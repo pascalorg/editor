@@ -884,6 +884,7 @@ export type {
   Tool,
   ToolDefaults,
   ToolMode,
+  ViewMode,
   WorkspaceMode,
 } from './store/use-editor'
 export {

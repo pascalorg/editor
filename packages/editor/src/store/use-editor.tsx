@@ -73,12 +73,15 @@ import {
   isViewVisible,
   normalizeViewLayout,
   paneOfView,
+  sceneLayout,
   storedViewLayout,
   swapped,
   VIEW_3D,
   type ViewLayout,
   type ViewPaneIndex,
+  type VisibleScene,
   viewLayoutFromLegacy,
+  visibleScene,
   withoutView,
   withPaneView,
   withSplitToggled,
@@ -88,6 +91,8 @@ import {
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'build'
 
 export type WorkspaceMode = 'edit' | 'studio' | 'sheets'
+/** @deprecated The stage is views now: read `visibleScene(state)` (`VisibleScene`). */
+export type ViewMode = VisibleScene
 
 // Snapshot capture is invoked from two surfaces with different policies.
 // `standard` mirrors the existing user-driven UX — pick region / viewport /
@@ -463,6 +468,17 @@ type EditorState = {
   closeView: (viewId: string) => void
   /** Replace the current workspace's layout (following a collaborator, tests). */
   setViewLayout: (layout: ViewLayout) => void
+  /**
+   * @deprecated The scene projection on screen, kept in step with the layout for
+   * plugins written before views: `'3d'` also while only other views show. Read
+   * `visibleScene(state)` instead.
+   */
+  viewMode: ViewMode
+  /**
+   * @deprecated Shows `mode` as the whole stage (`'split'`: the plan beside 3D).
+   * Use `setViewLayout(sceneLayout(mode))`, or `showView` for one view.
+   */
+  setViewMode: (mode: ViewMode) => void
   toggleSplit: () => void
   swapPanes: () => void
   setViewPaneRatio: (ratio: number) => void
@@ -1453,6 +1469,8 @@ const useEditor = create<EditorState>()(
         commitViewLayout(withPaneView(storedViewLayout(get()), pane, viewId)),
       closeView: (viewId) => commitViewLayout(withoutView(storedViewLayout(get()), viewId)),
       setViewLayout: (layout) => commitViewLayout(normalizeViewLayout(layout)),
+      viewMode: '3d',
+      setViewMode: (mode) => commitViewLayout(sceneLayout(mode)),
       toggleSplit: () => commitViewLayout(withSplitToggled(storedViewLayout(get()))),
       swapPanes: () => commitViewLayout(swapped(storedViewLayout(get()))),
       setViewPaneRatio: (ratio) =>
@@ -1651,6 +1669,13 @@ function yieldBrushToHiddenCanvas(): void {
   const state = useEditor.getState()
   if (state.mode === 'terrain-sculpt' && !isViewVisible(state, VIEW_3D)) state.setMode('select')
 }
+
+// The deprecated `viewMode` mirror follows every input of `visibleScene`
+// (layouts, workspace, capture, first person) without each writer knowing it.
+useEditor.subscribe((state) => {
+  const viewMode = visibleScene(state) ?? '3d'
+  if (state.viewMode !== viewMode) useEditor.setState({ viewMode })
+})
 
 export function armToolMode(next: ToolMode): void {
   useEditor.getState().armToolMode(next)

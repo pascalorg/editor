@@ -89,6 +89,18 @@ describe('the stage layout', () => {
   })
 })
 
+describe('the deprecated viewMode for plugins written before views', () => {
+  test('mirrors the scene on screen and sets it', () => {
+    useEditor.getState().setViewMode('split')
+    expect(visibleScene(useEditor.getState())).toBe('split')
+    expect(useEditor.getState().viewMode).toBe('split')
+    useEditor.getState().showView('gallery')
+    expect(useEditor.getState().viewMode).toBe('3d')
+    useEditor.getState().setCaptureMode(true)
+    expect(useEditor.getState().viewMode).toBe('3d')
+  })
+})
+
 describe('layouts saved before views', () => {
   test.each([
     ['3d', '3d'],
