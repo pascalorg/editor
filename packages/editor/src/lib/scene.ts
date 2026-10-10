@@ -1,7 +1,9 @@
 'use client'
 
 import {
+  type AnyNodeId,
   clearSceneHistory,
+  getSceneDocument,
   materializeRegisteredNodeDefaults,
   nodeRegistry,
   resolveLevelId,
@@ -14,6 +16,7 @@ import useEditor, {
   hasCustomPersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
+import useInteractionScope from '../store/use-interaction-scope'
 import { editorHostPanelRegistry } from './plugin-panels'
 
 export type SceneGraph = {
@@ -24,6 +27,18 @@ export type SceneGraph = {
   collections?: Record<string, unknown>
   materials?: Record<string, unknown>
   installedPlugins?: string[]
+}
+
+/**
+ * The scene as saves and exports write it. A clone in hand — a preset or duplicate the user is
+ * placing — is in the store from the tile click so tools can render and host it, but it only
+ * becomes part of the document when its placement commits.
+ */
+export function getSavedSceneDocument() {
+  const { scope } = useInteractionScope.getState()
+  const placing =
+    scope.kind === 'placing' && scope.driver === 'move-tool' ? [scope.nodeId as AnyNodeId] : []
+  return getSceneDocument(placing)
 }
 
 type PersistedSelectionPath = {

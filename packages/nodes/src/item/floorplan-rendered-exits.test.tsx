@@ -24,7 +24,7 @@ import {
   type Recipe,
   transformPoint,
 } from '@pascal-app/core/procedural-items'
-import { useEditor, useInteractionScope } from '@pascal-app/editor'
+import { sceneLayout, useEditor, useInteractionScope } from '@pascal-app/editor'
 import { NodeRenderer, useViewer, WallSystem } from '@pascal-app/viewer'
 import { extend, useFrame } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
@@ -145,7 +145,7 @@ beforeEach(() => {
   })
   useInteractionScope.getState().end()
   useEditor.setState({
-    viewMode: '2d',
+    viewLayouts: { edit: sceneLayout('2d') },
     mode: 'select',
     tool: 'item',
     movingNodeOrigin: '2d',

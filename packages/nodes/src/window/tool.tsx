@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  beginSceneHistoryDraft,
   type DormerEvent,
   type DormerNode,
   dormerWallFacePointToDormer,
@@ -150,6 +151,29 @@ const WindowTool: React.FC = () => {
   useEffect(() => {
     useScene.temporal.getState().pause()
 
+    // The draft is a created carry draft: undo history and every save leave it out
+    // (core `getSceneDocument`), so a reload mid-placement never finds it in the scene.
+    const draftHistoryEnds = new Map<string, () => void>()
+    const createDraft = (node: WindowNode, parentId: AnyNodeId) => {
+      const end = beginSceneHistoryDraft(node.id as AnyNodeId, null)
+      draftHistoryEnds.set(node.id, end)
+      try {
+        useScene.getState().createNode(node, parentId)
+      } catch (error) {
+        end()
+        draftHistoryEnds.delete(node.id)
+        throw error
+      }
+    }
+    const deleteDraft = (id: string) => {
+      try {
+        useScene.getState().deleteNode(id as AnyNodeId)
+      } finally {
+        draftHistoryEnds.get(id)?.()
+        draftHistoryEnds.delete(id)
+      }
+    }
+
     const ownedPreviewIds = new Set<string>()
     const fallbackPreview = () =>
       WindowNode.parse({
@@ -225,7 +249,7 @@ const WindowTool: React.FC = () => {
       }
       const wallId = draft.parentId
       useLiveNodeOverrides.getState().clear(draft.id)
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       draftRef.current = null
       clearPlacementPreview()
       // Rebuild wall so it removes the cutout from the deleted draft
@@ -361,7 +385,7 @@ const WindowTool: React.FC = () => {
           dormerFace: target.face,
           metadata: { isTransient: true },
         })
-        useScene.getState().createNode(node, event.node.id as AnyNodeId)
+        createDraft(node, event.node.id as AnyNodeId)
         draftRef.current = node
       }
 
@@ -478,7 +502,7 @@ const WindowTool: React.FC = () => {
           parentId: wall.id,
           metadata: { isTransient: true },
         })
-        useScene.getState().createNode(node, wall.id as AnyNodeId)
+        createDraft(node, wall.id as AnyNodeId)
         draftRef.current = node
       }
 
@@ -559,7 +583,7 @@ const WindowTool: React.FC = () => {
       hostKind = null
 
       useLiveNodeOverrides.getState().clear(draft.id)
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       useScene.temporal.getState().resume()
 
       const levelId = getLevelId()
@@ -617,7 +641,7 @@ const WindowTool: React.FC = () => {
       hostKind = null
 
       useLiveNodeOverrides.getState().clear(draft.id)
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       useScene.temporal.getState().resume()
 
       const state = useScene.getState()
@@ -942,7 +966,7 @@ const WindowTool: React.FC = () => {
           parentId: segment.id,
           metadata: { isTransient: true },
         })
-        useScene.getState().createNode(node, segment.id as AnyNodeId)
+        createDraft(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
       publishDraftPreview(segment)
@@ -966,7 +990,7 @@ const WindowTool: React.FC = () => {
       hostKind = null
 
       useLiveNodeOverrides.getState().clear(draft.id)
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       useScene.temporal.getState().resume()
 
       const state = useScene.getState()
@@ -1103,6 +1127,7 @@ const WindowTool: React.FC = () => {
 
     return () => {
       destroyDraft()
+      for (const end of draftHistoryEnds.values()) end()
       hideCursor()
       clearPlacementPreview()
       useAlignmentGuides.getState().clear()

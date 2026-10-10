@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_PERSISTED_EDITOR_UI_STATE, editorUiStateOnOpen } from './use-editor'
+import { sceneLayout } from './view-layout'
 
 /**
  * A project always opens in select mode.
@@ -18,14 +19,14 @@ describe('opening a project', () => {
       toolMode: { mode: 'build', tool: 'wall' },
       mode: 'build',
       tool: 'wall',
-      viewMode: '3d',
+      viewLayouts: { edit: sceneLayout('split') },
     })
 
     expect(state.toolMode).toEqual({ mode: 'select' })
     expect(state.mode).toBe('select')
     expect(state.tool).toBeNull()
     expect(state.phase).toBe('building')
-    expect(state.viewMode).toBe('3d')
+    expect(state.viewLayouts).toEqual({ edit: sceneLayout('split') })
   })
 
   test('the 2D plan opens in select mode as well', () => {
@@ -34,11 +35,10 @@ describe('opening a project', () => {
       toolMode: { mode: 'build', tool: 'slab' },
       mode: 'build',
       tool: 'slab',
-      viewMode: '2d',
+      viewLayouts: { edit: sceneLayout('2d') },
     })
 
-    expect(state.viewMode).toBe('2d')
-    expect(state.isFloorplanOpen).toBe(true)
+    expect(state.viewLayouts).toEqual({ edit: sceneLayout('2d') })
     expect(state.mode).toBe('select')
     expect(state.tool).toBeNull()
   })

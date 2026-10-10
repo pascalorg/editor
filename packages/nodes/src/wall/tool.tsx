@@ -54,6 +54,7 @@ import {
   useSegmentDraftChain,
   useWallDrawVariant,
   useWallSnapIndicator,
+  visibleScene,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
@@ -637,7 +638,7 @@ const LineWallTool: React.FC = () => {
     // In 2D-only view the plan owns wall drafting; this tool stays mounted
     // behind the hidden canvas and still hears the plan's grid events, so it
     // must not also draft (it would add every corner twice).
-    const planOwnsInput = () => useEditor.getState().viewMode === '2d'
+    const planOwnsInput = () => visibleScene(useEditor.getState()) === '2d'
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current) || planOwnsInput()) return

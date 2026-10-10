@@ -17,6 +17,11 @@ export type ExtraPanel = {
   label: string
   component: ComponentType
   pluginId?: string
+  /** Rail entry that drives the stage (see `SidebarTab.noPanel`); `component` serves the v1 sidebar. */
+  noPanel?: boolean
+  onSelect?: () => void
+  stageActive?: boolean
+  onDeselect?: () => void
 }
 
 interface IconRailProps {

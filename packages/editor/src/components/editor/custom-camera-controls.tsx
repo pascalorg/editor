@@ -60,6 +60,7 @@ import {
   useEndpointReshape,
   useMovingNode,
 } from '../../store/use-interaction-scope'
+import { visibleScene } from '../../store/view-layout'
 import { createCameraDraggingLifecycle } from './camera-dragging-lifecycle'
 import { FloorAwareCameraControls } from './floor-aware-camera-controls'
 import { FloorSurface } from './floor-surface'
@@ -78,7 +79,7 @@ const keyboardPanSpherical = new Spherical()
 const ORBIT_ROTATE_SPEED = 0.6
 // In 2D-only view the canvas is paused, so the floor plan drives WASD, orbit and
 // top view itself (`floorplan-panel.tsx`) and the camera stands down.
-const planOwnsNavigation = () => useEditor.getState().viewMode === '2d'
+const planOwnsNavigation = () => visibleScene(useEditor.getState()) === '2d'
 const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
 // Focusing one of these aims at its floor (raised to the orbit's pivot
 // height), not at the middle of its bounding box.

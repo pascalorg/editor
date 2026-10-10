@@ -60,6 +60,7 @@ import {
 import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
+import { isViewVisible, VIEW_2D } from '../../store/view-layout'
 import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
 import { CursorSphere } from '../tools/shared/cursor-sphere'
 import {
@@ -264,7 +265,7 @@ function RoomFloorplanMenu({
   room: RoomSelectionRecord
   plan: RefObject<SVGGElement | null>
 }) {
-  const planShown = useEditor((s) => s.viewMode !== '3d')
+  const planShown = useEditor((s) => isViewVisible(s, VIEW_2D))
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
   const rings = room.geometry.clearPolygon
   useEffect(() => {

@@ -67,15 +67,32 @@ import {
 import { cameraPoseStore } from './camera-pose-store'
 import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
+import {
+  clampViewPaneRatio,
+  DEFAULT_VIEW_LAYOUT,
+  isViewVisible,
+  normalizeViewLayout,
+  paneOfView,
+  sceneLayout,
+  storedViewLayout,
+  swapped,
+  VIEW_3D,
+  type ViewLayout,
+  type ViewPaneIndex,
+  type VisibleScene,
+  viewLayoutFromLegacy,
+  visibleScene,
+  withoutView,
+  withPaneView,
+  withSplitToggled,
+  withView,
+} from './view-layout'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'build'
-const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
-const MIN_FLOORPLAN_PANE_RATIO = 0.15
-const MAX_FLOORPLAN_PANE_RATIO = 0.85
 
-export type ViewMode = '3d' | '2d' | 'split'
-export type SplitOrientation = 'horizontal' | 'vertical'
 export type WorkspaceMode = 'edit' | 'studio' | 'sheets'
+/** @deprecated The stage is views now: read `visibleScene(state)` (`VisibleScene`). */
+export type ViewMode = VisibleScene
 
 // Snapshot capture is invoked from two surfaces with different policies.
 // `standard` mirrors the existing user-driven UX — pick region / viewport /
@@ -441,15 +458,34 @@ type EditorState = {
   // leaving capture puts back the level the editor was on.
   captureLevelId: LevelNode['id'] | null
   setCaptureLevel: (levelId: LevelNode['id'] | null) => void
-  // View mode (3D only, 2D only, or split 2D+3D)
+  // The stage's panes, per workspace (see `view-layout.ts`). Read what is on
+  // screen through `activeViewLayout` / `isViewVisible`, never the raw record.
+  viewLayouts: Record<string, ViewLayout>
+  /** Show a view: focus it if visible, else in the focused pane, or `beside` it. */
+  showView: (viewId: string, options?: { beside?: boolean }) => void
+  setPaneView: (pane: ViewPaneIndex, viewId: string) => void
+  /** Take a view off the stage: a split keeps the other pane, a single pane returns to 3D. */
+  closeView: (viewId: string) => void
+  /** Replace the current workspace's layout (following a collaborator, tests). */
+  setViewLayout: (layout: ViewLayout) => void
+  /**
+   * @deprecated The scene projection on screen, kept in step with the layout for
+   * plugins written before views: `'3d'` also while only other views show. Read
+   * `visibleScene(state)` instead.
+   */
   viewMode: ViewMode
+  /**
+   * @deprecated Shows `mode` as the whole stage (`'split'`: the plan beside 3D).
+   * Use `setViewLayout(sceneLayout(mode))`, or `showView` for one view.
+   */
   setViewMode: (mode: ViewMode) => void
-  splitOrientation: SplitOrientation
-  setSplitOrientation: (orientation: SplitOrientation) => void
-  // Toggleable 2D floorplan overlay (backward compat — derived from viewMode)
-  isFloorplanOpen: boolean
-  setFloorplanOpen: (open: boolean) => void
-  toggleFloorplanOpen: () => void
+  toggleSplit: () => void
+  swapPanes: () => void
+  setViewPaneRatio: (ratio: number) => void
+  focusViewPane: (pane: ViewPaneIndex) => void
+  /** Per-browser pins of the view bar, over each view's `defaultPinned`. */
+  pinnedViews: Record<string, boolean>
+  setViewPinned: (viewId: string, pinned: boolean) => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
   // Toggleable DWV riser-diagram (plumbing isometric) overlay.
@@ -501,7 +537,6 @@ type EditorState = {
   setShow2dVoronoi: (enabled: boolean) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
-  _viewModeBeforeFirstPerson: ViewMode | null
   setFirstPersonMode: (enabled: boolean) => void
   // Which first-person controller runs while `isFirstPersonMode` is on. Reset to
   // `walk` whenever first person is left, so the grounded controller stays the
@@ -525,14 +560,11 @@ type EditorState = {
   setCaptureShutterHold: (hold: boolean) => void
   // Workspace mode: 'edit' is the full editing surface; 'studio' is the
   // render/snapshot surface (clean canvas, no editing chrome or selection).
-  // Entering studio forces a 3D-only view and restores the prior view on exit.
+  // Each workspace keeps its own view layout.
   workspaceMode: WorkspaceMode
-  _viewModeBeforeStudio: ViewMode | null
   setWorkspaceMode: (mode: WorkspaceMode) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
-  floorplanPaneRatio: number
-  setFloorplanPaneRatio: (ratio: number) => void
   // Mobile-only: pixel height of the secondary panel sheet while open (0 when closed).
   // Read by the mobile layout so the viewer container can shrink to preview edits.
   mobilePanelSheetHeight: number
@@ -543,14 +575,20 @@ type EditorState = {
 
 export type PersistedEditorUiState = Pick<
   EditorState,
-  'phase' | 'toolMode' | 'mode' | 'tool' | 'catalogCategory' | 'isFloorplanOpen' | 'viewMode'
+  'phase' | 'toolMode' | 'mode' | 'tool' | 'catalogCategory' | 'viewLayouts'
 >
+
+/** What blobs written before view layouts stored instead. */
+type LegacyViewModeState = {
+  viewMode?: unknown
+  isFloorplanOpen?: unknown
+  floorplanPaneRatio?: unknown
+}
 
 type PersistedEditorLayoutState = Pick<
   EditorState,
   | 'activeSidebarPanel'
-  | 'floorplanPaneRatio'
-  | 'splitOrientation'
+  | 'pinnedViews'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
   | 'magneticSnap'
@@ -569,14 +607,12 @@ export const DEFAULT_PERSISTED_EDITOR_UI_STATE: PersistedEditorUiState = {
   mode: 'select',
   tool: null,
   catalogCategory: null,
-  isFloorplanOpen: false,
-  viewMode: '3d',
+  viewLayouts: {},
 }
 
 export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState = {
   activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
-  floorplanPaneRatio: DEFAULT_FLOORPLAN_PANE_RATIO,
-  splitOrientation: 'horizontal',
+  pinnedViews: {},
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
   magneticSnap: true,
@@ -664,16 +700,30 @@ function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
   return mode === 'build' || mode === 'delete' || mode === 'material-paint' ? mode : 'select'
 }
 
-function normalizeFloorplanPaneRatio(value: unknown): number {
-  if (!(typeof value === 'number' && Number.isFinite(value))) {
-    return DEFAULT_FLOORPLAN_PANE_RATIO
+function normalizeViewLayouts(
+  state: (Partial<PersistedEditorUiState> & LegacyViewModeState) | null | undefined,
+): Record<string, ViewLayout> {
+  const stored = state?.viewLayouts
+  if (stored && typeof stored === 'object') {
+    return Object.fromEntries(
+      Object.entries(stored).map(([workspace, layout]) => [workspace, normalizeViewLayout(layout)]),
+    )
   }
+  if (state?.viewMode === undefined && state?.isFloorplanOpen === undefined) return {}
+  return { edit: viewLayoutFromLegacy(state) }
+}
 
-  return Math.min(MAX_FLOORPLAN_PANE_RATIO, Math.max(MIN_FLOORPLAN_PANE_RATIO, value))
+function normalizePinnedViews(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== 'object') return {}
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, boolean] => typeof entry[1] === 'boolean',
+    ),
+  )
 }
 
 export function normalizePersistedEditorUiState(
-  state: Partial<PersistedEditorUiState> | null | undefined,
+  state: (Partial<PersistedEditorUiState> & LegacyViewModeState) | null | undefined,
 ): PersistedEditorUiState {
   // Before Structure and Furnish merged, `phase` stored either of them.
   const storedPhase: unknown = state?.phase
@@ -684,21 +734,15 @@ export function normalizePersistedEditorUiState(
   const persistedToolMode = readPersistedToolMode(state)
   let mode = normalizeModeForPhase(phase, persistedToolMode.mode)
 
-  // Migrate old isFloorplanOpen to viewMode
-  let viewMode: ViewMode = '3d'
-  if (state?.viewMode === '2d' || state?.viewMode === '3d' || state?.viewMode === 'split') {
-    viewMode = state.viewMode
-  } else if (state?.isFloorplanOpen) {
-    viewMode = 'split'
-  }
-  const isFloorplanOpen = viewMode !== '3d'
+  const viewLayouts = normalizeViewLayouts(state)
 
-  // Both are persisted independently, and rehydrate goes through neither setter,
-  // so this is the third place the sculpt/2D pair has to be reconciled. The view
-  // wins here for the same reason it does in `setViewMode`: a brush armed over a
-  // hidden canvas is a mode the user cannot use, and reviving one on load is
-  // worse than reviving it mid-session — nothing on screen explains it.
-  if (mode === 'terrain-sculpt' && viewMode === '2d') mode = 'select'
+  // Both are persisted independently, and rehydrate goes through no setter, so
+  // this is the third place the sculpt/3D pair has to be reconciled. The view
+  // wins here for the same reason it does in `commitViewLayout`: a brush armed
+  // over a hidden canvas is a mode the user cannot use, and reviving one on load
+  // is worse than reviving it mid-session — nothing on screen explains it.
+  const editLayout = viewLayouts.edit ?? DEFAULT_VIEW_LAYOUT
+  if (mode === 'terrain-sculpt' && paneOfView(editLayout, VIEW_3D) === null) mode = 'select'
 
   if (phase === 'site') {
     return withMaterializedToolMode({
@@ -706,8 +750,7 @@ export function normalizePersistedEditorUiState(
       mode,
       tool: mode === 'build' ? 'property-line' : null,
       catalogCategory: null,
-      viewMode,
-      isFloorplanOpen,
+      viewLayouts,
     })
   }
 
@@ -717,8 +760,7 @@ export function normalizePersistedEditorUiState(
       mode,
       tool: null,
       catalogCategory: null,
-      viewMode,
-      isFloorplanOpen,
+      viewLayouts,
     })
   }
 
@@ -732,8 +774,7 @@ export function normalizePersistedEditorUiState(
     mode,
     tool,
     catalogCategory: tool === 'item' ? (state?.catalogCategory ?? null) : null,
-    viewMode,
-    isFloorplanOpen,
+    viewLayouts,
   })
 }
 
@@ -748,7 +789,7 @@ export function normalizePersistedEditorUiState(
  * written before that still carries it, so the rule is enforced on read.
  */
 export function editorUiStateOnOpen(
-  state: Partial<PersistedEditorUiState> | null | undefined,
+  state: (Partial<PersistedEditorUiState> & LegacyViewModeState) | null | undefined,
 ): PersistedEditorUiState {
   return {
     ...normalizePersistedEditorUiState(state),
@@ -819,8 +860,7 @@ export function normalizePersistedEditorLayoutState(
       typeof state?.activeSidebarPanel === 'string' && state.activeSidebarPanel.trim()
         ? state.activeSidebarPanel
         : DEFAULT_ACTIVE_SIDEBAR_PANEL,
-    floorplanPaneRatio: normalizeFloorplanPaneRatio(state?.floorplanPaneRatio),
-    splitOrientation: state?.splitOrientation === 'vertical' ? 'vertical' : 'horizontal',
+    pinnedViews: normalizePinnedViews(state?.pinnedViews),
     floorplanSelectionTool: state?.floorplanSelectionTool === 'marquee' ? 'marquee' : 'click',
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
@@ -858,8 +898,7 @@ export function hasCustomPersistedEditorUiState(
     normalizedState.mode !== DEFAULT_PERSISTED_EDITOR_UI_STATE.mode ||
     normalizedState.tool !== DEFAULT_PERSISTED_EDITOR_UI_STATE.tool ||
     normalizedState.catalogCategory !== DEFAULT_PERSISTED_EDITOR_UI_STATE.catalogCategory ||
-    normalizedState.isFloorplanOpen !== DEFAULT_PERSISTED_EDITOR_UI_STATE.isFloorplanOpen ||
-    normalizedState.viewMode !== DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode
+    Object.keys(normalizedState.viewLayouts).length > 0
   )
 }
 
@@ -953,10 +992,6 @@ export function selectSiteFloorplanContext() {
   })
 }
 
-// Stashes the view mode the user was in before entering capture, so we can
-// restore it on exit. Snapshot capture always frames in 3D — the 2D/split
-// floorplan panes render nothing meaningful for a thumbnail.
-let viewModeBeforeCapture: ViewMode | null = null
 // The editor's active level when capture began (undefined: not in capture).
 let levelBeforeCapture: LevelNode['id'] | null | undefined
 // The editor's viewer selection while Preview borrows the shared viewer store.
@@ -965,8 +1000,6 @@ let viewerBeforePreview: {
   focusedUnitId: ReturnType<typeof useViewer.getState>['focusedUnitId']
   room: RoomKey | null
   toolMode: ToolMode
-  viewMode: ViewMode
-  isFloorplanOpen: boolean
   cameraPose: CameraPose | null
   cameraMode: ReturnType<typeof useViewer.getState>['cameraMode']
   levelMode: ReturnType<typeof useViewer.getState>['levelMode']
@@ -1073,8 +1106,6 @@ const useEditor = create<EditorState>()(
       armToolMode: (requested) => {
         const current = get()
         let phase = current.phase
-        let viewMode = current.viewMode
-        let isFloorplanOpen = current.isFloorplanOpen
         const next = materializeToolMode(
           requested.mode,
           requested.mode === 'build' ? requested.tool : null,
@@ -1083,10 +1114,6 @@ const useEditor = create<EditorState>()(
 
         if (next.mode === 'terrain-sculpt') {
           phase = 'site'
-          if (viewMode === '2d') {
-            viewMode = 'split'
-            isFloorplanOpen = true
-          }
         } else if (next.mode === 'build' && next.tool === 'property-line') {
           phase = 'site'
         }
@@ -1102,9 +1129,11 @@ const useEditor = create<EditorState>()(
           tool: nextTool,
           ...(endsSelection ? { room: null, hoveredRoom: null, selectedReferenceId: null } : {}),
           ...(phaseChanged ? { phase } : {}),
-          ...(viewMode !== current.viewMode ? { viewMode } : {}),
-          ...(isFloorplanOpen !== current.isFloorplanOpen ? { isFloorplanOpen } : {}),
         })
+        // The brush works on the 3D canvas, so arming it opens 3D beside the plan.
+        if (next.mode === 'terrain-sculpt' && !isViewVisible(get(), VIEW_3D)) {
+          get().showView(VIEW_3D, { beside: true })
+        }
 
         if (phaseChanged) {
           if (phase === 'site') selectSiteFloorplanContext()
@@ -1344,8 +1373,6 @@ const useEditor = create<EditorState>()(
             focusedUnitId: viewer.focusedUnitId,
             room: get().room,
             toolMode: get().toolMode,
-            viewMode: get().viewMode,
-            isFloorplanOpen: get().isFloorplanOpen,
             cameraPose: cameraPoseStore.getState().pose,
             cameraMode: viewer.cameraMode,
             levelMode: viewer.levelMode,
@@ -1378,8 +1405,6 @@ const useEditor = create<EditorState>()(
                 ? before.room
                 : null,
             hoveredRoom: null,
-            viewMode: before.viewMode,
-            isFloorplanOpen: before.isFloorplanOpen,
           })
           viewer.setSelection({
             buildingId: exists(before.selection.buildingId) ? before.selection.buildingId : null,
@@ -1411,40 +1436,16 @@ const useEditor = create<EditorState>()(
           set({ captureLevelId: null })
         }
         // Walk / drone framing is a capture-only camera, so leaving capture always
-        // lands back on orbit. Run it first: it restores its own view mode, and
-        // the capture restore below has the final say.
+        // lands back on orbit. Capture frames in 3D alone (`activeViewLayout`)
+        // without touching the stored layout, so leaving it needs no restore.
         if (!entering && get().isFirstPersonMode) {
           get().setFirstPersonMode(false)
         }
-        set((state) => {
-          if (entering) {
-            // Force 3D for the shot. Remember the prior mode only on the first
-            // entry (viewMode is already '3d' on re-entry), so we restore the
-            // user's real choice — not the forced '3d' — when capture ends.
-            if (state.viewMode !== '3d') {
-              viewModeBeforeCapture = state.viewMode
-              return {
-                captureMode: resolved,
-                isCaptureMode: true,
-                viewMode: '3d',
-                isFloorplanOpen: false,
-              }
-            }
-            return { captureMode: resolved, isCaptureMode: true }
-          }
-          const restore = viewModeBeforeCapture
-          viewModeBeforeCapture = null
-          if (restore && restore !== '3d') {
-            return {
-              captureMode: resolved,
-              isCaptureMode: false,
-              captureLevelId: null,
-              viewMode: restore,
-              isFloorplanOpen: true,
-            }
-          }
-          return { captureMode: resolved, isCaptureMode: false, captureLevelId: null }
-        })
+        set(
+          entering
+            ? { captureMode: resolved, isCaptureMode: true }
+            : { captureMode: resolved, isCaptureMode: false, captureLevelId: null },
+        )
         if (!entering && wasCapturing) {
           const level = levelBeforeCapture
           levelBeforeCapture = undefined
@@ -1461,24 +1462,28 @@ const useEditor = create<EditorState>()(
         const viewer = useViewer.getState()
         if (levelId && viewer.selection.levelId !== levelId) viewer.setSelection({ levelId })
       },
-      viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
-      setViewMode: (mode) => {
-        set({ viewMode: mode, isFloorplanOpen: mode !== '3d' })
-        // Going the other way, the view wins and the mode yields. Hiding the 3D
-        // pane leaves the brush unreachable, and a held `sculpting` scope would
-        // then keep selection suppressed in a floorplan the user is trying to
-        // work in — a mode you cannot use and cannot see how to leave.
-        if (mode === '2d' && get().mode === 'terrain-sculpt') get().setMode('select')
+      viewLayouts: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewLayouts,
+      showView: (viewId, options) =>
+        commitViewLayout(withView(storedViewLayout(get()), viewId, options)),
+      setPaneView: (pane, viewId) =>
+        commitViewLayout(withPaneView(storedViewLayout(get()), pane, viewId)),
+      closeView: (viewId) => commitViewLayout(withoutView(storedViewLayout(get()), viewId)),
+      setViewLayout: (layout) => commitViewLayout(normalizeViewLayout(layout)),
+      viewMode: '3d',
+      setViewMode: (mode) => commitViewLayout(sceneLayout(mode)),
+      toggleSplit: () => commitViewLayout(withSplitToggled(storedViewLayout(get()))),
+      swapPanes: () => commitViewLayout(swapped(storedViewLayout(get()))),
+      setViewPaneRatio: (ratio) =>
+        commitViewLayout({ ...storedViewLayout(get()), ratio: clampViewPaneRatio(ratio) }),
+      focusViewPane: (pane) => {
+        const layout = storedViewLayout(get())
+        if (layout.focus !== pane && (pane === 0 || layout.split)) {
+          commitViewLayout({ ...layout, focus: pane })
+        }
       },
-      splitOrientation: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.splitOrientation,
-      setSplitOrientation: (orientation) => set({ splitOrientation: orientation }),
-      isFloorplanOpen: DEFAULT_PERSISTED_EDITOR_UI_STATE.isFloorplanOpen,
-      setFloorplanOpen: (open) => set({ isFloorplanOpen: open, viewMode: open ? 'split' : '3d' }),
-      toggleFloorplanOpen: () =>
-        set((state) => {
-          const open = !state.isFloorplanOpen
-          return { isFloorplanOpen: open, viewMode: open ? 'split' : '3d' }
-        }),
+      pinnedViews: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.pinnedViews,
+      setViewPinned: (viewId, pinned) =>
+        set((state) => ({ pinnedViews: { ...state.pinnedViews, [viewId]: pinned } })),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
       isRiserOpen: false,
@@ -1554,26 +1559,14 @@ const useEditor = create<EditorState>()(
       show2dVoronoi: false,
       setShow2dVoronoi: (enabled) => set({ show2dVoronoi: enabled }),
       isFirstPersonMode: false,
-      _viewModeBeforeFirstPerson: null as ViewMode | null,
+      // First person shows 3D alone (`activeViewLayout`); the stored layout
+      // comes back on exit untouched.
       setFirstPersonMode: (enabled) => {
         if (enabled) {
-          const currentViewMode = get().viewMode
-          set({
-            isFirstPersonMode: true,
-            _viewModeBeforeFirstPerson: currentViewMode,
-            viewMode: '3d',
-            isFloorplanOpen: false,
-            catalogCategory: null,
-          })
+          set({ isFirstPersonMode: true, catalogCategory: null })
           get().armToolMode({ mode: 'select' })
         } else {
-          const prevMode = get()._viewModeBeforeFirstPerson
-          set({
-            isFirstPersonMode: false,
-            firstPersonMovementMode: 'walk',
-            _viewModeBeforeFirstPerson: null,
-            ...(prevMode ? { viewMode: prevMode, isFloorplanOpen: prevMode !== '3d' } : {}),
-          })
+          set({ isFirstPersonMode: false, firstPersonMovementMode: 'walk' })
         }
       },
       firstPersonMovementMode: 'walk' as FirstPersonMovementMode,
@@ -1591,38 +1584,23 @@ const useEditor = create<EditorState>()(
       captureShutterHold: false,
       setCaptureShutterHold: (hold) => set({ captureShutterHold: hold }),
       workspaceMode: 'edit' as WorkspaceMode,
-      _viewModeBeforeStudio: null as ViewMode | null,
       setWorkspaceMode: (mode) => {
         if (get().workspaceMode === mode) return
         // Every non-'edit' workspace (studio's clean canvas, sheets' paper
-        // space) enters the same way: stash the view, go 3D-only, drop the
-        // editing chrome. Leaving any of them restores the stashed view.
+        // space) enters the same way: drop the editing chrome. The view layout
+        // needs no stash — each workspace keeps its own.
         if (mode !== 'edit') {
-          const currentViewMode = get().viewMode
-          set({
-            workspaceMode: mode,
-            _viewModeBeforeStudio: currentViewMode,
-            viewMode: '3d',
-            isFloorplanOpen: false,
-            catalogCategory: null,
-          })
+          set({ workspaceMode: mode, catalogCategory: null })
           get().armToolMode({ mode: 'select' })
           // Clear selection so no edit affordances bleed into the clean canvas.
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
-          const prevMode = get()._viewModeBeforeStudio
-          set({
-            workspaceMode: 'edit',
-            _viewModeBeforeStudio: null,
-            ...(prevMode ? { viewMode: prevMode, isFloorplanOpen: prevMode !== '3d' } : {}),
-          })
+          set({ workspaceMode: 'edit' })
         }
+        yieldBrushToHiddenCanvas()
       },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
       setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
-      floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
-      setFloorplanPaneRatio: (ratio) =>
-        set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),
       mobilePanelSheetHeight: 0,
       setMobilePanelSheetHeight: (px) => set({ mobilePanelSheetHeight: Math.max(0, px) }),
       modelExport: null,
@@ -1656,11 +1634,9 @@ const useEditor = create<EditorState>()(
       // arm a tool nobody asked for on the next load.
       partialize: (state) => ({
         phase: state.phase,
-        isFloorplanOpen: state.isFloorplanOpen,
-        viewMode: state.viewMode,
+        viewLayouts: state.viewLayouts,
         activeSidebarPanel: state.activeSidebarPanel,
-        floorplanPaneRatio: state.floorplanPaneRatio,
-        splitOrientation: state.splitOrientation,
+        pinnedViews: state.pinnedViews,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
@@ -1675,6 +1651,31 @@ const useEditor = create<EditorState>()(
     },
   ),
 )
+
+/**
+ * The one writer of the stored layout. The view wins over the mode: hiding the
+ * 3D pane leaves the terrain brush unreachable, and a held `sculpting` scope
+ * would keep selection suppressed in a plan the user is trying to work in — a
+ * mode you cannot use and cannot see how to leave.
+ */
+function commitViewLayout(layout: ViewLayout): void {
+  useEditor.setState((state) => ({
+    viewLayouts: { ...state.viewLayouts, [state.workspaceMode]: layout },
+  }))
+  yieldBrushToHiddenCanvas()
+}
+
+function yieldBrushToHiddenCanvas(): void {
+  const state = useEditor.getState()
+  if (state.mode === 'terrain-sculpt' && !isViewVisible(state, VIEW_3D)) state.setMode('select')
+}
+
+// The deprecated `viewMode` mirror follows every input of `visibleScene`
+// (layouts, workspace, capture, first person) without each writer knowing it.
+useEditor.subscribe((state) => {
+  const viewMode = visibleScene(state) ?? '3d'
+  if (state.viewMode !== viewMode) useEditor.setState({ viewMode })
+})
 
 export function armToolMode(next: ToolMode): void {
   useEditor.getState().armToolMode(next)

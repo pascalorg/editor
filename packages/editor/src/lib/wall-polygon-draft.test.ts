@@ -13,6 +13,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../store/use-editor'
 import { useFloorplanDraftPreview } from '../store/use-floorplan-draft-preview'
+import { sceneLayout, visibleScene } from '../store/view-layout'
 import { runUndo } from './history'
 import { sfxEmitter } from './sfx-bus'
 import {
@@ -207,10 +208,12 @@ describe('Polygon room draft', () => {
       toolCancels += 1
     }
     emitter.on('tool:cancel', onCancel)
-    const view = useEditor.getState().viewMode
+    const layout = useEditor.getState().viewLayouts.edit
     try {
       drawThreeSides()
-      useEditor.getState().setViewMode(view === '2d' ? '3d' : '2d')
+      useEditor
+        .getState()
+        .setViewLayout(sceneLayout(visibleScene(useEditor.getState()) === '2d' ? '3d' : '2d'))
       expect(isWallPolygonDraftOpen()).toBe(false)
       expect(toolCancels).toBe(1)
       // The other view's click after that finds no polygon and ends its chain
@@ -219,7 +222,7 @@ describe('Polygon room draft', () => {
       expect(sceneWrites).toBe(0)
     } finally {
       emitter.off('tool:cancel', onCancel)
-      useEditor.getState().setViewMode(view)
+      useEditor.setState({ viewLayouts: layout ? { edit: layout } : {} })
     }
   })
 

@@ -101,7 +101,7 @@ function seed(entries: AnyNode[], slab = false) {
     tool: 'item',
     movingNodeOrigin: '3d',
     placementDragMode: false,
-    viewMode: '3d',
+    viewLayouts: {},
   })
   useEditor.getState().setSnappingMode('item', 'off')
   useViewer.setState({

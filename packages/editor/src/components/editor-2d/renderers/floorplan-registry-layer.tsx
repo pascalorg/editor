@@ -119,6 +119,7 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../../store/use-interaction-scope'
 import { expandSessionSelectionForNode } from '../../../store/use-session-groups'
+import { isViewVisible, VIEW_2D } from '../../../store/view-layout'
 import { FloorRegionControls2D } from '../../editor/floor-region-controls'
 import { startGroupPickUp } from '../../editor/group-actions'
 import { classifyParticipant } from '../../editor/group-transform-shared'
@@ -597,7 +598,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // While the floor plan is not on screen (pure 3D view), per-entry live
   // selectors freeze to `undefined` so drag publishes do not re-render the
   // hidden floor-plan tree.
-  const floorplanVisible = useEditor((s) => s.viewMode !== '3d')
+  const floorplanVisible = useEditor((s) => isViewVisible(s, VIEW_2D))
   const drawingType = useDrawingView((s) => s.drawingType)
   const annotationVisibility = useFloorplanAnnotationVisibility((s) => s.visibility)
   const wallDimensionReference = useFloorplanAnnotationVisibility((s) => s.wallDimensionReference)

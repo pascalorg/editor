@@ -413,6 +413,12 @@ export {
 } from './lib/door-interaction'
 export { createEditorApi } from './lib/editor-api'
 export {
+  type EditorHostView,
+  editorHostViewRegistry,
+  openEditorView,
+  registerEditorHostView,
+} from './lib/editor-views'
+export {
   clearStructuralElevationGuide,
   collectElevationSnapTargets,
   ELEVATION_ALIGNMENT_THRESHOLD_M,
@@ -718,9 +724,12 @@ export {
   type EditorHostPanel,
   type EditorHostPanelWorkspace,
   editorHostPanelRegistry,
+  type PluginAccess,
+  type PluginDirectoryContext,
   type PluginInstallLock,
   pluginInstallLocks,
   registerEditorHostPanel,
+  setPluginDirectoryContext,
   setPluginInstallLocks,
 } from './lib/plugin-panels'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
@@ -748,7 +757,7 @@ export {
   type ElementActionOrigin,
 } from './lib/room-zone-routing'
 export type { SceneGraph } from './lib/scene'
-export { applySceneGraphToEditor } from './lib/scene'
+export { applySceneGraphToEditor, getSavedSceneDocument } from './lib/scene'
 export {
   forEachSceneMaterialRef,
   referencedSceneMaterialIds,
@@ -871,7 +880,6 @@ export type {
   Mode,
   SnapshotCropMode,
   SnapshotStandardAspect,
-  SplitOrientation,
   StructureTool,
   Tool,
   ToolDefaults,
@@ -968,3 +976,14 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+export {
+  activeViewLayout,
+  isViewVisible,
+  sceneLayout,
+  VIEW_2D,
+  VIEW_3D,
+  type ViewLayout,
+  type ViewPaneIndex,
+  type VisibleScene,
+  visibleScene,
+} from './store/view-layout'
