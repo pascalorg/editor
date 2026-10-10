@@ -50,8 +50,8 @@
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.0",
     "@types/node": "^22",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "19.2.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@types/three": "^0.184.0",
     "typescript": "6.0.3"
   },

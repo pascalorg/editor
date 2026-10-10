@@ -21,8 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Vendored from R3F 9.6.1:
- * https://raw.githubusercontent.com/pmndrs/react-three-fiber/v9.6.1/packages/fiber/src/core/events.ts
+ * Vendored from R3F 9.8.1:
+ * https://raw.githubusercontent.com/pmndrs/react-three-fiber/v9.8.1/packages/fiber/src/core/events.ts
  * Ray collection is cached; camera-drag moves are throttled before stock dispatch.
  * The throttle is a vendored-manager policy; dev ?stockEvents uses untouched R3F.
  */
@@ -317,7 +317,7 @@ export function createPascalPointerEvents(store: RootStore): EventManager<HTMLEl
 }
 
 function makeId(event: Intersection) {
-  // biome-ignore lint/style/useTemplate: Keep the vendored dispatch identical to R3F 9.6.1.
+  // biome-ignore lint/style/useTemplate: Keep the vendored dispatch identical to R3F 9.8.1.
   return (event.eventObject || event.object).uuid + '/' + event.index + event.instanceId
 }
 
