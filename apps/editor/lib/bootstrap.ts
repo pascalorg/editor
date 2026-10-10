@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
+import { ifcHostPanel, ifcPlugin } from '@pascal-app/plugin-ifc'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import {
   environmentHostPanel,
@@ -115,6 +116,8 @@ registerEditorHostPanel({
 })
 extendPluginDiscovery(async () => [webXRPlugin])
 registerEditorHostPanel(webXRHostPanel)
+extendPluginDiscovery(async () => [ifcPlugin])
+registerEditorHostPanel(ifcHostPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()
