@@ -32,6 +32,8 @@ const nextConfig: NextConfig = {
     '@pascal-app/core',
     '@pascal-app/editor',
     '@pascal-app/mcp',
+    '@pascal-app/ifc-converter',
+    '@pascal-app/plugin-ifc',
     '@pascal-app/plugin-pool',
     '@pascal-app/plugin-streetscape',
     '@pascal-app/plugin-trees',
@@ -39,6 +41,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/plugin-bones',
     '@webxr/plugin',
     '@pascal-app/plugin-environment',
+    'web-ifc',
     '@dgreenheck/ez-tree',
   ],
   turbopack: {

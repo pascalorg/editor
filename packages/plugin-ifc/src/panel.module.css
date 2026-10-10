@@ -1,0 +1,94 @@
+.panel {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  color: var(--text, #e8edf2);
+  font: 13px/1.45 var(--font-body, system-ui, sans-serif);
+}
+
+.intro {
+  margin: 0;
+  color: var(--text-muted, #a4adb8);
+}
+
+.dropzone {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  padding: 18px;
+  border: 1px dashed var(--border, #475361);
+  border-radius: 10px;
+  background: var(--surface-1, #171c22);
+}
+
+.dropzone span,
+.exportRow span {
+  color: var(--text-muted, #a4adb8);
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border, #475361);
+  border-radius: 7px;
+  color: var(--text, #e8edf2);
+  background: var(--surface-2, #202730);
+  cursor: pointer;
+}
+
+.primaryButton {
+  border-color: var(--accent-border, #386b80);
+  background: var(--accent, #5096b3);
+  color: var(--bg, #0e1216);
+  font-weight: 600;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.exportRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-muted, #303943);
+}
+
+.exportRow div {
+  display: grid;
+  gap: 3px;
+}
+
+.status {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.working {
+  color: var(--info, #8cbad0);
+}
+
+.success {
+  color: var(--success, #6fc49a);
+}
+
+.warning {
+  color: var(--warning, #e6ba72);
+}
+
+.error {
+  color: var(--danger, #e47f7f);
+}
+
+.idle {
+  color: var(--text-muted, #a4adb8);
+}
+
+.hiddenInput {
+  display: none;
+}

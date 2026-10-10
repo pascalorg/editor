@@ -1,0 +1,35 @@
+{
+  "name": "@pascal-app/plugin-ifc",
+  "version": "1.0.3",
+  "description": "Import IFC building models into Pascal and export Pascal scenes as IFC4.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": ">=1.0.3 <2",
+    "@pascal-app/editor": ">=1.0.3 <2",
+    "@pascal-app/ifc-converter": ">=1.0.3 <2",
+    "react": "^18 || ^19"
+  },
+  "devDependencies": {
+    "@pascal-app/core": "1.0.3",
+    "@pascal-app/editor": "1.0.3",
+    "@pascal-app/ifc-converter": "1.0.3",
+    "@pascal/typescript-config": "*",
+    "@types/bun": "^1.3.0",
+    "@types/react": "^19.2.2",
+    "typescript": "6.0.3"
+  },
+  "license": "MIT"
+}

@@ -33,8 +33,10 @@
         "@number-flow/react": "^0.6.0",
         "@pascal-app/core": "*",
         "@pascal-app/editor": "*",
+        "@pascal-app/ifc-converter": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
+        "@pascal-app/plugin-ifc": "*",
         "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
         "@pascal-app/plugin-environment": "github:AxiomeCG/environment#1aa0bc3cbed273dbf751e9af79e446f6de105c90",
         "@pascal-app/plugin-pool": "github:sudhir9297/pool-pascal-plugin#483a080558293cd344170e66318230e2ac9b6ae8",
@@ -58,6 +60,7 @@
         "tailwind-merge": "^3.5.0",
         "tailwindcss": "^4.2.1",
         "three": "^0.186.0",
+        "web-ifc": "^0.0.77",
         "zod": ">=4.5.4 <4.6",
       },
       "devDependencies": {
@@ -262,6 +265,25 @@
         "@pascal/typescript-config": "*",
         "@types/bun": "^1.4.2",
         "typescript": "6.0.3",
+      },
+    },
+    "packages/plugin-ifc": {
+      "name": "@pascal-app/plugin-ifc",
+      "version": "1.0.3",
+      "devDependencies": {
+        "@pascal-app/core": "1.0.3",
+        "@pascal-app/editor": "1.0.3",
+        "@pascal-app/ifc-converter": "1.0.3",
+        "@pascal/typescript-config": "*",
+        "@types/bun": "^1.3.0",
+        "@types/react": "^19.2.2",
+        "typescript": "6.0.3",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": ">=1.0.3 <2",
+        "@pascal-app/editor": ">=1.0.3 <2",
+        "@pascal-app/ifc-converter": ">=1.0.3 <2",
+        "react": "^18 || ^19",
       },
     },
     "packages/mcp": {
@@ -793,6 +815,8 @@
     "@pascal-app/geometry-script": ["@pascal-app/geometry-script@workspace:packages/geometry-script"],
 
     "@pascal-app/ifc-converter": ["@pascal-app/ifc-converter@workspace:packages/ifc-converter"],
+
+    "@pascal-app/plugin-ifc": ["@pascal-app/plugin-ifc@workspace:packages/plugin-ifc"],
 
     "@pascal-app/lingo": ["@pascal-app/lingo@0.2.0", "", { "peerDependencies": { "react": "^19" }, "optionalPeers": ["react"] }, "sha512-Ws+Utm23SmDbMB0Jc7joIp4KPkXhs4Z1boUcW9dl8nC3ATJz+a50F7/MyVTbE3QaL5Fr+YwNfsiOMxrKdhwPhA=="],
 

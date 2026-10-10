@@ -1,0 +1,9 @@
+{
+  "extends": "@pascal/typescript-config/react-library.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["bun"]
+  },
+  "include": ["src", "tests"],
+  "exclude": ["node_modules", "dist"]
+}

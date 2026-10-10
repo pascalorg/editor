@@ -59,6 +59,7 @@ export {
   MeasurementPill,
 } from './components/editor/measurement-pill'
 export { NodeActionMenu } from './components/editor/node-action-menu'
+export { computeSceneBoundsXZ, type SceneBoundsXZ } from './lib/scene-bounds'
 // In-world arrow handle primitives (chevron geometry, invisible hit area,
 // shared material, palette + scale constants). Re-exported so kind-owned
 // 3D selection affordances in `@pascal-app/nodes` (duct side-move / height /
