@@ -11,6 +11,8 @@ import {
   GuideNode,
   ItemNode,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
   SlabNode,
   StairNode,
   WallNode,
@@ -20,6 +22,7 @@ import {
   photoCropSize,
   type SceneViewBox,
   sceneViewBounds,
+  sceneViewFacing,
   sceneViewNote,
   sceneViewPlan,
   sceneViewPose,
@@ -86,6 +89,36 @@ function building(): Record<string, AnyNode> {
 }
 
 const box: SceneViewBox = { min: [0, 0, 0], max: [20, 6, 10] }
+
+describe('an explicitly requested floor interior', () => {
+  // Capture-only policy: preserve authored geometry and exact camera choice.
+  // The mounted renderer test, not these plan assertions, proves visible interiors.
+  test('plans the floor without changing the scene or the ordinary exterior request', () => {
+    const nodes = building()
+    const before = structuredClone(nodes)
+    const camera = { position: [25, 14, 18], target: [10, 1, 5], fov: 53, aspect: 4 / 3 }
+    const ordinary = sceneViewPlan(nodes, { camera })
+    const interior = sceneViewPlan(nodes, { camera, interior: { levelId: 'level_0' } })
+    expect(ordinary.interior).toBeUndefined()
+    expect(interior.pose).toEqual(ordinary.pose)
+    expect(interior.size).toEqual(ordinary.size)
+    expect(interior.interior).toMatchObject({
+      levelId: 'level_0',
+      bounds: { min: [0, 0, 0], max: [20, 3, 10] },
+    })
+    expect(interior.interior!.cutHeight).toBeGreaterThan(0)
+    expect(interior.interior!.cutHeight).toBeLessThan(3)
+    expect(nodes).toEqual(before)
+  })
+
+  test('an exact camera does not bypass validation of the requested interior level', () => {
+    const nodes = building()
+    const camera = { position: [25, 14, 18], target: [10, 1, 5], fov: 53, aspect: 4 / 3 }
+    for (const levelId of ['level_missing', 'building_main', 'wall_level_0_0']) {
+      expect(() => sceneViewPlan(nodes, { camera, interior: { levelId } })).toThrow()
+    }
+  })
+})
 
 /** Every corner of the box inside the frame of a camera at the pose. */
 function framesBox(pose: ReturnType<typeof sceneViewPose>, target: SceneViewBox) {
@@ -217,6 +250,28 @@ describe("the photo's camera", () => {
   })
 })
 
+// Run 3 (2026-10-05) compared whole facades with view_scene and never recorded what the photo
+// showed: the note a view comes with invites the inventory until one exists (L15).
+describe('the note a view comes with', () => {
+  const building = (inventory?: unknown[]) => ({
+    building_note: BuildingNode.parse({
+      id: 'building_note',
+      ...(inventory ? { metadata: { referenceInventory: { items: inventory } } } : {}),
+    }),
+  })
+
+  test('says a view is not a measure, and invites the inventory until one exists', () => {
+    const bare = sceneViewNote(building())
+    expect(bare).toContain('not a measure')
+    expect(bare).toContain('record_reference')
+    const recorded = sceneViewNote(
+      building([{ image: 'p', id: 'x', kind: 'fixture', what: 'A lamp', status: 'to_build' }]),
+    )
+    expect(recorded).toContain('not a measure')
+    expect(recorded).not.toContain('record_reference')
+  })
+})
+
 describe('the note a view comes with', () => {
   test('says a view is a picture to compare, not a measure', () => {
     expect(sceneViewNote()).toContain('not a measure')
@@ -226,62 +281,67 @@ describe('the note a view comes with', () => {
 // An agent that compared whole facades only settled for a plain door against the photo's door
 // with three glass strips. A view frames one opening or item at detail scale, an opening from its
 // outside face, so it can be laid beside the photo's crop of the same element.
+/** A 10 m wall along x drawn so its outside is the north (-z) side, a door and a window in it. */
+function facadeScene(
+  outside: 'front' | 'back',
+  placed: { position?: [number, number, number]; rotation?: [number, number, number] } = {},
+) {
+  const wall = WallNode.parse({
+    id: 'wall_face',
+    parentId: 'level_face',
+    start: outside === 'back' ? [0, 0] : [10, 0],
+    end: outside === 'back' ? [10, 0] : [0, 0],
+    thickness: 0.2,
+    height: 2.8,
+    frontSide: outside === 'front' ? 'exterior' : 'interior',
+    backSide: outside === 'front' ? 'interior' : 'exterior',
+    children: ['door_face', 'window_face'],
+  })
+  const along = (x: number) => (outside === 'back' ? x : 10 - x)
+  const door = DoorNode.parse({
+    id: 'door_face',
+    parentId: wall.id,
+    wallId: wall.id,
+    position: [along(3), 1.05, 0],
+    width: 0.9,
+    height: 2.1,
+  })
+  const window = WindowNode.parse({
+    id: 'window_face',
+    parentId: wall.id,
+    wallId: wall.id,
+    position: [along(7), 1.5, 0],
+    width: 1.2,
+    height: 1.2,
+  })
+  const lamp = ItemNode.parse({
+    id: 'item_lamp',
+    parentId: 'level_face',
+    position: [5, 0, 4],
+    asset: {
+      id: 'floor-lamp',
+      name: 'Floor lamp',
+      category: 'lighting',
+      thumbnail: '/items/floor-lamp/thumbnail.webp',
+      src: '/items/floor-lamp/model.glb',
+      dimensions: [0.4, 1.6, 0.4],
+    },
+  })
+  const level = LevelNode.parse({
+    id: 'level_face',
+    parentId: 'building_face',
+    level: 0,
+    height: 2.8,
+    children: [wall.id, lamp.id],
+  })
+  const building = BuildingNode.parse({ id: 'building_face', children: [level.id], ...placed })
+  return Object.fromEntries(
+    [building, level, wall, door, window, lamp].map((node) => [node.id, node]),
+  ) as Record<string, AnyNode>
+}
+
 describe('a close-up of one element', () => {
-  /** A 10 m wall along x drawn so its outside is the north (-z) side, a door and a window in it. */
-  function facade(outside: 'front' | 'back') {
-    const wall = WallNode.parse({
-      id: 'wall_face',
-      parentId: 'level_face',
-      start: outside === 'back' ? [0, 0] : [10, 0],
-      end: outside === 'back' ? [10, 0] : [0, 0],
-      thickness: 0.2,
-      height: 2.8,
-      frontSide: outside === 'front' ? 'exterior' : 'interior',
-      backSide: outside === 'front' ? 'interior' : 'exterior',
-      children: ['door_face', 'window_face'],
-    })
-    const along = (x: number) => (outside === 'back' ? x : 10 - x)
-    const door = DoorNode.parse({
-      id: 'door_face',
-      parentId: wall.id,
-      wallId: wall.id,
-      position: [along(3), 1.05, 0],
-      width: 0.9,
-      height: 2.1,
-    })
-    const window = WindowNode.parse({
-      id: 'window_face',
-      parentId: wall.id,
-      wallId: wall.id,
-      position: [along(7), 1.5, 0],
-      width: 1.2,
-      height: 1.2,
-    })
-    const lamp = ItemNode.parse({
-      id: 'item_lamp',
-      parentId: 'level_face',
-      position: [5, 0, 4],
-      asset: {
-        id: 'floor-lamp',
-        name: 'Floor lamp',
-        category: 'lighting',
-        thumbnail: '/items/floor-lamp/thumbnail.webp',
-        src: '/items/floor-lamp/model.glb',
-        dimensions: [0.4, 1.6, 0.4],
-      },
-    })
-    const level = LevelNode.parse({
-      id: 'level_face',
-      parentId: 'building_face',
-      level: 0,
-      height: 2.8,
-      children: [wall.id, lamp.id],
-    })
-    const building = BuildingNode.parse({ id: 'building_face', children: [level.id] })
-    return Object.fromEntries(
-      [building, level, wall, door, window, lamp].map((node) => [node.id, node]),
-    ) as Record<string, AnyNode>
-  }
+  const facade = (outside: 'front' | 'back') => facadeScene(outside)
 
   test('a door frames its own box, at detail scale', () => {
     const box = sceneViewBounds(facade('back'), 'door_face')
@@ -548,5 +608,188 @@ describe('a close-up of a hosted item', () => {
     const [px, , pz] = centre(pendant)
     expect([Math.round(px! * 10) / 10, Math.round(pz! * 10) / 10]).toEqual([3, 3])
     expect(pendant.min[1]).toBeCloseTo(2.1, 2)
+  })
+})
+
+/** A 10 x 8 m house on a 2.45 m storey under a 22.5 degree hip roof seated on its top. */
+function hipHouse({ rotation = 0 }: { rotation?: number } = {}) {
+  const building = BuildingNode.parse({ id: 'building_main' })
+  const storey = LevelNode.parse({ id: 'level_0', parentId: building.id, level: 0, height: 2.45 })
+  const roofLevel = LevelNode.parse({ id: 'level_roof', parentId: building.id, level: 1 })
+  const corners: [number, number][] = [
+    [0, 0],
+    [10, 0],
+    [10, 8],
+    [0, 8],
+  ]
+  const walls = corners.map((start, index) =>
+    WallNode.parse({
+      id: `wall_${index}`,
+      parentId: storey.id,
+      start,
+      end: corners[(index + 1) % 4]!,
+    }),
+  )
+  const segment = RoofSegmentNode.parse({
+    id: 'rseg_main',
+    parentId: 'roof_main',
+    roofType: 'hip',
+    width: 10,
+    depth: 8,
+    pitch: 22.5,
+    wallHeight: 0,
+  })
+  const roof = RoofNode.parse({
+    id: 'roof_main',
+    parentId: roofLevel.id,
+    position: [5, 0, 4],
+    rotation,
+    children: [segment.id],
+  })
+  const nodes = [building, storey, roofLevel, ...walls, roof, segment].map((node) => ({
+    ...node,
+    children: 'children' in node && Array.isArray(node.children) ? node.children : [],
+  })) as unknown as AnyNode[]
+  const byId = Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<string, AnyNode>
+  const attach = (parentId: string, ids: string[]) => {
+    ;(byId[parentId] as { children: string[] }).children = ids
+  }
+  attach(building.id, [storey.id, roofLevel.id])
+  attach(
+    storey.id,
+    walls.map((wall) => wall.id),
+  )
+  attach(roofLevel.id, [roof.id])
+  return { nodes: byId }
+}
+
+// A check of a roof against what carries it (coherence items) asks to look at the roof: its level
+// held nothing a view could frame, so the look failed with nothing_to_view where the defect was.
+describe('a close-up of a roof', () => {
+  const r = (v: number) => Math.round(v * 100) / 100
+  const house = () => hipHouse().nodes
+
+  test('a roof, and the level it is on, frame its footprint from its seat to its peak', () => {
+    for (const target of ['roof_main', 'level_roof']) {
+      const box = sceneViewBounds(house(), target)
+      // 10 × 8 m about (5, 4), seated on the 2.45 m storey; a 22.5° hip over the 4 m half-span.
+      expect([r(box.min[0]), r(box.max[0]), r(box.min[2]), r(box.max[2])]).toEqual([0, 10, 0, 8])
+      expect(r(box.min[1])).toBe(2.45)
+      expect(box.max[1]).toBeGreaterThan(3.5)
+    }
+  })
+
+  test('a turned roof frames the footprint it covers in the plan', () => {
+    const box = sceneViewBounds(hipHouse({ rotation: Math.PI / 2 }).nodes, 'roof_main')
+    // A quarter turn about its centre swaps the half-extents: 8 m east-west, 10 m north-south.
+    expect([r(box.max[0] - box.min[0]), r(box.max[2] - box.min[2])]).toEqual([8, 10])
+  })
+
+  test('the building still frames its walls, and the roof level is not in its frame', () => {
+    const box = sceneViewBounds(house(), 'building_main')
+    expect([r(box.min[1]), r(box.max[1])]).toEqual([0, 2.45])
+  })
+
+  test('the picture is taken from outside the roof, centred on it', () => {
+    const { pose } = sceneViewPlan(house(), {
+      target: 'roof_main',
+      from: 'south-west',
+      elevation: 35,
+    })
+    expect(pose.target[0]).toBeCloseTo(5, 1)
+    expect(pose.target[2]).toBeCloseTo(4, 1)
+    expect(pose.position[1]).toBeGreaterThan(pose.target[1])
+  })
+})
+
+// The plancrafters cottage stands at [5.7, 0, 16.5] on its site. Everything under a building is
+// drawn in that building's frame, and the views were planned in it unmoved: a window as target
+// framed bare ground 16 m north of the house, a wall showed the house off to one side.
+describe('a building away from the origin', () => {
+  const at: [number, number, number] = [5.7, 0, 16.5]
+  const placed = () => facadeScene('back', { position: at })
+  const r = (v: number) => Math.round(v * 100) / 100
+  const rounded = (box: SceneViewBox) => ({ min: box.min.map(r), max: box.max.map(r) })
+  const moved = (box: SceneViewBox): SceneViewBox => ({
+    min: [box.min[0] + at[0], box.min[1] + at[1], box.min[2] + at[2]],
+    max: [box.max[0] + at[0], box.max[1] + at[1], box.max[2] + at[2]],
+  })
+
+  test('every target frames where it stands: the box it has at the origin, moved with the building', () => {
+    for (const target of [
+      'door_face',
+      'window_face',
+      'wall_face',
+      'level_face',
+      'building_face',
+      'item_lamp',
+    ]) {
+      expect(rounded(sceneViewBounds(placed(), target)), target).toEqual(
+        rounded(moved(sceneViewBounds(facadeScene('back'), target))),
+      )
+    }
+    expect(rounded(sceneViewBounds(placed()))).toEqual(
+      rounded(moved(sceneViewBounds(facadeScene('back')))),
+    )
+  })
+
+  test('the eye looks at the window, and from its outside', () => {
+    const { pose } = sceneViewPlan(placed(), { target: 'window_face' })
+    const window = sceneViewBounds(placed(), 'window_face')
+    expect(framesBox(pose as never, window)).toBe(true)
+    // The wall is drawn so its outside is the north (-z) side, as it was at the origin.
+    expect(pose.position[2]).toBeLessThan(window.min[2])
+  })
+
+  test('a turned building turns its boxes and the side an opening is seen from', () => {
+    const quarter: [number, number, number] = [0, Math.PI / 2, 0]
+    const turned = facadeScene('back', { position: at, rotation: quarter })
+    const local = sceneViewBounds(facadeScene('back'), 'window_face')
+    const centre = [
+      (local.min[0] + local.max[0]) / 2,
+      (local.min[1] + local.max[1]) / 2,
+      (local.min[2] + local.max[2]) / 2,
+    ]
+    // A quarter turn about the building's origin: local (x, z) lands at (z, -x) in the site.
+    const expected = [at[0] + centre[2]!, centre[1]!, at[2] - centre[0]!].map(r)
+    const box = sceneViewBounds(turned, 'window_face')
+    expect(
+      [
+        (box.min[0] + box.max[0]) / 2,
+        (box.min[1] + box.max[1]) / 2,
+        (box.min[2] + box.max[2]) / 2,
+      ].map(r),
+    ).toEqual(expected)
+    // Its outside was north (-z) in the building's frame: after the turn, one side of the site.
+    const { pose } = sceneViewPlan(turned, { target: 'window_face' })
+    expect(framesBox(pose as never, box)).toBe(true)
+    expect(Math.abs(pose.position[0] - (box.min[0] + box.max[0]) / 2)).toBeGreaterThan(
+      Math.abs(pose.position[2] - (box.min[2] + box.max[2]) / 2),
+    )
+  })
+})
+
+// Follow Pascal looks at an opening from the way it faces; the agent's own view of it takes the same side.
+describe('which way an opening faces', () => {
+  test('outward, in the site plan, whichever way its wall was drawn', () => {
+    for (const outside of ['back', 'front'] as const) {
+      expect(sceneViewFacing(facadeScene(outside), 'door_face')).toEqual([0, -1])
+      expect(sceneViewFacing(facadeScene(outside), 'window_face')).toEqual([0, -1])
+    }
+  })
+
+  test('turned with the building', () => {
+    const facing = sceneViewFacing(
+      facadeScene('back', { position: [5.7, 0, 16.5], rotation: [0, Math.PI / 2, 0] }),
+      'door_face',
+    )!
+    expect(facing[0]).toBeCloseTo(-1, 9)
+    expect(facing[1]).toBeCloseTo(0, 9)
+  })
+
+  test('nothing for what is not an opening', () => {
+    expect(sceneViewFacing(facadeScene('back'), 'wall_face')).toBeNull()
+    expect(sceneViewFacing(facadeScene('back'), 'item_lamp')).toBeNull()
+    expect(sceneViewFacing(facadeScene('back'), 'nothing_here')).toBeNull()
   })
 })

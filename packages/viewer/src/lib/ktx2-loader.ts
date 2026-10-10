@@ -33,6 +33,14 @@ function readMisalignedBasisSize(buffer: ArrayBuffer): { width: number; height: 
   return width % 4 !== 0 || height % 4 !== 0 ? { width, height } : null
 }
 
+const pendingTextureLoads = new Set<symbol>()
+const failedTextureUrls = new Set<string>()
+
+/** Includes GLTF textures loaded by the shared loader, not just finish textures. */
+export function ktx2TextureLoadState(): { pending: number; failed: number } {
+  return { pending: pendingTextureLoads.size, failed: failedTextureUrls.size }
+}
+
 /**
  * KTX2Loader that survives block-misaligned textures. WebGPU rejects
  * block-compressed textures whose base dimensions aren't multiples of 4;
@@ -46,6 +54,43 @@ function readMisalignedBasisSize(buffer: ArrayBuffer): { width: number; height: 
  */
 class AlignmentSafeKTX2Loader extends KTX2Loader {
   private rgbaFallback: KTX2Loader | null = null
+
+  override load(
+    url: string,
+    onLoad: (texture: CompressedTexture) => void,
+    onProgress?: (event: ProgressEvent) => void,
+    onError?: (error: unknown) => void,
+  ): void {
+    const token = Symbol(url)
+    pendingTextureLoads.add(token)
+    const settle = (failed: boolean) => {
+      pendingTextureLoads.delete(token)
+      // A later successful request cannot repair a GLTF already resolved with
+      // a missing texture. Keep failures conservative for this shared cache.
+      if (failed) failedTextureUrls.add(url)
+    }
+    try {
+      super.load(
+        url,
+        (texture) => {
+          settle(false)
+          onLoad?.(texture)
+        },
+        onProgress,
+        // Preserve the loader's absent-error-callback behavior. Such a failed
+        // fire-and-forget request conservatively remains pending for capture.
+        onError
+          ? (error) => {
+              settle(true)
+              onError(error)
+            }
+          : undefined,
+      )
+    } catch (error) {
+      settle(true)
+      throw error
+    }
+  }
 
   private fallbackLoader(): KTX2LoaderInternals {
     if (!this.rgbaFallback) {

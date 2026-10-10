@@ -161,6 +161,25 @@ export function itemNodePlanAabb(node: AnyNode): PlanAabb | null {
   )
 }
 
+/** Script bounds need not be centred on the item origin; catalog bounds are normalized. */
+export function itemNodePlanCorners(node: Extract<AnyNode, { type: 'item' }>): Vec2[] {
+  const [width, , depth] = node.asset.dimensions
+  const bounds = node.source?.manifest.bounds
+  const xs = bounds ? [bounds.min[0], bounds.max[0]] : [-width / 2, width / 2]
+  const zs = bounds ? [bounds.min[2], bounds.max[2]] : [-depth / 2, depth / 2]
+  const yaw = node.rotation?.[1] ?? 0
+  return xs.flatMap((x) =>
+    zs.map((z): Vec2 => {
+      const lx = x * node.scale[0]
+      const lz = z * node.scale[2]
+      return [
+        node.position[0] + lx * Math.cos(yaw) + lz * Math.sin(yaw),
+        node.position[2] - lx * Math.sin(yaw) + lz * Math.cos(yaw),
+      ]
+    }),
+  )
+}
+
 export function inspectItemPlanFootprint(
   node: Extract<AnyNode, { type: 'item' }>,
   options?: { floorOnly?: boolean },

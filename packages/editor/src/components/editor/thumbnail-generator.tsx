@@ -3,27 +3,38 @@
 import {
   type AnyNodeId,
   emitter,
+  getEffectiveNode,
+  getPendingNodeUpdateCount,
   sceneRegistry,
   type ThumbnailGenerateEvent,
   useScene,
 } from '@pascal-app/core'
+import { type SceneViewInteriorPolicy, sceneViewGraphKey } from '@pascal-app/core/agent-operations'
 import {
   computeHeroFraming,
   createSnapshotPipeline,
   GRID_LAYER,
+  getMaterialTextureVersion,
+  getPendingWallRebuildCount,
   getVisibleWallMaterials,
+  getWallFinishRefs,
   heroCameraPose,
   holdLiveFrame,
+  isNodeRevealing,
+  ktx2TextureLoadState,
+  materialTextureLoadState,
   pendingSceneBuildCount,
   refreshIsolation,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
   type SnapshotPipeline,
+  sceneCaptureInputsReady,
   snapLevelsToTruePositions,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
   temporarilyHideNodeTypes,
+  temporarilyShowPresentation,
   temporarilyShowShadowOnly,
   useSceneAtmosphere,
   useViewer,
@@ -40,6 +51,8 @@ import {
   createSnapshotQueue,
   deliverSnapshot,
   enqueueSnapshotCapture,
+  holdSnapshotControls,
+  preserveSnapshotObjectState,
   runSnapshotCapture,
 } from './snapshot-capture'
 
@@ -468,8 +481,9 @@ function macrotask(): Promise<void> {
  * removed inside one synchronous render never reaches the React tree.
  */
 function clipSceneFor(
-  scene: THREE.Scene,
+  scene: THREE.Object3D,
   planes: readonly { normal: [number, number, number]; constant: number }[],
+  clipShadows = false,
 ): () => void {
   const group = new ClippingGroup()
   group.clippingPlanes = planes.map(
@@ -480,12 +494,40 @@ function clipSceneFor(
       ),
   )
   group.enabled = true
+  group.clipShadows = clipShadows
   const children = [...scene.children]
   for (const child of children) group.add(child)
   scene.add(group)
   return () => {
     for (const child of children) scene.add(child)
     scene.remove(group)
+  }
+}
+
+/** Apply only the planned floor policy, after reversible capture listeners. */
+function interiorFor(policy: SceneViewInteriorPolicy, restore: (callback: () => void) => void) {
+  const root = sceneRegistry.nodes.get(policy.levelId)
+  if (!root) throw new Error('The requested interior floor is not built. Try again.')
+  restore(temporarilyShowPresentation(root, { wallBatches: true }))
+  restore(clipSceneFor(root, [{ normal: [0, -1, 0], constant: policy.cutHeight }], true))
+  for (const id of policy.hiddenNodeIds) {
+    const object = sceneRegistry.nodes.get(id)
+    if (!object) continue
+    const visible = object.visible
+    restore(() => {
+      object.visible = visible
+    })
+    object.visible = false
+  }
+  // Authored hidden ancestors and descendants are never made visible.
+  const state = useScene.getState()
+  for (const [id, object] of sceneRegistry.nodes) {
+    if (state.nodes[id as AnyNodeId]?.visible !== false) continue
+    const visible = object.visible
+    restore(() => {
+      object.visible = visible
+    })
+    object.visible = false
   }
 }
 
@@ -583,6 +625,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   const generate = useCallback(
     async (event: ThumbnailGenerateEvent) => {
       const { captureMode, cropRegion, standardSize, cameraPose, requestId } = event
+      const interior = event.interior
       const snapLevels = event.snapLevels === true
       const transparent = event.transparent === true
       // A SHEET's capture asks for more than a
@@ -617,10 +660,72 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         isGenerating,
         async () => {
           const version = captureVersion.current
-          const onCapture = onThumbnailCaptureRef.current
+          const onCapture =
+            onThumbnailCaptureRef.current ?? (interior && event.ephemeral ? () => {} : undefined)
           if (!onCapture) throw new Error('Snapshot storage is unavailable')
-          if (cameraPose && event.projectId !== useViewer.getState().projectId)
+          if ((cameraPose || interior) && event.projectId !== useViewer.getState().projectId)
             throw new Error('The active project changed before capture')
+          const plannedState = useScene.getState()
+          const textureVersion = getMaterialTextureVersion()
+          const checkInterior = () => {
+            if (!interior) return
+            const state = useScene.getState()
+            if (
+              event.projectId !== useViewer.getState().projectId ||
+              state.nodes !== plannedState.nodes ||
+              state.materials !== plannedState.materials ||
+              sceneViewGraphKey(state.nodes) !== interior.graphKey ||
+              textureVersion !== getMaterialTextureVersion()
+            )
+              throw new Error('The scene changed since this interior view was planned. Try again.')
+            const textures = materialTextureLoadState()
+            const ktx2 = ktx2TextureLoadState()
+            if (
+              Object.keys(useViewer.getState().itemLoadFailures).length ||
+              textures.failed ||
+              ktx2.failed
+            )
+              throw new Error('Interior capture refused: required scene assets failed to load.')
+            if (
+              Object.values(state.nodes).some((storedNode) => {
+                const node = getEffectiveNode(storedNode)
+                return (
+                  node.type === 'item' &&
+                  node.visible !== false &&
+                  'roomClearPreview' in node &&
+                  node.roomClearPreview === true
+                )
+              })
+            )
+              throw new Error('Interior capture refused: required scene assets are still previews.')
+            if (
+              pendingSceneBuildCount() > 0 ||
+              getPendingNodeUpdateCount() > 0 ||
+              getPendingWallRebuildCount() > 0 ||
+              textures.pending > 0 ||
+              ktx2.pending > 0 ||
+              Object.values(state.nodes).some((node) => isNodeRevealing(node.id)) ||
+              [...(sceneRegistry.byType.item ?? [])].some((id) => {
+                const node = state.nodes[id as AnyNodeId]
+                return (
+                  node?.visible !== false &&
+                  sceneRegistry.nodes.get(id)?.userData.itemModelSettled !== true
+                )
+              })
+            )
+              throw new Error('Interior capture refused: the scene is still building. Try again.')
+            if (!sceneCaptureInputsReady(scene, state, interior))
+              throw new Error(
+                'Interior capture refused: current inputs have not rendered yet. Try again.',
+              )
+            if (
+              !Number.isFinite(interior.cutHeight) ||
+              ![...interior.bounds.min, ...interior.bounds.max].every(Number.isFinite) ||
+              plannedState.nodes[interior.levelId as AnyNodeId]?.type !== 'level'
+            )
+              throw new Error('Invalid interior capture policy')
+          }
+          checkInterior()
           const perspectiveCamera = thumbnailCameraRef.current
           if (!perspectiveCamera) throw new Error('Snapshot camera is not ready')
           const { camera: mainCamera, controls } = getThree()
@@ -654,9 +759,67 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           if (pose && isTabHidden()) throw new Error(HIDDEN_TAB)
           // a sheet's capture runs frames by hand in a scene set up for the
           // picture: the viewport keeps its last frame meanwhile
-          const releaseLiveFrame = pose ? holdLiveFrame(HOLD_MAX_MS) : null
+          if (interior && (!pose || snapLevels || captureMode !== 'standard'))
+            throw new Error('An interior capture needs an explicit standard capture pose')
+          const releaseLiveFrame = pose ? holdLiveFrame(HOLD_MAX_MS, !!interior) : null
+          let restoreControls: (() => void) | undefined
+          const liveObjects = new Map<
+            THREE.Object3D,
+            {
+              parent: THREE.Object3D | null
+              children: THREE.Object3D[]
+              position: THREE.Vector3
+              quaternion: THREE.Quaternion
+              scale: THREE.Vector3
+              visible: boolean
+              mask: number
+              material?: THREE.Material | THREE.Material[]
+              geometry?: THREE.BufferGeometry
+            }
+          >()
+          if (interior)
+            scene.traverse((object) => {
+              const mesh = object as THREE.Mesh
+              liveObjects.set(object, {
+                parent: object.parent,
+                children: [...object.children],
+                position: object.position.clone(),
+                quaternion: object.quaternion.clone(),
+                scale: object.scale.clone(),
+                visible: object.visible,
+                mask: object.layers.mask,
+                ...(mesh.isMesh ? { material: mesh.material, geometry: mesh.geometry } : {}),
+              })
+            })
+          const checkLiveFrame = () => {
+            checkInterior()
+            if (!interior) return
+            let count = 0
+            scene.traverse((object) => {
+              count++
+              const saved = liveObjects.get(object)
+              const mesh = object as THREE.Mesh
+              if (
+                !saved ||
+                saved.parent !== object.parent ||
+                saved.children.length !== object.children.length ||
+                saved.children.some((child, i) => child !== object.children[i]) ||
+                !saved.position.equals(object.position) ||
+                !saved.quaternion.equals(object.quaternion) ||
+                !saved.scale.equals(object.scale) ||
+                saved.visible !== object.visible ||
+                saved.mask !== object.layers.mask ||
+                (mesh.isMesh &&
+                  (saved.material !== mesh.material || saved.geometry !== mesh.geometry))
+              )
+                throw new Error('The rendered scene changed during interior capture. Try again.')
+            })
+            if (count !== liveObjects.size)
+              throw new Error('The rendered scene changed during interior capture. Try again.')
+          }
 
           try {
+            if (interior) restoreControls = holdSnapshotControls(controls)
             const edges = edgesOverride ?? (transparent ? 'off' : useViewer.getState().edges)
 
             // A caller's own orthographic view, or an orthographic main camera,
@@ -665,7 +828,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             const wantOrtho =
               !snapLevels &&
               !cameraPose &&
-              (ortho !== undefined || mainCamera instanceof THREE.OrthographicCamera)
+              (ortho !== undefined || (!interior && mainCamera instanceof THREE.OrthographicCamera))
             let thumbnailCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera =
               perspectiveCamera
             let pipeline: SnapshotPipeline | null = pipelineRef.current
@@ -734,6 +897,23 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 }
               }
               perspectiveCamera.aspect = width / height
+              if (interior && perspective) {
+                applySnapshotCapturePose(
+                  perspectiveCamera,
+                  {
+                    position: perspective.position,
+                    quaternion: perspectiveCamera.quaternion.toArray() as [
+                      number,
+                      number,
+                      number,
+                      number,
+                    ],
+                    fov: perspective.fov ?? 60,
+                  },
+                  { width, height },
+                  { w: standardW, h: standardH },
+                )
+              }
               if (cameraPose) {
                 applySnapshotCapturePose(
                   perspectiveCamera,
@@ -752,6 +932,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               perspectiveCamera.updateMatrixWorld()
             }
 
+            // These uniforms belong to the separate snapshot pipeline, not
+            // the live view. In particular, don't "restore" them by updating
+            // the live camera's matrices during a read-only interior capture.
             pipeline?.applyEnvironment({
               theme: useViewer.getState().sceneTheme,
               transparent,
@@ -790,7 +973,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               ...(isOrtho && { zoom: (mainCamera as THREE.OrthographicCamera).zoom }),
             }
 
-            if (pose) {
+            if (pose && !interior) {
               // a sheet's capture: the house as built — never a half-built scene
               // or an item's loading placeholder (the cover once showed striped
               // boxes through a white roof, 2026-09-23) — then the viewer's own
@@ -806,6 +989,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             // the scene as the picture wants it, for one render; `restore` puts
             // every change back right after it
             const setUp = (restore: (callback: () => void) => void) => {
+              if (interior) {
+                checkLiveFrame()
+                restore(preserveSnapshotObjectState(scene))
+              }
               if (snapLevels) {
                 const prevMode = useViewer.getState().levelMode
                 if (prevMode !== 'stacked') {
@@ -823,7 +1010,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // true height
               if (pose) {
                 restore(hideCaptureExcluded(scene))
-                restore(snapLevelsToTruePositions())
+                restore(snapLevelsToTruePositions({ readOnly: !!interior }))
               }
               if (lightFace && pose) restore(aimLightsAtFace(scene, pose.position, pose.target))
               if (clip.length > 0) {
@@ -857,10 +1044,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 }
               }
 
-              restore(() => emitter.emit('thumbnail:after-capture', undefined))
-              emitter.emit('thumbnail:before-capture', undefined)
-              if (cameraPose) {
-                restore(snapLevelsToTruePositions())
+              const eventPolicy = interior
+                ? { readOnly: true as const, hiddenNodeIds: interior.hiddenNodeIds, restore }
+                : undefined
+              restore(() =>
+                emitter.emit('thumbnail:after-capture', interior ? { readOnly: true } : undefined),
+              )
+              emitter.emit('thumbnail:before-capture', eventPolicy)
+              if (cameraPose || interior) {
+                restore(snapLevelsToTruePositions({ readOnly: !!interior }))
                 restore(temporarilyShowShadowOnly(scene))
                 const wallMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>()
                 restore(() => {
@@ -868,18 +1060,27 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 })
                 const state = useScene.getState()
                 const viewer = useViewer.getState()
+                const interiorRoot = interior
+                  ? sceneRegistry.nodes.get(interior.levelId)
+                  : undefined
                 for (const id of sceneRegistry.byType.wall ?? []) {
                   const node = state.nodes[id as AnyNodeId]
                   const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh | undefined
                   if (node?.type !== 'wall' || !mesh?.isMesh) continue
+                  if (interior) {
+                    let ancestor: THREE.Object3D | null = mesh
+                    while (ancestor && ancestor !== interiorRoot) ancestor = ancestor.parent
+                    if (!ancestor) continue
+                  }
                   wallMaterials.set(mesh, mesh.material)
                   mesh.material = getVisibleWallMaterials(
                     node,
                     viewer.shading,
-                    viewer.textures,
-                    viewer.colorPreset,
+                    interior ? true : viewer.textures,
+                    interior ? 'clay' : viewer.colorPreset,
                     viewer.sceneTheme,
                     state.materials,
+                    interior ? getWallFinishRefs(mesh.geometry) : undefined,
                   )
                 }
               }
@@ -888,7 +1089,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // since the viewport's last frame. Apply the same isolation to
               // those meshes before either snapshot render path submits them,
               // and restore fog afterwards so the atmosphere never leaks in.
-              restore(refreshIsolation(scene))
+              if (interior) {
+                interiorFor(interior, restore)
+                restore(lightInterior(scene, thumbnailCamera))
+                checkInterior()
+              } else restore(refreshIsolation(scene))
             }
             // The scene pass is a FRAME-updated node: it renders once per node
             // frame, and only the animation loop advances that frame. With the
@@ -970,6 +1175,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 throw new Error('The scene changed during capture. Try again.')
               }
               trace('callback', { bytes: blob.size })
+              checkLiveFrame()
+              restoreControls?.()
               await within(
                 Promise.resolve(deliverSnapshot(event, blob, cameraData, onCapture)),
                 CAPTURE_SETTLE_MS,
@@ -1103,22 +1310,28 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             ) {
               throw new Error('The scene changed during capture. Try again.')
             }
-            if (cameraPose && event.projectId !== useViewer.getState().projectId) {
+            if ((cameraPose || interior) && event.projectId !== useViewer.getState().projectId) {
               throw new Error('The active project changed during capture')
             }
             trace('callback', { bytes: blob.size })
+            checkLiveFrame()
+            restoreControls?.()
             await within(
               Promise.resolve(deliverSnapshot(event, blob, cameraData, onCapture)),
               CAPTURE_SETTLE_MS,
               'The snapshot host never took the frame.',
             )
           } finally {
-            releaseLiveFrame?.()
+            try {
+              restoreControls?.()
+            } finally {
+              releaseLiveFrame?.()
+            }
             // a sheet capture (transparent ground, ink edges, an orthographic
             // camera) sets the environment the live viewer shares; put the
             // viewer's own look back whatever happened above, or the live 3D
             // view keeps the capture's tinted (sepia-looking) environment
-            if (transparent || edgesOverride !== undefined || ortho !== undefined) {
+            if (!interior && (transparent || edgesOverride !== undefined || ortho !== undefined)) {
               try {
                 pipelineRef.current?.applyEnvironment({
                   theme: useViewer.getState().sceneTheme,

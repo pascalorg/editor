@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   type SceneViewCrop,
+  type SceneViewInteriorPolicy,
   type SceneViewPose,
   sceneViewNote,
   sceneViewPlan,
@@ -31,6 +32,7 @@ export type SceneViewHost = {
     projectId: string
     pose: SceneViewPose
     size: { w: number; h: number }
+    interior?: SceneViewInteriorPolicy
   }): Promise<SceneViewCapture>
   /** Crops the reference photo to a region; without it a view with a photo is refused. */
   crop?(
@@ -61,7 +63,7 @@ export function registerViewScene(
         const projectId = operations.getActiveScene()?.projectId
         if (!projectId)
           refuse('no_project', 'This session has no project open to look at: load or create one.')
-        const { pose, size, crop } = sceneViewPlan(
+        const { pose, size, crop, interior } = sceneViewPlan(
           operations.getNodes() as Record<string, AnyNode>,
           input,
         )
@@ -71,7 +73,7 @@ export function registerViewScene(
             'This Pascal server cannot crop a photo: crop the region yourself and lay it beside the view.',
           )
         const [shot, cropped] = await Promise.all([
-          views!.capture({ projectId: projectId!, pose, size }),
+          views!.capture({ projectId: projectId!, pose, size, ...(interior ? { interior } : {}) }),
           crop ? views!.crop!(crop) : undefined,
         ])
         const payload = {
@@ -80,7 +82,7 @@ export function registerViewScene(
           size: { width: shot.width, height: shot.height },
           tab: shot.tab,
           capturedAt: shot.capturedAt,
-          note: sceneViewNote(),
+          note: sceneViewNote(operations.getNodes() as Record<string, AnyNode>),
           ...(crop && cropped
             ? {
                 photoRegion: crop.region,

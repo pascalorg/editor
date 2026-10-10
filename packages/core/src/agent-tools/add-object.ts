@@ -3,7 +3,7 @@ import { geometryMetaFields } from '../schema/geometry-metadata'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
-const DESCRIPTION = `Build an object by writing a plain three.js module, the way you would in any three.js project. Use it for what the catalog and the structure tools cannot reproduce faithfully: custom columns and capitals, mouldings and trim, panels, lanterns and fixtures, exposed beams, vaulted or tray ceiling bodies, canopies, a porch, railings, built-ins. Pascal runs the module in a sandbox, stores the result and places it as one object the user can move, paint, and ask you to edit again.
+const DESCRIPTION = `Author parametric Three.js furniture, decor and custom objects to match requested shapes, dimensions or style. A requested look or custom fit can justify authoring even when generic catalog equivalents exist; catalog items remain suitable when they fit. Examples include a low oak table, a slatted bench, a paper lantern, built-ins, custom columns and capitals, mouldings and trim, panels, exposed beams, ceiling bodies, canopies, a porch and railings. Pascal runs the module in a sandbox, stores the result and places it as one object the user can move, paint, and ask you to edit again.
 
 Module shape (import THREE from the three package as usual; the addons below too):
   // also available: three/addons/utils/BufferGeometryUtils.js, three/addons/geometries/{RoundedBoxGeometry,ConvexGeometry,LoftGeometry,ParametricGeometry}.js, three-bvh-csg (Brush, Evaluator, SUBTRACTION, ADDITION, INTERSECTION)
@@ -11,7 +11,7 @@ Module shape (import THREE from the three package as usual; the addons below too
   export const mount = 'floor'   // 'floor' | 'wall-side' (on a wall face) | 'wall' (through a wall, like a window) | 'ceiling'
   export default function build({ params, THREE }) { const group = new THREE.Group(); /* … */ return group }
 
-One object is one feature that changes together: a porch, a railing run, a fireplace surround, a ceiling with its beams. Never a whole house, and never walls, rooms, floors, roofs, stairs, doors or windows: those have their own tools. A new object says what it stands in for (reason): the scene check lists every authored object with its reason, so each names something Pascal has no type for. On a floor, a plain box with a wall's size or a floor plate is refused with the tool to use (use_walls, use_slab); a detailed object with a wall's size (a bookcase, a screen), or one named after something Pascal builds, is built with a hint naming the tool.
+One object is one feature that changes together: a table, a bench, a porch, a railing run, a fireplace surround, a ceiling with its beams. Never a whole house, and never walls, rooms, floors, roofs, stairs, doors or windows: those have their own tools. A new object's reason records its design intent: what the authored shape, dimensions or style contributes to the request. The scene check lists every authored object with its reason; no catalog-exhaustion proof is required. On a floor, a plain box with a wall's size or a floor plate is refused with the tool to use (use_walls, use_slab); a detailed object with a wall's size (a bookcase, a screen), or one named after something Pascal builds, is built with a hint naming the tool.
 
 Conventions (they make the object work in Pascal; follow them):
 - Metres, Y up, modelled as it stands. Pascal puts the bottom-centre of the bounds at the placement point; for wall-side the back face sits on the wall and the object faces +Z.
@@ -68,9 +68,9 @@ export const addObjectTool = {
       .optional()
       .describe('Which wall face a wall-side object sits on.'),
     ...geometryMetaFields,
-    name: geometryMetaFields.name.describe('What the user would call it ("Front porch").'),
+    name: geometryMetaFields.name.describe('What the user would call it ("Low oak table").'),
     category: geometryMetaFields.category.describe(
-      'What it is, one word or two ("porch", "lantern", "ceiling", "trim").',
+      'What it is, one word or two ("table", "bench", "porch", "lantern", "trim").',
     ),
     reason: z
       .string()
@@ -78,7 +78,7 @@ export const addObjectTool = {
       .max(200)
       .optional()
       .describe(
-        'What it stands in for: why no Pascal tool or catalog item builds it ("no cornice type"). Required to create; an edit keeps it unless given.',
+        'Design intent: why this authored shape, size or style suits the request ("low oak table for the Japandi seating area"). Required to create; an edit keeps it unless given. No catalog-exhaustion proof is required.',
       ),
   },
 }

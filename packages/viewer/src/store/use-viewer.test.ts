@@ -6,6 +6,7 @@ import useViewer from './use-viewer'
 const resetMeasurementPreferences = () => {
   useViewer.setState({
     externalSelectedIds: [],
+    pointedIds: [],
     projectId: null,
     projectPreferences: {},
     showMeasurements: true,
@@ -71,6 +72,41 @@ describe('external selection highlights', () => {
 
     expect(useViewer.getState().externalSelectedIds).toEqual(['wall_remote'])
     expect(useViewer.getState().selection).toBe(localSelection)
+  })
+})
+
+// Point and ask: a chat context chip hovered lights the elements it names. The slot is its own, so
+// writing it never clobbers a teammate's highlight in `externalSelectedIds` nor the local selection.
+describe('pointed highlights', () => {
+  test('tracks the pointed elements without touching the external or local selection', () => {
+    const localSelection = useViewer.getState().selection
+    useViewer.getState().setExternalSelectedIds(['wall_remote'])
+
+    useViewer.getState().setPointedIds(['zone_kitchen', 'wall_north'])
+
+    expect(useViewer.getState().pointedIds).toEqual(['zone_kitchen', 'wall_north'])
+    expect(useViewer.getState().externalSelectedIds).toEqual(['wall_remote'])
+    expect(useViewer.getState().selection).toBe(localSelection)
+  })
+
+  test('the same ids again change nothing, so nothing re-renders', () => {
+    useViewer.getState().setPointedIds(['zone_kitchen'])
+    const before = useViewer.getState().pointedIds
+
+    useViewer.getState().setPointedIds(['zone_kitchen'])
+
+    expect(useViewer.getState().pointedIds).toBe(before)
+  })
+
+  test('null clears it, and clearing what is already clear changes nothing', () => {
+    useViewer.getState().setPointedIds(['zone_kitchen'])
+    useViewer.getState().setPointedIds(null)
+    expect(useViewer.getState().pointedIds).toEqual([])
+
+    const empty = useViewer.getState().pointedIds
+    useViewer.getState().setPointedIds(null)
+    useViewer.getState().setPointedIds([])
+    expect(useViewer.getState().pointedIds).toBe(empty)
   })
 })
 

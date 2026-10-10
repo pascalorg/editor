@@ -7,6 +7,7 @@ import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, McpError, refusalResult, throwMcpError } from './errors'
 import './honest-patch-guard'
+import './level-height-guard'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { assertPatchKeepsIdentity, PatchRefusedError, runPatchGuards } from './patch-guards'
 import { PatchSchema } from './schemas'
@@ -19,6 +20,8 @@ export const applyPatchOutput = {
   appliedOps: z.number(),
   deletedIds: z.array(z.string()),
   createdIds: z.array(z.string()),
+  /** What the server changed in the patch before writing it, one line each. */
+  notes: z.array(z.string()).optional(),
   ...liveSyncOutput,
 }
 
@@ -57,7 +60,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
       })
 
       try {
-        runPatchGuards(bridgePatches, bridge.getNodes() as Record<string, AnyNode>)
+        const notes = runPatchGuards(bridgePatches, bridge.getNodes() as Record<string, AnyNode>)
         const planDeletion = (bridge as { planDeletion?: SceneOperations['planDeletion'] })
           .planDeletion
         assertPatchKeepsIdentity(
@@ -72,6 +75,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
           appliedOps: result.appliedOps,
           deletedIds: result.deletedIds as unknown as string[],
           createdIds: result.createdIds as unknown as string[],
+          ...(notes.length ? { notes } : {}),
           ...persistencePayload(persistence),
         }
         return {

@@ -39,7 +39,7 @@ The same shape powers the built-in `pascal:core` plugin in `@pascal-app/nodes` �
 The core `Plugin` manifest owns semantic node definitions (and registry-backed inspector extensions); host UI and viewer-wide presentation remain separate exports. Each `nodes` entry is a `NodeDefinition<S extends ZodObject>` that the registry stamps with `kind`, `schemaVersion`, `schema`, and any combination of:
 
 - `defaults` — initial field values for new instances.
-- `capabilities` — `selectable` / `duplicable` / `deletable` / `surfaces` / `relations` flags consumed by the framework.
+- `capabilities` — `selectable` / `duplicable` / `deletable` / `surfaces` / `relations` flags consumed by the framework. `reveal` (`{ phase, style }`, plus `height` in metres for `settle`, `drop` and `assemble`) stages the kind when an agent builds it (see [`systems.md`](systems.md#construction-reveal)); without it the node appears with its parent, or drops in as a part of an `assemble` parent.
 - `parametrics` — auto-derived inspector UI shape (`fields` + optional `customPanel` escape hatch).
 - `renderer` — custom 3D React component (GLB, drei, TSL — opt-out of `def.geometry`).
 - `system` — per-frame work (animation, dirty-cascade, runtime state).

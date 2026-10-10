@@ -64,6 +64,7 @@ import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
 import { paneOfView, VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../store/view-layout'
+import { PointAskLayer } from '../point-ask/point-ask-layer'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -105,6 +106,7 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanModeCoordinator } from './floorplan-mode-coordinator'
 import { FloorplanPanel } from './floorplan-panel'
+import { FollowPascal } from './follow-pascal'
 import { FootprintHeightHandle } from './footprint-height-handle'
 import { Grid } from './grid'
 import { GroupFloatingActionMenu } from './group-floating-action-menu'
@@ -156,6 +158,8 @@ const EDITOR_HOVER_STYLES: HoverStyles = {
   'paint-ready': { visibleColor: 0xf5_9e_0b, hiddenColor: 0xfd_e0_68, strength: 5, pulse: true },
   // Erasing paints nothing: a neutral outline, no paint colour.
   'erase-ready': { visibleColor: 0xe4_e4_e7, hiddenColor: 0xa1_a1_aa, strength: 5, pulse: false },
+  // Point and ask: the agent accent, steady (nothing animates a hover), the occluded parts faint.
+  point: { visibleColor: 0xa9_9b_ff, hiddenColor: 0x5b_4f_c9, strength: 5, pulse: false },
   'paint-disabled': {
     visibleColor: 0x94_a3_b8,
     hiddenColor: 0x47_55_69,
@@ -877,6 +881,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
       {!isXRMode && <CustomCameraControls />}
+      {!isXRMode && <FollowPascal />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!isXRMode && <VectorEdgeExtractor />}
       {!(isFirstPersonMode || isXRMode) && <SiteEdgeLabels />}
@@ -1231,6 +1236,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
               containerRef={viewer3dRef}
               isVersionPreviewMode={isVersionPreviewMode}
             />
+            {!isVersionPreviewMode && <PointAskLayer />}
             {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
               <ViewerCanvasControlsHint onDismiss={dismissCameraControlsHint} />
             ) : null}

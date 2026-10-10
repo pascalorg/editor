@@ -1,5 +1,6 @@
 import { useThree } from '@react-three/fiber'
 import { useLayoutEffect, useRef } from 'react'
+import { areLiveFrameUpdatesHeld } from '../../lib/live-frame-hold'
 import { timeSpan } from '../../lib/perf-tracks'
 import useViewer from '../../store/use-viewer'
 
@@ -12,6 +13,7 @@ type FrameLimiterProps = {
 export type FrameClock = {
   sample: (wallTimeMs: number, intervalMs: number) => number | null
   step: (seconds: number) => number
+  pause: (wallTimeMs: number) => void
 }
 
 /**
@@ -41,6 +43,9 @@ export function createFrameClock(initialTime = 0): FrameClock {
     step(seconds) {
       frameTime += seconds
       return frameTime
+    },
+    pause(wallTimeMs) {
+      previousWallTime = wallTimeMs
     },
   }
 }
@@ -80,6 +85,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false, o
     // boundaries: report the first failure to the host and keep the loop alive.
     let frameErrorReported = false
     function advance(frameTime: number) {
+      if (areLiveFrameUpdatesHeld()) return
       try {
         advanceFrame(frameTime)
       } catch (error) {
@@ -99,6 +105,10 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false, o
     }
     function tick(t: DOMHighResTimeStamp) {
       raf = requestAnimationFrame(tick)
+      if (areLiveFrameUpdatesHeld()) {
+        clock.pause(t)
+        return
+      }
       syncSize()
       const frameTime = clock.sample(t, interval)
       if (frameTime === null) return
@@ -106,6 +116,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false, o
       timeSpan('frame-cpu', () => advance(frameTime))
     }
     function kick() {
+      if (areLiveFrameUpdatesHeld()) return
       syncSize()
       const frameTime = clock.step(1 / 1000)
       nextFrameTimeRef.current = frameTime
@@ -118,6 +129,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false, o
     set({ frameloop: 'never' })
     if (DRAW_DISABLED) {
       timer = setInterval(() => {
+        if (areLiveFrameUpdatesHeld()) return
         const frameTime = clock.step(interval / 1000)
         nextFrameTimeRef.current = frameTime
         timeSpan('frame-cpu', () => advance(frameTime))

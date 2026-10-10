@@ -8,6 +8,7 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 import { MeasurementControl } from './measurement-control'
+import { PointAskButton } from './point-ask-button'
 
 type ControlId = 'select' | 'box-select' | 'delete'
 
@@ -76,6 +77,7 @@ export function ControlModes() {
         return (
           <Fragment key={c.id}>
             {c.id === 'delete' ? <MeasurementControl /> : null}
+            {c.id === 'zone' ? <PointAskButton /> : null}
             <ActionButton
               className={cn(
                 'group text-muted-foreground',

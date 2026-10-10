@@ -205,7 +205,7 @@ export function requireAddObjectReason(input: { nodeId?: string; reason?: string
   if (!input.nodeId && !input.reason?.trim())
     refuse(
       'reason_required',
-      'Say what this object stands in for (reason): why no Pascal tool or catalog item builds it. The scene check lists every authored object with its reason.',
+      'Give its design intent (reason): why the authored shape, size or style suits the request. The scene check lists every authored object with its reason; no catalog-exhaustion proof is required.',
     )
 }
 

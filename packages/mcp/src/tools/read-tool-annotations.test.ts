@@ -59,6 +59,7 @@ const TOOL_POLICIES = [
       openWorldHint: false,
     },
     tools: [
+      'add_corner_window',
       'add_door',
       'add_level',
       'add_wall',
@@ -106,6 +107,7 @@ const TOOL_POLICIES = [
       'move_zone',
       'rotate_zone',
       'lock_outside_faces',
+      'merge_windows',
       'merge_zones',
       'delete_scene',
       'get_project_status',

@@ -1720,6 +1720,12 @@ export type Capabilities = {
    */
   batchable?: BatchableConfig
   /**
+   * How the node appears when an agent builds it: its construction phase and
+   * motion. A kind without it appears at once, with its parent. See
+   * `RevealConfig`.
+   */
+  reveal?: RevealConfig
+  /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
    * directly (wall, slab). Lets a kind self-describe where it sits in plan
@@ -2540,6 +2546,53 @@ export type BatchableConfig = {
   /** Joins wait until wall rebuilds and wall drags on the node's level have settled. */
   waitsForWalls?: boolean
 }
+
+/**
+ * Construction phases, in the order a reveal plays them: slabs, then walls and
+ * columns, stairs, doors and windows, roofs and ceilings, furniture.
+ */
+export type RevealPhase =
+  | 'foundation'
+  | 'structure'
+  | 'circulation'
+  | 'openings'
+  | 'roof'
+  | 'furnishing'
+
+/**
+ * How a node moves into place when it is revealed:
+ *
+ * - `rise` grows it up from its base (walls, fences);
+ * - `scale` grows it from its footprint's centre;
+ * - `settle` lowers it the last few centimetres onto its support (slabs);
+ * - `drop` lets it fall from `height` like a dropped load and land with a small bounce;
+ * - `cut` pops it open from its centre (doors, windows);
+ * - `assemble` holds the node still while its child nodes, its parts, drop in one by one from
+ *   `height` (a roof and its segments). Its renderer reads `isRevealAssembling` and
+ *   `subscribeRevealAssembling` (`@pascal-app/viewer`) to draw them apart.
+ */
+export type RevealStyle = 'rise' | 'scale' | 'settle' | 'drop' | 'cut' | 'assemble'
+
+/**
+ * A staged appearance (`capabilities.reveal`), presentation only: the store
+ * write is already done. The styles that travel carry their height, in
+ * metres above the rest pose, so each kind tunes its own fall.
+ */
+export type RevealConfig =
+  | { phase: RevealPhase; style: 'rise' | 'scale' | 'cut'; clears?: RevealClears }
+  | {
+      phase: RevealPhase
+      style: 'settle' | 'drop' | 'assemble'
+      height: number
+      clears?: RevealClears
+    }
+
+/**
+ * A node that lifts out of the way while a phase of the build plays: a roof rises `height` metres
+ * and turns ghostly while the furniture drops in, so the rooms show from above, and seats again
+ * once the phase has landed. Presentation only, like the reveal itself.
+ */
+export type RevealClears = { for: RevealPhase; height: number }
 
 /**
  * Plan footprint a kind contributes to the alignment-anchor pool when it is

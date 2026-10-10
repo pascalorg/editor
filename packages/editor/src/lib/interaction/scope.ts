@@ -111,6 +111,10 @@ export type InteractionScope =
   // (`resolveOverlayPolicy`). A brush that only claimed the scope between
   // pointer-down and -up would flicker all of that back on between dabs.
   | { kind: 'sculpting' }
+  // Point and ask: the pointer belongs to pointing at things for the agent, so selection, handles and
+  // the floating action menu step back (the same active policy as a brush) for as long as the mode
+  // is on. Held by the point-ask session, which leaves the mode if another interaction takes over.
+  | { kind: 'pointing' }
 
 export type InteractionKind = InteractionScope['kind']
 

@@ -29,7 +29,14 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { beginPerfAction, cancelPerfAction, commitPerfAction, useViewer } from '@pascal-app/viewer'
+import {
+  beginPerfAction,
+  cancelPerfAction,
+  commitPerfAction,
+  useRevealPlanActive,
+  useRevealWaiting,
+  useViewer,
+} from '@pascal-app/viewer'
 import {
   type ComponentProps,
   memo,
@@ -151,6 +158,7 @@ import {
   resolveFloorplanLabelAngle,
   updateSvgFloorplanLabelOrientations,
 } from './floorplan-label-angle'
+import { useFloorplanReveal } from './floorplan-reveal'
 
 /**
  * Registry-driven floor-plan layer.
@@ -2027,6 +2035,10 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   wallDimensionReference,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
+  // A node an agent just built is drawn on its construction-reveal turn, as in 3D.
+  const revealWaiting = useRevealWaiting(nodeId)
+  const revealActive = useRevealPlanActive(nodeId)
+  const entryRef = useRef<SVGGElement>(null)
   const selected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const highlighted = useViewer((state) => state.previewSelectedIds.includes(nodeId))
   const multiSelected = useViewer(
@@ -2215,7 +2227,8 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     visibleGeometry && suppressHandles && pass !== 'base'
       ? stripHandleChrome(visibleGeometry)
       : visibleGeometry
-  if (!geometry) return null
+  useFloorplanReveal(nodeId, entryRef, cacheEntry, revealWaiting, revealActive)
+  if (revealWaiting || !geometry) return null
 
   const entryClick = isMarqueeSelectionActive ? undefined : onClickStop
   const entryPointerDown = isMarqueeSelectionActive ? undefined : handlePointerDown
@@ -2224,6 +2237,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     <g
       className="floorplan-registry-entry"
       data-node-id={nodeId}
+      ref={entryRef}
       onClick={entryClick}
       onPointerDown={entryPointerDown}
       onPointerEnter={handlePointerEnter}

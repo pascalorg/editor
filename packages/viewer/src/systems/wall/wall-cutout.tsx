@@ -72,7 +72,8 @@ export const WallCutout = ({
   useEffect(() => {
     const snapshot = new Map<Mesh, Material | Material[]>()
 
-    const restoreForCapture = () => {
+    const restoreForCapture = (policy: undefined | { readOnly: true }) => {
+      if (policy?.readOnly) return
       sceneRegistry.byType.wall!.forEach((wallId) => {
         const wallMesh = sceneRegistry.nodes.get(wallId) as Mesh | undefined
         if (!wallMesh) return
@@ -102,7 +103,8 @@ export const WallCutout = ({
       })
     }
 
-    const reapplyAfterCapture = () => {
+    const reapplyAfterCapture = (policy: undefined | { readOnly: true }) => {
+      if (policy?.readOnly) return
       snapshot.forEach((mat, mesh) => {
         mesh.material = mat
       })

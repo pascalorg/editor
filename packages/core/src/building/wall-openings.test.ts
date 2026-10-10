@@ -33,6 +33,24 @@ describe('planWallOpening', () => {
   }
 })
 
+// Not a shared case: core stands a window taller than its wall on the floor and says it clamped,
+// while a host refuses what pokes above the wall when it writes it ("The window does not fit").
+describe('a window taller than its wall, with no sill given', () => {
+  test('stands on the floor and is reported clamped', () => {
+    const { nodes } = openingScene()
+    const planned = planWallOpening(nodes, {
+      kind: 'window',
+      wallId: 'wall_main',
+      t: 0.5,
+      height: 3,
+    })
+
+    expect(planned.node.position[1]).toBeCloseTo(1.5, 6)
+    expect(planned.sillHeight).toBeCloseTo(0, 6)
+    expect(planned.clamped).toBe(true)
+  })
+})
+
 // An agent wrote a front door's three glass strips off as "not possible": both tools take code,
 // and their descriptions stopped at outline, type and style.
 describe('where an opening beyond the fields is made', () => {

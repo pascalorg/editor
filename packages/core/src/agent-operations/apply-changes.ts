@@ -1,4 +1,4 @@
-import type { AnyNode, Collection } from '../schema'
+import type { AnyNode, Collection, SceneMaterial } from '../schema'
 import type { SceneChanges, SceneNodes } from './types'
 
 const childrenOf = (node: AnyNode | undefined): string[] | null =>
@@ -54,11 +54,14 @@ export function applySceneChanges(
  * step. Updates to a node the batch created are folded into its creation, and a node created then
  * deleted never appears; updates only reach nodes that existed before, deletes come last.
  */
-export function mergeSceneChanges(sets: readonly SceneChanges[]): Required<SceneChanges> {
+export function mergeSceneChanges(
+  sets: readonly SceneChanges[],
+): Required<Omit<SceneChanges, 'materials'>> & Pick<SceneChanges, 'materials'> {
   const created = new Map<string, { node: AnyNode; parentId?: string }>()
   const updated = new Map<string, Partial<AnyNode>>()
   const deleted = new Set<string>()
   const collections: Record<string, Collection | null> = {}
+  const materials = new Map<string, SceneMaterial>()
   const dropCreated = (id: string) => {
     created.delete(id)
     for (const [childId, entry] of [...created])
@@ -66,6 +69,7 @@ export function mergeSceneChanges(sets: readonly SceneChanges[]): Required<Scene
   }
   for (const set of sets) {
     Object.assign(collections, set.collections)
+    for (const material of set.materials ?? []) materials.set(material.id, material)
     for (const { id, data } of set.update ?? []) {
       const entry = created.get(id)
       if (entry)
@@ -90,5 +94,6 @@ export function mergeSceneChanges(sets: readonly SceneChanges[]): Required<Scene
     update: [...updated].map(([id, data]) => ({ id, data })),
     delete: [...deleted],
     collections,
+    ...(materials.size ? { materials: [...materials.values()] } : {}),
   }
 }

@@ -1,6 +1,8 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
+import type { PointAskPin, PointAskStatus } from '../agent-operations/point-context'
+import type { SceneViewInteriorPolicy } from '../agent-operations/scene-view'
 import type {
   BlockNode,
   BoxVentNode,
@@ -228,6 +230,7 @@ export interface SnapshotCapturedEvent {
 
 export interface ThumbnailGenerateEvent {
   projectId: string
+  interior?: SceneViewInteriorPolicy
   requestId?: string
   /** World-space pose for a standard capture without moving the viewport camera. */
   cameraPose?: SnapshotCapturePose
@@ -355,9 +358,17 @@ type WindowAnimationEvents = {
   }
 }
 
+export type ThumbnailCapturePolicy = {
+  readOnly: true
+  /** Excluded ancestors whose packed draws must also be hidden for this render. */
+  hiddenNodeIds?: readonly string[]
+  /** Reversible renderer changes join the synchronous capture transaction. */
+  restore?: (callback: () => void) => void
+}
+
 type ThumbnailEvents = {
-  'thumbnail:before-capture': undefined
-  'thumbnail:after-capture': undefined
+  'thumbnail:before-capture': undefined | ThumbnailCapturePolicy
+  'thumbnail:after-capture': undefined | ThumbnailCapturePolicy
 }
 
 type SnapshotEvents = {
@@ -375,6 +386,13 @@ type AIChatEvents = {
 
 export interface RoomPresetCreateEvent {
   zoneId: ZoneNode['id']
+}
+
+type PointAskEvents = {
+  /** The chat's word on an ask's turn, for its pin. */
+  'point-ask:status': PointAskStatus
+  /** The pin tells the chat to light or open the ask's turn. */
+  'point-ask:pin': PointAskPin
 }
 
 type RoomPresetEvents = {
@@ -408,6 +426,7 @@ type EditorEvents = GridEvents &
   ThumbnailEvents &
   SnapshotEvents &
   AIChatEvents &
+  PointAskEvents &
   RoomPresetEvents &
   SelectionEvents
 

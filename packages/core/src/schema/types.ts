@@ -17,6 +17,7 @@ import { DuctSegmentNode } from './nodes/duct-segment'
 import { DuctTerminalNode } from './nodes/duct-terminal'
 import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
+import { FacadeNode } from './nodes/facade'
 import { FenceNode } from './nodes/fence'
 import { FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 import { FloorOpeningNode } from './nodes/floor-opening'
@@ -30,6 +31,7 @@ import { LevelNode } from './nodes/level'
 import { LinesetNode } from './nodes/lineset'
 import { LiquidLineNode } from './nodes/liquid-line'
 import { MeasurementNode } from './nodes/measurement'
+import { PanelNode } from './nodes/panel'
 import { PipeFittingNode } from './nodes/pipe-fitting'
 import { PipeSegmentNode } from './nodes/pipe-segment'
 import { PipeTrapNode } from './nodes/pipe-trap'
@@ -92,8 +94,10 @@ export const AnyNode = nodeUnion([
   BuildingNode,
   ElevatorNode,
   UnitNode,
+  FacadeNode,
   LevelNode,
   LeanToExtensionNode,
+  PanelNode,
   ColumnNode,
   ConstructionDimensionNode,
   BlockNode,

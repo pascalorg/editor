@@ -267,6 +267,27 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     this.pending.clear()
   }
 
+  temporarilyHideNodes(nodeIds: Iterable<string>): () => void {
+    const saved: Array<{ batched: BatchedMesh; instanceId: number; visible: boolean }> = []
+    for (const nodeId of new Set(nodeIds)) {
+      for (const { record, instanceId } of this.instancesByNode.get(nodeId) ?? []) {
+        const batched = record.batched
+        saved.push({ batched, instanceId, visible: batched.getVisibleAt(instanceId) })
+      }
+    }
+    const restore = () => {
+      for (const { batched, instanceId, visible } of saved)
+        batched.setVisibleAt(instanceId, visible)
+    }
+    try {
+      for (const { batched, instanceId } of saved) batched.setVisibleAt(instanceId, false)
+    } catch (error) {
+      restore()
+      throw error
+    }
+    return restore
+  }
+
   pruneEmpty(
     now = performance.now(),
     retainedLevels: ReadonlySet<string> = new Set(),

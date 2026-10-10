@@ -121,7 +121,7 @@ export {
   refreshIsolation,
 } from './lib/isolation'
 export { setKeyLightDirectionOverride } from './lib/key-light-override'
-export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
+export { configureKtx2Support, ensureKtx2Support, ktx2TextureLoadState } from './lib/ktx2-loader'
 export { LayerPassIndex } from './lib/layer-pass'
 export {
   BATCHED_LAYER,
@@ -153,9 +153,11 @@ export {
   DEFAULT_WALL_MATERIAL,
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
+  getMaterialTextureVersion,
   glassMaterial,
   MONO_PALETTE,
   materialCastsShadow,
+  materialTextureLoadState,
   PRESET_PALETTES,
   type RenderShading,
   registerMaterialCacheCleanup,
@@ -186,6 +188,8 @@ export {
   type RendererInitializationResult,
   type RendererPowerPreference,
 } from './lib/renderer-capability'
+export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
+export { sceneCaptureInputsReady } from './lib/scene-capture-inputs'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,
@@ -197,6 +201,7 @@ export {
   type HiddenReason,
   hideFromScene,
   showInScene,
+  temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
@@ -248,6 +253,34 @@ export {
   createColumnSphereGeometry,
   createColumnTorusGeometry,
 } from './systems/column/column-geometry'
+export {
+  ConstructionReveal,
+  type ConstructionRevealDriver,
+  type ConstructionRevealLevel,
+  type ConstructionRevealOptions,
+  getRevealPlanState,
+  isNodeRevealing,
+  isRevealAssembling,
+  type RetractResult,
+  type RevealCompleteEvent,
+  type RevealEvent,
+  type RevealFinaleEvent,
+  type RevealGroupEvent,
+  type RevealNodeStartEvent,
+  type RevealPhaseEvent,
+  type RevealPlanState,
+  type RevealRetractEvent,
+  retractNodes,
+  seatLiftedNow,
+  startConstructionReveal,
+  subscribeRevealAssembling,
+  subscribeRevealEvents,
+  subscribeRevealPhases,
+  subscribeRevealTicks,
+  useRevealPending,
+  useRevealPlanActive,
+  useRevealWaiting,
+} from './systems/construction-reveal/construction-reveal'
 export { DoorAnimationSystem } from './systems/door/door-animation-system'
 export { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './systems/door/door-system'
 export { ElevatorInteractionSystem } from './systems/elevator/elevator-interaction-system'

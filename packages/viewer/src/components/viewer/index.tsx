@@ -27,6 +27,7 @@ import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
 import { choosePointerEvents } from '../../lib/pointer-events'
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
+import { SceneCaptureInputFrames } from '../../lib/scene-capture-inputs'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
@@ -801,6 +802,7 @@ function ViewerScene({
   return (
     <>
       <ViewerCamera immersiveXR={immersiveXR} />
+      <SceneCaptureInputFrames />
       {immersiveXR && <ImmersiveXRBackground />}
       <PointerRaycastLayers />
       <GPUDeviceWatcher intentionalWebGL={immersiveXR} />

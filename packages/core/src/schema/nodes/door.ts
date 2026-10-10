@@ -22,6 +22,26 @@ export const DoorSegment = z.object({
 
 export type DoorSegment = z.infer<typeof DoorSegment>
 
+/** Glazed leaves over a low panel: the French door (porte-fenêtre) glazing. */
+export const FRENCH_DOOR_SEGMENTS: DoorSegment[] = [
+  {
+    type: 'glass',
+    heightRatio: 0.76,
+    columnRatios: [1, 1],
+    dividerThickness: 0.025,
+    panelDepth: 0.01,
+    panelInset: 0.04,
+  },
+  {
+    type: 'panel',
+    heightRatio: 0.24,
+    columnRatios: [1],
+    dividerThickness: 0.03,
+    panelDepth: 0.012,
+    panelInset: 0.035,
+  },
+]
+
 export const DoorCategory = z.enum(['interior', 'garage'])
 export const OpeningConstructionType = z.enum(['framed', 'masonry'])
 export const OpeningDimensionReference = z.enum([

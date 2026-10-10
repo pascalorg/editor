@@ -164,6 +164,8 @@ export const ColumnNode = BaseNode.extend({
   braceBottomSpread: z.number().min(0.2).default(1.2),
   braceTopSpread: z.number().min(0).default(0.12),
   bracePlateEnabled: z.boolean().default(true),
+  // A declaration consumed by the selected shared support checker; old columns stay unchanged.
+  role: z.enum(['ornament']).optional(),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),

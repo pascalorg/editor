@@ -194,6 +194,14 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
   }),
   row({
     kind: 'window',
+    path: 'corner.partnerId',
+    ...policy('node', 'connection', 'drop', 'strip'),
+    targetKinds: ['window'],
+    remaps: ['clone-scene-graph'],
+    note: "A corner window's other side (L65). The whole-graph clone remaps it; a level or a selection copied otherwise renders its pair as two plain windows until wrapped again.",
+  }),
+  row({
+    kind: 'window',
     path: 'dormerId',
     ...policy('node', 'host', 'cascade', 'strip'),
     targetKinds: ['dormer'],

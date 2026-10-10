@@ -135,6 +135,13 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   },
 
   capabilities: {
+    reveal: {
+      phase: 'roof',
+      style: 'assemble',
+      height: 4,
+      // The roof lifts out of the way while the furniture drops in, then seats again.
+      clears: { for: 'furnishing', height: 2.4 },
+    },
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

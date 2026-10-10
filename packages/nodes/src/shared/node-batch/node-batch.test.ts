@@ -331,6 +331,77 @@ test('external selection releases sources for outline masks and reoffers after c
   expect(meshes[1]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
 })
 
+test('a node still revealing draws itself, then joins once the reveal ends', () => {
+  const { meshes } = setup('item', 4)
+  let rising = true
+  const revealing = spyOn(viewerExports, 'isNodeRevealing').mockImplementation(
+    (id) => rising && id === 'item_3',
+  )
+  try {
+    settle()
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    expect(meshes[3]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+
+    rising = false
+    settle()
+    expect(meshes[3]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  } finally {
+    revealing.mockRestore()
+  }
+})
+
+test.each([
+  'item',
+  'door',
+  'window',
+  'ceiling',
+  'slab',
+  'column',
+])('a batched %s whose reverse play begins draws itself again, and stays out until it is gone', (kind) => {
+  const { meshes } = setup(kind, 4)
+  if (kind === 'door' || kind === 'window') {
+    // An opening belongs to its wall; its level is the wall's.
+    const ids = meshes.map((_, index) => `${kind}_${index}`)
+    const nodes = useScene.getState().nodes
+    useScene.setState({
+      nodes: {
+        ...nodes,
+        wall_host: {
+          id: 'wall_host',
+          type: 'wall',
+          parentId: 'level_test',
+          visible: true,
+          children: ids,
+        },
+        ...Object.fromEntries(
+          ids.map((id) => [id, { ...nodes[id as AnyNodeId], parentId: 'wall_host' }]),
+        ),
+      },
+    } as never)
+  }
+  settle()
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  expect(meshes[1]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  let going = true
+  const revealing = spyOn(viewerExports, 'isNodeRevealing').mockImplementation(
+    (id) => going && id === `${kind}_0`,
+  )
+  try {
+    frame()
+    // Its own meshes get the reverse play's pose; the batch copy would stay whole until the host took it out.
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expect(meshes[1]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    settle()
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+
+    going = false
+    settle()
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  } finally {
+    revealing.mockRestore()
+  }
+})
+
 test('items retain loading, animation, transparency, hidden-hitbox and dirty-rejoin guards', () => {
   const { meshes } = setup('item')
   meshes[0]!.userData.itemModelSettled = false

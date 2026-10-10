@@ -29,6 +29,11 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   const sceneMaterials = useScene((state) => state.materials)
 
   useRegistry(node.id, 'roof-segment', ref)
+  // A segment mounted after its roof (one dropping into an assembling roof)
+  // still gets its own build: the roof system dropped its mark while it was unmounted.
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
   // The renderer loads lazily, so the scene-load dirty mark can be consumed
   // before this mesh registers. A painted segment is built only from its own
   // mesh (the merged shell skips it), so it would keep its empty placeholder.

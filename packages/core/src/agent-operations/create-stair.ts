@@ -121,7 +121,12 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
     (level) => level.parentId === building.id || building.children.includes(level.id),
   )
 
-  const changes: Required<SceneChanges> = { create: [], update: [], delete: [], collections: {} }
+  const changes: Required<Pick<SceneChanges, 'create' | 'update' | 'delete' | 'collections'>> = {
+    create: [],
+    update: [],
+    delete: [],
+    collections: {},
+  }
   let upper = input.toLevelId
     ? requireLevel(nodes, input.toLevelId)
     : floors.find((level) => level.level > from.level)

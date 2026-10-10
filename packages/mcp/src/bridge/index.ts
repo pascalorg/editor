@@ -2,6 +2,7 @@ export type {
   ActiveSceneMeta,
   CreatePatch,
   DeletePatch,
+  MaterialUpsertPatch,
   Patch,
   UpdatePatch,
   ValidationError,

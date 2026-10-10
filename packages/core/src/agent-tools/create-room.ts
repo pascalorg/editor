@@ -24,7 +24,7 @@ export const createRoomTool = {
   name: 'create_room',
   title: 'Create room',
   description:
-    "Create a room on a level from its polygon: a wall per edge, an edge a wall already runs along reusing that wall (rooms share their boundary with their neighbour), and the room zone that names it. The floor plate and the ceiling are derived from the room — never author a slab or a ceiling for it. Declare the room's doors and windows in the same call by polygon edge (wallIndex) and t along it, no wall ids needed; each is placed with add_door's and add_window's rules, and one that cannot be is skipped and listed in skippedOpenings with its code. Returns zoneId, slabId, ceilingId, wallIds in edge order (null where no wall), doorIds, windowIds. outdoor: true draws a terrace instead: separators where no wall runs, no walls of its own and no ceiling.",
+    "Create a room on a level from its polygon: a wall per edge, an edge a wall already runs along reusing that wall (rooms share their boundary with their neighbour), and the room zone that names it. The floor plate and the ceiling are derived from the room — never author a slab or a ceiling for it. Declare the room's doors and windows in the same call by polygon edge (wallIndex) and t along it, no wall ids needed; each is placed with add_door's and add_window's rules, and one that cannot be is skipped and listed in skippedOpenings with its code. Returns zoneId, slabId, ceilingId, wallIds in edge order (null where no wall), doorIds, windowIds. outdoor: true draws a terrace instead: separators where no wall runs, no walls of its own and no ceiling. Where the walls already enclose a room the reconciler numbered, the call names that room instead of adding a second one; where they enclose a room with a name of its own (not a number the editor gave it), it is refused (room_named_by_person) unless rename is true, which you pass only when the person asked for the rename, so a name is never changed silently.",
   input: {
     ...levelTarget,
     name: z.string().min(1).describe('Room name, e.g. "Bedroom", "Kitchen".'),
@@ -43,6 +43,12 @@ export const createRoomTool = {
       positive: true,
       description: 'Thickness of the walls it builds.',
     }).optional(),
+    rename: z
+      .boolean()
+      .optional()
+      .describe(
+        'Only where the walls already enclose a room with a name of its own (not a number the editor gave it): true names that room with `name` instead of the refusal room_named_by_person. Pass it only when the person asked for the rename; otherwise ask them first.',
+      ),
     outdoor: z
       .boolean()
       .optional()
@@ -90,7 +96,8 @@ export const createRoomTool = {
           }).optional(),
           sillHeight: measurement('length', 'm', {
             min: 0,
-            description: 'Height from the floor to the bottom of the window (default 0.9 m).',
+            description:
+              'Height from the floor to the bottom of the window (default: centred vertically on the wall).',
           }).optional(),
           style: z
             .enum(WINDOW_STYLES)

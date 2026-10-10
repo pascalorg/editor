@@ -90,6 +90,43 @@ describe('apply_patch', () => {
     expect(bridge.getNode(wall.id)).not.toHaveProperty('materialPreset')
   })
 
+  // L68: a level written without a height is legacy to the editor's load, which derives its storey
+  // from what it holds; the session read 2.5 m. The write now gets the derived height, said in notes.
+  test('a level created without a height gets the height its walls give, and says so', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const { height: _height, ...level } = LevelNode.parse({ parentId: building.id, level: 1 })
+    const walls = [
+      WallNode.parse({ parentId: level.id, start: [0, 0], end: [4, 0], height: 3 }),
+      WallNode.parse({ parentId: level.id, start: [4, 0], end: [4, 4], height: 3 }),
+    ]
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'create', node: level, parentId: building.id },
+          ...walls.map((wall) => ({ op: 'create', node: wall, parentId: level.id })),
+        ],
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const stored = bridge.getNode(level.id) as { height?: number }
+    expect(stored.height).toBe(3)
+    expect((result.structuredContent as { notes?: string[] }).notes).toEqual([
+      `level ${level.id}: height ${Math.round(stored.height! * 100) / 100} m derived from its walls and ceilings, as the editor reads a level written without one`,
+    ])
+  })
+
+  test('an empty level created without a height gets the default storey height', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const { height: _height, ...level } = LevelNode.parse({ parentId: building.id, level: 1 })
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'create', node: level, parentId: building.id }] },
+    })
+    expect(result.isError).toBeFalsy()
+    expect((bridge.getNode(level.id) as { height?: number }).height).toBe(2.5)
+  })
+
   test('syncs derived stair openings after stair patches', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
