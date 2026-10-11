@@ -7,6 +7,7 @@ import {
 } from '../schema'
 import { generateId } from '../schema/base'
 import { findLevelAboveId, getLevelBelow, getLevelElevations } from '../services/storey'
+import { isSettlingDocument } from '../store/document-settling'
 import {
   activeSceneCommitNodeIds,
   getSceneHistoryPauseDepth,
@@ -604,6 +605,11 @@ export function initSpaceDetectionSync(
       sceneStore.temporal.getState().isTracking === false
     )
       return
+    // A settling host derives this edit's structure itself (reconcileDocument).
+    if (isSettlingDocument(sceneStore)) {
+      adoptSceneBaseline(state.nodes)
+      return
+    }
 
     const nodes = state.nodes
     const candidateIds = activeSceneCommitNodeIds()

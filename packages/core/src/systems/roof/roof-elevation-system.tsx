@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import type { AnyNodeId } from '../../schema'
+import { isSettlingDocument } from '../../store/document-settling'
 import {
   getSceneHistoryPauseDepth,
   notifySceneCommit,
@@ -58,7 +59,7 @@ export function initializeRoofElevationSync(): () => void {
   }
 
   const unsubscribe = useScene.subscribe((state, previous) => {
-    if (syncing || state.nodes === previous.nodes) return
+    if (syncing || state.nodes === previous.nodes || isSettlingDocument(useScene)) return
     const ids = new Set([...Object.keys(state.nodes), ...Object.keys(previous.nodes)])
     for (const id of ids) {
       const next = state.nodes[id as AnyNodeId]

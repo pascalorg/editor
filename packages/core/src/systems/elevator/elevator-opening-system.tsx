@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { structureChangeBatch } from '../../commands/structure/shared'
+import { isSettlingDocument } from '../../store/document-settling'
 import { pauseSceneHistory, resumeSceneHistory } from '../../store/history-control'
 import { isHydrationNormalization } from '../../store/scene-hydration'
 import useScene from '../../store/use-scene'
@@ -30,7 +31,7 @@ export function initializeElevatorOpeningSync() {
   applyChanges(true)
 
   return useScene.subscribe((state, prevState) => {
-    if (syncingAutoOpenings) return
+    if (syncingAutoOpenings || isSettlingDocument(useScene)) return
     if (!changedInputs(prevState.nodes, state.nodes, isElevatorOpeningInput)) return
     applyChanges(isHydrationNormalization() || state.hydrationId !== prevState.hydrationId)
   })

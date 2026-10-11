@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { structureChangeBatch } from '../../commands/structure/shared'
 import type { AnyNode, AnyNodeId } from '../../schema'
+import { isSettlingDocument } from '../../store/document-settling'
 import { pauseSceneHistory, resumeSceneHistory } from '../../store/history-control'
 import { isHydrationNormalization, queueSceneNormalization } from '../../store/scene-hydration'
 import useLiveNodeOverrides from '../../store/use-live-node-overrides'
@@ -129,7 +130,7 @@ export function initializeStairOpeningSync() {
   scheduleAutoSync(true)
 
   const unsubscribeScene = useScene.subscribe((state, prevState) => {
-    if (syncingAutoOpenings) return
+    if (syncingAutoOpenings || isSettlingDocument(useScene)) return
     if (!changedInputs(prevState.nodes, state.nodes, isStairOpeningInput)) return
     scheduleAutoSync(
       isHydrationNormalization() || state.hydrationId !== prevState.hydrationId,

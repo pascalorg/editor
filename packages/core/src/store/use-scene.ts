@@ -2070,8 +2070,16 @@ function insertSceneStructuralPlacements(
   return result as AnyNodeId[]
 }
 
-function sceneOperationPatchNextState(
-  beforeState: SceneState,
+/**
+ * The document a patch makes of `beforeState`, without a store, or null when the patch does not
+ * apply to it (a delete of a node that changed, a create at a taken position, a node that fails
+ * its schema). `applySceneOperationPatch` writes exactly this.
+ */
+export function nextSceneOperationState(
+  beforeState: Pick<
+    SceneState,
+    'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'
+  >,
   changes: SceneOperationPatch,
 ):
   | (Pick<SceneState, 'collections' | 'materials' | 'nodes' | 'rootNodeIds'> &
@@ -2373,7 +2381,7 @@ export function applySceneOperationPatch(
   )
     return false
   if (sceneOperationPatchHasLiveConflict(beforeState, changes)) return false
-  const next = sceneOperationPatchNextState(beforeState, changes)
+  const next = nextSceneOperationState(beforeState, changes)
   if (!next) return false
 
   const before = sceneHistorySnapshotFromState(beforeState)

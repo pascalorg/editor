@@ -57,7 +57,10 @@ export function changedInputs(
 }
 
 export type DocumentReconcileOptions = {
-  /** What the passes read: a detached scene passes its tracked view, so their reads are recorded. */
+  /**
+   * The view the passes read a version of the nodes through: a detached scene's tracked view, so
+   * their reads are recorded. Applied to every version a pass compares, so identity holds between.
+   */
   read?: (nodes: SceneNodes) => SceneNodes
   /** Re-derive every level's structure, not only the levels whose structure changed since `before`. */
   allLevels?: boolean
@@ -113,17 +116,17 @@ export function reconcileDocument(
     const previous = nodes()
     write(() => {
       store.getState().applyNodeChanges(structureChangeBatch(changes))
-      reconcileOwnedFloorOpeningChanges(readingStore, previous, changes)
+      reconcileOwnedFloorOpeningChanges(readingStore, read(previous), changes)
     })
   }
 
   withSpatialGrid(grid, () => {
-    const levelIds = options.allLevels ? undefined : changedStructureLevelIds(before, view())
+    const levelIds = options.allLevels ? undefined : changedStructureLevelIds(before, nodes())
     if (!levelIds || levelIds.length)
       write(() =>
         applyStructureReconciliation(readingStore, {
           levelIds,
-          previousNodes: options.allLevels ? undefined : before,
+          previousNodes: options.allLevels ? undefined : read(before),
           mintId: generateId,
         }),
       )
@@ -140,13 +143,13 @@ export function reconcileDocument(
         stairsFrom = start
         const rises = syncStairRises(view() as Record<string, AnyNode>)
         if (rises.length) write(() => store.getState().updateNodes(rises))
+        // Which stairs this edit moved is the edit's own bookkeeping; the re-cut reads the scene.
+        const owners = changedStairOpeningOwners(
+          from as Record<string, AnyNode>,
+          nodes() as Record<string, AnyNode>,
+        )
         applyOpenings(
-          planOwnedFloorOpenings(view() as Record<string, AnyNode>, {
-            ownerIds: changedStairOpeningOwners(
-              from as Record<string, AnyNode>,
-              view() as Record<string, AnyNode>,
-            ),
-          }),
+          planOwnedFloorOpenings(view() as Record<string, AnyNode>, { ownerIds: owners }),
         )
         stairsFrom = nodes()
       }
