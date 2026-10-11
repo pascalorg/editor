@@ -3,6 +3,7 @@ import { searchAssetsTool } from './assets'
 import { clearSceneTool } from './clear-scene'
 import { editCollectionTool, listCollectionsTool } from './collections'
 import { addColumnTool } from './columns'
+import type { AgentToolContract } from './contract'
 import { createRoomTool } from './create-room'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
@@ -29,6 +30,7 @@ export * from './assets'
 export * from './clear-scene'
 export * from './collections'
 export * from './columns'
+export * from './contract'
 export * from './create-room'
 export * from './find-by-type'
 export * from './furnish-room'
@@ -81,4 +83,4 @@ export const AGENT_TOOL_CONTRACTS = [
   furnishRoomTool,
   searchAssetsTool,
   ...ROOM_TOOL_CONTRACTS,
-] as const
+] as const satisfies readonly AgentToolContract[]

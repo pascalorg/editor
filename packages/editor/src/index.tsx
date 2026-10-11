@@ -720,6 +720,11 @@ export {
   type PlanarPoint,
   resolvePlanarCursorPosition,
 } from './lib/planar-cursor-placement'
+export type {
+  ChatToolCardProps,
+  ChatToolOutput,
+  PluginChatExtension,
+} from './lib/plugin-chat'
 export {
   type EditorHostPanel,
   type EditorHostPanelWorkspace,

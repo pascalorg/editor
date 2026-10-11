@@ -13,6 +13,7 @@ import { placeItems } from './place-items'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { fitStair, measureStairOperation } from './stairs'
+import type { AgentOperations } from './types'
 import { verifyScene } from './verify-scene'
 
 export * from './achieved'
@@ -72,4 +73,4 @@ export const AGENT_OPERATIONS = {
   furnish_room: furnishRoom,
   search_assets: searchAssets,
   ...ROOM_OPERATIONS,
-} as const
+} as const satisfies AgentOperations
