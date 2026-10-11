@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -21,6 +24,7 @@ import {
 } from '@pascal-app/core/schema'
 import { createSceneOperations, type SceneOperations } from '../operations'
 import { createPascalMcpServer } from '../server'
+import { SqliteSceneStore } from '../storage/sqlite-scene-store'
 import type { GeometryScriptHost } from '../tools/add-object'
 import { registerSharedTools } from '../tools/shared-tools'
 import { SceneBridge } from './scene-bridge'
@@ -134,7 +138,19 @@ describe('every MCP tool on a detached scene', () => {
   }
 
   async function build(effectId: string) {
-    const scene = detached(effectId)
+    const base = snapshot()
+    const wall = WallNode.parse({
+      id: 'wall_g',
+      parentId: 'level_g',
+      start: [0, 0],
+      end: [6, 0],
+      height: 2.8,
+    })
+    const level = base.nodes['level_g' as AnyNodeId] as LevelNode
+    const scene = detached(effectId, {
+      ...base,
+      nodes: { ...base.nodes, [wall.id]: wall, [level.id]: { ...level, children: [wall.id] } },
+    } as SceneSnapshot)
     const bridge = new SceneBridge({ runtime: scene })
     bridge.setActiveScene({ id: 'scene_detached', name: 'Detached' } as never)
     const client = await connect(createPascalMcpServer({ bridge, geometryScripts: host }))
@@ -142,6 +158,9 @@ describe('every MCP tool on a detached scene', () => {
       ['create_unit', { buildingId: 'building_b', name: 'Flat' }],
       ['create_roof', { levelId: 'level_g', width: 6, depth: 4 }],
       ['add_column', { levelId: 'level_g', x: 1, z: 1 }],
+      // These await their (absent) compile before planning.
+      ['add_door', { wallId: 'wall_g', t: 0.25 }],
+      ['add_window', { wallId: 'wall_g', t: 0.7 }],
       [
         'add_object',
         {
@@ -166,7 +185,7 @@ describe('every MCP tool on a detached scene', () => {
   test('mint the scene ids: the same effect recomputed gives the same patch', async () => {
     const first = await build('effect_tools')
     expect(first.nodeCreates.map(({ node }) => node.type)).toEqual(
-      expect.arrayContaining(['unit', 'roof', 'column', 'item']),
+      expect.arrayContaining(['unit', 'roof', 'column', 'item', 'door', 'window']),
     )
     expect(await build('effect_tools')).toEqual(first)
   })
@@ -249,6 +268,18 @@ describe('SceneOperations without runInScene', () => {
   })
 })
 
+describe('SceneBridge writes on a detached scene', () => {
+  test("copy what they are given: the caller's objects stay theirs", () => {
+    const scene = detached('effect_copy')
+    const bridge = new SceneBridge({ runtime: scene })
+    const metadata = { note: { tags: ['one'] } }
+    bridge.updateNode('level_g' as AnyNodeId, { metadata } as never)
+    metadata.note.tags.push('two')
+    expect(bridge.getNode('level_g' as AnyNodeId)?.metadata).toEqual({ note: { tags: ['one'] } })
+    scene.dispose()
+  })
+})
+
 describe('SceneBridge export', () => {
   test('reads materials and the plugin list as dependencies', () => {
     const base = {
@@ -263,5 +294,17 @@ describe('SceneBridge export', () => {
       expect.arrayContaining([{ kind: 'material', id: 'mat_red' }, { kind: 'plugins' }]),
     )
     scene.dispose()
+  })
+})
+
+describe('store-only operations', () => {
+  test('serve their tools: the scene scope needs no bridge', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'pascal-store-only-'))
+    const operations = createSceneOperations({
+      store: new SqliteSceneStore({ databasePath: join(directory, 'pascal.db') }),
+    })
+    const client = await connect(createPascalMcpServer({ bridge: new SceneBridge(), operations }))
+    const result = await client.callTool({ name: 'list_scenes', arguments: {} })
+    expect(result.isError, JSON.stringify(result.content)).toBeFalsy()
   })
 })

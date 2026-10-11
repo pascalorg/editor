@@ -292,7 +292,8 @@ class SceneOperationsFacade implements SceneOperations {
   }
 
   runInScene<T>(run: () => T): T {
-    return this.requireBridge().runInScene(run)
+    // Store-only operations have no scene to scope: their tools (list_scenes) run as they are.
+    return this.#bridge ? this.#bridge.runInScene(run) : run()
   }
 
   async createProject(options: ProjectCreateOptions): Promise<ProjectStatus> {
