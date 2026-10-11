@@ -8,8 +8,8 @@ import type {
   SceneNodes,
 } from '../agent-operations/types'
 import {
-  createSnapshotSpatialGrid,
   type SpatialGridManager,
+  supportIndexOf,
   withSpatialGrid,
 } from '../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../lib/node-ancestry'
@@ -282,12 +282,12 @@ function recordingSupportGrid(
   store: SceneStore,
   recorder: DependencyRecorder,
 ): () => SpatialGridManager {
-  let cached: { nodes: SceneNodes; grid: SpatialGridManager } | null = null
+  const recordings = new WeakMap<SpatialGridManager, SpatialGridManager>()
   return () => {
-    const nodes = store.getState().nodes as SceneNodes
-    if (cached?.nodes !== nodes) {
-      const grid = createSnapshotSpatialGrid(() => store.getState().nodes, resolveLevelId)
-      const recording = new Proxy(grid, {
+    const grid = supportIndexOf(store, resolveLevelId)
+    let recording = recordings.get(grid)
+    if (!recording) {
+      recording = new Proxy(grid, {
         get(target, key, receiver) {
           const value = Reflect.get(target, key, receiver)
           if (typeof value !== 'function') return value
@@ -299,9 +299,9 @@ function recordingSupportGrid(
           }
         },
       })
-      cached = { nodes, grid: recording }
+      recordings.set(grid, recording)
     }
-    return cached.grid
+    return recording
   }
 }
 

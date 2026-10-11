@@ -3,6 +3,7 @@ import {
   getWallEffectiveHeightForNodes,
 } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { findLevelAncestorId } from '../../lib/node-ancestry'
 import { queryNodes } from '../../runtime/node-queries'
 import type {
   AnyNode,
@@ -12,7 +13,7 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '../../schema'
-import { findLevelBelowId, getLevelElevations } from '../../services/storey'
+import { findLevelAboveId, findLevelBelowId, getLevelElevations } from '../../services/storey'
 import { wallOverlapsSlabFootprint } from '../slab/slab-support'
 import { getWallArcData } from '../wall/wall-curve'
 import { resolveRoomRoofFootprintOnLevel } from './roof-footprint'
@@ -143,10 +144,11 @@ export function isRoofElevationInput(node: AnyNode | undefined): boolean {
 /** Wall-supported roofs whose stored Y no longer sits on their walls, and where it should. */
 export function planRoofElevationUpdates(
   nodes: Readonly<Record<string, AnyNode>>,
+  only?: ReadonlySet<string> | null,
 ): Array<{ id: AnyNodeId; data: Partial<AnyNode> }> {
   const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
   for (const node of queryNodes<RoofNode>(nodes, { type: 'roof' })) {
-    if (node.support?.kind !== 'walls') continue
+    if (node.support?.kind !== 'walls' || (only && !only.has(node.id))) continue
     const elevation = resolveRoofElevation(node, nodes)
     if (Math.abs(node.position[1] - elevation) <= ROOF_ELEVATION_EPSILON) continue
     updates.push({
@@ -155,4 +157,41 @@ export function planRoofElevationUpdates(
     })
   }
   return updates
+}
+
+/**
+ * The roofs an edit can move, from the nodes it changed: a roof itself, and the roofs on the level
+ * of a changed wall or slab and on the level above it (a roof rests on its own level's walls or
+ * the level's below). Null, for every roof, when a level, building or site changed.
+ */
+export function roofsAffectedBy(
+  before: Readonly<Record<string, AnyNode>>,
+  after: Readonly<Record<string, AnyNode>>,
+  changedIds: Iterable<string>,
+): Set<string> | null {
+  const roofs = new Set<string>()
+  const levels = new Set<string>()
+  for (const id of changedIds)
+    for (const nodes of [before, after]) {
+      const node = nodes[id]
+      if (!node) continue
+      if (node.type === 'level' || node.type === 'building' || node.type === 'site') return null
+      if (node.type === 'roof') roofs.add(id)
+      else if (node.type === 'wall' || node.type === 'slab') {
+        const levelId = findLevelAncestorId(id as AnyNodeId, nodes as Record<string, AnyNode>)
+        if (!levelId) return null
+        levels.add(levelId)
+        const above = findLevelAboveId(
+          levelId,
+          getLevelElevations(nodes as Record<string, AnyNode>),
+        )
+        if (above) levels.add(above)
+      }
+    }
+  if (levels.size)
+    for (const roof of queryNodes<RoofNode>(after as Record<string, AnyNode>, { type: 'roof' })) {
+      const levelId = findLevelAncestorId(roof.id, after as Record<string, AnyNode>)
+      if (levelId && levels.has(levelId)) roofs.add(roof.id)
+    }
+  return roofs
 }

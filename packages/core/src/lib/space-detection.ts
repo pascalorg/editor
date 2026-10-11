@@ -490,6 +490,36 @@ export function changedStructureLevelIds(before: SceneNodes, after: SceneNodes):
   )
 }
 
+/**
+ * Levels whose structure an edit from `before` to `after` asks to re-derive, chosen as space
+ * detection chooses them for a store commit: from the nodes the edit changed (walls by level, and
+ * the fallbacks for levels, stairs, openings, slabs, ceilings, zones and separators), without
+ * signing every level of the scene.
+ */
+export function structureLevelsForChange(before: SceneNodes, after: SceneNodes): string[] {
+  const candidateIds = new Set<AnyNodeId>()
+  for (const id in after)
+    if (after[id] !== before[id] && !onlyChildrenChanged(before[id], after[id]))
+      candidateIds.add(id as AnyNodeId)
+  for (const id in before) if (!(id in after)) candidateIds.add(id as AnyNodeId)
+  if (!candidateIds.size) return []
+  const levels = fallbackLevelIdsForCandidates(before, after, candidateIds)
+  for (const levelId of changedWallIdsByLevel(before, after, candidateIds).keys())
+    levels.add(levelId)
+  return [...levels]
+}
+
+/**
+ * A parent whose child list alone changed: the children created or deleted are candidates of
+ * their own, so the parent adds nothing (an item placed on a level re-derives no structure).
+ */
+function onlyChildrenChanged(before: SceneNodes[string], after: SceneNodes[string]): boolean {
+  if (!(before && after)) return false
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)]))
+    if (key !== 'children' && before[key] !== after[key]) return false
+  return true
+}
+
 function syncSceneStructure(
   levelIds: string[],
   sceneStore: any,
@@ -610,9 +640,15 @@ export function initSpaceDetectionSync(
       sceneStore.temporal.getState().isTracking === false
     )
       return
-    // A settling host derives this edit's structure itself (reconcileDocument).
+    // A settling host derives this edit's structure itself (reconcileDocument): only the topology
+    // and spaces of the levels whose walls it changed are brought up to date here.
     if (isSettlingDocument(sceneStore)) {
-      adoptSceneBaseline(state.nodes)
+      const levels = [
+        ...changedWallIdsByLevel(previousNodes, state.nodes, activeSceneCommitNodeIds()).keys(),
+      ]
+      for (const levelId of levels) topologyIndex.rebuildLevel(levelId, state.nodes)
+      if (levels.length) publishSpaces(levels, state.nodes, editorStore)
+      previousNodes = state.nodes
       return
     }
 

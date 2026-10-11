@@ -1,11 +1,11 @@
 import { structureChangeBatch } from '../commands/structure/shared'
 import {
-  createSnapshotSpatialGrid,
   type SpatialGridManager,
+  supportIndexOf,
   withSpatialGrid,
 } from '../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../lib/node-ancestry'
-import { changedStructureLevelIds } from '../lib/space-detection'
+import { structureLevelsForChange } from '../lib/space-detection'
 import { applyStructureReconciliation } from '../lib/structure-commit'
 import type { SceneNodes } from '../lib/structure-kernel'
 import type { AnyNode, AnyNodeId } from '../schema'
@@ -15,7 +15,11 @@ import { withoutLivePreviews } from '../store/live-previews'
 import type { SceneStore } from '../store/use-scene'
 import { planOwnedFloorOpenings } from './owned-floor-openings'
 import { reconcileOwnedFloorOpeningChanges } from './reconcile-owned-floor-openings'
-import { isRoofElevationInput, planRoofElevationUpdates } from './roof/roof-elevation'
+import {
+  isRoofElevationInput,
+  planRoofElevationUpdates,
+  roofsAffectedBy,
+} from './roof/roof-elevation'
 import { changedStairOpeningOwners } from './stair/stair-opening-sync'
 import { syncStairRises } from './stair/stair-rise'
 
@@ -47,14 +51,26 @@ export function changedInputs(
   before: SceneNodes,
   after: SceneNodes,
   isInput: (node: AnyNode | undefined) => boolean,
+  options: { ignoreChildLists?: boolean } = {},
 ): boolean {
   if (before === after) return false
-  for (const id of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    const previous = before[id]
-    const next = after[id]
-    if (previous !== next && (isInput(previous) || isInput(next))) return true
-  }
+  const differs = (previous: AnyNode | undefined, next: AnyNode | undefined) =>
+    previous !== next &&
+    (isInput(previous) || isInput(next)) &&
+    !(options.ignoreChildLists && onlyChildListChanged(previous, next))
+  for (const id in after) if (differs(before[id], after[id])) return true
+  for (const id in before) if (!(id in after) && differs(before[id], undefined)) return true
   return false
+}
+
+/** Only a node's child list changed: its children's own changes are what passes react to. */
+function onlyChildListChanged(previous: AnyNode | undefined, next: AnyNode | undefined) {
+  if (!(previous && next)) return false
+  const a = previous as Record<string, unknown>
+  const b = next as Record<string, unknown>
+  for (const key in b) if (key !== 'children' && a[key] !== b[key]) return false
+  for (const key in a) if (key !== 'children' && !(key in b)) return false
+  return true
 }
 
 export type DocumentReconcileOptions = {
@@ -91,15 +107,7 @@ export function reconcileDocument(
   const read = options.read ?? ((nodes: SceneNodes) => nodes)
   const nodes = () => store.getState().nodes as SceneNodes
   const view = () => read(nodes())
-  let cached: { nodes: SceneNodes; grid: SpatialGridManager } | null = null
-  const grid =
-    options.grid ??
-    (() => {
-      const current = nodes()
-      if (cached?.nodes !== current)
-        cached = { nodes: current, grid: createSnapshotSpatialGrid(nodes, resolveLevelId) }
-      return cached.grid
-    })
+  const grid = options.grid ?? (() => supportIndexOf(store, resolveLevelId))
   // The kernel and opening planners read the store's nodes through `read`; their writes go to it.
   const readingStore = {
     getState: () => ({ ...store.getState(), nodes: view() as Record<AnyNodeId, AnyNode> }),
@@ -123,7 +131,7 @@ export function reconcileDocument(
 
   withoutLivePreviews(() =>
     withSpatialGrid(grid, () => {
-      const levelIds = options.allLevels ? undefined : changedStructureLevelIds(before, nodes())
+      const levelIds = options.allLevels ? undefined : structureLevelsForChange(before, nodes())
       if (!levelIds || levelIds.length)
         write(() =>
           applyStructureReconciliation(readingStore, {
@@ -133,6 +141,8 @@ export function reconcileDocument(
           }),
         )
 
+      // A parent's child list is bookkeeping: what was added or removed is an input of its own.
+      const settled = { ignoreChildLists: true }
       let stairsFrom = before
       let elevatorsFrom = before
       let roofsFrom = before
@@ -140,7 +150,7 @@ export function reconcileDocument(
       // again only on a change to its own inputs, so this settles in a few rounds.
       for (let round = 0; round < 8; round++) {
         const start = nodes()
-        if (changedInputs(stairsFrom, start, isStairOpeningInput)) {
+        if (changedInputs(stairsFrom, start, isStairOpeningInput, settled)) {
           const from = stairsFrom
           stairsFrom = start
           const rises = syncStairRises(view() as Record<string, AnyNode>)
@@ -155,12 +165,21 @@ export function reconcileDocument(
           )
           stairsFrom = nodes()
         }
-        if (changedInputs(elevatorsFrom, nodes(), isElevatorOpeningInput)) {
+        if (changedInputs(elevatorsFrom, nodes(), isElevatorOpeningInput, settled)) {
           applyOpenings(planOwnedFloorOpenings(view() as Record<string, AnyNode>))
           elevatorsFrom = nodes()
         }
-        if (changedInputs(roofsFrom, nodes(), isRoofElevationInput)) {
-          const roofs = planRoofElevationUpdates(view())
+        if (changedInputs(roofsFrom, nodes(), isRoofElevationInput, settled)) {
+          const current = nodes()
+          const changed: string[] = []
+          for (const id in current)
+            if (current[id] !== roofsFrom[id] && !onlyChildListChanged(roofsFrom[id], current[id]))
+              changed.push(id)
+          for (const id in roofsFrom) if (!(id in current)) changed.push(id)
+          const roofs = planRoofElevationUpdates(
+            view(),
+            roofsAffectedBy(roofsFrom, current, changed),
+          )
           if (roofs.length) write(() => store.getState().updateNodes(roofs))
           roofsFrom = nodes()
         }
