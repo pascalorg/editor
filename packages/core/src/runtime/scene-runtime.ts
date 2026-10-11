@@ -170,14 +170,17 @@ export function deepFreeze<T>(value: T): T {
 
 /** Unwraps tracked views an operation put in its changes, so the store holds plain records. */
 function plainChanges(changes: SceneChanges): SceneChanges {
+  // The store takes its own copy: a detached scene freezes what it holds, and must not freeze the
+  // caller's objects (or share them with anyone else).
+  const own = <T>(value: T): T => structuredClone(materialize(untracked(value)))
   const plainData = (data: Partial<AnyNode>) =>
     Object.fromEntries(
-      Object.entries(untracked(data)).map(([key, value]) => [key, untracked(value)]),
+      Object.entries(untracked(data)).map(([key, value]) => [key, own(value)]),
     ) as Partial<AnyNode>
   return {
     ...(changes.create && {
       create: changes.create.map(({ node, parentId }) => ({
-        node: untracked(node),
+        node: own(node),
         ...(parentId === undefined ? {} : { parentId }),
       })),
     }),
@@ -187,7 +190,7 @@ function plainChanges(changes: SceneChanges): SceneChanges {
     ...(changes.delete && { delete: [...changes.delete] }),
     ...(changes.collections && {
       collections: Object.fromEntries(
-        Object.entries(changes.collections).map(([id, collection]) => [id, untracked(collection)]),
+        Object.entries(changes.collections).map(([id, collection]) => [id, own(collection)]),
       ),
     }),
   }
@@ -242,12 +245,23 @@ export function createAgentHost(runtime: SceneRuntime): AgentHostRuntime {
   }
 }
 
+/** Kinds whose writes the store's actions plan around (gutters, ridge vents, downspouts). */
+const PLANNED_KINDS = new Set([
+  'roof',
+  'roof-segment',
+  'lean-to-extension',
+  'gutter',
+  'downspout',
+  'ridge-vent',
+])
+
 /**
- * The store's actions plan more than they are asked for (default gutters on a roof, merged walls
- * after a deletion, sanitised values), reading the scene directly. Where the result of `changes`
- * differs from applying them as given, the extra writes depend on reads the reader did not see:
- * each level they touch, and each level the changes touch, becomes a `scope` dependency (the
- * whole document for a node outside every level).
+ * The store's actions plan more than they are asked for, reading the scene directly: default
+ * gutters, ridge vents and downspouts around roof edits, merged walls and cleaned references
+ * around deletions, walls kept clear of each other on a curve, sanitised values. Whatever such a
+ * planner read is a dependency, whether or not it wrote anything (a disabled gutter is a decision
+ * too), so each level its triggers touch becomes a `scope` dependency (the whole document for a
+ * node outside every level); so does each level an unrequested write lands on.
  */
 export function declareActionDependencies(
   runtime: Pick<SceneRuntime, 'store' | 'declare'>,
@@ -259,14 +273,23 @@ export function declareActionDependencies(
   const plain = plainChanges(changes)
   const intended = applySceneChanges(before, plain)
   const after = runtime.store.getState().nodes as SceneNodes
-  const extra = new Set<string>()
-  for (const id of new Set([...Object.keys(intended), ...Object.keys(after)]))
-    if (intended[id] !== after[id] && !sameValue(intended[id], after[id])) extra.add(id)
-  if (!extra.size) return
-  const touched = new Set<string>(extra)
-  for (const { node } of plain.create ?? []) touched.add(node.id)
-  for (const { id } of plain.update ?? []) touched.add(id)
+  const kindOf = (id: string) => (after[id] ?? before[id] ?? intended[id])?.type
+  const touched = new Set<string>()
   for (const id of plain.delete ?? []) touched.add(id)
+  for (const { node } of plain.create ?? []) if (PLANNED_KINDS.has(node.type)) touched.add(node.id)
+  for (const { id, data } of plain.update ?? [])
+    if (PLANNED_KINDS.has(kindOf(id) ?? '') || (kindOf(id) === 'wall' && 'curveOffset' in data))
+      touched.add(id)
+  let extra = false
+  for (const id of new Set([...Object.keys(intended), ...Object.keys(after)]))
+    if (intended[id] !== after[id] && !sameValue(intended[id], after[id])) {
+      extra = true
+      touched.add(id)
+    }
+  if (extra) {
+    for (const { node } of plain.create ?? []) touched.add(node.id)
+    for (const { id } of plain.update ?? []) touched.add(id)
+  }
   const levels = new Set<string | null>()
   for (const id of touched)
     for (const nodes of [before, after, intended]) if (nodes[id]) levels.add(levelOf(nodes, id))

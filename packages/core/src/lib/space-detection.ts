@@ -424,7 +424,8 @@ function fallbackLevelIdsForCandidates(
         const changed =
           !old ||
           !next ||
-          ['thickness', 'floorHeight', 'polygon', 'holes', 'elevation'].some(
+          // Everything the covering underside below reads, as well as this level's own floor.
+          ['thickness', 'floorHeight', 'polygon', 'holes', 'elevation', 'recessed'].some(
             (field) =>
               JSON.stringify((old as unknown as Record<string, unknown>)[field]) !==
               JSON.stringify((next as unknown as Record<string, unknown>)[field]),

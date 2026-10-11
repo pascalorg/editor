@@ -160,9 +160,11 @@ export function planRoofElevationUpdates(
 }
 
 /**
- * The roofs an edit can move, from the nodes it changed: a roof itself, and the roofs on the level
- * of a changed wall or slab and on the level above it (a roof rests on its own level's walls or
- * the level's below). Null, for every roof, when a level, building or site changed.
+ * The roofs an edit can move, from the nodes it changed: a roof itself (its segments included),
+ * and the roofs on the level of a changed wall and on the level above it (a roof rests on its own
+ * level's walls or the level's below). Null, for every roof, when a slab (it carries walls on its
+ * level and bounds plane-bound wall tops below, and a base plate lifts the storeys above), a
+ * level, a building or a site changed.
  */
 export function roofsAffectedBy(
   before: Readonly<Record<string, AnyNode>>,
@@ -175,9 +177,16 @@ export function roofsAffectedBy(
     for (const nodes of [before, after]) {
       const node = nodes[id]
       if (!node) continue
-      if (node.type === 'level' || node.type === 'building' || node.type === 'site') return null
+      if (
+        node.type === 'level' ||
+        node.type === 'building' ||
+        node.type === 'site' ||
+        node.type === 'slab'
+      )
+        return null
       if (node.type === 'roof') roofs.add(id)
-      else if (node.type === 'wall' || node.type === 'slab') {
+      else if (node.type === 'roof-segment' && node.parentId) roofs.add(node.parentId)
+      else if (node.type === 'wall') {
         const levelId = findLevelAncestorId(id as AnyNodeId, nodes as Record<string, AnyNode>)
         if (!levelId) return null
         levels.add(levelId)

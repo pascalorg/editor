@@ -169,13 +169,19 @@ export function reconcileDocument(
           applyOpenings(planOwnedFloorOpenings(view() as Record<string, AnyNode>))
           elevatorsFrom = nodes()
         }
-        if (changedInputs(roofsFrom, nodes(), isRoofElevationInput, settled)) {
-          const current = nodes()
-          const changed: string[] = []
-          for (const id in current)
-            if (current[id] !== roofsFrom[id] && !onlyChildListChanged(roofsFrom[id], current[id]))
-              changed.push(id)
-          for (const id in roofsFrom) if (!(id in current)) changed.push(id)
+        // A roof's own child list is an input: a segment added reshapes its footprint.
+        const current = nodes()
+        const changed: string[] = []
+        for (const id in current)
+          if (
+            current[id] !== roofsFrom[id] &&
+            (current[id]?.type === 'roof' || !onlyChildListChanged(roofsFrom[id], current[id]))
+          )
+            changed.push(id)
+        for (const id in roofsFrom) if (!(id in current)) changed.push(id)
+        const roofInput = (node: AnyNode | undefined) =>
+          isRoofElevationInput(node) || node?.type === 'roof-segment'
+        if (changed.some((id) => roofInput(roofsFrom[id]) || roofInput(current[id]))) {
           const roofs = planRoofElevationUpdates(
             view(),
             roofsAffectedBy(roofsFrom, current, changed),
