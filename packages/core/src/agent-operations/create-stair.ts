@@ -11,7 +11,7 @@ import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, requireLevel, targetLevel } from './level-target'
 import { finishSurface, requireMaterialRef } from './material-refs'
 import { pointInPolygon, type Vec2 } from './plan-geometry'
-import { levelsOf } from './scene-queries'
+import { levelsOf, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneChanges } from './types'
 
 type CreateStairInput = LevelTargetInput & {
@@ -158,7 +158,7 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
   const withUpper = applySceneChanges(nodes, changes)
   const rotation = input.rotation ?? 0
   const width = input.width ?? 1
-  const stairs = Object.values(nodes).filter((node) => node.type === 'stair').length
+  const stairs = queryNodes(nodes, { type: 'stair' }).length
   const railingMode = input.railingMode ?? 'both'
   const draft = StairNode.parse({
     parentId: from.id,

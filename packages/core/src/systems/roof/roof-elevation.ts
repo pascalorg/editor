@@ -3,6 +3,7 @@ import {
   getWallEffectiveHeightForNodes,
 } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { queryNodes } from '../../runtime/node-queries'
 import type {
   AnyNode,
   AnyNodeId,
@@ -144,8 +145,8 @@ export function planRoofElevationUpdates(
   nodes: Readonly<Record<string, AnyNode>>,
 ): Array<{ id: AnyNodeId; data: Partial<AnyNode> }> {
   const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
-  for (const node of Object.values(nodes)) {
-    if (node.type !== 'roof' || node.support?.kind !== 'walls') continue
+  for (const node of queryNodes<RoofNode>(nodes, { type: 'roof' })) {
+    if (node.support?.kind !== 'walls') continue
     const elevation = resolveRoofElevation(node, nodes)
     if (Math.abs(node.position[1] - elevation) <= ROOF_ELEVATION_EPSILON) continue
     updates.push({

@@ -6,7 +6,7 @@ import { type AnyNode, generateId, type WallNode } from '../schema'
 import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, type Vec2 } from './plan-geometry'
-import { levelRole } from './scene-queries'
+import { levelRole, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
 type OpeningSpec = {
@@ -56,9 +56,7 @@ export function edgeProjection(a: Vec2, b: Vec2, point: readonly number[]) {
 }
 
 const wallsOn = (nodes: SceneNodes, levelId: string) =>
-  Object.values(nodes).filter(
-    (node): node is WallNode => node.type === 'wall' && node.parentId === levelId,
-  )
+  queryNodes<WallNode>(nodes, { type: 'wall', parentId: levelId })
 
 /** The walls of the level that run along the edge a → b, both ends on its line. */
 function wallsAlong(nodes: SceneNodes, levelId: string, a: Vec2, b: Vec2) {
@@ -88,7 +86,7 @@ function wallAt(nodes: SceneNodes, levelId: string, a: Vec2, b: Vec2, point: Vec
 
 /** The construction the host derived for the room: its floor plate and its ceiling. */
 function derivedSurfaces(nodes: SceneNodes, levelId: string, zoneId: string) {
-  const children = Object.values(nodes).filter((node) => node.parentId === levelId)
+  const children = queryNodes(nodes, { parentId: levelId })
   const slab = children.find(
     (node) => node.type === 'slab' && node.boundary === 'auto' && node.zoneIds?.includes(zoneId),
   )

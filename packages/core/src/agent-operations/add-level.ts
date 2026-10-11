@@ -1,7 +1,7 @@
 import { refuse } from '../agent-tools/refusal'
 import { BuildingNode, LevelNode, SiteNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
-import { levelsOf } from './scene-queries'
+import { levelsOf, queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
 type AddLevelInput = {
@@ -30,9 +30,7 @@ export function targetBuilding(
   const viewed = context.activeLevelId ? nodes[context.activeLevelId] : undefined
   const holder = viewed?.parentId ? nodes[viewed.parentId] : undefined
   if (holder?.type === 'building') return holder
-  const buildings = Object.values(nodes).filter(
-    (node): node is BuildingNode => node.type === 'building',
-  )
+  const buildings = queryNodes<BuildingNode>(nodes, { type: 'building' })
   if (buildings.length === 1) return buildings[0]!
   if (!buildings.length) refuse('no_building', 'The scene has no building to add a level to.')
   return refuse(
@@ -47,7 +45,7 @@ export function targetBuilding(
  * building, the ground level. An agent that cleared the scene to restart begins again here.
  */
 function freshStart(nodes: SceneNodes, input: AddLevelInput) {
-  const standing = Object.values(nodes).find((node) => node.type === 'site')
+  const standing = queryNodes(nodes, { type: 'site' })[0]
   const site = standing ? null : SiteNode.parse({ children: [] })
   const siteId = standing?.id ?? site!.id
   const building = BuildingNode.parse({ parentId: siteId, children: [] })
@@ -81,7 +79,7 @@ function freshStart(nodes: SceneNodes, input: AddLevelInput) {
 
 /** `add_level`: an empty level over the building's highest, or under its lowest — the editor's +. */
 export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) => {
-  if (!(input.buildingId || Object.values(nodes).some((node) => node.type === 'building')))
+  if (!(input.buildingId || queryNodes(nodes, { type: 'building' }).length))
     return freshStart(nodes, input)
   const building = targetBuilding(nodes, input.buildingId, context)
   const floors = levelsOf(nodes)
