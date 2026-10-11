@@ -95,7 +95,12 @@ function wallGeometrySignature(wall: WallNode, nodes: Record<string, any>, level
     // Plane-bound (no stored height) is a distinct state, not a default
     // value: it resolves to the storey plane, so it must not alias an
     // explicit height of the same magnitude in the trigger signature.
-    wall.height == null ? 'plane' : wall.height.toFixed(4),
+    // A legacy height that is not a number still signs, rather than throwing.
+    wall.height == null
+      ? 'plane'
+      : typeof wall.height === 'number'
+        ? wall.height.toFixed(4)
+        : String(wall.height),
     wall.supportSlabId ?? 'elected',
     (wall.supportOffset ?? 0).toFixed(4),
     getClampedWallCurveOffset(wall).toFixed(4),

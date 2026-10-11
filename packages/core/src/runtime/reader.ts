@@ -326,6 +326,7 @@ export function createDocumentReader(
       view = recordView(raw, assertActive, entity, enumerate)
       recordViews.set(raw, view)
       readerOfRecord.set(view, reader)
+      rawOfView.set(view, raw)
     }
     return view
   }
