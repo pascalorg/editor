@@ -124,14 +124,18 @@ export class DependencyRecorder {
 }
 
 const rawOfView = new WeakMap<object, object>()
-const readerOfRecord = new WeakMap<object, DocumentReader>()
+
+/** Selections over one version of a record, recorded by the reader that viewed it. */
+export type VersionQueries = Pick<DocumentReader, 'query' | 'orderedChildren'>
+const queriesOfRecord = new WeakMap<object, VersionQueries>()
 
 /**
- * The tracked reader behind a `nodes` record, when it is one (a detached scene's): helpers that
- * receive `SceneNodes` query through it, so they record what they select rather than everything.
+ * The tracked selections behind a record view, when it is one (a detached scene's): helpers that
+ * receive `SceneNodes` query through them, so they record what they select rather than everything.
+ * They read the version the view is of, not the scene's current one.
  */
-export function readerOf(nodes: object): DocumentReader | undefined {
-  return readerOfRecord.get(nodes)
+export function readerOf(record: object): VersionQueries | undefined {
+  return queriesOfRecord.get(record)
 }
 
 /** The plain value behind a tracked view (copying it records nothing); other values as they are. */
@@ -276,6 +280,10 @@ export function createDocumentReader(
   recorder: DependencyRecorder | null,
 ): DocumentReader {
   if (!recorder) return createPlainReader(source)
+  return createTrackedReader(source, recorder)
+}
+
+function createTrackedReader(source: DocumentSource, recorder: DependencyRecorder): DocumentReader {
   const { assertActive } = source
   const nodeViews = new WeakMap<AnyNode, AnyNode>()
   const collectionViews = new WeakMap<Collection, Collection>()
@@ -299,14 +307,19 @@ export function createDocumentReader(
     }
     return view
   }
-  const document = () => ({
-    nodes: source.nodes() as Record<string, AnyNode>,
-    collections: source.collections() as Record<string, Collection>,
+  type Version = { nodes?: Record<string, AnyNode>; collections?: Record<string, Collection> }
+  const document = (version: Version = {}) => ({
+    nodes: version.nodes ?? (source.nodes() as Record<string, AnyNode>),
+    collections: version.collections ?? (source.collections() as Record<string, Collection>),
     materials: source.materials() as Record<string, SceneMaterial>,
     rootNodeIds: source.rootNodeIds() as string[],
   })
-  const recordQuery = (query: QueryDependency['entity'], predicate: unknown): string[] => {
-    const resultIds = queryIds(document() as never, {
+  const recordQuery = (
+    query: QueryDependency['entity'],
+    predicate: unknown,
+    version?: Version,
+  ): string[] => {
+    const resultIds = queryIds(document(version) as never, {
       entity: query,
       predicate: (predicate ?? null) as never,
     })
@@ -319,35 +332,52 @@ export function createDocumentReader(
   const viewOf = <T extends object>(
     raw: Readonly<Record<string, T>>,
     entity: (id: string, raw: T | undefined) => T | undefined,
-    enumerate: () => void,
+    version: Version,
+    kind: 'node' | 'collection',
   ): Readonly<Record<string, T>> => {
     let view = recordViews.get(raw) as Readonly<Record<string, T>> | undefined
     if (!view) {
-      view = recordView(raw, assertActive, entity, enumerate)
+      view = recordView(raw, assertActive, entity, () => recordQuery(kind, null, version))
       recordViews.set(raw, view)
-      readerOfRecord.set(view, reader)
+      queriesOfRecord.set(view, {
+        query: ((selection: EntityQuery) => queryIn(selection, version)) as DocumentReader['query'],
+        orderedChildren: (id) => orderedChildrenIn(id, version),
+      })
       rawOfView.set(view, raw)
     }
     return view
   }
 
-  function query(query: EntityQuery): unknown[] {
+  function queryIn(query: EntityQuery, version: Version = {}): unknown[] {
     assertActive()
-    const current = document()
+    const current = document(version)
     switch (query.entity) {
       case 'node':
-        return recordQuery('node', query.where ?? null).map((id) =>
+        return recordQuery('node', query.where ?? null, version).map((id) =>
           trackNode(id, current.nodes[id]),
         )
       case 'collection':
-        return recordQuery('collection', query.where ?? null).map((id) =>
+        return recordQuery('collection', query.where ?? null, version).map((id) =>
           trackCollection(id, current.collections[id]),
         )
       case 'material':
-        return recordQuery('material', null).map((id) => current.materials[id])
+        // Each material returned is read whole.
+        return recordQuery('material', null).map((id) => {
+          recorder.material(id)
+          return current.materials[id]
+        })
       case 'root':
         return recordQuery('root', null).flatMap((id) => trackNode(id, current.nodes[id]) ?? [])
     }
+  }
+
+  function orderedChildrenIn(id: string, version: Version = {}): string[] {
+    assertActive()
+    const node = document(version).nodes[id]
+    recorder.node(id)
+    const children = childIdsOf(node)
+    recorder.order(id, children)
+    return [...children]
   }
 
   const reader: DocumentReader = {
@@ -355,15 +385,8 @@ export function createDocumentReader(
       assertActive()
       return trackNode(id, source.nodes()[id])
     },
-    query: query as DocumentReader['query'],
-    orderedChildren: (id) => {
-      assertActive()
-      const node = source.nodes()[id]
-      recorder.node(id)
-      const children = childIdsOf(node)
-      recorder.order(id, children)
-      return [...children]
-    },
+    query: ((selection: EntityQuery) => queryIn(selection)) as DocumentReader['query'],
+    orderedChildren: (id) => orderedChildrenIn(id),
     collection: (id) => {
       assertActive()
       return trackCollection(id, source.collections()[id])
@@ -380,15 +403,18 @@ export function createDocumentReader(
     },
     get nodes() {
       assertActive()
-      return viewOf(source.nodes(), trackNode, () => recordQuery('node', null)) as SceneNodes
+      const raw = source.nodes() as Record<string, AnyNode>
+      return viewOf(raw, trackNode, { nodes: raw }, 'node') as SceneNodes
     },
     track: (raw) => {
       assertActive()
-      return viewOf(raw, trackNode, () => recordQuery('node', null)) as SceneNodes
+      const version = raw as Record<string, AnyNode>
+      return viewOf(version, trackNode, { nodes: version }, 'node') as SceneNodes
     },
     get collections() {
       assertActive()
-      return viewOf(source.collections(), trackCollection, () => recordQuery('collection', null))
+      const raw = source.collections() as Record<string, Collection>
+      return viewOf(raw, trackCollection, { collections: raw }, 'collection')
     },
   }
   return reader

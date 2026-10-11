@@ -238,6 +238,26 @@ export function notifySceneCommit(commit: SceneCommit): void {
   emitSceneCommit(control, contextualCommit)
 }
 
+/**
+ * Makes `commit` the one `store`'s open transaction (`runAsSingleSceneHistoryStep`) emits: the
+ * pending commit, if any, keeps its origin and `before` and takes `commit`'s `current`, with both
+ * sets of changed ids. Outside a transaction, `commit` is emitted.
+ */
+export function settlePendingSceneCommit(store: object, commit: SceneCommit): void {
+  const control = of(store)
+  if (control.commitTransactionDepth === 0) {
+    sceneEnvironmentOf(store).run(() => notifySceneCommit(commit))
+    return
+  }
+  const pending = control.pendingCommit
+  control.pendingCommit = {
+    origin: pending?.origin ?? commit.origin,
+    before: pending?.before ?? commit.before,
+    current: commit.current,
+    changedNodeIds: mergedNodeIds(pending?.changedNodeIds, commit.changedNodeIds),
+  }
+}
+
 function pendingSceneCommitIsNoOp(control: HistoryControlState): boolean {
   const pending = control.pendingCommit
   return Boolean(pending && areSceneSnapshotsEqual(pending.before, pending.current))

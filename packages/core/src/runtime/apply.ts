@@ -59,6 +59,16 @@ function changedNodeIds(base: Doc, current: Doc): string[] {
   return ids
 }
 
+function ancestorIds(doc: Doc, id: string | undefined): string[] {
+  const ids: string[] = []
+  let parentId = id ? (nodeOf(doc, id)?.parentId as string | null | undefined) : null
+  while (parentId && !ids.includes(parentId)) {
+    ids.push(parentId)
+    parentId = nodeOf(doc, parentId)?.parentId as string | null | undefined
+  }
+  return ids
+}
+
 function documentChanged(base: Doc, current: Doc): boolean {
   return (
     changedNodeIds(base, current).length > 0 ||
@@ -138,9 +148,15 @@ function dependencyChanges(
     case 'scope': {
       if (dependency.whole) return documentChanged(base, current) ? changed({ kind: 'scope' }) : []
       const level = dependency.level
+      // The level's own content, and what it stands on: its building and site (transforms,
+      // sculpted terrain) reach every support answer on it.
+      const ancestors = new Set([...ancestorIds(base, level), ...ancestorIds(current, level)])
       const touched = changedIds().some(
         (id) =>
-          id === level || levelOf(base.nodes, id) === level || levelOf(current.nodes, id) === level,
+          id === level ||
+          ancestors.has(id) ||
+          levelOf(base.nodes, id) === level ||
+          levelOf(current.nodes, id) === level,
       )
       return touched ? changed({ kind: 'scope', id: level }) : []
     }

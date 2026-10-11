@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { AGENT_OPERATIONS, applyAgentOutcome, editCollection } from '../agent-operations'
 import { AGENT_TOOL_CASES } from '../agent-operations/__fixtures__/cases'
 import { AGENT_TOOL_CONTRACTS } from '../agent-tools'
+import { encodeTerrainField } from '../lib/terrain-codec'
+import { applyHeightPatch, createTerrainField, flattenPatch } from '../lib/terrain-field'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -11,11 +13,15 @@ import {
   ItemNode,
   LevelNode,
   RoofNode,
+  RoofSegmentNode,
+  SiteNode,
   StairNode,
   StairSegmentNode,
   WallNode,
 } from '../schema'
+import { SceneMaterial } from '../schema/scene-material'
 import { type SceneCommit, subscribeSceneCommits } from '../store/history-control'
+import useLiveTerrain from '../store/use-live-terrain'
 import useScene, {
   applySceneOperationPatch,
   clearSceneHistory,
@@ -25,12 +31,16 @@ import { closeLiveScene, openLiveScene, settle, snapshotOf } from './__fixtures_
 import {
   applyPatchWithDependencies,
   captureRegistryVersions,
+  createAgentHost,
   createSceneEnvironment,
   createSceneStore,
   type DetachedScene,
   effectIds,
+  isEmptyScenePatch,
+  liveSceneRuntime,
   loadCanonicalSnapshot,
   openDetachedScene,
+  orderedChildIds,
   queryNodes,
   SceneEnvironmentDisposedError,
   type SceneSnapshot,
@@ -409,7 +419,7 @@ describe('reconciliation', () => {
   afterEach(closeLiveScene)
 
   /** Walls under a wall-supported roof one storey up, from the roof system's own case. */
-  function roofScene(): SceneSnapshot {
+  function roofScene(site?: { terrain?: unknown }, open = false): SceneSnapshot {
     const level = LevelNode.parse({
       id: 'level_walls',
       parentId: 'building_r',
@@ -423,7 +433,8 @@ describe('reconciliation', () => {
       [4, 3],
       [0, 3],
     ]
-    const walls = corners.map((start, index) =>
+    // Open (two walls, no room): the walls stand on the ground itself rather than a floor plate.
+    const walls = corners.slice(0, open ? 2 : 4).map((start, index) =>
       WallNode.parse({
         id: `wall_${index}`,
         parentId: level.id,
@@ -432,17 +443,106 @@ describe('reconciliation', () => {
         height: 3,
       }),
     )
+    const segment = RoofSegmentNode.parse({ id: 'rseg_r', parentId: 'roof_r', width: 4, depth: 3 })
     const roof = RoofNode.parse({
       id: 'roof_r',
       parentId: upper.id,
       support: { kind: 'walls' },
       position: [2, 0, 1.5],
+      children: open ? [segment.id] : [],
     })
     level.children = walls.map((wall) => wall.id)
     upper.children = [roof.id]
-    const building = BuildingNode.parse({ id: 'building_r', children: [level.id, upper.id] })
-    return document(building, level, upper, ...walls, roof)
+    if (open) walls.push(segment as never)
+    const building = BuildingNode.parse({
+      id: 'building_r',
+      children: [level.id, upper.id],
+      ...(site ? { parentId: 'site_r' } : {}),
+    })
+    if (!site) return document(building, level, upper, ...walls, roof)
+    const ground = SiteNode.parse({ id: 'site_r', children: [building.id], ...site })
+    return document(ground, building, level, upper, ...walls, roof)
   }
+
+  const flatGround = () => createTerrainField({ cols: 17, rows: 17, spacing: 1, origin: [-8, -8] })
+  /** Ground raised 1 m under the walls. */
+  function raisedGround() {
+    const flat = flatGround()
+    return applyHeightPatch(
+      flat,
+      flattenPatch(flat, { minX: -2, minZ: -2, maxX: 6, maxZ: 5 }, 1) as never,
+    )
+  }
+
+  test("an agent's edit on the editor's store commits once, with the roof it moved, in one undo step", async () => {
+    const base = await openLiveScene(roofScene())
+    const past = useScene.temporal.getState().pastStates.length
+    const commits: SceneCommit[] = []
+    const stop = subscribeSceneCommits((commit) => commits.push(commit))
+    try {
+      createAgentHost(liveSceneRuntime).applyChanges({
+        update: [{ id: 'wall_0', data: { height: 4.2 } }],
+      })
+      await settle()
+    } finally {
+      stop()
+    }
+    const roof = getSceneDocument().nodes['roof_r' as AnyNodeId] as AnyNode & {
+      position: number[]
+    }
+    expect(roof.position[1]).toBeGreaterThan(1.2)
+    expect(commits).toHaveLength(1)
+    expect(commits[0]!.current.nodes['roof_r' as AnyNodeId]).toEqual(roof)
+    expect(commits[0]!.changedNodeIds).toContain('roof_r' as AnyNodeId)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(past + 1)
+    useScene.temporal.getState().undo()
+    await settle()
+    expect(getSceneDocument().nodes['roof_r' as AnyNodeId]).toEqual(
+      base.nodes['roof_r' as AnyNodeId],
+    )
+    expect(getSceneDocument().nodes['wall_0' as AnyNodeId]).toEqual(
+      base.nodes['wall_0' as AnyNodeId],
+    )
+  })
+
+  test('a terrain stroke in progress reaches no detached computation', () => {
+    const base = roofScene({ terrain: encodeTerrainField(flatGround()) }, true)
+    const raise = () => {
+      const scene = open(base)
+      scene.host().applyChanges({ update: [{ id: 'wall_0', data: { height: 4.2 } }] })
+      const patch = scene.patch()
+      scene.dispose()
+      return patch
+    }
+    const still = raise()
+    useLiveTerrain.getState().begin('site_r', raisedGround())
+    try {
+      expect(raise()).toEqual(still)
+    } finally {
+      useLiveTerrain.getState().end('site_r')
+    }
+  })
+
+  test("support read on a level depends on what it stands on: the site's terrain", () => {
+    const base = roofScene({})
+    const scene = open(base)
+    scene.host().applyChanges({ update: [{ id: 'wall_0', data: { height: 4.2 } }] })
+    const patch = scene.patch()
+    const current = editedBy(base, (store) =>
+      store.getState().updateNode(
+        'site_r' as AnyNodeId,
+        {
+          terrain: encodeTerrainField(raisedGround()),
+        } as never,
+      ),
+    )
+    const applied = applyPatchWithDependencies(current, patch, scene.dependencies(), base)
+    expect(!applied.ok && applied.changed).toContainEqual({
+      kind: 'scope',
+      id: 'level_walls',
+      reason: 'dependency',
+    })
+  })
 
   test('a wall raised detached carries the roof it holds up, and the editor then writes nothing', async () => {
     const base = await openLiveScene(roofScene())
@@ -477,5 +577,84 @@ describe('reconciliation', () => {
         nodeUpdates: patch.nodeUpdates.filter(({ id }) => id !== 'roof_r'),
       }),
     ).toBe(2)
+  })
+})
+
+describe('what a detached scene hands out', () => {
+  test('is its own, read-only data: nothing reached through it changes the snapshot or the scene', () => {
+    const { level, upper, building } = storeys()
+    const snapshot = document(building, level, upper)
+    const scene = open(snapshot)
+    const children = scene.reader().get(building.id)!.children as string[]
+    expect(() => children.push('level_x')).toThrow(TypeError)
+    expect((snapshot.nodes[building.id as AnyNodeId] as typeof building).children).toEqual([
+      level.id,
+      upper.id,
+    ])
+    ;(snapshot.nodes[building.id as AnyNodeId] as typeof building).children.push('level_y' as never)
+    expect(scene.reader().get(building.id)!.children).toEqual([level.id, upper.id])
+    expect(isEmptyScenePatch(scene.patch())).toBe(true)
+  })
+
+  test('selections over an earlier version read that version', () => {
+    const { level, upper, building } = storeys()
+    const scene = open(document(building, level, upper))
+    const before = scene.reader().nodes
+    scene.host().applyChanges({
+      create: [{ node: RoofNode.parse({ id: 'roof_new' }), parentId: upper.id }],
+    })
+    expect(before.roof_new).toBeUndefined()
+    expect(queryNodes(before, { type: 'roof' })).toEqual([])
+    expect(queryNodes(scene.reader().nodes, { type: 'roof' })).toHaveLength(1)
+    expect(orderedChildIds(before, upper.id)).toEqual([])
+  })
+
+  test('materials read are dependencies', () => {
+    const { level, upper, building } = storeys()
+    const red = SceneMaterial.parse({ id: 'mat_red', name: 'Red', material: { color: '#ff0000' } })
+    const base = { ...document(building, level, upper), materials: { [red.id]: red } }
+    const scene = open(base as SceneSnapshot)
+    const [material] = scene.reader().query({ entity: 'material' })
+    scene.host().applyChanges({ update: [{ id: level.id, data: { name: material!.name } }] })
+    const current = editedBy(base as SceneSnapshot, (store) =>
+      store.getState().updateSceneMaterial(red.id, { name: 'Blue' }),
+    )
+    const applied = applyPatchWithDependencies(
+      current,
+      scene.patch(),
+      scene.dependencies(),
+      base as SceneSnapshot,
+    )
+    expect(!applied.ok && applied.changed).toContainEqual({
+      kind: 'material',
+      id: red.id,
+      reason: 'dependency',
+    })
+  })
+})
+
+describe('what the store actions plan', () => {
+  test('writes an action plans beyond the changes depend on their level', () => {
+    const level = LevelNode.parse({ id: 'level_r', parentId: 'building_g', level: 0, height: 3 })
+    const segment = RoofSegmentNode.parse({ id: 'rseg_g', parentId: 'roof_g', width: 8, depth: 6 })
+    const roof = RoofNode.parse({ id: 'roof_g', parentId: level.id, children: [segment.id] })
+    level.children = [roof.id]
+    const building = BuildingNode.parse({ id: 'building_g', children: [level.id] })
+    const base = document(building, level, roof, segment)
+    const scene = open(base)
+    scene.host().applyChanges({
+      update: [{ id: segment.id, data: { metadata: { autoGutter: true } } }],
+    })
+    const patch = scene.patch()
+    expect(patch.nodeCreates.some(({ node }) => node.type === 'gutter')).toBe(true)
+    const current = editedBy(base, (store) =>
+      store.getState().updateNode(segment.id, { width: 12 }),
+    )
+    const applied = applyPatchWithDependencies(current, patch, scene.dependencies(), base)
+    expect(!applied.ok && applied.changed).toContainEqual({
+      kind: 'scope',
+      id: level.id,
+      reason: 'dependency',
+    })
   })
 })

@@ -64,9 +64,11 @@ import {
   resumeSceneHistory,
   runAsRemoteSceneChange,
   runAsSceneHistoryRestore,
+  runAsSingleSceneHistoryStep,
   runWithSceneCommitNodeIds,
   type SceneCommitOrigin,
   type SceneSnapshot,
+  settlePendingSceneCommit,
 } from './history-control'
 import {
   beginSceneHistoryDraft as beginSceneHistoryDraftIn,
@@ -2460,6 +2462,38 @@ export function applySceneOperationPatch(
     current,
   })
   return true
+}
+
+/**
+ * Runs `run` on `store` as one undo step and one commit that carries everything it changed: its
+ * own writes and the history-paused derived writes it settles after them (`reconcileDocument`),
+ * which a commit captured when the first write landed would miss. Collaboration then receives the
+ * derived construction, with its ids, in the same commit as the edit that caused it.
+ */
+export function runAsSettledSceneStep<T>(store: SceneStore, run: () => T): T {
+  const environment = sceneEnvironmentOf(store)
+  const snapshot = () => environment.run(() => sceneHistorySnapshotFromState(store.getState()))
+  const before = snapshot()
+  const pastBefore = store.temporal.getState().pastStates.length
+  return runAsSingleSceneHistoryStep(store, () => {
+    const result = run()
+    const current = snapshot()
+    if (areSceneSnapshotsEqual(before, current)) return result
+    const temporal = store.temporal.getState()
+    // Only paused (derived) writes landed: they still make one step of their own.
+    if (
+      temporal.pastStates.length === pastBefore &&
+      temporal.isTracking &&
+      getSceneHistoryPauseDepth(store) === 0
+    )
+      store.temporal.setState({ pastStates: [...temporal.pastStates, before], futureStates: [] })
+    const changedNodeIds = new Set<AnyNodeId>()
+    for (const id of new Set([...Object.keys(before.nodes), ...Object.keys(current.nodes)]))
+      if (before.nodes[id as AnyNodeId] !== current.nodes[id as AnyNodeId])
+        changedNodeIds.add(id as AnyNodeId)
+    settlePendingSceneCommit(store, { origin: 'local', before, current, changedNodeIds })
+    return result
+  })
 }
 
 export function applyScenePatch(changes: ScenePatch): boolean {

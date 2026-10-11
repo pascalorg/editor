@@ -11,6 +11,7 @@ import type { SceneNodes } from '../lib/structure-kernel'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import { pauseSceneHistory, resumeSceneHistory } from '../store/history-control'
+import { withoutLivePreviews } from '../store/live-previews'
 import type { SceneStore } from '../store/use-scene'
 import { planOwnedFloorOpenings } from './owned-floor-openings'
 import { reconcileOwnedFloorOpeningChanges } from './reconcile-owned-floor-openings'
@@ -120,49 +121,51 @@ export function reconcileDocument(
     })
   }
 
-  withSpatialGrid(grid, () => {
-    const levelIds = options.allLevels ? undefined : changedStructureLevelIds(before, nodes())
-    if (!levelIds || levelIds.length)
-      write(() =>
-        applyStructureReconciliation(readingStore, {
-          levelIds,
-          previousNodes: options.allLevels ? undefined : read(before),
-          mintId: generateId,
-        }),
-      )
+  withoutLivePreviews(() =>
+    withSpatialGrid(grid, () => {
+      const levelIds = options.allLevels ? undefined : changedStructureLevelIds(before, nodes())
+      if (!levelIds || levelIds.length)
+        write(() =>
+          applyStructureReconciliation(readingStore, {
+            levelIds,
+            previousNodes: options.allLevels ? undefined : read(before),
+            mintId: generateId,
+          }),
+        )
 
-    let stairsFrom = before
-    let elevatorsFrom = before
-    let roofsFrom = before
-    // Each pass can feed another (a stair's openings change slabs, slabs carry roofs); a pass runs
-    // again only on a change to its own inputs, so this settles in a few rounds.
-    for (let round = 0; round < 8; round++) {
-      const start = nodes()
-      if (changedInputs(stairsFrom, start, isStairOpeningInput)) {
-        const from = stairsFrom
-        stairsFrom = start
-        const rises = syncStairRises(view() as Record<string, AnyNode>)
-        if (rises.length) write(() => store.getState().updateNodes(rises))
-        // Which stairs this edit moved is the edit's own bookkeeping; the re-cut reads the scene.
-        const owners = changedStairOpeningOwners(
-          from as Record<string, AnyNode>,
-          nodes() as Record<string, AnyNode>,
-        )
-        applyOpenings(
-          planOwnedFloorOpenings(view() as Record<string, AnyNode>, { ownerIds: owners }),
-        )
-        stairsFrom = nodes()
+      let stairsFrom = before
+      let elevatorsFrom = before
+      let roofsFrom = before
+      // Each pass can feed another (a stair's openings change slabs, slabs carry roofs); a pass runs
+      // again only on a change to its own inputs, so this settles in a few rounds.
+      for (let round = 0; round < 8; round++) {
+        const start = nodes()
+        if (changedInputs(stairsFrom, start, isStairOpeningInput)) {
+          const from = stairsFrom
+          stairsFrom = start
+          const rises = syncStairRises(view() as Record<string, AnyNode>)
+          if (rises.length) write(() => store.getState().updateNodes(rises))
+          // Which stairs this edit moved is the edit's own bookkeeping; the re-cut reads the scene.
+          const owners = changedStairOpeningOwners(
+            from as Record<string, AnyNode>,
+            nodes() as Record<string, AnyNode>,
+          )
+          applyOpenings(
+            planOwnedFloorOpenings(view() as Record<string, AnyNode>, { ownerIds: owners }),
+          )
+          stairsFrom = nodes()
+        }
+        if (changedInputs(elevatorsFrom, nodes(), isElevatorOpeningInput)) {
+          applyOpenings(planOwnedFloorOpenings(view() as Record<string, AnyNode>))
+          elevatorsFrom = nodes()
+        }
+        if (changedInputs(roofsFrom, nodes(), isRoofElevationInput)) {
+          const roofs = planRoofElevationUpdates(view())
+          if (roofs.length) write(() => store.getState().updateNodes(roofs))
+          roofsFrom = nodes()
+        }
+        if (nodes() === start) break
       }
-      if (changedInputs(elevatorsFrom, nodes(), isElevatorOpeningInput)) {
-        applyOpenings(planOwnedFloorOpenings(view() as Record<string, AnyNode>))
-        elevatorsFrom = nodes()
-      }
-      if (changedInputs(roofsFrom, nodes(), isRoofElevationInput)) {
-        const roofs = planRoofElevationUpdates(view())
-        if (roofs.length) write(() => store.getState().updateNodes(roofs))
-        roofsFrom = nodes()
-      }
-      if (nodes() === start) break
-    }
-  })
+    }),
+  )
 }

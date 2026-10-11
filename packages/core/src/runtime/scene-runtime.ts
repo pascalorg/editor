@@ -1,3 +1,4 @@
+import { applySceneChanges } from '../agent-operations/apply-changes'
 import { type AgentHostRuntime, applyAgentOutcome } from '../agent-operations/apply-outcome'
 import { writeCollections } from '../agent-operations/collections'
 import type {
@@ -16,17 +17,18 @@ import { getNodePluginId, nodeRegistry } from '../registry/registry'
 import type { AnyNode, AnyNodeId, Collection } from '../schema'
 import { type IdAllocator, withIdAllocator } from '../schema/base'
 import { runSettlingDocument } from '../store/document-settling'
-import {
-  pauseSceneHistory,
-  resumeSceneHistory,
-  runAsSingleSceneHistoryStep,
-  type SceneSnapshot,
-} from '../store/history-control'
+import { pauseSceneHistory, resumeSceneHistory, type SceneSnapshot } from '../store/history-control'
+import { withoutLivePreviews } from '../store/live-previews'
 import { createSceneEnvironment, type SceneEnvironment } from '../store/scene-environment'
-import useScene, { createSceneStore, type SceneStore, sceneDocumentOf } from '../store/use-scene'
+import useScene, {
+  createSceneStore,
+  runAsSettledSceneStep,
+  type SceneStore,
+  sceneDocumentOf,
+} from '../store/use-scene'
 import { reconcileDocument } from '../systems/document-reconcile'
-import type { Dependency } from './dependencies'
-import { diffSceneDocuments } from './patch'
+import { type Dependency, levelOf } from './dependencies'
+import { diffSceneDocuments, sameValue } from './patch'
 import {
   createDocumentReader,
   DependencyRecorder,
@@ -85,6 +87,8 @@ export interface SceneRuntime {
   run<T>(run: () => T): T
   /** Settles every derived write owed since `before` (`reconcileDocument`), reading through `reader`. */
   reconcile(before: SceneNodes, options?: { allLevels?: boolean }): void
+  /** Records a read the reader cannot see; absent where nothing is recorded (the editor's store). */
+  declare?(dependency: Dependency): void
 }
 
 function sourceOf(store: SceneStore, environment: SceneEnvironment | null): DocumentSource {
@@ -156,6 +160,14 @@ export interface DetachedScene extends SceneRuntime {
   readonly disposed: boolean
 }
 
+/** Freezes plain data in place, deeply; returns it. */
+export function deepFreeze<T>(value: T): T {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value
+  Object.freeze(value)
+  for (const key of Object.keys(value)) deepFreeze((value as Record<string, unknown>)[key])
+  return value
+}
+
 /** Unwraps tracked views an operation put in its changes, so the store holds plain records. */
 function plainChanges(changes: SceneChanges): SceneChanges {
   const plainData = (data: Partial<AnyNode>) =>
@@ -211,18 +223,55 @@ export function createAgentHost(runtime: SceneRuntime): AgentHostRuntime {
     applyChanges: (changes) =>
       runtime.run(() =>
         runSettlingDocument(runtime.store, () =>
-          runAsSingleSceneHistoryStep(runtime.store, () => {
+          runAsSettledSceneStep(runtime.store, () => {
             const before = nodes()
             applySceneChangesToStore(runtime.store, changes)
+            declareActionDependencies(runtime, before, changes)
             runtime.reconcile(before)
           }),
         ),
       ),
     reconcile: () =>
       runtime.run(() =>
-        runSettlingDocument(runtime.store, () => runtime.reconcile(nodes(), { allLevels: true })),
+        runSettlingDocument(runtime.store, () =>
+          runAsSettledSceneStep(runtime.store, () =>
+            runtime.reconcile(nodes(), { allLevels: true }),
+          ),
+        ),
       ),
   }
+}
+
+/**
+ * The store's actions plan more than they are asked for (default gutters on a roof, merged walls
+ * after a deletion, sanitised values), reading the scene directly. Where the result of `changes`
+ * differs from applying them as given, the extra writes depend on reads the reader did not see:
+ * each level they touch, and each level the changes touch, becomes a `scope` dependency (the
+ * whole document for a node outside every level).
+ */
+export function declareActionDependencies(
+  runtime: Pick<SceneRuntime, 'store' | 'declare'>,
+  before: SceneNodes,
+  changes: SceneChanges,
+): void {
+  const declare = runtime.declare?.bind(runtime)
+  if (!declare) return
+  const plain = plainChanges(changes)
+  const intended = applySceneChanges(before, plain)
+  const after = runtime.store.getState().nodes as SceneNodes
+  const extra = new Set<string>()
+  for (const id of new Set([...Object.keys(intended), ...Object.keys(after)]))
+    if (intended[id] !== after[id] && !sameValue(intended[id], after[id])) extra.add(id)
+  if (!extra.size) return
+  const touched = new Set<string>(extra)
+  for (const { node } of plain.create ?? []) touched.add(node.id)
+  for (const { id } of plain.update ?? []) touched.add(id)
+  for (const id of plain.delete ?? []) touched.add(id)
+  const levels = new Set<string | null>()
+  for (const id of touched)
+    for (const nodes of [before, after, intended]) if (nodes[id]) levels.add(levelOf(nodes, id))
+  for (const level of levels)
+    declare(level ? { kind: 'scope', level } : { kind: 'scope', whole: true })
 }
 
 /**
@@ -275,13 +324,27 @@ export function openDetachedScene(
 
   const environment = createSceneEnvironment(`detached at ${JSON.stringify(options.base)}`)
   const store = createSceneStore(environment)
-  loadCanonicalSnapshot(store, snapshot)
+  // The scene owns its data, read-only throughout: nothing reached through it (a nested array of
+  // a node, a material) can change the caller's snapshot, the editor's store, or the baseline its
+  // patch is taken against without going through its own writes.
+  loadCanonicalSnapshot(store, deepFreeze(structuredClone(snapshot)))
+  store.subscribe((state, previous) => {
+    for (const key of ['nodes', 'collections', 'materials'] as const) {
+      const next = state[key] as Record<string, unknown>
+      const before = previous[key] as Record<string, unknown>
+      if (next === before) continue
+      for (const id in next) if (next[id] !== before[id]) deepFreeze(next[id])
+      Object.freeze(next)
+    }
+  })
   const base = sceneDocumentOf(store)
   const recorder = new DependencyRecorder()
   const reader = createDocumentReader(sourceOf(store, environment), recorder)
   const grid = recordingSupportGrid(store, recorder)
   const run = <T>(work: () => T): T =>
-    environment.run(() => withIdAllocator(options.ids, () => withSpatialGrid(grid, work)))
+    environment.run(() =>
+      withIdAllocator(options.ids, () => withoutLivePreviews(() => withSpatialGrid(grid, work))),
+    )
   const rawNodes = () => store.getState().nodes as SceneNodes
   const reconcile = (before: SceneNodes, reconcileOptions: { allLevels?: boolean } = {}) => {
     run(() => reconcileDocument(store, before, { ...reconcileOptions, read: reader.track, grid }))

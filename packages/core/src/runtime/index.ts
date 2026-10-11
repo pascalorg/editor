@@ -9,6 +9,7 @@ export {
 export {
   createSceneStore,
   nextSceneOperationState,
+  runAsSettledSceneStep,
   type SceneOperationPatch,
   type SceneStore,
   sceneDocumentOf,
