@@ -59,6 +59,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   if (opts.executeTool) installToolExecutor(server, opts.executeTool)
   const operations =
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
+  installSceneScope(server, operations)
   const catalog = opts.catalog ? cachedCatalog(opts.catalog) : undefined
   registerTools(server, operations, {
     catalog,
@@ -71,6 +72,23 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)
   return server
+}
+
+/**
+ * Every handler starts in the scene's scope (`SceneOperations.runInScene`): ids it mints and
+ * schema defaults it fills before its first await come from the scene's allocator, so a detached
+ * scene recomputed from the same snapshot and effect mints the same ones. Work after an await
+ * re-enters the scope itself (add_object, add_column).
+ */
+function installSceneScope(server: McpServer, operations: SceneOperations): void {
+  const runInScene = operations.runInScene?.bind(operations)
+  if (!runInScene) return
+  const registerTool = server.registerTool.bind(server)
+  server.registerTool = ((name, config, callback) => {
+    const runtimeCallback = callback as unknown as RuntimeToolCallback
+    return registerTool(name, config, ((...args: unknown[]) =>
+      runInScene(() => Reflect.apply(runtimeCallback, undefined, args))) as typeof callback)
+  }) as McpServer['registerTool']
 }
 
 function installToolExecutor(server: McpServer, executeTool: PascalMcpToolExecutor): void {

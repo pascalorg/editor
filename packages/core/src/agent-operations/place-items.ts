@@ -6,7 +6,7 @@ import {
   geometryUndersideAt,
   mountsFlush,
 } from '../lib/geometry-surfaces'
-import { type AnyNode, type AssetInput, ItemNode, type WallNode } from '../schema'
+import { type AnyNode, type AssetInput, ItemNode, type WallNode, type ZoneNode } from '../schema'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
 import { collectDoorKeepouts, type DoorKeepout } from './door-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
@@ -16,6 +16,7 @@ import {
   type Vec2,
   wallLength,
 } from './plan-geometry'
+import { queryNodes } from './scene-queries'
 import type { AgentOperation, SceneChanges, SceneNodes } from './types'
 
 type Entry = {
@@ -55,10 +56,8 @@ const isOutdoor = (asset: AssetInput) =>
   OUTDOOR_ASSET.test(`${asset.name} ${asset.category ?? ''} ${(asset.tags ?? []).join(' ')}`)
 
 function roomsOn(nodes: SceneNodes, levelId: string): Vec2[][] {
-  return Object.values(nodes).flatMap((node) =>
-    node.type === 'zone' && node.parentId === levelId && node.polygon.length >= 3
-      ? [node.polygon as Vec2[]]
-      : [],
+  return queryNodes<ZoneNode>(nodes, { type: 'zone', parentId: levelId }).flatMap((node) =>
+    node.polygon.length >= 3 ? [node.polygon as Vec2[]] : [],
   )
 }
 
@@ -292,7 +291,10 @@ export const placeItems: AgentOperation<PlaceItemsInput> = (nodes, input, contex
         'outside_rooms',
         `"${asset.name}" at (${x}, ${z}) is outside every room on this level: indoor items go inside a room (read the rooms with get_zones); trees and garden items may stand outside.`,
       )
-    doorsOn[floorId] ??= collectDoorKeepouts(Object.values(nodes), { levelId: floorId })
+    doorsOn[floorId] ??= collectDoorKeepouts(
+      queryNodes(nodes, { type: ['door', 'wall', 'level'] }),
+      { levelId: floorId },
+    )
     const misfit = floorFit(nodes, floorId, entry, asset, doorsOn[floorId])
     if (misfit) return misfit
     const node = make(asset, {

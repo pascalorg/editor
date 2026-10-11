@@ -64,9 +64,11 @@ import {
   resumeSceneHistory,
   runAsRemoteSceneChange,
   runAsSceneHistoryRestore,
+  runAsSingleSceneHistoryStep,
   runWithSceneCommitNodeIds,
   type SceneCommitOrigin,
   type SceneSnapshot,
+  settlePendingSceneCommit,
 } from './history-control'
 import {
   beginSceneHistoryDraft as beginSceneHistoryDraftIn,
@@ -86,6 +88,12 @@ import {
   withoutSceneNodeAnnotations,
   writeSceneNodeField,
 } from './scene-annotations'
+import {
+  bindSceneEnvironment,
+  liveSceneEnvironment,
+  type SceneEnvironment,
+  sceneEnvironmentOf,
+} from './scene-environment'
 import {
   invalidatePendingHydration,
   isHydrationNormalization,
@@ -1344,16 +1352,26 @@ function sceneHistorySnapshotFromState(
  * still carry `metadata.isNew`, so only explicitly owned drafts are left out.
  */
 export function getSceneDocument(drafts: Iterable<AnyNodeId> = []): SceneSnapshot {
-  const state = useScene.getState()
-  const kept = withoutDraftSubtrees(state, [...createdSceneHistoryDraftIds(), ...drafts])
-  return {
-    nodes: withAdoptedDraftsAsOriginal(state.nodes, kept.nodes),
-    rootNodeIds: kept.rootNodeIds,
-    collections: kept.collections,
-    materials: state.materials,
-    installedPlugins: state.installedPlugins,
-    hasExplicitPluginInstallState: state.hasExplicitPluginInstallState,
-  }
+  return sceneDocumentOf(useScene, drafts)
+}
+
+/** `getSceneDocument` for any scene store: its document as a save writes it. */
+export function sceneDocumentOf(
+  store: SceneStore,
+  drafts: Iterable<AnyNodeId> = [],
+): SceneSnapshot {
+  const state = store.getState()
+  return sceneEnvironmentOf(store).run(() => {
+    const kept = withoutDraftSubtrees(state, [...createdSceneHistoryDraftIds(), ...drafts])
+    return {
+      nodes: withAdoptedDraftsAsOriginal(state.nodes, kept.nodes),
+      rootNodeIds: kept.rootNodeIds,
+      collections: kept.collections,
+      materials: state.materials,
+      installedPlugins: state.installedPlugins,
+      hasExplicitPluginInstallState: state.hasExplicitPluginInstallState,
+    }
+  })
 }
 
 /**
@@ -1399,54 +1417,44 @@ class GuardedDirtySet extends Set<AnyNodeId> {
 
 type TemporalSceneCreator = StateCreator<SceneState, [], [['temporal', UseSceneStore['temporal']]]>
 
-function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
-  const hydratedConfig: TemporalSceneCreator = (set, get, store) => {
-    const setWithHydration: typeof set = (partial, replace) => {
-      const state = get()
-      let next = typeof partial === 'function' ? partial(state) : partial
-      const documentChanged = (
-        ['nodes', 'rootNodeIds', 'materials', 'collections', 'installedPlugins'] as const
-      ).some((key) => (replace || key in next) && next[key] !== state[key])
-      if (documentChanged && !isHydrationNormalization()) {
-        invalidatePendingHydration()
-        if (state.hydrationToken) next = { ...next, hydrationToken: null }
-      }
-      if (replace) set(next as SceneState, true)
-      else set(next)
-    }
-    store.setState = setWithHydration
-    return config(setWithHydration, get, store)
-  }
-  return create<SceneState>()(hydratedConfig)
-}
+/** A scene store: the document state and its own undo history. */
+export type SceneStore = UseSceneStore
 
-function runTemporalJump(target: Partial<SceneSnapshot> | undefined, restore: () => void): void {
-  const draftsBefore = useScene.getState().nodes
+function runTemporalJump(
+  store: UseSceneStore,
+  target: Partial<SceneSnapshot> | undefined,
+  restore: () => void,
+): void {
+  const draftsBefore = store.getState().nodes
   const restoreDrafts = () => {
-    const current = useScene.getState().nodes
+    const current = store.getState().nodes
     const nodes = retainSceneAnnotations(
       draftsBefore,
       withDraftsRestored(draftsBefore, current) ?? current,
     )
     if (nodes === current) return
     // The carry's own state, not a new step: a tracked write here would clear redo.
-    const pause = beginSceneHistoryPauseSession(useScene)
+    const pause = beginSceneHistoryPauseSession(store)
     try {
-      useScene.setState({ nodes })
+      store.setState({ nodes })
     } finally {
       pause.end()
     }
   }
-  runTemporalJumpOnly(target, () => runAsSceneHistoryRestore(restore))
+  runTemporalJumpOnly(store, target, () => runAsSceneHistoryRestore(restore))
   restoreDrafts()
 }
 
-function runTemporalJumpOnly(target: Partial<SceneSnapshot> | undefined, jump: () => void): void {
+function runTemporalJumpOnly(
+  store: UseSceneStore,
+  target: Partial<SceneSnapshot> | undefined,
+  jump: () => void,
+): void {
   if (!target?.nodes) {
     jump()
     return
   }
-  const before = useScene.getState().nodes
+  const before = store.getState().nodes
   const changed = new Set<AnyNodeId>()
   for (const id of new Set([...Object.keys(before), ...Object.keys(target.nodes)])) {
     const nodeId = id as AnyNodeId
@@ -1464,8 +1472,60 @@ function runTemporalJumpOnly(target: Partial<SceneSnapshot> | undefined, jump: (
   runWithSceneCommitNodeIds(changed, jump)
 }
 
-const useScene: UseSceneStore = createSceneStore(
-  temporal(
+/** Every function field of `state` runs inside `environment` (scene-environment.ts). */
+function inEnvironment<T extends object>(environment: SceneEnvironment, state: T): T {
+  const wrapped = { ...state } as Record<string, unknown>
+  for (const [key, value] of Object.entries(state)) {
+    if (typeof value !== 'function') continue
+    const action = value as (...args: unknown[]) => unknown
+    wrapped[key] = (...args: unknown[]) => environment.run(() => action(...args))
+  }
+  return wrapped as T
+}
+
+/**
+ * A scene store bound to `environment`: its writes, actions, history and commits run in that
+ * environment, so a second store (a detached scene, `@pascal-app/core/runtime`) never pauses,
+ * commits to or drafts in the editor's. Once the environment is disposed, every read and write
+ * of the store throws.
+ */
+export function createSceneStore(environment: SceneEnvironment): SceneStore {
+  const store = create<SceneState>()((set, get, api) => {
+    const setWithHydration: typeof set = (partial, replace) => {
+      const state = get()
+      let next = typeof partial === 'function' ? partial(state) : partial
+      const documentChanged = (
+        ['nodes', 'rootNodeIds', 'materials', 'collections', 'installedPlugins'] as const
+      ).some((key) => (replace || key in next) && next[key] !== state[key])
+      if (documentChanged && !isHydrationNormalization()) {
+        invalidatePendingHydration()
+        if (state.hydrationToken) next = { ...next, hydrationToken: null }
+      }
+      if (replace) set(next as SceneState, true)
+      else set(next)
+    }
+    api.setState = setWithHydration
+    const temporalApi = api as typeof api & { temporal: UseSceneStore['temporal'] }
+    return inEnvironment(
+      environment,
+      sceneStoreConfig(() => temporalApi as UseSceneStore)(setWithHydration, get, temporalApi),
+    )
+  }) as UseSceneStore
+  bindSceneEnvironment(store, environment)
+  const { getState, setState } = store
+  store.getState = () => {
+    environment.assertActive()
+    return getState()
+  }
+  store.setState = ((partial, replace) =>
+    environment.run(() => setState(partial as SceneState, replace as true))) as typeof setState
+  const temporalState = store.temporal.getState()
+  store.temporal.setState(inEnvironment(environment, temporalState))
+  return store
+}
+
+function sceneStoreConfig(storeOf: () => UseSceneStore): TemporalSceneCreator {
+  return temporal(
     (set, get) => ({
       // 1. Flat dictionary of all nodes
       nodes: {},
@@ -1575,11 +1635,11 @@ const useScene: UseSceneStore = createSceneStore(
                 if (get().hydrationId !== hydrationId) return
                 const { updates } = ensureSceneOpenings(get().nodes)
                 if (!updates.length) return
-                pauseSceneHistory(useScene)
+                pauseSceneHistory(storeOf())
                 try {
                   get().updateNodes(updates)
                 } finally {
-                  resumeSceneHistory(useScene)
+                  resumeSceneHistory(storeOf())
                 }
               })
             }
@@ -1795,19 +1855,21 @@ const useScene: UseSceneStore = createSceneStore(
         return {
           ...state,
           undo: (steps = 1) =>
-            runTemporalJump(get().pastStates.slice().splice(-steps, steps)[0], () =>
+            runTemporalJump(storeOf(), get().pastStates.slice().splice(-steps, steps)[0], () =>
               state.undo(steps),
             ),
           redo: (steps = 1) =>
-            runTemporalJump(get().futureStates.slice().splice(-steps, steps)[0], () =>
+            runTemporalJump(storeOf(), get().futureStates.slice().splice(-steps, steps)[0], () =>
               state.redo(steps),
             ),
         }
       },
       limit: 50, // Limit to last 50 actions
     },
-  ),
-)
+  )
+}
+
+const useScene: UseSceneStore = createSceneStore(liveSceneEnvironment)
 
 // Live state belongs to the hydration owner so even a lazy consumer cannot
 // miss an override that was set and cleared before its first frame.
@@ -2010,8 +2072,16 @@ function insertSceneStructuralPlacements(
   return result as AnyNodeId[]
 }
 
-function sceneOperationPatchNextState(
-  beforeState: SceneState,
+/**
+ * The document a patch makes of `beforeState`, without a store, or null when the patch does not
+ * apply to it (a delete of a node that changed, a create at a taken position, a node that fails
+ * its schema). `applySceneOperationPatch` writes exactly this.
+ */
+export function nextSceneOperationState(
+  beforeState: Pick<
+    SceneState,
+    'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'
+  >,
   changes: SceneOperationPatch,
 ):
   | (Pick<SceneState, 'collections' | 'materials' | 'nodes' | 'rootNodeIds'> &
@@ -2313,7 +2383,7 @@ export function applySceneOperationPatch(
   )
     return false
   if (sceneOperationPatchHasLiveConflict(beforeState, changes)) return false
-  const next = sceneOperationPatchNextState(beforeState, changes)
+  const next = nextSceneOperationState(beforeState, changes)
   if (!next) return false
 
   const before = sceneHistorySnapshotFromState(beforeState)
@@ -2392,6 +2462,38 @@ export function applySceneOperationPatch(
     current,
   })
   return true
+}
+
+/**
+ * Runs `run` on `store` as one undo step and one commit that carries everything it changed: its
+ * own writes and the history-paused derived writes it settles after them (`reconcileDocument`),
+ * which a commit captured when the first write landed would miss. Collaboration then receives the
+ * derived construction, with its ids, in the same commit as the edit that caused it.
+ */
+export function runAsSettledSceneStep<T>(store: SceneStore, run: () => T): T {
+  const environment = sceneEnvironmentOf(store)
+  const snapshot = () => environment.run(() => sceneHistorySnapshotFromState(store.getState()))
+  const before = snapshot()
+  const pastBefore = store.temporal.getState().pastStates.length
+  return runAsSingleSceneHistoryStep(store, () => {
+    const result = run()
+    const current = snapshot()
+    if (areSceneSnapshotsEqual(before, current)) return result
+    const temporal = store.temporal.getState()
+    // Only paused (derived) writes landed: they still make one step of their own.
+    if (
+      temporal.pastStates.length === pastBefore &&
+      temporal.isTracking &&
+      getSceneHistoryPauseDepth(store) === 0
+    )
+      store.temporal.setState({ pastStates: [...temporal.pastStates, before], futureStates: [] })
+    const changedNodeIds = new Set<AnyNodeId>()
+    for (const id of new Set([...Object.keys(before.nodes), ...Object.keys(current.nodes)]))
+      if (before.nodes[id as AnyNodeId] !== current.nodes[id as AnyNodeId])
+        changedNodeIds.add(id as AnyNodeId)
+    settlePendingSceneCommit(store, { origin: 'local', before, current, changedNodeIds })
+    return result
+  })
 }
 
 export function applyScenePatch(changes: ScenePatch): boolean {

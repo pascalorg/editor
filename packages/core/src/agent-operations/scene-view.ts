@@ -319,6 +319,7 @@ export function sceneViewBounds(
   // With no walls yet, what the level holds frames it: furniture placed from a plan before the
   // walls are built, a site with its paving and fences.
   const held: SceneViewBox[] = []
+  // biome-ignore lint/plugin: a view frames whatever the level holds
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
     if (level?.type !== 'level') continue

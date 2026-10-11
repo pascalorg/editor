@@ -56,6 +56,7 @@ export const findByType: AgentOperation<{ type: string; levelId?: string }> = (
   if (levelId) requireLevel(nodes, levelId)
   const word = type.trim().toLowerCase().replace(/s$/, '')
   const results: Record<string, unknown>[] = []
+  // biome-ignore lint/plugin: any node, or any typed part of an authored object, may match
   for (const node of Object.values(nodes)) {
     const level = levelIdOf(nodes, node.id)
     if (levelId && level !== levelId) continue

@@ -11,6 +11,7 @@ import {
   type SceneNodes,
 } from '@pascal-app/core/agent-operations'
 import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
+import { untracked } from '@pascal-app/core/runtime'
 import {
   type AnyNode,
   type CompiledGeometryScript,
@@ -24,6 +25,7 @@ import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
 import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 import { toPatches } from './shared-tools'
 
 /**
@@ -141,6 +143,8 @@ export function registerAddObject(
         })
       }
       const args = input as Omit<AddObjectInput, 'compiled'>
+      // A new object's id is the scene's, minted before anything is awaited.
+      const nodeId = args.nodeId ?? inScene(bridge, () => generateId('item'))
       let compiled: CompiledGeometryScript
       try {
         requireAddObjectReason(args)
@@ -153,7 +157,7 @@ export function registerAddObject(
         const previous = args.nodeId ? nodes[args.nodeId] : undefined
         const params = editedScriptParams(previous, args.params)
         compiled = await compileAndStore(host, scene.id, code, params, 'object', {
-          nodeId: args.nodeId,
+          nodeId,
           metadata: {
             ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
             ...GeometryReuseFields.parse(args),
@@ -167,10 +171,14 @@ export function registerAddObject(
       }
       // A copy: the hosted bridge writes its map in place, and a "before" that grows with the call
       // reads every creation as unchanged.
-      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      // Copying is not a read: on a detached scene the operation records what it selects.
+      const nodes = bridge.getNodes() as Record<string, AnyNode>
+      const before = { ...untracked(nodes) }
       let outcome: ReturnType<typeof addObject>
       try {
-        outcome = addObject(before, { ...args, compiled }, { activeLevelId: null })
+        outcome = inScene(bridge, () =>
+          addObject(nodes, { ...args, compiled }, { activeLevelId: null }),
+        )
       } catch (error) {
         return refusalResult(error)
       }

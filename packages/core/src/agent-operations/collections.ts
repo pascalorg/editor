@@ -1,4 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
+import { queryCollections } from '../runtime/node-queries'
+import { untracked } from '../runtime/reader'
 import {
   type AnyNodeId,
   COLLECTION_TEMPLATES,
@@ -103,14 +105,13 @@ export function editCollection(
   scene: CollectionScene,
   input: EditCollectionInput,
 ): AgentOperationOutcome {
-  const all = Object.values(scene.collections)
-  const nameKey = input.name?.toLowerCase()
+  // A lookup by template or name reads which collections match, absent ones included.
   const existing = input.collectionId
     ? collectionById(scene, input.collectionId)
     : input.template
-      ? all.find((collection) => collection.template === input.template)
-      : nameKey
-        ? all.find((collection) => collection.name.toLowerCase() === nameKey)
+      ? queryCollections(scene.collections, { template: input.template })[0]
+      : input.name
+        ? queryCollections(scene.collections, { name: input.name })[0]
         : refuse('collection_required', 'Pass a collectionId, a template or a name.')
 
   if (input.delete) {
@@ -140,8 +141,9 @@ export function editCollection(
   const nodeIds = [...new Set([...base.nodeIds, ...((input.add ?? []) as AnyNodeId[])])].filter(
     (id) => !removed.has(id),
   )
+  // The fields this call does not set are copied through, not read.
   const next: Collection = {
-    ...base,
+    ...untracked(base),
     ...(input.name ? { name: input.name } : {}),
     ...(input.color ? { color: input.color } : {}),
     ...(input.template ? { template: input.template } : {}),
@@ -163,7 +165,7 @@ export function listCollections(
 ): AgentOperationOutcome {
   const collections = collectionId
     ? [collectionById(scene, collectionId)]
-    : Object.values(scene.collections)
+    : queryCollections(scene.collections, {})
   return {
     result: {
       count: collections.length,

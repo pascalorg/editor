@@ -3,7 +3,7 @@ import { WallNode } from '../schema'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
 import { WALL_MIN_LENGTH } from '../systems/wall/wall-topology'
 import { type LevelTargetInput, targetLevel } from './level-target'
-import { levelRole } from './scene-queries'
+import { levelRole, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
 type Pt = [number, number]
@@ -42,7 +42,7 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
   const curveOffset = input.curveOffset
     ? normalizeWallCurveOffset({ start, end }, input.curveOffset)
     : 0
-  const walls = Object.values(nodes).filter((node) => node.type === 'wall').length
+  const walls = queryNodes(nodes, { type: 'wall' }).length
   const wall = WallNode.parse({
     name: `Wall ${walls + 1}`,
     parentId: level.id,
