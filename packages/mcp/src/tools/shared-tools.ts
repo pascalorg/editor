@@ -5,6 +5,7 @@ import {
   achievedChanges,
   applyAgentOutcome,
   type SceneChanges,
+  writeCollections,
 } from '@pascal-app/core/agent-operations'
 import {
   type AgentToolAnnotations,
@@ -335,6 +336,14 @@ export function toPatches(changes: SceneChanges): Patch[] {
   ]
 }
 
+function writesScene(changes: SceneChanges | undefined): boolean {
+  return Boolean(
+    changes &&
+      (toPatches(changes).length ||
+        (changes.collections && Object.keys(changes.collections).length)),
+  )
+}
+
 export function registerSharedTools(
   server: McpServer,
   bridge: SceneOperations,
@@ -379,16 +388,21 @@ export function registerOperationTool(
       } catch (error) {
         return refusalResult(error)
       }
-      const patches = outcome.changes ? toPatches(outcome.changes) : []
       let result = outcome.result
       let persistence = {}
-      if (patches.length) {
+      // An outcome edits the scene through its node changes, its collection writes, or the
+      // follow-up it plans once the host has reconciled; any of them is one history step.
+      if (writesScene(outcome.changes) || outcome.afterReconcile) {
         result = bridge.runAsSingleHistoryStep(() =>
           applyAgentOutcome(outcome, {
             getNodes: () => bridge.getNodes(),
             applyChanges: (changes) => {
               const next = toPatches(changes)
               if (next.length) bridge.applyPatch(next)
+              if (changes.collections && Object.keys(changes.collections).length)
+                bridge.setCollections(
+                  writeCollections(bridge.getCollections(), changes.collections),
+                )
             },
             reconcile: () => {
               bridge.deriveStructure()

@@ -335,14 +335,16 @@ export const signageAgentTools: PluginAgentTools = {
 import type { AgentOperations } from '@pascal-app/core/agent-operations'
 import { refuse } from '@pascal-app/core/agent-tools'
 
-export const signageAgentOperations: AgentOperations = {
+export const signageAgentOperations = {
   signage_place_exit_signs: (nodes, input: { levelId: string; text?: string }) => {
     const doors = exitDoorsOn(nodes, input.levelId)
     if (!doors.length) refuse('no_exit_doors', `Level ${input.levelId} has no exit door.`)
     return { result: { placed: doors.length }, changes: { create: doors.map(signAbove) } }
   },
-}
+} satisfies AgentOperations
 ```
+
+`satisfies` checks the map against `AgentOperations` and keeps each operation's own input type for your tests. An outcome may write nodes (`create`, `update`, `delete`), collections (`collections`), or plan a follow-up once the host has derived construction (`afterReconcile`); a surface applies all of it as one undo step.
 
 ```ts
 // src/chat.ts → the main entry

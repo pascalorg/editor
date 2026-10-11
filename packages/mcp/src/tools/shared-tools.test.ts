@@ -4,7 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentOperations } from '@pascal-app/core/agent-operations'
 import { type PluginAgentTools, refuse } from '@pascal-app/core/agent-tools'
-import { type AnyNodeId, BuildingNode, LevelNode } from '@pascal-app/core/schema'
+import { type AnyNodeId, BuildingNode, type Collection, LevelNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import { AGENT_TOOL_CASES } from '../../../core/src/agent-operations/__fixtures__/cases'
 import { SceneBridge } from '../bridge/scene-bridge'
@@ -109,9 +109,10 @@ describe("search_assets over MCP reads the host's catalog", () => {
   })
 })
 
-// A plugin's 'operation' tool, registered by a host as the shared tools are: the contract from the
-// plugin's ./agent-tools, the operation from its ./agent-operations.
-describe("a plugin's operation tool over MCP", () => {
+// A plugin's 'operation' tools, registered by a host as the shared tools are: the contracts from
+// the plugin's ./agent-tools, the operations from its ./agent-operations.
+describe("a plugin's operation tools over MCP", () => {
+  const level = { levelId: z.string() }
   const signage: PluginAgentTools = {
     pluginId: 'acme:signage',
     apiVersion: 1,
@@ -121,14 +122,40 @@ describe("a plugin's operation tool over MCP", () => {
         name: 'signage_name_level',
         title: 'Name level',
         description: 'Rename a level. Refused with level_not_found for an id that is not a level.',
-        input: { levelId: z.string(), name: z.string().min(1) },
+        input: { ...level, name: z.string().min(1) },
         // A wrong hint: what clients see is the host's annotations, never the plugin's.
         annotations: { readOnlyHint: true },
         runsIn: 'operation',
       },
+      {
+        name: 'signage_group_level',
+        title: 'Group level',
+        description: "Collect a level's signs.",
+        input: level,
+        runsIn: 'operation',
+      },
+      {
+        name: 'signage_name_and_group_level',
+        title: 'Name and group level',
+        description: 'Rename a level and collect its signs, in one step.',
+        input: level,
+        runsIn: 'operation',
+      },
+      {
+        name: 'signage_name_after_reconcile',
+        title: 'Name level after reconcile',
+        description: 'Rename a level once the host has derived its construction.',
+        input: level,
+        runsIn: 'operation',
+      },
     ],
   }
-  const signageOperations: AgentOperations = {
+  const signs = {
+    id: 'collection_signs',
+    name: 'Signs',
+    nodeIds: ['level_ground'],
+  } as Collection
+  const signageOperations = {
     signage_name_level: (nodes, input: { levelId: string; name: string }) => {
       if (nodes[input.levelId]?.type !== 'level')
         refuse('level_not_found', `${input.levelId} is not a level.`)
@@ -137,7 +164,25 @@ describe("a plugin's operation tool over MCP", () => {
         changes: { update: [{ id: input.levelId, data: { name: input.name } }] },
       }
     },
-  }
+    signage_group_level: () => ({
+      result: { collectionId: signs.id },
+      changes: { collections: { [signs.id]: signs } },
+    }),
+    signage_name_and_group_level: (_nodes, input: { levelId: string }) => ({
+      result: { collectionId: signs.id },
+      changes: {
+        update: [{ id: input.levelId, data: { name: 'Signed' } }],
+        collections: { [signs.id]: signs },
+      },
+    }),
+    signage_name_after_reconcile: (_nodes, input: { levelId: string }) => ({
+      result: { settled: false },
+      afterReconcile: (derived) => ({
+        result: { settled: true, levelSeen: derived[input.levelId]?.type === 'level' },
+        changes: { update: [{ id: input.levelId, data: { name: 'Reconciled' } }] },
+      }),
+    }),
+  } satisfies AgentOperations
 
   let bridge: SceneBridge
   let client: Client
@@ -145,12 +190,17 @@ describe("a plugin's operation tool over MCP", () => {
   beforeEach(async () => {
     bridge = new SceneBridge()
     const building = BuildingNode.parse({ id: 'building_a', children: ['level_ground'] })
-    const level = LevelNode.parse({ id: 'level_ground', parentId: building.id, name: 'Ground' })
-    bridge.setScene({ [building.id]: building, [level.id]: level } as never, [building.id] as never)
+    const ground = LevelNode.parse({ id: 'level_ground', parentId: building.id, name: 'Ground' })
+    bridge.setScene(
+      { [building.id]: building, [ground.id]: ground } as never,
+      [building.id] as never,
+    )
+    bridge.clearHistory()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
     const operations = createSceneOperations({ bridge })
+    const byName: AgentOperations = signageOperations
     for (const contract of signage.tools) {
-      const operation = signageOperations[contract.name]
+      const operation = byName[contract.name]
       if (contract.runsIn !== 'operation' || !operation) continue
       registerOperationTool(server, operations, {
         contract,
@@ -164,6 +214,8 @@ describe("a plugin's operation tool over MCP", () => {
   })
 
   const levelName = () => (bridge.getNode('level_ground' as AnyNodeId) as { name?: string }).name
+  const call = async (name: string, args: Record<string, unknown>) =>
+    (await client.callTool({ name, arguments: args })) as Result
 
   test("lists the tool from the plugin's contract, with the host's annotations", async () => {
     const { tools } = await client.listTools()
@@ -177,10 +229,7 @@ describe("a plugin's operation tool over MCP", () => {
   })
 
   test('applies the operation and answers with what the scene holds', async () => {
-    const result = (await client.callTool({
-      name: 'signage_name_level',
-      arguments: { levelId: 'level_ground', name: 'Main floor' },
-    })) as Result
+    const result = await call('signage_name_level', { levelId: 'level_ground', name: 'Main floor' })
     expect(result.isError).toBeFalsy()
     expect(result.structuredContent).toMatchObject({
       levelId: 'level_ground',
@@ -190,21 +239,42 @@ describe("a plugin's operation tool over MCP", () => {
     expect(levelName()).toBe('Main floor')
   })
 
+  test('applies collection writes alone, in one undo step', async () => {
+    const result = await call('signage_group_level', { levelId: 'level_ground' })
+    expect(result.isError).toBeFalsy()
+    expect(bridge.getCollections()).toMatchObject({ [signs.id]: signs })
+    expect(bridge.undo()).toBe(1)
+    expect(bridge.getCollections()).not.toHaveProperty(signs.id)
+  })
+
+  test('applies node changes and collection writes together, in one undo step', async () => {
+    const result = await call('signage_name_and_group_level', { levelId: 'level_ground' })
+    expect(result.isError).toBeFalsy()
+    expect(levelName()).toBe('Signed')
+    expect(bridge.getCollections()).toMatchObject({ [signs.id]: signs })
+    expect(bridge.undo()).toBe(1)
+    expect(levelName()).toBe('Ground')
+    expect(bridge.getCollections()).not.toHaveProperty(signs.id)
+  })
+
+  test('runs a follow-up planned after reconcile even with no changes before it', async () => {
+    const result = await call('signage_name_after_reconcile', { levelId: 'level_ground' })
+    expect(result.isError).toBeFalsy()
+    expect(result.structuredContent).toMatchObject({ settled: true, levelSeen: true })
+    expect(levelName()).toBe('Reconciled')
+    expect(bridge.undo()).toBe(1)
+    expect(levelName()).toBe('Ground')
+  })
+
   test('answers a refusal with its code and leaves the scene as it was', async () => {
-    const result = (await client.callTool({
-      name: 'signage_name_level',
-      arguments: { levelId: 'level_attic', name: 'Attic' },
-    })) as Result
+    const result = await call('signage_name_level', { levelId: 'level_attic', name: 'Attic' })
     expect(result.isError).toBe(true)
     expect(JSON.parse(result.content[0]!.text)).toMatchObject({ code: 'level_not_found' })
     expect(levelName()).toBe('Ground')
   })
 
   test("rejects input the plugin's contract does not parse", async () => {
-    const result = (await client.callTool({
-      name: 'signage_name_level',
-      arguments: { levelId: 'level_ground', name: '' },
-    })) as Result
+    const result = await call('signage_name_level', { levelId: 'level_ground', name: '' })
     expect(result.isError).toBe(true)
     expect(levelName()).toBe('Ground')
   })
