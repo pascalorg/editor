@@ -1,26 +1,22 @@
 // Side-effect import MUST come first: installs RAF polyfill before core loads.
 import './node-shims'
 import {
-  adjacentLevelId,
   applyStructureReconciliation,
   assertDerivedNodeWrites,
-  changedStairOpeningOwners,
-  floorOpeningTargets,
   HIDDEN_SITE_NOTE,
   type NodeDeletionPlan,
   type NodeDeletionScene,
   pauseSceneHistory,
   pauseSpaceDetection,
   planNodeDeletion,
-  planOwnedFloorOpenings,
   planWallDeletion,
   resumeSceneHistory,
   resumeSpaceDetection,
   runAsSingleSceneHistoryStep,
-  stairDeckLevelId,
   structureChangeBatch,
 } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
+import { liveSceneRuntime, type SceneRuntime } from '@pascal-app/core/runtime'
 import type { AnyNode, Collection, CollectionId } from '@pascal-app/core/schema'
 import {
   type AnyNodeId,
@@ -29,8 +25,6 @@ import {
   generateId,
   parseNode,
 } from '@pascal-app/core/schema'
-// Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
-import useScene from '@pascal-app/core/store'
 import type { SceneMeta } from '../storage/types'
 
 export type ValidationError = { nodeId: string; path: string; message: string }
@@ -51,17 +45,32 @@ export type ActiveSceneMeta = Pick<
 >
 
 /** The `extra` bag `setScene` accepts — collections, materials, plugin state. */
-type SetSceneExtra = Parameters<ReturnType<typeof useScene.getState>['setScene']>[2]
+type SetSceneExtra = Parameters<ReturnType<SceneRuntime['store']['getState']>['setScene']>[2]
 
 /**
- * Headless bridge to the `@pascal-app/core` Zustand store.
+ * Headless bridge to a `@pascal-app/core` scene store: the editor's own (the default), or a
+ * detached scene's (`@pascal-app/core/runtime`), whose host passes it as `runtime`.
  *
- * All mutation flows through the real core store so undo/redo works via Zundo.
- * No renderer is attached; `dirtyNodes` accumulates and can be drained via
- * `flushDirty()` for observability.
+ * All mutation flows through the real core store so undo/redo works via Zundo. Reads go through
+ * the runtime's reader (recorded on a detached scene), and writes run in its scope: its history
+ * environment, its id allocator, its disposal guard. No renderer is attached; `dirtyNodes`
+ * accumulates and can be drained via `flushDirty()` for observability.
  */
 export class SceneBridge {
   private activeScene: ActiveSceneMeta | null = null
+  private readonly runtime: SceneRuntime
+
+  constructor(options: { runtime?: SceneRuntime } = {}) {
+    this.runtime = options.runtime ?? liveSceneRuntime
+  }
+
+  private get store() {
+    return this.runtime.store
+  }
+
+  private write<T>(run: () => T): T {
+    return this.runtime.run(run)
+  }
 
   /**
    * Scene identity currently bound to this bridge. MCP tools use this to know
@@ -89,7 +98,7 @@ export class SceneBridge {
 
   /** Load initial state; if empty, creates default Site → Building → Level. */
   loadDefault(): void {
-    useScene.getState().loadScene()
+    this.write(() => this.store.getState().loadScene())
   }
 
   /** Replace entire scene (undoable via Zundo). */
@@ -98,18 +107,19 @@ export class SceneBridge {
     rootNodeIds: AnyNodeId[],
     extra?: SetSceneExtra,
   ): void {
-    useScene.getState().setScene(nodes, rootNodeIds, extra)
+    this.write(() => this.store.getState().setScene(nodes, rootNodeIds, extra))
   }
 
   /** Full snapshot for export, including collections and the material palette. */
   exportJSON(): SceneGraph & { collections: Record<string, unknown> } {
-    const state = useScene.getState()
+    const state = this.store.getState()
+    const reader = this.runtime.reader()
     // Deep-clone so callers can't mutate store state directly.
     return JSON.parse(
       JSON.stringify({
-        nodes: state.nodes,
-        rootNodeIds: state.rootNodeIds,
-        collections: state.collections ?? {},
+        nodes: reader.nodes,
+        rootNodeIds: this.getRootNodeIds(),
+        collections: reader.collections ?? {},
         materials: state.materials ?? {},
         ...(state.hasExplicitPluginInstallState || state.installedPlugins.length > 0
           ? { installedPlugins: state.installedPlugins }
@@ -181,27 +191,31 @@ export class SceneBridge {
 
   /** Read a single node, or `null` if not present. */
   getNode(id: AnyNodeId): AnyNode | null {
-    const node = useScene.getState().nodes[id]
-    return node ?? null
+    return this.runtime.reader().get(id) ?? null
   }
 
-  /** All nodes (live reference into the store — do NOT mutate). */
+  /** All nodes (a read-only view of the store's current nodes — do NOT mutate). */
   getNodes(): Record<AnyNodeId, AnyNode> {
-    return useScene.getState().nodes
+    return this.runtime.reader().nodes as Record<AnyNodeId, AnyNode>
   }
 
   getCollections(): Record<CollectionId, Collection> {
-    return useScene.getState().collections
+    return this.runtime.reader().collections as Record<CollectionId, Collection>
   }
 
   setCollections(collections: Record<CollectionId, Collection>): void {
-    if (useScene.getState().readOnly) return
-    useScene.setState({ collections })
+    this.write(() => {
+      if (this.store.getState().readOnly) return
+      this.store.setState({ collections })
+    })
   }
 
   /** Root node IDs. */
   getRootNodeIds(): AnyNodeId[] {
-    return useScene.getState().rootNodeIds
+    return this.runtime
+      .reader()
+      .query({ entity: 'root' })
+      .map((node) => node.id as AnyNodeId)
   }
 
   /**
@@ -220,7 +234,7 @@ export class SceneBridge {
    * Results are de-duplicated by id, in flat-dict iteration order.
    */
   getChildren(parentId: AnyNodeId): AnyNode[] {
-    const nodes = useScene.getState().nodes
+    const nodes = this.getNodes()
     const out: AnyNode[] = []
     const seen = new Set<AnyNodeId>()
 
@@ -265,7 +279,7 @@ export class SceneBridge {
    * unset (see the default-scene quirk documented on `getChildren`).
    */
   getAncestry(id: AnyNodeId): AnyNode[] {
-    const nodes = useScene.getState().nodes
+    const nodes = this.getNodes()
     const out: AnyNode[] = []
     let current: AnyNode | undefined = nodes[id]
     const seen = new Set<AnyNodeId>()
@@ -291,14 +305,16 @@ export class SceneBridge {
     parentId?: AnyNodeId | null
     levelId?: AnyNodeId
   }): AnyNode[] {
-    const nodes = useScene.getState().nodes
+    // A query, so a detached scene records the selection rather than a read of every node.
+    const selected = this.runtime.reader().query({
+      entity: 'node',
+      where: {
+        ...(filter.type !== undefined && { type: filter.type }),
+        ...(filter.parentId !== undefined && { parentId: filter.parentId }),
+      },
+    })
     const out: AnyNode[] = []
-    for (const node of Object.values(nodes)) {
-      if (filter.type !== undefined && node.type !== filter.type) continue
-      if (filter.parentId !== undefined) {
-        const np = (node.parentId ?? null) as AnyNodeId | null
-        if (np !== filter.parentId) continue
-      }
+    for (const node of selected) {
       if (filter.levelId !== undefined) {
         if (this.resolveLevelId(node.id as AnyNodeId) !== filter.levelId) continue
       }
@@ -322,25 +338,31 @@ export class SceneBridge {
    * Returns the generated id.
    */
   createNode(node: AnyNode, parentId?: AnyNodeId): AnyNodeId {
-    const before = useScene.getState().nodes
-    assertDerivedNodeWrites(before, { create: [{ node: parentId ? { ...node, parentId } : node }] })
-    runAsSingleSceneHistoryStep(useScene, () => {
-      useScene.getState().createNode(node, parentId)
-      this.reconcileDependentStructure(before)
+    this.write(() => {
+      const before = this.store.getState().nodes
+      assertDerivedNodeWrites(this.getNodes(), {
+        create: [{ node: parentId ? { ...node, parentId } : node }],
+      })
+      runAsSingleSceneHistoryStep(this.store, () => {
+        this.store.getState().createNode(node, parentId)
+        this.runtime.reconcile(before)
+      })
     })
     return node.id as AnyNodeId
   }
 
   /** Update node fields (shallow merge through the core store). */
   updateNode(id: AnyNodeId, data: Partial<AnyNode>): void {
-    if (!useScene.getState().nodes[id]) {
+    if (!this.getNode(id)) {
       throw new Error(`node not found: ${id}`)
     }
-    const before = useScene.getState().nodes
-    assertDerivedNodeWrites(before, { update: [{ id, data }] })
-    runAsSingleSceneHistoryStep(useScene, () => {
-      useScene.getState().updateNode(id, data)
-      this.reconcileDependentStructure(before)
+    this.write(() => {
+      const before = this.store.getState().nodes
+      assertDerivedNodeWrites(this.getNodes(), { update: [{ id, data }] })
+      runAsSingleSceneHistoryStep(this.store, () => {
+        this.store.getState().updateNode(id, data)
+        this.runtime.reconcile(before)
+      })
     })
   }
 
@@ -352,8 +374,8 @@ export class SceneBridge {
    * Returns the list of ids actually removed from the scene.
    */
   deleteNode(id: AnyNodeId, cascade = false): string[] {
-    const state = useScene.getState()
-    const node = state.nodes[id]
+    const nodes = this.getNodes()
+    const node = nodes[id]
     if (!node) {
       throw new Error(`node not found: ${id}`)
     }
@@ -365,21 +387,15 @@ export class SceneBridge {
       )
     }
 
-    const before = new Set(Object.keys(state.nodes))
-    const wallLevels = [
-      ...new Set(
-        descendants.flatMap((nodeId) => {
-          const deleted = state.nodes[nodeId]
-          return deleted?.type === 'wall' && deleted.parentId ? [deleted.parentId as AnyNodeId] : []
-        }),
-      ),
-    ]
-    runAsSingleSceneHistoryStep(useScene, () => {
-      useScene.getState().deleteNode(id)
-      if (wallLevels.length) this.deriveStructure(wallLevels)
-      this.reconcileDependentStructure(state.nodes)
-    })
-    const afterNodes = useScene.getState().nodes
+    const beforeNodes = this.store.getState().nodes
+    const before = new Set(Object.keys(beforeNodes))
+    this.write(() =>
+      runAsSingleSceneHistoryStep(this.store, () => {
+        this.store.getState().deleteNode(id)
+        this.runtime.reconcile(beforeNodes)
+      }),
+    )
+    const afterNodes = this.store.getState().nodes
     const removed: string[] = []
     for (const prevId of before) {
       if (!(prevId in afterNodes)) removed.push(prevId)
@@ -397,8 +413,16 @@ export class SceneBridge {
     deletedIds: AnyNodeId[]
     createdIds: AnyNodeId[]
   } {
-    const state = useScene.getState()
-    const nodes = state.nodes
+    return this.write(() => this.applyPatchInScope(patches))
+  }
+
+  private applyPatchInScope(patches: Patch[]): {
+    appliedOps: number
+    deletedIds: AnyNodeId[]
+    createdIds: AnyNodeId[]
+  } {
+    const nodes = this.getNodes()
+    const beforeNodes = this.store.getState().nodes
 
     // Track synthesized state as we dry-run so later ops can reference
     // earlier-created ids and reflect earlier-deleted ids.
@@ -501,34 +525,25 @@ export class SceneBridge {
     )
     for (const { id, data } of planned.update)
       updateOps.set(id, { ...updateOps.get(id), ...data } as Partial<AnyNode>)
-    const wallLevels = [
-      ...new Set(
-        planned.delete.flatMap((id) => {
-          const node = nodes[id]
-          return node?.type === 'wall' && node.parentId ? [node.parentId as AnyNodeId] : []
-        }),
-      ),
-    ]
-    runAsSingleSceneHistoryStep(useScene, () => {
+    runAsSingleSceneHistoryStep(this.store, () => {
       pauseSpaceDetection()
       try {
-        useScene.getState().createNodes([...createOps.values(), ...planned.create])
-        useScene.getState().updateNodes([...updateOps].map(([id, data]) => ({ id, data })))
-        useScene.getState().deleteNodes(planned.delete)
+        this.store.getState().createNodes([...createOps.values(), ...planned.create])
+        this.store.getState().updateNodes([...updateOps].map(([id, data]) => ({ id, data })))
+        this.store.getState().deleteNodes(planned.delete)
       } finally {
         resumeSpaceDetection()
       }
-      if (wallLevels.length) this.deriveStructure(wallLevels)
-      this.reconcileDependentStructure(nodes)
+      this.runtime.reconcile(beforeNodes)
     })
-    const createdIds = Object.keys(useScene.getState().nodes).filter(
-      (id) => !nodes[id as AnyNodeId],
+    const postNodes = this.store.getState().nodes
+    const createdIds = Object.keys(postNodes).filter(
+      (id) => !beforeNodes[id as AnyNodeId],
     ) as AnyNodeId[]
 
     // Compute actual deleted ids by diffing pre/post snapshots.
-    const postNodes = useScene.getState().nodes
     const deletedIds: AnyNodeId[] = []
-    for (const prevId of Object.keys(nodes)) {
+    for (const prevId of Object.keys(beforeNodes)) {
       if (!(prevId in postNodes)) deletedIds.push(prevId as AnyNodeId)
     }
 
@@ -559,9 +574,20 @@ export class SceneBridge {
    * before the triggering tool call rather than stranding derived nodes.
    */
   deriveStructure(levelIds?: AnyNodeId[]): { createdIds: AnyNodeId[]; deletedIds: AnyNodeId[] } {
-    pauseSceneHistory(useScene)
+    return this.write(() => this.deriveStructureInScope(levelIds))
+  }
+
+  private deriveStructureInScope(levelIds?: AnyNodeId[]): {
+    createdIds: AnyNodeId[]
+    deletedIds: AnyNodeId[]
+  } {
+    pauseSceneHistory(this.store)
     try {
-      const patches = applyStructureReconciliation(useScene, {
+      // The kernel reads through the runtime's reader; its writes go to the store.
+      const reading = {
+        getState: () => ({ ...this.store.getState(), nodes: this.getNodes() }),
+      }
+      const patches = applyStructureReconciliation(reading, {
         levelIds,
         mintId: (kind) => generateId(kind),
       })
@@ -572,24 +598,26 @@ export class SceneBridge {
         deletedIds: patches.flatMap((patch) => (patch.op === 'delete' ? [patch.id] : [])),
       }
     } finally {
-      resumeSceneHistory(useScene)
+      resumeSceneHistory(this.store)
     }
   }
 
   /** Undo. Returns the number of steps actually undone. */
   undo(steps = 1): number {
-    const before = useScene.temporal.getState().pastStates.length
-    useScene.temporal.getState().undo(steps)
-    const after = useScene.temporal.getState().pastStates.length
-    return Math.max(0, before - after)
+    return this.write(() => {
+      const before = this.store.temporal.getState().pastStates.length
+      this.store.temporal.getState().undo(steps)
+      return Math.max(0, before - this.store.temporal.getState().pastStates.length)
+    })
   }
 
   /** Redo. Returns the number of steps actually redone. */
   redo(steps = 1): number {
-    const before = useScene.temporal.getState().futureStates.length
-    useScene.temporal.getState().redo(steps)
-    const after = useScene.temporal.getState().futureStates.length
-    return Math.max(0, before - after)
+    return this.write(() => {
+      const before = this.store.temporal.getState().futureStates.length
+      this.store.temporal.getState().redo(steps)
+      return Math.max(0, before - this.store.temporal.getState().futureStates.length)
+    })
   }
 
   /**
@@ -599,7 +627,7 @@ export class SceneBridge {
   validateScene(): ValidationResult {
     const errors: ValidationError[] = []
     const warnings: ValidationError[] = []
-    const nodes = useScene.getState().nodes
+    const nodes = this.getNodes()
     for (const [id, node] of Object.entries(nodes)) {
       if (node.type === 'site' && node.visible === false) {
         warnings.push({ nodeId: id, path: 'visible', message: HIDDEN_SITE_NOTE })
@@ -622,7 +650,7 @@ export class SceneBridge {
    * renderer (there is no renderer in MCP mode); useful for observability.
    */
   flushDirty(): string[] {
-    const state = useScene.getState()
+    const state = this.store.getState()
     const ids = Array.from(state.dirtyNodes)
     for (const id of ids) {
       state.clearDirty(id as AnyNodeId)
@@ -632,7 +660,7 @@ export class SceneBridge {
 
   /** Current temporal history pointers. */
   getHistory(): { pastCount: number; futureCount: number } {
-    const t = useScene.temporal.getState()
+    const t = this.store.temporal.getState()
     return {
       pastCount: t.pastStates.length,
       futureCount: t.futureStates.length,
@@ -641,85 +669,16 @@ export class SceneBridge {
 
   /** Clear the temporal undo/redo history. */
   clearHistory(): void {
-    useScene.temporal.getState().clear()
+    this.store.temporal.getState().clear()
+  }
+
+  /** Runs `run` in the scene's scope: an operation planned here mints the runtime's ids. */
+  runInScene<T>(run: () => T): T {
+    return this.write(run)
   }
 
   runAsSingleHistoryStep<T>(run: () => T): T {
-    return runAsSingleSceneHistoryStep(useScene, run)
-  }
-
-  private reconcileDependentStructure(before: Record<string, AnyNode>): void {
-    const currentNodes: Record<string, AnyNode> = this.getNodes()
-    const authoredInputChanged = [
-      ...new Set([...Object.keys(before), ...Object.keys(currentNodes)]),
-    ].some((id) => {
-      if (before[id] === currentNodes[id]) return false
-      const type = (currentNodes[id] ?? before[id])?.type
-      return (
-        type === 'stair' ||
-        type === 'stair-segment' ||
-        type === 'elevator' ||
-        type === 'level' ||
-        type === 'building' ||
-        type === 'slab' ||
-        type === 'ceiling'
-      )
-    })
-    if (authoredInputChanged) {
-      const ownerIds = changedStairOpeningOwners(before, currentNodes)
-      for (const node of [...Object.values(before), ...Object.values(currentNodes)]) {
-        if (
-          node.type === 'elevator' &&
-          (before[node.id] !== currentNodes[node.id] ||
-            Object.values(currentNodes).some(
-              (level) => level.type === 'level' && before[level.id] !== level,
-            ))
-        )
-          ownerIds.add(node.id)
-      }
-      const owned = planOwnedFloorOpenings(currentNodes, { ownerIds })
-      if (owned.length) {
-        pauseSpaceDetection()
-        try {
-          useScene.getState().applyNodeChanges(structureChangeBatch(owned))
-        } finally {
-          resumeSpaceDetection()
-        }
-      }
-    }
-    const current: Record<string, AnyNode> = this.getNodes()
-    const levels = new Set<AnyNodeId>()
-    for (const id of new Set([...Object.keys(before), ...Object.keys(current)])) {
-      if (before[id] === current[id]) continue
-      for (const nodes of [before, current]) {
-        const level = stairDeckLevelId(nodes, nodes[id])
-        if (level) levels.add(level as AnyNodeId)
-        const node = nodes[id]
-        if (node?.type === 'level') {
-          levels.add(node.id as AnyNodeId)
-          const lower = adjacentLevelId(nodes, node.id, -1)
-          if (lower) levels.add(lower as AnyNodeId)
-        }
-        if (node?.type === 'stair')
-          for (const opening of Object.values(nodes))
-            if (opening.type === 'floor-opening' && opening.ownerId === node.id)
-              for (const target of floorOpeningTargets(nodes, opening))
-                levels.add(target.levelId as AnyNodeId)
-        if (node?.type === 'floor-opening')
-          for (const target of floorOpeningTargets(nodes, node))
-            levels.add(target.levelId as AnyNodeId)
-        if (node?.type === 'door' || node?.type === 'window') {
-          const wall = nodes[node.parentId!]
-          if (wall?.type === 'wall' && wall.parentId) levels.add(wall.parentId as AnyNodeId)
-        } else if (
-          (node?.type === 'zone' || node?.type === 'slab' || node?.type === 'wall') &&
-          node.parentId
-        ) {
-          levels.add(node.parentId as AnyNodeId)
-        }
-      }
-    }
-    if (levels.size) this.deriveStructure([...levels])
+    return this.write(() => runAsSingleSceneHistoryStep(this.store, run))
   }
 
   // ---- internal helpers ----
@@ -730,7 +689,7 @@ export class SceneBridge {
    * missing on a node.
    */
   private _findParentByChildrenScan(id: AnyNodeId): AnyNode | null {
-    const nodes = useScene.getState().nodes
+    const nodes = this.getNodes()
     for (const candidate of Object.values(nodes)) {
       if (!('children' in candidate && Array.isArray(candidate.children))) continue
       for (const child of candidate.children as unknown[]) {
@@ -756,7 +715,7 @@ export class SceneBridge {
    * the SiteNode quirk and the default-scene parentId-unset case both work.
    */
   private _collectDescendants(id: AnyNodeId): AnyNodeId[] {
-    const nodes = useScene.getState().nodes
+    const nodes = this.getNodes()
     if (!nodes[id]) return []
     const out: AnyNodeId[] = []
     const stack: AnyNodeId[] = [id]

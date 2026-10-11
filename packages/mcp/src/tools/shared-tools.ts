@@ -30,6 +30,7 @@ import {
   searchAssetsTool,
   verifySceneTool,
 } from '@pascal-app/core/agent-tools'
+import { untracked } from '@pascal-app/core/runtime'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch } from '../bridge/scene-bridge'
@@ -376,15 +377,17 @@ export function registerOperationTool(
     },
     async (input: Record<string, unknown>) => {
       let outcome: ReturnType<AgentOperation>
+      const nodes = bridge.getNodes() as Record<string, AnyNode>
       // A copy of the map: a host may write its own in place (the hosted bridge does), and a
-      // "before" that grows with the call reads every creation as unchanged.
-      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      // "before" that grows with the call reads every creation as unchanged. Copying is not a
+      // read: on a detached scene, the operation records what it selects.
+      const before = { ...untracked(nodes) }
       const context = {
         activeLevelId: null,
         ...(tool.catalog && { catalog: await catalog() }),
       }
       try {
-        outcome = tool.operation(before, input as never, context)
+        outcome = bridge.runInScene(() => tool.operation(nodes, input as never, context))
       } catch (error) {
         return refusalResult(error)
       }

@@ -81,6 +81,8 @@ export interface SceneOperations {
   getHistory(): { pastCount: number; futureCount: number }
   clearHistory(): void
   runAsSingleHistoryStep<T>(run: () => T): T
+  /** Runs `run` in the scene's scope (its ids, history environment and disposal guard). */
+  runInScene<T>(run: () => T): T
 
   createProject(options: ProjectCreateOptions): Promise<ProjectStatus>
   getProjectStatus(id: string): Promise<ProjectStatus | null>
@@ -282,6 +284,10 @@ class SceneOperationsFacade implements SceneOperations {
 
   runAsSingleHistoryStep<T>(run: () => T): T {
     return this.requireBridge().runAsSingleHistoryStep(run)
+  }
+
+  runInScene<T>(run: () => T): T {
+    return this.requireBridge().runInScene(run)
   }
 
   async createProject(options: ProjectCreateOptions): Promise<ProjectStatus> {
