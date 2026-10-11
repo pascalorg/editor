@@ -9,7 +9,7 @@ import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import { getWallPlaneTop } from '../../services/storey'
 import useLiveNodeOverrides, { getEffectiveNode } from '../../store/use-live-node-overrides'
 import useLiveTerrain from '../../store/use-live-terrain'
-import useLiveTransforms from '../../store/use-live-transforms'
+import useLiveTransforms, { type LiveTransform } from '../../store/use-live-transforms'
 import useScene from '../../store/use-scene'
 import {
   computeWallSlabSupport,
@@ -200,6 +200,40 @@ export type PointedSupportSurface = ItemSlabSupport & {
   point: [number, number] | null
 }
 
+/**
+ * What a manager reads besides its own index: the scene's nodes and the live previews (field
+ * overrides, translation deltas, terrain sculpting) that support queries honour mid-drag.
+ */
+export type SpatialGridSource = {
+  nodes(): Record<string, AnyNode>
+  overrides(): ReadonlyMap<string, unknown>
+  transforms(): ReadonlyMap<string, LiveTransform>
+  effective<T extends { id: string }>(node: T): T
+  terrain(): ReturnType<typeof useLiveTerrain.getState> | undefined
+}
+
+/** The editor's store and its live previews: the singleton manager's source. */
+export const liveSpatialGridSource: SpatialGridSource = {
+  nodes: () => useScene.getState().nodes,
+  overrides: () => useLiveNodeOverrides.getState().overrides,
+  transforms: () => useLiveTransforms.getState().transforms,
+  effective: getEffectiveNode,
+  terrain: () => useLiveTerrain.getState(),
+}
+
+const NO_PREVIEWS = new Map<string, never>()
+
+/** A fixed set of nodes, without previews: what a detached scene's support queries read. */
+export function snapshotSpatialGridSource(nodes: () => Record<string, AnyNode>): SpatialGridSource {
+  return {
+    nodes,
+    overrides: () => NO_PREVIEWS,
+    transforms: () => NO_PREVIEWS,
+    effective: (node) => node,
+    terrain: () => undefined,
+  }
+}
+
 export class SpatialGridManager {
   private readonly floorGrids = new Map<string, SpatialGrid>() // levelId -> grid
   private readonly wallGrids = new Map<string, WallSpatialGrid>() // levelId -> wall grid
@@ -210,9 +244,11 @@ export class SpatialGridManager {
   private readonly itemCeilingMap = new Map<string, string>() // itemId -> ceilingId (reverse lookup)
 
   private readonly cellSize: number
+  private readonly source: SpatialGridSource
 
-  constructor(cellSize = 0.5) {
+  constructor(cellSize = 0.5, source: SpatialGridSource = liveSpatialGridSource) {
     this.cellSize = cellSize
+    this.source = source
   }
 
   private getFloorGrid(levelId: string): SpatialGrid {
@@ -241,7 +277,7 @@ export class SpatialGridManager {
     const wall = this.walls.get(wallId)
     if (!wall) return 0
 
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const levelId = resolveNodeLevelId(wall, nodes)
     const support = this.getSlabSupportForWall(
       levelId,
@@ -302,17 +338,17 @@ export class SpatialGridManager {
    * live-effective records and skip the rendered-polygon cache.
    */
   private levelHasLivePreview(levelId: string): boolean {
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const structuralOnLevel = (id: string) => {
       const node = nodes[id as AnyNodeId]
       if (!node || (node.type !== 'slab' && node.type !== 'wall')) return false
       return resolveNodeLevelId(node, nodes) === levelId
     }
-    const overrides = useLiveNodeOverrides.getState().overrides
+    const overrides = this.source.overrides()
     for (const id of overrides.keys()) {
       if (structuralOnLevel(id)) return true
     }
-    const transforms = useLiveTransforms.getState().transforms
+    const transforms = this.source.transforms()
     for (const id of transforms.keys()) {
       if (structuralOnLevel(id)) return true
     }
@@ -329,8 +365,8 @@ export class SpatialGridManager {
    * never re-map, or the delta would apply twice.
    */
   private effectiveSlabRecord(slab: SlabNode): SlabNode {
-    let effective = getEffectiveNode(slab)
-    const live = useLiveTransforms.getState().get(slab.id)
+    let effective = this.source.effective(slab)
+    const live = this.source.transforms().get(slab.id)
     if (live) {
       const [dx, dy, dz] = live.position
       if (dx !== 0 || dy !== 0 || dz !== 0) {
@@ -344,7 +380,7 @@ export class SpatialGridManager {
         }
       }
     }
-    return liftedManualSlab(useScene.getState().nodes, effective)
+    return liftedManualSlab(this.source.nodes(), effective)
   }
 
   private getRenderedSlabPolygon(levelId: string, slab: SlabNode): Array<[number, number]> {
@@ -360,7 +396,7 @@ export class SpatialGridManager {
     }
     const walls = this.getLevelWallNodes(levelId)
     const polygon = getRenderableSlabPolygon(slab, {
-      walls: live ? walls.map((wall) => getEffectiveNode(wall)) : walls,
+      walls: live ? walls.map((wall) => this.source.effective(wall)) : walls,
       siblingSlabs,
     })
     if (!live) this.renderedSlabPolygons.set(slab.id, polygon)
@@ -562,7 +598,7 @@ export class SpatialGridManager {
     }[],
     ignoreIds?: string[],
   ) {
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const ignoreSet = expandIgnoredNodeIds(ignoreIds, nodes)
     const draftBounds = footprints.map((footprint) =>
       footprintBoundsXZ(footprint.position, footprint.dimensions, footprint.rotation[1] ?? 0),
@@ -664,7 +700,7 @@ export class SpatialGridManager {
 
     if (!baseResult.valid) return baseResult
 
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const ignoreSet = new Set(ignoreIds ?? [])
     const draftBounds = {
       minX: localX - itemWidth / 2,
@@ -939,7 +975,7 @@ export class SpatialGridManager {
     // Sampled at the wall's own start point — the same anchor the mesh is
     // positioned at, so the resolver and the renderer cannot disagree about
     // where the ground is under this wall.
-    const levelBase = levelBaseElevationAt(useScene.getState().nodes, levelId, start[0], start[1])
+    const levelBase = levelBaseElevationAt(this.source.nodes(), levelId, start[0], start[1])
 
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) {
@@ -968,7 +1004,7 @@ export class SpatialGridManager {
       inputs.terrainPlates.some((slab) =>
         wallOverlapsPolygon({ start, end, curveOffset, thickness, justification }, slab.polygon),
       )
-        ? useLiveTerrain.getState()
+        ? this.source.terrain()
         : undefined,
     )
     return support
@@ -1000,9 +1036,9 @@ export class SpatialGridManager {
   >()
 
   private getSupportInputs(levelId: string, slabMap: Map<string, SlabNode>) {
-    const nodes = useScene.getState().nodes
-    const overrides = useLiveNodeOverrides.getState().overrides
-    const transforms = useLiveTransforms.getState().transforms
+    const nodes = this.source.nodes()
+    const overrides = this.source.overrides()
+    const transforms = this.source.transforms()
     const cached = this.supportInputs.get(levelId)
     if (
       cached &&
@@ -1029,11 +1065,11 @@ export class SpatialGridManager {
     for (const slab of slabs)
       for (const id of slab.zoneIds ?? []) {
         const zone = nodes[id as AnyNodeId]
-        if (zone?.type === 'zone') supportNodes[id] = getEffectiveNode(zone)
+        if (zone?.type === 'zone') supportNodes[id] = this.source.effective(zone)
       }
     for (const node of Object.values(nodes))
       if (node.parentId === levelId && (node.type === 'separator' || node.type === 'zone'))
-        supportNodes[node.id] = getEffectiveNode(node)
+        supportNodes[node.id] = this.source.effective(node)
     for (const node of Object.values(nodes))
       if (node.type === 'site' || node.type === 'building' || node.type === 'level')
         supportNodes[node.id] = node
@@ -1051,7 +1087,7 @@ export class SpatialGridManager {
       baseAt: (x: number, z: number) => levelBaseElevationAt(nodes, levelId, x, z),
       slabs,
       supportNodes,
-      walls: this.getLevelWallNodes(levelId).map((wall) => getEffectiveNode(wall)),
+      walls: this.getLevelWallNodes(levelId).map((wall) => this.source.effective(wall)),
     }
     this.supportInputs.set(levelId, next)
     return next
@@ -1066,7 +1102,7 @@ export class SpatialGridManager {
   private readonly levelWallsCache = new WeakMap<object, Map<string, WallNode[]>>()
 
   private getLevelWallNodes(levelId: string): WallNode[] {
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     let byLevel = this.levelWallsCache.get(nodes)
     if (!byLevel) {
       byLevel = new Map()
@@ -1126,7 +1162,7 @@ export class SpatialGridManager {
       }
     }
 
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const ignoreSet = new Set(ignoreIds ?? [])
     const [width, , depth] = dimensions
     const yRot = rotation[1]
@@ -1185,13 +1221,43 @@ export class SpatialGridManager {
 // Singleton instance
 export const spatialGridManager = new SpatialGridManager()
 
+const activeGrids: Array<() => SpatialGridManager> = []
+
+/**
+ * The manager support queries read: the editor's singleton, or, inside `withSpatialGrid`, the one
+ * a detached scene builds from its own nodes (scene runtime).
+ */
+export function activeSpatialGrid(): SpatialGridManager {
+  return activeGrids.at(-1)?.() ?? spatialGridManager
+}
+
+export function withSpatialGrid<T>(grid: () => SpatialGridManager, run: () => T): T {
+  activeGrids.push(grid)
+  try {
+    return run()
+  } finally {
+    activeGrids.pop()
+  }
+}
+
+/** A manager indexed over `nodes()` as they are now, without previews. */
+export function createSnapshotSpatialGrid(
+  nodes: () => Record<string, AnyNode>,
+  levelIdOf: (node: AnyNode, nodes: Record<string, AnyNode>) => string,
+): SpatialGridManager {
+  const grid = new SpatialGridManager(0.5, snapshotSpatialGridSource(nodes))
+  const current = nodes()
+  for (const node of Object.values(current)) grid.handleNodeCreated(node, levelIdOf(node, current))
+  return grid
+}
+
 /** Level-local Y where the rendered wall mesh begins. */
 export function getWallBaseElevationForNodes(
   wall: WallNode,
   nodes: Record<string, AnyNode>,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
-  return spatialGridManager.getSlabSupportForWall(
+  return activeSpatialGrid().getSlabSupportForWall(
     levelId,
     wall.start,
     wall.end,
@@ -1217,7 +1283,7 @@ export function getWallEffectiveHeightForNodes(
   nodes: Record<string, AnyNode>,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
-  const support = spatialGridManager.getSlabSupportForWall(
+  const support = activeSpatialGrid().getSlabSupportForWall(
     levelId,
     wall.start,
     wall.end,

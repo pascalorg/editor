@@ -3,7 +3,14 @@ import {
   getWallEffectiveHeightForNodes,
 } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type { AnyNode, LevelNode, RoofNode, RoofSegmentNode, WallNode } from '../../schema'
+import type {
+  AnyNode,
+  AnyNodeId,
+  LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+  WallNode,
+} from '../../schema'
 import { findLevelBelowId, getLevelElevations } from '../../services/storey'
 import { wallOverlapsSlabFootprint } from '../slab/slab-support'
 import { getWallArcData } from '../wall/wall-curve'
@@ -116,4 +123,35 @@ export function resolveRoofElevation(
     highest = highest === undefined ? top : Math.max(highest, top)
   }
   return highest ?? roof.position[1]
+}
+
+const ROOF_ELEVATION_EPSILON = 1e-4
+
+/** Kinds whose change can move a wall-supported roof. */
+export function isRoofElevationInput(node: AnyNode | undefined): boolean {
+  return (
+    node?.type === 'roof' ||
+    node?.type === 'wall' ||
+    node?.type === 'slab' ||
+    node?.type === 'level' ||
+    node?.type === 'building' ||
+    node?.type === 'site'
+  )
+}
+
+/** Wall-supported roofs whose stored Y no longer sits on their walls, and where it should. */
+export function planRoofElevationUpdates(
+  nodes: Readonly<Record<string, AnyNode>>,
+): Array<{ id: AnyNodeId; data: Partial<AnyNode> }> {
+  const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'roof' || node.support?.kind !== 'walls') continue
+    const elevation = resolveRoofElevation(node, nodes)
+    if (Math.abs(node.position[1] - elevation) <= ROOF_ELEVATION_EPSILON) continue
+    updates.push({
+      id: node.id,
+      data: { position: [node.position[0], elevation, node.position[2]] },
+    })
+  }
+  return updates
 }

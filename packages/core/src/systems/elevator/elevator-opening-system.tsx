@@ -2,39 +2,12 @@
 
 import { useEffect } from 'react'
 import { structureChangeBatch } from '../../commands/structure/shared'
-import type { AnyNode } from '../../schema'
 import { pauseSceneHistory, resumeSceneHistory } from '../../store/history-control'
 import { isHydrationNormalization } from '../../store/scene-hydration'
 import useScene from '../../store/use-scene'
+import { changedInputs, isElevatorOpeningInput } from '../document-reconcile'
 import { planOwnedFloorOpenings } from '../owned-floor-openings'
 import { reconcileOwnedFloorOpeningChanges } from '../reconcile-owned-floor-openings'
-
-function isOpeningRelevantNode(node: AnyNode | undefined) {
-  return (
-    node?.type === 'building' ||
-    node?.type === 'ceiling' ||
-    node?.type === 'elevator' ||
-    node?.type === 'level' ||
-    node?.type === 'slab'
-  )
-}
-
-function hasOpeningRelevantNodeChange(
-  nextNodes: Record<string, AnyNode>,
-  prevNodes: Record<string, AnyNode>,
-) {
-  if (nextNodes === prevNodes) return false
-
-  const ids = new Set([...Object.keys(nextNodes), ...Object.keys(prevNodes)])
-  for (const id of ids) {
-    const nextNode = nextNodes[id]
-    const prevNode = prevNodes[id]
-    if (nextNode === prevNode) continue
-    if (isOpeningRelevantNode(nextNode) || isOpeningRelevantNode(prevNode)) return true
-  }
-
-  return false
-}
 
 export function initializeElevatorOpeningSync() {
   let syncingAutoOpenings = false
@@ -47,7 +20,7 @@ export function initializeElevatorOpeningSync() {
     try {
       const before = useScene.getState().nodes
       useScene.getState().applyNodeChanges(structureChangeBatch(changes))
-      reconcileOwnedFloorOpeningChanges(before, changes)
+      reconcileOwnedFloorOpeningChanges(useScene, before, changes)
     } finally {
       resumeSceneHistory(useScene)
       syncingAutoOpenings = false
@@ -58,7 +31,7 @@ export function initializeElevatorOpeningSync() {
 
   return useScene.subscribe((state, prevState) => {
     if (syncingAutoOpenings) return
-    if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
+    if (!changedInputs(prevState.nodes, state.nodes, isElevatorOpeningInput)) return
     applyChanges(isHydrationNormalization() || state.hydrationId !== prevState.hydrationId)
   })
 }

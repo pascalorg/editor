@@ -472,6 +472,18 @@ export function detectSpacesForLevel(levelId: string, walls: BoundaryNode[]) {
   return detectSpacesFromWalls(levelId, walls)
 }
 
+/**
+ * Levels whose structure intent differs between two versions of a scene: what a paused batch's
+ * resume (and a detached scene's reconciliation) re-derives.
+ */
+export function changedStructureLevelIds(before: SceneNodes, after: SceneNodes): string[] {
+  const previous = levelStructureSnapshots(before)
+  const current = levelStructureSnapshots(after)
+  return [...new Set([...previous.keys(), ...current.keys()])].filter(
+    (id) => previous.get(id) !== current.get(id),
+  )
+}
+
 function syncSceneStructure(
   levelIds: string[],
   sceneStore: any,
@@ -682,12 +694,7 @@ export function initSpaceDetectionSync(
       return { nodes, rootNodeIds, collections, materials, installedPlugins }
     }
     const beforeCommit = capture()
-    const nodes = beforeCommit.nodes
-    const before = levelStructureSnapshots(previousNodes)
-    const after = levelStructureSnapshots(nodes)
-    const levels = [...new Set([...before.keys(), ...after.keys()])].filter(
-      (id) => before.get(id) !== after.get(id),
-    )
+    const levels = changedStructureLevelIds(previousNodes, beforeCommit.nodes)
     if (!levels.length) return
     isProcessing = true
     pauseSceneHistory(sceneStore)
