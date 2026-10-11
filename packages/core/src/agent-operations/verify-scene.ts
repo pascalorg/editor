@@ -197,6 +197,7 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
 
 function schemaErrors(nodes: SceneNodes) {
   const errors: { nodeId: string; path: string; message: string }[] = []
+  // biome-ignore lint/plugin: verify_scene reads the whole scene
   for (const [id, node] of Object.entries(nodes)) {
     const parsed = AnyNodeSchema.safeParse(node)
     if (parsed.success) continue
@@ -339,6 +340,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     }
   }
 
+  // biome-ignore lint/plugin: verify_scene reads the whole scene
   for (const node of Object.values(nodes)) {
     if (node.type !== 'door' && node.type !== 'window') continue
     const parent = node.parentId ? nodes[node.parentId] : undefined
@@ -363,6 +365,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       )
   }
 
+  // biome-ignore lint/plugin: verify_scene reads the whole scene
   for (const stair of Object.values(nodes).filter(
     (node): node is StairNode => node.type === 'stair',
   )) {
@@ -460,6 +463,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     report('schema_invalid', `Schema: ${errors.length - 5} additional validation errors`)
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
+  // biome-ignore lint/plugin: verify_scene reads the whole scene
   issues.push(...layoutIssuesFromScene(Object.values(nodes)))
   for (const check of checks)
     if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
@@ -496,6 +500,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
 
 /** Objects built by add_object, with what each stands in for: each is a gap in what Pascal builds. */
 function authoredObjects(nodes: SceneNodes) {
+  // biome-ignore lint/plugin: verify_scene reads the whole scene
   const objects = Object.values(nodes)
     .flatMap((node) =>
       node.type === 'item' && node.source

@@ -252,6 +252,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
 
   const doors = doorsOfRoom(nodes, levelId, polygon)
   const doorWall = input.doorWallIndex ?? doors[0]?.edge ?? 0
+  // biome-ignore lint/plugin: door keep-outs and occupied footprints resolve each item through its parents
   const all = Object.values(nodes)
   const doorKeepouts = collectDoorKeepouts(all, { levelId })
   const keepouts: PlanAabb[] = doorKeepouts.map((door) => door.aabb)

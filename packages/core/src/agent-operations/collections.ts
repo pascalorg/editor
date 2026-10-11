@@ -165,7 +165,7 @@ export function listCollections(
 ): AgentOperationOutcome {
   const collections = collectionId
     ? [collectionById(scene, collectionId)]
-    : Object.values(scene.collections)
+    : queryCollections(scene.collections, {})
   return {
     result: {
       count: collections.length,
