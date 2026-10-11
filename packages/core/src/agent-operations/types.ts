@@ -49,3 +49,6 @@ export type AgentOperation<Input = never> = (
   input: Input,
   context: AgentContext,
 ) => AgentOperationOutcome
+
+/** Operations by tool name: core's `AGENT_OPERATIONS`, or a plugin's `./agent-operations` export. */
+export type AgentOperations = Readonly<Record<string, AgentOperation>>
