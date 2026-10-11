@@ -276,6 +276,22 @@ describe('SceneBridge writes on a detached scene', () => {
     bridge.updateNode('level_g' as AnyNodeId, { metadata } as never)
     metadata.note.tags.push('two')
     expect(bridge.getNode('level_g' as AnyNodeId)?.metadata).toEqual({ note: { tags: ['one'] } })
+
+    const collections = {
+      collection_a: { id: 'collection_a', name: 'A', nodeIds: ['level_g'] },
+    } as never as Record<string, { nodeIds: string[] }>
+    bridge.setCollections(collections as never)
+    collections.collection_a!.nodeIds.push('building_b')
+    expect(bridge.getCollections()['collection_a' as never]).toMatchObject({ nodeIds: ['level_g'] })
+
+    const replacement = snapshot()
+    const level = replacement.nodes['level_g' as AnyNodeId] as AnyNode & {
+      metadata: Record<string, unknown>
+    }
+    level.metadata = { tags: ['one'] }
+    bridge.setScene(replacement.nodes, replacement.rootNodeIds)
+    ;(level.metadata.tags as string[]).push('two')
+    expect(bridge.getNode('level_g' as AnyNodeId)?.metadata).toEqual({ tags: ['one'] })
     scene.dispose()
   })
 })

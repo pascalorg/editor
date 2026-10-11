@@ -112,7 +112,9 @@ export class SceneBridge {
     rootNodeIds: AnyNodeId[],
     extra?: SetSceneExtra,
   ): void {
-    this.write(() => this.store.getState().setScene(nodes, rootNodeIds, extra))
+    // The store takes its own copy: a detached scene freezes what it holds.
+    const owned = structuredClone(materialize({ nodes, rootNodeIds, extra }))
+    this.write(() => this.store.getState().setScene(owned.nodes, owned.rootNodeIds, owned.extra))
   }
 
   /** Full snapshot for export, including collections and the material palette. */
@@ -216,7 +218,7 @@ export class SceneBridge {
   setCollections(collections: Record<CollectionId, Collection>): void {
     this.write(() => {
       if (this.store.getState().readOnly) return
-      this.store.setState({ collections })
+      this.store.setState({ collections: structuredClone(materialize(collections)) })
     })
   }
 
