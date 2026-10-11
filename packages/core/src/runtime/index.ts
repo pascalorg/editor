@@ -14,6 +14,7 @@ export {
   sceneDocumentOf,
 } from '../store/use-scene'
 export { reconcileDocument } from '../systems/document-reconcile'
+export * from './apply'
 export * from './dependencies'
 export { effectIds, type IdAllocator, sha256, withIdAllocator } from './ids'
 export { orderedChildIds, queryCollections, queryNodes } from './node-queries'
