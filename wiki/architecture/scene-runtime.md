@@ -27,6 +27,8 @@ scene.dispose()
 ```
 
 - **Canonical snapshot.** `snapshot` is a document as the editor holds it (`getSceneDocument()`, or a saved draft): already migrated. `loadCanonicalSnapshot` puts it in the store as it is; no migration, healing or load-time normalisation runs again, so nothing (a level gap, an opening) changes on load.
+- **Owned, read-only data.** The scene loads a deep-frozen copy of the snapshot, and freezes every record its own writes produce: nothing reached through it, a nested array of a node or a material included, can change the caller's snapshot, the editor's store, or the baseline of its patch.
+- **No previews.** Inside the scene's scope (and inside `reconcileDocument`), the editor's live previews are hidden (`withoutLivePreviews`): field overrides, drag transforms and an in-flight terrain stroke. A computation reads saved state only.
 - **Scope.** `scene.run(fn)` runs `fn` in the scene's environment, with its id allocator and a support index built from its own nodes. `host()` (an `AgentHostRuntime`) and `execute()` run there. Code that awaits must read and mint before its first await (as `compileAndStoreGeometryScript` does): the scope is synchronous.
 - **Ids.** `generateId`, and so every schema default, reads the allocator in scope (`withIdAllocator`). `effectIds(effectId)` mints `prefix_` and 16 base-36 characters of SHA-256(`effectId:n`): recomputing an effect from the same snapshot mints the same ids, so a retried commit is idempotent. Outside a scope, ids stay random.
 - **Patch.** `patch()` settles any derived writes still owed, then diffs the document against the snapshot: creates and deletes with their position among their siblings, changed and removed fields, materials, collections, plugin state. A parent's `children` is written only when its order changed beyond what the creates and deletes account for. The patch is verified by applying it to the snapshot; a root reorder, which a patch cannot express, throws.
@@ -44,14 +46,15 @@ A detached scene's `DocumentReader` records each read as a `Dependency`:
 | `query({ entity, where })`, `queryNodes`, `queryCollections` | `query` with the ids it matched; an empty result is recorded too |
 | `orderedChildren(id)`, `orderedChildIds` | `order`: where an order is consumed (a stair's riser split) |
 | a collection, a material, the plugin list | `collection` (fields), `material`, `plugins` |
-| a support query (slab, wall, item support) | `scope` on the level asked about: the spatial index is not visible to the reader |
+| a support query (slab, wall, item support) | `scope` on the level asked about: the spatial index is not visible to the reader. A level scope also covers the level's ancestors (building transform, site terrain) |
+| a write the store's actions plan beyond the changes asked for (default gutters, merged walls, sanitised values) | `scope` on every level the changes and the extra writes touch (`declareActionDependencies`): the actions read the scene directly |
 | a project file, an artifact | `file` / `artifact`, declared by the host (`scene.declare`) |
 
 Rules that keep the record precise:
 
 - **Select, don't enumerate.** Enumerating the `nodes` record records a query over every node: any node created meanwhile then conflicts. Shared operations select with `queryNodes(nodes, { type, parentId })`; a Biome rule refuses `Object.values / keys / entries` of `nodes` in `agent-operations/`, and an operation that genuinely reads the whole scene (verify_scene) says so in a `biome-ignore`.
 - **Copying is not reading.** Spreading a node or collection reads all of it. Code that only carries untouched fields through to a write copies `untracked(value)`.
-- **Views are per version.** `reader.nodes` is a read-only view of the current record version; identity-keyed memos (level elevations) keep working, and `reader.track(older)` views an earlier version so two versions compare by identity.
+- **Views are per version.** `reader.nodes` is a read-only view of the current record version; identity-keyed memos (level elevations) keep working, and `reader.track(older)` views an earlier version so two versions compare by identity. `queryNodes` and `orderedChildIds` on a view select within the version it is of.
 - **Order is a dependency only where it is read.** A parent's child list changed by an independent create or delete is bookkeeping (below); reading the list itself (`node.children`) records it exactly.
 
 ## Complete reconciliation
@@ -62,7 +65,11 @@ Rules that keep the record precise:
 2. stair rises, and the floor openings stairs and elevators own, re-deriving the levels they cut;
 3. the elevation of wall-supported roofs.
 
-Support queries read a spatial index built from the store's own nodes, never the editor's previews. The editor's systems (`StairOpeningSystem`, `ElevatorOpeningSystem`, `RoofElevationSystem`) plan with the same functions, so after a host settles an edit they find nothing to write; while a host settles (`runSettlingDocument`), they and space detection stand down, so derived ids are minted once, in the host's order. A runtime's `reconcile` is `reconcileDocument` reading through its reader; the MCP bridge settles every node edit with it.
+Levels are chosen as space detection chooses them for a commit (from the nodes the edit changed; a parent whose child list alone changed adds nothing), and each pass runs only on a change to its own inputs; the roof pass resolves only the roofs the edit can move (`roofsAffectedBy`: a changed roof, and the roofs on a changed wall's or slab's level and the level above). Support queries read a support index kept per store (`supportIndexOf`): slabs, walls and ceilings bulk-loaded once, then brought up to date in place from the nodes each edit changed; item collision cells are built only when a placement query asks. It never reads the editor's previews. The editor's systems (`StairOpeningSystem`, `ElevatorOpeningSystem`, `RoofElevationSystem`) plan with the same functions, so after a host settles an edit they find nothing to write; while a host settles (`runSettlingDocument`), they and space detection stand down, so derived ids are minted once, in the host's order. A runtime's `reconcile` is `reconcileDocument` reading through its reader; the MCP bridge settles every node edit with it.
+
+## Commits
+
+A host that edits the editor's store writes, then settles derived construction under a history pause. `runAsSettledSceneStep(store, run)` makes that one undo step and one commit: the commit carries the document as settled, with the derived nodes' ids among its changed ids, so collaboration receives the roof a wall edit moved in the same commit as the wall. `createAgentHost` and the MCP bridge write through it.
 
 ## Applying: `applyPatchWithDependencies`
 
@@ -83,4 +90,4 @@ The result's `patch` is rebased onto `current`: what an editor applies (`applySc
 
 ## MCP
 
-`new SceneBridge({ runtime })` binds the bridge to a runtime; the default is the editor's store. The bridge reads through the runtime's reader and runs every write in its scope. Core does not import the MCP: the host opens the detached scene and constructs the bridge.
+`new SceneBridge({ runtime })` binds the bridge to a runtime; the default is the editor's store. The bridge reads through the runtime's reader and runs every write in its scope. Core does not import the MCP: the host opens the detached scene and constructs the bridge. `createPascalMcpServer` starts every tool handler in the scene's scope (`SceneOperations.runInScene`), and tools that await (add_object, add_column) mint their ids before the first await and re-enter the scope to plan; a custom `SceneOperations` without `runInScene` keeps unscoped, random ids.
