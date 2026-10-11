@@ -2,11 +2,16 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { AnyNodeId } from '@pascal-app/core/schema'
+import type { AgentOperations } from '@pascal-app/core/agent-operations'
+import { type PluginAgentTools, refuse } from '@pascal-app/core/agent-tools'
+import { type AnyNodeId, BuildingNode, LevelNode } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import { AGENT_TOOL_CASES } from '../../../core/src/agent-operations/__fixtures__/cases'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { type AssetCatalog, builtInCatalog } from './asset-catalog'
-import { registerSharedTools } from './shared-tools'
+import { registerOperationTool, registerSharedTools } from './shared-tools'
 
 // Layer 2 of 3: the MCP tools, through a real client, on every shared tool's edge cases.
 type Result = {
@@ -101,5 +106,106 @@ describe("search_assets over MCP reads the host's catalog", () => {
     }
     expect(await search('plant', async () => [palm])).toEqual(['palm'])
     expect(await search('sofa', async () => [palm])).toEqual([])
+  })
+})
+
+// A plugin's 'operation' tool, registered by a host as the shared tools are: the contract from the
+// plugin's ./agent-tools, the operation from its ./agent-operations.
+describe("a plugin's operation tool over MCP", () => {
+  const signage: PluginAgentTools = {
+    pluginId: 'acme:signage',
+    apiVersion: 1,
+    version: '1.0.0',
+    tools: [
+      {
+        name: 'signage_name_level',
+        title: 'Name level',
+        description: 'Rename a level. Refused with level_not_found for an id that is not a level.',
+        input: { levelId: z.string(), name: z.string().min(1) },
+        // A wrong hint: what clients see is the host's annotations, never the plugin's.
+        annotations: { readOnlyHint: true },
+        runsIn: 'operation',
+      },
+    ],
+  }
+  const signageOperations: AgentOperations = {
+    signage_name_level: (nodes, input: { levelId: string; name: string }) => {
+      if (nodes[input.levelId]?.type !== 'level')
+        refuse('level_not_found', `${input.levelId} is not a level.`)
+      return {
+        result: { levelId: input.levelId, name: input.name },
+        changes: { update: [{ id: input.levelId, data: { name: input.name } }] },
+      }
+    },
+  }
+
+  let bridge: SceneBridge
+  let client: Client
+
+  beforeEach(async () => {
+    bridge = new SceneBridge()
+    const building = BuildingNode.parse({ id: 'building_a', children: ['level_ground'] })
+    const level = LevelNode.parse({ id: 'level_ground', parentId: building.id, name: 'Ground' })
+    bridge.setScene({ [building.id]: building, [level.id]: level } as never, [building.id] as never)
+    const server = new McpServer({ name: 'test', version: '0.0.0' })
+    const operations = createSceneOperations({ bridge })
+    for (const contract of signage.tools) {
+      const operation = signageOperations[contract.name]
+      if (contract.runsIn !== 'operation' || !operation) continue
+      registerOperationTool(server, operations, {
+        contract,
+        operation,
+        annotations: ADDITIVE_TOOL_ANNOTATIONS,
+      })
+    }
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    client = new Client({ name: 'test-client', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  })
+
+  const levelName = () => (bridge.getNode('level_ground' as AnyNodeId) as { name?: string }).name
+
+  test("lists the tool from the plugin's contract, with the host's annotations", async () => {
+    const { tools } = await client.listTools()
+    const tool = tools.find(({ name }) => name === 'signage_name_level')
+    expect(tool).toMatchObject({
+      title: 'Name level',
+      description: signage.tools[0]!.description,
+      inputSchema: { required: ['levelId', 'name'] },
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    })
+  })
+
+  test('applies the operation and answers with what the scene holds', async () => {
+    const result = (await client.callTool({
+      name: 'signage_name_level',
+      arguments: { levelId: 'level_ground', name: 'Main floor' },
+    })) as Result
+    expect(result.isError).toBeFalsy()
+    expect(result.structuredContent).toMatchObject({
+      levelId: 'level_ground',
+      name: 'Main floor',
+      achieved: { updated: 1 },
+    })
+    expect(levelName()).toBe('Main floor')
+  })
+
+  test('answers a refusal with its code and leaves the scene as it was', async () => {
+    const result = (await client.callTool({
+      name: 'signage_name_level',
+      arguments: { levelId: 'level_attic', name: 'Attic' },
+    })) as Result
+    expect(result.isError).toBe(true)
+    expect(JSON.parse(result.content[0]!.text)).toMatchObject({ code: 'level_not_found' })
+    expect(levelName()).toBe('Ground')
+  })
+
+  test("rejects input the plugin's contract does not parse", async () => {
+    const result = (await client.callTool({
+      name: 'signage_name_level',
+      arguments: { levelId: 'level_ground', name: '' },
+    })) as Result
+    expect(result.isError).toBe(true)
+    expect(levelName()).toBe('Ground')
   })
 })

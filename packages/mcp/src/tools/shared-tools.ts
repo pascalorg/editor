@@ -7,6 +7,8 @@ import {
   type SceneChanges,
 } from '@pascal-app/core/agent-operations'
 import {
+  type AgentToolAnnotations,
+  type AgentToolContract,
   addLevelTool,
   addWallTool,
   createRoomTool,
@@ -45,17 +47,27 @@ import { ROOM_TOOL_ANNOTATIONS, type RoomToolName, structureOutput } from './str
 // Tools the MCP and the hosted chat share whole: one contract, one core operation. The MCP only
 // applies the operation's changes through its bridge and adds its own facts (scene, persistence).
 
-type SharedTool = {
-  contract: { name: string; title: string; description: string; input: Record<string, z.ZodType> }
+/**
+ * A tool the server runs as a core-style operation: parse with the contract, plan with the
+ * operation, apply its changes through the bridge in one history step, answer with what the scene
+ * then holds. `annotations` are the host's to choose from its own review of the operation; a
+ * plugin contract's `annotations` are only its hints.
+ */
+export type OperationTool = {
+  contract: AgentToolContract
   operation: AgentOperation
-  annotations:
-    | typeof READ_ONLY_TOOL_ANNOTATIONS
-    | typeof ADDITIVE_TOOL_ANNOTATIONS
-    | typeof DESTRUCTIVE_TOOL_ANNOTATIONS
+  annotations: AgentToolAnnotations
   outputSchema?: Record<string, z.ZodType>
   envelope?: (bridge: SceneOperations) => Record<string, unknown>
   /** Reads the host's item library: only these calls wait for it (the hosted one is a query). */
   catalog?: true
+}
+
+type SharedTool = OperationTool & {
+  annotations:
+    | typeof READ_ONLY_TOOL_ANNOTATIONS
+    | typeof ADDITIVE_TOOL_ANNOTATIONS
+    | typeof DESTRUCTIVE_TOOL_ANNOTATIONS
 }
 
 const jsonObject = z.record(z.string(), z.unknown())
@@ -328,66 +340,75 @@ export function registerSharedTools(
   bridge: SceneOperations,
   catalog: AssetCatalog = builtInCatalog,
 ): void {
-  for (const tool of SHARED_TOOLS) {
-    server.registerTool(
-      tool.contract.name,
-      {
-        title: tool.contract.title,
-        description: tool.contract.description,
-        inputSchema: tool.contract.input,
-        // Loose: a client that listed the tools rejects any field the schema leaves out, and the
-        // operations in core grow fields (verify_scene's guesses) that this list would miss.
-        ...(tool.outputSchema ? { outputSchema: z.looseObject(tool.outputSchema) } : {}),
-        annotations: tool.annotations,
-      },
-      async (input: Record<string, unknown>) => {
-        let outcome: ReturnType<AgentOperation>
-        // A copy of the map: a host may write its own in place (the hosted bridge does), and a
-        // "before" that grows with the call reads every creation as unchanged.
-        const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
-        const context = {
-          activeLevelId: null,
-          ...(tool.catalog && { catalog: await catalog() }),
-        }
-        try {
-          outcome = tool.operation(before, input as never, context)
-        } catch (error) {
-          return refusalResult(error)
-        }
-        const patches = outcome.changes ? toPatches(outcome.changes) : []
-        let result = outcome.result
-        let persistence = {}
-        if (patches.length) {
-          result = bridge.runAsSingleHistoryStep(() =>
-            applyAgentOutcome(outcome, {
-              getNodes: () => bridge.getNodes(),
-              applyChanges: (changes) => {
-                const next = toPatches(changes)
-                if (next.length) bridge.applyPatch(next)
-              },
-              reconcile: () => {
-                bridge.deriveStructure()
-              },
-            }),
-          )
-          persistence = persistencePayload(
-            await publishLiveSceneSnapshot(bridge, tool.contract.name),
-          )
-        }
-        // What the scene holds after the call, not only what the call says it built.
-        const achieved = outcome.changes ? achievedChanges(before, outcome.changes) : null
-        const payload = {
-          ...result,
-          ...(achieved ? { achieved } : {}),
-          ...(tool.envelope?.(bridge) ?? {}),
-          ...persistence,
-        }
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
-          structuredContent: payload,
-        }
-      },
-    )
-  }
+  for (const tool of SHARED_TOOLS) registerOperationTool(server, bridge, tool, catalog)
   registerCollectionTools(server, bridge)
+}
+
+/**
+ * Registers one operation tool, as the shared tools are: a host adds a plugin's `'operation'`
+ * tools with it, from the plugin's `./agent-tools` contract and `./agent-operations` operation.
+ */
+export function registerOperationTool(
+  server: McpServer,
+  bridge: SceneOperations,
+  tool: OperationTool,
+  catalog: AssetCatalog = builtInCatalog,
+): void {
+  server.registerTool(
+    tool.contract.name,
+    {
+      title: tool.contract.title,
+      description: tool.contract.description,
+      inputSchema: tool.contract.input,
+      // Loose: a client that listed the tools rejects any field the schema leaves out, and the
+      // operations in core grow fields (verify_scene's guesses) that this list would miss.
+      ...(tool.outputSchema ? { outputSchema: z.looseObject(tool.outputSchema) } : {}),
+      annotations: tool.annotations,
+    },
+    async (input: Record<string, unknown>) => {
+      let outcome: ReturnType<AgentOperation>
+      // A copy of the map: a host may write its own in place (the hosted bridge does), and a
+      // "before" that grows with the call reads every creation as unchanged.
+      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      const context = {
+        activeLevelId: null,
+        ...(tool.catalog && { catalog: await catalog() }),
+      }
+      try {
+        outcome = tool.operation(before, input as never, context)
+      } catch (error) {
+        return refusalResult(error)
+      }
+      const patches = outcome.changes ? toPatches(outcome.changes) : []
+      let result = outcome.result
+      let persistence = {}
+      if (patches.length) {
+        result = bridge.runAsSingleHistoryStep(() =>
+          applyAgentOutcome(outcome, {
+            getNodes: () => bridge.getNodes(),
+            applyChanges: (changes) => {
+              const next = toPatches(changes)
+              if (next.length) bridge.applyPatch(next)
+            },
+            reconcile: () => {
+              bridge.deriveStructure()
+            },
+          }),
+        )
+        persistence = persistencePayload(await publishLiveSceneSnapshot(bridge, tool.contract.name))
+      }
+      // What the scene holds after the call, not only what the call says it built.
+      const achieved = outcome.changes ? achievedChanges(before, outcome.changes) : null
+      const payload = {
+        ...result,
+        ...(achieved ? { achieved } : {}),
+        ...(tool.envelope?.(bridge) ?? {}),
+        ...persistence,
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+        structuredContent: payload,
+      }
+    },
+  )
 }
