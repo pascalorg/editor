@@ -32,7 +32,7 @@ import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
 import type { SceneAtmosphereSource } from '../components/viewer/scene-atmosphere'
 import { backdropGradient, deepSkyColor, horizonHazeColor } from './backdrop'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
-import { inkedEdges } from './ink-edges'
+import { createEdgeDepthSampler, inkedEdges } from './ink-edges'
 import { getSceneTheme } from './scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from './tsl-compat'
 
@@ -189,6 +189,7 @@ export async function createSnapshotPipeline({
 
     const scenePassColor = scenePass.getTextureNode('output')
     const scenePassDepth = scenePass.getTextureNode('depth')
+    const sampleEdgeDepth = createEdgeDepthSampler(scenePassDepth, camera)
     const scenePassNormal = scenePass.getTextureNode('normal')
 
     scenePass.getTexture('diffuseColor').type = UnsignedByteType
@@ -219,7 +220,7 @@ export async function createSnapshotPipeline({
 
     // Same far-field AO fade as the viewport pipeline — without it the
     // horizon picks up a visible AO line in captures.
-    const aoFarFade = smoothstep(float(0.9994), float(0.9998), scenePassDepth.sample(screenUV).r)
+    const aoFarFade = smoothstep(float(0.9994), float(0.9998), sampleEdgeDepth(screenUV))
     const ao = mix((denoisePass as any).r, float(1), aoFarFade)
     const aoRgb = scenePassColor.rgb.mul(ao)
 
@@ -231,7 +232,7 @@ export async function createSnapshotPipeline({
     const inkRadius = Math.max(1, Math.round(renderer.domElement.height / 1080))
     const inkedRgb = inkedEdges({
       sceneRgb: aoRgb,
-      depthTex: scenePassDepth,
+      sampleDepth: sampleEdgeDepth,
       normalTex: scenePassNormal,
       inkColor: inkColorUniform,
       radius: inkRadius,

@@ -124,7 +124,7 @@ function seed(
   })
   useScene.temporal.getState().resume()
   useScene.temporal.getState().clear()
-  useEditor.setState({ mode: 'select', tool: null, viewMode: '3d' })
+  useEditor.setState({ mode: 'select', tool: null, viewLayouts: {} })
   useViewer.setState({
     textures: false,
     showZones: false,

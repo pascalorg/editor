@@ -33,6 +33,7 @@ import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
+import { getPendingRoofMergeCount } from '../../systems/roof/roof-system'
 import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
 import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { SceneRenderer } from '../renderers/scene-renderer'
@@ -320,7 +321,8 @@ function hasPendingSceneBuildWork() {
 export function pendingSceneBuildCount(): number {
   if (!hasCommittedSceneRoot()) return 1
   const state = useScene.getState()
-  let count = 0
+  // A roof's dirty mark clears when its merged shell is queued, frames before it is built.
+  let count = getPendingRoofMergeCount()
   for (const id of state.dirtyNodes) {
     if (isPendingSceneBuild(id, state)) count++
   }

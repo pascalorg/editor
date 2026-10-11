@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import {
   consumePlacementDragRelease,
+  copyCollectionIds,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -198,7 +199,13 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
         useScene.temporal.getState().resume()
         state.applyNodeChanges({
           delete: node.id ? [node.id as AnyNodeId] : [],
-          create: [{ node: committed, parentId: targetSegmentId }],
+          create: [
+            {
+              node: committed,
+              parentId: targetSegmentId,
+              collectionIds: copyCollectionIds(node),
+            },
+          ],
         })
         state.dirtyNodes.add(targetSegmentId)
         setSelection({ selectedIds: [committed.id] })

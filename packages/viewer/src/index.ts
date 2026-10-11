@@ -33,11 +33,10 @@ export {
   buildGlbReplaceNodes,
 } from './components/viewer/glb-reference-nodes'
 export {
-  type GlbHover,
-  type GlbIdentity,
-  type GlbLevel,
+  type GlbPickEvent,
   GlbScene,
   type GlbWalkthrough,
+  resolveGlbPick,
 } from './components/viewer/glb-scene'
 export {
   CROUCH_CAPSULE,
@@ -67,6 +66,7 @@ export {
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
+export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
 export {
   isViewerPresentationTextureBorrowed,
   markViewerPresentationTextureBorrowed,
@@ -155,6 +155,7 @@ export {
   disposeMaterial,
   glassMaterial,
   MONO_PALETTE,
+  materialCastsShadow,
   PRESET_PALETTES,
   type RenderShading,
   registerMaterialCacheCleanup,
@@ -165,6 +166,7 @@ export {
   WHITE_PALETTE,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
+export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height'
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
@@ -184,6 +186,7 @@ export {
   type RendererInitializationResult,
   type RendererPowerPreference,
 } from './lib/renderer-capability'
+export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,
   SCENE_THEME_IDS,
@@ -248,14 +251,6 @@ export {
 export { DoorAnimationSystem } from './systems/door/door-animation-system'
 export { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './systems/door/door-system'
 export { ElevatorInteractionSystem } from './systems/elevator/elevator-interaction-system'
-// Fence system follows the wall re-export pattern — composed into the
-// registry-driven fence definition's `def.system`. Removed in Phase 6
-// alongside the legacy fence mount point.
-export {
-  FenceSystem,
-  generateFenceGeometry,
-  generateFenceSlotGeometries,
-} from './systems/fence/fence-system'
 // Generic floor-elevation system. Lifts the rendered mesh of any kind
 // whose definition declares `capabilities.floorPlaced` by the slab
 // elevation under its footprint. Replaces the per-kind elevation block
@@ -263,6 +258,11 @@ export {
 export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
 export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
+export {
+  type ScriptedClipActions,
+  ScriptedClips,
+  useClipActions,
+} from './systems/interactive/scripted-clips'
 // Item systems for the registry-driven item definition. ItemSystem
 // applies attachTo-driven transforms each frame; ItemLightSystem
 // manages item-mounted light sources.

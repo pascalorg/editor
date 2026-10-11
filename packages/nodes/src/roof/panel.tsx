@@ -19,7 +19,7 @@ import {
   ActionButton,
   ActionGroup,
   commitParametricNodeFields,
-  duplicateRoofSubtree,
+  duplicateNodeAndPickUp,
   formatLinearMeasurement,
   PanelSection,
   PanelWrapper,
@@ -183,14 +183,7 @@ export default function RoofPanel() {
   )
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-
-    try {
-      duplicateRoofSubtree(node.id as AnyNodeId, { mode: 'move' })
-    } catch (e) {
-      console.error('Failed to duplicate roof', e)
-    }
+    if (node) duplicateNodeAndPickUp(node)
   }, [node])
 
   const handleMove = useCallback(() => {

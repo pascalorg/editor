@@ -1,5 +1,6 @@
 import { getFloorPlacedFootprints } from '../hooks/spatial-grid/floor-placed-footprints'
-import { itemOverlapsPolygon } from '../lib/item-polygon-overlap'
+import { liftedManualSlab } from '../lib/floor-construction-lift'
+import { selectSlabSupportForItem } from '../lib/item-slab-support'
 import {
   pointInPolygon as containsPoint,
   type Point2D,
@@ -17,7 +18,7 @@ import type { AnyNode } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getStoredLevelHeight } from '../services/storey'
 import { surfaceRegionContainsPoint } from '../services/surface-region'
-import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
+import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
 import type { ProceduralItemNode } from './node'
 import { evaluateRecipe, type Surface, type Vec3 } from './recipe'
@@ -111,35 +112,30 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
     position[2],
   )
   if (supportSlabId === 'ground') return ground
+  const supportSlabs = slabs.map((slab) => liftedManualSlab(nodes as Record<string, AnyNode>, slab))
+  const supportFor = (footprint: { position: Vec3; dimensions: Vec3; rotation: Vec3 }) =>
+    selectSlabSupportForItem(
+      supportSlabs,
+      footprint,
+      (slab) => getRenderableSlabPolygon(slab, { walls, siblingSlabs: supportSlabs }),
+      { preferredSlabId: supportSlabId },
+    )
   if (capability || node.type === 'cabinet' || node.type === 'cabinet-module') {
     const footprints = capability
       ? getFloorPlacedFootprints(capability, node, { nodes: nodes as Record<string, AnyNode> })
       : []
-    const candidatesFor = (footprint: (typeof footprints)[number]) =>
-      slabs.filter((slab) => {
-        const footprintPosition = footprint.position ?? position
-        return (
-          itemOverlapsPolygon(
-            footprintPosition,
-            footprint.dimensions,
-            footprint.rotation,
-            getRenderableSlabPolygon(slab, { walls, siblingSlabs: slabs }),
-            0.005,
-          ) &&
-          !(slab.holes ?? []).some((hole) =>
-            pointInPolygon(footprintPosition[0], footprintPosition[2], hole),
-          )
-        )
-      })
-    const candidates = footprints.map(candidatesFor)
-    const pinned = candidates.flat().find((slab) => slab.id === supportSlabId)
+    const supports = footprints.map((footprint) =>
+      supportFor({ ...footprint, position: footprint.position ?? position }),
+    )
+    const preferred = supportSlabId ? nodes[supportSlabId] : undefined
+    const prefersBase = preferred?.type === 'slab' && preferred.plateRole === 'base'
+    const pinned = supports.find(
+      (slab) =>
+        slab && (slab.id === supportSlabId || (prefersBase && slab.plateRole === 'platform')),
+    )
     if (pinned) return pinned.elevation ?? 0.05
-    return candidates.length
-      ? Math.max(
-          ...candidates.map((slabs) =>
-            slabs.length ? Math.max(...slabs.map((slab) => slab.elevation ?? 0.05)) : ground,
-          ),
-        )
+    return supports.length
+      ? Math.max(...supports.map((slab) => (slab ? (slab.elevation ?? 0.05) : ground)))
       : ground
   }
   if (!(isProceduralItem(node) || node.type === 'item' || node.type === 'shelf')) return 0
@@ -153,25 +149,8 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
             : (node.asset.dimensions.map((v, i) => v * node.scale[i]!) as Vec3),
         rotation: node.rotation,
       }
-  const candidates = slabs.filter((s) => {
-    const polygon = getRenderableSlabPolygon(s, { walls, siblingSlabs: slabs })
-    return (
-      itemOverlapsPolygon(
-        footprint.position,
-        footprint.dimensions,
-        footprint.rotation,
-        polygon,
-        0.005,
-      ) &&
-      !(s.holes ?? []).some((h) => pointInPolygon(footprint.position[0], footprint.position[2], h))
-    )
-  })
-  const pinned = candidates.find((s) => s.id === supportSlabId)
-  return pinned
-    ? (pinned.elevation ?? 0.05)
-    : candidates.length
-      ? Math.max(...candidates.map((s) => s.elevation ?? 0.05))
-      : ground
+  const support = supportFor(footprint)
+  return support ? (support.elevation ?? 0.05) : ground
 }
 function nodeParentFrame(
   node: AnyNode | ProceduralItemNode,

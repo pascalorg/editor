@@ -3,13 +3,17 @@ import {
   type AnyNode,
   applyHeightPatch,
   BuildingNode,
+  createSceneApi,
   createTerrainField,
   encodeTerrainField,
   FenceNode,
   flattenPatch,
+  type GeometryContext,
   LevelNode,
   SlabNode,
 } from '@pascal-app/core'
+import { Box3, Mesh } from 'three'
+import { fenceDefinition } from '../definition'
 import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from '../lift'
 
 const LEVEL_ID = 'level-1'
@@ -192,5 +196,54 @@ describe('resolveFenceLiftElevationForNodes', () => {
     const fence = railingOnLevel(undefined, 0.25)
     const nodes = sceneWith(fence, plateauSite(1.5))
     expect(resolveFenceLiftElevationForNodes(fence as never, nodes)).toBeCloseTo(1.75)
+  })
+})
+
+test('curved hosted fence geometry and handles retain the lifted slab datum', () => {
+  const level = LevelNode.parse({ id: 'level_datum', children: [] })
+  const deck = makeDeck(1.25, level.id)
+  const base = SlabNode.parse({
+    parentId: level.id,
+    polygon: deck.polygon,
+    plateRole: 'base',
+    floorHeight: 1.05,
+    referenceFloorElevation: 0.05,
+  })
+  const railing = FenceNode.parse({
+    ...makeRailing(deck.id, level.id, 0.25),
+    path: [
+      [0, 0],
+      [2, 1],
+      [4, 0],
+    ],
+    style: 'guard',
+  })
+  level.children = [base.id, deck.id, railing.id]
+  const nodes = Object.fromEntries([level, base, deck, railing].map((node) => [node.id, node]))
+  const ctx: GeometryContext = {
+    resolve: (id) => nodes[id] as never,
+    parent: level,
+    children: [],
+    siblings: [],
+    levelBaseAt: () => 0,
+    supportHeightAt: () => 20,
+  }
+  const geometry = fenceDefinition.geometry!(railing, ctx, 'rendered', false)
+  expect(new Box3().setFromObject(geometry).min.y).toBeCloseTo(2.5)
+  const sceneApi = createSceneApi({
+    getState: () => ({ nodes }),
+  } as never)
+  const handles =
+    typeof fenceDefinition.handles === 'function'
+      ? fenceDefinition.handles(railing, sceneApi)
+      : fenceDefinition.handles!
+  const position = handles.find(
+    (handle) => handle.kind === 'linear-resize' && handle.shape === 'tracker',
+  )!.placement!.position
+  expect(typeof position === 'function' ? position(railing, sceneApi)[1] : position[1]).toBeCloseTo(
+    2.5,
+  )
+  geometry.traverse((object) => {
+    if (object instanceof Mesh) object.geometry.dispose()
   })
 })

@@ -26,6 +26,7 @@ import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { SCENE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
+import { applyWalkthroughCameraClipping } from './viewer-camera'
 
 // First-person FOV. The orbit camera is 50° (set on the Canvas), which feels
 // cramped on foot; ~60° vertical (~90° horizontal at 16:9) restores peripheral
@@ -311,6 +312,11 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       cam.fov = prevFov
       cam.updateProjectionMatrix()
     }
+  }, [camera])
+
+  useEffect(() => {
+    if (!(camera as PerspectiveCamera).isPerspectiveCamera) return
+    return applyWalkthroughCameraClipping(camera as PerspectiveCamera)
   }, [camera])
 
   useEffect(() => {

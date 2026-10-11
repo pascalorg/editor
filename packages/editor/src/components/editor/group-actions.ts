@@ -24,6 +24,7 @@ import {
   copySelectedNodesToEditorClipboard,
   duplicateNodesToLevel,
   getEditorClipboardSnapshot,
+  type PasteRefusal,
   pasteSystemEditorClipboardToLevel,
 } from '../../lib/scene-clipboard'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
@@ -35,6 +36,7 @@ import useEditor, {
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../store/use-editor'
+import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import {
@@ -458,12 +460,39 @@ function removeUnusedPasteMaterials(materialIds: SceneMaterialId[]) {
   }
 }
 
+const REFUSED_PASTE_REASONS: Record<PasteRefusal, [one: string, many: string]> = {
+  'no-access': [
+    'you no longer have access to the project it came from.',
+    'you no longer have access to the project they came from.',
+  ],
+  'no-copies': [
+    'this version is not available to copy from the source project.',
+    'these versions are not available to copy from the source project.',
+  ],
+  failed: ["it couldn't be copied. Try again.", "they couldn't be copied. Try again."],
+}
+
+/** Why scripted objects were left out of a paste, or of a build loaded from a file. */
+export function refusedObjectsNotice(
+  count: number,
+  refusal: PasteRefusal,
+  action: 'pasted' | 'loaded' = 'pasted',
+) {
+  const [one, many] = REFUSED_PASTE_REASONS[refusal]
+  return count === 1
+    ? `1 object wasn't ${action}: ${one}`
+    : `${count} objects weren't ${action}: ${many}`
+}
+
+let pastePending = false
+
 /**
  * Paste the Pascal scene payload from the browser clipboard onto the active
  * level, then carry the clones under the cursor until click-to-place. Escape
  * removes the uncommitted clones and any scene materials imported with them.
  */
 export async function pasteSelectionAndPickUp(targetLevelId?: AnyNodeId): Promise<boolean> {
+  if (pastePending) return false
   const activeScope = useInteractionScope.getState().scope
   if (activeScope.kind === 'placing' || activeScope.kind === 'moving') {
     emitter.emit('tool:cancel')
@@ -478,7 +507,18 @@ export async function pasteSelectionAndPickUp(targetLevelId?: AnyNodeId): Promis
   // above there is nothing to abandon.
   if (isBrushMode(useEditor.getState().mode)) useEditor.getState().setMode('select')
 
-  const result = await pasteSystemEditorClipboardToLevel(targetLevelId)
+  pastePending = true
+  let result: Awaited<ReturnType<typeof pasteSystemEditorClipboardToLevel>>
+  try {
+    result = await pasteSystemEditorClipboardToLevel(targetLevelId)
+  } finally {
+    pastePending = false
+  }
+  if (result?.refusal) {
+    useFloorplanMode
+      .getState()
+      .showNotice(refusedObjectsNotice(result.refusedIds.length, result.refusal))
+  }
   if (!result || result.pastedIds.length === 0) return false
 
   const discardPaste = () => {

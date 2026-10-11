@@ -1,0 +1,88 @@
+import { z } from 'zod'
+
+const point = z.array(z.number()).length(3)
+
+export const VIEW_SIDES = [
+  'north',
+  'north-east',
+  'east',
+  'south-east',
+  'south',
+  'south-west',
+  'west',
+  'north-west',
+  'above',
+] as const
+
+export const viewSceneTool = {
+  name: 'view_scene',
+  title: 'Look at the scene',
+  description:
+    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic); the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), and a tab in the background must be brought to the front (editor_tab_hidden). A picture is not a measure: take sizes and counts from the tools.",
+  input: {
+    target: z
+      .string()
+      .optional()
+      .describe(
+        'A building, level, wall, zone, door, window or floor item id to frame. Default: every wall in the scene.',
+      ),
+    from: z
+      .enum(VIEW_SIDES)
+      .optional()
+      .describe('The side the eye stands on, as a compass on the plan. Default south-west.'),
+    elevation: z
+      .number()
+      .min(-10)
+      .max(89)
+      .optional()
+      .describe('Degrees above the horizon the eye looks down from. Default 12.'),
+    eyeHeight: z
+      .number()
+      .min(0)
+      .optional()
+      .describe('Metres above the ground for a street view (1.7), instead of elevation.'),
+    // Arrays of three, not tuples: a tuple's list-form schema is refused by some clients.
+    position: point
+      .optional()
+      .describe('The eye exactly, [x, height, z] in metres; it looks at the target.'),
+    fov: z
+      .number()
+      .min(10)
+      .max(100)
+      .optional()
+      .describe('Vertical field of view in degrees for a perspective view. Default 45.'),
+    projection: z
+      .enum(['perspective', 'orthographic'])
+      .optional()
+      .describe('orthographic for a square-on elevation of a face, no perspective.'),
+    camera: z
+      .looseObject({
+        position: point,
+        target: point,
+        fov: z.number().min(5).max(120),
+        aspect: z.number().min(0.2).max(5),
+      })
+      .optional()
+      .describe(
+        "A photo's camera (position, target, fov, aspect): the render takes its eye, aim and field of view at the photo's aspect. Not with from, position, elevation, eyeHeight, fov or projection.",
+      ),
+    photo: z
+      .looseObject({
+        source: z
+          .string()
+          .min(1)
+          .max(8_000_000)
+          .describe(
+            'The photo as a data:image/...;base64 URL (read the file and encode it); in the chat, the URL of a file the user attached works too.',
+          ),
+        region: z
+          .array(z.number().min(0))
+          .length(4)
+          .describe("[left, top, right, bottom] in the photo's pixels: the element to compare."),
+      })
+      .optional()
+      .describe(
+        "The photo's crop of the element the view frames, returned beside it in the same call: a door's glass, a lamp's shape, a window's panes, at detail scale, to say what differs.",
+      ),
+  },
+}

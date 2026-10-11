@@ -1,9 +1,11 @@
 import {
   type AnyNode,
+  getEffectiveCutterNode,
   getScaledDimensions,
   type HandleDescriptor,
   type ItemNode as ItemNodeType,
   type NodeDefinition,
+  resolveCutterHost,
   toggleMechanism,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
@@ -15,6 +17,7 @@ import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemPaint } from './paint'
 import { itemParametrics } from './parametrics'
+import { itemPlacementNotice } from './placement-notice'
 import { ItemNode } from './schema'
 
 // The two floor gizmos flank the item at mid-height so they never overlap,
@@ -332,13 +335,28 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   // Stage C: floor-plan polygon. ctx.resolve walks the parent chain
   // (wall / nested item / level) to compute the world-space transform.
   floorplan: buildItemFloorplan,
-  floorplanAffectedIds: restingFloorplanAffectedIds,
+  floorplanAffectedIds: (args) => {
+    const ids = [...restingFloorplanAffectedIds(args)]
+    for (const node of [args.node, getEffectiveCutterNode(args.node)]) {
+      if (node.type !== 'item') continue
+      for (const cutter of node.source?.manifest.cutters ?? []) {
+        const host = resolveCutterHost(
+          node,
+          cutter.host === 'mounted' ? 'cutout' : `cut:${cutter.host}`,
+          args.nodes,
+        )
+        if (host) ids.push(host.id)
+      }
+    }
+    return ids
+  },
   // 2D move-on-floorplan handler. Branches on `asset.attachTo`:
   // wall items snap to walls (like door / window), ceiling items
   // snap to ceiling polygons, floor items snap to slabs. attachTo
   // *transitions* (drop a wall item on a ceiling) remain canonical
   // in the 3D path; 2D only re-anchors within the same family.
   floorplanMoveTarget: itemFloorplanMoveTarget,
+  placementNotice: itemPlacementNotice,
   keyboardActions: {
     e: {
       appliesTo: (node) => itemMechanism.has(node) || itemHasLights(node),

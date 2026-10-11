@@ -15,9 +15,9 @@ import {
 import {
   type ColorPreset,
   createMaterial,
-  createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
   getRoofMaterialArray,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -126,6 +126,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       ? (state.nodes[segmentStore.parentId as AnyNodeId] as RoofNode | undefined)
       : undefined,
   )
+  const sceneMaterials = useScene((state) => state.materials)
   const segmentGeometryKey = ridgeVentSegmentGeometryKey(segment)
   const rotationY = node.rotation ?? 0
   const snap = useMemo(
@@ -175,16 +176,22 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       const parentSpec = parentRoof ? getEffectiveRoofSurfaceMaterial(parentRoof, 'top') : undefined
       const spec = segment ? getEffectiveSegmentSurfaceMaterial(segment, 'top', parentSpec) : null
 
-      if (typeof spec?.materialPreset === 'string') {
-        const resolved = createMaterialFromPresetRef(spec.materialPreset, shading)
-        if (resolved) return resolved
-      }
+      const resolved = resolveMaterialRef(spec?.materialPreset, sceneMaterials, shading)
+      if (resolved) return resolved
       if (spec?.material !== undefined) {
         return createMaterial(spec.material, shading)
       }
 
       const roofMaterials = parentRoof
-        ? getRoofMaterialArray(parentRoof, shading, textures, colorPreset, sceneTheme)
+        ? getRoofMaterialArray(
+            parentRoof,
+            shading,
+            textures,
+            colorPreset,
+            sceneTheme,
+            null,
+            sceneMaterials,
+          )
         : null
       return (
         roofMaterials?.[3] ??
@@ -196,7 +203,10 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
       return createMaterial(node.material, shading)
     }
     if (node.materialPreset) {
-      return createMaterialFromPresetRef(node.materialPreset, shading) ?? createDefaultTopMaterial()
+      return (
+        resolveMaterialRef(node.materialPreset, sceneMaterials, shading) ??
+        createDefaultTopMaterial()
+      )
     }
     return createDefaultTopMaterial()
   }, [
@@ -208,6 +218,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
     node.materialPreset,
     segment,
     parentRoof,
+    sceneMaterials,
   ])
 
   // Map vent-local geometry into the host segment's local frame (where the trim

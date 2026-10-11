@@ -22,6 +22,7 @@ import { useState } from 'react'
 import type { CreatableMeasurementKind } from '../../../lib/measurement-kind'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import { VIEW_2D } from '../../../store/view-layout'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
@@ -76,12 +77,10 @@ export function MeasurementControl() {
     (state) => state.toolDefaults['construction-dimension']?.mode,
   )
   const setMode = useEditor((state) => state.setMode)
-  const setPhase = useEditor((state) => state.setPhase)
   const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
-  const setViewMode = useEditor((state) => state.setViewMode)
+  const showView = useEditor((state) => state.showView)
 
   const selectedOption =
     measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
@@ -106,8 +105,6 @@ export function MeasurementControl() {
       : selectedOption.label
 
   const activateMeasurement = (kind: CreatableMeasurementKind) => {
-    setPhase('structure')
-    setStructureLayer('elements')
     setLastMeasurementKind(kind)
     setToolDefaults('measurement', { kind })
     setMode('build')
@@ -123,8 +120,6 @@ export function MeasurementControl() {
   }
 
   const activateSmartMeasurement = () => {
-    setPhase('structure')
-    setStructureLayer('elements')
     setToolDefaults('measurement', { kind: 'smart' })
     setMode('build')
     setTool('measurement')
@@ -138,9 +133,7 @@ export function MeasurementControl() {
       useFloorplanMode.getState().showExpertModeNotice('Construction Dimension')
       return
     }
-    setPhase('structure')
-    setStructureLayer('elements')
-    setViewMode('2d')
+    showView(VIEW_2D)
     setToolDefaults('construction-dimension', { chainMode, mode: dimensionMode })
     setMode('build')
     setTool('construction-dimension')

@@ -1,5 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
+import { scriptInteractive } from '../lib/geometry-script-node'
 import type { AnyNodeId } from '../schema/types'
+import { itemPrompt, operateItem } from './item-interaction'
 import { useInteractive } from './use-interactive'
 
 const lamp = {
@@ -78,4 +80,41 @@ test('catalog E toggles all switches together; non-light baked defaults stay on'
   store.setLampDefault(true)
   expect(useInteractive.getState().items[editorFanId]?.controlValues).toEqual([false])
   expect(useInteractive.getState().items[bakedFanId]?.controlValues).toEqual([true])
+})
+
+test('the walkthrough opens an open clip, plays a named clip by its name, and switches the rest', () => {
+  const store = useInteractive.getState()
+  const garage = scriptInteractive({
+    lights: [],
+    animations: [{ name: 'open' }, { name: 'loop' }, { name: 'Wave' }],
+  } as never)!
+  const box = scriptInteractive({
+    lights: [],
+    animations: [{ name: 'Princess twirl' }, { name: 'Spin' }],
+  } as never)!
+  const ids = ['garage', 'box', 'lamp'] as AnyNodeId[]
+  store.initItem(ids[0]!, garage)
+  store.initItem(ids[1]!, box)
+  store.initItem(ids[2]!, lamp)
+
+  expect(itemPrompt(ids[0]!, 'Garage door', garage)).toEqual({
+    label: 'Garage door',
+    verb: 'open',
+    isOn: false,
+  })
+  operateItem(ids[0]!, garage)
+  expect(useInteractive.getState().items.garage!.controlValues).toEqual([true, false])
+
+  expect(itemPrompt(ids[1]!, 'Music box', box).label).toBe('Princess twirl')
+  operateItem(ids[1]!, box)
+  expect(itemPrompt(ids[1]!, 'Music box', box)).toEqual({
+    label: 'Princess twirl',
+    verb: 'pause',
+    isOn: true,
+  })
+  expect(useInteractive.getState().items.box!.controlValues).toEqual([true, false])
+
+  operateItem(ids[2]!, lamp)
+  expect(itemPrompt(ids[2]!, 'Lamp', lamp).verb).toBe('turn off')
+  for (const id of ids) store.removeItem(id)
 })

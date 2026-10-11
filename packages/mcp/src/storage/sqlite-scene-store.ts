@@ -9,6 +9,7 @@ import { openSqliteDatabase, type SqliteDatabase } from './sqlite-driver'
 import {
   type ProjectCreateOptions,
   type ProjectStatus,
+  type SceneDeleteResult,
   type SceneEvent,
   type SceneEventAppendOptions,
   type SceneEventListOptions,
@@ -293,7 +294,9 @@ export class SqliteSceneStore implements SceneStore {
 
   constructor(opts: SqliteSceneStoreOptions = {}) {
     const env = opts.env ?? process.env
-    this.databasePath = path.resolve(opts.databasePath ?? resolveDefaultDatabasePath(env))
+    this.databasePath = path.resolve(
+      /* turbopackIgnore: true */ opts.databasePath ?? resolveDefaultDatabasePath(env),
+    )
     this.maxSceneBytes = resolveMaxSceneBytes(env, opts.maxSceneBytes)
   }
 
@@ -493,18 +496,18 @@ export class SqliteSceneStore implements SceneStore {
     return rows.map((row) => rowToMeta(row as SceneRow))
   }
 
-  async delete(id: string, opts: SceneMutateOptions = {}): Promise<boolean> {
+  async delete(id: string, opts: SceneMutateOptions = {}): Promise<SceneDeleteResult> {
     return this.withWriteTransaction((db) => {
       const safeId = sanitizeSlug(id)
       const existing = this.getRow(db, safeId)
-      if (!existing) return false
+      if (!existing) return { deleted: false, hidden: false }
       if (opts.expectedVersion !== undefined && existing.version !== opts.expectedVersion) {
         throw new SceneVersionConflictError(
           `Scene "${safeId}" version mismatch: expected ${opts.expectedVersion}, got ${existing.version}`,
         )
       }
       db.query('DELETE FROM scenes WHERE id = ?').run(safeId)
-      return true
+      return { deleted: true, hidden: false }
     })
   }
 

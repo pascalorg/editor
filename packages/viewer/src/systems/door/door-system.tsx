@@ -24,6 +24,7 @@ import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import {
   type ColorPreset,
   createDefaultMaterial,
+  createMaterial,
   createSurfaceRoleMaterial,
   glassMaterial as defaultGlassMaterial,
   baseMaterial as getBaseMaterial,
@@ -258,14 +259,19 @@ function doorSlotDefault(slotId: DoorMaterialSlotId): THREE.Material {
 }
 
 // Resolve a door's slot to a material: the `node.slots` override (colored mode
-// only) → the body/glass/hardware default. Textures-off ignores overrides — the
-// monochrome escape hatch.
+// only) → the door-wide `material` for the body (panel and frame; glass and
+// hardware keep their own finish) → the body/glass/hardware default.
+// Textures-off ignores overrides — the monochrome escape hatch.
 function resolveDoorSlotMaterial(node: DoorNode, slotId: DoorMaterialSlotId): THREE.Material {
   const fallback = doorSlotDefault(slotId)
   if (!currentTextures) return fallback
   const ref = node.slots?.[slotId]
-  if (!ref) return fallback
-  return resolveMaterialRef(ref, currentSceneMaterials, currentShading) ?? fallback
+  const painted = ref ? resolveMaterialRef(ref, currentSceneMaterials, currentShading) : null
+  if (painted) return painted
+  if (node.material && (slotId === 'panel' || slotId === 'frame')) {
+    return createMaterial(node.material, currentShading)
+  }
+  return fallback
 }
 
 function addBox(
@@ -1085,7 +1091,9 @@ function addLeafSegmentContent({
           if (innerPanelShape && addLeafShape) {
             addLeafShape(baseMaterial, innerPanelShape, effectiveDepth)
           } else {
+            // A leaf is paneled on both faces, so the person sees the style from either side.
             addLeafBox(baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
+            addLeafBox(baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, -panelZ)
           }
         }
       }

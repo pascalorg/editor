@@ -1,5 +1,7 @@
 import {
   type AnyNodeId,
+  beginSceneHistoryDraft,
+  collectionIdsOf,
   type DormerEvent,
   dormerWallFacePointToDormer,
   emitter,
@@ -9,6 +11,7 @@ import {
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
+  runSceneHistoryDraftWrite,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -158,6 +161,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         ? (movingWindowNode.metadata as Record<string, unknown>)
         : {}
     const isNew = !!meta.isNew
+    const endDraft = isNew ? null : beginSceneHistoryDraft(movingWindowNode.id, movingWindowNode)
+    const updateDraft = (data: Partial<WindowNode>) =>
+      runSceneHistoryDraftWrite(() => useScene.getState().updateNode(movingWindowNode.id, data))
 
     // Save original state (only used in move mode)
     const original = {
@@ -185,7 +191,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // preview on the wall and can't be placed consecutively without leaving/re-entering. This
     // mirrors MoveDoorTool.
     if (!isNew) {
-      useScene.getState().updateNode(movingWindowNode.id, {
+      updateDraft({
         metadata: { ...meta, isTransient: true },
       })
     }
@@ -478,7 +484,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           windowMesh.updateMatrixWorld(true)
         }
       } else {
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
@@ -620,6 +626,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         // Duplicate mode: delete the transient draft while history is still
         // paused, then create the real node as the gesture's ONE tracked
         // write — undo removes the new window entirely.
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
 
         const cloned = structuredClone(movingWindowNode) as any
@@ -639,14 +647,16 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(node, target.wallId as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([{ node, parentId: target.wallId as AnyNodeId, collectionIds }])
         })
         placedId = node.id
       } else {
         // Move mode: restore the exact pre-drag state while history is still
         // paused (the clean undo baseline), then apply the drop as the
         // gesture's ONE tracked write — undo reverts to the original state.
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: original.position,
           rotation: original.rotation,
           side: original.side,
@@ -684,6 +694,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       triggerSFX('sfx:structure-build')
       hideCursor()
       selectNode(placedId as AnyNodeId)
+      endDraft?.()
       exitMoveMode()
     }
 
@@ -755,7 +766,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // window from the wall's `children` or the CSG cut trails the ghost
       // around the old wall (see the wall-branch note in `applyPreview`).
       if (currentHostId === levelId) {
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: [localX, sillCenterY, localZ],
           rotation: [0, yaw, 0],
           side: sideOverride,
@@ -763,7 +774,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         })
       } else {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: [localX, sillCenterY, localZ],
           rotation: [0, yaw, 0],
           side: sideOverride,
@@ -874,6 +885,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       let placedId: string
 
       if (isNew) {
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
         const cloned = structuredClone(movingWindowNode) as any
         delete cloned.id
@@ -892,11 +905,15 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(committedNode, target.dormer.id as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([
+              { node: committedNode, parentId: target.dormer.id as AnyNodeId, collectionIds },
+            ])
         })
         placedId = committedNode.id
       } else {
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: original.position,
           rotation: original.rotation,
           side: original.side,
@@ -934,6 +951,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       triggerSFX('sfx:structure-build')
       hideCursor()
       selectNode(placedId as AnyNodeId)
+      endDraft?.()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -1080,6 +1098,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       if (isNew) {
         // See commitToWall — delete the draft paused, create as the ONE
         // tracked write.
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
 
         const cloned = structuredClone(movingWindowNode) as any
@@ -1098,13 +1118,15 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(node, segmentId as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([{ node, parentId: segmentId as AnyNodeId, collectionIds }])
         })
         placedId = node.id
       } else {
         // See commitToWall — restore the pre-drag baseline paused, drop as
         // the ONE tracked write.
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: original.position,
           rotation: original.rotation,
           side: original.side,
@@ -1143,6 +1165,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       triggerSFX('sfx:structure-build')
       hideCursor()
       selectNode(placedId as AnyNodeId)
+      endDraft?.()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -1165,7 +1188,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         useScene.getState().deleteNode(movingWindowNode.id)
         if (currentHostId) markHostDirty(currentHostId)
       } else {
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: original.position,
           rotation: original.rotation,
           side: original.side,
@@ -1185,6 +1208,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // entirely. `end` is idempotent — the effect cleanup's end() is a no-op.
       history.end()
       hideCursor()
+      endDraft?.()
       exitMoveMode()
     }
 
@@ -1239,7 +1263,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       } else {
         // No preview yet (R before the first pointermove): flip the hidden node
         // so the first preview/commit already reflects the chosen side.
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           side: sideOverride,
           rotation: [0, sideOverride === 'back' ? Math.PI : 0, 0],
         })
@@ -1332,7 +1356,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           useScene.getState().deleteNode(movingWindowNode.id)
           if (currentHostId) markHostDirty(currentHostId)
         } else {
-          useScene.getState().updateNode(movingWindowNode.id, {
+          updateDraft({
             position: original.position,
             rotation: original.rotation,
             side: original.side,
@@ -1351,7 +1375,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         // Safety net: a fresh (isNew) clone isn't marked `isTransient`; if we
         // unmount mid-free-follow it would be left hidden. Reveal it so it never
         // becomes an invisible orphan (place-preset deletes a true cancel).
-        useScene.getState().updateNode(movingWindowNode.id, { visible: true })
+        updateDraft({ visible: true })
       }
       useLiveNodeOverrides.getState().clear(movingWindowNode.id)
       useLiveTransforms.getState().clear(movingWindowNode.id)
@@ -1361,6 +1385,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       clearPlacementSurface()
       releaseHiddenWallHold()
       history.end()
+      endDraft?.()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)

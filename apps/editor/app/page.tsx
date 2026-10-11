@@ -2,10 +2,11 @@
 
 import { Editor, ItemsPanel } from '@pascal-app/editor'
 import { PascalWebXRButton } from '@webxr/plugin/pascal-editor'
-import { Hammer, Layers, Package, Settings } from 'lucide-react'
+import { Hammer, Layers, Package, Palette, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
+import { PaintPanel } from '@/components/paint-panel'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -52,6 +53,22 @@ const SIDEBAR_TABS = [
         className="h-8 w-8 object-contain"
         height={32}
         src="/icons/build.webp"
+        width={32}
+      />
+    ),
+  },
+  {
+    id: 'paint',
+    label: 'Paint',
+    component: PaintPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Palette className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/paint.webp"
         width={32}
       />
     ),

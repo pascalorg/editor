@@ -19,8 +19,10 @@ import {
   getWallSurfacePolygon,
   getWallThickness,
   isCurvedWall,
+  isCutterName,
   type Point2D,
   pointToKey,
+  resolveCutterHost,
   resolveLevelId,
   resolveWallFaceBottom,
   resolveWallFinish,
@@ -667,14 +669,16 @@ function wallRebuildExitReason(
   let cutouts = 0
   for (const childId of getEffectiveWall(wall).children ?? []) {
     const child = nodes[childId]
-    if (
-      child?.type === 'door' ||
-      child?.type === 'window' ||
-      (child?.type === 'item' &&
-        (
-          sceneRegistry.nodes.get(childId)?.getObjectByName('cutout') as THREE.Mesh | undefined
-        )?.geometry?.getAttribute('position')?.count)
-    ) {
+    let hasCutter = false
+    if (child?.type === 'item') {
+      sceneRegistry.nodes.get(childId)?.traverse((object) => {
+        const mesh = object as THREE.Mesh
+        const name = typeof mesh.userData.name === 'string' ? mesh.userData.name : mesh.name
+        if (mesh.isMesh && isCutterName(name) && mesh.geometry?.getAttribute('position')?.count)
+          hasCutter = true
+      })
+    }
+    if (child?.type === 'door' || child?.type === 'window' || hasCutter) {
       cutouts++
       if (cutouts >= HEAVY_WALL_OPENINGS) return 'heavy'
     }
@@ -1936,16 +1940,26 @@ function collectCutoutBrushes(
   // Get wall's world matrix inverse to transform cutouts to wall-local space
   wallMesh.updateMatrixWorld()
   const wallMatrixInverse = wallMesh.matrixWorld.clone().invert()
+  // A wall child can only bind to its parent, so the wall alone resolves every cutter.
+  const hostNodes = { [wallNode.id]: wallNode }
 
   for (const child of childrenNodes) {
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
+    const cutterMeshes: THREE.Mesh[] = []
+    sceneRegistry.nodes.get(child.id)?.traverse((object) => {
+      const name = typeof object.userData.name === 'string' ? object.userData.name : object.name
+      if (
+        (object as THREE.Mesh).isMesh &&
+        resolveCutterHost(child, name, hostNodes)?.id === wallNode.id
+      ) {
+        cutterMeshes.push(object as THREE.Mesh)
+      }
+    })
+
     // A window or door built from a script cuts its `cutout` mesh like an
     // authored item (below); without one, or until it loads, its outline.
-    const scriptedCutout =
-      child.type !== 'item' &&
-      child.source &&
-      sceneRegistry.nodes.get(child.id)?.getObjectByName('cutout')
+    const scriptedCutout = child.type !== 'item' && child.source && cutterMeshes.length > 0
     if ((child.type === 'door' || child.type === 'window') && !scriptedCutout) {
       const nodes = {
         ...sceneNodes,
@@ -2049,61 +2063,57 @@ function collectCutoutBrushes(
       continue
     }
 
-    const childMesh = sceneRegistry.nodes.get(child.id)
-    if (!childMesh) continue
+    for (const cutoutMesh of cutterMeshes) {
+      // Get the cutout's bounding box in world space
+      cutoutMesh.updateMatrixWorld()
+      const positions = cutoutMesh.geometry?.attributes?.position
+      if (!positions) continue
 
-    const cutoutMesh = childMesh.getObjectByName('cutout') as THREE.Mesh
-    if (!cutoutMesh) continue
+      // Calculate bounds in wall-local space
+      const v3 = new THREE.Vector3()
+      let minX = Number.POSITIVE_INFINITY,
+        maxX = Number.NEGATIVE_INFINITY
+      let minY = Number.POSITIVE_INFINITY,
+        maxY = Number.NEGATIVE_INFINITY
 
-    // Get the cutout's bounding box in world space
-    cutoutMesh.updateMatrixWorld()
-    const positions = cutoutMesh.geometry?.attributes?.position
-    if (!positions) continue
+      for (let i = 0; i < positions.count; i++) {
+        v3.fromBufferAttribute(positions, i)
+        v3.applyMatrix4(cutoutMesh.matrixWorld)
+        v3.applyMatrix4(wallMatrixInverse)
 
-    // Calculate bounds in wall-local space
-    const v3 = new THREE.Vector3()
-    let minX = Number.POSITIVE_INFINITY,
-      maxX = Number.NEGATIVE_INFINITY
-    let minY = Number.POSITIVE_INFINITY,
-      maxY = Number.NEGATIVE_INFINITY
-
-    for (let i = 0; i < positions.count; i++) {
-      v3.fromBufferAttribute(positions, i)
-      v3.applyMatrix4(cutoutMesh.matrixWorld)
-      v3.applyMatrix4(wallMatrixInverse)
-
-      minX = Math.min(minX, v3.x)
-      maxX = Math.max(maxX, v3.x)
-      minY = Math.min(minY, v3.y)
-      maxY = Math.max(maxY, v3.y)
-    }
-
-    if (!Number.isFinite(minX)) continue
-
-    // An authored object's cutout keeps its shape (an arch, a circle): its own
-    // geometry in wall space, stretched across the wall so it cuts both faces.
-    if (child.source) {
-      const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, wallThickness, wallNode)
-      if (shaped) {
-        brushes.push(shaped)
-        continue
+        minX = Math.min(minX, v3.x)
+        maxX = Math.max(maxX, v3.x)
+        minY = Math.min(minY, v3.y)
+        maxY = Math.max(maxY, v3.y)
       }
+
+      if (!Number.isFinite(minX)) continue
+
+      // An authored object's cutout keeps its shape (an arch, a circle): its own
+      // geometry in wall space, stretched across the wall so it cuts both faces.
+      if (child.source) {
+        const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, wallThickness, wallNode)
+        if (shaped) {
+          brushes.push(shaped)
+          continue
+        }
+      }
+
+      // Create a box geometry that extends through the wall thickness
+      const width = maxX - minX
+      const height = maxY - minY
+      const depth = wallThickness * 2 // Extend beyond wall to ensure clean cut
+
+      const boxGeo = new THREE.BoxGeometry(width, height, depth)
+      // Position box at the center of the cutout
+      boxGeo.translate(minX + width / 2, minY + height / 2, getWallBodyCenterOffset(wallNode))
+
+      // Pre-compute BVH with new API to avoid deprecation warning
+      computeGeometryBoundsTree(boxGeo)
+
+      const brush = new Brush(boxGeo)
+      brushes.push(brush)
     }
-
-    // Create a box geometry that extends through the wall thickness
-    const width = maxX - minX
-    const height = maxY - minY
-    const depth = wallThickness * 2 // Extend beyond wall to ensure clean cut
-
-    const boxGeo = new THREE.BoxGeometry(width, height, depth)
-    // Position box at the center of the cutout
-    boxGeo.translate(minX + width / 2, minY + height / 2, getWallBodyCenterOffset(wallNode))
-
-    // Pre-compute BVH with new API to avoid deprecation warning
-    computeGeometryBoundsTree(boxGeo)
-
-    const brush = new Brush(boxGeo)
-    brushes.push(brush)
   }
 
   return brushes

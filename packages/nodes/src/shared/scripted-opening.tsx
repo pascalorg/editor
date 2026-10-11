@@ -3,8 +3,11 @@
 import {
   type AnyNodeId,
   artifactUrl,
+  type ColumnNode,
   type DoorNode,
   type ItemNode,
+  type ScriptedNode,
+  scriptedOrigin,
   scriptedSize,
   scriptInteractive,
   useInteractive,
@@ -17,13 +20,15 @@ import type { Group } from 'three'
 import { ScriptedModel } from '../item/renderer'
 
 /**
- * A window or door built from a script, rendered exactly as an authored item:
- * the same artifact, paint slots, clips and lights. The opening's mesh is
- * centred on the opening; the artifact's origin is its bottom centre.
+ * A window, door or column built from a script, rendered exactly as an authored
+ * item: the same artifact, paint slots, clips and lights. The artifact's origin
+ * is its bottom centre: an opening's mesh is centred on the opening, a column's
+ * sits on its support point.
  */
-export function ScriptedOpeningModel({ node }: { node: WindowNode | DoorNode }) {
+export function ScriptedOpeningModel({ node }: { node: WindowNode | DoorNode | ColumnNode }) {
   const source = node.source!
   const ref = useRef<Group>(null)
+  const modelData = useMemo(() => ({ [SCRIPTED_MODEL_FLAG]: true }), [])
   const view = useMemo(() => {
     const [width, height, depth] = scriptedSize(source.manifest)
     return {
@@ -40,21 +45,29 @@ export function ScriptedOpeningModel({ node }: { node: WindowNode | DoorNode }) 
         offset: [0, 0, 0],
         rotation: [0, 0, 0],
         scale: [1, 1, 1],
-        interactive: scriptInteractive(source.manifest),
+        interactive: scriptInteractive(
+          source.manifest,
+          scriptedOrigin({ type: node.type, source } as ScriptedNode),
+        ),
       },
     } as unknown as ItemNode
-  }, [node.id, node.parentId, node.metadata, node.slots, source])
+  }, [node.id, node.type, node.parentId, node.metadata, node.slots, source])
   const setSettled = useCallback(
     (settled: boolean) => {
-      if (ref.current) ref.current.userData.itemModelSettled = settled
+      if (ref.current) {
+        ref.current.userData.itemModelSettled = settled
+        // A column has no system of its own: its renderer and batch read the flag on the node's group.
+        if (node.type === 'column' && ref.current.parent)
+          ref.current.parent.userData.itemModelSettled = settled
+      }
       // The opening's system holds its dirty mark until the artifact has loaded.
       if (settled) useScene.getState().markDirty(node.id)
     },
-    [node.id],
+    [node.id, node.type],
   )
   const [, height] = scriptedSize(source.manifest)
   return (
-    <group position-y={-height / 2} ref={ref} userData={{ [SCRIPTED_MODEL_FLAG]: true }}>
+    <group position-y={node.type === 'column' ? 0 : -height / 2} ref={ref} userData={modelData}>
       <ScriptedModel setSettled={setSettled} view={view} />
     </group>
   )

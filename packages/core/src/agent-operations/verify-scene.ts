@@ -1,12 +1,16 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
+import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
 import { getStoredLevelHeight } from '../services/storey'
-import { resolveStairTotalRise } from '../systems/stair/stair-rise'
+import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
+import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
+import { measureStair } from '../systems/stair/stair-sizing'
 import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/opening-bounds'
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
   type ContentCounts,
   contentCounts,
@@ -18,18 +22,61 @@ import {
 import type { AgentOperation, SceneNodes } from './types'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
-export type SceneIssue = { type: string; message: string }
+export type SceneIssue =
+  | { type: string; message: string; severity?: 'info' }
+  | {
+      type: 'wall_open_end'
+      message: string
+      severity?: 'info'
+      wallId: string
+      end: OpenWallEnd['end']
+      reason: Exclude<OpenWallEnd['reason'], 'isolated'>
+      gap?: number
+      nearestWallId?: string
+    }
 
-type StairNode = AnyNode & { type: 'stair' }
-type SegmentTransform = { position: [number, number, number]; rotation: number }
-type StairSegmentLike = {
-  width: number
-  length: number
-  height: number
-  stepCount: number
-  attachmentSide: 'front' | 'left' | 'right'
+/** What verify_scene was asked: its contract's input, which other modules may extend. */
+export type VerifySceneInput = Readonly<Record<string, unknown>>
+
+/**
+ * A check verify_scene runs beyond its own, registered by the module that knows it (the facade
+ * checks, the photo's), so verify_scene imports none of them. Checks before CHECKPOINT_ORDER run
+ * ahead of the checkpoint's comparison, the rest after it.
+ */
+export type SceneCheck = {
+  name: string
+  order: number
+  run: (nodes: SceneNodes, input: VerifySceneInput) => SceneIssue[]
 }
 
+export const CHECKPOINT_ORDER = 100
+
+const checks: SceneCheck[] = []
+
+/**
+ * Fields verify_scene's result carries beyond its own, from the module that knows them (the
+ * reference inventory's counts and what is unbuilt).
+ */
+export type SceneReport = { name: string; run: (nodes: SceneNodes) => Record<string, unknown> }
+
+const reports: SceneReport[] = []
+
+/** Adds a report's fields to every verify_scene from now on; registering again replaces it. */
+export function registerSceneReport(report: SceneReport) {
+  const at = reports.findIndex((known) => known.name === report.name)
+  if (at >= 0) reports[at] = report
+  else reports.push(report)
+}
+
+/** Runs a check in every verify_scene from now on; registering a check again replaces it. */
+export function registerSceneCheck(check: SceneCheck) {
+  const at = checks.findIndex((known) => known.name === check.name)
+  if (at >= 0) checks[at] = check
+  else checks.push(check)
+  checks.sort((a, b) => a.order - b.order)
+}
+
+type StairNode = AnyNode & { type: 'stair' }
 const occupiedContent = (counts: ContentCounts) =>
   counts.walls +
   counts.zones +
@@ -40,64 +87,9 @@ const occupiedContent = (counts: ContentCounts) =>
   counts.ceilings +
   counts.stairs
 
-function rotateXZ(x: number, z: number, angle: number): Vec2 {
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
-  return [x * cos + z * sin, -x * sin + z * cos]
-}
-
 function toWorldPlanPoint(stair: StairNode, localX: number, localZ: number): Vec2 {
   const [worldX, worldZ] = rotateXZ(localX, localZ, stair.rotation ?? 0)
   return [stair.position[0] + worldX, stair.position[2] + worldZ]
-}
-
-function computeSegmentTransforms(segments: StairSegmentLike[]): SegmentTransform[] {
-  const transforms: SegmentTransform[] = []
-  let currentX = 0
-  let currentY = 0
-  let currentZ = 0
-  let currentRot = 0
-
-  for (let index = 0; index < segments.length; index++) {
-    const segment = segments[index]
-    if (!segment) continue
-
-    if (index === 0) {
-      transforms.push({ position: [currentX, currentY, currentZ], rotation: currentRot })
-      continue
-    }
-
-    const previous = segments[index - 1]
-    if (!previous) continue
-
-    let attachX = 0
-    let attachZ = 0
-    let rotationDelta = 0
-    switch (segment.attachmentSide) {
-      case 'front':
-        attachZ = previous.length
-        break
-      case 'left':
-        attachX = previous.width / 2
-        attachZ = previous.length / 2
-        rotationDelta = Math.PI / 2
-        break
-      case 'right':
-        attachX = -previous.width / 2
-        attachZ = previous.length / 2
-        rotationDelta = -Math.PI / 2
-        break
-    }
-
-    const [deltaX, deltaZ] = rotateXZ(attachX, attachZ, currentRot)
-    currentX += deltaX
-    currentY += previous.height
-    currentZ += deltaZ
-    currentRot += rotationDelta
-    transforms.push({ position: [currentX, currentY, currentZ], rotation: currentRot })
-  }
-
-  return transforms
 }
 
 function stairFootprintPolygons(nodes: SceneNodes, stair: StairNode): Vec2[][] {
@@ -114,7 +106,7 @@ function stairFootprintPolygons(nodes: SceneNodes, stair: StairNode): Vec2[][] {
   const segments = (stair.children ?? [])
     .map((childId) => nodes[childId])
     .filter((node): node is AnyNode & { type: 'stair-segment' } => node?.type === 'stair-segment')
-  const usableSegments: StairSegmentLike[] =
+  const usableSegments =
     segments.length > 0
       ? segments
       : [
@@ -220,7 +212,11 @@ function schemaErrors(nodes: SceneNodes) {
  * with no stair, openings off their wall, stairs off their slab, blocked doors, overlapping
  * furniture, nodes their schema rejects.
  */
-export const verifyScene: AgentOperation = (nodes, _input, context) => {
+export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
+  nodes,
+  input,
+  context,
+) => {
   const onLevel = (levelId: string) => nodesOnLevel(nodes, levelId)
   const ofType = <T extends AnyNode['type']>(content: readonly AnyNode[], type: T) =>
     content.filter((node): node is Extract<AnyNode, { type: T }> => node.type === type)
@@ -244,7 +240,8 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
   })
 
   const issues: SceneIssue[] = []
-  const report = (type: string, message: string) => issues.push({ type, message })
+  const report = (type: string, message: string, informational = false) =>
+    issues.push({ type, message, ...(informational ? { severity: 'info' as const } : {}) })
 
   const empty = levels.filter((level) => level.isEmpty)
   if (empty.length > 0)
@@ -255,6 +252,19 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
 
   for (const level of levels) {
     const { content, levelName } = level
+    // A free-standing wall (garden wall, half wall) is legitimate, not something to repair.
+    for (const end of detectOpenWallEnds(nodes, level.levelId)) {
+      if (end.reason === 'isolated') continue
+      issues.push({
+        type: 'wall_open_end',
+        message: `Wall ${end.wallId} ${end.end} is open on ${levelName}: ${end.reason}${end.candidate ? `; nearest wall ${end.candidate.wallId}` : ''}`,
+        wallId: end.wallId,
+        end: end.end,
+        reason: end.reason,
+        ...(end.gap !== undefined ? { gap: end.gap } : {}),
+        ...(end.candidate ? { nearestWallId: end.candidate.wallId } : {}),
+      })
+    }
     if (level.role === 'roof') {
       if (content.roofs === 0)
         report(
@@ -357,6 +367,12 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
     (node): node is StairNode => node.type === 'stair',
   )) {
     const stairName = stair.name ?? stair.id
+    for (const diagnostic of measureStair(stair, nodes as Record<string, AnyNode>).diagnostics)
+      report(
+        `stair_${diagnostic.code.replaceAll('-', '_')}`,
+        `Stair ${stairName}: ${diagnostic.message}`,
+        diagnostic.code.endsWith('-target'),
+      )
     const sourceLevelId = levelIdOf(nodes, stair.id)
     if (sourceLevelId) {
       const sourceName = nodes[sourceLevelId]?.name ?? sourceLevelId
@@ -407,6 +423,20 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
           .map((hole, index) => ({ slab, hole, index }))
           .filter((entry) => holeBelongsToStair(entry.slab, entry.index, stair.id)),
       )
+      // Since owned floor openings, the stair owns a floor-opening on the floor above, and the
+      // slab hole it cuts names the opening, not the stair (else 14 false reports on one build).
+      const owned = onLevel(targetLevelId).filter(
+        (node): node is AnyNode & { type: 'floor-opening' } =>
+          node.type === 'floor-opening' &&
+          node.source === 'stair' &&
+          node.ownerId === stair.id &&
+          node.drawnOn === 'floor',
+      )
+      for (const opening of owned) {
+        const slab =
+          targetSlabs.find((candidate) => candidate.id === opening.surfaceId) ?? targetSlabs[0]!
+        holes.push({ slab, hole: opening.polygon, index: -1 })
+      }
       if (holes.length === 0) {
         report(
           'stair_no_opening',
@@ -431,6 +461,15 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
   issues.push(...layoutIssuesFromScene(Object.values(nodes)))
+  for (const check of checks)
+    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
+  // What the edits since the host's checkpoint lost, by place.
+  const since = context.checkpoint
+    ? changesSince(context.checkpoint as SceneCheckpoint, nodes)
+    : null
+  if (since) issues.push(...since.issues)
+  for (const check of checks)
+    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
   return {
@@ -445,7 +484,31 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
       levels,
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
-      hasIssues: issues.length > 0,
+      hasIssues: issues.some((issue) => issue.severity !== 'info'),
+      ...authoredObjects(nodes),
+      ...Object.assign({}, ...reports.map((report) => report.run(nodes))),
+      ...(since && {
+        sinceCheckpoint: { name: context.checkpoint!.name, changes: since.changes },
+      }),
     },
   }
+}
+
+/** Objects built by add_object, with what each stands in for: each is a gap in what Pascal builds. */
+function authoredObjects(nodes: SceneNodes) {
+  const objects = Object.values(nodes)
+    .flatMap((node) =>
+      node.type === 'item' && node.source
+        ? [
+            {
+              id: node.id,
+              name: node.name ?? node.asset.name,
+              category: node.asset.category,
+              reason: typeof node.metadata?.reason === 'string' ? node.metadata.reason : null,
+            },
+          ]
+        : [],
+    )
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  return objects.length ? { authoredObjects: objects } : {}
 }

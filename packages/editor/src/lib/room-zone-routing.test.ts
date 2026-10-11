@@ -22,7 +22,10 @@ import { exitCeilingEditToRoom, startCeilingEdit } from './ceiling-edit-session'
 import { applyRoomPlan } from './room-structure-commands'
 import {
   captureElementActionOrigin,
+  clickZoneArea,
   completeElementAction,
+  hoverZoneArea,
+  leaveZoneArea,
   roomKeyForZone,
   selectZoneOrRoom,
   zoneKindLabel,
@@ -73,7 +76,7 @@ beforeEach(() => {
   useViewer
     .getState()
     .setSelection({ buildingId: building.id, levelId: level.id, selectedIds: [], zoneId: null })
-  useEditor.setState({ phase: 'structure', mode: 'select', room: null, hoveredRoom: null })
+  useEditor.setState({ phase: 'building', mode: 'select', room: null, hoveredRoom: null })
   clearSceneHistory()
 })
 afterEach(() => {
@@ -224,5 +227,68 @@ describe('finishing an action on a piece of a room returns to the room (point 3)
     expect(exitCeilingEditToRoom()).toBe(true)
     expect(useEditor.getState().room).toEqual({ levelId: LEVEL, zoneId })
     expect(useViewer.getState().selection.selectedIds).toEqual([])
+  })
+})
+
+describe('a zone area (plan fill, label, pill): hover shows what the click selects', () => {
+  const plain = { meta: false, ctrl: false, shift: false, alt: false }
+  const shown = () => ({
+    room: useEditor.getState().hoveredRoom?.zoneId ?? null,
+    zone: useViewer.getState().hoveredId,
+  })
+  const picked = () => ({
+    room: useEditor.getState().room?.zoneId ?? null,
+    zone: useViewer.getState().selection.selectedIds[0] ?? null,
+  })
+  const drawn = () => {
+    const zone = ZoneNodeSchema.parse({
+      name: 'Reading nook',
+      polygon: [
+        [20, 20],
+        [22, 20],
+        [22, 22],
+        [20, 22],
+      ],
+    })
+    useScene.getState().createNode(zone, LEVEL as AnyNodeId)
+    return zone.id
+  }
+
+  test('a room hovers and selects as the room; a modifier reaches the zone itself', () => {
+    for (const modifiers of [
+      plain,
+      { ...plain, alt: true },
+      { ...plain, shift: true },
+      { ...plain, ctrl: true },
+      { ...plain, meta: true },
+    ]) {
+      useEditor.getState().clearRoom()
+      useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+      hoverZoneArea(zoneId, modifiers)
+      const hover = shown()
+      clickZoneArea(zoneId, modifiers)
+      leaveZoneArea(zoneId)
+      expect(picked()).toEqual(hover)
+      expect(shown()).toEqual({ room: null, zone: null })
+    }
+    expect(roomKeyForZone(zoneId)).not.toBeNull()
+  })
+
+  test('a drawn zone that bounds no room hovers and selects as itself, and Shift adds to it', () => {
+    const nook = drawn()
+    hoverZoneArea(nook, plain)
+    expect(shown()).toEqual({ room: null, zone: nook })
+    clickZoneArea(nook, plain)
+    expect(picked()).toEqual({ room: null, zone: nook })
+    clickZoneArea(zoneId, { ...plain, shift: true })
+    expect(useViewer.getState().selection.selectedIds).toEqual([nook, zoneId])
+  })
+
+  test('hovering an already selected room area still shows the room its click keeps', () => {
+    clickZoneArea(zoneId, plain)
+    hoverZoneArea(zoneId, plain)
+    expect(shown()).toEqual({ room: zoneId, zone: null })
+    clickZoneArea(zoneId, plain)
+    expect(picked()).toEqual({ room: zoneId, zone: null })
   })
 })

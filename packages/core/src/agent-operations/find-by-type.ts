@@ -1,4 +1,6 @@
+import { isScriptedNode } from '../lib/geometry-script-node'
 import type { AnyNode, ItemNode } from '../schema'
+import { requireLevel } from './level-target'
 import { levelIdOf } from './scene-queries'
 import type { AgentOperation } from './types'
 
@@ -50,17 +52,23 @@ export const findByType: AgentOperation<{ type: string; levelId?: string }> = (
   nodes,
   { type, levelId },
 ) => {
+  // A level that is not there is said, as get_zones says it, not answered with nothing found.
+  if (levelId) requireLevel(nodes, levelId)
   const word = type.trim().toLowerCase().replace(/s$/, '')
   const results: Record<string, unknown>[] = []
   for (const node of Object.values(nodes)) {
     const level = levelIdOf(nodes, node.id)
     if (levelId && level !== levelId) continue
     const item = node.type === 'item' ? node : null
-    const typed = (item?.source?.manifest.parts ?? []).filter((part) => part.type)
+    const typed = (isScriptedNode(node) ? node.source.manifest.parts : []).filter(
+      (part) => part.type,
+    )
     const typedParts = typed.filter((part) => part.type === word)
-    // An authored object whose typed parts are all of this type is one (a
-    // lantern); a mixed one (a porch) answers with its parts.
-    const wholeAuthored = typedParts.length > 0 && typedParts.length === typed.length
+    // An authored item whose typed parts are all of this type is one (a
+    // lantern); a mixed one (a porch), or a window, door or column, answers
+    // with its parts.
+    const wholeAuthored =
+      item !== null && typedParts.length > 0 && typedParts.length === typed.length
     const wholeMatch =
       node.type === word ||
       wholeAuthored ||
@@ -79,13 +87,13 @@ export const findByType: AgentOperation<{ type: string; levelId?: string }> = (
     for (const part of typedParts) {
       results.push({
         id: node.id,
-        name: node.name ?? item!.asset.name,
+        name: node.name ?? item?.asset.name,
         nodeType: node.type,
         levelId: level,
         part: part.id,
         partType: part.type,
-        ...(part.bounds && item!.parentId === level
-          ? { bounds: boundsInLevel(item!, part.bounds) }
+        ...(part.bounds && item && item.parentId === level
+          ? { bounds: boundsInLevel(item, part.bounds) }
           : {}),
       })
     }

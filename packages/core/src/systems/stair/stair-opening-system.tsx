@@ -16,7 +16,7 @@ import {
   getNodesWithLiveStairOpeningInputs,
   hasLiveStairOpeningInputs,
 } from './stair-opening-preview'
-import { syncAutoStairOpenings } from './stair-opening-sync'
+import { changedStairOpeningOwners, syncAutoStairOpenings } from './stair-opening-sync'
 import { syncStairRises } from './stair-rise'
 
 function isOpeningRelevantNode(node: AnyNode | undefined) {
@@ -71,8 +71,11 @@ export function initializeStairOpeningSync() {
     })
   }
 
-  const applyOpeningChanges = (skipExistingSurfaces = false) => {
-    const changes = planOwnedFloorOpenings(useScene.getState().nodes, { skipExistingSurfaces })
+  const applyOpeningChanges = (skipExistingSurfaces = false, ownerIds?: ReadonlySet<string>) => {
+    const changes = planOwnedFloorOpenings(useScene.getState().nodes, {
+      skipExistingSurfaces,
+      ownerIds,
+    })
     if (!changes.length) return
     syncingAutoOpenings = true
     pauseSceneHistory(useScene)
@@ -115,7 +118,7 @@ export function initializeStairOpeningSync() {
     )
   }
 
-  const runAutoSync = (preserveSlabs: boolean) => {
+  const runAutoSync = (preserveSlabs: boolean, before: Record<string, AnyNode>) => {
     if (preserveSlabs) {
       applyUpdates(ensureSceneOpenings(useScene.getState().nodes).updates)
       applyOpeningChanges(true)
@@ -126,12 +129,14 @@ export function initializeStairOpeningSync() {
     // reads those segment heights — so it must run against the post-rise
     // nodes.
     applyUpdates(syncStairRises(useScene.getState().nodes))
-    applyOpeningChanges()
+    applyOpeningChanges(false, changedStairOpeningOwners(before, useScene.getState().nodes))
   }
 
   let disposed = false
   let syncGeneration = 0
-  const scheduleAutoSync = (preserveSlabs = false) => {
+  let pendingBefore: Record<string, AnyNode> | undefined
+  const scheduleAutoSync = (preserveSlabs = false, before = useScene.getState().nodes) => {
+    pendingBefore ??= before
     const generation = ++syncGeneration
     // One microtask later so every other scene-store listener for the
     // triggering transition (and, at mount, the editor's spatial-grid
@@ -141,7 +146,9 @@ export function initializeStairOpeningSync() {
     // rescale flights against the pre-transition slab state.
     queueSceneNormalization(() => {
       if (disposed || generation !== syncGeneration) return
-      runAutoSync(preserveSlabs)
+      const previous = pendingBefore!
+      pendingBefore = undefined
+      runAutoSync(preserveSlabs, previous)
       refreshLivePreview()
     })
   }
@@ -151,7 +158,10 @@ export function initializeStairOpeningSync() {
   const unsubscribeScene = useScene.subscribe((state, prevState) => {
     if (syncingAutoOpenings) return
     if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
-    scheduleAutoSync(isHydrationNormalization() || state.hydrationId !== prevState.hydrationId)
+    scheduleAutoSync(
+      isHydrationNormalization() || state.hydrationId !== prevState.hydrationId,
+      prevState.nodes,
+    )
   })
 
   const unsubscribeLiveTransforms = useLiveTransforms.subscribe(() => {

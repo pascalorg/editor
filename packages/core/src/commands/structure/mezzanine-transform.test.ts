@@ -294,6 +294,8 @@ test('stair planner picks longest free edge, arrives flush, opens railing and ap
     rotation: -Math.PI / 2,
   })
   expect(segment.height).toBeCloseTo(2.45)
+  expect(segment.height / segment.stepCount).toBeLessThanOrEqual(0.18)
+  expect(segment.length / segment.stepCount).toBeGreaterThanOrEqual(0.25)
   expect(stair.position[0] - segment.length).toBeCloseTo(4)
   expect(stair.position[2]).toBeCloseTo(1.55)
   expect(railingLength(nodes[f.plate.id] as SlabNode)).toBeCloseTo(
@@ -383,7 +385,7 @@ test('stair planner skips a blocked longer edge for a free edge and sizes the ri
   const stair = after[plan.stairId!] as StairNode
   const segment = after[stair.children[0]!] as StairSegmentNode
   expect(segment.height).toBeCloseTo(1.5)
-  expect(segment.length).toBeCloseTo(1.8)
+  expect(segment.length / segment.stepCount).toBeGreaterThanOrEqual(0.25)
   expect(stair.position[2] - segment.length).toBeCloseTo(3)
   const deck = after[stair.deckSlabId!] as SlabNode
   expect(railingLength(deck)).toBeCloseTo(railingLength(blocked[deck.id] as SlabNode) - stair.width)

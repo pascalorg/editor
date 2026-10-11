@@ -37,7 +37,7 @@ export function buildFromBriefPrompt(args: {
     '## Task',
     'Produce tool calls that realise the brief within the stated constraints.',
     '1. Bind a scene — `create_project` (new), `list_scenes` then `load_scene` (existing), or `create_house_from_brief` (starter template).',
-    '2. Build the design — `create_story_shell` for exterior shells, `create_room`/`add_door`/`add_window`/`create_stair_between_levels`/`furnish_room` for interior layout, `create_roof` for roofing, `apply_patch` for exact bulk graph work.',
+    '2. Build the design — `create_story_shell` for exterior shells, `create_room`/`add_door`/`add_window`/`create_stair`/`furnish_room` for interior layout, `create_roof` for roofing, `apply_patch` for exact bulk graph work.',
     '3. Finish — call `validate_scene`, `verify_scene`, and `get_project_status`, then return the `editorUrl`.',
     'Call `save_scene` with `saveMode: "checkpoint"` only when the design reaches a meaningful milestone.',
   )

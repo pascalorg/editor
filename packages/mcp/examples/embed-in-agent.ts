@@ -47,7 +47,7 @@ async function main(): Promise<void> {
 
   if (levelId) {
     const created = await client.callTool({
-      name: 'create_wall',
+      name: 'add_wall',
       arguments: {
         levelId,
         start: [0, 0],

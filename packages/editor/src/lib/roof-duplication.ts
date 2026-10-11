@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  collectionIdsOf,
   generateId,
   type RoofNode,
   RoofNode as RoofNodeSchema,
@@ -103,6 +104,7 @@ export function duplicateRoofSubtree(
   })
 
   const segmentClones: RoofSegmentNode[] = []
+  const segmentSourceIds: AnyNodeId[] = []
   for (const childId of sourceRoof.children ?? []) {
     const childNode = scene.nodes[childId as AnyNodeId]
     if (childNode?.type !== 'roof-segment') {
@@ -116,11 +118,17 @@ export function duplicateRoofSubtree(
       metadata: buildDuplicateMetadata(childNode.metadata),
     })
     segmentClones.push(childClone)
+    segmentSourceIds.push(childNode.id)
   }
 
+  // Each copy is in the collections its source is in.
   scene.createNodes([
-    { node: roofClone, parentId },
-    ...segmentClones.map((segment) => ({ node: segment, parentId: roofClone.id as AnyNodeId })),
+    { node: roofClone, parentId, collectionIds: collectionIdsOf(scene.collections, sourceRoofId) },
+    ...segmentClones.map((segment, index) => ({
+      node: segment,
+      parentId: roofClone.id as AnyNodeId,
+      collectionIds: collectionIdsOf(scene.collections, segmentSourceIds[index]!),
+    })),
   ])
 
   const nextScene = useScene.getState()

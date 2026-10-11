@@ -14,7 +14,7 @@ import {
 } from '@pascal-app/core'
 import {
   cn,
-  createFreshPlacementSubtree,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -129,18 +129,8 @@ export default function DormerPanel() {
   }, [node, selectedId, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.roofSegmentId) return
-    triggerSFX('sfx:item-pick')
-    useScene.temporal.getState().pause()
-    const draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
-    const draft = draftId ? (useScene.getState().nodes[draftId] as DormerNode | undefined) : null
-    if (!draft) {
-      useScene.temporal.getState().resume()
-      return
-    }
-    setMovingNode(draft)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return

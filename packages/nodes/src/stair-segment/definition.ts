@@ -1,23 +1,47 @@
 import {
   type HandleDescriptor,
   type NodeDefinition,
+  planStairFlightHeightEdit,
+  resolveStairWinder,
+  STAIR_BODY_SLOT_DEFAULT,
+  STAIR_TREADS_SLOT_DEFAULT,
   StairSegmentNode as StairSegmentNodeSchema,
   type StairSegmentNode as StairSegmentNodeType,
 } from '@pascal-app/core'
+import { stairSegmentPaint } from '../stair/paint'
 import { stairSegmentParametrics } from './parametrics'
 import { StairSegmentNode } from './schema'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const LENGTH_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
-const MIN_SEGMENT_WIDTH = 0.4
-const MIN_SEGMENT_LENGTH = 0.4
-const MIN_SEGMENT_HEIGHT = 0.1
+const MIN_SEGMENT_WIDTH = 0.001
+const MIN_SEGMENT_LENGTH = 0.001
+const MIN_SEGMENT_HEIGHT = 0.001
 
 // Width grows symmetrically around the chain centerline — the chain owns
 // segment.position so writing a new center here would be clobbered next
 // frame by `syncSegmentMeshTransforms`. We just write `width` and let the
 // chain re-center.
+function footprintBounds(node: StairSegmentNodeType) {
+  let footprint: [number, number][] | undefined
+  try {
+    footprint = resolveStairWinder(node)?.footprint
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+  }
+  footprint ??= [
+    [-node.width / 2, 0],
+    [node.width / 2, node.length],
+  ]
+  return {
+    minX: Math.min(...footprint.map(([x]) => x)),
+    maxX: Math.max(...footprint.map(([x]) => x)),
+    minZ: Math.min(...footprint.map(([, z]) => z)),
+    maxZ: Math.max(...footprint.map(([, z]) => z)),
+  }
+}
+
 function stairSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<StairSegmentNodeType> {
   return {
     kind: 'linear-resize',
@@ -31,9 +55,11 @@ function stairSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<Stair
     apply: (_n, newValue) => ({ width: newValue }),
     placement: {
       position: (n) => [
-        (side === 'right' ? 1 : -1) * (n.width / 2 + SIDE_HANDLE_OFFSET),
+        side === 'right'
+          ? footprintBounds(n).maxX + SIDE_HANDLE_OFFSET
+          : footprintBounds(n).minX - SIDE_HANDLE_OFFSET,
         n.height / 2,
-        n.length / 2,
+        (footprintBounds(n).minZ + footprintBounds(n).maxZ) / 2,
       ],
       rotationY: () => (side === 'right' ? 0 : Math.PI),
     },
@@ -77,8 +103,21 @@ function stairSegmentHeightHandle(): HandleDescriptor<StairSegmentNodeType> {
     min: MIN_SEGMENT_HEIGHT,
     currentValue: (n) => n.height,
     apply: (_n, newValue) => ({ height: newValue }),
+    previewOverrides: (node, height, scene) =>
+      planStairFlightHeightEdit(node, height, scene.nodes())
+        .slice(1)
+        .map(({ id, data }) => [id, data] as const),
+    commit: (node, patch, scene) => {
+      if (patch.height === undefined) return
+      const updates = planStairFlightHeightEdit(node, patch.height, scene.nodes())
+      scene.applyChanges?.({ update: updates })
+    },
     placement: {
-      position: (n) => [0, n.height + HEIGHT_HANDLE_OFFSET, n.length / 2],
+      position: (n) => [
+        (footprintBounds(n).minX + footprintBounds(n).maxX) / 2,
+        n.height + HEIGHT_HANDLE_OFFSET,
+        (footprintBounds(n).minZ + footprintBounds(n).maxZ) / 2,
+      ],
     },
     portal: 'grandparent',
   }
@@ -88,7 +127,7 @@ function stairSegmentHandles(node: StairSegmentNodeType): HandleDescriptor<Stair
   const handles: HandleDescriptor<StairSegmentNodeType>[] = [
     stairSegmentWidthHandle('left'),
     stairSegmentWidthHandle('right'),
-    stairSegmentLengthHandle(),
+    ...(node.winder ? [] : [stairSegmentLengthHandle()]),
   ]
   if (node.segmentType === 'stair') {
     handles.push(stairSegmentHeightHandle())
@@ -102,7 +141,7 @@ function stairSegmentHandles(node: StairSegmentNodeType): HandleDescriptor<Stair
  */
 export const stairSegmentDefinition: NodeDefinition<typeof StairSegmentNode> = {
   kind: 'stair-segment',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: StairSegmentNode,
   category: 'structure',
   surfaceRole: 'joinery',
@@ -120,6 +159,11 @@ export const stairSegmentDefinition: NodeDefinition<typeof StairSegmentNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: false,
     deletable: true,
+    slots: () => [
+      { slotId: 'treads', label: 'Treads', default: STAIR_TREADS_SLOT_DEFAULT },
+      { slotId: 'body', label: 'Body', default: STAIR_BODY_SLOT_DEFAULT },
+    ],
+    paint: stairSegmentPaint,
   },
 
   // Bespoke move shared with roof / roof-segment / stair via
@@ -147,6 +191,7 @@ export const stairSegmentDefinition: NodeDefinition<typeof StairSegmentNode> = {
   },
 
   mcp: {
-    description: 'A single stair flight with run + rise + tread parameters.',
+    description:
+      'A straight flight, landing or quarter-turn winder. Winders use an inner gap, walking-line offset and equal-going or equal-angle division; length applies only to straight flights.',
   },
 }

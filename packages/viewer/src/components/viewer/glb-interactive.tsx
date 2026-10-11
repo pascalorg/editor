@@ -1,12 +1,18 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   containsPoint,
   type Interactive,
+  isScriptedNode,
   type Polygon,
   type SceneGraph,
+  type ScriptedNode,
   type SliderControl,
+  scriptedOrigin,
+  scriptedSize,
+  scriptInteractive,
   useInteractive,
 } from '@pascal-app/core'
 import {
@@ -36,6 +42,7 @@ import { useItemLightPool } from '../../store/use-item-light-pool'
 import useViewer from '../../store/use-viewer'
 import { ControlWidget } from '../../systems/interactive/control-widget'
 import { proceduralControlDescriptors } from '../../systems/interactive/procedural-controls'
+import { type ScriptedClipActions, ScriptedClips } from '../../systems/interactive/scripted-clips'
 
 /** An interactive item recovered from the scene graph so the baked GLB can be
  *  re-lit / re-animated by joining on `pascalId`. The GLB carries the geometry
@@ -46,6 +53,10 @@ export type GlbInteractiveItem = {
   /** Item height (world units) for placing the controls overlay above it. */
   height: number
   interactive: Interactive
+  /** Built from a script: its clips keep the script's names (`<pascalId>: <name>`
+   *  in the GLB) and its toggles start at their own defaults. */
+  scripted?: boolean
+  localScale?: [number, number, number]
   procedural?: {
     lights: EvaluatedLight[]
     parts: ProceduralItemNode['recipe']['parts']
@@ -91,6 +102,31 @@ export function buildGlbInteractiveItems(
           parts: procedural.recipe.parts,
           recipe: procedural.recipe,
         },
+      })
+      continue
+    }
+    // A node built from a script: its controls come from what the script
+    // emitted, as in the editor.
+    if (isScriptedNode(raw as AnyNode)) {
+      const scripted = raw as ScriptedNode
+      const interactive = scriptInteractive(scripted.source.manifest, scriptedOrigin(scripted))
+      if (!interactive) continue
+      const [, height] = scriptedSize(scripted.source.manifest)
+      items.push({
+        pascalId: id as AnyNodeId,
+        label:
+          scripted.name ??
+          (scripted.type === 'item'
+            ? scripted.asset.name
+            : `${scripted.type[0]!.toUpperCase()}${scripted.type.slice(1)}`),
+        // A window or door is placed by its centre, everything else by its base.
+        height:
+          scripted.type === 'window' || scripted.type === 'door'
+            ? height / 2
+            : height * (scripted.type === 'item' ? (scripted.scale?.[1] ?? 1) : 1),
+        interactive,
+        scripted: true,
+        localScale: scripted.type === 'item' ? scripted.scale : [1, 1, 1],
       })
       continue
     }
@@ -163,6 +199,17 @@ export function buildGlbLightRegs(
         distance: effect.distance ?? 0,
         getWorldPosition: (out) => {
           object.updateWorldMatrix(true, false)
+          if (item.scripted) {
+            const scale = item.localScale ?? [1, 1, 1]
+            out
+              .set(
+                effect.offset[0] * scale[0],
+                effect.offset[1] * scale[1],
+                effect.offset[2] * scale[2],
+              )
+              .applyMatrix4(object.matrixWorld)
+            return
+          }
           object.getWorldPosition(out)
           out.set(out.x + effect.offset[0], out.y + effect.offset[1], out.z + effect.offset[2])
         },
@@ -215,12 +262,14 @@ export function GlbInteractive({
     useItemLightPool.getState().setBakedCanvas(scene, true)
     return () => useItemLightPool.getState().setBakedCanvas(scene, false)
   }, [scene])
-  // Baked animation toggles start on; light toggles follow the current theme.
-  // Clear per-item state on unmount so it cannot carry into another scene.
+  // Baked catalog animation toggles start on; light toggles follow the current
+  // theme; an authored object's toggles keep their own defaults, as in the
+  // editor. Clear per-item state on unmount so it cannot carry into another scene.
   useEffect(() => {
     const store = useInteractive.getState()
     for (const item of items) {
       store.initItem(item.pascalId, item.interactive, true)
+      if (item.scripted) continue
       const lampIndex = item.interactive.effects.some((effect) => effect.kind === 'light')
         ? item.interactive.controls.findIndex((control) => control.kind === 'toggle')
         : -1
@@ -266,9 +315,13 @@ export function GlbInteractive({
   return (
     <>
       <GlbItemLights levelIndexById={levelIndexById} regs={lightRegs} />
-      {animationItems.map((item) => (
-        <GlbItemAnimation actions={actions} item={item} key={item.pascalId} />
-      ))}
+      {animationItems.map((item) =>
+        item.scripted ? (
+          <GlbScriptedClips actions={actions} item={item} key={item.pascalId} />
+        ) : (
+          <GlbItemAnimation actions={actions} item={item} key={item.pascalId} />
+        ),
+      )}
       {items
         .filter((item) => item.procedural?.lights.length)
         .map((item) => {
@@ -602,6 +655,34 @@ function GlbItemAnimation({
   }, [actions, item.pascalId, isOn])
 
   return null
+}
+
+/** Plays an authored object's baked clips through the shared `ScriptedClips`,
+ *  addressing each by the name the script gave it. */
+function GlbScriptedClips({
+  item,
+  actions,
+}: {
+  item: GlbInteractiveItem
+  actions: Record<string, AnimationAction | null>
+}) {
+  // drei creates each action on first read, once the scene root is mounted, so
+  // forward reads instead of copying the actions during render.
+  const scriptActions = useMemo(() => {
+    const prefix = `${item.pascalId}: `
+    const forwarded: ScriptedClipActions = {}
+    for (const name of Object.keys(actions)) {
+      if (!name.startsWith(prefix)) continue
+      Object.defineProperty(forwarded, name.slice(prefix.length), {
+        enumerable: true,
+        get: () => actions[name],
+      })
+    }
+    return forwarded
+  }, [actions, item.pascalId])
+  return (
+    <ScriptedClips actions={scriptActions} interactive={item.interactive} nodeId={item.pascalId} />
+  )
 }
 
 const FADE_MS = 300

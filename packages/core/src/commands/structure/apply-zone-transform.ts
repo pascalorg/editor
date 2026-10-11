@@ -69,14 +69,16 @@ export function applyZoneTransformPlan(
     getNodes: () => StructureNodes
     applyChanges: (changes: NodeChange[]) => void
     reconcile: () => void
+    runAsSingleHistoryStep?: (run: () => void) => void
   } = {
     getNodes: () => useScene.getState().nodes,
     applyChanges: (changes) => useScene.getState().applyNodeChanges(structureChangeBatch(changes)),
     reconcile: () => {},
+    runAsSingleHistoryStep: (run) => runAsSingleSceneHistoryStep(useScene, run),
   },
 ) {
   if (!plan.changes.length) return
-  runAsSingleSceneHistoryStep(useScene, () => {
+  const apply = () => {
     runtime.applyChanges(plan.changes)
     runtime.reconcile()
     const hosts = resolveZoneTransformHosts(runtime.getNodes(), plan)
@@ -84,5 +86,7 @@ export function applyZoneTransformPlan(
       runtime.applyChanges(hosts)
       runtime.reconcile()
     }
-  })
+  }
+  if (runtime.runAsSingleHistoryStep) runtime.runAsSingleHistoryStep(apply)
+  else apply()
 }

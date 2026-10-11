@@ -1,19 +1,24 @@
 import {
   type AnyNode,
   getEffectiveRoofSurfaceMaterial,
+  parseMaterialRef,
   type RoofNode,
   type RoofSegmentNode,
+  type SceneMaterial,
+  type SceneMaterialId,
   wallAssemblyFinishRef,
 } from '@pascal-app/core'
 import type * as THREE from 'three'
 import {
   type ColorPreset,
   createMaterial,
-  createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
   type RenderShading,
+  resolveMaterialRef,
   resolveSlotDefaultMaterial,
 } from '../../lib/materials'
+
+type SceneMaterials = Record<SceneMaterialId, SceneMaterial> | undefined
 
 // Declared catalog defaults for an unpainted roof, per the 4-slot layout
 // (0 wall/trim · 1 deck · 2 interior soffit · 3 shingle top). The wall/trim
@@ -32,21 +37,29 @@ const roofMaterialArrayCache = new Map<string, RoofMaterialArray>()
 
 function getSurfaceMaterialSignature(
   spec: ReturnType<typeof getEffectiveRoofSurfaceMaterial>,
+  sceneMaterials: SceneMaterials,
 ): string {
+  const ref = parseMaterialRef(spec.materialPreset)
   return JSON.stringify({
     material: spec.material ?? null,
     materialPreset: spec.materialPreset ?? null,
+    sceneMaterial:
+      ref?.kind === 'scene'
+        ? (sceneMaterials?.[ref.id as SceneMaterialId]?.material ?? null)
+        : null,
   })
 }
 
 function createResolvedMaterial(
   material: RoofNode['material'] | RoofSegmentNode['material'] | undefined,
   materialPreset: string | undefined,
+  sceneMaterials: SceneMaterials,
   shading: RenderShading,
 ): THREE.Material | null {
-  if (materialPreset) {
-    return createMaterialFromPresetRef(materialPreset, shading)
-  }
+  // An unknown or dangling ref resolves to nothing: fall through to the
+  // colour, then the slot default, as the segment renderer does.
+  const preset = resolveMaterialRef(materialPreset, sceneMaterials, shading)
+  if (preset) return preset
 
   if (material) {
     return createMaterial(material, shading)
@@ -93,6 +106,7 @@ export function getRoofMaterialArray(
   sceneTheme?: string,
   /** Catalog ref for the gable/trim band when unpainted — see `levelWallCladdingRef`. */
   wallCladdingRef: string | null = null,
+  sceneMaterials?: SceneMaterials,
 ): RoofMaterialArray | null {
   const top = getEffectiveRoofSurfaceMaterial(node, 'top')
   const edge = getEffectiveRoofSurfaceMaterial(node, 'edge')
@@ -104,9 +118,9 @@ export function getRoofMaterialArray(
     colorPreset,
     sceneTheme,
     wallCladdingRef,
-    top: getSurfaceMaterialSignature(top),
-    edge: getSurfaceMaterialSignature(edge),
-    wall: getSurfaceMaterialSignature(wall),
+    top: getSurfaceMaterialSignature(top, sceneMaterials),
+    edge: getSurfaceMaterialSignature(edge, sceneMaterials),
+    wall: getSurfaceMaterialSignature(wall, sceneMaterials),
   })
 
   const cached = roofMaterialArrayCache.get(cacheKey)
@@ -141,9 +155,11 @@ export function getRoofMaterialArray(
     resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[3], shading),
   ]
 
-  const topMaterial = createResolvedMaterial(top.material, top.materialPreset, shading)
-  const edgeMaterial = createResolvedMaterial(edge.material, edge.materialPreset, shading)
-  const wallMaterial = createResolvedMaterial(wall.material, wall.materialPreset, shading)
+  const resolve = (spec: typeof top) =>
+    createResolvedMaterial(spec.material, spec.materialPreset, sceneMaterials, shading)
+  const topMaterial = resolve(top)
+  const edgeMaterial = resolve(edge)
+  const wallMaterial = resolve(wall)
 
   if (!(topMaterial || edgeMaterial || wallMaterial)) {
     roofMaterialArrayCache.set(cacheKey, defaultArray)

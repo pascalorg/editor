@@ -9,7 +9,7 @@ import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 import { MeasurementControl } from './measurement-control'
 
-type ControlId = 'select' | 'box-select' | 'zone' | 'delete'
+type ControlId = 'select' | 'box-select' | 'delete'
 
 type ControlConfig = {
   id: ControlId
@@ -33,14 +33,6 @@ const controls: ControlConfig[] = [
     activeColor: 'bg-blue-500/20 text-blue-400',
   },
   {
-    id: 'zone',
-    imageSrc: '/icons/zone.webp',
-    label: 'Zone',
-    shortcut: 'Z',
-    color: 'hover:bg-green-500/20 hover:text-green-400',
-    activeColor: 'bg-green-500/20 text-green-400',
-  },
-  {
     id: 'delete',
     icon: Trash2,
     label: 'Delete',
@@ -52,49 +44,23 @@ const controls: ControlConfig[] = [
 
 export function ControlModes() {
   const mode = useEditor((state) => state.mode)
-  const phase = useEditor((state) => state.phase)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
   const armToolMode = useEditor((state) => state.armToolMode)
-  const setPhase = useEditor((state) => state.setPhase)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
-
-  const isSiteEditing = phase === 'site'
-
-  const structureLayer = useEditor((state) => state.structureLayer)
 
   const getIsActive = (id: ControlId): boolean => {
     if (id === 'select') return mode === 'select' && selectionTool === 'click'
     if (id === 'box-select') return mode === 'select' && selectionTool === 'marquee'
-    if (id === 'zone')
-      return mode === 'build' && phase === 'structure' && structureLayer === 'zones'
     return mode === id
   }
 
   const handleClick = (id: ControlId) => {
-    // Exit site editing first if needed. Sculpting is a site-phase mode, so
-    // leaving the phase is exactly the right way to leave the brush — but the
-    // order matters: `setPhase` resets the mode, and setting the mode first
-    // would have it overwritten below.
-    if (isSiteEditing) {
-      setPhase('structure')
-      setStructureLayer('elements')
-    }
-
     if (id === 'select') {
       armToolMode({ mode: 'select' })
       setSelectionTool('click')
     } else if (id === 'box-select') {
       armToolMode({ mode: 'select' })
       setSelectionTool('marquee')
-    } else if (id === 'zone') {
-      if (getIsActive('zone')) {
-        armToolMode({ mode: 'select' })
-      } else {
-        setPhase('structure')
-        setStructureLayer('zones')
-        armToolMode({ mode: 'build', tool: 'zone' })
-      }
     } else {
       armToolMode({ mode: id })
     }

@@ -15,7 +15,6 @@ import {
 } from '@pascal-app/core'
 import {
   alignFloorplanDraftPoint,
-  type FencePlanPoint,
   getSegmentGridStep,
   isAlignmentGuideActive,
   isAngleSnapActive,
@@ -23,10 +22,10 @@ import {
   isMagneticSnapActive,
   isSegmentLongEnough,
   snapBuildingLocalToWorldGrid,
-  snapFenceDraftPoint,
   snapScalarToGrid,
   useAlignmentGuides,
 } from '@pascal-app/editor'
+import { type FencePlanPoint, snapFenceDraftPoint } from './drafting'
 
 /**
  * Floor-plan 2D drag affordances for fence — sister to the 3D
@@ -50,7 +49,6 @@ type FenceEndpointPayload = { fenceId: AnyNodeId; endpoint: 'start' | 'end' }
 type FenceControlPointPayload = { fenceId: AnyNodeId; index: number }
 type FenceTangentPayload = { fenceId: AnyNodeId; index: number; side: 'in' | 'out' }
 type FenceThicknessPayload = { fenceId: AnyNodeId; side: 1 | -1 }
-
 // Must match the floorplan builder's TANGENT_HANDLE_ARM_SCALE: the on-screen
 // arm is this many times the raw tangent vector, so dividing the dragged
 // offset back out recovers the stored tangent.
@@ -329,7 +327,8 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
           start: angleLocked ? fixedPoint : undefined,
           angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
-          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()) as FencePlanPoint,
+          gridSnap: (p: FencePlanPoint) =>
+            snapBuildingLocalToWorldGrid(p, getSegmentGridStep()) as FencePlanPoint,
         })
         // Figma-style alignment on the dragged endpoint — snaps it onto
         // another object's edge / wall face and publishes a guide, matching

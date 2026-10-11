@@ -458,8 +458,7 @@ export const SiteBoundaryEditor: React.FC = () => {
 
   const exitSiteEditing = useCallback(() => {
     const editor = useEditor.getState()
-    editor.setPhase('structure')
-    editor.setStructureLayer('elements')
+    editor.setPhase('building')
     editor.setMode('select')
   }, [])
 

@@ -5,6 +5,15 @@ import type {
   StairNode,
   StairSegmentNode,
 } from '@pascal-app/core'
+import {
+  computeSegmentTransforms,
+  measureStairDetail,
+  resolveStairArcDimensions,
+  resolveStairHandrailPaths,
+  resolveStairRailPaths,
+  resolveStairWalkingPaths,
+  rotateXZ,
+} from '@pascal-app/core'
 
 // Offset from the stair's footprint edge to the rotation chevron's
 // origin. Same magnitude as `STAIR_ROTATE_CORNER_OFFSET` in
@@ -13,7 +22,6 @@ import type {
 const STAIR_ROTATE_PLAN_OFFSET = 0.4
 
 import {
-  buildFloorplanStairEntry,
   buildSvgAnnularSectorPath,
   buildSvgArcPath,
   buildSvgArrowHeadPoints,
@@ -27,39 +35,47 @@ import {
   stairPlanBreakStep,
 } from './documentation'
 
-/**
- * Stage C floor-plan emitter for stair. The stair is the parent; its
- * children are the `stair-segment`s whose transforms are *cumulative*
- * (each flight attaches to the previous segment's end via
- * `computeFloorplanStairSegmentTransforms` — `attachmentSide` rotates
- * the chain ±π/2, segment length advances along the chain). Because no
- * individual segment can compute its polygon in isolation, the stair
- * emits the whole stack as one registry entry; `stair-segment` itself
- * has no `def.floorplan` (the registry layer renders the parent here
- * and skips children that don't ship a builder).
- *
- * The actual cumulative walk + segment / arrow / inner-band / tread-bar
- * geometry lives in `editor/src/lib/floorplan/stairs.ts` via
- * `buildFloorplanStairEntry`. We re-export that from `@pascal-app/editor`
- * and emit `FloorplanGeometry` primitives over its output — same shape
- * pattern the legacy `<FloorplanStairLayer>` consumed, minus the
- * per-pixel SVG drawing (the registry's `FloorplanGeometryRenderer`
- * handles that). Curved + spiral stairs fall back to a single curved
- * hit polygon (`buildFloorplanStairEntry` already returns it); the
- * arc-band rendering with steps along the sweep is not yet ported —
- * a follow-up will add either an `arc` primitive or expose the
- * segment-sampler helpers so we can emit a stitched polyline.
- */
+import { buildFloorplanStairEntry } from './plan-entry'
+
+/** The stair parent emits its complete cumulative segment chain. */
 export function buildStairFloorplan(
   stair: StairNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
   const segments = (ctx.children ?? []).filter(
-    (child): child is StairSegmentNode => child.type === 'stair-segment' && child.visible !== false,
+    (child): child is StairSegmentNode => child.type === 'stair-segment',
   )
-  const entry = buildFloorplanStairEntry(stair, segments)
+  const detail = measureStairDetail(
+    stair,
+    (ctx.children ?? []).filter(
+      (child): child is StairSegmentNode => child.type === 'stair-segment',
+    ),
+  )
+  const entry = buildFloorplanStairEntry(stair, segments, !!detail.error)
   if (!entry) return null
-
+  if (detail.error)
+    return {
+      kind: 'group',
+      children: [
+        ...entry.hitPolygons.map(
+          (polygon): FloorplanGeometry => ({
+            kind: 'polygon',
+            points: toFloorplanPoints(polygon),
+            fill: 'none',
+            stroke: '#b45309',
+            strokeWidth: 0.025,
+          }),
+        ),
+        {
+          kind: 'text',
+          x: stair.position[0],
+          y: stair.position[2],
+          text: 'Stair detail unavailable — inspect dimensions',
+          fontSize: 0.15,
+          fill: '#b45309',
+        },
+      ],
+    }
   const view = ctx.viewState
   const palette = view?.palette
   const isSelected = view?.selected ?? false
@@ -130,7 +146,32 @@ export function buildStairFloorplan(
       // (~lines 235 / 375 of stair-segment-handles.tsx).
       // Skip when the stair is being placed — placement-mode arrows would
       // compete with the cursor follow.
-      if (isSelected && !view?.moving) {
+      if (isSelected && !view?.moving && segmentEntry.segment.winder) {
+        const index = segments.findIndex((segment) => segment.id === segmentEntry.segment.id),
+          transform = computeSegmentTransforms(segments)[index]!
+        const angle = stair.rotation + transform.rotation
+        const [ax, az] = rotateXZ(1, 0, angle)
+        for (const side of ['left', 'right'] as const) {
+          const [sx, sz] = rotateXZ(
+            ((side === 'right' ? 1 : -1) * segmentEntry.segment.width) / 2,
+            0,
+            transform.rotation,
+          )
+          const [wx, wz] = rotateXZ(
+            transform.position[0] + sx,
+            transform.position[2] + sz,
+            stair.rotation,
+          )
+          children.push({
+            kind: 'move-arrow',
+            point: [stair.position[0] + wx, stair.position[2] + wz],
+            angle: Math.atan2(az, ax) + (side === 'left' ? Math.PI : 0),
+            affordance: 'segment-width',
+            payload: { segmentId: segmentEntry.segment.id, side, axisX: [ax, az] },
+          })
+        }
+      }
+      if (isSelected && !view?.moving && !segmentEntry.segment.winder) {
         const poly = segmentEntry.polygon
         // Polygon corners (from `getFloorplanStairSegmentPolygon`):
         //   0 back-left   1 back-right
@@ -193,38 +234,21 @@ export function buildStairFloorplan(
       }
     }
   } else {
-    // Curved / spiral — full arc-band chrome. Mirrors the legacy
-    // `<FloorplanStairLayer>` curved/spiral branches in
-    // floorplan-panel.tsx (~line 285+).
-    const normalizedSweepAngle = getNormalizedFloorplanStairSweepAngle(stair)
-    const sectorStartAngle = -stair.rotation - normalizedSweepAngle / 2
-    const sectorEndAngle = sectorStartAngle + normalizedSweepAngle
-    const spiralLandingSweep = getFloorplanSpiralLandingSweep(stair, normalizedSweepAngle)
-    // SVG `A` (arc) draws a single sub-360° segment. Once the base sweep
-    // is near a full turn and we add up to 0.75π of integrated landing
-    // on top, the total `visualSectorEnd - sectorStart` overflows 2π and
-    // the path becomes malformed (the whole stair chrome breaks). Cap
-    // the COMBINED visual sweep to just under a full revolution — past
-    // that, the landing visually overlaps the start of the arc, which
-    // is exactly the multi-turn "stack on top of each other" behaviour
-    // we want for spirals with > 360° rotation.
-    const rawVisualSweep = normalizedSweepAngle + spiralLandingSweep
-    const sweepCap = Math.PI * 2 - 0.001
+    const layout = resolveStairArcDimensions(stair, 0)
+    const normalizedSweepAngle = layout.sweepAngle
+    const sectorStartAngle = -stair.rotation - layout.sweepAngle / 2
+    const sectorEndAngle = sectorStartAngle + layout.sweepAngle
     const visualSweep =
-      Math.sign(rawVisualSweep || 1) * Math.min(Math.abs(rawVisualSweep), sweepCap)
-    const visualSectorEndAngle = sectorStartAngle + visualSweep
+      Math.sign(layout.sweepAngle || 1) *
+      Math.min(Math.abs(layout.sweepAngle + layout.landingSweep + layout.nosingSweep), Math.PI * 2)
+    const visualSectorStartAngle = sectorStartAngle - layout.nosingSweep
+    const visualSectorEndAngle = visualSectorStartAngle + visualSweep
     const stairCenter = { x: stair.position[0], y: stair.position[2] }
-    const innerRadius = Math.max(
-      stairType === 'spiral' ? 0.05 : 0.2,
-      stair.innerRadius ?? (stairType === 'spiral' ? 0.2 : 0.9),
-    )
-    const outerRadius = innerRadius + stair.width
-    const centerlineRadius = innerRadius + stair.width / 2
+    const { innerRadius, outerRadius, walkingRadius: centerlineRadius } = layout
 
     // Stroke widths are screen pixels (paired with `vectorEffect:
     // 'non-scaling-stroke'` below). World-metre values like 0.02 would
-    // render as sub-pixel — invisible at every zoom. Matches the legacy
-    // `<FloorplanStairLayer>` curved/spiral branches.
+    // render as sub-pixel — invisible at every zoom.
     const outerArcWidth = showSelectedChrome ? 2 : 1.4
     const innerArcWidth = showSelectedChrome ? 1.7 : 1.2
 
@@ -235,7 +259,7 @@ export function buildStairFloorplan(
         stairCenter,
         innerRadius,
         outerRadius,
-        sectorStartAngle,
+        visualSectorStartAngle,
         visualSectorEndAngle,
       ),
       fill,
@@ -247,7 +271,7 @@ export function buildStairFloorplan(
     // 2. Outer + inner arcs.
     children.push({
       kind: 'path',
-      d: buildSvgArcPath(stairCenter, outerRadius, sectorStartAngle, visualSectorEndAngle),
+      d: buildSvgArcPath(stairCenter, outerRadius, visualSectorStartAngle, visualSectorEndAngle),
       fill: 'none',
       stroke: stairStroke,
       strokeWidth: outerArcWidth,
@@ -255,7 +279,7 @@ export function buildStairFloorplan(
     })
     children.push({
       kind: 'path',
-      d: buildSvgArcPath(stairCenter, innerRadius, sectorStartAngle, visualSectorEndAngle),
+      d: buildSvgArcPath(stairCenter, innerRadius, visualSectorStartAngle, visualSectorEndAngle),
       fill: 'none',
       stroke: stairStroke,
       strokeWidth: innerArcWidth,
@@ -263,9 +287,7 @@ export function buildStairFloorplan(
     })
 
     // 3. Step lines (radial spokes).
-    const stepBase = stairType === 'spiral' ? 6 : 4
-    const stepCount = Math.max(stepBase, Math.round(stair.stepCount ?? 10))
-    const stepSweep = normalizedSweepAngle / stepCount
+    const { stepCount, stepSweep } = layout
     const breakStep = stairPlanBreakStep(stepCount)
     for (let index = 0; index <= stepCount; index += 1) {
       if (index >= breakStep && index !== stepCount) continue
@@ -274,9 +296,7 @@ export function buildStairFloorplan(
       const outer = getArcPlanPoint(stairCenter, outerRadius, angle)
       const isLast = index === stepCount
       const isFirst = index === 0
-      // Curved: regular stroke everywhere, but both the starting and the
-      // ending step lines are bolded (matches the legacy
-      // `<FloorplanStairLayer>` curved branch).
+      // Curved stairs accent both ascent portals.
       // Spiral: only the last step is accented + bolded.
       const isEmphasised = stairType === 'spiral' ? isLast : isFirst || isLast
       const stepWidth =
@@ -335,13 +355,13 @@ export function buildStairFloorplan(
     )
     const arrowAngle =
       direction === 'up'
-        ? visualSectorEndAngle - stepSweep * 0.8
+        ? sectorEndAngle + layout.landingSweep - stepSweep * 0.8
         : sectorStartAngle + stepSweep * 0.8
     const arrowPoint = getArcPlanPoint(stairCenter, centerlineRadius, arrowAngle)
     const sweepDirection = normalizedSweepAngle >= 0 ? 1 : -1
     const tangentAngle =
       arrowAngle + sweepDirection * (direction === 'up' ? Math.PI / 2 : -Math.PI / 2)
-    const arrowSize = clamp(stair.width * (stairType === 'spiral' ? 0.18 : 0.16), 0.1, 0.18)
+    const arrowSize = clamp(layout.width * (stairType === 'spiral' ? 0.18 : 0.16), 0.1, 0.18)
     const headPts = buildSvgArrowHeadPoints(arrowPoint, tangentAngle, arrowSize)
     children.push({
       kind: 'polygon',
@@ -444,6 +464,48 @@ export function buildStairFloorplan(
     }
   }
 
+  if (isSelected) {
+    const chain = (ctx.children ?? []).filter(
+      (child): child is StairSegmentNode => child.type === 'stair-segment',
+    )
+    for (const path of resolveStairWalkingPaths(stair, chain, 0)) {
+      children.push({
+        kind: 'polyline',
+        points: path.map(([x, , z]) => [
+          stair.position[0] + x * Math.cos(stair.rotation) + z * Math.sin(stair.rotation),
+          stair.position[2] - x * Math.sin(stair.rotation) + z * Math.cos(stair.rotation),
+        ]),
+        fill: 'none',
+        stroke: '#2563eb',
+        strokeWidth: 0.035,
+        strokeDasharray: '0.12 0.08',
+        metadata: floorplanGeometryMetadata({
+          annotationRole: 'stair-annotation',
+          renderPass: 'overlay',
+        }),
+      })
+    }
+  }
+
+  const railNodes = Object.fromEntries([stair, ...ctx.children].map((node) => [node.id, node]))
+  const guardPaths =
+    stair.railingPath === 'continuous' ||
+    stair.railingStyle === 'glass' ||
+    stair.railingStyle === 'metal'
+      ? resolveStairRailPaths(stair, railNodes)
+      : []
+  for (const path of [...guardPaths, ...resolveStairHandrailPaths(stair, railNodes)])
+    children.push({
+      kind: 'polyline',
+      points: path.points.map(([x, , z]) => [
+        stair.position[0] + x * Math.cos(stair.rotation) + z * Math.sin(stair.rotation),
+        stair.position[2] - x * Math.sin(stair.rotation) + z * Math.cos(stair.rotation),
+      ]),
+      fill: 'none',
+      stroke: stairStroke,
+      strokeWidth: 0.02,
+      metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
+    })
   children.push(...buildStairDocumentation(stair, entry, ctx))
 
   // Whole-stair rotation handle — sister to the 3D `stairRotateHandle`
@@ -465,12 +527,12 @@ export function buildStairFloorplan(
     let localX: number
     let localZ: number
     if (stairType === 'straight') {
-      const stairWidth = Math.max(stair.width ?? 1, 0.4)
+      const stairWidth = Math.max(stair.width ?? 1, 0.001)
       localX = stairWidth / 2 + STAIR_ROTATE_PLAN_OFFSET
       localZ = -STAIR_ROTATE_PLAN_OFFSET
     } else {
       const isSpiral = stairType === 'spiral'
-      const innerR = Math.max(isSpiral ? 0.05 : 0.2, stair.innerRadius ?? (isSpiral ? 0.2 : 0.9))
+      const innerR = Math.max(0.001, stair.innerRadius ?? (isSpiral ? 0.2 : 0.9))
       const outerR = innerR + (stair.width ?? 1)
       const sweep = stair.sweepAngle ?? (isSpiral ? Math.PI * 2 : Math.PI / 2)
       const radius = outerR + STAIR_ROTATE_PLAN_OFFSET
@@ -513,32 +575,4 @@ function toFloorplanPoints(points: ReadonlyArray<{ x: number; y: number }>): Flo
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
-}
-
-// Inlined from `editor/lib/floorplan/stairs.ts` — those are private
-// helpers in the legacy file. Both are pure derivations from the stair
-// node, so they live with the registry-driven emitter.
-function getNormalizedFloorplanStairSweepAngle(stair: StairNode): number {
-  const stairType = stair.stairType ?? 'straight'
-  const baseSweepAngle = stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
-  if (Math.abs(baseSweepAngle) >= Math.PI * 2) {
-    return Math.sign(baseSweepAngle || 1) * (Math.PI * 2 - 0.001)
-  }
-  return baseSweepAngle
-}
-
-function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number): number {
-  if (
-    (stair.stairType ?? 'straight') !== 'spiral' ||
-    (stair.topLandingMode ?? 'none') !== 'integrated'
-  ) {
-    return 0
-  }
-  const innerRadius = Math.max(0.05, stair.innerRadius ?? 0.9)
-  const width = Math.max(stair.width ?? 1, 0.4)
-  const landingDepth = Math.max(0.3, stair.topLandingDepth ?? Math.max(width * 0.9, 0.8))
-  return (
-    Math.min(Math.PI * 0.75, landingDepth / Math.max(innerRadius + width / 2, 0.1)) *
-    Math.sign(sweepAngle || 1)
-  )
 }

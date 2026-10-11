@@ -1,17 +1,33 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
   clearSceneHistory,
   DoorNode,
+  emitter,
   getSceneHistoryPauseDepth,
   LevelNode,
   pauseSceneHistory,
+  registerNode,
   resumeSceneHistory,
   useScene,
   WallNode,
+  WindowNode,
 } from '@pascal-app/core'
+import {
+  getSavedSceneDocument,
+  preloadRegistryToolModules,
+  ToolManager,
+  useEditor,
+  useOpeningGuides,
+} from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { act, create } from '@react-three/test-renderer'
+import { createElement } from 'react'
+import { Group } from 'three'
+import { doorDefinition } from '../door'
+import { windowDefinition } from '../window'
 import { beginOpeningMoveHistorySession } from './opening-move-history'
 
 // `updateNodesAction` batches dirty-marking through requestAnimationFrame.
@@ -187,6 +203,168 @@ describe('opening move history session', () => {
   beforeEach(resetScene)
   afterEach(() => {
     clearSceneHistory()
+  })
+
+  test.each(
+    [doorDefinition, windowDefinition].flatMap((definition) =>
+      (['cancel', 'unmount', 'commit'] as const).map((finish) => ({ definition, finish })),
+    ),
+  )('a mounted $definition.kind mover saves the original until $finish and releases its draft', async ({
+    definition,
+    finish,
+  }) => {
+    const globals = ['window', 'document'] as const
+    const descriptors = globals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key))
+    globalThis.window = new EventTarget() as Window & typeof globalThis
+    globalThis.document = { body: { style: { cursor: '' } } } as Document
+    const original =
+      definition.kind === 'door'
+        ? node(DOOR_ID)
+        : WindowNode.parse({
+            id: 'window_history',
+            parentId: WALL_A_ID,
+            wallId: WALL_A_ID,
+            position: [1.5, 1.05, 0],
+          })
+    if (definition.kind === 'window') {
+      useScene.getState().deleteNode(DOOR_ID)
+      useScene.getState().createNode(original, WALL_A_ID)
+      clearSceneHistory()
+    }
+    const initialViewer = useViewer.getState()
+    const initialEditor = useEditor.getState()
+    registerNode(definition)
+    useEditor.setState({ phase: 'building', mode: 'select', tool: null })
+    useViewer.getState().setSelection({ levelId: LEVEL_ID })
+    useEditor.getState().setMovingNode(original)
+    await preloadRegistryToolModules(definition.kind)
+    const renderer = await create(createElement(ToolManager))
+    const now = spyOn(performance, 'now').mockReturnValue(performance.now() + 1000)
+    try {
+      expect(useScene.getState().nodes[original.id]!.metadata?.isTransient).toBe(true)
+      expect(getSavedSceneDocument().nodes[original.id]).toEqual(original)
+      await act(async () =>
+        emitter.emit('grid:move', {
+          position: [8, 0, 8],
+          localPosition: [8, 0, 8],
+          nativeEvent: {} as never,
+        }),
+      )
+      expect(useScene.getState().nodes[original.id]!.parentId).toBe(LEVEL_ID)
+      expect(getSavedSceneDocument().nodes[original.id]).toEqual(original)
+      if (finish === 'cancel') await act(async () => emitter.emit('tool:cancel'))
+      if (finish === 'commit') {
+        const event = {
+          node: node(WALL_B_ID) as WallNode,
+          position: [3, 1.05, -2.5] as [number, number, number],
+          localPosition: [3, 1.05, 0] as [number, number, number],
+          normal: [0, 0, 1] as [number, number, number],
+          object: new Group(),
+          stopPropagation: () => {},
+          nativeEvent: {} as never,
+        }
+        await act(async () => {
+          emitter.emit('wall:move', event)
+          emitter.emit('wall:click', event)
+        })
+        expect(useScene.getState().nodes[original.id]!.parentId).toBe(WALL_B_ID)
+        expect(getSavedSceneDocument().nodes[original.id]).toEqual(
+          useScene.getState().nodes[original.id],
+        )
+      }
+      await renderer.unmount()
+      expect(getSavedSceneDocument().nodes[original.id]).toEqual(
+        useScene.getState().nodes[original.id],
+      )
+      useScene.getState().updateNode(original.id, { position: [4, 1, 0] } as never)
+      expect(getSavedSceneDocument().nodes[original.id]).toEqual(
+        useScene.getState().nodes[original.id],
+      )
+    } finally {
+      now.mockRestore()
+      await renderer.unmount()
+      useEditor.getState().setMovingNode(null)
+      useEditor.setState(initialEditor)
+      useViewer.setState(initialViewer)
+      globals.forEach((key, index) => {
+        const descriptor = descriptors[index]
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+        else Reflect.deleteProperty(globalThis, key)
+      })
+    }
+  })
+
+  test.each(
+    [doorDefinition, windowDefinition].flatMap((definition) =>
+      (['cancel', 'unmount', 'commit'] as const).map((finish) => ({ definition, finish })),
+    ),
+  )('a mounted $definition.kind draw tool excludes its hover draft until $finish', async ({
+    definition,
+    finish,
+  }) => {
+    const globals = ['window', 'document'] as const
+    const descriptors = globals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key))
+    globalThis.window = new EventTarget() as Window & typeof globalThis
+    globalThis.document = { body: { style: { cursor: '' } } } as Document
+    const initialViewer = useViewer.getState()
+    const initialEditor = useEditor.getState()
+    registerNode(definition)
+    useEditor.getState().armToolMode({ mode: 'build', tool: definition.kind as 'door' | 'window' })
+    useViewer.getState().setSelection({ levelId: LEVEL_ID })
+    await preloadRegistryToolModules(definition.kind)
+    const renderer = await create(createElement(ToolManager))
+    const event = {
+      node: node(WALL_B_ID) as WallNode,
+      position: [3, 1.05, -2.5] as [number, number, number],
+      localPosition: [3, 1.05, 0] as [number, number, number],
+      normal: [0, 0, 1] as [number, number, number],
+      object: new Group(),
+      stopPropagation: () => {},
+      nativeEvent: {} as never,
+    }
+    try {
+      const baseline = getSavedSceneDocument().nodes
+      const published: Array<ReturnType<typeof getSavedSceneDocument>['nodes']> = []
+      const stop = useScene.subscribe(() => published.push(getSavedSceneDocument().nodes))
+      try {
+        await act(async () => {
+          emitter.emit('wall:move', event)
+          // Dimension labels require a DOM; the draft and its host do not.
+          useOpeningGuides.getState().clear()
+        })
+      } finally {
+        stop()
+      }
+      const drafts = Object.values(useScene.getState().nodes).filter(
+        (entry) => entry.metadata?.isTransient,
+      )
+      expect(drafts).toHaveLength(1)
+      expect(published.length).toBeGreaterThan(0)
+      for (const snapshot of published) expect(snapshot).toEqual(baseline)
+      expect(getSavedSceneDocument().nodes).toEqual(baseline)
+      if (finish === 'cancel') await act(async () => emitter.emit('tool:cancel'))
+      if (finish === 'commit') {
+        await act(async () => emitter.emit('wall:click', event))
+        const saved = Object.values(getSavedSceneDocument().nodes).filter(
+          (entry) => !baseline[entry.id],
+        )
+        expect(saved).toHaveLength(1)
+        expect(saved[0]!.type).toBe(definition.kind)
+      }
+      await renderer.unmount()
+      expect(useScene.getState().nodes[drafts[0]!.id]).toBeUndefined()
+      expect(getSavedSceneDocument().nodes).toEqual(useScene.getState().nodes)
+    } finally {
+      await renderer.unmount()
+      useEditor.getState().setMovingNode(null)
+      useEditor.setState(initialEditor)
+      useViewer.setState(initialViewer)
+      globals.forEach((key, index) => {
+        const descriptor = descriptors[index]
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+        else Reflect.deleteProperty(globalThis, key)
+      })
+    }
   })
 
   test('a completed gesture is EXACTLY ONE undo entry; undo restores the pre-drag state', () => {

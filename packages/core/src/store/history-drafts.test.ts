@@ -13,6 +13,7 @@ import useScene, {
   applySceneSnapshot,
   beginSceneHistoryDraft,
   clearSceneHistory,
+  getSceneDocument,
   runSceneHistoryDraftWrite,
   sceneHistoryDraftRevertUpdates,
 } from './use-scene'
@@ -71,6 +72,36 @@ const wallStart = () => (node(wallId) as WallNode).start
 const levelChildren = () => (node(levelId) as LevelNode).children
 
 describe('scene history drafts', () => {
+  test('saving during a move keeps its original pose and host, then saves the committed drop', () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    try {
+      runSceneHistoryDraftWrite(() =>
+        useScene.getState().updateNode(itemId, {
+          position: [3, 0, 3],
+          parentId: wallId,
+          visible: false,
+          metadata: { isTransient: true },
+        }),
+      )
+      useScene.getState().updateNode(itemId, { name: 'Renamed while moving' })
+      const document = getSceneDocument()
+      expect(document.nodes[itemId]).toMatchObject({
+        position: [1, 0, 1],
+        parentId: levelId,
+        visible: true,
+        name: 'Renamed while moving',
+      })
+      expect(document.nodes[itemId]!.metadata?.isTransient).toBeUndefined()
+      expect((document.nodes[levelId] as LevelNode).children).toContain(itemId)
+      expect((document.nodes[wallId] as WallNode).children).not.toContain(itemId)
+      expect((node(itemId) as ItemNode).position).toEqual([3, 0, 3])
+    } finally {
+      end()
+    }
+    expect(getSceneDocument().nodes[itemId]).toBe(node(itemId)!)
+    expect((getSceneDocument().nodes[itemId] as ItemNode).position).toEqual([3, 0, 3])
+  })
+
   test.each([
     [true, false],
     [true, true],

@@ -29,6 +29,7 @@ import {
   triggerSFX,
   useEditor,
   useFloorplanDraftPreview,
+  visibleScene,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -205,7 +206,7 @@ export const SlabTool: React.FC = () => {
         Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
-        if (shouldRegistryCommitSlab(useEditor.getState().viewMode, 'grid')) {
+        if (shouldRegistryCommitSlab(visibleScene(useEditor.getState()), 'grid')) {
           const slabId = commitSlabDrawing(
             currentLevelId,
             points,
@@ -237,7 +238,7 @@ export const SlabTool: React.FC = () => {
     // vertices. Closing near the first vertex (in onGridClick) is the third way.
     const finishDrawing = (trigger: SlabCompletionTrigger) => {
       if (points.length < 3) return
-      if (shouldRegistryCommitSlab(useEditor.getState().viewMode, trigger)) {
+      if (shouldRegistryCommitSlab(visibleScene(useEditor.getState()), trigger)) {
         const slabId = commitSlabDrawing(
           currentLevelId,
           points,

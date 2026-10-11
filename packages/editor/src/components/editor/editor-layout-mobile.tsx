@@ -6,6 +6,8 @@ import useEditor from '../../store/use-editor'
 import { MobileTabBar } from '../ui/sidebar/mobile-tab-bar'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { BottomSheet, type BottomSheetHandle } from './bottom-sheet'
+import { useSceneSpan } from './views/scene-region'
+import { ViewTabs } from './views/view-bar'
 
 const MIN_SNAP = 0
 const MAX_SNAP = 1
@@ -40,6 +42,7 @@ export interface EditorLayoutMobileProps {
   viewerToolbarRight?: ReactNode
   viewerContent: ReactNode
   overlays?: ReactNode
+  viewBar?: boolean
 }
 
 export function EditorLayoutMobile({
@@ -51,7 +54,9 @@ export function EditorLayoutMobile({
   viewerToolbarRight,
   viewerContent,
   overlays,
+  viewBar = true,
 }: EditorLayoutMobileProps) {
+  const hasScene = useSceneSpan() !== null
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const activePanel = useEditor((s) => s.activeSidebarPanel)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
@@ -77,23 +82,22 @@ export function EditorLayoutMobile({
     }
   }, [sidebarTabs, activePanel, setActivePanel])
 
-  // Sync editor phase / mode with the active tab:
+  // Sync the editor mode with the active tab:
   // - Entering Chat always drops to Select (chat is a composing context).
-  // - Entering Items snaps the editor into furnish-build (matches the
-  //   desktop "Furnish" action which itself opens the Items panel).
-  // - Leaving Items while still furnishing exits the build mode.
+  // - Entering Items arms the item tool (matches the desktop F shortcut,
+  //   which itself opens the Items panel).
+  // - Leaving Items with the item tool still armed exits the build mode.
   useEffect(() => {
-    const { armToolMode, phase, mode, setPhase } = useEditor.getState()
+    const { armToolMode, mode, tool } = useEditor.getState()
     if (activePanel === 'ai' && mode === 'build') {
       armToolMode({ mode: 'select' })
       return
     }
     if (activePanel === 'items') {
-      if (phase !== 'furnish') setPhase('furnish')
       if (mode !== 'build') armToolMode({ mode: 'build', tool: 'item' })
       return
     }
-    if (phase === 'furnish' && mode === 'build') {
+    if (mode === 'build' && tool === 'item') {
       armToolMode({ mode: 'select' })
     }
   }, [activePanel])
@@ -148,6 +152,10 @@ export function EditorLayoutMobile({
       if (middleH <= 0) return
       const tab = sidebarTabs.find((t) => t.id === id)
       if (!tab) return
+      if (tab.onSelect) {
+        tab.onSelect()
+        return
+      }
       const defaultPx = getDefaultSnap(tab) * middleH
       if (id !== activePanel) {
         setActivePanel(id)
@@ -223,14 +231,23 @@ export function EditorLayoutMobile({
         {/* Viewer column: sized by committed sheet height */}
         <div className="absolute inset-x-0 top-0 overflow-hidden" style={{ height: viewerHeight }}>
           <div className="relative h-full w-full">
-            {(viewerToolbarLeft || viewerToolbarRight) && !isCaptureMode && (
+            {(viewBar || viewerToolbarLeft || viewerToolbarRight) && !isCaptureMode && (
               <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
-                <div className="pointer-events-auto flex items-center gap-2">
-                  {viewerToolbarLeft}
+                <div className="flex items-center gap-2">
+                  {viewBar && (
+                    <div data-view-bar={0}>
+                      <ViewTabs className="shadow-elevation-4" pane={0} />
+                    </div>
+                  )}
+                  <div className="pointer-events-auto flex items-center gap-2">
+                    {viewerToolbarLeft}
+                  </div>
                 </div>
-                <div className="pointer-events-auto flex items-center gap-2">
-                  {viewerToolbarRight}
-                </div>
+                {hasScene && (
+                  <div className="pointer-events-auto flex items-center gap-2">
+                    {viewerToolbarRight}
+                  </div>
+                )}
               </div>
             )}
             <div className="relative h-full w-full overflow-hidden">{viewerContent}</div>

@@ -1,7 +1,19 @@
-import type { ParametricDescriptor, StairNode } from '@pascal-app/core'
+import { type ParametricDescriptor, planStairRiseEdit, type StairNode } from '@pascal-app/core'
+import { StairConstructionField } from './construction-controls'
+import { StairRailingField } from './railing-controls'
 
 export const stairParametrics: ParametricDescriptor<StairNode> = {
   groups: [
+    {
+      label: 'Construction',
+      fields: [
+        {
+          key: 'construction',
+          kind: 'custom',
+          component: StairConstructionField,
+        },
+      ],
+    },
     {
       label: 'Type',
       fields: [
@@ -30,8 +42,6 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           kind: 'number',
           label: 'Opening offset',
           unit: 'm',
-          min: 0,
-          max: 0.5,
           step: 0.01,
           visibleIf: (node) => node.slabOpeningMode === 'destination',
         },
@@ -44,8 +54,7 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           key: 'width',
           kind: 'number',
           unit: 'm',
-          min: 0.4,
-          max: 1000,
+          min: 0.001,
           step: 0.05,
           visibleIf: (node) => node.stairType !== 'straight',
         },
@@ -54,7 +63,6 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           kind: 'number',
           label: 'Steps',
           min: 2,
-          max: 32,
           step: 1,
           visibleIf: (node) => node.stairType !== 'straight',
         },
@@ -68,8 +76,7 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           key: 'thickness',
           kind: 'number',
           unit: 'm',
-          min: 0.02,
-          max: 1000,
+          min: 0.001,
           step: 0.01,
           visibleIf: (node) => node.stairType === 'spiral' || !node.fillToFloor,
         },
@@ -78,8 +85,7 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           kind: 'number',
           label: 'Inner radius',
           unit: 'm',
-          min: 0.05,
-          max: 1000,
+          min: 0.001,
           step: 0.05,
           visibleIf: (node) => node.stairType !== 'straight',
         },
@@ -87,8 +93,6 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           key: 'sweepAngle',
           kind: 'number',
           label: 'Sweep (rad)',
-          min: -Math.PI * 4,
-          max: Math.PI * 4,
           step: Math.PI / 180,
           visibleIf: (node) => node.stairType !== 'straight',
         },
@@ -117,8 +121,7 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           kind: 'number',
           label: 'Landing depth',
           unit: 'm',
-          min: 0.3,
-          max: 1000,
+          min: 0.001,
           step: 0.05,
           visibleIf: (node) => node.stairType === 'spiral' && node.topLandingMode === 'integrated',
         },
@@ -142,6 +145,17 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
       label: 'Railing',
       fields: [
         {
+          key: 'railingStyle',
+          kind: 'enum',
+          options: ['balusters', 'post-and-rail', 'cable', 'boards', 'glass', 'metal'],
+        },
+        {
+          key: 'railingPath',
+          kind: 'custom',
+          label: 'Rail layout and handrail',
+          component: StairRailingField,
+        },
+        {
           key: 'railingMode',
           kind: 'enum',
           options: ['none', 'left', 'right', 'both'],
@@ -151,8 +165,7 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           kind: 'number',
           label: 'Railing height',
           unit: 'm',
-          min: 0.7,
-          max: 1.4,
+          min: 0.001,
           step: 0.02,
           visibleIf: (node) => node.railingMode !== 'none',
         },
@@ -166,5 +179,9 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           sweepAngle: (400 * Math.PI) / 180,
         }
       : {},
+  reconcile: (previous, next, nodes) =>
+    next.totalRise !== previous.totalRise && next.totalRise !== undefined
+      ? planStairRiseEdit(next, next.totalRise, nodes).slice(1)
+      : [],
   customPanel: () => import('./panel'),
 }

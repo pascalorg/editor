@@ -1,14 +1,12 @@
 /**
- * Style presets for doors and windows.
- *
- * Each preset is a small bag of property overrides applied on top of the
- * DoorNode / WindowNode schema defaults. Used by `add_door`, `add_window`,
- * and `create_room`'s inline doors[] / windows[] arrays so the AI (and the
- * dev tester) can pick a recognisable look by name instead of having to
- * spell out segment configurations or pane ratios.
+ * Style presets for doors and windows: what a door's leaf or a window's panes look like, never how
+ * it opens (doorType, windowType) or its size. `add_door`, `add_window` and `create_room`'s
+ * doors[] / windows[] apply them by name; the door and window panels show them as their Style row
+ * and read a node's style back from its fields.
  */
 
 import type { DoorSegment } from '../schema'
+import { DEFAULT_DOOR_CONTENT_PADDING, defaultDoorSegments } from '../schema/nodes/opening-types'
 
 // ── Doors ────────────────────────────────────────────────────────────────────
 
@@ -39,9 +37,22 @@ export const DOOR_STYLE_DESCRIPTIONS: Record<DoorStyle, string> = {
   barn: 'Wide single recessed panel — sliding-barn look.',
 }
 
-interface DoorStyleOverrides {
-  segments?: DoorSegment[]
+/** The Style row's labels; the stored and agent value is the style itself. */
+export const DOOR_STYLE_LABELS: Record<DoorStyle, string> = {
+  panel: 'Panel',
+  glass: 'Glass',
+  modern: 'Modern',
+  'paneled-glass': 'Paneled glass',
+  french: 'French',
+  shaker: 'Shaker',
+  'six-panel': 'Six-panel',
+  craftsman: 'Craftsman',
+  'half-louvered': 'Half-louvered',
+  barn: 'Barn',
 }
+
+/** Every field a door style owns. */
+export type DoorStyleLook = { segments: DoorSegment[]; contentPadding: [number, number] }
 
 const PANEL_DIVIDER = 0.03
 const PANEL_DEPTH = 0.01
@@ -64,70 +75,65 @@ function panelSegment(
   }
 }
 
-export function getDoorStyleOverrides(style: DoorStyle | undefined): DoorStyleOverrides {
-  if (!style || style === 'panel') {
-    // Schema default — two raised panels stacked.
-    return {}
-  }
-  if (style === 'glass') {
-    return { segments: [panelSegment('glass', 1)] }
-  }
-  if (style === 'modern') {
-    return { segments: [panelSegment('empty', 1)] }
-  }
-  if (style === 'paneled-glass') {
-    return {
-      segments: [panelSegment('glass', 0.55), panelSegment('panel', 0.45)],
-    }
-  }
-  if (style === 'french') {
-    return { segments: [panelSegment('glass', 1, [0.5, 0.5])] }
-  }
-  if (style === 'shaker') {
-    return {
-      segments: [panelSegment('panel', 1, [1], { panelDepth: -0.005, panelInset: 0.06 })],
-    }
-  }
-  if (style === 'six-panel') {
-    return {
-      segments: [
-        panelSegment('panel', 0.34, [0.5, 0.5]),
-        panelSegment('panel', 0.33, [0.5, 0.5]),
-        panelSegment('panel', 0.33, [0.5, 0.5]),
-      ],
-    }
-  }
-  if (style === 'craftsman') {
-    return {
-      segments: [
-        panelSegment('panel', 0.25),
-        panelSegment('panel', 0.25),
-        panelSegment('panel', 0.25),
-        panelSegment('panel', 0.25),
-      ],
-    }
-  }
-  if (style === 'half-louvered') {
-    // Approximate slats by stacking thin "empty" rows on the top half.
-    const slatRatio = 0.5 / 6
-    return {
-      segments: [
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
+const look = (
+  segments: DoorSegment[],
+  contentPadding: [number, number] = DEFAULT_DOOR_CONTENT_PADDING,
+): DoorStyleLook => ({ segments, contentPadding: [...contentPadding] })
+
+/**
+ * A door style's whole look: applied, it replaces the last style's (a panel door after a modern one
+ * gets its margin back), and the panel reads a style back by these fields alone.
+ */
+export function doorStyleLook(style: DoorStyle): DoorStyleLook {
+  switch (style) {
+    case 'panel':
+      return look(defaultDoorSegments())
+    case 'glass':
+      return look([panelSegment('glass', 1)])
+    case 'modern':
+      // A flush slab: one panel over the whole leaf. An 'empty' segment is no leaf at all (a front
+      // door once rendered as an open frame).
+      return look([panelSegment('panel', 1, [1], { panelDepth: 0, panelInset: 0 })], [0, 0])
+    case 'paneled-glass':
+      return look([panelSegment('glass', 0.55), panelSegment('panel', 0.45)])
+    case 'french':
+      return look([panelSegment('glass', 1, [0.5, 0.5])])
+    case 'shaker':
+      return look([panelSegment('panel', 1, [1], { panelDepth: -0.005, panelInset: 0.06 })])
+    case 'six-panel':
+      return look([0.34, 0.33, 0.33].map((ratio) => panelSegment('panel', ratio, [0.5, 0.5])))
+    case 'craftsman':
+      return look([0.25, 0.25, 0.25, 0.25].map((ratio) => panelSegment('panel', ratio)))
+    case 'half-louvered':
+      // Slats as narrow raised bars on the top half: an 'empty' row would be a hole in the leaf.
+      // The door system always raises a panel by |panelDepth|, so a slat reads only when it is
+      // deep and narrow against its gap: ten bars about 7 cm tall, 2.2 cm proud, 2.8 cm apart.
+      return look([
+        ...Array.from({ length: 10 }, () =>
+          panelSegment('panel', 0.5 / 10, [1], { panelDepth: 0.022, panelInset: 0.014 }),
+        ),
         panelSegment('panel', 0.5),
-      ],
-    }
+      ])
+    case 'barn':
+      return look([panelSegment('panel', 1, [1], { panelDepth: -0.02, panelInset: 0.08 })])
   }
-  if (style === 'barn') {
-    return {
-      segments: [panelSegment('panel', 1, [1], { panelDepth: -0.02, panelInset: 0.08 })],
-    }
-  }
-  return {}
+}
+
+const same = (a: unknown, b: unknown): boolean => {
+  if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) < 1e-6
+  if (Array.isArray(a) && Array.isArray(b))
+    return a.length === b.length && a.every((value, i) => same(value, b[i]))
+  if (a && b && typeof a === 'object' && typeof b === 'object')
+    return Object.keys({ ...a, ...b }).every((key) =>
+      same((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
+    )
+  return a === b
+}
+
+/** The styles a door's leaf is, in list order: none for a leaf made by hand (the panel's Custom). */
+export function doorStylesOf(door: DoorStyleLook): DoorStyle[] {
+  const { segments, contentPadding } = door
+  return DOOR_STYLES.filter((style) => same(doorStyleLook(style), { segments, contentPadding }))
 }
 
 // ── Windows ──────────────────────────────────────────────────────────────────
@@ -147,6 +153,14 @@ export const WINDOW_STYLES = [
 ] as const
 export type WindowStyle = (typeof WINDOW_STYLES)[number]
 
+/**
+ * The styles the panel's Style row and the window tool's L chip offer: one per look. 'picture'
+ * draws what 'single' draws, so it is not offered; agents may still ask for it (an alias).
+ */
+export const WINDOW_STYLE_CHOICES: readonly WindowStyle[] = WINDOW_STYLES.filter(
+  (style) => style !== 'picture',
+)
+
 export const WINDOW_STYLE_DESCRIPTIONS: Record<WindowStyle, string> = {
   single: 'Single pane with a frame — simplest look (default).',
   'double-hung': 'Two stacked sashes — classic American style.',
@@ -158,7 +172,22 @@ export const WINDOW_STYLE_DESCRIPTIONS: Record<WindowStyle, string> = {
   'wide-grid': '3 columns × 2 rows — wider proportions.',
   'horizontal-bands': '4 stacked horizontal bands — modernist strip window.',
   transom: 'Short row on top + larger pane below — transom over a base.',
-  picture: 'Large fixed pane, no internal divisions.',
+  picture: "Alias of 'single': one pane, no internal divisions.",
+}
+
+/** The Style row's labels; the stored and agent value is the style itself. */
+export const WINDOW_STYLE_LABELS: Record<WindowStyle, string> = {
+  single: 'Single',
+  'double-hung': 'Double-hung',
+  'triple-hung': 'Triple-hung',
+  casement: 'Casement',
+  sliding: 'Sliding',
+  grid: 'Grid',
+  'tall-grid': 'Tall grid',
+  'wide-grid': 'Wide grid',
+  'horizontal-bands': 'Horizontal bands',
+  transom: 'Transom',
+  picture: 'Picture',
 }
 
 interface WindowStyleOverrides {
@@ -199,4 +228,15 @@ export function getWindowStyleOverrides(style: WindowStyle | undefined): WindowS
     return { columnRatios: [1], rowRatios: [0.3, 0.7] }
   }
   return {}
+}
+
+/** The style a window's panes are, as the panel offers it: one per look, none for panes set by hand. */
+export function windowStylesOf(window: {
+  columnRatios: number[]
+  rowRatios: number[]
+}): WindowStyle[] {
+  const { columnRatios, rowRatios } = window
+  return WINDOW_STYLE_CHOICES.filter((style) =>
+    same(getWindowStyleOverrides(style), { columnRatios, rowRatios }),
+  )
 }

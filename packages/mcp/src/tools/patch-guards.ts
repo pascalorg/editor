@@ -6,6 +6,10 @@ import {
   previewDefaultGutterRefresh,
   validateNodeRelations,
 } from '@pascal-app/core'
+import {
+  scriptedFieldRefusal,
+  unknownMaterialPresetRefusal,
+} from '@pascal-app/core/agent-operations'
 import { AnyNode, type AnyNodeId, nodeKindOf, parseNode } from '@pascal-app/core/schema'
 import type { Patch } from '../bridge/scene-bridge'
 
@@ -16,6 +20,39 @@ export type PatchRefusalCode =
   | 'invalid_parent'
   | 'invalid_update'
   | 'regenerated_default'
+  | 'scripted_field'
+  // An update that would not do what it says (honestNodePatch).
+  | 'unknown_field'
+  | 'unknown_material'
+  | 'field_required'
+  | 'shadowed_field'
+
+/**
+ * A check apply_patch runs over the whole patch before applying it, registered by the module that
+ * owns what it protects, so a feature brings its own check (the honest-update check is the
+ * first). It may rewrite an update's data (the cleaned data is what is written) and
+ * refuses by throwing: a PatchRefusedError comes back as `{ code, patchIndex, id, message }`, an
+ * McpError as it is. Lower `order` runs first.
+ */
+export type PatchGuard = {
+  name: string
+  order: number
+  run(patches: Patch[], nodes: Readonly<Record<string, AnyNode>>): void
+}
+
+const guards: PatchGuard[] = []
+
+/** Runs a guard on every apply_patch from now on; registering a guard again replaces it. */
+export function registerPatchGuard(guard: PatchGuard) {
+  const at = guards.findIndex((known) => known.name === guard.name)
+  if (at >= 0) guards[at] = guard
+  else guards.push(guard)
+  guards.sort((a, b) => a.order - b.order)
+}
+
+export function runPatchGuards(patches: Patch[], nodes: Readonly<Record<string, AnyNode>>) {
+  for (const guard of guards) guard.run(patches, nodes)
+}
 
 /**
  * A patch op refused because it would break node identity, the hierarchy or
@@ -90,6 +127,11 @@ function withoutChild(parent: AnyNode, childId: string): AnyNode {
  *   (`immutable_field`); restating the current value passes;
  * - an update whose merged node has schema issues the node did not have
  *   before (`invalid_update`); kinds without a schema in this runtime pass;
+ * - an update writing a material preset the catalog does not know
+ *   (`invalid_update`; a create is rejected like other invalid creates): it
+ *   would render as the default finish;
+ * - an update of what a node's script owns, its `source` or the size it
+ *   built (`scripted_field`): only a rebuild keeps them and the geometry in step;
  * - any op on a node an earlier delete in the patch removed, or on a default
  *   gutter or downspout that delete regenerates, and any update of the roof
  *   segment holding them (`regenerated_default`).
@@ -165,6 +207,8 @@ export function assertPatchKeepsIdentity(
       const parsed = parseNode(patch.node)
       const node = (parsed.success ? parsed.data : patch.node) as AnyNode & { id?: unknown }
       if (typeof node?.id !== 'string') return
+      const preset = unknownMaterialPresetRefusal(node as Record<string, unknown>)
+      if (preset) throw new Error(`invalid patch: patches[${index}] create "${node.id}": ${preset}`)
       refuseRegenerated(index, node.id)
       const effectiveParentId = patch.parentId ?? (node.parentId as string | null | undefined)
       if (effectiveParentId) refuseRegenerated(index, effectiveParentId)
@@ -218,6 +262,10 @@ export function assertPatchKeepsIdentity(
           )
         }
       }
+      const scripted = scriptedFieldRefusal(current, data)
+      if (scripted) throw new PatchRefusedError('scripted_field', index, patch.id, scripted)
+      const preset = unknownMaterialPresetRefusal(data, current as Record<string, unknown>)
+      if (preset) throw new PatchRefusedError('invalid_update', index, patch.id, preset)
       const merged = { ...current, ...data } as AnyNode
       const issuesAfter = schemaIssues(merged as Record<string, unknown>)
       if (issuesAfter && issuesAfter.size > 0) {

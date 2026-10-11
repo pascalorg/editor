@@ -22,8 +22,8 @@ export const WindowNode = BaseNode.extend({
   type: nodeType('window'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `frame`,
-  // `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`). Absent =
-  // the frame/glass default. Mirrors `ShelfNode.slots`.
+  // `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`) or a plain
+  // `#rrggbb` colour. Absent = the frame/glass default. Mirrors `ShelfNode.slots`.
   slots: z.record(z.string(), z.string()).optional(),
   /**
    * A three.js script the window is built from instead of its parametric frame, as on an item:

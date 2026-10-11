@@ -7,6 +7,7 @@ import { LevelNode, type SeparatorNode, WallNode, type ZoneNode } from '../../sc
 import { subscribeSceneCommits } from '../../store/history-control'
 import useScene, { clearSceneHistory } from '../../store/use-scene'
 import { getWallCurveFrameAt } from '../../systems/wall/wall-curve'
+import { applyZoneTransformPlan } from './apply-zone-transform'
 import { createZone } from './create-zone'
 import { divideZone } from './divide-zone'
 import { applyToScratch, boundaries, type Point, structureChangeBatch } from './shared'
@@ -431,4 +432,27 @@ test.each([
     useScene.setState(previous)
     clearSceneHistory()
   }
+})
+
+// divide_zone over the hosted MCP crashed with "Cannot
+// read properties of undefined (reading 'getState')". A host that brings its own runtime keeps its
+// own history; the editor's scene store may not be there at all.
+test('a headless host divides a room without the scene store', () => {
+  const fixture = setup()
+  const plan = divideZone(fixture.nodes, { ...fixture, path: elbow })
+  let nodes = fixture.nodes
+  const temporal = useScene.temporal
+  Object.assign(useScene, { temporal: undefined })
+  try {
+    applyZoneTransformPlan(plan, {
+      getNodes: () => nodes,
+      applyChanges: (changes) => {
+        nodes = applyToScratch(nodes, structureChangeBatch(changes))
+      },
+      reconcile: () => {},
+    })
+  } finally {
+    Object.assign(useScene, { temporal })
+  }
+  expect(Object.values(nodes).filter((n) => n.type === 'separator')).toHaveLength(2)
 })

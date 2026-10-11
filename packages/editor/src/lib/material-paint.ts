@@ -21,6 +21,8 @@ import {
   type RoofSegmentNode,
   type RoofSegmentSurfaceMaterialRole,
   type RoofSurfaceMaterialRole,
+  type SceneMaterial,
+  type SceneMaterialId,
   type ShelfNode,
   type SlabNode,
   type StairNode,
@@ -243,6 +245,7 @@ export function getEffectiveChimneyMaterial(
 }
 
 export function resolveActivePaintMaterialFromSelection(params: {
+  materials?: Record<SceneMaterialId, SceneMaterial>
   nodes: Record<string, any>
   selectedId: string | null
   selectedMaterialTarget: {
@@ -274,6 +277,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       node: selectedNode,
       role: selectedMaterialTarget.role as string,
       nodes,
+      materials: params.materials,
     })
     if (surface) {
       const sourceTarget = (paintCap.materialTarget ?? selectedNode.type) as PaintableMaterialTarget

@@ -106,6 +106,34 @@ function describeMezzanineGeometry(
   }
 }
 
+const NO_WALLS: TopologyRoom['context'] = {
+  revision: -1,
+  walls: new Map(),
+  wallFootprints: new Map(),
+}
+
+/**
+ * A zone that bounds no room (a drawn area), outlined the way a room is: its
+ * polygon as the floor, no walls of its own.
+ */
+export function describeZoneOutline(levelId: string, zone: ZoneNode): RoomSelectionRecord {
+  const geometry: RoomSelectionGeometry = {
+    ...describeMezzanineGeometry(levelId, zone, NO_WALLS),
+    id: `zone:${zone.id}`,
+    mezzanine: null,
+  }
+  return {
+    ...geometry,
+    geometry,
+    name: zone.name || 'Zone',
+    zoneId: zone.id,
+    slabId: null,
+    slabName: null,
+    ceilingId: null,
+    ceilingName: null,
+  }
+}
+
 function describeRoom(
   geometry: RoomSelectionGeometry,
   candidates: readonly AnyNode[],

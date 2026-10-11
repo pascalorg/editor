@@ -112,7 +112,9 @@ export const itemSurfaceProvider: SurfaceProvider = {
     if (host.type !== 'item' || !canHostOnTop(host) || isLowProfileItemSurface(host)) return null
     if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y) || !hit.point.every(Number.isFinite))
       return null
-    const height = host.asset.surface ? host.asset.surface.height * host.scale[1] : hit.point[1]
+    // A script's single resting height summarizes its main top, not every shelf in its mesh.
+    const height =
+      !host.source && host.asset.surface ? host.asset.surface.height * host.scale[1] : hit.point[1]
     return {
       id: null,
       position: [hit.point[0], height, hit.point[2]],

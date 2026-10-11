@@ -1,7 +1,9 @@
 import {
   type AnyNodeId,
+  createAngleAccumulator,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  planStairSweepEdit,
   type StairNode,
   type StairSegmentNode,
   useLiveNodeOverrides,
@@ -10,16 +12,11 @@ import {
 import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
-// Minimums + max sweep mirror the 3D handles in
-// `packages/editor/src/components/editor/stair-segment-handles.tsx` so a 2D
-// drag can't push a stair past what the 3D drag would allow.
-const MIN_SEGMENT_WIDTH = 0.4
-const MIN_SEGMENT_LENGTH = 0.4
-const MIN_CURVED_WIDTH = 0.4
-const MIN_CURVED_INNER_RADIUS_SPIRAL = 0.05
-const MIN_CURVED_INNER_RADIUS_CURVED = 0.2
-const MIN_CURVED_SWEEP = Math.PI / 12
-const MAX_CURVED_SWEEP = Math.PI * 2 - 0.05
+const MIN_SEGMENT_WIDTH = 0.001
+const MIN_SEGMENT_LENGTH = 0.001
+const MIN_CURVED_WIDTH = 0.001
+const MIN_CURVED_INNER_RADIUS_SPIRAL = 0.001
+const MIN_CURVED_INNER_RADIUS_CURVED = 0.001
 
 type SegmentWidthPayload = {
   segmentId: string
@@ -284,11 +281,11 @@ export const curvedStairSweepAffordance: FloorplanAffordance<StairNode> = {
     const stairId = node.id as AnyNodeId
     const initialSweep =
       node.sweepAngle ?? (node.stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
-    const sweepSign = Math.sign(initialSweep) || 1
     const initialRotation = node.rotation
     const cx = node.position[0]
     const cz = node.position[2]
     const initialAngle = Math.atan2(initialPlanPoint[1] - cz, initialPlanPoint[0] - cx)
+    const accumulateAngle = createAngleAccumulator(initialAngle)
     let lastSweep = initialSweep
     let lastRotation = initialRotation
 
@@ -296,21 +293,12 @@ export const curvedStairSweepAffordance: FloorplanAffordance<StairNode> = {
       affectedIds: [stairId],
       apply({ planPoint }) {
         const currentAngle = Math.atan2(planPoint[1] - cz, planPoint[0] - cx)
-        let delta = currentAngle - initialAngle
-        // Wrap to [-π, π] so a drag crossing ±π doesn't flip sign mid-gesture.
-        while (delta > Math.PI) delta -= 2 * Math.PI
-        while (delta < -Math.PI) delta += 2 * Math.PI
-
-        const sweepDelta = end === 'end' ? delta : -delta
-        const targetSweep = initialSweep + sweepDelta
-        const clampedAbs = Math.min(
-          MAX_CURVED_SWEEP,
-          Math.max(MIN_CURVED_SWEEP, Math.abs(targetSweep)),
+        const delta = accumulateAngle(currentAngle)
+        const { sweepAngle: newSweep, rotation: newRotation } = planStairSweepEdit(
+          { sweepAngle: initialSweep, rotation: initialRotation },
+          delta,
+          end,
         )
-        const newSweep = sweepSign * clampedAbs
-        const appliedDelta = newSweep - initialSweep
-        const rotationShift = end === 'end' ? -appliedDelta / 2 : appliedDelta / 2
-        const newRotation = initialRotation + rotationShift
         lastSweep = newSweep
         lastRotation = newRotation
         useLiveNodeOverrides.getState().set(stairId, {

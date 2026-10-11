@@ -52,6 +52,7 @@ describe('add_door / add_window over MCP', () => {
       }
       expect(node.position[1]).toBeCloseTo(c.expect.centerY, 6)
       if (c.expect.glassPanels) expect(JSON.stringify(node)).toContain('"glass"')
+      if (c.expect.node) expect(node).toMatchObject(c.expect.node)
     })
   }
 })

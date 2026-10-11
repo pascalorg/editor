@@ -20,15 +20,17 @@ export function RegisteredToolHelper({
   snapContext = null,
   continuationContext = null,
   title = null,
+  notice = null,
 }: {
   hints: ToolHint[]
   shiftPressed?: boolean
   snapContext?: SnapContext | null
   continuationContext?: ContinuationContext | null
   title?: HudTitle | null
+  notice?: string | null
 }) {
   const visible = useVisibleToolHints(hints)
-  if (visible.length === 0 && !snapContext && !continuationContext) return null
+  if (visible.length === 0 && !snapContext && !continuationContext && !notice) return null
   // Hints carrying a live-state `chip` render as mode chips next to the
   // snapping / continuation rows; the rest stay static key rows.
   const chipHints = visible.filter((hint) => hint.chip)
@@ -47,6 +49,7 @@ export function RegisteredToolHelper({
         }
       })}
       continuationContext={continuationContext}
+      notice={notice}
       snapContext={snapContext}
       title={title}
     />

@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   findLevelAncestorId,
   type HandleDescriptor,
+  leanToSlots,
   type NodeDefinition,
   type RoofSegmentNode,
   type SceneApi,
@@ -29,7 +30,6 @@ import { leanToPaint } from './paint'
 import { deriveLeanToResizePatch, leanToExtensionParametrics } from './parametrics'
 import { applyLeanToRoofAttachment, resolveLeanToRoofAttachment } from './roof-attachment'
 import { LeanToExtensionNode } from './schema'
-import { leanToSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.25
 const SPAN_HANDLE_OFFSET = 0.3

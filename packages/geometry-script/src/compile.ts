@@ -5,6 +5,7 @@ import type {
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
 } from '@pascal-app/core'
+import { type Ring, union } from '@pascal-app/core/polygon-boolean'
 import { GEOMETRY_MANIFEST_MAX_BYTES, GEOMETRY_SCRIPT_MAX_BYTES } from '@pascal-app/core/schema'
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
@@ -109,6 +110,8 @@ function resolveParams(
   for (const spec of specs) {
     const override = overrides[spec.id]
     let value = typeof override === typeof spec.default ? override! : spec.default
+    if (typeof value === 'string' && spec.options && !spec.options.includes(value))
+      value = spec.default
     if (typeof value === 'number') {
       if (spec.min !== undefined) value = Math.max(spec.min, value)
       if (spec.max !== undefined) value = Math.min(spec.max, value)
@@ -130,7 +133,8 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
 
-const isHelper = (object: THREE.Object3D) => object.name === 'cutout' || object.name === 'collider'
+const isCutter = (name: string) => /^(cutout|cut:(wall|ceiling|slab))$/.test(name)
+const isHelper = (object: THREE.Object3D) => isCutter(object.name) || object.name === 'collider'
 
 function triangleCount(geometry: THREE.BufferGeometry): number {
   const index = geometry.getIndex()
@@ -183,7 +187,7 @@ function readConventions(root: THREE.Object3D) {
   const parts: GeometryArtifactManifest['parts'] = []
   const anchors: GeometryArtifactManifest['anchors'] = []
   const lights: GeometryArtifactManifest['lights'] = []
-  const slots = new Map<string, string | undefined>()
+  const slots = new Map<string, GeometryArtifactManifest['slots'][number]>()
   const materialSlot = new Map<THREE.Material, string>()
   const toRemove: THREE.Object3D[] = []
   let cutout = false
@@ -248,7 +252,7 @@ function readConventions(root: THREE.Object3D) {
       toRemove.push(object)
       return
     }
-    if (object.name === 'cutout') cutout = true
+    if (isCutter(object.name)) cutout = true
     if (object.name === 'collider') collider = true
 
     const mesh = object as THREE.Mesh
@@ -260,16 +264,36 @@ function readConventions(root: THREE.Object3D) {
     for (const material of materials) {
       if (materialSlot.has(material)) continue
       const authored = material.name ?? ''
-      if (authored.toLowerCase() === 'glass') {
-        materialSlot.set(material, 'glass')
-        continue
-      }
       const slotId =
         slugify(conventionId(authored, 'slot_') ?? authored) || `material_${slots.size + 1}`
       material.name = `slot_${slotId}`
       materialSlot.set(material, slotId)
-      if (!slots.has(slotId))
-        slots.set(slotId, authored.startsWith('slot_') ? undefined : authored || undefined)
+      const surface = material as THREE.MeshStandardMaterial & { transmission?: number }
+      const hints = {
+        color: surface.color?.isColor ? `#${surface.color.getHexString()}` : undefined,
+        roughness: surface.roughness,
+        metalness: surface.metalness,
+        // Faintly translucent shades and alpha-cut leaves are not glass; the viewer's glass cut-off.
+        transparent:
+          (surface.transmission ?? 0) > 0 || (material.transparent && material.opacity < 0.6),
+        emissive:
+          (surface.emissiveIntensity ?? 0) > 0 &&
+          (surface.emissive?.r > 0 || surface.emissive?.g > 0 || surface.emissive?.b > 0),
+      }
+      const previous = slots.get(slotId)
+      if (previous) {
+        // A shared slot with conflicting materials has no single authored tone to match.
+        for (const key of ['color', 'roughness', 'metalness', 'transparent'] as const) {
+          if (previous[key] !== hints[key]) delete previous[key]
+        }
+        previous.emissive ||= hints.emissive
+      } else {
+        slots.set(slotId, {
+          id: slotId,
+          label: (conventionId(authored, 'slot_') ?? authored) || undefined,
+          ...hints,
+        })
+      }
     }
   })
   for (const object of toRemove) object.parent?.remove(object)
@@ -278,7 +302,7 @@ function readConventions(root: THREE.Object3D) {
     parts,
     anchors,
     lights,
-    slots: [...slots].map(([id, label]) => ({ id, label })),
+    slots: [...slots.values()],
     cutout,
     collider,
     triangles,
@@ -316,6 +340,41 @@ function convexHull(points: [number, number][]): [number, number][] {
     upper.push(point)
   }
   return [...lower.slice(0, -1), ...upper.slice(0, -1)]
+}
+
+function readCutters(
+  root: THREE.Object3D,
+  mount: GeometryScriptMount,
+): NonNullable<GeometryArtifactManifest['cutters']> {
+  const cutters: NonNullable<GeometryArtifactManifest['cutters']> = []
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || !isCutter(mesh.name)) return
+    if (
+      mesh.name === 'cut:wall' ||
+      (mesh.name === 'cutout' && (mount === 'wall' || mount === 'wall-side'))
+    )
+      return
+    const positions = mesh.geometry.getAttribute('position')
+    const index = mesh.geometry.getIndex()
+    const points = Array.from({ length: positions.count }, (_, i) =>
+      new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld),
+    )
+    const triangles: Ring[] = []
+    for (let i = 0; i < (index?.count ?? positions.count); i += 3) {
+      const triangle = [0, 1, 2].map((j) => points[index ? index.getX(i + j) : i + j]!)
+      const [a, b, c] = triangle
+      if (Math.abs((b!.x - a!.x) * (c!.z - a!.z) - (b!.z - a!.z) * (c!.x - a!.x)) < 1e-10) continue
+      triangles.push(triangle.map((p): [number, number] => [p.x, p.z]))
+    }
+    const host = (mesh.name === 'cutout' ? 'mounted' : mesh.name.slice(4)) as NonNullable<
+      GeometryArtifactManifest['cutters']
+    >[number]['host']
+    const minY = points.reduce((y, p) => Math.min(y, p.y), Infinity)
+    const maxY = points.reduce((y, p) => Math.max(y, p.y), -Infinity)
+    for (const region of union(triangles)) cutters.push({ host, polygon: region.outer, minY, maxY })
+  })
+  return cutters
 }
 
 /**
@@ -665,7 +724,8 @@ const manifestBytes = (manifest: GeometryArtifactManifest) =>
 
 /**
  * The manifest rides inline in the node, so it stays under
- * GEOMETRY_MANIFEST_MAX_BYTES: outlines are thinned, then the smallest
+ * GEOMETRY_MANIFEST_MAX_BYTES: outlines are thinned (cutter footprints only
+ * when still over, since a coarser footprint changes the hole), then the smallest
  * surfaces and undersides go first (placement falls back to the bounds there),
  * then trailing part entries. The build itself never fails over its size.
  */
@@ -682,6 +742,9 @@ function compactManifest(manifest: GeometryArtifactManifest): GeometryArtifactMa
     outlineArea(b.polygon) - outlineArea(a.polygon)
   next.surfaces.sort(bySize)
   next.undersides.sort(bySize)
+  if (manifestBytes(next) > GEOMETRY_MANIFEST_MAX_BYTES) {
+    next.cutters = next.cutters?.map((cutter) => ({ ...cutter, polygon: thin(cutter.polygon) }))
+  }
   while (manifestBytes(next) > GEOMETRY_MANIFEST_MAX_BYTES) {
     const last = (list: { polygon: [number, number][] }[]) =>
       list.length ? outlineArea(list[list.length - 1]!.polygon) : Number.POSITIVE_INFINITY
@@ -794,6 +857,7 @@ export async function compileGeometryScript(
         name: clip.name,
         duration: Math.round(clip.duration * 1000) / 1000,
       })),
+      cutters: readCutters(root, mount),
       cutout: conventions.cutout,
       collider: conventions.collider,
       triangles: conventions.triangles,

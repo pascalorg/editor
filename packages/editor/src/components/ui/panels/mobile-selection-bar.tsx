@@ -2,9 +2,9 @@
 
 import type { AnyNode } from '@pascal-app/core'
 import { Copy, Move, SlidersHorizontal, Trash2 } from 'lucide-react'
-import Image from 'next/image'
 import type { MouseEventHandler } from 'react'
 import { cn } from '../../../lib/utils'
+import { NodeIconImage } from '../node-icon-image'
 import { getNodeDisplay } from './node-display'
 
 interface MobileSelectionBarProps {
@@ -45,7 +45,7 @@ export function MobileSelectionBar({
         onClick={onEdit}
         type="button"
       >
-        <Image
+        <NodeIconImage
           alt=""
           className="shrink-0 rounded object-contain"
           height={20}

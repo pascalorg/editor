@@ -1,5 +1,6 @@
 import type { SceneStore } from './types'
 
+export * from './disk-artifact-store'
 export * from './slug'
 export * from './sqlite-scene-store'
 export * from './types'

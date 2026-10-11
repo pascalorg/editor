@@ -1,4 +1,7 @@
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
+import { resolveStairConstruction } from './stair-construction'
+import { resolveStairArcDimensions } from './stair-layout'
+import { resolveStairWinder, resolveStairWinderFootprint } from './stair-winder'
 
 /**
  * Stair footprint geometry shared by the slab-opening sync and the
@@ -36,7 +39,10 @@ export function rotateXZ(x: number, z: number, angle: number): [number, number] 
  * the chain ±90° (left / right) or continues straight (front). Positions are in
  * the stair's local frame (before the stair's own `position` / `rotation`).
  */
-export function computeSegmentTransforms(segments: StairSegmentNode[]): SegmentTransform[] {
+export function computeSegmentTransforms(
+  segments: readonly (Pick<StairSegmentNode, 'width' | 'length' | 'height' | 'attachmentSide'> &
+    Partial<Pick<StairSegmentNode, 'stepCount' | 'winder'>>)[],
+): SegmentTransform[] {
   const transforms: SegmentTransform[] = []
   let currentX = 0
   let currentY = 0
@@ -59,22 +65,30 @@ export function computeSegmentTransforms(segments: StairSegmentNode[]): SegmentT
     let attachZ = 0
     let rotationDelta = 0
 
-    switch (segment.attachmentSide) {
-      case 'front':
-        attachX = 0
-        attachZ = previous.length
-        break
-      case 'left':
-        attachX = previous.width / 2
-        attachZ = previous.length / 2
-        rotationDelta = Math.PI / 2
-        break
-      case 'right':
-        attachX = -previous.width / 2
-        attachZ = previous.length / 2
-        rotationDelta = -Math.PI / 2
-        break
-    }
+    const winder = previous.winder
+      ? resolveStairWinder({ ...previous, stepCount: previous.stepCount ?? 1 })
+      : null
+    if (winder) {
+      attachX = winder.exit.position[0]
+      attachZ = winder.exit.position[2]
+      rotationDelta = winder.exit.rotation
+    } else
+      switch (segment.attachmentSide) {
+        case 'front':
+          attachX = 0
+          attachZ = previous.length
+          break
+        case 'left':
+          attachX = previous.width / 2
+          attachZ = previous.length / 2
+          rotationDelta = Math.PI / 2
+          break
+        case 'right':
+          attachX = -previous.width / 2
+          attachZ = previous.length / 2
+          rotationDelta = -Math.PI / 2
+          break
+      }
 
     const [deltaX, deltaZ] = rotateXZ(attachX, attachZ, currentRot)
     currentX += deltaX
@@ -120,26 +134,27 @@ function straightStairAABB(
 ): StairFootprintAABB | null {
   const segments = (stair.children ?? [])
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
-    .filter(
-      (segment): segment is StairSegmentNode =>
-        segment?.type === 'stair-segment' && segment.visible !== false,
-    )
+    .filter((segment): segment is StairSegmentNode => segment?.type === 'stair-segment')
   if (segments.length === 0) return null
 
   const transforms = computeSegmentTransforms(segments)
   const box = emptyBox()
   segments.forEach((segment, index) => {
     const transform = transforms[index]
-    if (!transform) return
+    if (!transform || segment.visible === false) return
     const halfWidth = segment.width / 2
+    const nose =
+      segment.segmentType === 'landing'
+        ? 0
+        : (resolveStairConstruction(segment, stair)?.nosing ?? 0)
     // Segment-local footprint: X across the flight, Z along the run from the
     // attachment edge (0) to the far edge (length).
-    for (const [cornerX, cornerZ] of [
-      [-halfWidth, 0],
-      [halfWidth, 0],
+    for (const [cornerX, cornerZ] of resolveStairWinderFootprint(segment, stair) ?? [
+      [-halfWidth, -nose],
+      [halfWidth, -nose],
       [halfWidth, segment.length],
       [-halfWidth, segment.length],
-    ] as const) {
+    ]) {
       const [offsetX, offsetZ] = rotateXZ(cornerX, cornerZ, transform.rotation)
       extendByLocal(box, stair, transform.position[0] + offsetX, transform.position[2] + offsetZ)
     }
@@ -149,40 +164,21 @@ function straightStairAABB(
 
 const ARC_SAMPLES = 48
 
-function getSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
-  if ((stair.topLandingMode ?? 'none') !== 'integrated') return 0
-
-  const innerRadius = Math.max(0.05, stair.innerRadius ?? 0.9)
-  const width = Math.max(stair.width ?? 1, 0.4)
-  const landingDepth = Math.max(0.3, stair.topLandingDepth ?? Math.max(width * 0.9, 0.8))
-
-  return (
-    Math.min(Math.PI * 0.75, landingDepth / Math.max(innerRadius + width / 2, 0.1)) *
-    Math.sign(sweepAngle || 1)
-  )
-}
-
 /** Bounding box of a curved / spiral stair's annular sector (plus the
  *  integrated spiral top landing when present). */
 function arcStairAABB(stair: StairNode): StairFootprintAABB | null {
-  const isSpiral = stair.stairType === 'spiral'
-  const minInnerRadius = isSpiral ? 0.05 : 0.2
-  const innerRadius = Math.max(minInnerRadius, stair.innerRadius ?? (isSpiral ? 0.2 : 0.9))
-  const width = Math.max(stair.width ?? 1, 0.4)
-  const outerRadius = innerRadius + width
-
-  const rawSweep = stair.sweepAngle ?? (isSpiral ? Math.PI * 2 : Math.PI / 2)
-  let sweep = rawSweep
-  // A full revolution would make the arc degenerate; clamp just under 2π the
-  // same way the floor-plan emitter does so the sampled box stays correct.
-  if (Math.abs(sweep) >= Math.PI * 2) sweep = Math.sign(sweep || 1) * (Math.PI * 2 - 0.001)
-  const half = sweep / 2
+  const layout = resolveStairArcDimensions(stair, 0)
+  const { innerRadius, outerRadius } = layout
+  const rawSweep = layout.sweepAngle
+  const sweep =
+    Math.sign(rawSweep || 1) * Math.min(Math.abs(rawSweep + layout.nosingSweep), Math.PI * 2)
+  const start = -rawSweep / 2 - layout.nosingSweep
 
   const box = emptyBox()
   // Sample both rims across the sweep — the extremes can fall on either the
   // arc ends or an axis crossing in between, so we need the full sweep.
   for (let step = 0; step <= ARC_SAMPLES; step += 1) {
-    const angle = -half + (sweep * step) / ARC_SAMPLES
+    const angle = start + (sweep * step) / ARC_SAMPLES
     const cos = Math.cos(angle)
     const sin = Math.sin(angle)
     extendByLocal(box, stair, cos * innerRadius, sin * innerRadius)
@@ -191,8 +187,8 @@ function arcStairAABB(stair: StairNode): StairFootprintAABB | null {
 
   // Integrated spiral top landing renders as an angular extension of the
   // annular stair body, not as a rectangular box outside the outer rim.
-  if (isSpiral && stair.topLandingMode === 'integrated') {
-    const landingSweep = getSpiralLandingSweep(stair, rawSweep)
+  if (layout.landingSweep) {
+    const landingSweep = layout.landingSweep
     const landingSteps = Math.max(1, Math.ceil(Math.abs(landingSweep) / (Math.PI / 24)))
     for (let step = 0; step <= landingSteps; step += 1) {
       const angle = rawSweep / 2 + (landingSweep * step) / landingSteps
@@ -231,25 +227,28 @@ export function stairArrivalOpening(
   if (stair.stairType === 'straight') {
     const segments = stair.children
       .map((id) => nodes[id])
-      .filter(
-        (node): node is StairSegmentNode =>
-          node?.type === 'stair-segment' && node.visible !== false,
-      )
+      .filter((node): node is StairSegmentNode => node?.type === 'stair-segment')
     const segment = segments.at(-1)
     const transform = computeSegmentTransforms(segments).at(-1)
     if (!segment || !transform) return []
+    const winder = resolveStairWinder(segment)
     const point = (x: number): [number, number] => {
-      const [dx, dz] = rotateXZ(x, segment.length, transform.rotation)
+      const [localX, localZ] = winder
+        ? (() => {
+            const [dx, dz] = rotateXZ(x, 0, winder.exit.rotation)
+            return [winder.exit.position[0] + dx, winder.exit.position[2] + dz]
+          })()
+        : [x, segment.length]
+      const [dx, dz] = rotateXZ(localX!, localZ!, transform.rotation)
       return [transform.position[0] + dx, transform.position[2] + dz]
     }
     start = point(-segment.width / 2)
     end = point(segment.width / 2)
   } else {
-    const spiral = stair.stairType === 'spiral'
-    const inner = Math.max(spiral ? 0.05 : 0.2, stair.innerRadius ?? (spiral ? 0.2 : 0.9))
-    const sweep = stair.sweepAngle ?? (spiral ? Math.PI * 2 : Math.PI / 2)
-    const angle = sweep / 2 + (spiral ? getSpiralLandingSweep(stair, sweep) : 0)
-    const outer = inner + Math.max(stair.width ?? 1, 0.4)
+    const layout = resolveStairArcDimensions(stair, 0)
+    const inner = layout.innerRadius
+    const outer = layout.outerRadius
+    const angle = layout.sweepAngle / 2 + layout.landingSweep
     start = [Math.cos(angle) * inner, Math.sin(angle) * inner]
     end = [Math.cos(angle) * outer, Math.sin(angle) * outer]
   }

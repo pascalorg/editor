@@ -22,7 +22,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSelectedRoom, useZoneRoom } from '../../../hooks/use-selected-room'
 import { FloorOpeningPanel } from './floor-opening-panel'
 import { OpenRoomPanel, RoomPanel } from './room-panel'
@@ -31,6 +31,7 @@ import { shouldShowEditingControls } from '../../../lib/interaction/overlay-poli
 import { captureElementActionOrigin, completeElementAction } from '../../../lib/room-zone-routing'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { duplicateNodeAndPickUp } from '../../editor/duplicate-node'
 import { deleteSelection, duplicateSelectionAndPickUp, startGroupPickUp } from '../../editor/group-actions'
 import { resolveHomogeneousSelection } from './homogeneous-selection'
 import { MobilePanelSheet } from './mobile-panel-sheet'
@@ -38,6 +39,7 @@ import { MobileSelectionBar } from './mobile-selection-bar'
 import { MultiParametricInspector } from './multi-parametric-inspector'
 import { MultiSelectionPanel } from './multi-selection-panel'
 import { getNodeDisplay, getTypeDisplay } from './node-display'
+import { InspectedNodesContext } from './panel-wrapper'
 import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
 import { formatSelectionBreakdown } from './selection-breakdown'
@@ -130,18 +132,8 @@ function MobilePanelLayer({
   }, [node, setMovingNode, clearSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!isMovableNode(node)) return
-    sfxEmitter.emit('sfx:item-pick')
-    const cloned = structuredClone(node) as MovableNode & { id?: AnyNodeId }
-    delete (cloned as { id?: AnyNodeId }).id
-    const prevMeta =
-      cloned.metadata && typeof cloned.metadata === 'object' && !Array.isArray(cloned.metadata)
-        ? (cloned.metadata as Record<string, unknown>)
-        : {}
-    cloned.metadata = { ...prevMeta, isNew: true }
-    setMovingNode(cloned as MovableNode)
-    clearSelection()
-  }, [node, setMovingNode, clearSelection])
+    if (isMovableNode(node)) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!node) return
@@ -276,72 +268,96 @@ export function PanelManager({
     }
   }, [selectedIds, selectedZoneId, room, setSelectedReferenceId])
 
+  // What the card shows, for its Collections section: a room is its zone.
+  const inspectedKey =
+    room && selectedIds.length === 0
+      ? room.zoneId
+      : panelZoneId && zoneRoom
+        ? panelZoneId
+        : selectedReferenceId
+          ? ''
+          : selectedIds.length === 0
+            ? (selectedZoneId ?? '')
+            : selectedIds.join(',')
+  const inspectedIds = useMemo(
+    () => (inspectedKey ? (inspectedKey.split(',') as AnyNodeId[]) : []),
+    [inspectedKey],
+  )
+
   if (!shouldShowEditingControls(readOnly)) return null
 
-  if (room && selectedIds.length === 0) return <RoomPanel room={room} />
-  if (selectedNodeType === 'floor-opening' && selectedIds[0])
-    return <FloorOpeningPanel key={selectedIds[0]} openingId={selectedIds[0]} />
-  if (zoneRoom && panelZoneId) {
-    const closeZone = () => setSelection({ selectedIds: [], zoneId: null })
-    return zoneRoom.record ? (
-      <RoomPanel onClose={closeZone} room={zoneRoom.record} />
-    ) : (
-      <OpenRoomPanel key={panelZoneId} onClose={closeZone} zoneId={panelZoneId} />
-    )
-  }
+  return (
+    <InspectedNodesContext.Provider value={inspectedIds}>
+      {renderPanel()}
+    </InspectedNodesContext.Provider>
+  )
 
-  if (isMobile) {
-    if (selectedReferenceId) {
-      return <MobilePanelLayer isReference={true} node={null} panel={<ReferencePanel />} />
+  function renderPanel() {
+    if (room && selectedIds.length === 0) return <RoomPanel room={room} />
+    if (selectedNodeType === 'floor-opening' && selectedIds[0])
+      return <FloorOpeningPanel key={selectedIds[0]} openingId={selectedIds[0]} />
+    if (zoneRoom && panelZoneId) {
+      const closeZone = () => setSelection({ selectedIds: [], zoneId: null })
+      return zoneRoom.record ? (
+        <RoomPanel onClose={closeZone} room={zoneRoom.record} />
+      ) : (
+        <OpenRoomPanel key={panelZoneId} onClose={closeZone} zoneId={panelZoneId} />
+      )
     }
-    if (selectedIds.length > 1) {
+
+    if (isMobile) {
+      if (selectedReferenceId) {
+        return <MobilePanelLayer isReference={true} node={null} panel={<ReferencePanel />} />
+      }
+      if (selectedIds.length > 1) {
+        return (
+          <MobileMultiPanelLayer
+            breakdown={multiBreakdown}
+            panel={
+              homogeneousType ? (
+                <MultiParametricInspector footer={multiSelectionFooter} />
+              ) : (
+                <MultiSelectionPanel footer={multiSelectionFooter} />
+              )
+            }
+            type={homogeneousType}
+          />
+        )
+      }
       return (
-        <MobileMultiPanelLayer
-          breakdown={multiBreakdown}
-          panel={
-            homogeneousType ? (
-              <MultiParametricInspector footer={multiSelectionFooter} />
-            ) : (
-              <MultiSelectionPanel footer={multiSelectionFooter} />
-            )
-          }
-          type={homogeneousType}
+        <MobilePanelLayer
+          isReference={false}
+          node={selectedNode}
+          panel={panelForType(selectedNodeType)}
         />
       )
     }
-    return (
-      <MobilePanelLayer
-        isReference={false}
-        node={selectedNode}
-        panel={panelForType(selectedNodeType)}
-      />
-    )
-  }
 
-  // Show reference panel if a reference is selected
-  if (selectedReferenceId) {
-    return <ReferencePanel />
-  }
-
-  if (selectedZoneId && selectedIds.length === 0) {
-    return (
-      <ParametricInspector
-        footer={inspectorFooter}
-        key={selectedZoneId}
-        nodeId={selectedZoneId as AnyNodeId}
-        onClose={() => setSelection({ zoneId: null })}
-      />
-    )
-  }
-
-  // Multi-selection: parametric inspector when every resolved id shares a type,
-  // otherwise the actions-only panel. Mobile uses the same panels in a sheet.
-  if (selectedIds.length > 1) {
-    if (homogeneousType) {
-      return <MultiParametricInspector footer={multiSelectionFooter} />
+    // Show reference panel if a reference is selected
+    if (selectedReferenceId) {
+      return <ReferencePanel />
     }
-    return <MultiSelectionPanel footer={multiSelectionFooter} />
-  }
 
-  return panelForType(selectedNodeType, inspectorFooter)
+    if (selectedZoneId && selectedIds.length === 0) {
+      return (
+        <ParametricInspector
+          footer={inspectorFooter}
+          key={selectedZoneId}
+          nodeId={selectedZoneId as AnyNodeId}
+          onClose={() => setSelection({ zoneId: null })}
+        />
+      )
+    }
+
+    // Multi-selection: parametric inspector when every resolved id shares a type,
+    // otherwise the actions-only panel. Mobile uses the same panels in a sheet.
+    if (selectedIds.length > 1) {
+      if (homogeneousType) {
+        return <MultiParametricInspector footer={multiSelectionFooter} />
+      }
+      return <MultiSelectionPanel footer={multiSelectionFooter} />
+    }
+
+    return panelForType(selectedNodeType, inspectorFooter)
+  }
 }

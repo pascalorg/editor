@@ -13,7 +13,7 @@ import { MaterialSchema } from '../material'
  * post out so the rails die into a post already standing there (a porch's
  * 6x6); `postThrough` runs the posts past the cap with a cap of their own.
  */
-export const FenceStyle = z.enum(['slat', 'rail', 'privacy', 'horizontal', 'guard'])
+export const FenceStyle = z.enum(['slat', 'rail', 'privacy', 'horizontal', 'guard', 'picket'])
 export const FenceGuardInfill = z.enum(['balusters', 'cable', 'boards'])
 /**
  * 'grounded' — a kickboard on the ground; 'floating' — no base, the panel
@@ -24,10 +24,51 @@ export const FenceGuardInfill = z.enum(['balusters', 'cable', 'boards'])
  */
 export const FenceBaseStyle = z.enum(['floating', 'grounded', 'raised'])
 export const FencePostCap = z.enum(['none', 'flat', 'pyramid'])
+export const FenceSurfaceMode = z.enum(['auto', 'selected', 'level'])
+export const FenceTransitionMode = z.enum(['slope', 'step', 'break'])
+export const FencePatternDistribution = z.enum([
+  'automatic',
+  'fixed-spacing',
+  'fixed-count',
+  'maximum-spacing',
+  'equal-fit',
+])
+
+export function maxFencePicketRailProjection(postSize: number): number {
+  return Math.max(0, postSize - 0.001)
+}
+
+export function clampFencePicketRailProjection(projection: number, postSize: number): number {
+  return Math.min(Math.max(projection, 0), maxFencePicketRailProjection(postSize))
+}
+export const FenceFeature = z.object({
+  id: z.string(),
+  kind: z.enum(['gate', 'opening']),
+  center: z.number().finite().nonnegative(),
+  width: z.number().finite().positive(),
+  matchFenceStyle: z.boolean().optional(),
+  matchFenceHeight: z.boolean().optional(),
+  leafType: z.enum(['single', 'double']).optional(),
+  style: z.enum(['match', ...FenceStyle.options]).optional(),
+  height: z.number().finite().min(0.3).max(1000).optional(),
+  clearance: z.number().finite().min(0).max(1000).optional(),
+  thickness: z.number().finite().min(0.02).max(0.3).optional(),
+  frameWidth: z.number().finite().min(0.025).max(0.2).optional(),
+  spacing: z.number().finite().min(0.04).max(1000).optional(),
+  boardWidth: z.number().finite().min(0.02).max(0.3).optional(),
+  hinge: z.enum(['left', 'right']).optional(),
+  swing: z.enum(['inward', 'outward']).optional(),
+  openAngle: z.number().finite().min(0).max(170).optional(),
+  leafSplit: z.number().finite().min(0.2).max(0.8).optional(),
+  brace: z.enum(['none', 'diagonal', 'cross']).optional(),
+  showHardware: z.boolean().optional(),
+  showPosts: z.boolean().optional(),
+})
 
 export const FenceNode = BaseNode.extend({
   id: objectId('fence'),
   type: nodeType('fence'),
+  children: z.array(z.string()).default([]),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),
@@ -42,6 +83,7 @@ export const FenceNode = BaseNode.extend({
   // that read endpoints (handles, bbox, miter references) stay valid. Absent =
   // the straight or single-arc fence defined by start/end (+ curveOffset).
   path: z.array(z.tuple([z.number(), z.number()])).optional(),
+  spanModes: z.array(z.enum(['straight', 'curve'])).optional(),
   // Optional per-control-point tangent handles, parallel to `path` (same
   // length when present). Each entry is the OUT-handle offset vector [dx, dy]
   // from its path point, in level meters; the IN handle is its mirror so the
@@ -53,19 +95,35 @@ export const FenceNode = BaseNode.extend({
   // Persisted slab-support host — the fence sits on that slab's walking
   // surface (see ItemNode.supportSlabId for the host rules).
   supportSlabId: z.string().optional(),
-  // Manual vertical offset from the elected slab or level support. This moves
-  // the complete fence body without changing its height.
+  // Top surface selected when drawing on a shaped node. The sampled surface
+  // is resolved again for both preview and committed geometry.
+  supportSurfaceNodeId: z.string().optional(),
+  // Manual vertical offset from the elected slab, shaped surface, or level base.
   supportOffset: z.number().finite().optional(),
+  surfaceMode: FenceSurfaceMode.default('auto'),
+  transitionMode: FenceTransitionMode.default('slope'),
+  transitionWidth: z.number().min(0.2).max(5).default(0.8),
   curveOffset: z.number().optional(),
   baseHeight: z.number().default(0.22),
   postSpacing: z.number().default(2),
+  picketSpacing: z.number().default(0.27),
+  patternDistribution: FencePatternDistribution.default('automatic'),
+  patternAlignment: z.enum(['start', 'center', 'end']).default('center'),
+  patternCount: z.number().int().min(1).max(500).default(4),
+  patternRemainder: z.enum(['leave', 'spread']).default('leave'),
+  picketWidth: z.number().positive().default(0.07),
+  picketTop: z.enum(['flat', 'pointed', 'rounded', 'dog-ear']).default('flat'),
+  picketProfile: z.enum(['level', 'arched', 'scalloped', 'alternating']).default('level'),
+  picketTopClearance: z.number().nonnegative().default(0.2),
+  picketVariation: z.number().nonnegative().default(0.23),
+  picketRailProjection: z.number().positive().default(0.001),
+  picketRailCount: z.number().int().min(2).max(3).default(2),
   postSize: z.number().default(0.1),
   topRailHeight: z.number().default(0.04),
   groundClearance: z.number().default(0),
   edgeInset: z.number().default(0.015),
   // Reveal between the boards of a `horizontal` fence (0 = flush cladding).
   slatGap: z.number().default(0.01),
-  // Topper drawn on each `horizontal`-fence post.
   postCap: FencePostCap.default('pyramid'),
   baseStyle: FenceBaseStyle.default('grounded'),
   showInfill: z.boolean().default(true),
@@ -74,6 +132,7 @@ export const FenceNode = BaseNode.extend({
   startPost: z.boolean().optional(),
   endPost: z.boolean().optional(),
   postThrough: z.boolean().optional(),
+  infillPlacement: z.enum(['center', 'front', 'back']).default('center'),
   color: z.string().default('#ffffff'),
   style: FenceStyle.default('slat'),
 }).describe(
@@ -81,13 +140,18 @@ export const FenceNode = BaseNode.extend({
   Fence node - used to represent a fence segment in the building/site level coordinate system
   - start/end: fence endpoints in level coordinate system
   - path: optional list of [x, y] points; when set (>= 2) the centerline is a smooth spline through them
+  - spanModes: straight or curved choice for each path span
+  - children: independently selectable gates and open passages
   - tangents: optional per-point handle vectors (parallel to path); null entries fall back to the automatic tangent
   - height/thickness: overall fence dimensions in meters
   - supportSlabId: optional slab host; the fence stands on that slab's walking surface (elevation)
+  - supportSurfaceNodeId: optional shaped surface whose top the fence follows
   - supportOffset: manual vertical offset from the elected support surface
+  - surfaceMode: auto follows the highest top, selected follows one chosen top, level holds the starting elevation
   - curveOffset: midpoint sagitta offset used to bend the fence into an arc (ignored when path is set)
   - baseHeight/postSpacing/postSize/topRailHeight: exact geometric controls from the plan3D fence model
   - groundClearance/edgeInset/baseStyle: fence support and inset configuration ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground) ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground) ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground)
+  - patternDistribution/patternAlignment/patternCount/patternRemainder: repeated-piece layout
   - showInfill: whether to draw intermediate posts/slats between end posts
   - color/style: visual appearance options ('guard': a DCA 6 deck guard — guardInfill balusters | cable | boards, startPost / endPost false where the rails die into a standing post, postThrough for posts past the cap; balusters, both end posts and no postThrough when absent)
   `,

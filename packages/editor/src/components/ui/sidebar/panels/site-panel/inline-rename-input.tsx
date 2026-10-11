@@ -3,8 +3,10 @@ import { Pencil } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from './../../../../../lib/utils'
 
-interface InlineRenameInputProps {
-  nodeId: AnyNodeId
+interface InlineRenameFieldProps {
+  name: string | undefined
+  /** Receives the trimmed name, or `undefined` when cleared. */
+  onRename: (name: string | undefined) => void
   isEditing: boolean
   onStopEditing: () => void
   defaultName: string
@@ -14,17 +16,34 @@ interface InlineRenameInputProps {
   onStartEditing?: () => void
 }
 
+type InlineRenameInputProps = Omit<InlineRenameFieldProps, 'name' | 'onRename'> & {
+  nodeId: AnyNodeId
+}
+
+/** Renames a scene node through `updateNode`. */
 export const InlineRenameInput = memo(function InlineRenameInput({
   nodeId,
+  ...props
+}: InlineRenameInputProps) {
+  const updateNode = useScene((s) => s.updateNode)
+  const name = useScene((s) => s.nodes[nodeId]?.name)
+  const handleRename = useCallback(
+    (next: string | undefined) => updateNode(nodeId, { name: next }),
+    [nodeId, updateNode],
+  )
+  return <InlineRenameField {...props} name={name} onRename={handleRename} />
+})
+
+export const InlineRenameField = memo(function InlineRenameField({
+  name,
+  onRename,
   isEditing,
   onStopEditing,
   defaultName,
   displayName,
   className,
   onStartEditing,
-}: InlineRenameInputProps) {
-  const updateNode = useScene((s) => s.updateNode)
-  const name = useScene((s) => s.nodes[nodeId]?.name)
+}: InlineRenameFieldProps) {
   const [value, setValue] = useState(name || '')
   const inputRef = useRef<HTMLInputElement>(null)
   const inputSize = Math.max((value || defaultName).length, 1)
@@ -45,10 +64,10 @@ export const InlineRenameInput = memo(function InlineRenameInput({
   const handleSave = useCallback(() => {
     const trimmed = value.trim()
     if (trimmed !== name) {
-      updateNode(nodeId, { name: trimmed || undefined })
+      onRename(trimmed || undefined)
     }
     onStopEditing()
-  }, [value, nodeId, name, updateNode, onStopEditing])
+  }, [value, name, onRename, onStopEditing])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {

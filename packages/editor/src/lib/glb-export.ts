@@ -40,6 +40,8 @@ import {
 } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { createExportTextureUtils, type ExportTextureUtils } from './export-texture-utils'
 import { cloneExportUserData } from './export-user-data'
+import { isIfcRolePart } from './ifc-parts'
+import { nodeDisplayLabel } from './node-display-label'
 import {
   type CompressedTextureDecompressor,
   decompressCanonicalNormalMaps,
@@ -480,7 +482,10 @@ function startSceneExportPreparation(
 
   for (const [id, original] of registryEntries) {
     const node = nodes[id]
-    if (!node) continue
+    if (!node) {
+      excludedObjects.add(original)
+      continue
+    }
     const installedPlugins = sceneState.hasExplicitPluginInstallState
       ? sceneState.installedPlugins
       : undefined
@@ -593,7 +598,7 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
     if (clone) identityNodes.add(clone)
   }
 
-  pruneNonRenderableMeshes(scene, identityNodes)
+  const warnings = pruneNonRenderableMeshes(scene, identityNodes)
   sanitizeMaterialGroups(scene, identityNodes)
   convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
 
@@ -625,7 +630,7 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   return {
     scene,
     animations: animation.clips,
-    warnings: [],
+    warnings,
     dispose: () => {
       if (disposed) return
       disposed = true
@@ -1004,7 +1009,16 @@ const PLACEHOLDER_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
  */
 function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE.Object3D>) {
   const toRemove: THREE.Object3D[] = []
+  const warnings: string[] = []
   root.traverse((object) => {
+    if (toRemove.some((ancestor) => isDescendantOf(object, ancestor))) return
+    if (typeof object.userData.pascalExportRefusal === 'string') {
+      warnings.push(
+        `Skipped ${object.name || object.userData.pascalId || 'object'}: ${object.userData.pascalExportRefusal}`,
+      )
+      toRemove.push(object)
+      return
+    }
     if (object.userData.pascalExport === 'strip') {
       toRemove.push(object)
       return
@@ -1063,6 +1077,7 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
   for (const object of toRemove) {
     object.removeFromParent()
   }
+  return warnings
 }
 
 /**
@@ -1758,42 +1773,6 @@ function bakeWindowClip(
  * (e.g. `pascalSwingLeaf`, cached-material flags) leaks into glTF extras — the
  * file describes itself with exactly the fields a consumer needs.
  */
-/**
- * Human-readable label for a baked node, mirroring the viewer's `getNodeName`:
- * an explicit name wins, items fall back to their catalog asset name, other
- * kinds to a capitalized type. Levels override this with their display name.
- */
-function nodeDisplayLabel(node: AnyNode): string {
-  if (node.name) return node.name
-  switch (node.type) {
-    case 'item':
-      return (node as { asset?: { name?: string } }).asset?.name || 'Item'
-    case 'wall':
-      return 'Wall'
-    case 'door':
-      return 'Door'
-    case 'window':
-      return 'Window'
-    case 'cabinet':
-    case 'cabinet-module':
-      return 'Cabinet'
-    case 'slab':
-      return 'Slab'
-    case 'ceiling':
-      return 'Ceiling'
-    case 'roof':
-      return 'Roof'
-    case 'fence':
-      return 'Fence'
-    case 'column':
-      return 'Column'
-    case 'stair':
-      return 'Stairs'
-    default:
-      return node.type
-  }
-}
-
 function stampIdentity(
   scene: THREE.Object3D,
   cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,
@@ -1814,9 +1793,20 @@ function stampIdentity(
           activeWindow?: [number, number]
         }
       | undefined
+    const surfaceNodeIds = object.userData.surfaceNodeIds
+    const ifcRole = object.userData.pascalIfcRole
+    const ifcParts = object.userData.pascalIfcParts
     const slotId = object.userData.slotId
     object.userData =
       typeof presentationId === 'string' ? { pascalPresentationId: presentationId, label } : {}
+    if (
+      Array.isArray(surfaceNodeIds) &&
+      surfaceNodeIds.every((id) => typeof id === 'string' && nodes[id])
+    )
+      object.userData.surfaceNodeIds = surfaceNodeIds
+    if (typeof ifcRole === 'string') object.userData.pascalIfcRole = ifcRole
+    if (Array.isArray(ifcParts) && ifcParts.every(isIfcRolePart))
+      object.userData.pascalIfcParts = ifcParts
     if (typeof slotId === 'string') object.userData.slotId = slotId
     if (motion) {
       object.userData.proceduralMotion = {
@@ -1882,6 +1872,6 @@ function stampIdentity(
       extras.rotation = (node as { rotation?: number }).rotation ?? 0
       target.visible = true
     }
-    target.userData = extras
+    target.userData = { ...target.userData, ...extras }
   }
 }

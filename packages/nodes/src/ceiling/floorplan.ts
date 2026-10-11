@@ -1,8 +1,10 @@
-import type {
-  CeilingNode,
-  FloorplanGeometry,
-  FloorplanPoint,
-  GeometryContext,
+import {
+  type CeilingNode,
+  cutterContextNodes,
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+  hostedCutterHoles,
 } from '@pascal-app/core'
 
 /**
@@ -34,7 +36,7 @@ export function buildCeilingFloorplan(
 
   const segments: string[] = [ring(outer)]
   const holes = node.holes ?? []
-  for (const hole of holes) {
+  for (const hole of [...holes, ...hostedCutterHoles(node, cutterContextNodes(node, ctx))]) {
     if (hole.length < 3) continue
     segments.push(ring(hole.map(([x, z]) => [x, z] as FloorplanPoint)))
   }

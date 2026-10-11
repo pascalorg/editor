@@ -370,6 +370,7 @@ export type FenceConstructionOptions = {
   supportCap?: number | null
   preferredSupportSlabId?: string | null
   constructionElevation?: number | null
+  supportSurfaceNodeId?: AnyNodeId | null
 }
 
 export function resolveFenceConstructionSupport(
@@ -378,6 +379,13 @@ export function resolveFenceConstructionSupport(
   nodes: Record<string, AnyNode>,
   options?: FenceConstructionOptions,
 ): FenceNode {
+  if (options?.supportSurfaceNodeId && nodes[options.supportSurfaceNodeId]) {
+    return {
+      ...fence,
+      supportSlabId: undefined,
+      supportSurfaceNodeId: options.supportSurfaceNodeId,
+    }
+  }
   const supportPatch = resolveFenceSupportSlabPatch({ ...fence, parentId: levelId }, nodes, {
     maxElevation: options?.supportCap ?? null,
     preferredSlabId: options?.preferredSupportSlabId ?? null,

@@ -10,7 +10,6 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
-  type FencePlanPoint,
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
@@ -24,6 +23,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { moveFenceEndpointDragAction } from './actions/move-endpoint'
+import type { FencePlanPoint } from './drafting'
 
 /**
  * Phase 5 Stage D — thin React wrapper around `moveFenceEndpointDragAction`.

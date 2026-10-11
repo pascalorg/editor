@@ -6,6 +6,7 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import { doorSlots } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import { doorBatchable } from '../shared/node-batch/batchable'
@@ -29,8 +30,8 @@ import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorMechanism } from './mechanism'
 import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
+import { DOOR_PLACEMENT_HINTS } from './placement'
 import { DoorNode } from './schema'
-import { doorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
@@ -317,6 +318,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
+    ...DOOR_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

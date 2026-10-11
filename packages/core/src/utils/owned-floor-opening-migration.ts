@@ -1,12 +1,127 @@
 import { canonicalOpeningRing } from '../lib/canonical-opening-ring'
-import { area, type Ring } from '../lib/polygon-boolean'
-import type { AnyNode, CeilingNode, SlabNode, StairNode } from '../schema'
+import { area, type Ring, union } from '../lib/polygon-boolean'
+import type { AnyNode, CeilingNode, SlabNode, StairNode, StairSegmentNode } from '../schema'
 import { FloorOpeningNode } from '../schema/nodes/floor-opening'
 import { syncAutoElevatorOpenings } from '../systems/elevator/elevator-opening-sync'
 import { ensureMissingSlabOpenings } from '../systems/slab/ensure-slab-openings'
+import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
 import { syncAutoStairOpenings } from '../systems/stair/stair-opening-sync'
-import { syncStairRises } from '../systems/stair/stair-rise-query'
+import { resolveStairTotalRise, syncStairRises } from '../systems/stair/stair-rise-query'
 import { loadMapMigration, loadMigration } from './load-migration'
+
+// Saved implicit openings used this geometry. Materializing them must not redesign a floor on load.
+function legacyStairOpening(
+  stair: StairNode,
+  nodes: Record<string, AnyNode>,
+  target: number,
+  offset: number,
+): Ring[] {
+  if (stair.slabOpeningMode !== 'destination') return []
+  const world = ([x, z]: [number, number]): [number, number] => {
+    const [rx, rz] = rotateXZ(x, z, stair.rotation ?? 0)
+    return [rx + stair.position[0], rz + stair.position[2]]
+  }
+  if (stair.stairType === 'spiral') {
+    const radius =
+      Math.max(0.05, stair.innerRadius ?? 0.9) + Math.max(stair.width ?? 1, 0.4) + offset
+    return [
+      Array.from({ length: 48 }, (_, i) =>
+        world([Math.cos((i * Math.PI) / 24) * radius, Math.sin((i * Math.PI) / 24) * radius]),
+      ),
+    ]
+  }
+  if (stair.stairType === 'curved') {
+    const inner = Math.max(0.01, (stair.innerRadius ?? 0.9) - offset),
+      outer = (stair.innerRadius ?? 0.9) + Math.max(stair.width ?? 1, 0.4) + offset
+    const total = stair.sweepAngle ?? Math.PI / 2
+    const sweep =
+      Math.sign(total || 1) *
+      Math.min(
+        Math.abs(total),
+        Math.abs(total) * Math.max(0.8, 1 / Math.max(stair.stepCount ?? 1, 1)) +
+          (offset / Math.max(inner, 0.1)) * 2,
+      )
+    const count = Math.max(
+      10,
+      Math.min(
+        32,
+        Math.ceil(Math.abs(sweep) / (Math.PI / 24) + Math.max(stair.stepCount ?? 1, 1) * 0.5),
+      ),
+    )
+    const arc = (radius: number) =>
+      Array.from({ length: count + 1 }, (_, i) => {
+        const angle = total / 2 - sweep + (sweep * i) / count
+        return world([Math.cos(angle) * radius, Math.sin(angle) * radius])
+      })
+    return [[...arc(outer), ...arc(inner).reverse()]]
+  }
+  const segments = stair.children
+    .map((id) => nodes[id])
+    .filter(
+      (node): node is StairSegmentNode => node?.type === 'stair-segment' && node.visible !== false,
+    )
+  const transforms = computeSegmentTransforms(segments)
+  const threshold = Math.max(
+    (resolveStairTotalRise(stair, nodes) / Math.max(stair.stepCount ?? 10, 1)) * 2,
+    0.35,
+  )
+  const slice = (index: number, start: number): Ring => {
+    const segment = segments[index]!,
+      transform = transforms[index]!
+    const length = Math.max(segment.length - start, 0.0001)
+    return [
+      [-segment.width / 2, start],
+      [segment.width / 2, start],
+      [segment.width / 2, start + length],
+      [-segment.width / 2, start + length],
+    ].map(([x, z]) => {
+      const [rx, rz] = rotateXZ(x!, z!, transform.rotation)
+      return [rx + transform.position[0], rz + transform.position[2]]
+    })
+  }
+  const rectangles: Ring[] = []
+  for (const [index, segment] of segments.entries()) {
+    const top =
+      transforms[index]!.position[1] + (segment.segmentType === 'stair' ? segment.height : 0)
+    if (Math.abs(target - top) > threshold) continue
+    const depth =
+      segment.segmentType === 'landing'
+        ? segment.length
+        : Math.min(
+            segment.length,
+            Math.max(
+              Math.max(
+                0.2,
+                segment.length / Math.max(segment.stepCount || stair.stepCount || 10, 1),
+              ) * 10,
+              segment.length * 0.8,
+              3,
+            ),
+          )
+    const polygon = slice(index, Math.max(0, segment.length - depth))
+    const minX = Math.min(...polygon.map(([x]) => x)) - (offset > 1e-6 ? offset : 0),
+      maxX = Math.max(...polygon.map(([x]) => x)) + (offset > 1e-6 ? offset : 0)
+    const minZ = Math.min(...polygon.map(([, z]) => z)) - (offset > 1e-6 ? offset : 0),
+      maxZ = Math.max(...polygon.map(([, z]) => z)) + (offset > 1e-6 ? offset : 0)
+    rectangles.push(
+      [
+        [minX, minZ],
+        [maxX, minZ],
+        [maxX, maxZ],
+        [minX, maxZ],
+      ].map(([x, z]) => [Number(x!.toFixed(6)), Number(z!.toFixed(6))]),
+    )
+  }
+  if (rectangles.length) return union(rectangles).map((region) => region.outer.map(world))
+  let lastFlight = -1
+  for (let index = segments.length - 1; index >= 0; index--)
+    if (segments[index]!.segmentType === 'stair') {
+      lastFlight = index
+      break
+    }
+  const fallback = lastFlight >= 0 ? lastFlight : segments.length - 1
+  return fallback >= 0 ? [slice(fallback, 0).map(world)] : []
+}
 
 function materializeLegacyAutoOpeningsOnView(
   sourceNodes: Record<string, unknown>,
@@ -58,7 +173,9 @@ function materializeLegacyAutoOpeningsOnView(
   let pending = true
   while (pending) {
     pending = false
-    for (const derive of [syncAutoElevatorOpenings, syncStairRises, syncAutoStairOpenings]) {
+    const legacyStairUpdates = (view: Record<string, AnyNode>) =>
+      syncAutoStairOpenings(view, legacyStairOpening)
+    for (const derive of [syncAutoElevatorOpenings, syncStairRises, legacyStairUpdates]) {
       const updates =
         derive === syncStairRises
           ? syncStairRises(nodes, (stair: StairNode) => stair.position[1], true)

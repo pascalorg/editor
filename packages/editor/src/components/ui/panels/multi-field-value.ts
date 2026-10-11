@@ -125,9 +125,12 @@ export function buildMultiNodePatches(
       patch = { ...patch, ...parametrics.derive(next, patch, node) } as Partial<AnyNode>
     }
     updates.push({ id, data: patch })
-    if (parametrics?.reconcile) {
-      const next = { ...node, ...patch } as AnyNode
-      followUps.push(...parametrics.reconcile(node, next))
+  }
+  if (parametrics?.reconcile) {
+    const proposed = { ...nodes }
+    for (const { id, data } of updates) proposed[id] = { ...nodes[id], ...data } as AnyNode
+    for (const { id } of updates) {
+      followUps.push(...parametrics.reconcile(nodes[id]!, proposed[id]!, proposed))
     }
   }
   return [...updates, ...followUps]

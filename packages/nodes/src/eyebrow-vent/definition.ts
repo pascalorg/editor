@@ -1,6 +1,7 @@
 import {
   EyebrowVentNode as EyebrowVentNodeSchema,
   type EyebrowVentNode as EyebrowVentNodeType,
+  eyebrowVentSlots,
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
@@ -127,10 +128,7 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
   },
 
   capabilities: {
-    slots: () => [
-      { slotId: 'hood', label: 'Hood', default: 'library:preset-softwhite' },
-      { slotId: 'front', label: 'Louvers', default: 'library:preset-softwhite' },
-    ],
+    slots: eyebrowVentSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

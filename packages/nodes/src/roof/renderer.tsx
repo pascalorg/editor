@@ -92,9 +92,19 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
 
   // The gable band is clad like the walls below it (their assemblies).
   const wallCladdingRef = useScene((state) => levelWallCladdingRef(state.nodes, node))
+  const sceneMaterials = useScene((state) => state.materials)
   const customMaterial = useMemo(
-    () => getRoofMaterialArray(node, shading, textures, colorPreset, sceneTheme, wallCladdingRef),
-    [node, shading, textures, colorPreset, sceneTheme, wallCladdingRef],
+    () =>
+      getRoofMaterialArray(
+        node,
+        shading,
+        textures,
+        colorPreset,
+        sceneTheme,
+        wallCladdingRef,
+        sceneMaterials,
+      ),
+    [node, shading, textures, colorPreset, sceneTheme, wallCladdingRef, sceneMaterials],
   )
 
   const material = debugColors

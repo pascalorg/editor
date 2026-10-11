@@ -4,6 +4,7 @@ import {
   BlockNode,
   BuildingNode,
   CeilingNode,
+  type Collection,
   ColumnNode,
   containsPoint,
   DEFAULT_LEVEL_HEIGHT,
@@ -21,10 +22,12 @@ import {
   WallNode,
   WindowNode,
   ZoneNode,
+  zoneColorForSeed,
 } from '@pascal-app/core'
 import * as WebIFC from 'web-ifc'
 import { extractBeamGeometry } from './beam-geometry'
 import { type IfcConversionSimplificationOptions, simplifyConvertedSceneGraph } from './cleanup'
+import { importCollections } from './collections'
 import { doorGlazingStyle, doorStyleFromIfcOperation } from './door-semantics'
 import { nextId, seedIds } from './ids'
 import { applyRoomFirstStructure } from './room-first'
@@ -41,7 +44,7 @@ export type PascalNode = AnyNode
 export interface PascalSceneGraph {
   nodes: Record<AnyNodeId, AnyNode>
   rootNodeIds: AnyNodeId[]
-  collections?: Record<string, unknown>
+  collections?: Record<string, Collection>
 }
 
 // Pascal's BaseNode.metadata is typed as `Record<string, unknown>` — an
@@ -2478,6 +2481,7 @@ export async function convertIfcToPascal(
           object: 'node',
           id: nodeId,
           type: 'zone',
+          color: zoneColorForSeed(nodeId),
           name: longName || spaceName || `Space ${i + 1}`,
           parentId: parentNodeId,
           visible: true,
@@ -2885,6 +2889,7 @@ export async function convertIfcToPascal(
 
   fitSitePolygons()
 
+  const collections = importCollections(ifcApi, modelID, nodes, expressIdToNodeId)
   ifcApi.CloseModel(modelID)
 
   progress('Building scene graph...', 95)
@@ -2913,5 +2918,6 @@ export async function convertIfcToPascal(
   return {
     nodes,
     rootNodeIds: rootNodeIds as AnyNodeId[],
+    collections,
   }
 }

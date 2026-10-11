@@ -24,6 +24,7 @@ export function catalogLightSource(
   nodeId: AnyNodeId,
   effect: LightEffect,
   interactive: Interactive,
+  localScale?: readonly [number, number, number],
 ): LightSource {
   const toggleIndex = interactive.controls.findIndex((control) => control.kind === 'toggle')
   const sliderIndex = interactive.controls.findIndex((control) => control.kind === 'slider')
@@ -36,6 +37,15 @@ export function catalogLightSource(
     getWorldPosition: (out) => {
       const object = sceneRegistry.nodes.get(nodeId)
       if (!object) return false
+      if (localScale) {
+        out.set(
+          effect.offset[0] * localScale[0],
+          effect.offset[1] * localScale[1],
+          effect.offset[2] * localScale[2],
+        )
+        object.localToWorld(out)
+        return true
+      }
       object.getWorldPosition(out)
       out.set(out.x + effect.offset[0], out.y + effect.offset[1], out.z + effect.offset[2])
       return true

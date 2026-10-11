@@ -67,6 +67,46 @@ function register(kind: string, capabilities: Capabilities = {}) {
 }
 
 describe('item surface boundaries', () => {
+  test('scripted shelves use the scaled mesh hit while catalog items keep their authored height', () => {
+    const catalog = ItemNode.parse({
+      asset: { ...asset, dimensions: [1.2, 2, 0.36], surface: { height: 2 } },
+      scale: [2, 1.5, 2],
+    })
+    const scripted = ItemNode.parse({
+      ...catalog,
+      source: {
+        kind: 'script',
+        script: 'a'.repeat(64),
+        artifact: 'b'.repeat(64),
+        manifest: {
+          bounds: { min: [-0.6, 0, -0.18], max: [0.6, 2, 0.18] },
+          triangles: 60,
+        },
+      },
+    })
+    for (const y of [0.7446, 1.3032, 1.8618, 2.4204, 3]) {
+      const args = {
+        childKind: 'item',
+        childFootprint: { size: [0.1, 0.2, 0.1] as const, rotationY: 0 },
+        hit: { point: [0.23, y, 0.04] as const, normalWorldY: 1 },
+        snapScalar: (value: number) => Math.round(value / 0.1) * 0.1,
+        scene,
+      }
+      expect(resolveSurfacePlacement({ ...args, host: scripted })?.position).toEqual([0.2, y, 0])
+      expect(resolveSurfacePlacement({ ...args, host: catalog })?.position).toEqual([0.2, 3, 0])
+      expect(
+        resolveSurfacePlacement({ ...args, host: scripted, hit: { ...args.hit, normalWorldY: 0 } }),
+      ).toBeNull()
+      expect(
+        resolveSurfacePlacement({
+          ...args,
+          host: scripted,
+          hit: { ...args.hit, normalWorldY: -1 },
+        }),
+      ).toBeNull()
+    }
+  })
+
   test('rejects non-finite hit Y with and without authored heights', () => {
     for (const y of [Number.NaN, Infinity, -Infinity])
       for (const authored of [false, true]) {

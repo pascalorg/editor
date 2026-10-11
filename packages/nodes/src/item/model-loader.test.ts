@@ -304,3 +304,52 @@ describe('ItemGLTFLoader', () => {
     }
   })
 })
+
+test('ItemGLTFLoader decodes required meshopt data without renderer configuration', async () => {
+  const encoded =
+    'oAAAATwAAAD//wE8AAAAfn0AAAEMAAAA/wEMAAAAfgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=='
+  const json = {
+    asset: { version: '2.0' },
+    extensionsUsed: ['EXT_meshopt_compression'],
+    extensionsRequired: ['EXT_meshopt_compression'],
+    buffers: [
+      { uri: `data:application/octet-stream;base64,${encoded}`, byteLength: 67 },
+      { byteLength: 36, extensions: { EXT_meshopt_compression: { fallback: true } } },
+    ],
+    bufferViews: [
+      {
+        buffer: 1,
+        byteLength: 36,
+        extensions: {
+          EXT_meshopt_compression: {
+            buffer: 0,
+            byteLength: 67,
+            byteStride: 12,
+            count: 3,
+            mode: 'ATTRIBUTES',
+          },
+        },
+      },
+    ],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: 'VEC3',
+        min: [0, 0, 0],
+        max: [1, 1, 0],
+      },
+    ],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    nodes: [{ name: 'part_panel', mesh: 0, extras: { anchor: 'top' } }],
+    scenes: [{ nodes: [0] }],
+    scene: 0,
+  }
+  const gltf = await new ItemGLTFLoader().parseAsync(JSON.stringify(json), '')
+  const panel = gltf.scene.getObjectByName('part_panel') as import('three').Mesh
+  expect(Array.from(panel.geometry.getAttribute('position').array)).toEqual([
+    0, 0, 0, 1, 0, 0, 0, 1, 0,
+  ])
+  expect(panel.userData.anchor).toBe('top')
+})

@@ -119,3 +119,45 @@ test('baked lights in nested motion groups anchor at their design-space pivot', 
   reg!.getWorldPosition(out)
   expect(out.x).toBeCloseTo(3.5)
 })
+
+test('a scripted window opens and lights from its base, and a music box plays its named clip', () => {
+  const source = (animations: string[], lights: unknown[] = []) => ({
+    manifest: {
+      bounds: { min: [-0.5, 0, -0.1], max: [0.5, 1.2, 0.1] },
+      lights,
+      animations: animations.map((name) => ({ name, duration: 1 })),
+    },
+  })
+  const lamp = { position: [0.2, 1, 0.3], color: '#ffffff', intensity: 2, distance: 3 }
+  const items = buildGlbInteractiveItems({
+    nodes: {
+      window_fan: { type: 'window', name: 'Fanlight', source: source(['open', 'close'], [lamp]) },
+      item_box: {
+        type: 'item',
+        asset: { name: 'Music box' },
+        source: source(['loop', 'Princess twirl']),
+      },
+    },
+  } as unknown as SceneGraph)
+  expect(
+    items.map(({ pascalId, label, height, scripted }) => [pascalId, label, height, scripted]),
+  ).toEqual([
+    ['window_fan', 'Fanlight', 0.6, true],
+    ['item_box', 'Music box', 1.2, true],
+  ])
+  expect(items[0]!.interactive.controls.map((control) => control.label)).toEqual(['Lights', 'Open'])
+  expect(items[1]!.interactive.controls).toEqual([
+    { kind: 'toggle', label: 'Princess twirl', default: false },
+  ])
+  // The window is placed by its centre; the script's light sits 1 m above its base.
+  const opening = new Group()
+  opening.position.set(0, 1.6, 0)
+  opening.rotation.y = Math.PI / 2
+  opening.scale.x = -1
+  const [reg] = buildGlbLightRegs([items[0]!], new Map([['window_fan', opening]]))
+  const out = new Vector3()
+  reg!.getWorldPosition(out)
+  expect(out.y).toBeCloseTo(1.6 - 0.6 + 1)
+  expect(out.x).toBeCloseTo(0.3)
+  expect(out.z).toBeCloseTo(0.2)
+})

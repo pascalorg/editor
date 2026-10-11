@@ -157,36 +157,34 @@ them by name:
 
 ### 5. Cut doors and windows
 
-The agent uses `cut_opening` to add entry doors on each interior partition
-and windows on the south and east façades:
+The agent uses `add_door` for the entry doors on each interior partition and
+`add_window` for the windows on the south and east façades:
 
 ```jsonc
-// tool: cut_opening  (called once per opening)
+// tool: add_window  (called once per window)
 {
-  "name": "cut_opening",
+  "name": "add_window",
   "arguments": {
     "wallId": "wall-south",       // perimeter wall [0,0] → [10,0]
-    "type": "window",
-    "position": 0.25,             // 25% along centerline
+    "t": 0.25,                    // 25% along centerline
     "width": 1.2,
     "height": 1.2
   }
 }
-// → { "openingId": "window-south-1" }
+// → { "windowId": "window-south-1", ... }
 ```
 
 ```jsonc
 {
-  "name": "cut_opening",
+  "name": "add_door",
   "arguments": {
     "wallId": "wall-bed1",        // partition wall to Bedroom 1
-    "type": "door",
-    "position": 0.4,
+    "t": 0.4,
     "width": 0.9,
     "height": 2.1
   }
 }
-// → { "openingId": "door-bed1" }
+// → { "doorId": "door-bed1", ... }
 ```
 
 The agent repeats this for Bedroom 2's door, the bathroom door, and two

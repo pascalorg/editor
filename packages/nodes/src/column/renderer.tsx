@@ -2,7 +2,12 @@
 
 import {
   type AnyNodeId,
+  COLUMN_BASE_DEFAULT,
+  COLUMN_CAPITAL_DEFAULT,
+  COLUMN_FRAME_DEFAULT,
+  COLUMN_SHAFT_DEFAULT,
   type ColumnNode,
+  type ColumnSlotId,
   collectDescendants,
   createSceneApi,
   useLiveNodeOverrides,
@@ -29,6 +34,7 @@ import {
 } from '@pascal-app/viewer'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
+import { ScriptedOpeningModel } from '../shared/scripted-opening'
 import {
   columnCapitalBlocks,
   columnShaftLayout,
@@ -37,13 +43,6 @@ import {
   getShaftSegmentCount,
   getShaftTwistRadians,
 } from './shape'
-import {
-  COLUMN_BASE_DEFAULT,
-  COLUMN_CAPITAL_DEFAULT,
-  COLUMN_FRAME_DEFAULT,
-  COLUMN_SHAFT_DEFAULT,
-  type ColumnSlotId,
-} from './slots'
 
 type ColumnSlotMaterials = Record<ColumnSlotId, Material>
 type SceneMaterials = ReturnType<typeof useScene.getState>['materials']
@@ -2233,7 +2232,7 @@ export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
     <ColumnMaterialContext.Provider value={materials}>
       <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
         <group ref={groupRef}>
-          <ColumnBody node={node} />
+          {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}
         </group>
       </ColumnEdgeSoftnessContext.Provider>
     </ColumnMaterialContext.Provider>
@@ -2251,6 +2250,8 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
     () => (liveOverride ? ({ ...rawNode, ...liveOverride } as ColumnNode) : rawNode),
     [rawNode, liveOverride],
   )
+  const scriptedColumn = Boolean(node.source)
+  const modelData = useMemo(() => ({ scriptedColumn }), [scriptedColumn])
   const handlers = useNodeEvents(node, 'column')
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const shading = useViewer((state) => state.shading)
@@ -2294,9 +2295,10 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
           ref={ref}
           rotation={[0, liveTransform?.rotation ?? node.rotation, 0]}
           visible={node.visible}
+          userData={modelData}
           {...handlers}
         >
-          <ColumnBody node={node} />
+          {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}
           {node.children.map((id) => (
             <NodeRenderer key={id} nodeId={id as AnyNodeId} />
           ))}

@@ -33,8 +33,12 @@ const platform = () =>
 const paint = (role: string, materialPreset?: string) =>
   slabPaint.commit({ node: platform(), role, material: undefined, materialPreset })
 const shows = (role: string) =>
-  slabPaint.getEffectiveMaterial?.({ node: platform(), role, nodes: useScene.getState().nodes })
-    ?.materialPreset
+  slabPaint.getEffectiveMaterial?.({
+    materials: useScene.getState().materials,
+    node: platform(),
+    role,
+    nodes: useScene.getState().nodes,
+  })?.materialPreset
 
 function build(textures = false): Group {
   const nodes = useScene.getState().nodes as Record<string, AnyNode>

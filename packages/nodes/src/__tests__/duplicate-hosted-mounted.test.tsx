@@ -457,9 +457,10 @@ for (const view of ['3d', '2d'])
         JSON.stringify({
           measurement: useScene.getState().nodes[measurement.id],
           zone: useScene.getState().nodes[zone.id],
-          collections: useScene.getState().collections,
         })
       const originals = references()
+      // Copies join the collections their sources are in.
+      const members = () => useScene.getState().collections.collection_original!.nodeIds
       const renderer = await create(<Scene menu />)
       try {
         const copy = await duplicate(renderer)
@@ -467,6 +468,7 @@ for (const view of ['3d', '2d'])
         expect(useScene.getState().nodes[host.id]?.children).toEqual([root.id, copy.id])
         expect(references()).toBe(originals)
         const childId = (useScene.getState().nodes[copy.id] as ItemNode).children[0]!
+        expect(members()).toEqual([root.id, leaf.id, copy.id, childId])
         const pointer = view === '3d' ? pointerDispatcher(hostKind !== 'block') : null
         const point =
           hostKind === 'wall'
@@ -492,6 +494,7 @@ for (const view of ['3d', '2d'])
         expect(placed.children).toHaveLength(1)
         expect(useScene.getState().nodes[host.id]?.children).toEqual([root.id, placed.id])
         expect(references()).toBe(originals)
+        expect(members()).toEqual([root.id, leaf.id, placed.id, placed.children[0]!])
         const after = snapshot()
         await act(async () => useScene.temporal.getState().undo())
         await settle(renderer)

@@ -29,7 +29,7 @@ import { RenderPipeline, TimestampQuery, type WebGPURenderer } from 'three/webgp
 import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/backdrop'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
-import { inkedEdges } from '../../lib/ink-edges'
+import { createEdgeDepthSampler, inkedEdges } from '../../lib/ink-edges'
 import { refreshIsolation } from '../../lib/isolation'
 import { LayerPassIndex, LayerPassNode } from '../../lib/layer-pass'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
@@ -466,6 +466,7 @@ const PostProcessingPasses = ({
       // Scene depth is shared by SSGI, ink, and outlines.
       // The normal MRT is only built when SSGI or ink needs it.
       const scenePassDepth = scenePass.getTextureNode('depth')
+      const sampleEdgeDepth = createEdgeDepthSampler(scenePassDepth, camera)
       let scenePassNormal: any = null
       if (needsNormalMRT) {
         scenePass.setMRT(
@@ -529,11 +530,7 @@ const PostProcessingPasses = ({
         // (same ≈150→350 m window as ink-edges' distanceFade) so the horizon
         // disc and the geometry↔sky depth cliff never grow an AO band — that
         // band read as a visible line along the horizon.
-        const aoFarFade = smoothstep(
-          tslFloat(0.9994),
-          tslFloat(0.9998),
-          scenePassDepth.sample(screenUV).r,
-        )
+        const aoFarFade = smoothstep(tslFloat(0.9994), tslFloat(0.9998), sampleEdgeDepth(screenUV))
         ao = mix(ao, tslFloat(1), aoFarFade)
 
         // Composite: scene * AO + diffuse * GI
@@ -550,7 +547,7 @@ const PostProcessingPasses = ({
         sceneColor = vec4(
           inkedEdges({
             sceneRgb: sceneColor.rgb,
-            depthTex: scenePassDepth,
+            sampleDepth: sampleEdgeDepth,
             normalTex: scenePassNormal,
             inkColor: inkColorUniform.current,
             radius: inkRadius,

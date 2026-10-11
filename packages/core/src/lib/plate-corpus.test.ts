@@ -9,8 +9,8 @@ import { createRoomTopologyIndex } from './space-detection'
 
 const cases = [
   { id: 'scene-02', rooms: 8, group: [2] },
-  { id: 'scene-14', rooms: 3, group: [0, 1, 2] },
-  { id: 'scene-15', rooms: 5, group: [0] },
+  { id: 'scene-14', rooms: 4, group: [0, 1, 2] },
+  { id: 'scene-15', rooms: 6, group: [0] },
   { id: 'scene-18', rooms: 28, group: [10] },
   { id: 'scene-28', rooms: 7, group: [4, 6] },
 ]

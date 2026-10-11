@@ -8,7 +8,11 @@ import {
 /** One packed allocation per node mesh, for geometry each rebuild replaces. */
 export const nodeMeshBatchKey = (node: AnyNode, meshIndex: number) => `${node.id}:${meshIndex}`
 
-export const columnBatchable: BatchableConfig = { scope: 'level' }
+export const columnBatchable: BatchableConfig = {
+  scope: 'level',
+  excluded: (node) => itemClipRegistry.has(node.id),
+  settled: (data) => !data.scriptedColumn || data.itemModelSettled === true,
+}
 
 /** Ceiling undersides and slab bodies are trimmed by walls and rebuilt in place. */
 export const surfaceBatchable: BatchableConfig = {

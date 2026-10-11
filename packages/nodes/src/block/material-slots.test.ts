@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { createBoxBlockTopology } from '@pascal-app/core'
+import { blockMaterialSlotIds, createBoxBlockTopology } from '@pascal-app/core'
 import {
   assignBlockMaterial,
   blockMaterialSelection,
-  blockMaterialSlotIds,
   createAssignedBlockMaterialSlot,
   createBlockMaterialSlot,
   removeBlockMaterialSlot,

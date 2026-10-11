@@ -27,7 +27,7 @@ describe('delete_scene', () => {
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
-  test('deletes an existing scene and returns { deleted: true }', async () => {
+  test('deletes an existing scene and returns { deleted: true, hidden: false }', async () => {
     await store.save({ id: 'gone-in-60', name: 'Expendable', graph: emptyGraph })
 
     const result = await client.callTool({
@@ -36,7 +36,7 @@ describe('delete_scene', () => {
     })
     expect(result.isError).toBeFalsy()
     const parsed = parseToolText(result.content as StoredTextContent[])
-    expect(parsed.deleted).toBe(true)
+    expect(parsed).toEqual({ deleted: true, hidden: false })
     expect(await store.load('gone-in-60')).toBeNull()
   })
 

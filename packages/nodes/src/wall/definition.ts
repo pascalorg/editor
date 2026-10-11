@@ -5,6 +5,7 @@ import {
   getWallEffectiveHeightForNodes,
   type NodeDefinition,
   type WallNode as WallNodeType,
+  wallSlots,
 } from '@pascal-app/core'
 import {
   DRAFTING_SURFACE_EXTENSION_KEY,
@@ -36,7 +37,6 @@ import { type WallReferenceValue, wallReferenceModel, wallSettings } from './pan
 import { wallParametrics } from './parametrics'
 import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'
-import { wallSlots } from './slots'
 import { WALL_SPLIT_MAX_CUTS } from './split-preview'
 import { setWallSplitCuts } from './split-session'
 import { useWallSplit } from './split-store'

@@ -1,13 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../operations'
+import { registerAddColumn } from './add-column'
 import { type GeometryScriptHost, registerAddObject, registerGetSource } from './add-object'
 import { registerApplyPatch } from './apply-patch'
+import type { AssetCatalog } from './asset-catalog'
 import { registerCheckCollisions } from './check-collisions'
+import { registerClearScene } from './clear-scene'
 import { registerConstructionTools } from './construction-tools'
-import { registerCreateLevel } from './create-level'
 import { registerCreateUnit } from './create-unit'
-import { registerCreateWall } from './create-wall'
-import { registerCutOpening } from './cut-opening'
 import { registerDescribeNode } from './describe-node'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
@@ -17,19 +17,18 @@ import { registerListUnits } from './list-units'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerPlaceDesign } from './place-design'
-import { registerPlaceItem } from './place-item'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
 import { registerSetUnitMembers } from './set-unit-members'
 import { registerSetZone } from './set-zone'
 import { registerSharedTools } from './shared-tools'
-import { registerStructureTools } from './structure-tools'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
 import { registerValidateDesign } from './validate-design'
 import { registerValidateScene } from './validate-scene'
 import { registerVariantTools } from './variants'
+import { registerViewScene, type SceneViewHost } from './view-scene'
 
 /**
  * Register every non-vision MCP tool against the given server.
@@ -39,31 +38,36 @@ import { registerVariantTools } from './variants'
  * Scene-lifecycle tools (save/load/list/delete/rename scene) are registered
  * when persistence operations are available.
  */
+/** What the host lends the tools: its item library, script compiles, a view. */
+export type ToolHosts = {
+  catalog?: AssetCatalog
+  geometryScripts?: GeometryScriptHost
+  sceneViews?: SceneViewHost
+}
+
 export function registerTools(
   server: McpServer,
   operations: SceneOperations,
-  geometryScripts?: GeometryScriptHost,
+  { catalog, geometryScripts, sceneViews }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
   registerDescribeNode(server, operations)
   registerFindNodes(server, operations)
-  registerSharedTools(server, operations)
+  registerSharedTools(server, operations, catalog)
+  registerAddColumn(server, operations, geometryScripts)
   registerAddObject(server, operations, geometryScripts)
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
+  registerViewScene(server, operations, sceneViews)
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations, geometryScripts)
   registerApplyPatch(server, operations)
-  registerCreateLevel(server, operations)
+  registerClearScene(server, operations)
   registerCreateUnit(server, operations)
   registerSetUnitMembers(server, operations)
   registerListUnits(server, operations)
-  registerCreateWall(server, operations)
-  registerPlaceItem(server, operations)
   registerPlaceDesign(server, operations)
-  registerCutOpening(server, operations)
   registerSetZone(server, operations)
-  registerStructureTools(server, operations)
   registerUndo(server, operations)
   registerRedo(server, operations)
   registerExportJson(server, operations)

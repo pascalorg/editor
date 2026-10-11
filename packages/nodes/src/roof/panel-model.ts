@@ -6,7 +6,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
-  duplicateRoofSubtree,
+  duplicateNodeAndPickUp,
   type NodePanelModel,
   type PanelRow,
   triggerSFX,
@@ -147,9 +147,8 @@ export const roofPanelModel: NodePanelModel<RoofNode> = {
           id: 'duplicate',
           label: 'Duplicate',
           onSelect: () => {
-            if (!useScene.getState().nodes[node.id]) return
-            triggerSFX('sfx:item-pick')
-            duplicateRoofSubtree(node.id, { mode: 'move' })
+            const live = useScene.getState().nodes[node.id]
+            if (live) duplicateNodeAndPickUp(live)
           },
         },
         {

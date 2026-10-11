@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { SceneBridge } from '../bridge/scene-bridge'
-import { registerGetScene } from './get-scene'
+import { SceneBridge } from '@pascal-app/mcp/bridge'
+import { registerGetScene } from '@pascal-app/mcp/tools/get-scene'
 
 describe('get_scene', () => {
   let client: Client
@@ -47,5 +47,16 @@ describe('get_scene', () => {
     expect(
       Array.isArray((result.structuredContent as { rootNodeIds: unknown[] }).rootNodeIds),
     ).toBe(true)
+  })
+
+  test('returns explicit installed plugin IDs so an agent can discover its service context', async () => {
+    bridge.loadJSON({ ...bridge.exportJSON(), installedPlugins: ['pascal:architect'] })
+    const result = await client.callTool({ name: 'get_scene', arguments: {} })
+    expect(result.structuredContent?.installedPlugins).toEqual(['pascal:architect'])
+    const legacy = bridge.exportJSON()
+    delete legacy.installedPlugins
+    bridge.loadJSON(legacy)
+    const withoutInstallState = await client.callTool({ name: 'get_scene', arguments: {} })
+    expect(withoutInstallState.structuredContent).not.toHaveProperty('installedPlugins')
   })
 })

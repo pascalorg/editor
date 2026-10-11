@@ -7,9 +7,11 @@ Use when changing `door-clearance.ts`, `layout-clearance.ts`, `furnish_room`, `v
 
 | Source | Message / skip reason | Meaning |
 |---|---|---|
-| `furnish_room` skip | `blocks door clearance` | Pose hits door keep-out (real or planned) |
-| `furnish_room` skip | `overlaps another item` | Pose hits another floor item (gap required) |
-| `furnish_room` skip | `outside room bounds` | Pose leaves room polygon bounds |
+| `furnish_room` skip | `<item> (w × d m): in the way of door <id>` | Pose hits door keep-out (real or planned) |
+| `furnish_room` skip | `<item> (w × d m): too large for the room (w × d m)` | The item fits the room in no turn |
+| `furnish_room` skip | `<item> (w × d m): overlaps another item` | Pose hits another floor item (gap required) |
+| `furnish_room` skip | `<item> (w × d m): outside the room` | Pose leaves room polygon bounds |
+| `place_items` refusal | `blocks_door`, `too_large_for_room` | A floor item set in a door's keep-out, or too large for its room; names a spot that fits |
 | `verify_scene` | `Door … is blocked by item …` | Existing item in door keep-out |
 | `verify_scene` / `check_collisions` | `Items overlap: A and B` | Item–item footprint conflict |
 | `check_collisions` | `kind: item-aabb` | Same as overlap, structured |

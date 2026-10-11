@@ -9,15 +9,17 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Hammer, Layers, Settings } from 'lucide-react'
+import { Hammer, Layers, Palette, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
+import { useLocalArtifactStore } from '@/lib/local-artifact-store'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
+import { PaintPanel } from './paint-panel'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -67,6 +69,22 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     ),
   },
   {
+    id: 'paint',
+    label: 'Paint',
+    component: PaintPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Palette className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/paint.webp"
+        width={32}
+      />
+    ),
+  },
+  {
     id: 'settings',
     label: 'Settings',
     component: () => null,
@@ -109,6 +127,7 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+  useLocalArtifactStore()
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)

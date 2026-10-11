@@ -18,7 +18,11 @@ export {
   migrateSlabSlots,
 } from './floor-plate-migration'
 export { healScenePlanCoordinates } from './heal-plan-coordinates'
-export { type HealSceneResult, healSceneNodes } from './heal-scene-graph'
+export {
+  type HealSceneResult,
+  healSceneNodes,
+  repairClaimedParentLinks,
+} from './heal-scene-graph'
 export { migrateStructuralMaterialSlots } from './legacy-material-slots'
 export { materializeNodeDefaults, STRUCTURE_NODE_KINDS } from './node-defaults'
 export { normalizeLegacyStructure } from './normalize-legacy-structure'

@@ -69,6 +69,11 @@ await bundleMcpServer(
   path.join(packageDirectory, 'dist/services/pascal-mcp.mjs'),
   packageJson.version,
 )
+await bundleMcpServer(
+  path.join(packageDirectory, 'dist/services/geometry-script-worker.js'),
+  packageJson.version,
+  'packages/mcp/src/tools/geometry-script-worker.ts',
+)
 await assertFile(path.join(standaloneAppDirectory, 'server.js'))
 await rm(outputDirectory, { recursive: true, force: true })
 await mkdir(path.dirname(outputDirectory), { recursive: true })
@@ -122,13 +127,17 @@ console.log(
 console.log(`Digest ${sha256}`)
 console.log(`Release asset ${assetUrl}`)
 
-async function bundleMcpServer(output: string, version: string): Promise<void> {
+async function bundleMcpServer(
+  output: string,
+  version: string,
+  entry = 'packages/mcp/src/bin/pascal-mcp.ts',
+): Promise<void> {
   await mkdir(path.dirname(output), { recursive: true })
   const child = spawn(
     process.execPath,
     [
       'build',
-      path.join(repositoryRoot, 'packages/mcp/src/bin/pascal-mcp.ts'),
+      path.join(repositoryRoot, entry),
       '--outfile',
       output,
       '--target',

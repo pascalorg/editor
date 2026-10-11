@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { newZone } from '@pascal-app/core'
 import type { AnyNodeId } from '@pascal-app/core/schema'
-import { ZoneNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -54,7 +54,7 @@ export function registerSetZone(server: McpServer, bridge: SceneOperations): voi
         )
       }
 
-      const zone = ZoneNode.parse({
+      const zone = newZone({
         name: label,
         polygon: polygon as Array<[number, number]>,
         metadata: properties ?? {},

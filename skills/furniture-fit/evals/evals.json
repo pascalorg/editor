@@ -100,7 +100,7 @@
       "files": [],
       "expectations": [
         "Inspects the connected check_collisions schema before using candidate fields.",
-        "Passes exact candidate dimensions, target level, position, Y rotation, and minimum clearance without calling place_item.",
+        "Passes exact candidate dimensions, target level, position, Y rotation, and minimum clearance without calling place_items.",
         "Confirms the returned candidateItemId and keeps room containment separate from item collision evidence.",
         "Does not save, checkpoint, or leave a temporary node in the project.",
         "Falls back to a qualified preliminary report if the connected release lacks candidate support.",
