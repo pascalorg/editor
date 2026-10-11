@@ -1,4 +1,5 @@
 import { levelBuildingId } from '../building/level-duplication'
+import { coherenceChecklist } from '../coherence'
 import { getLevelDisplayName } from '../lib/level-name'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
@@ -10,6 +11,7 @@ import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import { EMPTY_SESSION } from './scene-checkpoint'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
   type ContentCounts,
@@ -19,6 +21,7 @@ import {
   levelsOf,
   nodesOnLevel,
 } from './scene-queries'
+import { reviewSince } from './scene-review'
 import type { AgentOperation, SceneNodes } from './types'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
@@ -464,14 +467,22 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   for (const check of checks)
     if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
   // What the edits since the host's checkpoint lost, by place.
-  const since = context.checkpoint
+  const hosted = context.checkpoint
     ? changesSince(context.checkpoint as SceneCheckpoint, nodes)
     : null
-  if (since) issues.push(...since.issues)
+  if (hosted) issues.push(...hosted.issues)
+  // The look back: what the agent did since a moment it named. The places the registered families
+  // lost count as issues, as a window gone from its place always did.
+  const session = context.session ?? EMPTY_SESSION
+  const since = typeof input?.since === 'string' ? reviewSince(session, input.since, nodes) : null
+  if (since?.places) issues.push(...since.places.issues)
   for (const check of checks)
     if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
+  // What the scene's parts do where they meet. `valid` stays the schema's word; this is the list a
+  // maker settles by fixing each item or saying why it stands.
+  const coherence = coherenceChecklist(nodes)
   return {
     result: {
       ok: true,
@@ -484,12 +495,19 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       levels,
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
-      hasIssues: issues.some((issue) => issue.severity !== 'info'),
+      coherence,
+      hasIssues:
+        issues.some((issue) => issue.severity !== 'info') ||
+        coherence.checklist.some((item) => item.status === 'open' && item.severity === 'error'),
       ...authoredObjects(nodes),
       ...Object.assign({}, ...reports.map((report) => report.run(nodes))),
-      ...(since && {
-        sinceCheckpoint: { name: context.checkpoint!.name, changes: since.changes },
+      ...(Object.keys(session.checkpoints).length
+        ? { checkpoints: Object.keys(session.checkpoints) }
+        : {}),
+      ...(hosted && {
+        sinceCheckpoint: { name: context.checkpoint!.name, changes: hosted.changes },
       }),
+      ...(since && { since }),
     },
   }
 }

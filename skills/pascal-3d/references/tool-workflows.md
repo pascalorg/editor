@@ -51,11 +51,30 @@ If a live-sync version conflict occurs, call `load_scene`, inspect the newer gra
 
 ## Build a scripted object (hosted)
 
-`add_object`, and `add_window`, `add_door` or `add_column` with `code` or new params on a scripted node, compile in the user's open Pascal editor tab of the project. When none is open the call answers `editor_tab_required` with `editorUrl` and `mutationApplied: false`; nothing changed. Show the user the link, wait until they confirm the tab is open, and repeat the same call. `editor_tab_timeout` means the tab stopped answering; ask whether it is still open, then retry. `script_failed` is the module's own error: fix the code.
+`add_object`, and `add_window`, `add_door` or `add_column` with `code` or new params on a scripted node, compile in the user's open Pascal editor tab of the project. When none is open the call answers `editor_tab_required` with `editorUrl` and `mutationApplied: false`; nothing changed. Show the user the link, wait until they confirm the tab is open, and repeat the same call. `editor_tab_busy` means a tab is open but busy or still loading: wait a few seconds and repeat the same call, without asking the user. Whether you may open the link yourself is the person's setting ("Agents may open the editor for me"; Ask first: ask the user to open the link (or bring the tab forward), or ask their permission before opening it yourself; Allow: you may open the link yourself, in a tab in front; Never: ask the user, and do not open or switch windows yourself); the refusal's words say which, so follow them. `editor_tab_timeout` means the tab stopped answering; ask whether it is still open, then retry. `script_failed` is the module's own error: fix the code.
+
+## Wrap a window around a corner
+
+Where a photo's glass meets at a corner with no wall between the panes, build one corner window rather than two windows near the corner (which leave it solid).
+
+1. `get_walls` on the level: the corner is the point the two walls end at, `[x, z]`.
+2. `add_corner_window({ corner, width?, post? })`: one window on each wall, both running to the corner and joined; `post: "post"` puts a thin post at the corner, the default fuses the glass. Pass `wallIds` only when more than two walls end there.
+3. Read `windowIds`, `wallIds` and `angle` in the answer. `corner_angle` means the walls meet under 10° or over 170°: along a straight run one `add_window` is the window. `verify_scene` points two unjoined windows at one corner back to this tool.
+4. Two windows already built that open a corner (one on each wall, each within 0.30 m of it) or sit side by side on one wall (at most 0.30 m between, nothing between): `merge_windows({ windowIds: [a, b] })` makes them one window instead of building a new pair. Name first the window whose height, sill and type you want kept. It refuses, with a code and a sentence, anything it cannot join (`windows_not_adjacent`, `opening_between`, `window_not_at_corner`, `corner_angle`, `window_already_joined`).
+
+## Name a room the walls already enclose
+
+When walls are drawn first, `create_room` over them names the room they make instead of adding a second zone: `zoneId` is the existing room's. If that room has a name of its own (not a number the editor gave it), the call is refused with `room_named_by_person`, worded with its name: pass `rename: true` only when the person asked for the rename; otherwise ask them. Never rename a room unasked. The editor's own room tool behaves as before; the refusal is for agents.
+
+## When a call is refused `invalid_input`
+
+The arguments are the wrong shape or type for the tool's schema, and nothing ran. Read the refusal's `error`, fix the arguments and call again. Codes a tool raises itself (`invalid_update`, `cannot_enclose`, `room_named_by_person`) are not `invalid_input`: they name what the scene refused.
 
 ## Look at the result
 
-`view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) and `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat). A server with no renderer answers `view_unavailable`. A picture is not a measure.
+`view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat), and `editor_tab_busy` means it is open but busy or still loading, and carries no link (wait a few seconds and repeat; if it is still busy after about a minute, tell the person; do not ask them to open anything). A server with no renderer answers `view_unavailable`. A picture is not a measure.
+
+Optional `view_scene({ interior: { levelId } })` looks into one explicit floor as a capture-only cutaway, excluding its roof/ceiling and other floors. It preserves the live view and refuses pending/failed assets or a scene that changed since planning. A person may instead orbit the floor with existing presentation settings; neither path imposes a construction or review recipe.
 
 ## Start over
 

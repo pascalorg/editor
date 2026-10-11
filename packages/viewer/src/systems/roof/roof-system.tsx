@@ -35,6 +35,7 @@ import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
+import { isRevealAssembling } from '../construction-reveal/construction-reveal'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -164,6 +165,27 @@ const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
 const MAX_SEGMENTS_PER_FRAME = 3
 
+/** What each roof's shell was last merged from: its node and its segments, as the store held them. */
+const mergedFrom = new Map<AnyNodeId, Map<string, AnyNode>>()
+
+function rememberMergedInputs(roof: RoofNode, nodes: Record<string, AnyNode>) {
+  const inputs = new Map<string, AnyNode>()
+  for (const id of [roof.id, ...(roof.children ?? [])]) {
+    const node = nodes[id]
+    if (node) inputs.set(id, node)
+  }
+  mergedFrom.set(roof.id as AnyNodeId, inputs)
+}
+
+/** Whether nothing a roof's shell is made of has changed since it was merged. */
+function mergedFromStillHolds(roofId: AnyNodeId, nodes: Record<string, AnyNode>): boolean {
+  const inputs = mergedFrom.get(roofId)
+  const roof = nodes[roofId]
+  if (!inputs || roof?.type !== 'roof') return false
+  const ids = [roofId, ...(roof.children ?? [])]
+  return ids.length === inputs.size && ids.every((id) => inputs.get(id) === nodes[id])
+}
+
 /**
  * Roofs whose merged shell is still to build: until it is, the roof shows its segments apart (or
  * an old shell), and a capture would show that. Only roofs on screen count, a first merge (a
@@ -262,6 +284,7 @@ export const RoofSystem = () => {
       pendingRoofUpdates.clear()
       previousRoofPlanBounds.clear()
       warnedMergedRoofNaNIds.clear()
+      mergedFrom.clear()
       for (const cached of mergedRoofSegmentGeometryCache.values()) {
         disposeCachedMergedRoofSegmentGeometrySet(cached)
       }
@@ -344,9 +367,12 @@ export const RoofSystem = () => {
         } else {
           clearDirty(id as AnyNodeId)
         }
-        // Queue the parent roof for a merged geometry update
-        if (effectiveSegment.parentId) {
-          queueSiblingRoofUpdates(effectiveSegment.parentId as AnyNodeId, nodes)
+        // Queue the parent roof for a merged geometry update. A segment dropping in for the
+        // construction reveal changes nothing the shell is made of: the shell merged when the roof
+        // arrived already has it, and merging again for each segment (360 ms each) stalls the drop.
+        const parentId = effectiveSegment.parentId as AnyNodeId | null
+        if (parentId && !(isRevealAssembling(parentId) && mergedFromStillHolds(parentId, nodes))) {
+          queueSiblingRoofUpdates(parentId, nodes)
         }
       } else if (node.type === 'roof') {
         queueSiblingRoofUpdates(id as AnyNodeId, nodes)
@@ -362,6 +388,7 @@ export const RoofSystem = () => {
       const node = nodes[id]
       if (node?.type !== 'roof') {
         pendingRoofUpdates.delete(id)
+        mergedFrom.delete(id)
         continue
       }
 
@@ -371,11 +398,11 @@ export const RoofSystem = () => {
       const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
       if (!mergedMesh) continue
 
-      if (mergedMesh.visible !== false) {
-        // Only rebuild when visible — RoofEditSystem re-triggers via markDirty on edit mode exit
-        updateMergedRoofGeometry(node as RoofNode, group, nodes)
-        roofsProcessed++
-      }
+      // Built even while hidden: a roof assembling from its segments (construction
+      // reveal) hides its shell, and must show it whole the moment it is captured.
+      rememberMergedInputs(node as RoofNode, nodes)
+      updateMergedRoofGeometry(node as RoofNode, group, nodes)
+      roofsProcessed++
 
       pendingRoofUpdates.delete(id)
     }

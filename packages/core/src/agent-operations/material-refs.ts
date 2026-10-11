@@ -5,6 +5,7 @@ import {
   type MaterialSurface,
   parseMaterialRef,
 } from '../material-library'
+import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 
 const SURFACE_WORDS: Record<MaterialSurface, string> = {
   roof: 'roofing',
@@ -84,10 +85,24 @@ export function requireMaterialRef(
   field?: string,
   surface?: MaterialSurface,
   /** Whether to point to `paint` for a colour (paint passes it); else a flat library colour. */
-  { paint = false } = {},
+  {
+    paint = false,
+    materials,
+  }: {
+    paint?: boolean
+    materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
+  } = {},
 ): string {
   const parsed = parseMaterialRef(asked.includes(':') ? asked : `library:${asked}`)
-  if (parsed?.kind === 'scene') return asked
+  if (parsed?.kind === 'scene') {
+    if (materials !== undefined && !Object.hasOwn(materials, parsed.id))
+      refuse(
+        'unknown_material',
+        `Scene material ${asked} is not in this scene; nothing was painted.`,
+        { material: asked },
+      )
+    return asked
+  }
   // A community material (`library:mtl_…`): the host checks it against its catalog.
   if (parsed?.kind === 'library' && parsed.id.startsWith('mtl_')) return asked
   if (parsed?.kind === 'library' && getCatalogMaterialById(parsed.id)) return `library:${parsed.id}`
@@ -108,9 +123,13 @@ export function requireMaterialRef(
           kind.length ? kind.slice(0, 5).map(named).join(', ') : 'none'
         }.${byName.length ? ` Nearest by name: ${byName.join(', ')}.` : ''} Or ${colour} is the nearest.`
       : `${head}. Nearest: ${nearest.join(', ')}; or give ${colour}.`
-  return refuse('unknown_material', message, {
-    material: asked,
-    ...(field ? { field } : {}),
-    nearest,
-  })
+  return refuse(
+    'unknown_material',
+    `${message} search_materials finds a library material by words.`,
+    {
+      material: asked,
+      ...(field ? { field } : {}),
+      nearest,
+    },
+  )
 }

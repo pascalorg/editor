@@ -18,8 +18,14 @@ export const viewSceneTool = {
   name: 'view_scene',
   title: 'Look at the scene',
   description:
-    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic); the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), and a tab in the background must be brought to the front (editor_tab_hidden). A picture is not a measure: take sizes and counts from the tools.",
+    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic); the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you use interior or place the eye yourself with position or camera. For an unobstructed room or floor view, use interior: { levelId } with an explicit floor id and optional room/zone target; automatic cutaway framing excludes other floors, roof and ceiling for the picture only and restores the live view afterward. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), a tab in the background must be brought to the front (editor_tab_hidden), and a tab that is open but busy or still loading answers editor_tab_busy: call view_scene again in a few seconds, the user need not be asked. A picture is not a measure: take sizes and counts from the tools.",
   input: {
+    interior: z
+      .object({ levelId: z.string().min(1) })
+      .optional()
+      .describe(
+        'Capture only this explicit floor as an interior cutaway: other floors, its roof and ceiling are excluded for the picture only. Default framing looks down into it; camera or position still wins. Pending, failed or stale scene assets refuse the picture. The live view is unchanged.',
+      ),
     target: z
       .string()
       .optional()
@@ -73,7 +79,7 @@ export const viewSceneTool = {
           .min(1)
           .max(8_000_000)
           .describe(
-            'The photo as a data:image/...;base64 URL (read the file and encode it); in the chat, the URL of a file the user attached works too.',
+            'The photo: the asset:<id> of a file uploaded with request_upload (where the server offers it), a data:image/...;base64 URL (read the file and encode it), or in the chat the URL of a file the user attached.',
           ),
         region: z
           .array(z.number().min(0))

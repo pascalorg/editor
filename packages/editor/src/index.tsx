@@ -302,6 +302,7 @@ export {
   type ProjectVisibility,
   SettingsPanel,
   type SettingsPanelProps,
+  SettingsSwitchRow,
 } from './components/ui/sidebar/panels/settings-panel'
 export type { SitePanelProps } from './components/ui/sidebar/panels/site-panel'
 export type { SidebarTab } from './components/ui/sidebar/tab-bar'
@@ -732,6 +733,7 @@ export {
   setPluginDirectoryContext,
   setPluginInstallLocks,
 } from './lib/plugin-panels'
+export { setPointAskBusy, setPointAskPlayful } from './lib/point-ask/host-api'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {
@@ -849,6 +851,7 @@ export {
   startWallPolygonDraft,
   wallPolygonDraftWalls,
 } from './lib/wall-polygon-draft'
+export { writeWindowChanges } from './lib/window-changes'
 export {
   closeWindowOpenState,
   getDisplayedWindowValue,
@@ -868,6 +871,10 @@ export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CameraHintAction, useCameraHintFocus } from './store/use-camera-hint-focus'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
+export {
+  CONSTRUCTION_REVEAL_LEVELS,
+  default as useConstructionReveal,
+} from './store/use-construction-reveal'
 export {
   DRAWING_TYPE_OPTIONS,
   default as useDrawingView,
@@ -907,6 +914,7 @@ export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-p
 export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export { default as useFloorplanMode } from './store/use-floorplan-mode'
+export { default as useFollowPascal } from './store/use-follow-pascal'
 export {
   default as useInteractionScope,
   getEditingHole,
@@ -955,6 +963,7 @@ export {
   default as usePlacementPreview,
   type PlacementPreviewDimension,
 } from './store/use-placement-preview'
+export { usePointAsk } from './store/use-point-ask'
 export {
   activateQuickMeasurementHudSource,
   clearQuickMeasurementHudSource,

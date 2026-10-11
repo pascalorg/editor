@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   buildWallFinishLayout,
   containsPoint,
+  cornerPair,
   DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
@@ -53,6 +54,7 @@ import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
 import { timeSpan } from '../../lib/perf-tracks'
+import { isRevealWaiting } from '../../lib/reveal-pending'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
@@ -1139,16 +1141,7 @@ function updateWallGeometry(
   )
   const slabElevation = slabSupport.elevation
 
-  const childrenIds = node.children || []
-  const childrenNodes = childrenIds
-    .map((childId) => nodes[childId])
-    .filter((n): n is AnyNode => n !== undefined)
-    .map((child) => {
-      if (child.type !== 'door' && child.type !== 'window') return child
-      const effective = getEffectiveNode(child)
-      const live = useLiveTransforms.getState().get(child.id)
-      return live?.position ? { ...effective, position: live.position } : effective
-    })
+  const childrenNodes = wallGeometryChildren(node, nodes)
   const prepared = geometryAdapter?.prepareChildren?.(node, childrenNodes, {
     isLive: (id) =>
       useLiveNodeOverrides.getState().get(id) !== undefined ||
@@ -1238,6 +1231,25 @@ function updateWallGeometry(
     for (const child of childrenNodes) useScene.getState().markDirty(child.id)
   }
   mesh.userData.wallFrameKey = frameKey
+}
+
+/**
+ * The children a wall builds around, as they stand live: an opening still waiting for its
+ * construction reveal is left out, so the wall rises whole and is cut at the opening's turn.
+ */
+export function wallGeometryChildren(
+  node: WallNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): AnyNode[] {
+  return (node.children ?? [])
+    .map((childId) => nodes[childId])
+    .filter((child): child is AnyNode => child !== undefined && !isRevealWaiting(child.id))
+    .map((child) => {
+      if (child.type !== 'door' && child.type !== 'window') return child
+      const effective = getEffectiveNode(child)
+      const live = useLiveTransforms.getState().get(child.id)
+      return live?.position ? { ...effective, position: live.position } : effective
+    })
 }
 
 const WALL_UV_Y_AXIS = new THREE.Vector3(0, 1, 0)
@@ -1999,6 +2011,7 @@ function collectCutoutBrushes(
             wallThickness,
             getWallBodyCenterOffset(wallNode),
             cut.bottom - elevation,
+            child.type === 'window' ? cornerPair(sceneNodes, child)?.end : undefined,
           ),
         )
         continue
@@ -2119,20 +2132,29 @@ function collectCutoutBrushes(
   return brushes
 }
 
+/**
+ * How far a corner window's cut runs past its wall's end: past this wall's half of the corner at any
+ * angle (the miter stops at five thicknesses), so the two sides open the corner between them. The
+ * cut only takes this wall's own geometry, so running past it touches nothing else.
+ */
+const CORNER_CUT_REACH = 6
+
 function createOpeningCutoutBrush(
   opening: DoorNode | WindowNode,
   wallThickness: number,
   centerOffset: number,
   cutBottom?: number,
+  cornerEnd?: 'start' | 'end',
 ): Brush {
   const halfWidth = opening.width / 2
   const bottom = cutBottom ?? opening.position[1] - opening.height / 2
   const bottomPadding = getOpeningCutoutBottomPadding(opening, bottom)
+  const reach = CORNER_CUT_REACH * wallThickness
   const geometry = buildOpeningCutoutGeometry(
     opening,
     {
-      left: opening.position[0] - halfWidth,
-      right: opening.position[0] + halfWidth,
+      left: opening.position[0] - halfWidth - (cornerEnd === 'start' ? reach : 0),
+      right: opening.position[0] + halfWidth + (cornerEnd === 'end' ? reach : 0),
       bottom: bottom - bottomPadding,
       top: opening.position[1] + opening.height / 2,
     },

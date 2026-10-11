@@ -10,6 +10,7 @@ import {
   ZoneNode,
 } from '../../schema'
 import { doorFacing } from '../../building/wall-openings'
+import { reconcileSceneStructure } from '../../lib/structure-reconcile'
 import { findBlockedDoors } from '../door-clearance'
 import { findItemItemCollisions } from '../layout-clearance'
 import type { AgentToolCase, SceneGraph } from './cases'
@@ -117,6 +118,34 @@ function roomsScene(): SceneGraph {
   return graph(building, ground, upper, roof, wallG, door, window, kitchen, wallU)
 }
 
+/**
+ * Run 6's order: walls drawn first, one add_wall each, round CLEAR (and `extra` inside it), then the
+ * rooms the reconciler made of them, "Room 1" first; `renamed` is a name a person gave it since.
+ */
+function walledScene({ extra = [], renamed }: { extra?: [Pt, Pt][]; renamed?: string } = {}) {
+  return (): SceneGraph => {
+    const base = roomsScene().nodes as Record<string, AnyNode>
+    const walls = [...CLEAR.map((point, i): [Pt, Pt] => [point, CLEAR[(i + 1) % 4]!]), ...extra].map(
+      ([start, end], i) =>
+        WallNode.parse({ id: `wall_c${i}`, parentId: 'level_g', start, end, height: 2.5 }),
+    )
+    const level = base.level_g as LevelNode
+    let nodes: Record<string, AnyNode> = {
+      ...base,
+      level_g: { ...level, children: [...level.children, ...walls.map((wall) => wall.id)] },
+      ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+    }
+    const names: Record<string, string[]> = { zone: ['zone_walled', 'zone_side'] }
+    let count = 0
+    nodes = reconcileSceneStructure({
+      nodes,
+      mintId: (kind) => names[kind]?.shift() ?? `${kind}_walled${++count}`,
+    }).nodes as Record<string, AnyNode>
+    if (renamed) nodes.zone_walled = { ...nodes.zone_walled!, name: renamed } as AnyNode
+    return graph(...Object.values(nodes))
+  }
+}
+
 // ─── Checks the table cannot state: minted ids and derived construction ───────────────────────
 
 const problems = (...entries: [boolean, string][]) =>
@@ -183,6 +212,24 @@ function roomBuilt(levelId: string, name: string, edges: number) {
     )
   }
 }
+
+/** The room zones of the ground floor inside CLEAR's box: the one per walled space there. */
+const roomsInClear = (nodes: Nodes) =>
+  Object.values(nodes).filter(
+    (node) =>
+      node.type === 'zone' &&
+      node.parentId === 'level_g' &&
+      node.spaceRole === 'room' &&
+      node.polygon.every(([x, z]) => x >= -0.01 && x <= 4.01 && z >= 4.99 && z <= 8.01),
+  ) as ZoneNode[]
+
+const area = (polygon: readonly (readonly number[])[]) =>
+  Math.abs(
+    polygon.reduce((sum, [x, z], i) => {
+      const [nx, nz] = polygon[(i + 1) % polygon.length]!
+      return sum + x! * nz! - nx! * z!
+    }, 0) / 2,
+  )
 
 const roomOn = (levelId: string) => (result: Record<string, unknown>, nodes: Nodes) =>
   problems([
@@ -375,7 +422,7 @@ export const CREATE_ROOM_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: "a window sits at add_window's sill height; a door takes its size, hinge, swing and style",
+    name: 'a window is centred on its wall, as add_window places it; a door takes its size, hinge, swing and style',
     tool: 'create_room',
     scene: roomsScene,
     input: room({
@@ -396,12 +443,17 @@ export const CREATE_ROOM_CASES: AgentToolCase[] = [
       check: (result, nodes) => {
         const window = nodes[(result.windowIds as string[])[0]!]
         const door = nodes[(result.doorIds as string[])[0]!]
+        // Centred on the wall as it stands when the room is made, the storey's 2.8 m: the floor plate
+        // is derived afterwards, and a later add_window sees the slab (a window 2.5 cm lower).
+        const wall = window?.type === 'window' && window.wallId ? nodes[window.wallId] : undefined
+        const level = wall?.parentId ? nodes[wall.parentId] : undefined
+        const ceiling = level?.type === 'level' ? (level.height ?? Number.NaN) : Number.NaN
         return problems(
           [
             window?.type === 'window' &&
-              near(window.position[1] - window.height / 2, 0.9) &&
+              near(window.position[1], ceiling / 2) &&
               window.width === 1.5,
-            `window ${JSON.stringify(window)} is not 1.5 m wide on a 0.9 m sill`,
+            `window ${JSON.stringify(window)} is not 1.5 m wide and centred on its ${ceiling} m wall`,
           ],
           [
             door?.type === 'door' &&
@@ -487,6 +539,119 @@ export const CREATE_ROOM_CASES: AgentToolCase[] = [
       ],
     },
     expect: { refusal: 'outdoor_room_overlap', mentions: ['Kitchen'] },
+  },
+  // Run 6: 54 walls drawn first, then 14 create_room calls, each stacking its named zone on the
+  // "Room N" the walls had made: 16 twins.
+  {
+    name: 'a room over walls that already enclose it names the room they made, never a second zone',
+    tool: 'create_room',
+    scene: walledScene(),
+    input: room({ levelId: 'level_g' }),
+    expect: {
+      result: { ok: true, reusedWalls: 4, zoneId: 'zone_walled' },
+      after: { zone_walled: { name: 'Bedroom' } },
+      check: (result, nodes) => [
+        ...roomBuilt('level_g', 'Bedroom', 4)(result, nodes),
+        ...problems([
+          roomsInClear(nodes).length === 1,
+          `${roomsInClear(nodes).map((zone) => zone.name).join(', ')} stand over one walled room`,
+        ]),
+      ],
+    },
+  },
+  {
+    name: 'the walled room is named whichever way round and from whichever corner the polygon runs',
+    tool: 'create_room',
+    scene: walledScene(),
+    input: {
+      levelId: 'level_g',
+      name: 'Study',
+      polygon: [
+        [4, 8],
+        [4, 5],
+        [0, 5],
+        [0, 8],
+      ],
+    },
+    expect: {
+      result: { ok: true, zoneId: 'zone_walled' },
+      check: (_, nodes) =>
+        problems([
+          roomsInClear(nodes).map((zone) => zone.name).join() === 'Study',
+          `${roomsInClear(nodes).map((zone) => zone.name).join(', ')} stand there, not Study alone`,
+        ]),
+    },
+  },
+  {
+    name: 'a polygon over two walled spaces names the one holding most of it; the other keeps its name',
+    tool: 'create_room',
+    scene: walledScene({
+      extra: [
+        [
+          [3, 5],
+          [3, 8],
+        ],
+      ],
+    }),
+    input: room({ levelId: 'level_g', name: 'Master Bedroom' }),
+    expect: {
+      result: { ok: true },
+      check: (result, nodes) => {
+        const rooms = roomsInClear(nodes)
+        const master = nodes[result.zoneId as string] as ZoneNode | undefined
+        return problems(
+          [rooms.length === 2, `${rooms.length} rooms over two walled spaces`],
+          [
+            master?.name === 'Master Bedroom' && Math.abs(area(master.polygon) - 9) < 0.05,
+            `the named room is ${master?.name} over ${master && area(master.polygon)} m², not the 9 m² space`,
+          ],
+          [
+            rooms.some((zone) => /^Room \d+$/.test(zone.name ?? '')),
+            'the smaller space lost its own name',
+          ],
+        )
+      },
+    },
+  },
+  // The owner (7 October): a room a person named is never renamed silently, and never twinned: the
+  // refusal names it, and the agent either passes rename: true or asks the person.
+  {
+    name: 'a room a person named is refused with a choice, never twinned or renamed silently',
+    tool: 'create_room',
+    scene: walledScene({ renamed: 'Library' }),
+    input: room({ levelId: 'level_g' }),
+    expect: { refusal: 'room_named_by_person', mentions: ['Library', 'rename: true only if the person asked', 'ask them'] },
+  },
+  {
+    name: 'rename: true names the room a person named, in place, with no second zone',
+    tool: 'create_room',
+    scene: walledScene({ renamed: 'Library' }),
+    input: room({ levelId: 'level_g', rename: true }),
+    expect: {
+      result: { ok: true, zoneId: 'zone_walled' },
+      after: { zone_walled: { name: 'Bedroom' } },
+      check: (_, nodes) =>
+        problems([roomsInClear(nodes).length === 1, 'a second zone stands beside the renamed room']),
+    },
+  },
+  {
+    name: 'the same name over a room a person named has nothing to create',
+    tool: 'create_room',
+    scene: walledScene({ renamed: 'Bedroom' }),
+    input: room({ levelId: 'level_g' }),
+    expect: { refusal: 'room_named_by_person', mentions: ['already', 'Bedroom'] },
+  },
+  {
+    name: 'outdoor over a space walls already enclose names that room and drops its ceiling',
+    tool: 'create_room',
+    scene: walledScene(),
+    input: room({ levelId: 'level_g', name: 'Courtyard', outdoor: true }),
+    expect: {
+      result: { ok: true, zoneId: 'zone_walled', ceilingId: null },
+      after: { zone_walled: { name: 'Courtyard', hasCeiling: false } },
+      check: (_, nodes) =>
+        problems([roomsInClear(nodes).length === 1, 'the courtyard stands beside its room']),
+    },
   },
   {
     name: 'a roof level takes no room',

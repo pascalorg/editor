@@ -14,7 +14,7 @@ function honestUpdates(patches: Patch[], scene: Readonly<Record<string, AnyNode>
   for (const [index, patch] of patches.entries()) {
     if (patch.op === 'create') nodes[patch.node.id] = patch.node
     else if (patch.op === 'delete') delete nodes[patch.id]
-    else {
+    else if (patch.op === 'update') {
       const current = nodes[patch.id]
       if (!current) continue
       try {

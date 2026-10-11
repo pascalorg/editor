@@ -8,6 +8,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 |---|---|
 | [layers](layers.md) | Three.js layer constants, ownership, and rendering separation |
 | [systems](systems.md) | Core and viewer systems architecture |
+| [construction-animation](construction-animation.md) | The construction reveal's events (`subscribeRevealEvents`), the weight of a landing, the roof that lifts out of the way of the furniture, the build in reverse for an undo (`retractNodes`), and Follow Pascal |
 | [renderers](renderers.md) | Registry renderer dispatch and the custom `def.renderer` contract |
 | [node-definitions](node-definitions.md) | Three-checkbox composition model for registry-driven kinds (`geometry` / `renderer` / `system`) |
 | [materials-and-themes](materials-and-themes.md) | Surface colour: surface roles, colour presets, the textures axis, and scene themes (appearance / ground / clay tints) |
@@ -17,6 +18,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [agent-surfaces](agent-surfaces.md) | MCP ↔ hosted AI chat ↔ published skill parity: shared contracts and operations, knowledge parity, tells of drift |
 | [authored-objects](authored-objects.md) | Items an agent writes as three.js: script source, artifacts, naming conventions, surfaces, clips, compile hosts |
 | [measurements](measurements.md) | Persistent measurement data, 2D/3D draft ownership, snapping, units, and visibility |
+| [point-and-ask](point-and-ask.md) | Point and ask: the mode that lets a person point at the scene and ask the agent about it: the `pointing` scope, hover picks, the anchored bubble, the pin, the context shape, and the scene/chat boundary |
 | [interaction-scope](interaction-scope.md) | The authoritative interaction state machine ("the spine"): `InteractionScope` union, the begin/update/end/endIf contract, the raycast hot-set, and the overlay scope matrix |
 | [viewer-isolation](viewer-isolation.md) | Keeping `@pascal-app/viewer` editor-agnostic |
 | [capture-runtime](capture-runtime.md) | Open capture protocol, host source boundary, static/live viewer layers, and stream extension |

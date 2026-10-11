@@ -52,8 +52,17 @@ export type SceneSnapshot = {
 
 export type SceneCommitOrigin = 'local' | 'load' | 'host'
 
+/**
+ * Who made a local commit when it was not the person at the keyboard: `agent`
+ * is an AI agent's tool write. Presentation reads it (the construction reveal
+ * stages agent writes); the document and its history are the same either way.
+ */
+export type SceneCommitAuthor = 'agent'
+
 export type SceneCommit = {
   origin: SceneCommitOrigin
+  /** Absent for the person's own edits. See `runAsSceneCommitAuthor`. */
+  author?: SceneCommitAuthor
   before: SceneSnapshot
   current: SceneSnapshot
   changedNodeIds?: ReadonlySet<AnyNodeId>
@@ -123,6 +132,42 @@ export function runWithSceneCommitNodeIds<TResult>(
     }
   }
 }
+const sceneCommitAuthorScopes: SceneCommitAuthor[] = []
+const sceneCommitAuthorLeases = new Map<symbol, SceneCommitAuthor>()
+
+export function activeSceneCommitAuthor(): SceneCommitAuthor | undefined {
+  const scoped = sceneCommitAuthorScopes.at(-1)
+  if (scoped) return scoped
+  for (const author of sceneCommitAuthorLeases.values()) return author
+  return undefined
+}
+
+/** Commits made while `run` runs carry `author`. */
+export function runAsSceneCommitAuthor<TResult>(
+  author: SceneCommitAuthor,
+  run: () => TResult,
+): TResult {
+  sceneCommitAuthorScopes.push(author)
+  try {
+    return run()
+  } finally {
+    sceneCommitAuthorScopes.pop()
+  }
+}
+
+/**
+ * The async form of `runAsSceneCommitAuthor`, for work that awaits between its
+ * writes: commits carry `author` until the returned release runs. Every commit
+ * in that window carries it, whoever made it, so hold it only around the
+ * author's own work. Release is idempotent.
+ */
+export function acquireSceneCommitAuthor(author: SceneCommitAuthor): () => void {
+  const lease = Symbol('scene-commit-author')
+  sceneCommitAuthorLeases.set(lease, author)
+  return () => {
+    sceneCommitAuthorLeases.delete(lease)
+  }
+}
 
 function areSemanticValuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true
@@ -179,15 +224,19 @@ function emitSceneCommit(commit: SceneCommit): void {
 
 export function notifySceneCommit(commit: SceneCommit): void {
   if (areSceneSnapshotsEqual(commit.before, commit.current)) return
-  const contextualCommit = {
+  const author = commit.author ?? activeSceneCommitAuthor()
+  const contextualCommit: SceneCommit = {
     ...commit,
+    ...(author ? { author } : {}),
     changedNodeIds: mergedNodeIds(commit.changedNodeIds, activeSceneCommitNodeIds()),
   }
 
   if (sceneCommitTransactionDepth > 0) {
     if (pendingSceneCommit) {
+      const pendingAuthor = pendingSceneCommit.author ?? contextualCommit.author
       pendingSceneCommit = {
         origin: pendingSceneCommit.origin,
+        ...(pendingAuthor ? { author: pendingAuthor } : {}),
         before: pendingSceneCommit.before,
         current: contextualCommit.current,
         changedNodeIds: mergedNodeIds(

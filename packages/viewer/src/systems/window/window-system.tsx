@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  cornerPair,
   DEFAULT_WALL_THICKNESS,
   getEffectiveNode,
   getOpeningWallPlacement,
@@ -28,6 +29,7 @@ import {
   resolveMaterialRef,
 } from '../../lib/materials'
 import { timeSpan } from '../../lib/perf-tracks'
+import { useCommittedSceneMaterialInput } from '../../lib/scene-capture-inputs'
 import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
@@ -107,6 +109,8 @@ export const WindowSystem = () => {
       useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
     }
   }, [sceneMaterials])
+
+  useCommittedSceneMaterialInput(sceneMaterials)
 
   useFrame(() => {
     if (dirtyNodes.size === 0 && pendingWindowAnimationRebuilds.size === 0) return
@@ -3378,6 +3382,18 @@ function addShapedLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   }
 }
 
+/**
+ * The side of a corner window fused at the corner (L65), in the window's own frame: 1 its +x side,
+ * -1 its -x side, 0 none. A window facing its wall's back is turned half round, so its +x then
+ * points to the wall's start.
+ */
+function fusedCornerSide(node: WindowNode, rotationY: number): -1 | 0 | 1 {
+  const pair = cornerPair(useScene.getState().nodes, node)
+  if (pair?.post !== 'none') return 0
+  const flipped = Math.abs(rotationY) > Math.PI / 2
+  return (pair.end === 'end') !== flipped ? 1 : -1
+}
+
 function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
   currentWindowSlot = undefined
 
@@ -3504,7 +3520,10 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
     return true
   }
 
-  const innerW = width - 2 * frameThickness
+  // A corner window fused at the corner (L65): no jamb on that side, the glass runs to the corner.
+  const fused = fusedCornerSide(node, placement.rotation[1])
+  const innerW = width - (fused ? 1 : 2) * frameThickness
+  const innerX = (fused * frameThickness) / 2
   const innerH = height - 2 * frameThickness
 
   // ── Frame members ──
@@ -3531,26 +3550,28 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
     0,
   )
   // Left / right — inner height to avoid corner overlap
-  addBox(
-    mesh,
-    baseMaterial,
-    frameThickness,
-    innerH,
-    frameDepth,
-    -width / 2 + frameThickness / 2,
-    0,
-    0,
-  )
-  addBox(
-    mesh,
-    baseMaterial,
-    frameThickness,
-    innerH,
-    frameDepth,
-    width / 2 - frameThickness / 2,
-    0,
-    0,
-  )
+  if (fused !== -1)
+    addBox(
+      mesh,
+      baseMaterial,
+      frameThickness,
+      innerH,
+      frameDepth,
+      -width / 2 + frameThickness / 2,
+      0,
+      0,
+    )
+  if (fused !== 1)
+    addBox(
+      mesh,
+      baseMaterial,
+      frameThickness,
+      innerH,
+      frameDepth,
+      width / 2 - frameThickness / 2,
+      0,
+      0,
+    )
 
   // ── Pane grid ──
   const numCols = columnRatios.length
@@ -3566,7 +3587,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
 
   // Compute column x-centers starting from left edge of inner area
   const colXCenters: number[] = []
-  let cx = -innerW / 2
+  let cx = innerX - innerW / 2
   for (let c = 0; c < numCols; c++) {
     colXCenters.push(cx + colWidths[c]! / 2)
     cx += colWidths[c]!
@@ -3583,7 +3604,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
   }
 
   // Column dividers — full inner height
-  cx = -innerW / 2
+  cx = innerX - innerW / 2
   currentWindowSlot = 'frame'
   for (let c = 0; c < numCols - 1; c++) {
     cx += colWidths[c]!

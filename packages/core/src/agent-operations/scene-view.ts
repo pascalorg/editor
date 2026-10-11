@@ -6,12 +6,16 @@ import type {
   ColumnNode,
   FenceNode,
   ItemNode,
+  RoofNode,
   SlabNode,
   StairNode,
   WallNode,
 } from '../schema'
+import { getSegmentSlopeFrame } from '../schema'
 import { getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
+import { hasReferenceInventory, INVENTORY_INVITATION } from './reference-items'
+import type { SceneNodes } from './types'
 
 /**
  * Where `view_scene` looks from, the same on every surface; the picture is the host's: the chat's
@@ -22,6 +26,7 @@ export type SceneViewBox = { min: [number, number, number]; max: [number, number
 export type SceneViewSide = (typeof VIEW_SIDES)[number]
 
 export type SceneViewInput = {
+  interior?: { levelId: string }
   target?: string
   from?: SceneViewSide
   position?: number[]
@@ -35,6 +40,91 @@ export type SceneViewInput = {
 
 /** A region of the reference photo the host crops and returns beside the view. */
 export type SceneViewCrop = { source: string; region: [number, number, number, number] }
+
+/** Serializable, capture-only policy; never a scene edit or viewer selection. */
+export type SceneViewInteriorPolicy = {
+  levelId: string
+  bounds: SceneViewBox
+  cutHeight: number
+  hiddenNodeIds: string[]
+  graphKey: string
+}
+
+/** Order-independent identity for the graph a camera/policy was planned against. */
+export function sceneViewGraphKey(nodes: Readonly<Record<string, AnyNode>>): string {
+  const text = JSON.stringify(nodes, (_key, value) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((key) => [key, value[key]]),
+        )
+      : value,
+  )
+  let hash = 0xcbf29ce484222325n
+  for (let i = 0; i < text.length; i++)
+    hash = BigInt.asUintN(64, (hash ^ BigInt(text.charCodeAt(i))) * 0x100000001b3n)
+  return `${text.length}:${hash.toString(16)}`
+}
+
+function interiorPolicy(
+  nodes: Readonly<Record<string, AnyNode>>,
+  interior: SceneViewInput['interior'],
+): SceneViewInteriorPolicy | undefined {
+  if (!interior) return undefined
+  const level = nodes[interior.levelId]
+  if (level?.type !== 'level')
+    refuse('interior_level_invalid', 'An interior view needs an explicit existing level id.', {
+      levelId: interior.levelId,
+    })
+  let ancestor: AnyNode | undefined = level
+  const seen = new Set<string>()
+  while (ancestor && !seen.has(ancestor.id)) {
+    if (ancestor.visible === false)
+      refuse('interior_hidden', 'The requested interior floor or its ancestor is authored hidden.')
+    if (ancestor.type === 'building' && (ancestor.rotation[0] !== 0 || ancestor.rotation[2] !== 0))
+      refuse(
+        'interior_transform_unsupported',
+        'Interior cutaways require a vertically stacked building.',
+      )
+    seen.add(ancestor.id)
+    ancestor = nodes[ancestor.parentId ?? '']
+  }
+  const bounds = sceneViewBounds(nodes, interior.levelId)
+  const storey = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(interior.levelId)
+  const baseY = (storey?.baseY ?? 0) + standingOf(nodes, interior.levelId).y
+  const height = storey?.height ?? 3
+  const cutHeight = baseY + height * 0.65
+  if (
+    ![...bounds.min, ...bounds.max, baseY, height, cutHeight].every(Number.isFinite) ||
+    height <= 0
+  )
+    refuse('interior_bounds_invalid', 'This floor has no finite interior capture bounds.')
+  const hiddenNodeIds = Object.values(nodes)
+    .filter((node) => {
+      if (node.type === 'level') return node.id !== interior.levelId
+      if (node.type !== 'roof' && node.type !== 'ceiling') return false
+      let ancestor: AnyNode | undefined = node
+      const seen = new Set<string>()
+      while (ancestor && !seen.has(ancestor.id)) {
+        if (ancestor.id === interior.levelId) return true
+        seen.add(ancestor.id)
+        ancestor = nodes[ancestor.parentId ?? '']
+      }
+      return false
+    })
+    .map((node) => node.id)
+  return {
+    levelId: interior.levelId,
+    bounds: {
+      min: [bounds.min[0], baseY, bounds.min[2]],
+      max: [bounds.max[0], baseY + height, bounds.max[2]],
+    },
+    cutHeight,
+    hiddenNodeIds,
+    graphKey: sceneViewGraphKey(nodes),
+  }
+}
 
 function cropOf(photo: SceneViewInput['photo']): SceneViewCrop | undefined {
   if (!photo) return undefined
@@ -274,19 +364,137 @@ function siteBox(node: AnyNode, baseY: number): SceneViewBox | null {
 }
 
 /**
+ * A roof's box: the footprints of its segments in the plan, from the roof's seat to the peak of the
+ * highest. A roof holds no wall, so its level framed nothing and a look at the roof was refused.
+ */
+function roofBox(nodes: Readonly<Record<string, AnyNode>>, roof: RoofNode, baseY: number) {
+  const seat = baseY + roof.position[1]
+  const turn = ([x, z]: [number, number], angle: number): [number, number] => [
+    x * Math.cos(angle) - z * Math.sin(angle),
+    x * Math.sin(angle) + z * Math.cos(angle),
+  ]
+  const points: [number, number][] = []
+  let peak = seat
+  for (const id of roof.children ?? []) {
+    const segment = nodes[id]
+    if (segment?.type !== 'roof-segment') continue
+    for (const [sx, sz] of [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ] as const) {
+      // The segment's corner in the roof, then the roof's in the plan (the inverse of the turns
+      // the roof body reads a plan point in).
+      const [cx, cz] = turn([(sx * segment.width) / 2, (sz * segment.depth) / 2], -segment.rotation)
+      const [px, pz] = turn([cx + segment.position[0], cz + segment.position[2]], -roof.rotation)
+      points.push([px + roof.position[0], pz + roof.position[2]])
+    }
+    peak = Math.max(
+      peak,
+      seat + segment.position[1] + segment.wallHeight + getSegmentSlopeFrame(segment).activeRh,
+    )
+  }
+  if (!points.length) return null
+  return tall(
+    {
+      min: [Math.min(...points.map((p) => p[0])), seat, Math.min(...points.map((p) => p[1]))],
+      max: [Math.max(...points.map((p) => p[0])), peak, Math.max(...points.map((p) => p[1]))],
+    },
+    0.3,
+  )
+}
+
+/**
  * The side an opening is seen from by default: its outside, when its wall knows it; else the
  * side it faces. Its wall's +normal is perp(end - start) = (-dz, dx).
  */
-function outsideSide(opening: AnyNode & { rotation?: number[] }, wall: WallNode): SceneViewSide {
-  const [dx, dz] = [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
-  const facing = Math.abs(opening.rotation?.[1] ?? 0) > Math.PI / 2 ? -1 : 1
-  const sign = resolveWallExteriorSide(wall) ?? facing
-  const [nx, nz] = [-dz * sign, dx * sign]
+function outsideSide(
+  opening: AnyNode & { rotation?: number[] },
+  wall: WallNode,
+  yaw = 0,
+): SceneViewSide {
+  const [nx, nz] = outwardOf(opening, wall, yaw)
   return (Object.keys(COMPASS) as (keyof typeof COMPASS)[]).reduce((best, side) =>
     COMPASS[side][0] * nx + COMPASS[side][1] * nz > COMPASS[best][0] * nx + COMPASS[best][1] * nz
       ? side
       : best,
   )
+}
+
+/** The way an opening's wall faces outward, in the site's plan (x, z), turned with its building. */
+function outwardOf(
+  opening: AnyNode & { rotation?: number[] },
+  wall: WallNode,
+  yaw: number,
+): [number, number] {
+  const [dx, dz] = [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
+  const facing = Math.abs(opening.rotation?.[1] ?? 0) > Math.PI / 2 ? -1 : 1
+  const sign = resolveWallExteriorSide(wall) ?? facing
+  const [lx, lz] = [-dz * sign, dx * sign]
+  const length = Math.hypot(lx, lz) || 1
+  const [ux, uz] = [lx / length, lz / length]
+  // `+ 0` so a vector along an axis reads 0, not -0.
+  return [ux * Math.cos(yaw) + uz * Math.sin(yaw) + 0, -ux * Math.sin(yaw) + uz * Math.cos(yaw) + 0]
+}
+
+/**
+ * Which way a door or a window faces, outward, as a unit vector in the site's plan (x, z): what a
+ * view of it is taken from, and what a camera that follows the build looks at it along. Null for
+ * anything that is not an opening in a wall.
+ */
+export function sceneViewFacing(
+  nodes: Readonly<Record<string, AnyNode>>,
+  id: string,
+): [number, number] | null {
+  const opening = openingOf(nodes, nodes[id])
+  if (!opening) return null
+  return outwardOf(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
+}
+
+/**
+ * Where a building stands on its site. What is under a building (levels, walls, openings, roofs) is
+ * drawn in the building's own frame, and the editor puts that frame at the building's position and
+ * yaw: a view planned in the frame alone looks at the origin of the site, not at the building.
+ */
+type Standing = { x: number; y: number; z: number; yaw: number }
+const AT_ORIGIN: Standing = { x: 0, y: 0, z: 0, yaw: 0 }
+
+function standingOf(nodes: Readonly<Record<string, AnyNode>>, levelId?: string | null): Standing {
+  const level = levelId ? nodes[levelId] : undefined
+  const building = level?.type === 'level' ? nodes[level.parentId ?? ''] : undefined
+  if (building?.type !== 'building') return AT_ORIGIN
+  const [x, y, z] = building.position
+  return { x, y, z, yaw: building.rotation[1] ?? 0 }
+}
+
+/** A plan point of the building's frame, on the site: turned about the building's origin, then moved. */
+const onSite = ([px, pz]: Pt, at: Standing): Pt => [
+  at.x + px * Math.cos(at.yaw) + pz * Math.sin(at.yaw),
+  at.z - px * Math.sin(at.yaw) + pz * Math.cos(at.yaw),
+]
+
+/** A box of the building's frame, on the site: the box of its turned corners (its centre is the centre). */
+function placedBox(box: SceneViewBox, at: Standing): SceneViewBox {
+  if (at === AT_ORIGIN) return box
+  const corners = [
+    [box.min[0], box.min[2]],
+    [box.max[0], box.min[2]],
+    [box.max[0], box.max[2]],
+    [box.min[0], box.max[2]],
+  ].map((corner) => onSite(corner as Pt, at))
+  return {
+    min: [
+      Math.min(...corners.map((c) => c[0])),
+      box.min[1] + at.y,
+      Math.min(...corners.map((c) => c[1])),
+    ],
+    max: [
+      Math.max(...corners.map((c) => c[0])),
+      box.max[1] + at.y,
+      Math.max(...corners.map((c) => c[1])),
+    ],
+  }
 }
 
 export function sceneViewBounds(
@@ -301,19 +509,27 @@ export function sceneViewBounds(
   const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
   const baseOf = (levelId: string | null | undefined) =>
     (levelId ? elevations.get(levelId)?.baseY : undefined) ?? 0
+  const standing = (levelId: string | null | undefined) => standingOf(nodes, levelId)
   const opening = openingOf(nodes, target)
-  if (opening) return openingBox(opening as never, baseOf(opening.wall.parentId))
+  if (opening)
+    return placedBox(
+      openingBox(opening as never, baseOf(opening.wall.parentId)),
+      standing(opening.wall.parentId),
+    )
   if (target?.type === 'item' && nodes[target.parentId ?? '']?.type === 'level')
-    return itemBox(target, baseOf(target.parentId))
+    return placedBox(itemBox(target, baseOf(target.parentId)), standing(target.parentId))
   if (target?.type === 'item') {
     const pose = itemLevelPose(nodes, target, (id) => elevations.get(id)?.height ?? 2.5)
-    if (pose) return hostedItemBox(target, pose, baseOf(pose.levelId))
+    if (pose)
+      return placedBox(hostedItemBox(target, pose, baseOf(pose.levelId)), standing(pose.levelId))
   }
   const site =
     target && nodes[target.parentId ?? '']?.type === 'level'
-      ? siteBox(target, baseOf(target.parentId))
+      ? target.type === 'roof'
+        ? roofBox(nodes, target as RoofNode, baseOf(target.parentId))
+        : siteBox(target, baseOf(target.parentId))
       : null
-  if (site) return site
+  if (site) return placedBox(site, standing(target!.parentId))
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
   // With no walls yet, what the level holds frames it: furniture placed from a plan before the
@@ -328,13 +544,24 @@ export function sceneViewBounds(
       target.id === level.id ||
       (target.type === 'building' && level.parentId === target.id)
     if (!inTarget) continue
-    if (node.type === 'wall') outlines.push({ points: [node.start, node.end], levelId: level.id })
+    if (node.type === 'wall')
+      outlines.push({
+        points: [node.start, node.end].map((point) => onSite(point as Pt, standing(level.id))),
+        levelId: level.id,
+      })
     else if (node.type === 'zone' && target?.id === node.id)
-      outlines.push({ points: node.polygon as Pt[], levelId: level.id })
-    else if (node.type === 'item') held.push(itemBox(node, baseOf(level.id)))
-    else {
+      outlines.push({
+        points: (node.polygon as Pt[]).map((point) => onSite(point, standing(level.id))),
+        levelId: level.id,
+      })
+    else if (node.type === 'item')
+      held.push(placedBox(itemBox(node, baseOf(level.id)), standing(level.id)))
+    else if (node.type === 'roof') {
+      const box = roofBox(nodes, node as RoofNode, baseOf(level.id))
+      if (box) held.push(placedBox(box, standing(level.id)))
+    } else {
       const box = siteBox(node, baseOf(level.id))
-      if (box) held.push(box)
+      if (box) held.push(placedBox(box, standing(level.id)))
     }
   }
   if (!outlines.length && held.length)
@@ -354,8 +581,9 @@ export function sceneViewBounds(
   const max: V3 = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY]
   for (const { points, levelId } of outlines) {
     const storey = elevations.get(levelId) ?? { baseY: 0, height: 3 }
-    min[1] = Math.min(min[1], storey.baseY)
-    max[1] = Math.max(max[1], storey.baseY + storey.height)
+    const lift = standing(levelId).y
+    min[1] = Math.min(min[1], storey.baseY + lift)
+    max[1] = Math.max(max[1], storey.baseY + storey.height + lift)
     for (const [x, z] of points) {
       min[0] = Math.min(min[0], x)
       max[0] = Math.max(max[0], x)
@@ -453,17 +681,27 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewInput): SceneVi
  * The view to render and its size: from a photo's camera at the photo's aspect, so the two lay
  * one beside the other; else framing the target at the standard size.
  */
-/** What a view comes with, on both surfaces: a picture to compare, not a measure. */
-export function sceneViewNote() {
-  return 'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
+/** A picture is not a measure; invite an inventory until the host has one. */
+export function sceneViewNote(nodes?: Readonly<Record<string, AnyNode>>) {
+  const note =
+    'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
+  return nodes && !hasReferenceInventory(nodes as SceneNodes)
+    ? `${note} ${INVENTORY_INVITATION}`
+    : note
 }
 
 export function sceneViewPlan(
   nodes: Readonly<Record<string, AnyNode>>,
   input: SceneViewInput,
-): { pose: SceneViewPose; size: { w: number; h: number }; crop?: SceneViewCrop } {
+): {
+  pose: SceneViewPose
+  size: { w: number; h: number }
+  crop?: SceneViewCrop
+  interior?: SceneViewInteriorPolicy
+} {
   const { camera } = input
   const crop = cropOf(input.photo)
+  const interior = interiorPolicy(nodes, input.interior)
   if (camera) {
     const own = (
       ['from', 'position', 'elevation', 'eyeHeight', 'fov', 'projection'] as const
@@ -483,18 +721,30 @@ export function sceneViewPlan(
       },
       size: { w: VIEW_SIZE.w, h: Math.round(VIEW_SIZE.w / camera.aspect) },
       ...(crop ? { crop } : {}),
+      ...(interior ? { interior } : {}),
     }
   }
   const opening = openingOf(nodes, input.target ? nodes[input.target] : undefined)
   const from =
     input.from ??
-    (opening && !input.position ? outsideSide(opening.opening, opening.wall) : undefined)
+    (opening && !input.position
+      ? outsideSide(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
+      : undefined)
   return {
-    pose: sceneViewPose(sceneViewBounds(nodes, input.target), {
-      ...input,
-      ...(from ? { from } : {}),
-    }),
+    pose: sceneViewPose(
+      input.target
+        ? sceneViewBounds(nodes, input.target)
+        : (interior?.bounds ?? sceneViewBounds(nodes)),
+      {
+        ...input,
+        ...(interior && input.elevation === undefined && input.eyeHeight === undefined
+          ? { elevation: 55 }
+          : {}),
+        ...(from ? { from } : {}),
+      },
+    ),
     size: { ...VIEW_SIZE },
     ...(crop ? { crop } : {}),
+    ...(interior ? { interior } : {}),
   }
 }

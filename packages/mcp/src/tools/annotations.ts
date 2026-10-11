@@ -18,6 +18,16 @@ export const ADDITIVE_TOOL_ANNOTATIONS = {
   openWorldHint: false,
 } as const
 
+/**
+ * Adds to the scene, and may ask an external service (furnish_from_plan's judge of the labels,
+ * vectorize_plan's vectoriser).
+ */
+export const ADDITIVE_OPEN_WORLD_TOOL_ANNOTATIONS = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  openWorldHint: true,
+} as const
+
 export const DESTRUCTIVE_TOOL_ANNOTATIONS = {
   readOnlyHint: false,
   destructiveHint: true,

@@ -99,6 +99,16 @@ export const WindowNode = BaseNode.extend({
   columnDividerThickness: z.number().default(0.03),
   rowDividerThickness: z.number().default(0.03),
 
+  // A corner window (L65): this window runs to its wall's `end` and is joined there to `partnerId`
+  // on the other wall, the glass fused at the corner (`none`) or meeting at a thin post.
+  corner: z
+    .object({
+      end: z.enum(['start', 'end']),
+      partnerId: z.string(),
+      post: z.enum(['none', 'post']).default('none'),
+    })
+    .optional(),
+
   // Sill
   sill: z.boolean().default(true),
   sillDepth: z.number().default(0.08),
@@ -111,6 +121,7 @@ export const WindowNode = BaseNode.extend({
   - frameDepth: how deep the frame sits within the wall
   - columnRatios/rowRatios: pane division ratios
   - sill: whether to show a window sill
+  - corner: joined to a window on the other wall at this wall's start or end (a corner window)
 `)
 
 export type WindowNode = z.infer<typeof WindowNode>

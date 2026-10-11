@@ -7,6 +7,7 @@ import { CurtainWallConfig } from './curtain-wall'
 import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { LeanToExtensionNode } from './lean-to-extension'
+import { PanelNode } from './panel'
 import { WindowNode } from './window'
 
 // Geometric faces: `a` is left of start → end, `b` is right (wall-frame convention).
@@ -239,6 +240,7 @@ export const WallNode = BaseNode.extend({
         DoorNode.shape.id,
         WindowNode.shape.id,
         LeanToExtensionNode.shape.id,
+        PanelNode.shape.id,
       ]),
     )
     .default([]),
@@ -297,6 +299,9 @@ export const WallNode = BaseNode.extend({
   // Extend downward from the authored wall base to the terrain while keeping
   // the wall body height and top unchanged.
   fillToTerrain: z.boolean().optional(),
+  // An explicit declaration read by the shared coherence checker; absent on old walls.
+  roofJunction: z.enum(['parapet']).optional(),
+  cap: z.boolean().optional(),
   // The finish and the foundation carried below the base — see WallUnderpinning.
   underpinning: WallUnderpinning.optional(),
   skirting: WallTrimConfig.optional(),

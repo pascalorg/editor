@@ -11,6 +11,7 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
+import { FollowPascalPill } from './follow-pascal-pill'
 import { SecondaryToggles } from './view-toggles'
 
 // Mobile bottom offset matches the viewer's overlap behind the sheet's
@@ -49,6 +50,7 @@ export function ActionMenu({ className }: { className?: string }) {
 
   return (
     <TooltipProvider>
+      <FollowPascalPill />
       <motion.div
         className={cn(
           'left-1/2 z-50 -translate-x-1/2',

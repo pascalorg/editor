@@ -6,7 +6,10 @@ import type {
   AnyNodeType,
   Collection,
   CollectionId,
+  SceneMaterial,
+  SceneMaterialId,
 } from '@pascal-app/core/schema'
+import type { AgentSession } from '../bridge/agent-session'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
   ProjectCreateOptions,
@@ -30,6 +33,7 @@ export type CreateSceneOperationsOptions = {
 
 export interface SceneOperations {
   readonly hasBridge: boolean
+  readonly supportsMaterialUpserts?: boolean
   readonly hasStore: boolean
   readonly hasSceneEvents: boolean
   readonly canAppendSceneEvents: boolean
@@ -37,6 +41,8 @@ export interface SceneOperations {
   readonly canCreateProject: boolean
   readonly canGetProjectStatus: boolean
   readonly storeBackend: SceneStore['backend'] | null
+  /** What the agent's session has kept (named moments, what it made); absent on a host with none. */
+  readonly agentSession?: AgentSession
 
   setActiveScene(meta: ActiveSceneMeta): void
   getActiveScene(): ActiveSceneMeta | null
@@ -49,6 +55,8 @@ export interface SceneOperations {
   getNode(id: AnyNodeId): AnyNode | null
   getNodes(): Record<AnyNodeId, AnyNode>
   getCollections(): Record<CollectionId, Collection>
+  /** Undefined for a host that cannot atomically apply native material upserts with nodes. */
+  getMaterials?(): Readonly<Record<SceneMaterialId, SceneMaterial>> | undefined
   /** Replace the scene's collections (one undo step, like any edit). */
   setCollections(collections: Record<CollectionId, Collection>): void
   getRootNodeIds(): AnyNodeId[]
@@ -116,6 +124,17 @@ class SceneOperationsFacade implements SceneOperations {
 
   get hasBridge(): boolean {
     return this.#bridge !== undefined
+  }
+
+  get supportsMaterialUpserts(): boolean {
+    return (
+      this.#bridge?.supportsMaterialUpserts === true &&
+      typeof this.#bridge.getMaterials === 'function'
+    )
+  }
+
+  get agentSession(): AgentSession | undefined {
+    return (this.#bridge as { agentSession?: AgentSession } | undefined)?.agentSession
   }
 
   get hasStore(): boolean {
@@ -199,6 +218,13 @@ class SceneOperationsFacade implements SceneOperations {
     return this.requireBridge().getCollections()
   }
 
+  getMaterials(): Readonly<Record<SceneMaterialId, SceneMaterial>> | undefined {
+    const bridge = this.requireBridge()
+    return bridge.supportsMaterialUpserts === true && typeof bridge.getMaterials === 'function'
+      ? bridge.getMaterials()
+      : undefined
+  }
+
   setCollections(collections: Record<CollectionId, Collection>): void {
     this.requireBridge().setCollections(collections)
   }
@@ -244,6 +270,8 @@ class SceneOperationsFacade implements SceneOperations {
     deletedIds: AnyNodeId[]
     createdIds: AnyNodeId[]
   } {
+    if (patches.some((patch) => patch.op === 'upsert_material') && !this.supportsMaterialUpserts)
+      throw new Error('materials_unavailable')
     return this.requireBridge().applyPatch(patches)
   }
 

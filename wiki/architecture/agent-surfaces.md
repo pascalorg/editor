@@ -78,9 +78,26 @@ Both surfaces use the zod-only `@pascal-app/core/agent-tools` contracts and the 
 One contract (`viewSceneTool`) and one plan (`sceneViewPlan` in `core/agent-operations`): the plan turns the request (a target, a side or an exact eye, a projection, a photo's camera) into a camera pose and an image size, and, when a photo region is given, a crop of the photo to return beside the view. Only the rendering differs by surface:
 
 - **Hosted chat**: the editor in the same page renders the pose.
-- **MCP**: the server has no renderer. It asks the host's `sceneViews` (a `SceneViewHost`, passed to `createPascalMcpServer`) for a capture of the active project. The hosted Pascal app answers through the person's editor tab open on that project, as a screenshot job the tab runs; with no tab open the call is refused `editor_tab_required` with the editor link, and with the tab in the background `editor_tab_hidden`, so the agent asks the person to bring it forward. A server without a `sceneViews` host refuses `view_unavailable`; a session with no project, `no_project`; a photo crop the host cannot make, `photo_crop_unavailable`.
+- **MCP**: the server has no renderer. It asks the host's `sceneViews` (a `SceneViewHost`, passed to `createPascalMcpServer`) for a capture of the active project. The hosted Pascal app answers through the person's editor tab open on that project, as a screenshot job the tab runs; with no tab open the call is refused `editor_tab_required` with the editor link, with the tab in the background `editor_tab_hidden`, so the agent asks the person to bring it forward, and with a tab that is open but busy or still loading `editor_tab_busy`, retryable, so the agent waits and calls again. The refusals' words about opening the editor follow the person's host setting, read at each refusal (the hosted app's "Agents may open the editor for me"): Ask first (the default) tells the agent to ask the person to open the link or bring the tab forward, or to ask permission before opening it itself; Allow, that it may open the link itself, in a tab in front; Never, to ask the person and not open or switch windows. It words `editor_tab_required` and `editor_tab_hidden` only: `editor_tab_busy` carries no link, and an autonomous agent account is refused with `editor_host_identity_required`. A server without a `sceneViews` host refuses `view_unavailable`; a session with no project, `no_project`; a photo crop the host cannot make, `photo_crop_unavailable`.
 
 The answer is the picture plus the pose it was taken from, and which tab rendered it and when. A picture is not a measure: sizes and counts come from the tools.
+
+Optional `interior: { levelId }` selects one explicit floor for a capture-only cutaway. Core
+validates the level even with an explicit camera, and plans world storey bounds, a horizontal
+cut and excluded node IDs alongside a compact order-independent graph fingerprint. The same
+policy traverses `SceneViewHost`, hosted screenshot jobs and the native thumbnail event.
+
+The existing offscreen pipeline clips only the requested level subtree (including its static
+furniture batches), hides other levels and the floor's roof/ceiling, and restores before async
+readback. Read-only before/after events skip destructive reveals/dust/batch release; reversible
+renderer work can register cleanup in that synchronous transaction. No scene/presentation store
+is toggled, and a scoped frame-update hold preserves in-flight camera controls. Pending or
+failed models/textures, unfinished reveals and changed planned/rendered graphs refuse an image;
+readiness is conservative across the scene/material cache. The existing model-facing image
+conversion remains the only converter. Ordinary views without `interior` keep their behavior.
+
+By hand, orbiting a floor with existing presentation settings is an alternative; the API's
+cutaway is temporary, not a new viewer mode or mandatory review method.
 
 ## Emptying a project: `clear_scene`
 

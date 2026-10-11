@@ -4,12 +4,16 @@ import {
   type AnyNodeId,
   type BuildingNode,
   resolveBuildingForLevel,
+  runAsSingleSceneHistoryStep,
   useScene,
 } from '@pascal-app/core'
+import { mergeWindows, windowMergeOffer } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
-import { Building2, Copy, Group, Trash2, Ungroup } from 'lucide-react'
+import { Building2, Copy, Group, Merge, Trash2, Ungroup } from 'lucide-react'
 import { useMemo } from 'react'
 import { deleteSelection, duplicateSelectionAndPickUp } from '../../editor/group-actions'
+import { triggerSFX } from '../../../lib/sfx-bus'
+import { writeWindowChanges } from '../../../lib/window-changes'
 import { collectSelectableCandidateIds } from '../../tools/select/select-candidates'
 import {
   canCreateSessionGroup,
@@ -43,6 +47,53 @@ function selectBuilding(buildingId: AnyNodeId) {
   useViewer.getState().setSelection({ buildingId: buildingId as BuildingNode['id'] })
 }
 
+/**
+ * Merge windows (the owner, 8 October): with exactly two windows selected, one window across both,
+ * or one corner window when they sit on two walls that meet. Windows ride their wall, so they have
+ * no floating group menu, and this is where the wall merge's twin lives. The window selected first
+ * keeps its height, sill and type; when they cannot join, the button says why.
+ */
+function MergeWindowsAction() {
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const nodes = useScene((s) => s.nodes)
+  const readOnly = useScene((s) => s.readOnly)
+  const offer = useMemo(() => windowMergeOffer(nodes, selectedIds), [nodes, selectedIds])
+  if (!offer) return null
+  return (
+    <>
+      <ActionButton
+        className="basis-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
+        disabled={readOnly || offer.reason !== null}
+        icon={<Merge className="h-4 w-4" />}
+        label="Merge windows"
+        onClick={() => {
+          const merge = mergeWindows(useScene.getState().nodes, selectedIds[0]!, selectedIds[1]!)
+          runAsSingleSceneHistoryStep(useScene, () =>
+            writeWindowChanges({
+              create: null,
+              updates: Object.fromEntries(merge.changes.update.map(({ id, data }) => [id, data])),
+              remove: merge.changes.delete,
+            }),
+          )
+          triggerSFX('sfx:structure-build')
+          useViewer.getState().setSelection({ selectedIds: merge.windowIds as AnyNodeId[] })
+        }}
+        title={
+          offer.reason ?? 'Merge windows: the one you selected first keeps its height, sill and type'
+        }
+      />
+      {offer.reason ? (
+        <p
+          className="basis-full px-1 text-muted-foreground text-xs"
+          data-testid="merge-windows-reason"
+        >
+          {offer.reason}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
 export function MultiSelectionActions() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const sessionGroups = useSessionGroups((s) => s.groups)
@@ -61,6 +112,7 @@ export function MultiSelectionActions() {
 
   return (
     <ActionGroup className="flex-wrap">
+      <MergeWindowsAction />
       {buildingId && (
         <ActionButton
           className="basis-full whitespace-nowrap"

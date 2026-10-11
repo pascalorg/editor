@@ -8,6 +8,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode, ZoneNode } from '@pascal-app/core/schema'
 import useScene from '@pascal-app/core/store'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createPascalMcpServer } from '../server'
+import { InMemorySceneStore } from '../tools/scene-lifecycle/test-utils'
 import { registerAgentGuide } from './agent-guide'
 import { registerCatalogItems } from './catalog-items'
 import { registerConstraints } from './constraints'
@@ -216,8 +218,52 @@ describe('pascal://agent-guide', () => {
       expect(text).toContain('get_project_status')
       expect(text).toContain('editorUrl')
       expect(text).toContain('0 to 1 along the wall')
+      expect(text).toMatch(/glass meets at a corner.*add_corner_window/)
+      expect(text).toContain('room_named_by_person')
+      expect(text).toContain('rename: true` only when the person asked')
+      expect(text).toContain('request_upload')
+      expect(text).toContain('editor_tab_busy')
+      expect(text).toContain('invalid_input')
     } finally {
       await pair.close()
+    }
+  })
+
+  // The guide is the one text an agent is sure to read: a tool it names that the server does not
+  // serve (`get_capabilities` was one) sends every agent to a missing tool on its first step.
+  const REFUSAL_CODES = [
+    'editor_tab_busy',
+    'editor_tab_hidden',
+    'editor_tab_required',
+    'invalid_input',
+    'room_named_by_person',
+    'scene_wipe_blocked',
+  ]
+  // Hosted-only tools: the hosted server registers them beside the package's.
+  const HOSTED_ONLY_TOOLS = ['request_upload']
+
+  test('every tool the guide names is a tool the server serves', async () => {
+    const bridge = new SceneBridge()
+    const server = createPascalMcpServer({ bridge, store: new InMemorySceneStore() })
+    const client = new Client({ name: 'guide-tools', version: '0.0.0' })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    const pair = await spinUp(registerAgentGuide)
+    try {
+      const served = new Set((await client.listTools()).tools.map((tool) => tool.name))
+      const res = await pair.client.readResource({ uri: 'pascal://agent-guide' })
+      const text = (res.contents[0] as { text?: string }).text ?? ''
+      const named = [...new Set([...text.matchAll(/`([a-z]+(?:_[a-z]+)+)`/g)].map((m) => m[1]!))]
+      const unknown = named.filter(
+        (name) =>
+          !(served.has(name) || REFUSAL_CODES.includes(name) || HOSTED_ONLY_TOOLS.includes(name)),
+      )
+      expect(unknown).toEqual([])
+      expect(text).not.toContain('get_capabilities')
+    } finally {
+      await pair.close()
+      await client.close()
+      await server.close()
     }
   })
 

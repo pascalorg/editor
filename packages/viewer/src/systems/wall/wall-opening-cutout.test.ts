@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   type AnyNodeId,
   calculateLevelMiters,
   DoorNode,
@@ -10,6 +11,10 @@ import {
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallPlaneTop,
+  LevelNode,
+  loadPlugin,
+  nodeRegistry,
+  runAsSceneCommitAuthor,
   sceneRegistry,
   useScene,
   WallNode,
@@ -18,8 +23,9 @@ import {
 } from '@pascal-app/core'
 import * as THREE from 'three'
 import structure from '../../../../core/src/utils/__fixtures__/project_hrY3qVVq16yo5Out.json'
+import { startConstructionReveal } from '../construction-reveal/construction-reveal'
 import openings from './__fixtures__/wawa-house-openings.json'
-import { generateExtrudedWall } from './wall-system'
+import { generateExtrudedWall, wallGeometryChildren } from './wall-system'
 
 describe('wall opening cutout', () => {
   test('cuts a floor-level door directly from node geometry without a proxy mesh', () => {
@@ -236,6 +242,91 @@ describe('Wawa House openings', () => {
       for (const node of Object.values(nodes)) sceneRegistry.nodes.delete(node.id)
       for (const mesh of registered) mesh.geometry.dispose()
       useScene.getState().unloadScene()
+    }
+  })
+})
+
+// Victor run 12: walls rose with their window holes cut while the windows waited for the openings
+// phase. The user's pick: a wall stays whole until each opening's own turn.
+describe('an opening waiting for its construction reveal', () => {
+  test('cuts no hole in its wall until its turn comes', async () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    nodeRegistry._reset()
+    const previousScene = useScene.getState()
+    const definition = (kind: string, schema: typeof WallNode | typeof DoorNode, reveal?: object) =>
+      ({
+        kind,
+        schemaVersion: 1,
+        schema,
+        category: 'structure',
+        defaults: () => ({}),
+        capabilities: reveal ? { reveal } : {},
+      }) as unknown as AnyNodeDefinition
+    await loadPlugin({
+      id: 'fixture:opening-reveal',
+      apiVersion: 1,
+      nodes: [
+        definition('wall', WallNode),
+        definition('door', DoorNode, { phase: 'openings', style: 'cut' }),
+      ],
+    })
+    const level = LevelNode.parse({ id: 'level_reveal', level: 0, children: [] })
+    const wall = WallNode.parse({
+      id: 'wall_reveal-opening',
+      start: [0, 0],
+      end: [4, 0],
+      height: 2.5,
+      thickness: 0.2,
+    })
+    const door = DoorNode.parse({
+      id: 'door_reveal-opening',
+      wallId: wall.id,
+      position: [2, 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+    })
+    useScene.getState().setScene({ [level.id]: level } as never, [level.id] as AnyNodeId[], {
+      installedPlugins: ['fixture:opening-reveal'],
+      hasExplicitPluginInstallState: true,
+    })
+    useScene.getState().createNode(wall, level.id as AnyNodeId)
+    const driver = startConstructionReveal({
+      reveals: (commit) => commit.author === 'agent',
+      prefersReducedMotion: () => false,
+    })
+    const wallMesh = new THREE.Mesh()
+    sceneRegistry.nodes.set(wall.id, wallMesh)
+    const solidAtDoor = () => {
+      const nodes = useScene.getState().nodes
+      const hosted = nodes[wall.id as AnyNodeId] as WallNode
+      const geometry = generateExtrudedWall(
+        hosted,
+        wallGeometryChildren(hosted, nodes),
+        calculateLevelMiters([wall]),
+      )
+      const body = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
+      const hit =
+        new THREE.Raycaster(
+          new THREE.Vector3(2, 1, -1),
+          new THREE.Vector3(0, 0, 1),
+          0,
+          2,
+        ).intersectObject(body).length > 0
+      geometry.dispose()
+      return hit
+    }
+    try {
+      runAsSceneCommitAuthor('agent', () =>
+        useScene.getState().createNode(door, wall.id as AnyNodeId),
+      )
+      expect(solidAtDoor()).toBe(true)
+      driver.stop()
+      expect(solidAtDoor()).toBe(false)
+    } finally {
+      driver.stop()
+      sceneRegistry.nodes.delete(wall.id)
+      useScene.setState(previousScene)
+      restoreRegistry()
     }
   })
 })

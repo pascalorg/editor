@@ -35,7 +35,11 @@ import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowMechanism } from './mechanism'
 import { windowPaint } from './paint'
 import { windowParametrics } from './parametrics'
-import { WINDOW_PLACEMENT_HINTS } from './placement'
+import {
+  WINDOW_CORNER_HINTS,
+  WINDOW_PLACEMENT_HINTS,
+  WINDOW_PLAIN_PLACE_VISIBLE,
+} from './placement'
 import { WindowNode } from './schema'
 
 const SIDE_HANDLE_OFFSET = 0.24
@@ -291,6 +295,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   },
 
   capabilities: {
+    reveal: { phase: 'openings', style: 'cut' },
     batchable: windowBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
@@ -358,7 +363,8 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Place window on wall' },
+    { key: 'Left click', label: 'Place window on wall', visible: WINDOW_PLAIN_PLACE_VISIBLE },
+    ...WINDOW_CORNER_HINTS,
     ...WINDOW_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },

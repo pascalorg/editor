@@ -22,6 +22,8 @@ import { PLACE_ITEMS_CASES } from './place-items-cases'
 import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
 import { ROOM_CASES } from './room-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
+import { CORNER_WINDOW_CASES } from './corner-window-cases'
+import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
 import { ADD_LEVEL_CASES, ADD_WALL_CASES, CREATE_STAIR_CASES } from './structure-cases'
 import { VERIFY_SCENE_CASES } from './verify-scene-cases'
 
@@ -779,4 +781,6 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...CREATE_STAIR_CASES,
   ...PLACE_ITEMS_CASES,
   ...FIND_BY_TYPE_CASES,
+  ...CORNER_WINDOW_CASES,
+  ...MERGE_WINDOWS_CASES,
 ]

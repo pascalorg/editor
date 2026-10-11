@@ -88,6 +88,8 @@ export type NodeBatchStoreApi = {
   join(candidates: BatchCandidate[], minEntriesForNewBatch: number): BatchEntry[]
   /** Hides draws immediately; deletion is coalesced by flushReleases. Caller reveals sources. */
   release(nodeId: string): boolean
+  /** Hide packed draws for one render, preserving membership and prior visibility. */
+  temporarilyHideNodes(nodeIds: Iterable<string>): () => void
   flushReleases(now?: number): void
   pruneEmpty(
     now?: number,

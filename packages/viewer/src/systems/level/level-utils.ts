@@ -1,4 +1,5 @@
 import { getLevelElevations, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
+import { temporarilyShowShadowOnly } from '../../lib/scene-visibility'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import { shadowOnlyLevels } from './shadow-only-levels'
 
@@ -75,7 +76,11 @@ export function resolveLevelVisibility({
  *   renderer.render(scene, camera)
  *   restore()
  */
-export function snapLevelsToTruePositions(): () => void {
+export function snapLevelsToTruePositions({
+  readOnly = false,
+}: {
+  readOnly?: boolean
+} = {}): () => void {
   const nodes = useScene.getState().nodes
 
   type LevelEntry = {
@@ -110,7 +115,8 @@ export function snapLevelsToTruePositions(): () => void {
     obj.position.y = levelElevations.get(levelId)?.baseY ?? 0
     obj.visible = nodeVisible
   }
-  for (const { obj } of shadowOnly) clearShadowOnly(obj)
+  const restoreMasks = readOnly ? shadowOnly.map(({ obj }) => temporarilyShowShadowOnly(obj)) : []
+  if (!readOnly) for (const { obj } of shadowOnly) clearShadowOnly(obj)
 
   return () => {
     for (const { levelId, obj } of entries) {
@@ -120,6 +126,7 @@ export function snapLevelsToTruePositions(): () => void {
         obj.visible = saved.visible
       }
     }
-    for (const { obj } of shadowOnly) applyShadowOnly(obj)
+    if (readOnly) for (const restore of restoreMasks.reverse()) restore()
+    else for (const { obj } of shadowOnly) applyShadowOnly(obj)
   }
 }

@@ -113,12 +113,41 @@ const defaultMaterialCache = new Map<string, THREE.Material>()
 const surfaceRoleMaterialCache = new Map<string, THREE.Material>()
 const textureCache = new Map<string, THREE.Texture>()
 const textureLoadPromises = new Map<string, Promise<THREE.Texture | null>>()
+const pendingTextures = new Set<string>()
+const failedTextures = new Set<string>()
 const textureLoader = new THREE.TextureLoader()
 let materialTextureVersion = 0
 
 // Highlight clones can observe late assignments without polling every material.
 export function getMaterialTextureVersion(): number {
   return materialTextureVersion
+}
+
+/** Conservative capture readiness across the current material cache. */
+export function materialTextureLoadState(): { pending: number; failed: number } {
+  return { pending: pendingTextures.size + textureLoadPromises.size, failed: failedTextures.size }
+}
+
+function loadTexture(url: string, key: string): THREE.Texture {
+  pendingTextures.add(key)
+  try {
+    return pickTextureLoader(url).load(
+      url,
+      () => {
+        pendingTextures.delete(key)
+        failedTextures.delete(key)
+      },
+      undefined,
+      () => {
+        pendingTextures.delete(key)
+        failedTextures.add(key)
+      },
+    )
+  } catch (error) {
+    pendingTextures.delete(key)
+    failedTextures.add(key)
+    throw error
+  }
 }
 
 // `.ktx2` finish maps transcode through the shared KTX2 loader (support is
@@ -225,7 +254,7 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
   const resolvedUrl = /^(?:asset|blob|data):/.test(textureConfig.url)
     ? textureConfig.url
     : (resolveCdnUrl(textureConfig.url) ?? textureConfig.url)
-  const texture = pickTextureLoader(resolvedUrl).load(resolvedUrl)
+  const texture = loadTexture(resolvedUrl, cacheKey)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
 
@@ -297,7 +326,7 @@ function getPresetTexture(
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const texture = pickTextureLoader(resolvedPath).load(resolvedPath)
+  const texture = loadTexture(resolvedPath, cacheKey)
   applyTextureProperties(texture, props, slot)
   stampPascalTextureRef(texture, {
     kind: 'material',
@@ -367,11 +396,13 @@ async function loadPresetTexture(
       setTextureCacheKey(texture, cacheKey)
       textureCache.set(cacheKey, texture)
       textureLoadPromises.delete(cacheKey)
+      failedTextures.delete(cacheKey)
       return texture
     })
     .catch((error) => {
       console.warn('[viewer] Failed to load material texture', resolvedPath, error)
       textureLoadPromises.delete(cacheKey)
+      failedTextures.add(cacheKey)
       return null
     })
 
@@ -846,6 +877,8 @@ export function clearMaterialCache(): void {
   surfaceRoleMaterialCache.clear()
   textureCache.clear()
   textureLoadPromises.clear()
+  pendingTextures.clear()
+  failedTextures.clear()
   const disposals: Array<() => void> = []
   for (const cleanup of materialCacheCleanups) {
     const dispose = cleanup()

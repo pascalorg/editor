@@ -21,17 +21,19 @@ import {
   structureChangeBatch,
 } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import type { AnyNode, Collection, CollectionId } from '@pascal-app/core/schema'
+import type { AnyNode, Collection, CollectionId, SceneMaterialId } from '@pascal-app/core/schema'
 import {
   type AnyNodeId,
   AnyNode as AnyNodeSchema,
   type AnyNodeType,
   generateId,
   parseNode,
+  SceneMaterial,
 } from '@pascal-app/core/schema'
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
 import useScene from '@pascal-app/core/store'
 import type { SceneMeta } from '../storage/types'
+import { InMemoryAgentSession } from './agent-session'
 
 export type ValidationError = { nodeId: string; path: string; message: string }
 export type ValidationResult = {
@@ -44,7 +46,8 @@ export type ValidationResult = {
 export type CreatePatch = { op: 'create'; node: AnyNode; parentId?: AnyNodeId }
 export type UpdatePatch = { op: 'update'; id: AnyNodeId; data: Partial<AnyNode> }
 export type DeletePatch = { op: 'delete'; id: AnyNodeId; cascade?: boolean }
-export type Patch = CreatePatch | UpdatePatch | DeletePatch
+export type MaterialUpsertPatch = { op: 'upsert_material'; material: SceneMaterial }
+export type Patch = CreatePatch | UpdatePatch | DeletePatch | MaterialUpsertPatch
 export type ActiveSceneMeta = Pick<
   SceneMeta,
   'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version' | 'graphHash'
@@ -61,7 +64,11 @@ type SetSceneExtra = Parameters<ReturnType<typeof useScene.getState>['setScene']
  * `flushDirty()` for observability.
  */
 export class SceneBridge {
+  readonly supportsMaterialUpserts = true
   private activeScene: ActiveSceneMeta | null = null
+
+  /** What the agent's session has kept: its named moments, and what it made. */
+  readonly agentSession = new InMemoryAgentSession()
 
   /**
    * Scene identity currently bound to this bridge. MCP tools use this to know
@@ -89,6 +96,7 @@ export class SceneBridge {
 
   /** Load initial state; if empty, creates default Site → Building → Level. */
   loadDefault(): void {
+    this.agentSession.replace()
     useScene.getState().loadScene()
   }
 
@@ -98,6 +106,7 @@ export class SceneBridge {
     rootNodeIds: AnyNodeId[],
     extra?: SetSceneExtra,
   ): void {
+    this.agentSession.replace()
     useScene.getState().setScene(nodes, rootNodeIds, extra)
   }
 
@@ -192,6 +201,10 @@ export class SceneBridge {
 
   getCollections(): Record<CollectionId, Collection> {
     return useScene.getState().collections
+  }
+
+  getMaterials(): Record<SceneMaterialId, SceneMaterial> {
+    return useScene.getState().materials
   }
 
   setCollections(collections: Record<CollectionId, Collection>): void {
@@ -399,6 +412,8 @@ export class SceneBridge {
   } {
     const state = useScene.getState()
     const nodes = state.nodes
+    if (state.readOnly) throw new Error('scene_read_only')
+    const materialUpserts = new Map<string, SceneMaterial>()
 
     // Track synthesized state as we dry-run so later ops can reference
     // earlier-created ids and reflect earlier-deleted ids.
@@ -412,7 +427,12 @@ export class SceneBridge {
     for (let i = 0; i < patches.length; i++) {
       const p = patches[i]
       if (!p) throw new Error(`invalid patch: patches[${i}] is undefined`)
-      if (p.op === 'create') {
+      if (p.op === 'upsert_material') {
+        const material = SceneMaterial.parse(p.material)
+        if (!material.id || ['__proto__', 'constructor', 'prototype'].includes(material.id))
+          throw new Error(`invalid patch: patches[${i}] invalid scene material id`)
+        materialUpserts.set(material.id, material)
+      } else if (p.op === 'create') {
         const res = parseNode(p.node)
         if (!res.success) {
           throw new Error(
@@ -483,7 +503,7 @@ export class SceneBridge {
           if (patch.data.parentId !== undefined) created.parentId = patch.data.parentId as AnyNodeId
         } else
           updateOps.set(patch.id, { ...updateOps.get(patch.id), ...patch.data } as Partial<AnyNode>)
-      } else {
+      } else if (patch.op === 'delete') {
         deleteIds.add(patch.id)
         createOps.delete(patch.id)
         updateOps.delete(patch.id)
@@ -512,6 +532,8 @@ export class SceneBridge {
     runAsSingleSceneHistoryStep(useScene, () => {
       pauseSpaceDetection()
       try {
+        for (const material of materialUpserts.values())
+          useScene.getState().addSceneMaterial(material)
         useScene.getState().createNodes([...createOps.values(), ...planned.create])
         useScene.getState().updateNodes([...updateOps].map(([id, data]) => ({ id, data })))
         useScene.getState().deleteNodes(planned.delete)

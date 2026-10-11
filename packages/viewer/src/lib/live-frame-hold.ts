@@ -11,15 +11,18 @@
  */
 
 let holds = 0
+let frameHolds = 0
 
-export function holdLiveFrame(maxMs = 60_000): () => void {
+export function holdLiveFrame(maxMs = 60_000, freezeUpdates = false): () => void {
   holds += 1
+  if (freezeUpdates) frameHolds += 1
   let released = false
   const release = () => {
     if (released) return
     released = true
     clearTimeout(expiry)
     holds -= 1
+    if (freezeUpdates) frameHolds -= 1
   }
   const expiry = setTimeout(release, maxMs)
   return release
@@ -27,4 +30,9 @@ export function holdLiveFrame(maxMs = 60_000): () => void {
 
 export function isLiveFrameHeld(): boolean {
   return holds > 0
+}
+
+/** Read-only captures hold animation/controls at their exact in-flight state. */
+export function areLiveFrameUpdatesHeld(): boolean {
+  return frameHolds > 0
 }
