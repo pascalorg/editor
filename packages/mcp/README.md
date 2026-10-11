@@ -234,6 +234,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 
 const bridge = new SceneBridge()
+// Or over a detached scene a host opened (`@pascal-app/core/runtime`): every tool then reads and
+// writes that scene, with its ids, and the host turns it into a patch.
+// const bridge = new SceneBridge({ runtime: openDetachedScene(snapshot, options) })
 bridge.loadDefault()
 const server = createPascalMcpServer({ bridge })
 
