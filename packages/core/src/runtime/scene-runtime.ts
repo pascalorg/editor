@@ -16,6 +16,10 @@ import { resolveLevelId } from '../lib/node-ancestry'
 import { getNodePluginId, nodeRegistry } from '../registry/registry'
 import type { AnyNode, AnyNodeId, Collection } from '../schema'
 import { type IdAllocator, withIdAllocator } from '../schema/base'
+import {
+  shouldRefreshDefaultGutters,
+  shouldRefreshDefaultRidgeVents,
+} from '../store/actions/node-actions'
 import { runSettlingDocument } from '../store/document-settling'
 import { pauseSceneHistory, resumeSceneHistory, type SceneSnapshot } from '../store/history-control'
 import { withoutLivePreviews } from '../store/live-previews'
@@ -277,9 +281,15 @@ export function declareActionDependencies(
   const touched = new Set<string>()
   for (const id of plain.delete ?? []) touched.add(id)
   for (const { node } of plain.create ?? []) if (PLANNED_KINDS.has(node.type)) touched.add(node.id)
-  for (const { id, data } of plain.update ?? [])
-    if (PLANNED_KINDS.has(kindOf(id) ?? '') || (kindOf(id) === 'wall' && 'curveOffset' in data))
-      touched.add(id)
+  for (const { id, data } of plain.update ?? []) {
+    const kind = kindOf(id)
+    // A segment's planners run on the fields they read (a rename runs none).
+    const planned =
+      kind === 'roof-segment'
+        ? shouldRefreshDefaultGutters(data) || shouldRefreshDefaultRidgeVents(data)
+        : PLANNED_KINDS.has(kind ?? '') || (kind === 'wall' && 'curveOffset' in data)
+    if (planned) touched.add(id)
+  }
   let extra = false
   for (const id of new Set([...Object.keys(intended), ...Object.keys(after)]))
     if (intended[id] !== after[id] && !sameValue(intended[id], after[id])) {

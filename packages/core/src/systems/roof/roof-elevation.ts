@@ -160,11 +160,11 @@ export function planRoofElevationUpdates(
 }
 
 /**
- * The roofs an edit can move, from the nodes it changed: a roof itself (its segments included),
- * and the roofs on the level of a changed wall and on the level above it (a roof rests on its own
- * level's walls or the level's below). Null, for every roof, when a slab (it carries walls on its
- * level and bounds plane-bound wall tops below, and a base plate lifts the storeys above), a
- * level, a building or a site changed.
+ * The roofs an edit can move, from the nodes it changed. A roof rests on the walls of its own level
+ * or the level below, so: a changed roof (or segment); for a changed wall, the roofs on its level
+ * and the level above; for a changed slab, the levels whose walls it touches (its own, which it
+ * carries, and the one below, whose plane-bound tops it caps) and every level above it in its
+ * building (a base plate lifts them). Null, for every roof, when a level, building or site changed.
  */
 export function roofsAffectedBy(
   before: Readonly<Record<string, AnyNode>>,
@@ -174,27 +174,28 @@ export function roofsAffectedBy(
   const roofs = new Set<string>()
   const levels = new Set<string>()
   for (const id of changedIds)
-    for (const nodes of [before, after]) {
+    for (const nodes of [before, after] as const) {
       const node = nodes[id]
       if (!node) continue
-      if (
-        node.type === 'level' ||
-        node.type === 'building' ||
-        node.type === 'site' ||
-        node.type === 'slab'
-      )
-        return null
+      if (node.type === 'level' || node.type === 'building' || node.type === 'site') return null
       if (node.type === 'roof') roofs.add(id)
       else if (node.type === 'roof-segment' && node.parentId) roofs.add(node.parentId)
-      else if (node.type === 'wall') {
+      else if (node.type === 'wall' || node.type === 'slab') {
         const levelId = findLevelAncestorId(id as AnyNodeId, nodes as Record<string, AnyNode>)
         if (!levelId) return null
+        const elevations = getLevelElevations(nodes as Record<string, AnyNode>)
         levels.add(levelId)
-        const above = findLevelAboveId(
-          levelId,
-          getLevelElevations(nodes as Record<string, AnyNode>),
-        )
-        if (above) levels.add(above)
+        if (node.type === 'wall') {
+          const above = findLevelAboveId(levelId, elevations)
+          if (above) levels.add(above)
+          continue
+        }
+        const below = findLevelBelowId(levelId, elevations)
+        if (below) levels.add(below)
+        const own = elevations.get(levelId)
+        for (const [otherId, other] of elevations)
+          if (own && other.buildingId === own.buildingId && other.ordinal > own.ordinal)
+            levels.add(otherId)
       }
     }
   if (levels.size)

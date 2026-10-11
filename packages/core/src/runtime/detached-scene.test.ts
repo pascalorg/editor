@@ -677,6 +677,23 @@ describe('what the store actions plan', () => {
     })
   })
 
+  test("a rename runs no planner: a segment's name reads nothing of its level", () => {
+    const level = LevelNode.parse({ id: 'level_r', parentId: 'building_g', level: 0, height: 3 })
+    const segment = RoofSegmentNode.parse({ id: 'rseg_g', parentId: 'roof_g', width: 8, depth: 6 })
+    const roof = RoofNode.parse({ id: 'roof_g', parentId: level.id, children: [segment.id] })
+    const wall = WallNode.parse({ id: 'wall_g', parentId: level.id, start: [9, 0], end: [12, 0] })
+    level.children = [roof.id, wall.id]
+    const building = BuildingNode.parse({ id: 'building_g', children: [level.id] })
+    const base = document(building, level, roof, segment, wall)
+    const scene = open(base)
+    scene.host().applyChanges({ update: [{ id: segment.id, data: { name: 'South slope' } }] })
+    const current = editedBy(base, (store) =>
+      store.getState().updateNode(wall.id, { name: 'Garden wall' }),
+    )
+    const applied = applyPatchWithDependencies(current, scene.patch(), scene.dependencies(), base)
+    expect(applied.ok).toBe(true)
+  })
+
   test('a planner that decided to write nothing was still read: disabled gutters', () => {
     const level = LevelNode.parse({ id: 'level_r', parentId: 'building_g', level: 0, height: 3 })
     const segment = RoofSegmentNode.parse({ id: 'rseg_g', parentId: 'roof_g', width: 8, depth: 6 })
@@ -756,55 +773,85 @@ describe('scoped reconciliation settles what complete reconciliation would', () 
     expect(y(scoped)).toBeCloseTo(y(complete))
   })
 
-  test('a thicker slab above lowers plane-bound walls and the roof they carry', () => {
-    const level = LevelNode.parse({ id: 'level_0', parentId: 'building_s', level: 0, height: 3 })
-    const upper = LevelNode.parse({ id: 'level_1', parentId: 'building_s', level: 1, height: 3 })
+  /** A storey of plane-bound walls under a slab on the level above, its roof on the walls. */
+  function slabRoofBuilding(id: string, x = 0): AnyNode[] {
+    const level = LevelNode.parse({
+      id: `level_${id}0`,
+      parentId: `building_${id}`,
+      level: 0,
+      height: 3,
+    })
+    const upper = LevelNode.parse({
+      id: `level_${id}1`,
+      parentId: `building_${id}`,
+      level: 1,
+      height: 3,
+    })
     const corners: [number, number][] = [
-      [0, 0],
-      [4, 0],
-      [4, 3],
-      [0, 3],
+      [x, 0],
+      [x + 4, 0],
+      [x + 4, 3],
+      [x, 3],
     ]
     const walls = corners.map((start, index) =>
       WallNode.parse({
-        id: `wall_${index}`,
+        id: `wall_${id}${index}`,
         parentId: level.id,
         start,
         end: corners[(index + 1) % 4]!,
       }),
     )
     const roof = RoofNode.parse({
-      id: 'roof_s',
+      id: `roof_${id}`,
       parentId: level.id,
       support: { kind: 'walls' },
-      position: [2, 0, 1.5],
+      position: [x + 2, 0, 1.5],
     })
     const slab = SlabNode.parse({
-      id: 'slab_above',
+      id: `slab_${id}`,
       parentId: upper.id,
       polygon: [
-        [-1, -1],
-        [5, -1],
-        [5, 4],
-        [-1, 4],
+        [x - 1, -1],
+        [x + 5, -1],
+        [x + 5, 4],
+        [x - 1, 4],
       ],
       thickness: 0.05,
     })
     level.children = [...walls.map((wall) => wall.id), roof.id]
     upper.children = [slab.id]
-    const building = BuildingNode.parse({ id: 'building_s', children: [level.id, upper.id] })
-    const settled = open(document(building, level, upper, ...walls, roof, slab), 'settle')
+    const building = BuildingNode.parse({ id: `building_${id}`, children: [level.id, upper.id] })
+    return [building, level, upper, ...walls, roof, slab]
+  }
+
+  function settledScene(...nodes: AnyNode[]): SceneSnapshot {
+    const settled = open(document(...nodes), 'settle')
     settled.host().reconcile()
     settled
       .host()
       .applyChanges({ update: planRoofElevationUpdates(settled.store.getState().nodes) })
-    const base = sceneDocumentOf(settled.store)
+    return sceneDocumentOf(settled.store)
+  }
+
+  test('a thicker slab above lowers plane-bound walls and the roof they carry', () => {
+    const base = settledScene(...slabRoofBuilding('s'))
     const { scoped, complete } = scopedAndComplete(base, {
-      update: [{ id: slab.id, data: { thickness: 0.55 } }],
+      update: [{ id: 'slab_s', data: { thickness: 0.55 } }],
     })
     const y = (nodes: Record<string, AnyNode>) => (nodes.roof_s as RoofNode).position[1]
     expect(y(complete)).not.toBeCloseTo(y(base.nodes as Record<string, AnyNode>))
     expect(y(scoped)).toBeCloseTo(y(complete))
+  })
+
+  test("a slab edit in one building reads nothing of another's", () => {
+    const base = settledScene(...slabRoofBuilding('a'), ...slabRoofBuilding('b', 20))
+    const scene = open(base)
+    scene.host().applyChanges({ update: [{ id: 'slab_a', data: { thickness: 0.55 } }] })
+    const current = editedBy(base, (store) =>
+      store.getState().updateNode('wall_b0' as AnyNodeId, { name: 'North' }),
+    )
+    const applied = applyPatchWithDependencies(current, scene.patch(), scene.dependencies(), base)
+    expect(applied.ok).toBe(true)
   })
 
   test('an upper slab no longer recessed clamps the ceiling below', () => {

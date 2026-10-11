@@ -655,7 +655,7 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   return mergeNodeUpdate(currentNode, sanitized.value as Partial<AnyNode>)
 }
 
-function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_RIDGE_VENT_REFRESH_FIELDS.has(key))
 }
 
@@ -693,7 +693,7 @@ function refreshDefaultRidgeVentsForSegment(
   return nextVents.map((vent) => vent.id as AnyNodeId)
 }
 
-function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_GUTTER_REFRESH_FIELDS.has(key))
 }
 
