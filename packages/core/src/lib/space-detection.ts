@@ -16,6 +16,11 @@ import {
   resumeSceneHistory,
   subscribeSceneCommits,
 } from '../store/history-control'
+import {
+  currentSceneEnvironment,
+  type SceneEnvironment,
+  sceneEnvironmentOf,
+} from '../store/scene-environment'
 import { getClampedWallCurveOffset } from '../systems/wall/wall-curve'
 import { changedLevelConstructionDisplacements } from './floor-foundation-stack'
 import { createFloorOpeningIndex, floorOpeningTargets } from './floor-opening-intent'
@@ -492,24 +497,31 @@ function publishSpaces(levelIds: string[], nodes: SceneNodes, editorStore: any) 
 
 // Batch writers pause intermediate topology; the final resume reconciles every
 // level whose intent changed, including batches completed outside a store commit.
-let spaceDetectionPauseDepth = 0
-const resumeListeners = new Set<() => void>()
+// Per scene environment: a detached scene's batch never pauses (or resumes) the editor's.
+type SpaceDetectionPause = { depth: number; resumeListeners: Set<() => void> }
+const SPACE_DETECTION_PAUSE = Symbol('space-detection-pause')
+const pauseOf = (environment: SceneEnvironment = currentSceneEnvironment()) =>
+  environment.slot<SpaceDetectionPause>(SPACE_DETECTION_PAUSE, () => ({
+    depth: 0,
+    resumeListeners: new Set(),
+  }))
 
 /** Pause structure reconciliation. Refcounted — pair with `resumeSpaceDetection`. */
 export function pauseSpaceDetection(): void {
-  spaceDetectionPauseDepth += 1
+  pauseOf().depth += 1
 }
 
 /** Resume structure reconciliation. No-op if not currently paused. */
 export function resumeSpaceDetection(): void {
-  if (spaceDetectionPauseDepth === 0) return
-  spaceDetectionPauseDepth -= 1
-  if (spaceDetectionPauseDepth === 0) for (const reconcile of resumeListeners) reconcile()
+  const pause = pauseOf()
+  if (pause.depth === 0) return
+  pause.depth -= 1
+  if (pause.depth === 0) for (const reconcile of pause.resumeListeners) reconcile()
 }
 
 /** True iff structure reconciliation is currently paused. */
 export function isSpaceDetectionPaused(): boolean {
-  return spaceDetectionPauseDepth > 0
+  return pauseOf().depth > 0
 }
 
 export function createRoomTopologyIndex() {
@@ -530,6 +542,7 @@ export function initSpaceDetectionSync(
   // scene that merely loaded — rerunning on hydration resurrected auto slabs
   // the user had deleted in an earlier session.
   const initialNodes = sceneStore.getState().nodes
+  const pause = pauseOf(sceneEnvironmentOf(sceneStore))
   const topologyIndex = new RoomTopologyIndex<ExtractedRoom>({
     detectRooms: extractRooms,
     sampleWall: (wall) => sampleWallPointsForRoomDetection(wall).map(pointToTuple),
@@ -556,10 +569,12 @@ export function initSpaceDetectionSync(
 
   adoptSceneBaseline(initialNodes)
 
-  const unsubscribeCommits = subscribeSceneCommits((commit) => {
-    if (commit.origin === 'local') return
-    adoptSceneBaseline(commit.current.nodes)
-  })
+  const unsubscribeCommits = sceneEnvironmentOf(sceneStore).run(() =>
+    subscribeSceneCommits((commit) => {
+      if (commit.origin === 'local') return
+      adoptSceneBaseline(commit.current.nodes)
+    }),
+  )
 
   // Keep reconciliation in this synchronous store subscription. Zundo emits
   // the originating local SceneCommit only after subscribers return, so the
@@ -572,13 +587,16 @@ export function initSpaceDetectionSync(
       adoptSceneBaseline(state.nodes)
       return
     }
-    if (getSceneHistoryPauseDepth() > 0 || sceneStore.temporal.getState().isTracking === false)
+    if (
+      getSceneHistoryPauseDepth(sceneStore) > 0 ||
+      sceneStore.temporal.getState().isTracking === false
+    )
       return
 
     const nodes = state.nodes
     const candidateIds = activeSceneCommitNodeIds()
 
-    if (spaceDetectionPauseDepth > 0) return
+    if (pause.depth > 0) return
 
     const changedWalls = changedWallIdsByLevel(previousNodes, nodes, candidateIds)
     if (candidateIds && changedWalls.size > 0) {
@@ -686,12 +704,12 @@ export function initSpaceDetectionSync(
     // so collaboration receives the originator's ids even for AI/template batches.
     notifySceneCommit({ origin: 'local', before: beforeCommit, current: capture() })
   }
-  resumeListeners.add(reconcilePaused)
+  pause.resumeListeners.add(reconcilePaused)
 
   return () => {
     unsubscribe()
     unsubscribeCommits()
-    resumeListeners.delete(reconcilePaused)
+    pause.resumeListeners.delete(reconcilePaused)
   }
 }
 
