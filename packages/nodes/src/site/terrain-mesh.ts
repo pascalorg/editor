@@ -5,6 +5,7 @@ import {
   buildTerrainSkirt,
   HORIZON_PLANE_Y,
   patchUpdateRange,
+  SKIRT_DROP,
   type TerrainMeshBuffers,
   type TerrainSkirtBuffers,
   updateTerrainMesh,
@@ -45,7 +46,16 @@ export type TerrainGeometry = {
   readonly skirt: { readonly geometry: BufferGeometry; readonly buffers: TerrainSkirtBuffers }
 }
 
-export function createTerrainGeometry(field: TerrainField, holes: Ring[] = []): TerrainGeometry {
+/**
+ * `ring` (from `skirtRing`) runs the skirt along the lot's property line instead
+ * of the field's rectangle: the surface is cut to the lot by its material (see
+ * `lotMaskedMaterial`), and the skirt closes it as a block with a flat base.
+ */
+export function createTerrainGeometry(
+  field: TerrainField,
+  holes: Ring[] = [],
+  ring: Float32Array | null = null,
+): TerrainGeometry {
   const buffers = buildTerrainMesh(field)
   const holeBoundary = cutTerrainHoles(buffers, holes)
   const geometry = new BufferGeometry()
@@ -65,7 +75,7 @@ export function createTerrainGeometry(field: TerrainField, holes: Ring[] = []): 
   // A separate geometry, not extra vertices on the surface: the surface's dirty
   // range is a row span over a `cols * rows` layout, and appending a perimeter ring
   // to it would break that indexing for a saving of one draw call.
-  const skirtBuffers = buildTerrainSkirt(field)
+  const skirtBuffers = buildTerrainSkirt(field, ring)
   const skirtGeometry = new BufferGeometry()
   skirtGeometry.setAttribute(
     'position',
@@ -76,6 +86,7 @@ export function createTerrainGeometry(field: TerrainField, holes: Ring[] = []): 
     new BufferAttribute(skirtBuffers.normals, 3).setUsage(DynamicDrawUsage),
   )
   skirtGeometry.setIndex(new BufferAttribute(skirtBuffers.indices, 1))
+  if (skirtBuffers.ring) skirtGeometry.userData.ring = skirtBuffers.ring
   setSkirtBounds(skirtGeometry, field, span)
 
   return {
@@ -105,6 +116,7 @@ export function applyTerrainPatch(
   updateTerrainMesh(field, target.buffers, patch)
   if (target.holeBoundary) updateTerrainHoleBoundary(target.holeBoundary, target.buffers)
   if (
+    target.skirt.buffers.ring ||
     patch.col0 <= 0 ||
     patch.row0 <= 0 ||
     patch.col0 + patch.cols >= field.cols ||
@@ -190,13 +202,26 @@ function setSkirtBounds(
   field: TerrainField,
   { minY, maxY }: { minY: number; maxY: number },
 ): void {
-  const low = Math.min(minY, HORIZON_PLANE_Y) - 1
+  const low = Math.min(minY, HORIZON_PLANE_Y) - SKIRT_DROP
   const high = Math.max(maxY, HORIZON_PLANE_Y)
 
-  const minX = field.origin[0]
-  const minZ = field.origin[1]
-  const maxX = minX + (field.cols - 1) * field.spacing
-  const maxZ = minZ + (field.rows - 1) * field.spacing
+  let minX = field.origin[0]
+  let minZ = field.origin[1]
+  let maxX = minX + (field.cols - 1) * field.spacing
+  let maxZ = minZ + (field.rows - 1) * field.spacing
+  const ring = (geometry.userData as { ring?: Float32Array }).ring
+  if (ring && ring.length >= 6) {
+    minX = maxX = ring[0] ?? 0
+    minZ = maxZ = ring[1] ?? 0
+    for (let i = 2; i < ring.length; i += 2) {
+      const x = ring[i] ?? 0
+      const z = ring[i + 1] ?? 0
+      minX = Math.min(minX, x)
+      maxX = Math.max(maxX, x)
+      minZ = Math.min(minZ, z)
+      maxZ = Math.max(maxZ, z)
+    }
+  }
 
   geometry.boundingSphere ??= new Sphere()
   const sphere = geometry.boundingSphere

@@ -1,4 +1,10 @@
-import { type HeightPatch, heightAtSample, normalAt, type TerrainField } from '@pascal-app/core'
+import {
+  type HeightPatch,
+  heightAt,
+  heightAtSample,
+  normalAt,
+  type TerrainField,
+} from '@pascal-app/core'
 
 /**
  * Builds the terrain mesh buffers from a `TerrainField`.
@@ -42,7 +48,7 @@ export const HORIZON_PLANE_Y = -0.07
  * under the horizon disc. A metre reads as earth thickness from a grazing camera
  * without being tall enough to poke out of a neighbouring excavation.
  */
-const SKIRT_DROP = 1
+export const SKIRT_DROP = 1
 
 /** One vertex per sample, row-major — index `r * cols + c` matches the field. */
 export type TerrainMeshBuffers = {
@@ -149,6 +155,11 @@ export type TerrainSkirtBuffers = {
   positions: Float32Array
   normals: Float32Array
   indices: Uint32Array
+  /**
+   * When the skirt follows the lot's property line (`skirtRing`): its x, z pairs,
+   * counter-clockwise. Absent, the skirt runs round the field's own rectangle.
+   */
+  ring?: Float32Array
 }
 
 /**
@@ -206,13 +217,63 @@ function boundarySample(field: TerrainField, i: number): { col: number; row: num
   return { col: 0, row: 2 * (lastCol + lastRow) - i }
 }
 
-export function buildTerrainSkirt(field: TerrainField): TerrainSkirtBuffers {
-  const count = perimeterCount(field)
+/**
+ * The base of the lot as a block: one flat level under the field's lowest
+ * point (and under the horizon plane), so the skirt along the property line
+ * reads as earth whose thickness follows the slope, and the horizon disc can
+ * sit just beneath it without cutting into the lot anywhere.
+ */
+export function terrainBlockBase(field: TerrainField): number {
+  let minH = 0
+  for (let i = 0; i < field.heights.length; i++) {
+    const h = field.heights[i] ?? 0
+    if (h < minH) minH = h
+  }
+  return Math.min(minH * field.step, HORIZON_PLANE_Y) - SKIRT_DROP
+}
+
+/**
+ * The lot's property line as the skirt walks it: counter-clockwise in x, z (the
+ * field perimeter's own direction, so one winding and one normal formula serve
+ * both), a point at least every half grid cell so the top edge follows the
+ * ground between samples. Empty when the polygon is not a ring.
+ */
+export function skirtRing(
+  field: TerrainField,
+  polygon: ReadonlyArray<readonly [number, number]>,
+): Float32Array {
+  const points = polygon.filter(([x, z]) => Number.isFinite(x) && Number.isFinite(z))
+  if (points.length < 3 || field.cols < 2 || field.rows < 2) return new Float32Array(0)
+  let area = 0
+  for (let i = 0; i < points.length; i++) {
+    const [x0, z0] = points[i] as readonly [number, number]
+    const [x1, z1] = points[(i + 1) % points.length] as readonly [number, number]
+    area += x0 * z1 - x1 * z0
+  }
+  const ordered = area > 0 ? points : [...points].reverse()
+  const step = field.spacing / 2
+  const out: number[] = []
+  for (let i = 0; i < ordered.length; i++) {
+    const [ax, az] = ordered[i] as readonly [number, number]
+    const [bx, bz] = ordered[(i + 1) % ordered.length] as readonly [number, number]
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step))
+    for (let k = 0; k < n; k++) out.push(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n)
+  }
+  return Float32Array.from(out)
+}
+
+export function buildTerrainSkirt(
+  field: TerrainField,
+  ring?: Float32Array | null,
+): TerrainSkirtBuffers {
+  const onRing = !!ring && ring.length >= 6
+  const count = onRing ? (ring as Float32Array).length / 2 : perimeterCount(field)
   const vertices = count === 0 ? 0 : (count + 1) * 2
   const buffers: TerrainSkirtBuffers = {
     positions: new Float32Array(vertices * 3),
     normals: new Float32Array(vertices * 3),
     indices: new Uint32Array(count * 6),
+    ...(onRing ? { ring: ring as Float32Array } : {}),
   }
   for (let i = 0; i < count; i++) {
     const base = i * 6
@@ -240,6 +301,10 @@ export function buildTerrainSkirt(field: TerrainField): TerrainSkirtBuffers {
  * complexity because it saves 400 KB a dab; here there is nothing to save.
  */
 export function updateTerrainSkirt(field: TerrainField, buffers: TerrainSkirtBuffers): void {
+  if (buffers.ring) {
+    updateRingSkirt(field, buffers, buffers.ring)
+    return
+  }
   const count = perimeterCount(field)
   if (count === 0) return
 
@@ -263,6 +328,35 @@ export function updateTerrainSkirt(field: TerrainField, buffers: TerrainSkirtBuf
     const bottomIndex = topIndex + 1
     writeSkirtVertex(buffers, topIndex, x, Math.max(h, HORIZON_PLANE_Y), z, nx, nz)
     writeSkirtVertex(buffers, bottomIndex, x, Math.min(h, HORIZON_PLANE_Y) - SKIRT_DROP, z, nx, nz)
+  }
+}
+
+/**
+ * The property-line skirt: its top on the rendered ground (`heightAt`, the
+ * surface's own triangles), its bottom on the block's flat base — never above
+ * the ground it closes, so nothing stands proud of the lot from any side.
+ */
+function updateRingSkirt(
+  field: TerrainField,
+  buffers: TerrainSkirtBuffers,
+  ring: Float32Array,
+): void {
+  const count = ring.length / 2
+  if (count < 3) return
+  const base = terrainBlockBase(field)
+  for (let i = 0; i <= count; i++) {
+    const at = i % count
+    const x = ring[at * 2] ?? 0
+    const z = ring[at * 2 + 1] ?? 0
+    const prev = (at - 1 + count) % count
+    const next = (at + 1) % count
+    const tx = (ring[next * 2] ?? 0) - (ring[prev * 2] ?? 0)
+    const tz = (ring[next * 2 + 1] ?? 0) - (ring[prev * 2 + 1] ?? 0)
+    const tLength = Math.hypot(tx, tz) || 1
+    const nx = tz / tLength
+    const nz = -tx / tLength
+    writeSkirtVertex(buffers, i * 2, x, heightAt(field, x, z), z, nx, nz)
+    writeSkirtVertex(buffers, i * 2 + 1, x, base, z, nx, nz)
   }
 }
 

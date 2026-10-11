@@ -336,9 +336,44 @@ export function setbackEnvelope(
       else if (runs[(i + 1) % n] !== g && streetLike(after)) runRole.set(g, after)
     }
   }
+  // One lot line drawn as two: the county fabric splits a frontage at a kink of
+  // a degree or two, and only one half may come back from the street lookup
+  // (or the north-facing fallback). The half left out took a side yard, and
+  // the front yard swung round their shared corner in a circle as deep as
+  // itself. An edge running on nearly straight from a front or street edge
+  // is that frontage too.
+  const roleOf = (i: number) =>
+    runRole.get(runs[(i + n) % n] as number) ?? (roles[(i + n) % n] as EdgeRole)
+  const direction = (i: number) => {
+    const p = points[(i + n) % n] as Pt
+    const q = points[(i + 1 + n) % n] as Pt
+    const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1
+    return [(q[0] - p[0]) / l, (q[1] - p[1]) / l] as const
+  }
+  const straightOn = Math.cos((8 * Math.PI) / 180)
+  const continued = new Map<number, EdgeRole>()
+  for (let pass = 0; pass < n; pass++) {
+    let grew = false
+    for (let i = 0; i < n; i++) {
+      const own = continued.get(i) ?? roleOf(i)
+      if (streetLike(own)) continue
+      const d = direction(i)
+      for (const j of [i - 1, i + 1]) {
+        const k = (j + n) % n
+        const theirs = continued.get(k) ?? roleOf(k)
+        const e = direction(k)
+        if (streetLike(theirs) && d[0] * e[0] + d[1] * e[1] > straightOn) {
+          continued.set(i, theirs)
+          grew = true
+          break
+        }
+      }
+    }
+    if (!grew) break
+  }
   const distances: number[] = []
   for (let i = 0; i < n; i++) {
-    const role = runRole.get(runs[i] as number) ?? (roles[i] as EdgeRole)
+    const role = continued.get(i) ?? runRole.get(runs[i] as number) ?? (roles[i] as EdgeRole)
     const d = setbackForRole(
       setbacks,
       role === 'left' || role === 'right' ? (roles[i] as EdgeRole) : role,

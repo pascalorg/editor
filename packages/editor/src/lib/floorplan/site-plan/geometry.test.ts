@@ -195,6 +195,38 @@ describe('setbackEnvelope', () => {
     expect(setbackEnvelope(LOT, { front: 0, side: 0, rear: 0 }, 0)).toEqual([])
     expect(setbackEnvelope([[0, 0]], { front: 1, side: 1, rear: 1 }, 0)).toEqual([])
   })
+  it('a frontage the county drew as two nearly straight lines takes one front yard, not an arc', () => {
+    // 1054 Rivera Dr, Sacramento as the parcel fabric draws it: the front (north, y ≈ −15.4) split
+    // at a kink of under 2° into edges 3 and 4; the street lookup failed, so only edge 4 came back
+    // as frontage
+    const rivera: Pt[] = [
+      [12.39, -15.35],
+      [12.77, 14.38],
+      [-14.32, 15.47],
+      [-14.34, -15.26],
+      [-1.53, -15.56],
+    ]
+    const env = setbackEnvelope(rivera, { front: 6.096, side: 1.524, rear: 4.572 }, 4, {
+      streetEdges: [4],
+    })
+    // straight across the whole frontage (the kink's own corner, no curve round it): five corners at most
+    expect(env.length).toBeLessThanOrEqual(5)
+    const segDist = (p: readonly number[], a: readonly number[], b: readonly number[]) => {
+      const abx = b[0]! - a[0]!
+      const aby = b[1]! - a[1]!
+      const t = Math.max(
+        0,
+        Math.min(1, ((p[0]! - a[0]!) * abx + (p[1]! - a[1]!) * aby) / (abx * abx + aby * aby)),
+      )
+      return Math.hypot(p[0]! - (a[0]! + abx * t), p[1]! - (a[1]! + aby * t))
+    }
+    // both halves of the frontage keep the front yard
+    for (const v of env)
+      for (const i of [3, 4])
+        expect(segDist(v, rivera[i]!, rivera[(i + 1) % rivera.length]!)).toBeGreaterThan(
+          6.096 - 0.06,
+        )
+  })
 })
 
 describe('rayToPolygon + castYardDimensions', () => {
