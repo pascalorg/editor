@@ -12,11 +12,15 @@ import {
   planWallDeletion,
   resumeSceneHistory,
   resumeSpaceDetection,
-  runAsSingleSceneHistoryStep,
   structureChangeBatch,
 } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import { liveSceneRuntime, type SceneRuntime } from '@pascal-app/core/runtime'
+import {
+  declareActionDependencies,
+  liveSceneRuntime,
+  runAsSettledSceneStep,
+  type SceneRuntime,
+} from '@pascal-app/core/runtime'
 import type { AnyNode, Collection, CollectionId } from '@pascal-app/core/schema'
 import {
   type AnyNodeId,
@@ -114,15 +118,20 @@ export class SceneBridge {
   exportJSON(): SceneGraph & { collections: Record<string, unknown> } {
     const state = this.store.getState()
     const reader = this.runtime.reader()
+    // Everything exported is read through the reader: materials and the plugin list included.
+    const materials = Object.fromEntries(
+      reader.query({ entity: 'material' }).map((material) => [material.id, material]),
+    )
+    const installedPlugins = reader.installedPlugins()
     // Deep-clone so callers can't mutate store state directly.
     return JSON.parse(
       JSON.stringify({
         nodes: reader.nodes,
         rootNodeIds: this.getRootNodeIds(),
         collections: reader.collections ?? {},
-        materials: state.materials ?? {},
-        ...(state.hasExplicitPluginInstallState || state.installedPlugins.length > 0
-          ? { installedPlugins: state.installedPlugins }
+        materials,
+        ...(state.hasExplicitPluginInstallState || installedPlugins.length > 0
+          ? { installedPlugins }
           : {}),
       }),
     )
@@ -343,8 +352,9 @@ export class SceneBridge {
       assertDerivedNodeWrites(this.getNodes(), {
         create: [{ node: parentId ? { ...node, parentId } : node }],
       })
-      runAsSingleSceneHistoryStep(this.store, () => {
+      runAsSettledSceneStep(this.store, () => {
         this.store.getState().createNode(node, parentId)
+        declareActionDependencies(this.runtime, before, { create: [{ node, parentId }] })
         this.runtime.reconcile(before)
       })
     })
@@ -359,8 +369,9 @@ export class SceneBridge {
     this.write(() => {
       const before = this.store.getState().nodes
       assertDerivedNodeWrites(this.getNodes(), { update: [{ id, data }] })
-      runAsSingleSceneHistoryStep(this.store, () => {
+      runAsSettledSceneStep(this.store, () => {
         this.store.getState().updateNode(id, data)
+        declareActionDependencies(this.runtime, before, { update: [{ id, data }] })
         this.runtime.reconcile(before)
       })
     })
@@ -390,8 +401,9 @@ export class SceneBridge {
     const beforeNodes = this.store.getState().nodes
     const before = new Set(Object.keys(beforeNodes))
     this.write(() =>
-      runAsSingleSceneHistoryStep(this.store, () => {
+      runAsSettledSceneStep(this.store, () => {
         this.store.getState().deleteNode(id)
+        declareActionDependencies(this.runtime, beforeNodes, { delete: [id] })
         this.runtime.reconcile(beforeNodes)
       }),
     )
@@ -523,9 +535,15 @@ export class SceneBridge {
         mintId: generateId,
       }).changes,
     )
+    // What was asked for, before the deletion planner adds its own writes.
+    const requested = {
+      create: [...createOps.values()],
+      update: [...updateOps].map(([id, data]) => ({ id, data })),
+      delete: [...deleteIds],
+    }
     for (const { id, data } of planned.update)
       updateOps.set(id, { ...updateOps.get(id), ...data } as Partial<AnyNode>)
-    runAsSingleSceneHistoryStep(this.store, () => {
+    runAsSettledSceneStep(this.store, () => {
       pauseSpaceDetection()
       try {
         this.store.getState().createNodes([...createOps.values(), ...planned.create])
@@ -534,6 +552,7 @@ export class SceneBridge {
       } finally {
         resumeSpaceDetection()
       }
+      declareActionDependencies(this.runtime, beforeNodes, requested)
       this.runtime.reconcile(beforeNodes)
     })
     const postNodes = this.store.getState().nodes
@@ -574,7 +593,9 @@ export class SceneBridge {
    * before the triggering tool call rather than stranding derived nodes.
    */
   deriveStructure(levelIds?: AnyNodeId[]): { createdIds: AnyNodeId[]; deletedIds: AnyNodeId[] } {
-    return this.write(() => this.deriveStructureInScope(levelIds))
+    return this.write(() =>
+      runAsSettledSceneStep(this.store, () => this.deriveStructureInScope(levelIds)),
+    )
   }
 
   private deriveStructureInScope(levelIds?: AnyNodeId[]): {
@@ -678,7 +699,7 @@ export class SceneBridge {
   }
 
   runAsSingleHistoryStep<T>(run: () => T): T {
-    return this.write(() => runAsSingleSceneHistoryStep(this.store, run))
+    return this.write(() => runAsSettledSceneStep(this.store, run))
   }
 
   // ---- internal helpers ----

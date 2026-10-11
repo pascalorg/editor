@@ -44,6 +44,7 @@ import { type AssetCatalog, builtInCatalog } from './asset-catalog'
 import { registerCollectionTools } from './collections'
 import { refusalResult } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 import { ROOM_TOOL_ANNOTATIONS, type RoomToolName, structureOutput } from './structure-tools'
 
 // Tools the MCP and the hosted chat share whole: one contract, one core operation. The MCP only
@@ -387,7 +388,7 @@ export function registerOperationTool(
         ...(tool.catalog && { catalog: await catalog() }),
       }
       try {
-        outcome = bridge.runInScene(() => tool.operation(nodes, input as never, context))
+        outcome = inScene(bridge, () => tool.operation(nodes, input as never, context))
       } catch (error) {
         return refusalResult(error)
       }

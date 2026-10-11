@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { type SceneCommit, subscribeSceneCommits } from '@pascal-app/core'
 import {
   captureRegistryVersions,
   effectIds,
@@ -9,7 +10,18 @@ import {
   SceneEnvironmentDisposedError,
   type SceneSnapshot,
 } from '@pascal-app/core/runtime'
-import { type AnyNode, BuildingNode, LevelNode } from '@pascal-app/core/schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  BuildingNode,
+  GeometryArtifactManifest,
+  LevelNode,
+  RoofNode,
+  WallNode,
+} from '@pascal-app/core/schema'
+import { createSceneOperations, type SceneOperations } from '../operations'
+import { createPascalMcpServer } from '../server'
+import type { GeometryScriptHost } from '../tools/add-object'
 import { registerSharedTools } from '../tools/shared-tools'
 import { SceneBridge } from './scene-bridge'
 
@@ -26,6 +38,27 @@ function snapshot(): SceneSnapshot {
     materials: {},
     installedPlugins: [],
   } as SceneSnapshot
+}
+
+function detached(effectId: string, from: SceneSnapshot = snapshot()) {
+  return openDetachedScene(from, {
+    base: { kind: 'authority', seq: 1 },
+    context: {
+      activeLevelId: 'level_g',
+      selection: [],
+      units: 'metric',
+      catalogVersion: 'test',
+      registryVersions: captureRegistryVersions(),
+    },
+    ids: effectIds(effectId),
+  })
+}
+
+async function connect(server: ReturnType<typeof createPascalMcpServer>) {
+  const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: 'test-client', version: '0.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  return client
 }
 
 async function addWallDetached(effectId: string) {
@@ -80,5 +113,155 @@ describe('SceneBridge over a detached scene', () => {
       SceneEnvironmentDisposedError,
     )
     again.scene.dispose()
+  })
+})
+
+describe('every MCP tool on a detached scene', () => {
+  const compiledBox = {
+    sha256: 'a'.repeat(64),
+    script: 'b'.repeat(64),
+    mount: 'floor' as const,
+    params: {},
+    manifest: GeometryArtifactManifest.parse({
+      bounds: { min: [-0.5, 0, -0.5], max: [0.5, 1, 0.5] },
+      triangles: 12,
+    }),
+  }
+  const host: GeometryScriptHost = {
+    compile: async () => ({ ...compiledBox, glb: new Uint8Array() }) as never,
+    storeArtifact: async ({ sha256 }) => sha256,
+    readArtifact: async () => null,
+  }
+
+  async function build(effectId: string) {
+    const scene = detached(effectId)
+    const bridge = new SceneBridge({ runtime: scene })
+    bridge.setActiveScene({ id: 'scene_detached', name: 'Detached' } as never)
+    const client = await connect(createPascalMcpServer({ bridge, geometryScripts: host }))
+    const calls = [
+      ['create_unit', { buildingId: 'building_b', name: 'Flat' }],
+      ['create_roof', { levelId: 'level_g', width: 6, depth: 4 }],
+      ['add_column', { levelId: 'level_g', x: 1, z: 1 }],
+      [
+        'add_object',
+        {
+          code: 'export default function build() {}',
+          levelId: 'level_g',
+          name: 'Planter',
+          reason: 'No planter type.',
+          x: 2,
+          z: 2,
+        },
+      ],
+    ] as const
+    for (const [name, args] of calls) {
+      const result = await client.callTool({ name, arguments: args })
+      expect(result.isError, `${name}: ${JSON.stringify(result.content)}`).toBeFalsy()
+    }
+    const patch = scene.patch()
+    scene.dispose()
+    return patch
+  }
+
+  test('mint the scene ids: the same effect recomputed gives the same patch', async () => {
+    const first = await build('effect_tools')
+    expect(first.nodeCreates.map(({ node }) => node.type)).toEqual(
+      expect.arrayContaining(['unit', 'roof', 'column', 'item']),
+    )
+    expect(await build('effect_tools')).toEqual(first)
+  })
+})
+
+describe('SceneBridge commits', () => {
+  test('an edit and the roof it moves land in one commit and one undo step', () => {
+    const bridge = new SceneBridge()
+    const level = LevelNode.parse({ id: 'level_w', parentId: 'building_w', level: 0, height: 3 })
+    const upper = LevelNode.parse({ id: 'level_u', parentId: 'building_w', level: 1, height: 3 })
+    const corners: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ]
+    const walls = corners.map((start, index) =>
+      WallNode.parse({
+        id: `wall_${index}`,
+        parentId: level.id,
+        start,
+        end: corners[(index + 1) % 4]!,
+        height: 3,
+      }),
+    )
+    const roof = RoofNode.parse({
+      id: 'roof_w',
+      parentId: upper.id,
+      support: { kind: 'walls' },
+      position: [2, 0, 1.5],
+    })
+    level.children = walls.map((wall) => wall.id)
+    upper.children = [roof.id]
+    const building = BuildingNode.parse({ id: 'building_w', children: [level.id, upper.id] })
+    bridge.setScene(
+      Object.fromEntries(
+        [building, level, upper, ...walls, roof].map((node) => [node.id, node]),
+      ) as never,
+      [building.id] as never,
+    )
+    bridge.clearHistory()
+    const roofY = () => (bridge.getNode('roof_w' as AnyNodeId) as RoofNode).position[1]
+    const settledY = roofY()
+    const commits: SceneCommit[] = []
+    const stop = subscribeSceneCommits((commit) => commits.push(commit))
+    try {
+      bridge.updateNode('wall_0' as AnyNodeId, { height: 4.2 } as never)
+    } finally {
+      stop()
+    }
+    expect(roofY()).toBeGreaterThan(settledY)
+    expect(commits).toHaveLength(1)
+    expect((commits[0]!.current.nodes['roof_w' as AnyNodeId] as RoofNode).position[1]).toBe(roofY())
+    expect(commits[0]!.changedNodeIds).toContain('roof_w' as AnyNodeId)
+    expect(bridge.getHistory().pastCount).toBe(1)
+    bridge.undo()
+    expect(roofY()).toBe(settledY)
+  })
+})
+
+describe('SceneOperations without runInScene', () => {
+  test('a custom implementation serves the shared tools, its ids unscoped', async () => {
+    const operations = createSceneOperations({ bridge: new SceneBridge() })
+    // A host's own implementation predating the scene scope.
+    const custom = new Proxy(operations, {
+      get: (target, key) => {
+        if (key === 'runInScene') return undefined
+        const value = Reflect.get(target, key, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as SceneOperations
+    const bridge = new SceneBridge()
+    bridge.setScene(snapshot().nodes as never, snapshot().rootNodeIds as never)
+    const client = await connect(createPascalMcpServer({ bridge, operations: custom }))
+    const result = await client.callTool({
+      name: 'add_wall',
+      arguments: { levelId: 'level_g', start: [0, 0], end: [3, 0] },
+    })
+    expect(result.isError, JSON.stringify(result.content)).toBeFalsy()
+  })
+})
+
+describe('SceneBridge export', () => {
+  test('reads materials and the plugin list as dependencies', () => {
+    const base = {
+      ...snapshot(),
+      materials: { mat_red: { id: 'mat_red', name: 'Red', material: { color: '#ff0000' } } },
+      installedPlugins: ['pascal:test'],
+    } as unknown as SceneSnapshot
+    const scene = detached('effect_export', base)
+    const exported = new SceneBridge({ runtime: scene }).exportJSON() as Record<string, unknown>
+    expect(Object.keys(exported.materials as object)).toEqual(['mat_red'])
+    expect(scene.dependencies()).toEqual(
+      expect.arrayContaining([{ kind: 'material', id: 'mat_red' }, { kind: 'plugins' }]),
+    )
+    scene.dispose()
   })
 })

@@ -14,6 +14,7 @@ import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult } from './errors'
 import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 
 // The collection tools share contracts and operations with the chat; they read the scene's
 // collections beside its nodes, which the node-only shared operations never see.
@@ -55,7 +56,7 @@ export function registerCollectionTools(server: McpServer, bridge: SceneOperatio
     async (input: EditCollectionInput) => {
       let outcome: AgentOperationOutcome
       try {
-        outcome = bridge.runInScene(() => editCollection(sceneOf(bridge), input))
+        outcome = inScene(bridge, () => editCollection(sceneOf(bridge), input))
       } catch (error) {
         return refusalResult(error)
       }

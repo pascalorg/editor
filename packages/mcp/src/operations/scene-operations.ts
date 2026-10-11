@@ -81,8 +81,13 @@ export interface SceneOperations {
   getHistory(): { pastCount: number; futureCount: number }
   clearHistory(): void
   runAsSingleHistoryStep<T>(run: () => T): T
-  /** Runs `run` in the scene's scope (its ids, history environment and disposal guard). */
-  runInScene<T>(run: () => T): T
+  /**
+   * Runs `run` synchronously in the scene's scope: its ids, history environment and disposal guard
+   * (`SceneBridge` over a runtime). Optional: an implementation without it runs `run` as is, which
+   * is right for a scene with random ids. One that computes on a detached scene must provide it,
+   * or the ids its tools mint are not the scene's.
+   */
+  runInScene?<T>(run: () => T): T
 
   createProject(options: ProjectCreateOptions): Promise<ProjectStatus>
   getProjectStatus(id: string): Promise<ProjectStatus | null>
