@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  isScriptedNode,
   nodeMechanism,
   nodeRegistry,
   sceneRegistry,
@@ -8,6 +9,27 @@ import {
   useScene,
 } from '@pascal-app/core'
 import type { WalkthroughInteract } from '../../../store/use-first-person-hud'
+
+/**
+ * Whether the walkthrough swings this door or window itself, through the native `operationState`
+ * its door and window systems draw. One built from a script has no native leaf or sash: a swing
+ * would draw nothing, so its clips run through its mechanism, as an authored object's do.
+ */
+export function hasNativeLeaf(node: AnyNode | undefined): boolean {
+  return !isScriptedNode(node)
+}
+
+/** Mounted doors and windows the walkthrough's own door and window targets cover. */
+export function nativeOpeningIds(): AnyNodeId[] {
+  const nodes = useScene.getState().nodes
+  const ids: AnyNodeId[] = []
+  for (const kind of ['door', 'window'] as const) {
+    for (const id of sceneRegistry.byType[kind] ?? []) {
+      if (hasNativeLeaf(nodes[id as AnyNodeId])) ids.push(id as AnyNodeId)
+    }
+  }
+  return ids
+}
 
 /**
  * Mounted nodes the walkthrough runs through `capabilities.mechanism`, any kind

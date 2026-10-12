@@ -8,7 +8,12 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { Object3D } from 'three'
-import { mechanismHudInteract, mechanismTargetIds } from './mechanism-targets'
+import {
+  hasNativeLeaf,
+  mechanismHudInteract,
+  mechanismTargetIds,
+  nativeOpeningIds,
+} from './mechanism-targets'
 
 const switchMechanism = {
   has: (node: AnyNode) => (node as unknown as { joints: number }).joints > 0,
@@ -71,5 +76,24 @@ describe('walkthrough mechanism targets', () => {
     })
     expect(mechanismHudInteract(lid)).toEqual({ label: 'item', verb: 'open' })
     expect(mechanismHudInteract(mount(registerKind({}), 'plain_hud'))).toBeNull()
+  })
+})
+
+// A door or window built from a script has no native leaf or sash: the walkthrough's own door and
+// window targets only start a native swing on it, which draws nothing. Its `open` clip runs
+// through its mechanism, as an authored object's does.
+describe('walkthrough doors and windows', () => {
+  const script = { source: { kind: 'script', script: 'b'.repeat(64), artifact: 'a'.repeat(64) } }
+
+  test('the doors and windows it swings itself are the ones with a native leaf', () => {
+    const native = mount('door', 'door_native')
+    const scripted = mount('door', 'door_scripted', script)
+    mount('window', 'window_native')
+    mount('window', 'window_scripted', script)
+
+    expect(nativeOpeningIds().sort()).toEqual(['door_native', 'window_native'] as AnyNodeId[])
+    expect(hasNativeLeaf(native)).toBe(true)
+    expect(hasNativeLeaf(scripted)).toBe(false)
+    expect(hasNativeLeaf(undefined)).toBe(true)
   })
 })
