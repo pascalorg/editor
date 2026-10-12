@@ -37,7 +37,8 @@ export const createRoomTool = {
       ),
     wallHeight: measurement('length', 'm', {
       positive: true,
-      description: "Height of the walls it builds (default: the storey's).",
+      description:
+        "Omit to follow the storey and covering-slab underside. Equal to the stored storey height also follows that plane; other values are body heights above the wall's support, including deliberately taller walls.",
     }).optional(),
     wallThickness: measurement('length', 'm', {
       positive: true,

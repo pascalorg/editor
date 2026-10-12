@@ -8,7 +8,8 @@ The invariant, in one sentence:
 
 > Raising a room floor creates a solid platform without moving its wall tops or ceiling.
 > Raising a ground footprint lifts its walls, ceilings, roofs and supported upper storeys.
-> Plane-bound walls keep following the storey; explicit walls keep their body height above their elected base.
+> Plane-bound walls, including explicit heights equal to the stored storey height, follow the storey.
+> Other explicit walls keep their body height above their elected base.
 > Ground-hosted terrain walls retain their authored body-height rule. Platform fill and
 > per-face wall bases extend only the bottom, independently of the hosted-child datum.
 
@@ -20,7 +21,7 @@ The invariant, in one sentence:
 |---|---|---|
 | `level.height` | Storey height in meters, floor-to-floor. Level world Y is resolved by `getLevelElevations`, ordered by the `level` ordinal. | Unmigrated legacy data (never seen post-load; the migration writes it). Consumers fall back to `DEFAULT_LEVEL_HEIGHT` (2.5). |
 | `level.baseElevation` | Additive offset from the computed stack position. It shifts this level and cumulatively shifts every higher level in the same building; negative offsets are valid. | Zero (the schema default). |
-| `wall.height` | Explicit body height above the elected structural support, including below datum. | **Plane-bound**: follows the footprint-adjusted storey plane, clamped to covering-slab undersides. |
+| `wall.height` | Equal to the stored `level.height` within 1e-6 m: storey intent, unless ground-hosted. Otherwise an explicit body height above elected structural support, including below datum. | **Plane-bound**: follows the footprint-adjusted storey plane, clamped to covering-slab undersides. |
 | `ceiling.height` | Explicit custom height, write-clamped to the bound. | **Follows the level**: resolves live to `getCeilingClampBound` = `min(level height, covering underside) − 0.01`. |
 | `roof.support.kind` | `walls` follows the highest spatially matched wall top in the roof’s level frame; `level` keeps custom Y; `roof` retains its roof-surface attachment rule. Room and curved-wall creation write `walls`; free-drawn rectangles write `level` at Y 0. | Existing roofs remain custom (`level`); no load migration enables following. |
 | `slab.floorHeight` | Ground-contact base plate authored floor top, in level-local metres. Upper plates author the top through thickness with a fixed underside. | Automatic floor datum from its supports. |
@@ -48,7 +49,8 @@ Two schema rules protect these semantics:
 |---|---|---|
 | `getStoredLevelHeight`, `getLevelElevations`, `getLevelAbove/Below` | `services/storey.ts` | Level heights, offset-aware per-building stacking, neighbors |
 | `getWallPlaneTop` | `services/storey.ts` | A plane-bound wall's top: level height clamped to covering-slab undersides, span-sampled with boundary-inclusive band overlap |
-| `resolveWallTop`, `resolveWallEffectiveHeight`, `MIN_WALL_HEIGHT` | `systems/wall/wall-top.ts` | A wall's top / effective height given plane + elected base |
+| `getWallTop` | `services/storey.ts` | A wall's resolved top given scene + elected base; compares explicit height to the raw stored storey height, not the clamped or lifted plane |
+| `resolveWallTop`, `resolveWallEffectiveHeight`, `wallFollowsStorey`, `MIN_WALL_HEIGHT` | `systems/wall/wall-top.ts` | A wall's top / effective height given plane + elected base + raw authored storey height |
 | `getWallBaseElevationForNodes`, `getWallEffectiveHeightForNodes` | spatial-grid manager | The elected base and body height with terrain/support offsets, for UI overlays |
 | `getCeilingClampBound`, `getCoveringSlabUndersideAt` | `services/storey.ts` | Ceiling bound; the cross-level covering query (level above, non-recessed slabs) |
 | `resolveCeilingHeight` | `services/level-height.ts` | A ceiling's effective height (explicit or follows) |
@@ -64,7 +66,7 @@ Two schema rules protect these semantics:
 
 - A slab under plane-bound walls clamps its elevation to `level height − MIN_WALL_HEIGHT` (0.5).
 - Ceilings clamp (at write time, and reactively downward via space-detection) to `min(level top, covering-slab underside) − 0.01`.
-- Plane-bound wall tops clamp to covering-slab undersides. Upper base-plate height and thickness edits keep the underside fixed, leaving the walls below unchanged. Explicit-height walls keep their authored height.
+- Plane-bound wall tops, including explicit heights matching the stored storey height, clamp to covering-slab undersides. Upper base-plate height and thickness edits keep the underside fixed, leaving the walls below unchanged. Other explicit-height walls keep their authored body height.
 - Solid slab controls have non-overlapping contracts: the cube translates the occupied interval while preserving `thickness`; the chevron and panel thickness control hold the underside fixed and move the walking surface by writing `thickness` and `elevation` together. Panel elevation translates the body while preserving thickness. Recesses store their rim separately so floor/rim/depth controls and presets remain relative to the same anchor.
 - Structural elevation trackers move the reference base, not the body dimensions. A slab tracker moves its underside and keeps `thickness`; a wall tracker writes `supportOffset` and materializes its current body `height`; a fence tracker writes `supportOffset` and keeps `height`. Recessed slabs retain their separate rim/depth control.
 - Auto plates (`boundary: 'auto'`) render their stored full footprint unchanged. Wall-face adoption in `getRenderableSlabPolygon` applies only to grounded manual slabs (`elevation − thickness ≤ 0.01`, not recessed) — floating decks keep their drawn polygon and are skipped as seam candidates.
@@ -116,10 +118,39 @@ wall tops in the storey below. Room edits
 check the edited room and rooms sharing its walls/openings, with cached geometry
 and feasibility results. Existing conflicts may improve without being refused.
 
-Plate edits keep explicit wall heights while their bases move. Legacy load
+Plate edits keep custom explicit wall heights while their bases move. Legacy load
 reconciliation still preserves pre-plate wall tops when first deriving plates.
 The final ceiling clamp runs after footprint derivation
 so the first and second loads agree. Client and hosted authority use this same pass.
+
+## Explicit storey-height walls and saved scenes
+
+`create_room` stores a supplied `wallHeight` unchanged; omitting it leaves the wall
+plane-bound. A supplied height equal to the raw stored `level.height` now means
+the same storey intent. For a 3.6 m storey, a wall standing on a slab whose top and
+thickness are 0.05 m resolves to top 3.60 m, not 3.65 m. An upper slab at local
+elevation 0.05 m and thickness 0.05 m has underside 3.60 m in the lower level's
+frame, so the wall body is 3.55 m and does not penetrate the slab.
+
+Already-saved walls receive this correction on resolution, without rewriting
+their height keys or changing slab thickness. Custom heights remain body-relative:
+a 4.2 m wall on the same support still tops out at 4.25 m. Ground-hosted walls
+(`supportSlabId: 'ground'`) retain body-height semantics even at storey height.
+Without an authored level height, explicit walls retain body-height semantics;
+existing legacy load migration still owns conversion of those scenes.
+
+Equality is inferred intent, not a persisted follow mode: deliberately authoring a
+body height exactly equal to the storey height cannot be distinguished from
+storey intent. If the stored storey height later changes, the unchanged explicit
+wall height becomes custom; omit `height` for unconditional following.
+
+`verify_scene` reports `wall_covering_slab_contact` with both `wallId` and `slabId`,
+the wall top, slab underside/top, penetration depth, and walking-surface
+coplanarity. Heights are in the wall's level-local frame. A wall seated exactly at
+the underside is not a contact issue. Covering queries respect holes, boundaries,
+wall thickness and curves, and exclude recessed slabs. Deliberately tall walls
+remain allowed; the observation flags their intersection for review rather than
+silently shortening them.
 
 ## Pointer-decided placement
 

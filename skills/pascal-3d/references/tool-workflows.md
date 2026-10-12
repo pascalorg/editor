@@ -66,6 +66,14 @@ Where a photo's glass meets at a corner with no wall between the panes, build on
 
 When walls are drawn first, `create_room` over them names the room they make instead of adding a second zone: `zoneId` is the existing room's. If that room has a name of its own (not a number the editor gave it), the call is refused with `room_named_by_person`, worded with its name: pass `rename: true` only when the person asked for the rename; otherwise ask them. Never rename a room unasked. The editor's own room tool behaves as before; the refusal is for agents.
 
+For new walls, omit `wallHeight` to follow the storey. A supplied height equal to
+the stored storey height also ends at the covering slab's underside rather than
+adding the supporting floor thickness. Other explicit heights stay body-relative
+and can deliberately span storeys. `verify_scene` reports
+`wall_covering_slab_contact` with both node IDs, level-local wall/slab heights,
+penetration, and walking-surface coplanarity; underside seating is not a contact.
+Review a tall wall against the slab's openings rather than thickening the slab.
+
 ## When a call is refused `invalid_input`
 
 The arguments are the wrong shape or type for the tool's schema, and nothing ran. Read the refusal's `error`, fix the arguments and call again. Codes a tool raises itself (`invalid_update`, `cannot_enclose`, `room_named_by_person`) are not `invalid_input`: they name what the scene refused.
