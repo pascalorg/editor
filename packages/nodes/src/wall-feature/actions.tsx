@@ -6,16 +6,10 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import {
-  ActionMenuButton,
-  activeViewLayout,
-  useEditor,
-  useInteractionScope,
-  VIEW_2D,
-} from '@pascal-app/editor'
+import { activeViewLayout, useEditor, useInteractionScope, VIEW_2D } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Box, PanelTop } from 'lucide-react'
 import { useMemo } from 'react'
+import { FeatureActionButton } from '../shared/feature-action-button'
 import { createWallFeatureDraft } from './placement'
 
 export function startWallFeaturePlacement(host: WallNode | Feature, mode: Feature['mode']) {
@@ -41,7 +35,7 @@ export function startWallFeaturePlacement(host: WallNode | Feature, mode: Featur
   })
   useEditor.getState().setTool('wall-feature')
 }
-export default function WallFeatureActions() {
+export default function WallFeatureActions({ variant = 'menu' }: { variant?: 'menu' | 'panel' }) {
   const ids = useViewer((s) => s.selection.selectedIds)
   const host = useScene((s) => (ids.length === 1 ? s.nodes[ids[0] as AnyNodeId] : undefined))
   const nodes = useScene((s) => s.nodes)
@@ -67,29 +61,27 @@ export default function WallFeatureActions() {
     readOnly || (host.type === 'wall' && (isCurvedWall(host) || host.wallType === 'curtain'))
   return (
     <>
-      <ActionMenuButton
-        label="Add niche"
+      <FeatureActionButton
+        mode="niche"
+        variant={variant}
         disabled={disabled || !!reasons.niche}
         disabledReason={reasons.niche ?? undefined}
         onClick={(event) => {
           event.stopPropagation()
           startWallFeaturePlacement(host, 'niche')
         }}
-      >
-        <PanelTop className="size-4" />
-      </ActionMenuButton>
+      />
       {host.type === 'wall' && (
-        <ActionMenuButton
-          label="Add bump"
+        <FeatureActionButton
+          mode="bump"
+          variant={variant}
           disabled={disabled || !!reasons.bump}
           disabledReason={reasons.bump ?? undefined}
           onClick={(event) => {
             event.stopPropagation()
             startWallFeaturePlacement(host, 'bump')
           }}
-        >
-          <Box className="size-4" />
-        </ActionMenuButton>
+        />
       )}
     </>
   )

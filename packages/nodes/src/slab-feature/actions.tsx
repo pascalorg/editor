@@ -1,14 +1,8 @@
 'use client'
 import { type AnyNodeId, type SlabFeatureNode, type SlabNode, useScene } from '@pascal-app/core'
-import {
-  ActionMenuButton,
-  activeViewLayout,
-  useEditor,
-  useInteractionScope,
-  VIEW_2D,
-} from '@pascal-app/editor'
+import { activeViewLayout, useEditor, useInteractionScope, VIEW_2D } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Box, PanelTop } from 'lucide-react'
+import { FeatureActionButton } from '../shared/feature-action-button'
 import { createSlabFeatureDraft } from './placement'
 
 export function startSlabFeaturePlacement(
@@ -29,7 +23,7 @@ export function startSlabFeaturePlacement(
   })
   useEditor.getState().setTool('slab-feature')
 }
-export default function SlabFeatureActions() {
+export default function SlabFeatureActions({ variant = 'menu' }: { variant?: 'menu' | 'panel' }) {
   const ids = useViewer((s) => s.selection.selectedIds)
   const host = useScene((s) => {
     const hosts = ids
@@ -52,18 +46,17 @@ export default function SlabFeatureActions() {
             reason = err instanceof Error ? err.message : 'Feature unavailable.'
           }
           return (
-            <ActionMenuButton
+            <FeatureActionButton
               key={mode}
-              label={`Add ${mode}`}
+              mode={mode}
+              variant={variant}
               disabled={readOnly || !!reason}
               disabledReason={reason}
               onClick={(event) => {
                 event.stopPropagation()
                 startSlabFeaturePlacement(host, mode)
               }}
-            >
-              {mode === 'bump' ? <Box className="size-4" /> : <PanelTop className="size-4" />}
-            </ActionMenuButton>
+            />
           )
         })}
     </>

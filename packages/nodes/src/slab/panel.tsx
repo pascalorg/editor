@@ -264,7 +264,7 @@ export function SlabPanel() {
       <FloorFoundationPanel node={node} onClose={handleClose}>
         <PanelSection title="Features">
           <div className="flex gap-2">
-            <SlabFeatureActions />
+            <SlabFeatureActions variant="panel" />
           </div>
         </PanelSection>
       </FloorFoundationPanel>
@@ -322,7 +322,7 @@ export function SlabPanel() {
       )}
       <PanelSection title="Features">
         <div className="flex gap-2">
-          <SlabFeatureActions />
+          <SlabFeatureActions variant="panel" />
         </div>
       </PanelSection>
       <PanelSection title="Elevation">

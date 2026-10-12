@@ -59,6 +59,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import WallFeatureActions from '../wall-feature/actions'
 import { CurtainWallPanel } from './curtain-wall-panel'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallLengthPatch } from './length-patch'
@@ -284,6 +285,11 @@ export default function WallPanel() {
           ]}
           value={node.wallType ?? 'standard'}
         />
+      </PanelSection>
+      <PanelSection title="Features">
+        <ActionGroup>
+          <WallFeatureActions variant="panel" />
+        </ActionGroup>
       </PanelSection>
       <PanelSection title="Dimensions">
         <SliderControl
