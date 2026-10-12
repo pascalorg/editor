@@ -28,6 +28,7 @@ export { ActionMenuButton } from './components/editor/action-menu-button'
 // preset-system spec.
 export { BakeExporter } from './components/editor/bake-exporter'
 export { BakeThumbnail, prepareBakeThumbnailLook } from './components/editor/bake-thumbnail'
+export { ConstructionRevealAudio } from './components/editor/construction-reveal-audio'
 export { copyCollectionIds, duplicateNodeAndPickUp } from './components/editor/duplicate-node'
 export { FirstPersonControls } from './components/editor/first-person-controls'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'

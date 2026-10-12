@@ -27,6 +27,15 @@ What the construction reveal (see [systems](systems.md), "Construction reveal") 
   It draws in the scene pass (walls in front hide it). three blends only a pass's `output`; the normal and diffuse attachments are overwritten wherever a draw covers, so a transparent sprite stamped its whole quad there and the ink drew its edges. The scene pass (`scenePassMrt`) blends those attachments by the material, and the dust material writes alpha 0 to them (`createDustMaterial`).
 - Sound, one per phase and level, belongs on the `land` event, not on `start`.
 
+`ConstructionRevealAudio({ enabled, level })` from `@pascal-app/editor` mounts once alongside
+`ConstructionReveal`. It sends non-instant landings through the shared SFX bus at `full` and
+`framing`: structure cues for the building phases, item placement for furnishing, at most one
+cue every 250 ms across phases and levels. The gate survives prop changes; disabled or instant
+events are dropped, never replayed. The host owns the commit policy and optional-touch switch;
+turning optional touches off passes an effective `off` level to construction and framing without
+changing the saved construction preference. SFX bus initialization warms its cache through the
+existing mute-safe volume update; one-shot cues still play only loaded assets.
+
 ## The roof lifts out of the way of the furniture
 
 A kind may declare `capabilities.reveal.clears: { for: 'furnishing', height: 2.4 }` (the roof does). When a group of that phase starts in the same building, the node lifts `height` metres (a critically damped spring) as a ghost, so the furniture dropping in is seen. Shared materials are cached by their catalog entry, so a ghost never writes to them: each mesh wears clones (`setGhost`/`clearGhost`) while it is up, casts no shadow while faint, and gets its own materials back after.
