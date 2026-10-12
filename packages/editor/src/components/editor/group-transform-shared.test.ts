@@ -4,16 +4,24 @@ import {
   type AnyNodeDefinition,
   type AnyNodeId,
   CeilingNode,
+  clearSceneHistory,
   LevelNode,
   nodeRegistry,
   registerNode,
   SlabNode,
   sceneRegistry,
+  useLiveNodeOverrides,
+  useLiveTransforms,
   useScene,
   WallNode,
 } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { BoxGeometry, Group, Mesh } from 'three'
 import { z } from 'zod'
+import { getEditorClipboardSnapshot } from '../../lib/scene-clipboard'
+import useEditor from '../../store/use-editor'
+import useInteractionScope from '../../store/use-interaction-scope'
+import { startGroupPickUp } from './group-actions'
 import {
   classifyParticipant,
   collectParticipants,
@@ -594,6 +602,180 @@ describe('group plan bounds', () => {
       expect(plan.minZ).toBeCloseTo(-10.78, 1)
       expect(plan.maxZ).toBeCloseTo(-5, 1)
       expect(plan.maxX - plan.minX).toBeLessThan(8.4)
+    })
+  })
+})
+
+// Ownership comes from the editable-focus contract, not the rotation helper.
+// Exercise the actual carry's registered listener and real scene/preview stores.
+// These CPU targets model ownership only; native focus, propagation and undo
+// remain covered by the protected Chromium fixture, not by this EventTarget.
+describe('group keyboard editable ownership', () => {
+  function withCarry(
+    run: (fixture: {
+      press: (
+        key: string,
+        target?: object,
+        modifiers?: { ctrlKey?: boolean; metaKey?: boolean },
+      ) => Event
+      snapshot: () => unknown
+      cancellations: () => number
+    }) => void,
+  ) {
+    const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    const savedScene = useScene.getState()
+    const savedViewer = useViewer.getState()
+    const savedEditor = useEditor.getState()
+    const savedScope = useInteractionScope.getState()
+    const savedOverrides = useLiveNodeOverrides.getState()
+    const savedTransforms = useLiveTransforms.getState()
+    const history = useScene.temporal.getState()
+    const savedHistory = {
+      pastStates: history.pastStates,
+      futureStates: history.futureStates,
+      isTracking: history.isTracking,
+    }
+    const host = Object.assign(new EventTarget(), { location: { search: '' } })
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: host })
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { body: { style: { cursor: '' } }, querySelector: () => null },
+    })
+    const canvasTarget = { isContentEditable: false, closest: () => null }
+    let cancellations = 0
+    const press = (
+      key: string,
+      target: object = canvasTarget,
+      modifiers: { ctrlKey?: boolean; metaKey?: boolean } = {},
+    ) => {
+      const event = Object.assign(new Event('keydown', { bubbles: true, cancelable: true }), {
+        key,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        ...modifiers,
+      })
+      Object.defineProperty(event, 'target', { value: target })
+      host.dispatchEvent(event)
+      return event
+    }
+    const snapshot = () =>
+      structuredClone({
+        nodes: useScene.getState().nodes,
+        selection: useViewer.getState().selection,
+        scope: useInteractionScope.getState().scope,
+        overrides: [...useLiveNodeOverrides.getState().overrides],
+        transforms: [...useLiveTransforms.getState().transforms],
+        clipboard: getEditorClipboardSnapshot(),
+        history: {
+          past: useScene.temporal.getState().pastStates.length,
+          future: useScene.temporal.getState().futureStates.length,
+          tracking: useScene.temporal.getState().isTracking,
+        },
+      })
+    try {
+      useScene.temporal.getState().pause()
+      useScene.setState({
+        nodes: placedNodes() as Record<AnyNodeId, AnyNode>,
+        rootNodeIds: ['building_test' as AnyNodeId],
+        dirtyNodes: new Set<AnyNodeId>(),
+        readOnly: false,
+      })
+      useScene.temporal.getState().resume()
+      clearSceneHistory()
+      useScene.getState().updateNode('item_chair' as AnyNodeId, { name: 'undo sentinel' })
+      expect(useScene.temporal.getState().pastStates.length).toBeGreaterThan(0)
+      useLiveNodeOverrides.getState().clearAll()
+      useLiveTransforms.getState().clearAll()
+      useInteractionScope.getState().end()
+      useEditor.getState().armToolMode({ mode: 'select' })
+      useViewer.getState().setSelection({
+        buildingId: 'building_test',
+        levelId: 'level_test',
+        selectedIds: ['item_chair', 'column_post'],
+      })
+      expect(
+        startGroupPickUp({
+          onCancel: () => {
+            cancellations += 1
+          },
+        }),
+      ).toBe(true)
+      run({ press, snapshot, cancellations: () => cancellations })
+    } finally {
+      // Use the controller's own teardown before restoring shared globals/state.
+      press('Escape')
+      useScene.temporal.getState().pause()
+      useScene.setState(savedScene)
+      useScene.temporal.setState({
+        pastStates: savedHistory.pastStates,
+        futureStates: savedHistory.futureStates,
+      })
+      if (savedHistory.isTracking) useScene.temporal.getState().resume()
+      useViewer.setState(savedViewer)
+      useEditor.setState(savedEditor)
+      useInteractionScope.setState(savedScope)
+      useLiveNodeOverrides.setState(savedOverrides)
+      useLiveTransforms.setState(savedTransforms)
+      for (const [name, descriptor] of [
+        ['window', windowDescriptor],
+        ['document', documentDescriptor],
+      ] as const) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+        else Reflect.deleteProperty(globalThis, name)
+      }
+    }
+  }
+
+  for (const kind of ['input', 'textarea', 'select', 'contenteditable descendant']) {
+    test(`${kind} leaves an actual carried preview and its history untouched`, () => {
+      withCarry(({ press, snapshot, cancellations }) => {
+        expect(press('r').defaultPrevented).toBe(true)
+        expect(useLiveNodeOverrides.getState().overrides.size).toBeGreaterThan(0)
+        const before = snapshot()
+        const owner = { kind }
+        const target = {
+          isContentEditable: kind === 'contenteditable descendant',
+          closest: () => owner,
+        }
+        for (const key of ['r', 't', 'Escape', 'Backspace', 'Delete']) {
+          expect(press(key, target).defaultPrevented).toBe(false)
+          expect(snapshot()).toEqual(before)
+          expect(cancellations()).toBe(0)
+        }
+        for (const modifier of [{ ctrlKey: true }, { metaKey: true }]) {
+          for (const key of ['c', 'x', 'v', 'z']) {
+            expect(press(key, target, modifier).defaultPrevented).toBe(false)
+            expect(snapshot()).toEqual(before)
+            expect(cancellations()).toBe(0)
+          }
+        }
+      })
+    })
+  }
+
+  test('outside R/T still rotate the real preview and Escape restores the carry', () => {
+    withCarry(({ press, cancellations }) => {
+      const before = structuredClone(useScene.getState().nodes)
+      const initialYaw = 0.5
+      expect(press('r').defaultPrevented).toBe(true)
+      const rotated = useLiveNodeOverrides.getState().get('item_chair')
+      expect(rotated).toBeDefined()
+      expect((rotated!.rotation as number[])[1]).not.toBeCloseTo(initialYaw)
+      expect(useScene.getState().nodes).toEqual(before)
+      expect(press('t').defaultPrevented).toBe(true)
+      const restored = useLiveNodeOverrides.getState().get('item_chair')
+      expect((restored!.rotation as number[])[1]).toBeCloseTo(initialYaw)
+      expect(press('Escape').defaultPrevented).toBe(true)
+      expect(cancellations()).toBe(1)
+      expect(useInteractionScope.getState().scope.kind).toBe('idle')
+      expect(useLiveNodeOverrides.getState().overrides.size).toBe(0)
+      expect(useLiveTransforms.getState().transforms.size).toBe(0)
+      expect(useScene.getState().nodes).toEqual(before)
+      expect(useScene.temporal.getState().isTracking).toBe(true)
+      expect(useViewer.getState().selection.selectedIds).toEqual(['item_chair', 'column_post'])
     })
   })
 })

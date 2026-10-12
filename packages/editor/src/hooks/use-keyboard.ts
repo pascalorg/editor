@@ -36,6 +36,7 @@ import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
+import { isTypingTarget } from '../lib/typing-target'
 import { leaveUnitFocus } from '../lib/units'
 import { selectWallDrawVariant } from '../lib/wall-draw-variant'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
@@ -273,7 +274,13 @@ export function blocksSnappingShortcut(
 ): boolean {
   if (!target) return false
   if (target.tagName === 'INPUT' && target.hasAttribute('data-run-length-input')) return false
-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable ||
+    isTypingTarget(target as HTMLElement)
+  )
 }
 
 /** E on one selected node: the kind's own E action, else its mechanism. False when neither applies. */
@@ -344,12 +351,8 @@ export const useKeyboard = ({
         return
       }
 
-      // Don't handle shortcuts if user is typing in an input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) {
+      // Editable controls own their keyboard events.
+      if (isTypingTarget(e.target)) {
         return
       }
 
@@ -805,11 +808,7 @@ export const useKeyboard = ({
     const handleSessionGroupKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Shift') shiftTapClean = false
       if (e.key !== 'Control' && e.key !== 'Meta') ctrlTapClean = false
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) {
+      if (isTypingTarget(e.target)) {
         return
       }
       if (useDeleteConfirmation.getState().request) return
