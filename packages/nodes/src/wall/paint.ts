@@ -13,6 +13,8 @@ import {
   type PaintPreviewArgs,
   parseWallPaintRole as parseCoreWallPaintRole,
   parseMaterialRef,
+  plannedWallIds,
+  planWallPaint,
   resolveWallFaceChain,
   resolveWallFinish,
   type SceneMaterialId,
@@ -52,7 +54,6 @@ import {
   resolveSlotPaintMaterialRef,
 } from '../shared/slot-paint'
 import { swapPreviewMaterial } from '../shared/swap-preview-material'
-import { plannedWallIds, planWallPaint } from './paint-plan'
 
 // Roles (see `parseWallPaintRole` in core): face / trim slots write
 // `node.slots`, `region:<id>` a paint region, `room:<zoneId>/<face>` this face

@@ -895,6 +895,7 @@ export {
   planWallRectangle,
   wallRectangleCorners,
 } from './systems/wall/wall-operations'
+export { plannedWallIds, planWallPaint } from './systems/wall/wall-paint-plan'
 export { roomSideFaces } from './systems/wall/wall-room-sides'
 export { wallDoorStepRuns } from './systems/wall/wall-step-openings'
 export {
