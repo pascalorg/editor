@@ -154,5 +154,5 @@ export {
   type SessionRecord,
   startOfSession,
 } from './scene-checkpoint'
-export { proposeUnitLayoutsInScene } from './unit-layouts'
+export { proposeUnitLayoutsInScene, unitClientBrief } from './unit-layouts'
 export { vectorizePlanTarget } from './vectorize-plan'
