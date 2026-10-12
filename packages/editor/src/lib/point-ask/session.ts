@@ -808,6 +808,17 @@ const newAskId = () =>
 const markNow = () => markHistory(useScene.temporal.getState().pastStates)
 const stepsFrom = (mark: HistoryMark) => stepsSince(useScene.temporal.getState().pastStates, mark)
 
+/**
+ * The chat has taken the ask: the scene as it stands now is the "before" of its turn. Taken here and
+ * not at the chat's first "working", which comes from the stream and can follow the turn's first
+ * write. An ask the chat queued behind another turn is marked when its own turn starts.
+ */
+function markAccepted(askId: string) {
+  const marks = askMarks.get(askId)
+  const pin = usePointAsk.getState().pins[askId]
+  if (marks && marks.start === null && pin && pin.model.state !== 'queued') marks.start = markNow()
+}
+
 const askMarks = new Map<
   string,
   { start: HistoryMark | null; end: HistoryMark | null; undoneSteps: number; undone: boolean }
@@ -922,6 +933,7 @@ export async function sendBubble(
   usePointAsk.getState().patchPin(askId, { submit })
   const result = await submitPointAsk(submit)
   if (result.ok) {
+    markAccepted(askId)
     if (changes) {
       usePointAsk.getState().dispatchPin(changes, { type: 'keep' })
       usePointAsk.getState().removePin(changes)
@@ -1017,6 +1029,7 @@ export async function retryAsk(askId: string) {
   askMarks.set(next, { start: null, end: null, undoneSteps: 0, undone: false })
   state.dispatchPin(next, { type: 'sent' })
   const result = await submitPointAsk(submit)
+  if (result.ok) markAccepted(next)
   if (!result.ok) {
     usePointAsk.getState().dispatchPin(next, {
       type: 'status',
@@ -1083,18 +1096,41 @@ function beforeAsk(askId: string): SceneSnapshot | null {
   return stateAfterMark(past, marks.start)
 }
 
-const TURN_IN_FLIGHT = new Set(['sent', 'queued', 'working', 'needs-input'])
+// Only a turn that is writing swallows a preview. One that has been sent and not started cannot
+// (its first write lets go of the preview itself), and one that is waiting on the person is not
+// writing: a stuck "sent" pin must not shut every hold for good.
+const TURN_WRITING = new Set(['working'])
+const COMPARE_REFUSAL_MS = 3500
 
 const compare = createCompare({
   before: beforeAsk,
-  turnsWorking: () =>
-    Object.values(usePointAsk.getState().pins).some((pin) => TURN_IN_FLIGHT.has(pin.model.state)),
+  // A pin that says "working" while the chat is idle never heard its turn end: it is not writing.
+  turnsWorking: () => {
+    const state = usePointAsk.getState()
+    return state.busy && Object.values(state.pins).some((pin) => TURN_WRITING.has(pin.model.state))
+  },
   begin: beginScenePreview,
   onChange: (askId) => usePointAsk.getState().setComparing(askId),
 })
 
 /** Shows the scene as it was before that ask's turn, until `endCompare`. False when it may not. */
-export const startCompare = (askId: string) => compare.start(askId)
+export function startCompare(askId: string) {
+  const started = compare.start(askId)
+  const reason = compare.refusal()
+  const state = usePointAsk.getState()
+  if (started || !reason) {
+    state.setCompareRefusal(null)
+    return started
+  }
+  state.setCompareRefusal({ askId, reason })
+  setTimeout(() => {
+    const refusal = usePointAsk.getState().compareRefusal
+    if (refusal?.askId === askId && refusal.reason === reason) {
+      usePointAsk.getState().setCompareRefusal(null)
+    }
+  }, COMPARE_REFUSAL_MS)
+  return false
+}
 
 /** Lets go: the live scene is back. Idempotent, so every way out can call it. */
 export const endCompare = () => compare.end()
@@ -1126,6 +1162,7 @@ function onStatus(status: PointAskStatus) {
   const pin = state.pins[status.askId]
   if (!pin) return
   const marks = askMarks.get(status.askId)
+  if (status.status === 'queued' && marks) marks.start = null
   if (status.status === 'working' && marks && marks.start === null) marks.start = markNow()
   state.dispatchPin(status.askId, { type: 'status', status })
   if (status.status === 'ended') {

@@ -17,9 +17,14 @@ export type CompareDeps = {
   onChange: (askId: string | null) => void
 }
 
+/** Why a hold did not start, so the person is told instead of left holding a button that does nothing. */
+export type CompareRefusal = 'turn-working' | 'no-before' | 'history-held'
+
 export type Compare = {
   /** Starts showing that ask's before; false when it may not. Ends a hold already up. */
   start: (askId: string) => boolean
+  /** Why the last `start` returned false; null after one that started. */
+  refusal: () => CompareRefusal | null
   /** Lets go. Idempotent. */
   end: () => void
   /** The preview ended by itself (a write was about to land): clears the tag. */
@@ -29,17 +34,23 @@ export type Compare = {
 
 export function createCompare(deps: CompareDeps): Compare {
   let held: { askId: string; preview: { end: () => void } } | null = null
+  let refused: CompareRefusal | null = null
 
   const set = (askId: string | null) => deps.onChange(askId)
 
   return {
     start(askId) {
-      if (deps.turnsWorking()) return false
+      const refuse = (reason: CompareRefusal) => {
+        refused = reason
+        return false
+      }
+      if (deps.turnsWorking()) return refuse('turn-working')
       const snapshot = deps.before(askId)
-      if (!snapshot) return false
+      if (!snapshot) return refuse('no-before')
       if (held) this.end()
       const preview = deps.begin(snapshot)
-      if (!preview) return false
+      if (!preview) return refuse('history-held')
+      refused = null
       held = { askId, preview }
       set(askId)
       return true
@@ -56,6 +67,7 @@ export function createCompare(deps: CompareDeps): Compare {
       held = null
       set(null)
     },
+    refusal: () => refused,
     current: () => held?.askId ?? null,
   }
 }

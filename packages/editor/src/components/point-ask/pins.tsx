@@ -39,6 +39,12 @@ import {
 import { type PinRecord, usePointAsk } from '../../store/use-point-ask'
 import { finishOptionalAnimations, pointMotionCalm, usePointMotionCalm } from './optional-motion'
 
+const COMPARE_REFUSAL_WORDS = {
+  'history-held': 'Another change is in progress. Try again in a moment.',
+  'no-before': 'The scene has changed too much since to show how it was.',
+  'turn-working': "Pascal is still working. Try again when it's done.",
+} as const
+
 const SETTLED = new Set(['done', 'answered', 'no-change', 'undone'])
 const scratch = new Vector3()
 
@@ -443,6 +449,9 @@ function PinCard() {
   const [warn, setWarn] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const comparing = usePointAsk((s) => s.comparing === askId)
+  const refusal = usePointAsk((s) =>
+    s.compareRefusal?.askId === askId ? s.compareRefusal.reason : null,
+  )
   const lastMove = useRef<{ x: number; y: number } | null>(null)
   const carriedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const optional = useRef<Animation[]>([])
@@ -591,6 +600,7 @@ function PinCard() {
             You've changed the scene since. Undoing also removes those changes.
           </div>
         ) : null}
+        {refusal ? <div className="pa-card-s">{COMPARE_REFUSAL_WORDS[refusal]}</div> : null}
         {model.state === 'done' ? (
           <button
             aria-pressed={comparing}

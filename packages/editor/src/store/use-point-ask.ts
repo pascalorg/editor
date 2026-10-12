@@ -2,6 +2,7 @@
 
 import type { PointAskSubmit, PointCamera } from '@pascal-app/core'
 import { create } from 'zustand'
+import type { CompareRefusal } from '../lib/point-ask/compare'
 import { createPin, type PinEvent, type PinModel, reducePin } from '../lib/point-ask/pin-machine'
 import type { PointTarget, Rect, ScreenPoint } from '../lib/point-ask/types'
 
@@ -118,6 +119,8 @@ type PointAskState = {
   region: RegionState | null
   /** The ask whose "before" is on screen while a compare control is held, or null. */
   comparing: string | null
+  /** A hold that did not start, for its card to say why. */
+  compareRefusal: { askId: string; reason: CompareRefusal } | null
   /** How the last bubble left, so the exit can fold into a pin (send) or just shrink (dismiss). */
   closeKind: 'send' | 'dismiss'
 
@@ -125,6 +128,7 @@ type PointAskState = {
   setLatched: (latched: boolean) => void
   setRegion: (region: RegionState | null) => void
   setComparing: (askId: string | null) => void
+  setCompareRefusal: (refusal: { askId: string; reason: CompareRefusal } | null) => void
   setModifiers: (alt: boolean, shift: boolean) => void
   setHover: (hover: PointHover | null) => void
   openBubble: (bubble: PointBubble) => void
@@ -156,6 +160,7 @@ export const usePointAsk = create<PointAskState>((set) => ({
   closeKind: 'dismiss',
   region: null,
   comparing: null,
+  compareRefusal: null,
 
   setActive: (active, latched = false) =>
     set((state) =>
@@ -169,6 +174,7 @@ export const usePointAsk = create<PointAskState>((set) => ({
   setRegion: (region) => set((state) => (state.region === region ? state : { region })),
   setComparing: (comparing) =>
     set((state) => (state.comparing === comparing ? state : { comparing })),
+  setCompareRefusal: (compareRefusal) => set({ compareRefusal }),
   setModifiers: (alt, shift) =>
     set((state) => (state.alt === alt && state.shift === shift ? state : { alt, shift })),
   setHover: (hover) =>

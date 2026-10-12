@@ -25,6 +25,34 @@ function setup(options: { before?: unknown; working?: boolean; begin?: unknown }
   return { compare, ended, changes, began: () => began }
 }
 
+describe('why a hold is refused', () => {
+  test('says a turn is writing', () => {
+    const { compare } = setup({ working: true })
+    compare.start('ask_1')
+    expect(compare.refusal()).toBe('turn-working')
+  })
+
+  test('says history cannot show the before', () => {
+    const { compare } = setup({ before: null })
+    compare.start('ask_1')
+    expect(compare.refusal()).toBe('no-before')
+  })
+
+  test('says the scene is held by something else', () => {
+    const { compare } = setup({ begin: null })
+    compare.start('ask_1')
+    expect(compare.refusal()).toBe('history-held')
+  })
+
+  test('says nothing after a hold that started', () => {
+    const { compare } = setup({ working: true })
+    compare.start('ask_1')
+    const next = setup()
+    next.compare.start('ask_1')
+    expect(next.compare.refusal()).toBeNull()
+  })
+})
+
 describe('start', () => {
   test('shows the before of that ask and says whose', () => {
     const { compare, changes } = setup()
