@@ -11,6 +11,7 @@ import {
   WallNode,
 } from '@pascal-app/core'
 import { type BubbleTarget, usePointAsk } from '../../store/use-point-ask'
+import { setPointAskBusy } from './host-api'
 import { endCompare, sendBubble, startCompare, startPointAskSession } from './session'
 
 // The whole ask path with the real stores (hold to see before; an ask while Pascal is working): the session listening to the chat's
@@ -308,5 +309,19 @@ describe("which pin takes the scene's changes", () => {
     status(running, { status: 'working', sentence: 'Reading your request' })
     expect(usePointAsk.getState().pins[stale]?.model.state).not.toBe('working')
     expect(usePointAsk.getState().pins[running]?.model.state).toBe('working')
+  })
+
+  test("a plain message's changes after an ask whose end was never heard are no ask's", async () => {
+    const stale = await sendAsk()
+    setPointAskBusy(true)
+    status(stale, { status: 'working', sentence: 'Raising the wall' })
+    // The chat goes idle without the pin having heard the end, then a plain message runs.
+    setPointAskBusy(false)
+    setPointAskBusy(true)
+    agentWrite(() => useScene.getState().updateNode(wall.id, { height: 3.4 }))
+    setPointAskBusy(false)
+    const pin = usePointAsk.getState().pins[stale]?.model
+    expect(pin?.committed).toBe(false)
+    expect(pin?.state).not.toBe('working')
   })
 })

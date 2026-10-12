@@ -1169,8 +1169,11 @@ export function endCompareWhenPointerDrifts(origin: { x: number; y: number }, ra
  */
 let runningAskId: string | null = null
 
-/** Pins that said "working" or "asking" for a turn the chat has moved past: they end, unfinished. */
-function settleStalePins(running: string) {
+/**
+ * Pins that said "working" or "asking" for a turn the chat has moved past end, unfinished. `running`
+ * is the ask that is working now; none when the chat is idle.
+ */
+function settleStalePins(running: string | null) {
   const state = usePointAsk.getState()
   for (const askId of state.pinOrder) {
     if (askId === running) continue
@@ -1188,6 +1191,15 @@ function settleStalePins(running: string) {
       })
     }
   }
+}
+
+/**
+ * The chat has no turn running: an ask that still says "working" never heard its end, and the next
+ * turn (a plain message, say) is not its. Called by the host's busy flag going false.
+ */
+export function chatWentIdle() {
+  runningAskId = null
+  settleStalePins(null)
 }
 
 function onStatus(status: PointAskStatus) {

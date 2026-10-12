@@ -1,5 +1,5 @@
 import { usePointAsk } from '../../store/use-point-ask'
-import { retryAsk } from './session'
+import { chatWentIdle, retryAsk } from './session'
 
 // What a host app (the hosted chat) tells Point and ask about itself, without importing the store.
 
@@ -11,6 +11,7 @@ export function setPointAskPlayful(playful: boolean) {
 /** Pascal is on a turn: the bubble's Send says Queue, and a new ask waits its turn. */
 export function setPointAskBusy(busy: boolean) {
   usePointAsk.getState().setBusy(busy)
+  if (!busy) chatWentIdle()
 }
 
 /**
