@@ -364,6 +364,7 @@ export {
   type WallMaterials,
   type WallMaterialsResolver,
 } from './systems/wall/wall-materials'
+export { subscribeWallRebuilds } from './systems/wall/wall-rebuild-notifications'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are

@@ -13,6 +13,7 @@ import {
 } from '@pascal-app/core'
 import {
   createMaterial,
+  createMaterialFromPresetRef,
   getRoofMaterialArray,
   levelWallCladdingRef,
   resolveMaterialRef,
