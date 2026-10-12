@@ -87,7 +87,7 @@ function validateAuth(request: Request): NextResponse | null {
   return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
 }
 
-function validateRateLimit(request: Request): NextResponse | null {
+export function validateRateLimit(request: Request): NextResponse | null {
   const limit = rateLimitPerMinute()
   if (limit <= 0) return null
 

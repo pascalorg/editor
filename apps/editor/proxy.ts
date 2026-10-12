@@ -13,6 +13,7 @@ const OPEN_PATHS = new Set([
   '/api/auth/login',
   '/api/auth/logout',
 ])
+const OPEN_PREFIXES = ['/embed/']
 const SELF_GUARDED_API_PREFIXES = ['/api/scenes', '/api/artifacts']
 
 export function proxy(request: NextRequest) {
@@ -22,7 +23,8 @@ export function proxy(request: NextRequest) {
 export function gateRequest(request: Request): NextResponse | null {
   const url = new URL(request.url)
   const { pathname } = url
-  if (OPEN_PATHS.has(pathname)) return null
+  if (OPEN_PATHS.has(pathname) || OPEN_PREFIXES.some((prefix) => pathname.startsWith(prefix)))
+    return null
   if (SELF_GUARDED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null
 
   const mode = resolveAuthMode(request)

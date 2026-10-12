@@ -53,6 +53,12 @@ test('a valid session passes', () => {
   expect(gateRequest(request('/api/plugins/mint/session', { cookie }))).toBeNull()
 })
 
+test('public embed pages pass on a password-gated host without a session', () => {
+  process.env.PASCAL_ADMIN_PASSWORD = 'secret'
+  expect(gateRequest(request('/embed/abc'))).toBeNull()
+  expect(gateRequest(request('/embed-other/abc'))?.status).toBe(307)
+})
+
 test('login, setup, health and the scene API are never gated here', () => {
   delete process.env.PASCAL_ADMIN_PASSWORD
   for (const path of ['/login', '/setup', '/api/health', '/api/scenes', '/api/artifacts/abc']) {

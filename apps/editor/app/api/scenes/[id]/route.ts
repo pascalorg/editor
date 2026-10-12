@@ -8,6 +8,7 @@ import {
   sceneApiPreflight,
   withSceneApiHeaders,
 } from '@/lib/scene-api-security'
+import { deleteSceneShare } from '@/lib/scene-sharing'
 import { getSceneOperations } from '@/lib/scene-store-server'
 import { deleteSceneThumbnail, sceneThumbnailUrl } from '@/lib/scene-thumbnails'
 
@@ -146,6 +147,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
     await deleteSceneThumbnail(id).catch(() => {})
+    await deleteSceneShare(id).catch(() => {})
     return withSceneApiHeaders(request, new NextResponse(null, { status: 204 }))
   } catch (error) {
     return handleStoreError(request, error, { includeCurrentVersionFor: id })

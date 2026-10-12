@@ -69,6 +69,13 @@ How it is protected, by `apps/editor/lib/self-host-auth.ts`:
 Nothing is fixed at build time: `PASCAL_PUBLIC_URL` and the port are read when a request
 comes in, so one image serves any domain. `/api/health` answers without a session.
 
+**Public embeds.** Nothing is public by default. The **Share** button in the editor's navbar
+has a "Public link" switch: turning it on makes the project viewable, read-only, at
+`/embed/<id>`, which needs no password and can be put in an `<iframe>` (the panel gives
+the snippet). Turning it off makes that URL a 404 again. Besides the embed page itself,
+`/api/scenes/<id>/public` is the only unauthenticated read of scene data, and it answers
+only for shared projects; the files a shared scene references are served to it as well.
+
 ## CLI-managed editor
 
 Node.js 22.13 or newer can install a persistent local runtime, start it in the

@@ -67,6 +67,14 @@ jobs:
             | grep '"ownerId":"admin"'
           curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/ | grep -q 'Smoke'
 
+          # Public embeds: private until shared, then readable without a session.
+          ID=$(curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/scenes | sed -E 's/.*"id":"([^"]+)".*/\1/')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/embed/$ID)" = "404"
+          curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' -H 'Content-Type: application/json' \
+            -d '{"shared":true}' http://127.0.0.1:3000/api/scenes/$ID/share | grep -q '"shared":true'
+          curl -fsS -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/scenes/$ID/public | grep -q '"name":"Smoke"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/embed/$ID)" = "200"
+
       - name: Container logs
         if: always()
         run: docker logs pascal || true

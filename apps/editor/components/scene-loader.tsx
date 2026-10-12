@@ -365,7 +365,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         disablePostFx={lightPreview}
         immersive={vr?.session ? vr.immersive : undefined}
         layoutVersion="v2"
-        navbarSlot={<EditorNavbar name={meta.name} onRename={handleRename} />}
+        navbarSlot={<EditorNavbar name={meta.name} onRename={handleRename} sceneId={meta.id} />}
         onLoad={handleLoad}
         onSave={handleSave}
         onThumbnailCapture={handleThumb}

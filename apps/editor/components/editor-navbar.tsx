@@ -1,19 +1,24 @@
 'use client'
 
 import { useEditor } from '@pascal-app/editor'
-import { Eye, Pencil } from 'lucide-react'
+import { Eye, Pencil, Share2 } from 'lucide-react'
 import Link from 'next/link'
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { PascalMark } from './app-shell'
+import { SharePanel } from './share-panel'
 
 interface EditorNavbarProps {
+  sceneId: string
   name: string
   /** Persists a new project name; resolves once the server has answered. */
   onRename: (name: string) => Promise<void>
 }
 
-export function EditorNavbar({ name, onRename }: EditorNavbarProps) {
+export function EditorNavbar({ sceneId, name, onRename }: EditorNavbarProps) {
   const [editing, setEditing] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const shareAnchorRef = useRef<HTMLDivElement>(null)
+  const closeShare = useCallback(() => setShareOpen(false), [])
   const [draft, setDraft] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
   // Escape cancels; the blur it causes must not save.
@@ -101,6 +106,21 @@ export function EditorNavbar({ name, onRename }: EditorNavbarProps) {
         <Eye className="h-4 w-4 shrink-0" />
         <span className="hidden sm:inline">Preview</span>
       </button>
+
+      <div className="relative" ref={shareAnchorRef}>
+        <button
+          aria-expanded={shareOpen}
+          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
+          onClick={() => setShareOpen((open) => !open)}
+          type="button"
+        >
+          <Share2 className="h-4 w-4 shrink-0" />
+          <span className="hidden sm:inline">Share</span>
+        </button>
+        {shareOpen && (
+          <SharePanel anchorRef={shareAnchorRef} onClose={closeShare} sceneId={sceneId} />
+        )}
+      </div>
     </nav>
   )
 }
