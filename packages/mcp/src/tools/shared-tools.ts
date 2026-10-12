@@ -17,10 +17,7 @@ import {
   type AgentToolContract,
   addCornerWindowTool,
   addEntryDoorsTool,
-  addFenceTool,
   addLevelTool,
-  addSiteSurfaceTool,
-  addStepsTool,
   addWallTool,
   applyUnitLayoutTool,
   calibratePlanReferenceTool,
@@ -308,11 +305,6 @@ const SHARED_TOOLS: SharedTool[] = [
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
-    contract: addFenceTool,
-    operation: AGENT_OPERATIONS.add_fence,
-    annotations: ADDITIVE_TOOL_ANNOTATIONS,
-  },
-  {
     contract: addCornerWindowTool,
     operation: AGENT_OPERATIONS.add_corner_window,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
@@ -321,16 +313,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: mergeWindowsTool,
     operation: AGENT_OPERATIONS.merge_windows,
     annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
-  },
-  {
-    contract: addSiteSurfaceTool,
-    operation: AGENT_OPERATIONS.add_site_surface,
-    annotations: ADDITIVE_TOOL_ANNOTATIONS,
-  },
-  {
-    contract: addStepsTool,
-    operation: AGENT_OPERATIONS.add_steps,
-    annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
     contract: addLevelTool,

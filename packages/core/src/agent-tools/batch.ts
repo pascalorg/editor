@@ -34,10 +34,7 @@ export const BATCHABLE_TOOLS = [
   'record_reference',
   'add_corner_window',
   'merge_windows',
-  'add_fence',
   'add_column',
-  'add_site_surface',
-  'add_steps',
   'place_in_room',
   // Not search_assets: it reads the host's item library, which a host hands that one tool, and
   // already runs several queries per call. Not furnish_room or place_items, for the same library;

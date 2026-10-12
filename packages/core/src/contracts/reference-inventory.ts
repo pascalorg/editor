@@ -1109,7 +1109,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'textSizePt',
   ]),
   ...described('Site-plan facts kept on the node: values, not ids.', [
-    'flatwork',
     'flatworkDims',
     'services',
     'streetNames',

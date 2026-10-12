@@ -31,7 +31,6 @@ import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
-import { addFence, addSiteSurface, addSteps } from './site-works'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperation, AgentOperations } from './types'
 import { applyLayout, proposeLayouts } from './unit-layouts'
@@ -93,10 +92,7 @@ const SINGLE_OPERATIONS = {
   verify_scene: verifyScene,
   set_checkpoint: setCheckpoint,
   add_wall: addWall,
-  add_fence: addFence,
   add_corner_window: addCornerWindow,
-  add_site_surface: addSiteSurface,
-  add_steps: addSteps,
   merge_windows: mergeWindowsOperation,
   add_level: addLevel,
   create_stair: createStair,

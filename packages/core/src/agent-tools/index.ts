@@ -43,7 +43,6 @@ import {
 import { createRoofTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
-import { addFenceTool, addSiteSurfaceTool, addStepsTool } from './site-works'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { applyUnitLayoutTool, proposeUnitLayoutsTool } from './unit-layouts'
 import { nameUnitsTool } from './units'
@@ -103,10 +102,7 @@ export const AGENT_TOOL_CONTRACTS = [
   verifySceneTool,
   setCheckpointTool,
   addWallTool,
-  addFenceTool,
   addCornerWindowTool,
-  addSiteSurfaceTool,
-  addStepsTool,
   mergeWindowsTool,
   addLevelTool,
   placeItemsTool,
@@ -169,7 +165,6 @@ export {
 } from './plan-reference'
 export { createRoofTool } from './roofs'
 export { searchMaterialsTool } from './search-materials'
-export { addFenceTool, addSiteSurfaceTool, addStepsTool } from './site-works'
 export { applyUnitLayoutTool, proposeUnitLayoutsTool } from './unit-layouts'
 export { nameUnitsTool } from './units'
 export { VECTORIZE_PRICING, vectorizePlanTool } from './vectorize-plan'
