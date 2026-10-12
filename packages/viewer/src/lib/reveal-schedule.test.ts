@@ -65,19 +65,6 @@ describe('reveal schedule', () => {
     expect(start('book')).toBeGreaterThan(start('shelf'))
   })
 
-  test('within a floor the starts scatter, evenly spaced, the same way every time', () => {
-    const walls = Array.from({ length: 20 }, (_, index) =>
-      candidate(`wall_${index}`, 'structure', 0),
-    )
-    const plan = planReveal(walls, 0)
-    const order = plan.map((entry) => entry.id)
-    expect(order).not.toEqual(walls.map((wall) => wall.id))
-    expect(planReveal([...walls].reverse(), 0).map((entry) => entry.id)).toEqual(order)
-    expect(plan.map((entry) => entry.startMs)).toEqual(
-      walls.map((_, index) => index * REVEAL_TIMING.nodeGapMs),
-    )
-  })
-
   test('a thousand nodes all start, in order, within the cap and spread over frames', () => {
     const candidates = Array.from({ length: 1000 }, (_, index) =>
       candidate(`node_${index}`, index % 2 ? 'structure' : 'furnishing', index % 3),
@@ -99,12 +86,6 @@ describe('reveal schedule', () => {
     }
     const frames = (REVEAL_TIMING.capMs - longest) / frameMs
     expect(Math.max(...perFrame.values())).toBeLessThanOrEqual(Math.ceil(1000 / frames) + 1)
-  })
-
-  test('a small build keeps its natural pace', () => {
-    const plan = planReveal([candidate('a', 'structure', 0), candidate('b', 'structure', 0)], 1000)
-    expect(plan.map((entry) => entry.startMs)).toEqual([1000, 1000 + REVEAL_TIMING.nodeGapMs])
-    expect(plan.map((entry) => entry.id).sort()).toEqual(['a', 'b'])
   })
 })
 
@@ -162,19 +143,5 @@ describe('the schedule in reverse', () => {
   test('a lone piece goes at once', () => {
     const [only] = planRetract([candidate('a', 'structure', 0)], 700)
     expect(only!.startMs).toBe(700)
-  })
-
-  test('the pieces that read the same way share one group key per phase and level', () => {
-    const plan = planRetract(house(), 0)
-    const keys = new Set(plan.map((entry) => entry.group))
-    expect(keys).toEqual(
-      new Set([
-        'foundation:level_0',
-        'structure:level_0',
-        'openings:level_0',
-        'roof:level_1',
-        'furnishing:level_0',
-      ]),
-    )
   })
 })

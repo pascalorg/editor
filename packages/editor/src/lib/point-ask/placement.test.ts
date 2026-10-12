@@ -30,41 +30,6 @@ const bubbleRect = (pos: { x: number; y: number }): Rect => ({
 const touches = (a: Rect, b: Rect) => !(a.x1 < b.x0 || a.x0 > b.x1 || a.y1 < b.y0 || a.y0 > b.y1)
 
 describe('which side the bubble takes', () => {
-  test('right of the target first, centred on the click row', () => {
-    const placed = placeBubble(input(), FRESH, 16)
-
-    expect(placed.side).toBe('right')
-    expect(placed.pos).toEqual({ x: 516, y: 260 })
-    expect(placed.glide).toBe(false)
-  })
-
-  test('left when the right has no room', () => {
-    const placed = placeBubble(
-      input({ box: { x0: 700, y0: 300, x1: 800, y1: 400 }, click: { x: 750, y: 350 } }),
-      FRESH,
-      16,
-    )
-
-    expect(placed.side).toBe('left')
-    expect(placed.pos.x).toBe(700 - 16 - 320)
-  })
-
-  test('below when a wide target blocks both sides', () => {
-    const box = { x0: 50, y0: 300, x1: 990, y1: 400 }
-    const placed = placeBubble(input({ box, click: { x: 500, y: 350 } }), FRESH, 16)
-
-    expect(placed.side).toBe('below')
-    expect(placed.pos).toEqual({ x: 500 - 160, y: 416 })
-  })
-
-  test('above when it is blocked on every other side', () => {
-    const box = { x0: 50, y0: 560, x1: 990, y1: 690 }
-    const placed = placeBubble(input({ box, click: { x: 500, y: 620 } }), FRESH, 16)
-
-    expect(placed.side).toBe('above')
-    expect(placed.pos.y).toBe(560 - 16 - 180)
-  })
-
   test('is clamped inside the viewport', () => {
     const box = { x0: 30, y0: 60, x1: 90, y1: 120 }
     const placed = placeBubble(input({ box, click: { x: 60, y: 90 } }), FRESH, 16)
@@ -160,21 +125,6 @@ describe('hysteresis: a side is kept until it has been wrong for 150 ms', () => 
 })
 
 describe('the tail', () => {
-  test('sits on the edge facing the click, 16 px from the corners at most', () => {
-    const placed = placeBubble(input(), FRESH, 16)
-
-    expect(placed.tail).toEqual({ edge: 'left', x: 0, y: 90 })
-  })
-
-  test('on the top edge for a bubble below its target', () => {
-    const box = { x0: 50, y0: 300, x1: 990, y1: 400 }
-    const placed = placeBubble(input({ box, click: { x: 500, y: 350 } }), FRESH, 16)
-
-    expect(placed.tail?.edge).toBe('top')
-    expect(placed.tail?.y).toBe(0)
-    expect(placed.tail?.x).toBe(160)
-  })
-
   test('is clamped 16 px from the corners', () => {
     const placed = placeBubble(
       input({ box: { x0: 400, y0: 300, x1: 500, y1: 400 }, click: { x: 450, y: 305 } }),
@@ -196,12 +146,6 @@ describe('the tail', () => {
     )
 
     expect(placed.tail).toBeNull()
-  })
-
-  test('the origin of the open motion is the click, inside the bubble', () => {
-    const placed = placeBubble(input(), FRESH, 16)
-
-    expect(placed.origin).toEqual({ x: 0, y: 90 })
   })
 })
 

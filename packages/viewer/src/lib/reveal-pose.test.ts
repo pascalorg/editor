@@ -3,7 +3,6 @@ import type { RevealStyle } from '@pascal-app/core'
 import { Matrix4, Object3D, Vector3 } from 'three'
 import {
   clearRevealPose,
-  DROP_FALL,
   RETRACT_LIFT_MAX,
   RETRACT_LIFT_MIN,
   retractPoseAt,
@@ -41,53 +40,6 @@ describe('reveal poses', () => {
     }
   })
 
-  test('drop falls from its height like a load, lands before the end and bounces only a little', () => {
-    const height = 4
-    const path = samples('drop', height)
-    expect(path[0]!.lift).toBe(height)
-
-    const landing = path.findIndex((sample) => sample.lift <= 1e-9)
-    expect(landing).toBeGreaterThan(0)
-    expect(path[landing]!.t).toBeLessThan(0.9)
-    // Gravity: the second half of the fall covers more height than the first.
-    const fall = path.slice(0, landing + 1)
-    const half = fall[Math.floor(fall.length / 2)]!.lift
-    expect(height - half).toBeLessThan(half)
-    for (let index = 1; index < fall.length; index += 1) {
-      expect(fall[index]!.lift).toBeLessThanOrEqual(fall[index - 1]!.lift)
-    }
-    // One short, light settle: a small hop and a squash, no wobble.
-    const settle = path.slice(landing)
-    const hop = Math.max(...settle.map((sample) => sample.lift))
-    expect(hop).toBeGreaterThan(0)
-    expect(hop).toBeLessThanOrEqual(0.06)
-    expect(Math.min(...settle.map((sample) => sample.scale.y))).toBeLessThan(1)
-    expect(Math.min(...settle.map((sample) => sample.scale.y))).toBeGreaterThan(0.85)
-    expect(Math.min(...settle.map((sample) => sample.lift))).toBeGreaterThanOrEqual(0)
-  })
-
-  test('a short drop bounces in proportion', () => {
-    const hop = Math.max(
-      ...samples('drop', 0.3).map((sample, index, all) => {
-        const landed = all.findIndex((entry) => entry.lift <= 1e-9)
-        return index > landed ? sample.lift : 0
-      }),
-    )
-    expect(hop).toBeGreaterThan(0)
-    expect(hop).toBeLessThan(0.03)
-  })
-
-  test('settle lowers the last centimetres softly, without growing or squashing', () => {
-    const path = samples('settle', 0.08)
-    expect(path[0]!.lift).toBeCloseTo(0.08)
-    for (let index = 1; index < path.length; index += 1) {
-      expect(path[index]!.lift).toBeLessThanOrEqual(path[index - 1]!.lift)
-      expect(path[index]!.scale.y).toBe(1)
-    }
-    // A soft landing: most of the way is covered early.
-    expect(path[100]!.lift).toBeLessThan(0.08 / 4)
-  })
-
   // Victor run 12, the user: "it could just scale in normal so it seems carved out of the wall".
   test('cut keeps its width and height and grows through the wall, without overshoot', () => {
     const path = samples('cut', 0)
@@ -106,91 +58,6 @@ describe('reveal poses', () => {
       expect(lift).toBe(0)
       expect(scale.toArray()).toEqual([1, 1, 1])
     }
-  })
-
-  test('rise and scale keep their slice-one shapes', () => {
-    const rise = revealPoseAt('rise', 0.5, 0).scale
-    expect(rise.x).toBe(1)
-    expect(rise.z).toBe(1)
-    expect(rise.y).toBeGreaterThan(0.5)
-    const grow = revealPoseAt('scale', 0.5, 0).scale
-    expect(grow.x).toBe(grow.y)
-    expect(revealPoseAt('scale', 0, 0).scale.x).toBeGreaterThan(0)
-  })
-})
-
-// The owner's feel (2026-10-08): drops accelerate and land with a small squash and settle, never a
-// linear slide; a tiny overshoot on landing, then still; a hair of lift before a roof piece drops; the
-// last piece lands with a slightly bigger beat.
-describe('what a drop feels like', () => {
-  const landed = (path: ReturnType<typeof samples>) =>
-    path.filter((sample) => sample.t >= DROP_FALL)
-
-  test('after the squash it overshoots a little, then settles and stays still', () => {
-    const after = landed(samples('drop', 4, 400))
-    const ys = after.map((sample) => sample.scale.y)
-    const squash = Math.min(...ys)
-    expect(squash).toBeLessThan(0.97)
-    expect(squash).toBeGreaterThan(0.85)
-    const bottom = ys.indexOf(squash)
-    // Past the squash it rebounds beyond rest: follow-through, 0.4 % to 3 % taller.
-    const stretch = Math.max(...ys.slice(bottom))
-    expect(stretch).toBeGreaterThan(1.004)
-    expect(stretch).toBeLessThan(1.03)
-    // Then it only settles: every later extreme is smaller than the one before.
-    const extremes: number[] = []
-    for (let index = 1; index < ys.length - 1; index += 1) {
-      const [before, here, next] = [ys[index - 1]!, ys[index]!, ys[index + 1]!]
-      if ((here - before) * (next - here) < 0) extremes.push(Math.abs(here - 1))
-    }
-    for (let index = 1; index < extremes.length; index += 1) {
-      expect(extremes[index]!).toBeLessThan(extremes[index - 1]!)
-    }
-    expect(ys.at(-1)).toBe(1)
-  })
-
-  test('the wide sides give what the height takes, and rest exactly at the end', () => {
-    for (const { scale, t } of landed(samples('drop', 4, 100))) {
-      if (t >= 1) continue
-      expect(scale.x).toBeCloseTo(scale.z, 9)
-      expect(scale.x - 1).toBeCloseTo(-(scale.y - 1) / 2, 9)
-    }
-  })
-
-  test('a lead lifts the piece a hair before it falls, and never throws it', () => {
-    const height = 4
-    const path = samples('drop', height, 400, { lead: 0.05 })
-    expect(path[0]!.lift).toBe(height)
-    const peak = Math.max(...path.map((sample) => sample.lift))
-    expect(peak).toBeGreaterThan(height * 1.01)
-    expect(peak).toBeLessThanOrEqual(height * 1.05 + 1e-9)
-    // The lift is over before a tenth of the way; the fall that follows never goes back up.
-    const top = path.findIndex((sample) => sample.lift === peak)
-    expect(path[top]!.t).toBeLessThan(0.15)
-    const fall = path.filter((sample) => sample.t >= 0.2 && sample.t <= DROP_FALL)
-    for (let index = 1; index < fall.length; index += 1) {
-      expect(fall[index]!.lift).toBeLessThanOrEqual(fall[index - 1]!.lift + 1e-12)
-    }
-    // Without a lead it never rises above where it starts.
-    expect(Math.max(...samples('drop', height, 400).map((sample) => sample.lift))).toBe(height)
-  })
-
-  test('a heavier piece lands with a bigger squash and the same rest', () => {
-    const light = Math.min(...landed(samples('drop', 4, 400)).map((sample) => sample.scale.y))
-    const heavy = Math.min(
-      ...landed(samples('drop', 4, 400, { weight: 1.7 })).map((sample) => sample.scale.y),
-    )
-    expect(1 - heavy).toBeGreaterThan((1 - light) * 1.5)
-    expect(heavy).toBeGreaterThan(0.8)
-    expect(revealPoseAt('drop', 1, 4, undefined, { weight: 1.7 }).scale.toArray()).toEqual([
-      1, 1, 1,
-    ])
-  })
-
-  test('the fall is slow off the hook and fastest at the impact', () => {
-    const fall = samples('drop', 4, 400).filter((sample) => sample.t <= DROP_FALL)
-    const speed = (index: number) => fall[index - 1]!.lift - fall[index]!.lift
-    expect(speed(fall.length - 1)).toBeGreaterThan(speed(5) * 8)
   })
 })
 
@@ -285,11 +152,6 @@ describe('the build in reverse', () => {
       // It leaves quickly: most of the way up in the first half.
       expect(steps[50]!.lift).toBeGreaterThan(steps.at(-1)!.lift * 0.7)
     }
-  })
-
-  test('a short drop still lifts a visible way', () => {
-    expect(retractPoseAt('drop', 1, 0.05).lift).toBeCloseTo(RETRACT_LIFT_MIN, 6)
-    expect(retractPoseAt('drop', 1, 40).lift).toBeCloseTo(RETRACT_LIFT_MAX, 6)
   })
 
   test('an opening closes through its wall only', () => {

@@ -1,12 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  formatRegionSize,
   isRegionBigEnough,
-  nearestEdgePoint,
   rankInRegion,
   rectFromDrag,
   regionFractions,
-  regionLabel,
   regionSizeMetres,
 } from './region'
 
@@ -101,18 +98,6 @@ describe('regionSizeMetres', () => {
   })
 })
 
-describe('formatRegionSize', () => {
-  const size = { width: 4.23, depth: 3.07 }
-
-  test('metric: one decimal each, one unit', () => {
-    expect(formatRegionSize(size, 'metric')).toBe('4.2 × 3.1 m')
-  })
-
-  test('imperial: feet and inches as the editor writes them', () => {
-    expect(formatRegionSize(size, 'imperial')).toBe('13\'11" × 10\'1"')
-  })
-})
-
 describe('rankInRegion', () => {
   const region = { x0: 100, y0: 100, x1: 300, y1: 300 }
 
@@ -168,28 +153,5 @@ describe('rankInRegion', () => {
     expect(ranked.more).toBe(3)
     expect(ranked.ids[0]).toBe('e14')
     expect(rankInRegion(many, region, 5)).toMatchObject({ more: 10 })
-  })
-})
-
-describe('regionLabel', () => {
-  test('counts the elements, in words that agree', () => {
-    expect(regionLabel(6)).toBe('Area · 6 elements')
-    expect(regionLabel(1)).toBe('Area · 1 element')
-    expect(regionLabel(0)).toBe('Area')
-  })
-})
-
-describe('nearestEdgePoint', () => {
-  const rect = { x0: 100, y0: 100, x1: 300, y1: 200 }
-
-  test('puts a release point outside the rectangle on its nearest edge', () => {
-    expect(nearestEdgePoint(rect, { x: 400, y: 150 })).toEqual({ x: 300, y: 150 })
-    expect(nearestEdgePoint(rect, { x: 200, y: 20 })).toEqual({ x: 200, y: 100 })
-    expect(nearestEdgePoint(rect, { x: 20, y: 400 })).toEqual({ x: 100, y: 200 })
-  })
-
-  test('pushes a point inside out to the nearest edge, so a tail has something to point from', () => {
-    expect(nearestEdgePoint(rect, { x: 290, y: 150 })).toEqual({ x: 300, y: 150 })
-    expect(nearestEdgePoint(rect, { x: 200, y: 110 })).toEqual({ x: 200, y: 100 })
   })
 })

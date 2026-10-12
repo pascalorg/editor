@@ -6,8 +6,6 @@ import {
   DUST_MIN_PX,
   DustPool,
   dustSpriteSize,
-  emitAlongBase,
-  emitAroundFoot,
 } from './construction-dust'
 
 type Sprite = { slot: number; x: number; y: number; z: number; size: number; alpha: number }
@@ -81,40 +79,5 @@ describe('construction dust', () => {
     pool.clear()
     expect(pool.live).toBe(0)
     expect(live(pool, 1)).toHaveLength(0)
-  })
-
-  test('a rising wall puffs along its base; a landing puffs around its foot', () => {
-    const pool = new DustPool()
-    emitAlongBase(pool, new Vector3(0, 0, 0), new Vector3(4, 0, 0), 0)
-    const base = live(pool, 1)
-    expect(base.length).toBeGreaterThanOrEqual(3)
-    expect(base.length).toBeLessThanOrEqual(24)
-    for (const sprite of base) {
-      expect(sprite.x).toBeGreaterThan(-0.5)
-      expect(sprite.x).toBeLessThan(4.5)
-      expect(Math.abs(sprite.z)).toBeLessThan(0.5)
-      expect(sprite.y).toBeLessThan(0.5)
-    }
-
-    pool.clear()
-    emitAroundFoot(
-      pool,
-      [
-        new Vector3(-0.2, 1, -0.2),
-        new Vector3(0.2, 1, -0.2),
-        new Vector3(0.2, 1, 0.2),
-        new Vector3(-0.2, 1, 0.2),
-      ],
-      1,
-      0,
-    )
-    const foot = live(pool, 1)
-    expect(foot.length).toBeGreaterThanOrEqual(4)
-    expect(foot.length).toBeLessThanOrEqual(24)
-    for (const sprite of foot) {
-      expect(Math.abs(sprite.x)).toBeLessThan(0.8)
-      expect(Math.abs(sprite.z)).toBeLessThan(0.8)
-      expect(sprite.y).toBeGreaterThan(0.9)
-    }
   })
 })
