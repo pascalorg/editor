@@ -359,7 +359,8 @@ type WindowAnimationEvents = {
 }
 
 type ThumbnailEvents = {
-  'thumbnail:before-capture': undefined
+  /** `wholeWalls`: every wall drawn whole for the frame, whatever the wall mode (an authored pose, an interior view). */
+  'thumbnail:before-capture': { wholeWalls?: boolean } | undefined
   'thumbnail:after-capture': undefined
 }
 

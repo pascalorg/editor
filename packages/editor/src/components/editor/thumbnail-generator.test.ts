@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { BuildingNode, CeilingNode, LevelNode, WallNode } from '@pascal-app/core/schema'
 import { hideFromScene, SCENE_LAYER, useViewer } from '@pascal-app/viewer'
-import { Group, Layers, Mesh, Vector2 } from 'three'
+import { Group, Layers, Mesh, OrthographicCamera, PerspectiveCamera, Vector2 } from 'three'
 import { CanvasTarget, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
 import {
   atCaptureSize,
+  capturesOrthographically,
   interiorCutaway,
   presentFinished,
   pumpFrames,
@@ -285,5 +286,23 @@ describe('an interior view of a floor', () => {
     house()
     sceneRegistry.nodes.delete('level_ground')
     expect(() => interiorCutaway('level_ground', () => {})).toThrow('not built yet')
+  })
+})
+
+describe("a capture's projection", () => {
+  const user = { ortho: new OrthographicCamera(), perspective: new PerspectiveCamera() }
+  const view = { position: [8, 6, 8], target: [0, 1, 0] } as never
+
+  test("a perspective view asked for stays perspective under the user's orthographic camera", () => {
+    // Else view_scene's planned camera, a look into a floor from 55° or a photo's, would give
+    // way to the user's own orthographic view while the result reports the planned one.
+    expect(capturesOrthographically({ perspective: view }, user.ortho)).toBe(false)
+    expect(capturesOrthographically({ ortho: view }, user.perspective)).toBe(true)
+  })
+
+  test("with no view of its own, a capture takes the user's projection", () => {
+    expect(capturesOrthographically({}, user.ortho)).toBe(true)
+    expect(capturesOrthographically({}, user.perspective)).toBe(false)
+    expect(capturesOrthographically({ snapLevels: true }, user.ortho)).toBe(false)
   })
 })

@@ -1,19 +1,11 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  emitter,
-  sceneRegistry,
-  type ThumbnailGenerateEvent,
-  useScene,
-} from '@pascal-app/core'
+import { emitter, sceneRegistry, type ThumbnailGenerateEvent, useScene } from '@pascal-app/core'
 import { sceneViewInterior } from '@pascal-app/core/agent-operations'
 import {
   computeHeroFraming,
   createSnapshotPipeline,
   GRID_LAYER,
-  getVisibleWallMaterials,
-  getWallFinishRefs,
   heroCameraPose,
   holdLiveFrame,
   pendingSceneBuildCount,
@@ -497,9 +489,9 @@ function clipSceneFor(
 
 /**
  * An interior view of one floor, for one render (view_scene): the other
- * floors and this floor's roofs and ceilings out of the picture, its walls
- * cut where core says (sceneViewInterior, from the scene as this editor has
- * it) and their shadows with them, and whatever the user's solo or isolation
+ * floors and this floor's roofs and ceilings out of the picture, everything
+ * on it cut where core says (sceneViewInterior, from the scene as this editor
+ * has it) and its shadows with it, and whatever the user's solo or isolation
  * holds back on it shown.
  */
 export function interiorCutaway(levelId: string, restore: (callback: () => void) => void) {
@@ -516,6 +508,21 @@ export function interiorCutaway(levelId: string, restore: (callback: () => void)
   }
   restore(temporarilyShowPresentation(floor))
   restore(clipSceneFor(floor, [{ normal: [0, -1, 0], constant: cutHeight }], true))
+}
+
+/**
+ * A caller's own orthographic view, or with no view of its own an
+ * orthographic main camera, captures orthographically; a caller's perspective
+ * view (view_scene's), the auto-save hero shot and an authored snapshot pose
+ * stay perspective.
+ */
+export function capturesOrthographically(
+  event: Pick<ThumbnailGenerateEvent, 'snapLevels' | 'cameraPose' | 'ortho' | 'perspective'>,
+  mainCamera: THREE.Camera,
+): boolean {
+  if (event.snapLevels || event.cameraPose) return false
+  if (event.ortho) return true
+  return !event.perspective && mainCamera instanceof THREE.OrthographicCamera
 }
 
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
@@ -688,13 +695,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           try {
             const edges = edgesOverride ?? (transparent ? 'off' : useViewer.getState().edges)
 
-            // A caller's own orthographic view, or an orthographic main camera,
-            // captures orthographically; the auto-save hero shot and an authored
-            // snapshot pose stay perspective.
-            const wantOrtho =
-              !snapLevels &&
-              !cameraPose &&
-              (ortho !== undefined || mainCamera instanceof THREE.OrthographicCamera)
+            const wantOrtho = capturesOrthographically(event, mainCamera)
             let thumbnailCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera =
               perspectiveCamera
             let pipeline: SnapshotPipeline | null = pipelineRef.current
@@ -887,35 +888,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
 
               restore(() => emitter.emit('thumbnail:after-capture', undefined))
-              emitter.emit('thumbnail:before-capture', undefined)
+              // Walls whole, as built, whatever the user's wall mode: an
+              // authored pose is not the user's view, an interior is cut below.
+              emitter.emit(
+                'thumbnail:before-capture',
+                cameraPose || interior ? { wholeWalls: true } : undefined,
+              )
               if (cameraPose) {
                 restore(snapLevelsToTruePositions())
                 restore(temporarilyShowShadowOnly(scene))
-              }
-              // Walls whole, as built, whatever the user's wall mode: an
-              // authored pose is not the user's view, an interior is cut below.
-              if (cameraPose || interior) {
-                const wallMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>()
-                restore(() => {
-                  for (const [mesh, material] of wallMaterials) mesh.material = material
-                })
-                const state = useScene.getState()
-                const viewer = useViewer.getState()
-                for (const id of sceneRegistry.byType.wall ?? []) {
-                  const node = state.nodes[id as AnyNodeId]
-                  const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh | undefined
-                  if (node?.type !== 'wall' || !mesh?.isMesh) continue
-                  wallMaterials.set(mesh, mesh.material)
-                  mesh.material = getVisibleWallMaterials(
-                    node,
-                    viewer.shading,
-                    viewer.textures,
-                    viewer.colorPreset,
-                    viewer.sceneTheme,
-                    state.materials,
-                    getWallFinishRefs(mesh.geometry),
-                  )
-                }
               }
 
               // Geometry and presentation systems may have mounted new meshes
