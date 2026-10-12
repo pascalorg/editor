@@ -805,8 +805,6 @@ let askCounter = 0
 const newAskId = () =>
   `ask_${Date.now().toString(36)}${(askCounter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
-const BUSY_WORDS = 'Pascal is working. Ask again when it is done.'
-
 /** The scene history now, marked so what an ask's turn wrote can be counted when its Undo comes. */
 const markNow = () => markHistory(useScene.temporal.getState().pastStates)
 const stepsFrom = (mark: HistoryMark) => stepsSince(useScene.temporal.getState().pastStates, mark)
@@ -840,10 +838,6 @@ export async function sendBubble(
   const bubble = state.bubble
   const words = text.trim()
   if (!(bubble && words)) return
-  if (state.busy) {
-    state.patchBubble({ error: BUSY_WORDS })
-    return
-  }
   const askId = newAskId()
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
   const first = bubble.targets[0]

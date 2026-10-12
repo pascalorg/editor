@@ -216,52 +216,75 @@ describe('hold to see before, end to end', () => {
   })
 })
 
+function openBubbleOnWall(draft = '') {
+  usePointAsk.getState().openBubble({
+    targets: [target],
+    anchor: [2, 1, 0],
+    hit: { point: [2, 1, 0], normal: [0, 0, 1] },
+    gesture: 'click',
+    capturedAt: new Date().toISOString(),
+    camera: null,
+    crop: { state: 'failed' },
+    draft,
+    error: null,
+  })
+}
+
 describe('an ask while Pascal is working', () => {
-  test('is not sent: the bubble keeps its words and says why', async () => {
-    let handed = 0
+  test('is handed to the chat, which queues it as its own turn: the pin says queued', async () => {
+    const handed: string[] = []
     unregisterHandler()
-    unregisterHandler = registerPointAskHandler(async () => {
-      handed += 1
+    unregisterHandler = registerPointAskHandler(async (submit) => {
+      handed.push(submit.askId)
+      emitter.emit('point-ask:status', { askId: submit.askId, status: 'queued' } as never)
       return { ok: true }
     })
-    usePointAsk.getState().openBubble({
-      targets: [target],
-      anchor: [2, 1, 0],
-      hit: { point: [2, 1, 0], normal: [0, 0, 1] },
-      gesture: 'click',
-      capturedAt: new Date().toISOString(),
-      camera: null,
-      crop: { state: 'failed' },
-      draft: 'make this wall taller',
-      error: null,
-    })
     usePointAsk.setState({ busy: true })
+    openBubbleOnWall()
     await sendBubble('make this wall taller', { x: 0, y: 0, width: 10, height: 10 })
     const state = usePointAsk.getState()
-    expect(handed).toBe(0)
-    expect(state.pinOrder).toHaveLength(0)
-    expect(state.bubble?.draft).toBe('make this wall taller')
-    expect(state.bubble?.error).toBe('Pascal is working. Ask again when it is done.')
+    expect(handed).toHaveLength(1)
+    expect(state.bubble).toBeNull()
+    expect(state.pinOrder).toHaveLength(1)
+    expect(state.pins[handed[0]!]?.model.state).toBe('queued')
   })
 
-  test("the chat's own busy answer returns the bubble with its reason", async () => {
+  test("takes none of the running turn's changes, and its before is the scene when its own turn starts", async () => {
+    unregisterHandler()
+    unregisterHandler = registerPointAskHandler(async (submit) => {
+      emitter.emit('point-ask:status', { askId: submit.askId, status: 'queued' } as never)
+      return { ok: true }
+    })
+    // An earlier ask is running and writes.
+    const running = await sendAsk()
+    status(running, { status: 'working', sentence: 'Raising the wall' })
+    usePointAsk.setState({ busy: true })
+    openBubbleOnWall()
+    await sendBubble('paint it', { x: 0, y: 0, width: 10, height: 10 })
+    const queued = usePointAsk.getState().pinOrder.at(-1)!
+    agentWrite(() => useScene.getState().updateNode(wall.id, { height: 3 }))
+    status(running, { status: 'ended', outcome: 'completed', asked: false, wroteScene: true })
+    expect(usePointAsk.getState().pins[queued]?.model.committed).toBe(false)
+    // Its own turn starts and writes.
+    status(queued, { status: 'working', sentence: 'Painting' })
+    agentWrite(() => useScene.getState().updateNode(wall.id, { height: 3.4 }))
+    status(queued, { status: 'ended', outcome: 'completed', asked: false, wroteScene: true })
+    const pin = usePointAsk.getState().pins[queued]?.model
+    expect(pin?.state).toBe('done')
+    expect(pin?.changedTargetIds).toEqual([wall.id])
+    expect(startCompare(queued)).toBe(true)
+    // The state it started from: the running turn's change is in it.
+    expect(wallHeight()).toBe(3)
+  })
+
+  test('a host that does not queue answers busy, and the bubble comes back with its reason', async () => {
     unregisterHandler()
     unregisterHandler = registerPointAskHandler(async () => ({
       ok: false,
       code: 'busy',
       message: 'Pascal is working. Ask again when it is done.',
     }))
-    usePointAsk.getState().openBubble({
-      targets: [target],
-      anchor: [2, 1, 0],
-      hit: { point: [2, 1, 0], normal: [0, 0, 1] },
-      gesture: 'click',
-      capturedAt: new Date().toISOString(),
-      camera: null,
-      crop: { state: 'failed' },
-      draft: '',
-      error: null,
-    })
+    openBubbleOnWall()
     await sendBubble('make this wall taller', { x: 0, y: 0, width: 10, height: 10 })
     const state = usePointAsk.getState()
     expect(state.pinOrder).toHaveLength(0)
