@@ -90,7 +90,8 @@ export const createRoomTool = {
           }).optional(),
           sillHeight: measurement('length', 'm', {
             min: 0,
-            description: 'Height from the floor to the bottom of the window (default 0.9 m).',
+            description:
+              'Height from the floor to the bottom of the window (default: centred vertically on the wall).',
           }).optional(),
           style: z
             .enum(WINDOW_STYLES)

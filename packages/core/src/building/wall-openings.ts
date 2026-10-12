@@ -199,9 +199,12 @@ export type WallOpeningInput = {
 
 const equalRatios = (count: number) => Array.from({ length: count }, () => 1 / count)
 
+/** A window's size when none is given. Its sill is not a number: it is centred on its wall. */
+export const DEFAULT_WINDOW = { width: 1.5, height: 1.5 } as const
+
 const DEFAULTS = {
   door: { width: 0.9, height: 2.1 },
-  window: { width: 1.5, height: 1.5, sillHeight: 0.9 },
+  window: DEFAULT_WINDOW,
 } as const
 
 const metres = (value: number) => `${value.toFixed(2)} m`
@@ -294,8 +297,14 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     )
 
   const rawX = along * wallLength
-  const sillHeight = input.sillHeight ?? DEFAULTS.window.sillHeight
-  const rawY = kind === 'door' ? height / 2 : sillHeight + height / 2
+  // A window with no sill given is centred on its wall, taller than the wall or not: the clamp
+  // below stands one that is too tall on the floor and reports it clamped.
+  const rawY =
+    kind === 'door'
+      ? height / 2
+      : input.sillHeight === undefined
+        ? resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) / 2
+        : input.sillHeight + height / 2
   const { clampedX, clampedY } =
     kind === 'door'
       ? clampDoorToWall(wall, rawX, width, height)

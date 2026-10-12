@@ -375,7 +375,7 @@ export const CREATE_ROOM_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: "a window sits at add_window's sill height; a door takes its size, hinge, swing and style",
+    name: 'a window is centred on its wall, as add_window places it; a door takes its size, hinge, swing and style',
     tool: 'create_room',
     scene: roomsScene,
     input: room({
@@ -396,12 +396,17 @@ export const CREATE_ROOM_CASES: AgentToolCase[] = [
       check: (result, nodes) => {
         const window = nodes[(result.windowIds as string[])[0]!]
         const door = nodes[(result.doorIds as string[])[0]!]
+        // Centred on the wall as it stands when the room is made, the storey's 2.8 m: the floor plate
+        // is derived afterwards, and a later add_window sees the slab (a window 2.5 cm lower).
+        const wall = window?.type === 'window' && window.wallId ? nodes[window.wallId] : undefined
+        const level = wall?.parentId ? nodes[wall.parentId] : undefined
+        const ceiling = level?.type === 'level' ? (level.height ?? Number.NaN) : Number.NaN
         return problems(
           [
             window?.type === 'window' &&
-              near(window.position[1] - window.height / 2, 0.9) &&
+              near(window.position[1], ceiling / 2) &&
               window.width === 1.5,
-            `window ${JSON.stringify(window)} is not 1.5 m wide on a 0.9 m sill`,
+            `window ${JSON.stringify(window)} is not 1.5 m wide and centred on its ${ceiling} m wall`,
           ],
           [
             door?.type === 'door' &&
