@@ -5,6 +5,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  type CameraControlFrameEvent,
   type CeilingNode,
   CeilingNode as CeilingNodeSchema,
   type ColumnNode,
@@ -165,7 +166,13 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
-import { activeViewLayout, isViewVisible, VIEW_2D, visibleScene } from '../../store/view-layout'
+import {
+  activeViewLayout,
+  isViewVisible,
+  VIEW_2D,
+  VIEW_3D,
+  visibleScene,
+} from '../../store/view-layout'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -257,6 +264,10 @@ import { useFloorplanSceneData } from './use-floorplan-scene-data'
 import { sceneSpan } from './views/scene-region'
 
 const FALLBACK_VIEW_SIZE = 12
+// A framed node's diagonal spans half the plan's width, so it fits a landscape pane at any turn;
+// the view never closes in to less than a small room's width.
+const FLOORPLAN_FRAME_MARGIN = 2
+const FLOORPLAN_FRAME_MIN_WIDTH = 4
 const FLOORPLAN_PADDING = 2
 const MIN_VIEWPORT_WIDTH_RATIO = 0.08
 const MAX_VIEWPORT_WIDTH_RATIO = 40
@@ -6560,6 +6571,36 @@ export function FloorplanPanel({
     () => subscribeFloorplanCameraNavigation(receiveFloorplanNavigationPose),
     [receiveFloorplanNavigationPose],
   )
+
+  // A frame request ("show me this node") moves the 3D camera and the plan follows its pose; with no
+  // 3D view on screen no pose reaches the plan, so it centres on the node itself.
+  useEffect(() => {
+    const centreOn = (x: number, z: number, viewWidth?: number) =>
+      smoothFloorplanNavigationView(
+        worldToFloorplanLocalPoint(x, z, buildingPosition, buildingRotationY),
+        latestFloorplanUserRotationDegRef.current,
+        viewWidth,
+      )
+    const frame = ({ bounds, pose }: CameraControlFrameEvent) => {
+      if (!isFloorplanOpenRef.current || isViewVisible(useEditor.getState(), VIEW_3D)) return
+      if (pose) {
+        centreOn(pose.target[0], pose.target[2])
+      } else if (bounds) {
+        const [minX, , minZ] = bounds.min
+        const [maxX, , maxZ] = bounds.max
+        centreOn(
+          (minX + maxX) / 2,
+          (minZ + maxZ) / 2,
+          Math.max(
+            Math.hypot(maxX - minX, maxZ - minZ) * FLOORPLAN_FRAME_MARGIN,
+            FLOORPLAN_FRAME_MIN_WIDTH,
+          ),
+        )
+      }
+    }
+    emitter.on('camera-controls:frame', frame)
+    return () => emitter.off('camera-controls:frame', frame)
+  }, [buildingPosition, buildingRotationY, smoothFloorplanNavigationView])
 
   useEffect(() => {
     const receiveStoredNavigationPose = (pose: NavigationSyncPose | null) => {
