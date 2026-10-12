@@ -31,6 +31,7 @@ export function SegmentedControl<T extends string>({
         const isSelected = !mixed && value === option.value
         return (
           <button
+            aria-pressed={isSelected}
             className={cn(
               'relative flex h-full flex-1 items-center justify-center rounded-md font-medium text-xs transition-all duration-200',
               isSelected
