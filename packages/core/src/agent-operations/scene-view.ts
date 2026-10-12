@@ -665,6 +665,14 @@ export function sceneViewPlan(
   const crop = cropOf(input.photo)
   const inside = input.interior && sceneViewInterior(nodes, input.interior.levelId)
   const interior = input.interior && { levelId: input.interior.levelId }
+  const target = input.target ? nodes[input.target] : undefined
+  // Every other floor is left out of an interior view: a target on one would frame nothing shown.
+  if (interior && target && !ancestry(nodes, target).some((node) => node.id === interior.levelId))
+    refuse(
+      'interior_target_elsewhere',
+      `${target.type} ${target.id} is not on ${interior.levelId}: target something on the floor you look inside.`,
+      { target: target.id, levelId: interior.levelId },
+    )
   if (camera) {
     const own = (
       ['from', 'position', 'elevation', 'eyeHeight', 'fov', 'projection'] as const
@@ -687,7 +695,7 @@ export function sceneViewPlan(
       ...(interior ? { interior } : {}),
     }
   }
-  const opening = openingOf(nodes, input.target ? nodes[input.target] : undefined)
+  const opening = openingOf(nodes, target)
   const from =
     input.from ??
     (opening && !input.position

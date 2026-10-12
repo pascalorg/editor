@@ -151,6 +151,12 @@ describe('a look inside one floor', () => {
     expect(framesBox(wall.pose, sceneViewBounds(nodes, 'wall_level_0_0'))).toBe(true)
     const street = sceneViewPlan(nodes, { interior: { levelId: 'level_0' }, eyeHeight: 1.7 })
     expect(street.pose.position[1]).toBe(1.7)
+    // The upper floor is left out of the picture: its wall would frame nothing shown.
+    expect(
+      refusalOf(() =>
+        sceneViewPlan(nodes, { interior: { levelId: 'level_0' }, target: 'wall_level_1_0' }),
+      ),
+    ).toBe('interior_target_elsewhere')
   })
 
   test("a photo's camera keeps its pose, and the floor is still checked", () => {
