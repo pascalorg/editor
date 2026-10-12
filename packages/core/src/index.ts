@@ -263,6 +263,7 @@ export {
   openingDatumFromSupport,
   wallSupportForNodes,
 } from './lib/opening-floor-datum'
+export { panelDepthOffset } from './lib/panel-depth'
 export {
   classifyPlateSideAt,
   clearPlateSurfaceCaches,

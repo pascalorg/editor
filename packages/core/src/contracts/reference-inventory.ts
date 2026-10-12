@@ -80,6 +80,7 @@ const MATERIAL_FIELDS = [
   'material',
   'edgeMaterial',
   'exteriorMaterial',
+  'fasciaMaterial',
   'glassMaterial',
   'interiorMaterial',
   'panelMaterial',
@@ -782,6 +783,13 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
     { kind: '*', path: `${prefix}.reference.parameters.@key`, reason: 'Feature parameter name.' },
     { kind: '*', path: `${prefix}.reference.parameters.*`, reason: 'Feature parameter value.' },
   ]),
+  { kind: 'facade', path: 'set.style.id', reason: 'Style generator id (haussmann, …).' },
+  {
+    kind: 'facade',
+    path: 'sourceItemId',
+    reason: 'Catalog items row the set was loaded from (attribution), not a scene node.',
+  },
+  { kind: 'panel', path: 'offset', reason: 'Gap between the panel and its wall face, in metres.' },
 ]
 
 // ─── metadata.* ───────────────────────────────────────────────────────────
@@ -818,6 +826,11 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     targetKinds: ['duct-segment', 'pipe-segment'],
     dependents: ['metadata.automaticRunEndCapEndpoint'],
     note: 'The run whose open end this automatic cap closes.',
+  }),
+  meta('copiedFrom', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    targetKinds: ['level'],
+    note: 'The floor a level was duplicated from: its building map still draws the copy.',
   }),
   meta('conicalSourceWallId', {
     ...policy('node', 'internal', 'drop', 'strip'),
@@ -904,6 +917,72 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     ...policy('source', 'content', 'freeze', 'strip'),
     note: 'Import provenance: the source element ids an importer recorded (the /next converter writes them); find_nodes filters on them.',
   }),
+  meta('facadeOwner', {
+    ...policy('node', 'internal', 'cascade', 'strip'),
+    targetKinds: ['wall', 'facade'],
+    dependents: ['metadata.facadeCell'],
+    remaps: CLONES,
+    note: 'The wall whose facade generated this opening, panel, deck or railing (the facade node for corner chains and bands); resize sync deletes what an absent owner leaves.',
+  }),
+  meta('facadeReleasedFrom', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    targetKinds: ['wall'],
+    remaps: CLONES,
+    note: 'The wall a detached facade released this node from.',
+  }),
+  meta('proceduralFacade.set.facadeId', {
+    ...policy('node', 'membership', 'drop', 'strip'),
+    targetKinds: ['facade'],
+    remaps: CLONES,
+    note: "The facade node whose set this wall's facade belongs to.",
+  }),
+  meta('balcony.id', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    targetKinds: ['slab'],
+    note: 'The deck a balcony railing or deck belongs to.',
+  }),
+  meta('balconySourceWall', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    targetKinds: ['wall'],
+    note: 'The wall a balcony was built from.',
+  }),
+  meta('referenceOutline.guideId', {
+    ...policy('node', 'internal', 'freeze', 'strip'),
+    targetKinds: ['guide'],
+    note: 'The plan a wall, slab, zone or unit was built from; building links follow it.',
+  }),
+  ...(['planReference.anchorGuideId', 'planReference.calibrationSourceGuideId'] as const).map(
+    (key) =>
+      meta(key, {
+        ...policy('node', 'connection', 'freeze', 'strip'),
+        targetKinds: ['guide'],
+        note: 'The plan this plan was matched onto, or took its calibration from.',
+      }),
+  ),
+  meta('unitPlanRoom.guideId', {
+    ...policy('node', 'connection', 'freeze', 'strip'),
+    targetKinds: ['zone'],
+    note: 'The unit plan a room zone was named from (create_reference_elements into fits).',
+  }),
+  meta('guessed.unitId', {
+    ...policy('node', 'internal', 'freeze', 'strip'),
+    targetKinds: ['unit', 'zone'],
+    note: 'The unit a guessed room, wall or door was laid out for (apply_unit_layout); a later guess replaces what carries it.',
+  }),
+  ...(
+    [
+      'planReference.assetId',
+      'planReference.sourceUrl',
+      'planVectors.originalUrl',
+      'referenceOutline.assetId',
+      'referenceOutline.sourceUrl',
+    ] as const
+  ).map((key) =>
+    meta(key, {
+      ...policy('asset', 'content', 'freeze', 'keep'),
+      note: 'The plan image, its vector source, or the catalog asset an import matched.',
+    }),
+  ),
 ]
 
 const described = (reason: string, paths: readonly string[]) =>
@@ -911,6 +990,60 @@ const described = (reason: string, paths: readonly string[]) =>
 
 /** Metadata keys found in editor sources that are not references. */
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
+  ...described(
+    'Plan reference data: sizes, transforms, calibration and the reading; names no node.',
+    [
+      'planReference.alignment',
+      'planReference.alignment.anchorTransform',
+      'planReference.alignment.anchorTransform.metersPerPixel',
+      'planReference.alignment.anchorTransform.position',
+      'planReference.alignment.anchorTransform.rotation',
+      'planReference.baselineTransform',
+      'planReference.baselineTransform.metersPerPixel',
+      'planReference.baselineTransform.position',
+      'planReference.baselineTransform.rotation',
+      'planReference.height',
+      'planReference.inheritedCalibration',
+      'planReference.inheritedCalibration.knownDimension',
+      'planReference.inheritedCalibration.scaleReference',
+      'planReference.knownDimension',
+      'planReference.knownDimension.meters',
+      'planReference.metersPerPixel',
+      'planReference.method',
+      'planReference.mimeType',
+      'planReference.role',
+      'planReference.sharedFrame',
+      'planReference.traced',
+      'planReference.version',
+      'planReference.width',
+      'planReading',
+      'planReading.addBalconies',
+      'planReading.dropBalconies',
+      'planReading.roles',
+      'planVectors.method',
+      'referenceContours',
+      'referenceLabels',
+      'referenceOutline.conversion',
+      'referenceOutline.detachedReason',
+      'referenceOutline.linked',
+      'referenceOutline.outlineId',
+      'referenceOutline.outlineIds',
+      'referenceOutline.reviewRequired',
+      'requireHumanCalibration',
+    ],
+  ),
+  ...described('An authored object: what it stands in for, as add_object was told.', ['reason']),
+  ...described(
+    "What a reference image shows, as record_reference wrote it: items and their status. An item's nodeIds are read, never followed: a node gone reads as not built (lost), so nothing remaps them.",
+    ['referenceInventory', 'referenceInventory.items'],
+  ),
+  ...described(
+    "A room built from a unit plan: the apartment shape of the floor's map it went into.",
+    ['unitPlanRoom', 'unitPlanRoom.apartmentId'],
+  ),
+  ...described("The unit guesser's mark: the layout, seed and brief a guessed node came from.", [
+    'guessed',
+  ]),
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',
@@ -954,6 +1087,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'storyShell',
     'suppressedDimensionSegmentIndexes',
   ]),
+  ...described(
+    'What a maker said about a coherence issue, keyed by issue id (which embeds node ids). A copy with new ids stops matching them, so its issues are open again: stale, never wrong.',
+    ['coherence', 'coherence.disputes'],
+  ),
   ...described('Read as a truthy flag only; no editor writer.', [
     'arrayModifier',
     'curvedWindowMaster',
@@ -1002,6 +1139,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'textSizePt',
   ]),
   ...described('Site-plan facts kept on the node: values, not ids.', [
+    'flatwork',
     'flatworkDims',
     'services',
     'streetNames',
@@ -1009,7 +1147,38 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ]),
   ...described('Registry extension key, not scene-node metadata.', ['pascal:editor/floorplan']),
   ...described('Next.js page metadata export, not scene-node metadata.', ['title']),
-  ...described('An authored object: what it stands in for, as add_object was told.', ['reason']),
+  ...described('Facade and balcony state: a snapshot, flag or label; names nothing.', [
+    'facadeCell',
+    'facadeDressed.previous',
+    'proceduralFacade.appliedSlots',
+    'proceduralFacade.detached',
+    'proceduralFacade.detachedReason',
+    'proceduralFacade.face',
+    'proceduralFacade.layoutFrame',
+    'proceduralFacade.mode',
+    'proceduralFacade.previousSlots',
+    'proceduralFacade.sourceItemId',
+    'proceduralFacade.surface',
+    'proceduralFacade.treated',
+    'proceduralFacade.unit',
+    'proceduralFacade.set.unit',
+    'balcony.options',
+    'balcony.role',
+    'balcony.source',
+    'balcony.guardBoundaryIndices',
+    'balcony.hiddenByStyle',
+    'placeholderSource',
+    'balcony.options.depth',
+    'balcony.options.railing',
+    'facadeDressed',
+    'facadeDressed.previous.columnRatios',
+    'facadeDressed.previous.frameDepth',
+    'facadeDressed.previous.rowRatios',
+    'facadeDressed.previous.sill',
+    'facadeDressed.previous.sillDepth',
+    'facadeDressed.previous.slots',
+    'facadeDressed.previous.windowType',
+  ]),
 ]
 
 const bare = (path: string) => path.replace(/^metadata\./, '').replace(/\[\]/g, '')

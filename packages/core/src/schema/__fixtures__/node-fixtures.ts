@@ -25,6 +25,7 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       [1, 0, 0],
     ],
   },
+  facade: { set: { name: 'Facade' } },
   fence: { start: [0, 0], end: [4, 0] },
   'floor-opening': { polygon: [[0, 0], [1, 0], [1, 1], [0, 1]] },
   guide: { url: 'asset://guide.png' },

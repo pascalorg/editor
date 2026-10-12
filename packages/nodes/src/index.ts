@@ -16,6 +16,7 @@ import { ductSegmentDefinition } from './duct-segment'
 import { ductTerminalDefinition } from './duct-terminal'
 import { elevatorDefinition } from './elevator'
 import { eyebrowVentDefinition } from './eyebrow-vent'
+import { facadeDefinition } from './facade'
 import { fenceDefinition } from './fence'
 import { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 import { floorOpeningDefinition } from './floor-opening/definition'
@@ -29,6 +30,7 @@ import { levelDefinition } from './level'
 import { linesetDefinition } from './lineset'
 import { liquidLineDefinition } from './liquid-line'
 import { measurementDefinition } from './measurement'
+import { panelDefinition } from './panel'
 import { pipeFittingDefinition } from './pipe-fitting'
 import { pipeSegmentDefinition } from './pipe-segment'
 import { pipeTrapDefinition } from './pipe-trap'
@@ -81,6 +83,7 @@ export const builtinPlugin: Plugin = {
     separatorDefinition as unknown as AnyNodeDefinition,
     floorOpeningDefinition as unknown as AnyNodeDefinition,
     leanToExtensionDefinition as unknown as AnyNodeDefinition,
+    panelDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
     fenceGateDefinition as unknown as AnyNodeDefinition,
     fenceOpeningDefinition as unknown as AnyNodeDefinition,
@@ -98,6 +101,7 @@ export const builtinPlugin: Plugin = {
     columnDefinition as unknown as AnyNodeDefinition,
     elevatorDefinition as unknown as AnyNodeDefinition,
     unitDefinition as unknown as AnyNodeDefinition,
+    facadeDefinition as unknown as AnyNodeDefinition,
     roofDefinition as unknown as AnyNodeDefinition,
     roofSegmentDefinition as unknown as AnyNodeDefinition,
     stairDefinition as unknown as AnyNodeDefinition,
@@ -177,6 +181,7 @@ export { ductSegmentDefinition } from './duct-segment'
 export { ductTerminalDefinition } from './duct-terminal'
 export { elevatorDefinition } from './elevator'
 export { eyebrowVentDefinition } from './eyebrow-vent'
+export { facadeDefinition } from './facade'
 export { beginFenceFeaturePlacement, fenceDefinition } from './fence'
 export { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 export { floorOpeningDefinition } from './floor-opening/definition'
