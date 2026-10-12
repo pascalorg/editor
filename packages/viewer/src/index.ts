@@ -198,6 +198,7 @@ export {
   type HiddenReason,
   hideFromScene,
   showInScene,
+  temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'

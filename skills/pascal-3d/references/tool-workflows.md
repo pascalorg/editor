@@ -55,7 +55,7 @@ If a live-sync version conflict occurs, call `load_scene`, inspect the newer gra
 
 ## Look at the result
 
-`view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) and `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat). A server with no renderer answers `view_unavailable`. A picture is not a measure.
+`view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. `interior: { levelId }` looks inside one floor, the other floors, its roof and its ceilings left out and everything on it, walls, openings and furniture alike, cut at 0.65 of the storey's height; the live view is not changed. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) and `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat). A server with no renderer answers `view_unavailable`. A picture is not a measure.
 
 ## Start over
 

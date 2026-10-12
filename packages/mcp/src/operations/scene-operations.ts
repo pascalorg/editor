@@ -6,6 +6,8 @@ import type {
   AnyNodeType,
   Collection,
   CollectionId,
+  SceneMaterial,
+  SceneMaterialId,
 } from '@pascal-app/core/schema'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
@@ -37,6 +39,11 @@ export interface SceneOperations {
   readonly canCreateProject: boolean
   readonly canGetProjectStatus: boolean
   readonly storeBackend: SceneStore['backend'] | null
+  /**
+   * Whether `applyPatch` takes `upsert_material` patches with the nodes that use them, in one
+   * history step. A host that does lends `getMaterials`, and paint keeps native materials there.
+   */
+  readonly supportsMaterialUpserts?: boolean
 
   setActiveScene(meta: ActiveSceneMeta): void
   getActiveScene(): ActiveSceneMeta | null
@@ -49,6 +56,7 @@ export interface SceneOperations {
   getNode(id: AnyNodeId): AnyNode | null
   getNodes(): Record<AnyNodeId, AnyNode>
   getCollections(): Record<CollectionId, Collection>
+  getMaterials?(): Readonly<Record<SceneMaterialId, SceneMaterial>>
   /** Replace the scene's collections (one undo step, like any edit). */
   setCollections(collections: Record<CollectionId, Collection>): void
   getRootNodeIds(): AnyNodeId[]
@@ -116,6 +124,10 @@ class SceneOperationsFacade implements SceneOperations {
 
   get hasBridge(): boolean {
     return this.#bridge !== undefined
+  }
+
+  get supportsMaterialUpserts(): boolean {
+    return this.#bridge?.supportsMaterialUpserts === true
   }
 
   get hasStore(): boolean {
@@ -197,6 +209,10 @@ class SceneOperationsFacade implements SceneOperations {
 
   getCollections(): Record<CollectionId, Collection> {
     return this.requireBridge().getCollections()
+  }
+
+  getMaterials(): Readonly<Record<SceneMaterialId, SceneMaterial>> {
+    return this.requireBridge().getMaterials()
   }
 
   setCollections(collections: Record<CollectionId, Collection>): void {

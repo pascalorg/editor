@@ -18,13 +18,19 @@ export const viewSceneTool = {
   name: 'view_scene',
   title: 'Look at the scene',
   description:
-    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic); the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), and a tab in the background must be brought to the front (editor_tab_hidden). A picture is not a measure: take sizes and counts from the tools.",
+    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic); the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. To see inside a floor, give interior {levelId}: the other floors and that floor's roofs and ceilings are left out of the picture, and everything on it, walls, openings and furniture alike, is cut at 0.65 of the storey's height (about two thirds), so a tall wardrobe or a door head is cut, not short; a roof level has no inside; with no eye given it looks down into the floor, or into the room or zone you target. The live view is not changed. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), and a tab in the background must be brought to the front (editor_tab_hidden). A picture is not a measure: take sizes and counts from the tools.",
   input: {
     target: z
       .string()
       .optional()
       .describe(
         'A building, level, wall, zone, door, window or floor item id to frame. Default: every wall in the scene.',
+      ),
+    interior: z
+      .object({ levelId: z.string().min(1) })
+      .optional()
+      .describe(
+        'Look inside this floor (a level id): the other floors and its roofs and ceilings are left out of the picture, everything on it (walls, openings, furniture) cut at 0.65 of the storey height. Default framing looks down into it; camera or position still wins.',
       ),
     from: z
       .enum(VIEW_SIDES)

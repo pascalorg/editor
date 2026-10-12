@@ -1,14 +1,12 @@
+import type { AnyNode } from '../../schema'
+import type { WallFace, WallFaceRegion, WallNode } from '../../schema/nodes/wall'
+import type { ZoneNode } from '../../schema/nodes/zone'
 import {
-  type AnyNode,
-  type WallPaintRole as CoreWallPaintRole,
   getWallLevelZones,
   getWallZoneSpans,
   resolveWallFaceChain,
-  type WallFace,
-  type WallFaceRegion,
-  type WallNode,
-  type ZoneNode,
-} from '@pascal-app/core'
+  type WallPaintRole,
+} from './wall-finish'
 
 /**
  * What one wall paint click changes, as plain node updates — the commit writes
@@ -25,7 +23,6 @@ import {
  *   - a room: its wall finish, every override, and on each face turned to it
  *     the face's own paint and the regions over the room's part of the face.
  */
-export type WallPaintRole = CoreWallPaintRole
 
 type Nodes = Readonly<Record<string, AnyNode | undefined>>
 type Span = { wallId: string; face: WallFace; u0: number; u1: number }

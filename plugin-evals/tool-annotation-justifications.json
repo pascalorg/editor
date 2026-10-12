@@ -709,6 +709,19 @@
       }
     },
     {
+      "name": "paint",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it writes finishes onto walls, slabs, ceilings, openings and roofs of the connected Pascal scene, and may add a scene material.",
+        "destructiveHint": "It replaces the finish a surface had, and erase removes a surface's own finish.",
+        "openWorldHint": "It operates on the connected Pascal scene and its material library without accessing the public internet."
+      }
+    },
+    {
       "name": "photo_to_scene",
       "annotations": {
         "readOnlyHint": false,
@@ -836,6 +849,19 @@
         "readOnlyHint": "It searches Pascal asset catalog data available to the connected service without placing an asset or changing a scene.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "search_materials",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It searches the Pascal material library without painting anything or changing a scene.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It reads only the material library built into Pascal and does not access the public internet."
       }
     },
     {
