@@ -866,13 +866,6 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     ...policy('label', 'internal', 'drop', 'strip'),
     note: 'Offset group label.',
   }),
-  ...(['referenceLevelId', 'roofLevelId'] as const).map((key) =>
-    meta(key, {
-      ...policy('node', 'membership', 'drop', 'strip'),
-      targetKinds: ['level'],
-      note: 'Written by the MCP roof tools on roof levels and roofs.',
-    }),
-  ),
   meta('floorPlanUrl', { ...policy('asset', 'content', 'freeze', 'keep') }),
   ...(
     [
@@ -972,7 +965,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'ownerPose.runLength',
     'ownerPose.width',
   ]),
-  ...described('Display or authoring label written by the MCP tools.', ['label', 'name']),
+  ...described('Display or authoring label written by the MCP tools.', ['name']),
   ...described('IFC attribute copy: a value or IFC label, not an id.', [
     'elevation',
     'height',

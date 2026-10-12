@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { createZone, generateId } from '@pascal-app/core'
+import { createZone, generateId, isRoofLevel } from '@pascal-app/core'
 import { unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -66,16 +66,6 @@ function assertNode(bridge: SceneOperations, id: string, type: AnyNode['type']):
   if (!node) throw new Error(`${type} not found: ${id}`)
   if (node.type !== type) throw new Error(`Node ${id} is a ${node.type}, expected ${type}`)
   return node
-}
-
-function isRoofLevel(level: AnyNode): boolean {
-  return (
-    level.type === 'level' &&
-    typeof level.metadata === 'object' &&
-    level.metadata !== null &&
-    'role' in level.metadata &&
-    level.metadata.role === 'roof'
-  )
 }
 
 /** Room zones that appeared on the level while this tool call ran. */

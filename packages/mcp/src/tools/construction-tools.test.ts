@@ -338,7 +338,7 @@ describe('construction tools', () => {
     expect(roofLevel?.type).toBe('level')
     if (roofLevel?.type === 'level') {
       expect(roofLevel.level).toBe(level.type === 'level' ? level.level + 1 : 1)
-      expect(roofLevel.metadata).toMatchObject({ role: 'roof', referenceLevelId: level.id })
+      expect(roofLevel.metadata).toMatchObject({ role: 'roof' })
     }
     expect(roof?.parentId).toBe(parsed.roofLevelId)
     expect(roof?.type).toBe('roof')

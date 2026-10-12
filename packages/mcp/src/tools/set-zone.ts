@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { newZone, walledRoomToName } from '@pascal-app/core'
+import { isRoofLevel, newZone, walledRoomToName } from '@pascal-app/core'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -42,12 +42,7 @@ export function registerSetZone(server: McpServer, bridge: SceneOperations): voi
           `Node ${levelId} is a ${parent.type}, expected level`,
         )
       }
-      if (
-        typeof parent.metadata === 'object' &&
-        parent.metadata !== null &&
-        'role' in parent.metadata &&
-        parent.metadata.role === 'roof'
-      ) {
+      if (isRoofLevel(parent)) {
         throwMcpError(
           ErrorCode.InvalidParams,
           `Roof support level ${levelId} is not an occupied story; create zones on an occupied level instead`,

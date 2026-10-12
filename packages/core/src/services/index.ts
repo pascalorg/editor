@@ -91,6 +91,13 @@ export {
   type RiserLine,
   type RiserMarker,
 } from './riser-diagram'
+export {
+  isRoofLevel,
+  planRoofLevel,
+  type RoofLevelPlan,
+  roofsOver,
+  storeyInsertIndex,
+} from './roof-level'
 export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'
 export {
   DEFAULT_ANGLE_STEP,
