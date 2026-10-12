@@ -3,14 +3,12 @@ import { addColumn } from './add-column'
 import { addLevel } from './add-level'
 import { addWall } from './add-wall'
 import { createBatchOperation } from './batch'
-import { createStairsAndLifts } from './circulation'
 import { addCornerWindow } from './corner-window'
 import { createRoof } from './create-roof'
 import { createRoom } from './create-room'
 import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
 import { duplicateLevel } from './duplicate-level'
-import { addEntryDoors } from './entry-doors'
 import { findByType } from './find-by-type'
 import { furnishFromPlan } from './furnish-from-plan'
 import { furnishRoom } from './furnish-room'
@@ -18,7 +16,6 @@ import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
 import { mergeWindowsOperation } from './merge-windows'
-import { nameUnits } from './name-units'
 import { paint } from './paint'
 import { placeInRoom } from './place-in-room'
 import { placeItems } from './place-items'
@@ -33,7 +30,6 @@ import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperation, AgentOperations } from './types'
-import { applyLayout, proposeLayouts } from './unit-layouts'
 import { vectorizePlan } from './vectorize-plan'
 import { verifyScene } from './verify-scene'
 
@@ -116,11 +112,6 @@ const SINGLE_OPERATIONS = {
   survey_plan_references: surveyPlanReferences,
   create_reference_elements: createReferenceElements,
   correct_plan_reading: correctPlanReading,
-  create_stairs_and_lifts: createStairsAndLifts,
-  add_entry_doors: addEntryDoors,
-  propose_unit_layouts: proposeLayouts,
-  apply_unit_layout: applyLayout,
-  name_units: nameUnits,
 } as const
 
 const BATCHED_OPERATIONS = Object.fromEntries(
@@ -133,8 +124,6 @@ export const AGENT_OPERATIONS = {
   run_batch: createBatchOperation(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS),
 } as const satisfies AgentOperations
 
-export { type PlanMask, planMask } from '../building/unit-layout-plan-score'
-export type { UnitLayoutJudge } from '../building/unit-layout-propose'
 export { furnishFromPlanQuestions } from './furnish-from-plan'
 export { type PhotoFacePlan, planPhotoElevation } from './photo-elevation'
 export { recordMade } from './record-made'
@@ -147,5 +136,4 @@ export {
   type SessionRecord,
   startOfSession,
 } from './scene-checkpoint'
-export { proposeUnitLayoutsInScene, unitClientBrief } from './unit-layouts'
 export { vectorizePlanTarget } from './vectorize-plan'

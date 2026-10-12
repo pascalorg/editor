@@ -938,11 +938,6 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     targetKinds: ['zone'],
     note: 'The unit plan a room zone was named from (create_reference_elements into fits).',
   }),
-  meta('guessed.unitId', {
-    ...policy('node', 'internal', 'freeze', 'strip'),
-    targetKinds: ['unit', 'zone'],
-    note: 'The unit a guessed room, wall or door was laid out for (apply_unit_layout); a later guess replaces what carries it.',
-  }),
   ...(
     [
       'planReference.assetId',
@@ -1015,9 +1010,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     "A room built from a unit plan: the apartment shape of the floor's map it went into.",
     ['unitPlanRoom', 'unitPlanRoom.apartmentId'],
   ),
-  ...described("The unit guesser's mark: the layout, seed and brief a guessed node came from.", [
-    'guessed',
-  ]),
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',

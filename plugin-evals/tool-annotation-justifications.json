@@ -46,19 +46,6 @@
       }
     },
     {
-      "name": "add_entry_doors",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it creates a door in a wall of each apartment on the floors.",
-        "destructiveHint": "It only adds doors; apartments that already have a door on their outline are left as they are.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
       "name": "add_level",
       "annotations": {
         "readOnlyHint": false,
@@ -173,19 +160,6 @@
         "readOnlyHint": "It is not read-only because applies arbitrary scene patch operations that can update or remove existing Pascal nodes.",
         "destructiveHint": "A patch can update or delete existing nodes, so user-authored scene state can be overwritten or removed.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
-      }
-    },
-    {
-      "name": "apply_unit_layout",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": true,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it creates a zone per room, the interior walls and the doors of a chosen layout in one or more apartment units, splitting their outline walls where new walls meet them.",
-        "destructiveHint": "With replaceGuess it removes the layout guessed earlier in those units (only nodes marked as guessed); it refuses without the person's consent.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -341,19 +315,6 @@
       "justifications": {
         "readOnlyHint": "It is not read-only because it creates a stair, its flight and the floor openings it owns, and a level above when there is none.",
         "destructiveHint": "It adds nodes and opens holes in the floors it passes, as the editor's stair tool does; it deletes nothing.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
-      "name": "create_stairs_and_lifts",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it creates stairs, stair segments and lifts, and cuts their openings in the floors.",
-        "destructiveHint": "It adds nodes and opens holes in slabs for them; it deletes nothing, and skips cores that already hold a stair or lift.",
         "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
@@ -891,19 +852,6 @@
       }
     },
     {
-      "name": "name_units",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": true,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it renames apartment units, their zones and their rooms in the connected Pascal scene.",
-        "destructiveHint": "It replaces the names the units, zones and rooms had.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
       "name": "paint",
       "annotations": {
         "readOnlyHint": false,
@@ -966,19 +914,6 @@
         "readOnlyHint": "It is not read-only because it adds catalog items to the floor of a level in the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene and the host's configured item catalog without accessing the public internet."
-      }
-    },
-    {
-      "name": "propose_unit_layouts",
-      "annotations": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It reads the units' outlines and the walls around them, and returns proposed layouts and their drawings without changing the scene.",
-        "destructiveHint": "It never modifies, deletes, or overwrites scene data.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {

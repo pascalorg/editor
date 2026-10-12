@@ -2,14 +2,12 @@ import { addObjectTool, getSourceTool } from './add-object'
 import { searchAssetsTool } from './assets'
 import { runBatchTool } from './batch'
 import { setCheckpointTool } from './checkpoints'
-import { createStairsAndLiftsTool } from './circulation'
 import { clearSceneTool } from './clear-scene'
 import { editCollectionTool, listCollectionsTool } from './collections'
 import { addColumnTool } from './columns'
 import type { AgentToolContract } from './contract'
 import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
-import { addEntryDoorsTool } from './entry-doors'
 import { findByTypeTool } from './find-by-type'
 import { furnishFromPlanTool } from './furnish-from-plan'
 import { furnishRoomTool } from './furnish-room'
@@ -44,8 +42,6 @@ import { createRoofTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
-import { applyUnitLayoutTool, proposeUnitLayoutsTool } from './unit-layouts'
-import { nameUnitsTool } from './units'
 import { vectorizePlanTool } from './vectorize-plan'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
@@ -134,18 +130,11 @@ export const AGENT_TOOL_CONTRACTS = [
   matchPlanReferenceTool,
   surveyPlanReferencesTool,
   correctPlanReadingTool,
-  createStairsAndLiftsTool,
-  addEntryDoorsTool,
-  proposeUnitLayoutsTool,
-  applyUnitLayoutTool,
-  nameUnitsTool,
   runBatchTool,
 ] as const satisfies readonly AgentToolContract[]
 
 export { BATCHABLE_TOOLS, runBatchTool } from './batch'
 export { setCheckpointTool } from './checkpoints'
-export { createStairsAndLiftsTool } from './circulation'
-export { addEntryDoorsTool } from './entry-doors'
 export { furnishFromPlanTool } from './furnish-from-plan'
 export { recordReferenceTool } from './inventory'
 export { paintTool } from './paint'
@@ -165,8 +154,6 @@ export {
 } from './plan-reference'
 export { createRoofTool } from './roofs'
 export { searchMaterialsTool } from './search-materials'
-export { applyUnitLayoutTool, proposeUnitLayoutsTool } from './unit-layouts'
-export { nameUnitsTool } from './units'
 export { VECTORIZE_PRICING, vectorizePlanTool } from './vectorize-plan'
 
 export const BUILD_FROM_PLANS_GUIDE = plansGuide()
