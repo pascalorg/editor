@@ -64,17 +64,6 @@
   },
   {
     "object": "node",
-    "id": "facade_zh770yqzlunianm0",
-    "type": "facade",
-    "name": "Facade",
-    "parentId": null,
-    "visible": true,
-    "metadata": {},
-    "set": { "version": 1, "name": "Facade", "units": [] },
-    "areas": []
-  },
-  {
-    "object": "node",
     "id": "level_moxqm7bybe8sfzli",
     "type": "level",
     "parentId": null,
@@ -1513,21 +1502,5 @@
     "diameter": 2,
     "pipeMaterial": "pvc",
     "armLengthM": 0
-  },
-  {
-    "object": "node",
-    "id": "panel_js11cybjnjuv54ku",
-    "type": "panel",
-    "parentId": null,
-    "visible": true,
-    "metadata": {},
-    "wallId": "wall_fixturepanelhost",
-    "side": "front",
-    "position": [0, 0, 0],
-    "rotation": [0, 0, 0],
-    "width": 1,
-    "height": 1,
-    "thickness": 0.03,
-    "offset": 0
   }
 ]

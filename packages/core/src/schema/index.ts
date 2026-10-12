@@ -180,15 +180,6 @@ export {
 } from './nodes/elevator'
 export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
 export {
-  type FacadeArea,
-  FacadeAreaSchema,
-  type FacadeAreaTarget,
-  FacadeAreaTargetSchema,
-  FacadeNode,
-  type FacadeSegment,
-  FacadeSegmentSchema,
-} from './nodes/facade'
-export {
   clampFencePicketRailProjection,
   FenceBaseStyle,
   FenceGuardInfill,
@@ -264,7 +255,6 @@ export {
   PerimeterMeasurement,
   VolumeMeasurement,
 } from './nodes/measurement'
-export { PanelNode, type PanelNodeId, PanelSide } from './nodes/panel'
 export { PipeFittingNode } from './nodes/pipe-fitting'
 export { PipeSegmentNode } from './nodes/pipe-segment'
 export { PipeTrapNode } from './nodes/pipe-trap'

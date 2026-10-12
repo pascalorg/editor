@@ -79,5 +79,5 @@ export const createRoofTool = {
 registerPlansGuideSection({
   name: 'envelope',
   order: 4,
-  text: '4. Envelope: the roof over the top floor (create_roof, with the overhang the photo shows: a deep modern eave is 1–2 m), then the facade (5).',
+  text: '4. Envelope: the roof over the top floor (create_roof, with the overhang the photo shows: a deep modern eave is 1–2 m).',
 })

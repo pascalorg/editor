@@ -2,7 +2,7 @@
  * The marked plan (L53): the plan reference redrawn from its own shapes and texts, thin and grey,
  * each drawn piece boxed in colour with its number, for whoever picks the pieces' items (the
  * agent, a person) to see which number is which. In the plan image's own pixels; the host
- * rasterises it, as it does a facade elevation. Drawn from what the pieces were found in, so
+ * rasterises it, as it does an elevation drawing. Drawn from what the pieces were found in, so
  * nothing is fetched and every lane draws the same picture.
  */
 

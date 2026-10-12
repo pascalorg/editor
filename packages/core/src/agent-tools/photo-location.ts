@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { NodeId } from './node-id'
-import { extendVerifyScene } from './verify-scene'
 
 export const photoStretch = z.object({
   kind: z
@@ -51,38 +50,3 @@ export const locatePhotoTool = {
       ),
   },
 }
-
-// verify_scene compares the photo, as the agent read it, with what is built: the photo's input and
-// sentence, declared here with the photo, for the check photo-facade-check registers.
-extendVerifyScene({
-  description:
-    'Pass the photo as you described it to locate_photo and it is compared with what is built, floor by floor (photo_facade_mismatch).',
-  input: {
-    photo: z
-      .object({
-        faces: z
-          .array(
-            z.object({
-              wallId: NodeId.describe('A wall of the face the photo shows.'),
-              from: z
-                .enum(['left', 'right'])
-                .optional()
-                .describe(
-                  "The face's end its stretches are listed from, as seen: left (default, a frontal photo or the face right of a corner) or right (the face left of a corner, listed from the corner outward).",
-                ),
-              whole: z
-                .boolean()
-                .optional()
-                .describe('The photo shows the whole face, so its last stretch is counted too.'),
-              segments: z.array(photoStretch).min(1).max(8),
-            }),
-          )
-          .min(1)
-          .max(4),
-      })
-      .optional()
-      .describe(
-        'The photo as you read it: each face it shows, its stretches (flush, recess or projection) with the bays and balconies per storey. Each floor is compared with it.',
-      ),
-  },
-})

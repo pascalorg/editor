@@ -126,7 +126,7 @@ export const createReferenceElementsTool = {
       .enum(['facade', 'balconies', 'walls'])
       .optional()
       .describe(
-        "A building map's outline steps out and back where it draws a balcony (survey_plan_references lists them). The floor plate and walls run straight along the facade past each step. `facade` (default): nothing is built in the step; the result's balconyWalls names the wall behind each one with the balcony's width and depth, for a balcony-stack facade unit (apply_facade, scope wall). `balconies`: build each step as a plain balcony. `walls`: follow the steps, for a bay window.",
+        "A building map's outline steps out and back where it draws a balcony (survey_plan_references lists them). The floor plate and walls run straight along the facade past each step. `facade` (default): nothing is built in the step; the result's balconyWalls names the wall behind each one with the balcony's width and depth. `balconies`: build each step as a plain balcony. `walls`: follow the steps, for a bay window.",
       ),
     select: z
       .array(z.enum(['outline', 'apartments', 'cores']))
@@ -140,7 +140,7 @@ export const createReferenceElementsTool = {
       .boolean()
       .optional()
       .describe(
-        'Rebuild what these plan shapes built before: first remove the nodes of this kind that the same shapes built (never what was drawn by hand), with the openings and facade pieces on them, then build again — after correct_plan_reading, to turn balconies built as walls into balconies. One undo step; the result lists what was removed.',
+        'Rebuild what these plan shapes built before: first remove the nodes of this kind that the same shapes built (never what was drawn by hand), with the openings on them, then build again — after correct_plan_reading, to turn balconies built as walls into balconies. One undo step; the result lists what was removed.',
       ),
     gaps: z
       .enum(['doors'])
@@ -285,7 +285,7 @@ export const correctPlanReadingTool = {
   name: 'correct_plan_reading',
   title: 'Correct a plan reading',
   description:
-    "survey_plan_references reads a building map by rule: shapes by size (apartments, cores, text), balconies as short steps out of the outline. Where the plan says otherwise, correct the reading here; the survey, create_reference_elements (select, the balcony steps) and apply_facade's balconies scope then read the corrected plan. Pass the floors of one family together. Corrections are kept on each plan and add up; reset clears them. Plan pixels: x to the right, y down, north up.",
+    'survey_plan_references reads a building map by rule: shapes by size (apartments, cores, text), balconies as short steps out of the outline. Where the plan says otherwise, correct the reading here; the survey, create_reference_elements (select, the balcony steps) then read the corrected plan. Pass the floors of one family together. Corrections are kept on each plan and add up; reset clears them. Plan pixels: x to the right, y down, north up.',
   input: {
     guideIds,
     roles: z
@@ -319,7 +319,7 @@ export const correctPlanReadingTool = {
 registerPlansGuideSection({
   name: 'read',
   order: 1,
-  text: "1. Read. Create one level per floor first, then import each floor plan onto its own level (import_plan_reference with its levelId), never several floors on one level; pass sharedFrame when several come from one building map (same image size and origin). SVG plans carry contours to build from, raster plans their traced walls, grouped by stroke width; a brochure may draw its outside walls no thicker than its partitions, so read which lines are outside from the outline, not the width. survey_plan_references finds the identical and similar floors, what each building map holds (outline, apartments, cores, balconies, text) and where each unit plan fits, mirrored or turned. It reads by rule: put each plan's preview beside its reading and correct what it got wrong with correct_plan_reading before building — a shape read as the wrong thing (roles), a balcony it missed (addBalconies: its box in plan pixels and the side of the wall behind it; a loggia drawn inside the outline is one), a step that is no balcony (dropBalconies) — for the floors of a family together. When something already built is wrong (balconies standing as walls, walls from a misread shape), correct the reading and rebuild it with create_reference_elements replace: true, which removes only what those plan shapes built; never put a facade on walls you know are wrong. Read the photo into facade kinds (5). Tell the user the plan in a few lines, then build it.",
+  text: "1. Read. Create one level per floor first, then import each floor plan onto its own level (import_plan_reference with its levelId), never several floors on one level; pass sharedFrame when several come from one building map (same image size and origin). SVG plans carry contours to build from, raster plans their traced walls, grouped by stroke width; a brochure may draw its outside walls no thicker than its partitions, so read which lines are outside from the outline, not the width. survey_plan_references finds the identical and similar floors, what each building map holds (outline, apartments, cores, balconies, text) and where each unit plan fits, mirrored or turned. It reads by rule: put each plan's preview beside its reading and correct what it got wrong with correct_plan_reading before building — a shape read as the wrong thing (roles), a balcony it missed (addBalconies: its box in plan pixels and the side of the wall behind it; a loggia drawn inside the outline is one), a step that is no balcony (dropBalconies) — for the floors of a family together. When something already built is wrong (balconies standing as walls, walls from a misread shape), correct the reading and rebuild it with create_reference_elements replace: true, which removes only what those plan shapes built; Tell the user the plan in a few lines, then build it.",
 })
 registerPlansGuideSection({
   name: 'scale',
@@ -329,5 +329,5 @@ registerPlansGuideSection({
 registerPlansGuideSection({
   name: 'massing',
   order: 3,
-  text: "3. Massing, on every distinct floor, one call each for all of them: the floor plate (create_reference_elements, slab, select outline) and the exterior walls (walls, select outline), with a real storey height: building maps give none, and the default is lower than a real storey, which squashes every straightened photo later. Unless a section or the photo says otherwise, pass height 3 for residential storeys and 4–4.5 for a commercial or lobby ground floor, and say what you assumed. Walls run straight past the outline's balcony steps, and apartment walls stop at the facade there, so a balcony never gets walls on its open sides (balconyEdgesSkipped); the result names the wall behind each one (balconyWalls) for the balcony facade unit (5). Of a family of identical floors, build only the first. Stairs and lifts come after the copies (8).",
+  text: "3. Massing, on every distinct floor, one call each for all of them: the floor plate (create_reference_elements, slab, select outline) and the exterior walls (walls, select outline), with a real storey height: building maps give none, and the default is lower than a real storey, which squashes every straightened photo later. Unless a section or the photo says otherwise, pass height 3 for residential storeys and 4–4.5 for a commercial or lobby ground floor, and say what you assumed. Walls run straight past the outline's balcony steps, and apartment walls stop at the facade there, so a balcony never gets walls on its open sides (balconyEdgesSkipped); the result names the wall behind each one (balconyWalls) for a balcony built on it later. Of a family of identical floors, build only the first. Stairs and lifts come after the copies (8).",
 })

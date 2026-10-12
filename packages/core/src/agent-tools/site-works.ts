@@ -87,9 +87,7 @@ export const addFenceTool = {
     materialPreset: z
       .string()
       .optional()
-      .describe(
-        'A library material (library:<id>, as search_assets and the facade paint name them).',
-      ),
+      .describe('A library material (library:<id>, as search_assets and paint name them).'),
     ...levelTarget,
   },
 }

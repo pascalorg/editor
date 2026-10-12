@@ -18,7 +18,6 @@ const TOOL_POLICIES = [
     },
     tools: [
       'check_collisions',
-      'describe_facade',
       'describe_node',
       'export_glb',
       'export_json',
@@ -41,7 +40,6 @@ const TOOL_POLICIES = [
       'list_collections',
       'propose_unit_layouts',
       'survey_plan_references',
-      'preview_facade_unit',
       'search_assets',
       'search_materials',
       'validate_design',
@@ -115,8 +113,6 @@ const TOOL_POLICIES = [
       openWorldHint: false,
     },
     tools: [
-      'apply_facade',
-      'apply_facade_set',
       'apply_unit_layout',
       'name_units',
       'apply_patch',

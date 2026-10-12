@@ -202,32 +202,6 @@
       }
     },
     {
-      "name": "apply_facade",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": true,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it creates windows, doors, panels and balconies on existing walls and repaints their filled face.",
-        "destructiveHint": "Re-applying replaces the nodes a previous facade generated and overwrites the wall paint the unit sets.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
-      "name": "apply_facade_set",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": true,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it writes a facade node and fills the walls of a building with openings, panels, balconies, corner chains and bands.",
-        "destructiveHint": "Applying again replaces what the previous set generated, and replaceExisting removes openings in the way.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
       "name": "apply_patch",
       "annotations": {
         "readOnlyHint": false,
@@ -498,19 +472,6 @@
         "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
         "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
-      }
-    },
-    {
-      "name": "describe_facade",
-      "annotations": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It only reads the facade set a building carries.",
-        "destructiveHint": "It changes nothing.",
-        "openWorldHint": "It reads the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -1070,19 +1031,6 @@
         "readOnlyHint": "It is not read-only because it adds catalog items to the floor of a level in the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene and the host's configured item catalog without accessing the public internet."
-      }
-    },
-    {
-      "name": "preview_facade_unit",
-      "annotations": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It resolves a facade unit on synthetic test walls and returns the layout without reading or changing any scene.",
-        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
-        "openWorldHint": "It computes only from the unit supplied in the call and does not access the public internet."
       }
     },
     {

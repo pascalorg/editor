@@ -70,7 +70,7 @@ export const correctPlanReading: AgentOperation<CorrectInput> = (nodes, input) =
   return {
     result: {
       readings,
-      next: 'survey_plan_references, select, the balcony steps and apply_facade scope balconies now read the corrected plans.',
+      next: 'survey_plan_references and create_reference_elements (select, the balcony steps) now read the corrected plans.',
     },
     changes: { update },
   }

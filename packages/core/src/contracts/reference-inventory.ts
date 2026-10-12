@@ -783,13 +783,6 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
     { kind: '*', path: `${prefix}.reference.parameters.@key`, reason: 'Feature parameter name.' },
     { kind: '*', path: `${prefix}.reference.parameters.*`, reason: 'Feature parameter value.' },
   ]),
-  { kind: 'facade', path: 'set.style.id', reason: 'Style generator id (haussmann, …).' },
-  {
-    kind: 'facade',
-    path: 'sourceItemId',
-    reason: 'Catalog items row the set was loaded from (attribution), not a scene node.',
-  },
-  { kind: 'panel', path: 'offset', reason: 'Gap between the panel and its wall face, in metres.' },
 ]
 
 // ─── metadata.* ───────────────────────────────────────────────────────────
@@ -916,25 +909,6 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
   meta('sourceIds[]', {
     ...policy('source', 'content', 'freeze', 'strip'),
     note: 'Import provenance: the source element ids an importer recorded (the /next converter writes them); find_nodes filters on them.',
-  }),
-  meta('facadeOwner', {
-    ...policy('node', 'internal', 'cascade', 'strip'),
-    targetKinds: ['wall', 'facade'],
-    dependents: ['metadata.facadeCell'],
-    remaps: CLONES,
-    note: 'The wall whose facade generated this opening, panel, deck or railing (the facade node for corner chains and bands); resize sync deletes what an absent owner leaves.',
-  }),
-  meta('facadeReleasedFrom', {
-    ...policy('node', 'internal', 'drop', 'strip'),
-    targetKinds: ['wall'],
-    remaps: CLONES,
-    note: 'The wall a detached facade released this node from.',
-  }),
-  meta('proceduralFacade.set.facadeId', {
-    ...policy('node', 'membership', 'drop', 'strip'),
-    targetKinds: ['facade'],
-    remaps: CLONES,
-    note: "The facade node whose set this wall's facade belongs to.",
   }),
   meta('balcony.id', {
     ...policy('node', 'internal', 'drop', 'strip'),
@@ -1147,21 +1121,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ]),
   ...described('Registry extension key, not scene-node metadata.', ['pascal:editor/floorplan']),
   ...described('Next.js page metadata export, not scene-node metadata.', ['title']),
-  ...described('Facade and balcony state: a snapshot, flag or label; names nothing.', [
-    'facadeCell',
-    'facadeDressed.previous',
-    'proceduralFacade.appliedSlots',
-    'proceduralFacade.detached',
-    'proceduralFacade.detachedReason',
-    'proceduralFacade.face',
-    'proceduralFacade.layoutFrame',
-    'proceduralFacade.mode',
-    'proceduralFacade.previousSlots',
-    'proceduralFacade.sourceItemId',
-    'proceduralFacade.surface',
-    'proceduralFacade.treated',
-    'proceduralFacade.unit',
-    'proceduralFacade.set.unit',
+  ...described('Balcony state: a snapshot, flag or label; names nothing.', [
     'balcony.options',
     'balcony.role',
     'balcony.source',
@@ -1170,14 +1130,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'placeholderSource',
     'balcony.options.depth',
     'balcony.options.railing',
-    'facadeDressed',
-    'facadeDressed.previous.columnRatios',
-    'facadeDressed.previous.frameDepth',
-    'facadeDressed.previous.rowRatios',
-    'facadeDressed.previous.sill',
-    'facadeDressed.previous.sillDepth',
-    'facadeDressed.previous.slots',
-    'facadeDressed.previous.windowType',
   ]),
 ]
 

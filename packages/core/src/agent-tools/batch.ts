@@ -20,7 +20,6 @@ export const BATCHABLE_TOOLS = [
   'correct_plan_reading',
   'create_stairs_and_lifts',
   'add_entry_doors',
-  'describe_facade',
   'locate_photo',
   // Not propose_unit_layouts: the chat judges its layouts and reads the plan image only when it
   // is called on its own (Victor run 11 batched it and got neither).

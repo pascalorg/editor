@@ -11,12 +11,6 @@ import type { AgentToolContract } from './contract'
 import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
 import { addEntryDoorsTool } from './entry-doors'
-import {
-  applyFacadeSetTool,
-  applyFacadeTool,
-  describeFacadeTool,
-  previewFacadeUnitTool,
-} from './facade'
 import { findByTypeTool } from './find-by-type'
 import { furnishFromPlanTool } from './furnish-from-plan'
 import { furnishRoomTool } from './furnish-room'
@@ -142,10 +136,6 @@ export const AGENT_TOOL_CONTRACTS = [
   refinePlanMatchTool,
   alignReferenceFramesTool,
   createReferenceElementsTool,
-  previewFacadeUnitTool,
-  applyFacadeTool,
-  applyFacadeSetTool,
-  describeFacadeTool,
   getPlanReferenceTool,
   calibratePlanReferenceTool,
   matchPlanReferenceTool,
@@ -165,14 +155,6 @@ export { setCheckpointTool } from './checkpoints'
 export { createStairsAndLiftsTool } from './circulation'
 export { disputeCoherenceItemTool } from './coherence'
 export { addEntryDoorsTool } from './entry-doors'
-export {
-  applyFacadeOutput,
-  applyFacadeSetTool,
-  applyFacadeTool,
-  describeFacadeTool,
-  facadePreviewOutput,
-  previewFacadeUnitTool,
-} from './facade'
 export { furnishFromPlanTool } from './furnish-from-plan'
 export { recordReferenceTool } from './inventory'
 export { paintTool } from './paint'

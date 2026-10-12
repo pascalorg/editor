@@ -11,7 +11,6 @@ import { registerCreateUnit } from './create-unit'
 import { registerDescribeNode } from './describe-node'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
-import { registerFacadeTools } from './facade'
 import { registerFindNodes } from './find-nodes'
 import { registerGetScene } from './get-scene'
 import { registerListUnits } from './list-units'
@@ -92,7 +91,6 @@ export function registerTools(
   registerSetUnitMembers(server, operations)
   registerListUnits(server, operations)
   registerPlaceDesign(server, operations)
-  registerFacadeTools(server, operations)
   registerSetZone(server, operations)
   registerUndo(server, operations)
   registerRedo(server, operations)

@@ -73,8 +73,8 @@ type BalconyStep = { guideId: string; shapeId: string; corners: [number, number]
 /**
  * A building map's outline steps out and back for each balcony; traced as drawn, the walls ran
  * around every balcony (Victor run 4). The floor plate and walls take the outline without its
- * steps. By default the step stays for the facade: a balcony-stack unit on the wall behind it
- * (Victor run 5: the user builds balconies through the facade unit); `balconies` builds each step
+ * steps. By default the step stays unbuilt and the wall behind it is named (balconyWalls), for a
+ * balcony the user builds on it (Victor run 5); `balconies` builds each step
  * as a plain balcony (a contour of its own).
  */
 function withoutBalconySteps(nodes: SceneNodes, input: CreateInput) {
@@ -504,7 +504,7 @@ function builtBefore(nodes: SceneNodes, input: CreateInput): AnyNode[] {
   })
 }
 
-/** Every node that goes with these, by type: a wall takes its openings and facade pieces. */
+/** Every node that goes with these, by type: a wall takes its openings. */
 function countWithDescendants(nodes: SceneNodes, roots: readonly AnyNode[]) {
   const counts: Record<string, number> = {}
   const seen = new Set<string>()
@@ -528,7 +528,7 @@ function countWithDescendants(nodes: SceneNodes, roots: readonly AnyNode[]) {
  *
  * With `replace`, what the same plan shapes built before goes first — only that, never what was
  * drawn by hand — so a wrong reading can be rebuilt (balconies built as walls, the user: the model
- * then put the facade on them and never settled). Without it, the result says they are there.
+ * then built on them and never settled). Without it, the result says they are there.
  */
 export const createReferenceElements: AgentOperation<CreateInput> = (nodes, input, context) => {
   const previous = builtBefore(nodes, input)
@@ -540,7 +540,7 @@ export const createReferenceElements: AgentOperation<CreateInput> = (nodes, inpu
       result: {
         ...outcome.result,
         alreadyBuilt: previous.length,
-        hint: `These plan shapes were built before (${previous.length} nodes of this kind). To rebuild them from the plan, pass replace: true: it removes only what these shapes built, with the openings and facade pieces on it.`,
+        hint: `These plan shapes were built before (${previous.length} nodes of this kind). To rebuild them from the plan, pass replace: true: it removes only what these shapes built, with the openings on it.`,
       },
     }
   }
@@ -723,7 +723,7 @@ function buildReferenceElements(nodes: SceneNodes, input: CreateInput) {
   }
 
   // Each balcony step: built against the walls just built, so its railings take only the open
-  // sides, or named with the wall behind it for the balcony-stack facade unit.
+  // sides, or named with the wall behind it.
   let balconies = 0
   const balconyWalls: Record<string, unknown>[] = []
   const balconyStretches: { levelId: string | null; wallIds: string[] }[] = []

@@ -12,7 +12,6 @@ import { deleteNode } from './delete-node'
 import { disputeCoherenceItem } from './dispute-coherence'
 import { duplicateLevel } from './duplicate-level'
 import { addEntryDoors } from './entry-doors'
-import { describeBuildingFacade } from './facade-set-operation'
 import { findByType } from './find-by-type'
 import { furnishFromPlan } from './furnish-from-plan'
 import { furnishRoom } from './furnish-room'
@@ -125,7 +124,6 @@ const SINGLE_OPERATIONS = {
   correct_plan_reading: correctPlanReading,
   create_stairs_and_lifts: createStairsAndLifts,
   add_entry_doors: addEntryDoors,
-  describe_facade: describeBuildingFacade,
   locate_photo: locatePhoto,
   propose_unit_layouts: proposeLayouts,
   apply_unit_layout: applyLayout,
@@ -144,15 +142,6 @@ export const AGENT_OPERATIONS = {
 
 export { type PlanMask, planMask } from '../building/unit-layout-plan-score'
 export { type UnitLayoutJudge } from '../building/unit-layout-propose'
-export { facadeAppliedResult } from './facade-result'
-export { facadeSetSummary, planAgentFacadeSet } from './facade-set-operation'
-export {
-  facadeRequests,
-  facadeTargetsFor,
-  requireBalconiesKept,
-  requireFacadeFits,
-  requireFacadePreviewed,
-} from './facade-targets'
 export { furnishFromPlanQuestions } from './furnish-from-plan'
 export { type PhotoFacePlan, planPhotoElevation } from './photo-elevation'
 export { recordMade } from './record-made'

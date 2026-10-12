@@ -31,7 +31,6 @@ import {
   createStairsAndLiftsTool,
   createStairTool,
   deleteNodeTool,
-  describeFacadeTool,
   disputeCoherenceItemTool,
   duplicateLevelTool,
   findByTypeTool,
@@ -517,11 +516,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: addEntryDoorsTool,
     operation: AGENT_OPERATIONS.add_entry_doors,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-  },
-  {
-    contract: describeFacadeTool,
-    operation: AGENT_OPERATIONS.describe_facade,
-    annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
     contract: locatePhotoTool,

@@ -7,7 +7,6 @@ import { CurtainWallConfig } from './curtain-wall'
 import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { LeanToExtensionNode } from './lean-to-extension'
-import { PanelNode } from './panel'
 import { WindowNode } from './window'
 
 // Geometric faces: `a` is left of start → end, `b` is right (wall-frame convention).
@@ -240,7 +239,6 @@ export const WallNode = BaseNode.extend({
         DoorNode.shape.id,
         WindowNode.shape.id,
         LeanToExtensionNode.shape.id,
-        PanelNode.shape.id,
       ]),
     )
     .default([]),

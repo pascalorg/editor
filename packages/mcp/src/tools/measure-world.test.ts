@@ -44,7 +44,6 @@ type MeasurePayload = {
 /** Fields a kind needs beyond its schema defaults (mirrors core's node fixtures). */
 const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
   'procedural-item': { recipe: shelfRecipe },
-  facade: { set: { name: 'Facade' } },
   ceiling: {
     polygon: [
       [0, 0],

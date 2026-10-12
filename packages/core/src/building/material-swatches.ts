@@ -1,6 +1,6 @@
 /**
  * A representative colour for each textured library material: the average of its thumbnail, to
- * draw it where no texture shows (the facade preview elevation). Colour presets carry their own.
+ * draw it where no texture shows (a flat elevation drawing). Colour presets carry their own.
  * Averaged from apps/community/public/material thumbnails; a test fails when a textured material
  * has no swatch here, so a new texture needs one.
  */

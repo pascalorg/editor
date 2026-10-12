@@ -263,7 +263,6 @@ export {
   openingDatumFromSupport,
   wallSupportForNodes,
 } from './lib/opening-floor-datum'
-export { panelDepthOffset } from './lib/panel-depth'
 export {
   classifyPlateSideAt,
   clearPlateSurfaceCaches,
@@ -681,7 +680,6 @@ export {
   resolveElevatorServiceLevelIds,
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
-export { isPaintOnlyUnit } from './systems/facade/facade-unit'
 export {
   getFenceCenterlineFrameAt,
   getFenceCenterlineLength,

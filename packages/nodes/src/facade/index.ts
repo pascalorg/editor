@@ -1,1 +1,0 @@
-export { facadeDefinition } from './definition'

@@ -2,7 +2,6 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { ElevatorNode } from './elevator'
-import { FacadeNode } from './facade'
 import { LevelNode } from './level'
 import { UnitNode } from './unit'
 
@@ -10,9 +9,7 @@ export const BuildingNode = BaseNode.extend({
   id: objectId('building'),
   type: nodeType('building'),
   children: z
-    .array(
-      z.union([LevelNode.shape.id, ElevatorNode.shape.id, UnitNode.shape.id, FacadeNode.shape.id]),
-    )
+    .array(z.union([LevelNode.shape.id, ElevatorNode.shape.id, UnitNode.shape.id]))
     .default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
