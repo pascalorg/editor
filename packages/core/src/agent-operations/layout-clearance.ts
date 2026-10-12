@@ -23,7 +23,7 @@ import {
   type PlanAabb,
   resolveNodeLevelId,
 } from './door-clearance'
-import { furnitureKind } from './furniture-kind'
+import { furnitureKind, isFloorUnderlay } from './furniture-kind'
 import { pointInPolygon, type Vec2 } from './plan-geometry'
 
 export {
@@ -81,6 +81,7 @@ export function collectOccupiedFootprints(
     }
     const levelId = resolveNodeLevelId(node.id, byId)
     if (options?.levelId && levelId !== options.levelId) continue
+    if (levelId && node.parentId === levelId && isFloorUnderlay(node)) continue
     // Floor packing: prefer level-parented items (not wall-hosted children).
     if (options?.floorOnly && node.parentId && levelId && node.parentId !== levelId) {
       if (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling') continue

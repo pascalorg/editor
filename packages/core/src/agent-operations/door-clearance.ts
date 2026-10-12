@@ -154,11 +154,14 @@ export function itemNodePlanAabb(node: AnyNode): PlanAabb | null {
   ) {
     return null
   }
-  return itemPlanAabb(
-    node.position,
-    [Math.abs(width), Math.abs(height), Math.abs(depth)],
-    rotationY,
-  )
+  const corners = itemNodePlanCorners(node)
+  if (!corners.every((corner) => corner.every(Number.isFinite))) return null
+  return {
+    minX: Math.min(...corners.map(([x]) => x)),
+    maxX: Math.max(...corners.map(([x]) => x)),
+    minZ: Math.min(...corners.map(([, z]) => z)),
+    maxZ: Math.max(...corners.map(([, z]) => z)),
+  }
 }
 
 /** Script bounds need not be centred on the item origin; catalog bounds are normalized. */
@@ -253,9 +256,11 @@ export function inspectItemPlanFootprint(
     return { ok: false, reason: 'non_positive_plan_dimensions' }
   }
 
+  const aabb = itemNodePlanAabb(node)
+  if (!aabb) return { ok: false, reason: 'non_finite_dimensions' }
   return {
     ok: true,
-    aabb: itemPlanAabb(node.position, effectiveDimensions, rotationY),
+    aabb,
     sourceDimensions: [width, height, depth],
     effectiveDimensions,
     rotationY,

@@ -1,11 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, CeilingNode, ItemNode, LevelNode, SlabNode } from '../schema'
+import { type AnyNode, CeilingNode, ItemNode, LevelNode, SlabNode, ZoneNode } from '../schema'
 import { CEILING_DRAW_OFFSET } from '../services'
 import { authoredItem } from './__fixtures__/add-object-cases'
-import { inspectItemPlanFootprint, itemNodePlanAabb, resolveNodeLevelId } from './door-clearance'
-import { verifyScene } from './index'
+import {
+  aabbsOverlap,
+  inspectItemPlanFootprint,
+  itemNodePlanAabb,
+  resolveNodeLevelId,
+} from './door-clearance'
+import { AGENT_OPERATIONS, applySceneChanges, verifyScene } from './index'
 import {
   classifyPlacement,
+  collectOccupiedFootprints,
   findItemItemCollisions,
   findValidPlacement,
   generatePlacementCandidates,
@@ -45,6 +51,161 @@ function item(
 }
 
 describe('layout-clearance', () => {
+  test.each([
+    null,
+    'level_missing',
+  ])('an underlay with unresolved parent %s remains an occupied footprint', (parentId) => {
+    const rug = ItemNode.parse({
+      id: 'item_rug',
+      parentId,
+      position: [3, 0, 3],
+      asset: {
+        id: 'large-rug',
+        name: 'Large rug',
+        category: 'furniture',
+        thumbnail: '',
+        src: 'asset://large-rug',
+        dimensions: [4, 0.02, 4],
+      },
+    })
+    expect(collectOccupiedFootprints([rug])).toMatchObject([
+      {
+        id: 'item_rug',
+        levelId: null,
+        aabb: { minX: 1, maxX: 5, minZ: 1, maxZ: 5 },
+      },
+    ])
+    const level = LevelNode.parse({ id: 'level_floor' })
+    const floorRug = ItemNode.parse({ ...rug, parentId: level.id })
+    expect(collectOccupiedFootprints([level, floorRug])).toEqual([])
+  })
+
+  function bedRoom(blocker?: 'large-rug' | 'solid-cabinet' | 'thick-rug' | 'raised-rug') {
+    const level = LevelNode.parse({ id: 'level_r' })
+    const zone = ZoneNode.parse({
+      id: 'zone_r',
+      parentId: level.id,
+      name: 'Room',
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 6],
+        [0, 6],
+      ],
+    })
+    const underlay = ItemNode.parse({
+      id: 'item_underlay',
+      parentId: level.id,
+      position: [3, blocker === 'raised-rug' ? 0.5 : 0, 3],
+      asset: {
+        id: blocker ?? 'large-rug',
+        name: blocker ?? 'large-rug',
+        category: 'furniture',
+        thumbnail: '',
+        src: 'asset://underlay',
+        dimensions: [4, blocker === 'solid-cabinet' || blocker === 'thick-rug' ? 0.8 : 0.02, 4],
+        ...(blocker === 'thick-rug' ? { surface: { height: 0.02 } } : {}),
+      },
+    })
+    const catalog = [
+      {
+        ...underlay.asset,
+        id: 'double-bed',
+        name: 'double-bed',
+        dimensions: [1.6, 0.6, 2] as [number, number, number],
+        surface: undefined,
+      },
+    ]
+    const nodes = Object.fromEntries(
+      [level, zone, ...(blocker ? [underlay] : [])].map((node) => [node.id, node]),
+    )
+    return { nodes, catalog }
+  }
+
+  test.each([
+    undefined,
+    'large-rug',
+  ] as const)('automatic bed fits against a wall with floor covering %s', (blocker) => {
+    const { nodes, catalog } = bedRoom(blocker)
+    const before = structuredClone(nodes)
+    const outcome = AGENT_OPERATIONS.place_in_room(
+      nodes,
+      { assetId: 'double-bed', zoneId: 'zone_r' },
+      { catalog },
+    )
+    const after = applySceneChanges(nodes, outcome.changes!)
+    const bed = after[outcome.result.itemId as string]
+    expect(nodes).toEqual(before)
+    expect(outcome.result).toMatchObject({ ok: true })
+    expect(bed).toMatchObject({ type: 'item', parentId: 'level_r' })
+    if (bed?.type !== 'item') throw new Error('bed missing')
+    const footprint = itemNodePlanAabb(bed)!
+    expect([footprint.minX, footprint.minZ].every((value) => value >= 0)).toBe(true)
+    expect([footprint.maxX, footprint.maxZ].every((value) => value <= 6)).toBe(true)
+    expect(
+      Math.min(footprint.minX, footprint.minZ, 6 - footprint.maxX, 6 - footprint.maxZ),
+    ).toBeLessThanOrEqual(0.2)
+    expect(bed.position[1]).toBe(0)
+    if (blocker) {
+      expect(after.item_underlay).toEqual(before.item_underlay)
+      expect(aabbsOverlap(footprint, itemNodePlanAabb(after.item_underlay!)!)).toBe(true)
+      expect(findItemItemCollisions({ nodes: Object.values(after) })).toEqual([])
+    }
+  })
+
+  test.each([
+    'solid-cabinet',
+    'thick-rug',
+    'raised-rug',
+  ] as const)('automatic bed remains blocked by %s', (blocker) => {
+    const { nodes, catalog } = bedRoom(blocker)
+    expect(() =>
+      AGENT_OPERATIONS.place_in_room(
+        nodes,
+        { assetId: 'double-bed', zoneId: 'zone_r' },
+        { catalog },
+      ),
+    ).toThrow(expect.objectContaining({ code: 'no_free_spot' }))
+  })
+
+  test('automatic bed over a rug still respects reserved clearance', () => {
+    const { nodes, catalog } = bedRoom('large-rug')
+    expect(() =>
+      AGENT_OPERATIONS.place_in_room(
+        nodes,
+        {
+          assetId: 'double-bed',
+          zoneId: 'zone_r',
+          clearanceAreas: [{ id: 'reserved-floor', minX: 0, maxX: 6, minZ: 0, maxZ: 6 }],
+        },
+        { catalog },
+      ),
+    ).toThrow(expect.objectContaining({ code: 'stair_blocked' }))
+  })
+
+  test('scripted plan bounds keep their offset through yaw and scale', () => {
+    const node = authoredItem('item_offset', 'level_1', {
+      name: 'Offset',
+      category: 'furniture',
+      size: [2, 1, 3],
+    })
+    node.position = [10, 0, 20]
+    node.rotation = [0, Math.PI / 2, 0]
+    node.scale = [2, 1, 3]
+    node.source!.manifest.bounds.min = [1, 0, 2]
+    node.source!.manifest.bounds.max = [3, 1, 5]
+    const expected = { minX: 16, maxX: 25, minZ: 14, maxZ: 18 }
+    expect(itemNodePlanAabb(node)).toMatchObject(expected)
+    expect(inspectItemPlanFootprint(node)).toMatchObject({ ok: true, aabb: expected })
+    const blocker = authoredItem('item_blocker', 'level_1', {
+      name: 'Blocker',
+      category: 'furniture',
+      size: [1, 1, 1],
+    })
+    blocker.position = [20, 0, 16]
+    expect(findItemItemCollisions({ nodes: [node, blocker] })).toHaveLength(1)
+  })
+
   function verticalScene() {
     const level = LevelNode.parse({ id: 'level_vertical', height: 3 })
     const ceiling = CeilingNode.parse({
