@@ -221,7 +221,6 @@ describe('pascal://agent-guide', () => {
       expect(text).toMatch(/glass meets at a corner.*add_corner_window/)
       expect(text).toContain('room_named_by_person')
       expect(text).toContain('rename: true` only when the person asked')
-      expect(text).toContain('request_upload')
       expect(text).toContain('editor_tab_busy')
       expect(text).toContain('invalid_input')
     } finally {
@@ -239,9 +238,6 @@ describe('pascal://agent-guide', () => {
     'room_named_by_person',
     'scene_wipe_blocked',
   ]
-  // Hosted-only tools: the hosted server registers them beside the package's.
-  const HOSTED_ONLY_TOOLS = ['request_upload']
-
   test('every tool the guide names is a tool the server serves', async () => {
     const bridge = new SceneBridge()
     const server = createPascalMcpServer({ bridge, store: new InMemorySceneStore() })
@@ -254,10 +250,7 @@ describe('pascal://agent-guide', () => {
       const res = await pair.client.readResource({ uri: 'pascal://agent-guide' })
       const text = (res.contents[0] as { text?: string }).text ?? ''
       const named = [...new Set([...text.matchAll(/`([a-z]+(?:_[a-z]+)+)`/g)].map((m) => m[1]!))]
-      const unknown = named.filter(
-        (name) =>
-          !(served.has(name) || REFUSAL_CODES.includes(name) || HOSTED_ONLY_TOOLS.includes(name)),
-      )
+      const unknown = named.filter((name) => !(served.has(name) || REFUSAL_CODES.includes(name)))
       expect(unknown).toEqual([])
       expect(text).not.toContain('get_capabilities')
     } finally {
