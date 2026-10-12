@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
+import { sessionPrincipal } from '@/lib/self-host-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,6 +79,8 @@ export async function POST(request: NextRequest) {
       id: parsed.data.id,
       name: parsed.data.name,
       projectId: parsed.data.projectId ?? null,
+      // A signed-in save is attributable; agent saves through the bearer stay unowned.
+      ownerId: sessionPrincipal(request),
       graph: parsed.data.graph as never,
       thumbnailUrl: parsed.data.thumbnailUrl ?? null,
     })

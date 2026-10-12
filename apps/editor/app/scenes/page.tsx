@@ -2,35 +2,15 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
+import { resolvePublicUrl } from '@/lib/public-url'
+import { getSceneOperations } from '@/lib/scene-store-server'
+import { resolveAuthMode } from '@/lib/self-host-auth'
 
 export const dynamic = 'force-dynamic'
 
-async function resolveBaseUrl(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL
-  }
-  const h = await headers()
-  const host = h.get('x-forwarded-host') ?? h.get('host')
-  const proto = h.get('x-forwarded-proto') ?? 'http'
-  if (!host) {
-    return 'http://localhost:3000'
-  }
-  return `${proto}://${host}`
-}
-
 async function fetchScenes(): Promise<SceneMeta[]> {
-  const base = await resolveBaseUrl()
-  const response = await fetch(`${base}/api/scenes?limit=50`, {
-    cache: 'no-store',
-  })
-  if (!response.ok) {
-    return []
-  }
-  const payload = (await response.json()) as { scenes?: SceneMeta[] } | SceneMeta[]
-  if (Array.isArray(payload)) {
-    return payload
-  }
-  return payload.scenes ?? []
+  const operations = await getSceneOperations()
+  return operations.listScenes({ limit: 50 })
 }
 
 function formatDate(iso: string): string {
@@ -41,8 +21,19 @@ function formatDate(iso: string): string {
   }
 }
 
+/** Server components see headers, not a Request; the auth helpers want the latter. */
+async function currentRequest(): Promise<Request> {
+  const h = await headers()
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost'
+  const proto = h.get('x-forwarded-proto') ?? 'http'
+  return new Request(`${proto}://${host}/scenes`, { headers: h })
+}
+
 export default async function ScenesPage() {
-  const scenes = await fetchScenes()
+  const [scenes, request] = await Promise.all([fetchScenes(), currentRequest()])
+  const authMode = resolveAuthMode(request)
+  const sceneApiUrl = `${resolvePublicUrl(request)}/api/scenes`
+  const agentTokenConfigured = Boolean(process.env.PASCAL_SCENE_API_TOKEN)
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,7 +49,19 @@ export default async function ScenesPage() {
             <span className="text-muted-foreground">/</span>
             <span className="font-medium text-foreground">Scenes</span>
           </nav>
-          <CreateSceneButton />
+          <div className="flex items-center gap-3">
+            <CreateSceneButton />
+            {authMode === 'password' && (
+              <form action="/api/auth/logout" method="post">
+                <button
+                  className="rounded-full border border-border px-3 py-1.5 font-medium text-sm hover:bg-accent/40"
+                  type="submit"
+                >
+                  Sign out
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </header>
 
@@ -111,6 +114,17 @@ export default async function ScenesPage() {
             ))}
           </ul>
         )}
+
+        <section className="mt-12 rounded-xl border border-border/60 bg-accent/20 p-5">
+          <h2 className="font-semibold text-sm">Connect an agent</h2>
+          <p className="mt-1 text-muted-foreground text-xs">
+            Scripts and agents read and write scenes through the scene API at{' '}
+            <code className="font-mono">{sceneApiUrl}</code>.{' '}
+            {agentTokenConfigured
+              ? 'Send the configured token as an Authorization: Bearer header.'
+              : 'Set PASCAL_SCENE_API_TOKEN on this instance and send it as an Authorization: Bearer header.'}
+          </p>
+        </section>
       </main>
     </div>
   )
