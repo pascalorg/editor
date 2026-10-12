@@ -13,6 +13,7 @@ import {
   LevelNode,
   RoofNode,
   RoofSegmentNode,
+  SiteNode,
   SlabNode,
   StairNode,
   WallNode,
@@ -159,6 +160,24 @@ describe('a look inside one floor', () => {
     ).toBe('interior_target_elsewhere')
   })
 
+  test("the floor's roofs and ceilings are no target: the picture leaves them out", () => {
+    const nodes = finishedBuilding()
+    for (const [levelId, target] of [
+      ['level_1', 'roof_1'],
+      ['level_0', 'ceiling_0'],
+    ] as const)
+      expect(refusalOf(() => sceneViewPlan(nodes, { interior: { levelId }, target }))).toBe(
+        'interior_target_elsewhere',
+      )
+  })
+
+  test('a roof level has no inside, its roofs left out of the picture: the floor below has', () => {
+    expect(refusalOf(() => sceneViewInterior(hipHouse(), 'level_roof'))).toBe(
+      'interior_level_invalid',
+    )
+    expect(sceneViewInterior(hipHouse(), 'level_0').hiddenIds).toEqual(['level_roof'])
+  })
+
   test("a photo's camera keeps its pose, and the floor is still checked", () => {
     const nodes = finishedBuilding()
     const camera = { position: [25, 14, 18], target: [10, 1, 5], fov: 53, aspect: 4 / 3 }
@@ -184,6 +203,19 @@ describe('a look inside one floor', () => {
     } as typeof nodes
     expect(refusalOf(() => sceneViewInterior(tipped, 'level_0'))).toBe(
       'interior_transform_unsupported',
+    )
+  })
+
+  test('a hidden site hides its ground only: the floors on it are still shown', () => {
+    const nodes = finishedBuilding()
+    const site = SiteNode.parse({ id: 'site_main', visible: false, children: ['building_main'] })
+    const onHiddenSite = {
+      ...nodes,
+      [site.id]: site,
+      building_main: { ...nodes.building_main!, parentId: site.id },
+    } as typeof nodes
+    expect(sceneViewInterior(onHiddenSite, 'level_0').bounds).toEqual(
+      sceneViewInterior(nodes, 'level_0').bounds,
     )
   })
 

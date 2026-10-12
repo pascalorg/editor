@@ -16,7 +16,13 @@ import {
   SlabNode,
   WallNode,
   WindowNode,
+  ZoneNode,
 } from '../schema'
+import {
+  buildWallFinishLayout,
+  getWallLevelZones,
+  resolveWallFinish,
+} from '../systems/wall/wall-finish'
 import { achievedChanges } from './achieved'
 import { applySceneChanges } from './apply-changes'
 import { AGENT_OPERATIONS } from './index'
@@ -262,6 +268,83 @@ describe('paint with a native material', () => {
   })
 })
 
+describe('a wall in a room with a wall finish', () => {
+  const WHITE = 'library:preset-white'
+
+  /** The room, its walls given one finish as the editor's "paint this room's walls" leaves them. */
+  function finished() {
+    const nodes = room()
+    const zone = ZoneNode.parse({
+      id: 'zone_paint',
+      parentId: 'level_paint',
+      name: 'Living room',
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 4],
+        [0, 4],
+      ],
+      boundaryWallIds: ['wall_south', 'wall_east', 'wall_north', 'wall_west'],
+      wallMaterial: WHITE,
+    })
+    const level = nodes.level_paint as LevelNode
+    return {
+      ...nodes,
+      level_paint: { ...level, children: [...level.children, zone.id] },
+      [zone.id]: zone,
+    } as Record<string, AnyNode>
+  }
+
+  /** The finish the renderer draws at station `u`, 2 m up face `face` of `wallId`. */
+  function shownAt(nodes: Record<string, AnyNode>, wallId: string, face: 'a' | 'b', u: number) {
+    const wall = nodes[wallId] as WallNode
+    return resolveWallFinish(
+      buildWallFinishLayout(wall, getWallLevelZones(wall, nodes)),
+      face,
+      u,
+      2,
+    )
+  }
+
+  test("its inside face shows the paint over the room's finish; the room's other walls keep it", () => {
+    const nodes = finished()
+    expect(shownAt(nodes, 'wall_south', 'a', 3)).toMatchObject({ source: 'zone', ref: WHITE })
+    const outcome = paint(nodes, {
+      targets: ['wall_south'],
+      role: 'interior',
+      material: 'library:concrete-raw',
+    })
+    expect(outcome.result).toMatchObject({ painted: [{ id: 'wall_south', roles: ['a'] }] })
+    const after = applied(nodes, {}, outcome.changes).nodes
+    for (const u of [0.5, 3, 5.5])
+      expect(shownAt(after, 'wall_south', 'a', u)).toMatchObject({ ref: 'library:concrete-raw' })
+    expect(after.zone_paint).toMatchObject({
+      wallMaterial: WHITE,
+      wallOverrides: [{ wallId: 'wall_south', face: 'a', finish: 'library:concrete-raw' }],
+    })
+    // The painted stripe on that face keeps its own finish, and the result says so.
+    expect(String(outcome.result.note)).toContain('wall_south a: stripe')
+  })
+
+  test("erasing it shows the face's own default, not the room's finish", () => {
+    const nodes = finished()
+    const once = applied(
+      nodes,
+      {},
+      paint(nodes, { targets: ['wall_south'], role: 'a', material: 'library:concrete-raw' })
+        .changes,
+    ).nodes
+    const erased = applied(
+      once,
+      {},
+      paint(once, { targets: ['wall_south'], role: 'a', erase: true }).changes,
+    ).nodes
+    expect((erased.wall_south as WallNode).slots?.a).toBeUndefined()
+    expect(shownAt(erased, 'wall_south', 'a', 3).source).not.toBe('zone')
+    expect(shownAt(erased, 'wall_east', 'a', 2)).toEqual(shownAt(nodes, 'wall_east', 'a', 2))
+  })
+})
+
 describe('paint refuses the whole call', () => {
   for (const [label, input, code] of [
     ['a target not in the scene', timberOutside(['wall_south', 'wall_gone']), 'target_not_found'],
@@ -285,6 +368,16 @@ describe('paint refuses the whole call', () => {
       expect(nodes).toEqual(before)
     })
   }
+
+  test("a curtain wall's exterior: it has frame, glass and panels, no faces", () => {
+    const nodes = room()
+    nodes.wall_east = { ...(nodes.wall_east as WallNode), wallType: 'curtain' }
+    expect(
+      refusal(() =>
+        paint(nodes, { targets: ['wall_south', 'wall_east'], role: 'exterior', color: '#ffffff' }),
+      ),
+    ).toBe('unknown_role')
+  })
 
   test('a scripted column with no shaft names the surfaces it has', () => {
     const column = ColumnNode.parse({

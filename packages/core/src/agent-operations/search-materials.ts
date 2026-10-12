@@ -67,13 +67,33 @@ function shadeOf(hex: string | undefined): Shade | null {
 
 const stem = (word: string) => (word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word)
 
-/** Whether a material answers a query word: by its text, the trade vocabulary, shade or surface. */
-function answers(material: MaterialCatalogItem, text: string, word: string): boolean {
+/** Words that tell no material from another: "white render for the walls" asks for three things. */
+const STOP_WORDS = new Set(['and', 'the', 'for', 'with', 'from', 'into', 'some', 'like', 'its'])
+
+const wordsOf = (text: string) =>
+  text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+
+/** Whether a material can go on a surface: one that names no surface goes anywhere (flat colours). */
+const suits = (material: MaterialCatalogItem, surface: MaterialSurface) =>
+  !material.surfaces || material.surfaces.includes(surface)
+
+/**
+ * Whether a material answers a query word: by a word of its text (whole, or begun by a form of four
+ * letters or more: tile answers tiles, for never answers forest), the trade vocabulary, shade or
+ * the surface it is made for.
+ */
+function answers(material: MaterialCatalogItem, text: readonly string[], word: string): boolean {
   const forms = [word, stem(word), ...(SAME[word] ?? []), ...(SAME[stem(word)] ?? [])]
-  if (forms.some((form) => text.includes(form))) return true
+  const said = (token: string, form: string) =>
+    token === form || stem(token) === form || (form.length >= 4 && token.startsWith(form))
+  if (forms.some((form) => text.some((token) => said(token, form)))) return true
   const shade = SHADES[word]
   const colour = shadeOf(material.previewColor)
   if (shade && colour && shade(colour)) return true
+  // A surface word asks for a material made for it (floor is flooring), not one that can go there.
   const surface = SURFACE_WORDS[word] ?? SURFACE_WORDS[stem(word)]
   return !!surface && !!material.surfaces?.includes(surface)
 }
@@ -82,15 +102,13 @@ function answers(material: MaterialCatalogItem, text: string, word: string): boo
 export const searchMaterials: AgentOperation<SearchMaterialsInput> = (_nodes, { queries }) => ({
   result: {
     groups: queries.map(({ query, surface }) => {
-      const words = query
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter(Boolean)
+      const words = wordsOf(query).filter((word) => word.length > 2 && !STOP_WORDS.has(word))
       const scored = MATERIAL_CATALOG.filter(
-        (material) => !surface || material.surfaces?.includes(surface),
+        (material) => !surface || suits(material, surface),
       ).map((material) => {
-        const text =
-          `${material.id} ${material.label} ${material.category} ${material.description ?? ''}`.toLowerCase()
+        const text = wordsOf(
+          `${material.id} ${material.label} ${material.category} ${material.description ?? ''}`,
+        )
         return { material, hits: words.filter((word) => answers(material, text, word)) }
       })
       const missing = words.filter((word) => !scored.some(({ hits }) => hits.includes(word)))

@@ -45,6 +45,20 @@ describe('search_materials', () => {
     expect(group!.results).toEqual([])
   })
 
+  test('matches whole words: a short or common word answers nothing by being inside another', () => {
+    const [walls, brick] = search({ query: 'white render for the walls' }, { query: 'a red brick' })
+    // "for" is in forest, "red" in prepared, "a" in nearly every material.
+    expect(refs(walls!)[0]).toBe('library:concrete-stucco')
+    expect(refs(walls!)).not.toContain('library:siding-lap-forest')
+    expect(refs(brick!)).not.toContain('library:concrete-drywall')
+    expect(refs(brick!).every((ref) => /brick|red|tomato/.test(ref))).toBe(true)
+  })
+
+  test('a flat colour suits every surface asked', () => {
+    const [ceiling] = search({ query: 'white', surface: 'ceiling' })
+    expect(refs(ceiling!)).toContain('library:preset-white')
+  })
+
   test('ranks a material answering every word above one answering some', () => {
     // The white sidings answer "white" only.
     const [group] = search({ query: 'white stucco' })

@@ -42,7 +42,7 @@ export type SceneViewCrop = { source: string; region: [number, number, number, n
 /** A look inside one floor; the host cuts it from its own scene with sceneViewInterior. */
 export type SceneViewInterior = { levelId: string }
 
-/** How high up its storey an interior view cuts a floor's walls: low enough to see every room. */
+/** How high up its storey an interior view cuts a floor: low enough to see every room. */
 const INTERIOR_CUT = 0.65
 /** Degrees above the horizon an interior view looks down from, by default. */
 const INTERIOR_ELEVATION = 55
@@ -70,7 +70,8 @@ export function sceneViewInterior(
       levelId,
     })
   for (const node of ancestry(nodes, level)) {
-    if (node.visible === false)
+    // A hidden site drops only its own ground and lot line: what stands on it still shows.
+    if (node.visible === false && node.type !== 'site')
       refuse('interior_hidden', `${node.type} ${node.id} is hidden: show it to look inside.`, {
         target: node.id,
       })
@@ -80,6 +81,20 @@ export function sceneViewInterior(
         target: node.id,
       })
   }
+  const hiddenIds = Object.values(nodes)
+    .filter((node) =>
+      node.type === 'level'
+        ? node.id !== levelId
+        : (node.type === 'roof' || node.type === 'ceiling') &&
+          ancestry(nodes, node).some((at) => at.id === levelId),
+    )
+    .map((node) => node.id)
+  if (level.children.length && level.children.every((id) => hiddenIds.includes(id)))
+    refuse(
+      'interior_level_invalid',
+      `${levelId} holds only roofs and ceilings, which an interior view leaves out: look inside the floor below it.`,
+      { levelId },
+    )
   const box = sceneViewBounds(nodes, levelId)
   const storey = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(levelId)
   const baseY = (storey?.baseY ?? 0) + standingOf(nodes, levelId).y
@@ -87,14 +102,7 @@ export function sceneViewInterior(
   return {
     bounds: { min: [box.min[0], baseY, box.min[2]], max: [box.max[0], baseY + height, box.max[2]] },
     cutHeight: baseY + height * INTERIOR_CUT,
-    hiddenIds: Object.values(nodes)
-      .filter((node) =>
-        node.type === 'level'
-          ? node.id !== levelId
-          : (node.type === 'roof' || node.type === 'ceiling') &&
-            ancestry(nodes, node).some((at) => at.id === levelId),
-      )
-      .map((node) => node.id),
+    hiddenIds,
   }
 }
 
@@ -666,13 +674,20 @@ export function sceneViewPlan(
   const inside = input.interior && sceneViewInterior(nodes, input.interior.levelId)
   const interior = input.interior && { levelId: input.interior.levelId }
   const target = input.target ? nodes[input.target] : undefined
-  // Every other floor is left out of an interior view: a target on one would frame nothing shown.
-  if (interior && target && !ancestry(nodes, target).some((node) => node.id === interior.levelId))
-    refuse(
-      'interior_target_elsewhere',
-      `${target.type} ${target.id} is not on ${interior.levelId}: target something on the floor you look inside.`,
-      { target: target.id, levelId: interior.levelId },
-    )
+  // An interior view shows this floor alone, without its roofs and ceilings: a target left out of
+  // the picture would frame nothing shown.
+  if (interior && inside && target) {
+    const chain = ancestry(nodes, target)
+    const left = chain.find((node) => inside.hiddenIds.includes(node.id))
+    if (left || !chain.some((node) => node.id === interior.levelId))
+      refuse(
+        'interior_target_elsewhere',
+        left && left.type !== 'level'
+          ? `${target.type} ${target.id} is left out of an interior view, as the floor's roofs and ceilings are: target something on the floor you look inside.`
+          : `${target.type} ${target.id} is not on ${interior.levelId}: target something on the floor you look inside.`,
+        { target: target.id, levelId: interior.levelId },
+      )
+  }
   if (camera) {
     const own = (
       ['from', 'position', 'elevation', 'eyeHeight', 'fov', 'projection'] as const

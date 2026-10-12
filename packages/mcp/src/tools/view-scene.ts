@@ -32,7 +32,7 @@ export type SceneViewHost = {
     projectId: string
     pose: SceneViewPose
     size: { w: number; h: number }
-    /** A look inside this floor: the editor leaves the rest out and cuts its walls. */
+    /** A look inside this floor: the editor leaves the rest out and cuts everything on it. */
     interior?: SceneViewInterior
   }): Promise<SceneViewCapture>
   /** Crops the reference photo to a region; without it a view with a photo is refused. */

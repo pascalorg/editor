@@ -19,8 +19,10 @@ import {
   type MaterialSchema,
   type RoofSegmentNode,
   type SceneMaterial,
+  type WallFace,
   type WallNode,
 } from '../schema'
+import { buildWallFinishLayout, getWallLevelZones } from '../systems/wall/wall-finish'
 import { planWallPaint } from '../systems/wall/wall-paint-plan'
 import { roomSideFaces } from '../systems/wall/wall-room-sides'
 import { finishSurface, requireMaterialRef } from './material-refs'
@@ -145,6 +147,29 @@ function paintRoofRole(node: AnyNode, role: RoofRole, ref: string | undefined): 
   return next as AnyNode
 }
 
+/**
+ * A wall face painted whole, as the editor's Paint paints each part of it: the face's own finish,
+ * and the finish of each room it is turned to, which shows over the face's own. Painted parts
+ * (regions) stay on top, as they do under a room's paint.
+ */
+function paintWallFace(
+  nodes: SceneNodes,
+  wall: WallNode,
+  face: WallFace,
+  ref: string | undefined,
+): Record<string, AnyNode> {
+  const plan = planWallPaint(nodes, wall, { kind: 'slot', slotId: face }, ref)
+  const rooms = buildWallFinishLayout(wall, getWallLevelZones(wall, nodes)).spans[face]
+  for (const zoneId of new Set(rooms.map((span) => span.zoneId))) {
+    const scene = { ...nodes, ...plan }
+    Object.assign(
+      plan,
+      planWallPaint(scene, scene[wall.id] as WallNode, { kind: 'room-face', zoneId, face }, ref),
+    )
+  }
+  return plan
+}
+
 export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
   // A refused material's nearest are the first target's kind: a roof is offered roofing.
   const first = input.targets[0] ? nodes[input.targets[0]] : undefined
@@ -154,6 +179,7 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
   const current = (id: string) => (written[id] ?? nodes[id]) as AnyNode | undefined
   const scene = () => ({ ...nodes, ...written }) as SceneNodes
   const painted: { id: string; roles: string[] }[] = []
+  const keptParts: string[] = []
 
   for (const id of input.targets) {
     const node = current(id)
@@ -201,10 +227,11 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
     const ids = slots.map((slot) => slot.slotId)
     let roles: string[]
     if (input.role === 'exterior' || input.role === 'interior') {
-      if (node.type !== 'wall')
+      // A curtain wall has frame, glass and panels where a wall has faces.
+      if (node.type !== 'wall' || !ids.includes('a'))
         refuse(
           'unknown_role',
-          `Only a wall has an ${input.role} face: a ${node.type}'s roles are ${ids.join(', ')}.`,
+          `A ${node.type === 'wall' ? 'curtain wall' : node.type} has no ${input.role} face: its roles are ${ids.join(', ')}.`,
           { target: id, roles: ids },
         )
       const sides = roomSideFaces(scene() as never, id)
@@ -233,7 +260,17 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
     for (const role of roles) {
       const target = current(id)!
       if (target.type === 'wall') {
-        Object.assign(written, planWallPaint(scene(), target, { kind: 'slot', slotId: role }, ref))
+        const face = role === 'a' || role === 'b' ? role : null
+        Object.assign(
+          written,
+          face
+            ? paintWallFace(scene(), target, face, ref)
+            : planWallPaint(scene(), target, { kind: 'slot', slotId: role }, ref),
+        )
+        const parts =
+          face && ref ? target.faceRegions?.filter((region) => region.face === face) : []
+        if (parts?.length)
+          keptParts.push(`${id} ${face}: ${parts.map((region) => region.id).join(', ')}`)
         continue
       }
       const next = { ...((target as AnyNode & { slots?: Record<string, string> }).slots ?? {}) }
@@ -249,6 +286,12 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
     return Object.keys(data).length ? [{ id, data }] : []
   })
   const createdMaterial = finish.created ? finish.sceneMaterial : undefined
+  const note = [
+    finish.note,
+    keptParts.length && `Painted parts keep their own finish (${keptParts.join('; ')}).`,
+  ]
+    .filter(Boolean)
+    .join(' ')
   return {
     result: {
       ok: true,
@@ -258,7 +301,7 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
         ? { materialId: finish.sceneMaterial.id, material: finish.sceneMaterial.material }
         : {}),
       ...(createdMaterial ? { createdMaterial } : {}),
-      ...(finish.note ? { note: finish.note } : {}),
+      ...(note ? { note } : {}),
     },
     changes: { update, ...(createdMaterial ? { materials: [createdMaterial] } : {}) },
   }
