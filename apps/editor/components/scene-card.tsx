@@ -50,7 +50,7 @@ export function SceneCard({ scene }: { scene: SceneCardData }) {
     <li className="group relative">
       <Link
         className="block rounded-xl border border-border/50 bg-background p-2 transition-colors hover:border-border hover:bg-accent"
-        href={`/scene/${scene.id}`}
+        href={`/project/${scene.id}`}
       >
         <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-accent">
           {scene.thumbnailUrl && !thumbnailFailed ? (
@@ -124,7 +124,7 @@ export function SceneCard({ scene }: { scene: SceneCardData }) {
   )
 }
 
-const CONFLICT_MESSAGE = 'This scene changed since the page loaded. Reload and try again.'
+const CONFLICT_MESSAGE = 'This project changed since the page loaded. Reload and try again.'
 
 /** Opens a native modal dialog on mount; Escape, backdrop and Cancel all end in `onClose`. */
 function useModal(onClose: () => void) {
@@ -205,10 +205,10 @@ function RenameDialog({ scene, onClose }: { scene: SceneCardData; onClose: () =>
   }
 
   return (
-    <ModalFrame dialogRef={dialogRef} title="Rename scene">
+    <ModalFrame dialogRef={dialogRef} title="Rename project">
       <form className="mt-4 flex flex-col gap-3" onSubmit={handleSubmit}>
         <input
-          aria-label="Scene name"
+          aria-label="Project name"
           // biome-ignore lint/a11y/noAutofocus: the dialog exists to edit this field
           autoFocus
           className="rounded-lg border border-input bg-accent px-3 py-2 text-sm outline-none focus:border-ring"
@@ -268,7 +268,7 @@ function DeleteDialog({ scene, onClose }: { scene: SceneCardData; onClose: () =>
   }
 
   return (
-    <ModalFrame dialogRef={dialogRef} title="Delete scene?">
+    <ModalFrame dialogRef={dialogRef} title="Delete project?">
       <p className="mt-2 text-muted-foreground text-sm">
         “{scene.name}” will be removed from this editor, along with everything in it.
       </p>
@@ -278,7 +278,7 @@ function DeleteDialog({ scene, onClose }: { scene: SceneCardData; onClose: () =>
           Cancel
         </button>
         <button
-          className="inline-flex items-center justify-center rounded-full bg-destructive px-4 py-1.5 font-medium text-sm text-white transition-colors hover:bg-destructive/90 disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-lg bg-destructive px-4 py-1.5 font-medium text-sm text-white transition-colors hover:bg-destructive/90 disabled:opacity-50"
           disabled={pending}
           onClick={handleDelete}
           type="button"

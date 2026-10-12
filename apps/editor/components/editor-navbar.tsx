@@ -8,7 +8,7 @@ import { PascalMark } from './app-shell'
 
 interface EditorNavbarProps {
   name: string
-  /** Persists a new scene name; resolves once the server has answered. */
+  /** Persists a new project name; resolves once the server has answered. */
   onRename: (name: string) => Promise<void>
 }
 
@@ -55,10 +55,10 @@ export function EditorNavbar({ name, onRename }: EditorNavbarProps) {
     <nav className="flex h-12 shrink-0 items-center gap-2 border-border/30 border-b bg-sidebar px-2 lg:px-3">
       <div className="flex min-w-0 items-center gap-1.5 lg:gap-2">
         <Link
-          aria-label="All scenes"
+          aria-label="All projects"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-accent"
           href="/"
-          title="All scenes"
+          title="All projects"
         >
           <PascalMark />
         </Link>
@@ -68,7 +68,7 @@ export function EditorNavbar({ name, onRename }: EditorNavbarProps) {
         <div className="min-w-0 max-w-40 lg:max-w-72">
           {editing ? (
             <input
-              aria-label="Scene name"
+              aria-label="Project name"
               className="h-7 w-full rounded-md bg-accent/50 px-2 py-0 font-medium text-foreground text-sm outline-none ring-1 ring-primary/50 focus:ring-primary"
               maxLength={200}
               onBlur={commit}
@@ -81,7 +81,7 @@ export function EditorNavbar({ name, onRename }: EditorNavbarProps) {
             <button
               className="group/title flex h-7 max-w-full items-center gap-1.5 rounded-md px-2 text-left transition-colors hover:bg-accent/50"
               onClick={startEditing}
-              title="Rename scene"
+              title="Rename project"
               type="button"
             >
               <span className="truncate font-medium text-sm">{name}</span>
@@ -94,7 +94,7 @@ export function EditorNavbar({ name, onRename }: EditorNavbarProps) {
       <div className="flex-1" />
 
       <button
-        className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
+        className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >

@@ -5,7 +5,7 @@
 ### Features
 
 - **Self-hosting is one container.** `ghcr.io/pascalorg/pascal-editor:<version>` ships the same portable runtime as the CLI, multi-arch, published by the release workflow. The public URL is read per request (`PASCAL_PUBLIC_URL`, replacing the build-time `NEXT_PUBLIC_APP_URL` and `MINT_PASCAL_HOST_ORIGIN`), so one image serves any domain or port. A single admin password (`PASCAL_ADMIN_PASSWORD`) gates every page and API behind `/login`; agents keep the `PASCAL_SCENE_API_TOKEN` bearer; a network host with nothing configured serves a setup page and nothing else; `PASCAL_AUTH=proxy` defers to an authenticating reverse proxy. See `SETUP.md`, "Self-hosting".
-- **The standalone app is a product, not a shell.** Home at `/` lists saved scenes (the unsaved scratch canvas and `/scenes` are gone; `/scenes` redirects), with rename and delete on each card; the editor gets a navbar (logo back to home, inline rename, Preview); `/settings` holds the instance info, the agent endpoint and sign-out; scene thumbnails are captured after edits and stored under the data directory. `/privacy`, `/terms` and `vercel.json` leave the open-source app.
+- **The standalone app is a product, not a shell.** Home at `/` lists projects (the unsaved scratch canvas and `/scenes` are gone; `/scenes` and `/scene/<id>` redirect to `/` and `/project/<id>`), new ones are named `Project #n`, each card renames and deletes; the editor gets a navbar (logo back to home, inline rename, Preview); `/settings` holds the instance info, the agent endpoint and sign-out; thumbnails are captured after edits and stored under the data directory. `/privacy`, `/terms` and `vercel.json` leave the open-source app.
 
 ### Breaking
 

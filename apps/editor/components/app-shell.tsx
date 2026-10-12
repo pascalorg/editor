@@ -80,10 +80,10 @@ export function AppCard({ children, className }: { children: ReactNode; classNam
 }
 
 export const PRIMARY_PILL =
-  'inline-flex items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-1.5 font-medium text-primary-foreground text-sm transition-colors hover:bg-primary/90 disabled:opacity-50'
+  'inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 font-medium text-primary-foreground text-sm transition-colors hover:bg-primary/90 disabled:opacity-50'
 
 export const SECONDARY_PILL =
-  'inline-flex items-center justify-center gap-1.5 rounded-full border border-border px-4 py-1.5 font-medium text-foreground text-sm transition-colors hover:bg-accent disabled:opacity-50'
+  'inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-4 py-1.5 font-medium text-foreground text-sm transition-colors hover:bg-accent disabled:opacity-50'
 
 export const ICON_BUTTON =
   'inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'

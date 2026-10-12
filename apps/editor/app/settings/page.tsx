@@ -29,11 +29,11 @@ export default async function SettingsPage() {
       <AppHeader />
       <main className="mx-auto max-w-2xl px-6 py-10">
         <Link
-          className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-muted-foreground text-sm transition-colors hover:bg-accent hover:text-foreground"
+          className="-ml-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-muted-foreground text-sm transition-colors hover:bg-accent hover:text-foreground"
           href="/"
         >
           <ArrowLeft className="h-4 w-4" />
-          All scenes
+          All projects
         </Link>
         <h1 className="mt-4 mb-8 font-semibold text-lg">Settings</h1>
 

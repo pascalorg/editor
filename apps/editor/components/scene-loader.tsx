@@ -340,14 +340,14 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
           </p>
           <div className="mt-3 flex items-center gap-2">
             <button
-              className="rounded-full bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:bg-primary/90"
+              className="rounded-lg bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:bg-primary/90"
               onClick={() => router.refresh()}
               type="button"
             >
               Reload
             </button>
             <button
-              className="rounded-full border border-border px-3 py-1.5 font-medium text-xs hover:bg-accent"
+              className="rounded-lg border border-border px-3 py-1.5 font-medium text-xs hover:bg-accent"
               onClick={() => setConflict(false)}
               type="button"
             >
@@ -357,7 +357,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         </div>
       )}
       {saveError && !conflict && (
-        <div className="dark pointer-events-auto absolute top-14 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-full border border-destructive/50 bg-background px-4 py-2 text-center shadow-xl">
+        <div className="dark pointer-events-auto absolute top-14 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-destructive/50 bg-background px-4 py-2 text-center shadow-xl">
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}

@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     })
     return sceneApiJson(request, meta, {
       status: 201,
-      headers: { Location: `/scene/${meta.id}` },
+      headers: { Location: `/project/${meta.id}` },
     })
   } catch (error) {
     return handleStoreError(request, error)

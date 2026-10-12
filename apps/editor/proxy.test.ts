@@ -30,10 +30,10 @@ test('an unconfigured network host sends pages to setup and APIs to 503', async 
 test('a password gates pages behind login and keeps the requested path', () => {
   process.env.PASCAL_ADMIN_PASSWORD = 'secret'
 
-  const response = gateRequest(request('/scene/abc?tab=build'))
+  const response = gateRequest(request('/project/abc?tab=build'))
   expect(response?.status).toBe(307)
   expect(response?.headers.get('location')).toBe(
-    'https://pascal.example/login?next=%2Fscene%2Fabc%3Ftab%3Dbuild',
+    'https://pascal.example/login?next=%2Fproject%2Fabc%3Ftab%3Dbuild',
   )
   expect(gateRequest(request('/api/plugins/mint/session'))?.status).toBe(401)
 })
