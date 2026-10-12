@@ -20,6 +20,7 @@ import {
 import { mergeWindowsTool } from './merge-windows'
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { placeItemsTool } from './place-items'
+import { createRoofTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { verifySceneTool } from './verify-scene'
@@ -47,6 +48,7 @@ export { NodeId } from './node-id'
 export * from './nodes'
 export * from './place-items'
 export * from './refusal'
+export * from './roofs'
 export * from './room-structure'
 export * from './stairs'
 export * from './verify-scene'
@@ -81,6 +83,7 @@ export const AGENT_TOOL_CONTRACTS = [
   addLevelTool,
   placeItemsTool,
   createStairTool,
+  createRoofTool,
   deleteNodeTool,
   addObjectTool,
   getSourceTool,

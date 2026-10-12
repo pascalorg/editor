@@ -3,19 +3,9 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
+import { RoofType } from './roof-types'
 
-export const RoofType = z.enum([
-  'hip',
-  'gable',
-  'shed',
-  'gambrel',
-  'dutch',
-  'mansard',
-  'flat',
-  'conical',
-])
-
-export type RoofType = z.infer<typeof RoofType>
+export { RoofType } from './roof-types'
 
 export const MIN_ROOF_SEGMENT_TRIM_SPAN = 0.1
 const DEFAULT_ROOF_SEGMENT_WIDTH = 8

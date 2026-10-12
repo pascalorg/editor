@@ -272,6 +272,16 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'on top of the storeys, under the roof level, which moves up one',
+    tool: 'add_level',
+    scene: storeysScene,
+    input: { buildingId: 'building_roofed' },
+    expect: {
+      result: { ok: true, floorIndex: 1, shiftedLevelIds: ['level_roof'] },
+      after: { level_roof: { level: 2 } },
+    },
+  },
+  {
     name: 'below the lowest level for a basement, at the height asked',
     tool: 'add_level',
     scene: storeysScene,

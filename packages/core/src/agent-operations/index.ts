@@ -2,6 +2,7 @@ import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addWall } from './add-wall'
 import { addCornerWindow } from './corner-window'
+import { createRoof } from './create-roof'
 import { createRoom } from './create-room'
 import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
@@ -29,6 +30,7 @@ export * from './apply-changes'
 export * from './apply-outcome'
 export * from './collections'
 export * from './corner-window'
+export * from './create-roof'
 export * from './create-room'
 export * from './create-stair'
 export * from './delete-node'
@@ -76,6 +78,7 @@ export const AGENT_OPERATIONS = {
   merge_windows: mergeWindowsOperation,
   add_level: addLevel,
   create_stair: createStair,
+  create_roof: createRoof,
   place_items: placeItems,
   delete_node: deleteNode,
   find_by_type: findByType,

@@ -14,6 +14,7 @@ import {
   addFenceTool,
   addLevelTool,
   addWallTool,
+  createRoofTool,
   createRoomTool,
   createStairTool,
   deleteNodeTool,
@@ -255,6 +256,11 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: createStairTool,
     operation: AGENT_OPERATIONS.create_stair,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: createRoofTool,
+    operation: AGENT_OPERATIONS.create_roof,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {

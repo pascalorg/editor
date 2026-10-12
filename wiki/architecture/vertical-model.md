@@ -22,7 +22,7 @@ The invariant, in one sentence:
 | `level.baseElevation` | Additive offset from the computed stack position. It shifts this level and cumulatively shifts every higher level in the same building; negative offsets are valid. | Zero (the schema default). |
 | `wall.height` | Explicit body height above the elected structural support, including below datum. | **Plane-bound**: follows the footprint-adjusted storey plane, clamped to covering-slab undersides. |
 | `ceiling.height` | Explicit custom height, write-clamped to the bound. | **Follows the level**: resolves live to `getCeilingClampBound` = `min(level height, covering underside) − 0.01`. |
-| `roof.support.kind` | `walls` follows the highest spatially matched wall top in the roof’s level frame; `level` keeps custom Y; `roof` retains its roof-surface attachment rule. Room and curved-wall creation write `walls`; free-drawn rectangles write `level` at Y 0. | Existing roofs remain custom (`level`); no load migration enables following. |
+| `roof.support.kind` | `walls` follows the highest spatially matched wall top in the roof’s level frame; `level` keeps custom Y; `roof` retains its roof-surface attachment rule. Room and curved-wall creation and the agents' `create_roof` write `walls`; free-drawn rectangles write `level` at Y 0 (see [Roof levels](#roof-levels)). | Existing roofs remain custom (`level`); no load migration enables following. |
 | `slab.floorHeight` | Ground-contact base plate authored floor top, in level-local metres. Upper plates author the top through thickness with a fixed underside. | Automatic floor datum from its supports. |
 | `slab.foundation` | Base plate support to terrain at site contact: solid or none, with a separate material and paint target. | No foundation. |
 | `slab.elevation` | Manual slab walking surface intent, level-local; derived geometry on floor plates. | Default 0.05. |
@@ -165,6 +165,22 @@ closed solids from base top to room floor; exposed terrace sides remain edges.
 Room-facing skirting follows the room floor and exterior skirting follows the
 base. Structural steps and open edges paint `zone.floorStepFinish` and
 `zone.floorEdgeFinish`; the default step finish is the upper room's floor finish.
+
+## Roof levels
+
+A roof lives on the level directly above the storey whose walls carry it; over a building's
+top storey that is its roof level (`metadata.role: 'roof'`, named Roof), kept above every storey,
+so exploded and solo level views lift the roof off the plan. One core service,
+`services/roof-level.ts`, states it for every roof writer: `planRoofLevel` (the level above, or
+the roof level to reuse, declare or create), `roofsOver` (the roofs over a storey),
+`storeyInsertIndex` (a new top storey goes under the roof level, which moves up one) and
+`isRoofLevel`. The agents' `create_roof` and the editor's roof tool (a room's footprint, a
+rectangle drawn on a walled storey, a cone over a curved wall) place roofs by it; `add_level` and
+the editor's "add a floor" insert under the roof level. A level that holds only roofs (written
+before levels declared their role) counts as the roof level and is declared when reused.
+`verify_scene` reports a roof mixed into a storey (`roof_mixed_in_storey`) and a roof level below a
+storey (`roof_level_not_on_top`); existing scenes are not migrated. Unpainted gables on a roof
+level take the cladding of the storey's walls below (`levelWallCladdingRef`).
 
 ## Stacked mezzanine rooms
 

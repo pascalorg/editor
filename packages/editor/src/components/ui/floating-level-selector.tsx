@@ -52,6 +52,7 @@ import {
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
+import { addStoreyOnTop } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
 import { useLinearDisplay } from '../../lib/use-linear-display'
@@ -502,16 +503,9 @@ export function FloatingLevelSelector() {
 
   const handleAddAbove = useCallback(() => {
     if (!resolvedBuildingId) return
-    const maxLevel = levels.length > 0 ? Math.max(...levels.map((l) => l.level)) : -1
-    const newLevel = LevelNode.parse({
-      level: maxLevel + 1,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: resolvedBuildingId,
-    })
-    createNode(newLevel, resolvedBuildingId)
+    const newLevel = addStoreyOnTop(resolvedBuildingId)
     setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
-  }, [resolvedBuildingId, levels, createNode, setSelection])
+  }, [resolvedBuildingId, setSelection])
 
   const handleAddBelow = useCallback(() => {
     if (!resolvedBuildingId) return
