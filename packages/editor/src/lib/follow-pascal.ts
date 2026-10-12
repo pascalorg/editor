@@ -19,6 +19,7 @@ export type FollowKind = 'floor' | 'detail' | 'roof' | 'furnish' | 'group'
 export type FollowWant = {
   box: Box
   kind: FollowKind
+  levelId?: string
   /** The outward direction of the wall it is on, in the plan (x, z), for what is looked at square on. */
   normal?: [number, number]
   /** The eye must stand above this height (metres): a roof lifted out of the way is looked down through, not from within. */
@@ -77,6 +78,7 @@ export function mergeWants(wants: readonly FollowWant[]): FollowWant {
   return {
     box: { min, max },
     kind,
+    ...(first.levelId ? { levelId: first.levelId } : {}),
     ...(normal ? { normal } : {}),
     ...(eyes.length ? { eyeAbove: Math.max(...eyes) } : {}),
     at: Math.max(...wants.map((want) => want.at)),
@@ -100,8 +102,9 @@ export class Follower {
     const oldest = this.pending[0]
     if (!oldest || blocked) return null
     if (now - this.last < FOLLOW_DWELL_S || now - oldest.at < FOLLOW_GATHER_S) return null
-    const merged = mergeWants(this.pending)
-    this.pending = []
+    const nextFloor = this.pending.findIndex((want) => want.levelId !== oldest.levelId)
+    const count = nextFloor < 0 ? this.pending.length : nextFloor
+    const merged = mergeWants(this.pending.splice(0, count))
     this.last = now
     return merged
   }

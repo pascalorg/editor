@@ -57,6 +57,18 @@ describe('what the camera looks at next', () => {
     ).toBe('group')
   })
 
+  test('targets on different floors are visited separately, not framed across hidden floors', () => {
+    const follower = new Follower()
+    follower.want({ ...want('furnish', box([0, 0, 0], [1, 1, 1])), levelId: 'level_lower' })
+    follower.want({
+      ...want('furnish', box([0, 3, 0], [1, 4, 1]), 0.1),
+      levelId: 'level_upper',
+    })
+    expect(follower.due(0.5)?.levelId).toBe('level_lower')
+    expect(follower.due(0.6)).toBeNull()
+    expect(follower.due(2)?.levelId).toBe('level_upper')
+  })
+
   test('a shared direction survives the merge; a mixed one does not', () => {
     const facing = mergeWants([
       want('detail', box([0, 0, 0], [1, 1, 1]), 0, [0, 1]),

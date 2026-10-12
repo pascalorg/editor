@@ -1,6 +1,12 @@
 'use client'
 
-import { type CameraPose, emitter, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type CameraPose,
+  emitter,
+  resolveBuildingForLevel,
+  useScene,
+} from '@pascal-app/core'
 import { type RevealEvent, subscribeRevealEvents, useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
@@ -87,6 +93,22 @@ export function FollowPascal() {
 
   const fly = (want: FollowWant) => {
     last.current = want
+    const nodes = useScene.getState().nodes
+    const level = want.levelId ? nodes[want.levelId as AnyNodeId] : undefined
+    if (level?.type === 'level') {
+      const buildingId = resolveBuildingForLevel(level.id as AnyNodeId, nodes)
+      const building = buildingId ? nodes[buildingId] : undefined
+      const viewer = useViewer.getState()
+      if (viewer.selection.levelId !== level.id) {
+        viewer.setSelection({
+          ...(building?.type === 'building' ? { buildingId: building.id } : {}),
+          levelId: level.id,
+        })
+        useEditor.getState().clearRoom()
+      }
+      viewer.setLevelMode('stacked')
+      useViewer.setState({ hideLevelsAboveSelection: true })
+    }
     if (!spring.current) {
       spring.current = new OrbitSpring({ x: 0, y: 1, z: 0, r: 20, az: 0.6, el: 0.5 })
       synced.current = false

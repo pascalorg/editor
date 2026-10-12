@@ -1,4 +1,4 @@
-import { type AnyNode, nodeRegistry } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, findLevelAncestorId, nodeRegistry } from '@pascal-app/core'
 import { sceneViewBounds, sceneViewFacing } from '@pascal-app/core/agent-operations'
 import type { RevealEvent } from '@pascal-app/viewer'
 import type { Box, FollowWant } from './follow-pascal'
@@ -85,8 +85,26 @@ function wholeHouse(nodes: Nodes, id: string, at: number): FollowWant | null {
  * undo's reverse play is followed the same way, group by group, on what goes.
  */
 export function wantFromEvent(event: RevealEvent, nodes: Nodes, at: number): FollowWant | null {
+  const want = targetFromEvent(event, nodes, at)
+  if (!want || event.type === 'complete' || event.type === 'finale' || event.type === 'settle')
+    return want
+  let level = event.levelId ? nodes[event.levelId] : undefined
+  if (level?.type !== 'level') {
+    const id = 'id' in event ? event.id : event.nodeIds[0]
+    const levelId = id ? findLevelAncestorId(id as AnyNodeId, nodes) : null
+    level = levelId ? nodes[levelId] : undefined
+  }
+  return level?.type === 'level' ? { ...want, levelId: level.id } : want
+}
+
+function targetFromEvent(event: RevealEvent, nodes: Nodes, at: number): FollowWant | null {
   switch (event.type) {
     case 'start': {
+      // Hidden floors settle instantly and say only the group, not each node's start.
+      if (event.instant && (event.phase === 'openings' || event.phase === 'furnishing')) {
+        const box = unionOf(event.nodeIds.map((id) => boxOf(nodes, id)))
+        return box ? { kind: event.phase === 'openings' ? 'detail' : 'furnish', box, at } : null
+      }
       if (event.phase === 'roof') {
         const box = unionOf(event.nodeIds.map((id) => boxOf(nodes, id)))
         return box ? { kind: 'roof', box, at } : null
