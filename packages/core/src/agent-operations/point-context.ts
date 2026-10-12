@@ -83,10 +83,13 @@ export type PointAskSubmit = {
   from: { x: number; y: number; width: number; height: number }
 }
 
-/** The chat's answer to a submit. A busy Pascal is `ok: true`: the ask waits as its own turn. */
+/**
+ * The chat's answer to a submit. `busy`: Pascal is on a turn and the host does not queue asks, so
+ * the bubble keeps its words and says so.
+ */
 export type PointAskSubmitResult =
   | { ok: true }
-  | { ok: false; code: 'out_of_credits' | 'unavailable' | 'error'; message: string }
+  | { ok: false; code: 'busy' | 'out_of_credits' | 'unavailable' | 'error'; message: string }
 
 /** What the chat tells the pin about the ask's turn. */
 export type PointAskStatus = {

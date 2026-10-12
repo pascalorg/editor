@@ -68,6 +68,7 @@ import {
   regionLabel,
   regionSizeMetres,
 } from './region'
+import { planRetry } from './retry'
 import { pointCommitEvent } from './scene-commit'
 import type { Rect } from './types'
 
@@ -804,6 +805,8 @@ let askCounter = 0
 const newAskId = () =>
   `ask_${Date.now().toString(36)}${(askCounter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
+const BUSY_WORDS = 'Pascal is working. Ask again when it is done.'
+
 /** The scene history now, marked so what an ask's turn wrote can be counted when its Undo comes. */
 const markNow = () => markHistory(useScene.temporal.getState().pastStates)
 const stepsFrom = (mark: HistoryMark) => stepsSince(useScene.temporal.getState().pastStates, mark)
@@ -837,6 +840,10 @@ export async function sendBubble(
   const bubble = state.bubble
   const words = text.trim()
   if (!(bubble && words)) return
+  if (state.busy) {
+    state.patchBubble({ error: BUSY_WORDS })
+    return
+  }
   const askId = newAskId()
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
   const first = bubble.targets[0]
@@ -1010,39 +1017,39 @@ async function captureAfter(askId: string) {
   }
 }
 
-/** Try again after an error: the same words and context go as a new ask, planted where the old pin was. */
-export async function retryAsk(askId: string) {
+/**
+ * Try again: the same words and context go as a new ask, planted where the old pin was. After an
+ * error the new pin replaces the old; from the chat a finished ask keeps its pin. False when the pin
+ * is gone (a reload, an ask of a collaborator's): the caller sends the words again without one.
+ */
+export async function retryAsk(askId: string): Promise<boolean> {
   const state = usePointAsk.getState()
   const old = state.pins[askId]
-  if (!old?.submit) return
   const next = newAskId()
-  const submit = { ...old.submit, askId: next, context: { ...old.submit.context, askId: next } }
-  state.addPin({
-    ...old,
-    model: createPin({ askId: next, text: old.model.text, targetIds: old.model.targetIds }),
-    submit,
-    retireAt: null,
-    createdAt: Date.now(),
-  })
-  state.removePin(askId)
+  const plan = old ? planRetry(old, next, Date.now()) : null
+  if (!plan) return false
+  state.addPin(plan.pin)
+  if (!plan.keepOld) state.removePin(askId)
   state.openCard(null)
   askMarks.set(next, { start: null, end: null, undoneSteps: 0, undone: false })
   state.dispatchPin(next, { type: 'sent' })
-  const result = await submitPointAsk(submit)
-  if (result.ok) markAccepted(next)
-  if (!result.ok) {
-    usePointAsk.getState().dispatchPin(next, {
-      type: 'status',
-      status: {
-        askId: next,
-        status: 'ended',
-        outcome: 'errored',
-        asked: false,
-        wroteScene: false,
-        error: result.message,
-      },
-    })
+  const result = await submitPointAsk(plan.submit)
+  if (result.ok) {
+    markAccepted(next)
+    return true
   }
+  usePointAsk.getState().dispatchPin(next, {
+    type: 'status',
+    status: {
+      askId: next,
+      status: 'ended',
+      outcome: 'errored',
+      asked: false,
+      wroteScene: false,
+      error: result.message,
+    },
+  })
+  return true
 }
 
 // ─── the card: change more, and the scene as it was ─────────────────────────

@@ -1,4 +1,5 @@
 import { usePointAsk } from '../../store/use-point-ask'
+import { retryAsk } from './session'
 
 // What a host app (the hosted chat) tells Point and ask about itself, without importing the store.
 
@@ -10,4 +11,13 @@ export function setPointAskPlayful(playful: boolean) {
 /** Pascal is on a turn: the bubble's Send says Queue, and a new ask waits its turn. */
 export function setPointAskBusy(busy: boolean) {
   usePointAsk.getState().setBusy(busy)
+}
+
+/**
+ * The chat's Retry on a message that was a Point and ask: the same ask again, with its own pin. False
+ * when the editor no longer has the pin (a reload, a collaborator's ask): the chat sends the words
+ * again as a plain message.
+ */
+export function retryPointAsk(askId: string): Promise<boolean> {
+  return retryAsk(askId)
 }

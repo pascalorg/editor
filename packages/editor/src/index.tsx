@@ -738,7 +738,7 @@ export {
   setPluginDirectoryContext,
   setPluginInstallLocks,
 } from './lib/plugin-panels'
-export { setPointAskBusy, setPointAskPlayful } from './lib/point-ask/host-api'
+export { retryPointAsk, setPointAskBusy, setPointAskPlayful } from './lib/point-ask/host-api'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {

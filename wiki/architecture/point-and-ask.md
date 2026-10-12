@@ -11,7 +11,7 @@ The open-source editor has no chat. Point and ask is offered only while a host h
 | `point-ask:status` | host to pin | `queued`, `working` (+ the live `sentence`), `asking` (+ `question`), `ended` (`outcome`, `asked`, `wroteScene`, `answer?`, `error?`) |
 | `point-ask:pin` | pin to host | `hover` / `leave` / `open`: the host lights or scrolls to the ask's turn |
 
-The host also sets `setPointAskBusy` (the bubble's button says Queue) and `setPointAskPlayful` ("Playful touches": the ripple, the flashes, the shutter sound).
+The host also sets `setPointAskBusy` (the bubble's button says "Pascal is working" and does not send: a host that does not queue asks answers `code: 'busy'` too) and `setPointAskPlayful` ("Playful touches": the ripple, the flashes, the shutter sound). `retryPointAsk(askId)` is the chat's Retry on a message that was an ask: the same words, targets, camera and crop as a new ask with its own pin (a finished ask keeps its pin, an errored one is replaced); it answers false when the pin is gone, and the chat then sends the words as a plain message.
 
 ## `PointContext`
 

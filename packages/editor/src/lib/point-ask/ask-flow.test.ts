@@ -13,7 +13,7 @@ import {
 import { type BubbleTarget, usePointAsk } from '../../store/use-point-ask'
 import { endCompare, sendBubble, startCompare, startPointAskSession } from './session'
 
-// The whole hold-to-see-before path with the real stores: the session listening to the chat's
+// The whole ask path with the real stores (hold to see before; an ask while Pascal is working): the session listening to the chat's
 // statuses, a turn writing the scene through the store's own actions (each a history step), the pin
 // reaching "done", and the hold. Only the chat's words (statuses) and the DOM are stood in for.
 
@@ -212,5 +212,58 @@ describe('hold to see before, end to end', () => {
       askId: first,
       reason: 'turn-working',
     })
+  })
+})
+
+describe('an ask while Pascal is working', () => {
+  test('is not sent: the bubble keeps its words and says why', async () => {
+    let handed = 0
+    unregisterHandler()
+    unregisterHandler = registerPointAskHandler(async () => {
+      handed += 1
+      return { ok: true }
+    })
+    usePointAsk.getState().openBubble({
+      targets: [target],
+      anchor: [2, 1, 0],
+      hit: { point: [2, 1, 0], normal: [0, 0, 1] },
+      gesture: 'click',
+      capturedAt: new Date().toISOString(),
+      camera: null,
+      crop: { state: 'failed' },
+      draft: 'make this wall taller',
+      error: null,
+    })
+    usePointAsk.setState({ busy: true })
+    await sendBubble('make this wall taller', { x: 0, y: 0, width: 10, height: 10 })
+    const state = usePointAsk.getState()
+    expect(handed).toBe(0)
+    expect(state.pinOrder).toHaveLength(0)
+    expect(state.bubble?.draft).toBe('make this wall taller')
+    expect(state.bubble?.error).toBe('Pascal is working. Ask again when it is done.')
+  })
+
+  test("the chat's own busy answer returns the bubble with its reason", async () => {
+    unregisterHandler()
+    unregisterHandler = registerPointAskHandler(async () => ({
+      ok: false,
+      code: 'busy',
+      message: 'Pascal is working. Ask again when it is done.',
+    }))
+    usePointAsk.getState().openBubble({
+      targets: [target],
+      anchor: [2, 1, 0],
+      hit: { point: [2, 1, 0], normal: [0, 0, 1] },
+      gesture: 'click',
+      capturedAt: new Date().toISOString(),
+      camera: null,
+      crop: { state: 'failed' },
+      draft: '',
+      error: null,
+    })
+    await sendBubble('make this wall taller', { x: 0, y: 0, width: 10, height: 10 })
+    const state = usePointAsk.getState()
+    expect(state.pinOrder).toHaveLength(0)
+    expect(state.bubble?.error).toBe('Pascal is working. Ask again when it is done.')
   })
 })

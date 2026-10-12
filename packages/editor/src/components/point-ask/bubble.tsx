@@ -516,12 +516,12 @@ function BubbleView({
             </button>
           ) : null}
           <button
-            aria-label={busy ? 'Queue' : 'Send'}
+            aria-label={busy ? 'Pascal is working' : 'Send'}
             className={`pa-send${busy ? ' queue' : ''}`}
-            disabled={empty}
+            disabled={empty || busy}
             type="submit"
           >
-            {busy ? 'Queue' : ARROW}
+            {busy ? 'Pascal is working' : ARROW}
           </button>
         </form>
         {bubble.error ? <div className="pa-err">{bubble.error}</div> : null}
