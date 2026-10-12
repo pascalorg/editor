@@ -7,6 +7,7 @@ import { clearSceneTool } from './clear-scene'
 import { disputeCoherenceItemTool } from './coherence'
 import { editCollectionTool, listCollectionsTool } from './collections'
 import { addColumnTool } from './columns'
+import type { AgentToolContract } from './contract'
 import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
 import { addEntryDoorsTool } from './entry-doors'
@@ -66,6 +67,7 @@ export * from './assets'
 export * from './clear-scene'
 export * from './collections'
 export * from './columns'
+export * from './contract'
 export * from './corner-window'
 export * from './create-room'
 export * from './find-by-type'
@@ -156,7 +158,7 @@ export const AGENT_TOOL_CONTRACTS = [
   applyUnitLayoutTool,
   nameUnitsTool,
   runBatchTool,
-] as const
+] as const satisfies readonly AgentToolContract[]
 
 export { BATCHABLE_TOOLS, runBatchTool } from './batch'
 export { setCheckpointTool } from './checkpoints'

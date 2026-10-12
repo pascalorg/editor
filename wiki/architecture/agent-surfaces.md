@@ -19,7 +19,7 @@ Pascal has two agent surfaces: the MCP server in this repo, used by external age
 
 A tool has three layers, and only the last one may differ between surfaces:
 
-1. **Contract** — name, description, input schema — one definition in `@pascal-app/core/agent-tools`, registered by the MCP and defined by the chat from the same object. Kept zod-only: the chat declares tools inside a sandbox that rejects Node-dependent packages (`contracts-purity.test.ts`).
+1. **Contract** — name, description, input schema — one definition in `@pascal-app/core/agent-tools` (a plugin's tool: in the plugin, see [Plugin tools](#plugin-tools)), registered by the MCP and defined by the chat from the same object. Kept zod-only: the chat declares tools inside a sandbox that rejects Node-dependent packages (`contracts-purity.test.ts`).
 2. **Operation** — validation, defaults, clamping, refusals, the nodes to create — one pure function in core (`planWallOpening`, `verifyScene`, `duplicateLevel`…).
 3. **Executor** — applying to a store (the chat's live store, the MCP's bridge) and the result envelope (live sync, persistence). Surface context resolves here too: "the active floor" is what the person is viewing in the chat. An edit that reads construction the host derives (re-derived rooms, auto ceilings, floor plates — the room and floor tools) returns `afterReconcile`; both hosts run it through `applyAgentOutcome` with their own reconciler, in one undo step.
 
@@ -42,6 +42,22 @@ A tool is written once and registered twice; never build the same tool separatel
 7. **Knowledge**: the `pascal-3d` skill, the agent guide (`pascal://agent-guide`) and the MCP README's tool table.
 
 A tool that needs something only a host has keeps the same contract and operation; the host passes the missing piece to `createPascalMcpServer`. Without a renderer (`sceneViews`) or a script runtime (`geometryScripts`) the tool still exists and answers with a code (`view_unavailable`, `scripts_unavailable`); without a `catalog` the item tools draw from a small built-in list; hosted service tools are registered only with a `services` executor.
+
+## Plugin tools
+
+A plugin's tools keep the three layers; the plugin owns the first two instead of core (E-016). The contract is in its `./agent-tools` export, a `PluginAgentTools` of `PluginAgentTool`s (an `AgentToolContract` plus where it runs), zod only under the same purity rule. The operation of each `runsIn: 'operation'` tool is in its `./agent-operations` export, an `AgentOperations`. The executor is the host's. Both surfaces register from those same objects:
+
+- **MCP**: `registerOperationTool(server, operations, { contract, operation, annotations })` from `@pascal-app/mcp/tools/shared-tools`, the runner of the shared tools: parse, plan, apply in one history step, `achieved`, the persistence envelope, refusals as `{ error, code }`. A `runsIn: 'editor'` tool needs an editor tab: the host routes it to one, as `view_scene` does, or refuses with a code.
+- **Hosted chat**: the same contract defines the chat tool; `'operation'` tools run on the live store through its shared-tool executor, `'editor'` tools through the plugin's `PluginChatExtension.execute`.
+
+Beyond the rules above:
+
+- **Offered by the host.** A plugin's tools are offered only where the plugin is installed and the host's policy allows. A client's list of tools, or its claim that a plugin is installed, is never trusted.
+- **Annotations from the host.** The host classifies each tool from its own review and registers it with its own annotations; a contract's `annotations` are the plugin's hints and never decide a write scope, a retry or an approval. A tool the host has not classified is not registered.
+- **Versioned.** `PluginAgentTools.version` is the revision of the plugin's contracts; a host that runs long turns pins the revision a turn was offered.
+- **Exceptions are recorded.** `chatOnly` is a request, honoured only as a reviewed exception to capability parity, written down like any other.
+- **One name each.** A plugin tool's name collides with no core tool and no other plugin's; prefix it with the plugin.
+- **Tests follow the layers.** The plugin's edge cases as one table, run against its operation and through `registerOperationTool` with a real client; `shared-tools.test.ts` does this for a synthetic plugin.
 
 ## What stays surface-specific
 

@@ -340,7 +340,7 @@ function perfWindow(search = '?perf') {
   return probeWindow
 }
 
-describe('R3F 9.6.1 pointer-event differential', () => {
+describe('R3F 9.8.1 pointer-event differential', () => {
   test('handle-like two-arg raycasts cache when tagged and report fallback when untagged', async () => {
     const probeWindow = perfWindow()
     const { stock, cached } = await differential((f) => {
@@ -558,7 +558,7 @@ describe('R3F 9.6.1 pointer-event differential', () => {
 
   test('pins the vendored closure to the installed R3F version', () => {
     const pkg = JSON.parse(readFileSync(require.resolve('@react-three/fiber/package.json'), 'utf8'))
-    expect(pkg.version, 'R3F version drift: re-vendor pointer-events.ts').toBe('9.6.1')
+    expect(pkg.version, 'R3F version drift: re-vendor pointer-events.ts').toBe('9.8.1')
   })
 
   test('nested handlers preserve the complete ordered hit metadata and callback/hover order', async () => {

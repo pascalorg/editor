@@ -290,6 +290,85 @@ targets, or history entries. Registration also provides no persistence:
 versioned plugin configuration belongs in a host-owned project sidecar, and
 the host must call the plugin's public import/export functions explicitly.
 
+## Agent tools and chat extensions
+
+A plugin can give agents its own tools, in a host's chat and on the MCP server, without changing the `Plugin` manifest. Like panels and views, they ship as separate exports:
+
+| Export | Holds | Imported by | Rule |
+|---|---|---|---|
+| `./agent-tools` | one `PluginAgentTools` (`@pascal-app/core/agent-tools`): contracts, skills, instructions | wherever a host declares agent tools, a sandboxed durable workflow included | zod and the plugin's own dependency-free files only, the rule `core/agent-tools` follows (`contracts-purity.test.ts`); run the same check on your entry |
+| `./agent-operations` | one `AgentOperations` (`@pascal-app/core/agent-operations`): an operation per `runsIn: 'operation'` tool | a server (the MCP) and the editor tab | pure: core and the plugin's own pure files; no browser, no stores |
+| main entry | one `PluginChatExtension` (`@pascal-app/editor`) | the browser | runs the `runsIn: 'editor'` tools, renders cards |
+
+```ts
+// src/agent-tools.ts → "./agent-tools"
+import type { PluginAgentTools } from '@pascal-app/core/agent-tools'
+import { z } from 'zod'
+
+export const signageAgentTools: PluginAgentTools = {
+  pluginId: 'acme:signage',
+  apiVersion: 1,
+  version: '1.2.0',
+  tools: [
+    {
+      name: 'signage_place_exit_signs',
+      title: 'Place exit signs',
+      description: 'Place an exit sign above each exit door of a level. Refused with no_exit_doors when the level has none.',
+      input: { levelId: z.string(), text: z.string().max(40).optional() },
+      runsIn: 'operation',
+    },
+    {
+      name: 'signage_schedule',
+      title: 'Sign schedule',
+      description: 'Lay out the schedule of every sign and open it beside the scene.',
+      input: {},
+      runsIn: 'editor',
+      rendersView: true,
+    },
+  ],
+  skills: [{ name: 'egress-signage', summary: 'Where exit signs go and how high', body: '…' }],
+}
+```
+
+```ts
+// src/agent-operations.ts → "./agent-operations"
+import type { AgentOperations } from '@pascal-app/core/agent-operations'
+import { refuse } from '@pascal-app/core/agent-tools'
+
+export const signageAgentOperations = {
+  signage_place_exit_signs: (nodes, input: { levelId: string; text?: string }) => {
+    const doors = exitDoorsOn(nodes, input.levelId)
+    if (!doors.length) refuse('no_exit_doors', `Level ${input.levelId} has no exit door.`)
+    return { result: { placed: doors.length }, changes: { create: doors.map(signAbove) } }
+  },
+} satisfies AgentOperations
+```
+
+`satisfies` checks the map against `AgentOperations` and keeps each operation's own input type for your tests. An outcome may write nodes (`create`, `update`, `delete`), collections (`collections`), or plan a follow-up once the host has derived construction (`afterReconcile`); a surface applies all of it as one undo step.
+
+```ts
+// src/chat.ts → the main entry
+import type { PluginChatExtension } from '@pascal-app/editor'
+
+export const signageChat: PluginChatExtension = {
+  pluginId: 'acme:signage',
+  execute: async (name, input, { signal }) => renderSchedule(input, signal),
+  cards: { signage_schedule: () => import('./schedule-card') },
+  actions: [{ id: 'exit-signs', label: 'Exit signs', hint: 'Sign every exit', prompt: 'Place exit signs on every level.' }],
+  accepts: ['.csv'],
+}
+```
+
+- **Where a tool runs.** `'operation'`: a pure function over the scene's nodes that returns `{ result, changes }` or refuses with `refuse(code, message)`, like core's operations; every surface runs it. The MCP registers it with `registerOperationTool(server, operations, { contract, operation, annotations })` from `@pascal-app/mcp/tools/shared-tools`, the runner of the shared tools; a chat applies it to the live store in one undo step. `'editor'`: it needs the live editor (a renderer, the plugin's stores), so it runs in an editor tab through `execute`; a surface without a tab refuses it or hands it to one. Prefer `'operation'` whenever a tool only reads and writes nodes.
+- **Names.** A tool name is unique across the host's tools and every plugin's: prefix it with the plugin (`signage_…`). A host refuses a collision rather than picking a winner.
+- **Versions.** `apiVersion` is the shape of `PluginAgentTools`; `version` is the revision of your contracts. Bump it whenever a tool's name, input or meaning changes: a host may pin the revision a long run was offered and refuse an executor that no longer matches it.
+- **Annotations are hints.** A contract's `annotations` (`readOnlyHint`, `destructiveHint`, …) say what the plugin believes. A host classifies each tool from its own review and passes its own annotations to `registerOperationTool`; nothing a plugin declares grants a permission or a write scope.
+- **The host decides.** Which tools a turn offers, to whom and at what cost, whether a `chatOnly` request is honoured, and how far `timeoutMs` may go are host policy, like a panel's `access`. Being in `installedPlugins` is necessary, not sufficient. These packages define the shapes; a host keeps its own catalog of the plugins it serves.
+- **Trusted code.** These exports run with the application's privileges: a zod schema is code, and an executor or a card runs in the page. Hosts load reviewed, pinned plugins. The purity rule keeps contracts loadable in a sandboxed workflow; it does not isolate them.
+- **Cards and outputs.** A card renders from the persisted call alone (`toolName`, `input`, `output`, `state`), so a reloaded chat shows the same card; its `actions` open a view, select nodes or send a prompt. A `ChatToolOutput` carries images by reference (`ref`), never bytes. `actions` add entries to the composer's `/` menu; `accepts` lists the file types the plugin's tools read.
+
+The rules both surfaces follow for these tools are in [agent surfaces](agent-surfaces.md#plugin-tools).
+
 ## Versioning
 
 `apiVersion: 1` covers the surface above. The host bumps the major when it removes or changes the shape of an existing field. New optional fields don't bump. The plan is to keep additions backwards-compatible as long as possible — the bump is the escape hatch, not the default.
@@ -302,7 +381,7 @@ A plugin's own data versioning is `schemaVersion` on each `NodeDefinition`. The 
 
 - **Materials** — there's no `plugin.materials` slot. Use `createMaterial` from `@pascal-app/viewer` inside your `def.renderer` / `def.system`.
 - **Floor-plan primitives** — the `FloorplanGeometry` union is host-owned. To draw something the union can't express, fall back to `def.renderer` and render through a different 2D mount (or open an issue).
-- **Panels, views and other UI in the core manifest** — host-specific. Export an `EditorHostPanel` / `EditorHostView` separately for hosts that use `@pascal-app/editor`.
+- **Panels, views, agent tools and other UI in the core manifest** — host-specific. Export an `EditorHostPanel` / `EditorHostView` / `PluginChatExtension`, and the `./agent-tools` and `./agent-operations` entries, separately.
 - **Clone remapping for plugin-owned references** — project clone (`cloneSceneGraph`) and subtree duplicate (`cloneNodesInto`) remap `id`, `parentId` and `children` only. A plugin field that stores other node ids (an ordered camera list, a target list) is copied verbatim and keeps pointing at the source scene. Keep hosted ids in `children` where you can.
 - **Stores** — plugins create their own Zustand stores; they don't extend `useScene`, `useEditor`, or `useViewer`. A renderer may subscribe read-only to exported host presentation state such as `useViewer` appearance axes, but must not treat host stores as plugin-owned state.
 - **Routes / pages** — plugins are visualisation + interaction code, not full app surfaces. Hosting a settings page belongs to the app.

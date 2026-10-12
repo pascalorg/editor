@@ -10,8 +10,11 @@ import {
   type SceneChanges,
   startOfSession,
   vectorizePlanTarget,
+  writeCollections,
 } from '@pascal-app/core/agent-operations'
 import {
+  type AgentToolAnnotations,
+  type AgentToolContract,
   addCornerWindowTool,
   addEntryDoorsTool,
   addFenceTool,
@@ -88,14 +91,16 @@ import { ROOM_TOOL_ANNOTATIONS, type RoomToolName, structureOutput } from './str
 // Tools the MCP and the hosted chat share whole: one contract, one core operation. The MCP only
 // applies the operation's changes through its bridge and adds its own facts (scene, persistence).
 
-type SharedTool = {
-  contract: { name: string; title: string; description: string; input: Record<string, z.ZodType> }
+/**
+ * A tool the server runs as a core-style operation: parse with the contract, plan with the
+ * operation, apply its changes through the bridge in one history step, answer with what the scene
+ * then holds. `annotations` are the host's to choose from its own review of the operation; a
+ * plugin contract's `annotations` are only its hints.
+ */
+export type OperationTool = {
+  contract: AgentToolContract
   operation: AgentOperation
-  annotations:
-    | typeof READ_ONLY_TOOL_ANNOTATIONS
-    | typeof ADDITIVE_TOOL_ANNOTATIONS
-    | typeof ADDITIVE_OPEN_WORLD_TOOL_ANNOTATIONS
-    | typeof DESTRUCTIVE_TOOL_ANNOTATIONS
+  annotations: AgentToolAnnotations
   outputSchema?: Record<string, z.ZodType>
   envelope?: (bridge: SceneOperations) => Record<string, unknown>
   /** Reads the host's item library: only these calls wait for it (the hosted one is a query). */
@@ -124,6 +129,14 @@ export type PlanReadingHosts = {
 export type PlanVectorizer = (
   plan: ReturnType<typeof vectorizePlanTarget>,
 ) => Promise<{ svg: string; model: string; cost?: string }>
+
+type SharedTool = OperationTool & {
+  annotations:
+    | typeof READ_ONLY_TOOL_ANNOTATIONS
+    | typeof ADDITIVE_TOOL_ANNOTATIONS
+    | typeof ADDITIVE_OPEN_WORLD_TOOL_ANNOTATIONS
+    | typeof DESTRUCTIVE_TOOL_ANNOTATIONS
+}
 
 const jsonObject = z.record(z.string(), z.unknown())
 
@@ -581,12 +594,22 @@ export function agentRuntime(bridge: SceneOperations): AgentHostRuntime {
         )
       const next = toPatches(changes)
       if (next.length) bridge.applyPatch(next)
+      if (changes.collections && Object.keys(changes.collections).length)
+        bridge.setCollections(writeCollections(bridge.getCollections(), changes.collections))
     },
     reconcile: () => {
       bridge.deriveStructure()
     },
     keep: (keep) => bridge.agentSession?.keep(keep),
   }
+}
+
+function writesScene(changes: SceneChanges | undefined): boolean {
+  return Boolean(
+    changes &&
+      (toPatches(changes).length ||
+        (changes.collections && Object.keys(changes.collections).length)),
+  )
 }
 
 export function registerSharedTools(
@@ -596,129 +619,141 @@ export function registerSharedTools(
   // Read at each call, not at registration: a host may lend a tool's helper later (the tests do).
   hosts: PlanReadingHosts = {},
 ): void {
-  for (const tool of SHARED_TOOLS) {
-    server.registerTool(
-      tool.contract.name,
-      {
-        title: tool.contract.title,
-        description:
-          tool.contract.name === vectorizePlanTool.name && hosts.vectorizePlanPricing
-            ? tool.contract.description.replace(VECTORIZE_PRICING, hosts.vectorizePlanPricing)
-            : tool.contract.description,
-        inputSchema: tool.contract.input,
-        // Loose: a client that listed the tools rejects any field the schema leaves out, and the
-        // operations in core grow fields (verify_scene's guesses) that this list would miss.
-        ...(tool.outputSchema ? { outputSchema: z.looseObject(tool.outputSchema) } : {}),
-        annotations: tool.annotations,
-      },
-      async (input: Record<string, unknown>) => {
-        let outcome: ReturnType<AgentOperation>
-        // A copy of the map: a host may write its own in place (the hosted bridge does), and a
-        // "before" that grows with the call reads every creation as unchanged.
-        const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
-        // The agent's session begins with its first call, before anything is written.
-        const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
-        if (first) bridge.agentSession?.keep(first)
-        const batchPlacesInRoom =
-          tool.contract.name === runBatchTool.name &&
-          Array.isArray(input.calls) &&
-          input.calls.some(
-            (call) =>
-              typeof call === 'object' &&
-              call !== null &&
-              'tool' in call &&
-              call.tool === placeInRoomTool.name,
-          )
-        const context: AgentContext = {
-          activeLevelId: null,
-          materials: bridge.supportsMaterialUpserts === true ? bridge.getMaterials?.() : undefined,
-          session: bridge.agentSession?.read(),
-          ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
-        }
-        if (tool.readsPlan && hosts.planJudge) {
-          try {
-            const questions = furnishFromPlanQuestions(before, input as never, context)
-            const answers = questions.length ? await hosts.planJudge(questions) : []
-            context.planAnswers = Object.fromEntries(
-              questions.map((question, i) => [question.id, answers[i] ?? null]),
-            )
-          } catch {
-            // No plan to ask about: the operation refuses with the reason.
-          }
-        }
-        if (tool.vectorizesPlan && hosts.vectorizePlan) {
-          let target: ReturnType<typeof vectorizePlanTarget> | null = null
-          try {
-            target = vectorizePlanTarget(before, input as never, context)
-          } catch {
-            // No raster plan to send: the operation refuses with the reason, and nothing is paid.
-          }
-          if (target)
-            try {
-              context.planVector = {
-                guideId: target.guideId,
-                ...(await hosts.vectorizePlan(target)),
-              }
-            } catch (error) {
-              // A host that refuses (a plan it will not vectorise) gives its own code, unpaid.
-              context.planVector = isAgentRefusal(error)
-                ? { guideId: target.guideId, refusal: { code: error.code, message: error.message } }
-                : {
-                    guideId: target.guideId,
-                    error: error instanceof Error ? error.message : String(error),
-                  }
-            }
-        }
-        try {
-          outcome = tool.operation(before, input as never, context)
-        } catch (error) {
-          return refusalResult(error)
-        }
-        const patches = outcome.changes ? toPatches(outcome.changes) : []
-        let result = outcome.result
-        let persistence = {}
-        if (patches.length) {
-          result = bridge.runAsSingleHistoryStep(() =>
-            applyAgentOutcome(outcome, agentRuntime(bridge)),
-          )
-          persistence = persistencePayload(
-            await publishLiveSceneSnapshot(bridge, tool.contract.name),
-          )
-        } else if (outcome.keep) {
-          // A checkpoint: kept with the session, nothing in the scene to save.
-          result = applyAgentOutcome(outcome, agentRuntime(bridge))
-        }
-        // What the scene holds after the call, not only what the call says it built.
-        const achieved = outcome.changes ? achievedChanges(before, outcome.changes) : null
-        const payload = {
-          ...result,
-          ...(achieved ? { achieved } : {}),
-          ...(tool.envelope?.(bridge) ?? {}),
-          ...persistence,
-        }
-        const { markedPlanSvg, ...shown } = payload as typeof payload & { markedPlanSvg?: string }
-        if (typeof markedPlanSvg === 'string') {
-          const image = hosts.rasterizeSvg
-            ? await hosts.rasterizeSvg(markedPlanSvg).catch(() => null)
-            : null
-          return {
-            content: [
-              { type: 'text' as const, text: JSON.stringify(shown) },
-              ...(image
-                ? [{ type: 'image' as const, data: image.data, mimeType: image.mimeType }]
-                : []),
-            ],
-            structuredContent: image
-              ? { ...shown, markedPlan: `data:${image.mimeType};base64,${image.data}` }
-              : { ...shown, markedPlanSvg },
-          }
-        }
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
-          structuredContent: payload,
-        }
-      },
-    )
-  }
+  for (const tool of SHARED_TOOLS) registerOperationTool(server, bridge, tool, catalog, hosts)
   registerCollectionTools(server, bridge)
+}
+
+/**
+ * Registers one operation tool, as the shared tools are: a host adds a plugin's `'operation'`
+ * tools with it, from the plugin's `./agent-tools` contract and `./agent-operations` operation.
+ */
+export function registerOperationTool(
+  server: McpServer,
+  bridge: SceneOperations,
+  tool: OperationTool,
+  catalog: AssetCatalog = builtInCatalog,
+  // Read at each call, not at registration: a host may lend a tool's helper later (the tests do).
+  hosts: PlanReadingHosts = {},
+): void {
+  server.registerTool(
+    tool.contract.name,
+    {
+      title: tool.contract.title,
+      description:
+        tool.contract.name === vectorizePlanTool.name && hosts.vectorizePlanPricing
+          ? tool.contract.description.replace(VECTORIZE_PRICING, hosts.vectorizePlanPricing)
+          : tool.contract.description,
+      inputSchema: tool.contract.input,
+      // Loose: a client that listed the tools rejects any field the schema leaves out, and the
+      // operations in core grow fields (verify_scene's guesses) that this list would miss.
+      ...(tool.outputSchema ? { outputSchema: z.looseObject(tool.outputSchema) } : {}),
+      annotations: tool.annotations,
+    },
+    async (input: Record<string, unknown>) => {
+      let outcome: ReturnType<AgentOperation>
+      // A copy of the map: a host may write its own in place (the hosted bridge does), and a
+      // "before" that grows with the call reads every creation as unchanged.
+      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      // The agent's session begins with its first call, before anything is written.
+      const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
+      if (first) bridge.agentSession?.keep(first)
+      const batchPlacesInRoom =
+        tool.contract.name === runBatchTool.name &&
+        Array.isArray(input.calls) &&
+        input.calls.some(
+          (call) =>
+            typeof call === 'object' &&
+            call !== null &&
+            'tool' in call &&
+            call.tool === placeInRoomTool.name,
+        )
+      const context: AgentContext = {
+        activeLevelId: null,
+        materials: bridge.supportsMaterialUpserts === true ? bridge.getMaterials?.() : undefined,
+        session: bridge.agentSession?.read(),
+        ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
+      }
+      if (tool.readsPlan && hosts.planJudge) {
+        try {
+          const questions = furnishFromPlanQuestions(before, input as never, context)
+          const answers = questions.length ? await hosts.planJudge(questions) : []
+          context.planAnswers = Object.fromEntries(
+            questions.map((question, i) => [question.id, answers[i] ?? null]),
+          )
+        } catch {
+          // No plan to ask about: the operation refuses with the reason.
+        }
+      }
+      if (tool.vectorizesPlan && hosts.vectorizePlan) {
+        let target: ReturnType<typeof vectorizePlanTarget> | null = null
+        try {
+          target = vectorizePlanTarget(before, input as never, context)
+        } catch {
+          // No raster plan to send: the operation refuses with the reason, and nothing is paid.
+        }
+        if (target)
+          try {
+            context.planVector = {
+              guideId: target.guideId,
+              ...(await hosts.vectorizePlan(target)),
+            }
+          } catch (error) {
+            // A host that refuses (a plan it will not vectorise) gives its own code, unpaid.
+            context.planVector = isAgentRefusal(error)
+              ? { guideId: target.guideId, refusal: { code: error.code, message: error.message } }
+              : {
+                  guideId: target.guideId,
+                  error: error instanceof Error ? error.message : String(error),
+                }
+          }
+      }
+      try {
+        outcome = tool.operation(before, input as never, context)
+      } catch (error) {
+        return refusalResult(error)
+      }
+      let result = outcome.result
+      let persistence = {}
+      // An outcome edits the scene through its node changes, its collection writes, or the
+      // follow-up it plans once the host has reconciled; any of them is one history step.
+      if (writesScene(outcome.changes) || outcome.afterReconcile) {
+        result = bridge.runAsSingleHistoryStep(() =>
+          applyAgentOutcome(outcome, agentRuntime(bridge)),
+        )
+        persistence = persistencePayload(await publishLiveSceneSnapshot(bridge, tool.contract.name))
+      } else if (outcome.keep) {
+        // A checkpoint: kept with the session, nothing in the scene to save.
+        result = applyAgentOutcome(outcome, agentRuntime(bridge))
+      }
+      // What the scene holds after the call, not only what the call says it built.
+      const achieved = outcome.changes ? achievedChanges(before, outcome.changes) : null
+      const payload = {
+        ...result,
+        ...(achieved ? { achieved } : {}),
+        ...(tool.envelope?.(bridge) ?? {}),
+        ...persistence,
+      }
+      const { markedPlanSvg, ...shown } = payload as typeof payload & { markedPlanSvg?: string }
+      if (typeof markedPlanSvg === 'string') {
+        const image = hosts.rasterizeSvg
+          ? await hosts.rasterizeSvg(markedPlanSvg).catch(() => null)
+          : null
+        return {
+          content: [
+            { type: 'text' as const, text: JSON.stringify(shown) },
+            ...(image
+              ? [{ type: 'image' as const, data: image.data, mimeType: image.mimeType }]
+              : []),
+          ],
+          structuredContent: image
+            ? { ...shown, markedPlan: `data:${image.mimeType};base64,${image.data}` }
+            : { ...shown, markedPlanSvg },
+        }
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+        structuredContent: payload,
+      }
+    },
+  )
 }

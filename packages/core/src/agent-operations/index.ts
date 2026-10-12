@@ -36,7 +36,7 @@ import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
 import { addFence, addSiteSurface, addSteps } from './site-works'
 import { fitStair, measureStairOperation } from './stairs'
-import type { AgentOperation } from './types'
+import type { AgentOperation, AgentOperations } from './types'
 import { applyLayout, proposeLayouts } from './unit-layouts'
 import { vectorizePlan } from './vectorize-plan'
 import { verifyScene } from './verify-scene'
@@ -140,7 +140,7 @@ const BATCHED_OPERATIONS = Object.fromEntries(
 export const AGENT_OPERATIONS = {
   ...SINGLE_OPERATIONS,
   run_batch: createBatchOperation(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS),
-} as const
+} as const satisfies AgentOperations
 
 export { type PlanMask, planMask } from '../building/unit-layout-plan-score'
 export { type UnitLayoutJudge } from '../building/unit-layout-propose'
