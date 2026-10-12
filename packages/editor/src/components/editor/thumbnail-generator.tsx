@@ -7,11 +7,13 @@ import {
   type ThumbnailGenerateEvent,
   useScene,
 } from '@pascal-app/core'
+import { sceneViewInterior } from '@pascal-app/core/agent-operations'
 import {
   computeHeroFraming,
   createSnapshotPipeline,
   GRID_LAYER,
   getVisibleWallMaterials,
+  getWallFinishRefs,
   heroCameraPose,
   holdLiveFrame,
   pendingSceneBuildCount,
@@ -24,6 +26,7 @@ import {
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
   temporarilyHideNodeTypes,
+  temporarilyShowPresentation,
   temporarilyShowShadowOnly,
   useSceneAtmosphere,
   useViewer,
@@ -461,15 +464,17 @@ function macrotask(): Promise<void> {
 }
 
 /**
- * The scene's children gathered under one ClippingGroup carrying `planes`
- * (world space) for the length of a render; the returned function puts
- * them back on the scene. The WebGPU renderer clips only through such
- * groups (there is no renderer-level plane list), and a group added and
- * removed inside one synchronous render never reaches the React tree.
+ * The children of `root` (the scene, or one floor) gathered under one
+ * ClippingGroup carrying `planes` (world space) for the length of a render;
+ * the returned function puts them back. The WebGPU renderer clips only
+ * through such groups (there is no renderer-level plane list), and a group
+ * added and removed inside one synchronous render never reaches the React
+ * tree. `clipShadows` cuts the shadows too, so light reaches past the cut.
  */
 function clipSceneFor(
-  scene: THREE.Scene,
+  root: THREE.Object3D,
   planes: readonly { normal: [number, number, number]; constant: number }[],
+  clipShadows = false,
 ): () => void {
   const group = new ClippingGroup()
   group.clippingPlanes = planes.map(
@@ -480,13 +485,37 @@ function clipSceneFor(
       ),
   )
   group.enabled = true
-  const children = [...scene.children]
+  group.clipShadows = clipShadows
+  const children = [...root.children]
   for (const child of children) group.add(child)
-  scene.add(group)
+  root.add(group)
   return () => {
-    for (const child of children) scene.add(child)
-    scene.remove(group)
+    for (const child of children) root.add(child)
+    root.remove(group)
   }
+}
+
+/**
+ * An interior view of one floor, for one render (view_scene): the other
+ * floors and this floor's roofs and ceilings out of the picture, its walls
+ * cut where core says (sceneViewInterior, from the scene as this editor has
+ * it) and their shadows with them, and whatever the user's solo or isolation
+ * holds back on it shown.
+ */
+export function interiorCutaway(levelId: string, restore: (callback: () => void) => void) {
+  const { cutHeight, hiddenIds } = sceneViewInterior(useScene.getState().nodes, levelId)
+  const floor = sceneRegistry.nodes.get(levelId)
+  if (!floor) throw new Error('The floor to look inside is not built yet. Try again.')
+  for (const id of hiddenIds) {
+    const object = sceneRegistry.nodes.get(id)
+    if (!object?.visible) continue
+    object.visible = false
+    restore(() => {
+      object.visible = true
+    })
+  }
+  restore(temporarilyShowPresentation(floor))
+  restore(clipSceneFor(floor, [{ normal: [0, -1, 0], constant: cutHeight }], true))
 }
 
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
@@ -582,7 +611,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
   const generate = useCallback(
     async (event: ThumbnailGenerateEvent) => {
-      const { captureMode, cropRegion, standardSize, cameraPose, requestId } = event
+      const { captureMode, cropRegion, standardSize, cameraPose, requestId, interior } = event
       const snapLevels = event.snapLevels === true
       const transparent = event.transparent === true
       // A SHEET's capture asks for more than a
@@ -862,6 +891,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               if (cameraPose) {
                 restore(snapLevelsToTruePositions())
                 restore(temporarilyShowShadowOnly(scene))
+              }
+              // Walls whole, as built, whatever the user's wall mode: an
+              // authored pose is not the user's view, an interior is cut below.
+              if (cameraPose || interior) {
                 const wallMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>()
                 restore(() => {
                   for (const [mesh, material] of wallMaterials) mesh.material = material
@@ -880,6 +913,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                     viewer.colorPreset,
                     viewer.sceneTheme,
                     state.materials,
+                    getWallFinishRefs(mesh.geometry),
                   )
                 }
               }
@@ -889,6 +923,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // those meshes before either snapshot render path submits them,
               // and restore fog afterwards so the atmosphere never leaks in.
               restore(refreshIsolation(scene))
+              if (interior) {
+                interiorCutaway(interior.levelId, restore)
+                restore(lightInterior(scene, thumbnailCamera))
+              }
             }
             // The scene pass is a FRAME-updated node: it renders once per node
             // frame, and only the animation loop advances that frame. With the

@@ -98,6 +98,10 @@ One contract (`viewSceneTool`) and one plan (`sceneViewPlan` in `core/agent-oper
 
 The answer is the picture plus the pose it was taken from, and which tab rendered it and when. A picture is not a measure: sizes and counts come from the tools.
 
+Views are planned on the site: a building's position and yaw move and turn the boxes of what stands under it, so a building away from the origin is looked at where it stands. A roof, or a roof level holding only roofs, frames its segments from its seat to its peak.
+
+**Inside a floor.** `interior: { levelId }` looks into one floor. The plan checks the level (`interior_level_invalid`, `interior_hidden` for a hidden level or ancestor, `interior_transform_unsupported` for a tipped building), frames the floor from 55° above unless a target, an eye or a camera is given, and hands the host only the level id. The editor that renders it works out the rest from its own scene with `sceneViewInterior`: for that one render the other floors and this floor's roofs and ceilings are hidden, its walls (and their shadows) are cut at 0.65 of the storey height, its walls are drawn whole whatever the user's wall mode, and the user's solo and isolation are lifted on it. Everything is put back right after the render, so the live view does not change.
+
 ## Emptying a project: `clear_scene`
 
 A write that would leave a populated project empty is far more often an accident than an intent, so a store may refuse it: the save options carry `allowSceneWipe`, and without it a guarding store throws `SceneWipeBlockedError` (a `SceneInvalidError`). Live sync answers that refusal as `scene_wipe_blocked` with `mutationApplied: false` and loads the stored scene back into the session, so the agent's next write builds on the project as stored; when the stored scene cannot be read back, it says to call `load_scene` first.
