@@ -299,6 +299,7 @@ export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
 export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
 export type { FunctionTreeNode } from './components/ui/sidebar/panels/items-panel/function-tree-panel'
 export {
+  type InterfaceTheme,
   type ProjectVisibility,
   SettingsPanel,
   type SettingsPanelProps,

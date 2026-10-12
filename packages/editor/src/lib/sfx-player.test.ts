@@ -92,11 +92,15 @@ const fakeHowler = {
 }
 
 mock.module('howler', () => ({ Howl: FakeHowl, Howler: fakeHowler }))
+// A hook like the real store's: bun keeps a module mock for the rest of the
+// process, so components rendered by later test files call it.
+const audioState = () => ({ masterVolume: 100, muted, sfxVolume: 100 })
 mock.module('../store/use-audio', () => ({
-  default: {
-    getState: () => ({ masterVolume: 100, muted, sfxVolume: 100 }),
-    subscribe: () => () => {},
-  },
+  default: Object.assign(
+    <T>(selector?: (state: ReturnType<typeof audioState>) => T) =>
+      selector ? selector(audioState()) : audioState(),
+    { getState: audioState, subscribe: () => () => {} },
+  ),
 }))
 
 const { disposeSFX, playSFX, preloadSFX, startLoopSFX, stopLoopSFX, updateSFXVolumes } =
