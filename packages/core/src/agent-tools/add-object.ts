@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { geometryMetaFields } from '../schema/geometry-metadata'
+import { GeometryScriptLanguage } from '../schema/geometry-source'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
@@ -23,6 +24,13 @@ Conventions (they make the object work in Pascal; follow them):
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
 - No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
 
+Blender instead (language 'bpy'): when the shape is easier with Blender's modelling (bevelled or rounded edges, subdivision-smooth and organic forms, booleans, curves and text, solidify, array, screw and other modifiers), write a bpy module:
+  import bpy, bmesh
+  PARAMS = {"width": {"default": 1.8, "min": 1.2, "max": 2.6, "step": 0.05, "unit": "m", "label": "Width"}}
+  MOUNT = "floor"
+  def build(params): ...   # add objects to the empty scene; everything in it is exported, modifiers applied
+The same conventions in Blender terms: metres, Z up, the front faces -Y (Blender's Front view); part:<id>, light:<id> (a light object; its custom property intensity sets the brightness, default 2), anchor:<id> (an empty), cutout, cut:wall|ceiling|slab and collider are object names; userData is the object's custom properties (obj["type"] = "panel"); slot_<finish> are material names. A clip is one action named open, close, loop or anything else, assigned to every object that moves in it. Use the data API and bmesh, not operators that need a 3D viewport. A Blender build takes a few seconds.
+
 Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; read it first with get_source to change the code); identity, placement, paint and the params you leave out are kept. The result lists the size, parts, slots, lights, animations and params.`
 
 /** The `params` field every scripted tool shares (add_object, add_window, add_door, add_column). */
@@ -32,6 +40,11 @@ export const scriptParams = z
   .describe(
     "Values for the params the module declares; on an edit, each one you leave out keeps its current value (clamped to the param's range) and a param new to the code starts at its default.",
   )
+
+/** The `language` field every scripted tool shares. */
+export const scriptLanguage = GeometryScriptLanguage.optional().describe(
+  "The code's language: 'three' (default) for a three.js module, 'bpy' for a Blender module (see add_object). On an edit it defaults to the language the object was built in.",
+)
 
 export const addObjectTool = {
   name: 'add_object',
@@ -44,8 +57,9 @@ export const addObjectTool = {
       .max(48_000)
       .optional()
       .describe(
-        'The three.js module (see the tool description). Required to create; omit to rebuild an object with new params.',
+        'The module (see the tool description). Required to create; omit to rebuild an object with new params.',
       ),
+    language: scriptLanguage,
     params: scriptParams,
     nodeId: NodeId.optional().describe(
       'Edit this existing authored object instead of creating one.',
@@ -87,7 +101,7 @@ export const getSourceTool = {
   name: 'get_source',
   title: 'Read object script',
   description:
-    'The three.js module an object (or a window, door or column built from code) runs, with its params and their current values. Read it before changing its code, then pass the edited module back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.',
+    'The module (three.js or Blender bpy, named by language) an object (or a window, door or column built from code) runs, with its params and their current values. Read it before changing its code, then pass the edited module back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.',
   input: {
     nodeId: NodeId.describe('An object, window, door or column built from code.'),
   },
