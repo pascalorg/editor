@@ -4,6 +4,7 @@ import {
   resolveLevelId,
   SlabFeatureValidationError,
   type SlabNode,
+  validateSlabFeatures,
 } from '@pascal-app/core'
 import { resolveSlabEdgeBandSnap, resolveSlabPlanPointSnap } from '@pascal-app/editor'
 import {
@@ -31,6 +32,13 @@ import {
  * Simpler model, no UX downside in practice.
  */
 const slabSnapOptions = {
+  livePreview: true,
+  validatePreview(node: SlabNode, nodes: Record<string, AnyNode>) {
+    const projected = new Proxy(nodes, {
+      get: (target, key, receiver) => (key === node.id ? node : Reflect.get(target, key, receiver)),
+    })
+    validateSlabFeatures(projected, node.id)
+  },
   resolvePlanPoint({
     node,
     nodes,

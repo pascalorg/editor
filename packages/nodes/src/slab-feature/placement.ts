@@ -8,7 +8,12 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { isGridSnapActive, isMagneticSnapActive, useEditor } from '@pascal-app/editor'
+import {
+  isGridSnapActive,
+  isMagneticSnapActive,
+  useEditor,
+  usePlacementPreview,
+} from '@pascal-app/editor'
 import { clearSlabFeatureEditPreview, showSlabFeatureEditPreview } from './preview'
 
 type Nodes = Readonly<Record<string, AnyNode>>
@@ -84,6 +89,8 @@ export function proposeSlabFeature(
   const placement = planSlabFeaturePlacement(nodes, node)
   return { node, placement }
 }
+const previewOwners = new Map<string, symbol>()
+
 export function createSlabFeaturePlacementSession(
   original: SlabFeatureNode,
   scene: SceneApi,
@@ -91,13 +98,21 @@ export function createSlabFeaturePlacementSession(
 ) {
   let proposal: ReturnType<typeof proposeSlabFeature> | null = null,
     ended = false
+  const owner = Symbol(original.id)
+  const ownsPreview = () => previewOwners.get(original.id) === owner
   const clear = () => {
+    if (!ownsPreview()) return
+    previewOwners.delete(original.id)
+    if (usePlacementPreview.getState().node?.id === original.id)
+      usePlacementPreview.getState().clear()
     useLiveNodeOverrides.getState().clearFields(original.id, ['x', 'z'])
     clearSlabFeatureEditPreview(original.id)
   }
   return {
+    ownsPreview,
     update(point: readonly [number, number] | null, force = false) {
       if (ended) return null
+      previewOwners.set(original.id, owner)
       if (!point) {
         proposal = null
         clear()
@@ -123,7 +138,12 @@ export function createSlabFeaturePlacementSession(
       }
     },
     commit() {
-      if (ended || !proposal || useScene.getState().readOnly) return null
+      if (ended || !ownsPreview() || !proposal) return null
+      if (useScene.getState().readOnly) {
+        ended = true
+        clear()
+        return null
+      }
       try {
         const latest = moving ? scene.get(original.id) : original
         if (latest?.type !== 'slab-feature') return null

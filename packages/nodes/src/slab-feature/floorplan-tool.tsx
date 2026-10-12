@@ -58,7 +58,6 @@ function Placement({
       if (ended) return
       ended = true
       session.cancel()
-      usePlacementPreview.getState().clear()
       markToolCancelConsumed()
       if (owns()) {
         useInteractionScope.getState().end()
@@ -94,7 +93,6 @@ function Placement({
         const id = session.commit()
         if (!id) return
         ended = true
-        usePlacementPreview.getState().clear()
         selectNode(id)
         triggerSFX('sfx:item-place')
         useInteractionScope.getState().endIf((s) => s.kind === 'placing' && s.nodeId === node.id)
@@ -127,7 +125,6 @@ function Placement({
       ended = true
       if (frame !== null) cancelAnimationFrame(frame)
       session.cancel()
-      usePlacementPreview.getState().clear()
       stop()
       svg.removeEventListener('pointermove', queue)
       svg.removeEventListener('pointerdown', press, true)

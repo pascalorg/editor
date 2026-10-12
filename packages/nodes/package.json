@@ -36,7 +36,8 @@
     "dev": "tsgo --build --watch",
     "bench:wall-features": "bun run src/wall-feature/__bench__/runtime.bench.ts",
     "test": "bun test",
-    "prepublishOnly": "bun run build && bun test"
+    "prepublishOnly": "bun run build && bun test",
+    "bench:slab-features": "bun run src/slab-feature/__bench__/runtime.bench.ts"
   },
   "peerDependencies": {
     "@pascal-app/core": "^1.0.3",

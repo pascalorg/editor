@@ -128,7 +128,6 @@ export function SlabFeatureGesture({
     }
     const clear = () => {
       session.cancel()
-      usePlacementPreview.getState().clear()
       if (ghost.current) ghost.current.visible = false
     }
     const cancel = () => {
@@ -169,7 +168,6 @@ export function SlabFeatureGesture({
         const id = session.commit()
         if (!id) return
         ended = true
-        usePlacementPreview.getState().clear()
         swallowNextClick()
         selectNode(id)
         triggerSFX('sfx:item-place')

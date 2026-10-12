@@ -23,17 +23,12 @@ export const slabFeaturePlanMove: FloorplanMoveTarget<SlabFeatureNode> = ({ node
       valid = !!proposal?.placement
       usePlacementPreview.getState().set(valid ? proposal!.node : null)
     },
-    canCommit: () => valid,
+    canCommit: () => valid && session.ownsPreview(),
     commit() {
-      try {
-        session.commit()
-      } finally {
-        usePlacementPreview.getState().clear()
-      }
+      session.commit()
     },
     cancel() {
       session.cancel()
-      usePlacementPreview.getState().clear()
     },
   }
 }

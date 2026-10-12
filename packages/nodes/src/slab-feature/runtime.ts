@@ -1,9 +1,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getEffectiveNode,
   resolveSlabFeaturePlacement,
   type SlabFeatureNode,
+  useLiveNodeOverrides,
 } from '@pascal-app/core'
 
 export function slabFeatureRoot(nodes: Readonly<Record<string, AnyNode>>, node: SlabFeatureNode) {
@@ -30,24 +30,38 @@ export function createSlabFeatureDependencyTracker(initial: Readonly<Record<stri
   }
 }
 
-/** Only ancestor edits change the committed solid's frame during its own ghost preview. */
-export function slabFeatureRenderNodes(
-  nodes: Readonly<Record<string, AnyNode>>,
-  node: SlabFeatureNode,
-) {
-  const patches = new Map<string, AnyNode>()
-  let parent = nodes[node.parentId ?? '']
-  while (parent && (parent.type === 'slab' || parent.type === 'slab-feature')) {
-    const effective = getEffectiveNode(parent)
-    if (effective !== parent) patches.set(parent.id, effective)
-    parent = nodes[parent.parentId ?? '']
+// A live snapshot shares its projected slab identity across every feature. This
+// preserves the construction-lift memo instead of rescanning the scene per frame.
+const renderGraphs = new WeakMap<
+  Readonly<Record<string, AnyNode>>,
+  WeakMap<object, Readonly<Record<string, AnyNode>>>
+>()
+
+export function slabFeatureRenderNodes(nodes: Readonly<Record<string, AnyNode>>) {
+  const overrides = useLiveNodeOverrides.getState().overrides
+  if (!overrides.size) return nodes
+  let snapshots = renderGraphs.get(nodes)
+  if (!snapshots) {
+    snapshots = new WeakMap()
+    renderGraphs.set(nodes, snapshots)
   }
-  return patches.size
-    ? new Proxy(nodes, {
-        get: (target, key, receiver) =>
-          typeof key === 'string' && patches.has(key)
-            ? patches.get(key)
-            : Reflect.get(target, key, receiver),
-      })
-    : nodes
+  const cached = snapshots.get(overrides)
+  if (cached) return cached
+  const effective = new Map<string, AnyNode>()
+  const graph = new Proxy(nodes, {
+    get(target, key, receiver) {
+      if (typeof key !== 'string') return Reflect.get(target, key, receiver)
+      const node = target[key]
+      const patch = overrides.get(key)
+      if (!node || !patch) return node
+      let live = effective.get(key)
+      if (!live) {
+        live = { ...node, ...patch } as AnyNode
+        effective.set(key, live)
+      }
+      return live
+    },
+  })
+  snapshots.set(overrides, graph)
+  return graph
 }

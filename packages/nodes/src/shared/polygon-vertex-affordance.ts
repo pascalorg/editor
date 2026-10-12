@@ -4,6 +4,7 @@ import {
   type FloorplanAffordance,
   type FloorplanAffordanceModifiers,
   type FloorplanAffordanceSession,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -73,6 +74,8 @@ export type PolygonEdgeSnapContext<N extends PolygonShape & { id: AnyNodeId }> =
 }
 
 export type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
+  livePreview?: boolean
+  validatePreview?: (node: N, nodes: Record<AnyNodeId, AnyNode>) => void
   /** Data committed only when the outer boundary (not a hole) is edited. */
   boundaryCommitData?: Partial<N>
   resolvePlanPoint?: (context: PolygonAffordanceSnapContext<N>) => WallPlanPoint
@@ -135,11 +138,72 @@ function commitRingPatch(id: AnyNodeId, holeIndex: number | undefined, patch: un
   else scene.updateNodes([{ id, data: patch as Partial<unknown> as never }])
 }
 
+const ringOwners = new Map<string, symbol>()
+
+function createRingEdit<N extends PolygonShape & { id: AnyNodeId }>(
+  node: N,
+  holeIndex: number | undefined,
+  options?: PolygonAffordanceOptions<N>,
+) {
+  const field = holeIndex === undefined ? 'polygon' : 'holes'
+  const key = `${node.id}:${field}`
+  const owner = Symbol(key)
+  let patch: Partial<N> | undefined
+  let ended = false
+  const owns = () => ringOwners.get(key) === owner
+  const clear = () => {
+    if (!owns()) return
+    ringOwners.delete(key)
+    useLiveNodeOverrides.getState().clearFields(node.id, [field])
+  }
+  return {
+    publish(value: unknown) {
+      if (ended) return
+      if (!options?.livePreview) {
+        commitRingPatch(node.id, holeIndex, value)
+        return
+      }
+      const next = value as Partial<N>
+      options.validatePreview?.({ ...node, ...next }, useScene.getState().nodes)
+      patch = next
+      ringOwners.set(key, owner)
+      useLiveNodeOverrides.getState().set(node.id, { [field]: next[field] })
+    },
+    current() {
+      const current = useScene.getState().nodes[node.id] as N | undefined
+      if (!options?.livePreview) return current
+      return current && !ended && owns() && patch ? { ...current, ...patch } : undefined
+    },
+    hooks: options?.livePreview
+      ? {
+          commit() {
+            if (ended || !owns() || !patch) return
+            ended = true
+            try {
+              const current = useScene.getState().nodes[node.id] as N | undefined
+              if (!current || useScene.getState().readOnly) return
+              options.validatePreview?.({ ...current, ...patch }, useScene.getState().nodes)
+              commitRingPatch(node.id, holeIndex, patch)
+            } finally {
+              clear()
+            }
+          },
+          cancel() {
+            ended = true
+            clear()
+          },
+        }
+      : {},
+  }
+}
+
 function resolveAffordancePlanPoint<N extends PolygonShape & { id: AnyNodeId }>(
   options: PolygonAffordanceOptions<N> | undefined,
   context: PolygonAffordanceSnapContext<N>,
 ): WallPlanPoint {
-  return options?.resolvePlanPoint?.(context) ?? context.fallbackPoint
+  return context.modifiers.altKey
+    ? context.rawPoint
+    : (options?.resolvePlanPoint?.(context) ?? context.fallbackPoint)
 }
 
 export function createPolygonVertexAffordance<N extends PolygonShape & { id: AnyNodeId }>(
@@ -149,9 +213,11 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
   return {
     start({ node, payload, nodes }): FloorplanAffordanceSession {
       const { vertexIndex, holeIndex } = payload as PolygonVertexPayload
+      const edit = createRingEdit(node, holeIndex, options)
       const originalRing = getRing(node, holeIndex)
       if (!originalRing) {
         return {
+          ...edit.hooks,
           affectedIds: [node.id],
           apply() {},
           canCommit() {
@@ -161,6 +227,7 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
       }
 
       return {
+        ...edit.hooks,
         affectedIds: [node.id],
         apply({ planPoint, modifiers }) {
           const rawPoint: WallPlanPoint = [planPoint[0], planPoint[1]]
@@ -168,7 +235,10 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
           // 0 in any non-`grid` mode, so `lines` / `off` pass the raw point
           // through (the resolver's wall-snap/alignment handles `lines`); `grid`
           // quantizes to the live grid step. No Shift hold-to-bypass.
-          const fallbackPoint = snapPointToGrid(rawPoint, getSegmentGridStep())
+          const fallbackPoint = snapPointToGrid(
+            rawPoint,
+            modifiers.altKey ? 0 : getSegmentGridStep(),
+          )
           const snapped = resolveAffordancePlanPoint(options, {
             node,
             nodes,
@@ -182,10 +252,10 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
             i === vertexIndex ? [snapped[0], snapped[1]] : p,
           )
           const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
-          commitRingPatch(node.id, holeIndex, patch)
+          edit.publish(patch)
         },
         canCommit() {
-          const final = useScene.getState().nodes[node.id] as N | undefined
+          const final = edit.current()
           if (!final || (final as unknown as { type: string }).type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3
@@ -210,9 +280,11 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
   return {
     start({ node, payload, nodes }): FloorplanAffordanceSession {
       const { edgeIndex, holeIndex } = payload as AddVertexPayload
+      const edit = createRingEdit(node, holeIndex, options)
       const originalRing = getRing(node, holeIndex)
       if (!originalRing) {
         return {
+          ...edit.hooks,
           affectedIds: [node.id],
           apply() {},
           canCommit() {
@@ -224,6 +296,7 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
       const b = originalRing[(edgeIndex + 1) % originalRing.length]
       if (!a || !b) {
         return {
+          ...edit.hooks,
           affectedIds: [node.id],
           apply() {},
           canCommit() {
@@ -242,9 +315,10 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
       // Apply the insert immediately so the user sees the new vertex
       // before they even move.
       const initialPatch = buildRingPatch(node, holeIndex, initialRing, options?.boundaryCommitData)
-      commitRingPatch(node.id, holeIndex, initialPatch)
+      edit.publish(initialPatch)
 
       return {
+        ...edit.hooks,
         affectedIds: [node.id],
         apply({ planPoint, modifiers }) {
           const rawPoint: WallPlanPoint = [planPoint[0], planPoint[1]]
@@ -252,7 +326,10 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
           // 0 in any non-`grid` mode, so `lines` / `off` pass the raw point
           // through (the resolver's wall-snap/alignment handles `lines`); `grid`
           // quantizes to the live grid step. No Shift hold-to-bypass.
-          const fallbackPoint = snapPointToGrid(rawPoint, getSegmentGridStep())
+          const fallbackPoint = snapPointToGrid(
+            rawPoint,
+            modifiers.altKey ? 0 : getSegmentGridStep(),
+          )
           const snapped = resolveAffordancePlanPoint(options, {
             node,
             nodes,
@@ -266,10 +343,10 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
             i === newVertexIndex ? [snapped[0], snapped[1]] : p,
           )
           const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
-          commitRingPatch(node.id, holeIndex, patch)
+          edit.publish(patch)
         },
         canCommit() {
-          const final = useScene.getState().nodes[node.id] as N | undefined
+          const final = edit.current()
           if (!final || (final as unknown as { type: string }).type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3
@@ -318,6 +395,10 @@ export function createPolygonDeleteVertexAffordance<N extends PolygonShape & { i
           }
           const nextRing = ring.filter((_, index) => index !== vertexIndex)
           const patch = buildRingPatch(current, holeIndex, nextRing, options?.boundaryCommitData)
+          options?.validatePreview?.(
+            { ...current, ...(patch as Partial<N>) },
+            useScene.getState().nodes,
+          )
           commitRingPatch(node.id, holeIndex, patch)
         },
       }
@@ -341,9 +422,11 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
   return {
     start({ node, payload, initialPlanPoint, nodes }): FloorplanAffordanceSession {
       const { edgeIndex, holeIndex } = payload as EdgeDragPayload
+      const edit = createRingEdit(node, holeIndex, options)
       const originalRing = getRing(node, holeIndex)
       if (!originalRing) {
         return {
+          ...edit.hooks,
           affectedIds: [node.id],
           apply() {},
           canCommit() {
@@ -355,6 +438,7 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
       const endVertex = originalRing[(edgeIndex + 1) % originalRing.length]
       if (!startVertex || !endVertex) {
         return {
+          ...edit.hooks,
           affectedIds: [node.id],
           apply() {},
           canCommit() {
@@ -367,6 +451,7 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
       const len = Math.hypot(dx, dy)
       if (len < 1e-6) {
         return {
+          ...edit.hooks,
           affectedIds: [node.id],
           apply() {},
           canCommit() {
@@ -383,6 +468,7 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
       const edgeEndIndex = (edgeIndex + 1) % originalRing.length
 
       return {
+        ...edit.hooks,
         affectedIds: [node.id],
         apply({ planPoint, modifiers }) {
           // Project the pointer delta onto the edge normal — that's the
@@ -395,7 +481,7 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
           // passes the raw projection through; `grid` quantizes to the live step.
           const projection = snapScalarToGrid(
             deltaX * normalX + deltaY * normalY,
-            getSegmentGridStep(),
+            modifiers.altKey ? 0 : getSegmentGridStep(),
           )
           const fallbackPoint: WallPlanPoint = [
             startX + normalX * projection,
@@ -412,7 +498,7 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
           })
           let normalDistance =
             (snappedPoint[0] - startX) * normalX + (snappedPoint[1] - startY) * normalY
-          if (options?.snapEdge) {
+          if (options?.snapEdge && !modifiers.altKey) {
             const candidate: [[number, number], [number, number]] = [
               [
                 startVertex[0] + normalX * normalDistance,
@@ -444,10 +530,10 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
             return [p[0], p[1]] as [number, number]
           })
           const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
-          commitRingPatch(node.id, holeIndex, patch)
+          edit.publish(patch)
         },
         canCommit() {
-          const final = useScene.getState().nodes[node.id] as N | undefined
+          const final = edit.current()
           if (!final || (final as unknown as { type: string }).type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3

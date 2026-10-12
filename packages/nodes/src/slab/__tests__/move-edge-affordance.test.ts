@@ -7,7 +7,7 @@ import {
   useScene,
   WallNode,
 } from '@pascal-app/core'
-import { slabMoveEdgeAffordance } from '../floorplan-affordances'
+import { slabMoveEdgeAffordance } from '@pascal-app/nodes'
 
 type RafFn = (cb: (t: number) => void) => number
 ;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= ((
@@ -84,6 +84,9 @@ describe('slabMoveEdgeAffordance', () => {
     // snapping mode.
     session.apply({ planPoint: [2, 0.19], modifiers: MODIFIERS })
 
+    expect(useScene.getState().nodes[slab.id]).toEqual(slab)
+    expect(session.canCommit()).toBe(true)
+    session.commit?.()
     const updated = useScene.getState().nodes[slab.id] as SlabNodeType
     expect(updated.polygon[0]![1]).toBeCloseTo(0, 5)
     expect(updated.polygon[1]![1]).toBeCloseTo(0, 5)
@@ -92,7 +95,7 @@ describe('slabMoveEdgeAffordance', () => {
     expect(updated.polygon[1]![0]).toBeCloseTo(4, 5)
     // The far edge never moves.
     expect(updated.polygon[2]![1]).toBeCloseTo(3, 5)
-    expect(session.canCommit()).toBe(true)
+    expect(session.canCommit()).toBe(false)
   })
 
   test('a drag far from any wall keeps pure delta semantics', () => {
@@ -111,6 +114,9 @@ describe('slabMoveEdgeAffordance', () => {
     // pointer delta (possibly grid-quantized, which 1.0 is invariant to).
     session.apply({ planPoint: [2, 1.5], modifiers: MODIFIERS })
 
+    expect(useScene.getState().nodes[slab.id]).toEqual(slab)
+    expect(session.canCommit()).toBe(true)
+    session.commit?.()
     const updated = useScene.getState().nodes[slab.id] as SlabNodeType
     expect(updated.polygon[0]![1]).toBeCloseTo(1.5, 5)
     expect(updated.polygon[1]![1]).toBeCloseTo(1.5, 5)
@@ -130,6 +136,9 @@ describe('slabMoveEdgeAffordance', () => {
 
     session.apply({ planPoint: [2, 1.5], modifiers: MODIFIERS })
 
+    expect(useScene.getState().nodes[slab.id]).toEqual(slab)
+    expect(session.canCommit()).toBe(true)
+    session.commit?.()
     const updated = useScene.getState().nodes[slab.id] as SlabNodeType
     expect(updated.autoFromWalls).toBe(false)
   })

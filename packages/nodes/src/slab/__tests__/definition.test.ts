@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, pointInPolygon2D, SlabNode } from '@pascal-app/core'
-import { slabDefinition } from '../definition'
+import { slabDefinition } from '@pascal-app/nodes'
 
 function getThicknessHandle(slab: SlabNode) {
   const handles =
@@ -75,7 +75,9 @@ describe('slabDefinition handles', () => {
     const thicknessHandle = getThicknessHandle(slab)
 
     expect(thicknessHandle.currentValue(slab)).toBe(0.2)
-    const update = thicknessHandle.apply(slab, 0.35, {} as never)
+    const update = thicknessHandle.apply(slab, 0.35, {
+      nodes: () => ({ [slab.id]: slab }),
+    } as never)
     expect(update).toEqual({
       elevation: expect.any(Number),
       thickness: 0.35,
@@ -99,7 +101,7 @@ describe('slabDefinition handles', () => {
 
     expect(baseHandle.currentValue(slab)).toBeCloseTo(0.5)
     expect(baseHandle.placement.position(slab, {} as never)[1]).toBeCloseTo(0.5)
-    expect(baseHandle.apply(slab, 0.9, {} as never)).toEqual({
+    expect(baseHandle.apply(slab, 0.9, { nodes: () => ({ [slab.id]: slab }) } as never)).toEqual({
       elevation: 1.1,
     })
     expect(slab.thickness).toBe(0.2)
@@ -184,9 +186,11 @@ describe('slabDefinition handles', () => {
     expect(depthHandle?.kind).toBe('linear-resize')
     if (depthHandle?.kind !== 'linear-resize') throw new Error('Missing slab depth handle')
     expect(depthHandle.currentValue(slab)).toBe(-0.2)
-    expect(depthHandle.apply(slab, -0.35, {} as never)).toEqual({
-      elevation: -0.35,
-      recessed: true,
-    })
+    expect(depthHandle.apply(slab, -0.35, { nodes: () => ({ [slab.id]: slab }) } as never)).toEqual(
+      {
+        elevation: -0.35,
+        recessed: true,
+      },
+    )
   })
 })

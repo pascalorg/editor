@@ -54,8 +54,18 @@ operations reuse the manual placement validator.
 
 ## Check record
 
-Biome and package type checks passed during implementation. Automated tests and
-interactive acceptance were not run in this continuation. Acceptance still needs
-to cover solid volumes, picking/batching, nested placement, paint, hosted objects,
-undo/redo, old-scene reload, and saved/exported geometry. Hosted-chat registration
+`bun run ci` passes, including formatting, skill validation, type checks, all
+package tests, and production builds. The targeted slab and wall-feature suites
+pass (212 tests). Slab coverage
+includes preview handoff, backing and agent validation parity, nested CSG volume,
+ancestor frames, outline and hole preview/commit/undo, and invalid outline refusal.
+Ordinary slab item drops retain level ownership and floor support; features host
+items through their own surface provider.
+
+`bun run --cwd packages/nodes bench:slab-features` measures 100 features across
+120 frames with a live slab override. Both 1,000-node and 10,000-node scenes
+perform one construction-lift scene scan per unchanged override snapshot.
+
+Interactive acceptance still needs to cover picking/batching, paint, hosted
+objects, old-scene reload, and saved/exported geometry. Hosted-chat registration
 and semantic IFC mappings are separate integrations.

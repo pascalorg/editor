@@ -207,10 +207,24 @@ export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
 export { skylightDefinition } from './skylight'
 export { slabDefinition } from './slab'
+export {
+  slabAddVertexAffordance,
+  slabDeleteVertexAffordance,
+  slabMoveEdgeAffordance,
+  slabMoveVertexAffordance,
+} from './slab/floorplan-affordances'
 export { startSlabFeaturePlacement } from './slab-feature/actions'
 export { slabFeatureAgentOperations } from './slab-feature/agent-operations'
 export { slabFeatureAgentTools } from './slab-feature/agent-tools'
 export { slabFeatureDefinition } from './slab-feature/definition'
+export { buildSlabFeatureBody } from './slab-feature/geometry'
+export {
+  createSlabFeatureDraft,
+  createSlabFeaturePlacementSession,
+  proposeSlabFeature,
+} from './slab-feature/placement'
+export { slabFeatureRenderNodes } from './slab-feature/runtime'
+export { slabFeatureLocalFrame } from './slab-feature/surfaces'
 export { solarPanelDefinition } from './solar-panel'
 export { spawnDefinition } from './spawn'
 export { stairDefinition } from './stair'

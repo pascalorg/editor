@@ -39,7 +39,7 @@ export default function SlabFeatureRenderer({ node }: { node: SlabFeatureNode })
     [raw],
   )
   useFrame(() => {
-    const nodes = slabFeatureRenderNodes(useScene.getState().nodes, node)
+    const nodes = slabFeatureRenderNodes(useScene.getState().nodes)
     if (!ref.current) return
     try {
       const frame = slabFeatureLocalFrame(node, { nodes, planOnly: false })

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { ZoneNode } from '@pascal-app/core'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../../registry/registry'
 import { nodeFixtures } from '../../schema/__fixtures__/node-fixtures'
@@ -114,10 +115,10 @@ test('explicit children clearing still uses the schema', () => {
 })
 
 test('an explicit children removal on a schema without children does not restore the old array', () => {
-  const slab = { ...SlabNode.parse({ polygon: [] }), children: [child.id] }
-  seed(slab)
-  useScene.getState().updateNode(slab.id, { children: undefined })
-  expect(children(slab)).toBeUndefined()
+  const zone = { ...ZoneNode.parse({ name: 'Legacy host', polygon: [] }), children: [child.id] }
+  seed(zone)
+  useScene.getState().updateNode(zone.id, { children: undefined })
+  expect(children(zone)).toBeUndefined()
 })
 
 test('strict plugin updates preserve children while still rejecting invalid own fields', () => {

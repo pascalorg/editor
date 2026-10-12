@@ -8,6 +8,7 @@ import {
   type NodeDefinition,
   pointInPolygon2D,
   type SceneApi,
+  SlabFeatureValidationError,
   type SlabNode as SlabNodeType,
   slabSlots,
   syncStairRises,
@@ -271,7 +272,8 @@ function slabHandles(node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
             current.id,
           )
           return patch
-        } catch {
+        } catch (error) {
+          if (!(error instanceof SlabFeatureValidationError)) throw error
           return {}
         }
       },
@@ -334,6 +336,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
+      hosting: false,
       top: {
         height: (n) => (n as SlabNode).elevation,
         supportHeight: (node, x, z, context) => {
