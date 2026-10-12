@@ -8,6 +8,7 @@ import { addColumnTool } from './columns'
 import type { AgentToolContract } from './contract'
 import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
+import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
 import {
@@ -41,6 +42,7 @@ export * from './columns'
 export * from './contract'
 export * from './corner-window'
 export * from './create-room'
+export * from './fences'
 export * from './find-by-type'
 export * from './furnish-room'
 export * from './hosted-services'
@@ -82,6 +84,7 @@ export const AGENT_TOOL_CONTRACTS = [
   verifySceneTool,
   setCheckpointTool,
   addWallTool,
+  addFenceTool,
   addCornerWindowTool,
   mergeWindowsTool,
   addLevelTool,

@@ -15,6 +15,7 @@ const policy = (
 
 export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   add_door: policy(false, false, false),
+  add_fence: policy(false, false, false),
   add_level: policy(false, false, false),
   add_wall: policy(false, false, false),
   add_corner_window: policy(false, false, false),
