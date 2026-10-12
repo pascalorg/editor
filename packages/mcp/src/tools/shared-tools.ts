@@ -10,8 +10,11 @@ import {
 import {
   type AgentToolAnnotations,
   type AgentToolContract,
+  addCornerWindowTool,
+  addFenceTool,
   addLevelTool,
   addWallTool,
+  createRoofTool,
   createRoomTool,
   createStairTool,
   deleteNodeTool,
@@ -25,6 +28,7 @@ import {
   getZonesTool,
   listLevelsTool,
   measureStairTool,
+  mergeWindowsTool,
   placeItemsTool,
   ROOM_TOOL_CONTRACTS,
   searchAssetsTool,
@@ -230,6 +234,21 @@ const SHARED_TOOLS: SharedTool[] = [
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
+    contract: addFenceTool,
+    operation: AGENT_OPERATIONS.add_fence,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addCornerWindowTool,
+    operation: AGENT_OPERATIONS.add_corner_window,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: mergeWindowsTool,
+    operation: AGENT_OPERATIONS.merge_windows,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+  },
+  {
     contract: addLevelTool,
     operation: AGENT_OPERATIONS.add_level,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
@@ -237,6 +256,11 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: createStairTool,
     operation: AGENT_OPERATIONS.create_stair,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: createRoofTool,
+    operation: AGENT_OPERATIONS.create_roof,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {

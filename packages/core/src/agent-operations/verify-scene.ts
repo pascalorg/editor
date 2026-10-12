@@ -239,6 +239,11 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     }
   })
 
+  const buildingOf = (levelId: string) =>
+    levelBuildingId(
+      nodes as Record<AnyNodeId, AnyNode>,
+      nodes[levelId] as AnyNode & { type: 'level' },
+    )
   const issues: SceneIssue[] = []
   const report = (type: string, message: string, informational = false) =>
     issues.push({ type, message, ...(informational ? { severity: 'info' as const } : {}) })
@@ -276,11 +281,17 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
           'roof_level_occupied',
           `${levelName} is a roof support level but contains occupied-story content; move rooms, walls, stairs, slabs, ceilings, and items to an occupied story and keep the roof level for roof geometry only`,
         )
-      const reference = level.referenceLevelId ? nodes[level.referenceLevelId] : undefined
-      if (reference?.type === 'level' && level.floorIndex <= reference.level)
+      const storeyAbove = levels.find(
+        (other) =>
+          other.isOccupiedStory &&
+          !other.isEmpty &&
+          other.floorIndex > level.floorIndex &&
+          buildingOf(other.levelId) === buildingOf(level.levelId),
+      )
+      if (storeyAbove)
         report(
-          'roof_level_below_reference',
-          `${levelName} roof support level should be above its reference occupied level ${reference.name ?? reference.id}`,
+          'roof_level_not_on_top',
+          `${levelName} is a roof level below the storey ${storeyAbove.levelName} (${storeyAbove.levelId}): exploded and solo views show its roof inside the building. A building's roof level stays above its storeys: move the storey under it, or the roof onto the roof level on top.`,
         )
       continue
     }

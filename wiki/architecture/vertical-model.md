@@ -22,7 +22,7 @@ The invariant, in one sentence:
 | `level.baseElevation` | Additive offset from the computed stack position. It shifts this level and cumulatively shifts every higher level in the same building; negative offsets are valid. | Zero (the schema default). |
 | `wall.height` | Explicit body height above the elected structural support, including below datum. | **Plane-bound**: follows the footprint-adjusted storey plane, clamped to covering-slab undersides. |
 | `ceiling.height` | Explicit custom height, write-clamped to the bound. | **Follows the level**: resolves live to `getCeilingClampBound` = `min(level height, covering underside) − 0.01`. |
-| `roof.support.kind` | `walls` follows the highest spatially matched wall top in the roof’s level frame; `level` keeps custom Y; `roof` retains its roof-surface attachment rule. Room and curved-wall creation write `walls`; free-drawn rectangles write `level` at Y 0. | Existing roofs remain custom (`level`); no load migration enables following. |
+| `roof.support.kind` | `walls` follows the highest spatially matched wall top in the roof’s level frame; `level` keeps custom Y; `roof` retains its roof-surface attachment rule. Room and curved-wall creation and the agents' `create_roof` write `walls`; free-drawn rectangles write `level` at Y 0 (see [Roof levels](#roof-levels)). | Existing roofs remain custom (`level`); no load migration enables following. |
 | `slab.floorHeight` | Ground-contact base plate authored floor top, in level-local metres. Upper plates author the top through thickness with a fixed underside. | Automatic floor datum from its supports. |
 | `slab.foundation` | Base plate support to terrain at site contact: solid or none, with a separate material and paint target. | No foundation. |
 | `slab.elevation` | Manual slab walking surface intent, level-local; derived geometry on floor plates. | Default 0.05. |
@@ -166,6 +166,22 @@ Room-facing skirting follows the room floor and exterior skirting follows the
 base. Structural steps and open edges paint `zone.floorStepFinish` and
 `zone.floorEdgeFinish`; the default step finish is the upper room's floor finish.
 
+## Roof levels
+
+A roof lives on the level directly above the storey whose walls carry it; over a building's
+top storey that is its roof level (`metadata.role: 'roof'`, named Roof), kept above every storey,
+so exploded and solo level views lift the roof off the plan. One core service,
+`services/roof-level.ts`, states it for every roof writer: `planRoofLevel` (the level above, or
+the roof level to reuse, declare or create), `roofsOver` (the roofs over a storey),
+`storeyInsertIndex` (a new top storey goes under the roof level, which moves up one) and
+`isRoofLevel`. The agents' `create_roof` and the editor's roof tool (a room's footprint, a
+rectangle drawn on a walled storey, a cone over a curved wall) place roofs by it; `add_level` and
+the editor's "add a floor" insert under the roof level. A level that holds only roofs (written
+before levels declared their role) counts as the roof level and is declared when reused.
+`verify_scene` reports a roof mixed into a storey (`roof_mixed_in_storey`) and a roof level below a
+storey (`roof_level_not_on_top`); existing scenes are not migrated. Unpainted gables on a roof
+level take the cladding of the storey's walls below (`levelWallCladdingRef`).
+
 ## Stacked mezzanine rooms
 
 A mezzanine is a room zone with `floor.support: 'open'`, an explicit
@@ -246,7 +262,8 @@ selection proxy, not the instance. Such renderers must resolve each instance's Y
 
 Because community autosave only persists after the first post-load edit, the migration must remain on the load path. It is pure and server-safe so the editor loader and hosted scene authority canonicalize identical fields before collaboration compares or persists an operation:
 
-- Writes each legacy level's **exact** derived height (a default legacy storey stores 2.55 = 0.05 slab + 2.5 wall) — never snapped to presets.
+- Writes each legacy level's **exact** derived height (a default legacy storey stores 2.55 = 0.05 slab + 2.5 wall) — never snapped to presets. A wall with no stored height counts as `DEFAULT_WALL_HEIGHT` up from its slab, as the editor drew it.
+- An agent write that creates a level without a height, or clears one (MCP `apply_patch`), gets the height this migration would derive from what the level holds once the write lands (`fillLevelHeights`; an empty level: `DEFAULT_LEVEL_HEIGHT`), and the answer's `notes` say so. The session that wrote it and the editor that loads it then read the same storey.
 - Compacts `level` ordinals per building, anchored at zero (non-negatives → 0,1,2…; negatives → −1,−2… — basements stay basements). Runs every load; idempotent.
 - Classifies wall tops against the derived plane: `|plane − top| < 0.20` **strict** → plane-bound (height key removed); else explicit (materializing 2.5 on absent-height short walls). ε calibrated by a prod census: intentional 0.20-short walls exist and must not snap.
 - Ceilings within ε of the bound (and all `autoFromWalls` ceilings) drop their height → follows mode; stairs drop the legacy blind `totalRise: 2.5`. Both gated on the scene being legacy (some level lacked `height`).

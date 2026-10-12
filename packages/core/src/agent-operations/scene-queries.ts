@@ -1,4 +1,5 @@
 import type { AnyNode } from '../schema'
+import { isRoofLevel } from '../services/roof-level'
 import type { SceneNodes } from './types'
 
 export type LevelRole = 'occupied' | 'roof' | 'support'
@@ -76,9 +77,8 @@ export function contentCounts(content: readonly AnyNode[]): ContentCounts {
 
 /** A level is a storey unless it is declared (or found to be) only a roof or a support. */
 export function classifyLevel(level: AnyNode, counts: ContentCounts): LevelRole {
-  const declared = metadataString(level, 'role')
-  if (declared === 'roof') return 'roof'
-  if (declared === 'support') return 'support'
+  if (isRoofLevel(level)) return 'roof'
+  if (metadataString(level, 'role') === 'support') return 'support'
   const occupied =
     counts.walls +
     counts.zones +

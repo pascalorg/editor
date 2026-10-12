@@ -1,0 +1,266 @@
+import { refuse } from '../agent-tools/refusal'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  getActiveRoofHeight,
+  RoofNode,
+  RoofSegmentNode,
+  type RoofType,
+} from '../schema'
+import { planRoofLevel, roofsOver } from '../services/roof-level'
+import { resolveRoofElevation } from '../systems/roof/roof-elevation'
+import { applySceneChanges } from './apply-changes'
+import { requireLevel } from './level-target'
+import { finishSurface, requireMaterialRef } from './material-refs'
+import { buildingFrame, type RoofRectangle, roofRectangles } from './roof-footprint'
+import { levelRole, levelsOf } from './scene-queries'
+import type { AgentContext, AgentOperation, SceneChanges, SceneNodes } from './types'
+
+type Pt = [number, number]
+const mm = (value: number) => Math.round(value * 1000) / 1000
+type Level = AnyNode & { type: 'level' }
+
+type CreateRoofInput = {
+  levelId?: string
+  level?: string
+  roofType?: RoofType
+  pitch?: number
+  overhang?: number
+  wallHeight?: number
+  width?: number
+  depth?: number
+  center?: number[]
+  materialPreset?: string
+  fasciaHeight?: number
+  fasciaMaterialPreset?: string
+  name?: string
+}
+
+const isStorey = (nodes: SceneNodes, level: Level) => levelRole(nodes, level).role !== 'roof'
+
+/** A storey's floor plates, else its rooms: the footprint a roof covers. */
+function footprintPolygons(nodes: SceneNodes, storeyId: string): Pt[][] {
+  const on = (type: 'slab' | 'zone') =>
+    Object.values(nodes).filter(
+      (node) => node.type === type && node.parentId === storeyId,
+    ) as (AnyNode & { polygon: Pt[] })[]
+  const plates = on('slab')
+  return (plates.length ? plates : on('zone')).map((node) => node.polygon)
+}
+
+const buildingLevels = (nodes: SceneNodes, level: Level) =>
+  levelsOf(nodes).filter((other) => other.parentId === level.parentId)
+
+/** The segment fields the fascia input writes: none without a band. */
+function fasciaFields({ fasciaHeight, fasciaMaterialPreset }: CreateRoofInput) {
+  if (fasciaHeight === undefined && !fasciaMaterialPreset) return {}
+  return {
+    fascia: true,
+    ...(fasciaHeight !== undefined ? { fasciaHeight } : {}),
+    ...(fasciaMaterialPreset ? { fasciaMaterialPreset } : {}),
+  }
+}
+
+/**
+ * The storey a roof covers: the one named when it has a footprint, else the highest storey of its
+ * building with one; none named, the top storey with one of the building in view. A rectangle of
+ * its own needs no footprint: the storey named, else the top one that holds something. The floor
+ * in view does not decide: a person looking at the ground floor who asks for a roof means the
+ * house's. A roof level named stands for the storey under it.
+ */
+function coveredStorey(
+  nodes: SceneNodes,
+  input: CreateRoofInput,
+  rectangle: boolean,
+  context: AgentContext,
+) {
+  const { levelId, level } = input
+  if (levelId && level && levelId !== level)
+    refuse(
+      'conflicting_level',
+      `levelId (${levelId}) and level (${level}) disagree; they are the same field, pass one.`,
+      { levelId, level },
+    )
+  const named = levelId ?? level
+  const requested = named ? requireLevel(nodes, named) : null
+  if (
+    requested &&
+    isStorey(nodes, requested) &&
+    (rectangle || footprintPolygons(nodes, requested.id).length > 0)
+  )
+    return { storey: requested }
+  const viewed = context.activeLevelId ? nodes[context.activeLevelId] : undefined
+  const candidates = (
+    requested
+      ? buildingLevels(nodes, requested)
+      : viewed?.type === 'level'
+        ? buildingLevels(nodes, viewed)
+        : levelsOf(nodes)
+  ).filter((candidate) => isStorey(nodes, candidate))
+  if (rectangle) {
+    const top =
+      candidates.filter((candidate) => candidate.children.length > 0).at(-1) ?? candidates.at(-1)
+    if (!top) refuse('no_levels', 'The scene has no storey to roof yet.')
+    return { storey: top }
+  }
+  const storey = candidates
+    .filter((candidate) => footprintPolygons(nodes, candidate.id).length > 0)
+    .at(-1)
+  if (!storey)
+    refuse(
+      'no_rooms',
+      `No rooms on ${requested ? `${requested.id} or any other level of its building` : 'any level'}: create rooms first, or pass width and depth to roof a rectangle of your own.`,
+      requested ? { levelId: requested.id } : {},
+    )
+  return {
+    storey,
+    ...(requested &&
+      requested.id !== storey.id && {
+        note: `Level ${requested.id} has no rooms; the roof covers ${storey.name ?? storey.id} (${storey.id}), the highest level with rooms.`,
+      }),
+  }
+}
+
+/** Rectangles in the storey's own frame and the turn back to the world, from its footprint. */
+function footprintOf(nodes: SceneNodes, storeyId: string) {
+  const frame = buildingFrame(footprintPolygons(nodes, storeyId))
+  const { rectangles, roofType } = roofRectangles(frame.polygons)
+  return { rectangles, roofType, angle: frame.angle, toWorld: frame.toWorld }
+}
+
+/**
+ * `create_roof`: a roof over a storey, one segment per rectangle of its footprint (or the one
+ * rectangle asked for), on the building's roof level above it, standing on the storey's walls.
+ */
+export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, context) => {
+  const { width, depth } = input
+  // A finish the library lacks would render as the default.
+  const materialPreset =
+    input.materialPreset === undefined
+      ? undefined
+      : requireMaterialRef(input.materialPreset, 'materialPreset', finishSurface('roof'))
+  if ((width === undefined) !== (depth === undefined))
+    refuse(
+      'rectangle_incomplete',
+      'A rectangle of your own takes width and depth together; pass both, or neither to cover the footprint.',
+      { width, depth },
+    )
+  const rectangle = width !== undefined && depth !== undefined
+  const { storey, note } = coveredStorey(nodes, input, rectangle, context)
+
+  const existing = roofsOver(nodes, storey.id)
+  if (existing.length)
+    refuse(
+      'roof_exists',
+      `${storey.name ?? storey.id} (${storey.id}) already has a roof, ${existing.map((roof) => roof.id).join(', ')}: a storey takes one. Edit it, or delete_node it first if the person asked for a new one.`,
+      { levelId: storey.id, roofIds: existing.map((roof) => roof.id) },
+    )
+
+  let rectangles: RoofRectangle[]
+  let chosenType: RoofType
+  let angle = 0
+  let toWorld = ([x, z]: Pt): Pt => [x, z]
+  if (rectangle) {
+    const [x = 0, z = 0] = input.center ?? []
+    const r = { minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2 }
+    rectangles = [r]
+    // The size as asked, the type as the footprint rule would give it.
+    chosenType = roofRectangles([
+      [
+        [r.minX, r.minZ],
+        [r.maxX, r.minZ],
+        [r.maxX, r.maxZ],
+        [r.minX, r.maxZ],
+      ],
+    ]).roofType
+  } else {
+    const footprint = footprintOf(nodes, storey.id)
+    rectangles = footprint.rectangles
+    chosenType = footprint.roofType
+    angle = footprint.angle
+    toWorld = footprint.toWorld
+  }
+  const roofType = input.roofType ?? chosenType
+
+  const minX = Math.min(...rectangles.map((r) => r.minX))
+  const maxX = Math.max(...rectangles.map((r) => r.maxX))
+  const minZ = Math.min(...rectangles.map((r) => r.minZ))
+  const maxZ = Math.max(...rectangles.map((r) => r.maxZ))
+  const centerX = (minX + maxX) / 2
+  const centerZ = (minZ + maxZ) / 2
+  const wallHeight = input.wallHeight ?? 0
+  const segments = rectangles.map((r) => {
+    // To the millimetre: snapped coordinates subtract to 6.199999…
+    const span = { width: mm(r.maxX - r.minX), depth: mm(r.maxZ - r.minZ) }
+    // A cone stands on a circle.
+    const size =
+      roofType === 'conical'
+        ? { width: Math.max(span.width, span.depth), depth: Math.max(span.width, span.depth) }
+        : span
+    return RoofSegmentNode.parse({
+      ...size,
+      roofType,
+      wallHeight,
+      position: [(r.minX + r.maxX) / 2 - centerX, 0, (r.minZ + r.maxZ) / 2 - centerZ],
+      ...(input.pitch !== undefined && { pitch: input.pitch }),
+      ...(input.overhang !== undefined && { overhang: input.overhang }),
+      ...fasciaFields(input),
+    })
+  })
+
+  const peak = Math.max(...segments.map((segment) => getActiveRoofHeight(segment)))
+  const plan = planRoofLevel(nodes, storey.id, wallHeight + peak)
+  if (plan.kind === 'storey') {
+    const above = nodes[plan.levelId] as Level
+    refuse(
+      'storey_above',
+      `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${above.name ?? above.id} (${above.id}): a roof caps the top storey. Pass the top storey (with width and depth when it has no rooms).`,
+      { levelId: storey.id, storeyAboveId: above.id },
+    )
+  }
+
+  const changes: Required<Pick<SceneChanges, 'create' | 'update'>> = {
+    create: plan.create ? [{ node: plan.create, parentId: plan.create.parentId ?? undefined }] : [],
+    update: plan.update,
+  }
+  const [roofX, roofZ] = toWorld([centerX, centerZ])
+  const placed = RoofNode.parse({
+    name: input.name ?? 'Roof',
+    parentId: plan.levelId,
+    position: [roofX, 0, roofZ],
+    rotation: angle,
+    support: { kind: 'walls' },
+    children: segments.map((segment) => segment.id),
+    ...(materialPreset && { materialPreset }),
+  })
+  const draft = [
+    { node: placed, parentId: plan.levelId },
+    ...segments.map((segment) => ({
+      node: { ...segment, parentId: placed.id } as AnyNode,
+      parentId: placed.id,
+    })),
+  ]
+  // The eave on the storey's wall tops, as the editor's own follow resolves it: walls taller than
+  // their storey lift it, and the editor makes no second write after the call.
+  const seated = applySceneChanges(nodes, { ...changes, create: [...changes.create, ...draft] })
+  const elevation = resolveRoofElevation(
+    seated[placed.id as AnyNodeId] as RoofNode,
+    seated as Record<string, AnyNode>,
+  )
+  const roof = { ...placed, position: [roofX, elevation, roofZ] as [number, number, number] }
+  changes.create.push({ node: roof, parentId: plan.levelId }, ...draft.slice(1))
+
+  return {
+    result: {
+      roofId: roof.id,
+      roofLevelId: plan.levelId,
+      createdRoofLevelId: plan.create?.id ?? null,
+      coveredLevelId: storey.id,
+      segmentIds: segments.map((segment) => segment.id),
+      roofType,
+      message: `Created a ${roofType} roof of ${segments.length} segment${segments.length === 1 ? '' : 's'} over ${storey.name ?? storey.id}, on the roof level ${plan.levelId}.`,
+      ...(note && { note }),
+    },
+    changes,
+  }
+}

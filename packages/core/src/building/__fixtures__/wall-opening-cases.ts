@@ -225,10 +225,36 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     input: { wallId: main, t: 0.5, style: 'glass' },
     expect: { localX: 2, centerY: 1.05, clamped: false, glassPanels: true },
   },
+  // The agents' windows are centred on the wall unless a sill is given: a 1.5 m window on the
+  // 2.5 m wall spans 0.5–2.0 m. (A 0.9 m default put the same window at 0.9–2.4 m, under the top.)
   {
-    name: 'a window sits on a 0.9 m sill by default',
+    name: 'a window with no sill is centred on its wall',
     tool: 'add_window',
     input: { wallId: main, t: 0.5 },
+    expect: { localX: 2, centerY: 1.25, clamped: false },
+  },
+  {
+    name: 'a window of another height is centred on the wall too',
+    tool: 'add_window',
+    input: { wallId: main, t: 0.5, height: 1 },
+    expect: { localX: 2, centerY: 1.25, clamped: false },
+  },
+  {
+    name: 'a wall with no height of its own centres the window on the storey',
+    tool: 'add_window',
+    input: { wallId: storey, t: 0.5 },
+    expect: { localX: 2, centerY: 1.4, clamped: false },
+  },
+  {
+    name: 'a tall window is centred with room above and below',
+    tool: 'add_window',
+    input: { wallId: main, t: 0.5, height: 2.4 },
+    expect: { localX: 2, centerY: 1.25, clamped: false },
+  },
+  {
+    name: 'a window given a 0.9 m sill keeps it',
+    tool: 'add_window',
+    input: { wallId: main, t: 0.5, sillHeight: 0.9 },
     expect: { localX: 2, centerY: 1.65, clamped: false },
   },
   // A style shapes a Fixed window's panes; an operable window draws its own sashes and ignores them.
@@ -236,7 +262,7 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     name: 'a Fixed window takes a style',
     tool: 'add_window',
     input: { wallId: main, t: 0.5, windowType: 'fixed', style: 'double-hung' },
-    expect: { localX: 2, centerY: 1.65, clamped: false },
+    expect: { localX: 2, centerY: 1.25, clamped: false },
   },
   {
     name: 'a style on a window that is not Fixed is refused, naming the Fixed type',

@@ -315,32 +315,6 @@ describe('construction tools', () => {
     )
   })
 
-  test('create_roof creates a dedicated roof level by default', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
-    const result = await client.callTool({
-      name: 'create_roof',
-      arguments: { levelId: level.id, width: 8, depth: 6, roofType: 'gable' },
-    })
-    expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    const roofLevel = bridge.getNode(parsed.roofLevelId)
-    const roof = bridge.getNode(parsed.roofId)
-    const segment = bridge.getNode(parsed.roofSegmentId)
-    expect(parsed.createdRoofLevelId).toBe(parsed.roofLevelId)
-    expect(roofLevel?.parentId).toBe(building.id)
-    expect(roofLevel?.type).toBe('level')
-    if (roofLevel?.type === 'level') {
-      expect(roofLevel.level).toBe(level.type === 'level' ? level.level + 1 : 1)
-      expect(roofLevel.metadata).toMatchObject({ role: 'roof', referenceLevelId: level.id })
-    }
-    expect(roof?.parentId).toBe(parsed.roofLevelId)
-    expect(roof?.type).toBe('roof')
-    expect(segment?.parentId).toBe(parsed.roofId)
-    expect(segment?.type).toBe('roof-segment')
-    expect(bridge.validateScene().valid).toBe(true)
-  })
-
   test('story construction tools reject dedicated roof support levels', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
@@ -371,62 +345,6 @@ describe('construction tools', () => {
       arguments: { levelId: level.id, toLevelId: roofLevel.id, x: 0, z: 0 },
     })
     expect(stair.isError).toBe(true)
-  })
-
-  test('create_roof requires an explicit roof support level when roofLevelId is provided', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
-    const occupiedUpper = LevelNode.parse({
-      name: 'Second Floor',
-      level: 1,
-      children: [],
-    })
-    bridge.createNode(occupiedUpper, building.id)
-
-    const result = await client.callTool({
-      name: 'create_roof',
-      arguments: {
-        levelId: level.id,
-        roofLevelId: occupiedUpper.id,
-        width: 8,
-        depth: 6,
-      },
-    })
-    expect(result.isError).toBe(true)
-  })
-
-  test('verify_scene flags roofs mixed into occupied levels', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
-    await client.callTool({
-      name: 'create_story_shell',
-      arguments: {
-        levelId: level.id,
-        footprint: [
-          [-4, -3],
-          [4, -3],
-          [4, 3],
-          [-4, 3],
-        ],
-      },
-    })
-
-    const roof = await client.callTool({
-      name: 'create_roof',
-      arguments: {
-        levelId: level.id,
-        width: 8,
-        depth: 6,
-        useDedicatedRoofLevel: false,
-      },
-    })
-    expect(roof.isError).toBeFalsy()
-
-    const result = await client.callTool({ name: 'verify_scene', arguments: {} })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
-      'dedicated roof level',
-    )
   })
 
   // Main's sizing of a new flight (#1000), on create_stair: the run and the risers come from the

@@ -2,10 +2,9 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
-  DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GuideNode,
-  LevelNode,
+  type LevelNode,
   type ScanNode,
   type SiteNode,
   useScene,
@@ -55,6 +54,7 @@ import {
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
+import { addStoreyOnTop } from './../../../../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import {
   formatAreaLabel,
@@ -1014,7 +1014,6 @@ const LevelsSection = memo(function LevelsSection({
   onUploadAsset?: (projectId: string, levelId: string, file: File, type: 'scan' | 'guide') => void
   onDeleteAsset?: (projectId: string, url: string) => void
 } = {}) {
-  const createNode = useScene((state) => state.createNode)
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
@@ -1037,13 +1036,7 @@ const LevelsSection = memo(function LevelsSection({
   if (!building) return null
 
   const handleAddLevel = () => {
-    const newLevel = LevelNode.parse({
-      level: levels.length,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: building.id,
-    })
-    createNode(newLevel, building.id)
+    const newLevel = addStoreyOnTop(building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
   }
 

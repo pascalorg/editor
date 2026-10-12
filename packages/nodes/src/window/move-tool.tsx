@@ -1,14 +1,19 @@
 import {
   type AnyNodeId,
   beginSceneHistoryDraft,
+  type CornerBlock,
+  type CornerSnap,
   collectionIdsOf,
+  createSnapEaser,
   type DormerEvent,
   dormerWallFacePointToDormer,
   emitter,
+  evaluateCorner,
   type GridEvent,
   getOpeningWallPlacement,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  prefersReducedMotion,
   type RoofEvent,
   type RoofNode,
   runSceneHistoryDraftWrite,
@@ -71,6 +76,8 @@ import {
   collectWallOpeningAlignmentCandidates,
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
+import { showCornerCue } from './corner-cue'
+import { fuseAtCorner } from './corner-fuse'
 import { WindowFloorProjection } from './floor-projection'
 import WindowPreview from './preview'
 import {
@@ -259,6 +266,19 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // The wall the window was grabbed from. Nulled the first time the anchor
     // seeds on any other host: the grab offset is then forgotten for good.
     let grabWallId: string | null = movingWindowNode.parentId
+    // Dragging near a corner (the owner, 8 October): the same zone as placing: the window snaps its
+    // edge to the corner, the window waiting on the other wall is outlined, and on release they
+    // join. Alt drops it plain.
+    let cornerHeld: CornerSnap['end'] | null = null
+    const cornerEaser = createSnapEaser()
+    let cornerEaseFrame = 0
+    const resetCorner = () => {
+      cornerHeld = null
+      cornerEaser.reset()
+      if (cornerEaseFrame) cancelAnimationFrame(cornerEaseFrame)
+      cornerEaseFrame = 0
+      showCornerCue(null)
+    }
     let lastTarget: {
       wallNode: WallEvent['node']
       wallId: string
@@ -267,6 +287,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       clampedX: number
       clampedY: number
       valid: boolean
+      snap: CornerSnap | null
+      block: CornerBlock | null
       event: WallEvent
     } | null = null
     let lastRoofEvent: RoofEvent | null = null
@@ -315,6 +337,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       )
 
     const hideCursor = () => {
+      resetCorner()
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
@@ -418,18 +441,49 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         // component lives in `snapToHalf` (itself mode-aware).
         applySnap: isMagneticSnapActive(),
       })
-      const { clampedX, clampedY } = clampToWall(
+      const nodes = useScene.getState().nodes
+      const slid = clampToWall(
         event.node,
         localX,
         targetLocalY,
         movingWindowNode.width,
         movingWindowNode.height,
-        useScene.getState().nodes,
+        nodes,
       )
+      const { clampedY } = slid
+      let clampedX = slid.clampedX
+      // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
+      const found =
+        event.nativeEvent?.altKey === true || altHeld
+          ? { snap: null, block: null }
+          : evaluateCorner(nodes, {
+              wallId: event.node.id,
+              centreX: clampedX,
+              width: movingWindowNode.width,
+              height: movingWindowNode.height,
+              sillHeight: clampedY - movingWindowNode.height / 2,
+              ignoreId: movingWindowNode.id,
+              held: cornerHeld,
+            })
+      let { snap, block } = found
+      if (snap) {
+        const settled = clampToWall(
+          event.node,
+          snap.centreX,
+          clampedY,
+          movingWindowNode.width,
+          movingWindowNode.height,
+          nodes,
+        )
+        if (Math.abs(settled.clampedX - snap.centreX) > 1e-6) {
+          block = { reason: 'curtain', end: snap.end }
+          snap = null
+        } else clampedX = snap.centreX
+      }
 
       const valid = !hasWallChildOverlap(
         event.node.id,
-        useScene.getState().nodes,
+        nodes,
         clampedX,
         clampedY,
         movingWindowNode.width,
@@ -445,6 +499,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         clampedX,
         clampedY,
         valid,
+        snap,
+        block,
         event,
       }
     }
@@ -456,6 +512,22 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // mouse-move even when the window stays in the same along-wall cell.
       // Per-frame guard collapses duplicate wall events on the same pointermove.
       tickGridStep(target.event.nativeEvent?.timeStamp ?? -1, target.clampedX)
+      cornerHeld = (target.snap ?? target.block)?.end ?? null
+      showCornerCue(target.snap, target.block)
+      // The ghost eases into and out of the snap; the drop always lands on the snapped place.
+      const now = performance.now()
+      const shownX = cornerEaser.display(
+        target.clampedX,
+        target.snap !== null,
+        now,
+        prefersReducedMotion(),
+      )
+      if (cornerEaser.active(now) && !cornerEaseFrame) {
+        cornerEaseFrame = requestAnimationFrame(() => {
+          cornerEaseFrame = 0
+          if (!committed && lastTarget) applyPreview(lastTarget)
+        })
+      }
       // Keep the REAL node hidden and show a tinted ghost in the wall opening —
       // green when placeable, red when it collides — matching the free-follow
       // ghost so validity reads at a glance (see MoveDoorTool). Reparenting
@@ -474,7 +546,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             target.wallNode,
             {
               ...movingWindowNode,
-              position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
+              position: [shownX, target.clampedY, planeOffsetOn(target.wallId)],
               rotation: [0, target.itemRotation, 0],
             },
             useScene.getState().nodes,
@@ -485,7 +557,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         }
       } else {
         updateDraft({
-          position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
+          position: [shownX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
           parentId: target.wallId,
@@ -500,7 +572,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         currentHostId = target.wallId
       }
       useLiveTransforms.getState().set(movingWindowNode.id, {
-        position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
+        position: [shownX, target.clampedY, planeOffsetOn(target.wallId)],
         rotation: target.itemRotation,
       })
       markHostDirtyThrottled(target.wallId)
@@ -516,7 +588,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       )
       const ghostWorldPos = wallLocalToWorld(
         target.wallNode,
-        target.clampedX,
+        shownX,
         target.clampedY,
         getLevelYOffset(),
         getSlabElevation(target.event),
@@ -650,6 +722,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           useScene
             .getState()
             .createNodes([{ node, parentId: target.wallId as AnyNodeId, collectionIds }])
+          if (target.snap) fuseAtCorner(node.id, target.snap.waitingId)
         })
         placedId = node.id
       } else {
@@ -680,6 +753,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             roofSegmentId: undefined,
             visible: true,
           })
+          if (target.snap) fuseAtCorner(movingWindowNode.id, target.snap.waitingId)
         })
 
         if (original.parentId && original.parentId !== target.wallId) {
@@ -1277,6 +1351,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const held = e.type === 'keydown'
       if (held === altHeld) return
       altHeld = held
+      // Holding Alt takes the corner join off the target at once: no hint, no fuse on the drop.
+      if (held && lastTarget?.snap) lastTarget = { ...lastTarget, snap: null, block: null }
       if (!committed && lastTarget) applyPreview(lastTarget)
     }
 
@@ -1346,6 +1422,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     return () => {
+      resetCorner()
       // Safety cleanup: if still transient on unmount (e.g. phase switch mid-move)
       const current = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as
         | WindowNode

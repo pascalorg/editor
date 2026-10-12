@@ -4,7 +4,9 @@ import { clearSceneTool } from './clear-scene'
 import { editCollectionTool, listCollectionsTool } from './collections'
 import { addColumnTool } from './columns'
 import type { AgentToolContract } from './contract'
+import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
+import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
 import {
@@ -15,8 +17,10 @@ import {
   getZonesTool,
   listLevelsTool,
 } from './levels'
+import { mergeWindowsTool } from './merge-windows'
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { placeItemsTool } from './place-items'
+import { createRoofTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { verifySceneTool } from './verify-scene'
@@ -31,16 +35,20 @@ export * from './clear-scene'
 export * from './collections'
 export * from './columns'
 export * from './contract'
+export * from './corner-window'
 export * from './create-room'
+export * from './fences'
 export * from './find-by-type'
 export * from './furnish-room'
 export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
+export * from './merge-windows'
 export { NodeId } from './node-id'
 export * from './nodes'
 export * from './place-items'
 export * from './refusal'
+export * from './roofs'
 export * from './room-structure'
 export * from './stairs'
 export * from './verify-scene'
@@ -69,9 +77,13 @@ export const AGENT_TOOL_CONTRACTS = [
   duplicateLevelTool,
   verifySceneTool,
   addWallTool,
+  addFenceTool,
+  addCornerWindowTool,
+  mergeWindowsTool,
   addLevelTool,
   placeItemsTool,
   createStairTool,
+  createRoofTool,
   deleteNodeTool,
   addObjectTool,
   getSourceTool,

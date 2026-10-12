@@ -1,5 +1,8 @@
+import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addWall } from './add-wall'
+import { addCornerWindow } from './corner-window'
+import { createRoof } from './create-roof'
 import { createRoom } from './create-room'
 import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
@@ -9,6 +12,7 @@ import { furnishRoom } from './furnish-room'
 import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
+import { mergeWindowsOperation } from './merge-windows'
 import { placeItems } from './place-items'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
@@ -18,12 +22,15 @@ import { verifyScene } from './verify-scene'
 
 export * from './achieved'
 export * from './add-column'
+export * from './add-fence'
 export * from './add-level'
 export * from './add-object'
 export * from './add-wall'
 export * from './apply-changes'
 export * from './apply-outcome'
 export * from './collections'
+export * from './corner-window'
+export * from './create-roof'
 export * from './create-room'
 export * from './create-stair'
 export * from './delete-node'
@@ -34,11 +41,13 @@ export * from './furnish-room'
 export * from './get-node'
 export * from './hosted-services'
 export * from './layout-clearance'
+export * from './level-height-fill'
 export * from './level-reads'
 export * from './level-target'
 export * from './list-levels'
 export * from './material-preset'
 export * from './material-refs'
+export * from './merge-windows'
 export * from './node-patch'
 export * from './place-items'
 export * from './plan-geometry'
@@ -64,8 +73,12 @@ export const AGENT_OPERATIONS = {
   duplicate_level: duplicateLevel,
   verify_scene: verifyScene,
   add_wall: addWall,
+  add_fence: addFence,
+  add_corner_window: addCornerWindow,
+  merge_windows: mergeWindowsOperation,
   add_level: addLevel,
   create_stair: createStair,
+  create_roof: createRoof,
   place_items: placeItems,
   delete_node: deleteNode,
   find_by_type: findByType,
