@@ -29,6 +29,7 @@ import {
   continuationContextOf,
   nextContinuation,
 } from '../lib/continuation'
+import { hydrationGatedStorage } from '../lib/hydration-gated-storage'
 import {
   type ActivePaintMaterial,
   type PaintableMaterialTarget,
@@ -563,8 +564,13 @@ type EditorState = {
   // Each workspace keeps its own view layout.
   workspaceMode: WorkspaceMode
   setWorkspaceMode: (mode: WorkspaceMode) => void
+  // The rail panel picked in the current workspace. While the rail lacks it (a
+  // plugin panel registers once the scene's plugins load), the layout shows its
+  // first panel and leaves the choice in place (`useShownSidebarPanel`).
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
+  // The panel last picked in each workspace: entering one reopens its own.
+  sidebarPanels: Partial<Record<WorkspaceMode, string>>
   // Mobile-only: pixel height of the secondary panel sheet while open (0 when closed).
   // Read by the mobile layout so the viewer container can shrink to preview edits.
   mobilePanelSheetHeight: number
@@ -587,7 +593,7 @@ type LegacyViewModeState = {
 
 type PersistedEditorLayoutState = Pick<
   EditorState,
-  | 'activeSidebarPanel'
+  | 'sidebarPanels'
   | 'pinnedViews'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
@@ -611,7 +617,7 @@ export const DEFAULT_PERSISTED_EDITOR_UI_STATE: PersistedEditorUiState = {
 }
 
 export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState = {
-  activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
+  sidebarPanels: {},
   pinnedViews: {},
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
@@ -711,6 +717,16 @@ function normalizeViewLayouts(
   }
   if (state?.viewMode === undefined && state?.isFloorplanOpen === undefined) return {}
   return { edit: viewLayoutFromLegacy(state) }
+}
+
+function normalizeSidebarPanels(value: unknown): Partial<Record<WorkspaceMode, string>> {
+  if (!value || typeof value !== 'object') return {}
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === 'string' && entry[1].trim().length > 0,
+    ),
+  )
 }
 
 function normalizePinnedViews(value: unknown): Record<string, boolean> {
@@ -856,10 +872,7 @@ export function normalizePersistedEditorLayoutState(
     | undefined,
 ): PersistedEditorLayoutState {
   return {
-    activeSidebarPanel:
-      typeof state?.activeSidebarPanel === 'string' && state.activeSidebarPanel.trim()
-        ? state.activeSidebarPanel
-        : DEFAULT_ACTIVE_SIDEBAR_PANEL,
+    sidebarPanels: normalizeSidebarPanels(state?.sidebarPanels),
     pinnedViews: normalizePinnedViews(state?.pinnedViews),
     floorplanSelectionTool: state?.floorplanSelectionTool === 'marquee' ? 'marquee' : 'click',
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
@@ -1586,21 +1599,29 @@ const useEditor = create<EditorState>()(
       workspaceMode: 'edit' as WorkspaceMode,
       setWorkspaceMode: (mode) => {
         if (get().workspaceMode === mode) return
+        // Each workspace reopens on its last panel; one with none picked yet
+        // shows its first (`useShownSidebarPanel`).
+        const activeSidebarPanel = get().sidebarPanels[mode] ?? get().activeSidebarPanel
         // Every non-'edit' workspace (studio's clean canvas, sheets' paper
         // space) enters the same way: drop the editing chrome. The view layout
         // needs no stash — each workspace keeps its own.
         if (mode !== 'edit') {
-          set({ workspaceMode: mode, catalogCategory: null })
+          set({ workspaceMode: mode, activeSidebarPanel, catalogCategory: null })
           get().armToolMode({ mode: 'select' })
           // Clear selection so no edit affordances bleed into the clean canvas.
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
-          set({ workspaceMode: 'edit' })
+          set({ workspaceMode: 'edit', activeSidebarPanel })
         }
         yieldBrushToHiddenCanvas()
       },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
-      setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
+      setActiveSidebarPanel: (id) =>
+        set((state) => ({
+          activeSidebarPanel: id,
+          sidebarPanels: { ...state.sidebarPanels, [state.workspaceMode]: id },
+        })),
+      sidebarPanels: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.sidebarPanels,
       mobilePanelSheetHeight: 0,
       setMobilePanelSheetHeight: (px) => set({ mobilePanelSheetHeight: Math.max(0, px) }),
       modelExport: null,
@@ -1608,6 +1629,7 @@ const useEditor = create<EditorState>()(
     }),
     {
       name: 'pascal-editor-ui-preferences',
+      storage: hydrationGatedStorage((): boolean => useEditor.persist.hasHydrated()),
       merge: (persistedState, currentState) => {
         const uiState = editorUiStateOnOpen(persistedState as Partial<PersistedEditorState>)
         const layoutState = normalizePersistedEditorLayoutState(
@@ -1618,6 +1640,8 @@ const useEditor = create<EditorState>()(
           ...currentState,
           ...uiState,
           ...layoutState,
+          activeSidebarPanel:
+            layoutState.sidebarPanels[currentState.workspaceMode] ?? DEFAULT_ACTIVE_SIDEBAR_PANEL,
         }
       },
       // `merge` rewrites `mode` wholesale, while the interaction scope a brush
@@ -1635,7 +1659,7 @@ const useEditor = create<EditorState>()(
       partialize: (state) => ({
         phase: state.phase,
         viewLayouts: state.viewLayouts,
-        activeSidebarPanel: state.activeSidebarPanel,
+        sidebarPanels: state.sidebarPanels,
         pinnedViews: state.pinnedViews,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
