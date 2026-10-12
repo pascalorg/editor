@@ -2,10 +2,14 @@
 
 import {
   type AnyNodeId,
+  type BaseNode,
+  type BuildingNode,
   type CameraPose,
   emitter,
+  type LevelNode,
   resolveBuildingForLevel,
   useScene,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { type RevealEvent, subscribeRevealEvents, useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -19,10 +23,12 @@ import {
   OrbitSpring,
   type OrbitValue,
 } from '../../lib/follow-pascal'
+import { FollowPresentation, type PresentationPort } from '../../lib/follow-pascal-presentation'
 import { FollowSight } from '../../lib/follow-pascal-sight'
 import { wantFromEvent } from '../../lib/follow-pascal-targets'
 import useEditor from '../../store/use-editor'
 import useFollowPascal from '../../store/use-follow-pascal'
+import { usePointAsk } from '../../store/use-point-ask'
 
 /**
  * Follow Pascal: while a build plays, the camera eases to what the current step is working on, framed
@@ -30,6 +36,11 @@ import useFollowPascal from '../../store/use-follow-pascal'
  * a step and the camera share one rhythm, and moves like a critically damped spring on an orbit about
  * what it looks at, so the horizon stays level. Touching the camera, or choosing a view, pauses it; the
  * person resumes it from the pill, or the next build takes it again. Under reduced motion it cuts.
+ *
+ * To see a build it changes the presentation: it cuts the walls away when no eye sees the target,
+ * selects the floor being built and hides the floors above it. When Follow ends (switched off, the
+ * person takes the camera, the build is over and no turn is running) it puts back what it changed,
+ * and leaves what the person changed since (`FollowPresentation`).
  */
 
 /** A build is over this long after its last word; the pill goes with it. */
@@ -47,6 +58,51 @@ const TAKEN = [
   'camera-controls:orbit-ccw',
   'camera-controls:fit-scene',
 ] as const
+
+/** The viewer and the editor as `FollowPresentation` reads and writes them. */
+const viewPort: PresentationPort = {
+  read: () => {
+    const viewer = useViewer.getState()
+    const { selection } = viewer
+    return {
+      wall: viewer.wallMode,
+      levels: viewer.levelMode,
+      hideAbove: viewer.hideLevelsAboveSelection,
+      floor: {
+        buildingId: selection.buildingId,
+        levelId: selection.levelId,
+        zoneId: selection.zoneId,
+        selectedIds: selection.selectedIds,
+        room: useEditor.getState().room,
+      },
+    }
+  },
+  setWall: (mode) => useViewer.getState().setWallMode(mode),
+  setLevels: (mode) => useViewer.getState().setLevelMode(mode),
+  setHideAbove: (hide) => useViewer.setState({ hideLevelsAboveSelection: hide }),
+  setFloor: ({ buildingId, levelId }) => {
+    useViewer.getState().setSelection({
+      ...(buildingId ? { buildingId: buildingId as BuildingNode['id'] } : {}),
+      levelId: levelId as LevelNode['id'],
+    })
+    useEditor.getState().clearRoom()
+  },
+  putFloor: (floor) => {
+    const nodes = useScene.getState().nodes
+    const exists = (id: string | null) => id !== null && !!nodes[id as AnyNodeId]
+    useViewer.getState().setSelection({
+      buildingId: exists(floor.buildingId) ? (floor.buildingId as BuildingNode['id']) : null,
+      levelId: exists(floor.levelId) ? (floor.levelId as LevelNode['id']) : null,
+      zoneId: exists(floor.zoneId) ? (floor.zoneId as ZoneNode['id']) : null,
+      selectedIds: floor.selectedIds.filter(exists) as BaseNode['id'][],
+    })
+    const { room } = floor
+    useEditor.setState({
+      room: room && exists(room.zoneId) && exists(room.levelId) ? room : null,
+      hoveredRoom: null,
+    })
+  },
+}
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
@@ -71,6 +127,7 @@ export function FollowPascal() {
   const camera = useThree((state) => state.camera)
   const scene = useThree((state) => state.scene)
   const sight = useMemo(() => new FollowSight(scene), [scene])
+  const presentation = useMemo(() => new FollowPresentation(viewPort), [])
   const controls = useThree((state) => state.controls) as {
     getTarget?: (out: Vector3) => Vector3
   } | null
@@ -100,7 +157,7 @@ export function FollowPascal() {
     sight.refresh(want)
     const clear = clearFrame(goal, (pose) => sight.clear(pose))
     if (clear) return clear
-    useViewer.getState().setWallMode('cutaway')
+    presentation.wall('cutaway')
     return goal
   }
 
@@ -124,16 +181,12 @@ export function FollowPascal() {
     if (level?.type === 'level') {
       const buildingId = resolveBuildingForLevel(level.id as AnyNodeId, nodes)
       const building = buildingId ? nodes[buildingId] : undefined
-      const viewer = useViewer.getState()
-      if (viewer.selection.levelId !== level.id) {
-        viewer.setSelection({
-          ...(building?.type === 'building' ? { buildingId: building.id } : {}),
-          levelId: level.id,
-        })
-        useEditor.getState().clearRoom()
-      }
-      viewer.setLevelMode('stacked')
-      useViewer.setState({ hideLevelsAboveSelection: true })
+      presentation.floor({
+        buildingId: building?.type === 'building' ? building.id : null,
+        levelId: level.id,
+      })
+      presentation.levels('stacked')
+      presentation.hideAbove(true)
     }
     if (!spring.current) {
       spring.current = new OrbitSpring({ x: 0, y: 1, z: 0, r: 20, az: 0.6, el: 0.5 })
@@ -189,14 +242,35 @@ export function FollowPascal() {
   }, [])
 
   // Resuming flies back to what it was last looking at; switching it off ends a flight.
+  // Follow ends when it is switched off and when the person takes the camera: what it changed to see
+  // the build goes back. A build being over ends it only when no turn is running: a turn runs several
+  // programs, and the view holds steady between them (the host's busy flag, below).
   useEffect(
     () =>
       useFollowPascal.subscribe((state, before) => {
         if (before.paused && !state.paused && state.on) resuming.current = true
         if (before.on && !state.on) flying.current = false
+        if ((before.on && !state.on) || (!before.paused && state.paused)) presentation.restore()
+        // The build is over: that ends it when no turn is running to build more.
+        if (before.building && !state.building && !usePointAsk.getState().busy)
+          presentation.restore()
       }),
-    [],
+    [presentation],
   )
+
+  // The turn ends, or the person stops it: the host's busy flag is the editor's word on it. What the
+  // reveal still plays after that is still followed, so it ends with the build, not with the turn.
+  useEffect(
+    () =>
+      usePointAsk.subscribe((state, before) => {
+        if (before.busy && !state.busy && !useFollowPascal.getState().building)
+          presentation.restore()
+      }),
+    [presentation],
+  )
+
+  // Leaving the editor ends it too.
+  useEffect(() => () => presentation.restore(), [presentation])
 
   useFrame((_, delta) => {
     clock.current += Math.min(delta, 0.1)
