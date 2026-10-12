@@ -85,7 +85,11 @@ function wholeHouse(nodes: Nodes, id: string, at: number): FollowWant | null {
  * undo's reverse play is followed the same way, group by group, on what goes.
  */
 export function wantFromEvent(event: RevealEvent, nodes: Nodes, at: number): FollowWant | null {
-  const want = targetFromEvent(event, nodes, at)
+  let want = targetFromEvent(event, nodes, at)
+  if (want && (want.kind === 'detail' || want.kind === 'furnish' || want.kind === 'roof')) {
+    const nodeIds = 'id' in event ? [event.id] : 'nodeIds' in event ? event.nodeIds : []
+    want = { ...want, nodeIds }
+  }
   if (!want || event.type === 'complete' || event.type === 'finale' || event.type === 'settle')
     return want
   let level = event.levelId ? nodes[event.levelId] : undefined

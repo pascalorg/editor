@@ -20,6 +20,7 @@ export type FollowWant = {
   box: Box
   kind: FollowKind
   levelId?: string
+  nodeIds?: readonly string[]
   /** The outward direction of the wall it is on, in the plan (x, z), for what is looked at square on. */
   normal?: [number, number]
   /** The eye must stand above this height (metres): a roof lifted out of the way is looked down through, not from within. */
@@ -75,10 +76,12 @@ export function mergeWants(wants: readonly FollowWant[]): FollowWant {
     if (length / wants.length > 0.6) normal = [sum[0] / length, sum[1] / length]
   }
   const eyes = wants.flatMap((want) => (want.eyeAbove === undefined ? [] : [want.eyeAbove]))
+  const nodeIds = [...new Set(wants.flatMap((want) => want.nodeIds ?? []))]
   return {
     box: { min, max },
     kind,
     ...(first.levelId ? { levelId: first.levelId } : {}),
+    ...(nodeIds.length ? { nodeIds } : {}),
     ...(normal ? { normal } : {}),
     ...(eyes.length ? { eyeAbove: Math.max(...eyes) } : {}),
     at: Math.max(...wants.map((want) => want.at)),
@@ -181,6 +184,37 @@ export function frameOf(want: FollowWant, view: FollowView): OrbitValue {
 
 const KEYS = ['x', 'y', 'z', 'r', 'az', 'el'] as const
 
+function orbitPose({ x, y, z, r, az, el }: OrbitValue): CameraPose {
+  const flat = Math.cos(el)
+  return {
+    position: [x + r * flat * Math.sin(az), y + r * Math.sin(el), z + r * flat * Math.cos(az)],
+    target: [x, y, z],
+    projection: 'perspective',
+  }
+}
+
+/** Try a higher eye before turning away; never reorient an already clear view. */
+export function clearFrame(
+  goal: OrbitValue,
+  sees: (pose: CameraPose) => boolean,
+): OrbitValue | null {
+  for (const offset of [
+    0,
+    Math.PI / 6,
+    -Math.PI / 6,
+    Math.PI / 3,
+    -Math.PI / 3,
+    Math.PI / 2,
+    -Math.PI / 2,
+  ]) {
+    for (const elevation of [goal.el, 0.9, 1.2, (75 * Math.PI) / 180]) {
+      const candidate = { ...goal, az: goal.az + offset, el: Math.max(goal.el, elevation) }
+      if (sees(orbitPose(candidate))) return candidate
+    }
+  }
+  return null
+}
+
 /** The camera as six springs on an orbit: the point it looks at, how far, and which way round. */
 export class OrbitSpring {
   private states = Object.fromEntries(KEYS.map((key) => [key, { x: 0, v: 0 }])) as Record<
@@ -233,13 +267,7 @@ export class OrbitSpring {
 
   /** Where the camera is now: at the radius and angles about its centre, always looking at it, level. */
   pose(): CameraPose {
-    const { x, y, z, r, az, el } = this.value()
-    const flat = Math.cos(el)
-    return {
-      position: [x + r * flat * Math.sin(az), y + r * Math.sin(el), z + r * flat * Math.cos(az)],
-      target: [x, y, z],
-      projection: 'perspective',
-    }
+    return orbitPose(this.value())
   }
 
   /** The goal it is flying to. */

@@ -9,15 +9,17 @@ import {
 } from '@pascal-app/core'
 import { type RevealEvent, subscribeRevealEvents, useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Vector3 } from 'three'
 import {
+  clearFrame,
   Follower,
   type FollowWant,
   frameOf,
   OrbitSpring,
   type OrbitValue,
 } from '../../lib/follow-pascal'
+import { FollowSight } from '../../lib/follow-pascal-sight'
 import { wantFromEvent } from '../../lib/follow-pascal-targets'
 import useEditor from '../../store/use-editor'
 import useFollowPascal from '../../store/use-follow-pascal'
@@ -67,6 +69,8 @@ const arrived = (value: OrbitValue, goal: OrbitValue) =>
 
 export function FollowPascal() {
   const camera = useThree((state) => state.camera)
+  const scene = useThree((state) => state.scene)
+  const sight = useMemo(() => new FollowSight(scene), [scene])
   const controls = useThree((state) => state.controls) as {
     getTarget?: (out: Vector3) => Vector3
   } | null
@@ -80,6 +84,7 @@ export function FollowPascal() {
   const resuming = useRef(false)
   const over = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scratch = useRef(new Vector3())
+  const nextSightCheck = useRef(0)
 
   /** The camera as it is now, so a flight starts from the view the person has. */
   const currentPose = (): CameraPose => {
@@ -89,6 +94,27 @@ export function FollowPascal() {
       target: [target.x, target.y, target.z],
       projection: 'perspective',
     }
+  }
+
+  const unobstructed = (want: FollowWant, goal: OrbitValue): OrbitValue => {
+    sight.refresh(want)
+    const clear = clearFrame(goal, (pose) => sight.clear(pose))
+    if (clear) return clear
+    useViewer.getState().setWallMode('cutaway')
+    return goal
+  }
+
+  const moveTo = (goal: OrbitValue) => {
+    const orbit = spring.current!
+    if (prefersReducedMotion()) {
+      orbit.snap(goal)
+      emitter.emit('camera-controls:apply-pose', orbit.pose())
+      dipCanvas()
+      flying.current = false
+      return
+    }
+    orbit.to(goal)
+    flying.current = true
   }
 
   const fly = (want: FollowWant) => {
@@ -123,15 +149,8 @@ export function FollowPascal() {
       aspect: size.width / Math.max(1, size.height),
       azimuth: spring.current.value().az,
     })
-    if (prefersReducedMotion()) {
-      spring.current.snap(goal)
-      emitter.emit('camera-controls:apply-pose', spring.current.pose())
-      dipCanvas()
-      flying.current = false
-      return
-    }
-    spring.current.to(goal)
-    flying.current = true
+    moveTo(unobstructed(want, goal))
+    nextSightCheck.current = clock.current + 0.5
   }
 
   // What the build says it is doing: where to look, and when a build begins and ends.
@@ -181,7 +200,7 @@ export function FollowPascal() {
 
   useFrame((_, delta) => {
     clock.current += Math.min(delta, 0.1)
-    const { on, paused } = useFollowPascal.getState()
+    const { on, paused, building } = useFollowPascal.getState()
     if (!on || paused) return
     if (useViewer.getState().cameraMode !== 'perspective' || useEditor.getState().isFirstPersonMode)
       return
@@ -192,6 +211,17 @@ export function FollowPascal() {
     const due = follower.current.due(clock.current)
     if (due) fly(due)
     const orbit = spring.current
+    // Recheck as geometry lands, even after arrival; retain a clear orbit instead of hunting each frame.
+    if (
+      orbit &&
+      last.current &&
+      (building || flying.current) &&
+      clock.current >= nextSightCheck.current
+    ) {
+      nextSightCheck.current = clock.current + 0.5
+      const goal = unobstructed(last.current, orbit.destination())
+      if (!arrived(goal, orbit.destination())) moveTo(goal)
+    }
     if (!(flying.current && orbit)) return
     orbit.step(Math.min(delta, 0.05))
     emitter.emit('camera-controls:apply-pose', orbit.pose())

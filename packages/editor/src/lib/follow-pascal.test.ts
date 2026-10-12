@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import { LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
+import { BATCHED_LAYER, OVERLAY_LAYER, SHADOW_ONLY_LAYER, useViewer } from '@pascal-app/viewer'
+import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import {
   type Box,
+  clearFrame,
   FOLLOW_DWELL_S,
   FOLLOW_ELEVATION,
   FOLLOW_GATHER_S,
@@ -10,6 +14,7 @@ import {
   mergeWants,
   OrbitSpring,
 } from './follow-pascal'
+import { FollowSight } from './follow-pascal-sight'
 
 const box = (min: [number, number, number], max: [number, number, number]): Box => ({ min, max })
 const want = (kind: FollowWant['kind'], b: Box, at = 0, normal?: [number, number]): FollowWant => ({
@@ -174,6 +179,102 @@ describe('an eye that must clear something', () => {
       want('furnish', item),
     ])
     expect(merged.eyeAbove).toBe(9)
+  })
+})
+
+describe('keeping the followed target in sight', () => {
+  test('sight queries ignore the target, hidden helpers and upper floors, but detect batch sources', () => {
+    const scene = new Group()
+    scene.name = 'scene-renderer'
+    const target = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial())
+    target.position.set(0, 1, 0)
+    const upperRoot = new Group()
+    const obstacle = new Mesh(new BoxGeometry(8, 8, 1), new MeshBasicMaterial())
+    obstacle.position.set(0, 4, 5)
+    upperRoot.add(obstacle)
+    scene.add(target, upperRoot)
+    sceneRegistry.nodes.set('item_sight', target)
+    sceneRegistry.nodes.set('level_sight_upper', upperRoot)
+    const beforeScene = useScene.getState()
+    const beforeViewer = useViewer.getState()
+    const lower = LevelNode.parse({ id: 'level_sight_lower', level: 0 })
+    const upper = LevelNode.parse({ id: 'level_sight_upper', level: 1 })
+    const request = {
+      ...want('furnish', box([-0.5, 0.5, -0.5], [0.5, 1.5, 0.5])),
+      nodeIds: ['item_sight'],
+    }
+    const pose = { position: [0, 3, 10], target: [0, 1, 0], projection: 'perspective' } as const
+    const sight = new FollowSight(scene)
+    const clear = () => {
+      sight.refresh(request)
+      return sight.clear({ ...pose, position: [...pose.position], target: [...pose.target] })
+    }
+    try {
+      useScene.setState({ nodes: { [lower.id]: lower, [upper.id]: upper } })
+      useViewer.getState().setSelection({ levelId: lower.id })
+      useViewer.setState({ hideLevelsAboveSelection: false })
+      expect(clear()).toBe(false)
+      upperRoot.visible = false
+      expect(clear()).toBe(true)
+      upperRoot.visible = true
+      obstacle.layers.set(OVERLAY_LAYER)
+      expect(clear()).toBe(true)
+      obstacle.layers.set(SHADOW_ONLY_LAYER)
+      expect(clear()).toBe(true)
+      obstacle.layers.set(BATCHED_LAYER)
+      expect(clear()).toBe(false)
+      useViewer.setState({ hideLevelsAboveSelection: true })
+      expect(clear()).toBe(true)
+      useViewer.setState({ hideLevelsAboveSelection: false })
+      ;(obstacle.material as MeshBasicMaterial).opacity = 0
+      expect(clear()).toBe(true)
+    } finally {
+      useScene.setState(beforeScene)
+      useViewer.setState(beforeViewer)
+      sceneRegistry.nodes.delete('item_sight')
+      sceneRegistry.nodes.delete('level_sight_upper')
+      for (const mesh of [target, obstacle]) {
+        mesh.geometry.dispose()
+        ;(mesh.material as MeshBasicMaterial).dispose()
+      }
+    }
+  })
+
+  test('raises the camera to a clear line of sight past an obstacle without changing its target or distance', () => {
+    const goal = frameOf(want('furnish', box([-0.5, 0, -0.5], [0.5, 1, 0.5])), {
+      ...VIEW,
+      azimuth: 0,
+    })
+    const obstacle = new Mesh(
+      new BoxGeometry(8, 5, 0.5),
+      new MeshBasicMaterial({ side: DoubleSide }),
+    )
+    obstacle.position.set(0, 2.5, 2)
+    obstacle.updateMatrixWorld(true)
+    const ray = new Raycaster()
+    const sees = (pose: ReturnType<OrbitSpring['pose']>) => {
+      const eye = new Vector3(...pose.position)
+      const direction = new Vector3(...pose.target).sub(eye)
+      ray.set(eye, direction.clone().normalize())
+      ray.far = direction.length() - 0.01
+      return ray.intersectObject(obstacle).length === 0
+    }
+    expect(sees(new OrbitSpring(goal).pose())).toBe(false)
+    const clear = clearFrame(goal, sees)!
+    expect(clear).not.toBeNull()
+    expect(sees(new OrbitSpring(clear).pose())).toBe(true)
+    expect([clear.x, clear.y, clear.z, clear.r]).toEqual([goal.x, goal.y, goal.z, goal.r])
+    expect(clear.el).toBeGreaterThan(goal.el)
+    expect(clear.el).toBeLessThanOrEqual((75 * Math.PI) / 180)
+    expect(clearFrame(clear, sees)).toEqual(clear)
+    obstacle.geometry.dispose()
+    ;(obstacle.material as MeshBasicMaterial).dispose()
+  })
+
+  test('does not change an unobstructed view and reports when the bounded search has no clear view', () => {
+    const goal = frameOf(want('detail', box([0, 0, 0], [1, 1, 1])), VIEW)
+    expect(clearFrame(goal, () => true)).toEqual(goal)
+    expect(clearFrame(goal, () => false)).toBeNull()
   })
 })
 
