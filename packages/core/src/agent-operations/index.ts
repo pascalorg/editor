@@ -79,6 +79,7 @@ export * from './search-assets'
 export * from './stairs'
 export * from './types'
 export * from './verify-scene'
+export * from './wall-object-observations'
 export * from './wall-opening'
 
 const SINGLE_OPERATIONS = {
@@ -141,7 +142,7 @@ export const AGENT_OPERATIONS = {
 } as const satisfies AgentOperations
 
 export { type PlanMask, planMask } from '../building/unit-layout-plan-score'
-export { type UnitLayoutJudge } from '../building/unit-layout-propose'
+export type { UnitLayoutJudge } from '../building/unit-layout-propose'
 export { furnishFromPlanQuestions } from './furnish-from-plan'
 export { type PhotoFacePlan, planPhotoElevation } from './photo-elevation'
 export { recordMade } from './record-made'

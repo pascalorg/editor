@@ -306,7 +306,11 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     parentId: parent.id,
     ...(parent.type === 'wall' ? { wallId: parent.id, side: input.side ?? 'front' } : {}),
     position: (input.position as Vec3 | undefined) ?? [0, 0, 0],
-    rotation: rotation ?? [0, 0, 0],
+    rotation: rotation ?? [
+      0,
+      compiled.mount === 'wall-side' && input.side === 'back' ? Math.PI : 0,
+      0,
+    ],
     source: scriptSource(compiled, itemSourceMeta(input)),
     slots: matchScriptSlotsToLibrary(compiled.manifest),
     asset,
