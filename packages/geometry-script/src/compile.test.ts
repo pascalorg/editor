@@ -23,6 +23,7 @@ import {
 import { Box3, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { CHEF_LAMP_SCRIPT } from './__fixtures__/ceiling-lamp'
+import { FITTED_CABINET_SCRIPT } from './__fixtures__/fitted-cabinet'
 import { compileGeometryScript } from './index'
 
 const SASH = `
@@ -427,4 +428,65 @@ test.each([
 export default function build() { return new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)); }`,
     }),
   ).rejects.toThrow(`Unsupported import ${specifier}`)
+})
+
+// `Box3.isEmpty()` is false for a box with a NaN corner, so a mesh at a position that is not a
+// number used to compile into NaN bounds, which reached the item schema as a raw validation dump.
+describe('an object that cannot be measured', () => {
+  const built = (body: string) => `import * as THREE from 'three'
+export default function build() {
+  const g = new THREE.Group()
+  ${body}
+  return g
+}`
+
+  test('the cabinet builds at its defaults and with its display branch off', async () => {
+    for (const params of [undefined, { width: 7.7, display: false }]) {
+      const { manifest } = await compileGeometryScript({ code: FITTED_CABINET_SCRIPT, params })
+      const { min, max } = manifest.bounds
+      expect([...min, ...max].every(Number.isFinite)).toBe(true)
+      expect(max[0] - min[0]).toBeGreaterThan(4)
+    }
+  })
+
+  test('a mesh whose position holds a material is refused, naming the mesh and its axis', async () => {
+    const failure = await compileGeometryScript({
+      code: FITTED_CABINET_SCRIPT,
+      params: { width: 7.7, display: true },
+    }).then(
+      () => null,
+      (error: Error) => error,
+    )
+    expect(failure?.message).toContain('cannot be measured')
+    expect(failure?.message).toContain('BoxGeometry mesh')
+    expect(failure?.message).toContain('position.z = a MeshStandardMaterial')
+  })
+
+  test('a named group moved to NaN is named with its axis', async () => {
+    const code = built(`const shelf = new THREE.Group()
+  shelf.name = 'part:shelf'
+  shelf.position.y = Number.NaN
+  shelf.add(new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 0.4), new THREE.MeshStandardMaterial()))
+  g.add(shelf)`)
+    await expect(compileGeometryScript({ code })).rejects.toThrow(
+      '"part:shelf" has position.y = NaN',
+    )
+  })
+
+  test('vertices that are NaN keep their own message', async () => {
+    const code = built(`const geometry = new THREE.BoxGeometry(1, 1, 1)
+  geometry.getAttribute('position').setX(0, Number.NaN)
+  const lid = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial())
+  lid.name = 'lid'
+  g.add(lid)`)
+    await expect(compileGeometryScript({ code })).rejects.toThrow(
+      'lid has non-finite vertex positions',
+    )
+  })
+
+  test('an object with no mesh at all is still refused as empty', async () => {
+    await expect(compileGeometryScript({ code: built('') })).rejects.toThrow(
+      'build() returned no visible meshes',
+    )
+  })
 })
