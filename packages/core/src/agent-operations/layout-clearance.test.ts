@@ -29,6 +29,7 @@ import {
   generatePlacementCandidates,
   itemPlanAabb,
   layoutIssuesFromScene,
+  scriptItemBoundsInLevel,
 } from './layout-clearance'
 
 function item(
@@ -412,6 +413,41 @@ describe('layout-clearance', () => {
       size: [1, 1, 1],
     })
     blocker.position = [20, 0, 16]
+    expect(findItemItemCollisions({ nodes: [node, blocker] })).toHaveLength(1)
+  })
+
+  test("scripted plan bounds carry the asset's own corrective scale, offset and rotation", () => {
+    const level = LevelNode.parse({ id: 'level_1', height: 3 })
+    const node = authoredItem('item_asset_pose', 'level_1', {
+      name: 'Posed',
+      category: 'furniture',
+      size: [2, 1, 2],
+    })
+    node.position = [10, 0, 20]
+    node.source!.manifest.bounds.min = [-1, 0, -1]
+    node.source!.manifest.bounds.max = [1, 1, 1]
+    node.asset.scale = [2, 1, 3]
+    node.asset.rotation = [0, Math.PI / 2, 0]
+    node.asset.offset = [1, 0, 0.5]
+    // The 2 x 2 box grows to 4 x 6, turns a quarter about its own origin (3 m along x, 2 m along z)
+    // and moves 1 m along x and 0.5 m along z, all before the node's own pose.
+    const expected = { minX: 8, maxX: 14, minZ: 18.5, maxZ: 22.5 }
+    expect(itemNodePlanAabb(node)).toMatchObject(expected)
+    expect(inspectItemPlanFootprint(node)).toMatchObject({ ok: true, aabb: expected })
+    // The same box the vertical checks measure.
+    const measured = scriptItemBoundsInLevel(node, { [level.id]: level, [node.id]: node })!.bounds
+    expect([measured.min[0], measured.max[0], measured.min[2], measured.max[2]]).toEqual([
+      expected.minX,
+      expected.maxX,
+      expected.minZ,
+      expected.maxZ,
+    ])
+    const blocker = authoredItem('item_blocker', 'level_1', {
+      name: 'Blocker',
+      category: 'furniture',
+      size: [1, 1, 1],
+    })
+    blocker.position = [13, 0, 22]
     expect(findItemItemCollisions({ nodes: [node, blocker] })).toHaveLength(1)
   })
 
