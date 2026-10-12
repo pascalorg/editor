@@ -214,7 +214,7 @@ export function EditorLayoutMobile({
   }, [panelSheetHeight, committedSheetH])
 
   return (
-    <div className="dark flex h-full w-full flex-col bg-sidebar text-foreground">
+    <div className="flex h-full w-full flex-col bg-sidebar text-foreground">
       {navbarSlot}
 
       <div

@@ -109,7 +109,7 @@ function VisibilityMenu({
           <Eye className="h-5 w-5" />
         </ActionButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="min-w-44" side="top">
+      <DropdownMenuContent align="center" className="dark min-w-44" side="top">
         {canShowScans && (
           <DropdownMenuItem
             onSelect={(e) => keepOpen(e, () => useViewer.getState().setShowScans(!showScans))}
@@ -166,7 +166,7 @@ function DisplayMenu() {
           <SlidersHorizontal className="h-5 w-5" />
         </ActionButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="min-w-56" side="top">
+      <DropdownMenuContent align="center" className="dark min-w-56" side="top">
         <DropdownMenuItem
           onSelect={(e) => keepOpen(e, () => useViewer.getState().setShadows(!shadows))}
         >
@@ -207,7 +207,7 @@ function DisplayMenu() {
             <span>Render</span>
             <span className="ml-auto text-muted-foreground text-xs">{activeShading.name}</span>
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-56">
+          <DropdownMenuSubContent className="dark min-w-56">
             {SHADING_OPTIONS.map((option) => {
               const OptionIcon = option.icon
               return (
@@ -237,7 +237,7 @@ function DisplayMenu() {
               {activeTheme.name}
             </span>
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-48">
+          <DropdownMenuSubContent className="dark min-w-48">
             {SCENE_THEMES.map((t) => {
               const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
                 (role) => t.clayTints?.[role] ?? CLAY_PALETTE[role],
@@ -270,7 +270,7 @@ function DisplayMenu() {
             <span>Edges</span>
             <span className="ml-auto text-muted-foreground text-xs">{activeEdges.name}</span>
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-56">
+          <DropdownMenuSubContent className="dark min-w-56">
             {EDGE_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.id}
