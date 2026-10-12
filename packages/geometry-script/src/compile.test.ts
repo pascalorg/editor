@@ -20,10 +20,11 @@ import {
   LevelNode,
   SlabNode,
 } from '@pascal-app/core/schema'
-import { Box3, Vector3 } from 'three'
+import { AnimationMixer, Box3, LoopOnce, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { CHEF_LAMP_SCRIPT } from './__fixtures__/ceiling-lamp'
 import { FITTED_CABINET_SCRIPT } from './__fixtures__/fitted-cabinet'
+import { SLIDING_DOOR_SCRIPT } from './__fixtures__/sliding-door'
 import { compileGeometryScript } from './index'
 
 const SASH = `
@@ -488,5 +489,33 @@ export default function build() {
     await expect(compileGeometryScript({ code: built('') })).rejects.toThrow(
       'build() returned no visible meshes',
     )
+  })
+})
+
+describe('a sliding door built from a script', () => {
+  test('keeps its open clip with every track bound to a leaf that is in the artifact', async () => {
+    const { glb, manifest } = await compileGeometryScript({
+      code: SLIDING_DOOR_SCRIPT,
+      params: { width: 1.2, height: 2.55, glazed: false },
+    })
+    expect(manifest.animations).toEqual([{ name: 'open', duration: 1.3 }])
+
+    const gltf = await new GLTFLoader().parseAsync(glb, '')
+    const clip = gltf.animations.find((candidate) => candidate.name === 'open')!
+    expect(clip.tracks.map((track) => track.name).sort()).toEqual([
+      'leaf_0.position',
+      'leaf_1.position',
+    ])
+
+    // played the way the viewer plays it, the leaves slide apart from where they stand closed
+    const leaf = (name: string) => gltf.scene.getObjectByName(name)!
+    const closed = [leaf('leaf_0').position.x, leaf('leaf_1').position.x]
+    const action = new AnimationMixer(gltf.scene).clipAction(clip)
+    action.setLoop(LoopOnce, 1)
+    action.clampWhenFinished = true
+    action.play()
+    action.getMixer().setTime(clip.duration)
+    expect(leaf('leaf_0').position.x).toBeLessThan(closed[0]! - 0.4)
+    expect(leaf('leaf_1').position.x).toBeGreaterThan(closed[1]! + 0.4)
   })
 })
