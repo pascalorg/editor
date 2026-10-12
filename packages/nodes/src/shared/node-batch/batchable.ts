@@ -40,15 +40,19 @@ export const itemBatchable: BatchableConfig = {
 }
 
 // Mid-swing openings rebuild per tick off their animation record; the
-// completion dirty mark re-joins them at the settled pose.
+// completion dirty mark re-joins them at the settled pose. One built from a
+// script animates its own subtree (its leaves slide through a clip): under a
+// static batch instance the source meshes would move hidden.
 export const doorBatchable: BatchableConfig = {
   scope: 'wall',
-  excluded: (node) => node.id in useInteractive.getState().doorAnimations,
+  excluded: (node) =>
+    node.id in useInteractive.getState().doorAnimations || itemClipRegistry.has(node.id),
 }
 
 export const windowBatchable: BatchableConfig = {
   scope: 'wall',
-  excluded: (node) => node.id in useInteractive.getState().windowAnimations,
+  excluded: (node) =>
+    node.id in useInteractive.getState().windowAnimations || itemClipRegistry.has(node.id),
 }
 
 /** Imported meshes and blocks build their own geometry per node, rebuilt in place. */

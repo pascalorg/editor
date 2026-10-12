@@ -10,6 +10,7 @@ import {
   BuildingNode,
   CeilingNode,
   getMaterialPresetByRef,
+  itemClipRegistry,
   LevelNode,
   MATERIAL_CATALOG,
   nodeRegistry,
@@ -38,7 +39,7 @@ import { BoxGeometry, BufferGeometry, Group, type Material, Mesh, MeshBasicMater
 import { GeometrySystem } from '../../__tests__/harness'
 import { buildSlabGeometry } from '../../slab/geometry'
 import { slabPaint } from '../../slab/paint'
-import { columnBatchable, itemBatchable, surfaceBatchable } from './batchable'
+import { columnBatchable, doorBatchable, itemBatchable, surfaceBatchable } from './batchable'
 import { collectBatchCandidate } from './candidates'
 import { NodeBatchSystem, resetNodeBatchState } from './system'
 
@@ -533,4 +534,48 @@ test('a selected slab whose material cache is cleared never gets a disposed orig
   await frame()
   expect((slabs[0]!.children[0] as Mesh).material).toBe(current)
   expect(currentDisposed).toBe(false)
+})
+
+test('a scripted door with a clip keeps drawing its own leaves while plain doors beside it batch', async () => {
+  nodeRegistry._register({
+    kind: 'door',
+    schemaVersion: 1,
+    capabilities: { batchable: doorBatchable },
+  } as never)
+  const { node: levelNode, root } = level()
+  const wall = {
+    id: 'wall_test',
+    type: 'wall',
+    parentId: levelNode.id,
+    visible: true,
+    children: [],
+  }
+  const material = new MeshBasicMaterial()
+  const nodes: Record<string, AnyNode> = {
+    [levelNode.id]: levelNode,
+    [wall.id]: wall as unknown as AnyNode,
+  }
+  const doors = ['door_clip', 'door_a', 'door_b', 'door_c'].map((id) => {
+    nodes[id] = { id, type: 'door', parentId: wall.id, visible: true, children: [] } as never
+    const group = new Group()
+    // The leaf of a scripted door, as its model puts it under the door's registered group.
+    const leaf = new Mesh(new BoxGeometry(), material)
+    leaf.name = 'leaf_0'
+    group.add(leaf)
+    root.add(group)
+    sceneRegistry.nodes.set(id, group)
+    sceneRegistry.byType.door!.add(id)
+    return leaf
+  })
+  // What the item renderer registers once the door's artifact has loaded.
+  itemClipRegistry.set('door_clip', [] as never)
+  useScene.setState({ nodes, dirtyNodes: new Set() })
+  const { settle } = await mount(<NodeBatchSystem />)
+  try {
+    await settle()
+    expect(doors.slice(1).map(batched)).toEqual([true, true, true])
+    expect(batched(doors[0]!)).toBe(false)
+  } finally {
+    itemClipRegistry.delete('door_clip')
+  }
 })
