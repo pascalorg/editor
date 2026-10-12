@@ -5,7 +5,6 @@ import {
   recordMade,
   type SceneNodes,
 } from '@pascal-app/core/agent-operations'
-import { REFERENCE_INPUTS_GUIDE } from '@pascal-app/core/agent-tools'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
@@ -16,9 +15,6 @@ import type { GeometryScriptHost } from './tools/add-object'
 import { type AssetCatalog, cachedCatalog } from './tools/asset-catalog'
 import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
-import type { PlanRasterDecoder } from './tools/reference-construction'
-import type { PlanReadingHosts } from './tools/shared-tools'
-import type { SourceResolver } from './tools/source-resolver'
 import type { SceneViewHost } from './tools/view-scene'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
@@ -55,18 +51,6 @@ export type CreatePascalMcpServerOptions = {
   services?: HostedServiceExecutor
   /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
   sceneViews?: SceneViewHost
-  /** Answers what a plan's labels name (furnish_from_plan); without it, candidates go by size. */
-  planJudge?: PlanReadingHosts['planJudge']
-  /** Draws furnish_from_plan's marked plan as an image; without it, it stays an SVG. */
-  rasterizeSvg?: PlanReadingHosts['rasterizeSvg']
-  /** Turns a raster plan into SVG, paid (vectorize_plan); without it, refused. */
-  vectorizePlan?: PlanReadingHosts['vectorizePlan']
-  /** What vectorize_plan says a plan costs, for a host that charges otherwise (a plan it holds is free). */
-  vectorizePlanPricing?: PlanReadingHosts['vectorizePlanPricing']
-  /** Decodes a raster plan's pixels so its walls are traced; without it a raster is for reading. */
-  decodeRaster?: PlanRasterDecoder
-  /** Resolves a file the host serves `request_upload` for; without it, images are inline only. */
-  resolveSource?: SourceResolver
   /** Lines the host adds to what a client reads at connect (the person's own settings). */
   instructions?: string
 }
@@ -76,7 +60,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   const server = new McpServer(
     { name: opts.name ?? 'pascal-mcp-server', version: opts.version ?? version },
     {
-      instructions: `Pascal builds and edits 3D buildings; the agent guide is the resource pascal://agent-guide.\n${REFERENCE_INPUTS_GUIDE}${opts.instructions ? `\n${opts.instructions}` : ''}`,
+      instructions: `Pascal builds and edits 3D buildings; the agent guide is the resource pascal://agent-guide.${opts.instructions ? `\n${opts.instructions}` : ''}`,
     },
   )
   answerInvalidInputWithCode(server)
@@ -89,12 +73,6 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     catalog,
     geometryScripts: opts.geometryScripts,
     sceneViews: opts.sceneViews,
-    planJudge: opts.planJudge,
-    rasterizeSvg: opts.rasterizeSvg,
-    vectorizePlan: opts.vectorizePlan,
-    vectorizePlanPricing: opts.vectorizePlanPricing,
-    decodeRaster: opts.decodeRaster,
-    resolveSource: opts.resolveSource,
   })
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)

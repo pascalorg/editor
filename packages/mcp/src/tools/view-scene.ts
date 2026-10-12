@@ -82,7 +82,7 @@ export function registerViewScene(
           size: { width: shot.width, height: shot.height },
           tab: shot.tab,
           capturedAt: shot.capturedAt,
-          note: sceneViewNote(operations.getNodes() as Record<string, AnyNode>),
+          note: sceneViewNote(),
           ...(crop && cropped
             ? {
                 photoRegion: crop.region,

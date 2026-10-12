@@ -14,7 +14,6 @@ import type {
 import { getSegmentSlopeFrame } from '../schema'
 import { getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
-import { hasReferenceInventory, INVENTORY_INVITATION } from './reference-items'
 import type { SceneNodes } from './types'
 
 /**
@@ -681,13 +680,9 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewInput): SceneVi
  * The view to render and its size: from a photo's camera at the photo's aspect, so the two lay
  * one beside the other; else framing the target at the standard size.
  */
-/** A picture is not a measure; invite an inventory until the host has one. */
-export function sceneViewNote(nodes?: Readonly<Record<string, AnyNode>>) {
-  const note =
-    'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
-  return nodes && !hasReferenceInventory(nodes as SceneNodes)
-    ? `${note} ${INVENTORY_INVITATION}`
-    : note
+/** What a view comes with, on both surfaces: a picture to compare, not a measure. */
+export function sceneViewNote() {
+  return 'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
 }
 
 export function sceneViewPlan(

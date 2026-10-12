@@ -820,11 +820,6 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     dependents: ['metadata.automaticRunEndCapEndpoint'],
     note: 'The run whose open end this automatic cap closes.',
   }),
-  meta('copiedFrom', {
-    ...policy('node', 'internal', 'drop', 'strip'),
-    targetKinds: ['level'],
-    note: 'The floor a level was duplicated from: its building map still draws the copy.',
-  }),
   meta('conicalSourceWallId', {
     ...policy('node', 'internal', 'drop', 'strip'),
     targetKinds: ['wall'],
@@ -915,43 +910,6 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     targetKinds: ['slab'],
     note: 'The deck a balcony railing or deck belongs to.',
   }),
-  meta('balconySourceWall', {
-    ...policy('node', 'internal', 'drop', 'strip'),
-    targetKinds: ['wall'],
-    note: 'The wall a balcony was built from.',
-  }),
-  meta('referenceOutline.guideId', {
-    ...policy('node', 'internal', 'freeze', 'strip'),
-    targetKinds: ['guide'],
-    note: 'The plan a wall, slab, zone or unit was built from; building links follow it.',
-  }),
-  ...(['planReference.anchorGuideId', 'planReference.calibrationSourceGuideId'] as const).map(
-    (key) =>
-      meta(key, {
-        ...policy('node', 'connection', 'freeze', 'strip'),
-        targetKinds: ['guide'],
-        note: 'The plan this plan was matched onto, or took its calibration from.',
-      }),
-  ),
-  meta('unitPlanRoom.guideId', {
-    ...policy('node', 'connection', 'freeze', 'strip'),
-    targetKinds: ['zone'],
-    note: 'The unit plan a room zone was named from (create_reference_elements into fits).',
-  }),
-  ...(
-    [
-      'planReference.assetId',
-      'planReference.sourceUrl',
-      'planVectors.originalUrl',
-      'referenceOutline.assetId',
-      'referenceOutline.sourceUrl',
-    ] as const
-  ).map((key) =>
-    meta(key, {
-      ...policy('asset', 'content', 'freeze', 'keep'),
-      note: 'The plan image, its vector source, or the catalog asset an import matched.',
-    }),
-  ),
 ]
 
 const described = (reason: string, paths: readonly string[]) =>
@@ -959,57 +917,6 @@ const described = (reason: string, paths: readonly string[]) =>
 
 /** Metadata keys found in editor sources that are not references. */
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
-  ...described(
-    'Plan reference data: sizes, transforms, calibration and the reading; names no node.',
-    [
-      'planReference.alignment',
-      'planReference.alignment.anchorTransform',
-      'planReference.alignment.anchorTransform.metersPerPixel',
-      'planReference.alignment.anchorTransform.position',
-      'planReference.alignment.anchorTransform.rotation',
-      'planReference.baselineTransform',
-      'planReference.baselineTransform.metersPerPixel',
-      'planReference.baselineTransform.position',
-      'planReference.baselineTransform.rotation',
-      'planReference.height',
-      'planReference.inheritedCalibration',
-      'planReference.inheritedCalibration.knownDimension',
-      'planReference.inheritedCalibration.scaleReference',
-      'planReference.knownDimension',
-      'planReference.knownDimension.meters',
-      'planReference.metersPerPixel',
-      'planReference.method',
-      'planReference.mimeType',
-      'planReference.role',
-      'planReference.sharedFrame',
-      'planReference.traced',
-      'planReference.version',
-      'planReference.width',
-      'planReading',
-      'planReading.addBalconies',
-      'planReading.dropBalconies',
-      'planReading.roles',
-      'planVectors.method',
-      'referenceContours',
-      'referenceLabels',
-      'referenceOutline.conversion',
-      'referenceOutline.detachedReason',
-      'referenceOutline.linked',
-      'referenceOutline.outlineId',
-      'referenceOutline.outlineIds',
-      'referenceOutline.reviewRequired',
-      'requireHumanCalibration',
-    ],
-  ),
-  ...described('An authored object: what it stands in for, as add_object was told.', ['reason']),
-  ...described(
-    "What a reference image shows, as record_reference wrote it: items and their status. An item's nodeIds are read, never followed: a node gone reads as not built (lost), so nothing remaps them.",
-    ['referenceInventory', 'referenceInventory.items'],
-  ),
-  ...described(
-    "A room built from a unit plan: the apartment shape of the floor's map it went into.",
-    ['unitPlanRoom', 'unitPlanRoom.apartmentId'],
-  ),
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',
@@ -1108,13 +1015,13 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ]),
   ...described('Registry extension key, not scene-node metadata.', ['pascal:editor/floorplan']),
   ...described('Next.js page metadata export, not scene-node metadata.', ['title']),
+  ...described('An authored object: what it stands in for, as add_object was told.', ['reason']),
   ...described('Balcony state: a snapshot, flag or label; names nothing.', [
     'balcony.options',
     'balcony.role',
     'balcony.source',
     'balcony.guardBoundaryIndices',
     'balcony.hiddenByStyle',
-    'placeholderSource',
     'balcony.options.depth',
     'balcony.options.railing',
   ]),

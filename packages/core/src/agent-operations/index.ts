@@ -10,7 +10,6 @@ import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
 import { duplicateLevel } from './duplicate-level'
 import { findByType } from './find-by-type'
-import { furnishFromPlan } from './furnish-from-plan'
 import { furnishRoom } from './furnish-room'
 import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
@@ -19,18 +18,12 @@ import { mergeWindowsOperation } from './merge-windows'
 import { paint } from './paint'
 import { placeInRoom } from './place-in-room'
 import { placeItems } from './place-items'
-import { calibratePlanReference, getPlanReference, matchPlanReference } from './plan-calibration'
-import { correctPlanReading } from './plan-reading'
-import { surveyPlanReferences } from './plan-survey'
-import { createReferenceElements } from './reference-elements'
-import { recordReference } from './reference-items'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperation, AgentOperations } from './types'
-import { vectorizePlan } from './vectorize-plan'
 import { verifyScene } from './verify-scene'
 
 export * from './achieved'
@@ -76,7 +69,6 @@ export * from './wall-object-observations'
 export * from './wall-opening'
 
 const SINGLE_OPERATIONS = {
-  record_reference: recordReference,
   measure_stair: measureStairOperation,
   fit_stair: fitStair,
   list_levels: listLevels,
@@ -99,19 +91,11 @@ const SINGLE_OPERATIONS = {
   find_by_type: findByType,
   create_room: createRoom,
   furnish_room: furnishRoom,
-  furnish_from_plan: furnishFromPlan,
-  vectorize_plan: vectorizePlan,
   paint,
   place_in_room: placeInRoom,
   search_assets: searchAssets,
   search_materials: searchMaterials,
   ...ROOM_OPERATIONS,
-  get_plan_reference: getPlanReference,
-  calibrate_plan_reference: calibratePlanReference,
-  match_plan_reference: matchPlanReference,
-  survey_plan_references: surveyPlanReferences,
-  create_reference_elements: createReferenceElements,
-  correct_plan_reading: correctPlanReading,
 } as const
 
 const BATCHED_OPERATIONS = Object.fromEntries(
@@ -124,7 +108,6 @@ export const AGENT_OPERATIONS = {
   run_batch: createBatchOperation(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS),
 } as const satisfies AgentOperations
 
-export { furnishFromPlanQuestions } from './furnish-from-plan'
 export { type PhotoFacePlan, planPhotoElevation } from './photo-elevation'
 export { recordMade } from './record-made'
 export {
@@ -136,4 +119,3 @@ export {
   type SessionRecord,
   startOfSession,
 } from './scene-checkpoint'
-export { vectorizePlanTarget } from './vectorize-plan'

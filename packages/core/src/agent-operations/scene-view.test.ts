@@ -253,26 +253,6 @@ describe("the photo's camera", () => {
 // Run 3 (2026-10-05) compared whole facades with view_scene and never recorded what the photo
 // showed: the note a view comes with invites the inventory until one exists (L15).
 describe('the note a view comes with', () => {
-  const building = (inventory?: unknown[]) => ({
-    building_note: BuildingNode.parse({
-      id: 'building_note',
-      ...(inventory ? { metadata: { referenceInventory: { items: inventory } } } : {}),
-    }),
-  })
-
-  test('says a view is not a measure, and invites the inventory until one exists', () => {
-    const bare = sceneViewNote(building())
-    expect(bare).toContain('not a measure')
-    expect(bare).toContain('record_reference')
-    const recorded = sceneViewNote(
-      building([{ image: 'p', id: 'x', kind: 'fixture', what: 'A lamp', status: 'to_build' }]),
-    )
-    expect(recorded).toContain('not a measure')
-    expect(recorded).not.toContain('record_reference')
-  })
-})
-
-describe('the note a view comes with', () => {
   test('says a view is a picture to compare, not a measure', () => {
     expect(sceneViewNote()).toContain('not a measure')
   })

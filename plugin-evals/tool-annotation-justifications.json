@@ -98,32 +98,6 @@
       }
     },
     {
-      "name": "adjust_plan_reference",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it moves, turns or rescales a plan guide in the connected Pascal scene.",
-        "destructiveHint": "It changes one guide's placement by explicit amounts; it deletes nothing and every change is undoable.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
-      "name": "align_reference_frames",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it copies a human-calibrated transform onto guide nodes that declare the same image frame, moving their linked reference geometry.",
-        "destructiveHint": "It only applies an existing human measurement to guides declaring the identical frame; it deletes nothing and never invents a measurement.",
-        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
-      }
-    },
-    {
       "name": "analyze_floorplan_image",
       "annotations": {
         "readOnlyHint": true,
@@ -163,19 +137,6 @@
       }
     },
     {
-      "name": "calibrate_plan_reference",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it sets the scale of one plan guide in the connected Pascal scene from a known length.",
-        "destructiveHint": "It only rescales one guide about a point it keeps fixed and records what was measured; it refuses a plan that already has a scale unless asked to replace it, deletes nothing, and every change is undoable.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
       "name": "check_collisions",
       "annotations": {
         "readOnlyHint": true,
@@ -199,19 +160,6 @@
         "readOnlyHint": "It is not read-only because it empties the project back to its default scaffold and saves it.",
         "destructiveHint": "The operation removes everything in the project except the site, building and level, on purpose.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
-      }
-    },
-    {
-      "name": "correct_plan_reading",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it stores corrections to a plan's reading (shape roles, added or dropped balconies) on the plan guide in the connected Pascal scene.",
-        "destructiveHint": "It only adds or clears corrections kept on plan guides; it deletes no scene content and every change is undoable.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -263,19 +211,6 @@
       "justifications": {
         "readOnlyHint": "It is not read-only because creates a new Pascal project and its initial scene state.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
-        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
-      }
-    },
-    {
-      "name": "create_reference_elements",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it creates walls, slabs, units, zones or balconies from calibrated plan contours in the connected Pascal scene.",
-        "destructiveHint": "It only adds elements: existing walls are reused and never modified, and contours already built are skipped.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
       }
     },
@@ -527,19 +462,6 @@
       }
     },
     {
-      "name": "furnish_from_plan",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": true
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because, with picks, it adds catalog items where the plan reference draws its furniture in the connected Pascal scene.",
-        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
-        "openWorldHint": "It may send the plan's label texts and measured facts to an externally hosted fast judge, which says what room each label names."
-      }
-    },
-    {
       "name": "furnish_room",
       "annotations": {
         "readOnlyHint": false,
@@ -587,19 +509,6 @@
       },
       "justifications": {
         "readOnlyHint": "It reads one node from the connected Pascal scene without changing scene or project state.",
-        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
-        "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
-      }
-    },
-    {
-      "name": "get_plan_reference",
-      "annotations": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It reads one plan guide's size, scale and contours from the connected Pascal scene without changing scene or project state.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
       }
@@ -667,19 +576,6 @@
         "readOnlyHint": "It reads zone data from the connected Pascal scene without changing scene or project state.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
-      }
-    },
-    {
-      "name": "import_plan_reference",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it adds a plan guide node, with the plan's contours, to a floor of the connected Pascal scene.",
-        "destructiveHint": "It adds a new guide without deleting or replacing existing Pascal scene or project state, and never sets a measurement.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -771,19 +667,6 @@
         "readOnlyHint": "Updates exterior wall justification and connected reference lines in the scene.",
         "destructiveHint": "Replaces existing wall geometry intent so later thickness edits keep the outside face fixed.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
-      }
-    },
-    {
-      "name": "match_plan_reference",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it moves one plan guide onto another from shared features, and may give the other plan its scale, in the connected Pascal scene.",
-        "destructiveHint": "It only adjusts the placement and scale of plan guides; it deletes nothing and every change is undoable.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -930,19 +813,6 @@
       }
     },
     {
-      "name": "record_reference",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it keeps what a reference image shows, item by item, on the connected Pascal scene.",
-        "destructiveHint": "It adds items to the inventory or updates the ones it names; it changes no geometry and deletes nothing.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
       "name": "redo",
       "annotations": {
         "readOnlyHint": false,
@@ -953,19 +823,6 @@
         "readOnlyHint": "It is not read-only because reapplies a recorded change and mutates the active Pascal scene and history state.",
         "destructiveHint": "Reapplying history changes the active scene and can overwrite state restored by undo.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
-      }
-    },
-    {
-      "name": "refine_plan_match",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it moves a plan guide onto the matching contour of a calibrated plan in the connected Pascal scene.",
-        "destructiveHint": "It only adjusts one guide's placement, within a bounded scale change; it deletes nothing and every change is undoable.",
-        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -1016,7 +873,7 @@
       },
       "justifications": {
         "readOnlyHint": "It is not read-only because it runs scene tools that create, change and delete nodes, applied as one step.",
-        "destructiveHint": "Its calls can delete nodes (delete_node, create_reference_elements with replace), with their descendants.",
+        "destructiveHint": "Its calls can delete nodes (delete_node), with their descendants.",
         "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
@@ -1138,19 +995,6 @@
       }
     },
     {
-      "name": "survey_plan_references",
-      "annotations": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It measures placed plan guides in the connected Pascal scene (families of identical floors, what each map holds, where unit plans fit) without changing scene or project state.",
-        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
-        "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
-      }
-    },
-    {
       "name": "undo",
       "annotations": {
         "readOnlyHint": false,
@@ -1187,19 +1031,6 @@
         "readOnlyHint": "It checks the connected Pascal scene for schema and graph problems without repairing or changing it.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
-      }
-    },
-    {
-      "name": "vectorize_plan",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": true
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it replaces a raster plan reference's image and shapes with their SVG in the connected Pascal scene.",
-        "destructiveHint": "It keeps the plan's original image on the reference and deletes no scene or project state; the plan keeps its place and calibration.",
-        "openWorldHint": "It sends the plan's image to an externally hosted vectoriser, a paid model service, which answers its SVG."
       }
     },
     {

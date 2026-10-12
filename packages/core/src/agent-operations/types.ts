@@ -19,24 +19,6 @@ export type AgentContext = {
   catalog?: readonly AssetInput[]
   /** Absent when the host cannot author native scene materials. */
   materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
-  /**
-   * A host's fast judge's answers to an operation's questions, asked before the call as the
-   * catalog is fetched (furnish_from_plan: what each plan label names), by question id.
-   */
-  planAnswers?: Readonly<Record<string, { choice: string; sure: number } | null>>
-  /**
-   * A raster plan as the host's vectoriser drew it (vectorize_plan), fetched before the call as
-   * the catalog is: its SVG, or why there is none. `cost` is the host's word for what it paid.
-   */
-  planVector?: {
-    guideId: string
-    svg?: string
-    model?: string
-    cost?: string
-    error?: string
-    /** The host refused to vectorise this plan, with its own code, before any spend. */
-    refusal?: { code: string; message: string }
-  }
 }
 
 /** Edits an operation asks for; each surface applies them its own way, in one undo step. */

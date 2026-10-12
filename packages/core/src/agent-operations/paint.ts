@@ -15,7 +15,6 @@ import type { AnyNode, ColumnNode, FenceNode, MaterialSchema, WallNode } from '.
 import { planWallPaint } from '../systems/wall/wall-paint-plan'
 import { roomSideFaces } from '../systems/wall/wall-room-sides'
 import { finishSurface, requireMaterialRef } from './material-refs'
-import { registerBuildPath } from './reference-items'
 import { resolveInlinePaintMaterial } from './scene-materials'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
@@ -37,16 +36,6 @@ type PaintInput = {
   materialName?: string
   erase?: true
 }
-
-// An approximated or impossible finish in a reference inventory points here (L60).
-registerBuildPath('material', {
-  tool: 'paint',
-  how: 'paint gives it a library material or the nearest library colour: paint {targets, material | color}',
-})
-registerBuildPath('roof', {
-  tool: 'paint',
-  how: "paint gives a roof's top, edge or wall a library material or a colour: paint {targets, role, material | color}",
-})
 
 const ROOF_ROLES = ['top', 'edge', 'wall'] as const
 type RoofRole = (typeof ROOF_ROLES)[number]

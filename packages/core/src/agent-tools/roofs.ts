@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { registerPlansGuideSection } from './guides'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
@@ -74,10 +73,3 @@ export const createRoofTool = {
     name: z.string().max(120).optional().describe('What the user would call it (default "Roof").'),
   },
 }
-
-/** The plans guide's step 4, brought with these tools. */
-registerPlansGuideSection({
-  name: 'envelope',
-  order: 4,
-  text: '4. Envelope: the roof over the top floor (create_roof, with the overhang the photo shows: a deep modern eave is 1–2 m).',
-})
