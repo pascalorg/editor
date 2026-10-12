@@ -127,6 +127,12 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+  // The editor follows its host's `.dark` class, and this app keeps the editor
+  // dark. On <body>, so the menus and dialogs it portals there are dark too.
+  useEffect(() => {
+    document.body.classList.add('dark')
+    return () => document.body.classList.remove('dark')
+  }, [])
   useLocalArtifactStore()
   const router = useRouter()
   const searchParams = useSearchParams()

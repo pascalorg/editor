@@ -31,7 +31,7 @@ export default function RootLayout({
 
   return (
     <html
-      className={`dark ${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${barlow.variable}`}
+      className={`${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${barlow.variable}`}
       lang="en"
     >
       <body className="font-sans">
