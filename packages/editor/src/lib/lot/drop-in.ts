@@ -24,15 +24,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type BuildingNode,
   generateId,
+  placeBuildingPose,
   SiteNode,
+  siteBrief,
   useScene,
 } from '@pascal-app/core'
-import {
-  buildingRecentreOffset,
-  buildSitePlanDrawing,
-} from '../floorplan/site-plan/build-site-plan-drawing'
 import {
   answered,
   type CodeBasisData,
@@ -339,27 +336,15 @@ export async function dropInLot(
     terrainFailure = 'skipped'
   }
 
-  // Centre the building on the lot when its footprint fell outside the new ring.
+  // A house the new lot leaves past its lines stands centred on the buildable area again, facing
+  // as it did.
   let recentred = false
   const after = useScene.getState()
-  const drawing = buildSitePlanDrawing({
-    collections: after.collections,
-    installedPlugins: after.installedPlugins,
-    materials: after.materials,
-    nodes: after.nodes,
-    rootNodeIds: after.rootNodeIds,
-  })
-  const offset = buildingRecentreOffset(drawing.meta.lot, drawing.meta.footprintBounds)
-  if (offset && drawing.meta.buildingId) {
-    const building = after.nodes[drawing.meta.buildingId as AnyNodeId] as BuildingNode | undefined
-    if (building) {
-      after.updateNode(building.id, {
-        position: [
-          building.position[0] + offset[0],
-          building.position[1],
-          building.position[2] + offset[1],
-        ],
-      })
+  const brief = siteBrief(after.nodes)
+  if (brief?.buildingId && brief.footprint?.fit === 'outside') {
+    const placed = placeBuildingPose(after.nodes, { buildingId: brief.buildingId })
+    if (placed.ok && placed.moved) {
+      after.updateNode(placed.buildingId as AnyNodeId, { position: placed.position })
       recentred = true
     }
   }

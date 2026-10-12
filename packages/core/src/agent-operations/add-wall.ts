@@ -1,7 +1,9 @@
 import { refuse } from '../agent-tools/refusal'
+import { lotOverhang } from '../lib/site-placement'
 import { WallNode } from '../schema'
 import { isRoofLevel } from '../services/roof-level'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
+import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
 import { WALL_MIN_LENGTH } from '../systems/wall/wall-topology'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import type { AgentOperation, SceneNodes } from './types'
@@ -51,6 +53,17 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ...(input.height === undefined ? {} : { height: input.height }),
     ...(curveOffset ? { curveOffset } : {}),
   })
+  // the wall's band, square ends: what crosses the lot line, not only its centreline
+  const half = (wall.thickness ?? DEFAULT_WALL_THICKNESS) / 2
+  const [nx, nz] = [(-(end[1] - start[1]) / length) * half, ((end[0] - start[0]) / length) * half]
+  const site = lotOverhang(nodes, level.id, [
+    [
+      [start[0] + nx, start[1] + nz],
+      [end[0] + nx, end[1] + nz],
+      [end[0] - nx, end[1] - nz],
+      [start[0] - nx, start[1] - nz],
+    ],
+  ])
   return {
     result: {
       ok: true,
@@ -59,7 +72,12 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
       levelId: level.id,
       length: Math.round(length * 1000) / 1000,
       ...(curveOffset ? { curveOffset } : {}),
-      message: `Added wall "${wall.name}" on ${level.name ?? level.id}`,
+      ...(site ? { site } : {}),
+      message: `Added wall "${wall.name}" on ${level.name ?? level.id}${
+        site
+          ? `; it reaches ${site.overhangM} m past the lot line (${site.sides.join(', ')}): the house belongs inside the buildable area (get_site, place_building)`
+          : ''
+      }`,
     },
     changes: { create: [{ node: wall, parentId: level.id }] },
   }

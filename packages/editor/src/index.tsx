@@ -538,11 +538,8 @@ export {
 } from './lib/floorplan/sheet-export'
 // ── Site plan (WS1) ──────────────────────────────────────────────────
 export {
-  boundsInsidePolygon,
-  buildingRecentreOffset,
   buildSitePlanDrawing,
   castYardDimensions,
-  classifyEdges,
   computeSiteCoverage,
   describeSiteEdges,
   detectFrontEdgeFromRoads,
@@ -566,10 +563,8 @@ export {
   type SitePlanServiceRole,
   type SitePlanServices,
   serviceEntranceOf,
-  setbackEnvelope,
   streetCore,
   streetEdgeNames,
-  type YardDimension,
 } from './lib/floorplan/site-plan'
 export {
   commitFreshPlacementSubtree,

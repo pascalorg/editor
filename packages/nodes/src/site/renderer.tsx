@@ -2,7 +2,9 @@
 
 import {
   type AnyNodeId,
+  resolveFrontEdge,
   type SiteNode,
+  setbackEnvelope,
   sightTriangle,
   streetCorners,
   type TerrainField,
@@ -53,7 +55,6 @@ import {
   updateRibbonHeights,
 } from './line-ribbon'
 import { getRecessedSlabGroundHoles } from './recessed-slab-ground-holes'
-import { resolveFrontEdge, setbackEnvelope } from './setbacks'
 import {
   buildDrapedPolyline,
   type DrapedPolyline,

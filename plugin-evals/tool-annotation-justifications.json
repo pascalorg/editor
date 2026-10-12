@@ -553,6 +553,19 @@
       }
     },
     {
+      "name": "get_site",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It reads the site a building stands on, its lot, setbacks and footprint, from the connected Pascal scene without changing it.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
       "name": "get_source",
       "annotations": {
         "readOnlyHint": true,
@@ -771,6 +784,19 @@
         "readOnlyHint": "It is not read-only because uses image analysis to generate and persist a new active Pascal scene, replacing prior active scene state.",
         "destructiveHint": "It replaces active scene state and persists generated geometry, so existing user state can be overwritten.",
         "openWorldHint": "It may send the supplied photo to an externally hosted vision model or provider before generating the scene."
+      }
+    },
+    {
+      "name": "place_building",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It moves a building node on its site in the connected scene.",
+        "destructiveHint": "It replaces the building's stored position and rotation, in one undoable edit; what stands on its levels moves with it.",
+        "openWorldHint": "It operates on the connected scene and its configured live persistence transport without accessing the public internet."
       }
     },
     {
