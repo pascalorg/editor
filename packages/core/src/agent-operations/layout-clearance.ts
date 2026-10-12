@@ -8,7 +8,13 @@
  * See packages/mcp/docs/layout-clearance-error-log.md for regression checklist.
  */
 
-import type { AnyNode } from '../schema'
+import { floorConstructionLift, liftedManualSlab } from '../lib/floor-construction-lift'
+import { selectSlabSupportForItem } from '../lib/item-slab-support'
+import { getRenderableSlabPolygon } from '../lib/slab-polygon'
+import { levelBaseElevationAt } from '../lib/terrain-support-query'
+import { type AnyNode, getScaledDimensions, type ItemNode } from '../schema'
+import { resolveCeilingHeight } from '../services/level-height'
+import { CEILING_DRAW_OFFSET } from '../services/storey'
 import {
   aabbsOverlap,
   findBlockedDoors,
@@ -92,13 +98,139 @@ export function collectOccupiedFootprints(
   return out
 }
 
+type ItemVerticalInterval = { levelId: string; min: number; max: number }
+
+function finiteVec3(value: unknown): value is [number, number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    [value[0], value[1], value[2]].every(Number.isFinite)
+  )
+}
+
+function planarRotation(value: unknown): value is [number, number, number] {
+  return finiteVec3(value) && value[0] === 0 && value[2] === 0
+}
+
+function finiteNumbers(value: unknown): boolean {
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (Array.isArray(value)) return value.every(finiteNumbers)
+  if (value && typeof value === 'object') return Object.values(value).every(finiteNumbers)
+  return true
+}
+
+/** Snapshot counterpart of the item floorPlaced support election; never reads the live grid. */
+function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
+  // The renderer's item floorPlaced.applies skips corrective surface attachments.
+  if (node.asset.attachTo) return 0
+  const levelId = node.parentId!
+  const ground = () =>
+    levelBaseElevationAt(nodes, levelId, node.position[0], node.position[2]) +
+    floorConstructionLift(nodes, node)
+  if (node.supportSlabId === 'ground') return ground()
+  const list = Object.values(nodes)
+  const slabs = list
+    .filter(
+      (other): other is Extract<AnyNode, { type: 'slab' }> =>
+        other.type === 'slab' && other.parentId === levelId,
+    )
+    .map((slab) => liftedManualSlab(nodes, slab))
+  const walls = list.filter((other): other is Extract<AnyNode, { type: 'wall' }> => {
+    if (other.type !== 'wall') return false
+    let parent = other.parentId ? nodes[other.parentId] : undefined
+    for (let depth = 0; parent && parent.type !== 'level' && depth < 16; depth++) {
+      parent = parent.parentId ? nodes[parent.parentId] : undefined
+    }
+    return parent?.type === 'level' && parent.id === levelId
+  })
+  const support = selectSlabSupportForItem(
+    slabs,
+    { position: node.position, dimensions: getScaledDimensions(node), rotation: node.rotation },
+    (slab) =>
+      getRenderableSlabPolygon(slab, {
+        walls,
+        siblingSlabs: slabs.filter((other) => other.id !== slab.id),
+      }),
+    { preferredSlabId: node.supportSlabId },
+  )
+  return support ? support.elevation : ground()
+}
+
+/**
+ * Only script manifests supply raw bounds for the renderer's corrective asset pose.
+ * Catalog dimensions describe a plan box, not proof of the raw model's Y origin.
+ */
+function itemVerticalInterval(
+  node: AnyNode | undefined,
+  nodes: Record<string, AnyNode>,
+): ItemVerticalInterval | undefined {
+  if (node?.type !== 'item' || node.roofSegmentId || node.blockFaceId) return
+  const bounds = node.source?.manifest?.bounds
+  const assetScale = node.asset.scale ?? [1, 1, 1]
+  if (
+    !bounds ||
+    node.source?.manifest?.animations?.length ||
+    !finiteVec3(bounds.min) ||
+    !finiteVec3(bounds.max) ||
+    bounds.min.some((min, axis) => min > bounds.max[axis]!) ||
+    !finiteVec3(node.position) ||
+    !planarRotation(node.rotation) ||
+    !finiteVec3(node.scale) ||
+    node.scale.some((scale) => scale <= 0) ||
+    !finiteVec3(node.asset.offset) ||
+    !planarRotation(node.asset.rotation) ||
+    !finiteVec3(assetScale) ||
+    assetScale.some((scale) => scale <= 0) ||
+    !finiteVec3(node.asset.dimensions) ||
+    node.asset.dimensions.some((size) => size <= 0)
+  )
+    return
+  const parent = node.parentId ? nodes[node.parentId] : undefined
+  const level =
+    parent?.type === 'level'
+      ? parent
+      : parent?.type === 'ceiling' && parent.parentId
+        ? nodes[parent.parentId]
+        : undefined
+  if (level?.type !== 'level') return
+  try {
+    const hostY =
+      parent?.type === 'ceiling'
+        ? resolveCeilingHeight(parent, nodes) - CEILING_DRAW_OFFSET
+        : itemFloorLift(node, nodes)
+    // Clone: asset scale → asset yaw → asset offset → node scale → node yaw.
+    // Both rotations preserve Y; the owning level's world translation cancels.
+    const min =
+      hostY +
+      node.position[1] +
+      node.scale[1] * (node.asset.offset[1] + assetScale[1] * bounds.min[1])
+    const max =
+      hostY +
+      node.position[1] +
+      node.scale[1] * (node.asset.offset[1] + assetScale[1] * bounds.max[1])
+    if (Number.isFinite(min) && Number.isFinite(max)) return { levelId: level.id, min, max }
+  } catch {
+    // Malformed or unsupported support geometry is not evidence of separation.
+  }
+}
+
 export function findItemItemCollisions(args: {
   nodes: Iterable<AnyNode>
   levelId?: string
   gap?: number
 }): ItemCollision[] {
   const gap = args.gap ?? DEFAULT_ITEM_GAP
-  const footprints = collectOccupiedFootprints(args.nodes, { levelId: args.levelId })
+  const list = [...args.nodes]
+  const nodes = Object.fromEntries(list.map((node) => [node.id, node]))
+  const footprints = collectOccupiedFootprints(list, { levelId: args.levelId })
+  // Drawing fallbacks on invalid support heights cannot prove collision separation.
+  const finiteContext = list.every((node) => node.type === 'item' || finiteNumbers(node))
+  const intervals = new Map(
+    footprints.map(({ id }) => [
+      id,
+      finiteContext ? itemVerticalInterval(nodes[id], nodes) : undefined,
+    ]),
+  )
   const collisions: ItemCollision[] = []
   for (let i = 0; i < footprints.length; i++) {
     for (let j = i + 1; j < footprints.length; j++) {
@@ -106,6 +238,16 @@ export function findItemItemCollisions(args: {
       const b = footprints[j]!
       if (a.levelId && b.levelId && a.levelId !== b.levelId) continue
       if (!aabbsOverlap(a.aabb, b.aabb, gap)) continue
+      const aY = intervals.get(a.id)
+      const bY = intervals.get(b.id)
+      // Contact and sub-micrometre separation remain conservative against roundoff.
+      if (
+        aY &&
+        bY &&
+        aY.levelId === bY.levelId &&
+        (bY.min - aY.max > 1e-6 || aY.min - bY.max > 1e-6)
+      )
+        continue
       collisions.push({
         aId: a.id,
         bId: b.id,

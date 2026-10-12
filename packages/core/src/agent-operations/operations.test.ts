@@ -3,7 +3,15 @@ import { z } from 'zod'
 import { AGENT_TOOL_CONTRACTS } from '../agent-tools'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
-import { type AnyNode, generateId, LevelNode, StairNode, StairSegmentNode } from '../schema'
+import { nodeRegistry, registerNode } from '../registry'
+import {
+  type AnyNode,
+  BaseNode,
+  generateId,
+  LevelNode,
+  StairNode,
+  StairSegmentNode,
+} from '../schema'
 import { AGENT_TOOL_CASES } from './__fixtures__/cases'
 import { applyAgentOutcome } from './apply-outcome'
 import { AGENT_OPERATIONS, applySceneChanges } from './index'
@@ -84,4 +92,41 @@ test('stair design targets stay informational in scene verification', () => {
   expect(
     verified.issues.filter((issue) => issue.type.endsWith('_target') && issue.severity !== 'info'),
   ).toEqual([])
+})
+
+test('scene verification validates registered plugin kinds without accepting malformed or unknown nodes', () => {
+  const restore = nodeRegistry._snapshot()
+  const schema = BaseNode.extend({
+    type: z.literal('diagnostic-pool').default('diagnostic-pool'),
+    depth: z.number().positive(),
+  })
+  try {
+    registerNode({
+      kind: 'diagnostic-pool',
+      schemaVersion: 1,
+      schema,
+      category: 'utility',
+      defaults: () => schema.parse({ id: 'pool_test', depth: 1.5 }),
+      capabilities: {},
+    })
+    const pool = schema.parse({ id: 'pool_test', depth: 1.5 })
+    const verify = (node: unknown) =>
+      AGENT_OPERATIONS.verify_scene(
+        { [pool.id]: node } as Record<string, AnyNode>,
+        {},
+        { activeLevelId: null },
+      ).result
+    expect(verify(pool)).toMatchObject({ valid: true, issues: [], hasIssues: false })
+    for (const node of [
+      { ...pool, depth: -1 },
+      { ...pool, type: 'unknown-pool' },
+      { ...pool, type: 'wall' },
+    ]) {
+      const result = verify(node)
+      expect(result.valid).toBe(false)
+      expect(result.issues).toContainEqual(expect.objectContaining({ type: 'schema_invalid' }))
+    }
+  } finally {
+    restore()
+  }
 })

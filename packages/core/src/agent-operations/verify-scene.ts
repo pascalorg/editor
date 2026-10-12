@@ -2,6 +2,7 @@ import { levelBuildingId } from '../building/level-duplication'
 import { coherenceChecklist } from '../coherence'
 import { getLevelDisplayName } from '../lib/level-name'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
+import { nodeRegistry } from '../registry'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
 import { getStoredLevelHeight } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
@@ -201,7 +202,8 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
 function schemaErrors(nodes: SceneNodes) {
   const errors: { nodeId: string; path: string; message: string }[] = []
   for (const [id, node] of Object.entries(nodes)) {
-    const parsed = AnyNodeSchema.safeParse(node)
+    const schema = nodeRegistry.get(node.type)?.schema ?? AnyNodeSchema
+    const parsed = schema.safeParse(node)
     if (parsed.success) continue
     for (const issue of parsed.error.issues)
       errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode } from '../schema'
+import { type AnyNode, CeilingNode, ItemNode, LevelNode, SlabNode } from '../schema'
+import { CEILING_DRAW_OFFSET } from '../services'
+import { authoredItem } from './__fixtures__/add-object-cases'
 import { inspectItemPlanFootprint, itemNodePlanAabb, resolveNodeLevelId } from './door-clearance'
+import { verifyScene } from './index'
 import {
   classifyPlacement,
   findItemItemCollisions,
@@ -42,6 +45,184 @@ function item(
 }
 
 describe('layout-clearance', () => {
+  function verticalScene() {
+    const level = LevelNode.parse({ id: 'level_vertical', height: 3 })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_vertical',
+      parentId: level.id,
+      height: 3,
+      polygon: [
+        [-3, -3],
+        [3, -3],
+        [3, 3],
+        [-3, 3],
+      ],
+    })
+    const furniture = authoredItem('item_furniture', level.id, {
+      name: 'Table',
+      category: 'furniture',
+      size: [2, 1, 2],
+    })
+    const pendant = authoredItem('item_pendant', ceiling.id, {
+      name: 'Pendant',
+      category: 'lighting',
+      size: [1, 0.4, 1],
+    })
+    pendant.asset.attachTo = 'ceiling'
+    pendant.source!.manifest.bounds.min[1] = -0.4
+    pendant.source!.manifest.bounds.max[1] = 0
+    return { level, ceiling, furniture, pendant }
+  }
+
+  test('proven ceiling pendant height clears floor furniture through scene verification', () => {
+    const { level, ceiling, furniture, pendant } = verticalScene()
+    const nodes = [level, ceiling, furniture, pendant]
+    expect(findItemItemCollisions({ nodes })).toEqual([])
+    const result = verifyScene(
+      Object.fromEntries(nodes.map((node) => [node.id, node])),
+      {},
+      { activeLevelId: level.id },
+    ).result
+    expect(result.issues).not.toContainEqual(expect.objectContaining({ type: 'item_overlap' }))
+    expect(result.issues).not.toContainEqual(expect.objectContaining({ type: 'item_too_close' }))
+    pendant.position[0] = 1.53
+    expect(findItemItemCollisions({ nodes })).toEqual([])
+  })
+
+  test('low pendants, ceiling peers and floor collisions remain warnings', () => {
+    const { level, ceiling, furniture, pendant } = verticalScene()
+    pendant.position[1] = -2
+    expect(findItemItemCollisions({ nodes: [level, ceiling, furniture, pendant] })).toHaveLength(1)
+    pendant.position[1] = 0
+    const peer = { ...pendant, id: 'item_peer' as const }
+    expect(findItemItemCollisions({ nodes: [level, ceiling, pendant, peer] })).toHaveLength(1)
+    expect(
+      findItemItemCollisions({
+        nodes: [level, furniture, { ...furniture, id: 'item_peer' }],
+      }),
+    ).toHaveLength(1)
+  })
+
+  test('vertical separation uses corrective transforms and elected slab support', () => {
+    const { level, ceiling, furniture, pendant } = verticalScene()
+    const slab = SlabNode.parse({
+      parentId: level.id,
+      polygon: ceiling.polygon,
+      elevation: 2,
+    })
+    const nodes = [level, ceiling, slab, furniture, pendant]
+    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
+    furniture.supportSlabId = 'ground'
+    expect(findItemItemCollisions({ nodes })).toEqual([])
+    pendant.asset.offset[1] = -2
+    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
+    pendant.asset.offset[1] = 0
+    pendant.asset.scale[1] = 6
+    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
+    pendant.asset.scale[1] = 1
+    pendant.scale[1] = 6
+    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
+  })
+
+  test('following ceiling height and contact remain conservative', () => {
+    const { level, ceiling, furniture, pendant } = verticalScene()
+    const nodes = [level, ceiling, furniture, pendant]
+    delete ceiling.height
+    expect(findItemItemCollisions({ nodes })).toEqual([])
+    level.height = 1.4
+    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
+    ceiling.height = 1.4 + CEILING_DRAW_OFFSET
+    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
+    ceiling.height += 0.5e-6
+    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
+    ceiling.height += 1e-4
+    expect(findItemItemCollisions({ nodes })).toEqual([])
+  })
+
+  test('two catalogue recessed lights without raw bounds retain floor and ceiling warnings', () => {
+    const { level, ceiling, furniture } = verticalScene()
+    const lights = ['item_recessed_a', 'item_recessed_b'].map((id) =>
+      ItemNode.parse({
+        id,
+        parentId: ceiling.id,
+        asset: {
+          id: 'recessed-light',
+          name: 'Recessed Light',
+          category: 'furniture',
+          thumbnail: '',
+          src: 'asset://recessed-light',
+          dimensions: [0.23, 0.06, 0.23],
+          offset: [0, 0.0057, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1],
+          attachTo: 'ceiling',
+          recessed: true,
+        },
+      }),
+    )
+    const nodes = [level, ceiling, furniture, ...lights]
+    const hits = findItemItemCollisions({ nodes })
+    expect(hits).toHaveLength(3)
+    expect(hits.filter((hit) => hit.aId === furniture.id)).toHaveLength(2)
+    const result = verifyScene(
+      Object.fromEntries(nodes.map((node) => [node.id, node])),
+      {},
+      { activeLevelId: level.id },
+    ).result
+    expect(result.issues.filter((issue) => issue.type === 'item_overlap')).toHaveLength(3)
+  })
+
+  test('unknown bounds and non-planar or malformed transforms cannot waive collisions', () => {
+    const mutations = [
+      (node: ReturnType<typeof authoredItem>) => {
+        node.source = undefined
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.rotation[0] = 0.1
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.asset.rotation[2] = 0.1
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.scale[1] = -1
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.position[1] = Number.NaN
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.asset.offset[1] = Number.NaN
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.source!.manifest.bounds.min[1] = 1
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.source!.manifest.animations = [{ name: 'swing', duration: 1 }]
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.roofSegmentId = 'rseg_unknown'
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.blockFaceId = 'block_unknown'
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.parentId = 'missing_parent'
+      },
+      (node: ReturnType<typeof authoredItem>) => {
+        node.parentId = 'item_furniture'
+      },
+    ]
+    for (const mutate of mutations) {
+      const { level, ceiling, furniture, pendant } = verticalScene()
+      mutate(pendant)
+      expect(findItemItemCollisions({ nodes: [level, ceiling, furniture, pendant] })).toHaveLength(
+        1,
+      )
+    }
+    const { level, ceiling, furniture, pendant } = verticalScene()
+    level.height = Number.NaN
+    expect(findItemItemCollisions({ nodes: [level, ceiling, furniture, pendant] })).toHaveLength(1)
+  })
+
   test('findItemItemCollisions detects rotated footprint overlap', () => {
     // Two 2x1 footprints; second rotated 90° so it extends along X
     const a = item('a', [0, 0, 0], [2, 1, 1], 'A', 0)
