@@ -5,6 +5,7 @@ import {
   sceneApiPreflight,
   withSceneApiHeaders,
 } from '@/lib/scene-api-security'
+import { isArtifactShared } from '@/lib/scene-sharing'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,8 +16,8 @@ export function OPTIONS(request: Request) {
 export async function GET(request: Request, { params }: { params: Promise<{ sha256: string }> }) {
   // A scene loads one artifact per scripted object; immutable reads stay outside the request budget.
   const guard = guardSceneApiRequest(request, { skipRateLimit: true })
-  if (guard) return guard
   const { sha256 } = await params
+  if (guard && (!/^[0-9a-f]{64}$/.test(sha256) || !(await isArtifactShared(sha256)))) return guard
   if (!/^[0-9a-f]{64}$/.test(sha256))
     return sceneApiJson(request, { error: 'invalid_hash' }, { status: 400 })
   const bytes = await new DiskArtifactStore(resolveDefaultDatabasePath()).read(sha256)
