@@ -346,6 +346,7 @@ export {
   type SkylightTypePreset,
 } from './nodes/skylight'
 export { MIN_GROUND_FLOOR_THICKNESS, MIN_SLAB_THICKNESS, SlabNode } from './nodes/slab'
+export { SlabFeatureNode, type SlabFeatureNodeId } from './nodes/slab-feature'
 export {
   SolarPanelMaterialRole,
   SolarPanelNode,

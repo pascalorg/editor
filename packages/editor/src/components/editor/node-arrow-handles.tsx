@@ -416,9 +416,17 @@ function NodeArrowHandlesForNode({
       )
       return
     }
-    if (outerRef.current && outerRide) {
-      outerRef.current.position.copy(outerRide.position)
-      outerRef.current.quaternion.copy(outerRide.quaternion)
+    if (outerRef.current && outerRide && portalObject) {
+      // Surface-local children sit inside an attachment frame below the
+      // registered host. Include that frame when positioning the handle rig.
+      portalObject.updateWorldMatrix(true, false)
+      outerRide.updateWorldMatrix(true, false)
+      _rigRelative.copy(portalObject.matrixWorld).invert().multiply(outerRide.matrixWorld)
+      _rigRelative.decompose(
+        outerRef.current.position,
+        outerRef.current.quaternion,
+        _rigScratchScale,
+      )
     }
   })
 

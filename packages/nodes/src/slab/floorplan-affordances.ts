@@ -1,4 +1,10 @@
-import { type AnyNode, resolveLevelId, type SlabNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type FloorplanAffordance,
+  resolveLevelId,
+  SlabFeatureValidationError,
+  type SlabNode,
+} from '@pascal-app/core'
 import { resolveSlabEdgeBandSnap, resolveSlabPlanPointSnap } from '@pascal-app/editor'
 import {
   createPolygonAddVertexAffordance,
@@ -61,19 +67,51 @@ const slabSnapOptions = {
   },
 }
 
-export const slabMoveVertexAffordance = createPolygonVertexAffordance<SlabNode>(
-  'slab',
-  slabSnapOptions,
+export const slabMoveVertexAffordance = guardSlabFeatureFit(
+  createPolygonVertexAffordance<SlabNode>('slab', slabSnapOptions),
 )
-export const slabAddVertexAffordance = createPolygonAddVertexAffordance<SlabNode>(
-  'slab',
-  slabSnapOptions,
+export const slabAddVertexAffordance = guardSlabFeatureFit(
+  createPolygonAddVertexAffordance<SlabNode>('slab', slabSnapOptions),
 )
-export const slabMoveEdgeAffordance = createPolygonMoveEdgeAffordance<SlabNode>(
-  'slab',
-  slabSnapOptions,
+export const slabMoveEdgeAffordance = guardSlabFeatureFit(
+  createPolygonMoveEdgeAffordance<SlabNode>('slab', slabSnapOptions),
 )
-export const slabDeleteVertexAffordance = createPolygonDeleteVertexAffordance<SlabNode>(
-  'slab',
-  slabSnapOptions,
+export const slabDeleteVertexAffordance = guardSlabFeatureFit(
+  createPolygonDeleteVertexAffordance<SlabNode>('slab', slabSnapOptions),
 )
+
+function guardSlabFeatureFit(
+  affordance: FloorplanAffordance<SlabNode>,
+): FloorplanAffordance<SlabNode> {
+  return {
+    ...affordance,
+    start(args) {
+      let session
+      try {
+        session = affordance.start(args)
+      } catch (err) {
+        if (!(err instanceof SlabFeatureValidationError)) throw err
+        return { affectedIds: [args.node.id], apply() {}, canCommit: () => false }
+      }
+      return {
+        ...session,
+        commit: session.commit
+          ? () => {
+              try {
+                session.commit?.()
+              } catch (err) {
+                if (!(err instanceof SlabFeatureValidationError)) throw err
+              }
+            }
+          : undefined,
+        apply(point) {
+          try {
+            session.apply(point)
+          } catch (err) {
+            if (!(err instanceof SlabFeatureValidationError)) throw err
+          }
+        },
+      }
+    },
+  }
+}

@@ -1035,8 +1035,19 @@ function migrateNodes(nodes: Record<string, any>): {
     vertical.nodes,
     { legacyOpeningsPrepared },
   )
+  const hostedNodes = { ...structure.nodes }
+  for (const child of Object.values(hostedNodes)) {
+    const parent = hostedNodes[child.parentId ?? '']
+    if (
+      parent?.type !== 'slab' ||
+      (child.type !== 'item' && child.type !== 'procedural-item' && child.type !== 'slab-feature')
+    )
+      continue
+    if (!parent.children?.includes(child.id))
+      hostedNodes[parent.id] = { ...parent, children: [...(parent.children ?? []), child.id] }
+  }
   return {
-    nodes: materializeNodeDefaults(structure.nodes).nodes as Record<string, AnyNode>,
+    nodes: materializeNodeDefaults(hostedNodes).nodes as Record<string, AnyNode>,
     mintedMaterials,
   }
 }

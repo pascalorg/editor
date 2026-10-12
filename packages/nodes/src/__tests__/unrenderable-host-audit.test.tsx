@@ -98,10 +98,27 @@ function makeHost(kind: string) {
           parentId: level.id,
         }) as AnyNode)
       : undefined
+  const featureSlab =
+    kind === 'slab-feature'
+      ? (nodeRegistry.get('slab')!.schema.parse({
+          parentId: level.id,
+          polygon: [
+            [-2, -2],
+            [2, -2],
+            [2, 2],
+            [-2, 2],
+          ],
+          thickness: 0.2,
+          elevation: 0.3,
+        }) as AnyNode)
+      : undefined
   const fields = {
     ...NODE_REQUIRED_FIELDS[kind],
-    parentId: featureWall?.id ?? level.id,
+    parentId: featureWall?.id ?? featureSlab?.id ?? level.id,
     ...(kind === 'wall-feature' ? { face: 'a', mode: 'bump' } : {}),
+    ...(kind === 'slab-feature'
+      ? { mode: 'bump', x: 2, z: 2, width: 2, length: 2, depth: 0.1 }
+      : {}),
     ...(kind === 'item' ? { asset: { ...asset, dimensions: [2, 1, 2] } } : {}),
     ...(kind === 'procedural-item'
       ? {
@@ -134,8 +151,10 @@ function makeHost(kind: string) {
   const nodes: Record<string, AnyNode> = {
     [host.id]: host,
     ...(featureWall ? { [featureWall.id]: featureWall } : {}),
+    ...(featureSlab ? { [featureSlab.id]: featureSlab } : {}),
   }
   if (featureWall) (featureWall as AnyNode & { children: string[] }).children = [host.id]
+  if (featureSlab) (featureSlab as AnyNode & { children: string[] }).children = [host.id]
   const parse = (type: string, values: Record<string, unknown>) =>
     nodeRegistry.get(type)!.schema.parse(values) as AnyNode
   if (

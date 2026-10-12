@@ -42,6 +42,7 @@ import { ShelfNode } from './nodes/shelf'
 import { SiteNode } from './nodes/site'
 import { SkylightNode } from './nodes/skylight'
 import { SlabNode } from './nodes/slab'
+import { SlabFeatureNode } from './nodes/slab-feature'
 import { SolarPanelNode } from './nodes/solar-panel'
 import { SpawnNode } from './nodes/spawn'
 import { StairNode } from './nodes/stair'
@@ -113,6 +114,7 @@ export const AnyNode = nodeUnion([
   ImportedMeshNode,
   ZoneNode,
   SlabNode,
+  SlabFeatureNode,
   CeilingNode,
   RoofNode,
   RoofSegmentNode,

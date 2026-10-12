@@ -312,6 +312,7 @@
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
         "three": "^0.186",
+        "zod": ">=4.5.4 <4.6",
         "zustand": "^5",
       },
     },
@@ -369,6 +370,7 @@
     },
   },
   "patchedDependencies": {
+    "@react-three/drei@10.7.7": "patches/@react-three%2Fdrei@10.7.7.patch",
     "three@0.186.0": "patches/three@0.186.0.patch",
     "iwer@2.3.0": "patches/iwer@2.3.0.patch",
   },

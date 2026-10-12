@@ -22,7 +22,9 @@ import {
   parseFloorStepRole,
   plateFinishKey,
   plateLevelContext,
+  pointInPolygon2D,
   resolveFloorStepFinish,
+  resolveSlabFeaturePlacement,
   type SiteNode,
   SLAB_SIDE_SLOT_DEFAULT,
   SLAB_TOP_SLOT_DEFAULT,
@@ -50,6 +52,7 @@ import {
 import { type BufferGeometry, FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 import { generateFenceSlotGeometries } from '../fence/geometry-parts'
 import { creaseCrossings } from '../site/terrain-drape'
+import { buildSlabFeatureBody } from '../slab-feature/geometry'
 import { clipPlateTerrainFill, splitPlateFaces, splitSlabFacesByFacing } from './surface-split'
 
 /**
@@ -313,6 +316,7 @@ export function buildSlabGeometry(
   sceneTheme?: string,
 ): Group {
   if (ctx) node = withHostedCutterHoles(node, cutterContextNodes(node, ctx))
+  const authoredElevation = node.elevation
   if (ctx && !node.plateRole && !node.autoFromWalls)
     node = liftedManualSlab(plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}, node)
   const group = new Group()
@@ -356,7 +360,32 @@ export function buildSlabGeometry(
         return false
       }),
     )
-  const merged = generateSlabGeometry(node, polygonContext, platform ? levelBaseAt : undefined)
+  let merged = generateSlabGeometry(node, polygonContext, platform ? levelBaseAt : undefined)
+  const featureNodes: Record<string, AnyNode> = {
+    ...plateLevelContext(ctx?.parent ?? null, ctx?.resolve ?? (() => undefined)).nodes,
+    [node.id]: { ...node, elevation: authoredElevation },
+  }
+  const pending = [...(node.children ?? [])]
+  while (ctx && pending.length) {
+    const id = pending.shift()!
+    if (featureNodes[id]) continue
+    const child = ctx.resolve<AnyNode>(id)
+    if (child?.type !== 'slab-feature') continue
+    featureNodes[id] = child
+    pending.push(...child.children)
+  }
+  const placements = Object.values(featureNodes)
+    .filter(
+      (n) =>
+        n.type === 'slab-feature' &&
+        n.visible !== false &&
+        featureNodes[n.parentId ?? '']?.visible !== false,
+    )
+    .map((n) =>
+      resolveSlabFeaturePlacement(featureNodes, n as import('@pascal-app/core').SlabFeatureNode),
+    )
+  const featured = buildSlabFeatureBody(merged, placements)
+  merged = featured.body
   const elevation = node.elevation ?? 0.05
   const partition = platePartitionOf(node, ctx, platform || node.plateRole === 'platform')
 
@@ -380,6 +409,40 @@ export function buildSlabGeometry(
     // floor sits at `elevation`.
     if (node.recessed) mesh.position.y = elevation
     group.add(mesh)
+  }
+
+  for (const [id, geometry] of featured.features) {
+    const feature = featureNodes[id]
+    if (feature?.type !== 'slab-feature') {
+      geometry.dispose()
+      continue
+    }
+    const parent = featureNodes[feature.parentId ?? '']
+    const ref =
+      feature.slots?.surface ??
+      (parent?.type === 'slab-feature' ? parent.slots?.surface : undefined)
+    const placement = placements.find((p) => p.node.id === id)!
+    const cell = partition?.cells.find((cell) =>
+      cell.polygons.some((polygon) =>
+        pointInPolygon2D([placement.x, placement.z], polygon.outer, { includeBoundary: true }),
+      ),
+    )
+    const fallback = cell
+      ? getPlateCellMaterial(node, cell, shading, textures, colorPreset, sceneTheme, ctx?.materials)
+      : getSlabSlotMaterial(
+          node,
+          'surface',
+          shading,
+          textures,
+          colorPreset,
+          sceneTheme,
+          ctx?.materials,
+        )
+    const material =
+      textures && ref ? (resolveMaterialRef(ref, ctx?.materials, shading) ?? fallback) : fallback
+    addMesh(geometry, 'surface', material)
+    const mesh = group.children.at(-1) as Mesh | undefined
+    if (mesh?.geometry === geometry) mesh.userData.slabFeatureId = id
   }
 
   if (partition) {

@@ -17,7 +17,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useRef, useState } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
 import {
   applyFloorFoundation,
   beginFootprintHeightPreview,
@@ -331,7 +331,7 @@ export function floorFoundationModel(nodes: Record<string, AnyNode>, plate: Slab
  * only — and the floor top that follows. Scrubbing the foundation height moves
  * the building live and lands as one undo step.
  */
-export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClose: () => void }) {
+export function FloorFoundationPanel({ node, onClose, children }: { node: SlabNode; onClose: () => void; children?: ReactNode }) {
   const nodes = useScene((state) => state.nodes)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
@@ -391,6 +391,7 @@ export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClos
       onClose={onClose}
       title={floorFootprintName(nodes, plate)}
     >
+      {children}
       <div
         className="flex flex-col gap-3 px-4 pt-3 pb-4 text-sm"
         data-floor-foundation={plate.id}

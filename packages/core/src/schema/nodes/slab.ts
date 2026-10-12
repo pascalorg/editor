@@ -16,6 +16,9 @@ export const DEFAULT_SLAB_ELEVATION = 0.05
 export const SlabNode = BaseNode.extend({
   id: objectId('slab'),
   type: nodeType('slab'),
+  children: z
+    .array(z.union([objectId('slab-feature'), objectId('item'), objectId('procedural-item')]))
+    .default([]),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   // Per-slot material overrides on the unified slot model, mirroring

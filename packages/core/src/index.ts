@@ -1,4 +1,13 @@
 export {
+  MIN_SLAB_FEATURE_BACKING,
+  planSlabFeaturePlacement,
+  resolveSlabFeaturePlacement,
+  type SlabFeaturePlacement,
+  SlabFeatureValidationError,
+  slabFeatureFootprint,
+  validateSlabFeatures,
+} from './building/slab-features'
+export {
   planWallFeaturePlacement,
   resolveWallFeaturePlacement,
   validateWallFeatures,

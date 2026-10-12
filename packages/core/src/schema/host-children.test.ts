@@ -40,6 +40,7 @@ test('frozen pre-slice corpus covers every kind predating separators', () => {
       (kind) =>
         kind !== 'separator' &&
         kind !== 'wall-feature' &&
+        kind !== 'slab-feature' &&
         kind !== 'floor-opening' &&
         kind !== 'fence-gate' &&
         kind !== 'fence-opening',
@@ -49,7 +50,8 @@ test('frozen pre-slice corpus covers every kind predating separators', () => {
 test.each(
   baseline,
 )('pre-slice $type parses, saves and loads without changing existing fields', (saved) => {
-  const expected = saved.type === 'column' ? { ...saved, children: [] } : saved
+  const expected =
+    saved.type === 'column' || saved.type === 'slab' ? { ...saved, children: [] } : saved
   const parsedExpected =
     saved.type === 'zone'
       ? { ...expected, boundarySeparatorIds: [], holes: [] }

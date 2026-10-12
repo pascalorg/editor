@@ -1,6 +1,13 @@
 'use client'
 
-import { resolveLevelId, type SlabNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  resolveLevelId,
+  SlabFeatureValidationError,
+  type SlabNode,
+  useLiveNodeOverrides,
+  useScene,
+  validateSlabFeatures,
+} from '@pascal-app/core'
 import {
   boundaryReshapeScope,
   clearSlabSnapFeedback,
@@ -47,7 +54,12 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
       clearSlabSnapFeedback()
       // Reshaping the boundary is the sanctioned conversion of a derived floor
       // plate into an authored slab — the reconciler stops owning it here.
-      detachDerivedNode(slabId, { polygon: newPolygon })
+      try {
+        detachDerivedNode(slabId, { polygon: newPolygon })
+      } catch (err) {
+        if (!(err instanceof SlabFeatureValidationError)) throw err
+        return
+      }
       setSelection({ selectedIds: [slabId] })
     },
     [slabId, detachDerivedNode, setSelection],
@@ -56,6 +68,24 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
   const handlePolygonPreview = useCallback(
     (preview: ReadonlyArray<readonly [number, number]> | null) => {
       if (preview) {
+        const nodes = useScene.getState().nodes,
+          current = nodes[slabId]
+        if (current?.type !== 'slab') return
+        try {
+          validateSlabFeatures(
+            {
+              ...nodes,
+              [slabId]: {
+                ...current,
+                polygon: preview.map(([x, z]) => [x, z] as [number, number]),
+              },
+            },
+            slabId,
+          )
+        } catch (err) {
+          if (!(err instanceof SlabFeatureValidationError)) throw err
+          return
+        }
         useLiveNodeOverrides.getState().set(slabId, {
           polygon: preview.map(([x, z]) => [x, z] as [number, number]),
         })

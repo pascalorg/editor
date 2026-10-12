@@ -180,6 +180,19 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     note: 'Feature surface id on which the keyed child sits.',
   }),
   row({
+    kind: 'slab-feature',
+    path: 'attachments.@key',
+    ...policy('node', 'hierarchy', 'drop', 'keep'),
+    remaps: [...CLONES, 'clone-nodes-into', 'delete-nodes'],
+    note: 'Record key: a hosted child id on a feature resting surface.',
+  }),
+  row({
+    kind: 'slab-feature',
+    path: 'attachments.*',
+    ...policy('surface', 'internal', 'drop', 'keep'),
+    note: 'Feature surface id on which the keyed child sits.',
+  }),
+  row({
     kind: '#scene',
     path: 'rootNodeIds[]',
     ...policy('node', 'hierarchy', 'drop', 'keep'),

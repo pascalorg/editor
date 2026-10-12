@@ -462,3 +462,10 @@ bun run --cwd packages/mcp smoke
 ## License
 
 MIT
+
+The built-in nodes package also exports `slabFeatureAgentTools` and
+`slabFeatureAgentOperations` from those entry points. Register them as another
+reviewed `pluginTools` pack to offer `pascal_create_slab_feature` and
+`pascal_update_slab_feature`. These act on slab tops only, use metre-based centre
+offsets from the slab's first outline vertex (or a parent bump's centre), and
+share the manual editor's fit, overlap, nesting, and backing validation.

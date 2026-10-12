@@ -1,6 +1,13 @@
 'use client'
 
-import { resolveLevelId, type SlabNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  resolveLevelId,
+  SlabFeatureValidationError,
+  type SlabNode,
+  useLiveNodeOverrides,
+  useScene,
+  validateSlabFeatures,
+} from '@pascal-app/core'
 import { PolygonEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect } from 'react'
@@ -30,7 +37,12 @@ export const SlabHoleEditor: React.FC<{ slabId: SlabNode['id']; holeIndex: numbe
     (newPolygon: Array<[number, number]>) => {
       const updatedHoles = [...holes]
       updatedHoles[holeIndex] = newPolygon
-      updateNode(slabId, { holes: updatedHoles })
+      try {
+        updateNode(slabId, { holes: updatedHoles })
+      } catch (err) {
+        if (!(err instanceof SlabFeatureValidationError)) throw err
+        return
+      }
       setSelection({ selectedIds: [slabId] })
     },
     [slabId, holeIndex, holes, updateNode, setSelection],
@@ -45,6 +57,15 @@ export const SlabHoleEditor: React.FC<{ slabId: SlabNode['id']; holeIndex: numbe
       if (preview) {
         const updatedHoles = [...holes]
         updatedHoles[holeIndex] = preview.map(([x, z]) => [x, z] as [number, number])
+        const nodes = useScene.getState().nodes,
+          current = nodes[slabId]
+        if (current?.type !== 'slab') return
+        try {
+          validateSlabFeatures({ ...nodes, [slabId]: { ...current, holes: updatedHoles } }, slabId)
+        } catch (err) {
+          if (!(err instanceof SlabFeatureValidationError)) throw err
+          return
+        }
         useLiveNodeOverrides.getState().set(slabId, { holes: updatedHoles })
       } else {
         useLiveNodeOverrides.getState().clear(slabId)

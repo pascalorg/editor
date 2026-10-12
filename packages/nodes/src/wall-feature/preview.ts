@@ -4,17 +4,14 @@ import {
   sceneRegistry,
   type WallFeatureNode,
 } from '@pascal-app/core'
-import { EDITOR_LAYER } from '@pascal-app/editor'
-import { BoxGeometry, Mesh, MeshBasicMaterial } from 'three'
+import { createFeaturePreviewBox } from '../shared/feature-preview-box'
 
-const previews = new Map<string, Mesh<BoxGeometry, MeshBasicMaterial>>()
+const previews = new Map<string, ReturnType<typeof createFeaturePreviewBox>>()
 
 export function clearWallFeatureEditPreview(id: string): void {
   const preview = previews.get(id)
   if (!preview) return
-  preview.removeFromParent()
-  preview.geometry.dispose()
-  preview.material.dispose()
+  preview.dispose()
   previews.delete(id)
 }
 
@@ -25,23 +22,12 @@ export function showWallFeatureEditPreview(node: WallFeatureNode, scene: SceneAp
     return
   }
   const placement = resolveWallFeaturePlacement(scene.nodes(), node)
-  let preview = previews.get(node.id)
-  if (!preview) {
-    preview = new Mesh(
-      new BoxGeometry(1, 1, 1),
-      new MeshBasicMaterial({
-        wireframe: true,
-        color: '#8b5cf6',
-        transparent: true,
-        opacity: 0.7,
-        depthWrite: false,
-      }),
-    )
-    preview.layers.set(EDITOR_LAYER)
-    preview.userData.pascalExport = 'strip'
-    preview.raycast = () => {}
-    previews.set(node.id, preview)
+  let entry = previews.get(node.id)
+  if (!entry) {
+    entry = createFeaturePreviewBox()
+    previews.set(node.id, entry)
   }
+  const preview = entry.mesh
   if (preview.parent !== root) root.add(preview)
   preview.position.set(
     node.width / 2,

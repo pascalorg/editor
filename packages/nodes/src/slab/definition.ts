@@ -11,6 +11,7 @@ import {
   type SlabNode as SlabNodeType,
   slabSlots,
   syncStairRises,
+  validateSlabFeatures,
 } from '@pascal-app/core'
 import {
   clearStructuralElevationGuide,
@@ -23,6 +24,7 @@ import {
 import { surfaceBatchable } from '../shared/node-batch/batchable'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { sameOutlineSurfaceCounterparts } from '../shared/surface-counterparts'
+import { slabFeatureTopAt } from '../slab-feature/surfaces'
 import {
   applySlabBaseElevationChange,
   applySlabThicknessChange,
@@ -254,9 +256,27 @@ function slabHandles(node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
   // ground, drawn by the editor's footprint height handle; room plates are
   // reached through their room. Only user-drawn slabs keep these handles.
   if (node.plateRole) return []
-  return node.recessed
+  const handles = node.recessed
     ? [slabRecessedDepthHandle()]
     : [slabThicknessHandle(), slabBaseElevationHandle()]
+  return handles.map((handle): HandleDescriptor<SlabNodeType> => {
+    if (handle.kind !== 'linear-resize') return handle
+    return {
+      ...handle,
+      apply: (current: SlabNodeType, value: number, scene: SceneApi) => {
+        const patch = handle.apply(current, value, scene)
+        try {
+          validateSlabFeatures(
+            { ...scene.nodes(), [current.id]: { ...current, ...patch } },
+            current.id,
+          )
+          return patch
+        } catch {
+          return {}
+        }
+      },
+    }
+  })
 }
 
 /**
@@ -278,8 +298,11 @@ function slabHandles(node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
 export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   kind: 'slab',
   snapProfile: 'structural',
-  schemaVersion: 1,
-  schema: SlabNode,
+  schemaVersion: 2,
+  schema: SlabNode.meta({
+    validateRelations: (node: SlabNodeType, nodes: Readonly<Record<string, AnyNode>>) =>
+      validateSlabFeatures(nodes, node.id),
+  }),
   category: 'structure',
   surfaceRole: 'floor',
   extensions: {
@@ -288,6 +311,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     } satisfies DraftingSurfaceExtension,
     'pascal:editor/floorplan': {
       selectionCounterparts: sameOutlineSurfaceCounterparts,
+      actionMenu: { actions: () => import('../slab-feature/actions') },
     } satisfies FloorplanNodeExtension,
   },
 
@@ -296,6 +320,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     parentId: null,
     visible: true,
     metadata: {},
+    children: [],
     polygon: [],
     holes: [],
     holeMetadata: [],
@@ -322,7 +347,10 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
             )
           )
             return null
-          return liftedManualSlab(context.nodes, slab).elevation
+          return (
+            slabFeatureTopAt(slab, x, z, context.nodes) ??
+            liftedManualSlab(context.nodes, slab).elevation
+          )
         },
       },
     },
@@ -335,7 +363,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   },
 
   relations: {
-    hosts: ['item'],
+    hosts: ['slab-feature', 'item', 'procedural-item'],
     cascadeDelete: 'descendants',
   },
 

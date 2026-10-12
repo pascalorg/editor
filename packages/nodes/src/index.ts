@@ -42,6 +42,7 @@ import { shelfDefinition } from './shelf'
 import { siteDefinition } from './site'
 import { skylightDefinition } from './skylight'
 import { slabDefinition } from './slab'
+import { slabFeatureDefinition } from './slab-feature/definition'
 import { solarPanelDefinition } from './solar-panel'
 import { spawnDefinition } from './spawn'
 import { stairDefinition } from './stair'
@@ -80,6 +81,7 @@ export const builtinPlugin: Plugin = {
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     wallFeatureDefinition as unknown as AnyNodeDefinition,
+    slabFeatureDefinition as unknown as AnyNodeDefinition,
     separatorDefinition as unknown as AnyNodeDefinition,
     floorOpeningDefinition as unknown as AnyNodeDefinition,
     leanToExtensionDefinition as unknown as AnyNodeDefinition,
@@ -139,6 +141,7 @@ export const builtinPlugin: Plugin = {
   ],
 }
 
+export { SlabFeatureNode, type SlabFeatureNodeId } from '@pascal-app/core'
 export {
   applyBlockCommand,
   type BlockCommand,
@@ -204,6 +207,10 @@ export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
 export { skylightDefinition } from './skylight'
 export { slabDefinition } from './slab'
+export { startSlabFeaturePlacement } from './slab-feature/actions'
+export { slabFeatureAgentOperations } from './slab-feature/agent-operations'
+export { slabFeatureAgentTools } from './slab-feature/agent-tools'
+export { slabFeatureDefinition } from './slab-feature/definition'
 export { solarPanelDefinition } from './solar-panel'
 export { spawnDefinition } from './spawn'
 export { stairDefinition } from './stair'

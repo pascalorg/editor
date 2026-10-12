@@ -25,7 +25,8 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import SlabFeatureActions from '../slab-feature/actions'
 import {
   applySlabAnchorElevationChange,
   applySlabElevationPreset,
@@ -50,6 +51,7 @@ import {
  * into `parametrics.groups`.
  */
 export function SlabPanel() {
+  const [error, setError] = useState('')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
@@ -75,7 +77,12 @@ export function SlabPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<SlabNode>) => {
       if (!selectedId) return
-      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
+      try {
+        useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
+        setError('')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Invalid slab edit.')
+      }
     },
     [selectedId],
   )
@@ -252,7 +259,16 @@ export function SlabPanel() {
 
   if (!(node && node.type === 'slab' && selectedId)) return null
 
-  if (node.plateRole === 'base') return <FloorFoundationPanel node={node} onClose={handleClose} />
+  if (node.plateRole === 'base')
+    return (
+      <FloorFoundationPanel node={node} onClose={handleClose}>
+        <PanelSection title="Features">
+          <div className="flex gap-2">
+            <SlabFeatureActions />
+          </div>
+        </PanelSection>
+      </FloorFoundationPanel>
+    )
   const derived = isDerivedNode(node)
   const room = useEditor.getState().room
   const openingZoneId =
@@ -299,6 +315,16 @@ export function SlabPanel() {
       title={node.name || 'Slab'}
       width={320}
     >
+      {error && (
+        <p role="status" className="px-4 text-amber-500">
+          {error}
+        </p>
+      )}
+      <PanelSection title="Features">
+        <div className="flex gap-2">
+          <SlabFeatureActions />
+        </div>
+      </PanelSection>
       <PanelSection title="Elevation">
         {/* Range mirrors the 20 m storey cap; `clampSlabElevation` in the
             write path stays the real bound against the level. */}
