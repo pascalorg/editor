@@ -538,6 +538,38 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { contains: ['item_overlap'] },
   ),
   verify(
+    'a fridge standing in the middle of a room is reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ItemNode.parse({
+          id: 'item_fridge',
+          parentId: 'level_0',
+          position: [3, 0, 1.6],
+          asset: asset('fridge', [0.7, 1.8, 0.72]),
+        }),
+      ),
+    { contains: ['item_mid_room'], mentions: ['item_fridge'] },
+  ),
+  verify(
+    'a fridge against a wall is not reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ItemNode.parse({
+          id: 'item_fridge',
+          parentId: 'level_0',
+          position: [3.6, 0, 1.5],
+          asset: asset('fridge', [0.7, 1.8, 0.72]),
+        }),
+      ),
+    { lacks: ['item_mid_room'] },
+  ),
+  verify(
     'a node its schema rejects fails validation',
     () =>
       scene(building(), level('level_0', 0), ...room('level_0', 'ground'), {

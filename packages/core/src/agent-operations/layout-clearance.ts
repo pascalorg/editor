@@ -23,6 +23,8 @@ import {
   type PlanAabb,
   resolveNodeLevelId,
 } from './door-clearance'
+import { furnitureKind } from './furniture-kind'
+import { pointInPolygon, type Vec2 } from './plan-geometry'
 
 export {
   aabbsOverlap,
@@ -385,12 +387,105 @@ export function findValidPlacement(args: {
   return { candidate: null, reason: primaryReason ?? bestFailReason }
 }
 
+/** A wall-bound piece whose nearest edge is further than this from every wall face is not against a wall. */
+export const MID_ROOM_DISTANCE_M = 0.4
+const DEFAULT_WALL_THICKNESS_M = 0.1
+
+const cross = (o: Vec2, p: Vec2, q: Vec2) =>
+  (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
+
+function distanceToSegment(point: Vec2, a: Vec2, b: Vec2) {
+  const dx = b[0] - a[0]
+  const dz = b[1] - a[1]
+  const length2 = dx * dx + dz * dz
+  const t =
+    length2 === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / length2))
+  return Math.hypot(point[0] - (a[0] + t * dx), point[1] - (a[1] + t * dz))
+}
+
+/** The shortest distance from a footprint box to a wall's centre line (0 when the line passes through it). */
+function boxToSegment(box: PlanAabb, a: Vec2, b: Vec2) {
+  const corners: Vec2[] = [
+    [box.minX, box.minZ],
+    [box.maxX, box.minZ],
+    [box.maxX, box.maxZ],
+    [box.minX, box.maxZ],
+  ]
+  let nearest = Number.POSITIVE_INFINITY
+  for (let i = 0; i < 4; i++) {
+    const c = corners[i]!
+    const d = corners[(i + 1) % 4]!
+    if (cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0) return 0
+    nearest = Math.min(
+      nearest,
+      distanceToSegment(a, c, d),
+      distanceToSegment(b, c, d),
+      distanceToSegment(c, a, b),
+      distanceToSegment(d, a, b),
+    )
+  }
+  return nearest
+}
+
+/**
+ * Wall-bound pieces (a fridge, a counter, a bed, a sofa) that stand in a room but away from every
+ * wall: further than {@link MID_ROOM_DISTANCE_M} from the face of each wall of their level. Pieces
+ * outside every room, free-standing kinds, and levels with no walls are not judged.
+ */
+export function findItemsMidRoom(args: { nodes: Iterable<AnyNode>; levelId?: string }): {
+  id: string
+  message: string
+}[] {
+  const list = [...args.nodes]
+  const byId = new Map<string, AnyNode>(list.map((node) => [node.id, node]))
+  const walls: { a: Vec2; b: Vec2; halfThickness: number }[] = []
+  const zones: Extract<AnyNode, { type: 'zone' }>[] = []
+  for (const node of list) {
+    if (resolveNodeLevelId(node.id, byId) !== args.levelId) continue
+    if (node.type === 'wall')
+      walls.push({
+        a: [node.start[0], node.start[1]],
+        b: [node.end[0], node.end[1]],
+        halfThickness: (node.thickness ?? DEFAULT_WALL_THICKNESS_M) / 2,
+      })
+    else if (node.type === 'zone') zones.push(node)
+  }
+  if (walls.length === 0 || zones.length === 0) return []
+
+  const found: { id: string; message: string }[] = []
+  for (const footprint of collectOccupiedFootprints(list, {
+    floorOnly: true,
+    ...(args.levelId === undefined ? {} : { levelId: args.levelId }),
+  })) {
+    const node = byId.get(footprint.id)
+    if (node?.type !== 'item' || furnitureKind(node.asset) !== 'wall') continue
+    const room = zones.find((zone) =>
+      pointInPolygon([node.position[0], node.position[2]], zone.polygon as Vec2[], true),
+    )
+    if (!room) continue
+    const gap = Math.min(
+      ...walls.map((wall) =>
+        Math.max(0, boxToSegment(footprint.aabb, wall.a, wall.b) - wall.halfThickness),
+      ),
+    )
+    if (gap <= MID_ROOM_DISTANCE_M) continue
+    found.push({
+      id: node.id,
+      message: `${footprint.name ?? node.asset.id} (${node.id}) stands in the middle of ${room.name || room.id}, ${gap.toFixed(1)} m from the nearest wall: a ${node.asset.id} belongs against a wall (place_in_room puts it there).`,
+    })
+  }
+  return found
+}
+
 /**
  * Collect layout issues, scoped per level so stacked floors do not false-positive.
  */
-export function layoutIssuesFromScene(
-  nodes: Iterable<AnyNode>,
-): { type: 'door_blocked' | 'item_overlap' | 'item_too_close'; message: string }[] {
+export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): {
+  type: 'door_blocked' | 'item_overlap' | 'item_too_close' | 'item_mid_room'
+  message: string
+}[] {
   const list = [...nodes]
   const byId = new Map(list.map((n) => [n.id, n] as const))
   const levelIds = new Set<string>()
@@ -403,7 +498,10 @@ export function layoutIssuesFromScene(
     if (lid) levelIds.add(lid)
   }
 
-  const issues = new Map<string, 'door_blocked' | 'item_overlap' | 'item_too_close'>()
+  const issues = new Map<
+    string,
+    'door_blocked' | 'item_overlap' | 'item_too_close' | 'item_mid_room'
+  >()
   const levels = levelIds.size > 0 ? [...levelIds] : [undefined]
 
   for (const levelId of levels) {
@@ -412,6 +510,9 @@ export function layoutIssuesFromScene(
     }
     for (const c of findItemItemCollisions({ nodes: list, levelId })) {
       issues.set(c.message, c.violation === 'overlap' ? 'item_overlap' : 'item_too_close')
+    }
+    for (const m of findItemsMidRoom({ nodes: list, levelId })) {
+      issues.set(m.message, 'item_mid_room')
     }
   }
 
