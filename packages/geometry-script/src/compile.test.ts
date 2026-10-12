@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, matchScriptSlotsToLibrary, scriptSource } from '@pascal-app/core'
+import {
+  type AnyNode,
+  CEILING_DRAW_OFFSET,
+  matchScriptSlotsToLibrary,
+  resolveCeilingHeight,
+  scriptSource,
+} from '@pascal-app/core'
 import { addObject, applySceneChanges, editedScriptParams } from '@pascal-app/core/agent-operations'
-import { GeometryArtifactManifest, ItemNode, LevelNode } from '@pascal-app/core/schema'
+import { CeilingNode, GeometryArtifactManifest, ItemNode, LevelNode } from '@pascal-app/core/schema'
+import { Box3, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { compileGeometryScript } from './index'
 
@@ -28,6 +35,45 @@ describe('clips', () => {
     const end = track.values[track.values.length - 2]!
     expect(end - start).toBeCloseTo(0.7, 3)
   })
+})
+
+test('ceiling artifacts hang below their attachment while floor and wall origins stay unchanged', async () => {
+  const level = LevelNode.parse({ id: 'level_mount', height: 3.6 })
+  const ceiling = CeilingNode.parse({
+    id: 'ceiling_mount',
+    parentId: level.id,
+    polygon: [
+      [-5, -5],
+      [5, -5],
+      [5, 5],
+      [-5, 5],
+    ],
+  })
+  const plane =
+    resolveCeilingHeight(ceiling, {
+      [level.id]: level,
+      [ceiling.id]: ceiling,
+    }) - CEILING_DRAW_OFFSET
+  for (const mount of ['ceiling', 'floor', 'wall', 'wall-side']) {
+    const compiled = await compileGeometryScript({
+      code: `export const mount = '${mount}';
+      export default function build({ THREE }) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 1));
+        mesh.position.set(3, 4, 5);
+        return mesh;
+      }`,
+    })
+    const artifact = await new GLTFLoader().parseAsync(compiled.glb, '')
+    artifact.scene.position.y = plane
+    const bounds = new Box3().setFromObject(artifact.scene)
+    expect(bounds.getSize(new Vector3()).toArray()).toEqual([2, expect.closeTo(0.8), 1])
+    expect(compiled.manifest.bounds.min[1]).toBe(mount === 'ceiling' ? -0.8 : 0)
+    expect(compiled.manifest.bounds.max[1]).toBe(mount === 'ceiling' ? 0 : 0.8)
+    expect(bounds.min.y).toBeCloseTo(plane - (mount === 'ceiling' ? 0.8 : 0))
+    expect(bounds.max.y).toBeCloseTo(plane + (mount === 'ceiling' ? 0 : 0.8))
+    expect(compiled.manifest.bounds.min[2]).toBe(mount === 'wall-side' ? 0 : -0.5)
+    expect(compiled.manifest.bounds.max[2]).toBe(mount === 'wall-side' ? 1 : 0.5)
+  }
 })
 
 test('an edit keeps the current param values the new code still accepts', async () => {

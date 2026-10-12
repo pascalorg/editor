@@ -14,7 +14,7 @@ Module shape (import THREE from the three package as usual; the addons below too
 One object is one feature that changes together: a table, a bench, a porch, a railing run, a fireplace surround, a ceiling with its beams. Never a whole house, and never walls, rooms, floors, roofs, stairs, doors or windows: those have their own tools. A new object's reason records its design intent: what the authored shape, dimensions or style contributes to the request. The scene check lists every authored object with its reason; no catalog-exhaustion proof is required. On a floor, a plain box with a wall's size or a floor plate is refused with the tool to use (use_walls, use_slab); a detailed object with a wall's size (a bookcase, a screen), or one named after something Pascal builds, is built with a hint naming the tool.
 
 Conventions (they make the object work in Pascal; follow them):
-- Metres, Y up, modelled as it stands. Pascal puts the bottom-centre of the bounds at the placement point; for wall-side the back face sits on the wall and the object faces +Z.
+- Metres, Y up, modelled in its installed orientation. Floor and wall mounts put the bottom-centre of the visible bounds at the placement point. Ceiling mounts put the top-centre there: visible geometry extends down in negative local Y, with its top at Y = 0. Wall-side mounts put the bottom-centre of the back face there (back at Z = 0, facing +Z). Normalization translates geometry; it does not flip it.
 - Paint: name every material slot_<finish> (slot_trim, slot_frame, slot_metal) and reuse one material per finish; a material named "glass" renders as glass.
 - Parts: name the few groups a person would point at part:<id> (part:column_left, part:canopy, part:landing), usually 2–24, a group per part, not every mesh. Set userData.type on parts someone would look for: column, beam, slab, roof, railing, panel, trim, step, light.
 - Lights: add a THREE.PointLight or SpotLight named light:<id> where the bulb is; it becomes a switchable light.
@@ -58,7 +58,7 @@ export const addObjectTool = {
       .length(3)
       .optional()
       .describe(
-        'Placement in the host frame, metres. Level: [x, y, z] (y = 0 on the floor). Wall: [distance along the wall from its start, height of the bottom, 0].',
+        'Placement of the mount origin in the host frame, metres. Floor: [x, y, z] locates the bottom-centre (y = 0 on the level floor). Ceiling: [x, y, z] locates the top-centre (y = 0 on the drawn ceiling attachment plane; negative y lowers it). Wall / wall-side: [distance along the wall from its start, height of the bottom, 0]; wall-side also anchors the back face.',
       ),
     rotation: measurement('angle', 'deg', {
       description: 'Y-axis rotation (default: 0).',

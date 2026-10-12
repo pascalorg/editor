@@ -170,6 +170,7 @@ function visibleBounds(root: THREE.Object3D): THREE.Box3 {
 
 function originFor(box: THREE.Box3, mount: GeometryScriptMount): THREE.Vector3 {
   const center = box.getCenter(new THREE.Vector3())
+  if (mount === 'ceiling') return new THREE.Vector3(center.x, box.max.y, center.z)
   if (mount === 'wall-side') return new THREE.Vector3(center.x, box.min.y, box.min.z)
   return new THREE.Vector3(center.x, box.min.y, center.z)
 }
