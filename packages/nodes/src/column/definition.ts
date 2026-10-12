@@ -409,6 +409,8 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     // square → width, rectangular → width/depth, plus brace spread) so the
     // box, slab-overlap, and collision all track the real column size rather
     // than the raw width/depth (stale for a round column resized by radius).
+    // A tilted column stands on its base: the lean above it neither lifts the
+    // column onto a slab it overhangs nor blocks floor placement under it.
     floorPlaced: {
       footprint: (node) => {
         const column = node as ColumnNodeType

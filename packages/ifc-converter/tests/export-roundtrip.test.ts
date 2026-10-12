@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url'
 import {
   type AnyNode,
   type Collection,
-  type ColumnNode,
+  ColumnNode,
   type DoorNode,
   getLevelElevations,
   ItemNode,
+  LevelNode,
   type SlabNode,
   type WallNode,
   type WindowNode,
@@ -399,6 +400,78 @@ describe('IFC export — columns', () => {
     expect(round.position[2]).toBeCloseTo(3, MM)
     expect(round.radius).toBeCloseTo(0.2, MM)
     expect(round.height).toBeCloseTo(3, MM)
+  })
+})
+
+describe('IFC export — i-beam columns', () => {
+  const level = LevelNode.parse({ id: 'level_steel', name: 'Steel', height: 3 })
+  const beam = ColumnNode.parse({
+    id: 'column_ibeam',
+    name: 'Steel column',
+    parentId: level.id,
+    position: [1, 0, 2],
+    rotation: Math.PI / 2,
+    crossSection: 'i-beam',
+    width: 0.3,
+    depth: 0.4,
+    height: 2.8,
+    style: 'plain',
+    baseStyle: 'none',
+    capitalStyle: 'none',
+    shaftProfile: 'straight',
+  })
+  const ifc = exportSceneToIfc({
+    nodes: { [level.id]: { ...level, children: [beam.id] } as AnyNode, [beam.id]: beam },
+    timestamp: EPOCH,
+  })
+
+  test('exports an IfcIShapeProfileDef extrusion', () => {
+    const entities = expectWellFormedStep(ifc)
+    const profile = [...entities.values()].find((entity) => entity.type === 'IFCISHAPEPROFILEDEF')
+    expect(profile).toBeDefined()
+    expect(ifc).toMatch(/IFCISHAPEPROFILEDEF\(\.AREA\.,\$,#\d+,0\.3,0\.4,0\.03,0\.04,\$,\$,\$\)/)
+  })
+
+  test('re-imports the section as an i-beam', async () => {
+    const [column] = nodesOf<ColumnNode>(await reimport(ifc), 'column')
+    expect(column?.crossSection).toBe('i-beam')
+    expect(column?.width).toBeCloseTo(0.3, MM)
+    expect(column?.depth).toBeCloseTo(0.4, MM)
+    expect(column?.height).toBeCloseTo(2.8, MM)
+    expect(column?.position[0]).toBeCloseTo(1, MM)
+    expect(column?.position[2]).toBeCloseTo(2, MM)
+  })
+})
+
+describe('IFC export — leaning columns', () => {
+  const level = LevelNode.parse({ id: 'level_lean', name: 'Lean', height: 3 })
+  const leaning = ColumnNode.parse({
+    id: 'column_lean',
+    name: 'Leaning column',
+    parentId: level.id,
+    position: [0, 0, 0],
+    crossSection: 'rectangular',
+    width: 0.3,
+    depth: 0.3,
+    height: 2.5,
+    tiltX: 0.2,
+    tiltZ: -0.1,
+    style: 'plain',
+    baseStyle: 'none',
+    capitalStyle: 'none',
+    shaftProfile: 'straight',
+  })
+  const ifc = exportSceneToIfc({
+    nodes: { [level.id]: { ...level, children: [leaning.id] } as AnyNode, [leaning.id]: leaning },
+    timestamp: EPOCH,
+  })
+
+  test('exports the lean as an oblique extrusion and reads it back', async () => {
+    expectWellFormedStep(ifc)
+    const [column] = nodesOf<ColumnNode>(await reimport(ifc), 'column')
+    expect(column?.height).toBeCloseTo(2.5, MM)
+    expect(column?.tiltX).toBeCloseTo(0.2, MM)
+    expect(column?.tiltZ).toBeCloseTo(-0.1, MM)
   })
 })
 

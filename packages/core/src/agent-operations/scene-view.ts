@@ -1,5 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
 import type { VIEW_SIDES } from '../agent-tools/view-scene'
+import { columnPlanLeanOffset } from '../lib/column-geometry'
 import type {
   AnyNode,
   AnyNodeId,
@@ -230,7 +231,11 @@ function siteBox(node: AnyNode, baseY: number): SceneViewBox | null {
     const half =
       column.crossSection === 'round' ? column.radius : Math.max(column.width, column.depth) / 2
     const [x, , z] = column.position
-    return { min: [x - half, baseY, z - half], max: [x + half, baseY + column.height, z + half] }
+    const [dx, dz] = columnPlanLeanOffset(column, column.height)
+    return {
+      min: [Math.min(x, x + dx) - half, baseY, Math.min(z, z + dz) - half],
+      max: [Math.max(x, x + dx) + half, baseY + column.height, Math.max(z, z + dz) + half],
+    }
   }
   if (node.type === 'fence') {
     const fence = node as FenceNode

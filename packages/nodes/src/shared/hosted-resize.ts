@@ -14,6 +14,8 @@ import { boundsOf, boxCorners, frame, transformPoint } from '@pascal-app/core/pr
 export type HostedEditPolicy = {
   host: (node: AnyNode) => boolean
   child: (node: AnyNode) => boolean
+  /** Children also follow a surface that slides in plan (a leaning column's top), not only in height. */
+  followsSurfacePlan?: boolean
 }
 
 type Nodes = Record<AnyNodeId, AnyNode>
@@ -81,10 +83,11 @@ export function hostedChildUpdates(
         continue
       const nextSurface = nextSurfaces.find((surface) => surface.id === previousSurface.id)
       if (!nextSurface) return null
+      const planShift = policy.followsSurfacePlan ? 1 : 0
       const nextPosition: [number, number, number] = [
-        position[0],
+        position[0] + (nextSurface.position[0] - previousSurface.position[0]) * planShift,
         position[1] + nextSurface.position[1] - previousSurface.position[1],
-        position[2],
+        position[2] + (nextSurface.position[2] - previousSurface.position[2]) * planShift,
       ]
       const surfaceLocal: [number, number, number] = [
         nextPosition[0] - nextSurface.position[0],
@@ -101,7 +104,7 @@ export function hostedChildUpdates(
         )
       )
         return null
-      if (Math.abs(nextPosition[1] - position[1]) > 1e-8)
+      if (nextPosition.some((value, i) => Math.abs(value - position[i]!) > 1e-8))
         updates.push([child.id, { position: nextPosition } as Partial<AnyNode>])
     }
   }
