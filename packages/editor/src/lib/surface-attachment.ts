@@ -1,12 +1,17 @@
-import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
-import { evaluateRecipe, isProceduralItem } from '@pascal-app/core/procedural-items'
+import { type AnyNode, type AnyNodeId, getSurfaceProvider, useScene } from '@pascal-app/core'
 import { Euler, Quaternion, Vector3 } from 'three'
+
+function attachmentsOf(host: AnyNode | undefined): Record<string, string> | undefined {
+  return (host as { attachments?: Record<string, string> } | undefined)?.attachments
+}
 
 type Pose = { position: [number, number, number]; rotation: [number, number, number] }
 
 export function surfaceAttachmentId(node: Pick<AnyNode, 'id' | 'parentId'>): string | null {
   const parent = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : undefined
-  return isProceduralItem(parent) ? (parent.attachments[node.id] ?? null) : null
+  return parent && getSurfaceProvider(parent).childFrame === 'surface-local'
+    ? (attachmentsOf(parent)?.[node.id] ?? null)
+    : null
 }
 
 export function surfaceAttachmentUpdates(
@@ -18,10 +23,11 @@ export function surfaceAttachmentUpdates(
   const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
   for (const hostId of new Set([nodes[id]?.parentId, parentId])) {
     const host = hostId ? nodes[hostId as AnyNodeId] : undefined
-    if (!isProceduralItem(host)) continue
+    if (!host || !attachmentsOf(host) || getSurfaceProvider(host).childFrame !== 'surface-local')
+      continue
     const nextId = host.id === parentId ? surfaceId : null
-    if ((host.attachments[id] ?? null) === nextId) continue
-    const attachments = { ...host.attachments }
+    if ((attachmentsOf(host)![id] ?? null) === nextId) continue
+    const attachments = { ...attachmentsOf(host) }
     if (nextId === null) delete attachments[id]
     else attachments[id] = nextId
     updates.push({ id: host.id, data: { attachments } })
@@ -52,20 +58,27 @@ export function surfaceFramePose(
   toStorage: boolean,
 ): Pose {
   const host = parentId ? useScene.getState().nodes[parentId as AnyNodeId] : undefined
-  if (!isProceduralItem(host) || surfaceId === null)
+  if (!host || surfaceId === null || getSurfaceProvider(host).childFrame !== 'surface-local')
     return { position: pose.position, rotation: pose.rotation }
-  const surface = evaluateRecipe(host.recipe, host.parameters).surfaces.find(
-    (s) => s.id === surfaceId,
-  )
+  const surface = getSurfaceProvider(host)
+    .surfaces?.(host, {
+      scene: {
+        get: <N extends AnyNode = AnyNode>(id: AnyNodeId) =>
+          useScene.getState().nodes[id] as N | undefined,
+        nodes: () => useScene.getState().nodes,
+      },
+    })
+    .find((s) => s.id === surfaceId)
   if (!surface) throw new Error('Missing attachment surface')
-  const q = new Quaternion().setFromEuler(new Euler(...surface.rotation))
+  const q = new Quaternion().setFromEuler(new Euler(...(surface.rotation ?? [0, 0, 0])))
   const position = new Vector3(...pose.position)
   if (toStorage) position.sub(new Vector3(...surface.position)).applyQuaternion(q.clone().invert())
   else position.applyQuaternion(q).add(new Vector3(...surface.position))
-  if (!surface.rotation[0] && !surface.rotation[2] && !pose.rotation[0] && !pose.rotation[2]) {
+  const surfaceRotation = surface.rotation ?? [0, 0, 0]
+  if (!surfaceRotation[0] && !surfaceRotation[2] && !pose.rotation[0] && !pose.rotation[2]) {
     return {
       position: position.toArray(),
-      rotation: [0, pose.rotation[1] + (toStorage ? -1 : 1) * surface.rotation[1], 0],
+      rotation: [0, pose.rotation[1] + (toStorage ? -1 : 1) * surfaceRotation[1], 0],
     }
   }
   const rotation = new Euler().setFromQuaternion(

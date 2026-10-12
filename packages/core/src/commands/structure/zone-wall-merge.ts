@@ -1,4 +1,4 @@
-import type { AnyNode, WallNode } from '../../schema'
+import type { AnyNode, WallFeatureNode, WallNode } from '../../schema'
 import { getWallArcData, getWallCurveLength } from '../../systems/wall/wall-curve'
 import { buildMergedWallAttachmentUpdates } from '../../systems/wall/wall-merge'
 import { at, type Point, type StructureMintId, type StructureNodes } from './shared'
@@ -82,6 +82,31 @@ export function rehostWallChild(
   source: WallNode,
   target: WallNode,
 ) {
+  if (child.type === 'wall-feature') {
+    const feature = child as WallFeatureNode
+    const sourceLength = Math.hypot(
+      source.end[0] - source.start[0],
+      source.end[1] - source.start[1],
+    )
+    const targetLength = Math.hypot(
+      target.end[0] - target.start[0],
+      target.end[1] - target.start[1],
+    )
+    const sx = (source.end[0] - source.start[0]) / sourceLength
+    const sz = (source.end[1] - source.start[1]) / sourceLength
+    const tx = (target.end[0] - target.start[0]) / targetLength
+    const tz = (target.end[1] - target.start[1]) / targetLength
+    const x = source.start[0] + sx * feature.u
+    const z = source.start[1] + sz * feature.u
+    const reversed = sx * tx + sz * tz < 0
+    nodes[child.id] = {
+      ...feature,
+      parentId: target.id,
+      u: (x - target.start[0]) * tx + (z - target.start[1]) * tz,
+      face: reversed ? (feature.face === 'a' ? 'b' : 'a') : feature.face,
+    }
+    return
+  }
   const host = { ...source, children: [child.id] as WallNode['children'] }
   const empty = { ...source, children: [] }
   const update = buildMergedWallAttachmentUpdates(
@@ -176,10 +201,12 @@ export function splitCollinearWalls(
     const own = bySource.get(source)!
     for (const child of wallAttachments(nodes, source)) {
       const t =
-        'position' in child && Array.isArray(child.position)
-          ? child.position[0] /
-            Math.hypot(source.end[0] - source.start[0], source.end[1] - source.start[1])
-          : 0.5
+        child.type === 'wall-feature'
+          ? child.u / Math.hypot(source.end[0] - source.start[0], source.end[1] - source.start[1])
+          : 'position' in child && Array.isArray(child.position)
+            ? child.position[0] /
+              Math.hypot(source.end[0] - source.start[0], source.end[1] - source.start[1])
+            : 0.5
       const point = at(source.start, source.end, t)
       const target =
         own.find((wall) => {

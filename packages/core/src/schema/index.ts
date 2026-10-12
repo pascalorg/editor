@@ -404,6 +404,7 @@ export {
   WallTreatmentSide,
   WallTrimProfile,
 } from './nodes/wall'
+export { WallFeatureNode, type WallFeatureNodeId } from './nodes/wall-feature'
 export {
   WindowConstructionType,
   WindowDimensionReference,

@@ -1,5 +1,6 @@
 import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { HostedServiceExecutor } from '@pascal-app/core/agent-operations'
+import type { AgentOperations, HostedServiceExecutor } from '@pascal-app/core/agent-operations'
+import type { AgentToolAnnotations, PluginAgentTools } from '@pascal-app/core/agent-tools'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
@@ -10,6 +11,7 @@ import type { GeometryScriptHost } from './tools/add-object'
 import { type AssetCatalog, cachedCatalog } from './tools/asset-catalog'
 import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
+import { registerOperationTool } from './tools/shared-tools'
 import type { SceneViewHost } from './tools/view-scene'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
@@ -48,6 +50,12 @@ export type CreatePascalMcpServerOptions = {
   sceneViews?: SceneViewHost
   /** Lines the host adds to what a client reads at connect (the person's own settings). */
   instructions?: string
+  /** Reviewed plugin packs; only host-classified operation tools are offered. */
+  pluginTools?: readonly {
+    agentTools: PluginAgentTools
+    operations: AgentOperations
+    annotationsByTool: Readonly<Record<string, AgentToolAnnotations>>
+  }[]
 }
 
 export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpServer {
@@ -65,6 +73,14 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     geometryScripts: opts.geometryScripts,
     sceneViews: opts.sceneViews,
   })
+  for (const plugin of opts.pluginTools ?? [])
+    for (const contract of plugin.agentTools.tools) {
+      if (contract.runsIn !== 'operation') continue
+      const operation = plugin.operations[contract.name]
+      const annotations = plugin.annotationsByTool[contract.name]
+      if (!operation || !annotations) continue
+      registerOperationTool(server, operations, { contract, operation, annotations }, catalog)
+    }
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)
   registerResources(server, operations, catalog)

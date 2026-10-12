@@ -37,6 +37,22 @@ export function insertDroppedBoundaries(
         [boundaryStation(source, piece.start), boundaryStation(source, piece.end)] as const,
     )
     if (source.type === 'wall') {
+      const length = getWallCurveLength(source)
+      const crossingFeature = wallAttachments(nodes, source).find(
+        (child) =>
+          child.type === 'wall-feature' &&
+          !ranges.some(
+            ([lo, hi]) =>
+              child.u - child.width / 2 >= lo * length - 1e-4 &&
+              child.u + child.width / 2 <= hi * length + 1e-4,
+          ),
+      )
+      if (crossingFeature)
+        return {
+          code: 'wall-feature-split',
+          nodeIds: [crossingFeature.id],
+          message: 'A wall split cannot cross a niche or bump.',
+        }
       const conflict = clearOpeningCuts(nodes, source, ranges.flat(), force)
       if (conflict) return conflict
     }
@@ -49,8 +65,12 @@ export function insertDroppedBoundaries(
     })
     const children = source.type === 'wall' ? wallAttachments(nodes, source) : []
     for (const child of children) {
-      const position =
-        'position' in child && Array.isArray(child.position) ? child.position : undefined
+      const position: [number, number, number] | undefined =
+        child.type === 'wall-feature'
+          ? [child.u, 0, 0]
+          : 'position' in child && Array.isArray(child.position)
+            ? (child.position as [number, number, number])
+            : undefined
       const length = getWallCurveLength(source as WallNode)
       const t = position ? position[0] / length : 0.5
       const index = Math.max(
@@ -63,7 +83,9 @@ export function insertDroppedBoundaries(
         parentId: host.id,
         ...('wallId' in child ? { wallId: host.id } : {}),
         ...(position
-          ? { position: [position[0] - ranges[index]![0] * length, position[1], position[2]] }
+          ? child.type === 'wall-feature'
+            ? { u: position[0] - ranges[index]![0] * length }
+            : { position: [position[0] - ranges[index]![0] * length, position[1], position[2]] }
           : {}),
         ...('wallT' in child
           ? { wallT: (t - ranges[index]![0]) / (ranges[index]![1] - ranges[index]![0]) }

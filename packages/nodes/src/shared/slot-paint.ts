@@ -58,7 +58,7 @@ export function subscribeSlotPaintPreviews(listener: (nodeId: string) => void): 
   }
 }
 
-function beginSlotPaintPreview(nodeId: string): () => void {
+export function beginSlotPaintPreview(nodeId: string): () => void {
   const count = previewCounts.get(nodeId) ?? 0
   previewCounts.set(nodeId, count + 1)
   try {
@@ -375,8 +375,10 @@ export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapabil
         if (ended) return
         ended = true
         try {
-          if (committed) useScene.getState().markDirty(args.node.id as AnyNodeId)
-          else restore()
+          if (committed) {
+            useScene.getState().markDirty(args.node.id as AnyNodeId)
+            ;(restore as (() => void) & { commit?: () => void }).commit?.()
+          } else restore()
         } finally {
           end()
         }

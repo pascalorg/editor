@@ -542,6 +542,11 @@ export function HelperManager() {
   }
 
   if (movingNode) {
+    const definition=nodeRegistry.get(movingNode.type)
+    const hints=scope.kind==='placing'&&scope.driver==='registry-tool'
+      ? definition?.toolHints : scope.kind==='moving' ? definition?.affordanceHints?.move : undefined
+    if(hints?.length) return <RegisteredToolHelper hints={hints} shiftPressed={modifiers.shift}
+      snapContext={snapContext} title={nodeKindHudTitle(movingNode.type,scope.kind==='moving'?'Move':undefined)}/>
     // A fresh placement (e.g. a positioned preset like a shelf) advertises its
     // once/repeat continuation, exactly like the GLB item tool — but an existing
     // node being *moved* is not a placement, so it gets no continuation chip.

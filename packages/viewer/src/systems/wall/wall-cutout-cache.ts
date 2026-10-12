@@ -395,7 +395,7 @@ export class WallCutoutCache {
     // on and the preview is dropped, rather than leaving groups with no material.
     const viewer = this.viewer!
     if (
-      viewer.hoveredId === wall.node.id &&
+      (viewer.hoveredId === wall.node.id || wall.mesh.userData.pascalMaterialPreview) &&
       viewer.hoverHighlightMode !== 'default' &&
       viewer.hoverHighlightMode !== 'delete' &&
       hasMaterialsForGroups(wall.mesh)

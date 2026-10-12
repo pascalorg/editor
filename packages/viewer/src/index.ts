@@ -318,9 +318,11 @@ export {
   type WallCutoutViewerStore,
 } from './systems/wall/wall-cutout-cache'
 export {
+  getWallBodyFaceAssignments,
   getWallFaceBaseAt,
   getWallFinishData,
   getWallFinishRefs,
+  type WallBodyFaceAssignment,
   type WallFinishGeometryData,
 } from './systems/wall/wall-finish-data'
 export {
@@ -340,6 +342,9 @@ export {
   getPendingWallRebuildCount,
   isWallInitialBuildActive,
   runWallBuildFrame,
+  type WallBodyGeometry,
+  type WallBodyGeometryContext,
+  type WallBodyGeometryModifier,
   type WallGeometryAdapter,
   type WallGeometryAdapterContext,
   WallSystem,

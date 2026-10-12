@@ -1,5 +1,19 @@
 import type { BufferGeometry } from 'three'
 
+export type WallBodyFaceAssignment = {
+  start: number
+  ownerId?: string
+  face: 'a' | 'b'
+  finishRef?: string
+  baseMaterialIndex: number
+}
+
+export function getWallBodyFaceAssignments(
+  geometry: BufferGeometry | undefined,
+): readonly WallBodyFaceAssignment[] {
+  return geometry?.userData.wallBodyFaces ?? []
+}
+
 /** A run of one face's base, in wall-local x (m) and local y. */
 export type WallFaceBaseRun = { start: number; end: number; y: number }
 

@@ -15,7 +15,14 @@ import {
 import { detectOpenWallEnds, extractRooms } from '../../lib/room-graph'
 import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
-import { type AnyNode, type AnyNodeId, DoorNode, WallNode, ZoneNode } from '../../schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  DoorNode,
+  WallFeatureNode,
+  WallNode,
+  ZoneNode,
+} from '../../schema'
 import { getWallArcData, getWallCurveFrameAt } from './wall-curve'
 import { planWallInsertion, planWallSplitAtPoint } from './wall-topology'
 
@@ -182,6 +189,40 @@ describe('planWallInsertion', () => {
     expect(update.id).toBe(door.id)
     expect(update.data.position).toEqual([1, 0, 0])
     expect(replacement?.type === 'wall' ? replacement.children : []).toContain(door.id)
+  })
+
+  test('moves a wall feature to the split segment that contains its whole width', () => {
+    const feature = WallFeatureNode.parse({
+      id: 'wall-feature_split',
+      parentId: 'wall_host',
+      face: 'b',
+      u: 1,
+      width: 0.6,
+      bottom: 0.8,
+    })
+    const host = WallNode.parse({
+      id: 'wall_host',
+      parentId: LEVEL_ID,
+      children: [feature.id],
+      start: [0, 0],
+      end: [4, 0],
+    })
+    let nextId = 0
+    const result = planWallInsertion(nodeMap([host, feature]), {
+      levelId: LEVEL_ID,
+      start: [2, -2],
+      end: [2, 2],
+      joinRadius: 0.05,
+      mintId: () => `wall_split_${nextId++}`,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const featureUpdate = result.plan.changes.update.find(({ id }) => id === feature.id)
+    expect(featureUpdate?.data).toMatchObject({ u: 1 })
+    const created = result.plan.changes.create.find(
+      ({ node }) => node.id === featureUpdate?.data.parentId,
+    )?.node
+    expect(created).toMatchObject({ type: 'wall', children: [feature.id] })
   })
 
   test('keeps a host intact when an opening straddles the crossing', () => {

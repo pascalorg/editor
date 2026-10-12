@@ -29,6 +29,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import {
+  getWallBodyFaceAssignments,
   getWallFaceBaseAt,
   getWallFinishData,
   getWallFinishRefs,
@@ -324,6 +325,7 @@ export function regroupWallFaces(
   const index = geometry.getIndex()
   const vertex = (at: number) => (index ? index.getX(at) : at)
   const finish = getWallFinishData(geometry)
+  const bodyFaces = new Map(getWallBodyFaceAssignments(geometry).map((face) => [face.start, face]))
   const a = new Vector3()
   const b = new Vector3()
   const c = new Vector3()
@@ -351,7 +353,11 @@ export function regroupWallFaces(
           (a.z + b.z + c.z) / 3,
         ]
         const normal = ab.subVectors(b, a).cross(ac.subVectors(c, a)).normalize()
-        const face = getWallFaceAtLocalPoint(wall, centre, [normal.x, normal.y, normal.z])
+        const bodyFace = bodyFaces.get(at)
+        const face = bodyFace?.finishRef
+          ? null
+          : (bodyFace?.face ??
+            getWallFaceAtLocalPoint(wall, centre, [normal.x, normal.y, normal.z]))
         if (face) {
           const v = centre[1] - getWallFaceBaseAt(finish, face, centre[0])
           next = indexFor(face, centre[0], v) ?? own

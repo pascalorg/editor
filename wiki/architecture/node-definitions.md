@@ -55,6 +55,10 @@ Two framework components live in `packages/viewer/src/components/viewer/`:
 
 ### Hosting declarations
 
+`def.localFrame(node, { nodes, planOnly })` supplies a parent-local position and rotation for a kind whose frame is derived from its host. Headless `nodeLevelFrame` queries compose this pose through the same ownership chain. A custom renderer must use the same frame. Wall features use this to place hosted items on their wall-relative shelves and tops.
+
+Named surfaces whose provider declares `childFrame: 'surface-local'` can persist an `attachments` record mapping child IDs to surface IDs. The query and editor attachment helpers resolve these through the registered provider. Providers using `host-local` retain host-relative child poses.
+
 `rendersChildren` describes whether a custom parametric renderer mounts arbitrary child
 nodes. It defaults to true for custom renderers; a renderer that filters children or
 only draws its own meshes declares `rendersChildren: false`. Geometry-only definitions

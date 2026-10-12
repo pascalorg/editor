@@ -4,6 +4,7 @@ import {
   createSceneApi,
   findLevelAncestorId,
   type GridEvent,
+  getSurfaceProvider,
   NON_PHYSICAL_HOST_KINDS,
   type NodeEvent,
   nodeRegistry,
@@ -241,7 +242,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const hit = itemEventToSurfaceHit(host, { ...event, position })
       if (!hit) return null
       const counterHit =
-        host.type === 'cabinet' || host.type === 'procedural-item'
+        host.type === 'cabinet' || getSurfaceProvider(host).childFrame === 'surface-local'
           ? itemEventToSurfaceHit(host, event)
           : null
       const stayingOnShelf = host.type === 'shelf' && live.parentId === host.id
@@ -371,7 +372,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         { position, rotation: storedRotation },
         false,
       )
-      if (host?.type === 'procedural-item') position.splice(0, 3, ...local.position)
+      if (host && getSurfaceProvider(host).childFrame === 'surface-local')
+        position.splice(0, 3, ...local.position)
       if (host) {
         const footprint = floorPlaced.footprint?.(live, { nodes: scene.nodes() })
         const bounds:
@@ -381,7 +383,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           (footprint ? { size: footprint.dimensions } : undefined)
         if (!bounds) return null
         const center = bounds.center ?? [0, bounds.size[1] / 2, 0]
-        const localRotation = host.type === 'procedural-item' ? local.rotation : rotation(yaw)
+        const localRotation =
+          getSurfaceProvider(host).childFrame === 'surface-local' ? local.rotation : rotation(yaw)
         const euler = new Euler(
           ...(Array.isArray(localRotation) ? localRotation : ([0, yaw, 0] as const)),
         )
@@ -425,7 +428,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
             rotationY: Array.isArray(live.rotation) ? live.rotation[1] : live.rotation,
           }
         }
-        if (host.type === 'procedural-item') {
+        if (placement.childFrame === 'surface-local') {
           const pose =
             placement.childFrame === 'surface-local'
               ? placement.surfaceLocal!

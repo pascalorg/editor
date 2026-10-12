@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { AnyNode, loadPlugin, nodeKindOf, nodeRegistry } from '@pascal-app/core'
-import { builtinPlugin } from './index'
+import { builtinPlugin, WallFeatureNode, wallFeatureDefinition } from './index'
 
 describe('builtinPlugin', () => {
   beforeEach(() => {
@@ -17,6 +17,27 @@ describe('builtinPlugin', () => {
     await loadPlugin(builtinPlugin)
     expect(nodeRegistry.has('shelf')).toBe(true)
     expect(nodeRegistry.size).toBeGreaterThanOrEqual(1)
+  })
+
+  test('registers wall features with host ownership and host-relative data', async () => {
+    await loadPlugin(builtinPlugin)
+    const definition = nodeRegistry.get('wall-feature')
+    expect(definition).toBe(wallFeatureDefinition)
+    const node = WallFeatureNode.parse({
+      ...definition?.defaults(),
+      parentId: 'wall_host',
+      mode: 'bump',
+    })
+    expect(definition?.schema.parse(node)).toEqual(node)
+    expect(
+      nodeRegistry.get('wall')?.schema.parse({
+        start: [0, 0],
+        end: [4, 0],
+        children: [node.id],
+      }).children,
+    ).toEqual([node.id])
+    expect(nodeRegistry.get('wall')?.relations?.hosts).toContain('wall-feature')
+    expect(definition?.relations?.cascadeDelete).toBe('descendants')
   })
 
   test('opening paint reads the body material beneath slot overrides', async () => {

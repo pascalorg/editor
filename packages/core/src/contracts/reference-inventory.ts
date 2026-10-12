@@ -167,6 +167,19 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     note: 'Recipe surface of this item that the keyed child sits on.',
   }),
   row({
+    kind: 'wall-feature',
+    path: 'attachments.@key',
+    ...policy('node', 'hierarchy', 'drop', 'keep'),
+    remaps: ['clone-scene-graph', ...WALL_TOPOLOGY, 'delete-nodes'],
+    note: 'Record key: a hosted child id on a feature resting surface.',
+  }),
+  row({
+    kind: 'wall-feature',
+    path: 'attachments.*',
+    ...policy('surface', 'internal', 'drop', 'keep'),
+    note: 'Feature surface id on which the keyed child sits.',
+  }),
+  row({
     kind: '#scene',
     path: 'rootNodeIds[]',
     ...policy('node', 'hierarchy', 'drop', 'keep'),
@@ -945,6 +958,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'showTrimPlanes',
     'storyShell',
     'suppressedDimensionSegmentIndexes',
+    'wallFeature',
+    'wallFeature.mode',
+    'wallFeature.cut',
+    'wallFeature.cutHeight',
   ]),
   ...described('Read as a truthy flag only; no editor writer.', [
     'arrayModifier',

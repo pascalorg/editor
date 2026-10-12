@@ -853,6 +853,8 @@ export type FloorplanAffordanceSession = {
    * collapsed onto neighbour).
    */
   canCommit(): boolean
+  /** Release kind-owned transient state on cancellation or teardown. */
+  cancel?(): void
   /**
    * Optional atomic commit hook — mirror of the same field on
    * `FloorplanMoveTargetSession`. New live-preview sessions should provide
@@ -865,6 +867,8 @@ export type FloorplanAffordanceSession = {
 }
 
 export type FloorplanAffordance<N> = {
+  /** Declare the gesture so the dispatcher owns selection and snapping scope. */
+  interaction?: 'resize' | 'move'
   start(args: {
     node: N
     /** Opaque kind-specific payload from the handle primitive. */
@@ -929,6 +933,8 @@ export type FloorplanMoveTargetSession = {
    * area, overlap detected, ...).
    */
   canCommit(): boolean
+  /** Release kind-owned transient state on cancellation or teardown. */
+  cancel?(): void
   /**
    * Optional atomic-commit hook. The default overlay path snapshots
    * each affected node before drag and writes a diff back on commit —
@@ -1057,6 +1063,14 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   /** Opaque host/plugin contributions. Core stores but never interprets them. */
   extensions?: Readonly<Record<string, unknown>>
   surfaceRole?: SurfaceRole
+  /** Parent-local pose for kinds whose frame is derived from their host rather than stored. */
+  localFrame?: (
+    node: z.infer<S>,
+    context: {
+      nodes: Readonly<Record<string, AnyNode>>
+      planOnly: boolean
+    },
+  ) => { position: readonly [number, number, number]; rotation: readonly [number, number, number] }
   /**
    * Show a floor direction-triangle while placing/moving — the kind has a
    * meaningful front. `true` points along the node's local +Z (forward).

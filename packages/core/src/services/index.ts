@@ -125,6 +125,7 @@ export {
 export {
   canHostSurfaceChild,
   type DeclaredHostSurface,
+  getHostAttachmentSurface,
   getSurfaceProvider,
   type HostSurface,
   hitDerivedSurfaceProvider,

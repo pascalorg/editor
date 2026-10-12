@@ -69,7 +69,7 @@ const whenWallVariant = (variant: WallDrawVariant) => ({
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
-  schemaVersion: 10,
+  schemaVersion: 11,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -176,7 +176,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   relations: {
-    hosts: ['door', 'window', 'item', 'lean-to-extension'],
+    hosts: ['door', 'window', 'item', 'lean-to-extension', 'wall-feature'],
     affectsSpatial: ['slab', 'ceiling', 'zone'],
     linkedBy: 'endpoint-match',
     cascadeDelete: 'descendants',

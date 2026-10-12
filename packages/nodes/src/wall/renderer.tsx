@@ -20,6 +20,7 @@ import {
 import { type ComponentProps, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { hasDescendantHit } from '../shared/descendant-hit'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 import {
@@ -113,6 +114,15 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     for (const key of Object.keys(rawHandlers) as (keyof typeof rawHandlers)[]) {
       const fn = rawHandlers[key] as (e: unknown) => void
       ;(gated as Record<string, (e: unknown) => void>)[key] = (e: unknown) => {
+        if (
+          key !== 'onPointerLeave' &&
+          ref.current &&
+          hasDescendantHit(
+            ref.current,
+            (e as { intersections?: { object: import('three').Object3D }[] }).intersections ?? [],
+          )
+        )
+          return
         const wallHidden = ref.current?.userData?.wallHidden === true
         if (
           wallPointerEventsSuppressed({

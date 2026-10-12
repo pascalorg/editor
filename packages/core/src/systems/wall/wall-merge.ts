@@ -8,6 +8,7 @@ import {
   WALL_TRIM_DEFAULTS,
   type WallFace,
   type WallFaceRegion,
+  type WallFeatureNode,
   type WallNode,
   type ZoneNode,
 } from '../../schema'
@@ -368,6 +369,29 @@ export function buildMergedWallAttachmentUpdates(
     // Every child moves to the kept wall: deleting the absorbed wall would
     // otherwise take a child left on it along. Only positioned ones re-place.
     const rehost = { parentId: mergedWallId, wallId: mergedWallId }
+    if (child.type === 'wall-feature') {
+      const feature = child as WallFeatureNode
+      const sourceWall = child.parentId === secondary.id ? secondary : primary
+      const sourceLength = Math.max(wallLength(sourceWall), 1e-6)
+      const reversed =
+        (sourceWall.end[0] - sourceWall.start[0]) * tangentX +
+          (sourceWall.end[1] - sourceWall.start[1]) * tangentZ <
+        0
+      const worldX =
+        sourceWall.start[0] + ((sourceWall.end[0] - sourceWall.start[0]) * feature.u) / sourceLength
+      const worldZ =
+        sourceWall.start[1] + ((sourceWall.end[1] - sourceWall.start[1]) * feature.u) / sourceLength
+      const nextLocalX = (worldX - mergedStart[0]) * tangentX + (worldZ - mergedStart[1]) * tangentZ
+      updates.push({
+        id: childId,
+        data: {
+          parentId: mergedWallId,
+          u: nextLocalX,
+          face: reversed ? (feature.face === 'a' ? 'b' : 'a') : feature.face,
+        },
+      })
+      continue
+    }
     if (!('position' in child && Array.isArray(child.position))) {
       updates.push({ id: childId, data: rehost as Partial<AnyNode> })
       continue

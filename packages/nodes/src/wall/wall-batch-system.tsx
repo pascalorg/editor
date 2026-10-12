@@ -224,7 +224,12 @@ export function collectTintedWalls(wallIds: ReadonlySet<string>): Set<string> {
 
   // A paint preview spreads past the hovered wall (a room's walls): each one it
   // repaints has to draw itself, or the merged copy hides the preview.
-  for (const id of wallIds) if (isSlotPaintPreviewActive(id)) tinted.add(id)
+  for (const id of wallIds)
+    if (
+      isSlotPaintPreviewActive(id) ||
+      sceneRegistry.nodes.get(id as AnyNodeId)?.userData.pascalMaterialPreview
+    )
+      tinted.add(id)
 
   return tinted
 }

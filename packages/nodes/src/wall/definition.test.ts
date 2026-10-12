@@ -15,8 +15,8 @@ import {
 import { createConicalRoofSectorAboveWall } from '../roof/conical-roof'
 import { wallDefinition } from './definition'
 
-test('wallDefinition records the F2 assembly schema version', () => {
-  expect(wallDefinition.schemaVersion).toBe(10)
+test('wallDefinition records the wall feature child schema version', () => {
+  expect(wallDefinition.schemaVersion).toBe(11)
 })
 
 test('walls host F2 assembly layers whose sum is the stored thickness', () => {

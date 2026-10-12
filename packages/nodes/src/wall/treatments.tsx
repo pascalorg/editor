@@ -9,6 +9,7 @@ import {
   isCurvedWall,
   type SceneMaterial,
   type SceneMaterialId,
+  sceneRegistry,
   spatialGridManager,
   useScene,
   WALL_CHAIR_RAIL_DEFAULT,
@@ -22,6 +23,7 @@ import {
   type WallTrimProfile,
   type WallTrimSlotId,
   wallDoorStepRuns,
+  wallSupportForNodes,
 } from '@pascal-app/core'
 import {
   baseMaterial,
@@ -29,10 +31,12 @@ import {
   type RenderShading,
   resolveMaterialRef,
 } from '@pascal-app/viewer'
-import { memo, useEffect, useMemo } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries as mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { wallFeatureTrimRanges } from '../wall-feature/trim'
 import { treatmentMiterDataForProud, type WallTreatmentLevelData } from './treatment-level-data'
 
 const CURVE_SEGMENTS = 24
@@ -543,6 +547,17 @@ export function buildTrimGeometry(
   const runs = bases.flatMap((base) => {
     const bottom = support ? base.elevation - support.elevation : yBottom
     const openingRanges = trimOpeningRanges(node, childrenNodes, bottom, height)
+    const nodes = useScene.getState().nodes
+    const wallBase = support?.elevation ?? wallSupportForNodes(node, nodes).elevation
+    openingRanges.push(
+      ...wallFeatureTrimRanges(
+        node,
+        resolveTreatmentSideSign(node, side) > 0 ? 'a' : 'b',
+        nodes,
+        wallBase + bottom,
+        height,
+      ),
+    )
     if (support)
       for (const child of childrenNodes) {
         for (const run of wallDoorStepRuns(node, child, support.faceDatum, support.elevation))
@@ -640,6 +655,11 @@ export const WallTreatments = memo(function WallTreatments({
   levelData: WallTreatmentLevelData
   materials: Record<WallTreatmentSlotId, THREE.Material>
 }) {
+  const group = useRef<THREE.Group>(null!)
+  useFrame(() => {
+    if (group.current)
+      group.current.visible = sceneRegistry.nodes.get(node.id)?.userData.wallHidden !== true
+  })
   const fallbackMaterial =
     materials.aSkirting ??
     materials.bSkirting ??
@@ -689,7 +709,7 @@ export const WallTreatments = memo(function WallTreatments({
   )
 
   return (
-    <>
+    <group ref={group}>
       {trimEntries.map((entry) => (
         <mesh
           castShadow
@@ -700,6 +720,6 @@ export const WallTreatments = memo(function WallTreatments({
           userData={{ slotId: entry.slotId }}
         />
       ))}
-    </>
+    </group>
   )
 })

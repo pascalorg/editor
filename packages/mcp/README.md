@@ -251,6 +251,30 @@ console.log(scene)
 See [`examples/embed-in-agent.ts`](./examples/embed-in-agent.ts) for a
 compilable version.
 
+### Registering plugin operation tools
+
+Hosts that install a plugin can pass its tool contracts and operations to
+`createPascalMcpServer`. Only operation tools with a host-supplied annotation
+classification are registered; contract annotations are hints and are ignored
+for authorization.
+
+```ts
+import { wallFeatureAgentTools } from '@pascal-app/nodes/agent-tools'
+import { wallFeatureAgentOperations } from '@pascal-app/nodes/agent-operations'
+
+const server = createPascalMcpServer({
+  bridge,
+  pluginTools: [{
+    agentTools: wallFeatureAgentTools,
+    operations: wallFeatureAgentOperations,
+    annotationsByTool: {
+      pascal_create_wall_feature: { destructiveHint: false, idempotentHint: false },
+      pascal_update_wall_feature: { destructiveHint: false, idempotentHint: true },
+    },
+  }],
+})
+```
+
 ## Coordinate conventions
 
 Pascal is a **right-handed** scene where **X and Z form the ground plane and Y
@@ -351,6 +375,8 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `apply_patch` | Batched create/update/delete/move, validated and dry-run before commit. Batch-first is the default: send all create/update/delete ops for a build step in one atomic call (stable order, later ops may reference earlier created ids); do not loop one-op calls. A create with an id already in the scene is refused (`node_exists`); delete it earlier in the same patch to replace it. Updates cannot change `id` or `type` (`identity_change`), `object` or `children` (`immutable_field`), move a node under a missing or childless parent (`invalid_parent`), or add schema issues (`invalid_update`); default gutters and downspouts a delete regenerates are addressable only in a later call (`regenerated_default`). Refusals are tool errors with JSON text `{ code, patchIndex, id, message }`. | `{ patches: Patch[] }` | `{ applied: number }` |
 | `add_level` | Add an empty level to a building, as the editor does: above the highest, or below the lowest for a basement. Omit `buildingId` for the scene's only building. | `{ buildingId?, position?, name?, height? }` | `{ levelId, buildingId, floorIndex, height }`; refusals `building_required`, `building_not_found`, `no_building` |
 | `add_wall` | Add a wall to a level, straight or, with `curveOffset`, an arc. Omit `levelId` for the lowest storey. | `{ start, end, levelId?, thickness?, height?, curveOffset? }` | `{ wallId, levelId, length }`; refusals `roof_level`, `wall_too_short`, `level_not_found` |
+| `pascal_create_wall_feature` | Available when a host registers the `pascal:core` plugin tools. Creates a rectangular niche or bump on a straight solid wall, or a niche inside a wall-owned bump. Dimensions and coordinates are metres; omitted wall face defaults to `a`; finish override is optional. | `{ hostId, mode, face?, u, bottom, width, height, depth, finishRef? }` | `{ featureId, hostId, mode }`; refusals include invalid host, bounds, overlap, and backing |
+| `pascal_update_wall_feature` | Available when a host registers the `pascal:core` plugin tools. Updates a feature with the editor's shared placement validation. Omitted values stay unchanged; `finishRef: null` clears its override. | `{ featureId, mode?, face?, u?, bottom?, width?, height?, depth?, finishRef? }` | `{ featureId, hostId, mode }`; same placement refusals as creation |
 | `place_items` | Place catalog items in one call, each placed or refused on its own, at level `(x, z)`: on the level's floor, or on the host each names (`targetNodeId`): a wall (`y`, the height of its bottom, required), a ceiling, or an item standing on the floor. A floor item in a door's clearance is refused `blocks_door` (naming the door and a spot that clears every door), one its room cannot hold in any turn `too_large_for_room`. | `{ items: [{ assetId, x, z, y?, targetNodeId?, rotation? }], levelId? }` | `{ levelId, items: [{ ok, itemId?, hostId?, restingOn?, code? }] }`; per-item refusals `asset_not_found`, `outside_rooms`, `blocks_door`, `too_large_for_room`, `height_required`, `item_too_tall`, `unsupported_host`, `host_not_found`, `host_not_on_level` |
 | `place_design` | Create one design (procedural item recipe, object or JSON string) that passes `validate_design`. Its mounting picks the host: level/slab/zone or a design surface (`surfaceId`), a straight wall face, or a ceiling. Create-only, one undo step, inline designs up to 24 KiB, with coded refusals. | `{ design, hostId, position, rotation?, side?, surfaceId?, parameters?, slots?, name?, id? }` | `{ designId, parentId, surfaceId }` |
 | `set_zone` | Create a zone/room polygon on a level. | `{ levelId, polygon, label, properties? }` | `{ zoneId }` |

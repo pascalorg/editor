@@ -233,6 +233,23 @@ export function getSurfaceProvider(host: AnyNode): SurfaceProvider {
   return declaration?.hosting || adapters.get(host.type) || hitDerivedSurfaceProvider
 }
 
+export function getHostAttachmentSurface(
+  host: AnyNode,
+  childId: string,
+  nodes: Readonly<Record<string, AnyNode>>,
+): DeclaredHostSurface | undefined {
+  const id = (host as AnyNode & { attachments?: Record<string, string> }).attachments?.[childId]
+  if (!id) return undefined
+  return getSurfaceProvider(host)
+    .surfaces?.(host, {
+      scene: {
+        get: <N extends AnyNode = AnyNode>(nodeId: AnyNodeId) => nodes[nodeId] as N | undefined,
+        nodes: () => nodes,
+      },
+    })
+    .find((surface) => surface.id === id)
+}
+
 export function rendersHostedChildren(def: AnyNodeDefinition): boolean {
   return def.renderer
     ? def.renderer.kind === 'parametric' && def.rendersChildren !== false

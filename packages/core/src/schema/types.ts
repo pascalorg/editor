@@ -50,6 +50,7 @@ import { StructuralGridNode } from './nodes/structural-grid'
 import { TurbineVentNode } from './nodes/turbine-vent'
 import { UnitNode } from './nodes/unit'
 import { WallNode } from './nodes/wall'
+import { WallFeatureNode } from './nodes/wall-feature'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
 
@@ -99,6 +100,7 @@ export const AnyNode = nodeUnion([
   BlockNode,
   StructuralGridNode,
   WallNode,
+  WallFeatureNode,
   SeparatorNode,
   FloorOpeningNode,
   FenceNode,

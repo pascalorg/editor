@@ -1,5 +1,6 @@
+import { validateWallFeatures } from '../../building/wall-features'
 import { type AnyNodeId, WallNode } from '../../schema'
-import { planWallJustification } from '../../systems/wall/wall-frame'
+import { planWallJustification, reverseWallDirection } from '../../systems/wall/wall-frame'
 import { getPlannedLinkedWallUpdates, planWallMoveJunctions } from '../../systems/wall/wall-move'
 import {
   applyToScratch,
@@ -32,10 +33,16 @@ export function setWallGeometry(
       update: planWallJustification(nodes, original.id, input.justification ?? undefined),
     })
   const wall = scratch[original.id] as WallNode
-  const start = input.start ?? wall.start,
-    end = input.end ?? wall.end
+  const directionReversed =
+    input.start?.[0] === wall.end[0] &&
+    input.start?.[1] === wall.end[1] &&
+    input.end?.[0] === wall.start[0] &&
+    input.end?.[1] === wall.start[1]
+  const orientedWall = directionReversed ? { ...wall, ...reverseWallDirection(wall) } : wall
+  const start = input.start ?? orientedWall.start,
+    end = input.end ?? orientedWall.end
   const next = WallNode.parse({
-    ...wall,
+    ...orientedWall,
     start,
     end,
     ...(input.thickness !== undefined ? { thickness: input.thickness } : {}),
@@ -81,5 +88,17 @@ export function setWallGeometry(
     })
   }
   scratch[wall.id] = next
+  if (directionReversed) {
+    const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+    for (const feature of Object.values(scratch)) {
+      if (feature.type !== 'wall-feature' || feature.parentId !== wall.id) continue
+      scratch[feature.id] = {
+        ...feature,
+        face: feature.face === 'a' ? 'b' : 'a',
+        u: length - feature.u,
+      }
+    }
+  }
+  validateWallFeatures(scratch, wall.id)
   return { changes: diffStructure(nodes, scratch) }
 }

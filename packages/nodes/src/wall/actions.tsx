@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { FoldHorizontal, Scissors } from 'lucide-react'
 import { useMemo } from 'react'
+import WallFeatureActions from '../wall-feature/actions'
 import { openWallSplit } from './split-session'
 
 const BUTTON =
@@ -25,6 +26,7 @@ const BUTTON =
 export default function WallActions() {
   return (
     <>
+      <WallFeatureActions />
       <SplitWallAction />
       <MergeWallsAction />
     </>

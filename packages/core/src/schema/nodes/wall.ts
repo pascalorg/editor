@@ -239,6 +239,7 @@ export const WallNode = BaseNode.extend({
         DoorNode.shape.id,
         WindowNode.shape.id,
         LeanToExtensionNode.shape.id,
+        objectId('wall-feature'),
       ]),
     )
     .default([]),

@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   DoorNode,
   LevelNode,
+  WallFeatureNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -104,6 +105,33 @@ describe('explicit wall merge', () => {
         [a.id, taller.id],
       ),
     ).toThrow('These walls have a different height.')
+  })
+
+  test('moves a feature on a reversed absorbed wall and flips its face', () => {
+    const kept = wall([0, 0], [4, 0])
+    const absorbed = wall([8, 0], [4, 0])
+    const feature = WallFeatureNode.parse({
+      id: 'wall-feature_merge',
+      parentId: absorbed.id,
+      face: 'a',
+      u: 1,
+      width: 0.6,
+      bottom: 0.8,
+    })
+    const keptChildren = [0.8, 2.4].map((u) =>
+      WallFeatureNode.parse({ parentId: kept.id, face: 'a', u, width: 0.3 }),
+    )
+    kept.children = keptChildren.map((child) => child.id)
+    absorbed.children = [feature.id]
+    const graph = map([kept, absorbed, ...keptChildren, feature])
+    const plan = planWallMerge(graph, [kept.id, absorbed.id])
+    const merged = apply(graph, plan.changes)
+    expect(merged[feature.id]).toMatchObject({
+      parentId: kept.id,
+      face: 'b',
+      u: 7,
+    })
+    expect((merged[kept.id] as WallNode).children).toContain(feature.id)
   })
 
   test('refuses anything that would change the layout', () => {

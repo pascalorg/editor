@@ -1,3 +1,11 @@
+export {
+  planWallFeaturePlacement,
+  resolveWallFeaturePlacement,
+  validateWallFeatures,
+  WALL_FEATURE_MIN_BACKING,
+  type WallFeaturePlacement,
+  type WallFeaturePlacementContext,
+} from './building/wall-features'
 export * from './commands/structure'
 export type {
   BlockEvent,
@@ -233,6 +241,7 @@ export {
   getOpeningWallCut,
   getOpeningWallPlacement,
   openingDatumFromSupport,
+  supportSegmentAt,
   wallSupportForNodes,
 } from './lib/opening-floor-datum'
 export {

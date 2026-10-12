@@ -7,6 +7,7 @@ import {
   type DoorNode,
   getScaledDimensions,
   type ItemNode,
+  type WallFeatureNode,
   type WallNode,
   WallNode as WallSchema,
   type WindowNode,
@@ -389,6 +390,14 @@ function attachmentSpan(node: AnyNode): { min: number; max: number; center: numb
       center: item.position[0],
     }
   }
+  if (node.type === 'wall-feature') {
+    const feature = node as WallFeatureNode
+    return {
+      min: feature.u - feature.width / 2,
+      max: feature.u + feature.width / 2,
+      center: feature.u,
+    }
+  }
   return null
 }
 
@@ -413,6 +422,7 @@ function remapAttachment(
   wall: WallNode,
   nextLocalX: number,
 ): Partial<AnyNode> | null {
+  if (node.type === 'wall-feature') return { parentId: wall.id, u: nextLocalX } as Partial<AnyNode>
   if (!(node.type === 'door' || node.type === 'window' || node.type === 'item')) return null
   const nextLength = wallLength(wall)
   const clampedX = Math.max(0, Math.min(nextLength, nextLocalX))

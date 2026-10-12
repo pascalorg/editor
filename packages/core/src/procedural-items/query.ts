@@ -17,6 +17,7 @@ import type { WallNode } from '../schema/nodes/wall'
 import type { AnyNode } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getStoredLevelHeight } from '../services/storey'
+import { getHostAttachmentSurface, getSurfaceProvider } from '../services/surface-hosting'
 import { surfaceRegionContainsPoint } from '../services/surface-region'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
@@ -161,12 +162,21 @@ function nodeParentFrame(
   if (!node.parentId) return IDENTITY_FRAME
   let parentFrame = nodeLevelFrame(node.parentId, nodes, seen, options)
   const parent = nodes[node.parentId]
-  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
-    const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
-      (s) => s.id === parent.attachments[node.id],
+  if (
+    parent &&
+    getSurfaceProvider(parent as AnyNode).childFrame === 'surface-local' &&
+    (parent as { attachments?: Record<string, string> }).attachments?.[node.id]
+  ) {
+    const surface = getHostAttachmentSurface(
+      parent as AnyNode,
+      node.id,
+      nodes as Record<string, AnyNode>,
     )
     if (!surface) throw new Error('Missing attachment surface')
-    parentFrame = composeFrames(parentFrame, frame(surface.position, surface.rotation))
+    parentFrame = composeFrames(
+      parentFrame,
+      frame([...surface.position], [...(surface.rotation ?? [0, 0, 0])]),
+    )
   }
   return parentFrame
 }
@@ -210,6 +220,15 @@ function resolveNodeLevelFrame(
   if (!node) throw new Error(`Missing node ${id}`)
   if (node.type === 'level') return IDENTITY_FRAME
   seen.add(id)
+  const localFrame = nodeRegistry.get(node.type)?.localFrame
+  if (localFrame) {
+    const pose = localFrame(node, {
+      nodes: nodes as Record<string, AnyNode>,
+      planOnly: options.planOnly ?? false,
+    })
+    const local = frame([...pose.position], [...pose.rotation])
+    return node.parentId ? composeFrames(nodeParentFrame(node, nodes, seen, options), local) : local
+  }
   if (node.type === 'ceiling') {
     // Match the ceiling renderer's underside frame, including its 1 cm inset.
     if (options.planOnly) return IDENTITY_FRAME

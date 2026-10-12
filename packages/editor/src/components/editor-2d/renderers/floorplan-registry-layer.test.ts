@@ -268,6 +268,16 @@ describe('floorplan selection handle sizing', () => {
 })
 
 describe('floorplan affordance ownership', () => {
+  test('registered resize affordances declare their interaction scope', () => {
+    expect(
+      floorplanAffordanceReshapeScope('custom-feature', 'feature_1', undefined, 'resize'),
+    ).toEqual({
+      kind: 'handle-drag',
+      nodeId: 'feature_1',
+      handle: 'Resize',
+    })
+  })
+
   test('keeps the wall center curve drag owned by the floorplan dispatcher', () => {
     expect(floorplanAffordanceReshapeScope('wall-curve', 'wall_1', undefined)).toEqual({
       kind: 'reshaping',
@@ -381,11 +391,13 @@ describe('floorplan affordance cancellation', () => {
   test('tool:cancel reverts the drag and makes a later pointerup inert', () => {
     const releasePointerCapture = mock(() => {})
     const commit = mock(() => {})
+    const cancel = mock(() => {})
     const session: FloorplanAffordanceSession = {
       affectedIds: ['wall_a', 'wall_b'],
       apply: () => {},
       canCommit: () => true,
       commit,
+      cancel,
     }
     const revert = mock(() => {})
     const writes = {
@@ -436,6 +448,7 @@ describe('floorplan affordance cancellation', () => {
     expect(dragRef.current).toBeNull()
     expect(releasePointerCapture).toHaveBeenCalledWith(7)
     expect(revert).toHaveBeenCalledTimes(1)
+    expect(cancel).toHaveBeenCalledTimes(1)
     expect(resumeHistory).toHaveBeenCalledTimes(1)
     expect(clearPreview).toHaveBeenCalledTimes(2)
     expect(clearPreview).toHaveBeenNthCalledWith(1, 'wall_a')

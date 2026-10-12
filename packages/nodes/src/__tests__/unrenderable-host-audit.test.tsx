@@ -91,9 +91,17 @@ const harness = installMountedScene()
 
 function makeHost(kind: string) {
   const def = nodeRegistry.get(kind)!
+  const featureWall =
+    kind === 'wall-feature'
+      ? (nodeRegistry.get('wall')!.schema.parse({
+          ...NODE_REQUIRED_FIELDS.wall,
+          parentId: level.id,
+        }) as AnyNode)
+      : undefined
   const fields = {
     ...NODE_REQUIRED_FIELDS[kind],
-    parentId: level.id,
+    parentId: featureWall?.id ?? level.id,
+    ...(kind === 'wall-feature' ? { face: 'a', mode: 'bump' } : {}),
     ...(kind === 'item' ? { asset: { ...asset, dimensions: [2, 1, 2] } } : {}),
     ...(kind === 'procedural-item'
       ? {
@@ -123,7 +131,11 @@ function makeHost(kind: string) {
   }) as AnyNode
   if ('position' in host && Array.isArray(host.position)) host.position = [0.7, 0.2, -0.4]
   if ('rotation' in host) host.rotation = typeof host.rotation === 'number' ? 0.31 : [0, 0.31, 0]
-  const nodes: Record<string, AnyNode> = { [host.id]: host }
+  const nodes: Record<string, AnyNode> = {
+    [host.id]: host,
+    ...(featureWall ? { [featureWall.id]: featureWall } : {}),
+  }
+  if (featureWall) (featureWall as AnyNode & { children: string[] }).children = [host.id]
   const parse = (type: string, values: Record<string, unknown>) =>
     nodeRegistry.get(type)!.schema.parse(values) as AnyNode
   if (

@@ -13,8 +13,8 @@ import {
 import { timeSpan, WallCutout, WallSystem } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
-import { curtainWallGeometryAdapter } from './curtain-wall-adapter'
 import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
+import { wallGeometryAdapter } from './geometry-adapter'
 import {
   buildWallTreatmentLevelData,
   clearWallTreatmentMiterCache,
@@ -179,7 +179,7 @@ const WallSystems = () => {
   return (
     <>
       <WallTreatmentMiterSystem />
-      <WallSystem geometryAdapter={curtainWallGeometryAdapter} />
+      <WallSystem geometryAdapter={wallGeometryAdapter} />
       <WallCutout materialResolver={getCurtainAwareWallMaterials} />
       <WallBatchSystem />
     </>

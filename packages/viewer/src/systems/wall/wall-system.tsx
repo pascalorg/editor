@@ -391,6 +391,7 @@ function assignWallMaterialGroups(
   wall: WallNode,
   boundaryEdges: TaggedWallBoundaryEdge[],
   finish: WallFinishContext,
+  faceAt?: WallBodyGeometry['faceAt'],
 ) {
   const position = geometry.getAttribute('position')
   if (!position) return
@@ -403,6 +404,7 @@ function assignWallMaterialGroups(
   }
 
   const triangleMaterials = new Array<number>(triangleCount).fill(0)
+  const bodyFaces: import('./wall-finish-data').WallBodyFaceAssignment[] = []
   const a = new THREE.Vector3()
   const b = new THREE.Vector3()
   const c = new THREE.Vector3()
@@ -437,16 +439,38 @@ function assignWallMaterialGroups(
 
     normal.normalize()
 
-    if (Math.abs(normal.y) >= WALL_FACE_NORMAL_Y_EPSILON) {
-      triangleMaterials[triangleIndex] = 0
-      continue
-    }
-
     centroid
       .copy(a)
       .add(b)
       .add(c)
       .multiplyScalar(1 / 3)
+    const modifiedFace = faceAt?.(centroid)
+    if (modifiedFace) {
+      triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(
+        finish,
+        typeof modifiedFace === 'string' ? modifiedFace : modifiedFace.face,
+        centroid.x,
+        centroid.y,
+      )
+      bodyFaces.push({
+        start: baseIndex,
+        face: typeof modifiedFace === 'string' ? modifiedFace : modifiedFace.face,
+        ownerId: typeof modifiedFace === 'string' ? undefined : modifiedFace.ownerId,
+        finishRef: typeof modifiedFace === 'string' ? undefined : modifiedFace.finishRef,
+        baseMaterialIndex: triangleMaterials[triangleIndex]!,
+      })
+      if (typeof modifiedFace !== 'string' && modifiedFace.finishRef) {
+        const index = finish.refs.indexOf(modifiedFace.finishRef)
+        if (index >= 0) triangleMaterials[triangleIndex] = 3 + index
+      }
+      continue
+    }
+
+    if (Math.abs(normal.y) >= WALL_FACE_NORMAL_Y_EPSILON) {
+      triangleMaterials[triangleIndex] = 0
+      continue
+    }
+
     projectedCentroid.set(centroid.x, centroid.z)
 
     let nearestTag: WallBoundaryEdgeTag | null = null
@@ -477,8 +501,15 @@ function assignWallMaterialGroups(
       centroid.y,
     )
   }
-
   setGroupsSortedByMaterial(geometry, triangleMaterials)
+  if (bodyFaces.length) {
+    const order = Array.from({ length: triangleCount }, (_, i) => i).sort(
+      (a, b) => triangleMaterials[a]! - triangleMaterials[b]! || a - b,
+    )
+    const starts = new Map(order.map((original, sorted) => [original * 3, sorted * 3]))
+    for (const assignment of bodyFaces) assignment.start = starts.get(assignment.start)!
+    geometry.userData.wallBodyFaces = bodyFaces
+  } else delete geometry.userData.wallBodyFaces
 }
 
 type SplitVertex = {
@@ -706,7 +737,30 @@ export type WallGeometryAdapterContext = {
   isLive: (id: AnyNodeId) => boolean
 }
 
+export type WallBodyGeometry = {
+  geometry: THREE.BufferGeometry
+  /** A modified surface inherits this host face's finish, including horizontal reveals. */
+  faceAt?: (
+    point: THREE.Vector3,
+  ) => 'a' | 'b' | { face: 'a' | 'b'; finishRef?: string; ownerId?: string } | null
+  finishRefs?: readonly string[]
+}
+
+/** Takes ownership of the body and returns the solid that opening cuts should remove from. */
+export type WallBodyGeometryModifier = (body: THREE.BufferGeometry) => WallBodyGeometry
+
+export type WallBodyGeometryContext = {
+  nodes: Readonly<Record<string, AnyNode>>
+  elevation: number
+  support?: WallSlabSupport
+  planeTop?: number
+}
+
 export type WallGeometryAdapter = {
+  bodyModifier?: (
+    wall: WallNode,
+    context: WallBodyGeometryContext,
+  ) => WallBodyGeometryModifier | undefined
   prepareChildren?: (
     wall: WallNode,
     children: readonly AnyNode[],
@@ -1188,6 +1242,13 @@ function updateWallGeometry(
     terrainBottomAt,
     slabSupport.faceDatum,
     buildWallFinishLayout(node, getCachedLevelZones(node, nodes)),
+    nodes,
+    geometryAdapter?.bodyModifier?.(node, {
+      nodes,
+      elevation: slabElevation,
+      support: slabSupport,
+      planeTop,
+    }),
   )
   const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   // World transform the render mesh will apply (position + Y-rotation below).
@@ -1474,6 +1535,7 @@ function mergeWallTerrainFill(
   wall: WallNode,
   boundaryEdges: TaggedWallBoundaryEdge[],
   finish: WallFinishContext,
+  faceAt?: WallBodyGeometry['faceAt'],
 ): THREE.BufferGeometry {
   const present = fills.filter((fill): fill is THREE.BufferGeometry => fill !== null)
   if (present.length === 0) return body
@@ -1494,7 +1556,7 @@ function mergeWallTerrainFill(
   bodyGeometry.dispose()
   for (const fill of splitFills) fill.dispose()
   merged.computeVertexNormals()
-  assignWallMaterialGroups(merged, wall, boundaryEdges, finish)
+  assignWallMaterialGroups(merged, wall, boundaryEdges, finish, faceAt)
   ensureRenderableGeometryAttributes(merged)
   return merged
 }
@@ -1549,6 +1611,7 @@ export function generateExtrudedWall(
   faceBase?: { a: readonly WallSlabSupportSegment[]; b: readonly WallSlabSupportSegment[] },
   finishLayout: WallFinishLayout = buildWallFinishLayout(wallNode, []),
   sceneNodes: Readonly<Record<string, AnyNode>> = useScene.getState().nodes,
+  modifyBody?: WallBodyGeometryModifier,
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
@@ -1790,8 +1853,31 @@ export function generateExtrudedWall(
     baseProfileCutouts.push(new Brush(cutoutGeometry))
   }
 
+  let body: THREE.BufferGeometry = geometry
+  let faceAt: WallBodyGeometry['faceAt']
+  let cutterDepth = thickness * 2
+  if (modifyBody) {
+    if (baseProfileCutouts.length) body = subtractWallCutouts(body, baseProfileCutouts)
+    const modified = modifyBody(body)
+    body = modified.geometry
+    faceAt = modified.faceAt
+    if (modified.finishRefs?.length)
+      finish.refs = [...new Set([...finish.refs, ...modified.finishRefs])]
+    body.computeBoundingBox()
+    if (body.boundingBox && !body.boundingBox.isEmpty()) {
+      const center = getWallBodyCenterOffset(wallNode)
+      cutterDepth =
+        2 *
+        Math.max(
+          thickness,
+          body.boundingBox.max.z - center + 0.002,
+          center - body.boundingBox.min.z + 0.002,
+        )
+    }
+  }
+
   const cutoutBrushes = [
-    ...baseProfileCutouts,
+    ...(modifyBody ? [] : baseProfileCutouts),
     ...collectCutoutBrushes(
       wallNode,
       childrenNodes,
@@ -1800,19 +1886,32 @@ export function generateExtrudedWall(
       slabElevation,
       sceneNodes,
       baseSegments,
+      cutterDepth,
     ),
   ]
-  if (cutoutBrushes.length === 0) {
-    const splitGeometry = splitGeometryAtPlanes(geometry, finishPlanes.y, finishPlanes.x)
-    splitGeometry.computeVertexNormals()
-    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges, finish)
-    ensureRenderableGeometryAttributes(splitGeometry)
-    return withWallFinishData(
-      mergeWallTerrainFill(splitGeometry, belowBaseFills, wallNode, boundaryEdges, finish),
-      finish,
-    )
-  }
+  const resultGeometry = cutoutBrushes.length ? subtractWallCutouts(body, cutoutBrushes) : body
+  const splitResultGeometry = splitGeometryAtPlanes(resultGeometry, finishPlanes.y, finishPlanes.x)
+  splitResultGeometry.computeVertexNormals()
+  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges, finish, faceAt)
+  ensureRenderableGeometryAttributes(splitResultGeometry)
 
+  return withWallFinishData(
+    mergeWallTerrainFill(
+      splitResultGeometry,
+      belowBaseFills,
+      wallNode,
+      boundaryEdges,
+      finish,
+      faceAt,
+    ),
+    finish,
+  )
+}
+
+function subtractWallCutouts(
+  geometry: THREE.BufferGeometry,
+  cutoutBrushes: Brush[],
+): THREE.BufferGeometry {
   // Create wall brush from geometry
   // Pre-compute BVH with new API to avoid deprecation warning
   ensureRenderableGeometryAttributes(geometry)
@@ -1854,23 +1953,14 @@ export function generateExtrudedWall(
     for (const brush of cutoutBrushes) csgGeometry(brush).dispose()
   }
 
-  const resultGeometry = csgGeometry(resultBrush)
-  const splitResultGeometry = splitGeometryAtPlanes(resultGeometry, finishPlanes.y, finishPlanes.x)
-  splitResultGeometry.computeVertexNormals()
-  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges, finish)
-  ensureRenderableGeometryAttributes(splitResultGeometry)
-
-  return withWallFinishData(
-    mergeWallTerrainFill(splitResultGeometry, belowBaseFills, wallNode, boundaryEdges, finish),
-    finish,
-  )
+  return csgGeometry(resultBrush)
 }
 
 function withWallFinishData(
   geometry: THREE.BufferGeometry,
   finish: WallFinishContext,
 ): THREE.BufferGeometry {
-  if (!finish.layout.plain || finish.foundation) {
+  if (!finish.layout.plain || finish.foundation || finish.refs.length) {
     geometry.userData.wallFinish = {
       refs: finish.refs,
       faceBase: finish.faceBase,
@@ -1893,7 +1983,7 @@ function withWallFinishData(
 function authoredCutoutBrush(
   cutoutMesh: THREE.Mesh,
   wallMatrixInverse: THREE.Matrix4,
-  wallThickness: number,
+  cutterDepth: number,
   wallNode: WallNode,
 ): Brush | null {
   const geometry = cutoutMesh.geometry.clone()
@@ -1909,7 +1999,7 @@ function authoredCutoutBrush(
   }
   const centre = getWallBodyCenterOffset(wallNode)
   const meshCentre = (box.min.z + box.max.z) / 2
-  const scale = (wallThickness * 2) / depth
+  const scale = cutterDepth / depth
   const positions = geometry.getAttribute('position')
   for (let i = 0; i < positions.count; i++) {
     positions.setZ(i, centre + (positions.getZ(i) - meshCentre) * scale)
@@ -1932,6 +2022,7 @@ function collectCutoutBrushes(
   elevation = 0,
   sceneNodes: Readonly<Record<string, AnyNode>> = useScene.getState().nodes,
   baseSegments: readonly WallSlabSupportSegment[] = [{ start: 0, end: 1, elevation }],
+  cutterDepth = wallThickness * 2,
 ): Brush[] {
   const brushes: Brush[] = []
   const wallMesh = sceneRegistry.nodes.get(wallNode.id) as THREE.Mesh
@@ -1999,6 +2090,7 @@ function collectCutoutBrushes(
             wallThickness,
             getWallBodyCenterOffset(wallNode),
             cut.bottom - elevation,
+            cutterDepth,
           ),
         )
         continue
@@ -2041,6 +2133,7 @@ function collectCutoutBrushes(
         wallThickness,
         getWallBodyCenterOffset(wallNode),
         cut.bottom - elevation,
+        cutterDepth,
       )
       const frame = getWallCurveFrameAt(wallNode, child.position[0] / getWallCurveLength(wallNode))
       const offset = getWallBodyCenterOffset(wallNode)
@@ -2092,7 +2185,7 @@ function collectCutoutBrushes(
       // An authored object's cutout keeps its shape (an arch, a circle): its own
       // geometry in wall space, stretched across the wall so it cuts both faces.
       if (child.source) {
-        const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, wallThickness, wallNode)
+        const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, cutterDepth, wallNode)
         if (shaped) {
           brushes.push(shaped)
           continue
@@ -2102,7 +2195,7 @@ function collectCutoutBrushes(
       // Create a box geometry that extends through the wall thickness
       const width = maxX - minX
       const height = maxY - minY
-      const depth = wallThickness * 2 // Extend beyond wall to ensure clean cut
+      const depth = cutterDepth
 
       const boxGeo = new THREE.BoxGeometry(width, height, depth)
       // Position box at the center of the cutout
@@ -2124,6 +2217,7 @@ function createOpeningCutoutBrush(
   wallThickness: number,
   centerOffset: number,
   cutBottom?: number,
+  cutterDepth = wallThickness * 2,
 ): Brush {
   const halfWidth = opening.width / 2
   const bottom = cutBottom ?? opening.position[1] - opening.height / 2
@@ -2136,7 +2230,7 @@ function createOpeningCutoutBrush(
       bottom: bottom - bottomPadding,
       top: opening.position[1] + opening.height / 2,
     },
-    wallThickness * 2,
+    cutterDepth,
     wallThickness,
   )
   if (centerOffset !== 0) geometry.translate(0, 0, centerOffset)

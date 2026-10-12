@@ -42,6 +42,7 @@ export const AGENT_GUIDE = [
   '- Between adjacent rooms, prefer one shared wall (or only cut openings that line up). Leave ~0.65 m clear on both sides of each door; do not stack furniture footprints.',
   '- For complete homes, create exterior shell, interior rooms, openings, roof, furniture, then landscaping.',
   '- For doors/windows, use `t` or `position` from 0 to 1 along the wall unless a tool explicitly says otherwise.',
+  '- When the installed plugin exposes `pascal_create_wall_feature` and `pascal_update_wall_feature`, use them for rectangular niches and bumps on straight solid walls. Dimensions and local stations are metres. Direct wall features use face `a` or `b`; a niche hosted by a wall-owned bump inherits its face. Omit `finishRef` to inherit the nearest host finish, or pass `null` on update to clear an override. Placement refusals cover bounds, unrelated overlaps, nesting and the required 2 cm niche backing.',
   '- X/Z are floor-plan axes and Y is vertical; dimensions are meters.',
   '- Use `create_roof` for roofs. A dedicated roof support level is valid and should not count as an occupied story.',
   '',

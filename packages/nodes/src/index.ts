@@ -50,6 +50,7 @@ import { structuralGridDefinition } from './structural-grid'
 import { turbineVentDefinition } from './turbine-vent'
 import { unitDefinition } from './unit'
 import { wallDefinition } from './wall'
+import { wallFeatureDefinition } from './wall-feature'
 import { windowDefinition } from './window'
 import { zoneDefinition } from './zone'
 
@@ -78,6 +79,7 @@ export const builtinPlugin: Plugin = {
     blockDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
+    wallFeatureDefinition as unknown as AnyNodeDefinition,
     separatorDefinition as unknown as AnyNodeDefinition,
     floorOpeningDefinition as unknown as AnyNodeDefinition,
     leanToExtensionDefinition as unknown as AnyNodeDefinition,
@@ -218,5 +220,49 @@ export { structuralGridDefinition } from './structural-grid'
 export { turbineVentDefinition } from './turbine-vent'
 export { unitDefinition } from './unit'
 export { wallDefinition } from './wall'
+export { wallGeometryAdapter } from './wall/geometry-adapter'
+export { buildWallBatch, type WallBatch, type WallBatchSource } from './wall/wall-batch'
+export { WallFeatureNode, type WallFeatureNodeId, wallFeatureDefinition } from './wall-feature'
+export { startWallFeaturePlacement } from './wall-feature/actions'
+export { wallFeatureAgentOperations } from './wall-feature/agent-operations'
+export { wallFeatureAgentTools } from './wall-feature/agent-tools'
+export {
+  createWallFeaturePropertyPreview,
+  wallFeatureEdit,
+  wallFeatureHandles,
+} from './wall-feature/editing'
+export {
+  buildWallFeatureFloorplan,
+  WALL_FEATURE_PLAN_CUT_HEIGHT,
+  wallFeatureFloorplanDependencies,
+  wallFeaturePlanPoint,
+} from './wall-feature/floorplan'
+export {
+  wallFeaturePlanAffordance,
+  wallFeaturePlanHit,
+  wallFeaturePlanMove,
+} from './wall-feature/floorplan-interaction'
+export { wallFeaturePaint } from './wall-feature/paint'
+export {
+  createWallFeatureDraft,
+  createWallFeaturePlacementSession,
+  proposeWallFeature,
+  type WallFeatureHit,
+  type WallFeatureSnap,
+} from './wall-feature/placement'
+export {
+  deferWallFeatureGeometry,
+  isWallFeatureGeometryDeferred,
+  resetWallFeatureGeometry,
+  syncWallFeatureGeometry,
+} from './wall-feature/runtime'
+export { hasDescendantHit, raycastWallFeature } from './wall-feature/selection'
+export {
+  wallFeatureLocalFrame,
+  wallFeatureSupportHeight,
+  wallFeatureSurfaceProvider,
+  wallFeatureSurfaces,
+} from './wall-feature/surfaces'
+export { wallFeatureTrimRanges } from './wall-feature/trim'
 export { windowDefinition } from './window'
 export { zoneDefinition } from './zone'

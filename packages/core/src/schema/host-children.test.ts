@@ -39,6 +39,7 @@ test('frozen pre-slice corpus covers every kind predating separators', () => {
     NODE_KINDS.filter(
       (kind) =>
         kind !== 'separator' &&
+        kind !== 'wall-feature' &&
         kind !== 'floor-opening' &&
         kind !== 'fence-gate' &&
         kind !== 'fence-opening',

@@ -201,6 +201,7 @@ export function FloorplanRegistryMoveOverlay() {
       }
 
       const clearLivePreviews = () => {
+        session.cancel?.()
         const liveTransforms = useLiveTransforms.getState()
         const liveOverrides = useLiveNodeOverrides.getState()
         const scene = useScene.getState()

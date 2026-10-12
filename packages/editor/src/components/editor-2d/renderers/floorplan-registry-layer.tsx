@@ -267,6 +267,7 @@ export function cancelFloorplanAffordanceDrag(
     effects.resumeHistory()
     drag.historyPaused = false
   }
+  drag.session.cancel?.()
   effects.clearSnapFeedback()
   for (const id of drag.session.affectedIds) effects.clearPreview(id)
   effects.endReshapeScope(drag)
@@ -297,7 +298,10 @@ export function floorplanAffordanceReshapeScope(
   affordance: string,
   nodeId: string,
   payload: unknown,
+  interaction?: 'resize' | 'move',
 ): ActiveInteractionScope | null {
+  if (interaction)
+    return { kind: 'handle-drag', nodeId, handle: interaction === 'move' ? 'Move' : 'Resize' }
   if (affordance.includes('vertex') || affordance.includes('edge')) {
     const holeIndex = (payload as { holeIndex?: number } | undefined)?.holeIndex
     return holeIndex !== undefined
@@ -1340,7 +1344,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // the right chip during the edit AND `getActiveSnapContext()` resolves the
       // polygon / wall mode-set the affordance's snap math reads. Torn down on
       // release / cancel below. `null` for resize / rotate (no snapping chip).
-      const reshapeScope = floorplanAffordanceReshapeScope(affordance, nodeId, payload)
+      const reshapeScope = floorplanAffordanceReshapeScope(
+        affordance,
+        nodeId,
+        payload,
+        handler.interaction,
+      )
       if (reshapeScope) {
         useInteractionScope.getState().begin(reshapeScope)
       }
@@ -1506,6 +1515,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           resumeSceneHistory(useScene)
           drag.historyPaused = false
         }
+        drag.session.cancel?.()
         const overrides = useLiveNodeOverrides.getState()
         for (const id of drag.session.affectedIds) overrides.clear(id)
         cancelPerfAction()
