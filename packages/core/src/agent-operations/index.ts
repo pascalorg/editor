@@ -1,3 +1,4 @@
+import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addWall } from './add-wall'
 import { addCornerWindow } from './corner-window'
@@ -20,6 +21,7 @@ import { verifyScene } from './verify-scene'
 
 export * from './achieved'
 export * from './add-column'
+export * from './add-fence'
 export * from './add-level'
 export * from './add-object'
 export * from './add-wall'
@@ -69,6 +71,7 @@ export const AGENT_OPERATIONS = {
   duplicate_level: duplicateLevel,
   verify_scene: verifyScene,
   add_wall: addWall,
+  add_fence: addFence,
   add_corner_window: addCornerWindow,
   merge_windows: mergeWindowsOperation,
   add_level: addLevel,

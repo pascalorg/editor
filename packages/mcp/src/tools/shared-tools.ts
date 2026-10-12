@@ -11,6 +11,7 @@ import {
   type AgentToolAnnotations,
   type AgentToolContract,
   addCornerWindowTool,
+  addFenceTool,
   addLevelTool,
   addWallTool,
   createRoomTool,
@@ -229,6 +230,11 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: addWallTool,
     operation: AGENT_OPERATIONS.add_wall,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addFenceTool,
+    operation: AGENT_OPERATIONS.add_fence,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
