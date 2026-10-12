@@ -209,8 +209,49 @@ async function toolText(client: Client, name: string): Promise<string | undefine
   return content?.type === 'text' ? content.text : undefined
 }
 
-// What the agent does when a tool needs the editor tab is the host's to say, at connect.
+// Run 3 (2026-10-05) read its plan image in the shell before any call and never reached
+// import_plan_reference. A client shows the server's instructions before the first call.
 describe('what a client reads at connect', () => {
+  test('a plan image goes to import_plan_reference, a photo to record_reference', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const server = createPascalMcpServer({ bridge })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'instructions-test', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    try {
+      const instructions = client.getInstructions() ?? ''
+      expect(instructions).toContain('import_plan_reference')
+      expect(instructions).toContain('data:image/')
+      expect(instructions).toContain('record_reference')
+    } finally {
+      await client.close()
+      await server.close()
+    }
+  })
+  // Run 4 (2026-10-06) read "pass the file the user attached" as a file:// URL, then typed its plan
+  // as 10 KB of base64 for 3.6 min, thresholded to 1-bit to keep it short.
+  test("a file on the agent's machine is uploaded, an SVG inlined", async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const server = createPascalMcpServer({ bridge })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'instructions-test', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    try {
+      const instructions = client.getInstructions() ?? ''
+      expect(instructions).toContain('request_upload')
+      expect(instructions).toContain('asset:<id>')
+      expect(instructions).toContain('inline only small SVGs')
+      expect(instructions).not.toContain('Pass the file the user attached')
+    } finally {
+      await client.close()
+      await server.close()
+    }
+  })
+
+  // L64 (the user, 18:07): whether the agent may open the editor is the person's setting, which
+  // the host says at connect.
   test('a host adds its own lines', async () => {
     const bridge = new SceneBridge()
     bridge.loadDefault()
@@ -220,7 +261,7 @@ describe('what a client reads at connect', () => {
     const client = new Client({ name: 'instructions-test', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
     try {
-      expect(client.getInstructions()).toBe(line)
+      expect(client.getInstructions()).toEndWith(`\n${line}`)
     } finally {
       await client.close()
       await server.close()

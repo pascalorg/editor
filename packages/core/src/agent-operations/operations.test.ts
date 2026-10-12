@@ -79,5 +79,9 @@ test('stair design targets stay informational in scene verification', () => {
   expect(verified.issues).toContainEqual(
     expect.objectContaining({ type: 'stair_riser_target', severity: 'info' }),
   )
-  expect(verified.hasIssues).toBe(false)
+  // The circulation check also names a stair with no landing in this bare scene: what must hold is
+  // that the design targets are informational, never an issue that fails the scene.
+  expect(
+    verified.issues.filter((issue) => issue.type.endsWith('_target') && issue.severity !== 'info'),
+  ).toEqual([])
 })
