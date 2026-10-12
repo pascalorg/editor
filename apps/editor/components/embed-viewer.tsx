@@ -129,7 +129,7 @@ export function EmbedViewer({ id, name, graph, chrome = true }: EmbedViewerProps
         <a
           // The floorplan keeps its zoom buttons in the bottom-right corner; sit above them.
           className={cn(
-            'absolute z-20 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/60 px-3 py-1.5 font-medium text-white text-xs shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80',
+            'corner-smooth absolute z-20 inline-flex items-center gap-1.5 rounded-2xl border border-border/40 bg-background/95 px-3 py-2 font-medium text-foreground text-xs shadow-elevation-4 backdrop-blur-xl transition-colors hover:bg-background',
             stageMode === '3d' ? 'right-3 bottom-3' : 'right-4 bottom-16',
           )}
           href="https://editor.pascal.app"
