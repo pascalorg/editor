@@ -295,6 +295,7 @@ export {
   getPitchFromActiveRoofHeight,
   getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
+  getSegmentFasciaMaterial,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   isBandedShedSegment,

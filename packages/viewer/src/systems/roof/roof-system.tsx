@@ -1434,7 +1434,10 @@ function buildFasciaBoards(
   tanTheta: number,
 ): THREE.BufferGeometry | null {
   const { roofType, width, depth } = node
-  const { thickness: bt, height: bh } = FASCIA_BOARD
+  const bt = node.fasciaDepth ?? FASCIA_BOARD.thickness
+  const bh = node.fasciaHeight ?? FASCIA_BOARD.height
+  // A flat roof's boards sized on purpose reach its top, over the membrane's edge: a coping band.
+  const flatTopY = node.fasciaHeight !== undefined ? eaveTopY + node.shingleThickness : eaveTopY
   const out = bt / 2 - FASCIA_EMBED
   const halfD = depth / 2 + deckExt
   const zE = halfD + out
@@ -1491,10 +1494,10 @@ function buildFasciaBoards(
       board([sx * xE, ridgeY, 0], [sx * xE, eaveTopY, -zE], [1, 0])
     }
   } else if (roofType === 'hip' || roofType === 'flat') {
-    for (const sz of [-1, 1]) board([-xL, eaveTopY, sz * zE], [xL, eaveTopY, sz * zE], [0, 1])
+    const y = roofType === 'flat' ? flatTopY : eaveTopY
+    for (const sz of [-1, 1]) board([-xL, y, sz * zE], [xL, y, sz * zE], [0, 1])
     // the side boards butt the eave boards' backs
-    for (const sx of [-1, 1])
-      board([sx * xE, eaveTopY, -zE + bt / 2], [sx * xE, eaveTopY, zE - bt / 2], [1, 0])
+    for (const sx of [-1, 1]) board([sx * xE, y, -zE + bt / 2], [sx * xE, y, zE - bt / 2], [1, 0])
   } else if (roofType === 'shed') {
     // the low eave at +z, the slope rising to −z
     const highY = eaveTopY + 2 * halfD * tanTheta

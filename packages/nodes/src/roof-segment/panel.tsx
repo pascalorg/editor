@@ -631,6 +631,23 @@ export default function RoofSegmentPanel() {
           unit="m"
           value={node.shingleThickness}
         />
+        <ToggleControl
+          checked={node.fascia ?? false}
+          label="Fascia"
+          onChange={(checked) => handleUpdate({ fascia: checked })}
+        />
+        {node.fascia && (
+          <SliderControl
+            label="Fascia height"
+            max={0.6}
+            min={0.1}
+            onChange={(v) => handleUpdate({ fasciaHeight: v })}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={node.fasciaHeight ?? 0.184}
+          />
+        )}
       </PanelSection>
 
       <PanelSection title="Position">

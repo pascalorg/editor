@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
+  getSegmentFasciaMaterial,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSegmentSurfaceMaterialRole,
@@ -99,8 +100,17 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     const edge = resolveSlot('edge')
     const wall = resolveSlot('wall')
     const top = resolveSlot('top')
+    // Slot 2 holds the fascia and rake boards: their own finish, else the wall role's.
+    const fasciaSpec = getSegmentFasciaMaterial(node)
+    const fascia = fasciaSpec
+      ? typeof fasciaSpec.materialPreset === 'string'
+        ? createMaterialFromPresetRef(fasciaSpec.materialPreset, shading)
+        : fasciaSpec.material !== undefined
+          ? createMaterial(fasciaSpec.material, shading)
+          : null
+      : null
 
-    if (!(edge || wall || top)) {
+    if (!(edge || wall || top || fascia)) {
       return themedArray
     }
 
@@ -109,7 +119,12 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     // Per-role only, then the themed parent slot — no cross-role fallback, so
     // painting one segment surface never bleeds onto its other surfaces.
     const slot = (i: number) => themedArray?.[i] ?? new THREE.MeshStandardMaterial()
-    return [edge ?? slot(0), wall ?? slot(1), wall ?? slot(2), top ?? slot(3)] as THREE.Material[]
+    return [
+      edge ?? slot(0),
+      wall ?? slot(1),
+      fascia ?? wall ?? slot(2),
+      top ?? slot(3),
+    ] as THREE.Material[]
   }, [
     node.material,
     node.materialPreset,
@@ -120,6 +135,8 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     node.edgeMaterialPreset,
     node.wallMaterial,
     node.wallMaterialPreset,
+    node.fasciaMaterial,
+    node.fasciaMaterialPreset,
     parentNode,
     sceneMaterials,
     shading,
