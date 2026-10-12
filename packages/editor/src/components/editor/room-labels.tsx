@@ -321,8 +321,9 @@ export class PillPlacer {
   constructor(
     private readonly elements: ReadonlyMap<string, HTMLElement>,
     private readonly onGone: (gone: ReadonlySet<string>) => void,
-    private readonly schedule: (run: () => void, ms: number) => Timer = setTimeout,
-    private readonly cancel: (timer: Timer) => void = clearTimeout,
+    private readonly schedule: (run: () => void, ms: number) => Timer = (run, ms) =>
+      setTimeout(run, ms),
+    private readonly cancel: (timer: Timer) => void = (timer) => clearTimeout(timer),
   ) {}
 
   apply(placements: ReadonlyMap<string, PillPlacement>, fadeMs = pillFadeMs()) {
