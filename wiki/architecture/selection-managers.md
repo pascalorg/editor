@@ -115,7 +115,9 @@ Room label pills (`RoomLabels3D`, `RoomLabels2D`, one `RoomPill`) show while not
 site, building or level is selected. Only the pill itself takes the pointer, and it goes through
 the same zone-area rule as a zone's fill or label in the plan (`hoverZoneArea` / `clickZoneArea`
 in `lib/room-zone-routing.ts`): a room room-first, a modifier or a zone that bounds no room as the
-zone (its outline, its panel and outline editor). Zones show tinted volumes only while a unit's
+zone (its outline, its panel and outline editor). A list that names a zone, the Rooms list or a
+host's chat reference, selects it through `selectZoneOrRoom` (exported for hosts) by the same rule.
+Zones show tinted volumes only while a unit's
 membership is painted; otherwise a zone looks like a room. A new zone is written with a palette
 colour picked from its id (`newZone` / `zoneColorForSeed` in core), a captured room from its capture's
 id, unless its creator chose one;

@@ -86,6 +86,7 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { PLUGINS_VIEW_ID } from './components/editor/views/use-editor-views'
 export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
@@ -762,6 +763,7 @@ export {
   captureElementActionOrigin,
   completeElementAction,
   type ElementActionOrigin,
+  selectZoneOrRoom,
 } from './lib/room-zone-routing'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor, getSavedSceneDocument } from './lib/scene'
@@ -839,6 +841,7 @@ export {
   applyViewerHover,
   framedLookAt,
   frameViewerCamera,
+  frameViewerNode,
   useViewerFloorDisplay,
   type ViewerPick,
   type ViewerSource,
