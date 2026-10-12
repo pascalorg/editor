@@ -76,8 +76,12 @@ export function ControlModes() {
 
         return (
           <Fragment key={c.id}>
-            {c.id === 'delete' ? <MeasurementControl /> : null}
-            {c.id === 'zone' ? <PointAskButton /> : null}
+            {c.id === 'delete' ? (
+              <>
+                <PointAskButton />
+                <MeasurementControl />
+              </>
+            ) : null}
             <ActionButton
               className={cn(
                 'group text-muted-foreground',

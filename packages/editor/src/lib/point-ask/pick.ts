@@ -27,7 +27,7 @@ export type PointPickInput = {
   nodes: Readonly<Record<string, AnyNode | undefined>>
   /** The level in view; null picks on every level. */
   currentLevelId: string | null
-  phase?: 'site' | 'structure' | 'furnish'
+  phase?: 'site' | 'building'
   /** Zones pick directly only in the zone layer; elsewhere they are reached through their surfaces. */
   zonesPickable?: boolean
   /** The editor's room for a wall, floor or ceiling hit (`roomForEvent`), null when it bounds none. */
@@ -62,7 +62,7 @@ export function resolvePointPick(input: PointPickInput): PointPick | null {
   // The building and the site are not pointed at from inside a building (the select hover
   // ignores them there too): ground and sky are an area, not a target.
   if (node.type === 'building' || node.type === 'site') {
-    if ((input.phase ?? 'structure') !== 'site') return null
+    if ((input.phase ?? 'building') !== 'site') return null
     return { nodeId: node.id, ambiguous: false }
   }
   if (node.type === 'zone' && !input.zonesPickable) return null
