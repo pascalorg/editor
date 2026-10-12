@@ -9,6 +9,7 @@ export * from './merge-windows'
 export * from './opening-style-presets'
 export { type RgbaImage, warpImage } from './photo-elevation'
 export { type PlanJudge } from './plan-judge'
+export { planPreviewSvg } from './plan-preview'
 export { PLAN_RASTER_LONGEST, type RasterPlan } from './plan-raster-walls'
 export {
   planReferenceFrameAlignment,
