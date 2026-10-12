@@ -1,6 +1,11 @@
 import { refuseParamsWithoutScript } from '../agent-operations/add-object'
 import { refuse } from '../agent-tools/refusal'
-import { matchScriptSlotsToLibrary, scriptedSize, scriptSource } from '../lib/geometry-script-node'
+import {
+  matchScriptSlotsToLibrary,
+  requireMeasured,
+  scriptedSize,
+  scriptSource,
+} from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
@@ -294,6 +299,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   const { compiled } = input
   if (compiled && compiled.mount !== 'wall')
     refuse('wrong_mount', `A ${kind}'s script uses mount 'wall'.`, { mount: compiled.mount })
+  if (compiled) requireMeasured(compiled, { label: `A ${kind}`, tool: `add_${kind}` })
   const [scriptedWidth, scriptedHeight] = compiled ? scriptedSize(compiled.manifest) : []
   const width = scriptedWidth ?? input.width ?? DEFAULTS[kind].width
   const height = scriptedHeight ?? input.height ?? DEFAULTS[kind].height

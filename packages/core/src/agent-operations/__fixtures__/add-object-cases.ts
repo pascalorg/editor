@@ -71,8 +71,11 @@ export function compiledSolid(
  * that is not a number made every bound NaN. A structured clone (the chat's worker) keeps NaN; a
  * JSON hop (a tab job answering the server) turns it to null.
  */
-function compiledUnmeasured(hop: 'clone' | 'json'): CompiledGeometryScript {
-  const solid = compiledSolid([1.2, 2.8, 0.6])
+export function compiledUnmeasured(
+  hop: 'clone' | 'json',
+  mount: GeometryScriptMount = 'floor',
+): CompiledGeometryScript {
+  const solid = compiledSolid([1.2, 2.8, 0.6], mount)
   const nan: [number, number, number] = [Number.NaN, Number.NaN, Number.NaN]
   const compiled = {
     ...solid,

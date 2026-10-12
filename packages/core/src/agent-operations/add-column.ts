@@ -3,6 +3,7 @@ import type { addColumnTool } from '../agent-tools/columns'
 import { refuse } from '../agent-tools/refusal'
 import {
   matchScriptSlotsToLibrary,
+  requireMeasured,
   scriptedSize,
   scriptSource,
   withSourceMeta,
@@ -62,6 +63,8 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
   const { compiled } = input
   if (compiled && compiled.mount !== 'floor')
     refuse('wrong_mount', "A column's script uses mount 'floor'.")
+  if (compiled)
+    requireMeasured(compiled, { label: input.name, nodeId: input.nodeId, tool: 'add_column' })
   const dimensions = compiled ? scriptedSize(compiled.manifest) : undefined
   const {
     nodeId: _,
