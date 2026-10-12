@@ -29,6 +29,7 @@ import {
   continuationContextOf,
   nextContinuation,
 } from '../lib/continuation'
+import { hydrationGatedStorage } from '../lib/hydration-gated-storage'
 import {
   type ActivePaintMaterial,
   type PaintableMaterialTarget,
@@ -1628,6 +1629,7 @@ const useEditor = create<EditorState>()(
     }),
     {
       name: 'pascal-editor-ui-preferences',
+      storage: hydrationGatedStorage((): boolean => useEditor.persist.hasHydrated()),
       merge: (persistedState, currentState) => {
         const uiState = editorUiStateOnOpen(persistedState as Partial<PersistedEditorState>)
         const layoutState = normalizePersistedEditorLayoutState(
