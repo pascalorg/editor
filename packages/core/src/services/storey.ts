@@ -419,12 +419,24 @@ export function getWallCoveringSlabUnderside(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
 ): number | null {
-  const context = resolveCoveringSlabContext(levelId, nodes)
-  if (!context) return null
-  const undersides = context.slabs
-    .filter((slab) => wallOverlapsSlabFootprint(wall, slab.polygon, slab.holes))
-    .map((slab) => coveringUndersideY(context.floorToFloorHeight, slab))
+  const undersides = getWallCoveringSlabs(wall, levelId, nodes).map(({ underside }) => underside)
   return undersides.length ? Math.min(...undersides) : null
+}
+
+export function getWallCoveringSlabs(
+  wall: Pick<WallNode, 'start' | 'end'> & Partial<Pick<WallNode, 'thickness' | 'curveOffset'>>,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): Array<{ slab: SlabNode; underside: number; top: number }> {
+  const context = resolveCoveringSlabContext(levelId, nodes)
+  if (!context) return []
+  return context.slabs
+    .filter((slab) => wallOverlapsSlabFootprint(wall, slab.polygon, slab.holes))
+    .map((slab) => ({
+      slab,
+      underside: coveringUndersideY(context.floorToFloorHeight, slab),
+      top: context.floorToFloorHeight + slab.elevation,
+    }))
 }
 
 export function getWallPlaneTops(

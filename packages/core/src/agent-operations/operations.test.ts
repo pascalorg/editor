@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { AGENT_TOOL_CONTRACTS } from '../agent-tools'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
+import { BuildingNode, SlabNode, WallNode } from '../index'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { nodeRegistry, registerNode } from '../registry'
 import {
@@ -150,6 +151,101 @@ test('stair design targets stay informational in scene verification', () => {
   expect(
     verified.issues.filter((issue) => issue.type.endsWith('_target') && issue.severity !== 'info'),
   ).toEqual([])
+})
+
+test('scene verification names wall and covering slab contacts but not underside seating or holes', () => {
+  const polygon: [number, number][] = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ]
+  const building = BuildingNode.parse({
+    id: 'building_contact',
+    children: ['level_contact0', 'level_contact1'],
+  })
+  const ground = LevelNode.parse({
+    id: 'level_contact0',
+    parentId: building.id,
+    level: 0,
+    height: 3.6,
+    children: ['slab_contact0', 'wall_contact'],
+  })
+  const upper = LevelNode.parse({
+    id: 'level_contact1',
+    parentId: building.id,
+    level: 1,
+    height: 3.3,
+    children: ['slab_contact1'],
+  })
+  const floor = SlabNode.parse({
+    id: 'slab_contact0',
+    parentId: ground.id,
+    polygon,
+    elevation: 0.05,
+    thickness: 0.05,
+  })
+  const cover = SlabNode.parse({
+    id: 'slab_contact1',
+    parentId: upper.id,
+    polygon,
+    elevation: 0.05,
+    thickness: 0.05,
+  })
+  const wall = WallNode.parse({
+    id: 'wall_contact',
+    parentId: ground.id,
+    start: [1, 2],
+    end: [3, 2],
+    height: 3.61,
+  })
+  const nodes = Object.fromEntries(
+    [building, ground, upper, floor, cover, wall].map((node) => [node.id, node]),
+  )
+  const contacts = (scene: Record<string, AnyNode>) =>
+    AGENT_OPERATIONS.verify_scene(scene, {}, { activeLevelId: ground.id }).result.issues.filter(
+      (issue) => issue.type === 'wall_covering_slab_contact',
+    )
+  expect(contacts(nodes)).toContainEqual(
+    expect.objectContaining({
+      wallId: wall.id,
+      slabId: cover.id,
+      wallTop: expect.closeTo(3.66, 6),
+      slabUnderside: expect.closeTo(3.6, 6),
+      slabTop: expect.closeTo(3.65, 6),
+      coplanar: false,
+    }),
+  )
+  const coplanar = { ...wall, height: 3.6 - 0.0000001, supportSlabId: floor.id }
+  const lowerStorey = { ...ground, height: 3.5 }
+  const loweredCover = { ...cover, elevation: 0.15 }
+  expect(
+    contacts({
+      ...nodes,
+      [ground.id]: lowerStorey,
+      [cover.id]: loweredCover,
+      [wall.id]: coplanar,
+    }),
+  ).toContainEqual(expect.objectContaining({ wallId: wall.id, slabId: cover.id, coplanar: true }))
+  expect(contacts({ ...nodes, [wall.id]: { ...wall, height: 3.6 } })).toEqual([])
+  expect(contacts({ ...nodes, [cover.id]: { ...cover, recessed: true } })).toEqual([])
+  expect(
+    contacts({
+      ...nodes,
+      [cover.id]: {
+        ...cover,
+        holes: [
+          [
+            [0.5, 1],
+            [3.5, 1],
+            [3.5, 3],
+            [0.5, 3],
+          ],
+        ],
+      },
+    }),
+  ).toEqual([])
+  expect(contacts({ ...nodes, [wall.id]: { ...wall, start: [6, 0], end: [6, 4] } })).toEqual([])
 })
 
 test('scene verification validates registered plugin kinds without accepting malformed or unknown nodes', () => {
