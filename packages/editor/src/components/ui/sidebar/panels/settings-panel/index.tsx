@@ -1214,7 +1214,7 @@ export function SettingsPanel({
                 </Button>
               </div>
             </DialogTrigger>
-            <DialogContent className="h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
+            <DialogContent className="dark h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
               <DialogTitle className="sr-only">Scene Graph</DialogTitle>
               <div
                 className="flex h-full min-h-0 w-full min-w-0 *:h-full *:w-full *:overflow-y-auto"

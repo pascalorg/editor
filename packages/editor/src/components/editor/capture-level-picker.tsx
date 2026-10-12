@@ -10,8 +10,8 @@ const rowClass = (selected: boolean) =>
   cn(
     'flex w-full min-w-0 items-center rounded-lg px-2.5 py-1.5 text-left font-medium text-xs transition-colors',
     selected
-      ? 'bg-white/10 text-foreground'
-      : 'text-muted-foreground/70 hover:bg-white/5 hover:text-muted-foreground',
+      ? 'bg-black/6 dark:bg-white/10 text-foreground'
+      : 'text-muted-foreground/70 hover:bg-black/4 dark:hover:bg-white/5 hover:text-muted-foreground',
   )
 
 /**
