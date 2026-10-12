@@ -102,6 +102,7 @@ import {
   mechanismHudInteract,
   mechanismTargetIds,
   nativeOpeningIds,
+  watchScriptedDoors,
 } from './first-person/mechanism-targets'
 
 const CAMERA_EYE_OFFSET = 0.45
@@ -1305,9 +1306,12 @@ export const FirstPersonControls = () => {
     if (isDroneMode) return
     emitter.on('door:animation-completed', rebuildColliderWorld)
     emitter.on('window:animation-completed', rebuildColliderWorld)
+    // A door built from a script opens by its model's clip, which reports no animation end.
+    const stopWatching = watchScriptedDoors(rebuildColliderWorld)
     return () => {
       emitter.off('door:animation-completed', rebuildColliderWorld)
       emitter.off('window:animation-completed', rebuildColliderWorld)
+      stopWatching()
     }
   }, [isDroneMode, rebuildColliderWorld])
 

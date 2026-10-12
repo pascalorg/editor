@@ -56,3 +56,33 @@ export function mechanismHudInteract(node: AnyNode): WalkthroughInteract {
   const verb = mechanism.verb === 'open' ? (on ? 'close' : 'open') : on ? 'turn off' : 'turn on'
   return { label: node.name ?? 'item', verb }
 }
+
+/** Ids of the mounted doors built from a script that are open, by their mechanism. */
+function openScriptedDoors(): string {
+  const nodes = useScene.getState().nodes
+  const state = useInteractive.getState()
+  const open: string[] = []
+  for (const id of sceneRegistry.byType.door ?? []) {
+    const node = nodes[id as AnyNodeId]
+    if (isScriptedNode(node) && nodeMechanism(node)?.isOn(node, state)) open.push(id)
+  }
+  return open.sort().join(',')
+}
+
+/**
+ * Calls `onChange` when a mounted door built from a script opens or closes. The walkthrough's
+ * collider follows the door's mechanism, and its model's clip is moved by no tween system that
+ * would report the end, as a native door's does: without this the world keeps the leaf that was
+ * there when it was last built. It fires at the toggle: the doorway is passable as the leaves
+ * start to move, and solid again as they start to close.
+ */
+export function watchScriptedDoors(onChange: () => void): () => void {
+  let known = openScriptedDoors()
+  return useInteractive.subscribe((state, previous) => {
+    if (state.items === previous.items) return
+    const next = openScriptedDoors()
+    if (next === known) return
+    known = next
+    onChange()
+  })
+}
