@@ -44,7 +44,6 @@ import {
   getZonesTool,
   isAgentRefusal,
   listLevelsTool,
-  locatePhotoTool,
   matchPlanReferenceTool,
   measureStairTool,
   mergeWindowsTool,
@@ -523,11 +522,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: addEntryDoorsTool,
     operation: AGENT_OPERATIONS.add_entry_doors,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-  },
-  {
-    contract: locatePhotoTool,
-    operation: AGENT_OPERATIONS.locate_photo,
-    annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
     contract: proposeUnitLayoutsTool,

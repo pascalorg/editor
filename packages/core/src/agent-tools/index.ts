@@ -27,7 +27,6 @@ import {
 import { mergeWindowsTool } from './merge-windows'
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
-import { locatePhotoTool } from './photo-location'
 import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
 import {
@@ -143,7 +142,6 @@ export const AGENT_TOOL_CONTRACTS = [
   correctPlanReadingTool,
   createStairsAndLiftsTool,
   addEntryDoorsTool,
-  locatePhotoTool,
   proposeUnitLayoutsTool,
   applyUnitLayoutTool,
   nameUnitsTool,
@@ -159,7 +157,6 @@ export { furnishFromPlanTool } from './furnish-from-plan'
 export { recordReferenceTool } from './inventory'
 export { paintTool } from './paint'
 export { straightenFacadePhotoTool } from './photo-elevation'
-export { locatePhotoTool } from './photo-location'
 export { placeInRoomTool } from './place-in-room'
 export {
   adjustPlanReferenceTool,

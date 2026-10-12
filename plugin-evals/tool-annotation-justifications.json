@@ -852,19 +852,6 @@
       }
     },
     {
-      "name": "locate_photo",
-      "annotations": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It only reads the floor's exterior walls and balconies and ranks its corners.",
-        "destructiveHint": "It changes nothing.",
-        "openWorldHint": "It reads the connected Pascal scene without accessing the public internet."
-      }
-    },
-    {
       "name": "lock_outside_faces",
       "annotations": {
         "readOnlyHint": false,

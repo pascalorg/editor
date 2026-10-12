@@ -33,7 +33,6 @@ const TOOL_POLICIES = [
       'list_scenes',
       'list_templates',
       'list_units',
-      'locate_photo',
       'measure',
       'measure_stair',
       'get_source',

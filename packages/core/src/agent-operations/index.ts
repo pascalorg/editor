@@ -21,7 +21,6 @@ import { listLevels } from './list-levels'
 import { mergeWindowsOperation } from './merge-windows'
 import { nameUnits } from './name-units'
 import { paint } from './paint'
-import { locatePhoto } from './photo-location'
 import { placeInRoom } from './place-in-room'
 import { placeItems } from './place-items'
 import { calibratePlanReference, getPlanReference, matchPlanReference } from './plan-calibration'
@@ -125,7 +124,6 @@ const SINGLE_OPERATIONS = {
   correct_plan_reading: correctPlanReading,
   create_stairs_and_lifts: createStairsAndLifts,
   add_entry_doors: addEntryDoors,
-  locate_photo: locatePhoto,
   propose_unit_layouts: proposeLayouts,
   apply_unit_layout: applyLayout,
   name_units: nameUnits,

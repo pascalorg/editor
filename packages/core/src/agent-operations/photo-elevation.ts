@@ -430,7 +430,7 @@ function planFromOwnPicks(
   const warnings = [
     ...(storey !== null && storey < LOW_STOREY
       ? [
-          `The storeys here average ${storey.toFixed(2)} m floor to floor, and they set this drawing's vertical scale. A residential storey is usually 2.8–3.2 m: if the photo's windows fill most of a storey, raise the storeys first (create_reference_elements walls with height), then straighten again.`,
+          `The storeys here average ${storey.toFixed(2)} m floor to floor, and they set this drawing's vertical scale. A residential storey is usually 2.8–3.2 m: if the photo's windows fill most of a storey, raise the storeys first, then straighten again.`,
         ]
       : []),
     ...commonWarnings(residualPx, sourcePxPerMetre),
@@ -706,7 +706,7 @@ function planWithCamera(
       ...(storeyHeight &&
       Math.abs(storeyHeight.photo - storeyHeight.scene) > STOREY_MISMATCH * storeyHeight.photo
         ? [
-            `The photo measures ${storeyHeight.photo.toFixed(2)} m floor to floor on this face, the scene's storeys ${storeyHeight.scene.toFixed(2)} m. The photo's figure comes from the picked lines: if a close-up is off or the lines are short, pick again before changing anything. This drawing takes its scale from the camera and the face's walls, not from the storeys: if those are the right walls, set the storeys to the photo's height (create_reference_elements walls with height) before building the facade, or its units will not fit.`,
+            `The photo measures ${storeyHeight.photo.toFixed(2)} m floor to floor on this face, the scene's storeys ${storeyHeight.scene.toFixed(2)} m. The photo's figure comes from the picked lines: if a close-up is off or the lines are short, pick again before changing anything. This drawing takes its scale from the camera and the face's walls, not from the storeys: if those are the right walls, set the storeys to the photo's height before building the facade, or its units will not fit.`,
           ]
         : []),
       ...commonWarnings(residualPx, sourcePxPerMetre),

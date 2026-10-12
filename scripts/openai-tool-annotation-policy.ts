@@ -81,7 +81,6 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   list_templates: policy(true, false, false),
   list_units: policy(true, false, false),
   load_scene: policy(false, true, false),
-  locate_photo: policy(true, false, false),
   lock_outside_faces: policy(false, true, false),
   match_plan_reference: policy(false, false, false),
   measure: policy(true, false, false),
