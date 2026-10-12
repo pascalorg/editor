@@ -209,8 +209,25 @@ export function requireAddObjectReason(input: { nodeId?: string; reason?: string
     )
 }
 
+/**
+ * An object whose compile left no finite size cannot be placed, and its manifest would fail the
+ * item schema with a raw validation array: refuse it before an asset is built from it. A mesh at a
+ * position that is not a number leaves NaN bounds (null once they crossed a JSON hop).
+ */
+function requireMeasured(compiled: CompiledGeometryScript, input: AddObjectInput) {
+  const { min, max } = compiled.manifest.bounds
+  if ([...min, ...max].every(Number.isFinite)) return
+  const label = input.name ? `"${input.name}"` : (input.nodeId ?? 'The object')
+  refuse(
+    'unmeasurable_object',
+    `${label} cannot be measured: its bounds are not finite numbers (min [${min.map(String).join(', ')}], max [${max.map(String).join(', ')}]) with params ${JSON.stringify(compiled.params)}. A mesh in the script has a position, rotation or scale that is not a number (a helper called one argument short passes the next value in its place). Fix the script and call add_object again; nothing was ${input.nodeId ? 'changed' : 'added'}.`,
+    { label: input.name ?? input.nodeId },
+  )
+}
+
 export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context) => {
   const { compiled } = input
+  requireMeasured(compiled, input)
   const rotation: Vec3 | undefined =
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
