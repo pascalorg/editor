@@ -3,7 +3,8 @@ import { NodeId } from './node-id'
 export const getNodeTool = {
   name: 'get_node',
   title: 'Get node',
-  description: 'Get the full data of any node by its id.',
+  description:
+    'Get the full data of any node by its id, and the scene materials (scene:<id>) its finishes use.',
   input: { id: NodeId.describe('The node id.') },
 }
 

@@ -36,6 +36,7 @@ export const AGENT_GUIDE = [
   '- Do not hand-write node graphs unless no semantic tool exists.',
   '- When you do use `apply_patch` for bulk graph edits, batch-first is the default: one call containing all create/update/delete ops for the phase, in stable order so later ops can reference ids created earlier. A single call is atomic (all or nothing); do not loop one-op `apply_patch` calls.',
   '- For rooms, use `create_room` -> `add_door` -> `add_window` -> `furnish_room`.',
+  "- Give finishes with `paint`, as the editor's Paint does: a library material found with `search_materials`, a colour, or a native material for an exact finish. Do not write `slots` or material presets through `apply_patch`.",
   '- Floors and ceilings are DERIVED from rooms, never authored. State intent — walls, separators and a zone with `spaceRole: "room"` — and the structure reconciler builds the floor plate and the ceiling for you. Creating a slab or ceiling carrying the derived markers (`boundary` / `autoFromWalls`), or reshaping or relinking one, is refused; deleting one records that opt-out on the zone instead. A room without a floor or ceiling is expressed on its zone (`hasFloor: false`, `hasCeiling: false`), and its floor height with `floor.elevation`.',
   '- Manual slabs remain valid for things that are not rooms: pools, platforms, stair decks, terraces at their own elevation.',
   '- `furnish_room` skips or nudges poses that block door clear zones or overlap other items; `verify_scene` and `check_collisions` report remaining issues.',

@@ -9,9 +9,11 @@ import { furnishRoom } from './furnish-room'
 import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
+import { paint } from './paint'
 import { placeItems } from './place-items'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
+import { searchMaterials } from './search-materials'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperations } from './types'
 import { verifyScene } from './verify-scene'
@@ -40,13 +42,16 @@ export * from './list-levels'
 export * from './material-preset'
 export * from './material-refs'
 export * from './node-patch'
+export * from './paint'
 export * from './place-items'
 export * from './plan-geometry'
 export * from './room-structure'
+export * from './scene-materials'
 export * from './scene-measure'
 export * from './scene-queries'
 export * from './scene-view'
 export * from './search-assets'
+export * from './search-materials'
 export * from './stairs'
 export * from './types'
 export * from './verify-scene'
@@ -72,5 +77,7 @@ export const AGENT_OPERATIONS = {
   create_room: createRoom,
   furnish_room: furnishRoom,
   search_assets: searchAssets,
+  paint,
+  search_materials: searchMaterials,
   ...ROOM_OPERATIONS,
 } as const satisfies AgentOperations

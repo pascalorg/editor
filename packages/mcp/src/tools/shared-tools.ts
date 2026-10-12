@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   AGENT_OPERATIONS,
+  type AgentContext,
   type AgentOperation,
   achievedChanges,
   applyAgentOutcome,
@@ -25,12 +26,19 @@ import {
   getZonesTool,
   listLevelsTool,
   measureStairTool,
+  paintTool,
   placeItemsTool,
   ROOM_TOOL_CONTRACTS,
   searchAssetsTool,
+  searchMaterialsTool,
   verifySceneTool,
 } from '@pascal-app/core/agent-tools'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  MaterialSchema,
+  SceneMaterial,
+} from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
@@ -133,7 +141,7 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: getNodeTool,
     operation: AGENT_OPERATIONS.get_node,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    outputSchema: { node: jsonObject },
+    outputSchema: { node: jsonObject, materials: z.record(z.string(), SceneMaterial).optional() },
   },
   {
     contract: getLevelSummaryTool,
@@ -305,6 +313,27 @@ const SHARED_TOOLS: SharedTool[] = [
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
     catalog: true,
   },
+  {
+    contract: paintTool,
+    operation: AGENT_OPERATIONS.paint,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      ok: z.literal(true),
+      painted: z.array(z.object({ id: z.string(), roles: z.array(z.string()) })),
+      finish: z.string(),
+      materialId: z.string().optional(),
+      material: MaterialSchema.optional(),
+      createdMaterial: SceneMaterial.optional(),
+      note: z.string().optional(),
+      ...achievedOutput,
+      ...liveSyncOutput,
+    },
+  },
+  {
+    contract: searchMaterialsTool,
+    operation: AGENT_OPERATIONS.search_materials,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
   ...ROOM_TOOL_CONTRACTS.map((contract) => {
     const name = contract.name as RoomToolName
     return {
@@ -318,6 +347,7 @@ const SHARED_TOOLS: SharedTool[] = [
 
 export function toPatches(changes: SceneChanges): Patch[] {
   return [
+    ...(changes.materials ?? []).map((material) => ({ op: 'upsert_material' as const, material })),
     ...(changes.create ?? []).map(({ node, parentId }) => ({
       op: 'create' as const,
       node,
@@ -379,9 +409,12 @@ export function registerOperationTool(
       // A copy of the map: a host may write its own in place (the hosted bridge does), and a
       // "before" that grows with the call reads every creation as unchanged.
       const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
-      const context = {
+      const context: AgentContext = {
         activeLevelId: null,
         ...(tool.catalog && { catalog: await catalog() }),
+        ...(bridge.supportsMaterialUpserts && bridge.getMaterials
+          ? { materials: bridge.getMaterials() }
+          : {}),
       }
       try {
         outcome = tool.operation(before, input as never, context)
