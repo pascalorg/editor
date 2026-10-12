@@ -169,6 +169,7 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height'
+export { pendingSceneBuildNodeIds } from './lib/pending-scene-build'
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'

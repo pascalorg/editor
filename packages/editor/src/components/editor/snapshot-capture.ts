@@ -234,3 +234,51 @@ export function deliverSnapshot<T extends object & { resolution?: { w: number; h
   }
   return onCapture(blob, cameraData)
 }
+
+/** A scene that stops settling for this long holds a node no system will ever build. */
+export const SCENE_BUILD_STALL_MS = 15_000
+/** However busy the scene, a capture waits no longer than this for it. */
+export const SCENE_BUILD_MAX_MS = 120_000
+
+export type SceneBuildWait = {
+  /** The count left when the wait ended; 0 when the scene is built. */
+  pending: number
+  /** The count stopped moving: what is left is held by nodes no system will ever settle. */
+  stalled: boolean
+  /** Those nodes (only when `stalled`); a node dirtied later is not among them. */
+  unsettled: ReadonlySet<string>
+}
+
+/**
+ * Waits until the scene has built what a picture shows. Progress-based: a count that keeps moving
+ * (a slow GPU loading a big house) is waited for up to `SCENE_BUILD_MAX_MS`; a count that stops
+ * moving for `SCENE_BUILD_STALL_MS` is held by nodes no system settles (a plugin kind that never
+ * clears its own dirty mark), and the wait ends naming them so the caller can set those aside.
+ */
+export async function waitForSceneBuilt(deps: {
+  /** Throws when the capture cannot run (a background tab draws no frames). */
+  assertVisible: () => void
+  count: () => number
+  ids: () => Set<string>
+  now: () => number
+  sleep: (ms: number) => Promise<void>
+}): Promise<SceneBuildWait> {
+  const started = deps.now()
+  let pending = deps.count()
+  let changedAt = started
+  while (pending > 0) {
+    deps.assertVisible()
+    const now = deps.now()
+    if (now - changedAt > SCENE_BUILD_STALL_MS) {
+      return { pending, stalled: true, unsettled: deps.ids() }
+    }
+    if (now - started > SCENE_BUILD_MAX_MS) return { pending, stalled: false, unsettled: new Set() }
+    await deps.sleep(100)
+    const next = deps.count()
+    if (next !== pending) {
+      pending = next
+      changedAt = deps.now()
+    }
+  }
+  return { pending, stalled: false, unsettled: new Set() }
+}

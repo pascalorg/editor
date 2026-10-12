@@ -24,6 +24,7 @@ import {
   ktx2TextureLoadState,
   materialTextureLoadState,
   pendingSceneBuildCount,
+  pendingSceneBuildNodeIds,
   refreshIsolation,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
@@ -54,6 +55,7 @@ import {
   holdSnapshotControls,
   preserveSnapshotObjectState,
   runSnapshotCapture,
+  waitForSceneBuilt,
 } from './snapshot-capture'
 
 export interface SnapshotCameraData {
@@ -368,35 +370,23 @@ function isTabHidden(): boolean {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden'
 }
 
-/** A scene that stops settling for this long holds a node no system will ever build. */
-const SCENE_BUILD_STALL_MS = 15_000
-/** However busy the scene, a capture waits no longer than this for it. */
-const SCENE_BUILD_MAX_MS = 120_000
-
 /**
  * Until the scene has built what the picture shows — walls, roofs, openings,
  * every item's model (a loading placeholder draws through the roof) — the
  * viewer's own scene-ready test. Progress-based: a slow GPU loading a big
  * house keeps it waiting while the pending count moves; a count that stops
- * moving (a node no system settles) lets the capture go. Returns the count
- * left.
+ * moving (a node no system settles) lets the capture go, naming those nodes.
  */
-async function untilSceneBuilt(): Promise<number> {
-  const started = performance.now()
-  let pending = pendingSceneBuildCount()
-  let changedAt = started
-  while (pending > 0) {
-    if (isTabHidden()) throw new Error(HIDDEN_TAB)
-    const now = performance.now()
-    if (now - changedAt > SCENE_BUILD_STALL_MS || now - started > SCENE_BUILD_MAX_MS) break
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    const next = pendingSceneBuildCount()
-    if (next !== pending) {
-      pending = next
-      changedAt = performance.now()
-    }
-  }
-  return pending
+function untilSceneBuilt() {
+  return waitForSceneBuilt({
+    assertVisible: () => {
+      if (isTabHidden()) throw new Error(HIDDEN_TAB)
+    },
+    count: () => pendingSceneBuildCount(),
+    ids: pendingSceneBuildNodeIds,
+    now: () => performance.now(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  })
 }
 
 /** `promise`, or a rejection with `message` after `ms` — a wait that must not hold the capture queue for good. */
@@ -665,6 +655,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           if (!onCapture) throw new Error('Snapshot storage is unavailable')
           if ((cameraPose || interior) && event.projectId !== useViewer.getState().projectId)
             throw new Error('The active project changed before capture')
+          // An interior view waits for the scene to build like every other picture of it: a build
+          // in progress is waited for, not refused, and nodes no system settles (a plugin kind
+          // that never clears its dirty mark) are set aside once the count stops moving.
+          const unsettled = interior ? (await untilSceneBuilt()).unsettled : undefined
           const plannedState = useScene.getState()
           const textureVersion = getMaterialTextureVersion()
           const checkInterior = () => {
@@ -699,7 +693,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             )
               throw new Error('Interior capture refused: required scene assets are still previews.')
             if (
-              pendingSceneBuildCount() > 0 ||
+              pendingSceneBuildCount({ except: unsettled }) > 0 ||
               getPendingNodeUpdateCount() > 0 ||
               getPendingWallRebuildCount() > 0 ||
               textures.pending > 0 ||
@@ -981,7 +975,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // frames — run by hand, never awaited from the animation loop: a
               // hidden tab gets no animation frames at all, and a capture that
               // waited on one hung the sheet's whole capture chain (2026-09-10)
-              const pending = await untilSceneBuilt()
+              const { pending } = await untilSceneBuilt()
               trace('scene-built', { pending })
               await pumpFrames(advance, clock, 2)
             }
