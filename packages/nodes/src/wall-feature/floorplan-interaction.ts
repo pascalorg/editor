@@ -24,6 +24,7 @@ import {
   type WallFeatureHit,
   type WallFeatureSnap,
 } from './placement'
+import { clearWallFeatureEditPreview, showWallFeatureEditPreview } from './preview'
 import { deferWallFeatureGeometry } from './runtime'
 
 export function wallFeaturePlanHit(
@@ -160,6 +161,7 @@ export const wallFeaturePlanAffordance: FloorplanAffordance<WallFeatureNode> = {
     deferWallFeatureGeometry(node.id, true)
     const clear = () => {
       useLiveNodeOverrides.getState().clearFields(node.id, Object.keys(patch))
+      clearWallFeatureEditPreview(node.id)
       deferWallFeatureGeometry(node.id, false)
     }
     return {
@@ -197,6 +199,7 @@ export const wallFeaturePlanAffordance: FloorplanAffordance<WallFeatureNode> = {
           patch = candidate
           valid = true
           useLiveNodeOverrides.getState().set(node.id, patch)
+          showWallFeatureEditPreview({ ...node, ...patch }, sceneApi)
         } catch {
           valid = Object.keys(patch).length > 0
         }

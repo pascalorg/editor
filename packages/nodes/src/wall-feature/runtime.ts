@@ -17,6 +17,65 @@ type Overrides = ReturnType<typeof useLiveNodeOverrides.getState>['overrides']
 type FeatureGraph = { nodes: Nodes; byWall: Map<string, WallFeatureNode[]> }
 
 let graphCache = new WeakMap<Nodes, { overrides: Overrides; graph: FeatureGraph }>()
+let featureIndex = new WeakMap<Nodes, WallFeatureNode[]>()
+let geometryCache = new WeakMap<
+  Nodes,
+  { overrides: Overrides; revision: number; graph: FeatureGraph }
+>()
+let deferralRevision = 0
+
+function indexedFeatures(nodes: Nodes): WallFeatureNode[] {
+  const cached = featureIndex.get(nodes)
+  if (cached) return cached
+  const features = Object.values(nodes).filter(
+    (node): node is WallFeatureNode => node.type === 'wall-feature',
+  )
+  featureIndex.set(nodes, features)
+  return features
+}
+
+// Preserve scene-map enumeration for domain queries while resolving overrides lazily.
+// Pointer ticks allocate only patched nodes; the committed scene map stays untouched.
+function overlayNodes(nodes: Nodes, patches: ReadonlyMap<string, Record<string, unknown>>): Nodes {
+  if (!patches.size) return nodes
+  const resolved = new Map<string, AnyNode>()
+  const get = (key: string) => {
+    const node = nodes[key]
+    const patch = patches.get(key)
+    if (!node || !patch) return node
+    const cached = resolved.get(key)
+    if (cached) return cached
+    const effective = { ...node, ...patch } as AnyNode
+    resolved.set(key, effective)
+    return effective
+  }
+  return new Proxy(Object.create(null) as Record<string, AnyNode>, {
+    get: (_target, key) => (typeof key === 'string' ? get(key) : Reflect.get(nodes, key)),
+    has: (_target, key) => key in nodes,
+    ownKeys: () => Reflect.ownKeys(nodes),
+    getOwnPropertyDescriptor: (_target, key) =>
+      Object.hasOwn(nodes, key)
+        ? {
+            configurable: true,
+            enumerable: true,
+            value: typeof key === 'string' ? get(key) : Reflect.get(nodes, key),
+          }
+        : undefined,
+  })
+}
+
+function groupFeatures(source: Nodes, effective: Nodes): FeatureGraph {
+  const byWall = new Map<string, WallFeatureNode[]>()
+  for (const raw of indexedFeatures(source)) {
+    const node = effective[raw.id] as WallFeatureNode
+    const root = featureWall(node, effective)
+    if (!root) continue
+    const features = byWall.get(root.id) ?? []
+    features.push(node)
+    byWall.set(root.id, features)
+  }
+  return { nodes: effective, byWall }
+}
 
 function featureWall(
   node: WallFeatureNode,
@@ -40,21 +99,7 @@ function effectiveGraph(nodes: Nodes): FeatureGraph {
   const overrides = useLiveNodeOverrides.getState().overrides
   const cached = graphCache.get(nodes)
   if (cached?.overrides === overrides) return cached.graph
-  const effective = { ...nodes }
-  for (const [id, patch] of overrides) {
-    const node = nodes[id]
-    if (node) effective[id] = { ...node, ...patch } as AnyNode
-  }
-  const byWall = new Map<string, WallFeatureNode[]>()
-  for (const node of Object.values(effective)) {
-    if (node.type !== 'wall-feature') continue
-    const root = featureWall(node, effective)
-    if (!root) continue
-    const features = byWall.get(root.id) ?? []
-    features.push(node)
-    byWall.set(root.id, features)
-  }
-  const graph = { nodes: effective, byWall }
+  const graph = groupFeatures(nodes, overlayNodes(nodes, overrides))
   graphCache.set(nodes, { overrides, graph })
   return graph
 }
@@ -98,24 +143,19 @@ export function deferWallFeatureGeometry(id: string, deferred: boolean) {
   if (deferredFeatures.has(id) === deferred) return
   if (deferred) deferredFeatures.add(id)
   else deferredFeatures.delete(id)
+  deferralRevision++
   previousNodes = undefined
 }
 
 function geometryGraph(nodes: Nodes): FeatureGraph {
   if (!deferredFeatures.size) return effectiveGraph(nodes)
-  const graph = effectiveGraph(nodes)
-  const restored = { ...graph.nodes }
-  for (const id of deferredFeatures) if (nodes[id]) restored[id] = nodes[id]!
-  const byWall = new Map<string, WallFeatureNode[]>()
-  for (const node of Object.values(restored)) {
-    if (node.type !== 'wall-feature') continue
-    const root = featureWall(node, restored)
-    if (!root) continue
-    const list = byWall.get(root.id) ?? []
-    list.push(node)
-    byWall.set(root.id, list)
-  }
-  return { nodes: restored, byWall }
+  const overrides = useLiveNodeOverrides.getState().overrides
+  const cached = geometryCache.get(nodes)
+  if (cached?.overrides === overrides && cached.revision === deferralRevision) return cached.graph
+  const active = new Map([...overrides].filter(([id]) => !deferredFeatures.has(id)))
+  const graph = groupFeatures(nodes, overlayNodes(nodes, active))
+  geometryCache.set(nodes, { overrides, revision: deferralRevision, graph })
+  return graph
 }
 
 export function createWallFeatureBodyModifier(
@@ -128,7 +168,7 @@ export function createWallFeatureBodyModifier(
     .get(wall.id)
     ?.filter((node) => featureWall(node, graph.nodes)?.visible)
   if (!features?.length) return undefined
-  const nodes = { ...graph.nodes, [wall.id]: wall }
+  const nodes = overlayNodes(graph.nodes, new Map([[wall.id, wall]]))
   const placements = features.map((node) => resolveWallFeaturePlacement(nodes, node, context))
   return (body) => buildWallFeatureBody(body, placements, context.elevation)
 }
@@ -151,8 +191,7 @@ export function syncWallFeatureGeometry(): void {
   const graph = geometryGraph(nodes)
   const seen = new Set<string>()
   const dirty = new Set<WallNode['id']>()
-  for (const node of Object.values(nodes)) {
-    if (node.type !== 'wall-feature') continue
+  for (const node of indexedFeatures(nodes)) {
     seen.add(node.id)
     const override = deferredFeatures.has(node.id) ? undefined : overrides.get(node.id)
     const effective = graph.nodes[node.id] as WallFeatureNode
@@ -180,4 +219,7 @@ export function resetWallFeatureGeometry(): void {
   previousOverrides = undefined
   previousInputs.clear()
   graphCache = new WeakMap()
+  featureIndex = new WeakMap()
+  geometryCache = new WeakMap()
+  deferralRevision = 0
 }

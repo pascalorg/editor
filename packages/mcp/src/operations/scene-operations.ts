@@ -40,6 +40,9 @@ export interface SceneOperations {
 
   setActiveScene(meta: ActiveSceneMeta): void
   getActiveScene(): ActiveSceneMeta | null
+  getInstalledPlugins?(): readonly string[]
+  /** Required when a custom host registers external plugin tools. */
+  subscribePluginInstallation?(listener: () => void): () => void
   clearActiveScene(): void
   loadDefault(): void
   setScene(nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: AnyNodeId[]): void
@@ -152,6 +155,14 @@ class SceneOperationsFacade implements SceneOperations {
 
   getActiveScene(): ActiveSceneMeta | null {
     return this.requireBridge().getActiveScene()
+  }
+
+  getInstalledPlugins(): readonly string[] {
+    return this.requireBridge().getInstalledPlugins()
+  }
+
+  subscribePluginInstallation(listener: () => void): () => void {
+    return this.requireBridge().subscribePluginInstallation(listener)
   }
 
   clearActiveScene(): void {

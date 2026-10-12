@@ -83,6 +83,16 @@ export class SceneBridge {
     return this.activeScene
   }
 
+  getInstalledPlugins(): readonly string[] {
+    return useScene.getState().installedPlugins
+  }
+
+  subscribePluginInstallation(listener: () => void): () => void {
+    return useScene.subscribe((state, previous) => {
+      if (state.installedPlugins !== previous.installedPlugins) listener()
+    })
+  }
+
   clearActiveScene(): void {
     this.activeScene = null
   }

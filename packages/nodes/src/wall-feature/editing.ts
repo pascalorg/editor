@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  createSceneApi,
   type HandleDescriptor,
   planWallFeaturePlacement,
   resolveWallFeaturePlacement,
@@ -8,6 +9,7 @@ import {
   useScene,
   type WallFeatureNode,
 } from '@pascal-app/core'
+import { clearWallFeatureEditPreview, showWallFeatureEditPreview } from './preview'
 import { deferWallFeatureGeometry } from './runtime'
 
 export function wallFeatureEdit(
@@ -58,8 +60,14 @@ export function wallFeatureHandles(
       (key): HandleDescriptor<WallFeatureNode> => ({
         kind: 'linear-resize',
         commit,
-        onDrag: (n) => deferWallFeatureGeometry(n.id, true),
-        onDragEnd: (n) => deferWallFeatureGeometry(n.id, false),
+        onDrag: (n, scene) => {
+          deferWallFeatureGeometry(n.id, true)
+          showWallFeatureEditPreview(n, scene)
+        },
+        onDragEnd: (n) => {
+          deferWallFeatureGeometry(n.id, false)
+          clearWallFeatureEditPreview(n.id)
+        },
         axis: key === 'width' ? 'x' : key === 'height' ? 'y' : 'z',
         anchor: 'min',
         min: Number.MIN_VALUE,
@@ -88,8 +96,14 @@ export function wallFeatureHandles(
       (key): HandleDescriptor<WallFeatureNode> => ({
         kind: 'linear-resize',
         commit,
-        onDrag: (n) => deferWallFeatureGeometry(n.id, true),
-        onDragEnd: (n) => deferWallFeatureGeometry(n.id, false),
+        onDrag: (n, scene) => {
+          deferWallFeatureGeometry(n.id, true)
+          showWallFeatureEditPreview(n, scene)
+        },
+        onDragEnd: (n) => {
+          deferWallFeatureGeometry(n.id, false)
+          clearWallFeatureEditPreview(n.id)
+        },
         axis: key === 'width' ? 'x' : 'y',
         anchor: 'max',
         direction: -1,
@@ -118,6 +132,7 @@ export function createWallFeaturePropertyPreview(id: WallFeatureNode['id']) {
   const clear = () => {
     useLiveNodeOverrides.getState().clearFields(id, Object.keys(pending))
     pending = {}
+    clearWallFeatureEditPreview(id)
     deferWallFeatureGeometry(id, false)
   }
   return {
@@ -129,6 +144,7 @@ export function createWallFeaturePropertyPreview(id: WallFeatureNode['id']) {
       deferWallFeatureGeometry(id, true)
       pending = next
       useLiveNodeOverrides.getState().set(id, patch)
+      showWallFeatureEditPreview({ ...node, ...next }, createSceneApi(useScene))
     },
     commit(patch: Partial<WallFeatureNode> = {}) {
       const node = useScene.getState().nodes[id]

@@ -3,6 +3,7 @@ import {
   remapConstructionDimensionReferences,
   remapMeasurementReferences,
 } from '../lib/measurement-geometry'
+import { remapSurfaceAttachments } from '../lib/remap-surface-attachments'
 import { generateId } from '../schema/base'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
@@ -170,14 +171,7 @@ export function cloneNodesInto(
         .filter((cid): cid is AnyNodeId => cid !== undefined)
     }
 
-    if (cloned.type === 'procedural-item') {
-      cloned.attachments = Object.fromEntries(
-        Object.entries(cloned.attachments).flatMap(([id, surface]) => {
-          const fresh = idMap.get(id as AnyNodeId)
-          return fresh ? [[fresh, surface]] : []
-        }),
-      )
-    }
+    remapSurfaceAttachments(cloned, idMap)
     if (cloned.type === 'measurement') {
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }

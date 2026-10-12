@@ -7,19 +7,17 @@ import {
   useScene,
   type WallFeatureNode,
 } from '@pascal-app/core'
-import { useInteractionScope } from '@pascal-app/editor'
 import { NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { type Group, Matrix4, type Mesh } from 'three'
-import { getWallFeaturePlacement, isWallFeatureGeometryDeferred } from './runtime'
+import { getWallFeaturePlacement } from './runtime'
 import { hasDescendantHit, raycastWallFeature } from './selection'
 
 export default function WallFeatureRenderer({ node }: { node: WallFeatureNode }) {
   const ref = useRef<Group>(null!)
   const offsetMatrix = useMemo(() => new Matrix4(), [])
   const hitRef = useRef<Mesh>(null!)
-  const ghostRef = useRef<Mesh>(null!)
   useRegistry(node.id, 'wall-feature', ref)
   const raw = useNodeEvents(node, 'wall-feature')
   const handlers = useMemo(
@@ -46,12 +44,6 @@ export default function WallFeatureRenderer({ node }: { node: WallFeatureNode })
     if (!group) return
     const wall = placement && sceneRegistry.nodes.get(placement.wall.id)
     group.visible = !!placement && wall?.userData.wallHidden !== true
-    const scope = useInteractionScope.getState().scope
-    ghostRef.current.visible =
-      !!placement &&
-      isWallFeatureGeometryDeferred(node.id) &&
-      scope.kind !== 'moving' &&
-      scope.kind !== 'placing'
     if (!placement) return
     hitRef.current.position.set(
       placement.node.width / 2,
@@ -117,21 +109,6 @@ export default function WallFeatureRenderer({ node }: { node: WallFeatureNode })
       >
         <boxGeometry args={[node.width, node.height, node.depth]} />
         <meshBasicMaterial visible={false} />
-        <mesh
-          ref={ghostRef}
-          visible={false}
-          raycast={() => {}}
-          userData={{ pascalExport: 'strip' }}
-        >
-          <boxGeometry args={[node.width, node.height, node.depth]} />
-          <meshBasicMaterial
-            wireframe
-            color="#8b5cf6"
-            transparent
-            opacity={0.7}
-            depthWrite={false}
-          />
-        </mesh>
       </mesh>
       {node.children.map((id) => (
         <FeatureChild key={id} node={node} id={id} />

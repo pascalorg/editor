@@ -1,10 +1,95 @@
 import { describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import type { PluginAgentTools } from '@pascal-app/core/agent-tools'
 import { SceneBridge } from './bridge/scene-bridge'
+import { createSceneOperations } from './operations'
 import { createPascalMcpServer } from './server'
 
 describe('Pascal MCP tool execution', () => {
+  test('plugin tools follow project installation and reject calls cached before uninstall', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const original = bridge.exportJSON()
+    let calls = 0
+    const agentTools: PluginAgentTools = {
+      pluginId: 'test:features',
+      apiVersion: 1,
+      version: '1.0.0',
+      tools: [
+        {
+          name: 'features_probe',
+          title: 'Probe',
+          description: 'Read the feature plugin.',
+          input: {},
+          runsIn: 'operation',
+        },
+      ],
+    }
+    const customOperations = createSceneOperations({ bridge })
+    Object.defineProperty(customOperations, 'subscribePluginInstallation', { value: undefined })
+    expect(() =>
+      createPascalMcpServer({
+        bridge,
+        operations: customOperations,
+        pluginTools: [
+          {
+            agentTools,
+            operations: { features_probe: () => ({ result: {} }) },
+            annotationsByTool: { features_probe: { readOnlyHint: true } },
+          },
+        ],
+      }),
+    ).toThrow('subscribePluginInstallation')
+    const server = createPascalMcpServer({
+      bridge,
+      pluginTools: [
+        {
+          agentTools,
+          operations: {
+            features_probe: () => {
+              calls++
+              return { result: { available: true } }
+            },
+          },
+          annotationsByTool: {
+            features_probe: {
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+          },
+        },
+      ],
+    })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'plugin-install-test', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    const listed = async () =>
+      (await client.listTools()).tools.some((tool) => tool.name === 'features_probe')
+    try {
+      bridge.loadJSON({ ...original, installedPlugins: [] })
+      expect(await listed()).toBe(false)
+      bridge.loadJSON({ ...original, installedPlugins: ['test:features'] })
+      expect(await listed()).toBe(true)
+      expect((await client.callTool({ name: 'features_probe', arguments: {} })).isError).toBeFalsy()
+      expect(calls).toBe(1)
+      bridge.loadJSON({ ...original, installedPlugins: [] })
+      expect(await listed()).toBe(false)
+      const refused = await client.callTool({ name: 'features_probe', arguments: {} })
+      expect(refused.isError).toBe(true)
+      expect(JSON.stringify(refused.content)).toContain('disabled')
+      expect(calls).toBe(1)
+      bridge.loadJSON({ ...original, installedPlugins: ['test:features'] })
+      expect(await listed()).toBe(true)
+    } finally {
+      await client.close()
+      await server.close()
+      bridge.loadJSON(original)
+    }
+  })
+
   test('runs registered tools through the configured executor', async () => {
     const bridge = new SceneBridge()
     bridge.loadDefault()

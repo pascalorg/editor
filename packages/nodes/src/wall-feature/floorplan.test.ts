@@ -6,13 +6,19 @@ import {
   type FloorplanGeometry,
   type GeometryContext,
   LevelNode,
+  sceneRegistry,
   subscribeSceneCommits,
   useLiveNodeOverrides,
   useScene,
   type WallFeatureNode,
   WallNode,
 } from '@pascal-app/core'
-import { useEditor, useInteractionScope, usePlacementPreview } from '@pascal-app/editor'
+import {
+  EDITOR_LAYER,
+  useEditor,
+  useInteractionScope,
+  usePlacementPreview,
+} from '@pascal-app/editor'
 import {
   buildWallFeatureFloorplan,
   createWallFeatureDraft,
@@ -25,6 +31,7 @@ import {
   wallFeaturePlanHit,
   wallFeaturePlanMove,
 } from '@pascal-app/nodes'
+import { Group } from 'three'
 
 const initial = useScene.getState(),
   editor = useEditor.getState(),
@@ -170,6 +177,8 @@ test('plan movement and an equivalent 3D cursor proposal persist the same coordi
 })
 test('width and depth affordances use anchored dimensions and cancellation releases geometry deferral', () => {
   const { node, scene, nodes } = setup()
+  const root = new Group()
+  sceneRegistry.nodes.set(node.id, root)
   const start = (action: string) =>
     wallFeaturePlanAffordance.start({
       node,
@@ -183,7 +192,9 @@ test('width and depth affordances use anchored dimensions and cancellation relea
   width.apply({ planPoint: [1.9, 3.5], modifiers })
   expect(width.canCommit()).toBe(true)
   expect(scene.get(node.id)).toBe(node)
+  expect(root.children[0]!.layers.mask).toBe(1 << EDITOR_LAYER)
   width.commit?.()
+  expect(root.children).toHaveLength(0)
   const saved = scene.get(node.id) as WallFeatureNode
   expect(saved.width).toBeCloseTo(0.8)
   expect(saved.u - saved.width / 2).toBeCloseTo(node.u - node.width / 2)
@@ -200,6 +211,8 @@ test('width and depth affordances use anchored dimensions and cancellation relea
   expect(depth.canCommit()).toBe(true)
   expect(useLiveNodeOverrides.getState().get(node.id)?.depth).toBeCloseTo(0.05)
   depth.cancel?.()
+  expect(root.children).toHaveLength(0)
+  sceneRegistry.nodes.delete(node.id)
   expect(isWallFeatureGeometryDeferred(node.id)).toBe(false)
   expect(useLiveNodeOverrides.getState().get(node.id)).toBeUndefined()
 })

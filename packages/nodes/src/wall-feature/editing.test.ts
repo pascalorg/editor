@@ -14,6 +14,7 @@ import {
   WallFeatureNode,
   WallNode,
 } from '@pascal-app/core'
+import { EDITOR_LAYER } from '@pascal-app/editor'
 import {
   builtinPlugin,
   createWallFeaturePropertyPreview,
@@ -150,6 +151,31 @@ test('inspector previews commit once and undo once; cancellation preserves unrel
     expect(useLiveNodeOverrides.getState().get(bump.id)).toEqual({ name: 'Other preview' })
   } finally {
     stop()
+  }
+})
+
+test('handle and inspector ghosts use the editor layer and release their resources on cancellation', () => {
+  const { bump, scene } = setup()
+  const root = new Group()
+  sceneRegistry.nodes.set(bump.id, root)
+  try {
+    const width = wallFeatureHandles(bump, scene)[0]!
+    if (width.kind !== 'linear-resize') throw Error('Missing width handle')
+    width.onDrag?.({ ...bump, width: 1.2 }, scene)
+    const ghost = root.children[0] as Mesh<BoxGeometry, MeshBasicMaterial>
+    expect(ghost.layers.mask).toBe(1 << EDITOR_LAYER)
+    expect(ghost.userData.pascalExport).toBe('strip')
+    expect(ghost.scale.x).toBe(1.2)
+    width.onDragEnd?.(bump, scene)
+    expect(root.children).toHaveLength(0)
+    const preview = createWallFeaturePropertyPreview(bump.id)
+    preview.preview({ height: 1.2 })
+    expect(root.children).toHaveLength(1)
+    expect(root.children[0]!.layers.mask).toBe(1 << EDITOR_LAYER)
+    preview.cancel()
+    expect(root.children).toHaveLength(0)
+  } finally {
+    sceneRegistry.nodes.delete(bump.id)
   }
 })
 test('registered nested features and items outrank their host; passive helpers do not', async () => {

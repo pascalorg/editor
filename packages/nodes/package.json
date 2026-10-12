@@ -34,6 +34,7 @@
   "scripts": {
     "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build",
     "dev": "tsgo --build --watch",
+    "bench:wall-features": "bun run src/wall-feature/__bench__/runtime.bench.ts",
     "test": "bun test",
     "prepublishOnly": "bun run build && bun test"
   },

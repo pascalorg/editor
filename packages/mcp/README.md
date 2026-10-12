@@ -253,6 +253,14 @@ compilable version.
 
 ### Registering plugin operation tools
 
+Plugin operation tools are listed only while their plugin is installed in the active project;
+`pascal:core` is always installed. Installation changes enable or disable the registration,
+and every call checks installation again before executing. A custom `SceneOperations` host
+must supply `subscribePluginInstallation` for external plugin packs so its own project changes
+update the tool list immediately; `getInstalledPlugins` avoids copying the scene snapshot.
+The default bridge provides both methods; tool-driven
+project changes also refresh registrations before and after execution.
+
 Hosts that install a plugin can pass its tool contracts and operations to
 `createPascalMcpServer`. Only operation tools with a host-supplied annotation
 classification are registered; contract annotations are hints and are ignored

@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   AGENT_OPERATIONS,
   type AgentOperation,
@@ -58,6 +58,7 @@ export type OperationTool = {
   contract: AgentToolContract
   operation: AgentOperation
   annotations: AgentToolAnnotations
+  authorize?: () => void
   outputSchema?: Record<string, z.ZodType>
   envelope?: (bridge: SceneOperations) => Record<string, unknown>
   /** Reads the host's item library: only these calls wait for it (the hosted one is a query). */
@@ -362,8 +363,8 @@ export function registerOperationTool(
   bridge: SceneOperations,
   tool: OperationTool,
   catalog: AssetCatalog = builtInCatalog,
-): void {
-  server.registerTool(
+): RegisteredTool {
+  return server.registerTool(
     tool.contract.name,
     {
       title: tool.contract.title,
@@ -384,6 +385,7 @@ export function registerOperationTool(
         ...(tool.catalog && { catalog: await catalog() }),
       }
       try {
+        tool.authorize?.()
         outcome = tool.operation(before, input as never, context)
       } catch (error) {
         return refusalResult(error)

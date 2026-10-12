@@ -59,6 +59,11 @@ Two framework components live in `packages/viewer/src/components/viewer/`:
 
 Named surfaces whose provider declares `childFrame: 'surface-local'` can persist an `attachments` record mapping child IDs to surface IDs. The query and editor attachment helpers resolve these through the registered provider. Providers using `host-local` retain host-relative child poses.
 
+Subtree and level duplication remap the child-ID keys in these attachment records while
+preserving the surface IDs. Edit ghosts belong to the gesture or inspector preview owner,
+use the editor overlay layer, and release their resources on completion or cancellation;
+the node renderer remains independent of editor interaction state.
+
 `rendersChildren` describes whether a custom parametric renderer mounts arbitrary child
 nodes. It defaults to true for custom renderers; a renderer that filters children or
 only draws its own meshes declares `rendersChildren: false`. Geometry-only definitions

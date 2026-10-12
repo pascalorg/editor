@@ -12,6 +12,7 @@ import {
 import {
   clearPlacementSurface,
   consumePlacementDragRelease,
+  EDITOR_LAYER,
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
@@ -422,7 +423,7 @@ export function WallFeatureGesture({
           visible={false}
           userData={{ pascalExport: 'strip' }}
         >
-          <mesh ref={box} raycast={() => {}}>
+          <mesh ref={box} layers={EDITOR_LAYER} raycast={() => {}}>
             <boxGeometry args={[1, 1, 1]} />
             <meshBasicMaterial ref={material} transparent opacity={0.2} depthWrite={false} />
             {error && (
@@ -435,7 +436,7 @@ export function WallFeatureGesture({
                 </p>
               </Html>
             )}
-            <lineSegments geometry={edgeGeometry} raycast={() => {}}>
+            <lineSegments geometry={edgeGeometry} layers={EDITOR_LAYER} raycast={() => {}}>
               <lineBasicMaterial ref={edges} color="#a78bfa" depthTest={false} depthWrite={false} />
             </lineSegments>
           </mesh>

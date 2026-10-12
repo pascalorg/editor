@@ -1,6 +1,7 @@
 import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentOperations, HostedServiceExecutor } from '@pascal-app/core/agent-operations'
 import type { AgentToolAnnotations, PluginAgentTools } from '@pascal-app/core/agent-tools'
+import { refuse } from '@pascal-app/core/agent-tools'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
@@ -64,7 +65,16 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     { name: opts.name ?? 'pascal-mcp-server', version: opts.version ?? version },
     opts.instructions ? { instructions: opts.instructions } : undefined,
   )
-  if (opts.executeTool) installToolExecutor(server, opts.executeTool)
+  let refreshPluginTools = () => {}
+  if (opts.executeTool || opts.pluginTools?.length)
+    installToolExecutor(server, async (input) => {
+      refreshPluginTools()
+      try {
+        return await (opts.executeTool ? opts.executeTool(input) : input.execute())
+      } finally {
+        refreshPluginTools()
+      }
+    })
   const operations =
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
   const catalog = opts.catalog ? cachedCatalog(opts.catalog) : undefined
@@ -73,14 +83,63 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     geometryScripts: opts.geometryScripts,
     sceneViews: opts.sceneViews,
   })
+  const registrations: { tool: RegisteredTool; installed: () => boolean }[] = []
   for (const plugin of opts.pluginTools ?? [])
     for (const contract of plugin.agentTools.tools) {
       if (contract.runsIn !== 'operation') continue
       const operation = plugin.operations[contract.name]
       const annotations = plugin.annotationsByTool[contract.name]
       if (!operation || !annotations) continue
-      registerOperationTool(server, operations, { contract, operation, annotations }, catalog)
+      const pluginId = plugin.agentTools.pluginId
+      if (pluginId !== 'pascal:core' && !operations.subscribePluginInstallation)
+        throw new Error(
+          'External plugin tools require SceneOperations.subscribePluginInstallation.',
+        )
+      const installed = () =>
+        pluginId === 'pascal:core' ||
+        (
+          operations.getInstalledPlugins?.() ??
+          operations.exportSceneGraph().installedPlugins ??
+          []
+        ).includes(pluginId)
+      const tool = registerOperationTool(
+        server,
+        operations,
+        {
+          contract,
+          operation,
+          annotations,
+          authorize: () => {
+            if (!installed())
+              refuse(
+                'plugin_not_installed',
+                `Plugin ${pluginId} is not installed in this project.`,
+                { pluginId },
+              )
+          },
+        },
+        catalog,
+      )
+      registrations.push({ tool, installed })
     }
+  refreshPluginTools = () => {
+    for (const { tool, installed } of registrations) {
+      const enabled = installed()
+      if (enabled !== tool.enabled) {
+        if (enabled) tool.enable()
+        else tool.disable()
+      }
+    }
+  }
+  if (registrations.length) {
+    refreshPluginTools()
+    const unsubscribe = operations.subscribePluginInstallation?.(refreshPluginTools)
+    const previousClose = server.server.onclose
+    server.server.onclose = () => {
+      unsubscribe?.()
+      previousClose?.()
+    }
+  }
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)
   registerResources(server, operations, catalog)

@@ -16,7 +16,9 @@ import {
   WallFeatureNode,
   WallNode,
 } from '@pascal-app/core'
+import { cloneLevelSubtree } from '@pascal-app/core/clone-scene-graph'
 import { nodeLevelFrame } from '@pascal-app/core/procedural-items'
+import { cloneNodesInto } from '@pascal-app/core/registry'
 import { surfaceAttachmentId, surfaceFramePose, updateSurfaceNode } from '@pascal-app/editor'
 import {
   itemDefinition,
@@ -166,6 +168,31 @@ test('nested shelves and support-height sampling agree with the rendered host fr
   expect(wallFeatureSupportHeight(niche, 2, 3, { nodes })).toBeNull()
   nodes[wall.id] = { ...wall, visible: false }
   expect(getSurfaceProvider(niche).surfaces!(niche, { scene })).toHaveLength(0)
+})
+
+test('subtree and level copies retain the hosted item resting frame with fresh attachment IDs', () => {
+  const { feature, item, wall, level, nodes } = setup('bump', 'b')
+  feature.attachments[item.id] = 'resting'
+  const originalFrame = nodeLevelFrame(item.id, nodes)
+  const subtree = cloneNodesInto([feature, item], { rootId: feature.id, parentId: wall.id })
+  const levelCopy = cloneLevelSubtree(nodes as Record<AnyNode['id'], AnyNode>, level.id)
+  for (const copy of [
+    { nodes: subtree.nodes, idMap: subtree.idMap },
+    { nodes: levelCopy.clonedNodes, idMap: levelCopy.idMap },
+  ]) {
+    const copiedNodes = {
+      ...nodes,
+      ...Object.fromEntries(copy.nodes.map((node) => [node.id, node])),
+    }
+    const copiedFeature = copiedNodes[copy.idMap.get(feature.id)!] as WallFeatureNode
+    const copiedItemId = copy.idMap.get(item.id)!
+    expect(copiedFeature.attachments).toEqual({ [copiedItemId]: 'resting' })
+    expect(getHostAttachmentSurface(copiedFeature, copiedItemId, copiedNodes)?.id).toBe('resting')
+    const copiedFrame = nodeLevelFrame(copiedItemId, copiedNodes)
+    copiedFrame.position.forEach((value, i) => {
+      expect(value).toBeCloseTo(originalFrame.position[i]!)
+    })
+  }
 })
 
 test('openings and niches reaching a bump top remove the corresponding resting region', () => {

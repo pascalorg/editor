@@ -157,8 +157,8 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     kind: 'procedural-item',
     path: 'attachments.@key',
     ...policy('node', 'hierarchy', 'drop', 'keep'),
-    remaps: ['clone-scene-graph', 'clone-nodes-into'],
-    note: 'Record key: a hosted child id. The level-subtree clone keeps the old key.',
+    remaps: [...CLONES, 'clone-nodes-into'],
+    note: 'Record key: a hosted child id.',
   }),
   row({
     kind: 'procedural-item',
@@ -170,7 +170,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     kind: 'wall-feature',
     path: 'attachments.@key',
     ...policy('node', 'hierarchy', 'drop', 'keep'),
-    remaps: ['clone-scene-graph', ...WALL_TOPOLOGY, 'delete-nodes'],
+    remaps: [...CLONES, 'clone-nodes-into', ...WALL_TOPOLOGY, 'delete-nodes'],
     note: 'Record key: a hosted child id on a feature resting surface.',
   }),
   row({

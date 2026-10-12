@@ -5,6 +5,7 @@ import {
   remapConstructionDimensionReferences,
   remapMeasurementReferences,
 } from '../lib/measurement-geometry'
+import { remapSurfaceAttachments } from '../lib/remap-surface-attachments'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -434,6 +435,7 @@ export function cloneLevelSubtree(
         idMap.get(cloned.deckSlabId) ?? cloned.deckSlabId
     }
     remapFloorOpeningReferences(cloned, idMap)
+    remapSurfaceAttachments(cloned, idMap)
 
     // A copied plate or ceiling stands for the copied rooms, so the guard
     // accepts it as derived and the reconciler adopts it on the new level.
