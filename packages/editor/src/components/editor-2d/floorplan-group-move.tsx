@@ -571,6 +571,7 @@ export function startFloorplanGroupRotate(event: {
 
   // Capture phase so Escape wins over the global `use-keyboard` arm.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (isTypingTarget(e.target)) return
     if (e.key === 'Delete' || e.key === 'Backspace') {
       // Deleting mid-rotate: revert first, then let the global Delete arm run.
       cancel()

@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   CeilingNode,
   clearSceneHistory,
+  getSceneHistoryPauseDepth,
   LevelNode,
   nodeRegistry,
   registerNode,
@@ -21,6 +22,7 @@ import { z } from 'zod'
 import { getEditorClipboardSnapshot } from '../../lib/scene-clipboard'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
+import { startFloorplanGroupRotate, useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import { startGroupPickUp } from './group-actions'
 import {
   classifyParticipant,
@@ -608,8 +610,7 @@ describe('group plan bounds', () => {
 
 // Ownership comes from the editable-focus contract, not the rotation helper.
 // Exercise the actual carry's registered listener and real scene/preview stores.
-// These CPU targets model ownership only; native focus, propagation and undo
-// remain covered by the protected Chromium fixture, not by this EventTarget.
+// These CPU targets model ownership only, not native focus, propagation or undo.
 describe('group keyboard editable ownership', () => {
   function withCarry(
     run: (fixture: {
@@ -624,6 +625,10 @@ describe('group keyboard editable ownership', () => {
   ) {
     const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
     const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    const rafDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame')
+    const cancelRafDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame')
+    const frames = new Map<number, FrameRequestCallback>()
+    let frameId = 0
     const savedScene = useScene.getState()
     const savedViewer = useViewer.getState()
     const savedEditor = useEditor.getState()
@@ -641,6 +646,17 @@ describe('group keyboard editable ownership', () => {
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
       value: { body: { style: { cursor: '' } }, querySelector: () => null },
+    })
+    Object.defineProperty(globalThis, 'requestAnimationFrame', {
+      configurable: true,
+      value: (callback: FrameRequestCallback) => {
+        frames.set(++frameId, callback)
+        return frameId
+      },
+    })
+    Object.defineProperty(globalThis, 'cancelAnimationFrame', {
+      configurable: true,
+      value: (id: number) => frames.delete(id),
     })
     const canvasTarget = { isContentEditable: false, closest: () => null }
     let cancellations = 0
@@ -719,9 +735,12 @@ describe('group keyboard editable ownership', () => {
       useInteractionScope.setState(savedScope)
       useLiveNodeOverrides.setState(savedOverrides)
       useLiveTransforms.setState(savedTransforms)
+      frames.clear()
       for (const [name, descriptor] of [
         ['window', windowDescriptor],
         ['document', documentDescriptor],
+        ['requestAnimationFrame', rafDescriptor],
+        ['cancelAnimationFrame', cancelRafDescriptor],
       ] as const) {
         if (descriptor) Object.defineProperty(globalThis, name, descriptor)
         else Reflect.deleteProperty(globalThis, name)
@@ -776,6 +795,265 @@ describe('group keyboard editable ownership', () => {
       expect(useScene.getState().nodes).toEqual(before)
       expect(useScene.temporal.getState().isTracking).toBe(true)
       expect(useViewer.getState().selection.selectedIds).toEqual(['item_chair', 'column_post'])
+    })
+  })
+})
+
+// The editable-focus contract owns these expectations: a live rotation is a
+// preview, not a scene/history edit, until an outside release commits it.
+// Real package stores/controller and CPU geometry; the DOM below supplies only
+// identity screen coordinates and event dispatch, not browser focus/native undo.
+describe('floorplan group rotation keyboard ownership', () => {
+  function snapshot() {
+    const history = useScene.temporal.getState()
+    return structuredClone({
+      nodes: useScene.getState().nodes,
+      selection: useViewer.getState().selection,
+      scope: useInteractionScope.getState().scope,
+      overrides: [...useLiveNodeOverrides.getState().overrides],
+      transforms: [...useLiveTransforms.getState().transforms],
+      rotation: useFloorplanGroupDrag.getState().rotation,
+      inputDragging: useViewer.getState().inputDragging,
+      history: {
+        past: history.pastStates,
+        future: history.futureStates,
+        tracking: history.isTracking,
+        pauseDepth: getSceneHistoryPauseDepth(),
+      },
+    })
+  }
+
+  function withRotation(
+    run: (fixture: {
+      press: (key: string, target?: object, modifiers?: object) => Event
+      pointer: (type: string) => void
+      snapshot: () => ReturnType<typeof snapshot>
+    }) => void,
+  ) {
+    const names = [
+      'window',
+      'document',
+      'setTimeout',
+      'clearTimeout',
+      'queueMicrotask',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+    ] as const
+    const descriptors = names.map(
+      (name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const,
+    )
+    const savedStores = [
+      [useScene, useScene.getState()],
+      [useViewer, useViewer.getState()],
+      [useEditor, useEditor.getState()],
+      [useInteractionScope, useInteractionScope.getState()],
+      [useLiveNodeOverrides, useLiveNodeOverrides.getState()],
+      [useLiveTransforms, useLiveTransforms.getState()],
+      [useFloorplanGroupDrag, useFloorplanGroupDrag.getState()],
+    ] as const
+    const savedHistory = useScene.temporal.getState()
+    const pauseDepth = getSceneHistoryPauseDepth()
+    const savedRegistry = new Map(sceneRegistry.nodes)
+    const host = Object.assign(new EventTarget(), { location: { search: '' } })
+    const timers = new Map<number, () => void>()
+    const microtasks: (() => void)[] = []
+    let timerId = 0
+    const sceneElement = {
+      getScreenCTM: () => ({ inverse: () => ({}) }),
+      ownerSVGElement: {
+        createSVGPoint: () => ({
+          x: 0,
+          y: 0,
+          matrixTransform() {
+            return { x: this.x, y: this.y }
+          },
+        }),
+      },
+    }
+    const globals = {
+      window: host,
+      document: {
+        body: { style: { cursor: '' } },
+        querySelector: (selector: string) =>
+          selector === 'g[data-floorplan-scene]' ? sceneElement : null,
+      },
+      setTimeout: (callback: () => void) => {
+        timers.set(++timerId, callback)
+        return timerId
+      },
+      clearTimeout: (id: number) => {
+        timers.delete(id)
+      },
+      queueMicrotask: (callback: () => void) => {
+        microtasks.push(callback)
+      },
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        timers.set(++timerId, () => callback(0))
+        return timerId
+      },
+      cancelAnimationFrame: (id: number) => {
+        timers.delete(id)
+      },
+    }
+    const canvas = { isContentEditable: false, closest: () => null }
+    const press = (key: string, target: object = canvas, modifiers: object = {}) => {
+      const event = Object.assign(new Event('keydown', { cancelable: true }), {
+        key,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        ...modifiers,
+      })
+      Object.defineProperty(event, 'target', { value: target })
+      host.dispatchEvent(event)
+      return event
+    }
+    const pointer = (type: string) => {
+      host.dispatchEvent(
+        Object.assign(new Event(type), {
+          pointerId: 7,
+          clientX: 2.5,
+          clientY: 4,
+        }),
+      )
+    }
+    const meshes: Mesh[] = []
+    try {
+      // No shared gesture may already own a history pause in this isolated test.
+      expect(pauseDepth).toBe(0)
+      for (const name of names) {
+        Object.defineProperty(globalThis, name, { configurable: true, value: globals[name] })
+      }
+      useScene.temporal.getState().pause()
+      useScene.setState({
+        nodes: placedNodes() as Record<AnyNodeId, AnyNode>,
+        rootNodeIds: ['building_test' as AnyNodeId],
+        dirtyNodes: new Set<AnyNodeId>(),
+        readOnly: false,
+      })
+      useScene.temporal.getState().resume()
+      // Clear only this temporal stack, never the process-wide draft registry.
+      useScene.temporal.getState().clear()
+      useScene.getState().updateNode('item_chair' as AnyNodeId, { name: 'rotation undo sentinel' })
+      useLiveNodeOverrides.getState().clearAll()
+      useLiveTransforms.getState().clearAll()
+      useFloorplanGroupDrag.setState({ delta: null, rotation: null })
+      useInteractionScope.getState().end()
+      useEditor.getState().armToolMode({ mode: 'select' })
+      useViewer.getState().setSelection({
+        buildingId: 'building_test',
+        levelId: 'level_test',
+        selectedIds: ['item_chair', 'column_post'],
+      })
+      sceneRegistry.nodes.clear()
+      for (const id of ['item_chair', 'column_post'] as const) {
+        const mesh = new Mesh(new BoxGeometry(1, 1, 1))
+        mesh.position.fromArray(
+          (useScene.getState().nodes[id as AnyNodeId] as unknown as { position: number[] })
+            .position,
+        )
+        mesh.updateMatrixWorld(true)
+        meshes.push(mesh)
+        sceneRegistry.nodes.set(id as AnyNodeId, mesh)
+      }
+      expect(startFloorplanGroupRotate({ clientX: 5.5, clientY: 1, pointerId: 7 })).toBe(true)
+      pointer('pointermove')
+      expect(useFloorplanGroupDrag.getState().rotation?.angle).toBeCloseTo(Math.PI / 2)
+      expect(useLiveNodeOverrides.getState().overrides.size).toBe(2)
+      expect(useInteractionScope.getState().scope.kind).toBe('handle-drag')
+      expect(useScene.temporal.getState().pastStates.length).toBeGreaterThan(0)
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+      run({ press, pointer, snapshot })
+    } finally {
+      // Controller teardown balances its own history pause even after an assertion
+      // fails. Drain its deferred input/click cleanup before restoring shared state.
+      pointer('pointercancel')
+      while (microtasks.length) microtasks.shift()!()
+      for (const callback of timers.values()) {
+        callback()
+        while (microtasks.length) microtasks.shift()!()
+      }
+      timers.clear()
+      useScene.temporal.getState().pause()
+      for (const [store, state] of savedStores)
+        (store.setState as (snapshot: unknown) => void)(state)
+      useScene.temporal.setState(savedHistory)
+      sceneRegistry.nodes.clear()
+      for (const [id, object] of savedRegistry) sceneRegistry.nodes.set(id, object)
+      for (const mesh of meshes) {
+        mesh.geometry.dispose()
+        if (Array.isArray(mesh.material))
+          mesh.material.forEach((material) => {
+            material.dispose()
+          })
+        else mesh.material.dispose()
+      }
+      for (const [name, descriptor] of descriptors) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+        else Reflect.deleteProperty(globalThis, name)
+      }
+      expect(getSceneHistoryPauseDepth()).toBe(pauseDepth)
+    }
+  }
+
+  test('editable undo and cancel keys preserve the actual active rotation', () => {
+    withRotation(({ press, snapshot }) => {
+      const before = snapshot()
+      const targets = [
+        { isContentEditable: false, closest: () => ({ tagName: 'TEXTAREA' }) },
+        { isContentEditable: true, closest: () => null },
+      ]
+      for (const target of targets) {
+        for (const modifiers of [{ ctrlKey: true }, { metaKey: true }]) {
+          expect(press('z', target, modifiers).defaultPrevented).toBe(false)
+          expect(snapshot()).toEqual(before)
+        }
+        for (const key of ['Backspace', 'Delete', 'Escape']) {
+          expect(press(key, target).defaultPrevented).toBe(false)
+          expect(snapshot()).toEqual(before)
+        }
+      }
+    })
+  })
+
+  test('outside history and Escape still cancel without consuming a scene undo', () => {
+    for (const [key, modifiers] of [
+      ['Escape', {}],
+      ['z', { ctrlKey: true }],
+      ['z', { metaKey: true }],
+    ] as const) {
+      withRotation(({ press, snapshot }) => {
+        const before = snapshot()
+        expect(press(key, undefined, modifiers).defaultPrevented).toBe(true)
+        const after = snapshot()
+        expect(after.nodes).toEqual(before.nodes)
+        expect(after.history.past).toEqual(before.history.past)
+        expect(after.history.future).toEqual(before.history.future)
+        expect(after.history.tracking).toBe(true)
+        expect(after.history.pauseDepth).toBe(0)
+        expect(after.scope.kind).toBe('idle')
+        expect(after.overrides).toEqual([])
+        expect(after.transforms).toEqual([])
+        expect(after.rotation).toBeNull()
+      })
+    }
+  })
+
+  test('outside pointer release commits one undoable rotation', () => {
+    withRotation(({ pointer, snapshot }) => {
+      const before = snapshot()
+      pointer('pointerup')
+      const after = snapshot()
+      expect(after.nodes).not.toEqual(before.nodes)
+      expect(after.history.past).toHaveLength(before.history.past.length + 1)
+      expect(after.history.tracking).toBe(true)
+      expect(after.scope.kind).toBe('idle')
+      expect(after.overrides).toEqual([])
+      expect(after.transforms).toEqual([])
+      expect(after.rotation).toBeNull()
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes).toEqual(before.nodes)
     })
   })
 })
