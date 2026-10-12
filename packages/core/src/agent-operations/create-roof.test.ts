@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { BuildingNode, LevelNode, WallNode } from '../schema'
 import { createRoof, grown } from './create-roof'
 import type { SceneNodes } from './types'
@@ -47,6 +48,60 @@ describe('create_roof: a roof outline that stays on the walls', () => {
     const { width, depth } = segments[0] as unknown as { width: number; depth: number }
     expect(Math.max(width, depth)).toBeLessThan(30.5)
     expect(Math.max(width, depth)).toBeGreaterThan(30)
+  })
+})
+
+describe('create_roof: a finish the library lacks', () => {
+  const house = () =>
+    storey([
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ])
+  const context = { activeLevelId: null }
+
+  function refusalOf(run: () => unknown) {
+    try {
+      run()
+    } catch (error) {
+      expect(isAgentRefusal(error)).toBe(true)
+      return error as AgentRefusal
+    }
+    throw new Error('create_roof did not refuse')
+  }
+
+  test('a fascia finish is refused as the roof finish is, and nothing is created', () => {
+    const refusal = refusalOf(() =>
+      createRoof(
+        house(),
+        { fasciaHeight: 0.3, fasciaMaterialPreset: 'library:no-such-fascia' },
+        context,
+      ),
+    )
+
+    expect(refusal.code).toBe('unknown_material')
+    expect(refusal.message).toContain('fasciaMaterialPreset')
+    expect(refusal.message).toContain('library:no-such-fascia')
+  })
+
+  test('a library finish is written on every segment of the band', () => {
+    const outcome = createRoof(
+      house(),
+      { fasciaHeight: 0.3, fasciaMaterialPreset: 'library:preset-nearblack' },
+      context,
+    )
+    const segments = (outcome.changes?.create ?? [])
+      .map(({ node }) => node)
+      .filter((node) => node.type === 'roof-segment')
+
+    expect(segments.length).toBeGreaterThan(0)
+    for (const segment of segments)
+      expect(segment).toMatchObject({
+        fascia: true,
+        fasciaHeight: 0.3,
+        fasciaMaterialPreset: 'library:preset-nearblack',
+      })
   })
 })
 

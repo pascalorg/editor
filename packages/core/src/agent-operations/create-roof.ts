@@ -212,6 +212,14 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
     input.materialPreset === undefined
       ? undefined
       : requireMaterialRef(input.materialPreset, 'materialPreset', finishSurface('roof'))
+  const fasciaMaterialPreset =
+    input.fasciaMaterialPreset === undefined
+      ? undefined
+      : requireMaterialRef(
+          input.fasciaMaterialPreset,
+          'fasciaMaterialPreset',
+          finishSurface('roof'),
+        )
   if ((width === undefined) !== (depth === undefined))
     refuse(
       'rectangle_incomplete',
@@ -279,7 +287,7 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
       position: [(r.minX + r.maxX) / 2 - centerX, 0, (r.minZ + r.maxZ) / 2 - centerZ],
       ...(input.pitch !== undefined && { pitch: input.pitch }),
       ...(input.overhang !== undefined && { overhang: input.overhang }),
-      ...fasciaFields(input),
+      ...fasciaFields({ ...input, fasciaMaterialPreset }),
     })
   })
 
