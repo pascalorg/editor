@@ -38,12 +38,14 @@ export {
   type CompiledGeometryScript,
   GEOMETRY_MANIFEST_MAX_BYTES,
   GEOMETRY_SCRIPT_MAX_BYTES,
-  GEOMETRY_SCRIPT_MIME_TYPE,
+  GEOMETRY_SCRIPT_MIME_TYPES,
   GeometryArtifactManifest,
+  GeometryScriptLanguage,
   GeometryScriptMount,
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
   GeometryScriptSource,
+  isGeometryScriptMimeType,
 } from './geometry-source'
 export type {
   MaterialMapProperties,

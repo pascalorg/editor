@@ -56,6 +56,7 @@ export function compiledSolid(
   return {
     sha256: 'a'.repeat(64),
     script: 'b'.repeat(64),
+    language: 'three',
     mount,
     params: {},
     manifest: GeometryArtifactManifest.parse({

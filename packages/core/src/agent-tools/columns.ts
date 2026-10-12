@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { geometryMetaFields } from '../schema/geometry-metadata'
-import { scriptParams } from './add-object'
+import { scriptLanguage, scriptParams } from './add-object'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
@@ -61,8 +61,9 @@ export const addColumnTool = {
       .max(48_000)
       .optional()
       .describe(
-        'A three.js module when the native fields cannot express the column. Same module and conventions as add_object; mount floor. Declare height, width and depth params for editable dimensions.',
+        'A module (three.js, or bpy with language) when the native fields cannot express the column. Same module and conventions as add_object; mount floor. Declare height, width and depth params for editable dimensions.',
       ),
+    language: scriptLanguage,
     params: scriptParams,
   },
 }

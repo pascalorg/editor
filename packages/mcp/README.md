@@ -100,7 +100,9 @@ editor reads and writes the same database-side store.
 
 Local MCP compilation is opt-in with `PASCAL_SERVER_SCRIPT_COMPILE=1`. It runs in a separate
 process without inherited environment variables, with a deadline; this is not a sandbox for
-untrusted code. `get_source` can read saved scripts without enabling compilation.
+untrusted code. Blender (`bpy`) modules run in the Blender binary `PASCAL_BLENDER` names
+(`blender -b`), with the same caveat. `get_source` can read saved scripts without enabling
+compilation.
 
 ## Live editor updates
 
