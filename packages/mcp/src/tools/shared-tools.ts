@@ -21,10 +21,12 @@ import {
   furnishRoomTool,
   getLevelSummaryTool,
   getNodeTool,
+  getSiteTool,
   getWallsTool,
   getZonesTool,
   listLevelsTool,
   measureStairTool,
+  placeBuildingTool,
   placeItemsTool,
   ROOM_TOOL_CONTRACTS,
   searchAssetsTool,
@@ -304,6 +306,24 @@ const SHARED_TOOLS: SharedTool[] = [
     operation: AGENT_OPERATIONS.search_assets,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
     catalog: true,
+  },
+  {
+    contract: getSiteTool,
+    operation: AGENT_OPERATIONS.get_site,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: placeBuildingTool,
+    operation: AGENT_OPERATIONS.place_building,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      buildingId: z.string(),
+      moved: z.boolean(),
+      fit: z.enum(['buildable', 'lot', 'outside']),
+      message: z.string(),
+      ...achievedOutput,
+      ...liveSyncOutput,
+    },
   },
   ...ROOM_TOOL_CONTRACTS.map((contract) => {
     const name = contract.name as RoomToolName

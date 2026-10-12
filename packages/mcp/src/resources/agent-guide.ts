@@ -32,6 +32,7 @@ export const AGENT_GUIDE = [
   '',
   '## Scene Creation Rules',
   '',
+  '- The site comes first, before the first wall: `get_site` gives the lot, the buildable area inside its setbacks and its centre, the street side and whether the lot is only the new-project placeholder, in the level coordinates you draw in. Then `place_building` with the outline of the plan you are about to draw, in the coordinates you will draw it (and the yards a site plan gives), so the house rises inside the lot, centred. `create_room` and `add_wall` take your coordinates as given and say when they cross the lot line; `verify_scene` reports a house past it.',
   '- Prefer semantic tools over raw graph patches.',
   '- Do not hand-write node graphs unless no semantic tool exists.',
   '- When you do use `apply_patch` for bulk graph edits, batch-first is the default: one call containing all create/update/delete ops for the phase, in stable order so later ops can reference ids created earlier. A single call is atomic (all or nothing); do not loop one-op `apply_patch` calls.',

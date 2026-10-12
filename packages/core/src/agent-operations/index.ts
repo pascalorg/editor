@@ -12,6 +12,7 @@ import { listLevels } from './list-levels'
 import { placeItems } from './place-items'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
+import { getSite, placeBuilding } from './site'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperations } from './types'
 import { verifyScene } from './verify-scene'
@@ -47,6 +48,7 @@ export * from './scene-measure'
 export * from './scene-queries'
 export * from './scene-view'
 export * from './search-assets'
+export * from './site'
 export * from './stairs'
 export * from './types'
 export * from './verify-scene'
@@ -72,5 +74,7 @@ export const AGENT_OPERATIONS = {
   create_room: createRoom,
   furnish_room: furnishRoom,
   search_assets: searchAssets,
+  get_site: getSite,
+  place_building: placeBuilding,
   ...ROOM_OPERATIONS,
 } as const satisfies AgentOperations

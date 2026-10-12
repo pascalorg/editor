@@ -1,20 +1,22 @@
 import { describe, expect, it } from 'bun:test'
-import { sightTriangle, streetCorners } from '@pascal-app/core'
 import {
-  boundsInsidePolygon,
-  castYardDimensions,
   classifyEdges,
   edgeHeadingDeg,
-  formatFeetInches,
-  METRES_PER_FOOT,
   mostNorthFacingEdge,
   outwardNormal,
-  type Pt,
-  polygonArea,
   rayToPolygon,
   resolveFrontEdge,
   setbackEnvelope,
   setbackForRole,
+  sightTriangle,
+  streetCorners,
+} from '@pascal-app/core'
+import {
+  castYardDimensions,
+  formatFeetInches,
+  METRES_PER_FOOT,
+  type Pt,
+  polygonArea,
 } from './geometry'
 
 /**
@@ -255,14 +257,6 @@ describe('rayToPolygon + castYardDimensions', () => {
     // Footprint entirely north of (above) the lot: nothing casts north.
     const yards = castYardDimensions(LOT, { minX: 10, minY: -30, maxX: 20, maxY: -25 })
     expect(yards.map((y) => y.side)).not.toContain('north')
-  })
-})
-
-describe('boundsInsidePolygon', () => {
-  it('is true only when every bbox corner is inside the lot', () => {
-    expect(boundsInsidePolygon(LOT, { minX: 5, minY: 5, maxX: 25, maxY: 15 })).toBe(true)
-    expect(boundsInsidePolygon(LOT, { minX: -5, minY: 5, maxX: 25, maxY: 15 })).toBe(false)
-    expect(boundsInsidePolygon(LOT, { minX: 100, minY: 100, maxX: 110, maxY: 110 })).toBe(false)
   })
 })
 
