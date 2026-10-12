@@ -19,6 +19,7 @@ export const ColumnCrossSection = z.enum([
   'rectangular',
   'octagonal',
   'sixteen-sided',
+  'i-beam',
 ])
 
 export const ColumnShaftProfile = z.enum(['straight', 'tapered', 'bulged', 'baluster', 'hourglass'])
@@ -88,6 +89,8 @@ export const ColumnNode = BaseNode.extend({
   children: z.array(z.string()).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
+  tiltX: z.number().default(0),
+  tiltZ: z.number().default(0),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),
   source: GeometryScriptSource.optional().describe(

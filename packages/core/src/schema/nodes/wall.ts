@@ -288,6 +288,7 @@ export const WallNode = BaseNode.extend({
   // Absent centers the body; a/b place it left/right of the stored start → end line.
   justification: z.enum(['a', 'b']).optional(),
   height: z.number().optional(),
+  tilt: z.number().default(0),
   curveOffset: z.number().optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),

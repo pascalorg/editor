@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import {
   type AnyNodeId,
@@ -58,6 +58,7 @@ function ColumnMaterial() {
   const slotId = useContext(ColumnSlotContext)
   const materials = useContext(ColumnMaterialContext)
   const material = materials[slotId] ?? materials.shaft
+  if (!material) return null
   return <primitive attach="material" object={material} />
 }
 
@@ -1029,6 +1030,53 @@ function SquareBlock({
   )
 }
 
+function IBeamBlock({
+  y,
+  height,
+  width,
+  depth,
+  softenEdges = true,
+}: {
+  y: number
+  height: number
+  width: number
+  depth: number
+  softenEdges?: boolean
+}) {
+  const flangeThickness = Math.max(0.01, depth * 0.1)
+  const webThickness = Math.max(0.01, width * 0.1)
+  const webDepth = Math.max(0, depth - flangeThickness * 2)
+
+  return (
+    <group position={[0, y + height / 2, 0]}>
+      {/* Front Flange */}
+      <MappedBox
+        depth={flangeThickness}
+        height={height}
+        position={[0, 0, depth / 2 - flangeThickness / 2]}
+        softenEdges={softenEdges}
+        width={width}
+      />
+      {/* Back Flange */}
+      <MappedBox
+        depth={flangeThickness}
+        height={height}
+        position={[0, 0, -depth / 2 + flangeThickness / 2]}
+        softenEdges={softenEdges}
+        width={width}
+      />
+      {/* Web */}
+      <MappedBox
+        depth={webDepth}
+        height={height}
+        position={[0, 0, 0]}
+        softenEdges={softenEdges}
+        width={webThickness}
+      />
+    </group>
+  )
+}
+
 function RoundBlock({
   x = 0,
   y,
@@ -1143,6 +1191,10 @@ function ColumnBlock({
   const depth = node.depth * scale
   const radius = node.radius * scale
 
+  if (node.crossSection === 'i-beam') {
+    return <IBeamBlock depth={depth} height={height} width={width} y={y} />
+  }
+
   if (node.crossSection === 'square' || node.crossSection === 'rectangular') {
     return <SquareBlock depth={depth} height={height} width={width} y={y} />
   }
@@ -1236,6 +1288,10 @@ function Shaft({ node, y, height }: { node: ColumnNode; y: number; height: numbe
     node.crossSection === 'sixteen-sided'
   ) {
     return <TaperedRoundShaft height={height} node={node} y={y} />
+  }
+
+  if (node.crossSection === 'i-beam') {
+    return <IBeamBlock depth={node.depth} height={height} width={node.width} y={y} />
   }
 
   return <TaperedSquareShaft height={height} node={node} y={y} />
@@ -2231,7 +2287,7 @@ export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
   return (
     <ColumnMaterialContext.Provider value={materials}>
       <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
-        <group ref={groupRef}>
+        <group ref={groupRef} rotation={[node.tiltX ?? 0, 0, node.tiltZ ?? 0]}>
           {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}
         </group>
       </ColumnEdgeSoftnessContext.Provider>
@@ -2250,8 +2306,6 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
     () => (liveOverride ? ({ ...rawNode, ...liveOverride } as ColumnNode) : rawNode),
     [rawNode, liveOverride],
   )
-  const scriptedColumn = Boolean(node.source)
-  const modelData = useMemo(() => ({ scriptedColumn }), [scriptedColumn])
   const handlers = useNodeEvents(node, 'column')
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const shading = useViewer((state) => state.shading)
@@ -2293,9 +2347,8 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
         <group
           position={liveTransform?.position ?? node.position}
           ref={ref}
-          rotation={[0, liveTransform?.rotation ?? node.rotation, 0]}
+          rotation={[node.tiltX ?? 0, liveTransform?.rotation ?? node.rotation, node.tiltZ ?? 0]}
           visible={node.visible}
-          userData={modelData}
           {...handlers}
         >
           {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}

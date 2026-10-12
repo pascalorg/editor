@@ -1895,11 +1895,13 @@ function authoredCutoutBrush(
   wallMatrixInverse: THREE.Matrix4,
   wallThickness: number,
   wallNode: WallNode,
+  inverseShear: THREE.Matrix4 | null,
 ): Brush | null {
   const geometry = cutoutMesh.geometry.clone()
   geometry.applyMatrix4(
     new THREE.Matrix4().multiplyMatrices(wallMatrixInverse, cutoutMesh.matrixWorld),
   )
+  if (inverseShear) geometry.applyMatrix4(inverseShear)
   geometry.computeBoundingBox()
   const box = geometry.boundingBox!
   const depth = box.max.z - box.min.z
@@ -1940,6 +1942,11 @@ function collectCutoutBrushes(
   // Get wall's world matrix inverse to transform cutouts to wall-local space
   wallMesh.updateMatrixWorld()
   const wallMatrixInverse = wallMesh.matrixWorld.clone().invert()
+
+  const inverseShear = wallNode.tilt
+    ? new THREE.Matrix4().makeShear(0, 0, 0, 0, 0, -Math.tan(wallNode.tilt))
+    : null
+
   // A wall child can only bind to its parent, so the wall alone resolves every cutter.
   const hostNodes = { [wallNode.id]: wallNode }
 
@@ -2080,6 +2087,7 @@ function collectCutoutBrushes(
         v3.fromBufferAttribute(positions, i)
         v3.applyMatrix4(cutoutMesh.matrixWorld)
         v3.applyMatrix4(wallMatrixInverse)
+        if (inverseShear) v3.applyMatrix4(inverseShear)
 
         minX = Math.min(minX, v3.x)
         maxX = Math.max(maxX, v3.x)
@@ -2092,7 +2100,13 @@ function collectCutoutBrushes(
       // An authored object's cutout keeps its shape (an arch, a circle): its own
       // geometry in wall space, stretched across the wall so it cuts both faces.
       if (child.source) {
-        const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, wallThickness, wallNode)
+        const shaped = authoredCutoutBrush(
+          cutoutMesh,
+          wallMatrixInverse,
+          wallThickness,
+          wallNode,
+          inverseShear,
+        )
         if (shaped) {
           brushes.push(shaped)
           continue
