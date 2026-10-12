@@ -30,9 +30,11 @@ export async function generateMetadata({ params }: PageProps<'/embed/[id]'>): Pr
   }
 }
 
-export default async function EmbedPage({ params }: PageProps<'/embed/[id]'>) {
-  const { id } = await params
+export default async function EmbedPage({ params, searchParams }: PageProps<'/embed/[id]'>) {
+  const [{ id }, { ui }] = await Promise.all([params, searchParams])
   const scene = await loadSharedScene(id)
   if (!scene) notFound()
-  return <EmbedViewer graph={scene.graph} id={id} name={scene.name} />
+  // `?ui=0` is the bare 3D view: no header, controls bar or 3D/2D switcher.
+  const chrome = ui !== '0' && ui !== 'false'
+  return <EmbedViewer chrome={chrome} graph={scene.graph} id={id} name={scene.name} />
 }

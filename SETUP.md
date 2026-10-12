@@ -72,7 +72,9 @@ comes in, so one image serves any domain. `/api/health` answers without a sessio
 **Public embeds.** Nothing is public by default. The **Share** button in the editor's navbar
 has a "Public link" switch: turning it on makes the project viewable, read-only, at
 `/embed/<id>`, which needs no password and can be put in an `<iframe>` (the panel gives
-the snippet). Turning it off makes that URL a 404 again. Besides the embed page itself,
+the snippet). The page looks like the editor's Preview mode; `/embed/<id>?ui=0` (the
+panel's "Hide controls" switch) shows only the 3D view, without the header, the toolbar
+or the 3D/2D switcher. Turning the link off makes that URL a 404 again. Besides the embed page itself,
 `/api/scenes/<id>/public` is the only unauthenticated read of scene data, and it answers
 only for shared projects; the files a shared scene references are served to it as well.
 

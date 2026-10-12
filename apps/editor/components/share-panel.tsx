@@ -42,6 +42,7 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
   const [shared, setShared] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hideControls, setHideControls] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -92,7 +93,7 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
     }
   }
 
-  const embedUrl = `${window.location.origin}/embed/${sceneId}`
+  const embedUrl = `${window.location.origin}/embed/${sceneId}${hideControls ? '?ui=0' : ''}`
   const snippet = `<iframe src="${embedUrl}" width="800" height="500" style="border:0" allow="fullscreen" loading="lazy"></iframe>`
 
   return (
@@ -109,25 +110,12 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
         <span className="font-medium text-sm" id="share-public-link-label">
           Public link
         </span>
-        <button
-          aria-checked={shared === true}
-          aria-labelledby="share-public-link-label"
-          className={cn(
-            'inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-            shared ? 'bg-primary' : 'bg-input',
-          )}
+        <Switch
+          checked={shared === true}
           disabled={shared === null || saving}
+          labelId="share-public-link-label"
           onClick={toggle}
-          role="switch"
-          type="button"
-        >
-          <span
-            className={cn(
-              'pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg transition-transform',
-              shared ? 'translate-x-4' : 'translate-x-0',
-            )}
-          />
-        </button>
+        />
       </div>
       <p className="mt-1.5 text-muted-foreground text-xs">
         Anyone with the link can view this project. They cannot edit it.
@@ -136,6 +124,21 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
 
       {shared && (
         <div className="mt-4 space-y-3 border-border/50 border-t pt-4">
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium text-sm" id="share-hide-controls-label">
+                Hide controls
+              </span>
+              <Switch
+                checked={hideControls}
+                labelId="share-hide-controls-label"
+                onClick={() => setHideControls((value) => !value)}
+              />
+            </div>
+            <p className="mt-1.5 text-muted-foreground text-xs">
+              Only the 3D view, no header or toolbar.
+            </p>
+          </div>
           <div>
             <span className="mb-1.5 block text-muted-foreground text-xs">Link</span>
             <div className="flex items-center gap-1.5">
@@ -174,6 +177,40 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
         </div>
       )}
     </div>
+  )
+}
+
+function Switch({
+  checked,
+  disabled,
+  labelId,
+  onClick,
+}: {
+  checked: boolean
+  disabled?: boolean
+  labelId: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      aria-checked={checked}
+      aria-labelledby={labelId}
+      className={cn(
+        'inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+        checked ? 'bg-primary' : 'bg-input',
+      )}
+      disabled={disabled}
+      onClick={onClick}
+      role="switch"
+      type="button"
+    >
+      <span
+        className={cn(
+          'pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0',
+        )}
+      />
+    </button>
   )
 }
 
