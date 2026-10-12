@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { DEFAULT_PERSISTED_EDITOR_UI_STATE, editorUiStateOnOpen } from './use-editor'
 import { sceneLayout } from './view-layout'
 
@@ -90,5 +90,53 @@ describe('opening a project', () => {
 
   test('an empty blob opens on the defaults', () => {
     expect(editorUiStateOnOpen(null)).toEqual(DEFAULT_PERSISTED_EDITOR_UI_STATE)
+  })
+})
+
+const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+afterEach(() => {
+  if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+  else Reflect.deleteProperty(globalThis, 'window')
+})
+
+/** A browser's localStorage. */
+function stubStorage() {
+  const values = new Map<string, string>()
+  const localStorage: Partial<Storage> = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => void values.set(key, value),
+    removeItem: (key) => void values.delete(key),
+  }
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { localStorage } })
+}
+
+let fresh = 0
+/** The editor store as a page load creates it: not yet rehydrated (`skipHydration`). */
+async function loadEditorStore() {
+  const { default: useEditor } = await import(`./use-editor.tsx?load=${++fresh}`)
+  return useEditor as typeof import('./use-editor').default
+}
+
+describe('reopening the editor', () => {
+  test('each workspace reopens its own panel, and a reload opens Edit on its own', async () => {
+    stubStorage()
+    const firstSession = await loadEditorStore()
+    await firstSession.persist.rehydrate()
+    const editor = () => firstSession.getState()
+
+    editor().setActiveSidebarPanel('ai')
+    editor().setWorkspaceMode('studio')
+    editor().setActiveSidebarPanel('studio-materials')
+    editor().setWorkspaceMode('edit')
+    expect(editor().activeSidebarPanel).toBe('ai')
+    editor().setWorkspaceMode('studio')
+    expect(editor().activeSidebarPanel).toBe('studio-materials')
+
+    const nextSession = await loadEditorStore()
+    await nextSession.persist.rehydrate()
+    expect(nextSession.getState().workspaceMode).toBe('edit')
+    expect(nextSession.getState().activeSidebarPanel).toBe('ai')
+    nextSession.getState().setWorkspaceMode('studio')
+    expect(nextSession.getState().activeSidebarPanel).toBe('studio-materials')
   })
 })
