@@ -216,6 +216,8 @@ export function wallObjectObservations(
     if (!solids.has(wall.id)) solids.set(wall.id, wallSolid(wall, nodes))
     const solid = solids.get(wall.id)
     const geometry = rendered[item.id] ?? scriptGeometry(item, wall)
+    // A wall-side item with no `side` is drawn on the back face (the item system and the plan
+    // symbols read `side === 'front' ? a : b`): observed where it is drawn.
     const side = item.side === 'front' ? 'front' : 'back'
     const sign = side === 'front' ? 1 : -1
     const hostFace = getWallLocalFaceZ(wall, sign > 0 ? 'a' : 'b')

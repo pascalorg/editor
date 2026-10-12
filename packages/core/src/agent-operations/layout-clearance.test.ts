@@ -116,6 +116,24 @@ describe('layout-clearance', () => {
     )
   })
 
+  test('an item with no side is observed on the face the renderer draws it on, the back', () => {
+    const saved = wallObservations(wallScreenScene())
+    const withoutSide = wallScreenScene()
+    const front = wallScreenScene()
+    for (const [nodes, side] of [
+      [withoutSide, undefined],
+      [front, 'front' as const],
+    ] as const) {
+      const screen = nodes.item_7j1l6855lxvbemw5!
+      if (screen.type !== 'item') throw new Error('screen missing')
+      screen.side = side
+    }
+
+    expect(saved.length).toBeGreaterThan(0)
+    expect(wallObservations(withoutSide)).toEqual(saved)
+    expect(wallObservations(front)).not.toEqual(saved)
+  })
+
   test('turning the saved back-side screen outward leaves its hidden contact face silent', () => {
     const nodes = wallScreenScene()
     const screen = nodes.item_7j1l6855lxvbemw5!
