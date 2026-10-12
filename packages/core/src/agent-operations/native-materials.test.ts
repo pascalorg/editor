@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { AGENT_TOOL_CONTRACTS } from '../agent-tools'
 import { isAgentRefusal } from '../agent-tools/refusal'
 import { slotPaintMaterial } from '../lib/slots'
-import { ColumnNode, type SceneMaterial } from '../schema'
+import { ColumnNode, RoofNode, RoofSegmentNode, type SceneMaterial } from '../schema'
 import {
   EXPECTED_MOUNTAIN_MATERIAL,
   expectPreserved,
@@ -323,5 +323,21 @@ describe('native custom paint: contract v1.1', () => {
     expect(wall.slots?.b).toBeUndefined()
     expectPreserved(nodes, after)
     expect(erased.changes?.materials ?? []).toHaveLength(0)
+  })
+
+  test("erasing a roof's finish takes the field off the node, as the store does", () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_erase',
+      parentId: 'roof_erase',
+      topMaterialPreset: 'library:concrete-raw',
+    })
+    const roof = RoofNode.parse({ id: 'roof_erase', children: [segment.id] })
+    const nodes: SceneNodes = { [roof.id]: roof, [segment.id]: segment }
+    const erased = run('paint', nodes, { targets: [segment.id], role: 'top', erase: true })
+
+    const after = applySceneChanges(nodes, erased.changes!)[segment.id]!
+
+    expect('topMaterialPreset' in after).toBe(false)
+    expect(erased.result.finish).toBe('default')
   })
 })
