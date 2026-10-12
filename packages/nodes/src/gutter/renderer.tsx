@@ -189,6 +189,9 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
     effectiveSegment?.wallHeight,
     effectiveSegment?.overhang,
     effectiveSegment?.pitch,
+    effectiveSegment?.backPitch,
+    effectiveSegment?.ridgeOffset,
+    effectiveSegment?.ridgeStep,
     effectiveSegment?.roofType,
     mitreNodes,
   ])

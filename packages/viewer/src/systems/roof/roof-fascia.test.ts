@@ -23,7 +23,7 @@ function segment(patch: Partial<RoofSegmentNode>): RoofSegmentNode {
 }
 
 /**
- * Vertices of the trim-slot triangles whose centre lies outside the deck
+ * Vertices of the fascia-slot triangles whose centre lies outside the deck
  * along `axis` and within the span across it: the boards on that edge, not
  * the ends of the boards that meet it.
  */
@@ -39,7 +39,7 @@ function boardPoints(node: RoofSegmentNode, axis: 'x' | 'z', side: 1 | -1): THRE
   const at = (i: number) =>
     new THREE.Vector3().fromBufferAttribute(position, index ? index.getX(i) : i)
   for (const group of geometry.groups) {
-    if (group.materialIndex !== 2) continue
+    if (group.materialIndex !== 1) continue
     for (let i = group.start; i < group.start + group.count; i += 3) {
       const tri = [at(i), at(i + 1), at(i + 2)]
       const c = tri.reduce((sum, v) => sum.add(v), new THREE.Vector3()).multiplyScalar(1 / 3)

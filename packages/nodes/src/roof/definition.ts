@@ -13,6 +13,7 @@ import {
   PANEL_MODEL_EXTENSION,
 } from '@pascal-app/editor'
 import { buildRoofFloorplan } from './floorplan'
+import useRoofOutlineSnap from './outline-snap'
 import { roofPanelModel } from './panel-model'
 import { roofParametrics } from './parametrics'
 import useRoofFootprintSource from './roof-footprint-source'
@@ -241,19 +242,62 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
           label: 'Room',
           description: 'Hover a room to preview its boundary, then click to place.',
         },
+        {
+          value: 'outline',
+          label: 'Outline',
+          description:
+            'Click points around the walls and close the outline at the first point (or Enter). The roof is built over the outline and cut to it.',
+        },
       ],
       subscribe: (onChange) => useRoofFootprintSource.subscribe(onChange),
       value: () => useRoofFootprintSource.getState().source,
       set: (value) =>
-        useRoofFootprintSource.getState().setSource(value === 'room' ? 'room' : 'draw'),
+        useRoofFootprintSource
+          .getState()
+          .setSource(value === 'room' || value === 'outline' ? value : 'draw'),
       // Conical roofs always build from a curved wall pick; the row would lie.
       visible: standardRoofToolHintVisibility,
+    },
+    {
+      id: 'outlineSnap',
+      label: 'Snap to',
+      choices: [
+        {
+          value: 'building',
+          label: 'Building',
+          description: 'Points stick to the outer wall corners and faces of the building.',
+        },
+        {
+          value: 'grid',
+          label: 'Grid',
+          description: 'Points follow the grid and the usual wall snapping.',
+        },
+      ],
+      subscribe: (onChange) => useRoofOutlineSnap.subscribe(onChange),
+      value: () => useRoofOutlineSnap.getState().snap,
+      set: (value) => useRoofOutlineSnap.getState().setSnap(value === 'grid' ? 'grid' : 'building'),
+      visible: {
+        subscribe: (onChange) => {
+          const offSource = useRoofFootprintSource.subscribe(onChange)
+          const offKind = standardRoofToolHintVisibility.subscribe(onChange)
+          return () => {
+            offSource()
+            offKind()
+          }
+        },
+        value: () =>
+          standardRoofToolHintVisibility.value() &&
+          useRoofFootprintSource.getState().source === 'outline',
+      },
     },
   ],
 
   parametrics: roofParametrics,
   handles: resolveRoofHandles,
   floorplan: buildRoofFloorplan,
+  // The roof draws its segments' ridges, hips and slope arrows, so a segment
+  // edit (a moved ridge, a new pitch) must redraw the roof's plan too.
+  floorplanDependencies: (node) => node.children as AnyNodeId[],
 
   rendersChildren: false,
   renderer: {

@@ -1,4 +1,10 @@
-import { ROOF_SHAPE_DEFAULTS, type RoofType } from './roof-segment'
+import {
+  getGableRidge,
+  getRoofSegmentBackSlopeTwin,
+  ROOF_SHAPE_DEFAULTS,
+  type RoofSegmentNode,
+  type RoofType,
+} from './roof-segment'
 
 export type RoofShapeFaceVertex = {
   x: number
@@ -28,6 +34,38 @@ export type RoofShapeInsets = {
   iL?: number
   iR?: number
   dutchI?: number
+}
+
+/**
+ * The −z eave of a gable whose two slopes differ, taken from the same layer
+ * built at the −z pitch: its distance from the segment centre, its height,
+ * the slope's tangent and the inset of its bottom edge.
+ */
+export type RoofShapeGableBack = {
+  halfDepth: number
+  wh: number
+  tanTheta: number
+  inset: number
+  /**
+   * Segment-local z of a stepped ridge: each slope runs up to it at its own
+   * height and a vertical face closes the step. Absent, the ridge is where the
+   * two slope planes meet.
+   */
+  stepZ?: number
+  /**
+   * With a stepped ridge, build only one slope's body: from that side's eave
+   * to `endZ` (segment-local z), its top the slope's plane carried on, its end
+   * plumb. The two slopes are built apart so the higher one can run on over
+   * the lower one.
+   */
+  only?: 'front' | 'back'
+  endZ?: number
+  /**
+   * The one slope's end cut along a plane instead of plumb at `endZ`: through
+   * (`z`, `y`) with normal (`nz`, `ny`) in the segment's z–y plane, the body
+   * kept on the side the normal points away from.
+   */
+  endCut?: { z: number; y: number; nz: number; ny: number }
 }
 
 export type RoofShapeRatios = {
@@ -296,6 +334,7 @@ export function getRoofModuleFaces(input: {
   dutchTopRakeThickness?: number
   conicalStartAngle?: number
   conicalSweepAngle?: number
+  gableBack?: RoofShapeGableBack
 }): RoofShapeFaceVertex[][] {
   const v = (x: number, y: number, z: number): RoofShapeFaceVertex => ({ x, y, z })
   const { iF = 0, iB = 0, iL = 0, iR = 0 } = input.insets
@@ -357,16 +396,64 @@ export function getRoofModuleFaces(input: {
     return sweepAngle > 0 ? faces.map((face) => [...face].reverse()) : faces
   }
 
+  const gableBack = input.type === 'gable' ? input.gableBack : undefined
+  const backZ = gableBack ? gableBack.halfDepth : input.d / 2
+  const backWh = gableBack ? gableBack.wh : input.wh
+  const backInset = gableBack ? gableBack.inset : iB
+
+  if (gableBack?.only && gableBack.endZ !== undefined && input.rh !== 0) {
+    // One slope of a stepped gable: a box from its eave to the end line, the
+    // top on the slope's plane. b/e 1–2 on the +z side, 3–4 on the −z side.
+    const frontZ = input.d / 2
+    const endZ = gableBack.endZ
+    const front = gableBack.only === 'front'
+    const frontY = (z: number) => input.wh + (frontZ - z) * input.tanTheta
+    const backY = (z: number) => backWh + (backZ + z) * gableBack.tanTheta
+    // where the end plane meets the slope's top and the body's bottom
+    const cut = gableBack.endCut
+    const topEndZ = cut
+      ? front
+        ? (cut.nz * cut.z - cut.ny * (input.wh + frontZ * input.tanTheta - cut.y)) /
+          (cut.nz - cut.ny * input.tanTheta)
+        : (cut.nz * cut.z - cut.ny * (backWh + backZ * gableBack.tanTheta - cut.y)) /
+          (cut.nz + cut.ny * gableBack.tanTheta)
+      : endZ
+    const bottomEndZ =
+      cut && Math.abs(cut.nz) > 1e-9 ? cut.z - (cut.ny * (input.baseY - cut.y)) / cut.nz : topEndZ
+    const zF = front ? frontZ : topEndZ
+    const zB = front ? topEndZ : -backZ
+    const yF = front ? input.wh : backY(topEndZ)
+    const yB = front ? frontY(topEndZ) : backWh
+    const bF = front ? zF - iF : bottomEndZ
+    const bB = front ? bottomEndZ : zB + backInset
+    const p1 = v(-input.w / 2 + iL, input.baseY, bF)
+    const p2 = v(input.w / 2 - iR, input.baseY, bF)
+    const p3 = v(input.w / 2 - iR, input.baseY, bB)
+    const p4 = v(-input.w / 2 + iL, input.baseY, bB)
+    const q1 = v(-input.w / 2, yF, zF)
+    const q2 = v(input.w / 2, yF, zF)
+    const q3 = v(input.w / 2, yB, zB)
+    const q4 = v(-input.w / 2, yB, zB)
+    return [
+      [p1, p2, q2, q1],
+      [p2, p3, q3, q2],
+      [p3, p4, q4, q3],
+      [p4, p1, q1, q4],
+      [p4, p3, p2, p1],
+      [q1, q2, q3, q4],
+    ]
+  }
+
   const b1 = v(-input.w / 2 + iL, input.baseY, input.d / 2 - iF)
   const b2 = v(input.w / 2 - iR, input.baseY, input.d / 2 - iF)
-  const b3 = v(input.w / 2 - iR, input.baseY, -input.d / 2 + iB)
-  const b4 = v(-input.w / 2 + iL, input.baseY, -input.d / 2 + iB)
+  const b3 = v(input.w / 2 - iR, input.baseY, -backZ + backInset)
+  const b4 = v(-input.w / 2 + iL, input.baseY, -backZ + backInset)
   const bottom = [b4, b3, b2, b1]
 
   const e1 = v(-input.w / 2, input.wh, input.d / 2)
   const e2 = v(input.w / 2, input.wh, input.d / 2)
-  const e3 = v(input.w / 2, input.wh, -input.d / 2)
-  const e4 = v(-input.w / 2, input.wh, -input.d / 2)
+  const e3 = v(input.w / 2, backWh, -backZ)
+  const e4 = v(-input.w / 2, backWh, -backZ)
 
   const faces: RoofShapeFaceVertex[][] = []
   faces.push([b1, b2, e2, e1], [b2, b3, e3, e2], [b3, b4, e4, e3], [b4, b1, e1, e4], bottom)
@@ -376,8 +463,41 @@ export function getRoofModuleFaces(input: {
   if (input.type === 'flat' || input.rh === 0) {
     faces.push([e1, e2, e3, e4])
   } else if (input.type === 'gable') {
-    const r1 = v(-input.w / 2, h, 0)
-    const r2 = v(input.w / 2, h, 0)
+    let ridgeZ = 0
+    let ridgeY = h
+    if (gableBack?.stepZ !== undefined) {
+      // Each slope up to the step line at its own height; a vertical face between.
+      const frontZ = input.d / 2
+      const z = Math.min(frontZ - 0.001, Math.max(-backZ + 0.001, gableBack.stepZ))
+      const frontY = input.wh + (frontZ - z) * input.tanTheta
+      const backY = backWh + (backZ + z) * gableBack.tanTheta
+      const f1 = v(-input.w / 2, frontY, z)
+      const f2 = v(input.w / 2, frontY, z)
+      const k1 = v(-input.w / 2, backY, z)
+      const k2 = v(input.w / 2, backY, z)
+      faces.push([e1, e2, f2, f1], [e3, e4, k1, k2], [f1, f2, k2, k1])
+      // The ends are concave on the lower side: fan them from the higher side's eave.
+      if (backY >= frontY) {
+        faces.push([e4, e1, f1], [e4, f1, k1], [e3, k2, f2], [e3, f2, e2])
+      } else {
+        faces.push([e1, f1, k1], [e1, k1, e4], [e2, e3, k2], [e2, k2, f2])
+      }
+      return faces
+    }
+    if (gableBack) {
+      // The ridge is where the +z and −z slope planes meet.
+      const frontZ = input.d / 2
+      const tanFront = input.tanTheta
+      const tanSum = tanFront + gableBack.tanTheta
+      ridgeZ =
+        tanSum > 1e-9
+          ? (input.wh + frontZ * tanFront - backWh - backZ * gableBack.tanTheta) / tanSum
+          : 0
+      ridgeZ = Math.min(frontZ - 0.001, Math.max(-backZ + 0.001, ridgeZ))
+      ridgeY = input.wh + (frontZ - ridgeZ) * tanFront
+    }
+    const r1 = v(-input.w / 2, ridgeY, ridgeZ)
+    const r2 = v(input.w / 2, ridgeY, ridgeZ)
     faces.push([e4, e1, r1], [e2, e3, r2], [e1, e2, r2, r1], [e3, e4, r1, r2])
   } else if (input.type === 'hip') {
     if (Math.abs(input.w - input.d) < 0.01) {
@@ -518,4 +638,41 @@ export function getRoofModuleFaces(input: {
   }
 
   return faces
+}
+
+export type RoofModuleInput = Parameters<typeof getRoofModuleFaces>[0]
+
+/**
+ * A roof layer's module input, with the −z eave of a gable whose slopes differ
+ * taken from the same layer built at the −z pitch. `build` is the layer's usual
+ * math for one pitch; the bottom sits under the lower of the two sides' bases
+ * and both eaves' bottom-edge insets are recomputed against it.
+ */
+export function withRoofSegmentGableBack<
+  N extends Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'depth' | 'wallHeight'> &
+    Partial<Pick<RoofSegmentNode, 'backPitch' | 'ridgeOffset' | 'ridgeStep'>>,
+>(node: N, build: (node: N) => RoofModuleInput): RoofModuleInput {
+  const input = build(node)
+  const twin = getRoofSegmentBackSlopeTwin(node)
+  if (!twin || input.type !== 'gable' || input.rh === 0) return input
+  const ridge = getGableRidge(node)
+  const back = build(twin)
+  const halfDepth = back.d / 2
+  // One level bottom under both eaves: the lower of the two sides' bases.
+  const baseY = Math.min(input.baseY, back.baseY)
+  const maxInset = (input.d / 2 + halfDepth) / 2 - 0.005
+  const squareCut = (inset: number | undefined, wh: number, tanTheta: number) =>
+    (inset ?? 0) > 0 ? Math.min(Math.max(0, (wh - baseY) * tanTheta), maxInset) : 0
+  return {
+    ...input,
+    baseY,
+    insets: { ...input.insets, iF: squareCut(input.insets.iF, input.wh, input.tanTheta) },
+    gableBack: {
+      halfDepth,
+      wh: back.wh,
+      tanTheta: back.tanTheta,
+      inset: squareCut(input.insets.iB, back.wh, back.tanTheta),
+      ...(ridge && ridge.step !== 0 ? { stepZ: ridge.ridgeZ } : {}),
+    },
+  }
 }

@@ -5,8 +5,10 @@ import {
   getDutchEndSlopeFaces,
   getDutchRoofShapeMetrics,
   getEffectiveNode,
+  getGableRidge,
   getRoofModuleFaces,
   getRoofPlanBounds,
+  getRoofSegmentBackSlopeTwin,
   getRoofSegmentSurfaceY,
   getRoofShapeInsets,
   getRoofShapeRatios,
@@ -17,24 +19,29 @@ import {
   normalizeRoofSegmentTrim,
   pointInPolygon2D,
   ROOF_SHAPE_DEFAULTS,
+  type RoofModuleInput,
   type RoofNode,
   type RoofPlanBounds,
   type RoofSegmentNode,
   type RoofType,
+  readGableRidgeStep,
   roofOverlapEntryOwns,
   roofPlanBoundsOverlap,
   sceneRegistry,
   unionPolygons,
   useLiveNodeOverrides,
   useScene,
+  withRoofSegmentGableBack,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
+import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
+import { runRoofClipFrame } from './roof-clip'
+import { ROOF_SLOT_ROLES } from './roof-materials'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -257,6 +264,7 @@ export const RoofSystem = () => {
   useLiveNodeOverrides((s) => s.overrides)
 
   useFrame(() => {
+    runRoofClipFrame()
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {
       pendingRoofUpdates.clear()
@@ -728,6 +736,7 @@ function updateMergedRoofGeometry(
         [dummyMats[1], 1],
         [dummyMats[2], 2],
         [dummyMats[3], 3],
+        [dummyMats[4], 4],
       ])
 
       for (const g of resultGeo.groups) {
@@ -827,7 +836,9 @@ export const roofCsgDummyMats: [
   THREE.MeshBasicMaterial,
   THREE.MeshBasicMaterial,
   THREE.MeshBasicMaterial,
+  THREE.MeshBasicMaterial,
 ] = [
+  new THREE.MeshBasicMaterial(),
   new THREE.MeshBasicMaterial(),
   new THREE.MeshBasicMaterial(),
   new THREE.MeshBasicMaterial(),
@@ -836,7 +847,18 @@ export const roofCsgDummyMats: [
 // Internal alias kept so the surrounding file's many call sites don't churn.
 const dummyMats = roofCsgDummyMats
 
-export const ROOF_MATERIAL_SLOT_COUNT = 4
+export const ROOF_MATERIAL_SLOT_COUNT = ROOF_SLOT_ROLES.length
+const ROOF_FASCIA_MATERIAL_INDEX = 1
+/** Metres the roof's own walls stop under its deck (see the 'wall' volume layer). */
+const ROOF_WALL_UNDER_DECK = 0.001
+const ROOF_SOFFIT_MATERIAL_INDEX = 4
+
+/** A deck or shingle face of a hand-built slab: covering on top, soffit beneath, fascia at the ends. */
+function roofSlabFaceSlot(normal: THREE.Vector3): number {
+  if (normal.y > SHINGLE_SURFACE_EPSILON) return 3
+  if (normal.y < -SHINGLE_SURFACE_EPSILON) return ROOF_SOFFIT_MATERIAL_INDEX
+  return ROOF_FASCIA_MATERIAL_INDEX
+}
 
 type RoofSegmentBrushSet = {
   deckSlab: Brush
@@ -1024,8 +1046,6 @@ function remapDutchRakeBoardMaterials(geometry: THREE.BufferGeometry) {
 }
 
 const SHINGLE_SURFACE_EPSILON = 0.02
-const RAKE_FACE_NORMAL_EPSILON = 0.3
-const RAKE_FACE_ALIGNMENT_EPSILON = 0.35
 const TRIM_CUT_EPSILON = 0.002
 const ROOF_EDGE_MATERIAL_INDEX = 0
 const ROOF_INSET_WALL_MATERIAL_INDEX = 2
@@ -1124,10 +1144,26 @@ function hasSegmentTrim(node: RoofSegmentNode): boolean {
 // slots. Accessories still clamp the slot via `useSegmentTrimClippedGeometry`
 // when they expose fewer material slots.
 const TRIM_CUT_MATERIAL_SLOT = 0
-function assignTrimCutterSlot(geometry: THREE.BufferGeometry): void {
+function assignTrimCutterSlot(
+  geometry: THREE.BufferGeometry,
+  slot: number = TRIM_CUT_MATERIAL_SLOT,
+): void {
   geometry.clearGroups()
   const count = geometry.index ? geometry.index.count : geometry.getAttribute('position').count
-  geometry.addGroup(0, count, TRIM_CUT_MATERIAL_SLOT)
+  geometry.addGroup(0, count, slot)
+}
+
+/** The same cutter, its faces in another slot: a cut through the deck and shingles shows their ends. */
+function withCutterSlot(cut: Brush, slot: number): Brush {
+  const geometry = cut.geometry.clone()
+  assignTrimCutterSlot(geometry, slot)
+  computeGeometryBoundsTree(geometry)
+  const brush = new Brush(geometry, dummyMats)
+  brush.position.copy(cut.position)
+  brush.quaternion.copy(cut.quaternion)
+  brush.scale.copy(cut.scale)
+  brush.updateMatrixWorld()
+  return brush
 }
 
 function buildTrimCutBrush(
@@ -1216,11 +1252,17 @@ function buildDiagonalTrimCutBrush(
 }
 
 function subtractCutFromSegmentBrushes(brushes: RoofSegmentBrushSet, cut: Brush) {
-  for (const key of ['shinSlab', 'deckSlab', 'wallBrush', 'innerBrush'] as const) {
-    const next = csgEvaluator.evaluate(brushes[key], cut, SUBTRACTION) as Brush
-    brushes[key].geometry.dispose()
-    prepareBrushForCSG(next)
-    brushes[key] = next
+  const slabCut = withCutterSlot(cut, ROOF_FASCIA_MATERIAL_INDEX)
+  try {
+    for (const key of ['shinSlab', 'deckSlab', 'wallBrush', 'innerBrush'] as const) {
+      const cutter = key === 'shinSlab' || key === 'deckSlab' ? slabCut : cut
+      const next = csgEvaluator.evaluate(brushes[key], cutter, SUBTRACTION) as Brush
+      brushes[key].geometry.dispose()
+      prepareBrushForCSG(next)
+      brushes[key] = next
+    }
+  } finally {
+    slabCut.geometry.dispose()
   }
 }
 
@@ -1255,7 +1297,13 @@ function buildSegmentTrimCutBrushes(segment: RoofSegmentNode): Brush[] {
   const minZ = -segment.depth / 2 - extra
   const maxZ = segment.depth / 2 + extra
   const minY = -2
-  const maxY = segment.wallHeight + activeRh + segment.deckThickness + segment.shingleThickness + 2
+  const maxY =
+    segment.wallHeight +
+    activeRh +
+    Math.max(0, readGableRidgeStep(segment)) +
+    segment.deckThickness +
+    segment.shingleThickness +
+    2
 
   const cuts: Brush[] = []
 
@@ -1325,6 +1373,604 @@ function buildSegmentTrimCutBrushes(segment: RoofSegmentNode): Brush[] {
   return cuts
 }
 
+type PlanPoint = [number, number]
+
+function planSignedArea(ring: readonly PlanPoint[]) {
+  let area = 0
+  for (let i = 0; i < ring.length; i++) {
+    const [x0, z0] = ring[i]!
+    const [x1, z1] = ring[(i + 1) % ring.length]!
+    area += x0 * z1 - x1 * z0
+  }
+  return area / 2
+}
+
+/** Part of a plan ring where `side(point) >= 0`. */
+function clipPlanRing(ring: readonly PlanPoint[], side: (point: PlanPoint) => number): PlanPoint[] {
+  const result: PlanPoint[] = []
+  for (let i = 0; i < ring.length; i++) {
+    const current = ring[i]!
+    const next = ring[(i + 1) % ring.length]!
+    const a = side(current)
+    const b = side(next)
+    if (a >= 0) result.push(current)
+    if (a >= 0 !== b >= 0) {
+      const t = a / (a - b)
+      result.push([
+        current[0] + (next[0] - current[0]) * t,
+        current[1] + (next[1] - current[1]) * t,
+      ])
+    }
+  }
+  return result
+}
+
+/**
+ * The parts of a plan ring on one side of the line z = `z0` (`side` +1: z > z0,
+ * −1: z < z0), each its own ring. A concave ring can fall apart into several.
+ */
+function splitPlanRingByLine(ring: readonly PlanPoint[], z0: number, side: 1 | -1): PlanPoint[][] {
+  const eps = 1e-9
+  const r = planSignedArea(ring) > 0 ? [...ring] : [...ring].reverse()
+  const inside = (p: PlanPoint) => side * (p[1] - z0) > eps
+  if (r.every(inside)) return [r]
+  const start = r.findIndex((p) => !inside(p))
+  if (start < 0) return [r]
+  const cross = (a: PlanPoint, b: PlanPoint): PlanPoint => {
+    const t = (z0 - a[1]) / (b[1] - a[1])
+    return [a[0] + (b[0] - a[0]) * t, z0]
+  }
+  // chains through the kept side, each from the line back to the line
+  const chains: PlanPoint[][] = []
+  let chain: PlanPoint[] | null = null
+  for (let k = 0; k < r.length; k++) {
+    const a = r[(start + k) % r.length]!
+    const b = r[(start + k + 1) % r.length]!
+    const ina = inside(a)
+    const inb = inside(b)
+    if (!ina && inb) chain = [cross(a, b), b]
+    else if (ina && inb) chain?.push(b)
+    else if (ina && !inb && chain) {
+      chain.push(cross(a, b))
+      chains.push(chain)
+      chain = null
+    }
+  }
+  // Along the line the boundary runs with the kept side on its left: toward
+  // +x for z > z0, −x for z < z0. Each chain's end joins the nearest start
+  // that way on.
+  const used = new Set<number>()
+  const rings: PlanPoint[][] = []
+  for (let first = 0; first < chains.length; first++) {
+    if (used.has(first)) continue
+    used.add(first)
+    const out: PlanPoint[] = [...chains[first]!]
+    for (let guard = 0; guard < chains.length; guard++) {
+      const endX = out[out.length - 1]![0]
+      let next = -1
+      let best = Number.POSITIVE_INFINITY
+      for (let c = 0; c < chains.length; c++) {
+        if (c !== first && used.has(c)) continue
+        const gap = side * (chains[c]![0]![0] - endX)
+        if (gap >= -1e-9 && gap < best) {
+          best = gap
+          next = c
+        }
+      }
+      if (next < 0 || next === first) break
+      used.add(next)
+      out.push(...chains[next]!)
+    }
+    if (out.length >= 3 && Math.abs(planSignedArea(out)) > 1e-9) rings.push(out)
+  }
+  return rings
+}
+
+/**
+ * A plan ring pushed outward (negative: inward) by `distance`, edges kept
+ * parallel. Repeated points (a pulled canopy edge can leave one) are dropped
+ * first: an edge of no length has no direction to push.
+ */
+export function offsetPlanRing(ring: readonly PlanPoint[], distance: number): PlanPoint[] {
+  const clean = ring.filter((point, i) => {
+    const next = ring[(i + 1) % ring.length]!
+    return Math.hypot(next[0] - point[0], next[1] - point[1]) > 1e-9
+  })
+  if (clean.length < 3) return [...ring]
+  if (distance > 0 && isAxisRing(clean)) return growAxisRing(clean, distance)
+  const ccw = planSignedArea(clean) > 0
+  const count = clean.length
+  const lines = clean.map((point, i) => {
+    const next = clean[(i + 1) % count]!
+    const dx = next[0] - point[0]
+    const dz = next[1] - point[1]
+    const length = Math.hypot(dx, dz)
+    // Outward normal: right of the direction for a counter-clockwise (x, z) ring.
+    const nx = (ccw ? dz : -dz) / length
+    const nz = (ccw ? -dx : dx) / length
+    return { x: point[0] + nx * distance, z: point[1] + nz * distance, dx, dz }
+  })
+  return clean.map((point, i): PlanPoint => {
+    const a = lines[(i - 1 + count) % count]!
+    const b = lines[i]!
+    const denominator = a.dx * b.dz - a.dz * b.dx
+    if (Math.abs(denominator) < 1e-12) return [b.x, b.z]
+    const t = ((b.x - a.x) * b.dz - (b.z - a.z) * b.dx) / denominator
+    return [a.x + a.dx * t, a.z + a.dz * t]
+  })
+}
+
+/** Whether every edge of a ring runs along x or along z. */
+function isAxisRing(ring: readonly PlanPoint[]): boolean {
+  return ring.every((point, i) => {
+    const next = ring[(i + 1) % ring.length]!
+    return Math.abs(next[0] - point[0]) < 1e-9 || Math.abs(next[1] - point[1]) < 1e-9
+  })
+}
+
+/**
+ * An axis-aligned ring grown outward by `distance`, as the edge-by-edge push
+ * would grow it, but sound where that push folds over: a notch or a slot
+ * narrower than twice the distance closes instead of turning inside out.
+ * The grown ring is everything within `distance` of the ring along x and z
+ * (its mitred corners are square), worked out on the grid of the pushed
+ * coordinates; a courtyard it would leave is filled.
+ */
+function growAxisRing(ring: readonly PlanPoint[], distance: number): PlanPoint[] {
+  const unique = (values: number[]) =>
+    [...new Set(values.map((v) => Math.round(v * 1e9) / 1e9))].sort((a, b) => a - b)
+  const xs = unique(ring.flatMap(([x]) => [x - distance, x + distance]))
+  const zs = unique(ring.flatMap(([, z]) => [z - distance, z + distance]))
+  const inside = (x: number, z: number) => {
+    let hit = false
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, zi] = ring[i]!
+      const [xj, zj] = ring[j]!
+      if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) hit = !hit
+    }
+    return hit
+  }
+  // a cell is covered when the square of half-size `distance` about its
+  // centre meets the ring's area: the centre is inside, or an edge crosses it
+  const near = (x: number, z: number) => {
+    if (inside(x, z)) return true
+    const d = distance - 1e-9
+    for (let i = 0; i < ring.length; i++) {
+      const [ax, az] = ring[i]!
+      const [bx, bz] = ring[(i + 1) % ring.length]!
+      if (
+        Math.max(ax, bx) >= x - d &&
+        Math.min(ax, bx) <= x + d &&
+        Math.max(az, bz) >= z - d &&
+        Math.min(az, bz) <= z + d
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+  const nx = xs.length - 1
+  const nz = zs.length - 1
+  const covered: boolean[] = []
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      covered.push(near((xs[i]! + xs[i + 1]!) / 2, (zs[j]! + zs[j + 1]!) / 2))
+    }
+  }
+  const at = (i: number, j: number) => i >= 0 && j >= 0 && i < nx && j < nz && covered[j * nx + i]!
+  // the boundary as directed edges between grid nodes, the covered cells on
+  // their left (x right, z down: counter-clockwise in the plan's signed area)
+  const next = new Map<string, [number, number][]>()
+  const key = (i: number, j: number) => `${i},${j}`
+  const link = (a: [number, number], b: [number, number]) => {
+    const list = next.get(key(...a)) ?? []
+    list.push(b)
+    next.set(key(...a), list)
+  }
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      if (!at(i, j)) continue
+      if (!at(i, j - 1)) link([i, j], [i + 1, j])
+      if (!at(i + 1, j)) link([i + 1, j], [i + 1, j + 1])
+      if (!at(i, j + 1)) link([i + 1, j + 1], [i, j + 1])
+      if (!at(i - 1, j)) link([i, j + 1], [i, j])
+    }
+  }
+  // chain the loops; the outer one encloses the most
+  let best: PlanPoint[] = []
+  let bestArea = 0
+  for (const start of [...next.keys()]) {
+    while ((next.get(start)?.length ?? 0) > 0) {
+      const loop: [number, number][] = []
+      let current = start.split(',').map(Number) as [number, number]
+      let previous: [number, number] | null = null
+      do {
+        loop.push(current)
+        const options = next.get(key(...current))!
+        // at a node where two corners touch, turn the tightest way
+        let pick = 0
+        if (options.length > 1 && previous) {
+          const dx = current[0] - previous[0]
+          const dz = current[1] - previous[1]
+          pick = options.findIndex(([a, b]) => dx * (b - current[1]) - dz * (a - current[0]) > 0)
+          if (pick < 0) pick = 0
+        }
+        const [following] = options.splice(pick, 1)
+        previous = current
+        current = following!
+      } while (key(...current) !== key(...loop[0]!) && loop.length <= covered.length * 4)
+      const points = loop.map(([i, j]): PlanPoint => [xs[i]!, zs[j]!])
+      const area = Math.abs(planSignedArea(points))
+      if (area > bestArea) {
+        bestArea = area
+        best = points
+      }
+    }
+  }
+  // straight runs as one edge
+  const corners = best.filter((point, i) => {
+    const a = best[(i - 1 + best.length) % best.length]!
+    const b = best[(i + 1) % best.length]!
+    return (
+      Math.abs((point[0] - a[0]) * (b[1] - point[1]) - (point[1] - a[1]) * (b[0] - point[0])) >
+      1e-12
+    )
+  })
+  // the ring's own winding
+  return planSignedArea(corners) > 0 === planSignedArea(ring) > 0 ? corners : corners.reverse()
+}
+
+function readSegmentFootprint(segment: RoofSegmentNode): PlanPoint[] | null {
+  return readPlanRing(segment.footprint)
+}
+
+/** What the covering reaches: the canopy outline if pulled out, else the walls' outline. */
+function readSegmentCover(segment: RoofSegmentNode): PlanPoint[] | null {
+  return readPlanRing(segment.coverFootprint) ?? readSegmentFootprint(segment)
+}
+
+function readPlanRing(footprint: RoofSegmentNode['footprint']): PlanPoint[] | null {
+  if (!Array.isArray(footprint) || footprint.length < 3) return null
+  const points = footprint.filter(
+    (point): point is PlanPoint =>
+      Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]),
+  )
+  return points.length === footprint.length && Math.abs(planSignedArea(points)) > 1e-6
+    ? points
+    : null
+}
+
+/** Vertical prism over a plan ring, segment-local, tall enough for the whole segment. */
+function buildFootprintPrismBrush(
+  ring: readonly PlanPoint[],
+  minY: number,
+  maxY: number,
+  shear?: THREE.Matrix4,
+  slot: number = TRIM_CUT_MATERIAL_SLOT,
+): Brush {
+  const shape = new THREE.Shape()
+  shape.moveTo(ring[0]![0], -ring[0]![1])
+  for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i]![0], -ring[i]![1])
+  shape.closePath()
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: maxY - minY, bevelEnabled: false })
+  geometry.rotateX(-Math.PI / 2)
+  geometry.translate(0, minY, 0)
+  if (shear) {
+    geometry.applyMatrix4(shear)
+    geometry.computeVertexNormals()
+  }
+  assignTrimCutterSlot(geometry, slot)
+  ensureRenderableGeometryAttributes(geometry)
+  computeGeometryBoundsTree(geometry)
+  const brush = new Brush(geometry, dummyMats)
+  brush.updateMatrixWorld()
+  return brush
+}
+
+/** Square eaves (see cutSlabsSquare): on, and a sloped roof that is not a cone. */
+function hasSquareEaves(node: RoofSegmentNode): boolean {
+  return (
+    node.squareEaves === true &&
+    node.roofType !== 'conical' &&
+    getSegmentSlopeFrame(node).activeRh > 0
+  )
+}
+
+/** Whether either eave of the segment is set below its plate (y = 0). */
+function hasEaveBelowPlate(node: RoofSegmentNode): boolean {
+  const ridge = getGableRidge(node)
+  return ridge ? Math.min(ridge.frontWallHeight, ridge.backWallHeight) < 0 : node.wallHeight < 0
+}
+
+/** The outer face of the walls a segment stands on: its outline, else its rectangle. */
+function segmentWallOutline(node: RoofSegmentNode): PlanPoint[] {
+  const footprint = readSegmentFootprint(node)
+  if (footprint) return footprint
+  const x = node.width / 2 + node.wallThickness / 2
+  const z = node.depth / 2 + node.wallThickness / 2
+  return [
+    [-x, -z],
+    [x, -z],
+    [x, z],
+    [-x, z],
+  ]
+}
+
+/**
+ * With an eave below the plate, the roof's own walls end at the plate — below
+ * it they would only double the walls of the floor. With `cutAtWallTop` the
+ * deck and shingles under the plate inside the walls go too; otherwise they
+ * stay (a ceiling that follows the slope). Beyond the walls the eave
+ * overhangs as built.
+ */
+function clipSegmentBrushesBelowPlate(brushes: RoofSegmentBrushSet, node: RoofSegmentNode) {
+  if (!hasEaveBelowPlate(node)) return
+  const slabs = node.cutAtWallTop === true
+  const depthBelow = 50
+  const outline = segmentWallOutline(node)
+  const reach = Math.max(node.width, node.depth) + 50
+  const box: PlanPoint[] = [
+    [-reach, -reach],
+    [reach, -reach],
+    [reach, reach],
+    [-reach, reach],
+  ]
+  const cuts: Array<
+    [keyof Pick<RoofSegmentBrushSet, 'shinSlab' | 'deckSlab' | 'wallBrush' | 'innerBrush'>, boolean]
+  > = [
+    ['wallBrush', true],
+    ['innerBrush', true],
+  ]
+  if (slabs) cuts.push(['shinSlab', false], ['deckSlab', false])
+  for (const [key, everywhere] of cuts) {
+    const cutter = buildFootprintPrismBrush(
+      everywhere ? box : outline,
+      -depthBelow,
+      0,
+      undefined,
+      everywhere ? TRIM_CUT_MATERIAL_SLOT : ROOF_SOFFIT_MATERIAL_INDEX,
+    )
+    try {
+      const next = csgEvaluator.evaluate(brushes[key], cutter, SUBTRACTION) as Brush
+      brushes[key].geometry.dispose()
+      prepareBrushForCSG(next)
+      brushes[key] = next
+    } catch (e) {
+      console.error('Roof below-plate CSG failed:', e)
+    } finally {
+      cutter.geometry.dispose()
+    }
+  }
+}
+
+/**
+ * Cuts a segment to its outline: shingles and deck to the outline pushed out
+ * by the eave extension, the wall shell between the outline and the outline
+ * pulled in by the wall thickness — the roof's own walls (gables) stand
+ * flush with the outer face of the walls below.
+ */
+function clipSegmentBrushesToFootprint(
+  brushes: RoofSegmentBrushSet,
+  segment: RoofSegmentNode,
+  { slabs = true }: { slabs?: boolean } = {},
+) {
+  const footprint = readSegmentFootprint(segment)
+  const cover = readSegmentCover(segment)
+  if (!(footprint || cover)) return
+  const { activeRh, cosTheta } = getSegmentSlopeFrame(segment)
+  const minY = -10
+  const maxY =
+    segment.wallHeight +
+    activeRh +
+    Math.max(0, readGableRidgeStep(segment)) +
+    segment.deckThickness +
+    segment.shingleThickness +
+    10
+  const half = segment.wallThickness / 2
+  // The outline is the outer face of the walls: the covering overhangs it by
+  // the overhang alone, and with none it ends flush with that face.
+  const roofExtension = segment.overhang * cosTheta + TRIM_CUT_EPSILON
+  const clips: Array<
+    [
+      keyof Pick<RoofSegmentBrushSet, 'shinSlab' | 'deckSlab' | 'wallBrush' | 'innerBrush'>,
+      readonly PlanPoint[],
+      number,
+    ]
+  > = []
+  // The walls' outline is the outer face of the walls below: the gable stands
+  // inside it, flush with that face. Over a canopy the roof has no walls.
+  if (footprint) clips.push(['wallBrush', footprint, 0], ['innerBrush', footprint, -2 * half])
+  // The covering follows what it covers: plumb here, or square to each slope
+  // (square eaves, cutSlabsSquare).
+  if (cover && slabs && !hasSquareEaves(segment)) {
+    clips.push(['shinSlab', cover, roofExtension], ['deckSlab', cover, roofExtension])
+  }
+  for (const [key, ring, distance] of clips) {
+    const slab = key === 'shinSlab' || key === 'deckSlab'
+    const prism = buildFootprintPrismBrush(
+      offsetPlanRing(ring, distance),
+      minY,
+      maxY,
+      undefined,
+      slab ? ROOF_FASCIA_MATERIAL_INDEX : TRIM_CUT_MATERIAL_SLOT,
+    )
+    try {
+      const next = csgEvaluator.evaluate(brushes[key], prism, INTERSECTION) as Brush
+      brushes[key].geometry.dispose()
+      prepareBrushForCSG(next)
+      brushes[key] = next
+    } catch (e) {
+      console.error('Roof footprint CSG failed:', e)
+    } finally {
+      prism.geometry.dispose()
+    }
+  }
+}
+
+/** Outward normal of a module face (counter-clockwise seen from outside), or null if degenerate. */
+function faceNormal(face: readonly { x: number; y: number; z: number }[]): THREE.Vector3 | null {
+  const normal = new THREE.Vector3()
+  for (let index = 0; index < face.length; index++) {
+    const current = face[index]!
+    const next = face[(index + 1) % face.length]!
+    normal.x += (current.y - next.y) * (current.z + next.z)
+    normal.y += (current.z - next.z) * (current.x + next.x)
+    normal.z += (current.x - next.x) * (current.y + next.y)
+  }
+  return normal.length() > 1e-9 ? normal.normalize() : null
+}
+
+/**
+ * Square eaves: cuts the deck and shingles square to each slope, the way
+ * boards are cut, without moving how far the roof reaches. Over every slope
+ * the outline (pushed out by the overhang) is swept plumb, and along the
+ * slope's normal twice — held at the roof's outer face and held at the
+ * soffit — and what falls outside any sweep goes. So every edge keeps its farthest point on
+ * the overhang line: an eave its outer face (the soffit draws back), a high
+ * edge its soffit (the face draws back); an edge along the fall line stays
+ * plumb, which is square to the slope as well.
+ */
+function cutSlabsSquare(
+  slabs: Pick<RoofSegmentBrushSet, 'deckSlab' | 'shinSlab'>,
+  segment: RoofSegmentNode,
+  rings: readonly (readonly PlanPoint[])[],
+  faces: readonly (readonly { x: number; y: number; z: number }[])[],
+) {
+  const far = 50
+  const thickness = segment.deckThickness + segment.shingleThickness
+  // Where the square cut holds the outer face: on the overhang line, but no
+  // nearer than the covering's lean, so the soffit never draws back inside
+  // the wall the roof rests on. The plumb cut below still stops everything on
+  // the overhang line: with little or no overhang the end comes out plumb.
+  const outerReach = (normal: THREE.Vector3) =>
+    Math.max(segment.overhang * normal.y, thickness * Math.sqrt(Math.max(0, 1 - normal.y ** 2)))
+  // Plumb on the overhang line first — nothing reaches farther than with plumb
+  // eaves (the gentlest slope's overhang across the plan is the widest).
+  let widest = 0
+  for (const face of faces) {
+    const n = faceNormal(face)
+    if (n && n.y >= 0.05) widest = Math.max(widest, segment.overhang * n.y)
+  }
+  let plumb: Brush | null = null
+  for (const ring of rings) {
+    const prism = buildFootprintPrismBrush(
+      offsetPlanRing(ring, widest + TRIM_CUT_EPSILON),
+      -far,
+      far,
+      undefined,
+      ROOF_FASCIA_MATERIAL_INDEX,
+    )
+    if (plumb) {
+      const merged = csgEvaluator.evaluate(plumb, prism, ADDITION) as Brush
+      prepareBrushForCSG(merged)
+      plumb.geometry.dispose()
+      prism.geometry.dispose()
+      plumb = merged
+    } else plumb = prism
+  }
+  if (plumb) {
+    for (const key of ['shinSlab', 'deckSlab'] as const) {
+      const next = csgEvaluator.evaluate(slabs[key], plumb, INTERSECTION) as Brush
+      slabs[key].geometry.dispose()
+      prepareBrushForCSG(next)
+      slabs[key] = next
+    }
+    plumb.geometry.dispose()
+  }
+  for (const face of faces) {
+    const points = face.map((point) => new THREE.Vector3(point.x, point.y, point.z))
+    const normal = faceNormal(face)
+    if (!normal) continue
+    // only the slopes; the module's walls and bottom face sideways or down
+    if (normal.y < 0.05) continue
+    const plan = points.map((point): PlanPoint => [point.x, point.z])
+    if (Math.abs(planSignedArea(plan)) < 1e-6) continue
+    // the overhang across the plan at this slope's pitch: the soffit's line
+    // (a high edge keeps its soffit there), and the outer face's
+    const reach = segment.overhang * normal.y + TRIM_CUT_EPSILON
+    const outer = outerReach(normal) + TRIM_CUT_EPSILON
+    const a = normal.x / normal.y
+    const b = normal.z / normal.y
+    // a hair over the slope's own plan, so neighbouring cutters overlap
+    const region = buildFootprintPrismBrush(offsetPlanRing(plan, 0.001), -far, far)
+    try {
+      // The kept region: swept along the normal held at the outer face and at
+      // the soffit. The two simple sweeps meet first; the slabs are cut once.
+      const shearAt = (lift: number) => {
+        const anchor = points[0]!.clone().addScaledVector(normal, lift)
+        const k = normal.dot(anchor) / normal.y
+        return new THREE.Matrix4().set(
+          1 + a * a,
+          a,
+          a * b,
+          -a * k,
+          0,
+          1,
+          0,
+          0,
+          a * b,
+          b,
+          1 + b * b,
+          -b * k,
+          0,
+          0,
+          0,
+          1,
+        )
+      }
+      // held at the outer face on its line, and at the soffit on the overhang line
+      const sweeps: Array<[THREE.Matrix4, number]> = [
+        [shearAt(0), outer],
+        [shearAt(-thickness), reach],
+      ]
+      let sweep: Brush | null = null
+      for (const ring of rings) {
+        let kept: Brush | null = null
+        for (const [shear, distance] of sweeps) {
+          const prism = buildFootprintPrismBrush(
+            offsetPlanRing(ring, distance),
+            -far,
+            far,
+            shear,
+            ROOF_FASCIA_MATERIAL_INDEX,
+          )
+          if (kept) {
+            const met = csgEvaluator.evaluate(kept, prism, INTERSECTION) as Brush
+            prepareBrushForCSG(met)
+            kept.geometry.dispose()
+            prism.geometry.dispose()
+            kept = met
+          } else kept = prism
+        }
+        if (!kept) continue
+        if (sweep) {
+          const merged = csgEvaluator.evaluate(sweep, kept, ADDITION) as Brush
+          prepareBrushForCSG(merged)
+          sweep.geometry.dispose()
+          kept.geometry.dispose()
+          sweep = merged
+        } else sweep = kept
+      }
+      if (sweep) {
+        const cutter = csgEvaluator.evaluate(region, sweep, SUBTRACTION) as Brush
+        prepareBrushForCSG(cutter)
+        sweep.geometry.dispose()
+        for (const key of ['shinSlab', 'deckSlab'] as const) {
+          const next = csgEvaluator.evaluate(slabs[key], cutter, SUBTRACTION) as Brush
+          slabs[key].geometry.dispose()
+          prepareBrushForCSG(next)
+          slabs[key] = next
+        }
+        cutter.geometry.dispose()
+      }
+    } catch (e) {
+      console.error('Roof square eaves CSG failed:', e)
+    } finally {
+      region.geometry.dispose()
+    }
+  }
+}
+
 function subtractSegmentTrimCuts(brushes: RoofSegmentBrushSet, segment: RoofSegmentNode) {
   const cuts = buildSegmentTrimCutBrushes(segment)
   for (const cut of cuts) {
@@ -1390,7 +2036,7 @@ const FASCIA_EMBED = 0.002
  * leaves it alone: the remap would send a plumb eave board to the wall band
  * and its top edge to the shingles.
  */
-const FASCIA_MATERIAL_INDEX = 2
+const FASCIA_MATERIAL_INDEX = ROOF_FASCIA_MATERIAL_INDEX
 
 /**
  * The fascia and rake boards a segment wears, in its own frame: a plumb 1x8
@@ -1400,17 +2046,40 @@ const FASCIA_MATERIAL_INDEX = 2
  * trims, cuts and sibling roofs clip them like the deck. Gable, hip, shed
  * and flat; null for the other forms.
  */
+type DeckEave = {
+  /** Outward reach of the deck past the footprint. */
+  deckExt: number
+  /** Height of the deck's top edge at an eave. */
+  eaveTopY: number
+  tanTheta: number
+}
+
+/** The deck's eave at the segment's own pitch, as `getRoofSegmentVolumeFaces` builds the deck. */
+function getDeckEave(node: RoofSegmentNode): DeckEave {
+  const { activeRh, tanTheta, cosTheta } = getSegmentSlopeFrame(node)
+  const deckExt = node.wallThickness / 2 + node.overhang * cosTheta
+  const verticalRt = activeRh > 0 ? node.deckThickness / cosTheta : node.deckThickness
+  const drop = deckExt * tanTheta
+  const eaveTopY =
+    drop > 0
+      ? node.wallHeight - drop + verticalRt
+      : Math.max(0.05, node.wallHeight - drop + verticalRt)
+  return { deckExt, eaveTopY, tanTheta }
+}
+
 function buildFasciaBoards(
   node: RoofSegmentNode,
-  deckExt: number,
-  eaveTopY: number,
-  tanTheta: number,
+  front: DeckEave,
+  back: DeckEave,
 ): THREE.BufferGeometry | null {
   const { roofType, width, depth } = node
+  const { deckExt, eaveTopY, tanTheta } = front
   const { thickness: bt, height: bh } = FASCIA_BOARD
   const out = bt / 2 - FASCIA_EMBED
+  // the eave boards stand on the deck's edge
   const halfD = depth / 2 + deckExt
   const zE = halfD + out
+  // a gable's rake is no eave; a hip's and a flat roof's sides are
   const xE = width / 2 + deckExt + out
   // the eave boards run through the corners to the rake / side boards'
   // outer faces (a lapped return, no notch at the corner)
@@ -1456,12 +2125,38 @@ function buildFasciaBoards(
   }
 
   if (roofType === 'gable') {
-    const ridgeY = eaveTopY + halfD * tanTheta
+    // −z eave at the back slope's own pitch; the ridge where the slopes meet
+    const backHalfD = depth / 2 + back.deckExt
+    const backZE = backHalfD + out
+    // a stepped ridge: each rake up to the step line at its own slope's height
+    const step = getGableRidge(node)
+    const ridgeZ =
+      step && step.step !== 0
+        ? step.ridgeZ
+        : (eaveTopY + halfD * tanTheta - back.eaveTopY - backHalfD * back.tanTheta) /
+          (tanTheta + back.tanTheta || 1)
+    const frontTop = (z: number) => eaveTopY + (halfD - z) * tanTheta
+    const backTop = (z: number) => back.eaveTopY + (backHalfD + z) * back.tanTheta
+    // Over a step the higher slope runs on past the step line by the overhang
+    // (see buildSteppedGableSlabs): its rake boards go on to that end, and the
+    // end wears a board like an eave.
+    let frontEnd = ridgeZ
+    let backEnd = ridgeZ
+    if (step && step.step !== 0) {
+      const higherBack = step.step > 0
+      const toward = higherBack ? 1 : -1
+      const pitch = ((higherBack ? step.backPitch : step.frontPitch) * Math.PI) / 180
+      const edgeZ = ridgeZ + toward * node.overhang * Math.cos(pitch)
+      const edgeY = higherBack ? backTop(edgeZ) : frontTop(edgeZ)
+      if (higherBack) backEnd = edgeZ
+      else frontEnd = edgeZ
+      board([-xL, edgeY, edgeZ + toward * out], [xL, edgeY, edgeZ + toward * out], [0, 1])
+    }
     board([-xL, eaveTopY, zE], [xL, eaveTopY, zE], [0, 1])
-    board([-xL, eaveTopY, -zE], [xL, eaveTopY, -zE], [0, 1])
+    board([-xL, back.eaveTopY, -backZE], [xL, back.eaveTopY, -backZE], [0, 1])
     for (const sx of [-1, 1]) {
-      board([sx * xE, eaveTopY, zE], [sx * xE, ridgeY, 0], [1, 0])
-      board([sx * xE, ridgeY, 0], [sx * xE, eaveTopY, -zE], [1, 0])
+      board([sx * xE, eaveTopY, zE], [sx * xE, frontTop(frontEnd), frontEnd], [1, 0])
+      board([sx * xE, backTop(backEnd), backEnd], [sx * xE, back.eaveTopY, -backZE], [1, 0])
     }
   } else if (roofType === 'hip' || roofType === 'flat') {
     for (const sz of [-1, 1]) board([-xL, eaveTopY, sz * zE], [xL, eaveTopY, sz * zE], [0, 1])
@@ -1469,11 +2164,13 @@ function buildFasciaBoards(
     for (const sx of [-1, 1])
       board([sx * xE, eaveTopY, -zE + bt / 2], [sx * xE, eaveTopY, zE - bt / 2], [1, 0])
   } else if (roofType === 'shed') {
-    // the low eave at +z, the slope rising to −z
-    const highY = eaveTopY + 2 * halfD * tanTheta
+    // the low eave at +z, the slope rising to −z; the high edge is no eave
+    const highHalfD = depth / 2 + deckExt
+    const highZ = highHalfD + out
+    const highY = eaveTopY + (halfD + highHalfD) * tanTheta
     board([-xL, eaveTopY, zE], [xL, eaveTopY, zE], [0, 1])
-    if (node.fasciaHighEdge ?? true) board([-xL, highY, -zE], [xL, highY, -zE], [0, 1])
-    for (const sx of [-1, 1]) board([sx * xE, eaveTopY, zE], [sx * xE, highY, -zE], [1, 0])
+    if (node.fasciaHighEdge ?? true) board([-xL, highY, -highZ], [xL, highY, -highZ], [0, 1])
+    for (const sx of [-1, 1]) board([sx * xE, eaveTopY, zE], [sx * xE, highY, -highZ], [1, 0])
   } else return null
   return createGeometryFromFaces(faces, FASCIA_MATERIAL_INDEX)
 }
@@ -1495,10 +2192,324 @@ function wearsFascia(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
  * `fascia`: build the segment's fascia boards into its deck. Only the roof
  * renderer asks; a dormer, a chimney or a sibling's clip takes the bare shell.
  */
-export function getRoofSegmentBrushes(
+/**
+ * The prisms a segment is built from: its wall shell (`wall`), the shell's
+ * hollow (`inner`), and the deck slab's top and bottom (`deck-top`,
+ * `deck-bottom`).
+ */
+type RoofSegmentVolumeLayer = 'wall' | 'inner' | 'deck-top' | 'deck-bottom'
+
+type RoofSegmentVolumeOptions = {
+  /** Outward extension of the footprint on every side. */
+  wExt: number
+  /** Vertical lift of the whole volume (the deck top rides `verticalRt` above the deck bottom). */
+  vOffset: number
+  baseY: number
+  /** A void volume (the deck bottom) uses the deck-inset dutch waist. */
+  isVoid: boolean
+  /** A plate-seated wall shell keeps its floored eave; see `getRoofSegmentBrushes`. */
+  onPlate: boolean
+}
+
+/** The overhang and slab lift of a layer follow the pitch, so they are worked out per pitch. */
+function getRoofSegmentVolumeOptions(
   node: RoofSegmentNode,
-  options: { fascia?: boolean } = {},
-): RoofSegmentBrushSet | null {
+  layer: RoofSegmentVolumeLayer,
+): RoofSegmentVolumeOptions {
+  const { activeRh, cosTheta } = getSegmentSlopeFrame(node)
+  const deckExt = node.wallThickness / 2 + node.overhang * cosTheta
+  switch (layer) {
+    case 'wall':
+      // a hair under the deck: their union then shares no face, which the CSG
+      // otherwise answers with slivers torn out of the soffit
+      return {
+        wExt: node.wallThickness / 2,
+        vOffset: -ROOF_WALL_UNDER_DECK,
+        baseY: 0,
+        isVoid: false,
+        onPlate: true,
+      }
+    case 'inner':
+      return { wExt: -node.wallThickness / 2, vOffset: 0, baseY: -5, isVoid: false, onPlate: true }
+    case 'deck-top':
+      return {
+        wExt: deckExt,
+        vOffset: activeRh > 0 ? node.deckThickness / cosTheta : node.deckThickness,
+        baseY: 0,
+        isVoid: false,
+        onPlate: false,
+      }
+    case 'deck-bottom':
+      return { wExt: deckExt, vOffset: 0, baseY: -5, isVoid: true, onPlate: false }
+  }
+}
+
+/**
+ * Faces of one roof-segment prism in segment-local space. Single source for
+ * the brush builder and for consumers that need the roof planes as data
+ * (walls fitted to the roof underside).
+ */
+export function getRoofSegmentVolumeFaces(
+  node: RoofSegmentNode,
+  layer: RoofSegmentVolumeLayer,
+): THREE.Vector3[][] {
+  const input = withRoofSegmentGableBack(node, (pitched) =>
+    getRoofSegmentVolumeModule(pitched, layer),
+  )
+  // A stepped ridge's wall: the hollow's step stands a wall thickness into the
+  // higher side, so the shell keeps a wall there from the lower slope up.
+  const stepZ = input.gableBack?.stepZ
+  if (layer === 'inner' && stepZ !== undefined && input.gableBack) {
+    const higherBack = readGableRidgeStep(node) > 0
+    input.gableBack = {
+      ...input.gableBack,
+      stepZ: stepZ + (higherBack ? -1 : 1) * node.wallThickness,
+    }
+  }
+  return getRoofModuleFaces(input).map((face) =>
+    face.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
+  )
+}
+
+function getRoofSegmentVolumeModule(
+  node: RoofSegmentNode,
+  layer: RoofSegmentVolumeLayer,
+): RoofModuleInput {
+  const { roofType, width, depth, wallHeight, deckThickness } = node
+  const { wExt, vOffset, baseY, isVoid, onPlate } = getRoofSegmentVolumeOptions(node, layer)
+  const conicalCoverage = getConicalRoofCoverage(node)
+  const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
+  const shapeRatios = getRoofShapeRatios({
+    gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
+    mansardSteepWidthRatio: node.mansardSteepWidthRatio,
+    dutchHipWidthRatio: node.dutchHipWidthRatio,
+    dutchHipHeightRatio: node.dutchHipHeightRatio,
+    dutchWaistLengthRatio: node.dutchWaistLengthRatio,
+    dutchGabletRake: node.dutchGabletRake,
+  })
+  // Gablet inset must track dutchHipWidthRatio so the 3D waist matches both
+  // the 2D floorplan and the slope frame (which derives activeRh from the
+  // same ratio). A hardcoded 0.25 desyncs the gablet from the parameter.
+  const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
+
+  const wV = Math.max(0.01, width + 2 * wExt)
+  const dV = Math.max(0.01, depth + 2 * wExt)
+
+  const autoDrop = wExt * tanTheta
+  // Floor every prism at 5 cm so CSG never sees a degenerate volume — by
+  // raising the top, never by sinking the base (the base is the wall top).
+  // One floor for all volumes keeps each cutter level with the shell it carves.
+  // The sloped deck volumes are the exception: when their eave hangs below
+  // that floor (a low wall under a long overhang), raising it would lift the
+  // roof off its walls and a base at the plate would slice the overhang flat,
+  // so their base sinks instead. An eave set below the plate (a gable's attic
+  // wall below zero) sinks every volume; the brush builder then cuts away
+  // what falls below the plate inside the walls.
+  const eaveY = wallHeight - autoDrop + vOffset
+  const sinkBase = wallHeight < 0 || (!onPlate && autoDrop !== 0 && eaveY < 0.05)
+  const whV = sinkBase ? eaveY : Math.max(0.05, eaveY)
+
+  let rhV = activeRh
+  if (activeRh > 0) {
+    rhV = activeRh + autoDrop
+    if (roofType === 'shed') rhV = activeRh + 2 * autoDrop
+  }
+
+  // A sunk deck top reaches below the deck's own bottom edge (`vOffset` lower),
+  // so the slab keeps its full eave instead of a flat cut.
+  const safeBaseY = sinkBase ? Math.min(baseY, whV - vOffset - 0.05) : baseY
+
+  let structuralI = baseI
+  if (isVoid) {
+    structuralI += deckThickness
+  }
+
+  return {
+    type: roofType,
+    w: wV,
+    d: dV,
+    wh: whV,
+    rh: rhV,
+    baseY: safeBaseY,
+    insets: { dutchI: structuralI },
+    baseW: width,
+    baseD: depth,
+    tanTheta,
+    shapeRatios,
+    dutchTopRakeThickness: node.dutchTopRakeThickness,
+    conicalStartAngle: conicalCoverage.startAngle,
+    conicalSweepAngle: conicalCoverage.sweepAngle,
+  }
+}
+
+/**
+ * Keeps the part of a planar polygon where `side(point) >= 0`. The roof faces
+ * are planar, so a straight plan cut interpolates their height exactly.
+ */
+function clipPlanarPolygon(
+  polygon: THREE.Vector3[],
+  side: (point: THREE.Vector3) => number,
+): THREE.Vector3[] {
+  const result: THREE.Vector3[] = []
+  for (let index = 0; index < polygon.length; index++) {
+    const current = polygon[index]!
+    const next = polygon[(index + 1) % polygon.length]!
+    const currentSide = side(current)
+    const nextSide = side(next)
+    if (currentSide >= 0) result.push(current)
+    if (currentSide >= 0 !== nextSide >= 0) {
+      result.push(current.clone().lerp(next, currentSide / (currentSide - nextSide)))
+    }
+  }
+  return result
+}
+
+function getSegmentTrimHalfPlanes(
+  segment: RoofSegmentNode,
+): Array<(point: THREE.Vector3) => number> {
+  const trim = normalizeRoofSegmentTrim(segment)
+  const leftX = -segment.width / 2 + trim.left
+  const rightX = segment.width / 2 - trim.right
+  const frontZ = segment.depth / 2 - trim.front
+  const backZ = -segment.depth / 2 + trim.back
+  const planes: Array<(point: THREE.Vector3) => number> = []
+  if (trim.left > 0) planes.push((point) => point.x - leftX)
+  if (trim.right > 0) planes.push((point) => rightX - point.x)
+  if (trim.front > 0) planes.push((point) => frontZ - point.z)
+  if (trim.back > 0) planes.push((point) => point.z - backZ)
+  // The same corner lines as `buildSegmentTrimCutBrushes`, kept on the side
+  // away from the trimmed corner.
+  const diagonal = (a: TrimPlanPoint, b: TrimPlanPoint, outside: TrimPlanPoint) => {
+    const cross = (x: number, z: number) => (b[0] - a[0]) * (z - a[1]) - (b[1] - a[1]) * (x - a[0])
+    const outsideSign = Math.sign(cross(outside[0], outside[1])) || 1
+    planes.push((point) => -outsideSign * cross(point.x, point.z))
+  }
+  if (trim.frontLeftX > 0 && trim.frontLeftZ > 0) {
+    diagonal([leftX + trim.frontLeftX, frontZ], [leftX, frontZ - trim.frontLeftZ], [-1e6, 1e6])
+  }
+  if (trim.frontRightX > 0 && trim.frontRightZ > 0) {
+    diagonal([rightX, frontZ - trim.frontRightZ], [rightX - trim.frontRightX, frontZ], [1e6, 1e6])
+  }
+  if (trim.backLeftX > 0 && trim.backLeftZ > 0) {
+    diagonal([leftX, backZ + trim.backLeftZ], [leftX + trim.backLeftX, backZ], [-1e6, -1e6])
+  }
+  if (trim.backRightX > 0 && trim.backRightZ > 0) {
+    diagonal([rightX - trim.backRightX, backZ], [rightX, backZ + trim.backRightZ], [1e6, -1e6])
+  }
+  return planes
+}
+
+/**
+ * The underside of a segment's deck — the surface a wall beneath the roof
+ * meets — as planar polygons in segment-local space: the upward faces of the
+ * deck-bottom void the brush builder subtracts (`deckBotGeo`), clipped by the
+ * segment trim. A shed built from footprint pieces uses those pieces under its
+ * slope plane. Null when the deck has no planar data here (a banded shed
+ * following an arc, an open conical sector).
+ */
+export function getRoofSegmentUndersidePolygons(node: RoofSegmentNode): THREE.Vector3[][] | null {
+  if (node.roofType === 'shed') {
+    if (isBandedShedSegment(node)) return null
+    const storedPieces = readShedFootprintPieces(node)
+    const pieces =
+      storedPieces.length > 0
+        ? storedPieces
+        : node.managedByParent
+          ? [managedShedFootprint(node)]
+          : []
+    if (pieces.length > 0) {
+      return pieces
+        .map((piece) =>
+          sanitizeRoofPlanPolygon(piece).map(
+            ([x, z]) => new THREE.Vector3(x, getRoofSegmentSurfaceY(node, x, z), z),
+          ),
+        )
+        .filter((polygon) => polygon.length >= 3)
+    }
+  }
+  if (
+    node.roofType === 'conical' &&
+    !hasSegmentTrim(node) &&
+    !getConicalRoofCoverage(node).fullCircle
+  ) {
+    return null
+  }
+
+  const { cosTheta } = getSegmentSlopeFrame(node)
+  const faces = getRoofSegmentVolumeFaces(node, 'deck-bottom')
+  let minY = Number.POSITIVE_INFINITY
+  for (const face of faces) for (const point of face) minY = Math.min(minY, point.y)
+  const halfPlanes = getSegmentTrimHalfPlanes(node)
+  // cut at the wall top, the roof is gone below the plate inside the walls, so
+  // it bears on no wall there; otherwise it is a ceiling following the slope
+  const belowPlate = hasEaveBelowPlate(node) && node.cutAtWallTop === true
+  const cover = readSegmentCover(node)
+  // the covering reaches the outline plus the overhang (clipSegmentBrushesToFootprint)
+  const outline = cover ? offsetPlanRing(cover, node.overhang * cosTheta) : null
+  const polygons: THREE.Vector3[][] = []
+  const normal = new THREE.Vector3()
+  for (const face of faces) {
+    if (face.length < 3 || face.every((point) => Math.abs(point.y - minY) <= 1e-6)) continue
+    // Newell normal: robust for the planar quads and triangles of a module.
+    normal.set(0, 0, 0)
+    for (let index = 0; index < face.length; index++) {
+      const current = face[index]!
+      const next = face[(index + 1) % face.length]!
+      normal.x += (current.y - next.y) * (current.z + next.z)
+      normal.y += (current.z - next.z) * (current.x + next.x)
+      normal.z += (current.x - next.x) * (current.y + next.y)
+    }
+    const length = normal.length()
+    if (!(length > 1e-9) || Math.abs(normal.y) / length < 0.05) continue
+    // Winding in plan (x, z): the Newell normal's y is minus the plan area sign.
+    const faceCcw = normal.y < 0
+    let polygon = belowPlate ? clipPlanarPolygon(face, (point) => point.y) : face
+    for (const side of halfPlanes) {
+      if (polygon.length < 3) break
+      polygon = clipPlanarPolygon(polygon, side)
+    }
+    if (polygon.length < 3) continue
+    if (!outline) {
+      polygons.push(polygon)
+      continue
+    }
+    // The face is convex, the outline may not be: clip the outline by the face
+    // and lift the result onto the face plane.
+    let piece: PlanPoint[] = outline
+    for (let index = 0; index < polygon.length && piece.length >= 3; index++) {
+      const a = polygon[index]!
+      const b = polygon[(index + 1) % polygon.length]!
+      const inward = faceCcw ? 1 : -1
+      piece = clipPlanRing(
+        piece,
+        ([x, z]) => inward * ((b.x - a.x) * (z - a.z) - (b.z - a.z) * (x - a.x)),
+      )
+    }
+    if (piece.length < 3) continue
+    const [p0, p1, p2] = polygon
+    const plane = new THREE.Plane().setFromCoplanarPoints(p0!, p1!, p2!)
+    polygons.push(
+      piece.map(([x, z]) => {
+        const y =
+          Math.abs(plane.normal.y) > 1e-9
+            ? -(plane.normal.x * x + plane.normal.z * z + plane.constant) / plane.normal.y
+            : p0!.y
+        return new THREE.Vector3(x, y, z)
+      }),
+    )
+  }
+  return polygons
+}
+
+/**
+ * The shingle layer's lower (`bottom`, on the deck) or outer (`top`) prism of
+ * a segment at its own pitch. A shed's outer prism is built centred; the
+ * brush builder shifts it by half the shingle projection.
+ */
+function getRoofSegmentShingleModule(
+  node: RoofSegmentNode,
+  side: 'bottom' | 'top',
+): RoofModuleInput {
   const {
     roofType,
     width,
@@ -1510,101 +2521,9 @@ export function getRoofSegmentBrushes(
     shingleThickness,
   } = node
   const conicalCoverage = getConicalRoofCoverage(node)
-
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(node)
-  const shapeRatios = getRoofShapeRatios({
-    gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
-    mansardSteepWidthRatio: node.mansardSteepWidthRatio,
-    dutchHipWidthRatio: node.dutchHipWidthRatio,
-    dutchHipHeightRatio: node.dutchHipHeightRatio,
-    dutchWaistLengthRatio: node.dutchWaistLengthRatio,
-    dutchGabletRake: node.dutchGabletRake,
-  })
-
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
-  // Gablet inset must track dutchHipWidthRatio so the 3D waist matches both
-  // the 2D floorplan and the slope frame (which derives activeRh from the
-  // same ratio). A hardcoded 0.25 desyncs the gablet from the parameter.
-  const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
-
-  const plateSeated = wallHeight <= 0
-  const getVol = (
-    wExt: number,
-    vOffset: number,
-    baseY: number,
-    matIndex: number,
-    isVoid: boolean,
-    materialRule?: (normal: THREE.Vector3) => number,
-    onPlate = false,
-  ) => {
-    const wV = Math.max(0.01, width + 2 * wExt)
-    const dV = Math.max(0.01, depth + 2 * wExt)
-
-    const autoDrop = wExt * tanTheta
-    // Floor every prism at 5 cm so CSG never sees a degenerate volume — by
-    // raising the top, never by sinking the base (the base is the wall top).
-    // One floor for all volumes keeps each cutter level with the shell it carves.
-    // A plate-seated roof (wallHeight 0) is the exception for its sloped deck
-    // volumes: their eave hangs below the plate, and raising it lifted the
-    // whole roof off its walls, so their base sinks instead.
-    const eaveY = wallHeight - autoDrop + vOffset
-    const sinkBase = plateSeated && !onPlate && autoDrop !== 0
-    const whV = sinkBase ? eaveY : Math.max(0.05, eaveY)
-
-    let rhV = activeRh
-    if (activeRh > 0) {
-      rhV = activeRh + autoDrop
-      if (roofType === 'shed') rhV = activeRh + 2 * autoDrop
-    }
-
-    const safeBaseY = sinkBase ? Math.min(baseY, whV - 0.05) : baseY
-
-    let structuralI = baseI
-    if (isVoid) {
-      structuralI += deckThickness
-    }
-
-    const faces = getRoofModuleFaces({
-      type: roofType,
-      w: wV,
-      d: dV,
-      wh: whV,
-      rh: rhV,
-      baseY: safeBaseY,
-      insets: { dutchI: structuralI },
-      baseW: width,
-      baseD: depth,
-      tanTheta,
-      shapeRatios,
-      dutchTopRakeThickness: node.dutchTopRakeThickness,
-      conicalStartAngle: conicalCoverage.startAngle,
-      conicalSweepAngle: conicalCoverage.sweepAngle,
-    }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
-    return createGeometryFromFaces(faces, materialRule ?? matIndex)
-  }
-
-  const wallGeo = getVol(wallThickness / 2, 0, 0, 0, false, undefined, true)
-  const innerGeo = getVol(-wallThickness / 2, 0, -5, 2, false, undefined, true)
-
-  const horizontalOverhang = overhang * cosTheta
-  const deckExt = wallThickness / 2 + horizontalOverhang
-
-  // A shed's deck and shingle edges take the wall/trim slot, unless it wears
-  // fascia boards: then they are fascia like a gable's, in the deck slot.
-  const shedEdgesInTrimSlot = roofType === 'shed' && !options.fascia
-  const shedRoofSideMaterialRule = shedEdgesInTrimSlot
-    ? (normal: THREE.Vector3) => (normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX)
-    : undefined
-  const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false, shedRoofSideMaterialRule)
-  const deckBotGeo = getVol(deckExt, 0, -5, 0, true)
-  // the deck's top edge at its outer plane, as `getVol` puts it
-  const deckEaveDrop = deckExt * tanTheta
-  const deckEaveTopY =
-    plateSeated && deckEaveDrop > 0
-      ? wallHeight - deckEaveDrop + verticalRt
-      : Math.max(0.05, wallHeight - deckEaveDrop + verticalRt)
-  const fasciaGeo = options.fascia ? buildFasciaBoards(node, deckExt, deckEaveTopY, tanTheta) : null
-
+  const deckExt = wallThickness / 2 + overhang * cosTheta
   const stSin = shingleThickness * sinTheta
   const stCos = shingleThickness * cosTheta
 
@@ -1620,10 +2539,53 @@ export function getRoofSegmentBrushes(
     if (roofType === 'shed') shinBotRh = activeRh + 2 * deckDrop
   }
 
+  const availableR = (Math.min(shinBotW, shinBotD) / 2) * 0.95
+  const maxDrop = tanTheta > 0.001 ? availableR / tanTheta : 2.0
+  const common = {
+    type: roofType,
+    baseW: width,
+    baseD: depth,
+    tanTheta,
+    shapeRatios: getRoofShapeRatios({
+      gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
+      mansardSteepWidthRatio: node.mansardSteepWidthRatio,
+      dutchHipWidthRatio: node.dutchHipWidthRatio,
+      dutchHipHeightRatio: node.dutchHipHeightRatio,
+      dutchWaistLengthRatio: node.dutchWaistLengthRatio,
+      dutchGabletRake: node.dutchGabletRake,
+    }),
+    dutchTopRakeThickness: node.dutchTopRakeThickness,
+    conicalStartAngle: conicalCoverage.startAngle,
+    conicalSweepAngle: conicalCoverage.sweepAngle,
+  }
+
+  if (side === 'bottom') {
+    const botBaseY = shinBotWh - Math.min(2.0, maxDrop * 0.8)
+    return {
+      ...common,
+      w: shinBotW,
+      d: shinBotD,
+      wh: shinBotWh,
+      rh: shinBotRh,
+      baseY: botBaseY,
+      insets: getRoofShapeInsets({
+        roofType,
+        width,
+        depth,
+        wh: shinBotWh,
+        baseY: botBaseY,
+        isVoid: true,
+        brushW: shinBotW,
+        brushD: shinBotD,
+        tanTheta,
+        shingleThickness,
+        dutchHipWidthRatio: node.dutchHipWidthRatio,
+      }),
+    }
+  }
+
   let shinTopW = shinBotW
   let shinTopD = shinBotD
-  let transZ = 0
-
   if (['hip', 'mansard', 'dutch', 'conical'].includes(roofType)) {
     shinTopW += 2 * stSin
     shinTopD += 2 * stSin
@@ -1631,91 +2593,271 @@ export function getRoofSegmentBrushes(
     shinTopD += 2 * stSin
   } else if (roofType === 'shed') {
     shinTopD += stSin
-    transZ = stSin / 2
   }
 
   const shinTopWh = shinBotWh + stCos
-
-  let shinTopRh = shinBotRh
-  if (activeRh > 0) {
-    shinTopRh = shinBotRh + stSin * tanTheta
-  }
-
-  const availableR = (Math.min(shinBotW, shinBotD) / 2) * 0.95
-  const maxDrop = tanTheta > 0.001 ? availableR / tanTheta : 2.0
-  const dropTop = Math.min(1.0, maxDrop * 0.4)
-  const dropBot = Math.min(2.0, maxDrop * 0.8)
-
-  const topBaseY = shinBotWh - dropTop
-  const botBaseY = shinBotWh - dropBot
-
-  const insetsBot = getRoofShapeInsets({
-    roofType,
-    width,
-    depth,
-    wh: shinBotWh,
-    baseY: botBaseY,
-    isVoid: true,
-    brushW: shinBotW,
-    brushD: shinBotD,
-    tanTheta,
-    shingleThickness,
-    dutchHipWidthRatio: node.dutchHipWidthRatio,
-  })
-  const insetsTop = getRoofShapeInsets({
-    roofType,
-    width,
-    depth,
-    wh: shinTopWh,
-    baseY: topBaseY,
-    isVoid: false,
-    brushW: shinTopW,
-    brushD: shinTopD,
-    tanTheta,
-    shingleThickness,
-    dutchHipWidthRatio: node.dutchHipWidthRatio,
-  })
-
-  const botFaces = getRoofModuleFaces({
-    type: roofType,
-    w: shinBotW,
-    d: shinBotD,
-    wh: shinBotWh,
-    rh: shinBotRh,
-    baseY: botBaseY,
-    insets: insetsBot,
-    baseW: width,
-    baseD: depth,
-    tanTheta,
-    shapeRatios,
-    dutchTopRakeThickness: node.dutchTopRakeThickness,
-    conicalStartAngle: conicalCoverage.startAngle,
-    conicalSweepAngle: conicalCoverage.sweepAngle,
-  }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
-  const topFaces = getRoofModuleFaces({
-    type: roofType,
+  const shinTopRh = activeRh > 0 ? shinBotRh + stSin * tanTheta : shinBotRh
+  const topBaseY = shinBotWh - Math.min(1.0, maxDrop * 0.4)
+  return {
+    ...common,
     w: shinTopW,
     d: shinTopD,
     wh: shinTopWh,
     rh: shinTopRh,
     baseY: topBaseY,
-    insets: insetsTop,
-    baseW: width,
-    baseD: depth,
-    tanTheta,
-    shapeRatios,
-    dutchTopRakeThickness: node.dutchTopRakeThickness,
-    conicalStartAngle: conicalCoverage.startAngle,
-    conicalSweepAngle: conicalCoverage.sweepAngle,
-  }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
+    insets: getRoofShapeInsets({
+      roofType,
+      width,
+      depth,
+      wh: shinTopWh,
+      baseY: topBaseY,
+      isVoid: false,
+      brushW: shinTopW,
+      brushD: shinTopD,
+      tanTheta,
+      shingleThickness,
+      dutchHipWidthRatio: node.dutchHipWidthRatio,
+    }),
+  }
+}
+
+/**
+ * A stepped gable's deck and shingles, one slope at a time. Each slope's
+ * covering is its own plane carried on: the higher slope runs on past the
+ * step line by the overhang (over the lower one), the lower slope stops at
+ * the step. Under an outline each slope is cut, plumb, to its own part of it
+ * pushed out by the overhang — an outline edge on the step line overhangs
+ * only the slope it bounds. Null unless the gable is stepped.
+ */
+function buildSteppedGableSlabs(
+  node: RoofSegmentNode,
+  toBrush: (geometry: THREE.BufferGeometry) => Brush | null,
+): { deckSlab: Brush; shinSlab: Brush } | null {
+  const ridge = getGableRidge(node)
+  if (!ridge || ridge.step === 0) return null
+  const higherBack = ridge.step > 0
+  // from the step line toward the lower slope
+  const toward = higherBack ? 1 : -1
+  const stepZ = ridge.ridgeZ
+  const cover = readSegmentCover(node)
+  const shingleRule = (normal: THREE.Vector3) =>
+    normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_FASCIA_MATERIAL_INDEX
+  type Build = (pitched: RoofSegmentNode) => RoofModuleInput
+  type Material = number | ((normal: THREE.Vector3) => number)
+  const layers: Array<{
+    key: 'deckSlab' | 'shinSlab'
+    top: Build
+    bottom: Build
+    topMat: Material
+    bottomMat: Material
+  }> = [
+    {
+      key: 'deckSlab',
+      top: (pitched) => getRoofSegmentVolumeModule(pitched, 'deck-top'),
+      bottom: (pitched) => getRoofSegmentVolumeModule(pitched, 'deck-bottom'),
+      topMat: ROOF_FASCIA_MATERIAL_INDEX,
+      bottomMat: ROOF_SOFFIT_MATERIAL_INDEX,
+    },
+    {
+      key: 'shinSlab',
+      top: (pitched) => getRoofSegmentShingleModule(pitched, 'top'),
+      bottom: (pitched) => getRoofSegmentShingleModule(pitched, 'bottom'),
+      topMat: shingleRule,
+      bottomMat: shingleRule,
+    },
+  ]
+  const maxY =
+    Math.max(ridge.height, ridge.backHeight) + node.deckThickness + node.shingleThickness + 10
+  const toFaces = (input: RoofModuleInput) =>
+    getRoofModuleFaces(input).map((face) =>
+      face.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
+    )
+  const disposeAll = (brushes: Array<Brush | null | undefined>) => {
+    for (const brush of brushes) brush?.geometry.dispose()
+  }
+  const square = hasSquareEaves(node)
+  const outline = cover ?? segmentWallOutline(node)
+  const joined: Partial<Record<'deckSlab' | 'shinSlab', Brush>> = {}
+  for (const side of ['front', 'back'] as const) {
+    const isHigher = (side === 'back') === higherBack
+    const pitch = ((side === 'front' ? ridge.frontPitch : ridge.backPitch) * Math.PI) / 180
+    const endZ = isHigher ? stepZ + toward * node.overhang * Math.cos(pitch) : stepZ
+    // outward past the slope's end
+    const outward = isHigher ? toward : -toward
+    // With square eaves the lower slope's end, under the step wall, is cut
+    // square to it through the roof's outer face on the step line: the
+    // soffit reaches on under the wall, so nothing opens at the step.
+    let endCut: { z: number; y: number; nz: number; ny: number } | undefined
+    if (square && !isHigher) {
+      const outer = withRoofSegmentGableBack(node, (pitched) =>
+        getRoofSegmentShingleModule(pitched, 'top'),
+      )
+      const back = outer.gableBack
+      const y =
+        side === 'front'
+          ? outer.wh + (outer.d / 2 - stepZ) * outer.tanTheta
+          : back
+            ? back.wh + (back.halfDepth + stepZ) * back.tanTheta
+            : outer.wh
+      // the plane's normal: up the slope, toward the step
+      endCut = { z: stepZ, y, nz: outward * Math.cos(pitch), ny: Math.sin(pitch) }
+    }
+    const body = (build: Build, beyond: number): RoofModuleInput | null => {
+      const input = withRoofSegmentGableBack(node, build)
+      if (!input.gableBack) return null
+      const cut = endCut && beyond === 0 ? endCut : undefined
+      // a cut end runs on under the step: the bottom body goes well past it
+      const past = endCut && beyond > 0 ? 2 : beyond
+      return {
+        ...input,
+        gableBack: {
+          ...input.gableBack,
+          only: side,
+          endZ: endZ + outward * past,
+          ...(cut ? { endCut: cut } : {}),
+        },
+      }
+    }
+    // this slope's deck and shingles: each its top body less its bottom body
+    const slabs: Partial<Record<'deckSlab' | 'shinSlab', Brush>> = {}
+    for (const layer of layers) {
+      const topInput = body(layer.top, 0)
+      // the bottom reaches a little past the top's end: no faces coincide
+      const bottomInput = body(layer.bottom, 0.05)
+      const top = topInput && toBrush(createGeometryFromFaces(toFaces(topInput), layer.topMat))
+      const bottom =
+        bottomInput && toBrush(createGeometryFromFaces(toFaces(bottomInput), layer.bottomMat))
+      if (!(top && bottom && bottomInput)) {
+        disposeAll([top, bottom, ...Object.values(slabs), ...Object.values(joined)])
+        return null
+      }
+      // a hair larger across and along, as the one-piece build does
+      bottom.scale.set(
+        1 + 0.002 / Math.max(0.01, bottomInput.w),
+        1,
+        1 + 0.002 / Math.max(0.01, bottomInput.d),
+      )
+      bottom.updateMatrixWorld()
+      const slab = csgEvaluator.evaluate(top, bottom, SUBTRACTION) as Brush
+      prepareBrushForCSG(slab)
+      disposeAll([top, bottom])
+      slabs[layer.key] = slab
+    }
+    let sideSlabs = slabs as Record<'deckSlab' | 'shinSlab', Brush>
+    // This slope's part of the outline: an edge on the step line overhangs
+    // only the slope it bounds.
+    const parts = splitPlanRingByLine(outline, stepZ, side === 'front' ? 1 : -1)
+    if (parts.length === 0) {
+      // no part of the outline on this side: no slope there
+      disposeAll(Object.values(sideSlabs))
+      continue
+    }
+    if (square) {
+      const shinTopInput = body((pitched) => getRoofSegmentShingleModule(pitched, 'top'), 0)
+      if (shinTopInput) cutSlabsSquare(sideSlabs, node, parts, getRoofModuleFaces(shinTopInput))
+    } else if (cover) {
+      const reach = node.overhang * Math.cos(pitch) + TRIM_CUT_EPSILON
+      let keep: Brush | null = null
+      for (const part of parts) {
+        const prism = buildFootprintPrismBrush(
+          offsetPlanRing(part, reach),
+          -10,
+          maxY,
+          undefined,
+          ROOF_FASCIA_MATERIAL_INDEX,
+        )
+        if (keep) {
+          const merged = csgEvaluator.evaluate(keep, prism, ADDITION) as Brush
+          prepareBrushForCSG(merged)
+          disposeAll([keep, prism])
+          keep = merged
+        } else keep = prism
+      }
+      const kept: Partial<Record<'deckSlab' | 'shinSlab', Brush>> = {}
+      for (const key of ['deckSlab', 'shinSlab'] as const) {
+        const cut = csgEvaluator.evaluate(sideSlabs[key], keep!, INTERSECTION) as Brush
+        prepareBrushForCSG(cut)
+        sideSlabs[key].geometry.dispose()
+        kept[key] = cut
+      }
+      keep!.geometry.dispose()
+      sideSlabs = kept as Record<'deckSlab' | 'shinSlab', Brush>
+    }
+    for (const key of ['deckSlab', 'shinSlab'] as const) {
+      const previous = joined[key]
+      if (previous) {
+        const merged = csgEvaluator.evaluate(previous, sideSlabs[key], ADDITION) as Brush
+        prepareBrushForCSG(merged)
+        disposeAll([previous, sideSlabs[key]])
+        joined[key] = merged
+      } else joined[key] = sideSlabs[key]
+    }
+  }
+  if (!(joined.deckSlab && joined.shinSlab)) {
+    disposeAll(Object.values(joined))
+    return null
+  }
+  return { deckSlab: joined.deckSlab, shinSlab: joined.shinSlab }
+}
+
+export function getRoofSegmentBrushes(
+  node: RoofSegmentNode,
+  options: { fascia?: boolean } = {},
+): RoofSegmentBrushSet | null {
+  const { roofType, width, depth, wallThickness, overhang, shingleThickness } = node
+  const { cosTheta, sinTheta } = getSegmentSlopeFrame(node)
+  const shapeRatios = getRoofShapeRatios({
+    gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
+    mansardSteepWidthRatio: node.mansardSteepWidthRatio,
+    dutchHipWidthRatio: node.dutchHipWidthRatio,
+    dutchHipHeightRatio: node.dutchHipHeightRatio,
+    dutchWaistLengthRatio: node.dutchWaistLengthRatio,
+    dutchGabletRake: node.dutchGabletRake,
+  })
+
+  const getVol = (
+    layer: RoofSegmentVolumeLayer,
+    matIndex: number,
+    materialRule?: (normal: THREE.Vector3) => number,
+  ) => createGeometryFromFaces(getRoofSegmentVolumeFaces(node, layer), materialRule ?? matIndex)
+
+  const wallGeo = getVol('wall', 0)
+  const innerGeo = getVol('inner', 2)
+
+  const horizontalOverhang = overhang * cosTheta
+  const deckExt = wallThickness / 2 + horizontalOverhang
+
+  const deckTopGeo = getVol('deck-top', ROOF_FASCIA_MATERIAL_INDEX)
+  const deckBotGeo = getVol('deck-bottom', ROOF_SOFFIT_MATERIAL_INDEX)
+  let fasciaGeo: THREE.BufferGeometry | null = null
+  if (options.fascia) {
+    const backTwin = getRoofSegmentBackSlopeTwin(node)
+    const frontEave = getDeckEave(node)
+    fasciaGeo = buildFasciaBoards(node, frontEave, backTwin ? getDeckEave(backTwin) : frontEave)
+  }
+
+  const shinBot = withRoofSegmentGableBack(node, (pitched) =>
+    getRoofSegmentShingleModule(pitched, 'bottom'),
+  )
+  const shinTop = withRoofSegmentGableBack(node, (pitched) =>
+    getRoofSegmentShingleModule(pitched, 'top'),
+  )
+  const shinBotW = shinBot.w
+  const shinBotD = shinBot.d
+  const transZ = roofType === 'shed' ? (shingleThickness * sinTheta) / 2 : 0
+  const toVectors = (faces: ReturnType<typeof getRoofModuleFaces>) =>
+    faces.map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
+  const botFaces = toVectors(getRoofModuleFaces(shinBot))
+  const topFaces = toVectors(getRoofModuleFaces(shinTop))
+  const insetsTop = shinTop.insets
 
   let rakeBoards: THREE.BufferGeometry | null = null
   if (roofType === 'dutch' && insetsTop.dutchI !== undefined) {
     rakeBoards = buildDutchRakeBoards(
-      shinTopW,
-      shinTopD,
-      shinTopWh,
-      shinTopRh,
+      shinTop.w,
+      shinTop.d,
+      shinTop.wh,
+      shinTop.rh,
       insetsTop.dutchI,
       shapeRatios,
       node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake,
@@ -1723,12 +2865,11 @@ export function getRoofSegmentBrushes(
     )
   }
 
-  const shedRoofSideMaterialIndex = shedEdgesInTrimSlot ? ROOF_EDGE_MATERIAL_INDEX : 1
   const shinBotGeo = createGeometryFromFaces(botFaces, (normal) =>
-    normal.y > SHINGLE_SURFACE_EPSILON ? 3 : shedRoofSideMaterialIndex,
+    normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_FASCIA_MATERIAL_INDEX,
   )
   const shinTopGeo = createGeometryFromFaces(topFaces, (normal) =>
-    normal.y > SHINGLE_SURFACE_EPSILON ? 3 : shedRoofSideMaterialIndex,
+    normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_FASCIA_MATERIAL_INDEX,
   )
 
   if (transZ !== 0) {
@@ -1791,7 +2932,10 @@ export function getRoofSegmentBrushes(
 
   if (deckTopBrush && deckBotBrush && wallBrush && innerBrush && shinTopBrush && shinBotBrush) {
     try {
-      let deckSlab = csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
+      const stepped = buildSteppedGableSlabs(node, toBrush)
+      let deckSlab = stepped
+        ? stepped.deckSlab
+        : csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
       prepareBrushForCSG(deckSlab)
       if (fasciaBrush) {
         const withFascia = csgEvaluator.evaluate(deckSlab, fasciaBrush, ADDITION)
@@ -1800,7 +2944,9 @@ export function getRoofSegmentBrushes(
         fasciaBrush.geometry.dispose()
         deckSlab = withFascia
       }
-      const shinSlab = csgEvaluator.evaluate(shinTopBrush, shinBotBrush, SUBTRACTION)
+      const shinSlab = stepped
+        ? stepped.shinSlab
+        : csgEvaluator.evaluate(shinTopBrush, shinBotBrush, SUBTRACTION)
       prepareBrushForCSG(shinSlab)
 
       deckTopBrush.geometry.dispose()
@@ -1826,6 +2972,16 @@ export function getRoofSegmentBrushes(
           remapDutchRakeBoardMaterials(brushes.rakeBoards)
         }
       }
+      clipSegmentBrushesToFootprint(brushes, node, { slabs: !stepped })
+      if (!stepped && hasSquareEaves(node)) {
+        const transZ =
+          roofType === 'shed' ? (shingleThickness * getSegmentSlopeFrame(node).sinTheta) / 2 : 0
+        const faces = getRoofModuleFaces(shinTop).map((face) =>
+          face.map((point) => ({ x: point.x, y: point.y, z: point.z + transZ })),
+        )
+        cutSlabsSquare(brushes, node, [readSegmentCover(node) ?? segmentWallOutline(node)], faces)
+      }
+      clipSegmentBrushesBelowPlate(brushes, node)
 
       return brushes
     } catch (e) {
@@ -1915,12 +3071,9 @@ export function generateRoofSegmentGeometry(
 
     const resultMaterials = csgMaterials(combined)
 
-    const matToIndex = new Map<THREE.Material, number>([
-      [dummyMats[0], 0],
-      [dummyMats[1], 1],
-      [dummyMats[2], 2],
-      [dummyMats[3], 3],
-    ])
+    const matToIndex = new Map<THREE.Material, number>(
+      dummyMats.map((material, slot) => [material, slot]),
+    )
 
     for (const group of resultGeo.groups) {
       group.materialIndex = mapRoofGroupMaterialIndex(
@@ -1974,12 +3127,9 @@ function clipDirectRoofGeometryAgainstSiblings(
     const clipped = subtractCsgBrush(brush, siblingInterior, csgEvaluator)
     const clippedGeometry = csgGeometry(clipped)
     const clippedMaterials = csgMaterials(clipped)
-    const materialIndices = new Map<THREE.Material, number>([
-      [dummyMats[0], 0],
-      [dummyMats[1], 1],
-      [dummyMats[2], 2],
-      [dummyMats[3], 3],
-    ])
+    const materialIndices = new Map<THREE.Material, number>(
+      dummyMats.map((material, slot) => [material, slot]),
+    )
     for (const group of clippedGeometry.groups) {
       group.materialIndex = mapRoofGroupMaterialIndex(
         group.materialIndex,
@@ -2301,9 +3451,7 @@ function buildConcentricBandDeckGeometry(node: RoofSegmentNode): THREE.BufferGeo
       frontTop[last]!.clone(),
     ],
   )
-  const merged = createGeometryFromFaces(faces, (normal) =>
-    normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX,
-  )
+  const merged = createGeometryFromFaces(faces, (normal) => roofSlabFaceSlot(normal))
   merged.computeVertexNormals()
   ensureRenderableGeometryAttributes(merged)
   return merged
@@ -2412,9 +3560,10 @@ function buildDirectConicalSectorGeometry(node: RoofSegmentNode): THREE.BufferGe
   const deck = layerFaces(deckBottomRing, deckBottomApex, deckTopRing, deckTopApex)
   const shingles = layerFaces(deckTopRing, deckTopApex, shingleTopRing, shingleTopApex)
   const geometries = [
-    createGeometryFromFaces([...deck.bottomFaces, ...deck.edgeFaces], ROOF_EDGE_MATERIAL_INDEX),
+    createGeometryFromFaces(deck.bottomFaces, ROOF_SOFFIT_MATERIAL_INDEX),
+    createGeometryFromFaces(deck.edgeFaces, ROOF_FASCIA_MATERIAL_INDEX),
     createGeometryFromFaces(shingles.topFaces, 3),
-    createGeometryFromFaces(shingles.edgeFaces, ROOF_EDGE_MATERIAL_INDEX),
+    createGeometryFromFaces(shingles.edgeFaces, ROOF_FASCIA_MATERIAL_INDEX),
   ]
 
   if (node.wallHeight > 0.001) {
@@ -3097,11 +4246,7 @@ function buildCustomShedGeometry(
         }
       }
     }
-    geometries.push(
-      createGeometryFromFaces(faces, (normal) =>
-        normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX,
-      ),
-    )
+    geometries.push(createGeometryFromFaces(faces, (normal) => roofSlabFaceSlot(normal)))
     if (jointTransitionFaces.length > 0) {
       geometries.push(createGeometryFromFaces(jointTransitionFaces, 3))
     }
@@ -3324,10 +4469,9 @@ export function remapRoofShellFaces(geometry: THREE.BufferGeometry, node: RoofSe
           materialIndex = 3
         } else if (normal.y > SHINGLE_SURFACE_EPSILON) {
           materialIndex = 3
-        } else if (isRakeFace(node, geometry, centroid, normal)) {
-          materialIndex = 1
         } else {
-          materialIndex = 0
+          // eave and rake ends of the deck and shingles alike: the fascia
+          materialIndex = ROOF_FASCIA_MATERIAL_INDEX
         }
       }
 
@@ -3350,41 +4494,6 @@ export function remapRoofShellFaces(geometry: THREE.BufferGeometry, node: RoofSe
   }
 
   geometry.addGroup(groupStart * 3, (triangleCount - groupStart) * 3, currentMaterial)
-}
-
-function isRakeFace(
-  node: RoofSegmentNode,
-  geometry: THREE.BufferGeometry,
-  centroid: THREE.Vector3,
-  normal: THREE.Vector3,
-) {
-  const rakeAxis = getRakeAxis(node)
-  const bounds = geometry.boundingBox
-
-  if (!(rakeAxis && bounds)) return false
-  if (Math.abs(normal.y) > RAKE_FACE_NORMAL_EPSILON) return false
-
-  const axisNormal = rakeAxis === 'x' ? Math.abs(normal.x) : Math.abs(normal.z)
-  if (axisNormal < RAKE_FACE_ALIGNMENT_EPSILON) return false
-
-  const halfExtent =
-    rakeAxis === 'x'
-      ? Math.max(Math.abs(bounds.min.x), Math.abs(bounds.max.x))
-      : Math.max(Math.abs(bounds.min.z), Math.abs(bounds.max.z))
-  const axisCoord = rakeAxis === 'x' ? Math.abs(centroid.x) : Math.abs(centroid.z)
-  const planeTolerance = Math.max(
-    node.overhang + node.wallThickness + node.deckThickness + node.shingleThickness,
-    0.25,
-  )
-
-  if (halfExtent - axisCoord > planeTolerance) return false
-
-  return true
-}
-
-function getRakeAxis(node: RoofSegmentNode): 'x' | 'z' | null {
-  if (node.roofType === 'gable' || node.roofType === 'gambrel') return 'x'
-  return null
 }
 
 type ShapeWidthRatios = {
@@ -4074,6 +5183,25 @@ export function getRoofOuterSurfaceFrameAtPoint(
     }
   }
 
+  const backTwin = getRoofSegmentBackSlopeTwin(segment)
+  if (backTwin) {
+    // Each slope's outer skin is its wall-line plane lifted by the deck and
+    // shingle thickness at that slope's pitch; the roof is the lower of the two.
+    const back = getSegmentSlopeFrame(backTwin)
+    const lift = deckThickness + shingleThickness
+    const frontY = wallHeight + (depth / 2 - lz) * tanTheta + lift / cosTheta
+    const backY = backTwin.wallHeight + (depth / 2 + lz) * back.tanTheta + lift / back.cosTheta
+    return frontY <= backY
+      ? {
+          point: new THREE.Vector3(lx, frontY, lz),
+          normal: new THREE.Vector3(0, cosTheta, sinTheta),
+        }
+      : {
+          point: new THREE.Vector3(lx, backY, lz),
+          normal: new THREE.Vector3(0, back.cosTheta, -back.sinTheta),
+        }
+  }
+
   const verticalRt = deckThickness / cosTheta
   const horizontalOverhang = overhang * cosTheta
   const deckExt = wallThickness / 2 + horizontalOverhang
@@ -4182,7 +5310,13 @@ export function getRoofOuterSurfaceFrameAtPoint(
   if (transZ !== 0) topGeo.translate(0, 0, transZ)
   topGeo.computeBoundingBox()
 
-  const topY = wallHeight + activeRh + deckThickness + shingleThickness + 10
+  const topY =
+    wallHeight +
+    activeRh +
+    Math.max(0, readGableRidgeStep(segment)) +
+    deckThickness +
+    shingleThickness +
+    10
   _surfaceOrigin.set(lx, topY, lz)
   _surfaceRay.set(_surfaceOrigin, _surfaceDir)
   _surfaceHits.length = 0

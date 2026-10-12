@@ -17,7 +17,7 @@ import { create } from 'zustand'
 /** Screen-space (SVG-local px) cursor point — drives the coordinate badge. */
 type SvgPoint = { x: number; y: number }
 
-export type FloorplanPolygonDraftType = 'ceiling' | 'slab' | 'zone'
+export type FloorplanPolygonDraftType = 'ceiling' | 'roof' | 'slab' | 'zone'
 
 type FloorplanDraftPreviewState = {
   /** Snapped plan-XZ point under the cursor; drives the crosshair + the

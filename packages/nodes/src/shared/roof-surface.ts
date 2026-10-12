@@ -6,7 +6,9 @@ import {
   getRoofShapeRatios,
   getSegmentSlopeFrame,
   ROOF_SHAPE_DEFAULTS,
+  type RoofModuleInput,
   type RoofSegmentNode,
+  withRoofSegmentGableBack,
 } from '@pascal-app/core'
 import * as THREE from 'three'
 
@@ -102,6 +104,9 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
     segment.overhang,
     segment.shingleThickness,
     segment.pitch,
+    segment.backPitch,
+    segment.ridgeOffset,
+    segment.ridgeStep,
     conicalCoverage.startAngle,
     conicalCoverage.sweepAngle,
     segment.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio,
@@ -114,7 +119,7 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
   ].join('|')
 }
 
-function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
+function getShingleTopModule(segment: RoofSegmentNode): RoofModuleInput {
   const conicalCoverage = getConicalRoofCoverage(segment)
   const { roofType, width, depth, wallHeight, wallThickness, deckThickness, overhang } = segment
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
@@ -139,7 +144,6 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
 
   let shinTopW = shinBotW
   let shinTopD = shinBotD
-  let transZ = 0
 
   if (
     roofType === 'hip' ||
@@ -153,7 +157,6 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     shinTopD += 2 * stSin
   } else if (roofType === 'shed') {
     shinTopD += stSin
-    transZ = stSin / 2
   }
 
   const shinTopWh = shinBotWh + stCos
@@ -188,7 +191,7 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     dutchGabletRake: segment.dutchGabletRake,
   })
 
-  return getRoofModuleFaces({
+  return {
     type: roofType,
     w: shinTopW,
     d: shinTopD,
@@ -203,7 +206,16 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     dutchTopRakeThickness: segment.dutchTopRakeThickness,
     conicalStartAngle: conicalCoverage.startAngle,
     conicalSweepAngle: conicalCoverage.sweepAngle,
-  })
+  }
+}
+
+function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
+  // A shed's outer prism is built centred and shifted by half the shingle projection.
+  const transZ =
+    segment.roofType === 'shed'
+      ? ((segment.shingleThickness ?? 0) * getSegmentSlopeFrame(segment).sinTheta) / 2
+      : 0
+  return getRoofModuleFaces(withRoofSegmentGableBack(segment, getShingleTopModule))
     .filter((face) => faceNormalY(face) > SHINGLE_SURFACE_EPSILON)
     .map((face) => {
       const vertices = face.map((point) => ({ ...point, z: point.z + transZ }))
@@ -438,7 +450,8 @@ export function getAnalyticalNormal(
         return buildSlopeNormal(0, lz >= 0 ? 1 : -1, upperTan, out)
       }
     }
-    return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
+    if (lz >= slope.ridgeZ) return buildSlopeNormal(0, 1, primaryTan, out)
+    return buildSlopeNormal(0, -1, slope.backTanTheta, out)
   }
 
   // Single slope falling toward +Z (ridge at -Z, eave at +Z).

@@ -89,8 +89,6 @@ describe('roof system shed geometry', () => {
     const normal = new THREE.Vector3()
     const edge = new THREE.Vector3()
 
-    expect(geometry.groups.some((group) => group.materialIndex === 1)).toBe(false)
-
     for (const group of geometry.groups) {
       for (let i = group.start; i < group.start + group.count; i += 3) {
         const ia = index!.getX(i)
@@ -101,7 +99,8 @@ describe('roof system shed geometry', () => {
         c.fromBufferAttribute(position, ic)
         normal.subVectors(b, a).cross(edge.subVectors(c, a)).normalize()
 
-        if (group.materialIndex === 0 || group.materialIndex === 3) {
+        // the deck and shingle ends are fascia (slot 1), the covering slot 3
+        if (group.materialIndex === 1 || group.materialIndex === 3) {
           roofSideX.push(Math.abs(a.x), Math.abs(b.x), Math.abs(c.x))
         }
 

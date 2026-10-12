@@ -94,7 +94,6 @@ export function SliderControl({
   const cancelRef = useRef(onCancel)
   cancelRef.current = onCancel
   const editingRef = useRef(false)
-  const labelRef = useRef<HTMLDivElement>(null)
   const shown = dragDisplay ?? value
   const valueRef = useRef(shown)
   valueRef.current = shown
@@ -120,22 +119,8 @@ export function SliderControl({
     }
   }, [value, precision, isEditing, toDisplay])
 
-  // Wheel support on the label
-  useEffect(() => {
-    const el = labelRef.current
-    if (!el) return
-    const handleWheel = (e: WheelEvent) => {
-      if (isEditing) return
-      e.preventDefault()
-      const direction = e.deltaY < 0 ? 1 : -1
-      const s = getAdjustedStep(step, e)
-      const final = applyDisplayDelta(valueRef.current, direction * s, s)
-      if (final !== valueRef.current) onChange(final)
-      onCommit?.(final)
-    }
-    el.addEventListener('wheel', handleWheel, { passive: false })
-    return () => el.removeEventListener('wheel', handleWheel)
-  }, [isEditing, step, applyDisplayDelta, onChange, onCommit])
+  // No wheel on the label: the wheel scrolls the panel, and a scroll passing
+  // over a label must not change its value (drag, arrows or typing do).
 
   // Arrow key support while hovered
   useEffect(() => {
@@ -348,7 +333,6 @@ export function SliderControl({
         onLostPointerCapture={() => {
           if (dragRef.current) cancelEdit()
         }}
-        ref={labelRef}
       >
         {/* Grip dots — 2×3 grid */}
         <div

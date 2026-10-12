@@ -5,6 +5,7 @@ import { MaterialSchema } from '../material'
 import {
   getDutchRoofMetrics,
   getRoofSegmentVisibleTopBounds,
+  getSegmentSlopeFrame,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
   type RoofSegmentTrim,
@@ -194,12 +195,13 @@ export function getRidgeVentLinesForSegment(segment: RoofSegmentNode): RidgeVent
   }
 
   if (segment.roofType !== 'hip') {
-    if (!ridgeZVisible) return []
+    const ridgeZ = segment.roofType === 'gable' ? getSegmentSlopeFrame(segment).ridgeZ : 0
+    if (!(minZ <= ridgeZ && maxZ >= ridgeZ)) return []
     return [
       {
         name: 'Ridge Vent',
-        start: [minX, 0],
-        end: [maxX, 0],
+        start: [minX, ridgeZ],
+        end: [maxX, ridgeZ],
       },
     ]
   }

@@ -54,6 +54,7 @@ import {
 } from 'three'
 import { createConicalRoofSectorAboveWall } from './conical-roof'
 import { resolveConicalRoofPlacement } from './conical-roof-placement'
+import { RoofOutlineTool } from './outline-tool'
 import {
   isStandardRoofWallEligible,
   parseRoofFootprintSource,
@@ -69,7 +70,7 @@ const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
 
-function createRoofNodes(
+export function createRoofNodes(
   sceneApi: SceneApi,
   ops: Parameters<NonNullable<SceneApi['createMany']>>[0],
 ): void {
@@ -145,7 +146,7 @@ function getBelowLevelWalls(
 // Current-level + floor-below walls — the magnetic snap targets the roof draft
 // locks onto (corners, midpoints, crossings, wall bodies), matching the wall
 // tool. Same coordinate frame, so no transform is needed.
-function getRoofSnapWalls(
+export function getRoofSnapWalls(
   currentLevelId: string | null,
   nodes: Readonly<Record<string, AnyNode>>,
   roofType: RoofType,
@@ -160,7 +161,7 @@ function getRoofSnapWalls(
 }
 
 // Current-level alignment anchors plus the floor-below wall corners.
-function collectRoofAlignmentAnchors(
+export function collectRoofAlignmentAnchors(
   nodes: Readonly<Record<string, AnyNode>>,
   currentLevelId: string | null,
   roofType: RoofType,
@@ -588,7 +589,7 @@ function buildRoofGhostEdges(
   return geometry
 }
 
-export const RoofTool: React.FC = () => {
+const RoofRectTool: React.FC = () => {
   const { activeLevelId: currentLevelId, sceneApi, selectNode } = useRegistryToolContext()
   const cursorRef = useRef<Group>(null)
   const outlineRef = useRef<Line>(null!)
@@ -1299,6 +1300,17 @@ export const RoofTool: React.FC = () => {
         )}
     </group>
   )
+}
+
+/**
+ * The roof tool: two corners or a room ('draw' / 'room'), or an outline placed
+ * point by point ('outline').
+ */
+export const RoofTool: React.FC = () => {
+  const source = useRoofFootprintSource((state) => state.source)
+  const roofType = RoofTypeSchema.safeParse(useEditor((state) => state.toolDefaults.roof)?.roofType)
+  const conical = roofType.success && roofType.data === 'conical'
+  return source === 'outline' && !conical ? <RoofOutlineTool /> : <RoofRectTool />
 }
 
 export default RoofTool

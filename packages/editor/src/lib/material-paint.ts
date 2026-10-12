@@ -17,6 +17,7 @@ import {
   type MaterialSchema,
   type MaterialTarget,
   nodeRegistry,
+  ROOF_SURFACE_MATERIAL_ROLES,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSegmentSurfaceMaterialRole,
@@ -87,28 +88,35 @@ export function buildRoofSurfaceMaterialPatch(
   material: MaterialSchema | undefined,
   materialPreset: string | undefined,
 ): Partial<RoofNode> {
-  const nextSurfaceMaterial = { material, materialPreset }
-  const nextTop =
-    targetRole === 'top' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'top')
-  const nextEdge =
-    targetRole === 'edge' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'edge')
-  const nextWall =
-    targetRole === 'wall' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'wall')
-
-  return {
-    topMaterial: nextTop.material,
-    topMaterialPreset: nextTop.materialPreset,
-    edgeMaterial: nextEdge.material,
-    edgeMaterialPreset: nextEdge.materialPreset,
-    wallMaterial: nextWall.material,
-    wallMaterialPreset: nextWall.materialPreset,
-    material: undefined,
-    materialPreset: undefined,
-  }
+  return buildRoleMaterialPatch(targetRole, { material, materialPreset }, (role) =>
+    getEffectiveRoofSurfaceMaterial(node, role),
+  ) as Partial<RoofNode>
 }
 
 /**
- * Build a per-segment paint patch for one of the three surface roles. The
+ * Every surface role written out: the painted one takes the new paint, the
+ * others keep what they show now — so a role that still followed another
+ * (see roof-surface-roles) stays put instead of following the new paint.
+ */
+function buildRoleMaterialPatch(
+  targetRole: RoofSurfaceMaterialRole,
+  next: { material: MaterialSchema | undefined; materialPreset: string | undefined },
+  current: (role: RoofSurfaceMaterialRole) => {
+    material?: MaterialSchema
+    materialPreset?: string
+  },
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = { material: undefined, materialPreset: undefined }
+  for (const role of ROOF_SURFACE_MATERIAL_ROLES) {
+    const surface = role === targetRole ? next : current(role)
+    patch[`${role}Material`] = surface.material
+    patch[`${role}MaterialPreset`] = surface.materialPreset
+  }
+  return patch
+}
+
+/**
+ * Build a per-segment paint patch for one of the surface roles. The
  * segment ends up with role-specific fields set (and the legacy catch-all
  * `material` cleared) so subsequent reads pick the role override over any
  * parent-roof fallback.
@@ -119,24 +127,9 @@ export function buildRoofSegmentSurfaceMaterialPatch(
   material: MaterialSchema | undefined,
   materialPreset: string | undefined,
 ): Partial<RoofSegmentNode> {
-  const nextSurfaceMaterial = { material, materialPreset }
-  const nextTop =
-    targetRole === 'top' ? nextSurfaceMaterial : getEffectiveSegmentSurfaceMaterial(node, 'top')
-  const nextEdge =
-    targetRole === 'edge' ? nextSurfaceMaterial : getEffectiveSegmentSurfaceMaterial(node, 'edge')
-  const nextWall =
-    targetRole === 'wall' ? nextSurfaceMaterial : getEffectiveSegmentSurfaceMaterial(node, 'wall')
-
-  return {
-    topMaterial: nextTop.material,
-    topMaterialPreset: nextTop.materialPreset,
-    edgeMaterial: nextEdge.material,
-    edgeMaterialPreset: nextEdge.materialPreset,
-    wallMaterial: nextWall.material,
-    wallMaterialPreset: nextWall.materialPreset,
-    material: undefined,
-    materialPreset: undefined,
-  }
+  return buildRoleMaterialPatch(targetRole, { material, materialPreset }, (role) =>
+    getEffectiveSegmentSurfaceMaterial(node, role),
+  ) as Partial<RoofSegmentNode>
 }
 
 /**
@@ -244,6 +237,10 @@ export function getEffectiveChimneyMaterial(
   return { material: node.material, materialPreset: node.materialPreset }
 }
 
+function isRoofSurfaceRole(role: string): role is RoofSurfaceMaterialRole {
+  return (ROOF_SURFACE_MATERIAL_ROLES as readonly string[]).includes(role)
+}
+
 export function resolveActivePaintMaterialFromSelection(params: {
   materials?: Record<SceneMaterialId, SceneMaterial>
   nodes: Record<string, any>
@@ -295,12 +292,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
     }
   }
 
-  if (
-    selectedNode.type === 'roof' &&
-    (selectedMaterialTarget.role === 'top' ||
-      selectedMaterialTarget.role === 'edge' ||
-      selectedMaterialTarget.role === 'wall')
-  ) {
+  if (selectedNode.type === 'roof' && isRoofSurfaceRole(selectedMaterialTarget.role)) {
     let surface = getEffectiveRoofSurfaceMaterial(selectedNode, selectedMaterialTarget.role)
     if (
       selectedMaterialTarget.role === 'top' &&

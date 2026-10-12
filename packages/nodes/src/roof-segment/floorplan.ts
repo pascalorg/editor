@@ -4,9 +4,25 @@ import {
   type GeometryContext,
   getConicalRoofCoverage,
   getDutchRoofMetrics,
+  getGableRidge,
+  getRoofRingEdgeNormal,
+  getRoofSegmentCoverOutline,
+  getSegmentSlopeFrame,
   type RoofNode,
   type RoofSegmentNode,
 } from '@pascal-app/core'
+import { readGableRidgeLocks } from './gable-ridge-edit'
+
+/** A sloped gable drawn over an outline can be pulled out past its walls as a canopy. */
+export function canPullCanopy(node: RoofSegmentNode): boolean {
+  return (
+    node.roofType === 'gable' &&
+    node.pitch > 0 &&
+    Array.isArray(node.footprint) &&
+    node.footprint.length >= 3 &&
+    !node.managedByParent
+  )
+}
 
 /**
  * Stage C floor-plan builder for roof segment. Renders the segment as a
@@ -174,6 +190,26 @@ export function buildRoofSegmentFloorplan(
         affordance: 'roof-segment-resize',
         payload: { mode: 'radial' },
       })
+    } else if (canPullCanopy(node)) {
+      // A roof drawn over an outline: an arrow on every edge of what it covers
+      // pulls that edge out as a canopy (or back to the walls).
+      const cover = getRoofSegmentCoverOutline(node)
+      cover.forEach((point, edge) => {
+        const next = cover[(edge + 1) % cover.length]!
+        const [nx, nz] = getRoofRingEdgeNormal(cover, edge)
+        const [ox, oz] = rotateLocal(
+          (point[0] + next[0]) / 2 + nx * sideArrowOffset,
+          (point[1] + next[1]) / 2 + nz * sideArrowOffset,
+        )
+        const [tx, tz] = rotateLocal(nx, nz)
+        children.push({
+          kind: 'move-arrow',
+          point: [cx + ox, cz + oz],
+          angle: Math.atan2(tz, tx),
+          affordance: 'roof-segment-pull',
+          payload: { edge },
+        })
+      })
     } else {
       const sides: Array<{
         local: [number, number]
@@ -197,6 +233,21 @@ export function buildRoofSegmentFloorplan(
           payload: { axis: side.axis, side: side.side },
         })
       }
+    }
+
+    // Gable ridge: an arrow on the ridge line, a quarter way along it (clear
+    // of the centre move dot), slides the ridge across the depth.
+    const ridge = node.roofType === 'gable' ? getGableRidge(node) : null
+    if (ridge && !readGableRidgeLocks(node.metadata).ridge) {
+      const [ox, oz] = rotateLocal(halfW / 2, ridge.ridgeZ)
+      const [tx, tz] = rotateLocal(0, 1)
+      children.push({
+        kind: 'move-arrow',
+        point: [cx + ox, cz + oz],
+        angle: Math.atan2(tz, tx),
+        affordance: 'roof-segment-ridge',
+        payload: {},
+      })
     }
 
     // Rotate-arrow at the +X / +Z corner. Local angle π/4 puts the
@@ -293,13 +344,15 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
     case 'conical':
     case 'flat':
       break
-    case 'gable':
-      // Single ridge down the middle along the width axis.
+    case 'gable': {
+      // Single ridge along the width axis; off-centre when the slopes differ.
+      const { ridgeZ } = getSegmentSlopeFrame(node)
       ridges.push([
-        [-hw, 0],
-        [hw, 0],
+        [-hw, ridgeZ],
+        [hw, ridgeZ],
       ])
       break
+    }
     case 'shed':
       // 3D builder slopes from the high eave (lz = -hd) down to lz = +hd.
       slope = { tail: [0, -hd * 0.55], head: [0, hd * 0.55] }

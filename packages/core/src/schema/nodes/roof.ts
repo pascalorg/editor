@@ -2,15 +2,15 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { Assembly } from '../assembly'
 import { BaseNode, nodeType, objectId } from '../base'
-import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 import { RoofSegmentNode } from './roof-segment'
+import {
+  type RoofSurfaceMaterialRole,
+  type RoofSurfaceMaterialSpec,
+  readRoofRoleMaterial,
+} from './roof-surface-roles'
 
-export type RoofSurfaceMaterialRole = 'top' | 'edge' | 'wall'
-export type RoofSurfaceMaterialSpec = {
-  material?: MaterialSchemaType
-  materialPreset?: string
-}
+export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './roof-surface-roles'
 
 export const RoofSupport = z
   .discriminatedUnion('kind', [
@@ -36,6 +36,10 @@ export const RoofNode = BaseNode.extend({
   topMaterialPreset: z.string().optional(),
   edgeMaterial: MaterialSchema.optional(),
   edgeMaterialPreset: z.string().optional(),
+  soffitMaterial: MaterialSchema.optional(),
+  soffitMaterialPreset: z.string().optional(),
+  fasciaMaterial: MaterialSchema.optional(),
+  fasciaMaterialPreset: z.string().optional(),
   wallMaterial: MaterialSchema.optional(),
   wallMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
@@ -74,39 +78,9 @@ export function getEffectiveRoofSurfaceMaterial(
   node: RoofNode,
   role: RoofSurfaceMaterialRole,
 ): RoofSurfaceMaterialSpec {
-  if (role === 'top') {
-    if (node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string') {
-      return {
-        material: node.topMaterial,
-        materialPreset:
-          typeof node.topMaterialPreset === 'string' ? node.topMaterialPreset : undefined,
-      }
-    }
-  }
-
-  if (role === 'edge') {
-    if (node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string') {
-      return {
-        material: node.edgeMaterial,
-        materialPreset:
-          typeof node.edgeMaterialPreset === 'string' ? node.edgeMaterialPreset : undefined,
-      }
-    }
-  }
-
-  if (role === 'wall') {
-    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
-      return {
-        material: node.wallMaterial,
-        materialPreset:
-          typeof node.wallMaterialPreset === 'string' ? node.wallMaterialPreset : undefined,
-      }
-    }
-  }
-
-  // No cross-role fallback: an unset role resolves only to the legacy
-  // catch-all (which covers all three roles for back-compat) and otherwise
-  // to the caller's theme default. Painting one surface must never bleed
-  // onto the others.
-  return getLegacyRoofSurfaceMaterial(node)
+  // No cross-role fallback beyond the roles a new surface still follows
+  // (see roof-surface-roles): an unset role resolves only to the legacy
+  // catch-all and otherwise to the caller's theme default. Painting one
+  // surface must never bleed onto the others.
+  return readRoofRoleMaterial(node, role) ?? getLegacyRoofSurfaceMaterial(node)
 }

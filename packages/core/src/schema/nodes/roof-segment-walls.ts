@@ -1,6 +1,11 @@
 import { getWallFaceOffsets } from '../../systems/wall/wall-frame'
 import type { RoofSegmentNode } from './roof-segment'
-import { getDutchRoofMetrics, getSegmentSlopeFrame } from './roof-segment'
+import {
+  getDutchRoofMetrics,
+  getGableRidge,
+  getRoofSegmentBackSlopeTwin,
+  getSegmentSlopeFrame,
+} from './roof-segment'
 
 /**
  * Wall-face math for roof segments — the vertical surfaces a wall-mounted
@@ -50,6 +55,9 @@ type SegmentWallInputs = Pick<
   Partial<
     Pick<
       RoofSegmentNode,
+      | 'backPitch'
+      | 'ridgeOffset'
+      | 'ridgeStep'
       | 'gambrelLowerWidthRatio'
       | 'gambrelLowerHeightRatio'
       | 'mansardSteepWidthRatio'
@@ -66,11 +74,17 @@ type WallVolumeFrame = {
   dV: number
   /** Eave height of the outer volume. */
   eaveY: number
-  /** Ridge/peak height of the outer volume. */
+  /** Ridge/peak height of the outer volume (gable: the +z slope's ridge). */
   peakY: number
+  /** Gable: ridge height of the −z slope (differs from `peakY` with a ridge step). */
+  backPeakY: number
   /** tan(pitch) of the primary slope. */
   tanTheta: number
   hasSlope: boolean
+  /** Gable: eave height on the −z side (differs from `eaveY` with `backPitch`). */
+  backEaveY: number
+  /** Gable: segment-local z of the ridge. */
+  ridgeZ: number
 }
 
 function getWallVolumeFrame(node: SegmentWallInputs): WallVolumeFrame {
@@ -85,13 +99,45 @@ function getWallVolumeFrame(node: SegmentWallInputs): WallVolumeFrame {
     rh = activeRh + autoDrop
     if (node.roofType === 'shed') rh = activeRh + 2 * autoDrop
   }
+  const backTwin = getRoofSegmentBackSlopeTwin(node)
+  if (backTwin && activeRh > 0) {
+    const backTan = getSegmentSlopeFrame(backTwin).tanTheta
+    const backEaveY = Math.max(0.05, backTwin.wallHeight - (wallThickness / 2) * backTan)
+    // Same as the module's gable ridge: where the two slope planes meet, or the step line.
+    const ridge = getGableRidge(node)
+    const stepped = ridge !== null && ridge.step !== 0
+    const ridgeZ = Math.min(
+      dV / 2 - 0.001,
+      Math.max(
+        -dV / 2 + 0.001,
+        stepped
+          ? ridge.ridgeZ
+          : (eaveY + (dV / 2) * tanTheta - backEaveY - (dV / 2) * backTan) / (tanTheta + backTan),
+      ),
+    )
+    const peakY = eaveY + (dV / 2 - ridgeZ) * tanTheta
+    return {
+      wV,
+      dV,
+      eaveY,
+      peakY,
+      backPeakY: stepped ? backEaveY + (dV / 2 + ridgeZ) * backTan : peakY,
+      tanTheta,
+      hasSlope: true,
+      backEaveY,
+      ridgeZ,
+    }
+  }
   return {
     wV,
     dV,
     eaveY,
     peakY: eaveY + Math.max(0.001, rh),
+    backPeakY: eaveY + Math.max(0.001, rh),
     tanTheta,
     hasSlope: activeRh > 0,
+    backEaveY: eaveY,
+    ridgeZ: 0,
   }
 }
 
@@ -123,7 +169,7 @@ function buildFaceProfile(
   frame: WallVolumeFrame,
   id: RoofWallFaceId,
 ): [number, number][] {
-  const { wV, dV, eaveY, peakY, tanTheta, hasSlope } = frame
+  const { wV, dV, eaveY, peakY, backPeakY, tanTheta, hasSlope, backEaveY, ridgeZ } = frame
   const isEnd = id === 'right' || id === 'left'
   const length = isEnd ? dV : wV
 
@@ -131,14 +177,26 @@ function buildFaceProfile(
 
   switch (node.roofType) {
     case 'gable': {
+      if (id === 'back') return rectProfile(length, backEaveY)
       if (!isEnd) return rectProfile(length, eaveY)
-      return [
-        [0, 0],
-        [length, 0],
-        [length, eaveY],
-        [length / 2, peakY],
-        [0, eaveY],
-      ]
+      // u runs from +z to −z on the right face and from −z to +z on the left.
+      return id === 'right'
+        ? [
+            [0, 0],
+            [length, 0],
+            [length, backEaveY],
+            ...(backPeakY !== peakY ? [[dV / 2 - ridgeZ, backPeakY] as [number, number]] : []),
+            [dV / 2 - ridgeZ, peakY],
+            [0, eaveY],
+          ]
+        : [
+            [0, 0],
+            [length, 0],
+            [length, eaveY],
+            [dV / 2 + ridgeZ, peakY],
+            ...(backPeakY !== peakY ? [[dV / 2 + ridgeZ, backPeakY] as [number, number]] : []),
+            [0, backEaveY],
+          ]
     }
     case 'gambrel': {
       if (!isEnd) return rectProfile(length, eaveY)

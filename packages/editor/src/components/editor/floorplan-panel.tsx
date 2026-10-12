@@ -4435,6 +4435,13 @@ function FloorplanLinearDraftLayer({
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
   const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
+  // The roof tool's outline mode publishes its points; the cursor closes the ring.
+  const roofOutlineDraft = useFloorplanDraftPreview((s) =>
+    s.polygonDraftType === 'roof' ? s.polygonDraftPoints : null,
+  )
+  const roofOutlineCursor = useFloorplanDraftPreview((s) =>
+    s.polygonDraftType === 'roof' && s.polygonDraftPoints.length > 0 ? s.cursorPoint : null,
+  )
   const wallRectangleDraftStart = useFloorplanDraftPreview((s) => s.wallRectangleDraftStart)
   const wallPolygonDraftPoints = useFloorplanDraftPreview((s) => s.wallPolygonDraftPoints)
   // The live cursor is the rectangle's opposite corner; select it only while a
@@ -4536,8 +4543,19 @@ function FloorplanLinearDraftLayer({
         ])
       }
     }
+    if (isRoofBuildActive && roofOutlineDraft && roofOutlineDraft.length > 0) {
+      const ring = roofOutlineCursor ? [...roofOutlineDraft, roofOutlineCursor] : roofOutlineDraft
+      if (ring.length >= 2) return formatPolygonPoints(ring.map(([x, y]) => ({ x, y })))
+    }
     return draftPolygon ? formatPolygonPoints(draftPolygon) : null
-  }, [draftPolygon, isRoofBuildActive, roofDraftEnd, roofDraftStart])
+  }, [
+    draftPolygon,
+    isRoofBuildActive,
+    roofDraftEnd,
+    roofDraftStart,
+    roofOutlineCursor,
+    roofOutlineDraft,
+  ])
 
   const roofDraftDirectionLine = useMemo(() => {
     if (!(isRoofBuildActive && roofDraftStart && roofDraftEnd)) return null

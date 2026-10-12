@@ -272,6 +272,7 @@ export function generateDormerGeometry(
       [roofCsgDummyMats[1], 1],
       [roofCsgDummyMats[2], 2],
       [roofCsgDummyMats[3], 3],
+      [roofCsgDummyMats[4], 4],
     ])
     for (const group of resultGeo.groups) {
       group.materialIndex = mapRoofGroupMaterialIndex(

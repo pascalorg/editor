@@ -4,6 +4,7 @@ import {
   parseMaterialRef,
   type RoofNode,
   type RoofSegmentNode,
+  type RoofSurfaceMaterialRole,
   type SceneMaterial,
   type SceneMaterialId,
   wallAssemblyFinishRef,
@@ -20,18 +21,47 @@ import {
 
 type SceneMaterials = Record<SceneMaterialId, SceneMaterial> | undefined
 
-// Declared catalog defaults for an unpainted roof, per the 4-slot layout
-// (0 wall/trim · 1 deck · 2 interior soffit · 3 shingle top). The wall/trim
-// band mirrors the wall kind's default (WALL_SLOT_DEFAULT = concrete-drywall)
-// so a roof reads as continuous with the walls below it.
-const ROOF_DEFAULT_REFS: [string, string, string, string] = [
+/**
+ * The material slots of a roof's geometry and the surface role each one is
+ * painted with: 0 the gables (the roof's own walls), 1 the fascia (eave and
+ * rake ends of the overhang, fascia boards), 2 the inside, 3 the covering,
+ * 4 the soffit (the underside of the deck).
+ */
+export const ROOF_SLOT_ROLES = [
+  'edge',
+  'fascia',
+  'wall',
+  'top',
+  'soffit',
+] as const satisfies readonly RoofSurfaceMaterialRole[]
+
+// Declared catalog defaults for an unpainted roof, per slot. The gables, the
+// fascia and the soffit mirror the wall kind's default (WALL_SLOT_DEFAULT =
+// concrete-drywall) so a roof reads as continuous with the walls below it.
+const ROOF_DEFAULT_REFS: readonly string[] = [
+  'library:concrete-drywall',
   'library:concrete-drywall',
   'library:preset-softwhite',
-  'library:preset-softwhite',
   'library:roof-terracottatiles',
+  'library:concrete-drywall',
 ]
 
-export type RoofMaterialArray = [THREE.Material, THREE.Material, THREE.Material, THREE.Material]
+export type RoofMaterialArray = THREE.Material[]
+
+/**
+ * A roof's per-slot material array from a per-role resolver: each slot takes
+ * its own role's paint, else the slot's fallback — never another role's.
+ */
+export function buildRoofSlotMaterials(
+  resolveRole: (role: RoofSurfaceMaterialRole) => THREE.Material | null,
+  fallback: (slot: number) => THREE.Material,
+): RoofMaterialArray {
+  const byRole = new Map<RoofSurfaceMaterialRole, THREE.Material | null>()
+  return ROOF_SLOT_ROLES.map((role, slot) => {
+    if (!byRole.has(role)) byRole.set(role, resolveRole(role))
+    return byRole.get(role) ?? fallback(slot)
+  })
+}
 
 const roofMaterialArrayCache = new Map<string, RoofMaterialArray>()
 
@@ -108,9 +138,9 @@ export function getRoofMaterialArray(
   wallCladdingRef: string | null = null,
   sceneMaterials?: SceneMaterials,
 ): RoofMaterialArray | null {
-  const top = getEffectiveRoofSurfaceMaterial(node, 'top')
-  const edge = getEffectiveRoofSurfaceMaterial(node, 'edge')
-  const wall = getEffectiveRoofSurfaceMaterial(node, 'wall')
+  const specs = new Map(
+    ROOF_SLOT_ROLES.map((role) => [role, getEffectiveRoofSurfaceMaterial(node, role)] as const),
+  )
 
   const cacheKey = JSON.stringify({
     shading,
@@ -118,25 +148,21 @@ export function getRoofMaterialArray(
     colorPreset,
     sceneTheme,
     wallCladdingRef,
-    top: getSurfaceMaterialSignature(top, sceneMaterials),
-    edge: getSurfaceMaterialSignature(edge, sceneMaterials),
-    wall: getSurfaceMaterialSignature(wall, sceneMaterials),
+    roles: [...specs.values()].map((spec) => getSurfaceMaterialSignature(spec, sceneMaterials)),
   })
 
   const cached = roofMaterialArrayCache.get(cacheKey)
   if (cached) return cached
 
-  // Themed role colours: roof top/edge use the 'roof' role, the soffit/underside
-  // uses 'ceiling'. These also fill any untextured slot so an untextured roof is
-  // theme-coloured regardless of the textures toggle (no more white default).
+  // Themed role colours: the covering, gables, fascia and soffit use the
+  // 'roof' role, the inside uses 'ceiling'. These also fill any untextured
+  // slot so an untextured roof is theme-coloured regardless of the textures
+  // toggle (no more white default).
   const roofMaterial = createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
   const ceilingMaterial = createSurfaceRoleMaterial('ceiling', colorPreset, undefined, sceneTheme)
-  const roleArray: RoofMaterialArray = [
-    roofMaterial,
-    ceilingMaterial,
-    ceilingMaterial,
-    roofMaterial,
-  ]
+  const roleArray: RoofMaterialArray = ROOF_SLOT_ROLES.map((role) =>
+    role === 'wall' ? ceilingMaterial : roofMaterial,
+  )
 
   // Textures-off (monochrome) is the guaranteed escape hatch: themed role
   // colours, no catalog finishes.
@@ -146,38 +172,37 @@ export function getRoofMaterialArray(
   }
 
   // Textures-on default appearance: catalog finishes per slot (terracotta
-  // shingle, soft-white deck/soffit, wall-coloured trim). Used both when the
-  // roof is unpainted and to fill any individual unpainted slot below.
-  const defaultArray: RoofMaterialArray = [
-    resolveSlotDefaultMaterial(wallCladdingRef ?? ROOF_DEFAULT_REFS[0], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[1], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[2], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[3], shading),
-  ]
+  // shingle, soft-white inside, wall-coloured gables, fascia and soffit).
+  // Used both when the roof is unpainted and to fill any unpainted slot below.
+  const defaultArray: RoofMaterialArray = ROOF_DEFAULT_REFS.map((ref, slot) =>
+    resolveSlotDefaultMaterial(
+      slot === 0 || slot === 1 || slot === 4 ? (wallCladdingRef ?? ref) : ref,
+      shading,
+    ),
+  )
 
-  const resolve = (spec: typeof top) =>
-    createResolvedMaterial(spec.material, spec.materialPreset, sceneMaterials, shading)
-  const topMaterial = resolve(top)
-  const edgeMaterial = resolve(edge)
-  const wallMaterial = resolve(wall)
+  const resolved = new Map(
+    [...specs].map(
+      ([role, spec]) =>
+        [
+          role,
+          createResolvedMaterial(spec.material, spec.materialPreset, sceneMaterials, shading),
+        ] as const,
+    ),
+  )
 
-  if (!(topMaterial || edgeMaterial || wallMaterial)) {
+  if (![...resolved.values()].some(Boolean)) {
     roofMaterialArrayCache.set(cacheKey, defaultArray)
     return defaultArray
   }
 
   // Each slot resolves to its own role only, then the declared default — never
-  // another role. Cross-role fallback here used to splatter a single painted
-  // surface (e.g. the edge) across the shingle and soffit slots. The legacy
-  // catch-all still fills every role because `getEffectiveRoofSurfaceMaterial`
-  // returns it for top/edge/wall alike.
-  const materialArray: RoofMaterialArray = [
-    edgeMaterial ?? defaultArray[0],
-    wallMaterial ?? defaultArray[1],
-    wallMaterial ?? defaultArray[2],
-    topMaterial ?? defaultArray[3],
-  ]
-
+  // another role. The legacy catch-all still fills every role because
+  // `getEffectiveRoofSurfaceMaterial` returns it for every role alike.
+  const materialArray = buildRoofSlotMaterials(
+    (role) => resolved.get(role) ?? null,
+    (slot) => defaultArray[slot]!,
+  )
   roofMaterialArrayCache.set(cacheKey, materialArray)
   return materialArray
 }

@@ -7,8 +7,10 @@ import {
   getSegmentSlopeFrame,
   nodeRegistry,
   normalizeRoofSegmentTrim,
+  type RoofModuleInput,
   type RoofSegmentNode,
   type RoofShapeFaceVertex,
+  withRoofSegmentGableBack,
 } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -409,24 +411,36 @@ function buildRoofModuleGeometry(
     : { status: 'blocked', message: 'A canonical print face could not be triangulated.' }
 }
 
-function getVolumeFaces(
-  node: RoofSegmentNode,
-  options: { widthExtension: number; verticalOffset: number; isVoid: boolean },
-): RoofFace[] {
+type PrintVolume = 'wall-outer' | 'wall-inner' | 'roof-inner'
+
+function getVolumeFaces(node: RoofSegmentNode, volume: PrintVolume): RoofFace[] {
+  return getRoofModuleFaces(
+    withRoofSegmentGableBack(node, (pitched) => getVolumeModule(pitched, volume)),
+  )
+}
+
+/** The deck overhang follows the pitch, so each volume is worked out per pitch. */
+function getVolumeModule(node: RoofSegmentNode, volume: PrintVolume): RoofModuleInput {
+  const { activeRh, tanTheta, cosTheta } = getSegmentSlopeFrame(node)
+  const widthExtension =
+    volume === 'wall-outer'
+      ? node.wallThickness / 2
+      : volume === 'wall-inner'
+        ? -node.wallThickness / 2
+        : node.wallThickness / 2 + node.overhang * cosTheta
   const conicalCoverage = getConicalRoofCoverage(node)
-  const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
-  const width = Math.max(0.01, node.width + options.widthExtension * 2)
-  const depth = Math.max(0.01, node.depth + options.widthExtension * 2)
-  const autoDrop = options.widthExtension * tanTheta
-  const wallHeight = Math.max(0.01, node.wallHeight - autoDrop + options.verticalOffset)
+  const width = Math.max(0.01, node.width + widthExtension * 2)
+  const depth = Math.max(0.01, node.depth + widthExtension * 2)
+  const autoDrop = widthExtension * tanTheta
+  const wallHeight = Math.max(0.01, node.wallHeight - autoDrop)
   const roofHeight =
     activeRh > 0 ? activeRh + autoDrop * (node.roofType === 'shed' ? 2 : 1) : activeRh
   const shapeRatios = getRoofShapeRatios(node)
   const dutchInset =
     Math.min(node.width, node.depth) * node.dutchHipWidthRatio +
-    (options.isVoid ? node.deckThickness : 0)
+    (volume === 'roof-inner' ? node.deckThickness : 0)
 
-  return getRoofModuleFaces({
+  return {
     type: node.roofType,
     w: width,
     d: depth,
@@ -441,10 +455,18 @@ function getVolumeFaces(
     dutchTopRakeThickness: node.dutchTopRakeThickness,
     conicalStartAngle: conicalCoverage.startAngle,
     conicalSweepAngle: conicalCoverage.sweepAngle,
-  })
+  }
 }
 
 function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
+  const faces = getRoofModuleFaces(withRoofSegmentGableBack(node, getShingleOuterModule))
+  // A shed's outer prism is built centred and shifted by half the shingle projection.
+  if (node.roofType !== 'shed') return faces
+  const translateZ = (node.shingleThickness * getSegmentSlopeFrame(node).sinTheta) / 2
+  return faces.map((face) => face.map((point) => ({ ...point, z: point.z + translateZ })))
+}
+
+function getShingleOuterModule(node: RoofSegmentNode): RoofModuleInput {
   const conicalCoverage = getConicalRoofCoverage(node)
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(node)
   const shapeRatios = getRoofShapeRatios(node)
@@ -461,7 +483,6 @@ function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
     activeRh > 0 ? activeRh + deckDrop * (node.roofType === 'shed' ? 2 : 1) : activeRh
   let width = baseWidth
   let depth = baseDepth
-  let translateZ = 0
 
   if (['hip', 'mansard', 'dutch', 'conical'].includes(node.roofType)) {
     width += shingleHorizontalThickness * 2
@@ -470,7 +491,6 @@ function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
     depth += shingleHorizontalThickness * 2
   } else if (node.roofType === 'shed') {
     depth += shingleHorizontalThickness
-    translateZ = shingleHorizontalThickness / 2
   }
 
   const wallHeight = baseWallHeight + shingleVerticalThickness
@@ -490,7 +510,7 @@ function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
     dutchHipWidthRatio: node.dutchHipWidthRatio,
   })
 
-  const faces = getRoofModuleFaces({
+  return {
     type: node.roofType,
     w: width,
     d: depth,
@@ -505,10 +525,7 @@ function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
     dutchTopRakeThickness: node.dutchTopRakeThickness,
     conicalStartAngle: conicalCoverage.startAngle,
     conicalSweepAngle: conicalCoverage.sweepAngle,
-  })
-
-  if (translateZ === 0) return faces
-  return faces.map((face) => face.map((point) => ({ ...point, z: point.z + translateZ })))
+  }
 }
 
 function blockingDiagnostics(
@@ -582,23 +599,9 @@ export function buildPrintableRoofSegmentSolids(
   const diagnostics = blockingDiagnostics(node, nodes)
   if (diagnostics.length > 0) return { status: 'blocked', object: null, diagnostics }
 
-  const { cosTheta } = getSegmentSlopeFrame(node)
-  const wallOuter = getVolumeFaces(node, {
-    widthExtension: node.wallThickness / 2,
-    verticalOffset: 0,
-    isVoid: false,
-  })
-  const wallInner = getVolumeFaces(node, {
-    widthExtension: -node.wallThickness / 2,
-    verticalOffset: 0,
-    isVoid: false,
-  })
-  const deckExtension = node.wallThickness / 2 + node.overhang * cosTheta
-  const roofInner = getVolumeFaces(node, {
-    widthExtension: deckExtension,
-    verticalOffset: 0,
-    isVoid: true,
-  })
+  const wallOuter = getVolumeFaces(node, 'wall-outer')
+  const wallInner = getVolumeFaces(node, 'wall-inner')
+  const roofInner = getVolumeFaces(node, 'roof-inner')
   const roofOuter = getShingleOuterFaces(node)
   const geometryResult = buildRoofModuleGeometry(wallOuter, wallInner, roofOuter, roofInner)
   if (geometryResult.status === 'blocked') {
