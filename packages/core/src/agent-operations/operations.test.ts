@@ -12,7 +12,8 @@ import {
   StairNode,
   StairSegmentNode,
 } from '../schema'
-import { AGENT_TOOL_CASES } from './__fixtures__/cases'
+import { AGENT_TOOL_CASES, finiteReadbackProblems } from './__fixtures__/cases'
+import { paintedKitchenScene } from './__fixtures__/room-cases'
 import { applyAgentOutcome } from './apply-outcome'
 import { AGENT_OPERATIONS, applySceneChanges } from './index'
 
@@ -22,6 +23,9 @@ describe('agent operations', () => {
     if (c.surfaces && !c.surfaces.includes('core')) continue
     test(`${c.tool}: ${c.name}`, () => {
       const nodes = c.scene().nodes as Record<string, AnyNode>
+      const readBefore = ['get_walls', 'get_zones', 'get_level_summary'].includes(c.tool)
+        ? structuredClone(nodes)
+        : undefined
       const operation = AGENT_OPERATIONS[c.tool as keyof typeof AGENT_OPERATIONS]
       expect(operation).toBeDefined()
       const context = {
@@ -45,7 +49,13 @@ describe('agent operations', () => {
       }
       // Applied as both surfaces apply it: a scene without a store, derived by the pure reconciler.
       let after: Record<string, AnyNode> = nodes
-      const result = applyAgentOutcome(operation(nodes, input as never, context), {
+      const outcome = operation(nodes, input as never, context)
+      if (readBefore) {
+        expect(outcome.changes).toBeUndefined()
+        expect(outcome.afterReconcile).toBeUndefined()
+        expect(nodes).toEqual(readBefore)
+      }
+      const result = applyAgentOutcome(outcome, {
         getNodes: () => after,
         applyChanges: (changes) => {
           after = applySceneChanges(after, changes)
@@ -56,6 +66,11 @@ describe('agent operations', () => {
         },
       })
       expect(result).toMatchObject(c.expect.result)
+      if (readBefore) {
+        expect(after).toEqual(readBefore)
+        expect(finiteReadbackProblems(result)).toEqual([])
+        expect(JSON.parse(JSON.stringify(result))).toMatchObject(c.expect.result)
+      }
       for (const id of c.expect.present ?? []) expect(after[id]).toBeDefined()
       for (const id of c.expect.absent ?? []) expect(after[id]).toBeUndefined()
       for (const [id, fields] of Object.entries(c.expect.after ?? {}))
@@ -73,6 +88,49 @@ describe('agent operations', () => {
       for (const text of c.expect.mentions ?? []) expect(JSON.stringify(result)).toContain(text)
       expect(c.expect.check?.(result, after) ?? []).toEqual([])
     })
+  }
+})
+
+test('room intent writes round-trip through readback without deleting local paint', () => {
+  let nodes = paintedKitchenScene().nodes as Record<string, AnyNode>
+  const context = { activeLevelId: 'level_rooms' }
+  const expectedOverrides = [{ wallId: 'wall_north', face: 'a', finish: 'library:local-tile' }]
+  const transitions = [
+    [{ wallMaterial: null }, null],
+    [{ wallMaterial: 'library:preset-white' }, 'library:preset-white'],
+    [{ name: 'Studio' }, 'library:preset-white'],
+    [{ wallMaterial: '' }, ''],
+    [{ wallMaterial: null }, null],
+  ] as const
+  for (const [patch, expected] of transitions) {
+    const contract = AGENT_TOOL_CONTRACTS.find((entry) => entry.name === 'set_zone_intent')!
+    const input = z.object(contract.input).parse({ zoneId: 'zone_kitchen', patch })
+    applyAgentOutcome(AGENT_OPERATIONS.set_zone_intent(nodes, input as never, context), {
+      getNodes: () => nodes,
+      applyChanges: (changes) => {
+        nodes = applySceneChanges(nodes, changes)
+      },
+      reconcile: () => {
+        nodes = reconcileSceneStructure({ nodes, mintId: (kind) => generateId(kind) })
+          .nodes as Record<string, AnyNode>
+      },
+    })
+    const before = structuredClone(nodes)
+    const outcome = AGENT_OPERATIONS.get_zones(nodes, { levelId: 'level_rooms' }, context)
+    const result = outcome.result as { zones: Record<string, unknown>[] }
+    expect(result.zones.find((zone) => zone.id === 'zone_kitchen')).toMatchObject({
+      wallMaterial: expected,
+      wallOverrides: expectedOverrides,
+    })
+    expect(result.zones.find((zone) => zone.id === 'zone_pantry')).toMatchObject({
+      wallMaterial: 'library:pantry-blue',
+      wallOverrides: [{ wallId: 'wall_south', face: 'a', finish: 'library:pantry-tile' }],
+    })
+    expect(nodes.wall_north).toMatchObject({
+      faceRegions: [{ id: 'wainscot', face: 'a', v1: 0.9, finish: 'library:wood' }],
+    })
+    expect(outcome.changes).toBeUndefined()
+    expect(nodes).toEqual(before)
   }
 })
 

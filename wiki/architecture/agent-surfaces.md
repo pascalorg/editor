@@ -29,6 +29,8 @@ A tool has three layers, and only the last one may differ between surfaces:
 
 **Tests follow the layers.** A tool's edge cases are written first as one table (e.g. `building/__fixtures__/wall-opening-cases.ts`, or the shared `agent-operations/__fixtures__/cases.ts`) and run by three runners: the core operation (`operations.test.ts`), the MCP tool through a real client (`shared-tools.test.ts`), the chat executor on the real store. A change that makes one layer disagree fails.
 
+**Wall finish readback is intent and base-chain provenance, not visual verification.** `get_zones` exposes persisted `wallMaterial` (string, or `null` when absent) and `wallOverrides` (`{ wallId, face, finish }` records, or `[]` when absent). `get_walls` and the walls in `get_level_summary` expose `wallFaceChains: { a, b }` through the shared `resolveWallFaceChain`: each face is a slot `ref`, a `legacy` inline spec, or a `default` fallback ref. Room overrides/defaults and face paint regions are separate layers; exterior assembly cladding, dangling refs, loading and visibility can also change the final appearance. A chosen white or default-matching ref is legitimate, and absence alone is not a defect or a requirement to paint. `get_node` retains the full detailed state.
+
 ## Adding a tool to both surfaces
 
 A tool is written once and registered twice; never build the same tool separately for the chat and the MCP.

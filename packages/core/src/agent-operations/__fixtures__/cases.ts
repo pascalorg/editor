@@ -240,6 +240,40 @@ function houseScene(): SceneGraph {
 
 const emptyScene = (): SceneGraph => ({ nodes: {}, rootNodeIds: [] })
 
+/** Base chains are not the room/region finish, nor a promise that a ref renders. */
+export function finishReadbackScene(): SceneGraph {
+  const scene = houseScene()
+  const wall = scene.nodes.wall_ground as WallNode
+  scene.nodes.wall_ground = {
+    ...wall,
+    slots: { a: 'library:concrete-drywall' },
+    faceRegions: [{ id: 'wainscot', face: 'a', v1: 0.9, finish: 'library:wood' }],
+  }
+  scene.nodes.wall_side = {
+    ...(scene.nodes.wall_side as WallNode),
+    legacyFaceMaterials: {
+      a: { material: { preset: 'white' }, materialPreset: 'library:preset-white' },
+    },
+    materialPreset: 'library:legacy-wall',
+  }
+  scene.nodes.zone_ground = {
+    ...(scene.nodes.zone_ground as ZoneNode),
+    boundaryWallIds: [wall.id],
+    wallMaterial: 'library:preset-white',
+    wallOverrides: [{ wallId: wall.id, face: 'a', finish: 'library:local-tile' }],
+  }
+  return scene
+}
+
+/** Reject non-finite layout endpoints before JSON can silently turn them into null. */
+export function finiteReadbackProblems(value: unknown, path = 'result'): string[] {
+  if (typeof value === 'number') return Number.isFinite(value) ? [] : [`${path} is not finite`]
+  if (!value || typeof value !== 'object') return []
+  return Object.entries(value).flatMap(([key, entry]) =>
+    finiteReadbackProblems(entry, `${path}.${key}`),
+  )
+}
+
 /** A level no building holds. */
 function orphanLevelScene(): SceneGraph {
   const level = LevelNode.parse({ id: 'level_orphan', level: 0 })
@@ -444,6 +478,10 @@ export const GET_WALLS_CASES: AgentToolCase[] = [
             height: 2.5,
             resolvedHeight: 2.5,
             heightIsExplicit: true,
+            wallFaceChains: {
+              a: { kind: 'default', ref: 'library:concrete-drywall' },
+              b: { kind: 'default', ref: 'library:concrete-drywall' },
+            },
             openings: [
               { id: 'door_ground', type: 'door' },
               { id: 'window_ground', type: 'window' },
@@ -454,6 +492,10 @@ export const GET_WALLS_CASES: AgentToolCase[] = [
             length: 4,
             resolvedHeight: 2.8,
             heightIsExplicit: false,
+            wallFaceChains: {
+              a: { kind: 'default', ref: 'library:concrete-drywall' },
+              b: { kind: 'default', ref: 'library:concrete-drywall' },
+            },
             openings: [],
           },
         ],
@@ -483,6 +525,80 @@ export const GET_ZONES_CASES: AgentToolCase[] = [
             ],
             areaSqMeters: 12,
             bounds: { width: 4, depth: 3 },
+            wallMaterial: null,
+            wallOverrides: [],
+          },
+        ],
+      },
+    },
+  },
+]
+
+// Approved readback contract: preserve provenance, including a deliberate choice identical to
+// the fallback. Literal oracles deliberately do not call the finish resolver under test.
+export const FINISH_READBACK_CASES: AgentToolCase[] = [
+  ...(['get_walls', 'get_level_summary'] as const).map((tool): AgentToolCase => ({
+    name: 'base face chains distinguish chosen default, unchosen default and legacy finishes',
+    tool,
+    scene: finishReadbackScene,
+    input: { levelId: 'level_ground' },
+    expect: {
+      result: {
+        walls: [
+          {
+            id: 'wall_ground',
+            wallFaceChains: {
+              a: { kind: 'ref', ref: 'library:concrete-drywall' },
+              b: { kind: 'default', ref: 'library:concrete-drywall' },
+            },
+          },
+          {
+            id: 'wall_side',
+            wallFaceChains: {
+              a: {
+                kind: 'legacy',
+                spec: { material: { preset: 'white' }, materialPreset: 'library:preset-white' },
+              },
+              b: { kind: 'legacy', spec: { materialPreset: 'library:legacy-wall' } },
+            },
+          },
+        ],
+      },
+      check: (result) => finiteReadbackProblems(result),
+    },
+  })),
+  {
+    name: 'a chosen white room default and local face paint are persisted intent',
+    tool: 'get_zones',
+    scene: finishReadbackScene,
+    input: { levelId: 'level_ground' },
+    expect: {
+      result: {
+        zones: [
+          {
+            id: 'zone_ground',
+            wallMaterial: 'library:preset-white',
+            wallOverrides: [{ wallId: 'wall_ground', face: 'a', finish: 'library:local-tile' }],
+          },
+        ],
+      },
+      check: (result) => finiteReadbackProblems(result),
+    },
+  },
+  {
+    name: 'another storey does not inherit the painted storey base chains',
+    tool: 'get_walls',
+    scene: finishReadbackScene,
+    input: { levelId: 'level_upper' },
+    expect: {
+      result: {
+        walls: [
+          {
+            id: 'wall_upper',
+            wallFaceChains: {
+              a: { kind: 'default', ref: 'library:concrete-drywall' },
+              b: { kind: 'default', ref: 'library:concrete-drywall' },
+            },
           },
         ],
       },
@@ -769,6 +885,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...GET_WALLS_CASES,
   ...GET_ZONES_CASES,
   ...GET_LEVEL_SUMMARY_CASES,
+  ...FINISH_READBACK_CASES,
   ...DUPLICATE_LEVEL_CASES,
   ...VERIFY_SCENE_CASES,
   ...DELETE_NODE_CASES,
