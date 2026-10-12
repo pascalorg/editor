@@ -154,6 +154,12 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
 
 export function SceneLoader(props: SceneLoaderProps) {
   const webXRInstalled = useWebXRInstalled()
+  // The editor follows its host's `.dark` class, and this app keeps the editor
+  // dark. On <body>, so the menus and dialogs it portals there are dark too.
+  useEffect(() => {
+    document.body.classList.add('dark')
+    return () => document.body.classList.remove('dark')
+  }, [])
   return (
     <WebXRFeatureRuntime enabled={webXRInstalled}>
       <SceneEditor {...props} />
