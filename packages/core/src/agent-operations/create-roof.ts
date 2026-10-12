@@ -137,8 +137,14 @@ function wallOutline(nodes: SceneNodes, storeyId: string) {
   return outlines.map((polygon) => grown(polygon, half))
 }
 
-/** A polygon moved out by `distance` along each edge's outward normal, corners mitred. */
-function grown(polygon: Pt[], distance: number): Pt[] {
+/**
+ * How far a mitre may reach, in multiples of the distance moved: past it (a corner under about
+ * 29°, or an edge folding back on itself) the corner is bevelled, as an SVG stroke's is.
+ */
+const MITER_LIMIT = 4
+
+/** A polygon moved out by `distance` along each edge's outward normal, corners mitred up to the limit. */
+export function grown(polygon: Pt[], distance: number): Pt[] {
   const n = polygon.length
   let area = 0
   for (let i = 0; i < n; i++) {
@@ -152,14 +158,19 @@ function grown(polygon: Pt[], distance: number): Pt[] {
     const length = Math.hypot(dx, dz) || 1
     return [(side * dz) / length, (-side * dx) / length]
   }
-  return polygon.map((point, i) => {
+  return polygon.flatMap((point, i): Pt[] => {
     const before = normal(polygon[(i - 1 + n) % n]!, point)
     const after = normal(point, polygon[(i + 1) % n]!)
-    const sum: Pt = [before[0] + after[0], before[1] + after[1]]
     const dot = before[0] * after[0] + before[1] * after[1]
+    // The mitre reaches distance × √(2 / (1 + dot)): unbounded as the edges fold onto each other.
+    if (1 + dot < 2 / MITER_LIMIT ** 2)
+      return [
+        [point[0] + before[0] * distance, point[1] + before[1] * distance],
+        [point[0] + after[0] * distance, point[1] + after[1] * distance],
+      ]
     // Along the bisector, as far as both edges move by `distance`.
     const scale = distance / (1 + dot)
-    return [point[0] + sum[0] * scale, point[1] + sum[1] * scale]
+    return [[point[0] + (before[0] + after[0]) * scale, point[1] + (before[1] + after[1]) * scale]]
   })
 }
 
