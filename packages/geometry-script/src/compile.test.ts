@@ -21,12 +21,22 @@ import {
   SlabNode,
   WallNode,
 } from '@pascal-app/core/schema'
-import { AnimationMixer, Box3, LoopOnce, Vector3 } from 'three'
+import {
+  AnimationMixer,
+  Box3,
+  BoxGeometry,
+  Group,
+  LoopOnce,
+  Mesh,
+  MeshStandardMaterial,
+  Vector3,
+} from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { CHEF_LAMP_SCRIPT } from './__fixtures__/ceiling-lamp'
 import { FITTED_CABINET_SCRIPT } from './__fixtures__/fitted-cabinet'
 import { SLIDING_DOOR_SCRIPT } from './__fixtures__/sliding-door'
 import { CINEMA_SCREEN_SCRIPT } from './__fixtures__/wall-screen'
+import { finishBuild } from './compile'
 import { compileGeometryScript } from './index'
 
 const SASH = `
@@ -590,5 +600,37 @@ describe('a sliding door built from a script', () => {
     action.getMixer().setTime(clip.duration)
     expect(leaf('leaf_0').position.x).toBeLessThan(closed[0]! - 0.4)
     expect(leaf('leaf_1').position.x).toBeGreaterThan(closed[1]! + 0.4)
+  })
+})
+
+// A Blender module is read into the same `finishBuild` a three.js one ends in, so what refuses an
+// object there refuses it for both languages: a node at a position that is not a number, or no mesh.
+describe('what refuses an object that cannot be measured, for a Blender build too', () => {
+  const finish = (built: Group) =>
+    finishBuild({
+      built,
+      mount: 'floor',
+      specs: [],
+      params: {},
+      code: 'import bpy',
+      language: 'bpy',
+    })
+
+  test('a mesh at a position that is not a number is refused, naming it', async () => {
+    const built = new Group()
+    const mesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial())
+    mesh.position.set(0, 0.5, new MeshStandardMaterial() as unknown as number)
+    built.add(mesh)
+    await expect(finish(built)).rejects.toThrow('position.z = a MeshStandardMaterial')
+  })
+
+  test('a build with no mesh is refused as empty', async () => {
+    await expect(finish(new Group())).rejects.toThrow('build() returned no visible meshes')
+  })
+
+  test('a build that is measurable carries its language into the artifact', async () => {
+    const built = new Group()
+    built.add(new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial()))
+    expect((await finish(built)).language).toBe('bpy')
   })
 })

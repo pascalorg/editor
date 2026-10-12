@@ -354,7 +354,7 @@ describe('a door built from a script', () => {
     set: () => {},
   }
 
-  function mountScriptedDoor() {
+  function mountScriptedDoor(language: 'three' | 'bpy' = 'three') {
     registerNode({
       kind: 'door',
       schema: DoorNode,
@@ -368,7 +368,7 @@ describe('a door built from a script', () => {
       doorType: 'sliding',
       width: 1.2,
       height: 2.55,
-      source,
+      source: { ...source, language },
     })
     const column = ColumnNode.parse({ id: 'column_far' })
     setSceneNodes([door, column])
@@ -423,6 +423,14 @@ describe('a door built from a script', () => {
     mountScriptedDoor()
     useInteractive.setState({ items: { door_shoji: { controlValues: [true] } } } as never)
 
+    expect(firstHitAcrossDoorway()).toBeNull()
+  })
+  test('a Blender-built door follows its mechanism the same way: the language makes no difference', () => {
+    mountScriptedDoor('bpy')
+    useInteractive.setState({ items: { door_shoji: { controlValues: [false] } } } as never)
+    expect(firstHitAcrossDoorway()?.z).toBeCloseTo(-0.03, 3)
+
+    useInteractive.setState({ items: { door_shoji: { controlValues: [true] } } } as never)
     expect(firstHitAcrossDoorway()).toBeNull()
   })
 })
