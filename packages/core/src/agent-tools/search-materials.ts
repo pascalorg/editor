@@ -13,7 +13,7 @@ export const searchMaterialsTool = {
   name: 'search_materials',
   title: 'Search materials',
   description:
-    "Search the material library (the finishes paint, a slot or a preset takes) by words, several queries in one call: before giving a library material, find its id here rather than guessing. A query matches a material's id, name, kind and description, building words as the library writes them (timber is wood, weatherboard is lap siding, render is stucco), colour words by its shade (dark, light, grey), and surface words (roof, wall, floor, ceiling) by what it suits. Returns one group per query: each material's ref (library:<id>), name, kind, the surfaces it suits and its colour, best first, and the words no material matches (missing), so a material the library lacks is said, not guessed.",
+    "Search the material library (the finishes paint, a slot or a preset takes) by words, with one or several queries in a call. Results provide library material ids when these are not already known; ids are never guessed. A query matches a material's id, name, kind and description, building words as the library writes them (timber is wood, weatherboard is lap siding, render is stucco), colour words by its shade (dark, light, grey), and surface words (roof, wall, floor, ceiling) by what it suits. Returns one group per query: each material's ref (library:<id>), name, kind, the surfaces it suits and its colour, best first, and the words no material matches (missing), so a material the library lacks is said, not guessed.",
   input: {
     queries: z
       .array(

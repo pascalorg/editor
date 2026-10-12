@@ -16,7 +16,7 @@ export function extendVerifyScene(extension: {
 }
 
 const DESCRIPTION =
-  'Check the whole scene after complex edits, and before retrying a failed tool: per-level content and roles (storey, roof-only, support), then every problem found, each with a type: empty levels, walls with no room or door, rooms with no floor or ceiling, storeys with no stair, roof levels misused, openings off their wall, stairs off their slab or blocked, furniture blocking a door or overlapping, nodes their schema rejects.'
+  'Optional whole-scene evidence: per-level content and roles (storey, roof-only, support), then every problem found, each with a type: empty levels, walls with no room or door, rooms with no floor or ceiling, storeys with no stair, roof levels misused, openings off their wall, stairs off their slab or blocked, furniture blocking a door or overlapping, nodes their schema rejects.'
 
 export const verifySceneTool = {
   name: 'verify_scene',

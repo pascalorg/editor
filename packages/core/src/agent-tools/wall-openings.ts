@@ -30,7 +30,7 @@ const script = (kind: string) => ({
     .max(48_000)
     .optional()
     .describe(
-      `A three.js module for a ${kind} the fields cannot express (a fan grille, tracery, carved trim): the same module and conventions as add_object, with mount 'wall'. Its size is what it builds (name params width and height so the ${kind}'s size controls edit them), and its cutout mesh cuts the wall. Make it open like a real ${kind}: add an \`open\` clip (${kind === 'door' ? 'the leaves swinging or sliding' : 'the sash sliding or swinging'}; \`close\` is optional, \`open\` reversed by default) unless it is fixed. Fields first; code only beyond them.`,
+      `An optional three.js module for a ${kind} (a fan grille, tracery, carved trim): the same module and conventions as add_object, with mount 'wall'. Its size is what it builds (name params width and height so the ${kind}'s size controls edit them), and its cutout mesh cuts the wall. Make it open like a real ${kind}: add an \`open\` clip (${kind === 'door' ? 'the leaves swinging or sliding' : 'the sash sliding or swinging'}; \`close\` is optional, \`open\` reversed by default) unless it is fixed. Native fields and code are available to express the requested shape.`,
     ),
   params: scriptParams,
   ...geometryMetaFields,
@@ -61,7 +61,7 @@ export const addDoorTool = {
   input: {
     wallId: NodeId.optional().describe('The wall to add the door to.'),
     nodeId: NodeId.optional().describe(
-      'Rebuild this door instead of adding one: new code and/or params (get_source first to change its code). Its native fields change with update_node.',
+      'Rebuild this door instead of adding one: new code and/or params (get_source provides current code when needed). Its native fields change with update_node.',
     ),
     ...placement,
     width: measurement('length', 'm', {
@@ -105,7 +105,7 @@ export const addWindowTool = {
   input: {
     wallId: NodeId.optional().describe('The wall to add the window to.'),
     nodeId: NodeId.optional().describe(
-      'Rebuild this window instead of adding one: new code and/or params (get_source first to change its code). Its native fields change with update_node.',
+      'Rebuild this window instead of adding one: new code and/or params (get_source provides current code when needed). Its native fields change with update_node.',
     ),
     ...placement,
     width: measurement('length', 'm', {

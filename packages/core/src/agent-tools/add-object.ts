@@ -23,7 +23,7 @@ Conventions (they make the object work in Pascal; follow them):
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
 - No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
 
-Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; read it first with get_source to change the code); identity, placement, paint and the params you leave out are kept. The result lists the size, parts, slots, lights, animations and params.`
+Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; get_source provides the current code and params when needed); identity, placement, paint and the params you leave out are kept. The result lists the size, parts, slots, lights, animations and params.`
 
 /** The `params` field every scripted tool shares (add_object, add_window, add_door, add_column). */
 export const scriptParams = z
@@ -87,7 +87,7 @@ export const getSourceTool = {
   name: 'get_source',
   title: 'Read object script',
   description:
-    'The three.js module an object (or a window, door or column built from code) runs, with its params and their current values. Read it before changing its code, then pass the edited module back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.',
+    'The three.js module an object (or a window, door or column built from code) runs, with its params and their current values. Optional source evidence when the current module is needed. An edited module can be passed back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.',
   input: {
     nodeId: NodeId.describe('An object, window, door or column built from code.'),
   },

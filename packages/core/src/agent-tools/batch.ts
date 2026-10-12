@@ -48,7 +48,7 @@ export const BATCHABLE_TOOLS = [
 export const runBatchTool = {
   name: 'run_batch',
   title: 'Run a batch of scene tools',
-  description: `Run several scene tools in one call: in order, each on the scene the calls before it left, applied as one undo step, with a report per call. Use it for what repeats or can be written in advance — the same tool on every floor, many nodes to delete, plans to rebuild with replace, a check at the end — instead of one call per step. A call cannot use an id another call of the same batch creates: take it from the report and batch again. onRefusal stop (default): a refused call stops the batch and nothing is applied; skip: the others are applied and each refusal is reported. Tools: ${BATCHABLE_TOOLS.join(', ')}.`,
+  description: `Optionally run several scene tools in one call: in order, each on the scene the calls before it left, applied as one undo step, with a report per call. Supports repeated or known-in-advance work; individual calls remain available. A call cannot use an id another call of the same batch creates; created ids are available in the report for subsequent calls. onRefusal stop (default): a refused call stops the batch and nothing is applied; skip: the others are applied and each refusal is reported. Tools: ${BATCHABLE_TOOLS.join(', ')}.`,
   input: {
     calls: z
       .array(
