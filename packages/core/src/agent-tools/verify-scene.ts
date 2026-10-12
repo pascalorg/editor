@@ -16,7 +16,7 @@ export function extendVerifyScene(extension: {
 }
 
 const DESCRIPTION =
-  'Optional whole-scene evidence: per-level content and roles (storey, roof-only, support), then every problem found, each with a type: empty levels, walls with no room or door, rooms with no floor or ceiling, storeys with no stair, roof levels misused, walls intersecting a covering slab or ending coplanar with its walking surface (wall_covering_slab_contact, with wallId and slabId), openings off their wall, stairs off their slab or blocked, furniture blocking a door or overlapping, nodes their schema rejects.'
+  'Optional whole-scene evidence: per-level content and roles (storey, roof-only, support), then every problem found, each with a type: empty levels, walls with no room or door, rooms with no floor or ceiling, storeys with no stair, roof levels misused, walls intersecting a covering slab or ending coplanar with its walking surface (wall_covering_slab_contact, with wallId and slabId), openings off their wall, stairs off their slab or blocked, furniture blocking a door or overlapping, nodes their schema rejects. Static authored ceiling objects report transformed bounds extending above their ceiling attachment and bounds overlapping solid covering slab bands, with node IDs and measured metres; stored and derived slab holes are subtracted. These are observations, not instructions to change the scene or proof of exact mesh intersection. Bounds are measured in the owning building frame, including stacked level elevations; catalog/animated models, unsupported attachment frames, roof collisions, recessed slab shells and foundation volumes are not assessed.'
 
 export const verifySceneTool = {
   name: 'verify_scene',

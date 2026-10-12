@@ -10,6 +10,10 @@ import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footp
 import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
 import { measureStair } from '../systems/stair/stair-sizing'
 import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/opening-bounds'
+import {
+  type CeilingObjectObservation,
+  ceilingObjectObservations,
+} from './ceiling-object-observations'
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
@@ -28,6 +32,7 @@ import type { AgentOperation, SceneNodes } from './types'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
 export type SceneIssue =
+  | CeilingObjectObservation
   | { type: string; message: string; severity?: 'info' }
   | {
       type: 'wall_covering_slab_contact'
@@ -508,6 +513,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
   issues.push(...layoutIssuesFromScene(Object.values(nodes)))
+  issues.push(...ceilingObjectObservations(nodes))
   for (const check of checks)
     if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
   // What the edits since the host's checkpoint lost, by place.

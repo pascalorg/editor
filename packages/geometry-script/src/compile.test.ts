@@ -6,10 +6,23 @@ import {
   resolveCeilingHeight,
   scriptSource,
 } from '@pascal-app/core'
-import { addObject, applySceneChanges, editedScriptParams } from '@pascal-app/core/agent-operations'
-import { CeilingNode, GeometryArtifactManifest, ItemNode, LevelNode } from '@pascal-app/core/schema'
+import {
+  addObject,
+  applySceneChanges,
+  editedScriptParams,
+  verifyScene,
+} from '@pascal-app/core/agent-operations'
+import {
+  BuildingNode,
+  CeilingNode,
+  GeometryArtifactManifest,
+  ItemNode,
+  LevelNode,
+  SlabNode,
+} from '@pascal-app/core/schema'
 import { Box3, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { CHEF_LAMP_SCRIPT } from './__fixtures__/ceiling-lamp'
 import { compileGeometryScript } from './index'
 
 const SASH = `
@@ -74,6 +87,114 @@ test('ceiling artifacts hang below their attachment while floor and wall origins
     expect(compiled.manifest.bounds.min[2]).toBe(mount === 'wall-side' ? 0 : -0.5)
     expect(compiled.manifest.bounds.max[2]).toBe(mount === 'wall-side' ? 1 : 0.5)
   }
+})
+
+test('the rebuilt chef lamp hangs down and verification observes its saved upward-built bounds', async () => {
+  const compiled = await compileGeometryScript({
+    code: CHEF_LAMP_SCRIPT,
+    params: { radius: 0.72, drop: 0.85, tiers: 1 },
+  })
+  expect(compiled.manifest.bounds).toEqual({
+    min: [-0.764, -0.8285, -0.764],
+    max: [0.764, 0, 0.764],
+  })
+  const polygon: [number, number][] = [
+    [6, -3],
+    [10, -3],
+    [10, 1],
+    [6, 1],
+  ]
+  const building = BuildingNode.parse({ id: 'building_chef' })
+  const ground = LevelNode.parse({
+    id: 'level_chef_ground',
+    parentId: building.id,
+    level: 0,
+    height: 3.6,
+  })
+  const upper = LevelNode.parse({
+    id: 'level_chef_upper',
+    parentId: building.id,
+    level: 1,
+    height: 3.3,
+  })
+  const ceiling = CeilingNode.parse({
+    id: 'ceiling_88zvkao8naaye0gw',
+    parentId: ground.id,
+    polygon,
+  })
+  const slab = SlabNode.parse({
+    id: 'slab_0000evo624j6qr31',
+    parentId: upper.id,
+    polygon,
+    elevation: 0.05,
+    thickness: 0.05,
+  })
+  building.children = [ground.id, upper.id]
+  ground.children = [ceiling.id]
+  upper.children = [slab.id]
+  const initial = Object.fromEntries(
+    [building, ground, upper, ceiling, slab].map((node) => [node.id, node]),
+  )
+  const context = { activeLevelId: ground.id }
+  const added = addObject(
+    initial,
+    {
+      compiled,
+      parentId: ceiling.id,
+      position: [8, 0, -1],
+      name: 'Chef Kitchen alabaster light',
+      reason: 'Warm alabaster ring lighting',
+    },
+    context,
+  )
+  const correct = applySceneChanges(initial, added.changes)
+  const item = ItemNode.parse(correct[added.result.nodeId as string])
+  const plane = resolveCeilingHeight(ceiling, correct) - CEILING_DRAW_OFFSET
+  expect(plane).toBeCloseTo(3.58)
+  const artifact = await new GLTFLoader().parseAsync(compiled.glb, '')
+  artifact.scene.position.set(8, plane, -1)
+  const worldBounds = new Box3().setFromObject(artifact.scene)
+  expect(worldBounds.max.y).toBeCloseTo(plane)
+  expect(worldBounds.min.y).toBeCloseTo(plane - 0.8285)
+  const observations = (nodes: Record<string, AnyNode>) =>
+    (verifyScene(nodes, {}, context).result.issues as { type: string }[]).filter((issue) =>
+      ['item_above_ceiling', 'item_covering_slab_overlap'].includes(issue.type),
+    )
+  expect(observations(correct)).toEqual([])
+
+  // The old compiler translated these same meshes to minY = 0 instead of maxY = 0.
+  const saved = ItemNode.parse({
+    ...item,
+    id: 'item_pq9vb5ybn2em2cr9',
+    source: {
+      ...item.source,
+      manifest: {
+        ...compiled.manifest,
+        bounds: { min: [-0.764, 0, -0.764], max: [0.764, 0.8285, 0.764] },
+      },
+    },
+  })
+  const savedNodes = { ...correct, [saved.id]: saved }
+  delete savedNodes[item.id]
+  savedNodes[ceiling.id] = { ...ceiling, children: [saved.id] }
+  const before = JSON.stringify(savedNodes)
+  expect(observations(savedNodes)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        type: 'item_above_ceiling',
+        itemId: saved.id,
+        ceilingId: ceiling.id,
+        aboveAttachmentMeters: expect.closeTo(0.8285),
+      }),
+      expect.objectContaining({
+        type: 'item_covering_slab_overlap',
+        itemId: saved.id,
+        slabId: slab.id,
+        overlapHeightMeters: expect.closeTo(0.05),
+      }),
+    ]),
+  )
+  expect(JSON.stringify(savedNodes)).toBe(before)
 })
 
 test('an edit keeps the current param values the new code still accepts', async () => {

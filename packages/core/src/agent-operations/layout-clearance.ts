@@ -12,6 +12,14 @@ import { floorConstructionLift, liftedManualSlab } from '../lib/floor-constructi
 import { selectSlabSupportForItem } from '../lib/item-slab-support'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support-query'
+import {
+  type Bounds,
+  boundsOf,
+  boxCorners,
+  frame,
+  rotateVector,
+  transformPoint,
+} from '../procedural-items/spatial'
 import { type AnyNode, getScaledDimensions, type ItemNode } from '../schema'
 import { resolveCeilingHeight } from '../services/level-height'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
@@ -163,10 +171,10 @@ function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
  * Only script manifests supply raw bounds for the renderer's corrective asset pose.
  * Catalog dimensions describe a plan box, not proof of the raw model's Y origin.
  */
-function itemVerticalInterval(
+export function scriptItemBoundsInLevel(
   node: AnyNode | undefined,
   nodes: Record<string, AnyNode>,
-): ItemVerticalInterval | undefined {
+): { levelId: string; bounds: Bounds; corners: [number, number, number][] } | undefined {
   if (node?.type !== 'item' || node.roofSegmentId || node.blockFaceId) return
   const bounds = node.source?.manifest?.bounds
   const assetScale = node.asset.scale ?? [1, 1, 1]
@@ -177,11 +185,11 @@ function itemVerticalInterval(
     !finiteVec3(bounds.max) ||
     bounds.min.some((min, axis) => min > bounds.max[axis]!) ||
     !finiteVec3(node.position) ||
-    !planarRotation(node.rotation) ||
+    !finiteVec3(node.rotation) ||
     !finiteVec3(node.scale) ||
     node.scale.some((scale) => scale <= 0) ||
     !finiteVec3(node.asset.offset) ||
-    !planarRotation(node.asset.rotation) ||
+    !finiteVec3(node.asset.rotation) ||
     !finiteVec3(assetScale) ||
     assetScale.some((scale) => scale <= 0) ||
     !finiteVec3(node.asset.dimensions) ||
@@ -195,26 +203,55 @@ function itemVerticalInterval(
       : parent?.type === 'ceiling' && parent.parentId
         ? nodes[parent.parentId]
         : undefined
-  if (level?.type !== 'level') return
+  if (level?.type !== 'level' || !finiteNumbers(level) || !finiteNumbers(parent)) return
   try {
     const hostY =
       parent?.type === 'ceiling'
         ? resolveCeilingHeight(parent, nodes) - CEILING_DRAW_OFFSET
         : itemFloorLift(node, nodes)
-    // Clone: asset scale → asset yaw → asset offset → node scale → node yaw.
-    // Both rotations preserve Y; the owning level's world translation cancels.
-    const min =
-      hostY +
-      node.position[1] +
-      node.scale[1] * (node.asset.offset[1] + assetScale[1] * bounds.min[1])
-    const max =
-      hostY +
-      node.position[1] +
-      node.scale[1] * (node.asset.offset[1] + assetScale[1] * bounds.max[1])
-    if (Number.isFinite(min) && Number.isFinite(max)) return { levelId: level.id, min, max }
+    const pose = frame(
+      [node.position[0], hostY + node.position[1], node.position[2]],
+      node.rotation,
+    )
+    // Match the model groups: corrective asset pose is inside the node-scale group.
+    const corners = boxCorners(bounds.min, bounds.max).map((point) => {
+      const rotated = rotateVector(
+        point.map((value, axis) => value * assetScale[axis]!) as [number, number, number],
+        node.asset.rotation,
+      )
+      return transformPoint(
+        pose,
+        rotated.map((value, axis) => (value + node.asset.offset[axis]!) * node.scale[axis]!) as [
+          number,
+          number,
+          number,
+        ],
+      )
+    })
+    if (corners.every(finiteVec3)) return { levelId: level.id, bounds: boundsOf(corners), corners }
   } catch {
     // Malformed or unsupported support geometry is not evidence of separation.
   }
+}
+
+function itemVerticalInterval(
+  node: AnyNode | undefined,
+  nodes: Record<string, AnyNode>,
+): ItemVerticalInterval | undefined {
+  // Keep the existing plan-layout evidence limited to yaw-only model poses.
+  if (
+    node?.type !== 'item' ||
+    !planarRotation(node.rotation) ||
+    !planarRotation(node.asset.rotation)
+  )
+    return
+  const resolved = scriptItemBoundsInLevel(node, nodes)
+  if (resolved)
+    return {
+      levelId: resolved.levelId,
+      min: resolved.bounds.min[1],
+      max: resolved.bounds.max[1],
+    }
 }
 
 export function findItemItemCollisions(args: {

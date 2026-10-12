@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, CeilingNode, ItemNode, LevelNode, SlabNode, ZoneNode } from '../schema'
+import {
+  type AnyNode,
+  BuildingNode,
+  CeilingNode,
+  ItemNode,
+  LevelNode,
+  SlabNode,
+  ZoneNode,
+} from '../schema'
 import { CEILING_DRAW_OFFSET } from '../services'
 import { authoredItem } from './__fixtures__/add-object-cases'
 import {
@@ -204,6 +212,208 @@ describe('layout-clearance', () => {
     })
     blocker.position = [20, 0, 16]
     expect(findItemItemCollisions({ nodes: [node, blocker] })).toHaveLength(1)
+  })
+
+  function ceilingBoundsScene() {
+    const building = BuildingNode.parse({
+      id: 'building_bounds',
+      position: [30, 7, -20],
+      rotation: [0, Math.PI / 3, 0],
+    })
+    const level = LevelNode.parse({
+      id: 'level_bounds',
+      parentId: building.id,
+      height: 3.6,
+      baseElevation: 0.7,
+    })
+    const upper = LevelNode.parse({
+      id: 'level_bounds_upper',
+      parentId: building.id,
+      level: 1,
+      height: 3,
+    })
+    const polygon: [number, number][] = [
+      [-12, -8],
+      [12, -8],
+      [12, 8],
+      [-12, 8],
+    ]
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_bounds',
+      parentId: level.id,
+      polygon,
+    })
+    const slab = SlabNode.parse({
+      id: 'slab_bounds',
+      parentId: upper.id,
+      polygon,
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    const lamp = authoredItem('item_bounds', ceiling.id, {
+      name: 'Chef Kitchen alabaster light',
+      category: 'lighting',
+      size: [1.528, 0.8285, 1.528],
+    })
+    lamp.position = [8, 0, -1]
+    lamp.asset.attachTo = 'ceiling'
+    const nodes = [building, level, upper, ceiling, slab, lamp]
+    for (const node of nodes) {
+      const parent = nodes.find((candidate) => candidate.id === node.parentId)
+      if (parent && 'children' in parent) parent.children.push(node.id as never)
+    }
+    return { building, level, upper, ceiling, slab, lamp, nodes }
+  }
+
+  function boundsObservations(nodes: AnyNode[]) {
+    const graph = Object.fromEntries(nodes.map((node) => [node.id, node]))
+    const before = JSON.stringify(graph)
+    const issues = verifyScene(graph, {}, { activeLevelId: 'level_bounds' }).result.issues
+    expect(JSON.stringify(graph)).toBe(before)
+    return issues.filter(
+      (issue) => issue.type === 'item_above_ceiling' || issue.type === 'item_covering_slab_overlap',
+    )
+  }
+
+  test('ceiling bounds observations measure saved positive-Y lamps without changing them', () => {
+    const { nodes, lamp, ceiling, slab } = ceilingBoundsScene()
+    const observations = boundsObservations(nodes)
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        type: 'item_above_ceiling',
+        itemId: lamp.id,
+        ceilingId: ceiling.id,
+        aboveAttachmentMeters: expect.closeTo(0.8285, 6),
+        attachmentElevation: expect.closeTo(4.28, 6),
+        coordinateFrame: 'building',
+      }),
+    )
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        type: 'item_covering_slab_overlap',
+        itemId: lamp.id,
+        ceilingId: ceiling.id,
+        slabId: slab.id,
+        overlapHeightMeters: expect.closeTo(0.05, 6),
+        overlapAreaSquareMeters: expect.closeTo(1.528 ** 2, 6),
+      }),
+    )
+    expect(observations[0]!.message).toContain('0.829 m above ceiling attachment ceiling_bounds')
+  })
+
+  test('ceiling bounds observations leave top-anchored negative-Y lamps clear', () => {
+    const { nodes, lamp } = ceilingBoundsScene()
+    lamp.source!.manifest.bounds.min[1] = -0.8285
+    lamp.source!.manifest.bounds.max[1] = 0
+    expect(boundsObservations(nodes)).toEqual([])
+  })
+
+  test('ceiling bounds observations apply asset and node corrective transforms', () => {
+    const { nodes, lamp } = ceilingBoundsScene()
+    lamp.source!.manifest.bounds.min[1] = -0.8285
+    lamp.source!.manifest.bounds.max[1] = 0
+    lamp.asset.offset = [0, 0.1, 0]
+    lamp.asset.scale = [2, 3, 1]
+    lamp.asset.rotation = [0, 0, Math.PI / 2]
+    lamp.scale = [1, 2, 1]
+    lamp.rotation = [0, Math.PI / 2, 0]
+    expect(boundsObservations(nodes)).toContainEqual(
+      expect.objectContaining({
+        type: 'item_above_ceiling',
+        aboveAttachmentMeters: expect.closeTo(3.256, 6),
+      }),
+    )
+    lamp.asset.offset = [0, 0, 0]
+    lamp.asset.scale = [1, 1, 1]
+    lamp.asset.rotation = [0, 0, 0]
+    lamp.scale = [1, 1, 1]
+    lamp.rotation = [Math.PI / 2, 0, 0]
+    expect(boundsObservations(nodes)).toContainEqual(
+      expect.objectContaining({
+        type: 'item_above_ceiling',
+        aboveAttachmentMeters: expect.closeTo(0.764, 6),
+      }),
+    )
+  })
+
+  test('ceiling bounds observations subtract full holes but not just a covered centroid', () => {
+    const { nodes, slab } = ceilingBoundsScene()
+    slab.holes = [
+      [
+        [7, -2],
+        [9, -2],
+        [9, 0],
+        [7, 0],
+      ],
+    ]
+    expect(boundsObservations(nodes).map((issue) => issue.type)).toEqual(['item_above_ceiling'])
+    slab.holes[0] = [
+      [7.8, -1.2],
+      [8.2, -1.2],
+      [8.2, -0.8],
+      [7.8, -0.8],
+    ]
+    expect(boundsObservations(nodes)).toContainEqual(
+      expect.objectContaining({
+        type: 'item_covering_slab_overlap',
+        overlapAreaSquareMeters: expect.closeTo(1.528 ** 2 - 0.16, 6),
+      }),
+    )
+  })
+
+  test('ceiling bounds observations subtract derived authored slab cutters', () => {
+    const { nodes, upper, slab } = ceilingBoundsScene()
+    const cutter = authoredItem('item_slab_cutter', upper.id, {
+      name: 'Slab opening',
+      category: 'opening',
+      size: [2, 0.2, 2],
+    })
+    cutter.position = [8, 0, -1]
+    cutter.supportSlabId = slab.id
+    cutter.source!.manifest.cutters = [
+      {
+        host: 'slab',
+        polygon: [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ],
+        minY: -0.1,
+        maxY: 0.1,
+      },
+    ]
+    upper.children.push(cutter.id)
+    expect(boundsObservations([...nodes, cutter]).map((issue) => issue.type)).toEqual([
+      'item_above_ceiling',
+    ])
+  })
+
+  test('ceiling bounds observations exclude disjoint, unrelated and nonpenetrating coverings', () => {
+    const { nodes, slab, lamp, upper } = ceilingBoundsScene()
+    slab.polygon = [
+      [-2, -2],
+      [2, -2],
+      [2, 2],
+      [-2, 2],
+    ]
+    expect(boundsObservations(nodes).map((issue) => issue.type)).toEqual(['item_above_ceiling'])
+    slab.polygon = [
+      [7, -2],
+      [9, -2],
+      [9, 0],
+      [7, 0],
+    ]
+    const unrelated = BuildingNode.parse({ id: 'building_unrelated' })
+    upper.parentId = unrelated.id
+    expect(boundsObservations([...nodes, unrelated]).map((issue) => issue.type)).toEqual([
+      'item_above_ceiling',
+    ])
+    upper.parentId = 'building_bounds'
+    lamp.position[1] = 2
+    expect(boundsObservations(nodes).map((issue) => issue.type)).toEqual(['item_above_ceiling'])
+    lamp.position[1] = 0.02 - 0.8285
+    expect(boundsObservations(nodes).map((issue) => issue.type)).toEqual(['item_above_ceiling'])
   })
 
   function verticalScene() {
