@@ -7,7 +7,7 @@
 
 export type ModuleTable = Record<string, Record<string, unknown>>
 
-const IMPORT_RE = /^\s*import\s+([\s\S]+?)\s+from\s+['"]([^'"]+)['"]\s*;?/gm
+const IMPORT_RE = /(?:^|(?<=;))\s*import\s+([\s\S]+?)\s+from\s+['"]([^'"]+)['"]\s*;?/gm
 const SIDE_EFFECT_IMPORT_RE = /^\s*import\s+['"][^'"]+['"]\s*;?/gm
 
 export function moduleKey(specifier: string): string | null {

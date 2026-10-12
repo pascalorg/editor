@@ -221,3 +221,43 @@ test('only slab and ceiling cutter outlines are stored while wall cutters stay i
     )
   }
 })
+
+test('compiles a bespoke bed with consecutive allowlisted imports on one line', async () => {
+  const { manifest, mount, params, glb } = await compileGeometryScript({
+    code: `import * as THREE from 'three'; import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+export const params={width:{default:4,min:2.8,max:4.6,step:.1},depth:{default:2.8,min:2.5,max:3.2,step:.1},color:{default:'#d5c5ad'}};export const mount='floor';
+export default function build({params:p}){const g=new THREE.Group();const fabric=new THREE.MeshStandardMaterial({color:p.color,roughness:.94});fabric.name='slot_upholstery';const linen=new THREE.MeshStandardMaterial({color:'#f2ece1',roughness:1});linen.name='slot_linen';const wood=new THREE.MeshStandardMaterial({color:'#493426',roughness:.4});wood.name='slot_joinery';const brass=new THREE.MeshStandardMaterial({color:'#b39660',metalness:.78,roughness:.3});brass.name='slot_bronze';const accent=new THREE.MeshStandardMaterial({color:'#6b6e57',roughness:1});accent.name='slot_throw';
+function part(id,type){let q=new THREE.Group();q.name='part:'+id;q.userData.type=type;g.add(q);return q;}function b(q,w,h,d,x,y,z,m,r=.05){let a=new THREE.Mesh(new RoundedBoxGeometry(w,h,d,3,r),m);a.position.set(x,y,z);q.add(a);return a;}
+let a=part('headboard','panel');b(a,p.width,1.48,.2,0,.84,-p.depth/2+.1,fabric,.085);for(let x=-p.width/2+.22;x<p.width/2;x+=.24)b(a,.012,1.12,.012,x,.94,-p.depth/2+.207,brass,.003);
+a=part('bed','bed');b(a,2.24,.17,2.26,0,.13,.13,brass);b(a,2.4,.24,2.36,0,.3,.13,fabric,.09);b(a,2.2,.27,2.22,0,.555,.15,linen,.11);b(a,2.21,.075,.83,0,.73,.87,accent,.025);for(let x of[-.56,.56]){const pillow=b(a,.88,.18,.53,x,.78,-.62,linen,.085);pillow.rotation.x=-.14;b(a,.46,.19,.32,x,.83,-.28,fabric,.09);}
+a=part('bedside_cabinets','cabinet');for(let s of[-1,1]){let x=s*(p.width/2-.34);b(a,.6,.11,.55,x,.08,-.78,brass);b(a,.64,.47,.58,x,.37,-.78,wood);b(a,.67,.035,.61,x,.625,-.78,brass,.015);b(a,.22,.018,.024,x,.37,-.478,brass,.005);let ball=new THREE.Mesh(new THREE.SphereGeometry(.10,24,16),brass);ball.position.set(x,.74,-.78);a.add(ball);}
+return g;}`,
+    params: { width: 3.15, depth: 2.7, color: '#b6c0b5' },
+  })
+  expect(mount).toBe('floor')
+  expect(params).toEqual({ width: 3.15, depth: 2.7, color: '#b6c0b5' })
+  expect(manifest.parts.map((part) => part.id)).toEqual(['headboard', 'bed', 'bedside_cabinets'])
+  expect(manifest.slots.map((slot) => slot.id).sort()).toEqual([
+    'bronze',
+    'joinery',
+    'linen',
+    'throw',
+    'upholstery',
+  ])
+  expect(manifest.triangles).toBeGreaterThan(0)
+  const artifact = await new GLTFLoader().parseAsync(glb, '')
+  expect(artifact.scene.children.length).toBeGreaterThan(0)
+})
+
+test.each([
+  'node:fs',
+  'https://example.com/module.js',
+  'three/addons/loaders/GLTFLoader.js',
+])('rejects a non-allowlisted import after a same-line import: %s', async (specifier) => {
+  await expect(
+    compileGeometryScript({
+      code: `import * as THREE from 'three'; import { unavailable } from '${specifier}';
+export default function build() { return new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)); }`,
+    }),
+  ).rejects.toThrow(`Unsupported import ${specifier}`)
+})
