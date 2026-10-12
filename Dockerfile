@@ -23,6 +23,16 @@ RUN cd packages/cli && bun run build && bun run stage-runtime
 
 FROM node:22-alpine
 WORKDIR /app
+
+# GHCR reads these: the package page links to the repository, shows its
+# README and inherits its access, and the licence is declared on the image.
+LABEL org.opencontainers.image.title="Pascal editor" \
+      org.opencontainers.image.description="Self-hosted Pascal, the open-source 3D architecture editor: one container, projects in SQLite under /data." \
+      org.opencontainers.image.source="https://github.com/pascalorg/editor" \
+      org.opencontainers.image.documentation="https://github.com/pascalorg/editor/blob/main/SETUP.md" \
+      org.opencontainers.image.url="https://editor.pascal.app" \
+      org.opencontainers.image.vendor="Pascal" \
+      org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
