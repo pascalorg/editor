@@ -164,3 +164,29 @@ test('an obstacle appearing after arrival causes one calm flight to a clear view
   obstacle.geometry.dispose()
   ;(obstacle.material as MeshBasicMaterial).dispose()
 })
+
+test.each([
+  'camera-controls:interaction-start',
+  'camera-controls:orbit-cw',
+] as const)('$0 yields the camera and floor even when another target arrives', async (event) => {
+  const { target } = await followItem()
+  expect(poses.length).toBeGreaterThan(0)
+  emitter.emit(event)
+  const count = poses.length
+  expect(useFollowPascal.getState().paused).toBe(true)
+  await act(async () => {
+    runAsSceneCommitAuthor('agent', () =>
+      useScene
+        .getState()
+        .createNode(
+          ItemNode.parse({ ...useScene.getState().nodes.item_follow, id: 'item_next' }),
+          'level_roof',
+        ),
+    )
+    driver!.tick(40)
+    await renderer!.advanceFrames(100, 0.05)
+  })
+  expect(useFollowPascal.getState().paused).toBe(true)
+  expect(poses.length).toBe(count)
+  expect(useViewer.getState().selection.levelId).toBe(target.id)
+})
