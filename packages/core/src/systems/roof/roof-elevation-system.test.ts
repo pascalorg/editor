@@ -123,7 +123,7 @@ describe('RoofElevationSystem', () => {
   })
 
   test('waits for the slab grid listener and tracks subsequent slab elevation edits', async () => {
-    const { level, roof } = setup()
+    const { level, wall, roof } = setup()
     const slab = SlabNode.parse({
       elevation: 0.5,
       polygon: [
@@ -135,10 +135,13 @@ describe('RoofElevationSystem', () => {
     })
     useScene.getState().createNode(slab, level.id)
     await Promise.resolve()
-    expect(currentRoof(roof.id).position[1]).toBe(0.5)
+    expect(currentRoof(roof.id).position[1]).toBe(0)
+    useScene.getState().updateNode(wall.id, { height: 3.2 })
+    await Promise.resolve()
+    expect(currentRoof(roof.id).position[1]).toBeCloseTo(0.7)
     useScene.getState().updateNode(slab.id, { elevation: 0.9 })
     await Promise.resolve()
-    expect(currentRoof(roof.id).position[1]).toBeCloseTo(0.9)
+    expect(currentRoof(roof.id).position[1]).toBeCloseTo(1.1)
   })
 
   test('keeps a custom Y edit after follow mode is disabled', async () => {

@@ -15,10 +15,9 @@ import {
 } from '../schema'
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
 import type { DoorType, WindowType } from '../schema/nodes/opening-types'
-import { getWallPlaneTop } from '../services/storey'
+import { getWallTop } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
-import { resolveWallTop } from '../systems/wall/wall-top'
 import {
   type DoorStyle,
   doorStyleLook,
@@ -49,11 +48,8 @@ export function resolveWallOpeningCeiling(
 ): number {
   const support = wallSupportForNodes(wall, nodes)
   return (
-    resolveWallTop(
-      wall,
-      getWallPlaneTop(wall, wall.parentId ?? '', nodes as Record<string, AnyNode>),
-      support.elevation,
-    ) - support.elevation
+    getWallTop(wall, wall.parentId ?? '', nodes as Record<string, AnyNode>, support.elevation) -
+    support.elevation
   )
 }
 

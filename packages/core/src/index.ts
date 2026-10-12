@@ -956,6 +956,7 @@ export {
   MIN_WALL_HEIGHT,
   resolveWallEffectiveHeight,
   resolveWallTop,
+  wallFollowsStorey,
 } from './systems/wall/wall-top'
 export {
   findOpenWallEnds,

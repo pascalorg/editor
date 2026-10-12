@@ -8,6 +8,7 @@ import {
   pointOnPolygonBoundary,
   wallOverlapsSlabFootprint,
 } from '../systems/slab/slab-support'
+import { resolveWallTop } from '../systems/wall/wall-top'
 import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 
 /**
@@ -385,10 +386,8 @@ export function getCoveringSlabUndersideAt(
  * edge's orientation (one wall clamped, its neighbor didn't). Boundary
  * contact counts as covered on every side of the slab.
  *
- * This is THE plane for a plane-bound wall (`height` absent). Explicit-height
- * walls ignore the value (`resolveWallTop` returns their stored height), so
- * passing it wherever a raw storey height feeds `resolveWallTop` /
- * `resolveWallEffectiveHeight` is always safe. Falls back to
+ * Use {@link getWallTop} to resolve a wall's top with its elected base and
+ * raw authored storey height, independently of this plane. Falls back to
  * {@link DEFAULT_LEVEL_HEIGHT} when `levelId` doesn't resolve to a level.
  */
 export function getWallPlaneTop(
@@ -397,6 +396,22 @@ export function getWallPlaneTop(
   nodes: Record<AnyNodeId, AnyNode>,
 ): number {
   return wallPlaneTop(wall, resolveCoveringSlabContext(levelId, nodes))
+}
+
+export function getWallTop(
+  wall: WallNode,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  electedBase: number,
+): number {
+  const level = nodes[levelId as LevelNode['id']]
+  const authoredStoreyHeight = level?.type === 'level' ? (level.height ?? null) : null
+  return resolveWallTop(
+    wall,
+    getWallPlaneTop(wall, levelId, nodes),
+    electedBase,
+    authoredStoreyHeight,
+  )
 }
 
 export function getWallCoveringSlabUnderside(

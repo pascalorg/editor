@@ -1,9 +1,8 @@
 import { levelIdOf, nodesOnLevel } from '../agent-operations/scene-queries'
 import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../schema'
-import { findLevelBelowId, getLevelElevations, getWallPlaneTop } from '../services/storey'
+import { findLevelBelowId, getLevelElevations, getWallTop } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
-import { resolveWallTop } from '../systems/wall/wall-top'
 import { type RoofBody, resolveRoofBody, sampleRoofBody } from './roof-body'
 import { COHERENCE_TOLERANCES } from './tolerances'
 import type { CoherenceIssue, CoherenceSeverity, RoofWallFigures } from './types'
@@ -151,8 +150,7 @@ export function wallTopOf(nodes: SceneNodes, wall: WallNode, levelId: string): n
     nodes,
   )
   const baseY = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(levelId)?.baseY ?? 0
-  const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>)
-  return baseY + resolveWallTop(wall, planeTop, support.elevation)
+  return baseY + getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation)
 }
 
 function measureWall(
@@ -179,8 +177,8 @@ function measureWall(
     0,
     nodes,
   )
-  const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>)
-  const top = level.baseY + resolveWallTop(wall, planeTop, support.elevation)
+  const top =
+    level.baseY + getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation)
 
   const samples: WallRoofSample[] = []
   for (let index = 0; index < count; index++) {

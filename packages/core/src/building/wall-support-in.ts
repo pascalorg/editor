@@ -1,8 +1,7 @@
 import { resolveLevelId } from '../lib/node-ancestry'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import type { AnyNode, WallNode } from '../schema'
-import { getWallPlaneTop } from '../services/storey'
-import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
+import { getWallTop } from '../services/storey'
 
 /**
  * A wall's base and height read from the records given, never from the open scene. The facade and
@@ -16,9 +15,6 @@ export function wallBaseElevationIn(wall: WallNode, nodes: Readonly<Record<strin
 
 export function wallEffectiveHeightIn(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
   const levelId = resolveLevelId(wall, nodes as Record<string, AnyNode>)
-  return resolveWallEffectiveHeight(
-    wall,
-    getWallPlaneTop(wall, levelId, nodes as Record<string, AnyNode>),
-    wallSupportForNodes(wall, nodes).elevation,
-  )
+  const base = wallSupportForNodes(wall, nodes).elevation
+  return getWallTop(wall, levelId, nodes as Record<string, AnyNode>, base) - base
 }

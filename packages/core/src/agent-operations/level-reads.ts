@@ -2,7 +2,7 @@ import { area } from '../lib/polygon-boolean'
 import { roomFloorChoices } from '../lib/room-floor-choices'
 import type { AnyNode, AnyNodeId, ItemNode, LevelNode, WallNode, ZoneNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
-import { getWallPlaneTop } from '../services/storey'
+import { getWallTop } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { resolveWallFaceChain } from '../systems/wall/wall-finish'
 import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
@@ -33,8 +33,10 @@ export function wallResolvedHeight(nodes: SceneNodes, wall: WallNode): number {
     0,
     nodes as Record<AnyNodeId, AnyNode>,
   )
-  const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>)
-  return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
+  return (
+    getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation) -
+    support.elevation
+  )
 }
 
 export function wallSummary(nodes: SceneNodes, wall: WallNode) {

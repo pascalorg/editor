@@ -1126,7 +1126,7 @@ function updateWallGeometry(
 
   const levelId = resolveLevelId(node, nodes)
   // Covering-clamped plane: a flush/thick slab on the level above shortens
-  // the plane-bound walls below it (explicit-height walls ignore the value).
+  // the plane-bound walls below it.
   const planeTop = getWallPlaneTop(node, levelId, nodes)
   const slabSupport = spatialGridManager.getSlabSupportForWall(
     levelId,
@@ -1564,7 +1564,10 @@ export function generateExtrudedWall(
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
+  const levelId = resolveLevelId(wallNode, sceneNodes as Record<string, AnyNode>)
+  const level = sceneNodes[levelId]
+  const authoredStoreyHeight = level?.type === 'level' ? (level.height ?? null) : null
+  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation, authoredStoreyHeight)
   const faceDatum = faceBase
   if (faceBase)
     faceBase = {
