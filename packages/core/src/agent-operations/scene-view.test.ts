@@ -663,8 +663,8 @@ function hipHouse({ rotation = 0 }: { rotation?: number } = {}) {
   return { nodes: byId }
 }
 
-// A check of a roof against what carries it (coherence items) asks to look at the roof: its level
-// held nothing a view could frame, so the look failed with nothing_to_view where the defect was.
+// A look at a roof defect asks to see the roof: its level held nothing a view could frame, so the
+// look failed with nothing_to_view where the defect was.
 describe('a close-up of a roof', () => {
   const r = (v: number) => Math.round(v * 100) / 100
   const house = () => hipHouse().nodes

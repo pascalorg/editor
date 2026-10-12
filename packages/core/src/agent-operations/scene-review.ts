@@ -1,7 +1,4 @@
 import { refuse } from '../agent-tools/refusal'
-import { checkCoherence, coherenceItems } from '../coherence'
-import { activeIssues } from '../coherence/disputes'
-import type { CoherenceItem } from '../coherence/types'
 import { getLevelDisplayName } from '../lib/level-name'
 import type { AnyNode } from '../schema'
 import { hashNode as hashOf, type SessionRecord } from './scene-checkpoint'
@@ -40,7 +37,6 @@ export type SinceReview = {
   groups: ReviewGroup[]
   /** What the agent made and is gone now, since the checkpoint. */
   lost: LostElement[]
-  coherence: { introduced: CoherenceItem[]; resolved: { id: string }[] }
   /** The registered families, by place: windows, lit rooms… that are gone or new. */
   places?: { changes: MeasureChange[]; issues: LostSinceCheckpointIssue[] }
 }
@@ -55,8 +51,8 @@ type Bucket = {
 
 /**
  * The scene now against a checkpoint the session named: what was created, changed and deleted,
- * grouped by level and kind with a view each, the coherence items introduced and resolved since, and
- * what the agent made that is gone. Pure: the session record comes from the host.
+ * grouped by level and kind with a view each, and what the agent made that is gone. Pure: the
+ * session record comes from the host.
  */
 export function reviewSince(session: SessionRecord, name: string, nodes: SceneNodes): SinceReview {
   const checkpoint = session.checkpoints[name]
@@ -142,9 +138,6 @@ export function reviewSince(session: SessionRecord, name: string, nodes: SceneNo
     })
   })
 
-  const open = activeIssues(checkCoherence(nodes), nodes)
-  const stillOpen = new Set(open.map((issue) => issue.id))
-  const before = new Set(checkpoint.issues)
   const places = changesSince({ name: checkpoint.name, measure: checkpoint.measure }, nodes)
 
   return {
@@ -156,13 +149,6 @@ export function reviewSince(session: SessionRecord, name: string, nodes: SceneNo
     },
     groups,
     lost,
-    coherence: {
-      introduced: coherenceItems(
-        open.filter((issue) => !before.has(issue.id)),
-        nodes,
-      ),
-      resolved: checkpoint.issues.filter((id) => !stillOpen.has(id)).map((id) => ({ id })),
-    },
     ...(places.changes.length ? { places } : {}),
   }
 }

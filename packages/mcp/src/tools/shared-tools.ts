@@ -31,7 +31,6 @@ import {
   createStairsAndLiftsTool,
   createStairTool,
   deleteNodeTool,
-  disputeCoherenceItemTool,
   duplicateLevelTool,
   findByTypeTool,
   fitStairTool,
@@ -283,9 +282,6 @@ const SHARED_TOOLS: SharedTool[] = [
         }),
       ),
       hasIssues: z.boolean(),
-      coherence: z
-        .object({ open: z.number(), disputed: z.number(), checklist: z.array(jsonObject) })
-        .optional(),
       checkpoints: z.array(z.string()).optional(),
       since: jsonObject.optional(),
       authoredObjects: z
@@ -304,11 +300,6 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: setCheckpointTool,
     operation: AGENT_OPERATIONS.set_checkpoint,
-    annotations: ADDITIVE_TOOL_ANNOTATIONS,
-  },
-  {
-    contract: disputeCoherenceItemTool,
-    operation: AGENT_OPERATIONS.dispute_coherence_item,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {

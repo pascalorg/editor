@@ -57,7 +57,6 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   delete_node: policy(false, true, false),
   delete_scene: policy(false, true, false),
   delete_zone: policy(false, true, false),
-  dispute_coherence_item: policy(false, false, false),
   divide_zone: policy(false, true, false),
   describe_node: policy(true, false, false),
   duplicate_level: policy(false, false, false),

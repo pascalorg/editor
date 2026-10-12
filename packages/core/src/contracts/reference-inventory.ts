@@ -1061,10 +1061,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'storyShell',
     'suppressedDimensionSegmentIndexes',
   ]),
-  ...described(
-    'What a maker said about a coherence issue, keyed by issue id (which embeds node ids). A copy with new ids stops matching them, so its issues are open again: stale, never wrong.',
-    ['coherence', 'coherence.disputes'],
-  ),
   ...described('Read as a truthy flag only; no editor writer.', [
     'arrayModifier',
     'curvedWindowMaster',

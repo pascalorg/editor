@@ -84,7 +84,6 @@ const TOOL_POLICIES = [
       'create_room',
       'create_stair',
       'create_stairs_and_lifts',
-      'dispute_coherence_item',
       'set_checkpoint',
       'create_story_shell',
       'create_unit',

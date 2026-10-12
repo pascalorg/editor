@@ -9,7 +9,6 @@ import { createRoof } from './create-roof'
 import { createRoom } from './create-room'
 import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
-import { disputeCoherenceItem } from './dispute-coherence'
 import { duplicateLevel } from './duplicate-level'
 import { addEntryDoors } from './entry-doors'
 import { findByType } from './find-by-type'
@@ -92,7 +91,6 @@ const SINGLE_OPERATIONS = {
   get_zones: getZones,
   duplicate_level: duplicateLevel,
   verify_scene: verifyScene,
-  dispute_coherence_item: disputeCoherenceItem,
   set_checkpoint: setCheckpoint,
   add_wall: addWall,
   add_fence: addFence,

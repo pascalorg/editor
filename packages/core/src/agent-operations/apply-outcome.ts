@@ -1,4 +1,3 @@
-import { coherenceOfChange } from '../coherence'
 import { madeEntries, type SessionKeep } from './scene-checkpoint'
 import type { AgentOperationOutcome, SceneChanges, SceneNodes } from './types'
 
@@ -18,16 +17,12 @@ export type AgentHostRuntime = {
 /**
  * Applies an operation's outcome through a host and returns the answer: its changes, then for an
  * outcome that reads derived construction, the reconcile, its follow-up changes and a second
- * reconcile. The host frames the call as one undo step. A write that reaches a level answers with
- * what it did to the scene's coherence checklist: the contacts it introduced and resolved.
+ * reconcile. The host frames the call as one undo step.
  */
 export function applyAgentOutcome(
   outcome: AgentOperationOutcome,
   runtime: AgentHostRuntime,
 ): Record<string, unknown> {
-  // A copy: a host may write its own map in place, and a "before" that grows with the call reads
-  // every introduction as already there.
-  const before = outcome.changes || outcome.afterReconcile ? { ...runtime.getNodes() } : null
   const written: SceneChanges[] = []
   if (outcome.changes) {
     runtime.applyChanges(outcome.changes)
@@ -44,11 +39,10 @@ export function applyAgentOutcome(
     }
     result = settled.result
   }
-  const coherence = before ? coherenceOfChange(before, runtime.getNodes(), written) : null
   if (runtime.keep) {
     const made = madeEntries(runtime.getNodes(), written)
     if (outcome.keep?.checkpoint || made.length)
       runtime.keep({ ...outcome.keep, ...(made.length ? { made } : {}) })
   }
-  return coherence ? { ...result, coherence } : result
+  return result
 }

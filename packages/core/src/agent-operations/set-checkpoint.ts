@@ -37,7 +37,6 @@ export const setCheckpoint: AgentOperation<{ name: string }> = (nodes, input, co
       name,
       replaced,
       nodes: size,
-      openCoherenceIssues: checkpoint.issues.length,
       checkpoints: replaced ? names : [...names, name],
       message: `Checkpoint "${name}" kept with this session. verify_scene({ since: "${name}" }) lists what changes after it.`,
     },

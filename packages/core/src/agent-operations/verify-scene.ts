@@ -1,5 +1,4 @@
 import { levelBuildingId } from '../building/level-duplication'
-import { coherenceChecklist } from '../coherence'
 import { getLevelDisplayName } from '../lib/level-name'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
@@ -533,9 +532,6 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
-  // What the scene's parts do where they meet. `valid` stays the schema's word; this is the list a
-  // maker settles by fixing each item or saying why it stands.
-  const coherence = coherenceChecklist(nodes)
   return {
     result: {
       ok: true,
@@ -548,10 +544,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       levels,
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
-      coherence,
-      hasIssues:
-        issues.some((issue) => issue.severity !== 'info') ||
-        coherence.checklist.some((item) => item.status === 'open' && item.severity === 'error'),
+      hasIssues: issues.some((issue) => issue.severity !== 'info'),
       ...authoredObjects(nodes),
       ...Object.assign({}, ...reports.map((report) => report.run(nodes))),
       ...(Object.keys(session.checkpoints).length

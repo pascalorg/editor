@@ -152,8 +152,8 @@ describe('view_scene over the MCP', () => {
     }
   })
 
-  // The cottage of the coherence corpus stands at [5.7, 0, 16.5] on its site: a view of its window
-  // planned in the building's own frame looked at bare ground 16 m north of it.
+  // A cottage stands at [5.7, 0, 16.5] on its site: a view of its window planned in the building's
+  // own frame looked at bare ground 16 m north of it.
   test('a building away from the origin is looked at where it stands', async () => {
     const asked: { pose: { target: number[] } }[] = []
     const view = await viewWith(

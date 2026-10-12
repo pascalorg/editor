@@ -1,6 +1,4 @@
 import { z } from 'zod'
-import { checkCoherence } from '../coherence'
-import { activeIssues } from '../coherence/disputes'
 import { type AnyNode, isDefaultGutterNode } from '../schema'
 import { isDerivedNode } from '../store/derived-node-guard'
 import { measureScene, type SceneMeasure } from './scene-measure'
@@ -24,7 +22,7 @@ export type SessionCheckpoint = {
   /** The registered families' places, for `changesSince` (windows, lit rooms…). */
   measure: SceneMeasure
   nodes: Record<string, CheckpointNode>
-  /** Ids of the coherence issues open when it was taken. */
+  /** Issue ids an older version recorded; records taken now write none. */
   issues: string[]
   /** How many entries of the session's `made` list there were: what follows was made after it. */
   madeAt: number
@@ -86,8 +84,8 @@ function stable(value: unknown): string {
 
 /**
  * A node's fingerprint, eight hex digits. Its children are left out (a wall that gained a door did
- * not change; the door is new) and so are the checker's notes in its metadata (a dispute is not an
- * edit of the building).
+ * not change; the door is new) and so are the notes older versions kept in `metadata.coherence`: a
+ * session record taken before them must not read them as an edit of the building.
  */
 export function hashNode(node: AnyNode): string {
   const {
@@ -111,7 +109,7 @@ export function hashNode(node: AnyNode): string {
 const nameOf = (node: AnyNode) =>
   typeof node.name === 'string' && node.name ? { name: node.name } : {}
 
-/** The scene as a checkpoint remembers it: every node's fingerprint, and the issues then open. */
+/** The scene as a checkpoint remembers it: every node's fingerprint and the registered families' places. */
 export function takeCheckpoint(nodes: SceneNodes, name: string, madeAt: number): SessionCheckpoint {
   const remembered: Record<string, CheckpointNode> = {}
   for (const node of Object.values(nodes))
@@ -125,9 +123,7 @@ export function takeCheckpoint(nodes: SceneNodes, name: string, madeAt: number):
     name,
     measure: measureScene(nodes),
     nodes: remembered,
-    issues: activeIssues(checkCoherence(nodes), nodes)
-      .map((issue) => issue.id)
-      .sort(),
+    issues: [],
     madeAt,
   }
 }

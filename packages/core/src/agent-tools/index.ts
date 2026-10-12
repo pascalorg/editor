@@ -4,7 +4,6 @@ import { runBatchTool } from './batch'
 import { setCheckpointTool } from './checkpoints'
 import { createStairsAndLiftsTool } from './circulation'
 import { clearSceneTool } from './clear-scene'
-import { disputeCoherenceItemTool } from './coherence'
 import { editCollectionTool, listCollectionsTool } from './collections'
 import { addColumnTool } from './columns'
 import type { AgentToolContract } from './contract'
@@ -102,7 +101,6 @@ export const AGENT_TOOL_CONTRACTS = [
   getZonesTool,
   duplicateLevelTool,
   verifySceneTool,
-  disputeCoherenceItemTool,
   setCheckpointTool,
   addWallTool,
   addFenceTool,
@@ -151,7 +149,6 @@ export const AGENT_TOOL_CONTRACTS = [
 export { BATCHABLE_TOOLS, runBatchTool } from './batch'
 export { setCheckpointTool } from './checkpoints'
 export { createStairsAndLiftsTool } from './circulation'
-export { disputeCoherenceItemTool } from './coherence'
 export { addEntryDoorsTool } from './entry-doors'
 export { furnishFromPlanTool } from './furnish-from-plan'
 export { recordReferenceTool } from './inventory'
