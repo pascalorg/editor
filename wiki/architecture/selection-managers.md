@@ -70,8 +70,10 @@ The navigation (`ViewerSceneHeader`, given a `ViewerSource`) is the breadcrumb �
 room › element, where an element shows the room it stands in without selecting it — and the floor
 list with, under the current floor, its Units, Rooms and Zones (empty sections left out). A crumb,
 a floor or a row selects and frames (`camera-controls:frame`: the node's saved view, else its box at
-about 45° along the current heading); the canvas never frames. `ViewerRooms` draws the editor's room
-pills (same visibility rule, same declutter) and the editor's room highlight for the selected or
+about 45° along the current heading); the canvas never frames. Hosts frame through the same
+`frameViewerNode`. The plan follows the framed camera; with no 3D view on screen it answers the
+request itself, centred on the box (or the saved view's target) at the current turn.
+`ViewerRooms` draws the editor's room pills (same visibility rule, same declutter) and the editor's room highlight for the selected or
 hovered room and a focused unit's rooms. `useViewerFloorDisplay` hides the levels above the current
 floor outside the walkthrough.
 
@@ -124,9 +126,8 @@ the same zone-area rule as a zone's fill or label in the plan (`hoverZoneArea` /
 in `lib/room-zone-routing.ts`): a room room-first, a modifier or a zone that bounds no room as the
 zone (its outline, its panel and outline editor). A list that names a zone, the Rooms list or a
 host's chat reference, selects it through `selectZoneOrRoom` (exported for hosts) by the same rule.
-Zones show tinted volumes only while a unit's
-membership is painted; otherwise a zone looks like a room. A new zone is written with a palette
-colour picked from its id (`newZone` / `zoneColorForSeed` in core), a captured room from its capture's
+Zones show tinted volumes only while a unit's membership is painted; otherwise a zone looks like a
+room. A new zone is written with a palette colour picked from its id (`newZone` / `zoneColorForSeed` in core), a captured room from its capture's
 id, unless its creator chose one;
 existing zones keep their stored colour.
 
