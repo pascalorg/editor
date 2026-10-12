@@ -92,6 +92,29 @@ Catalog or animated objects and unsupported attachment frames are not assessed, 
 roof intersections, recessed slab shells, foundations or terrain-fill volumes. Upward
 geometry in roof-backed rooms still produces the above-attachment observation.
 
+For wall-mounted items, `verify_scene` reports `item_wall_body_overlap`,
+`item_through_wall`, and `item_faces_wall`, with IDs, transformed bounds, depths,
+and corrected +Z-front orientation. Wall-side Z = 0 lands on the selected wall
+face; `side` chooses that face but does not override the saved rotation. A back
+mount normally has a π yaw. Correct hidden back-to-wall contact is not z-fighting.
+New `add_object` back-side wall mounts default to that π yaw when rotation is
+omitted. Explicit rotations and saved rotations on rebuild are preserved; existing
+scenes are not rewritten and no blanket stand-off is added.
+
+The item systems register a mesh-backed check for settled, static editor models:
+catalog bounds and large, wall-parallel, same-facing coplanar triangles on the host or another
+item on the same wall (`item_wall_coplanar_face`,
+`item_wall_object_coplanar_face`). It measures overlapping face area and separation
+within 1 mm, not a screenshot or a guarantee of visible flicker. Headless callers
+without editor meshes still get scripted bounds and mount-orientation observations;
+catalog dimensions alone do not establish a raw model origin or a face.
+
+Finite wall bounds and opening rectangles exclude cutout space. Shaped openings
+use their enclosing rectangles conservatively; hosts with unresolved scripted wall
+cuts withhold wall-body/contact evidence. Curved walls, nested hosts, deformed,
+animated, unfinished, dirty and oversized meshes are not assessed. No placement,
+artifact or scene data is changed by these checks.
+
 ## Cutter binding
 
 A bare `cutout` cuts the surface the object is mounted on. A wall or ceiling parent is the host; a floor item uses its preferred support slab while it overlaps, otherwise the same highest overlapping slab as floor placement. Items resting on other items do not cut a slab beneath them. `cut:wall`, `cut:ceiling` and `cut:slab` require that kind of host; they never select a neighbouring surface.

@@ -185,6 +185,10 @@ export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'
 export { importedMeshDefinition } from './imported-mesh'
 export { getPendingItemModelLoadCount, itemDefinition } from './item'
+export {
+  registerWallObjectSceneCheck,
+  wallObjectRenderedObservations,
+} from './item/wall-object-observations'
 export { leanToExtensionDefinition } from './lean-to-extension'
 export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'

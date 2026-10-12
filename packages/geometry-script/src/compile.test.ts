@@ -19,10 +19,12 @@ import {
   ItemNode,
   LevelNode,
   SlabNode,
+  WallNode,
 } from '@pascal-app/core/schema'
 import { Box3, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { CHEF_LAMP_SCRIPT } from './__fixtures__/ceiling-lamp'
+import { CINEMA_SCREEN_SCRIPT } from './__fixtures__/wall-screen'
 import { compileGeometryScript } from './index'
 
 const SASH = `
@@ -87,6 +89,77 @@ test('ceiling artifacts hang below their attachment while floor and wall origins
     expect(compiled.manifest.bounds.min[2]).toBe(mount === 'wall-side' ? 0 : -0.5)
     expect(compiled.manifest.bounds.max[2]).toBe(mount === 'wall-side' ? 1 : 0.5)
   }
+})
+
+test('the owner screen compiles back-anchored, while a reversed back mount crosses its wall', async () => {
+  const compiled = await compileGeometryScript({ code: CINEMA_SCREEN_SCRIPT })
+  expect(compiled.mount).toBe('wall-side')
+  expect(compiled.manifest.bounds).toEqual({
+    min: [-3.3, 0, expect.closeTo(0, 6)],
+    max: [3.3, 2.5, 0.3325],
+  })
+  const level = LevelNode.parse({ id: 'level_screen', height: 3.8 })
+  const wall = WallNode.parse({
+    id: 'wall_screen',
+    parentId: level.id,
+    start: [-3, 3],
+    end: [-12, 3],
+    thickness: 0.22,
+  })
+  const screen = ItemNode.parse({
+    id: 'item_screen',
+    parentId: wall.id,
+    side: 'back',
+    position: [4.5, 0.55, 0],
+    source: scriptSource(compiled),
+    asset: {
+      id: 'screen',
+      name: 'Cinema projection screen and acoustic surround',
+      category: 'media wall',
+      thumbnail: '',
+      src: 'asset://screen',
+      attachTo: 'wall-side',
+      dimensions: [6.6, 2.5, 0.3325],
+    },
+  })
+  const artifact = await new GLTFLoader().parseAsync(compiled.glb, '')
+  artifact.scene.position.z = -0.11
+  const observed = new Box3().setFromObject(artifact.scene)
+  expect(observed.min.z).toBeCloseTo(-0.11, 6)
+  expect(observed.max.z).toBeCloseTo(0.2225, 6)
+  const nodes = Object.fromEntries([level, wall, screen].map((node) => [node.id, node]))
+  const issues = verifyScene(nodes, {}, { activeLevelId: level.id }).result.issues
+  expect(issues).toContainEqual(
+    expect.objectContaining({
+      type: 'item_through_wall',
+      beyondOppositeFaceMeters: expect.closeTo(0.1125, 6),
+    }),
+  )
+  screen.rotation[1] = Math.PI
+  expect(
+    (
+      verifyScene(nodes, {}, { activeLevelId: level.id }).result.issues as { type: string }[]
+    ).filter((issue) => /^item_(wall_|through_wall|faces_wall)/.test(issue.type)),
+  ).toEqual([])
+  const initial = { [level.id]: level, [wall.id]: wall }
+  const added = addObject(
+    initial,
+    {
+      compiled,
+      parentId: wall.id,
+      side: 'back',
+      position: [4.5, 0.55, 0],
+      reason: 'Cinema projection screen and acoustic surround.',
+    },
+    { activeLevelId: level.id },
+  )
+  const placed = applySceneChanges(initial, added.changes)
+  expect(ItemNode.parse(placed[added.result.nodeId as string]).rotation).toEqual([0, Math.PI, 0])
+  expect(
+    (
+      verifyScene(placed, {}, { activeLevelId: level.id }).result.issues as { type: string }[]
+    ).filter((issue) => /^item_(wall_|through_wall|faces_wall)/.test(issue.type)),
+  ).toEqual([])
 })
 
 test('the rebuilt chef lamp hangs down and verification observes its saved upward-built bounds', async () => {

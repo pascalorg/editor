@@ -3,13 +3,17 @@ import {
   type AnyNode,
   BuildingNode,
   CeilingNode,
+  DoorNode,
   ItemNode,
   LevelNode,
   SlabNode,
+  WallNode,
+  WindowNode,
   ZoneNode,
 } from '../schema'
 import { CEILING_DRAW_OFFSET } from '../services'
 import { authoredItem } from './__fixtures__/add-object-cases'
+import savedWallScreen from './__fixtures__/wall-screen.json'
 import {
   aabbsOverlap,
   inspectItemPlanFootprint,
@@ -59,6 +63,203 @@ function item(
 }
 
 describe('layout-clearance', () => {
+  function wallScreenScene() {
+    return Object.fromEntries(
+      Object.entries(structuredClone(savedWallScreen)).map(([id, node]) => [
+        id,
+        node.type === 'item'
+          ? ItemNode.parse(node)
+          : node.type === 'wall'
+            ? WallNode.parse(node)
+            : LevelNode.parse(node),
+      ]),
+    )
+  }
+
+  function wallObservations(nodes: Record<string, AnyNode>) {
+    const before = structuredClone(nodes)
+    const result = verifyScene(nodes, {}, { activeLevelId: null }).result
+    expect(nodes).toEqual(before)
+    return (result.issues as { type: string; message: string }[]).filter((issue) =>
+      /^item_(wall_|through_wall|faces_wall)/.test(issue.type),
+    )
+  }
+
+  test('saved cinema screen bounds penetrate the wall and its front faces its host', () => {
+    const nodes = wallScreenScene()
+    const observations = wallObservations(nodes)
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        type: 'item_wall_body_overlap',
+        itemId: 'item_7j1l6855lxvbemw5',
+        wallId: 'wall_fseg8ncv7q8u5kqn',
+        overlapDepthMeters: expect.closeTo(0.22, 6),
+        coordinateFrame: 'building',
+        bounds: {
+          min: [expect.closeTo(-10.8), expect.closeTo(0.55), expect.closeTo(2.7775)],
+          max: [expect.closeTo(-4.2), expect.closeTo(3.05), expect.closeTo(3.11)],
+        },
+      }),
+    )
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        type: 'item_through_wall',
+        beyondOppositeFaceMeters: expect.closeTo(0.1125, 6),
+      }),
+    )
+    expect(observations).toContainEqual(
+      expect.objectContaining({ type: 'item_faces_wall', frontDotOutward: -1 }),
+    )
+    expect(observations.every((issue) => !/should|must|fix|move|rotate/i.test(issue.message))).toBe(
+      true,
+    )
+  })
+
+  test('turning the saved back-side screen outward leaves its hidden contact face silent', () => {
+    const nodes = wallScreenScene()
+    const screen = nodes.item_7j1l6855lxvbemw5!
+    if (screen.type !== 'item') throw new Error('screen missing')
+    screen.rotation[1] = Math.PI
+    expect(wallObservations(nodes)).toEqual([])
+  })
+
+  test('wall observations honor corrective scales, offsets and justified faces', () => {
+    const nodes = wallScreenScene()
+    const screen = nodes.item_7j1l6855lxvbemw5!
+    const wall = nodes.wall_fseg8ncv7q8u5kqn!
+    if (screen.type !== 'item' || wall.type !== 'wall') throw new Error('fixture missing')
+    screen.rotation[1] = Math.PI
+    screen.asset.offset[2] = -0.003
+    screen.scale[2] = 2
+    wall.justification = 'a'
+    expect(wallObservations(nodes)).toContainEqual(
+      expect.objectContaining({
+        type: 'item_wall_body_overlap',
+        overlapDepthMeters: expect.closeTo(0.006, 6),
+      }),
+    )
+    screen.asset.offset[2] = -0.0004
+    expect(wallObservations(nodes)).toEqual([])
+    screen.asset.offset[2] = 0
+    screen.asset.rotation[1] = Math.PI
+    expect(wallObservations(nodes)).toContainEqual(
+      expect.objectContaining({ type: 'item_faces_wall', frontDotOutward: -1 }),
+    )
+  })
+
+  test('wall observations exclude opening nodes and bounds entirely inside a wall cutout', () => {
+    const nodes = wallScreenScene()
+    const wall = nodes.wall_fseg8ncv7q8u5kqn!
+    if (wall.type !== 'wall') throw new Error('wall missing')
+    const window = WindowNode.parse({
+      id: 'window_screen',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [4.5, 1.8, 0],
+      width: 7,
+      height: 2.8,
+    })
+    wall.children.push(window.id)
+    nodes[window.id] = window
+    expect(wallObservations(nodes)).toEqual([])
+    delete nodes[window.id]
+    nodes.door_screen = DoorNode.parse({
+      id: 'door_screen',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [4.5, 1.6, 0],
+      width: 7,
+      height: 3.2,
+    })
+    wall.children = ['door_screen']
+    expect(wallObservations(nodes)).toEqual([])
+  })
+
+  test('unknown catalog raw origins do not manufacture a wall-depth collision', () => {
+    const nodes = wallScreenScene()
+    const screen = nodes.item_7j1l6855lxvbemw5!
+    if (screen.type !== 'item') throw new Error('screen missing')
+    delete screen.source
+    screen.rotation[1] = Math.PI
+    screen.asset.attachTo = 'wall'
+    screen.asset.dimensions = [0.8, 0.6, 0.04]
+    screen.asset.offset = [0.013, 0, 0.024]
+    expect(wallObservations(nodes)).toEqual([])
+  })
+
+  test('wall bounds stay in the owning building frame through stacked elevations', () => {
+    const nodes = wallScreenScene()
+    const level = nodes.level_qqolzyn207xv0jj9!
+    if (level.type !== 'level') throw new Error('level missing')
+    const building = BuildingNode.parse({
+      id: 'building_wall_bounds',
+      position: [40, 8, -30],
+      rotation: [0, 0.7, 0],
+    })
+    const ground = LevelNode.parse({ id: 'level_wall_ground', parentId: building.id, height: 3 })
+    level.parentId = building.id
+    level.level = 1
+    level.baseElevation = 0.7
+    nodes[building.id] = building
+    nodes[ground.id] = ground
+    expect(wallObservations(nodes)).toContainEqual(
+      expect.objectContaining({
+        type: 'item_wall_body_overlap',
+        bounds: {
+          min: [expect.closeTo(-10.8), expect.closeTo(4.25), expect.closeTo(2.7775)],
+          max: [expect.closeTo(-4.2), expect.closeTo(6.75), expect.closeTo(3.11)],
+        },
+      }),
+    )
+  })
+
+  test('partial openings subtract area without hiding the remaining wall overlap', () => {
+    const nodes = wallScreenScene()
+    const wall = nodes.wall_fseg8ncv7q8u5kqn!
+    if (wall.type !== 'wall') throw new Error('wall missing')
+    const window = WindowNode.parse({
+      id: 'window_partial_screen',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [4.5, 1.8, 0],
+      width: 1,
+      height: 1,
+    })
+    nodes[window.id] = window
+    wall.children.push(window.id)
+    expect(wallObservations(nodes)).toContainEqual(
+      expect.objectContaining({
+        type: 'item_wall_body_overlap',
+        overlapAreaSquareMeters: expect.closeTo(15.5, 4),
+      }),
+    )
+  })
+
+  test('bounds wholly beyond the opposite face are observed without inventing body overlap', () => {
+    const nodes = wallScreenScene()
+    const screen = nodes.item_7j1l6855lxvbemw5!
+    if (screen.type !== 'item') throw new Error('screen missing')
+    screen.rotation[1] = Math.PI
+    screen.asset.offset[2] = -0.7
+    expect(wallObservations(nodes).map((issue) => issue.type)).toEqual(['item_through_wall'])
+    expect(wallObservations(nodes)[0]).toMatchObject({
+      beyondOppositeFaceMeters: expect.closeTo(0.48, 4),
+    })
+  })
+
+  test('unsupported curved, animated and scripted-cut hosts withhold depth evidence', () => {
+    for (const mode of ['curved', 'animated', 'cutout'] as const) {
+      const nodes = wallScreenScene()
+      const wall = nodes.wall_fseg8ncv7q8u5kqn!
+      const screen = nodes.item_7j1l6855lxvbemw5!
+      if (wall.type !== 'wall' || screen.type !== 'item') throw new Error('fixture missing')
+      if (mode === 'curved') wall.curveOffset = 0.3
+      if (mode === 'animated') screen.source!.manifest.animations = [{ name: 'swing', duration: 1 }]
+      if (mode === 'cutout') screen.source!.manifest.cutout = true
+      expect(wallObservations(nodes)).toEqual([])
+    }
+  })
+
   test.each([
     null,
     'level_missing',

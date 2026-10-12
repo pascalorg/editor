@@ -215,6 +215,46 @@ export const ADD_OBJECT_CASES: AddObjectCase[] = [
     'wall-side',
   ),
   create(
+    'a back-side wall mount defaults to facing away from its wall',
+    { parentId: 'wall_south', side: 'back' },
+    [1, 1, 0.04],
+    { result: { mount: 'wall-side' }, node: { side: 'back', rotation: [0, Math.PI, 0] } },
+    'wall-side',
+  ),
+  create(
+    'a front-side wall mount defaults to facing away from its wall',
+    { parentId: 'wall_south', side: 'front' },
+    [1, 1, 0.04],
+    { result: { mount: 'wall-side' }, node: { side: 'front', rotation: [0, 0, 0] } },
+    'wall-side',
+  ),
+  create(
+    'an explicit back-side wall mount rotation remains explicit',
+    { parentId: 'wall_south', side: 'back', rotation: 0 },
+    [1, 1, 0.04],
+    { result: { mount: 'wall-side' }, node: { side: 'back', rotation: [0, 0, 0] } },
+    'wall-side',
+  ),
+  {
+    name: 'rebuilding a saved back-side wall object preserves its rotation',
+    scene: () => {
+      const scene = floorScene()
+      const previous = ItemNode.parse(scene.nodes.item_screen)
+      scene.nodes.item_screen = ItemNode.parse({
+        ...previous, parentId: 'wall_south', wallId: 'wall_south', side: 'back',
+        asset: { ...previous.asset, attachTo: 'wall-side' },
+      })
+      const wall = WallNode.parse(scene.nodes.wall_south)
+      scene.nodes.wall_south = { ...wall, children: [previous.id] }
+      const level = LevelNode.parse(scene.nodes.level_0)
+      scene.nodes.level_0 = { ...level, children: [wall.id] }
+      return scene
+    },
+    input: { nodeId: 'item_screen', code: CODE },
+    compiled: compiledSolid([1, 1, 0.04], 'wall-side'),
+    expect: { result: { nodeId: 'item_screen' }, node: { rotation: [0, 0, 0], side: 'back' } },
+  },
+  create(
     'a name naming a Pascal type is built, with a hint naming the tool for it',
     { name: 'Spiral staircase', category: 'stair' },
     [1.6, 2.8, 1.6],

@@ -61,7 +61,8 @@ export const addObjectTool = {
         'Placement of the mount origin in the host frame, metres. Floor: [x, y, z] locates the bottom-centre (y = 0 on the level floor). Ceiling: [x, y, z] locates the top-centre (y = 0 on the drawn ceiling attachment plane; negative y lowers it). Wall / wall-side: [distance along the wall from its start, height of the bottom, 0]; wall-side also anchors the back face.',
       ),
     rotation: measurement('angle', 'deg', {
-      description: 'Y-axis rotation (default: 0).',
+      description:
+        'Y-axis rotation in the host frame. New wall-side back mounts default to 180° so +Z faces away from the wall; other new objects default to 0°. An edit keeps its saved rotation unless given.',
     }).optional(),
     side: z
       .enum(['front', 'back'])

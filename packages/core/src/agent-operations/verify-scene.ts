@@ -29,10 +29,12 @@ import {
 } from './scene-queries'
 import { reviewSince } from './scene-review'
 import type { AgentOperation, SceneNodes } from './types'
+import { type WallObjectObservation, wallObjectObservations } from './wall-object-observations'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
 export type SceneIssue =
   | CeilingObjectObservation
+  | WallObjectObservation
   | { type: string; message: string; severity?: 'info' }
   | {
       type: 'wall_covering_slab_contact'
@@ -514,6 +516,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
   issues.push(...layoutIssuesFromScene(Object.values(nodes)))
   issues.push(...ceilingObjectObservations(nodes))
+  issues.push(...wallObjectObservations(nodes))
   for (const check of checks)
     if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
   // What the edits since the host's checkpoint lost, by place.
