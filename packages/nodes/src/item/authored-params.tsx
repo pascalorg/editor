@@ -22,7 +22,8 @@ import { isScriptDefault, scriptDefault, scriptDefaultsPatch } from './script-pa
 /**
  * The params an authored object's script declares, as controls. Sliders
  * preview their value while dragging and rebuild on release (a rebuild runs
- * the script again: tens to hundreds of milliseconds). A param changed from
+ * the script again: tens to hundreds of milliseconds in three.js, seconds in
+ * Blender). A param changed from
  * the script's default can be put back, alone or with all the others.
  */
 export function AuthoredParams({
@@ -139,7 +140,11 @@ export function AuthoredParams({
           Reset parameters
         </button>
       ) : null}
-      {busy ? <div className="px-2 py-1 text-muted-foreground text-xs">Rebuilding…</div> : null}
+      {busy ? (
+        <div className="px-2 py-1 text-muted-foreground text-xs">
+          {source.language === 'bpy' ? 'Rebuilding in Blender…' : 'Rebuilding…'}
+        </div>
+      ) : null}
       {error ? <div className="px-2 py-1 text-red-400 text-xs">{error}</div> : null}
     </PanelSection>
   )

@@ -7,7 +7,7 @@ import type { ItemNode } from '../schema/nodes/item'
 import type { WindowNode } from '../schema/nodes/window'
 import { artifactUrl } from './artifact-store'
 
-/** A node built from a three.js script: an authored item, or a window or door with a script source. */
+/** A node built from a script: an authored item, or a window, door or column with a script source. */
 export type ScriptedNode = (ItemNode | WindowNode | DoorNode | ColumnNode) & {
   source: NonNullable<ItemNode['source']>
 }
@@ -51,7 +51,7 @@ export const scriptSource = (
     {
       kind: 'script' as const,
       meta: previous?.meta,
-      language: 'three' as const,
+      language: compiled.language,
       script: compiled.script,
       params: compiled.params,
       artifact: compiled.sha256,

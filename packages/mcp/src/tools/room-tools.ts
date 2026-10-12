@@ -3,6 +3,7 @@ import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   achievedChanges,
   addWallOpening,
+  editedScriptLanguage,
   editedScriptParams,
   rebuiltOpeningResult,
   rescriptOpening,
@@ -18,6 +19,7 @@ import {
 import type {
   AnyNode,
   CompiledGeometryScript,
+  GeometryScriptLanguage,
   GeometryScriptParamValue,
 } from '@pascal-app/core/schema'
 import { GeometryReuseFields } from '@pascal-app/core/schema'
@@ -54,6 +56,7 @@ async function rebuildOpening(
     category?: string
     tags?: string[]
     code?: string
+    language?: GeometryScriptLanguage
     params?: Record<string, GeometryScriptParamValue>
   },
 ) {
@@ -68,8 +71,9 @@ async function rebuildOpening(
   try {
     const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId))
     const previous = nodes[input.nodeId]
+    const language = editedScriptLanguage(previous, input)
     const params = editedScriptParams(previous, input.params)
-    const compiled = await compileAndStore(host, scene.id, code, params, kind, {
+    const compiled = await compileAndStore(host, scene.id, { code, language, params }, kind, {
       nodeId: input.nodeId,
       metadata: {
         ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
@@ -106,6 +110,7 @@ async function compileOpeningScript(
   host: GeometryScriptHost | undefined,
   input: {
     code?: string
+    language?: GeometryScriptLanguage
     params?: Record<string, GeometryScriptParamValue>
     name?: string
     description?: string
@@ -125,9 +130,13 @@ async function compileOpeningScript(
     return { error: toolError('Open or save a scene first.', { code: 'no_active_scene' }) }
   try {
     return {
-      script: await compileAndStore(host, scene.id, input.code, input.params, kind, {
-        metadata: input,
-      }),
+      script: await compileAndStore(
+        host,
+        scene.id,
+        { code: input.code, language: input.language ?? 'three', params: input.params },
+        kind,
+        { metadata: input },
+      ),
     }
   } catch (error) {
     if (isAgentRefusal(error)) return { error: refusalResult(error) }

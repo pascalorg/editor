@@ -80,7 +80,7 @@ async function sha256(bytes: ArrayBuffer | Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** The artifact and script hashes, computed here: nothing the sandboxed code reports about itself is trusted. */
+/** The artifact and script hashes and the language, set here: nothing the sandboxed code reports about itself is trusted. */
 async function withOwnHashes(
   output: GeometryScriptCompileOutput,
   code: string,
@@ -89,7 +89,7 @@ async function withOwnHashes(
     sha256(output.glb),
     sha256(new TextEncoder().encode(code)),
   ])
-  return { ...output, sha256: artifact, script }
+  return { ...output, sha256: artifact, script, language: 'three' }
 }
 
 /** Starts the sandbox frame and its compile worker once; a crash or timeout starts a fresh one. */
