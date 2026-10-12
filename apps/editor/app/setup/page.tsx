@@ -1,4 +1,8 @@
+import type { Metadata } from 'next'
+import { AppCard } from '@/components/app-shell'
+
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Set up · Pascal' }
 
 const VARIABLES = [
   ['PASCAL_ADMIN_PASSWORD', 'The password that unlocks this editor. Required on a network host.'],
@@ -18,25 +22,20 @@ const VARIABLES = [
 
 export default function SetupPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-        <p className="font-mono text-muted-foreground text-xs uppercase tracking-wide">Pascal</p>
-        <h1 className="mt-2 font-semibold text-lg">
-          This editor is reachable but not protected yet
-        </h1>
-        <p className="mt-2 text-muted-foreground text-sm">
-          Set an admin password in the environment and restart. Until then, nothing is served from
-          this address.
-        </p>
-        <dl className="mt-5 flex flex-col gap-3">
-          {VARIABLES.map(([name, description]) => (
-            <div key={name}>
-              <dt className="font-mono text-sm">{name}</dt>
-              <dd className="text-muted-foreground text-xs">{description}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    </div>
+    <AppCard className="max-w-lg">
+      <h1 className="mt-6 font-semibold text-lg">This editor is reachable but not protected yet</h1>
+      <p className="mt-2 text-muted-foreground text-sm">
+        Set an admin password in the environment and restart. Until then, nothing is served from
+        this address.
+      </p>
+      <dl className="mt-5 flex flex-col divide-y divide-border/50 rounded-xl border border-border/50">
+        {VARIABLES.map(([name, description]) => (
+          <div className="px-4 py-3" key={name}>
+            <dt className="font-mono text-sm">{name}</dt>
+            <dd className="mt-0.5 text-muted-foreground text-xs">{description}</dd>
+          </div>
+        ))}
+      </dl>
+    </AppCard>
   )
 }

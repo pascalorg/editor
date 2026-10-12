@@ -24,6 +24,8 @@ const nextConfig: NextConfig = {
         destination: '/scene/:id',
         permanent: false,
       },
+      // The scenes list moved to the home page.
+      { source: '/scenes', destination: '/', permanent: false },
     ]
   },
   transpilePackages: [

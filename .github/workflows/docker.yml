@@ -54,7 +54,7 @@ jobs:
           curl -fsS -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/health | grep '"status":"ok"'
 
           # The gate: pages redirect to /login, the scene API refuses.
-          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/scenes)" = "307"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/)" = "307"
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/scenes)" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' -H 'Content-Type: application/json' \
             -d '{"password":"wrong"}' http://127.0.0.1:3000/api/auth/login)" = "401"
@@ -65,7 +65,7 @@ jobs:
           curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' -H 'Content-Type: application/json' \
             -d '{"name":"Smoke","graph":{"nodes":{},"rootNodeIds":[]}}' http://127.0.0.1:3000/api/scenes \
             | grep '"ownerId":"admin"'
-          curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/scenes | grep -q 'Smoke'
+          curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/ | grep -q 'Smoke'
 
       - name: Container logs
         if: always()

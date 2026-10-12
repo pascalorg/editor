@@ -57,7 +57,7 @@ How it is protected, by `apps/editor/lib/self-host-auth.ts`:
   behind `/login`. There is one account; everyone who signs in shares the scenes. Sessions
   are signed with a digest of the password, so changing it signs everyone out.
 - **Agents use a bearer.** Set `PASCAL_SCENE_API_TOKEN` and send it as
-  `Authorization: Bearer …` to `/api/scenes` and `/api/artifacts`; the scenes page shows the
+  `Authorization: Bearer …` to `/api/scenes` and `/api/artifacts`; the settings page shows the
   endpoint under "Connect an agent".
 - **Fail closed.** A host that is not loopback with no password set serves a setup page
   listing the variables and nothing else. `PASCAL_AUTH=proxy` opts out when a reverse proxy

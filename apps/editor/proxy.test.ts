@@ -18,7 +18,7 @@ test('an unconfigured network host sends pages to setup and APIs to 503', async 
   delete process.env.PASCAL_ADMIN_PASSWORD
   delete process.env.PASCAL_AUTH
 
-  const page = gateRequest(request('/scenes'))
+  const page = gateRequest(request('/'))
   expect(page?.status).toBe(307)
   expect(page?.headers.get('location')).toBe('https://pascal.example/setup')
 
@@ -38,10 +38,18 @@ test('a password gates pages behind login and keeps the requested path', () => {
   expect(gateRequest(request('/api/plugins/mint/session'))?.status).toBe(401)
 })
 
+test('the home page sends a signed-out visitor to login without a next param', () => {
+  process.env.PASCAL_ADMIN_PASSWORD = 'secret'
+  const response = gateRequest(request('/'))
+  expect(response?.status).toBe(307)
+  expect(response?.headers.get('location')).toBe('https://pascal.example/login')
+})
+
 test('a valid session passes', () => {
   process.env.PASCAL_ADMIN_PASSWORD = 'secret'
   const cookie = `${SESSION_COOKIE}=${issueSession()}`
-  expect(gateRequest(request('/scenes', { cookie }))).toBeNull()
+  expect(gateRequest(request('/', { cookie }))).toBeNull()
+  expect(gateRequest(request('/settings', { cookie }))).toBeNull()
   expect(gateRequest(request('/api/plugins/mint/session', { cookie }))).toBeNull()
 })
 
@@ -54,10 +62,10 @@ test('login, setup, health and the scene API are never gated here', () => {
 
 test('loopback and an upstream proxy are open', () => {
   delete process.env.PASCAL_ADMIN_PASSWORD
-  const loopback = new Request('http://localhost:3002/scenes', {
+  const loopback = new Request('http://localhost:3002/', {
     headers: { host: 'localhost:3002' },
   })
   expect(gateRequest(loopback)).toBeNull()
   process.env.PASCAL_AUTH = 'proxy'
-  expect(gateRequest(request('/scenes'))).toBeNull()
+  expect(gateRequest(request('/'))).toBeNull()
 })

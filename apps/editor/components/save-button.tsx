@@ -1,8 +1,10 @@
 'use client'
 
 import type { SceneGraph } from '@pascal-app/editor'
+import { Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
+import { PRIMARY_PILL } from './app-shell'
 
 const EMPTY_GRAPH: SceneGraph = {
   nodes: {},
@@ -19,7 +21,7 @@ interface SaveButtonProps {
 /**
  * Creates a new empty scene and navigates the user to it.
  */
-export function CreateSceneButton({ label = 'Create new scene' }: { label?: string } = {}) {
+export function CreateSceneButton({ label = 'New scene' }: { label?: string } = {}) {
   const router = useRouter()
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,12 +51,8 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
   return (
     <div className="flex items-center gap-3">
       {error && <span className="text-destructive text-xs">{error}</span>}
-      <button
-        className="rounded-md border border-border bg-accent px-3 py-1.5 font-medium text-sm hover:bg-accent/80 disabled:opacity-50"
-        disabled={isCreating}
-        onClick={handleCreate}
-        type="button"
-      >
+      <button className={PRIMARY_PILL} disabled={isCreating} onClick={handleCreate} type="button">
+        <Plus className="h-4 w-4" />
         {isCreating ? 'Creating…' : label}
       </button>
     </div>
