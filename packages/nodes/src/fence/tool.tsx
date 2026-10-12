@@ -35,6 +35,7 @@ import {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   markToolCancelConsumed,
   type PointerSupportSurface,
   publishPlacementSurface,
@@ -1089,6 +1090,7 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return
       if (event.key === 'Enter') commit()
     }
     const onCancel = () => {

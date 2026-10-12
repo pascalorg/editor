@@ -39,6 +39,7 @@ import {
 import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { surfaceAttachmentId } from '../../lib/surface-attachment'
+import { isTypingTarget } from '../../lib/typing-target'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
@@ -497,6 +498,7 @@ export function FloorplanRegistryMoveOverlay() {
       }
 
       const onKey = (event: KeyboardEvent) => {
+        if (isTypingTarget(event.target)) return
         // R flips a directional kind's facing mid-placement (door / window:
         // front ↔ back). The session records the flip and re-runs its last
         // apply so the 2D symbol updates immediately; kinds without a facing
@@ -516,10 +518,6 @@ export function FloorplanRegistryMoveOverlay() {
           if (event.metaKey || event.ctrlKey) return
           if (!(session.flipSide && hasMovedSinceStart && pointerOverFloorplan)) return
           if (event.repeat) return
-          const t = event.target as HTMLElement | null
-          if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
-            return
-          }
           event.preventDefault()
           event.stopImmediatePropagation()
           ownWrite(() => session.flipSide?.())
@@ -964,6 +962,7 @@ export function FloorplanRegistryMoveOverlay() {
     }
 
     const onKey = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return
       if (event.key !== 'Escape' && !isHistoryShortcut(event)) return
       if (isHistoryShortcut(event)) {
         // ⌘Z mid-move cancels like Escape — keep it from reaching the
