@@ -1,8 +1,8 @@
 diff --git a/build/three.webgpu.js b/build/three.webgpu.js
-index 8cbb77a7bd36c6a89d397f18f8758fc60ff8146e..c1f87477640e683e447bcbf97645a64e8b5a22c6 100644
+index 48b30e6bf4bf114ba5524ae509c81c4a043d27ea..7cdcd1e3bb548d586ace72288205b61571ebd863 100644
 --- a/build/three.webgpu.js
 +++ b/build/three.webgpu.js
-@@ -14952,7 +14952,11 @@ const cameraPosition = /*@__PURE__*/ ( Fn( ( { camera } ) => {
+@@ -14947,7 +14947,11 @@ const cameraPosition = /*@__PURE__*/ ( Fn( ( { camera } ) => {
  
  		if ( _cameraPositionArray === null ) {
  
@@ -15,7 +15,7 @@ index 8cbb77a7bd36c6a89d397f18f8758fc60ff8146e..c1f87477640e683e447bcbf97645a64e
  
  				const subCameras = camera.cameras;
  				const array = self.array;
-@@ -71131,7 +71135,7 @@ class WebGLState {
+@@ -71130,7 +71134,7 @@ class WebGLState {
  
  		let needsUpdate = false;
  
@@ -25,10 +25,10 @@ index 8cbb77a7bd36c6a89d397f18f8758fc60ff8146e..c1f87477640e683e447bcbf97645a64e
  			drawBuffers = this.currentDrawbuffers.get( framebuffer );
  
 diff --git a/build/three.webgpu.nodes.js b/build/three.webgpu.nodes.js
-index fda563ffd328b99dc693d884f51fd39beb530a47..ee31416d454d94469465bd949b2d9ac0636b3266 100644
+index e96c4ae08d528fea66c58e5869923c1675822ac9..1da11d600c04baef183e480391a2dd813d9f9d0c 100644
 --- a/build/three.webgpu.nodes.js
 +++ b/build/three.webgpu.nodes.js
-@@ -14952,7 +14952,11 @@ const cameraPosition = /*@__PURE__*/ ( Fn( ( { camera } ) => {
+@@ -14947,7 +14947,11 @@ const cameraPosition = /*@__PURE__*/ ( Fn( ( { camera } ) => {
  
  		if ( _cameraPositionArray === null ) {
  
@@ -41,7 +41,7 @@ index fda563ffd328b99dc693d884f51fd39beb530a47..ee31416d454d94469465bd949b2d9ac0
  
  				const subCameras = camera.cameras;
  				const array = self.array;
-@@ -71131,7 +71135,7 @@ class WebGLState {
+@@ -71130,7 +71134,7 @@ class WebGLState {
  
  		let needsUpdate = false;
  

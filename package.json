@@ -44,16 +44,16 @@
     "@types/three": "0.184.1",
     "next": "16.4.0",
     "react-grab": "0.1.50",
-    "three": "0.186.0",
+    "three": "0.186.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "@react-three/fiber": "9.8.1"
   },
   "optionalDependencies": {
-    "@tailwindcss/oxide-darwin-arm64": "4.3.0",
-    "@tailwindcss/oxide-darwin-x64": "4.3.0",
-    "@tailwindcss/oxide-linux-arm64-gnu": "4.3.0",
-    "@tailwindcss/oxide-linux-x64-gnu": "4.3.0",
+    "@tailwindcss/oxide-darwin-arm64": "4.3.3",
+    "@tailwindcss/oxide-darwin-x64": "4.3.3",
+    "@tailwindcss/oxide-linux-arm64-gnu": "4.3.3",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",
     "lightningcss-darwin-arm64": "1.32.0",
     "lightningcss-darwin-x64": "1.32.0",
     "lightningcss-linux-arm64-gnu": "1.32.0",
@@ -66,6 +66,6 @@
   ],
   "patchedDependencies": {
     "iwer@2.3.0": "patches/iwer@2.3.0.patch",
-    "three@0.186.0": "patches/three@0.186.0.patch"
+    "three@0.186.1": "patches/three@0.186.1.patch"
   }
 }
