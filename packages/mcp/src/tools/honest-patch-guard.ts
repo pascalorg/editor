@@ -9,7 +9,7 @@ import { type PatchRefusalCode, PatchRefusedError, registerPatchGuard } from './
  * the one updated): a field the node would drop, a material the library lacks or a field a set
  * one hides is refused, naming it; `null` clears. The cleaned data is what is written.
  */
-function honestUpdates(patches: Patch[], scene: Readonly<Record<string, AnyNode>>) {
+function honestUpdates(patches: Patch[], scene: Readonly<Record<string, AnyNode>>): undefined {
   const nodes: Record<string, AnyNode> = { ...scene }
   for (const [index, patch] of patches.entries()) {
     if (patch.op === 'create') nodes[patch.node.id] = patch.node

@@ -246,7 +246,8 @@ selection proxy, not the instance. Such renderers must resolve each instance's Y
 
 Because community autosave only persists after the first post-load edit, the migration must remain on the load path. It is pure and server-safe so the editor loader and hosted scene authority canonicalize identical fields before collaboration compares or persists an operation:
 
-- Writes each legacy level's **exact** derived height (a default legacy storey stores 2.55 = 0.05 slab + 2.5 wall) — never snapped to presets.
+- Writes each legacy level's **exact** derived height (a default legacy storey stores 2.55 = 0.05 slab + 2.5 wall) — never snapped to presets. A wall with no stored height counts as `DEFAULT_WALL_HEIGHT` up from its slab, as the editor drew it.
+- An agent write that creates a level without a height, or clears one (MCP `apply_patch`), gets the height this migration would derive from what the level holds once the write lands (`fillLevelHeights`; an empty level: `DEFAULT_LEVEL_HEIGHT`), and the answer's `notes` say so. The session that wrote it and the editor that loads it then read the same storey.
 - Compacts `level` ordinals per building, anchored at zero (non-negatives → 0,1,2…; negatives → −1,−2… — basements stay basements). Runs every load; idempotent.
 - Classifies wall tops against the derived plane: `|plane − top| < 0.20` **strict** → plane-bound (height key removed); else explicit (materializing 2.5 on absent-height short walls). ε calibrated by a prod census: intentional 0.20-short walls exist and must not snap.
 - Ceilings within ε of the bound (and all `autoFromWalls` ceilings) drop their height → follows mode; stairs drop the legacy blind `totalRise: 2.5`. Both gated on the scene being legacy (some level lacked `height`).
