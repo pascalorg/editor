@@ -271,6 +271,7 @@ export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } fr
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export type {
   DutchRoofMetrics,
+  GableRidge,
   RoofSegmentSurfaceMaterialRole,
   RoofSegmentSurfaceMaterialSpec,
   RoofSegmentVisibleTopBounds,
@@ -281,7 +282,9 @@ export {
   getConicalRoofCoverage,
   getDutchRoofMetrics,
   getEffectiveSegmentSurfaceMaterial,
+  getGableRidge,
   getPitchFromActiveRoofHeight,
+  getRoofSegmentBackSlopeTwin,
   getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
@@ -293,11 +296,22 @@ export {
   RoofSegmentNode,
   RoofSegmentTrim,
   RoofType,
+  readGableRidgeStep,
 } from './nodes/roof-segment'
+export type { RoofPlanRing } from './nodes/roof-segment-canopy'
+export {
+  getGableWallInsets,
+  getRoofRingEdgeNormal,
+  getRoofSegmentCoverOutline,
+  getRoofSegmentWallOutline,
+  pullRoofSegmentCoverEdge,
+} from './nodes/roof-segment-canopy'
 export type {
   DutchRoofShapeMetrics,
+  RoofModuleInput,
   RoofShapeEaveSide,
   RoofShapeFaceVertex,
+  RoofShapeGableBack,
   RoofShapeInsets,
   RoofShapeRatios,
 } from './nodes/roof-segment-shape'
@@ -308,6 +322,7 @@ export {
   getRoofShapeEaveSides,
   getRoofShapeInsets,
   getRoofShapeRatios,
+  withRoofSegmentGableBack,
 } from './nodes/roof-segment-shape'
 export type { RoofSegmentWallFace, RoofWallFaceId } from './nodes/roof-segment-walls'
 export {
@@ -320,6 +335,12 @@ export {
   roofFacePointToSegment,
   segmentPointToRoofWallFace,
 } from './nodes/roof-segment-walls'
+export type { RoofSurfaceMaterialFields } from './nodes/roof-surface-roles'
+export {
+  hasRoofRoleMaterial,
+  ROOF_SURFACE_MATERIAL_ROLES,
+  readRoofRoleMaterial,
+} from './nodes/roof-surface-roles'
 export {
   CaptureSessionReference,
   type CaptureSessionReferenceInput,

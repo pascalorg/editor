@@ -1,17 +1,27 @@
 import {
   getActiveRoofHeight,
+  getGableRidge,
+  getGableWallInsets,
   getPitchFromActiveRoofHeight,
+  getRoofRingEdgeNormal,
+  getRoofSegmentCoverOutline,
+  getRoofSegmentSurfaceY,
   type HandleDescriptor,
   type NodeDefinition,
+  pullRoofSegmentCoverEdge,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofSegmentNode as RoofSegmentNodeType,
 } from '@pascal-app/core'
-import { buildRoofSegmentFloorplan } from './floorplan'
+import { getCanopySnapPoints, snapCanopyReach } from './canopy-snap'
+import { buildRoofSegmentFloorplan, canPullCanopy } from './floorplan'
 import {
   roofSegmentMoveTarget,
+  roofSegmentPullAffordance,
   roofSegmentResizeAffordance,
+  roofSegmentRidgeAffordance,
   roofSegmentRotateAffordance,
 } from './floorplan-affordances'
+import { applyGableRidgeEdit, type GableSide, readGableRidgeLocks } from './gable-ridge-edit'
 import { matchRoofSegmentMeasurementFeature, roofSegmentMeasurementFeatures } from './measurement'
 import { roofSegmentParametrics } from './parametrics'
 import { RoofSegmentNode } from './schema'
@@ -253,6 +263,156 @@ function roofSegmentPitchHandle(): HandleDescriptor<RoofSegmentNodeType> {
   }
 }
 
+// Gable ridge: an arrow on the ridge slides it across the depth, a tracker
+// over it lifts and lowers it. Both go through the ridge group's edit, so the
+// locks decide what gives way (the attic walls by default); a locked ridge
+// shows neither.
+function gableRidgeVisible(n: RoofSegmentNodeType): boolean {
+  return !n.managedByParent && getGableRidge(n) !== null && !readGableRidgeLocks(n.metadata).ridge
+}
+
+function gableRidgePositionHandle(): HandleDescriptor<RoofSegmentNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'z',
+    anchor: 'min',
+    min: (n) => -n.depth / 2 + 0.05,
+    max: (n) => n.depth / 2 - 0.05,
+    gridSnap: true,
+    currentValue: (n) => getGableRidge(n)?.ridgeZ ?? 0,
+    visible: gableRidgeVisible,
+    apply: (initial, ridgeZ) =>
+      applyGableRidgeEdit(
+        initial,
+        {
+          kind: 'position',
+          side: 'front',
+          value: initial.depth / 2 - ridgeZ - getGableWallInsets(initial).front,
+        },
+        readGableRidgeLocks(initial.metadata),
+      ) ?? {},
+    placement: {
+      position: (n) => {
+        const ridge = getGableRidge(n)
+        return [
+          n.width / 4,
+          (ridge ? Math.max(ridge.height, ridge.backHeight) : getPeakHeight(n)) +
+            HEIGHT_HANDLE_OFFSET,
+          ridge?.ridgeZ ?? 0,
+        ]
+      },
+    },
+  }
+}
+
+// Each slope's ridge height has its own tracker, on that slope just off the
+// ridge line: lifting one apart from the other steps the ridge.
+const RIDGE_HEIGHT_HANDLE_INSET = 0.4
+
+function gableRidgeHeightHandle(side: GableSide): HandleDescriptor<RoofSegmentNodeType> {
+  const heightOf = (n: RoofSegmentNodeType) => {
+    const ridge = getGableRidge(n)
+    if (!ridge) return getPeakHeight(n)
+    return side === 'front' ? ridge.height : ridge.backHeight
+  }
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    gridSnap: true,
+    currentValue: heightOf,
+    visible: gableRidgeVisible,
+    apply: (initial, height) =>
+      applyGableRidgeEdit(
+        initial,
+        { kind: 'height', side, value: height },
+        readGableRidgeLocks(initial.metadata),
+      ) ?? {},
+    placement: {
+      position: (n) => {
+        const ridgeZ = getGableRidge(n)?.ridgeZ ?? 0
+        const inset = Math.min(
+          RIDGE_HEIGHT_HANDLE_INSET,
+          (side === 'front' ? n.depth / 2 - ridgeZ : n.depth / 2 + ridgeZ) / 2,
+        )
+        return [0, heightOf(n) + HEIGHT_HANDLE_OFFSET, ridgeZ + (side === 'front' ? inset : -inset)]
+      },
+    },
+  }
+}
+
+// The canopy snap points depend only on the scene; keep them per scene record
+// (weakly, so a scene left behind is not held) so a drag gathers them once
+// rather than on every pointer move.
+const canopySnapCache = new WeakMap<object, Map<string, ReturnType<typeof getCanopySnapPoints>>>()
+function canopySnapPointsFor(
+  node: RoofSegmentNodeType,
+  edge: number,
+  nodes: Parameters<typeof getCanopySnapPoints>[2],
+) {
+  let byEdge = canopySnapCache.get(nodes)
+  if (!byEdge) {
+    byEdge = new Map()
+    canopySnapCache.set(nodes, byEdge)
+  }
+  const key = `${node.id}:${edge}`
+  let points = byEdge.get(key)
+  if (!points) {
+    points = getCanopySnapPoints(node, edge, nodes)
+    byEdge.set(key, points)
+  }
+  return points
+}
+
+// Canopy pull: an arrow on the fascia of every edge of what the roof covers
+// that runs along a local axis drags that edge out past the walls (or back),
+// keeping the slopes in their planes (see `pullRoofSegmentCoverEdge`). The
+// value is the edge's outward reach, so dragging outward always grows it.
+function canopyPullHandles(node: RoofSegmentNodeType): HandleDescriptor<RoofSegmentNodeType>[] {
+  const cover = getRoofSegmentCoverOutline(node)
+  return cover.flatMap((_, edge) => {
+    const [nx, nz] = getRoofRingEdgeNormal(cover, edge)
+    const axis = Math.abs(nx) > 0.999 ? 'x' : Math.abs(nz) > 0.999 ? 'z' : null
+    if (!axis) return []
+    const sign = (axis === 'x' ? nx : nz) > 0 ? 1 : -1
+    const reach = (n: RoofSegmentNodeType) => {
+      const ring = getRoofSegmentCoverOutline(n)
+      const [x, z] = ring[edge] ?? [0, 0]
+      return sign * (axis === 'x' ? x : z)
+    }
+    const handle: HandleDescriptor<RoofSegmentNodeType> = {
+      kind: 'linear-resize',
+      axis,
+      anchor: sign > 0 ? 'min' : 'max',
+      gridSnap: true,
+      currentValue: reach,
+      apply: (initial, value) =>
+        pullRoofSegmentCoverEdge(initial, edge, value - reach(initial)) ?? {},
+      // lines the edge up with a neighbouring line within reach, in every
+      // snapping mode; Alt pulls freely
+      connectionSnap: (n, value, sceneApi) =>
+        snapCanopyReach(n, edge, value, canopySnapPointsFor(n, edge, sceneApi.nodes())),
+      placement: {
+        position: (n) => {
+          const ring = getRoofSegmentCoverOutline(n)
+          const a = ring[edge] ?? [0, 0]
+          const b = ring[(edge + 1) % ring.length] ?? a
+          const x = (a[0] + b[0]) / 2
+          const z = (a[1] + b[1]) / 2
+          const out = n.overhang + SIDE_HANDLE_OFFSET
+          return [
+            x + (axis === 'x' ? sign * out : 0),
+            getRoofSegmentSurfaceY(n, x, z),
+            z + (axis === 'z' ? sign * out : 0),
+          ]
+        },
+        rotationY: () => (sign > 0 ? 0 : Math.PI),
+      },
+    }
+    return [handle]
+  })
+}
+
 // Whole-segment rotation gizmo — curved two-headed arrow at the +X / +Z
 // corner of the footprint, guide ring traces the corner-diagonal radius
 // on hover / drag. Same pattern as the elevator / column rotate gizmo;
@@ -293,6 +453,19 @@ const roofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
   roofSegmentRotateHandle(),
 ]
 
+// A gable's peak is its ridge: the ridge group's handles replace the pitch arrow.
+const gableRoofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
+  roofSegmentWidthHandle('right'),
+  roofSegmentWidthHandle('left'),
+  roofSegmentDepthHandle('front'),
+  roofSegmentDepthHandle('back'),
+  roofSegmentWallHeightHandle(),
+  gableRidgeHeightHandle('front'),
+  gableRidgeHeightHandle('back'),
+  gableRidgePositionHandle(),
+  roofSegmentRotateHandle(),
+]
+
 const conicalRoofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
   conicalRoofSegmentRadiusHandle(),
   roofSegmentWallHeightHandle(),
@@ -303,7 +476,21 @@ function resolveRoofSegmentHandles(
   node: RoofSegmentNodeType,
 ): HandleDescriptor<RoofSegmentNodeType>[] {
   if (node.managedByParent) return []
-  return node.roofType === 'conical' ? conicalRoofSegmentHandles : roofSegmentHandles
+  if (node.roofType === 'conical') return conicalRoofSegmentHandles
+  if (node.roofType !== 'gable') return roofSegmentHandles
+  // drawn over an outline: the covering's edges pull out as canopies instead
+  // of the rectangle resizing
+  if (canPullCanopy(node)) {
+    return [
+      ...canopyPullHandles(node),
+      roofSegmentWallHeightHandle(),
+      gableRidgeHeightHandle('front'),
+      gableRidgeHeightHandle('back'),
+      gableRidgePositionHandle(),
+      roofSegmentRotateHandle(),
+    ]
+  }
+  return gableRoofSegmentHandles
 }
 
 /**
@@ -375,6 +562,8 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   // arrow emitted by `buildRoofSegmentFloorplan`.
   floorplanAffordances: {
     'roof-segment-resize': roofSegmentResizeAffordance,
+    'roof-segment-pull': roofSegmentPullAffordance,
+    'roof-segment-ridge': roofSegmentRidgeAffordance,
     'roof-segment-rotate': roofSegmentRotateAffordance,
   },
 

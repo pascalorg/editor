@@ -13,6 +13,7 @@ import {
   getRoofMaterialArray,
   levelWallCladdingRef,
   NodeRenderer,
+  ROOF_SLOT_ROLES,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -87,8 +88,8 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
     }),
   )
 
-  // 4 groups map 1:1 to the roof's 4-material array (see getRoofMaterialArray).
-  const placeholderGeometry = useMemo(() => createPlaceholderGeometry(4), [])
+  // groups map 1:1 to the roof's per-slot material array (see getRoofMaterialArray).
+  const placeholderGeometry = useMemo(() => createPlaceholderGeometry(ROOF_SLOT_ROLES.length), [])
 
   // The gable band is clad like the walls below it (their assemblies).
   const wallCladdingRef = useScene((state) => levelWallCladdingRef(state.nodes, node))

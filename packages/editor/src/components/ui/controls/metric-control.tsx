@@ -63,7 +63,6 @@ export function MetricControl({
   const [inputValue, setInputValue] = useState(displayValue.toFixed(precision))
   const startXRef = useRef(0)
   const startValueRef = useRef(0)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const valueRef = useRef(value)
   valueRef.current = value
@@ -85,38 +84,7 @@ export function MetricControl({
     }
   }, [displayValue, precision, isEditing])
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    const handleWheel = (e: WheelEvent) => {
-      if (isEditing) return
-
-      e.preventDefault()
-
-      const direction = e.deltaY < 0 ? 1 : -1
-      let scrollStep = toStoredValue(step)
-      if (e.shiftKey) scrollStep = toStoredValue(step * 10)
-      else if (e.altKey) scrollStep = toStoredValue(step * 0.1)
-
-      const newValue = clamp(valueRef.current + direction * scrollStep)
-      const finalValue = roundStoredValueForDisplayPrecision(newValue)
-
-      if (Math.abs(finalValue - valueRef.current) > 1e-6) {
-        applyCommittedValue(finalValue)
-      }
-    }
-
-    container.addEventListener('wheel', handleWheel, { passive: false })
-    return () => container.removeEventListener('wheel', handleWheel)
-  }, [
-    isEditing,
-    step,
-    clamp,
-    applyCommittedValue,
-    toStoredValue,
-    roundStoredValueForDisplayPrecision,
-  ])
+  // No wheel: it scrolls the panel; a scroll passing over must not change the value.
 
   useEffect(() => {
     if (!isHovered || isEditing) return
@@ -315,7 +283,6 @@ export function MetricControl({
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      ref={containerRef}
     >
       <div
         className={cn(

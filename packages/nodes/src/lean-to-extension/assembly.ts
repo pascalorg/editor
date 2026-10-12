@@ -79,6 +79,10 @@ export type LeanToRoofMaterialPatch = Pick<
   | 'topMaterialPreset'
   | 'edgeMaterial'
   | 'edgeMaterialPreset'
+  | 'soffitMaterial'
+  | 'soffitMaterialPreset'
+  | 'fasciaMaterial'
+  | 'fasciaMaterialPreset'
   | 'wallMaterial'
   | 'wallMaterialPreset'
 >
@@ -916,6 +920,10 @@ export function leanToRoofMaterialPatch(hostRoof: RoofNodeType): LeanToRoofMater
     topMaterialPreset: hostRoof.topMaterialPreset,
     edgeMaterial: hostRoof.edgeMaterial,
     edgeMaterialPreset: hostRoof.edgeMaterialPreset,
+    soffitMaterial: hostRoof.soffitMaterial,
+    soffitMaterialPreset: hostRoof.soffitMaterialPreset,
+    fasciaMaterial: hostRoof.fasciaMaterial,
+    fasciaMaterialPreset: hostRoof.fasciaMaterialPreset,
     wallMaterial: hostRoof.wallMaterial,
     wallMaterialPreset: hostRoof.wallMaterialPreset,
   }

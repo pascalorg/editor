@@ -11,9 +11,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  buildRoofSlotMaterials,
   createMaterial,
   getRoofMaterialArray,
   levelWallCladdingRef,
+  ROOF_SLOT_ROLES,
   resolveMaterialRef,
   useNodeEvents,
   useViewer,
@@ -45,8 +47,8 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined)
     : undefined
-  // 4 groups map 1:1 to the roof's 4-material array (see getRoofMaterialArray).
-  const placeholderGeometry = useMemo(() => createPlaceholderGeometry(4), [])
+  // groups map 1:1 to the roof's per-slot material array (see getRoofMaterialArray).
+  const placeholderGeometry = useMemo(() => createPlaceholderGeometry(ROOF_SLOT_ROLES.length), [])
 
   // Segment material precedence, per-role:
   //   1. Segment's role-specific override (topMaterial, edgeMaterial, wallMaterial).
@@ -55,11 +57,7 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   //   4. Parent roof's catch-all material.
   //   5. Default `roofMaterials` (handled at the `material =` line below).
   //
-  // The 4-slot layout matches getRoofMaterialArray:
-  //   slot 0 → 'edge'  (wall/trim & rake bands)
-  //   slot 1 → 'wall'  (deck top & shingle eave bands)
-  //   slot 2 → 'wall'  (interior)
-  //   slot 3 → 'top'   (shingle / roof surface)
+  // The slot layout matches getRoofMaterialArray (ROOF_SLOT_ROLES).
   // The gable band is clad like the walls below it (their assemblies).
   const wallCladdingRef = useScene((state) =>
     parentNode ? levelWallCladdingRef(state.nodes, parentNode) : null,
@@ -91,11 +89,8 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
         )
       : null
 
-    const edge = resolveSlot('edge')
-    const wall = resolveSlot('wall')
-    const top = resolveSlot('top')
-
-    if (!(edge || wall || top)) {
+    const resolved = new Map(ROOF_SLOT_ROLES.map((role) => [role, resolveSlot(role)] as const))
+    if (![...resolved.values()].some(Boolean)) {
       return themedArray
     }
 
@@ -103,8 +98,10 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     // an untextured slot still picks up the scene-theme role colour, not blank white.
     // Per-role only, then the themed parent slot — no cross-role fallback, so
     // painting one segment surface never bleeds onto its other surfaces.
-    const slot = (i: number) => themedArray?.[i] ?? new THREE.MeshStandardMaterial()
-    return [edge ?? slot(0), wall ?? slot(1), wall ?? slot(2), top ?? slot(3)] as THREE.Material[]
+    return buildRoofSlotMaterials(
+      (role) => resolved.get(role) ?? null,
+      (i) => themedArray?.[i] ?? new THREE.MeshStandardMaterial(),
+    )
   }, [
     node.material,
     node.materialPreset,
@@ -113,6 +110,10 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     node.edgeMaterial,
     wallCladdingRef,
     node.edgeMaterialPreset,
+    node.soffitMaterial,
+    node.soffitMaterialPreset,
+    node.fasciaMaterial,
+    node.fasciaMaterialPreset,
     node.wallMaterial,
     node.wallMaterialPreset,
     parentNode,

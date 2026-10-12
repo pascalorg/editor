@@ -54,6 +54,9 @@ const ChimneyPreview = ({
     [
       effectiveSegment.wallHeight,
       effectiveSegment.pitch,
+      effectiveSegment.backPitch,
+      effectiveSegment.ridgeOffset,
+      effectiveSegment.ridgeStep,
       effectiveSegment.roofType,
       effectiveSegment.width,
       effectiveSegment.depth,

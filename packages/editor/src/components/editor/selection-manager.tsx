@@ -19,6 +19,7 @@ import {
   type RoofNode,
   type RoofSegmentEvent,
   type RoofSegmentNode,
+  type RoofSurfaceMaterialRole,
   resolveLevelId,
   type SlabNode,
   type StairEvent,
@@ -30,8 +31,10 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  buildRoofSlotMaterials,
   createMaterial,
   getRoofMaterialArray,
+  ROOF_SLOT_ROLES,
   registerMaterialCacheCleanup,
   resolveMaterialRef,
   useViewer,
@@ -255,11 +258,10 @@ function resolveStairMaterialTarget(
 
 function resolveRoofMaterialTarget(
   event: RoofEvent | RoofSegmentEvent,
-): 'top' | 'edge' | 'wall' | null {
+): RoofSurfaceMaterialRole | null {
   const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
-  if (materialIndex === 3) return 'top'
-  if (materialIndex === 0) return 'edge'
-  if (materialIndex === 1 || materialIndex === 2) return 'wall'
+  const slotRole = materialIndex === undefined ? undefined : ROOF_SLOT_ROLES[materialIndex]
+  if (slotRole) return slotRole
 
   const normalY = event.normal?.[1]
   if (normalY !== undefined && normalY > 0.35) return 'top'
@@ -476,7 +478,7 @@ function previewCursor(cursor: string): PaintPreviewCleanup {
 
 function applyRoofPaintPreview(
   node: RoofNode,
-  role: 'top' | 'edge' | 'wall',
+  role: RoofSurfaceMaterialRole,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   const root = getRegisteredNodeObject(node.id)
@@ -504,22 +506,21 @@ function applyRoofPaintPreview(
 function applyRoofSegmentPaintPreview(
   node: RoofSegmentNode,
   parent: RoofNode | null,
-  role: 'top' | 'edge' | 'wall',
+  role: RoofSurfaceMaterialRole,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   const mesh = getRegisteredMesh(node.id)
   if (!mesh) return null
 
   // Synthesise the segment node as if the paint had committed, then build
-  // the same 4-slot array the renderer would. Mirrors getRoofMaterialArray
-  // layout (slot 0 ← edge, 1 ← wall, 2 ← wall, 3 ← top) so the preview
-  // material lands on the matching CSG groups.
+  // the same per-slot array the renderer would (ROOF_SLOT_ROLES), so the
+  // preview material lands on the matching CSG groups.
   const previewNode: RoofSegmentNode = {
     ...node,
     ...buildRoofSegmentSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
   const sceneMaterials = useScene.getState().materials
-  const resolveSlot = (r: 'top' | 'edge' | 'wall'): Material | null => {
+  const resolveSlot = (r: RoofSurfaceMaterialRole): Material | null => {
     const parentSpec = parent ? getEffectiveRoofSurfaceMaterial(parent, r) : undefined
     const spec = getEffectiveSegmentSurfaceMaterial(previewNode, r, parentSpec)
     const resolved = resolveMaterialRef(spec.materialPreset, sceneMaterials)
@@ -527,18 +528,18 @@ function applyRoofSegmentPaintPreview(
     if (spec.material !== undefined) return createMaterial(spec.material)
     return null
   }
-  const edge = resolveSlot('edge')
-  const wall = resolveSlot('wall')
-  const top = resolveSlot('top')
-  if (!(edge || wall || top)) return null
+  const resolved = new Map(ROOF_SLOT_ROLES.map((role) => [role, resolveSlot(role)] as const))
+  if (![...resolved.values()].some(Boolean)) return null
   const fallback = parent
     ? getRoofMaterialArray(parent, undefined, undefined, undefined, undefined, null, sceneMaterials)
     : null
-  const fb = (n: number) => fallback?.[n] ?? null
+  if (!fallback) return null
   // Per-role only, then the parent's themed slot — matches the renderer so the
   // preview never bleeds a painted surface onto the segment's other surfaces.
-  const arr: Material[] = [edge ?? fb(0)!, wall ?? fb(1)!, wall ?? fb(2)!, top ?? fb(3)!]
-  if (arr.some((m) => !m)) return null
+  const arr = buildRoofSlotMaterials(
+    (role) => resolved.get(role) ?? null,
+    (slot) => fallback[slot]!,
+  )
   return previewMeshMaterial(mesh, arr)
 }
 

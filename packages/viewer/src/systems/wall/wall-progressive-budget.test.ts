@@ -693,7 +693,7 @@ test('a new hydration resets counters and pending neighbours; node stats preserv
 import { mock } from 'bun:test'
 const react = require('react')
 mock.module('react', () => ({ ...react, default: react, useEffect: (effect) => { globalThis.wallCleanup = effect() } }))
-mock.module('@react-three/fiber', () => ({ useFrame: (frame) => { globalThis.wallFrame = frame } }))
+mock.module('@react-three/fiber', () => ({ useFrame: (frame) => { globalThis.wallFrame = frame }, addAfterEffect: () => () => {}, invalidate: () => {} }))
 const core = require(${sourcePath('packages/core/src/index.ts')})
 const storeWithoutHooks = (store) => Object.assign((selector) => selector(store.getState()), store)
 mock.module('@pascal-app/core', () => ({ ...core, useScene: storeWithoutHooks(core.useScene), useLiveNodeOverrides: storeWithoutHooks(core.useLiveNodeOverrides) }))

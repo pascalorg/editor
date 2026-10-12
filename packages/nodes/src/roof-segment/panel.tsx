@@ -30,6 +30,8 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Check, Copy, Move, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { canPullCanopy } from './floorplan'
+import { GableRidgeSection } from './gable-ridge-section'
 
 const ROOF_TYPE_OPTIONS: { label: string; value: RoofType }[] = [
   { label: 'Hip', value: 'hip' },
@@ -106,6 +108,10 @@ export default function RoofSegmentPanel() {
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined) : undefined,
   )
+  const parentRoofRotation = useScene((s) => {
+    const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
+    return parent?.type === 'roof' ? parent.rotation : 0
+  })
   const autoRidgeVentEnabled = useScene((s) => {
     const current = selectedId
       ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined)
@@ -367,43 +373,47 @@ export default function RoofSegmentPanel() {
         </PanelSection>
       )}
 
-      <PanelSection title="Footprint">
-        {node.roofType === 'conical' ? (
-          <SliderControl
-            label="Diameter"
-            max={1000}
-            min={0.5}
-            onChange={(v) => handleUpdate({ width: v, depth: v })}
-            precision={2}
-            step={0.5}
-            unit="m"
-            value={node.width}
-          />
-        ) : (
-          <>
+      {/* drawn over an outline the outline sets the size: its edges pull out as
+          canopies, a rectangle of its own would only cut it */}
+      {!canPullCanopy(node) && (
+        <PanelSection title="Footprint">
+          {node.roofType === 'conical' ? (
             <SliderControl
-              label="Width"
+              label="Diameter"
               max={1000}
               min={0.5}
-              onChange={(v) => handleUpdate({ width: v })}
+              onChange={(v) => handleUpdate({ width: v, depth: v })}
               precision={2}
               step={0.5}
               unit="m"
               value={node.width}
             />
-            <SliderControl
-              label="Depth"
-              max={1000}
-              min={0.5}
-              onChange={(v) => handleUpdate({ depth: v })}
-              precision={2}
-              step={0.5}
-              unit="m"
-              value={node.depth}
-            />
-          </>
-        )}
-      </PanelSection>
+          ) : (
+            <>
+              <SliderControl
+                label="Width"
+                max={1000}
+                min={0.5}
+                onChange={(v) => handleUpdate({ width: v })}
+                precision={2}
+                step={0.5}
+                unit="m"
+                value={node.width}
+              />
+              <SliderControl
+                label="Depth"
+                max={1000}
+                min={0.5}
+                onChange={(v) => handleUpdate({ depth: v })}
+                precision={2}
+                step={0.5}
+                unit="m"
+                value={node.depth}
+              />
+            </>
+          )}
+        </PanelSection>
+      )}
 
       {node.roofType === 'conical' && (
         <PanelSection title="Conical Shape">
@@ -446,40 +456,50 @@ export default function RoofSegmentPanel() {
         </PanelSection>
       )}
 
-      <PanelSection title="Wall Height">
-        <SliderControl
-          label="Wall"
-          max={1000}
-          min={0}
-          onChange={(v) => handleUpdate({ wallHeight: v })}
-          precision={2}
-          step={0.1}
-          unit="m"
-          value={node.wallHeight}
+      {node.roofType === 'gable' ? (
+        <GableRidgeSection
+          node={node}
+          onUpdate={handleUpdate}
+          rotation={parentRoofRotation + node.rotation}
         />
-      </PanelSection>
-
-      <PanelSection title="Pitch">
-        <SliderControl
-          label="Angle"
-          max={60}
-          min={0}
-          onChange={(v) => handleUpdate({ pitch: v })}
-          precision={0}
-          step={1}
-          unit="°"
-          value={Math.round(node.pitch)}
-        />
-        <div className="flex gap-1.5 px-1 pt-2 pb-1">
-          {PITCH_PRESETS.map((preset) => (
-            <ActionButton
-              key={preset.label}
-              label={preset.label}
-              onClick={() => handleUpdate({ pitch: preset.deg })}
+      ) : (
+        <>
+          <PanelSection title="Wall Height">
+            <SliderControl
+              label="Wall"
+              max={1000}
+              min={0}
+              onChange={(v) => handleUpdate({ wallHeight: v })}
+              precision={2}
+              step={0.1}
+              unit="m"
+              value={node.wallHeight}
             />
-          ))}
-        </div>
-      </PanelSection>
+          </PanelSection>
+
+          <PanelSection title="Pitch">
+            <SliderControl
+              label="Angle"
+              max={60}
+              min={0}
+              onChange={(v) => handleUpdate({ pitch: v })}
+              precision={0}
+              step={1}
+              unit="°"
+              value={Math.round(node.pitch)}
+            />
+            <div className="flex gap-1.5 px-1 pt-2 pb-1">
+              {PITCH_PRESETS.map((preset) => (
+                <ActionButton
+                  key={preset.label}
+                  label={preset.label}
+                  onClick={() => handleUpdate({ pitch: preset.deg })}
+                />
+              ))}
+            </div>
+          </PanelSection>
+        </>
+      )}
 
       {node.roofType === 'gambrel' && (
         <PanelSection title="Shape">
@@ -630,6 +650,16 @@ export default function RoofSegmentPanel() {
           step={0.01}
           unit="m"
           value={node.shingleThickness}
+        />
+        <ToggleControl
+          checked={node.squareEaves === true}
+          label="Square eaves"
+          onChange={(checked) => handleUpdate({ squareEaves: checked })}
+        />
+        <ToggleControl
+          checked={node.cutAtWallTop === true}
+          label="Cut at wall top"
+          onChange={(checked) => handleUpdate({ cutAtWallTop: checked })}
         />
       </PanelSection>
 

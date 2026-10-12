@@ -1,8 +1,13 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
+import {
+  hasRoofRoleMaterial,
+  type RoofSurfaceMaterialRole,
+  type RoofSurfaceMaterialSpec,
+  readRoofRoleMaterial,
+} from './roof-surface-roles'
 
 export const RoofType = z.enum([
   'hip',
@@ -105,6 +110,10 @@ export const RoofSegmentNode = BaseNode.extend({
   topMaterialPreset: z.string().optional(),
   edgeMaterial: MaterialSchema.optional(),
   edgeMaterialPreset: z.string().optional(),
+  soffitMaterial: MaterialSchema.optional(),
+  soffitMaterialPreset: z.string().optional(),
+  fasciaMaterial: MaterialSchema.optional(),
+  fasciaMaterialPreset: z.string().optional(),
   wallMaterial: MaterialSchema.optional(),
   wallMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
@@ -131,6 +140,22 @@ export const RoofSegmentNode = BaseNode.extend({
   // boundary is projected vertically through the roof volume, so the
   // resulting edge follows the actual sloped roof surfaces.
   trim: RoofSegmentTrim,
+  // Segment-local plan outline (the wall line) the roof is cut to: the
+  // segment is built over its width × depth rectangle, then everything outside
+  // the outline (pushed out by the overhang) goes. The roof's own wall shell
+  // follows the outline itself, closing the gables along the walls.
+  footprint: z
+    .array(z.tuple([z.number(), z.number()]))
+    .min(3)
+    .optional(),
+  // Segment-local plan outline of what the roof covers, where it reaches past
+  // the walls as a canopy (over a terrace or a porch): the deck, shingles and
+  // soffit follow it (plus the overhang), the roof's own walls stay on
+  // `footprint`. Absent, the roof covers its footprint.
+  coverFootprint: z
+    .array(z.tuple([z.number(), z.number()]))
+    .min(3)
+    .optional(),
   // Wall height beneath the roof
   wallHeight: z.number().default(0.5),
   // Roof pitch in degrees — angle of the primary slope face.
@@ -138,6 +163,19 @@ export const RoofSegmentNode = BaseNode.extend({
   // it is the steep (lower) slope. The overall peak height is derived
   // from pitch + footprint + roofType via getActiveRoofHeight().
   pitch: z.number().min(0).max(85).default(40),
+  // Gable only: pitch of the slope on the segment's −z side. Absent, both
+  // slopes take `pitch`.
+  backPitch: z.number().min(1).max(85).optional(),
+  // Gable only: plan distance from the +z wall line to the ridge — where the
+  // design puts it. The ridge stands at `wallHeight + ridgeOffset·tan(pitch)`
+  // and the −z eave hangs where the back slope reaches from it, so the two
+  // eaves (attic walls) may differ in height. Absent, both eaves stay at
+  // `wallHeight` and the ridge falls where the slopes meet.
+  ridgeOffset: z.number().positive().optional(),
+  // Gable only: how much higher the −z slope's ridge stands than the +z one's
+  // (negative: lower). Each slope keeps its own ridge height; at the ridge line
+  // a vertical step wall of the roof closes the gap. Absent, one ridge.
+  ridgeStep: z.number().optional(),
   // Structure thicknesses
   wallThickness: z.number().default(0.1),
   deckThickness: z.number().default(0.1),
@@ -177,6 +215,15 @@ export const RoofSegmentNode = BaseNode.extend({
   // shed, flat), built from the segment itself so they follow its pitch,
   // size, overhang and type.
   fascia: z.boolean().optional(),
+  // Edges of the covering cut square to the slope, as boards are, keeping how
+  // far the roof reaches: an eave keeps its outer face on the overhang line
+  // (the soffit draws back), a high edge its soffit. Off when absent: plumb.
+  squareEaves: z.boolean().optional(),
+  // With an eave below the wall top (a negative attic wall), cut the deck and
+  // shingles below the wall top inside the walls; outside, the eave
+  // overhangs. Off when absent: they stay (a ceiling following the slope).
+  // The roof's own walls end at the wall top either way.
+  cutAtWallTop: z.boolean().optional(),
   // Shed only: the board on the high edge. Off when that edge meets a wall
   // (a porch cover on a ledger); a lean-to never has one.
   fasciaHighEdge: z.boolean().optional(),
@@ -243,11 +290,18 @@ export const RoofSegmentNode = BaseNode.extend({
   - conicalStartAngle / conicalSweepAngle: angular extent of a conical sector (radians)
   - conicalFullCircle: temporarily render the complete cone while preserving the sector angles
   - trim: segment-local side cut distances
+  - footprint: segment-local outline the roof is cut to (overhang added outward)
+  - coverFootprint: segment-local outline the covering reaches, past the walls as a canopy (absent = footprint)
   - wallHeight: height of walls below the roof
-  - pitch: roof slope in degrees (angle of the primary slope face)
+  - pitch: roof slope in degrees (angle of the primary slope face; on a gable, the +z slope)
+  - backPitch: gable only — slope of the −z side in degrees (absent = pitch)
+  - ridgeOffset: gable only — plan distance from the +z wall line to the ridge (absent = where equal eaves meet)
+  - ridgeStep: gable only — how much higher the −z slope's ridge is than the +z one's; a step wall closes the gap (absent = one ridge)
   - wallThickness/deckThickness: structural thicknesses
   - overhang: eave overhang distance
   - shingleThickness: outer shingle layer thickness
+  - cutAtWallTop: with an eave below the wall top, cut the deck and shingles below it inside the walls (off when absent; the roof's own walls always end there)
+  - squareEaves: covering edges cut square to the slope, the overhang's reach kept (off when absent = plumb)
   - fascia: plumb fascia and rake boards on the eaves and rakes (gable, hip, shed, flat) (off when absent)
   - fasciaHighEdge: shed only — a board on the high edge (off when it meets a wall; on when absent)
   - gambrelLowerWidthRatio / gambrelLowerHeightRatio: kink position on gambrel roofs
@@ -566,6 +620,116 @@ export type SegmentSlopeFrame = {
   sinTheta: number
   /** Overall eave-to-peak height of the assembled roof. */
   activeRh: number
+  /** tan of the −z slope: differs from `tanTheta` only on a gable with `backPitch`. */
+  backTanTheta: number
+  /** Segment-local z of the gable ridge; 0 unless the two slopes differ. */
+  ridgeZ: number
+}
+
+type GableRidgeInput = Partial<Pick<RoofSegmentNode, 'backPitch' | 'ridgeOffset' | 'ridgeStep'>>
+
+/** The gable's ridge step in metres: 0 when absent or not finite. */
+export function readGableRidgeStep(node: Pick<RoofSegmentNode, 'ridgeStep'> | object): number {
+  const step = (node as { ridgeStep?: unknown }).ridgeStep
+  return typeof step === 'number' && Number.isFinite(step) ? step : 0
+}
+
+/** A gable whose two sides differ: in pitch, in eave height around a placed ridge, or in ridge height. */
+function isUnevenGable(
+  node: Pick<RoofSegmentNode, 'roofType' | 'pitch'> & GableRidgeInput,
+): boolean {
+  if (node.roofType !== 'gable' || !(node.pitch > 0)) return false
+  const distinctBack =
+    typeof node.backPitch === 'number' &&
+    Number.isFinite(node.backPitch) &&
+    node.backPitch > 0 &&
+    node.backPitch !== node.pitch
+  const placedRidge =
+    typeof node.ridgeOffset === 'number' &&
+    Number.isFinite(node.ridgeOffset) &&
+    node.ridgeOffset > 0
+  return distinctBack || placedRidge || readGableRidgeStep(node) !== 0
+}
+
+export type GableRidge = {
+  /** Plan distance from the +z wall line to the ridge. */
+  offset: number
+  /** Segment-local z of the ridge. */
+  ridgeZ: number
+  /** Ridge height of the +z slope above the segment base. */
+  height: number
+  /** Ridge height of the −z slope: `height + step`. */
+  backHeight: number
+  /** How much higher the −z ridge stands than the +z one; 0 for one ridge. */
+  step: number
+  /** Eave (attic wall) height on the +z side — the segment's `wallHeight`. */
+  frontWallHeight: number
+  /** Eave (attic wall) height on the −z side. */
+  backWallHeight: number
+  frontPitch: number
+  backPitch: number
+}
+
+/**
+ * The ridge of a sloped gable and the attic wall height it leaves on each side.
+ * Null for other roof types and for a flat gable.
+ */
+export function getGableRidge(
+  node: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'depth' | 'wallHeight'> & GableRidgeInput,
+): GableRidge | null {
+  if (node.roofType !== 'gable' || !(node.pitch > 0)) return null
+  const depth = finitePositive(node.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
+  const frontPitch = node.pitch
+  const backPitch =
+    typeof node.backPitch === 'number' && Number.isFinite(node.backPitch) && node.backPitch > 0
+      ? node.backPitch
+      : frontPitch
+  const tanFront = Math.tan((frontPitch * Math.PI) / 180)
+  const tanBack = Math.tan((backPitch * Math.PI) / 180)
+  const minRun = Math.min(0.01, depth / 4)
+  // Without a placed ridge both eaves sit at the wall height:
+  // offset·tan(front) = (depth − offset)·tan(back).
+  const offset =
+    typeof node.ridgeOffset === 'number' && Number.isFinite(node.ridgeOffset)
+      ? Math.min(depth - minRun, Math.max(minRun, node.ridgeOffset))
+      : (depth * tanBack) / (tanFront + tanBack)
+  const frontWallHeight = node.wallHeight
+  const height = frontWallHeight + offset * tanFront
+  const step = readGableRidgeStep(node)
+  const backHeight = height + step
+  return {
+    offset,
+    ridgeZ: depth / 2 - offset,
+    height,
+    backHeight,
+    step,
+    frontWallHeight,
+    backWallHeight: backHeight - (depth - offset) * tanBack,
+    frontPitch,
+    backPitch,
+  }
+}
+
+/**
+ * The segment as if both its slopes were its −z side, or null when the two
+ * sides match. Every layer of a gable (wall shell, deck, shingles, boards) is
+ * built per side from that side's pitch and eave height alone, so a builder
+ * runs its usual math on this twin and keeps the −z eave; the ridge is where
+ * the two slope planes meet.
+ */
+export function getRoofSegmentBackSlopeTwin<
+  T extends Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'depth' | 'wallHeight'> & GableRidgeInput,
+>(node: T): T | null {
+  if (!isUnevenGable(node)) return null
+  const ridge = getGableRidge(node)!
+  return {
+    ...node,
+    pitch: ridge.backPitch,
+    backPitch: undefined,
+    ridgeOffset: undefined,
+    ridgeStep: undefined,
+    wallHeight: ridge.backWallHeight,
+  }
 }
 
 /**
@@ -577,7 +741,9 @@ export type SegmentSlopeFrame = {
  * silently drifted when a new roof type was added.
  */
 export function getSegmentSlopeFrame(
-  node: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'width' | 'depth'> & Partial<ShapeRatios>,
+  node: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'width' | 'depth'> &
+    Partial<ShapeRatios> &
+    GableRidgeInput,
 ): SegmentSlopeFrame {
   const ratios = withRatioDefaults(node)
   const run = getPrimarySlopeRun(ratios)
@@ -586,15 +752,40 @@ export function getSegmentSlopeFrame(
   // resolves to a flat frame instead of computing `Math.tan(NaN)` → NaN geometry,
   // which poisons the merged-roof CSG ("Coplanar clip not handled" + NaN positions).
   if (node.roofType === 'flat' || !(node.pitch > 0)) {
-    return { run, rise: 0, tanTheta: 0, cosTheta: 1, sinTheta: 0, activeRh: 0 }
+    return {
+      run,
+      rise: 0,
+      tanTheta: 0,
+      cosTheta: 1,
+      sinTheta: 0,
+      activeRh: 0,
+      backTanTheta: 0,
+      ridgeZ: 0,
+    }
   }
   const pitchRad = (node.pitch * Math.PI) / 180
   const tanTheta = Math.tan(pitchRad)
   const cosTheta = Math.cos(pitchRad) || 1
   const sinTheta = Math.sin(pitchRad)
+  if (isUnevenGable(node)) {
+    // The eave height does not move the ridge in plan, so any wall height will do here.
+    const ridge = getGableRidge({ ...node, depth: ratios.depth, wallHeight: 0 })!
+    const backTanTheta = Math.tan((ridge.backPitch * Math.PI) / 180)
+    const rise = ridge.offset * tanTheta
+    return {
+      run: ridge.offset,
+      rise,
+      tanTheta,
+      cosTheta,
+      sinTheta,
+      activeRh: rise,
+      backTanTheta,
+      ridgeZ: ridge.ridgeZ,
+    }
+  }
   const rise = run * tanTheta
   const activeRh = rise / getPrimarySlopeRiseFraction(ratios)
-  return { run, rise, tanTheta, cosTheta, sinTheta, activeRh }
+  return { run, rise, tanTheta, cosTheta, sinTheta, activeRh, backTanTheta: tanTheta, ridgeZ: 0 }
 }
 
 /**
@@ -624,10 +815,19 @@ export function getRoofSegmentVisibleTopBounds(
   const horizontalOverhang = finiteNonNegative(segment.overhang) * cosTheta
   const deckExt = finiteNonNegative(segment.wallThickness) / 2 + horizontalOverhang
   const shingleOverhang = finiteNonNegative(segment.shingleThickness) * sinTheta
+  const backTwin = getRoofSegmentBackSlopeTwin(segment)
+  const backFrame = backTwin ? getSegmentSlopeFrame(backTwin) : null
+  const backDeckExt = backFrame
+    ? finiteNonNegative(segment.wallThickness) / 2 +
+      finiteNonNegative(segment.overhang) * backFrame.cosTheta
+    : deckExt
+  const backShingleOverhang = backFrame
+    ? finiteNonNegative(segment.shingleThickness) * backFrame.sinTheta
+    : shingleOverhang
 
   let xExt = deckExt
   let frontExt = deckExt
-  let backExt = deckExt
+  let backExt = backDeckExt
 
   if (
     segment.roofType === 'hip' ||
@@ -640,7 +840,7 @@ export function getRoofSegmentVisibleTopBounds(
     backExt += shingleOverhang
   } else if (segment.roofType === 'gable' || segment.roofType === 'gambrel') {
     frontExt += shingleOverhang
-    backExt += shingleOverhang
+    backExt += backShingleOverhang
   } else if (segment.roofType === 'shed' && activeRh > 0) {
     frontExt += shingleOverhang
   }
@@ -697,6 +897,13 @@ export function getRoofSegmentSurfaceY(
   const activeRh = slopeFrame.activeRh
   const peakY = node.wallHeight + activeRh
   if (activeRh === 0) return node.wallHeight
+
+  const ridge = isUnevenGable(node) ? getGableRidge(node) : null
+  if (ridge) {
+    return localZ >= ridge.ridgeZ
+      ? ridge.frontWallHeight + (node.depth / 2 - localZ) * slopeFrame.tanTheta
+      : ridge.backWallHeight + (node.depth / 2 + localZ) * slopeFrame.backTanTheta
+  }
 
   if (node.roofType === 'gable' || node.roofType === 'gambrel' || node.roofType === 'mansard') {
     const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
@@ -785,11 +992,8 @@ export function getPitchFromActiveRoofHeight(input: PitchInputs & { roofHeight: 
 // Per-segment surface materials
 // ----------------------------------------------------------------------------
 
-export type RoofSegmentSurfaceMaterialRole = 'top' | 'edge' | 'wall'
-export type RoofSegmentSurfaceMaterialSpec = {
-  material?: MaterialSchemaType
-  materialPreset?: string
-}
+export type RoofSegmentSurfaceMaterialRole = RoofSurfaceMaterialRole
+export type RoofSegmentSurfaceMaterialSpec = RoofSurfaceMaterialSpec
 
 function getLegacyRoofSegmentSurfaceMaterial(
   node: RoofSegmentNode,
@@ -801,8 +1005,8 @@ function getLegacyRoofSegmentSurfaceMaterial(
 }
 
 /**
- * Resolve the segment-level material for one of the three surface roles.
- * Falls back through: role-specific field → catch-all `material`. Pass the
+ * Resolve the segment-level material for one of the surface roles.
+ * Falls back through: role field (or the role it still follows) → catch-all `material`. Pass the
  * parent roof to `parentFallback` when you want the roof's role material
  * to fill in for an unset segment slot — typical from the renderer.
  */
@@ -811,31 +1015,8 @@ export function getEffectiveSegmentSurfaceMaterial(
   role: RoofSegmentSurfaceMaterialRole,
   parentFallback?: RoofSegmentSurfaceMaterialSpec,
 ): RoofSegmentSurfaceMaterialSpec {
-  if (role === 'top') {
-    if (node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string') {
-      return {
-        material: node.topMaterial,
-        materialPreset:
-          typeof node.topMaterialPreset === 'string' ? node.topMaterialPreset : undefined,
-      }
-    }
-  } else if (role === 'edge') {
-    if (node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string') {
-      return {
-        material: node.edgeMaterial,
-        materialPreset:
-          typeof node.edgeMaterialPreset === 'string' ? node.edgeMaterialPreset : undefined,
-      }
-    }
-  } else if (role === 'wall') {
-    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
-      return {
-        material: node.wallMaterial,
-        materialPreset:
-          typeof node.wallMaterialPreset === 'string' ? node.wallMaterialPreset : undefined,
-      }
-    }
-  }
+  const own = readRoofRoleMaterial(node, role)
+  if (own) return own
 
   const legacy = getLegacyRoofSegmentSurfaceMaterial(node)
   if (legacy.material !== undefined || legacy.materialPreset !== undefined) return legacy
@@ -845,7 +1026,7 @@ export function getEffectiveSegmentSurfaceMaterial(
 
 /**
  * Returns true when the segment has any segment-level material override —
- * either the legacy catch-all or any of the three role-specific fields.
+ * either the legacy catch-all or any role field.
  * Used by `RoofRenderer` and `updateMergedRoofGeometry` to decide whether
  * the segment should be drawn as its own mesh or folded into the merged
  * shell.
@@ -854,11 +1035,6 @@ export function hasSegmentMaterialOverride(node: RoofSegmentNode): boolean {
   return (
     node.material !== undefined ||
     typeof node.materialPreset === 'string' ||
-    node.topMaterial !== undefined ||
-    typeof node.topMaterialPreset === 'string' ||
-    node.edgeMaterial !== undefined ||
-    typeof node.edgeMaterialPreset === 'string' ||
-    node.wallMaterial !== undefined ||
-    typeof node.wallMaterialPreset === 'string'
+    hasRoofRoleMaterial(node)
   )
 }

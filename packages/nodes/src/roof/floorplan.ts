@@ -3,6 +3,7 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getRoofSegmentVisibleTopBounds,
+  getSegmentSlopeFrame,
   type RoofNode,
   type RoofSegmentNode,
   roofPlanOverlapEntryOwns,
@@ -73,7 +74,15 @@ function slopeArrows(node: RoofSegmentNode): { tail: [number, number]; head: [nu
     case 'shed':
       // Unchanged from the linework builder: the 3D shed falls −lz → +lz.
       return [{ tail: [0, -hd * 0.55], head: [0, hd * 0.55] }]
-    case 'gable':
+    case 'gable': {
+      const { ridgeZ } = getSegmentSlopeFrame(node)
+      const front = along(hd - ridgeZ)
+      const back = along(hd + ridgeZ)
+      return [
+        { tail: [-hw * 0.35, ridgeZ + front.near], head: [-hw * 0.35, ridgeZ + front.far] },
+        { tail: [hw * 0.35, ridgeZ - back.near], head: [hw * 0.35, ridgeZ - back.far] },
+      ]
+    }
     case 'gambrel': {
       const z = along(hd)
       return [
@@ -158,6 +167,8 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): 
   // faces, the shingle projection) to the footprint on each side.
   const edge = getRoofSegmentVisibleTopBounds(seg)
   const pitch = roofPitchLabel(seg.pitch)
+  // A gable's second arrow is its −z slope.
+  const backPitch = seg.roofType === 'gable' ? roofPitchLabel(seg.backPitch ?? seg.pitch) : pitch
   return {
     footprint,
     eave: [
@@ -169,10 +180,10 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): 
     ridges,
     hips,
     breaks,
-    slopes: slopeArrows(seg).map((arrow) => ({
+    slopes: slopeArrows(seg).map((arrow, index) => ({
       tail: tp(arrow.tail[0], arrow.tail[1]),
       head: tp(arrow.head[0], arrow.head[1]),
-      pitch,
+      pitch: index === 1 ? backPitch : pitch,
     })),
   }
 }

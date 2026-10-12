@@ -2,6 +2,11 @@ import {
   type AnyNodeId,
   type FloorplanAffordance,
   type FloorplanMoveTarget,
+  getGableRidge,
+  getGableWallInsets,
+  getRoofRingEdgeNormal,
+  getRoofSegmentCoverOutline,
+  pullRoofSegmentCoverEdge,
   type RoofNode,
   type RoofSegmentNode,
   snapScalar,
@@ -11,6 +16,8 @@ import {
 import { getSegmentGridStep, isAngleSnapActive, isGridSnapActive } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
+import { getCanopySnapPoints, snapCanopyReach } from './canopy-snap'
+import { applyGableRidgeEdit, readGableRidgeLocks } from './gable-ridge-edit'
 
 const MIN_ROOF_DIM = 1
 
@@ -158,6 +165,110 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
               ? { width: lastValue }
               : { depth: lastValue }
         useScene.getState().updateNode(segmentId, { ...dimensions, position })
+      },
+    }
+  },
+}
+
+/**
+ * Gable ridge drag (floor-plan). Sister to the 3D ridge-position arrow: the
+ * plan cursor, projected onto the segment's local Z, slides the ridge across
+ * the depth through the ridge group's edit, so the locks decide what gives
+ * way. A locked ridge does not move.
+ */
+export const roofSegmentRidgeAffordance: FloorplanAffordance<RoofSegmentNode> = {
+  start({ node, nodes, initialPlanPoint }) {
+    const segmentId = node.id as AnyNodeId
+    const ridge = getGableRidge(node)
+    const locks = readGableRidgeLocks(node.metadata)
+    const { cx, cz, effRot } = resolveSegmentFrame(node, nodes)
+    const cosEff = Math.cos(effRot)
+    const sinEff = Math.sin(effRot)
+    const projectLocalZ = (px: number, pz: number) => -(px - cx) * sinEff + (pz - cz) * cosEff
+    const initialLocal = projectLocalZ(initialPlanPoint[0], initialPlanPoint[1])
+    let lastPatch: Partial<RoofSegmentNode> | null = null
+
+    return {
+      affectedIds: [segmentId],
+      apply({ planPoint }) {
+        if (!ridge || locks.ridge) return
+        const delta = projectLocalZ(planPoint[0], planPoint[1]) - initialLocal
+        const step = isGridSnapActive() ? getSegmentGridStep() : 0
+        const rawZ = ridge.ridgeZ + delta
+        const ridgeZ = step > 0 ? snapScalar(rawZ, step) : rawZ
+        lastPatch = applyGableRidgeEdit(
+          node,
+          {
+            kind: 'position',
+            side: 'front',
+            value: node.depth / 2 - ridgeZ - getGableWallInsets(node).front,
+          },
+          locks,
+        )
+        if (!lastPatch) return
+        useLiveNodeOverrides.getState().set(segmentId, lastPatch)
+        useScene.getState().markDirty(segmentId)
+      },
+      canCommit() {
+        return lastPatch !== null
+      },
+      commit() {
+        useLiveNodeOverrides.getState().clear(segmentId)
+        if (lastPatch) useScene.getState().updateNode(segmentId, lastPatch)
+      },
+    }
+  },
+}
+
+/**
+ * Canopy pull (floor-plan): drag an edge of what the roof covers out past the
+ * walls (or back to them). The plan cursor, projected onto the edge's outward
+ * normal, is how far the edge slides; `pullRoofSegmentCoverEdge` keeps the
+ * slopes in their planes and the roof's walls on the house.
+ */
+export const roofSegmentPullAffordance: FloorplanAffordance<RoofSegmentNode> = {
+  start({ node, payload, nodes, initialPlanPoint }) {
+    const segmentId = node.id as AnyNodeId
+    const edge = (payload as { edge: number }).edge
+    const cover = getRoofSegmentCoverOutline(node)
+    const [nx, nz] = getRoofRingEdgeNormal(cover, edge)
+    const { effRot } = resolveSegmentFrame(node, nodes)
+    const cosEff = Math.cos(effRot)
+    const sinEff = Math.sin(effRot)
+    // the edge's outward normal in plan (local x → (cos, sin), local z → (−sin, cos))
+    const planNx = nx * cosEff - nz * sinEff
+    const planNz = nx * sinEff + nz * cosEff
+    const along = (px: number, pz: number) => px * planNx + pz * planNz
+    const initialAlong = along(initialPlanPoint[0], initialPlanPoint[1])
+    const [ex, ez] = cover[edge]!
+    const initialReach = nx * ex + nz * ez
+    // neighbouring lines to line the edge up with, gathered once per drag
+    const snapPoints = getCanopySnapPoints(node, edge, nodes)
+    let lastPatch: Partial<RoofSegmentNode> | null = null
+
+    return {
+      affectedIds: [segmentId],
+      apply({ planPoint, modifiers }) {
+        const raw = along(planPoint[0], planPoint[1]) - initialAlong
+        const step = isGridSnapActive() ? getSegmentGridStep() : 0
+        let distance = step > 0 ? snapScalar(raw, step) : raw
+        // a neighbouring line within reach wins over the grid in every snapping
+        // mode (as the 3D arrow's connection snap); Alt pulls freely
+        if (!modifiers.altKey) {
+          const reach = snapCanopyReach(node, edge, initialReach + raw, snapPoints)
+          if (reach !== initialReach + raw) distance = reach - initialReach
+        }
+        lastPatch = pullRoofSegmentCoverEdge(node, edge, distance)
+        if (!lastPatch) return
+        useLiveNodeOverrides.getState().set(segmentId, lastPatch)
+        useScene.getState().markDirty(segmentId)
+      },
+      canCommit() {
+        return lastPatch !== null
+      },
+      commit() {
+        useLiveNodeOverrides.getState().clear(segmentId)
+        if (lastPatch) useScene.getState().updateNode(segmentId, lastPatch)
       },
     }
   },
