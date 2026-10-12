@@ -1162,17 +1162,50 @@ export function endCompareWhenPointerDrifts(origin: { x: number; y: number }, ra
 
 // ─── the chat's word on a turn, and the scene's commits ─────────────────────
 
+/**
+ * The ask whose turn is running: the last one the chat reported "working", until it ends. Only its
+ * pin takes the scene's commits. A pin that says "working" and never heard its end is an older turn
+ * that is not running, and must not absorb this one's changes.
+ */
+let runningAskId: string | null = null
+
+/** Pins that said "working" or "asking" for a turn the chat has moved past: they end, unfinished. */
+function settleStalePins(running: string) {
+  const state = usePointAsk.getState()
+  for (const askId of state.pinOrder) {
+    if (askId === running) continue
+    const model = state.pins[askId]?.model
+    if (model && (model.state === 'working' || model.state === 'needs-input')) {
+      state.dispatchPin(askId, {
+        type: 'status',
+        status: {
+          askId,
+          status: 'ended',
+          outcome: 'cancelled',
+          asked: false,
+          wroteScene: false,
+        },
+      })
+    }
+  }
+}
+
 function onStatus(status: PointAskStatus) {
   // A turn starting to write while the before is held would be swallowed by it.
   if (status.status === 'working' || status.status === 'queued') endCompare()
   const state = usePointAsk.getState()
   const pin = state.pins[status.askId]
   if (!pin) return
+  if (status.status === 'working') {
+    runningAskId = status.askId
+    settleStalePins(status.askId)
+  }
   const marks = askMarks.get(status.askId)
   if (status.status === 'queued' && marks) marks.start = null
   if (status.status === 'working' && marks && marks.start === null) marks.start = markNow()
   state.dispatchPin(status.askId, { type: 'status', status })
   if (status.status === 'ended') {
+    if (runningAskId === status.askId) runningAskId = null
     if (marks) marks.end = markNow()
     state.patchPin(status.askId, { retireAt: null })
     const settled = usePointAsk.getState().pins[status.askId]
@@ -1181,13 +1214,12 @@ function onStatus(status: PointAskStatus) {
 }
 
 function onCommit(commit: SceneCommit) {
+  if (!runningAskId) return
   const state = usePointAsk.getState()
-  for (const askId of state.pinOrder) {
-    const pin = state.pins[askId]
-    if (pin?.model.state !== 'working') continue
-    const event = pointCommitEvent(commit, pin.model.targetIds)
-    if (event) state.dispatchPin(askId, event)
-  }
+  const pin = state.pins[runningAskId]
+  if (pin?.model.state !== 'working') return
+  const event = pointCommitEvent(commit, pin.model.targetIds)
+  if (event) state.dispatchPin(runningAskId, event)
 }
 
 /** What an undo of the turn will take out of the scene: the nodes the turn created, not those it only changed. */
@@ -1337,6 +1369,7 @@ export function startPointAskSession(): () => void {
     endCompare()
     for (const off of offs) off()
     leavePointMode()
+    runningAskId = null
     stopSession = null
   }
   return stopSession

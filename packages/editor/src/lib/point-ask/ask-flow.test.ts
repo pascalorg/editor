@@ -101,7 +101,7 @@ async function sendAsk() {
     error: null,
   })
   await sendBubble('make this wall taller', { x: 0, y: 0, width: 10, height: 10 })
-  const askId = usePointAsk.getState().pinOrder[0]
+  const askId = usePointAsk.getState().pinOrder.at(-1)
   if (!askId) throw new Error('the ask did not plant a pin')
   return askId
 }
@@ -265,5 +265,48 @@ describe('an ask while Pascal is working', () => {
     const state = usePointAsk.getState()
     expect(state.pinOrder).toHaveLength(0)
     expect(state.bubble?.error).toBe('Pascal is working. Ask again when it is done.')
+  })
+})
+
+describe("which pin takes the scene's changes", () => {
+  test("a stale pin never absorbs the running ask's changes: they go to its pin alone", async () => {
+    // Two earlier asks said "working" and the pin never heard their end (a dropped turn, a reload of
+    // the chat), and they point at the same wall.
+    const staleWorking = await sendAsk()
+    status(staleWorking, { status: 'working', sentence: 'Raising the wall' })
+    const staleAsking = await sendAsk()
+    status(staleAsking, { status: 'working', sentence: 'Painting' })
+    status(staleAsking, { status: 'asking', question: 'Which colour?' })
+    // The ask that runs now.
+    const running = await sendAsk()
+    status(running, { status: 'working', sentence: 'Reading your request' })
+    agentWrite(() => useScene.getState().updateNode(wall.id, { height: 3.4 }))
+    status(running, { status: 'ended', outcome: 'completed', asked: false, wroteScene: true })
+
+    const { pins } = usePointAsk.getState()
+    expect(pins[running]?.model.state).toBe('done')
+    expect(pins[running]?.model.changedTargetIds).toEqual([wall.id])
+    for (const stale of [staleWorking, staleAsking]) {
+      expect(pins[stale]?.model.committed).toBe(false)
+      expect(pins[stale]?.model.changedTargetIds).toEqual([])
+      expect(pins[stale]?.model.alsoChangedIds).toEqual([])
+      expect(pins[stale]?.model.state).not.toBe('done')
+    }
+  })
+
+  test('changes made before any ask is working go to no pin', async () => {
+    const waiting = await sendAsk()
+    agentWrite(() => useScene.getState().updateNode(wall.id, { height: 3.4 }))
+    status(waiting, { status: 'ended', outcome: 'completed', asked: false, wroteScene: false })
+    expect(usePointAsk.getState().pins[waiting]?.model.committed).toBe(false)
+  })
+
+  test("a stale pin is settled when another ask starts working: it is not left 'working'", async () => {
+    const stale = await sendAsk()
+    status(stale, { status: 'working', sentence: 'Raising the wall' })
+    const running = await sendAsk()
+    status(running, { status: 'working', sentence: 'Reading your request' })
+    expect(usePointAsk.getState().pins[stale]?.model.state).not.toBe('working')
+    expect(usePointAsk.getState().pins[running]?.model.state).toBe('working')
   })
 })
