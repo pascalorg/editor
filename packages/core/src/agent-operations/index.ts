@@ -1,5 +1,6 @@
 import { addLevel } from './add-level'
 import { addWall } from './add-wall'
+import { addCornerWindow } from './corner-window'
 import { createRoom } from './create-room'
 import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
@@ -9,6 +10,7 @@ import { furnishRoom } from './furnish-room'
 import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
+import { mergeWindowsOperation } from './merge-windows'
 import { placeItems } from './place-items'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
@@ -24,6 +26,7 @@ export * from './add-wall'
 export * from './apply-changes'
 export * from './apply-outcome'
 export * from './collections'
+export * from './corner-window'
 export * from './create-room'
 export * from './create-stair'
 export * from './delete-node'
@@ -40,6 +43,7 @@ export * from './level-target'
 export * from './list-levels'
 export * from './material-preset'
 export * from './material-refs'
+export * from './merge-windows'
 export * from './node-patch'
 export * from './place-items'
 export * from './plan-geometry'
@@ -65,6 +69,8 @@ export const AGENT_OPERATIONS = {
   duplicate_level: duplicateLevel,
   verify_scene: verifyScene,
   add_wall: addWall,
+  add_corner_window: addCornerWindow,
+  merge_windows: mergeWindowsOperation,
   add_level: addLevel,
   create_stair: createStair,
   place_items: placeItems,

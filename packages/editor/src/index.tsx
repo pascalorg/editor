@@ -854,6 +854,7 @@ export {
   startWallPolygonDraft,
   wallPolygonDraftWalls,
 } from './lib/wall-polygon-draft'
+export { writeWindowChanges } from './lib/window-changes'
 export {
   closeWindowOpenState,
   getDisplayedWindowValue,
@@ -873,6 +874,13 @@ export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CameraHintAction, useCameraHintFocus } from './store/use-camera-hint-focus'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
+export {
+  CORNER_BLOCK_NOTES,
+  type CornerHintRow,
+  type CornerSnapHint,
+  cornerHintRows,
+  useCornerSnapHint,
+} from './store/use-corner-snap-hint'
 export {
   DRAWING_TYPE_OPTIONS,
   default as useDrawingView,

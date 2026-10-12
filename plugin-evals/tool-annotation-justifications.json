@@ -20,6 +20,19 @@
       }
     },
     {
+      "name": "add_corner_window",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds two joined window nodes on the walls meeting at a corner of the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "add_door",
       "annotations": {
         "readOnlyHint": false,
@@ -680,6 +693,19 @@
         "readOnlyHint": "It reads resolved stair quantities and design diagnostics without writing scene state.",
         "destructiveHint": "It does not change, replace or delete authored geometry.",
         "openWorldHint": "It evaluates the connected scene with the shared core stair planner; it does not access the public internet."
+      }
+    },
+    {
+      "name": "merge_windows",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it joins two existing window nodes into one corner window or one wide window in the connected Pascal scene.",
+        "destructiveHint": "Merging two windows on one wall removes one of them and widens the other; on a corner it moves both to the corner.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {

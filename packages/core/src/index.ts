@@ -130,6 +130,22 @@ export {
   computeCeilingSurfaceCells,
   parseCeilingRegionRole,
 } from './lib/ceiling-surface'
+export {
+  CORNER_REACH_M,
+  cornerPair,
+  windowCornerEnd,
+  windowNearCornerEnd,
+} from './lib/corner-pair'
+export {
+  CORNER_SNAP_ENTER_M,
+  CORNER_SNAP_EXIT_M,
+  type CornerBlock,
+  type CornerBlockReason,
+  type CornerSnap,
+  cornerBlock,
+  cornerSnap,
+  evaluateCorner,
+} from './lib/corner-snap'
 export { isCutterName, resolveCutterHost } from './lib/cutter-host'
 export {
   clampDoorOperationState,
@@ -346,6 +362,7 @@ export {
   slotLabelFromId,
   slotPaintMaterial,
 } from './lib/slots'
+export { createSnapEaser, prefersReducedMotion, SNAP_EASE_MS } from './lib/snap-ease'
 export {
   createRoomTopologyIndex,
   detectSpacesForLevel,

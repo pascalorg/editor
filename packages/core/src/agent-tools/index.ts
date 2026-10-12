@@ -4,6 +4,7 @@ import { clearSceneTool } from './clear-scene'
 import { editCollectionTool, listCollectionsTool } from './collections'
 import { addColumnTool } from './columns'
 import type { AgentToolContract } from './contract'
+import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
@@ -15,6 +16,7 @@ import {
   getZonesTool,
   listLevelsTool,
 } from './levels'
+import { mergeWindowsTool } from './merge-windows'
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { placeItemsTool } from './place-items'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
@@ -31,12 +33,14 @@ export * from './clear-scene'
 export * from './collections'
 export * from './columns'
 export * from './contract'
+export * from './corner-window'
 export * from './create-room'
 export * from './find-by-type'
 export * from './furnish-room'
 export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
+export * from './merge-windows'
 export { NodeId } from './node-id'
 export * from './nodes'
 export * from './place-items'
@@ -69,6 +73,8 @@ export const AGENT_TOOL_CONTRACTS = [
   duplicateLevelTool,
   verifySceneTool,
   addWallTool,
+  addCornerWindowTool,
+  mergeWindowsTool,
   addLevelTool,
   placeItemsTool,
   createStairTool,

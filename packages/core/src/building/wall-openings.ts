@@ -103,7 +103,7 @@ export function findWallChildOverlap(
   clampedY: number,
   width: number,
   height: number,
-  ignoreId?: string,
+  ignoreId?: string | readonly string[],
 ): AnyNode | null {
   const wallNode = nodes[wallId] as WallNode | undefined
   if (!wallNode) return null
@@ -113,7 +113,7 @@ export function findWallChildOverlap(
   const newRight = clampedX + width / 2
 
   for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
-    if (childId === ignoreId) continue
+    if (typeof ignoreId === 'string' ? childId === ignoreId : ignoreId?.includes(childId)) continue
     const child = nodes[childId]
     if (!child || child.metadata.isTransient) continue
 
@@ -160,7 +160,7 @@ export function hasWallChildOverlap(
   clampedY: number,
   width: number,
   height: number,
-  ignoreId?: string,
+  ignoreId?: string | readonly string[],
 ): boolean {
   if (!nodes[wallId]) return true
   return findWallChildOverlap(wallId, nodes, clampedX, clampedY, width, height, ignoreId) !== null
@@ -199,7 +199,7 @@ export type WallOpeningInput = {
 
 const equalRatios = (count: number) => Array.from({ length: count }, () => 1 / count)
 
-/** A window's size when none is given. Its sill is not a number: it is centred on its wall. */
+/** A window's size when none is given. Its sill is not a number: see `centredWindowSill`. */
 export const DEFAULT_WINDOW = { width: 1.5, height: 1.5 } as const
 
 const DEFAULTS = {
@@ -208,6 +208,19 @@ const DEFAULTS = {
 } as const
 
 const metres = (value: number) => `${value.toFixed(2)} m`
+
+/**
+ * The sill that centres a window of `height` vertically on the lowest of `walls`, or 0 when it is
+ * taller than they are: a corner window's one sill, with none given.
+ */
+export function centredWindowSill(
+  walls: readonly WallNode[],
+  height: number,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+): number {
+  const ceiling = Math.min(...walls.map((wall) => resolveWallOpeningCeiling(wall, nodes)))
+  return Math.max(0, (ceiling - height) / 2)
+}
 
 /**
  * Plan a door or window on a wall with the editor's rules, or refuse with a code: the one
