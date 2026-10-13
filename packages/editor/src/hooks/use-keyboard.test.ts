@@ -385,6 +385,32 @@ describe('B and P open their panel', () => {
     expect(useSidebarStore.getState().isCollapsed).toBe(false)
   })
 
+  // A host may drop the armed tool when the panel changes (the community does,
+  // with any placement in flight), so B and F open their panel first.
+  test('B and F keep their tool from another panel where the host disarms on a panel change', () => {
+    setSidebarTabIds(['build', 'paint', 'items', 'ai'])
+    const unsubscribe = useEditor.subscribe((state, prev) => {
+      if (state.activeSidebarPanel !== prev.activeSidebarPanel) {
+        useEditor.getState().armToolMode({ mode: 'select' })
+      }
+    })
+    try {
+      for (const [arm, from, panel, tool] of [
+        [armWallToolFromShortcut, 'ai', 'build', 'wall'],
+        [openItemCatalogFromShortcut, 'paint', 'items', 'item'],
+      ] as const) {
+        useEditor.getState().setActiveSidebarPanel(from)
+        arm()
+        const editor = useEditor.getState()
+        expect(editor.activeSidebarPanel).toBe(panel)
+        expect(editor.mode).toBe('build')
+        expect(editor.tool).toBe(tool)
+      }
+    } finally {
+      unsubscribe()
+    }
+  })
+
   test('P arms paint and shows the Paint panel, or Build where the host has none', () => {
     setSidebarTabIds(['build', 'paint', 'items'])
     useEditor.getState().setActiveSidebarPanel('items')
