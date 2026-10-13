@@ -135,6 +135,7 @@ import {
   zoneAtLevelPoint,
 } from '../../lib/units'
 import { cn } from '../../lib/utils'
+import { framingAnimates } from '../../lib/viewer-selection'
 import { getWallDrawVariant } from '../../lib/wall-draw-variant'
 import {
   addWallPolygonDraftCorner,
@@ -264,10 +265,6 @@ import { useFloorplanSceneData } from './use-floorplan-scene-data'
 import { sceneSpan } from './views/scene-region'
 
 const FALLBACK_VIEW_SIZE = 12
-// A framed node's diagonal spans half the plan's width, so it fits a landscape pane at any turn;
-// the view never closes in to less than a small room's width.
-const FLOORPLAN_FRAME_MARGIN = 2
-const FLOORPLAN_FRAME_MIN_WIDTH = 4
 const FLOORPLAN_PADDING = 2
 const MIN_VIEWPORT_WIDTH_RATIO = 0.08
 const MAX_VIEWPORT_WIDTH_RATIO = 40
@@ -6572,36 +6569,6 @@ export function FloorplanPanel({
     [receiveFloorplanNavigationPose],
   )
 
-  // A frame request ("show me this node") moves the 3D camera and the plan follows its pose; with no
-  // 3D view on screen no pose reaches the plan, so it centres on the node itself.
-  useEffect(() => {
-    const centreOn = (x: number, z: number, viewWidth?: number) =>
-      smoothFloorplanNavigationView(
-        worldToFloorplanLocalPoint(x, z, buildingPosition, buildingRotationY),
-        latestFloorplanUserRotationDegRef.current,
-        viewWidth,
-      )
-    const frame = ({ bounds, pose }: CameraControlFrameEvent) => {
-      if (!isFloorplanOpenRef.current || isViewVisible(useEditor.getState(), VIEW_3D)) return
-      if (pose) {
-        centreOn(pose.target[0], pose.target[2])
-      } else if (bounds) {
-        const [minX, , minZ] = bounds.min
-        const [maxX, , maxZ] = bounds.max
-        centreOn(
-          (minX + maxX) / 2,
-          (minZ + maxZ) / 2,
-          Math.max(
-            Math.hypot(maxX - minX, maxZ - minZ) * FLOORPLAN_FRAME_MARGIN,
-            FLOORPLAN_FRAME_MIN_WIDTH,
-          ),
-        )
-      }
-    }
-    emitter.on('camera-controls:frame', frame)
-    return () => emitter.off('camera-controls:frame', frame)
-  }, [buildingPosition, buildingRotationY, smoothFloorplanNavigationView])
-
   useEffect(() => {
     const receiveStoredNavigationPose = (pose: NavigationSyncPose | null) => {
       if (pose?.source === '2d') {
@@ -6722,6 +6689,56 @@ export function FloorplanPanel({
     movingNode,
     siteVertexDragState,
     stopFloorplanViewAnimation,
+  ])
+
+  // A frame request ("show me this node") moves the 3D camera and the plan follows its pose; with no
+  // 3D view on screen no pose reaches the plan, so it frames the node itself. The request waits for
+  // the selection it came with to render: a node on another floor or in another building is placed
+  // with that building's transform, after the floor change has reset the view.
+  const [pendingFrame, setPendingFrame] = useState<CameraControlFrameEvent | null>(null)
+  useEffect(() => {
+    const frame = (event: CameraControlFrameEvent) => {
+      if (isFloorplanOpenRef.current && !isViewVisible(useEditor.getState(), VIEW_3D))
+        setPendingFrame(event)
+    }
+    emitter.on('camera-controls:frame', frame)
+    return () => emitter.off('camera-controls:frame', frame)
+  }, [])
+
+  useEffect(() => {
+    if (!pendingFrame) return
+    setPendingFrame(null)
+    const userRotationDeg = latestFloorplanUserRotationDegRef.current
+    const toLocal = (x: number, z: number) =>
+      worldToFloorplanLocalPoint(x, z, buildingPosition, buildingRotationY)
+    const { bounds, pose } = pendingFrame
+    let centre: SvgPoint
+    let width: number | undefined
+    if (bounds) {
+      // The box's corners as the plan shows them now, so it fits the pane at any turn and aspect.
+      const sceneRotationDeg = FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
+      const shown = [bounds.min[0], bounds.max[0]].flatMap((x) =>
+        [bounds.min[2], bounds.max[2]].map((z) => rotateSvgPoint(toLocal(x, z), sceneRotationDeg)),
+      )
+      const xs = shown.map((point) => point.x)
+      const ys = shown.map((point) => point.y)
+      centre = toLocal((bounds.min[0] + bounds.max[0]) / 2, (bounds.min[2] + bounds.max[2]) / 2)
+      width = Math.max(
+        Math.max(...xs) - Math.min(...xs) + FLOORPLAN_PADDING * 2,
+        (Math.max(...ys) - Math.min(...ys) + FLOORPLAN_PADDING * 2) * svgAspectRatio,
+      )
+    } else if (pose) {
+      // A saved view with nothing to measure: its target, at the zoom the person has.
+      centre = toLocal(pose.target[0], pose.target[2])
+    } else return
+    applyFloorplanNavigationView(centre, userRotationDeg, width, { smooth: framingAnimates() })
+  }, [
+    applyFloorplanNavigationView,
+    buildingPosition,
+    buildingRotationDeg,
+    buildingRotationY,
+    pendingFrame,
+    svgAspectRatio,
   ])
 
   const viewBox = useMemo(() => {

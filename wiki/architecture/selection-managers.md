@@ -71,11 +71,14 @@ room › element, where an element shows the room it stands in without selecting
 list with, under the current floor, its Units, Rooms and Zones (empty sections left out). A crumb,
 a floor or a row selects and frames (`camera-controls:frame`: the node's saved view, else its box at
 about 45° along the current heading); the canvas never frames. Hosts frame through the same
-`frameViewerNode`. The plan follows the framed camera; with no 3D view on screen it answers the
-request itself, centred on the box (or the saved view's target) at the current turn.
-`ViewerRooms` draws the editor's room pills (same visibility rule, same declutter) and the editor's room highlight for the selected or
-hovered room and a focused unit's rooms. `useViewerFloorDisplay` hides the levels above the current
-floor outside the walkthrough.
+`frameViewerNode`, and a unit through `enterUnitFocus`, as the site panel does. Framing jumps
+instead of gliding under reduced motion. The plan follows the framed camera; with no 3D view on
+screen it answers the request itself, once the selection that came with it has rendered (so a node
+on another floor or building is placed with that building's transform), fitting the node's box to
+the pane at the current turn and aspect, or centring a saved view's target at the current zoom.
+`ViewerRooms` draws the editor's room pills (same visibility rule, same declutter) and the editor's
+room highlight for the selected or hovered room and a focused unit's rooms. `useViewerFloorDisplay`
+hides the levels above the current floor outside the walkthrough.
 
 Preview borrows the shared store: `setPreviewMode(true)` saves the editor's `selection` and
 `focusedUnitId` and opens Preview on the editor's floor with nothing else selected;
@@ -127,8 +130,8 @@ in `lib/room-zone-routing.ts`): a room room-first, a modifier or a zone that bou
 zone (its outline, its panel and outline editor). A list that names a zone, the Rooms list or a
 host's chat reference, selects it through `selectZoneOrRoom` (exported for hosts) by the same rule.
 Zones show tinted volumes only while a unit's membership is painted; otherwise a zone looks like a
-room. A new zone is written with a palette colour picked from its id (`newZone` / `zoneColorForSeed` in core), a captured room from its capture's
-id, unless its creator chose one;
+room. A new zone is written with a palette colour picked from its id (`newZone` /
+`zoneColorForSeed` in core), a captured room from its capture's id, unless its creator chose one;
 existing zones keep their stored colour.
 
 Inside the building no click changes the phase. Site is entered from the Scene panel's site header
