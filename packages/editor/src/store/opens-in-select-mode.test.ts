@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { DEFAULT_PERSISTED_EDITOR_UI_STATE, editorUiStateOnOpen } from './use-editor'
+import { createElement } from 'react'
+import type { SidebarTab } from '../components/ui/sidebar/tab-bar'
+import { useShownSidebarPanel } from '../lib/sidebar-panel'
+import { withSelectionHarness } from '../test-utils/selection-harness'
+import useEditor, { DEFAULT_PERSISTED_EDITOR_UI_STATE, editorUiStateOnOpen } from './use-editor'
 import { sceneLayout } from './view-layout'
 
 /**
@@ -187,5 +191,33 @@ describe('reopening the editor', () => {
     staleTab.getState().setCanFindNode(true)
 
     expect(storage.read(STORAGE_KEY).state.sidebarPanels).toEqual({ edit: 'ai' })
+  })
+})
+
+describe('the rail', () => {
+  test('a remembered panel the rail lacks shows the first tab, keeps the pick, and comes back', async () => {
+    const tab = (id: string): SidebarTab => ({ id, label: id })
+    let shown = ''
+    function Rail({ tabs }: { tabs: SidebarTab[] }) {
+      shown = useShownSidebarPanel(tabs)
+      return null
+    }
+
+    await withSelectionHarness(async ({ render }) => {
+      useEditor.setState({
+        workspaceMode: 'edit',
+        activeSidebarPanel: 'nature',
+        sidebarPanels: { edit: 'nature' },
+      })
+
+      await render(createElement(Rail, { tabs: [tab('build'), tab('paint')] }))
+      expect(shown).toBe('build')
+      expect(useEditor.getState().activeSidebarPanel).toBe('build')
+      expect(useEditor.getState().sidebarPanels).toEqual({ edit: 'nature' })
+
+      await render(createElement(Rail, { tabs: [tab('build'), tab('paint'), tab('nature')] }))
+      expect(shown).toBe('nature')
+      expect(useEditor.getState().activeSidebarPanel).toBe('nature')
+    })
   })
 })

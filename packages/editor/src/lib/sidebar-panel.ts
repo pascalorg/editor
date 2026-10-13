@@ -16,42 +16,47 @@ export function setSidebarTabIds(ids: readonly string[]): void {
 }
 
 /**
- * Show a sidebar panel: expands a collapsed sidebar
- * and switches to the first of `preferred` the host provides. Returns the
- * panel shown, or null when the host has none of them (e.g. on mobile).
+ * Pick panel `id` and expand a collapsed sidebar onto it, at a usable width.
+ * The pick goes first: expanding first would reopen the panel left open for a
+ * moment, and a host may arm that panel's tool as it opens (Paint).
+ */
+export function showSidebarPanel(id: string): void {
+  useEditor.getState().setActiveSidebarPanel(id)
+  const sidebar = useSidebarStore.getState()
+  if (!sidebar.isCollapsed) return
+  sidebar.setIsCollapsed(false)
+  if (sidebar.width < SIDEBAR_MIN_WIDTH) sidebar.setWidth(SIDEBAR_MIN_WIDTH)
+}
+
+/**
+ * Show the first of `preferred` the host provides (`showSidebarPanel`).
+ * Returns the panel shown, or null when the host has none of them (e.g. on
+ * mobile).
  */
 export function openSidebarPanel(preferred: readonly string[]): string | null {
   const id = preferred.find((candidate) => sidebarTabIds.includes(candidate))
   if (!id) return null
-  const sidebar = useSidebarStore.getState()
-  if (sidebar.isCollapsed) {
-    sidebar.setIsCollapsed(false)
-    if (sidebar.width < SIDEBAR_MIN_WIDTH) sidebar.setWidth(SIDEBAR_MIN_WIDTH)
-  }
-  useEditor.getState().setActiveSidebarPanel(id)
+  showSidebarPanel(id)
   return id
 }
 
 /**
  * The rail tab on screen: the panel picked in this workspace when the rail has
- * it, else the first tab with a panel. The pick is never reset to what shows: a
- * plugin's panel joins the rail only once the scene's plugins load, so a panel
- * restored on reload is missing for a moment, and a reset would lose it. A
- * workspace with nothing picked yet takes the tab it shows, so what reads the
- * store agrees with the screen.
+ * it, else the first tab with a panel. `activeSidebarPanel` follows what shows,
+ * so every reader agrees with the screen, while the pick (`sidebarPanels`)
+ * stays: a plugin's panel joins the rail only once the scene's plugins load,
+ * so a panel restored on reload is missing for a moment and comes back then.
  */
 export function useShownSidebarPanel(tabs: readonly SidebarTab[]): string {
   const activePanel = useEditor((s) => s.activeSidebarPanel)
-  const hasPickedPanel = useEditor((s) => s.sidebarPanels[s.workspaceMode] !== undefined)
-  const shownPanel = tabs.some((tab) => tab.id === activePanel)
-    ? activePanel
-    : ((tabs.find((tab) => !tab.noPanel) ?? tabs[0])?.id ?? activePanel)
+  const pickedPanel = useEditor((s) => s.sidebarPanels[s.workspaceMode] ?? s.activeSidebarPanel)
+  const shownPanel = tabs.some((tab) => tab.id === pickedPanel)
+    ? pickedPanel
+    : ((tabs.find((tab) => !tab.noPanel) ?? tabs[0])?.id ?? pickedPanel)
 
   useEffect(() => {
-    if (!hasPickedPanel && shownPanel !== activePanel) {
-      useEditor.getState().setActiveSidebarPanel(shownPanel)
-    }
-  }, [hasPickedPanel, shownPanel, activePanel])
+    if (shownPanel !== activePanel) useEditor.setState({ activeSidebarPanel: shownPanel })
+  }, [shownPanel, activePanel])
 
   return shownPanel
 }

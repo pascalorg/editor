@@ -6,6 +6,7 @@ import {
   openSidebarPanel,
   SIDEBAR_MIN_WIDTH,
   setSidebarTabIds,
+  showSidebarPanel,
   useShownSidebarPanel,
 } from '../../lib/sidebar-panel'
 import useEditor from '../../store/use-editor'
@@ -101,9 +102,8 @@ function LeftColumn({
     [setIsDragging],
   )
 
-  // Rail click: reopen a collapsed panel, collapse when re-clicking the open
-  // tab, otherwise switch tabs. Reopening clamps below-min persisted widths
-  // up to the minimum so the panel always returns to a usable size.
+  // Rail click: reopen a collapsed panel (at a usable width), collapse when
+  // re-clicking the open tab, otherwise switch tabs.
   const handleRailClick = useCallback(
     (id: string) => {
       const tab = tabs.find((t) => t.id === id)
@@ -115,9 +115,7 @@ function LeftColumn({
         return
       }
       if (isCollapsed) {
-        setIsCollapsed(false)
-        if (width < SIDEBAR_MIN_WIDTH) setWidth(SIDEBAR_MIN_WIDTH)
-        setActivePanel(id)
+        showSidebarPanel(id)
         return
       }
       if (id === activePanel) {
@@ -126,7 +124,7 @@ function LeftColumn({
       }
       setActivePanel(id)
     },
-    [tabs, isCollapsed, width, activePanel, setIsCollapsed, setWidth, setActivePanel],
+    [tabs, isCollapsed, activePanel, setIsCollapsed, setActivePanel],
   )
 
   useEffect(() => {
