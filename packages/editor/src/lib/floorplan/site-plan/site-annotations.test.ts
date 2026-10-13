@@ -278,6 +278,64 @@ describe('coverage: one computation for the site plan and the cover', () => {
   })
 })
 
+describe('the roof line', () => {
+  test('a roof on the roof level above the storey is drawn dashed over the footprint', () => {
+    const nodes = {
+      site_1: {
+        id: 'site_1',
+        type: 'site',
+        polygon: { type: 'polygon', points: lot30() },
+        children: ['bldg'],
+      },
+      bldg: {
+        id: 'bldg',
+        type: 'building',
+        parentId: 'site_1',
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        children: ['level_0', 'level_roof'],
+      },
+      level_0: { id: 'level_0', type: 'level', level: 0, parentId: 'bldg', children: [] },
+      level_roof: {
+        id: 'level_roof',
+        type: 'level',
+        level: 1,
+        parentId: 'bldg',
+        children: ['roof_1'],
+        metadata: { role: 'roof' },
+      },
+      roof_1: {
+        id: 'roof_1',
+        type: 'roof',
+        parentId: 'level_roof',
+        position: [0, 0, 0],
+        rotation: 0,
+        children: ['rseg_1'],
+      },
+      rseg_1: {
+        id: 'rseg_1',
+        type: 'roof-segment',
+        parentId: 'roof_1',
+        position: [0, 0, 0],
+        rotation: 0,
+        width: 10,
+        depth: 8,
+        overhang: 0.5,
+      },
+    }
+    const drawing = buildSitePlanDrawing({
+      nodes,
+      rootNodeIds: [],
+      collections: {},
+      materials: {},
+    } as unknown as SceneSnapshot)
+    const outlines = drawing.primitives.filter(
+      (g) => (g as { metadata?: { sitePlan?: string } }).metadata?.sitePlan === 'roof-outline',
+    )
+    expect(outlines).toHaveLength(1)
+  })
+})
+
 function lot30(): [number, number][] {
   return [
     [-15, -15],

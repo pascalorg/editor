@@ -51,7 +51,7 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
-import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
+import { getDefaultLevelName, getLevelDisplayName, isRoofLevel } from '@pascal-app/core'
 import { addStoreyOnTop } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
@@ -527,26 +527,22 @@ export function FloatingLevelSelector() {
       if (!lower) return
 
       const newLevelNumber = lower.level + 1
-      const toShift = levels.filter((l) => l.level >= newLevelNumber)
-      if (toShift.length > 0) {
-        updateNodes(
-          toShift.map((l) => ({
-            id: l.id as AnyNodeId,
-            data: { level: l.level + 1 } as Partial<AnyNode>,
-          })),
-        )
-      }
-
       const newLevel = LevelNode.parse({
         level: newLevelNumber,
         height: DEFAULT_LEVEL_HEIGHT,
         children: [],
         parentId: resolvedBuildingId,
       })
-      createNode(newLevel, resolvedBuildingId)
+      // One undo step: undoing the floor also moves the levels above back down.
+      applyNodeChanges({
+        create: [{ node: newLevel, parentId: resolvedBuildingId }],
+        update: levels
+          .filter((l) => l.level >= newLevelNumber)
+          .map((l) => ({ id: l.id as AnyNodeId, data: { level: l.level + 1 } as Partial<AnyNode> })),
+      })
       setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
     },
-    [resolvedBuildingId, levels, createNode, updateNodes, setSelection],
+    [resolvedBuildingId, levels, applyNodeChanges, setSelection],
   )
 
   const handleConfirmDelete = useCallback(() => {
@@ -595,6 +591,9 @@ export function FloatingLevelSelector() {
       if (oldIndex === -1 || newIndex === -1) return
 
       const reorderedVisualLevels = arrayMove(visualLevels, oldIndex, newIndex)
+      // The roof level stays above every storey (top first here): a drop under a storey is refused.
+      const firstStorey = reorderedVisualLevels.findIndex((level) => !isRoofLevel(level))
+      if (firstStorey >= 0 && reorderedVisualLevels.slice(firstStorey + 1).some(isRoofLevel)) return
       const levelNumbersDescending = levels.map((level) => level.level).sort((a, b) => b - a)
 
       const updates = reorderedVisualLevels

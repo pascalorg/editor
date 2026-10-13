@@ -47,6 +47,7 @@ import {
   streetEdgeNames,
 } from './site-annotations'
 import {
+  aboveGradeLevels,
   findBuilding,
   findLowestLevel,
   findSite,
@@ -566,7 +567,11 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   }
 
   // ── The roof line, dashed over the footprint ─────────────────────────
-  for (const ring of roofOutlineRings(scene, level, building)) {
+  // Every storey's roofs, and the roof level's above them all.
+  const roofRings = aboveGradeLevels(scene, building).flatMap((roofed) =>
+    roofOutlineRings(scene, roofed, building),
+  )
+  for (const ring of roofRings) {
     primitives.push({
       kind: 'polygon',
       points: ring,
