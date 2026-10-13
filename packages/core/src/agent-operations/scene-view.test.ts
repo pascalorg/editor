@@ -507,11 +507,11 @@ describe("the photo's crop beside the view", () => {
   })
 })
 
-// Both hosts return a crop at most 1280 px long, as a view is (the hosted one capped, the chat's
+// Both hosts return a crop at most 1920 px long, as a view is (the hosted one capped, the chat's
 // did not: a whole 4000-px photo as the region went to the model at full size).
 describe("a crop's size", () => {
-  test('kept below 1280 px on its longer side', () => {
-    expect(photoCropSize(4000, 3000)).toEqual({ width: 1280, height: 960 })
+  test('kept below 1920 px on its longer side', () => {
+    expect(photoCropSize(4000, 3000)).toEqual({ width: 1920, height: 1440 })
     expect(photoCropSize(560, 270)).toEqual({ width: 560, height: 270 })
   })
 
