@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { Polygon } from '@pascal-app/core'
 import { ZoneNode } from '@pascal-app/core/schema'
-import { Vector3 } from 'three'
+import { Object3D, PerspectiveCamera, Vector3 } from 'three'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
 import {
+  candidates3D,
   DeclutterClock,
   formatRoomArea,
   type LabelRect,
@@ -20,6 +21,7 @@ import {
   REVEAL_DWELL_MS,
   REVEAL_GRACE_MS,
   RoomAnchors,
+  type RoomHit,
   type RoomLabelEntry,
   type RoomLabelVisibilityState,
   roomAt,
@@ -164,17 +166,57 @@ describe('room label pills', () => {
       area: 9,
     })
   })
+
+  test('a zone drawn inside a room is a hole in it, so their labels and the pointer agree', () => {
+    const living = square(5, 5, 10)
+    const nook = square(7, 7, 3)
+    const entries = roomLabelEntries(
+      [],
+      [
+        ZoneNode.parse({ id: 'zone_living', name: 'Living room', polygon: living.outer }),
+        ZoneNode.parse({ id: 'zone_nook', name: 'Reading nook', polygon: nook.outer }),
+        ZoneNode.parse({ id: 'zone_hall', name: 'Hall', polygon: square(15, 5, 10).outer }),
+      ],
+    )
+    const [livingEntry, nookEntry, hallEntry] = entries
+    expect(livingEntry!.holes).toEqual([nook.outer])
+    expect(livingEntry!.area).toBe(100)
+    expect(nookEntry!.holes).toEqual([])
+    expect(hallEntry!.holes).toEqual([])
+    // At 40 px per metre, the living room's label next to the nook moves off it.
+    const onScreen = (zoneId: string, x: number, y: number): PillCandidate => {
+      const entry = entries.find((candidate) => candidate.zoneId === zoneId)!
+      const scale = ([px, py]: [number, number]): [number, number] => [px * 40, py * 40]
+      return {
+        id: zoneId,
+        x: x * 40,
+        y: y * 40,
+        size: [80, 24, 50],
+        area: entry.area,
+        outline: { outer: entry.polygon.map(scale), holes: entry.holes.map((h) => h.map(scale)) },
+      }
+    }
+    const placements = placePills([onScreen('zone_living', 7, 8.7), onScreen('zone_nook', 7, 7)], {
+      width: 1000,
+      height: 1000,
+    })
+    expect(placements.get('zone_living')).toEqual({ tier: 'full', dy: 8 })
+    expect(placements.get('zone_nook')).toEqual({ tier: 'full', dy: 0 })
+    expect(roomAt(entries, () => [7, 7, 0])).toBe('zone_nook')
+    expect(roomAt(entries, () => [2, 2, 0])).toBe('zone_living')
+  })
 })
 
 describe('pill placement', () => {
   const pane = { width: 1000, height: 1000 }
+  const everywhere = square(0, 0, 1e5)
   const pill = (
     id: string,
     x: number,
     y: number,
     area: number,
     size: PillSize = [120, 24, 70],
-    outline?: Polygon,
+    outline: Polygon = everywhere,
   ): PillCandidate => ({ id, x, y, size, area, outline })
   const near = (a: LabelRect, b: LabelRect) =>
     a.left < b.right + PILL_GAP &&
@@ -333,23 +375,73 @@ describe('the room under the pointer', () => {
     area,
   })
   const hall = room('hall', square(5, 5, 10), 100)
-  const mezzanine = room('mezzanine', square(2, 2, 3), 9)
+  const nook = room('nook', square(2, 2, 3), 9)
   const atrium = room('atrium', { ...square(25, 5, 10), holes: [square(25, 5, 4).outer] }, 84)
 
-  test('is the smallest room holding the point: a mezzanine over the room it stands in', () => {
-    const at = (point: [number, number]) => roomAt([hall, mezzanine, atrium], () => point)
-    expect(at([2, 2])).toBe('mezzanine')
-    expect(at([8, 8])).toBe('hall')
-    expect(at([22, 2])).toBe('atrium')
+  test('is the smallest room holding the point: a zone drawn inside the room it stands in', () => {
+    const at = (x: number, y: number) => roomAt([hall, nook, atrium], () => [x, y, 0])
+    expect(at(2, 2)).toBe('nook')
+    expect(at(8, 8)).toBe('hall')
+    expect(at(22, 2)).toBe('atrium')
   })
 
   test('is no room outside every room or inside a hole', () => {
-    expect(roomAt([hall, atrium], () => [15, 5])).toBeNull()
-    expect(roomAt([hall, atrium], () => [25, 5])).toBeNull()
+    expect(roomAt([hall, atrium], () => [15, 5, 0])).toBeNull()
+    expect(roomAt([hall, atrium], () => [25, 5, 0])).toBeNull()
   })
 
   test('only tests a room where the pointer meets its own plane', () => {
-    expect(roomAt([hall, mezzanine], (entry) => (entry === mezzanine ? null : [2, 2]))).toBe('hall')
+    expect(roomAt([hall, nook], (entry) => (entry === nook ? null : [2, 2, 0]))).toBe('hall')
+  })
+
+  test('is the floor the pointer reaches first, before a smaller one further down', () => {
+    // A raised floor over the whole hall, and a small room on the floor below it.
+    const raised = room('raised', square(5, 5, 10), 100)
+    const below = room('below', square(5, 5, 2), 4)
+    const hits = new Map<RoomLabelEntry, RoomHit>([
+      [raised, [5, 5, 3]],
+      [below, [5, 5, 6]],
+    ])
+    expect(roomAt([raised, below], (entry) => hits.get(entry) ?? null)).toBe('raised')
+    // Met at the same distance, they are one floor: the smaller wins.
+    hits.set(raised, [5, 5, 6 + 1e-4])
+    expect(roomAt([raised, below], (entry) => hits.get(entry) ?? null)).toBe('below')
+  })
+})
+
+describe('pills in 3D', () => {
+  test('a corridor running behind the camera still holds its pill to its width', () => {
+    // 0.3 m wide and 20 m long, half of it behind a camera standing in it.
+    const corridor: RoomLabelEntry = {
+      zoneId: 'corridor',
+      polygon: [
+        [-0.15, -10],
+        [0.15, -10],
+        [0.15, 10],
+        [-0.15, 10],
+      ],
+      holes: [],
+      area: 6,
+    }
+    const camera = new PerspectiveCamera(50, 1440 / 900, 0.1, 1000)
+    camera.position.set(0, 1.6, 0)
+    camera.updateMatrixWorld()
+    const level = new Object3D()
+    level.updateMatrixWorld()
+    const size = { width: 1440, height: 900 }
+    const [candidate] = candidates3D(
+      [corridor],
+      new Map([['corridor', new Vector3(0, 1.25, -5)]]),
+      new Map<string, PillSize>([['corridor', [120, 24, 70]]]),
+      camera,
+      level,
+      size,
+    )
+    expect(
+      candidate!.outline.outer.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)),
+    ).toBe(true)
+    // About 58 px wide where the pill would sit: only its dot fits.
+    expect(placePills([candidate!], size).get('corridor')).toEqual({ tier: 'dot', dy: 0 })
   })
 })
 
@@ -560,14 +652,17 @@ describe('applying placements', () => {
 
   test('the pills under the detail chip fade out of its way, and come back', () => {
     const { elements, placer } = setup()
-    placer.suppress(new Set(['near']))
+    placer.suppress(new Set(['near', 'far']), 'far')
     expect(has(elements.get('near'), 'roomLabelSuppressed')).toBe(true)
+    // The open room's own pill fades under its chip but stays the control.
     expect(has(elements.get('far'), 'roomLabelSuppressed')).toBe(false)
+    expect(has(elements.get('far'), 'roomLabelOpen')).toBe(true)
     const remounted = element()
     placer.mount('near', remounted)
     expect(has(remounted, 'roomLabelSuppressed')).toBe(true)
-    placer.suppress(new Set())
+    placer.suppress(new Set(), null)
     expect(has(elements.get('near'), 'roomLabelSuppressed')).toBe(false)
+    expect(has(elements.get('far'), 'roomLabelOpen')).toBe(false)
   })
 
   test('with the default timers, a pill hiding never stops the pills after it', () => {
@@ -681,13 +776,54 @@ describe("a room's detail", () => {
     expect(changes).toEqual(['bath', null])
   })
 
-  test('opens at once for keyboard focus, and says so until the pointer takes over', () => {
-    const { changes, focused, reveal } = setup()
+  test('opens at once for keyboard focus, and says so while that pill keeps it', () => {
+    const { clock, changes, focused, reveal } = setup()
     reveal.focus('kitchen')
     reveal.hover('kitchen')
     reveal.hover(null)
-    expect(changes).toEqual(['kitchen', 'kitchen', 'kitchen'])
-    expect(focused).toEqual([true, false, true])
+    reveal.focus(null)
+    clock.advance(REVEAL_GRACE_MS)
+    expect(changes).toEqual(['kitchen', null])
+    expect(focused).toEqual([true, false])
+  })
+
+  test('with the pointer on one pill and focus on another, the one that moved last wins', () => {
+    const { changes, focused, reveal } = setup()
+    reveal.hover('kitchen')
+    reveal.focus('bath')
+    expect(reveal.active).toBe('bath')
+    reveal.hover('kitchen')
+    expect(reveal.active).toBe('bath')
+    reveal.hover('closet')
+    reveal.focus('hall')
+    reveal.hover(null)
+    expect(changes).toEqual(['kitchen', 'bath', 'closet', 'hall'])
+    expect(focused).toEqual([false, true, false, true])
+  })
+
+  test('Escape closes it until the pointer or focus moves on to another room', () => {
+    const { clock, changes, reveal } = setup()
+    reveal.pick('bath')
+    clock.advance(REVEAL_DWELL_MS)
+    reveal.dismiss()
+    reveal.pick('bath')
+    clock.advance(1000)
+    reveal.hover('bath')
+    expect(changes).toEqual(['bath', null])
+    reveal.hover(null)
+    reveal.pick('closet')
+    clock.advance(REVEAL_DWELL_MS)
+    reveal.pick('bath')
+    clock.advance(REVEAL_DWELL_MS)
+    expect(changes).toEqual(['bath', null, 'closet', 'bath'])
+  })
+
+  test('a focused pill opens again once the view rests', () => {
+    const { changes, reveal } = setup()
+    reveal.focus('kitchen')
+    reveal.clear()
+    reveal.pick(null)
+    expect(changes).toEqual(['kitchen', null, 'kitchen'])
   })
 
   test('closes at once when the view moves, and forgets the pointer', () => {

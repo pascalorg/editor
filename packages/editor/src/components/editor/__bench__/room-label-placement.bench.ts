@@ -1,5 +1,11 @@
 import type { Polygon } from '@pascal-app/core'
-import { type PillCandidate, placePills, type RoomLabelEntry, roomAt } from '../room-labels'
+import {
+  type PillCandidate,
+  placePills,
+  type RoomHit,
+  type RoomLabelEntry,
+  roomAt,
+} from '../room-labels'
 
 // One room-label placement pass and one pointer pick, for a 900 × 600 px house of 31, 60 and 120
 // rooms (every third an L), printed as JSON medians in ms. Run with `bun run <this file>`.
@@ -75,10 +81,10 @@ for (const count of [31, 60, 120]) {
     previous = placePills(candidates, pane, previous)
     warm.push(performance.now() - started)
   }
-  const points = Array.from({ length: 1000 }, (): [number, number] => [
-    270 + random() * 900,
-    150 + random() * 600,
-  ])
+  const points = Array.from(
+    { length: 1000 },
+    (): RoomHit => [270 + random() * 900, 150 + random() * 600, 0],
+  )
   for (const point of points) roomAt(entries, () => point)
   const picks: number[] = []
   for (let i = 0; i < 20; i++) {

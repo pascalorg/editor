@@ -22,8 +22,8 @@ import {
 import { RoomAssemblyMesh } from '../editor/room-highlight'
 import {
   RoomLabelAnchor3D,
-  type RoomLabelEntry,
   RoomPillChip,
+  RoomPillDetail,
   RoomPillsLayer3D,
   roomLabelEntries,
   roomLabelsVisible,
@@ -104,45 +104,53 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
     })
   }, [focusedUnitId, hoveredId, levelId, nodes, walkthrough, zoneId])
 
-  const pill = (entry: RoomLabelEntry, elements?: Map<string, HTMLElement>) => {
-    const zone = nodes[entry.zoneId]
-    if (zone?.type !== 'zone') return null
-    return (
-      <RoomPillChip
-        areaM2={entry.area}
-        color={zone.color}
-        detail={!elements}
-        elements={elements}
-        name={zoneLabel(zone)}
-        onClick={() => selectViewerRoom(zone.id, source)}
-        onHover={() => useViewer.getState().setHoveredId(zone.id)}
-        onLeave={() => {
-          if (useViewer.getState().hoveredId === zone.id) useViewer.getState().setHoveredId(null)
-        }}
-        view="3d"
-        zoneId={zone.id}
-      />
-    )
-  }
-
   return (
     <>
       {pillsPresent && levelId ? (
         <RoomPillsLayer3D
           entries={entries}
+          // A level of its own: nothing open or placed on one floor carries to the next.
+          key={levelId}
           levelObject={() => source.objectFor(levelId)}
-          renderDetail={(entry) => pill(entry)}
-          renderLabel={(entry, anchors, elements) =>
-            nodes[entry.zoneId]?.type === 'zone' ? (
+          renderDetail={(entry) => {
+            const zone = nodes[entry.zoneId]
+            if (zone?.type !== 'zone') return null
+            return (
+              <RoomPillDetail
+                areaM2={entry.area}
+                color={zone.color}
+                name={zoneLabel(zone)}
+                view="3d"
+                zoneId={zone.id}
+              />
+            )
+          }}
+          renderLabel={(entry, anchors, elements) => {
+            const zone = nodes[entry.zoneId]
+            if (zone?.type !== 'zone') return null
+            return (
               <RoomLabelAnchor3D
                 anchors={anchors}
                 entry={entry}
                 floorY={roomFloorElevation(nodes as Record<string, AnyNode>, entry.zoneId)}
               >
-                {pill(entry, elements)}
+                <RoomPillChip
+                  areaM2={entry.area}
+                  color={zone.color}
+                  elements={elements}
+                  name={zoneLabel(zone)}
+                  onClick={() => selectViewerRoom(zone.id, source)}
+                  onHover={() => useViewer.getState().setHoveredId(zone.id)}
+                  onLeave={() => {
+                    if (useViewer.getState().hoveredId === zone.id)
+                      useViewer.getState().setHoveredId(null)
+                  }}
+                  view="3d"
+                  zoneId={zone.id}
+                />
               </RoomLabelAnchor3D>
-            ) : null
-          }
+            )
+          }}
           shown={pillsShown}
         />
       ) : null}

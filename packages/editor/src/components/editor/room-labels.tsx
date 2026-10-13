@@ -154,8 +154,8 @@ export type PillPlacement = { tier: PillTier; dy: number }
 
 /**
  * A pill to place: where its room's anchor lands on screen, its size, its
- * room's area and the room's outline on screen. A room with no outline (part
- * of it is behind the camera) is not held to one.
+ * room's area and the part of the room's outline in front of the camera, on
+ * screen.
  */
 export type PillCandidate = {
   id: string
@@ -163,7 +163,7 @@ export type PillCandidate = {
   y: number
   size: PillSize
   area: number
-  outline?: Polygon
+  outline: Polygon
 }
 
 /** The collapsed pill: its colour dot in a small round box. */
@@ -193,22 +193,6 @@ export function placedRect(pill: PillCandidate, { tier, dy }: PillPlacement): La
   return tier === 'hidden' ? null : pillRect(pill.x, pill.y + dy, tierSize(pill.size, tier))
 }
 
-// Liang–Barsky's entry and exit along the segment being clipped.
-const clipSpan = new Float64Array(2)
-
-function clipSide(p: number, q: number) {
-  if (p === 0) return q >= 0
-  const t = q / p
-  if (p < 0) {
-    if (t > clipSpan[1]!) return false
-    if (t > clipSpan[0]!) clipSpan[0] = t
-  } else {
-    if (t < clipSpan[0]!) return false
-    if (t < clipSpan[1]!) clipSpan[1] = t
-  }
-  return true
-}
-
 function segmentTouchesRect(
   [ax, ay]: readonly [number, number],
   [bx, by]: readonly [number, number],
@@ -221,13 +205,26 @@ function segmentTouchesRect(
     Math.min(ay, by) > rect.bottom
   )
     return false
-  clipSpan[0] = 0
-  clipSpan[1] = 1
+  // Liang–Barsky: narrow the segment's span to each side of the rect in turn.
+  let t0 = 0
+  let t1 = 1
+  const clip = (p: number, q: number) => {
+    if (p === 0) return q >= 0
+    const t = q / p
+    if (p < 0) {
+      if (t > t1) return false
+      if (t > t0) t0 = t
+    } else {
+      if (t < t0) return false
+      if (t < t1) t1 = t
+    }
+    return true
+  }
   return (
-    clipSide(ax - bx, ax - rect.left) &&
-    clipSide(bx - ax, rect.right - ax) &&
-    clipSide(ay - by, ay - rect.top) &&
-    clipSide(by - ay, rect.bottom - ay)
+    clip(ax - bx, ax - rect.left) &&
+    clip(bx - ax, rect.right - ax) &&
+    clip(ay - by, ay - rect.top) &&
+    clip(by - ay, rect.bottom - ay)
   )
 }
 
@@ -280,9 +277,7 @@ function slotFor(
 ): PillPlacement {
   const { outline } = pill
   // The pane, narrowed to the room's bounding box: cheap to reject against.
-  const box = outline
-    ? ringBox(outline.outer)
-    : { left: 0, top: 0, right: Infinity, bottom: Infinity }
+  const box = ringBox(outline.outer)
   box.left = Math.max(box.left, 0)
   box.top = Math.max(box.top, 0)
   box.right = Math.min(box.right, bounds.width)
@@ -301,7 +296,7 @@ function slotFor(
         rect.bottom > box.bottom
       )
         continue
-      if (outline && !rectInPolygon(rect, outline)) continue
+      if (!rectInPolygon(rect, outline)) continue
       if (placed.some((other) => near(rect, other))) continue
       placed.push(rect)
       return { tier, dy }
@@ -351,21 +346,38 @@ export type RoomLabelEntry = {
 }
 type LabelEntry = RoomLabelEntry
 
+/** Where the pointer meets a room's plane: the point in it, and how far along the pointer's ray. */
+export type RoomHit = readonly [x: number, y: number, distance: number]
+
+// Planes closer together than this along the ray (in metres) count as one floor.
+const SAME_FLOOR = 1e-3
+
 /**
- * The room under a point: the smallest whose outline, holes excluded, holds
- * it, so a mezzanine or a zone drawn inside a room wins over the room.
- * `pointOn` gives the point in each room's own plane (in 3D, where the
- * pointer's ray meets that room's floor), or null if it never meets it.
+ * The room under the pointer: of the rooms whose outline, holes excluded,
+ * holds the point where the pointer meets their plane, the nearest along the
+ * pointer's ray (the floor it reaches first), then the smallest (a zone drawn
+ * inside a room, on the same floor). `pointOn` gives that point for each room
+ * (in 3D, where the ray meets the room's floor), or null if it never meets it.
  */
 export function roomAt(
   entries: readonly RoomLabelEntry[],
-  pointOn: (entry: RoomLabelEntry) => [number, number] | null,
+  pointOn: (entry: RoomLabelEntry) => RoomHit | null,
 ): string | null {
   let found: RoomLabelEntry | null = null
+  let foundAt = Number.POSITIVE_INFINITY
   for (const entry of entries) {
-    if (found && entry.area >= found.area) continue
-    const point = pointOn(entry)
-    if (point && containsPoint([{ outer: entry.polygon, holes: entry.holes }], point)) found = entry
+    const hit = pointOn(entry)
+    if (!hit) continue
+    const [x, y, distance] = hit
+    if (found) {
+      const nearer = distance < foundAt - SAME_FLOOR
+      const sameFloor = !nearer && distance <= foundAt + SAME_FLOOR
+      if (!(nearer || (sameFloor && entry.area < found.area))) continue
+    }
+    if (containsPoint([{ outer: entry.polygon, holes: entry.holes }], [x, y])) {
+      found = entry
+      foundAt = distance
+    }
   }
   return found?.zoneId ?? null
 }
@@ -515,6 +527,7 @@ export class PillPlacer {
   placements: ReadonlyMap<string, PillPlacement> = new Map()
   private readonly fading = new Map<string, Timer>()
   private suppressed: ReadonlySet<string> = new Set()
+  private open: string | null = null
   private shown = true
 
   constructor(
@@ -554,16 +567,18 @@ export class PillPlacer {
     const placement = this.placements.get(id)
     if (placement && placement.tier !== 'hidden') this.show(element, placement)
     else element.dataset.roomLabelHidden = ''
-    if (this.suppressed.has(id)) element.dataset.roomLabelSuppressed = ''
+    this.mark(id, element)
   }
 
-  /** Fade the pills under the detail chip out of its way, and every other back. */
-  suppress(ids: ReadonlySet<string>) {
+  /**
+   * Fade the pills under the detail chip out of its way, and every other back.
+   * The open room's own pill fades too but still takes the pointer: the chip
+   * over it is read-only, so the pill stays the control.
+   */
+  suppress(ids: ReadonlySet<string>, open: string | null) {
     this.suppressed = ids
-    for (const [id, element] of this.elements) {
-      if (ids.has(id)) element.dataset.roomLabelSuppressed = ''
-      else delete element.dataset.roomLabelSuppressed
-    }
+    this.open = open
+    for (const [id, element] of this.elements) this.mark(id, element)
   }
 
   /** Remount hidden pills invisibly so changed text or fonts can be measured. */
@@ -595,6 +610,14 @@ export class PillPlacer {
     else element.dataset.roomLabelHidden = ''
   }
 
+  private mark(id: string, element: HTMLElement) {
+    const { dataset } = element
+    if (id === this.open) dataset.roomLabelOpen = ''
+    else delete dataset.roomLabelOpen
+    if (id !== this.open && this.suppressed.has(id)) dataset.roomLabelSuppressed = ''
+    else delete dataset.roomLabelSuppressed
+  }
+
   private setGone(gone: ReadonlySet<string>) {
     this.gone = gone
     this.onGone(gone)
@@ -602,11 +625,13 @@ export class PillPlacer {
 }
 
 /**
- * Which room's detail chip is open. A pill (or the chip) under the pointer, or
- * a pill with keyboard focus, opens at once. Otherwise the room under the
- * pointer opens once the pointer has rested on it for a moment, and stays a
- * moment after the pointer leaves, so crossing a wall hands over from one
- * room to the next without a gap and passing over a room opens nothing.
+ * Which room's detail chip is open. A pill under the pointer, or a pill with
+ * keyboard focus, opens at once; when both are set, whichever moved last
+ * wins. Otherwise the room under the pointer opens once the pointer has
+ * rested on it for a moment, and stays a moment after the pointer leaves, so
+ * crossing a wall hands over from one room to the next without a gap and
+ * passing over a room opens nothing. Escape closes it until the pointer or
+ * focus moves on to another room.
  */
 export class LabelReveal {
   active: string | null = null
@@ -614,6 +639,8 @@ export class LabelReveal {
   private hovered: string | null = null
   private focused: string | null = null
   private picked: string | null = null
+  private keyboardLast = false
+  private dismissed: string | null = null
   private pending: { id: string | null; timer: Timer } | null = null
 
   constructor(
@@ -622,14 +649,16 @@ export class LabelReveal {
     private readonly cancel: (timer: Timer) => void = stopTimer,
   ) {}
 
-  /** The pill or chip under the pointer. */
+  /** The pill under the pointer. */
   hover(id: string | null) {
+    if (id !== null && id !== this.hovered) this.keyboardLast = false
     this.hovered = id
     this.update()
   }
 
   /** The pill with keyboard focus. */
   focus(id: string | null) {
+    if (id !== null) this.keyboardLast = true
     this.focused = id
     this.update()
   }
@@ -640,17 +669,36 @@ export class LabelReveal {
     this.update()
   }
 
-  /** Close at once and forget the pointer and focus: the view moved, or the layer hid. */
+  /** Close what is open, and keep it closed while the pointer and focus stay on it. */
+  dismiss() {
+    if (this.active === null) return
+    this.dismissed = this.active
+    this.stop()
+    this.set(null)
+  }
+
+  /**
+   * Close at once and forget the pointer: the view moved, or the layer hid.
+   * Focus is kept, so a focused pill opens again once the view rests.
+   */
   clear() {
     this.hovered = null
-    this.focused = null
     this.picked = null
     this.stop()
     this.set(null)
   }
 
   private update() {
-    const direct = this.hovered ?? this.focused
+    const direct = this.keyboardLast
+      ? (this.focused ?? this.hovered)
+      : (this.hovered ?? this.focused)
+    if (this.dismissed !== null) {
+      if ((direct ?? this.picked) === this.dismissed) {
+        this.stop()
+        return
+      }
+      this.dismissed = null
+    }
     if (direct) {
       this.stop()
       this.set(direct)
@@ -682,7 +730,7 @@ export class LabelReveal {
   }
 
   private set(id: string | null) {
-    const focused = id !== null && this.hovered === null && this.focused === id
+    const focused = id !== null && this.focused === id
     if (id === this.active && focused === this.activeFocused) return
     this.active = id
     this.activeFocused = focused
@@ -754,18 +802,13 @@ class PillLayer {
   private rects = new Map<string, LabelRect>()
   private bounds: PaneSize = { width: 0, height: 0 }
   private chip: LabelRect | null = null
-  // Its own store, so a reveal re-renders the chip alone, not every pill.
+  // The open detail, a store of its own: see `OpenRoomLabelDetail`.
   private detail: RoomLabelDetailState | null = null
   private readonly detailListeners = new Set<() => void>()
 
   constructor(onGone: (gone: ReadonlySet<string>) => void) {
     this.placer = new PillPlacer(this.elements, onGone)
-    this.reveal = new LabelReveal((id, focused) => {
-      const at = id ? this.locate(id) : null
-      this.detail =
-        id && at ? { id, open: true, focused, at } : this.detail && { ...this.detail, open: false }
-      for (const listener of this.detailListeners) listener()
-    })
+    this.reveal = new LabelReveal((id, focused) => this.openDetail(id, focused))
   }
 
   subscribeDetail = (listener: () => void) => {
@@ -787,7 +830,9 @@ class PillLayer {
       const rect = placedRect(candidate, placements.get(candidate.id)!)
       if (rect) this.rects.set(candidate.id, rect)
     }
-    if (this.chip) this.placer.suppress(suppressedBy(this.chip, this.rects))
+    // An open chip follows its pill to its new place.
+    if (this.detail?.open) this.openDetail(this.detail.id, this.detail.focused)
+    this.suppress()
   }
 
   /**
@@ -805,9 +850,26 @@ class PillLayer {
     this.reveal.pick(this.pointer && pick(this.pointer))
   }
 
+  /** Where the detail chip now sits, or null once it closes or unmounts. */
   placeDetail = (rect: LabelRect | null) => {
     this.chip = rect
-    this.placer.suppress(rect ? suppressedBy(rect, this.rects) : new Set())
+    this.suppress()
+  }
+
+  private suppress() {
+    if (!this.chip) {
+      this.placer.suppress(new Set(), null)
+      return
+    }
+    const open = this.detail?.open ? this.detail.id : null
+    this.placer.suppress(suppressedBy(this.chip, this.rects), open)
+  }
+
+  private openDetail(id: string | null, focused: boolean) {
+    const at = id ? this.locate(id) : null
+    this.detail =
+      id && at ? { id, open: true, focused, at } : this.detail && { ...this.detail, open: false }
+    for (const listener of this.detailListeners) listener()
   }
 
   private locate(id: string): DetailOrigin | null {
@@ -926,11 +988,9 @@ function usePillLayer(
     const { reveal } = layer
     const labelAt = (target: EventTarget | null) => {
       const label =
-        target instanceof Element
-          ? target.closest<HTMLElement>('[data-room-label], [data-room-label-detail]')
-          : null
+        target instanceof Element ? target.closest<HTMLElement>('[data-room-label]') : null
       if (!(label && layer.container()?.contains(label))) return null
-      return label.dataset.roomLabel ?? label.dataset.roomLabelDetail ?? null
+      return label.dataset.roomLabel ?? null
     }
     const move = (event: PointerEvent) => {
       const label = labelAt(event.target)
@@ -954,22 +1014,43 @@ function usePillLayer(
         reveal.focus(id)
     }
     const focusOut = () => reveal.focus(null)
+    // The canvas and the plan pan while Space is held; on a pill, Space presses it.
+    const keepSpace = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && labelAt(event.target)) event.stopPropagation()
+    }
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') reveal.dismiss()
+    }
     // Captured: a plan or canvas handler stopping the move must not blind the layer.
     host.addEventListener('pointermove', move, { capture: true, passive: true })
+    // A drag ending with the pointer held still picks the room under it once the view rests.
+    host.addEventListener('pointerup', move, { capture: true, passive: true })
     host.addEventListener('pointerleave', leave)
     host.addEventListener('focusin', focusIn)
     host.addEventListener('focusout', focusOut)
+    host.addEventListener('keydown', keepSpace)
+    host.addEventListener('keyup', keepSpace)
+    document.addEventListener('keydown', dismiss)
     return () => {
       host.removeEventListener('pointermove', move, { capture: true })
+      host.removeEventListener('pointerup', move, { capture: true })
       host.removeEventListener('pointerleave', leave)
       host.removeEventListener('focusin', focusIn)
       host.removeEventListener('focusout', focusOut)
+      host.removeEventListener('keydown', keepSpace)
+      host.removeEventListener('keyup', keepSpace)
+      document.removeEventListener('keydown', dismiss)
     }
   }, [host, layer])
   return { layer, gone }
 }
 
-/** The pills of one level: every detected room, and every drawn zone that bounds none. */
+/**
+ * The pills of one level: every detected room, and every drawn zone that
+ * bounds none. A smaller one inside a larger one (a zone drawn in a room) is
+ * a hole in the larger: the label there, and the room under the pointer
+ * there, are the smaller one's.
+ */
 export function roomLabelEntries(
   rooms: readonly RoomSelectionRecord[],
   zones: readonly ZoneNode[],
@@ -978,7 +1059,7 @@ export function roomLabelEntries(
     zones.filter((zone) => zone.visible === false).map((zone) => zone.id),
   )
   const roomIds = new Set(rooms.map((room) => room.zoneId))
-  return [
+  const entries: RoomLabelEntry[] = [
     ...rooms
       .filter((room) => !hiddenIds.has(room.zoneId))
       .map((room) => ({
@@ -996,6 +1077,18 @@ export function roomLabelEntries(
         area: area([{ outer: zone.polygon, holes: zone.holes ?? [] }]),
       })),
   ]
+  const insides = entries.map((entry) =>
+    polygonInteriorPoint({ polygon: entry.polygon, holes: entry.holes }),
+  )
+  return entries.map((entry) => {
+    const outline = [{ outer: entry.polygon, holes: entry.holes }]
+    const nested = entries.filter(
+      (other, i) => other.area < entry.area && containsPoint(outline, insides[i]!),
+    )
+    return nested.length === 0
+      ? entry
+      : { ...entry, holes: [...entry.holes, ...nested.map((other) => other.polygon)] }
+  })
 }
 
 function useRoomLabelEntries(levelId: string | null): LabelEntry[] {
@@ -1012,10 +1105,47 @@ function useRoomLabelEntries(levelId: string | null): LabelEntry[] {
   return useMemo(() => roomLabelEntries(rooms, zones), [rooms, zones])
 }
 
+/** A label's colour dot, name and area: a pill hides what its tier leaves out, the detail shows all. */
+function LabelParts({
+  color,
+  name,
+  areaLabel,
+  full,
+}: {
+  color: string
+  name: string
+  areaLabel: string
+  full: boolean
+}) {
+  return (
+    <>
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        data-room-label-dot=""
+        style={{ backgroundColor: color }}
+      />
+      <span
+        className={
+          full
+            ? 'min-w-0 font-medium [overflow-wrap:anywhere]'
+            : 'max-w-40 truncate font-medium [[data-room-label-tier=dot]>&]:hidden'
+        }
+      >
+        {name}
+      </span>
+      <span
+        className="shrink-0 whitespace-nowrap font-mono text-white/60 tabular-nums [[data-room-label-tier]>&]:hidden"
+        data-room-label-area=""
+      >
+        {areaLabel}
+      </span>
+    </>
+  )
+}
+
 /**
- * The pill itself: a colour dot, the name (cut at 160 px) and the area in the
- * active unit, as much of it as its placement shows. As the `detail` chip it
- * is the whole label, over the pills, for the room the pointer or focus is on.
+ * The pill itself, a button: a colour dot, the name (cut at 160 px) and the
+ * area in the active unit, as much of it as its placement shows.
  */
 export function RoomPillChip({
   zoneId,
@@ -1024,7 +1154,6 @@ export function RoomPillChip({
   name,
   areaM2,
   elements,
-  detail = false,
   onClick,
   onHover,
   onLeave,
@@ -1034,8 +1163,7 @@ export function RoomPillChip({
   color: string
   name: string
   areaM2: number
-  elements?: Map<string, HTMLElement>
-  detail?: boolean
+  elements: Map<string, HTMLElement>
   onClick: (event: ReactMouseEvent) => void
   onHover: (event: ReactPointerEvent) => void
   onLeave: () => void
@@ -1044,81 +1172,79 @@ export function RoomPillChip({
   const areaLabel = formatRoomArea(areaM2, unit)
   // biome-ignore lint/correctness/useExhaustiveDependencies: A dot's border box does not resize when its hidden text changes.
   useLayoutEffect(() => {
-    if (!detail && elements instanceof PillElements) elements.measure(zoneId)
-  }, [areaM2, detail, elements, name, unit, zoneId])
+    if (elements instanceof PillElements) elements.measure(zoneId)
+  }, [areaM2, elements, name, unit, zoneId])
   const register = useCallback(
     (element: HTMLElement | null) => {
-      if (element) elements?.set(zoneId, element)
-      else elements?.delete(zoneId)
+      if (element) elements.set(zoneId, element)
+      else elements.delete(zoneId)
     },
     [elements, zoneId],
   )
-  const handlers = {
-    onClick: (event: ReactMouseEvent) => {
-      event.stopPropagation()
-      onClick(event)
-    },
-    onPointerDown: (event: ReactPointerEvent) => event.stopPropagation(),
-    // Move as well as enter: leaving the canvas for the pill ends the canvas
-    // hover after the pill's enter has run.
-    onPointerEnter: onHover,
-    onPointerLeave: onLeave,
-    onPointerMove: onHover,
-  }
-  const content = (
-    <>
-      <span
-        className="h-2 w-2 shrink-0 rounded-full"
-        data-room-label-dot=""
-        style={{ backgroundColor: color }}
-      />
-      <span
-        className={
-          detail
-            ? 'font-medium'
-            : 'max-w-40 truncate font-medium [[data-room-label-tier=dot]>&]:hidden'
-        }
-      >
-        {name}
-      </span>
-      <span
-        className="font-mono text-white/60 tabular-nums [[data-room-label-tier]>&]:hidden"
-        data-room-label-area=""
-      >
-        {areaLabel}
-      </span>
-    </>
-  )
-  if (detail) {
-    // The pill under it is the control; this is the same room, read in full.
-    return (
-      <div
-        aria-hidden
-        className="pointer-events-auto flex cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-neutral-950/90 px-2.5 py-1 text-white text-xs shadow-elevation-3 backdrop-blur-sm"
-        data-room-label-detail={zoneId}
-        data-room-label-view={view}
-        {...handlers}
-      >
-        {content}
-      </div>
-    )
-  }
   return (
     <button
       aria-label={`${name}, ${areaLabel}`}
-      // Fades in once placed and out (taking no pointer) while hidden or under
-      // the detail chip; eases into its nudged place and its tier.
-      className="pointer-events-auto flex cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-neutral-950/75 px-2.5 py-1 text-white text-xs shadow-sm outline-none backdrop-blur-sm transition-[opacity,translate] duration-180 starting:opacity-0 focus-visible:outline-2 focus-visible:outline-white/70 focus-visible:outline-offset-2 data-room-label-hidden:pointer-events-none data-room-label-suppressed:pointer-events-none data-room-label-hidden:opacity-0 data-room-label-suppressed:opacity-0 data-room-label-suppressed:duration-150 data-[room-label-tier=dot]:gap-0 data-[room-label-tier=dot]:p-[3px] motion-reduce:transition-none"
+      // Fades in once placed, and out while hidden (then out of the tab order)
+      // or under the detail chip (taking no pointer unless it is the open
+      // room's); eases into its nudged place and its tier.
+      className="pointer-events-auto flex cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-neutral-950/75 px-2.5 py-1 text-white text-xs shadow-sm backdrop-blur-sm transition-[opacity,translate,visibility] duration-180 starting:opacity-0 focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-2 focus-visible:ring-6 focus-visible:ring-neutral-950/85 data-room-label-hidden:pointer-events-none data-room-label-suppressed:pointer-events-none data-room-label-hidden:invisible data-room-label-hidden:opacity-0 data-room-label-open:opacity-0 data-room-label-suppressed:opacity-0 data-room-label-open:duration-150 data-room-label-suppressed:duration-150 data-[room-label-tier=dot]:gap-0 data-[room-label-tier=dot]:p-[3px] motion-reduce:transition-none"
       data-room-label={zoneId}
       data-room-label-view={view}
+      onClick={(event) => {
+        event.stopPropagation()
+        onClick(event)
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+      // Move as well as enter: leaving the canvas for the pill ends the canvas
+      // hover after the pill's enter has run.
+      onPointerEnter={onHover}
+      onPointerLeave={onLeave}
+      onPointerMove={onHover}
       ref={register}
       type="button"
-      {...handlers}
     >
-      {content}
+      <LabelParts areaLabel={areaLabel} color={color} full={false} name={name} />
     </button>
   )
 }
+
+/**
+ * The detail chip: the open room's whole label, wrapping to fit its layer.
+ * It only reads: the pill under it is the control, and the pointer goes
+ * through it to the rooms it covers.
+ */
+export function RoomPillDetail({
+  zoneId,
+  view,
+  color,
+  name,
+  areaM2,
+}: {
+  zoneId: string
+  view: '2d' | '3d'
+  color: string
+  name: string
+  areaM2: number
+}) {
+  const unit = useViewer((s) => s.unit)
+  return (
+    <div
+      aria-hidden
+      className="flex select-none items-center gap-1.5 rounded-[13px] border border-white/10 bg-neutral-950/90 px-2.5 py-1 text-white text-xs shadow-elevation-3 backdrop-blur-sm"
+      data-room-label-detail={zoneId}
+      data-room-label-view={view}
+    >
+      <LabelParts areaLabel={formatRoomArea(areaM2, unit)} color={color} full name={name} />
+    </div>
+  )
+}
+
+function useLabelZone(zoneId: string) {
+  const zone = useScene((s) => s.nodes[zoneId as AnyNodeId] as ZoneNode | undefined)
+  return zone && zone.visible !== false ? zone : null
+}
+
+const labelName = (zone: ZoneNode) => zone.name?.trim() || zoneKindLabel(zone)
 
 /**
  * One room's pill in the editor. Hover and click take the same rule as the
@@ -1129,28 +1255,39 @@ function RoomPill({
   entry,
   view,
   elements,
-  detail,
 }: {
   entry: LabelEntry
   view: '2d' | '3d'
-  elements?: Map<string, HTMLElement>
-  detail?: boolean
+  elements: Map<string, HTMLElement>
 }) {
-  const zone = useScene((s) => s.nodes[entry.zoneId as AnyNodeId] as ZoneNode | undefined)
+  const zone = useLabelZone(entry.zoneId)
   // A pill that disappears under the cursor (its click selected something)
   // fires no leave: end the hover it set.
   useEffect(() => () => leaveZoneArea(entry.zoneId), [entry.zoneId])
-  if (!zone || zone.visible === false) return null
+  if (!zone) return null
   return (
     <RoomPillChip
       areaM2={entry.area}
       color={zone.color}
-      detail={detail}
       elements={elements}
-      name={zone.name?.trim() || zoneKindLabel(zone)}
+      name={labelName(zone)}
       onClick={(event) => clickZoneArea(entry.zoneId, selectionModifiersFromEvent(event))}
       onHover={(event) => hoverZoneArea(entry.zoneId, selectionModifiersFromEvent(event))}
       onLeave={() => leaveZoneArea(entry.zoneId)}
+      view={view}
+      zoneId={entry.zoneId}
+    />
+  )
+}
+
+function RoomDetail({ entry, view }: { entry: LabelEntry; view: '2d' | '3d' }) {
+  const zone = useLabelZone(entry.zoneId)
+  if (!zone) return null
+  return (
+    <RoomPillDetail
+      areaM2={entry.area}
+      color={zone.color}
+      name={labelName(zone)}
       view={view}
       zoneId={entry.zoneId}
     />
@@ -1161,6 +1298,7 @@ function RoomPill({
  * The open room's whole label over its layer: opened with its colour dot on
  * the pill's, or centred where a hidden room's label would sit, and kept 8 px
  * inside the layer. The pills it covers fade out of its way; nothing moves.
+ * One chip serves every room, so a handoff moves it without fading it again.
  */
 function RoomLabelDetail({
   detail,
@@ -1179,83 +1317,65 @@ function RoomLabelDetail({
       onPlaced(null)
       return
     }
-    const width = frame.offsetWidth
-    const height = frame.offsetHeight
-    const dot = frame.querySelector<HTMLElement>('[data-room-label-dot]')
-    const x = at.onDot && dot ? at.x - dot.offsetLeft - dot.offsetWidth / 2 : at.x - width / 2
-    const left = Math.max(DETAIL_INSET, Math.min(x, at.bounds.width - DETAIL_INSET - width))
-    const top = Math.max(
-      DETAIL_INSET,
-      Math.min(at.y - height / 2, at.bounds.height - DETAIL_INSET - height),
-    )
-    frame.style.left = `${left}px`
-    frame.style.top = `${top}px`
-    onPlaced({ left, top, right: left + width, bottom: top + height })
+    const place = () => {
+      const width = frame.offsetWidth
+      const height = frame.offsetHeight
+      const dot = frame.querySelector<HTMLElement>('[data-room-label-dot]')
+      const x = at.onDot && dot ? at.x - dot.offsetLeft - dot.offsetWidth / 2 : at.x - width / 2
+      const left = Math.max(DETAIL_INSET, Math.min(x, at.bounds.width - DETAIL_INSET - width))
+      const top = Math.max(
+        DETAIL_INSET,
+        Math.min(at.y - height / 2, at.bounds.height - DETAIL_INSET - height),
+      )
+      frame.style.left = `${left}px`
+      frame.style.top = `${top}px`
+      onPlaced({ left, top, right: left + width, bottom: top + height })
+    }
+    place()
+    // Placed again when its text reflows: a rename, a unit change, a font arriving.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place)
+    observer?.observe(frame)
+    return () => observer?.disconnect()
   }, [at, onPlaced, open])
+  // Gone with its room: the pills it covered come back.
+  useLayoutEffect(() => () => onPlaced(null), [onPlaced])
   return (
     <div
-      className="absolute z-30 origin-left rounded-full transition-[opacity,scale] duration-150 ease-out starting:scale-[0.98] starting:opacity-0 data-closed:scale-[0.98] data-closed:opacity-0 data-closed:duration-50 data-focused:outline-2 data-focused:outline-white/70 data-focused:outline-offset-2 data-closed:*:pointer-events-none motion-reduce:transition-none"
+      className="pointer-events-none absolute z-30 w-max origin-left rounded-[13px] transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] starting:scale-[0.98] starting:opacity-0 data-closed:scale-[0.98] data-closed:opacity-0 data-closed:duration-50 data-focused:outline-2 data-focused:outline-white data-focused:outline-offset-2 data-focused:ring-6 data-focused:ring-neutral-950/85 motion-reduce:transition-none"
       data-closed={open ? undefined : ''}
       data-focused={open && detail.focused ? '' : undefined}
       ref={ref}
+      style={{ maxWidth: at.bounds.width - 2 * DETAIL_INSET }}
     >
       {children}
     </div>
   )
 }
 
-/** The open room's detail and its entry, read from the layer's own store. */
-function useOpenDetail(layer: PillLayer, entries: readonly LabelEntry[]) {
-  const detail = useSyncExternalStore(layer.subscribeDetail, layer.getDetail, layer.getDetail)
-  const entry = detail && entries.find((candidate) => candidate.zoneId === detail.id)
-  return detail && entry ? { detail, entry } : null
-}
-
-function RoomLabelDetail3D({
+/**
+ * The open room's detail, read from the layer's own store where it renders,
+ * so a reveal re-renders the chip alone, not the canvas tree or every pill.
+ */
+function OpenRoomLabelDetail({
   layer,
   entries,
-  anchors,
-  portal,
   renderDetail,
 }: {
   layer: PillLayer
   entries: readonly LabelEntry[]
-  anchors: ReadonlyMap<string, Vector3>
-  portal: { current: HTMLElement }
   renderDetail: (entry: LabelEntry) => ReactNode
 }) {
-  const open = useOpenDetail(layer, entries)
-  if (!open) return null
+  const detail = useSyncExternalStore(layer.subscribeDetail, layer.getDetail, layer.getDetail)
+  const entry = detail && entries.find((candidate) => candidate.zoneId === detail.id)
+  if (!(detail && entry)) return null
   return (
-    <Html
-      calculatePosition={atLayerOrigin}
-      portal={portal}
-      position={anchors.get(open.detail.id)}
-      style={{ pointerEvents: 'none' }}
-      zIndexRange={DETAIL_Z_RANGE}
-    >
-      <RoomLabelDetail detail={open.detail} key={open.detail.id} onPlaced={layer.placeDetail}>
-        {renderDetail(open.entry)}
-      </RoomLabelDetail>
-    </Html>
-  )
-}
-
-function RoomLabelDetail2D({
-  layer,
-  entries,
-}: {
-  layer: PillLayer
-  entries: readonly LabelEntry[]
-}) {
-  const open = useOpenDetail(layer, entries)
-  if (!open) return null
-  return (
-    <RoomLabelDetail detail={open.detail} key={open.detail.id} onPlaced={layer.placeDetail}>
-      <RoomPill detail entry={open.entry} view="2d" />
+    <RoomLabelDetail detail={detail} onPlaced={layer.placeDetail}>
+      {renderDetail(entry)}
     </RoomLabelDetail>
   )
 }
+
+const renderDetail2D = (entry: LabelEntry) => <RoomDetail entry={entry} view="2d" />
 
 /** Light name-and-area pills over each room and drawn zone of the active level. */
 export function RoomLabels3D() {
@@ -1284,7 +1404,7 @@ function LevelRoomLabels3D({
     <RoomPillsLayer3D
       entries={entries}
       levelObject={() => sceneRegistry.nodes.get(levelId)}
-      renderDetail={(entry) => <RoomPill detail entry={entry} view="3d" />}
+      renderDetail={(entry) => <RoomDetail entry={entry} view="3d" />}
       renderLabel={(entry, anchors, elements) => (
         <EditorRoomLabel3D anchors={anchors} elements={elements} entry={entry} />
       )}
@@ -1324,7 +1444,40 @@ function screenPoint(x: number, y: number, z: number, size: PaneSize) {
   ] as const
 }
 
-function candidates3D(
+// How far in front of the camera an outline is cut off (in clip-space w, the
+// depth along the view for a perspective camera): past it, points project
+// ever further out and then flip to the other side of the screen.
+const NEAR_W = 1e-3
+
+/**
+ * A level-local ring at height `y` on screen: cut to the part in front of the
+ * camera (Sutherland–Hodgman against w = NEAR_W, which is linear in the
+ * level's coordinates), then projected. Null when none of it is in front.
+ */
+function screenRing(points: readonly [number, number][], y: number, size: PaneSize): Ring | null {
+  const e = toScreen.elements
+  const w = ([x, z]: readonly [number, number]) => e[3] * x + e[7] * y + e[11] * z + e[15]
+  const ring: Ring = []
+  const add = (x: number, z: number) => {
+    const point = screenPoint(x, y, z, size)
+    if (point) ring.push([point[0], point[1]])
+  }
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[j]!
+    const b = points[i]!
+    const wa = w(a)
+    const wb = w(b)
+    if (wa >= NEAR_W !== wb >= NEAR_W) {
+      const t = (wa - NEAR_W) / (wa - wb)
+      add(a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+    }
+    if (wb >= NEAR_W) add(b[0], b[1])
+  }
+  return ring.length >= 3 ? ring : null
+}
+
+/** Where the pills of a level land on screen, each with the part of its room in front of the camera. */
+export function candidates3D(
   entries: readonly LabelEntry[],
   anchors: ReadonlyMap<string, Vector3>,
   sizes: ReadonlyMap<string, PillSize>,
@@ -1343,25 +1496,20 @@ function candidates3D(
     // Behind the camera or past its far plane: not on screen to collide.
     if (!at || Math.abs(at[2]) > 1) continue
     // The room's outline at its pill's height, where the pill has to fit.
-    const ring = (points: [number, number][]) => {
-      const projected: Ring = []
-      for (const [x, z] of points) {
-        const point = screenPoint(x, anchor.y, z, size)
-        if (!point) return null
-        projected.push([point[0], point[1]])
-      }
-      return projected
+    const outer = screenRing(entry.polygon, anchor.y, size)
+    if (!outer) continue
+    const holes: Ring[] = []
+    for (const hole of entry.holes) {
+      const ring = screenRing(hole, anchor.y, size)
+      if (ring) holes.push(ring)
     }
-    const outer = ring(entry.polygon)
-    const holes = entry.holes.map(ring)
     candidates.push({
       id: entry.zoneId,
       x: at[0],
       y: at[1],
       size: pill,
       area: entry.area,
-      outline:
-        outer && holes.every((hole): hole is Ring => hole !== null) ? { outer, holes } : undefined,
+      outline: { outer, holes },
     })
   }
   return candidates
@@ -1372,7 +1520,7 @@ const pickPointer = new Vector2()
 const levelInverse = new Matrix4()
 const levelRay = new Ray()
 
-/** The room whose floor the pointer's ray meets, testing each room at its own floor. */
+/** The room whose floor the pointer's ray meets first, testing each room at its own floor. */
 function pick3D(
   entries: readonly LabelEntry[],
   anchors: ReadonlyMap<string, Vector3>,
@@ -1393,21 +1541,23 @@ function pick3D(
     if (!anchor) return null
     const t = (anchor.y - LABEL_HEIGHT - origin.y) / direction.y
     return t > 0 && Number.isFinite(t)
-      ? [origin.x + t * direction.x, origin.z + t * direction.z]
+      ? [origin.x + t * direction.x, origin.z + t * direction.z, t]
       : null
   })
 }
 
-// The detail chip's own Html sits at the layer's top-left corner and places
-// the chip itself, above every pill.
+// The detail chip's own Html sits at its layer's top-left corner and places
+// the chip itself, so drei must never hide it: the object it rides is not
+// where it shows.
 const atLayerOrigin = () => [0, 0]
-const DETAIL_Z_RANGE = [30, 30]
+const keepShown = () => {}
 
 /**
  * The pills of one level in 3D, riding the level's object (so they follow
  * level stacking) and placed from where their anchors land on screen. They
  * live in their own stacking layer clipped to the canvas, so every piece of
- * UI over the canvas stays above them.
+ * UI over the canvas stays above them; the open room's chip, the label being
+ * read, has a layer of its own above the canvas's flags.
  */
 export function RoomPillsLayer3D({
   entries,
@@ -1430,24 +1580,34 @@ export function RoomPillsLayer3D({
   const [anchors] = useState(() => new RoomAnchors())
   const view = useRef(new Float64Array(50))
   const host = useThree((s) => (s.events.connected ?? s.gl.domElement.parentNode) as HTMLElement)
-  const [container] = useState(() =>
-    typeof document === 'undefined' ? null : document.createElement('div'),
+  const [portals] = useState(() =>
+    typeof document === 'undefined'
+      ? null
+      : {
+          pills: { current: document.createElement('div') },
+          detail: { current: document.createElement('div') },
+        },
   )
   const canvas = useThree((s) => s.gl.domElement)
   const { layer, gone } = usePillLayer(
     shown,
     entries,
     host,
-    () => container,
+    () => portals?.pills.current ?? null,
     () => canvas,
   )
-  const portal = useMemo(() => (container ? { current: container } : null), [container])
   useEffect(() => {
-    if (!(host && container)) return
-    container.className = 'pointer-events-none absolute inset-0 isolate z-0 overflow-hidden'
-    host.appendChild(container)
-    return () => container.remove()
-  }, [container, host])
+    if (!(host && portals)) return
+    const { pills, detail } = portals
+    pills.current.className = 'pointer-events-none absolute inset-0 isolate z-0 overflow-hidden'
+    // Over the flags and guides on the canvas (z-index 25 at most), unlike the pills.
+    detail.current.className = 'pointer-events-none absolute inset-0 z-30'
+    host.append(pills.current, detail.current)
+    return () => {
+      pills.current.remove()
+      detail.current.remove()
+    }
+  }, [host, portals])
 
   useEffect(() => {
     anchors.onMove = () => layer.clock.invalidate()
@@ -1486,21 +1646,22 @@ export function RoomPillsLayer3D({
     layer.settle(placed, (pointer) => pick3D(entries, anchors, pointer, camera, level, size))
   })
 
-  if (entries.length === 0 || !portal) return null
+  if (entries.length === 0 || !portals) return null
   return (
-    <PillPortalContext.Provider value={portal}>
+    <PillPortalContext.Provider value={portals.pills}>
       <HiddenPillsContext.Provider value={gone}>
         <group matrixAutoUpdate={false} ref={ref}>
           {entries.map((entry) => (
             <Fragment key={entry.zoneId}>{renderLabel(entry, anchors, layer.elements)}</Fragment>
           ))}
-          <RoomLabelDetail3D
-            anchors={anchors}
-            entries={entries}
-            layer={layer}
-            portal={portal}
-            renderDetail={renderDetail}
-          />
+          <Html
+            calculatePosition={atLayerOrigin}
+            onOcclude={keepShown}
+            portal={portals.detail}
+            style={{ pointerEvents: 'none' }}
+          >
+            <OpenRoomLabelDetail entries={entries} layer={layer} renderDetail={renderDetail} />
+          </Html>
         </group>
       </HiddenPillsContext.Provider>
     </PillPortalContext.Provider>
@@ -1683,9 +1844,11 @@ function LevelRoomLabels2D({
       }
       layer.settle(placed, (pointer) => {
         const inverse = ctm.inverse()
-        const point: [number, number] = [
+        // The plan is one plane, met at the same distance for every room: the smallest wins.
+        const point: RoomHit = [
           inverse.a * pointer.x + inverse.c * pointer.y + inverse.e,
           inverse.b * pointer.x + inverse.d * pointer.y + inverse.f,
+          0,
         ]
         return roomAt(entries, () => point)
       })
@@ -1718,7 +1881,7 @@ function LevelRoomLabels2D({
                   <RoomPill elements={layer.elements} entry={entry} view="2d" />
                 </div>
               ))}
-            <RoomLabelDetail2D entries={entries} layer={layer} />
+            <OpenRoomLabelDetail entries={entries} layer={layer} renderDetail={renderDetail2D} />
           </div>,
           host,
         )}
