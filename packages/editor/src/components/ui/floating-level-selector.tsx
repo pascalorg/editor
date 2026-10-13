@@ -244,7 +244,7 @@ function LevelRow({
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground/50 tabular-nums transition-colors hover:bg-black/4 dark:hover:bg-white/5 hover:text-foreground"
+                className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground tabular-nums transition-colors hover:bg-black/4 hover:text-foreground dark:text-muted-foreground/50 dark:hover:bg-white/5 dark:hover:text-foreground"
                 onClick={(e) => e.stopPropagation()}
                 title="Level height"
                 type="button"

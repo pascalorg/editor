@@ -388,7 +388,7 @@ export default function BlockPanel() {
                   </span>
                 ) : (
                   <button
-                    className={`${SLOT_TRAILING_ACTION_CLASS} relative z-10 text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-700 dark:focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground`}
+                    className={`${SLOT_TRAILING_ACTION_CLASS} relative z-10 text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-700 dark:focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground dark:disabled:hover:text-muted-foreground`}
                     aria-label={`Delete ${slot.label} slot`}
                     disabled={!editing || readOnly}
                     onClick={() => removeMaterialSlot(slot.slotId)}

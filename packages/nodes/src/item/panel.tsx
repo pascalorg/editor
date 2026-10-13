@@ -102,7 +102,7 @@ export default function ItemPanel() {
     >
       {fitWarning && (
         <div className="mx-1 mb-1 flex gap-2 rounded-lg bg-amber-400/10 px-3 py-2 text-xs">
-          <span className="font-semibold text-amber-600 dark:text-amber-400">!</span>
+          <span className="font-semibold text-amber-700 dark:text-amber-400">!</span>
           <div className="flex flex-col gap-0.5">
             <span className="font-medium text-foreground">{fitWarning.line}</span>
             {fitWarning.detail && (

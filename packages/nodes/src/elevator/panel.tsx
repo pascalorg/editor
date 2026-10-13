@@ -790,7 +790,7 @@ export default function ElevatorPanel() {
                   <button
                     className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
                       isServiceOnly
-                        ? 'border-sky-300/45 bg-sky-400/15 text-sky-100'
+                        ? 'border-sky-600/40 bg-sky-400/15 text-sky-800 dark:border-sky-300/45 dark:text-sky-100'
                         : 'border-border/50 bg-black/4 dark:bg-black/15 text-muted-foreground hover:text-foreground'
                     } ${isDisabled ? 'cursor-not-allowed opacity-45' : ''}`}
                     disabled={isDisabled}
@@ -802,7 +802,7 @@ export default function ElevatorPanel() {
                   <button
                     className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
                       isDisabled
-                        ? 'border-red-300/45 bg-red-400/15 text-red-100'
+                        ? 'border-red-600/40 bg-red-400/15 text-red-700 dark:border-red-300/45 dark:text-red-100'
                         : 'border-border/50 bg-black/4 dark:bg-black/15 text-muted-foreground hover:text-foreground'
                     }`}
                     onClick={() => toggleLevelAccess('disabledLevelIds', level.id)}
@@ -830,7 +830,7 @@ export default function ElevatorPanel() {
                   isDisabled
                     ? 'cursor-not-allowed border-border/35 bg-black/3 dark:bg-[#202024] text-muted-foreground/55'
                     : isActive
-                      ? 'border-emerald-400/45 bg-emerald-400/15 text-emerald-100'
+                      ? 'border-emerald-600/45 bg-emerald-400/15 text-emerald-800 dark:border-emerald-400/45 dark:text-emerald-100'
                       : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e]'
                 }`}
                 disabled={isDisabled}

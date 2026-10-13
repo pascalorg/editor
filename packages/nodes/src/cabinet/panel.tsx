@@ -896,7 +896,7 @@ export default function CabinetPanel() {
         {reflowNotice ? (
           <p
             aria-live="polite"
-            className="px-1 pb-2 text-xs leading-5 text-amber-600 dark:text-amber-400"
+            className="px-1 pb-2 text-xs leading-5 text-amber-700 dark:text-amber-400"
             role="status"
           >
             {reflowNotice.message}
