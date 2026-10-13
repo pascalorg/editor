@@ -100,10 +100,12 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, 'window')
 })
 
-/** A browser's localStorage, seeded with what an earlier session left behind. */
+/** A browser's localStorage, seeded with what an earlier session left behind (a string as is). */
 function stubStorage(stored: Record<string, unknown> = {}) {
   const values = new Map(
-    Object.entries(stored).map(([key, value]) => [key, JSON.stringify(value)] as const),
+    Object.entries(stored).map(
+      ([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)] as const,
+    ),
   )
   const localStorage: Partial<Storage> = {
     getItem: (key) => values.get(key) ?? null,
@@ -123,9 +125,9 @@ async function loadEditorStore() {
 
 describe('reopening the editor', () => {
   // The editor rehydrates in a mount effect, after the host's own mount effects
-  // have written to the store. Every write used to save the whole state, so the
-  // defaults replaced the stored preferences before they were read, and the rail
-  // came back on Build after every reload.
+  // have written to the store. Each write saves the whole state, so a write
+  // saved before rehydrate would replace the stored preferences with the
+  // defaults before they are read.
   test('a write before the store rehydrates leaves the stored panel to come back', async () => {
     const storage = stubStorage({
       [STORAGE_KEY]: { state: { sidebarPanels: { edit: 'ai' } }, version: 0 },
@@ -160,5 +162,30 @@ describe('reopening the editor', () => {
     expect(nextSession.getState().activeSidebarPanel).toBe('ai')
     nextSession.getState().setWorkspaceMode('studio')
     expect(nextSession.getState().activeSidebarPanel).toBe('studio-materials')
+  })
+
+  test('an unreadable stored blob opens on the defaults, and the next change replaces it', async () => {
+    const storage = stubStorage({ [STORAGE_KEY]: '{"state":{"sidebarPanels"' })
+    const useEditor = await loadEditorStore()
+    await useEditor.persist.rehydrate()
+
+    expect(useEditor.persist.hasHydrated()).toBe(true)
+    expect(useEditor.getState().activeSidebarPanel).toBe('build')
+    useEditor.getState().setActiveSidebarPanel('ai')
+    expect(storage.read(STORAGE_KEY).state.sidebarPanels).toEqual({ edit: 'ai' })
+  })
+
+  test("a tab whose preferences did not change leaves another tab's panel stored", async () => {
+    const storage = stubStorage()
+    const staleTab = await loadEditorStore()
+    await staleTab.persist.rehydrate()
+    staleTab.getState().setActiveSidebarPanel('build')
+    const otherTab = await loadEditorStore()
+    await otherTab.persist.rehydrate()
+    otherTab.getState().setActiveSidebarPanel('ai')
+
+    staleTab.getState().setCanFindNode(true)
+
+    expect(storage.read(STORAGE_KEY).state.sidebarPanels).toEqual({ edit: 'ai' })
   })
 })
