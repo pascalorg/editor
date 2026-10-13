@@ -236,10 +236,24 @@ its floor (a porch's or a lower wing's roof, where the rule puts it), else the s
 roof written on its own walls' level). `roofsOver` reads it, so a porch roof on the upper storey
 does not stop `create_roof` capping that storey; a lower wing's roof that follows walls follows the
 walls below only, not the upper storey's along its edge; and `verify_scene` reports a roof mixed
-into a storey (`roof_mixed_in_storey`) only for a roof covering its own storey, and a roof level
-below a storey, an empty one still to be built included (`roof_level_not_on_top`). Existing scenes
-are not migrated. Unpainted gables on a roof level take the cladding of the storey's walls below
+into a storey (`roof_mixed_in_storey`) only for a roof covering its own storey or standing on its
+walls (below), and a roof level below a storey, an empty one still to be built included
+(`roof_level_not_on_top`). Existing scenes are not migrated. Unpainted gables on a roof level take the cladding of the storey's walls below
 (`levelWallCladdingRef`).
+
+A roof held by the storey whose wall tops it bears on (within 0.15 m: a porch roof on its beam
+bears lower; a lower wing's roof on the storey above bears on the walls below) is a roof the rule
+moves (`isRoofOnStoreyWalls`, in `services/roof-move.ts`); `verify_scene`'s `roof_mixed_in_storey`
+names the move for it. Such a roof offers "Move to the roof level" on its panel (in 2D and 3D;
+"Move to <storey>" under an upper storey, as `roofLevelAbove` reads it), and agents have
+`move_roofs_to_roof_level`: both run `planRoofsOffStorey`, which moves the storey's roofs on its
+walls to the level the rule gives them in one undo step, each container dropped by
+`planRoofLevel`'s `storeyOffset` so it stands where it stood, a roof following walls turning custom
+where the walls there would lift it. A roof above the storey it covers at a height of its own
+(`support` level, as moved roofs, the agents' and the auto roof's are, measured from that storey's
+floor) keeps its height over that floor when the storey's height changes: the roof elevation sync
+moves it (`roofsKeptOverStorey`) without an undo step of its own, as it does a roof following
+walls.
 
 ## Stacked mezzanine rooms
 

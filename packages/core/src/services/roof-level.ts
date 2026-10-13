@@ -70,20 +70,35 @@ function stackOf(nodes: Nodes, levelId: string, side: 'below' | 'above'): LevelN
 
 export type RoofLevelPlan =
   /** A storey stands above: it takes a roof over part of the storey below. */
-  | { kind: 'storey'; levelId: string }
-  /** The building's roof level, `create`d first when it has none, `update`d when undeclared. */
-  | {
-      kind: 'roof'
-      levelId: string
-      create: LevelNode | null
-      update: { id: string; data: Partial<LevelNode> }[]
-    }
+  (
+    | { kind: 'storey'; levelId: string }
+    /** The building's roof level, `create`d first when it has none, `update`d when undeclared. */
+    | {
+        kind: 'roof'
+        levelId: string
+        create: LevelNode | null
+        update: { id: string; data: Partial<LevelNode> }[]
+      }
+  ) & {
+    /**
+     * The storey's floor from the target level's, once the plan is written (m, negative): a roof
+     * measured from the storey's floor sits its container this high on the target level.
+     */
+    storeyOffset: number
+  }
+
+/** How far `storeyId`'s floor sits from `levelId`'s (m): negative, the storey being below. */
+function storeyOffsetTo(nodes: Nodes, storeyId: string, levelId: string): number {
+  const elevations = elevationsOf(nodes)
+  return (elevations.get(storeyId)?.baseY ?? 0) - (elevations.get(levelId)?.baseY ?? 0)
+}
 
 /** A level reused as the roof level, declared when it was not. */
-function roofLevelPlan(level: LevelNode): RoofLevelPlan {
+function roofLevelPlan(nodes: Nodes, storeyId: string, level: LevelNode): RoofLevelPlan {
   return {
     kind: 'roof',
     levelId: level.id,
+    storeyOffset: storeyOffsetTo(nodes, storeyId, level.id),
     create: null,
     update: isRoofLevel(level)
       ? []
@@ -104,27 +119,50 @@ function roofLevelPlan(level: LevelNode): RoofLevelPlan {
 }
 
 /**
- * Where a roof carried by `storeyId`'s walls lives. With a storey built above (anything on it),
- * the storey directly above takes the roof over part of the one below: a porch, a lower wing.
- * Else the building's roof level, above every level still to be built and every support level:
- * the roof level there; the empty level directly above when it is the only one, declared; else a
- * new "Roof" level `roofHeight` tall (the roof's rise over its eaves) on top. Pure: the caller
- * writes the plan in the same step as the roof.
+ * The level that takes the roofs over `storeyId`'s walls, as the scene stands. With a storey built
+ * above (anything on it), the storey directly above takes the roof over part of the one below: a
+ * porch, a lower wing. Else the building's roof level, above every level still to be built and
+ * every support level: the roof level there; the empty level directly above when it is the only
+ * one; else none yet (`level` null). Reads only, so a panel can ask on every store change.
  */
-export function planRoofLevel(nodes: Nodes, storeyId: string, roofHeight: number): RoofLevelPlan {
-  const storey = nodes[storeyId]
-  if (storey?.type !== 'level') throw Error(`${storeyId} is not a level`)
+export function roofLevelAbove(
+  nodes: Nodes,
+  storeyId: string,
+): { kind: 'storey'; level: LevelNode } | { kind: 'roof'; level: LevelNode | null } {
   const above = stackOf(nodes, storeyId, 'above')
   const isPlain = (level: LevelNode) => !servesAsRoofLevel(nodes, level) && !isSupportLevel(level)
   // The roof stands on the storey directly above, an empty one still to be built included.
   if (above.some((level) => isPlain(level) && level.children.length > 0))
-    return { kind: 'storey', levelId: above.find(isPlain)!.id }
+    return { kind: 'storey', level: above.find(isPlain)! }
   const top = above.filter((level) => !servesAsRoofLevel(nodes, level)).at(-1)
   const roofLevel = above.find(
     (level) => servesAsRoofLevel(nodes, level) && (!top || level.level > top.level),
   )
-  if (roofLevel) return roofLevelPlan(roofLevel)
-  if (above.length === 1 && isPlain(above[0]!)) return roofLevelPlan(above[0]!)
+  if (roofLevel) return { kind: 'roof', level: roofLevel }
+  if (above.length === 1 && isPlain(above[0]!)) return { kind: 'roof', level: above[0]! }
+  return { kind: 'roof', level: null }
+}
+
+/**
+ * Where a roof carried by `storeyId`'s walls lives (`roofLevelAbove`): the storey directly above,
+ * or the building's roof level, declared if it was not, else a new "Roof" level `roofHeight` tall
+ * (the roof's rise over its eaves) on top. Pure: the caller writes the plan in the same step as the
+ * roof.
+ */
+export function planRoofLevel(nodes: Nodes, storeyId: string, roofHeight: number): RoofLevelPlan {
+  const storey = nodes[storeyId]
+  if (storey?.type !== 'level') throw Error(`${storeyId} is not a level`)
+  const target = roofLevelAbove(nodes, storeyId)
+  if (target.kind === 'storey')
+    return {
+      kind: 'storey',
+      levelId: target.level.id,
+      storeyOffset: storeyOffsetTo(nodes, storeyId, target.level.id),
+    }
+  if (target.level) return roofLevelPlan(nodes, storeyId, target.level)
+  const top = stackOf(nodes, storeyId, 'above')
+    .filter((level) => !servesAsRoofLevel(nodes, level))
+    .at(-1)
   const level = LevelNode.parse({
     name: 'Roof',
     parentId: storey.parentId,
@@ -133,7 +171,13 @@ export function planRoofLevel(nodes: Nodes, storeyId: string, roofHeight: number
     children: [],
     metadata: { role: 'roof' },
   })
-  return { kind: 'roof', levelId: level.id, create: level, update: [] }
+  return {
+    kind: 'roof',
+    levelId: level.id,
+    storeyOffset: storeyOffsetTo({ ...nodes, [level.id]: level }, storeyId, level.id),
+    create: level,
+    update: [],
+  }
 }
 
 /**

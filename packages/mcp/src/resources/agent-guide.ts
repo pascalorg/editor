@@ -49,7 +49,7 @@ export const AGENT_GUIDE = [
   '- For complete homes, create exterior shell, interior rooms, openings, roof, furniture, then landscaping.',
   '- For doors/windows, use `t` or `position` from 0 to 1 along the wall unless a tool explicitly says otherwise.',
   '- X/Z are floor-plan axes and Y is vertical; dimensions are meters.',
-  "- Use `create_roof` for roofs, once the storeys and their exterior walls stand. A building's roof goes on its roof level, the level directly above the top storey (named Roof, made when there is none), so exploded and solo level views lift it off the plan; a roof level is not an occupied story. `add_level` puts a new storey under it. A storey takes one roof: `roof_exists` names the one there.",
+  "- Use `create_roof` for roofs, once the storeys and their exterior walls stand. A building's roof goes on its roof level, the level directly above the top storey (named Roof, made when there is none), so exploded and solo level views lift it off the plan; a roof level is not an occupied story. `add_level` puts a new storey under it. A storey takes one roof: `roof_exists` names the one there. A project built before the roof level holds its roof on the storey (`verify_scene`'s `roof_mixed_in_storey`): `move_roofs_to_roof_level` moves it there as it stands; never delete and rebuild it.",
   '',
   '## Stairs',
   '',

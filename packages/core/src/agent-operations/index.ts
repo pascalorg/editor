@@ -16,6 +16,7 @@ import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
 import { mergeWindowsOperation } from './merge-windows'
+import { moveRoofsToRoofLevel } from './move-roofs'
 import { paint } from './paint'
 import { placeInRoom } from './place-in-room'
 import { placeItems } from './place-items'
@@ -56,6 +57,7 @@ export * from './list-levels'
 export * from './material-preset'
 export * from './material-refs'
 export * from './merge-windows'
+export * from './move-roofs'
 export * from './node-patch'
 export * from './paint'
 export * from './place-items'
@@ -94,6 +96,7 @@ const SINGLE_OPERATIONS = {
   create_stair: createStair,
   add_column: addColumn,
   create_roof: createRoof,
+  move_roofs_to_roof_level: moveRoofsToRoofLevel,
   place_items: placeItems,
   delete_node: deleteNode,
   find_by_type: findByType,
