@@ -273,7 +273,7 @@ export default function SolarPanelPanel() {
           <ActionButton disabled={!segment} label="Auto-fit to roof" onClick={handleAutoFit} />
         </ActionGroup>
         {autoFitMessage ? (
-          <p className="px-1 text-amber-600 dark:text-amber-400 text-xs">{autoFitMessage}</p>
+          <p className="px-1 text-amber-700 dark:text-amber-400 text-xs">{autoFitMessage}</p>
         ) : null}
       </PanelSection>
 

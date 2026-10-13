@@ -146,8 +146,8 @@ export function MeasurementControl() {
           className={cn(
             'rounded-r-none p-0 text-muted-foreground',
             isControlActive
-              ? 'bg-cyan-500/20 text-cyan-600 hover:bg-cyan-500/20 dark:text-cyan-400 dark:hover:text-accent-foreground'
-              : 'hover:bg-cyan-500/15 hover:text-cyan-600 dark:hover:text-cyan-400',
+              ? 'bg-cyan-500/20 text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-400 dark:hover:text-accent-foreground'
+              : 'hover:bg-cyan-500/15 hover:text-cyan-700 dark:hover:text-cyan-400',
           )}
           label={`Measure: ${selectedLabel}`}
           onClick={handlePrimaryClick}
@@ -166,8 +166,8 @@ export function MeasurementControl() {
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
               isOpen
-                ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400'
-                : 'hover:bg-cyan-500/10 hover:text-cyan-600 dark:hover:text-cyan-400',
+                ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400'
+                : 'hover:bg-cyan-500/10 hover:text-cyan-700 dark:hover:text-cyan-400',
             )}
             type="button"
           >

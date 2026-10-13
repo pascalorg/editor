@@ -200,7 +200,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
           className={cn(
             'flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-colors',
             isEditing
-              ? 'bg-orange-500/20 text-orange-600 dark:text-orange-400'
+              ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400'
               : 'text-muted-foreground hover:bg-accent',
           )}
           onClick={handleToggleEdit}

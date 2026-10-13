@@ -395,7 +395,7 @@ export function PanelWrapper({
                   className={cn(
                     'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
                     isActive
-                      ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/30'
+                      ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/30'
                       : 'bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                   )}
                   key={extension.id}
