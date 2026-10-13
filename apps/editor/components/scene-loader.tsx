@@ -128,7 +128,8 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   // The editor follows its host's `.dark` class, and this app keeps the editor
-  // dark. On <body>, so the menus and dialogs it portals there are dark too.
+  // dark: the page root carries it from the first paint, and <body> for the
+  // menus and dialogs the editor portals there.
   useEffect(() => {
     document.body.classList.add('dark')
     return () => document.body.classList.remove('dark')
@@ -266,7 +267,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   )
 
   return (
-    <div className="relative h-screen w-screen">
+    <div className="dark relative h-screen w-screen">
       {conflict && (
         <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
           <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
