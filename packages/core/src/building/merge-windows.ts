@@ -1,4 +1,4 @@
-import { refuse } from '../agent-tools/refusal'
+import { type AgentRefusal, isAgentRefusal, refuse } from '../agent-tools/refusal'
 import {
   CORNER_REACH_M,
   cornerAngle,
@@ -262,18 +262,20 @@ function mergeAtCorner(nodes: Nodes, first: Side, second: Side): WindowMerge {
 
 /**
  * What the Merge windows button does for a selection: nothing unless exactly two windows are
- * selected; otherwise whether they can join, and if not, why, in the refusal's own words.
+ * selected; otherwise whether they can join, and if not, the refusal, whose code and details the
+ * panel words for a person (its message is written for agents, with node ids and metres).
  */
 export function windowMergeOffer(
   nodes: Nodes,
   selectedIds: readonly string[],
-): { reason: string | null } | null {
+): { refusal: AgentRefusal | null } | null {
   if (selectedIds.length !== 2) return null
   if (selectedIds.some((id) => nodes[id]?.type !== 'window')) return null
   try {
     mergeWindows(nodes, selectedIds[0]!, selectedIds[1]!)
-    return { reason: null }
+    return { refusal: null }
   } catch (error) {
-    return { reason: error instanceof Error ? error.message : 'These windows cannot be merged.' }
+    if (isAgentRefusal(error)) return { refusal: error }
+    throw error
   }
 }
