@@ -26,6 +26,7 @@ import {
   DragBoundingBox,
   getFloorStackPreviewPosition,
   isMagneticSnapActive,
+  isTypingTarget,
   resolvePlanarCursorPosition,
   stripPlacementMetadataFlags,
   triggerSFX,
@@ -474,9 +475,7 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0
