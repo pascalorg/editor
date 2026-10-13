@@ -31,11 +31,8 @@ import { RoomControls2D, RoomControls3D } from './room-controls'
  * as a room, or the one a chat chip points at) shows the room's outline, never
  * a tinted volume. With zones hidden, a pointed zone has nothing else to light.
  */
-function useZoneOutline() {
+function useZoneOutline(pointedId: string | undefined) {
   const hoveredId = useViewer((state) => state.hoveredId)
-  const pointedId = useViewer((state) =>
-    state.pointedIds.length === 1 ? state.pointedIds[0] : null,
-  )
   const selectedId = useViewer(
     (state) =>
       state.selection.zoneId ??
@@ -57,13 +54,20 @@ function useZoneOutline() {
 
 function useRoomHighlight() {
   const room = useHighlightedRoom()
-  const zoneOutline = useZoneOutline()
+  const pointedId = useViewer((state) =>
+    state.pointedIds.length === 1 ? state.pointedIds[0] : undefined,
+  )
+  const zoneOutline = useZoneOutline(pointedId)
   const visible = useInteractionScope(
     (state) => resolveOverlayPolicy(state.scope).conflictingControls === 'shown',
   )
   // No phase gate: site never hovers or keeps a room (`roomPickingEnabled`).
   const enabled = useEditor((state) => state.mode === 'select')
-  return enabled && visible ? (room ?? zoneOutline) : null
+  if (!(enabled && visible)) return null
+  // A zone a chat points at shows over a kept room: it is what the person is reaching for.
+  if (zoneOutline && zoneOutline.zoneId === pointedId && room?.zoneId !== pointedId)
+    return zoneOutline
+  return room ?? zoneOutline
 }
 
 const noRaycast = () => {}
