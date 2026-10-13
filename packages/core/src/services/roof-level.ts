@@ -33,14 +33,14 @@ const roofsOn = (nodes: Nodes, level: LevelNode) =>
   childrenOf(nodes, level).filter((child): child is RoofNode => child.type === 'roof')
 
 /**
- * A level that is its building's roof level: declared, or holding roofs and nothing a storey holds
- * (a roof level written before levels declared it).
+ * A level that is its building's roof level: declared, or holding roofs (a roof level written
+ * before levels declared it), and holding nothing a storey holds: a declared level someone walled
+ * is a storey.
  */
 function servesAsRoofLevel(nodes: Nodes, level: LevelNode): boolean {
-  if (isRoofLevel(level)) return true
   const children = childrenOf(nodes, level)
   return (
-    children.some((child) => child.type === 'roof') &&
+    (isRoofLevel(level) || children.some((child) => child.type === 'roof')) &&
     !children.some((child) => STOREY_CONTENT.has(child.type))
   )
 }
@@ -62,15 +62,20 @@ export type RoofLevelPlan =
 /**
  * Where a roof carried by `storeyId`'s walls lives. Directly above the storey stands either a
  * storey (the roof covers part of the storey below it: a porch, a lower wing) or the building's
- * roof level: the level there when it serves as one, or is empty, declared if it was not; else a
- * new "Roof" level `roofHeight` tall (the roof's rise over its eaves). Pure: the caller writes the
- * plan in the same step as the roof.
+ * roof level: the level there when it serves as one, or is empty and the top of the stack, declared
+ * if it was not; else a new "Roof" level `roofHeight` tall (the roof's rise over its eaves). An
+ * empty level with another above it is a storey not built yet, never a roof level under a floor.
+ * Pure: the caller writes the plan in the same step as the roof.
  */
 export function planRoofLevel(nodes: Nodes, storeyId: string, roofHeight: number): RoofLevelPlan {
   const storey = nodes[storeyId]
   if (storey?.type !== 'level') throw Error(`${storeyId} is not a level`)
   const above = levelAbove(nodes, storeyId)
-  if (above && !servesAsRoofLevel(nodes, above) && above.children.length > 0)
+  if (
+    above &&
+    !servesAsRoofLevel(nodes, above) &&
+    (above.children.length > 0 || levelAbove(nodes, above.id))
+  )
     return { kind: 'storey', levelId: above.id }
   if (above)
     return {

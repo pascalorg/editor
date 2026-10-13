@@ -90,22 +90,27 @@ function coveredStorey(
   )
     return { storey: requested }
   const viewed = context.activeLevelId ? nodes[context.activeLevelId] : undefined
-  const candidates = (
-    requested
-      ? buildingLevels(nodes, requested)
-      : viewed?.type === 'level'
-        ? buildingLevels(nodes, viewed)
-        : levelsOf(nodes)
-  ).filter((candidate) => isStorey(nodes, candidate))
+  const scope = requested ?? (viewed?.type === 'level' ? viewed : null)
+  const candidates = (scope ? buildingLevels(nodes, scope) : levelsOf(nodes)).filter((candidate) =>
+    isStorey(nodes, candidate),
+  )
+  const eligible = rectangle
+    ? candidates.filter((candidate) => candidate.children.length > 0)
+    : candidates.filter((candidate) => footprintPolygons(nodes, candidate.id).length > 0)
+  // With no level in view (the MCP), the last level by ordinal would pick a building by its id.
+  const buildingIds = [...new Set(eligible.map((candidate) => candidate.parentId))]
+  if (!scope && buildingIds.length > 1)
+    refuse(
+      'building_required',
+      `The scene has ${buildingIds.length} buildings to roof; pass a level of the one to roof: ${buildingIds.join(', ')}.`,
+      { buildingIds },
+    )
   if (rectangle) {
-    const top =
-      candidates.filter((candidate) => candidate.children.length > 0).at(-1) ?? candidates.at(-1)
+    const top = eligible.at(-1) ?? candidates.at(-1)
     if (!top) refuse('no_levels', 'The scene has no storey to roof yet.')
     return { storey: top }
   }
-  const storey = candidates
-    .filter((candidate) => footprintPolygons(nodes, candidate.id).length > 0)
-    .at(-1)
+  const storey = eligible.at(-1)
   if (!storey)
     refuse(
       'no_rooms',
@@ -214,7 +219,7 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
     const above = nodes[plan.levelId] as Level
     refuse(
       'storey_above',
-      `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${above.name ?? above.id} (${above.id}): a roof caps the top storey. Pass the top storey (with width and depth when it has no rooms).`,
+      `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${above.name ?? above.id} (${above.id}): create_roof caps the top storey, and its roof covers the floors under it. A roof over a lower wing or a porch of ${storey.name ?? storey.id} stands on its walls, below the top storey's: do not roof it from the top storey; the person draws it with the Roof tool on ${storey.name ?? storey.id}.`,
       { levelId: storey.id, storeyAboveId: above.id },
     )
   }

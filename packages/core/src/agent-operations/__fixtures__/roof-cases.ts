@@ -4,6 +4,7 @@ import {
   LevelNode,
   RoofNode,
   RoofSegmentNode,
+  SlabNode,
   WallNode,
   ZoneNode,
 } from '../../schema'
@@ -169,6 +170,93 @@ export const CREATE_ROOF_CASES: AgentToolCase[] = [
     scene: house({ storeys: 2 }),
     input: { levelId: 'level_g' },
     expect: { refusal: 'storey_above', mentions: ['level_1'] },
+  },
+  {
+    name: 'an empty level with a storey above it is not made a roof level under that storey',
+    tool: 'create_roof',
+    scene: () => {
+      const nodes = house({ storeys: 2 })().nodes as Record<string, AnyNode>
+      const building = nodes.building_r as BuildingNode
+      const empty = LevelNode.parse({ id: 'level_e', parentId: 'building_r', level: 1 })
+      const upper = nodes.level_1 as LevelNode
+      return graph(
+        { ...building, children: ['level_g', 'level_e', 'level_1'] },
+        ...Object.values(nodes).filter((node) => node.type !== 'building' && node.id !== 'level_1'),
+        empty,
+        { ...upper, level: 2 },
+      )
+    },
+    input: { levelId: 'level_g' },
+    expect: { refusal: 'storey_above', mentions: ['level_e', 'Roof tool'] },
+  },
+  {
+    name: 'two floor plates that overlap are one footprint, their overlap roofed',
+    tool: 'create_roof',
+    scene: () =>
+      graph(
+        BuildingNode.parse({ id: 'building_r', children: ['level_g'] }),
+        LevelNode.parse({
+          id: 'level_g',
+          parentId: 'building_r',
+          level: 0,
+          height: 2.5,
+          children: ['slab_west', 'slab_east'],
+        }),
+        SlabNode.parse({
+          id: 'slab_west',
+          parentId: 'level_g',
+          polygon: [
+            [0, 0],
+            [8, 0],
+            [8, 6],
+            [0, 6],
+          ],
+        }),
+        SlabNode.parse({
+          id: 'slab_east',
+          parentId: 'level_g',
+          polygon: [
+            [4, 0],
+            [12, 0],
+            [12, 6],
+            [4, 6],
+          ],
+        }),
+      ),
+    input: {},
+    expect: {
+      result: { coveredLevelId: 'level_g', roofType: 'gable' },
+      check: (result, nodes) => {
+        const segments = (result.segmentIds as string[]).map((id) => nodes[id])
+        const [segment] = segments
+        return segments.length === 1 &&
+          segment?.type === 'roof-segment' &&
+          segment.width === 12 &&
+          segment.depth === 6
+          ? []
+          : [`expected one 12 × 6 m segment, got ${JSON.stringify(segments)}`]
+      },
+    },
+  },
+  {
+    name: 'no level named nor in view on a site of two buildings: which one is asked',
+    tool: 'create_roof',
+    scene: () => {
+      const one = house()()
+      const other = BuildingNode.parse({ id: 'building_o', children: ['level_o'] })
+      const room = ZoneNode.parse({ id: 'zone_o', parentId: 'level_o', name: 'Shed', polygon: ROOM })
+      const level = LevelNode.parse({
+        id: 'level_o',
+        parentId: other.id,
+        level: 0,
+        height: 2.5,
+        children: [room.id],
+      })
+      return graph(...(Object.values(one.nodes) as AnyNode[]), other, level, room)
+    },
+    input: {},
+    context: { activeLevelId: null },
+    expect: { refusal: 'building_required', mentions: ['building_r', 'building_o'] },
   },
   {
     name: 'a roof level named stands for the storey under it',
