@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
+  getActiveRoofHeight,
   LevelNode,
   RoofNode,
   RoofSegmentNode,
@@ -410,6 +411,13 @@ describe('planRoofsOffStorey', () => {
     // still following the walls, and they seat it where it stands
     expect(roof.support.kind).toBe('walls')
     expect(resolveRoofElevation(roof, moved)).toBeCloseTo(roof.position[1], 6)
+    // the new level is as tall as the roof rises over its floor: the 0.2 m the walls stand above
+    // the storey, then the roof's own rise, as create_roof sizes one
+    const rise = getActiveRoofHeight(moved.rseg_main as RoofSegmentNode)
+    expect((moved[move.plan.levelId] as LevelNode).height).toBeCloseTo(0.2 + rise, 6)
+    expect(move.plan.create).toMatchObject({
+      height: (moved[move.plan.levelId] as LevelNode).height,
+    })
   })
 
   test('a roof at a height of its own keeps it, measured from the roof level', () => {

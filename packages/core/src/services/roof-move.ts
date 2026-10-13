@@ -75,29 +75,45 @@ export function planRoofsOffStorey(nodes: Nodes, storeyId: string): RoofMove | n
       (child): child is RoofNode => child?.type === 'roof' && isRoofOnStoreyWalls(nodes, child.id),
     )
   if (!roofs.length) return null
-  const rise = Math.max(
-    0,
-    ...roofs
-      .flatMap((roof) => roof.children.map((id) => nodes[id]))
+  const segmentsOf = (roof: RoofNode) =>
+    roof.children
+      .map((id) => nodes[id])
       .filter((child): child is RoofSegmentNode => child?.type === 'roof-segment')
-      .map((segment) => (segment.wallHeight ?? 0) + getActiveRoofHeight(segment)),
-  )
-  const plan = planRoofLevel(nodes, storeyId, rise)
-  // Updates land before creates (in the store too): a new level lists its roofs from the start.
+  const segmentRise = (segment: RoofSegmentNode) =>
+    (segment.wallHeight ?? 0) + getActiveRoofHeight(segment)
+  const rise = Math.max(0, ...roofs.flatMap(segmentsOf).map(segmentRise))
+  const planned = planRoofLevel(nodes, storeyId, rise)
+  const seats = roofs.map((roof) => roof.position[1] + planned.storeyOffset)
+  // A roof level made for them is as tall as they rise over its floor, the eaves' lift over the
+  // storey included, as create_roof makes one; it lists its roofs from the start (updates land
+  // before creates, in the store too).
+  const plan: RoofLevelPlan =
+    planned.kind === 'roof' && planned.create
+      ? {
+          ...planned,
+          create: {
+            ...planned.create,
+            children: roofs.map((roof) => roof.id),
+            height: Math.max(
+              0.2,
+              ...roofs.flatMap((roof, index) =>
+                segmentsOf(roof).map(
+                  (segment) => (seats[index] ?? 0) + segment.position[1] + segmentRise(segment),
+                ),
+              ),
+            ),
+          },
+        }
+      : planned
   const create =
     plan.kind === 'roof' && plan.create
-      ? [
-          {
-            node: { ...plan.create, children: roofs.map((roof) => roof.id) } as AnyNode,
-            parentId: plan.create.parentId ?? undefined,
-          },
-        ]
+      ? [{ node: plan.create as AnyNode, parentId: plan.create.parentId ?? undefined }]
       : []
-  const moves = roofs.map((roof) => {
-    const [x, y, z] = roof.position
+  const moves = roofs.map((roof, index) => {
+    const [x, , z] = roof.position
     const data: Partial<RoofNode> = {
       parentId: plan.levelId,
-      position: [x, y + plan.storeyOffset, z],
+      position: [x, seats[index] ?? roof.position[1], z],
     }
     return { id: roof.id, data }
   })
