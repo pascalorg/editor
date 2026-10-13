@@ -15,6 +15,8 @@ import {
   type SceneCommit,
   subscribeSceneCommits,
   useScene,
+  WallNode,
+  WindowNode,
 } from '@pascal-app/core'
 import { z } from 'zod'
 import {
@@ -221,6 +223,48 @@ describe('commitFreshPlacementSubtree', () => {
     expect(useScene.getState().nodes[finalId]).toBeUndefined()
     expect(useScene.getState().nodes[SHELF_ID]).toBeUndefined()
     expect((useScene.getState().nodes[LEVEL_ID] as { children: AnyNodeId[] }).children).toEqual([])
+  })
+
+  test('a window joined at a corner while in hand stays joined: its partner names the committed window', () => {
+    const wall = WallNode.parse({ id: 'wall_a', parentId: LEVEL_ID, start: [4, 0], end: [0, 0] })
+    const other = WallNode.parse({ id: 'wall_b', parentId: LEVEL_ID, start: [0, 0], end: [0, 3] })
+    const draft = WindowNode.parse({
+      id: 'window_draft',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [3.5, 1.5, 0],
+      width: 1,
+      visible: false,
+      metadata: { isNew: true },
+      corner: { end: 'end', partnerId: 'window_partner', post: 'none' },
+    })
+    const partner = WindowNode.parse({
+      id: 'window_partner',
+      parentId: other.id,
+      wallId: other.id,
+      position: [0.5, 1.5, 0],
+      width: 1,
+      corner: { end: 'start', partnerId: draft.id, post: 'none' },
+    })
+    useScene.setState({
+      nodes: {
+        [LEVEL_ID]: level([wall.id as AnyNodeId, other.id as AnyNodeId]),
+        [wall.id]: { ...wall, children: [draft.id] } as AnyNode,
+        [other.id]: { ...other, children: [partner.id] } as AnyNode,
+        [draft.id]: draft as AnyNode,
+        [partner.id]: partner as AnyNode,
+      },
+      rootNodeIds: [LEVEL_ID],
+      collections: {},
+      dirtyNodes: new Set(),
+    } as never)
+
+    const committedId = commitFreshPlacementSubtree(draft.id as AnyNodeId, { visible: true })
+
+    const nodes = useScene.getState().nodes as Record<string, AnyNode>
+    expect(committedId).toBeTruthy()
+    expect((nodes[committedId!] as WindowNode).corner?.partnerId).toBe(partner.id)
+    expect((nodes[partner.id] as WindowNode).corner?.partnerId).toBe(committedId!)
   })
 
   test("never records inside another owner's pause", () => {
