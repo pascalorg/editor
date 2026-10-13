@@ -1,10 +1,14 @@
 import { addObjectTool, getSourceTool } from './add-object'
 import { searchAssetsTool } from './assets'
+import { runBatchTool } from './batch'
+import { setCheckpointTool } from './checkpoints'
 import { clearSceneTool } from './clear-scene'
 import { editCollectionTool, listCollectionsTool } from './collections'
 import { addColumnTool } from './columns'
 import type { AgentToolContract } from './contract'
+import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
+import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
 import {
@@ -15,9 +19,15 @@ import {
   getZonesTool,
   listLevelsTool,
 } from './levels'
+import { mergeWindowsTool } from './merge-windows'
 import { deleteNodeTool, getNodeTool } from './nodes'
+import { paintTool } from './paint'
+import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
+import { createRoofTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
+import { searchMaterialsTool } from './search-materials'
+import { getSiteTool, placeBuildingTool } from './site'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
@@ -31,17 +41,24 @@ export * from './clear-scene'
 export * from './collections'
 export * from './columns'
 export * from './contract'
+export * from './corner-window'
 export * from './create-room'
+export * from './fences'
 export * from './find-by-type'
 export * from './furnish-room'
 export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
+export * from './merge-windows'
 export { NodeId } from './node-id'
 export * from './nodes'
+export * from './paint'
 export * from './place-items'
 export * from './refusal'
+export * from './roofs'
 export * from './room-structure'
+export * from './search-materials'
+export * from './site'
 export * from './stairs'
 export * from './verify-scene'
 export * from './view-scene'
@@ -68,10 +85,15 @@ export const AGENT_TOOL_CONTRACTS = [
   getZonesTool,
   duplicateLevelTool,
   verifySceneTool,
+  setCheckpointTool,
   addWallTool,
+  addFenceTool,
+  addCornerWindowTool,
+  mergeWindowsTool,
   addLevelTool,
   placeItemsTool,
   createStairTool,
+  createRoofTool,
   deleteNodeTool,
   addObjectTool,
   getSourceTool,
@@ -81,6 +103,18 @@ export const AGENT_TOOL_CONTRACTS = [
   clearSceneTool,
   createRoomTool,
   furnishRoomTool,
+  paintTool,
+  placeInRoomTool,
   searchAssetsTool,
+  searchMaterialsTool,
+  getSiteTool,
+  placeBuildingTool,
   ...ROOM_TOOL_CONTRACTS,
+  runBatchTool,
 ] as const satisfies readonly AgentToolContract[]
+
+export { BATCHABLE_TOOLS, runBatchTool } from './batch'
+export { setCheckpointTool } from './checkpoints'
+export { straightenFacadePhotoTool } from './photo-elevation'
+export { placeInRoomTool } from './place-in-room'
+export { createRoofTool } from './roofs'

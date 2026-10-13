@@ -34,7 +34,7 @@ export function SelectControl<T extends string>({
         <button
           aria-label={label}
           className={cn(
-            'group flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm transition-colors hover:bg-[#3e3e3e] data-[state=open]:bg-[#3e3e3e]',
+            'group flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] data-[state=open]:bg-black/8 dark:data-[state=open]:bg-[#3e3e3e]',
             className,
           )}
           type="button"

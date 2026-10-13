@@ -30,7 +30,7 @@ export const getWallsTool = {
   name: 'get_walls',
   title: 'Get walls',
   description:
-    'Get the walls of a level: start and end in metres, length, stored and resolved height, thickness, and their doors and windows.',
+    'Get the walls of a level: start and end in metres, length, stored and resolved height, thickness, and their doors and windows. wallFaceChains gives base-chain provenance for geometric faces a (left of start → end) and b (right): ref (authored face slot), legacy (inline spec), or default (declared fallback ref). These are not final rendered finishes: room intent, face paint regions, exterior assembly cladding and reference availability can change appearance. A chosen white or default-matching ref is legitimate; fallback alone is not a defect or a requirement to paint.',
   input: levelTarget,
 }
 
@@ -38,7 +38,7 @@ export const getZonesTool = {
   name: 'get_zones',
   title: 'Get zones',
   description:
-    'Get the zones (rooms) of a level: name, colour, polygon and holes in metres, area in m² (holes taken out), bounding size, and floor_choices: the floor plates the room can take (key, plateId, name, current; drawn and mezzanine flags). A room shares its floor plate with the rooms next to it unless detached.',
+    'Get the zones (rooms) of a level: name, colour, polygon and holes in metres, area in m² (holes taken out), bounding size, and floor_choices: the floor plates the room can take (key, plateId, name, current; drawn and mezzanine flags). A room shares its floor plate with the rooms next to it unless detached. Persisted authored wall intent is wallMaterial (string, or null when absent) and wallOverrides (records of wallId, geometric face a or b, and finish; [] when absent). This is not a final rendered finish or visual verification: local overrides and face paint can take precedence, and absent room intent is not a defect or a requirement to paint.',
   input: levelTarget,
 }
 
@@ -46,7 +46,7 @@ export const addLevelTool = {
   name: 'add_level',
   title: 'Add level',
   description:
-    'Add an empty level to a building, as the editor does: above its highest level, or below its lowest for a basement. On a scene with no building (a new or cleared scene), it starts the scene as the editor does: a site, a building and its ground level. To copy a floor with its content, use duplicate_level.',
+    "Add an empty level to a building, as the editor does: above its top storey, under the building's roof level, which moves up one so the roof stays on top; or below its lowest level for a basement. On a scene with no building (a new or cleared scene), it starts the scene as the editor does: a site, a building and its ground level. To copy a floor with its content, use duplicate_level.",
   input: {
     buildingId: NodeId.optional().describe(
       "The building. Default: the building of the floor the person is viewing, else the scene's only building.",
@@ -54,7 +54,9 @@ export const addLevelTool = {
     position: z
       .enum(['above', 'below'])
       .optional()
-      .describe('above (default): over the highest level; below: under the lowest, a basement.'),
+      .describe(
+        'above (default): over the top storey, under the roof level; below: under the lowest, a basement.',
+      ),
     name: z
       .string()
       .min(1)

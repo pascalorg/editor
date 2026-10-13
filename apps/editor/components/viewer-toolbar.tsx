@@ -541,7 +541,7 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SwatchBook className="h-4 w-4" />
-            <span>Theme</span>
+            <span>Scene theme</span>
             <span className="ml-auto truncate text-muted-foreground text-xs">
               {activeTheme.name}
             </span>
@@ -649,7 +649,7 @@ function VRButton({
   )
 }
 
-export function CommunityViewerToolbarLeft() {
+export function EditorViewerToolbarLeft() {
   return (
     <>
       <CollapseSidebarButton />
@@ -657,7 +657,7 @@ export function CommunityViewerToolbarLeft() {
   )
 }
 
-export function CommunityViewerToolbarRight({
+export function EditorViewerToolbarRight({
   onVRToggle,
   vrButton,
   vrActive = false,

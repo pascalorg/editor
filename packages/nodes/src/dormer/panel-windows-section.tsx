@@ -23,11 +23,11 @@ export function DormerWindowsSection({
         <div className="flex flex-col gap-1">
           {windows.map((window, index) => (
             <div
-              className="flex items-center gap-1 rounded-lg border border-border/50 bg-[#2C2C2E] p-1"
+              className="flex items-center gap-1 rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] p-1"
               key={window.id}
             >
               <button
-                className="min-w-0 flex-1 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[#3e3e3e]"
+                className="min-w-0 flex-1 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 onClick={() => onEdit(window)}
                 type="button"
               >
@@ -41,7 +41,7 @@ export function DormerWindowsSection({
               </button>
               <button
                 aria-label={`Edit ${window.name || `Window ${index + 1}`}`}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={() => onEdit(window)}
                 title="Edit window"
                 type="button"
@@ -50,7 +50,7 @@ export function DormerWindowsSection({
               </button>
               <button
                 aria-label={`Move ${window.name || `Window ${index + 1}`}`}
-                className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-muted-foreground text-xs transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-muted-foreground text-xs transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={() => onMove(window)}
                 title="Move window"
                 type="button"

@@ -22,13 +22,13 @@
  * - `northRotation` is 0: the parcel frame is x east / z south, so plan up
  *   is true north.
  */
-import type { SiteNode, SiteSetbacks } from '@pascal-app/core'
+import { edgeLength, type SiteNode, type SiteSetbacks } from '@pascal-app/core'
 import {
   detectFrontEdgeFromRoads,
   type FrontEdgeMatch,
   type RoadCenterline,
 } from '../floorplan/site-plan/front-edge'
-import { edgeLength, METRES_PER_FOOT, type Pt } from '../floorplan/site-plan/geometry'
+import { METRES_PER_FOOT, type Pt } from '../floorplan/site-plan/geometry'
 import { sameStreet } from '../floorplan/site-plan/street-name'
 import { cleanLotRing, describeRingCleanup } from './clean-ring'
 import { detectFrontEdgeFromFrontage, type FrontageMatch } from './dossier'

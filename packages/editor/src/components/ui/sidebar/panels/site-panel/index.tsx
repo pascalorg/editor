@@ -2,10 +2,9 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
-  DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GuideNode,
-  LevelNode,
+  type LevelNode,
   type ScanNode,
   type SiteNode,
   useScene,
@@ -55,6 +54,7 @@ import {
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
+import { addStoreyOnTop } from './../../../../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import {
   formatAreaLabel,
@@ -200,7 +200,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
           className={cn(
             'flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-colors',
             isEditing
-              ? 'bg-orange-500/20 text-orange-400'
+              ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400'
               : 'text-muted-foreground hover:bg-accent',
           )}
           onClick={handleToggleEdit}
@@ -256,7 +256,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
                   className={cn(
                     'flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded',
                     points.length > 3
-                      ? 'text-muted-foreground hover:bg-red-500/20 hover:text-red-400'
+                      ? 'text-muted-foreground hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-400'
                       : 'cursor-not-allowed text-muted-foreground/30',
                   )}
                   disabled={points.length <= 3}
@@ -1014,7 +1014,6 @@ const LevelsSection = memo(function LevelsSection({
   onUploadAsset?: (projectId: string, levelId: string, file: File, type: 'scan' | 'guide') => void
   onDeleteAsset?: (projectId: string, url: string) => void
 } = {}) {
-  const createNode = useScene((state) => state.createNode)
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
@@ -1037,13 +1036,7 @@ const LevelsSection = memo(function LevelsSection({
   if (!building) return null
 
   const handleAddLevel = () => {
-    const newLevel = LevelNode.parse({
-      level: levels.length,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: building.id,
-    })
-    createNode(newLevel, building.id)
+    const newLevel = addStoreyOnTop(building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
   }
 

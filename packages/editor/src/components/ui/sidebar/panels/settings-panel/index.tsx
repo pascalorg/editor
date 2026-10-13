@@ -26,9 +26,12 @@ import {
   Layers,
   ListTree,
   Map as MapIcon,
+  Monitor,
+  Moon,
   Save,
   ChevronDown,
   Send,
+  Sun,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -55,6 +58,7 @@ import {
   sendGlbToLocalApp,
   waitForLocalImport,
 } from '../../../../../lib/send-to-app'
+import { SegmentedControl } from './../../../../../components/ui/controls/segmented-control'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -66,12 +70,14 @@ import { Input } from './../../../../../components/ui/primitives/input'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import { cn } from './../../../../../lib/utils'
 import { refusedObjectsNotice } from './../../../../../components/editor/group-actions'
+import { addStoreyOnTop } from './../../../../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { bringBuildArtifacts } from './../../../../../lib/scene-clipboard'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
 import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
 import { AudioSettingsDialog } from './audio-settings-dialog'
+import { ConstructionAnimationSetting } from './construction-animation-setting'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
 import { PrintExportButton } from './print-export-button'
@@ -275,7 +281,8 @@ function SettingsSubheading({ children }: { children: ReactNode }) {
   return <h4 className="font-medium text-muted-foreground text-xs">{children}</h4>
 }
 
-function SettingsSwitchRow({
+/** One on/off preference: a label, a line on what it does, a switch. Hosts use it for their rows. */
+export function SettingsSwitchRow({
   checked,
   description,
   label,
@@ -300,6 +307,65 @@ function SettingsSwitchRow({
   )
 }
 
+export type InterfaceTheme = 'system' | 'light' | 'dark'
+
+const INTERFACE_THEME_OPTIONS: { label: ReactNode; value: InterfaceTheme }[] = [
+  {
+    label: (
+      <>
+        <Monitor className="size-3.5" />
+        System
+      </>
+    ),
+    value: 'system',
+  },
+  {
+    label: (
+      <>
+        <Sun className="size-3.5" />
+        Light
+      </>
+    ),
+    value: 'light',
+  },
+  {
+    label: (
+      <>
+        <Moon className="size-3.5" />
+        Dark
+      </>
+    ),
+    value: 'dark',
+  },
+]
+
+/**
+ * The interface theme as a System / Light / Dark row. The editor applies no theme itself: its
+ * chrome follows the host's `.dark` class, so a host that owns the setting passes this row.
+ */
+export function InterfaceThemeRow({
+  onChange,
+  value,
+}: {
+  onChange: (value: InterfaceTheme) => void
+  value: InterfaceTheme
+}) {
+  const labelId = useId()
+  return (
+    <div className="flex flex-col gap-2 py-1 @sm:flex-row @sm:items-center @sm:justify-between @sm:gap-4">
+      <div className="min-w-0 space-y-0.5">
+        <p className="font-medium text-sm" id={labelId}>
+          Interface theme
+        </p>
+        <p className="text-muted-foreground text-xs">System follows your device’s appearance.</p>
+      </div>
+      <div aria-labelledby={labelId} className="w-full shrink-0 @sm:w-60" role="group">
+        <SegmentedControl onChange={onChange} options={INTERFACE_THEME_OPTIONS} value={value} />
+      </div>
+    </div>
+  )
+}
+
 export interface SettingsPanelProps {
   /** Merged onto the scrolling root so hosts can restyle padding (e.g. inside a dialog). */
   className?: string
@@ -311,6 +377,11 @@ export interface SettingsPanelProps {
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
   ) => Promise<void>
+  /**
+   * Rows a host adds under Preferences, for its own features and settings (SettingsSwitchRow,
+   * InterfaceThemeRow).
+   */
+  preferences?: ReactNode
 }
 
 function FloorSettingsSection() {
@@ -346,9 +417,13 @@ function FloorSettingsSection() {
 
   if (!building) return null
 
-  const addLevel = (level: number) => {
+  const addFloor = () => {
+    const newLevel = addStoreyOnTop(building.id)
+    setSelection({ buildingId: building.id, levelId: newLevel.id })
+  }
+  const addBasement = () => {
     const newLevel = LevelNode.parse({
-      level,
+      level: Math.min(0, ...levels.map((level) => level.level)) - 1,
       height: DEFAULT_LEVEL_HEIGHT,
       children: [],
       parentId: building.id,
@@ -356,10 +431,6 @@ function FloorSettingsSection() {
     createNode(newLevel, building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
   }
-
-  const addFloor = () =>
-    addLevel(levels.length === 0 ? 0 : Math.max(0, ...levels.map((level) => level.level)) + 1)
-  const addBasement = () => addLevel(Math.min(0, ...levels.map((level) => level.level)) - 1)
 
   return (
     <div className="space-y-3">
@@ -435,6 +506,7 @@ export function SettingsPanel({
   projectName,
   projectVisibility,
   onVisibilityChange,
+  preferences,
 }: SettingsPanelProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const copyResetTimeoutRef = useRef<number | null>(null)
@@ -1184,7 +1256,12 @@ export function SettingsPanel({
           />
         </SettingsSection>
 
-        <SettingsSection description="Sound levels and keyboard shortcuts." title="Preferences">
+        <SettingsSection
+          description="Sound levels, the construction animation and keyboard shortcuts."
+          title="Preferences"
+        >
+          <ConstructionAnimationSetting />
+          {preferences}
           <div className="grid gap-2 @sm:grid-cols-2">
             <AudioSettingsDialog />
             <KeyboardShortcutsDialog />
@@ -1204,7 +1281,7 @@ export function SettingsPanel({
                 </Button>
               </div>
             </DialogTrigger>
-            <DialogContent className="h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
+            <DialogContent className="dark h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
               <DialogTitle className="sr-only">Scene Graph</DialogTitle>
               <div
                 className="flex h-full min-h-0 w-full min-w-0 *:h-full *:w-full *:overflow-y-auto"

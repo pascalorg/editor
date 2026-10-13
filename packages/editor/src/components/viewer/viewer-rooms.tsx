@@ -23,6 +23,7 @@ import { RoomAssemblyMesh } from '../editor/room-highlight'
 import {
   RoomLabelAnchor3D,
   RoomPillChip,
+  RoomPillDetail,
   RoomPillsLayer3D,
   roomLabelEntries,
   roomLabelsVisible,
@@ -108,7 +109,22 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
       {pillsPresent && levelId ? (
         <RoomPillsLayer3D
           entries={entries}
+          // A level of its own: nothing open or placed on one floor carries to the next.
+          key={levelId}
           levelObject={() => source.objectFor(levelId)}
+          renderDetail={(entry) => {
+            const zone = nodes[entry.zoneId]
+            if (zone?.type !== 'zone') return null
+            return (
+              <RoomPillDetail
+                areaM2={entry.area}
+                color={zone.color}
+                name={zoneLabel(zone)}
+                view="3d"
+                zoneId={zone.id}
+              />
+            )
+          }}
           renderLabel={(entry, anchors, elements) => {
             const zone = nodes[entry.zoneId]
             if (zone?.type !== 'zone') return null

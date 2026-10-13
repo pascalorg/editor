@@ -2,7 +2,13 @@
 
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
-import { openSidebarPanel, SIDEBAR_MIN_WIDTH, setSidebarTabIds } from '../../lib/sidebar-panel'
+import {
+  openSidebarPanel,
+  SIDEBAR_MIN_WIDTH,
+  setSidebarTabIds,
+  showSidebarPanel,
+  useShownSidebarPanel,
+} from '../../lib/sidebar-panel'
 import useEditor from '../../store/use-editor'
 
 import { useSidebarStore } from '../ui/primitives/sidebar'
@@ -33,7 +39,7 @@ function LeftColumn({
   const setWidth = useSidebarStore((s) => s.setWidth)
   const isDragging = useSidebarStore((s) => s.isDragging)
   const setIsDragging = useSidebarStore((s) => s.setIsDragging)
-  const activePanel = useEditor((s) => s.activeSidebarPanel)
+  const activePanel = useShownSidebarPanel(tabs)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
 
   const isResizing = useRef(false)
@@ -43,13 +49,6 @@ function LeftColumn({
     setSidebarTabIds(tabs.map((tab) => tab.id))
     return () => setSidebarTabIds([])
   }, [tabs])
-
-  // Ensure active panel is a valid tab
-  useEffect(() => {
-    if (tabs.length > 0 && !tabs.some((t) => t.id === activePanel)) {
-      setActivePanel(tabs[0]!.id)
-    }
-  }, [tabs, activePanel, setActivePanel])
 
   // A stage entry whose surface has left the stage (its view closed from the
   // view bar) hands the rail back to the panel that was open before it.
@@ -103,9 +102,8 @@ function LeftColumn({
     [setIsDragging],
   )
 
-  // Rail click: reopen a collapsed panel, collapse when re-clicking the open
-  // tab, otherwise switch tabs. Reopening clamps below-min persisted widths
-  // up to the minimum so the panel always returns to a usable size.
+  // Rail click: reopen a collapsed panel (at a usable width), collapse when
+  // re-clicking the open tab, otherwise switch tabs.
   const handleRailClick = useCallback(
     (id: string) => {
       const tab = tabs.find((t) => t.id === id)
@@ -117,9 +115,7 @@ function LeftColumn({
         return
       }
       if (isCollapsed) {
-        setIsCollapsed(false)
-        if (width < SIDEBAR_MIN_WIDTH) setWidth(SIDEBAR_MIN_WIDTH)
-        setActivePanel(id)
+        showSidebarPanel(id)
         return
       }
       if (id === activePanel) {
@@ -128,7 +124,7 @@ function LeftColumn({
       }
       setActivePanel(id)
     },
-    [tabs, isCollapsed, width, activePanel, setIsCollapsed, setWidth, setActivePanel],
+    [tabs, isCollapsed, activePanel, setIsCollapsed, setActivePanel],
   )
 
   useEffect(() => {
@@ -336,7 +332,7 @@ export function EditorLayoutV2({
   }
 
   return (
-    <div className="dark flex h-full w-full flex-col bg-sidebar text-foreground">
+    <div className="flex h-full w-full flex-col bg-sidebar text-foreground">
       {/* Top navbar */}
       {navbarSlot}
 

@@ -4,6 +4,7 @@ import {
 } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type { AnyNode, LevelNode, RoofNode, RoofSegmentNode, WallNode } from '../../schema'
+import { coveredStoreyId, servesAsRoofLevel } from '../../services/roof-level'
 import { findLevelBelowId, getLevelElevations } from '../../services/storey'
 import { wallOverlapsSlabFootprint } from '../slab/slab-support'
 import { getWallArcData } from '../wall/wall-curve'
@@ -36,7 +37,14 @@ export function resolveRoofElevation(
   // A roof usually sits on the storey above its walls, but the top floor (or a
   // roof armed from the walls' own level) keeps roof and walls on one level.
   const belowId = findLevelBelowId(levelId, elevations)
-  const candidateWallIds = [levelId, belowId]
+  // A lower wing's roof on the storey above stands on the walls below only: that storey's own
+  // walls along the wing's edge would lift it to their tops.
+  const level = nodes[levelId] as LevelNode
+  const supportLevelIds =
+    belowId && !servesAsRoofLevel(nodes, level) && coveredStoreyId(nodes, roof) === belowId
+      ? [belowId]
+      : [levelId, belowId]
+  const candidateWallIds = supportLevelIds
     .map((id) => (id ? nodes[id] : undefined))
     .filter((node): node is LevelNode => node?.type === 'level')
     .flatMap((level) => level.children)
@@ -97,7 +105,7 @@ export function resolveRoofElevation(
             footprints.some((polygon) => wallOverlapsSlabFootprint(wall, polygon))
           )
         })
-      : ([levelId, belowId]
+      : (supportLevelIds
           .map((id) =>
             id
               ? resolveRoomRoofFootprintOnLevel(id as LevelNode['id'], nodes, [

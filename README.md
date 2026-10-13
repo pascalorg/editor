@@ -62,6 +62,23 @@ troubleshooting.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
+## Self-host it
+
+The editor ships as one container, `ghcr.io/pascalorg/pascal-editor`, tagged with the
+same version as the npm packages (`latest` follows stable releases). Projects live in
+SQLite under `/data`; one admin password protects the instance; `PASCAL_PUBLIC_URL` is
+read at runtime, so the same image serves any domain.
+
+```bash
+docker run -d -p 3000:3000 -v pascal-data:/data \
+  -e PASCAL_ADMIN_PASSWORD=change-me \
+  -e PASCAL_PUBLIC_URL=https://pascal.example.com \
+  ghcr.io/pascalorg/pascal-editor:latest
+```
+
+See [SETUP.md, "Self-hosting"](SETUP.md#self-hosting) for the compose file, the
+variables, agent access and public embeds.
+
 ## Agent skills
 
 [![Install with skills](https://skills.sh/b/pascalorg/editor)](https://skills.sh/pascalorg/editor)

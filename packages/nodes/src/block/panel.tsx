@@ -39,7 +39,7 @@ import {
 const SLOT_TRAILING_ACTION_CLASS =
   'm-2 ml-0 flex w-8 shrink-0 items-center justify-center rounded-md'
 const SLOT_DISABLED_ACTION_CLASS =
-  'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-[#2C2C2E] disabled:active:bg-[#2C2C2E]'
+  'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-black/4 dark:disabled:hover:bg-[#2C2C2E] disabled:active:bg-black/4 dark:disabled:active:bg-[#2C2C2E]'
 const NEW_BLOCK_SLOT_MATERIAL = {
   preset: 'custom',
   properties: {
@@ -319,7 +319,7 @@ export default function BlockPanel() {
           </div>
         ) : null}
 
-        <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-border/60 bg-[#252527]">
+        <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-border/60 bg-black/3 dark:bg-[#252527]">
           {slotDeclarations.map((slot, index) => {
             const ref = node.slots?.[slot.slotId]
             const active =
@@ -334,7 +334,7 @@ export default function BlockPanel() {
               <div
                 className={`group relative flex min-h-11 items-stretch border-border/50 ${
                   index > 0 ? 'border-t' : ''
-                } ${active ? 'bg-primary/15' : 'hover:bg-white/[0.035]'}`}
+                } ${active ? 'bg-primary/15' : 'hover:bg-black/4 dark:hover:bg-white/[0.035]'}`}
                 key={slot.slotId}
               >
                 <button
@@ -347,7 +347,7 @@ export default function BlockPanel() {
                 />
                 <span className="pointer-events-none relative z-10 flex w-12 shrink-0 items-center justify-center">
                   <span
-                    className="h-7 w-7 shrink-0 rounded-md border border-white/10 bg-cover bg-center shadow-inner"
+                    className="h-7 w-7 shrink-0 rounded-md border border-black/10 dark:border-white/10 bg-cover bg-center shadow-inner"
                     style={{
                       backgroundColor:
                         !ref && slot.slotId !== BLOCK_BODY_SLOT_ID ? '#7768d8' : preview.color,
@@ -388,7 +388,7 @@ export default function BlockPanel() {
                   </span>
                 ) : (
                   <button
-                    className={`${SLOT_TRAILING_ACTION_CLASS} relative z-10 text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground`}
+                    className={`${SLOT_TRAILING_ACTION_CLASS} relative z-10 text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-700 dark:focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground dark:disabled:hover:text-muted-foreground`}
                     aria-label={`Delete ${slot.label} slot`}
                     disabled={!editing || readOnly}
                     onClick={() => removeMaterialSlot(slot.slotId)}
@@ -408,7 +408,7 @@ export default function BlockPanel() {
         <ActionGroup>
           <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={move} />
           <ActionButton
-            className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+            className="border-red-500/40 text-red-700 dark:text-red-200 hover:bg-red-500/15"
             icon={<Trash2 className="h-4 w-4" />}
             label="Delete"
             onClick={() => {

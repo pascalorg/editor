@@ -13,8 +13,10 @@ import {
   type FloorplanGeometry,
   heightAt,
   type LevelNode,
+  outwardNormal,
   type SceneSnapshot,
   type SiteNode,
+  siteFrame,
   type TerrainField,
   terrainContours,
 } from '@pascal-app/core'
@@ -26,14 +28,13 @@ import {
 import {
   formatFeetInches,
   METRES_PER_FOOT,
-  outwardNormal,
   type Pt,
   pointInPolygon,
   polygonArea,
   polygonBounds,
   polygonCentroid,
 } from './geometry'
-import { flatworkKindOf, type OutdoorPart, siteFrame } from './site-parts'
+import { flatworkKindOf, type OutdoorPart } from './site-parts'
 
 const INK = '#111827'
 const INK_SOFT = '#4b5563'

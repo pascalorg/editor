@@ -66,6 +66,25 @@ export function compiledSolid(
   }
 }
 
+/**
+ * What a compile that could not measure the object leaves in the manifest: a mesh at a position
+ * that is not a number made every bound NaN. A structured clone (the chat's worker) keeps NaN; a
+ * JSON hop (a tab job answering the server) turns it to null.
+ */
+export function compiledUnmeasured(
+  hop: 'clone' | 'json',
+  mount: GeometryScriptMount = 'floor',
+): CompiledGeometryScript {
+  const solid = compiledSolid([1.2, 2.8, 0.6], mount)
+  const nan: [number, number, number] = [Number.NaN, Number.NaN, Number.NaN]
+  const compiled = {
+    ...solid,
+    params: { width: 7.7, display: true },
+    manifest: { ...solid.manifest, bounds: { min: nan, max: nan } },
+  }
+  return hop === 'json' ? JSON.parse(JSON.stringify(compiled)) : compiled
+}
+
 /** An object add_object built earlier, with the reason it was given. */
 export function authoredItem(
   id: string,
@@ -165,6 +184,46 @@ export const ADD_OBJECT_CASES: AddObjectCase[] = [
     [1.2, 0.5, 0.4],
     { refusal: 'reason_required', mentions: ['reason'], beforeCompile: true },
   ),
+  // An agent's cabinet script put a material where a position goes, with one param on: the compile
+  // answered with NaN bounds and the item schema threw its raw validation array at the model.
+  {
+    name: 'an object whose bounds are not numbers is refused before its asset is built',
+    scene: floorScene,
+    input: {
+      code: CODE,
+      name: 'Library wall',
+      category: 'cabinet',
+      reason: 'Pascal has no library wall.',
+      params: { width: 7.7, display: true },
+    },
+    compiled: compiledUnmeasured('clone'),
+    expect: {
+      refusal: 'unmeasurable_object',
+      mentions: ['"Library wall" cannot be measured', '"display":true', 'nothing was added'],
+    },
+  },
+  {
+    name: 'bounds that crossed a JSON hop as null are refused the same way',
+    scene: floorScene,
+    input: {
+      code: CODE,
+      name: 'Library wall',
+      category: 'cabinet',
+      reason: 'Pascal has no library wall.',
+    },
+    compiled: compiledUnmeasured('json'),
+    expect: { refusal: 'unmeasurable_object', mentions: ['"Library wall" cannot be measured'] },
+  },
+  {
+    name: 'an edit whose rebuild cannot be measured is refused and leaves the object as it was',
+    scene: floorScene,
+    input: { nodeId: 'item_screen', code: CODE, params: { display: true } },
+    compiled: compiledUnmeasured('clone'),
+    expect: {
+      refusal: 'unmeasurable_object',
+      mentions: ['item_screen cannot be measured', 'nothing was changed'],
+    },
+  },
   // Production saw whole houses of plain custom solids, nothing editable as walls or rooms.
   create(
     'a plain box with a wall’s size is refused: walls exist',
@@ -215,6 +274,46 @@ export const ADD_OBJECT_CASES: AddObjectCase[] = [
     { result: { mount: 'wall-side' }, node: { parentId: 'wall_south' } },
     'wall-side',
   ),
+  create(
+    'a back-side wall mount defaults to facing away from its wall',
+    { parentId: 'wall_south', side: 'back' },
+    [1, 1, 0.04],
+    { result: { mount: 'wall-side' }, node: { side: 'back', rotation: [0, Math.PI, 0] } },
+    'wall-side',
+  ),
+  create(
+    'a front-side wall mount defaults to facing away from its wall',
+    { parentId: 'wall_south', side: 'front' },
+    [1, 1, 0.04],
+    { result: { mount: 'wall-side' }, node: { side: 'front', rotation: [0, 0, 0] } },
+    'wall-side',
+  ),
+  create(
+    'an explicit back-side wall mount rotation remains explicit',
+    { parentId: 'wall_south', side: 'back', rotation: 0 },
+    [1, 1, 0.04],
+    { result: { mount: 'wall-side' }, node: { side: 'back', rotation: [0, 0, 0] } },
+    'wall-side',
+  ),
+  {
+    name: 'rebuilding a saved back-side wall object preserves its rotation',
+    scene: () => {
+      const scene = floorScene()
+      const previous = ItemNode.parse(scene.nodes.item_screen)
+      scene.nodes.item_screen = ItemNode.parse({
+        ...previous, parentId: 'wall_south', wallId: 'wall_south', side: 'back',
+        asset: { ...previous.asset, attachTo: 'wall-side' },
+      })
+      const wall = WallNode.parse(scene.nodes.wall_south)
+      scene.nodes.wall_south = { ...wall, children: [previous.id] }
+      const level = LevelNode.parse(scene.nodes.level_0)
+      scene.nodes.level_0 = { ...level, children: [wall.id] }
+      return scene
+    },
+    input: { nodeId: 'item_screen', code: CODE },
+    compiled: compiledSolid([1, 1, 0.04], 'wall-side'),
+    expect: { result: { nodeId: 'item_screen' }, node: { rotation: [0, 0, 0], side: 'back' } },
+  },
   create(
     'a name naming a Pascal type is built, with a hint naming the tool for it',
     { name: 'Spiral staircase', category: 'stair' },

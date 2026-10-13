@@ -11,7 +11,7 @@ import type { AnyNode, SeparatorNode, SlabNode, WallNode, ZoneNode } from '../..
 import { getWallCurveFrameAt, isCurvedWall } from '../wall/wall-curve'
 import { DEFAULT_WALL_THICKNESS } from '../wall/wall-footprint'
 import { getWallFaceOffsets, type WallJustification } from '../wall/wall-frame'
-import { MIN_WALL_HEIGHT } from '../wall/wall-top'
+import { MIN_WALL_HEIGHT, wallFollowsStorey } from '../wall/wall-top'
 
 export type SlabElevationClamp = {
   elevation: number
@@ -20,11 +20,12 @@ export type SlabElevationClamp = {
 
 /**
  * Clamp-never-ask upper bound for a slab's elevation. A plane-bound wall
- * (no stored `height`) keeps its top at the storey plane, so a slab that
+ * (no stored `height`, or height equal to the authored storey) keeps its
+ * top at the storey plane, so a slab that
  * rises past `storeyHeight - MIN_WALL_HEIGHT` while electing as that
  * wall's base would squeeze the wall body below its minimum (and at the
- * plane, to nothing). Walls with explicit heights don't constrain — their
- * top is an explicit level-local height rather than the storey plane. Negative proposals (the
+ * plane, to nothing). Walls with other explicit heights don't constrain —
+ * their body height stays fixed above the elected base. Negative proposals (the
  * drag-through-zero path that commits the `recessed` intent) pass
  * through untouched: this is a purely numeric upper bound.
  *
@@ -52,7 +53,7 @@ export function clampSlabElevationForWalls(
     : [...levelSlabs, { ...slab, elevation: proposedElevation }]
 
   for (const wall of levelWalls) {
-    if (wall.height != null) continue
+    if (!wallFollowsStorey(wall, storeyHeight)) continue
     const wallLike: WallOverlapInput = {
       start: wall.start,
       end: wall.end,

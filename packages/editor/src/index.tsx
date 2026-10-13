@@ -28,6 +28,7 @@ export { ActionMenuButton } from './components/editor/action-menu-button'
 // preset-system spec.
 export { BakeExporter } from './components/editor/bake-exporter'
 export { BakeThumbnail, prepareBakeThumbnailLook } from './components/editor/bake-thumbnail'
+export { ConstructionRevealAudio } from './components/editor/construction-reveal-audio'
 export { copyCollectionIds, duplicateNodeAndPickUp } from './components/editor/duplicate-node'
 export { FirstPersonControls } from './components/editor/first-person-controls'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
@@ -86,6 +87,7 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { PLUGINS_VIEW_ID } from './components/editor/views/use-editor-views'
 export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
@@ -252,6 +254,7 @@ export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-pane
 export { ToggleControl } from './components/ui/controls/toggle-control'
 export { ToolOptionsPanel } from './components/ui/controls/tool-options-panel'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
+export { IconRefGlyph, IconRefImage } from './components/ui/icon-ref'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 // A base plate's panel (one connected footprint's floor and foundation); the
 // slab kind's panel hands base plates to it.
@@ -299,9 +302,12 @@ export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
 export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
 export type { FunctionTreeNode } from './components/ui/sidebar/panels/items-panel/function-tree-panel'
 export {
+  type InterfaceTheme,
+  InterfaceThemeRow,
   type ProjectVisibility,
   SettingsPanel,
   type SettingsPanelProps,
+  SettingsSwitchRow,
 } from './components/ui/sidebar/panels/settings-panel'
 export type { SitePanelProps } from './components/ui/sidebar/panels/site-panel'
 export type { SidebarTab } from './components/ui/sidebar/tab-bar'
@@ -532,11 +538,8 @@ export {
 } from './lib/floorplan/sheet-export'
 // ── Site plan (WS1) ──────────────────────────────────────────────────
 export {
-  boundsInsidePolygon,
-  buildingRecentreOffset,
   buildSitePlanDrawing,
   castYardDimensions,
-  classifyEdges,
   computeSiteCoverage,
   describeSiteEdges,
   detectFrontEdgeFromRoads,
@@ -560,10 +563,8 @@ export {
   type SitePlanServiceRole,
   type SitePlanServices,
   serviceEntranceOf,
-  setbackEnvelope,
   streetCore,
   streetEdgeNames,
-  type YardDimension,
 } from './lib/floorplan/site-plan'
 export {
   commitFreshPlacementSubtree,
@@ -723,6 +724,7 @@ export {
   resolvePlanarCursorPosition,
 } from './lib/planar-cursor-placement'
 export type {
+  ChatStartProps,
   ChatToolCardProps,
   ChatToolOutput,
   PluginChatExtension,
@@ -739,6 +741,12 @@ export {
   setPluginDirectoryContext,
   setPluginInstallLocks,
 } from './lib/plugin-panels'
+export {
+  retryPointAsk,
+  setPointAskBehindQueue,
+  setPointAskBusy,
+  setPointAskPlayful,
+} from './lib/point-ask/host-api'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {
@@ -762,6 +770,7 @@ export {
   captureElementActionOrigin,
   completeElementAction,
   type ElementActionOrigin,
+  selectZoneOrRoom,
 } from './lib/room-zone-routing'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor, getSavedSceneDocument } from './lib/scene'
@@ -774,6 +783,7 @@ export {
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
+export { showSidebarPanel } from './lib/sidebar-panel'
 export {
   clearSlabSnapFeedback,
   resolveSlabEdgeBandSnap,
@@ -828,6 +838,8 @@ export {
   sculptFieldForSite,
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
+export { isTypingTarget } from './lib/typing-target'
+export { enterUnitFocus } from './lib/units'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 export { useLinearDisplay } from './lib/use-linear-display'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
@@ -839,6 +851,7 @@ export {
   applyViewerHover,
   framedLookAt,
   frameViewerCamera,
+  frameViewerNode,
   useViewerFloorDisplay,
   type ViewerPick,
   type ViewerSource,
@@ -856,6 +869,7 @@ export {
   startWallPolygonDraft,
   wallPolygonDraftWalls,
 } from './lib/wall-polygon-draft'
+export { writeWindowChanges } from './lib/window-changes'
 export {
   closeWindowOpenState,
   getDisplayedWindowValue,
@@ -875,6 +889,17 @@ export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CameraHintAction, useCameraHintFocus } from './store/use-camera-hint-focus'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
+export {
+  CONSTRUCTION_REVEAL_LEVELS,
+  default as useConstructionReveal,
+} from './store/use-construction-reveal'
+export {
+  CORNER_BLOCK_NOTES,
+  type CornerHintRow,
+  type CornerSnapHint,
+  cornerHintRows,
+  useCornerSnapHint,
+} from './store/use-corner-snap-hint'
 export {
   DRAWING_TYPE_OPTIONS,
   default as useDrawingView,
@@ -914,6 +939,7 @@ export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-p
 export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export { default as useFloorplanMode } from './store/use-floorplan-mode'
+export { default as useFollowPascal } from './store/use-follow-pascal'
 export {
   default as useInteractionScope,
   getEditingHole,
@@ -962,6 +988,7 @@ export {
   default as usePlacementPreview,
   type PlacementPreviewDimension,
 } from './store/use-placement-preview'
+export { usePointAsk } from './store/use-point-ask'
 export {
   activateQuickMeasurementHudSource,
   clearQuickMeasurementHudSource,

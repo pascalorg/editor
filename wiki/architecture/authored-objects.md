@@ -27,6 +27,20 @@ export default function build({ params, THREE }) { /* … */ return group }
 
 Allowed imports: `three`, `three/addons/…` (BufferGeometryUtils, RoundedBoxGeometry, ConvexGeometry, LoftGeometry, ParametricGeometry) and `three-bvh-csg`. No network, DOM, `eval`, dynamic import or `process`.
 
+Model in metres, Y up, in the installed orientation. The compiler translates the visible
+bounds without flipping the object:
+
+| Mount | Normalized origin |
+| --- | --- |
+| `floor`, `wall` | Bottom-centre; visible geometry starts at local Y = 0. |
+| `wall-side` | Bottom-centre of the back face; local Y = 0 and back Z = 0, facing +Z. |
+| `ceiling` | Top-centre; visible geometry ends at local Y = 0 and hangs down in negative Y. |
+
+For a ceiling parent, `[x, 0, z]` puts that origin on the drawn attachment plane:
+`resolveCeilingHeight − CEILING_DRAW_OFFSET` (0.01 m). The following-ceiling clamp already
+reserves 0.01 m below the storey/covering bound; the draw offset is separate. Negative placement
+Y lowers the object further. Floor and wall placement conventions are unchanged.
+
 ## Blender modules
 
 ```python
@@ -58,11 +72,61 @@ The compiler also derives upward surfaces (where things rest) and undersides (wh
 
 `@pascal-app/geometry-script` compiles a module to a GLB and manifest in a browser worker, Bun or Node, and returns both hashes. The host decides the isolation: the editor runs it in a worker with network and storage removed; an MCP server receives a `GeometryScriptHost` (compile, store, read) or answers `scripts_unavailable`. The default in-memory artifact store lasts one session. Local MCP and the standalone editor use a disk store beside the SQLite database that holds their saved scenes (`<database-path>.artifacts/<sha256>`). Keep this directory with the database. Writes verify the hash and publish complete bytes atomically without replacing existing artifacts. Local MCP compilation is opt-in (`PASCAL_SERVER_SCRIPT_COMPILE=1`; bpy modules run in the Blender binary `PASCAL_BLENDER` names); reading saved source does not require compilation.
 
+### Saved ceiling objects
+
+Previously compiled ceiling objects keep their saved GLB, manifest and placement on load,
+view, publish and bake. A bottom-centred artifact therefore still extends upward unless its
+saved pose already compensates for that origin. The compiler fix does not silently move
+existing objects or rewrite their artifacts.
+
+No schema/load migration is needed to keep scenes readable. Correcting an old upward-built
+object requires an explicit rebuild with `add_object` and its `nodeId` (or its Parameters
+panel). Rebuilding uses the new top-centred convention while keeping identity, placement
+and paint. An old negative-Y placement that compensated for bottom-centring is also kept;
+after rebuilding it still lowers the new top, so its attachment offset may need an explicit
+edit. There is no automatic bulk correction or migration in this change.
+
 ## Agent tools
 
 `add_object` (create, or edit by `nodeId`: new code, or params alone to rebuild the stored script; `language` picks `three` or `bpy` and defaults to the object's own), `get_source` (the module, its language and its params, for an edit) and `find_by_type` (nodes and typed parts of one type) are shared contracts in `@pascal-app/core/agent-tools`, one operation each; only the compile step differs per surface. See [agent-surfaces.md](agent-surfaces.md).
 
 A new object carries a `reason`, what it stands in for, kept in `metadata.reason`; `verify_scene` lists every authored object with it (`authoredObjects`), so each names something Pascal has no type for. On a level, a floor object that is a plain box (12 triangles) with a wall's size (≤ 0.45 m thin, ≥ 1 m long, ≥ 2 m high), or a floor plate (≤ 0.35 m thick, ≥ 2 m both ways, on the floor), is refused (`use_walls`, `use_slab`). A detailed object with a wall's size (a bookcase's shelves, a screen's holes) is built with a `hint` naming `add_wall`, as is a name whose head word is something Pascal builds, with that tool. These apply to creation only: an edit, which is also the inspector's rebuild path, is never refused for its shape.
+
+For static scripted items directly hosted by a ceiling, `verify_scene` also reports
+`item_above_ceiling` (metres above the drawn attachment) and
+`item_covering_slab_overlap` (vertical overlap and plan area of transformed bounds against
+a solid slab band). Both name the object and host; the latter also names the slab. Bounds
+include asset and item offsets, rotations and scales, plus stacked level elevations, and
+are reported in the owning building frame. Plan overlap subtracts stored slab holes and
+derived authored cutter holes, including partial overlaps rather than just testing a centre.
+
+These are read-only observations, not repair instructions or proof of exact mesh collision.
+Catalog or animated objects and unsupported attachment frames are not assessed, nor are
+roof intersections, recessed slab shells, foundations or terrain-fill volumes. Upward
+geometry in roof-backed rooms still produces the above-attachment observation.
+
+For wall-mounted items, `verify_scene` reports `item_wall_body_overlap`,
+`item_through_wall`, and `item_faces_wall`, with IDs, transformed bounds, depths,
+and corrected +Z-front orientation. Wall-side Z = 0 lands on the selected wall
+face; `side` chooses that face but does not override the saved rotation. A back
+mount normally has a π yaw. Correct hidden back-to-wall contact is not z-fighting.
+New `add_object` back-side wall mounts default to that π yaw when rotation is
+omitted. Explicit rotations and saved rotations on rebuild are preserved; existing
+scenes are not rewritten and no blanket stand-off is added.
+
+The item systems register a mesh-backed check for settled, static editor models:
+catalog bounds and large, wall-parallel, same-facing coplanar triangles on the host or another
+item on the same wall (`item_wall_coplanar_face`,
+`item_wall_object_coplanar_face`). It measures overlapping face area and separation
+within 1 mm, not a screenshot or a guarantee of visible flicker. Headless callers
+without editor meshes still get scripted bounds and mount-orientation observations;
+catalog dimensions alone do not establish a raw model origin or a face.
+
+Finite wall bounds and opening rectangles exclude cutout space. Shaped openings
+use their enclosing rectangles conservatively; hosts with unresolved scripted wall
+cuts withhold wall-body/contact evidence. Curved walls, nested hosts, deformed,
+animated, unfinished, dirty and oversized meshes are not assessed. No placement,
+artifact or scene data is changed by these checks.
 
 ## Cutter binding
 

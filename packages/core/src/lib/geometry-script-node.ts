@@ -1,3 +1,4 @@
+import { refuse } from '../agent-tools/refusal'
 import { matchPascalMaterial } from '../procedural-items/library-colors'
 import type { CompiledGeometryScript } from '../schema'
 import { GeometrySourceMeta } from '../schema/geometry-metadata'
@@ -125,6 +126,26 @@ export function scriptedSize(
 ): [number, number, number] {
   const { min, max } = manifest.bounds
   return [max[0] - min[0], max[1] - min[1], max[2] - min[2]]
+}
+
+/**
+ * A compile whose bounds are not finite numbers cannot be sized or placed, and what is built from
+ * it would fail its schema with a raw validation array or carry a non-finite size: refused before
+ * anything is built, whichever scripted tool it came to. A mesh at a position that is not a number
+ * leaves NaN bounds (null once they crossed a JSON hop).
+ */
+export function requireMeasured(
+  compiled: CompiledGeometryScript,
+  subject: { label?: string; nodeId?: string; tool: string },
+) {
+  const { min, max } = compiled.manifest.bounds
+  if ([...min, ...max].every(Number.isFinite)) return
+  const label = subject.label ? `"${subject.label}"` : (subject.nodeId ?? 'The object')
+  refuse(
+    'unmeasurable_object',
+    `${label} cannot be measured: its bounds are not finite numbers (min [${min.map(String).join(', ')}], max [${max.map(String).join(', ')}]) with params ${JSON.stringify(compiled.params)}. A mesh in the script has a position, rotation or scale that is not a number (a helper called one argument short passes the next value in its place). Fix the script and call ${subject.tool} again; nothing was ${subject.nodeId ? 'changed' : 'added'}.`,
+    { label: subject.label ?? subject.nodeId },
+  )
 }
 
 /**

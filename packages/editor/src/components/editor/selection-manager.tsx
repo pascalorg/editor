@@ -355,7 +355,7 @@ const wallPaintWorldPoint = new Vector3()
 
 const roomHitPoint = new Vector3()
 const roomHitXZ: [number, number] = [0, 0]
-function roomForEvent(event: NodeEvent) {
+export function roomForEvent(event: NodeEvent) {
   if (event.node.type !== 'wall' && event.node.type !== 'slab' && event.node.type !== 'ceiling')
     return null
   // The floor edge band and the foundation belong to the footprint, not the
@@ -400,7 +400,7 @@ function resolveWallPaintHit(event: NodeEvent): WallPaintHit | undefined {
   }
 }
 
-function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | null {
+export function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | null {
   const roof = event.node
   if (roof.type !== 'roof') return null
 

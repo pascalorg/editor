@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeTerrainField } from '../../lib/terrain-codec'
 import { createTerrainField } from '../../lib/terrain-field'
-import { migrateSiteMetadata, SiteNode } from './site'
+import { SiteNode } from './site'
+import { migrateSiteMetadata } from './site-facts'
 
 describe('SiteNode.terrain', () => {
   test('a scene saved before terrain existed still parses', () => {

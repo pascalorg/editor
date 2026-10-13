@@ -103,6 +103,31 @@ describe('roof fascia', () => {
     expect(boardPoints(off, 'z', 1).length).toBeGreaterThan(0)
   })
 
+  // Hawkesbury's flat roofs wear a black band ~0.3 m tall over their edge (2026-10-03).
+  test('a flat roof sized on purpose wears a band to its top, over the membrane edge', () => {
+    const node = segment({ roofType: 'flat', pitch: 0, fasciaHeight: 0.3, fasciaDepth: 0.03 })
+    const top = eaveTopY(node) + node.shingleThickness
+    for (const [axis, side] of [
+      ['z', 1],
+      ['x', -1],
+    ] as const) {
+      const points = boardPoints(node, axis, side)
+      const ys = points.map((v) => v.y)
+      expect(Math.max(...ys)).toBeCloseTo(top, 3)
+      expect(Math.min(...ys)).toBeCloseTo(top - 0.3, 3)
+      const out = points.map((v) => Math.abs(axis === 'x' ? v.x : v.z))
+      const deckEdge = (axis === 'x' ? node.width : node.depth) / 2 + 0.09 + 0.55
+      expect(Math.max(...out) - deckEdge).toBeCloseTo(0.03 - 0.002, 3)
+    }
+  })
+
+  test('a flat roof not sized keeps the 1x8 on its deck edge', () => {
+    const node = segment({ roofType: 'flat', pitch: 0 })
+    const ys = boardPoints(node, 'z', 1).map((v) => v.y)
+    expect(Math.max(...ys)).toBeCloseTo(eaveTopY(node), 3)
+    expect(Math.min(...ys)).toBeCloseTo(eaveTopY(node) - BOARD, 3)
+  })
+
   test('fascia off leaves the bare deck edge', () => {
     const node = segment({ fascia: false })
     expect(boardPoints(node, 'z', 1)).toHaveLength(0)

@@ -1,4 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import { readdirSync, readFileSync } from 'node:fs'
+import { computeWallSlabSupport } from '../systems/slab/slab-support'
+import { resolveWallTop } from '../systems/wall/wall-top'
+import { healSceneNodes, normalizeLegacyStructure } from './scene-migrations'
 import { migrateVerticalSceneNodes } from './vertical-scene-migration'
 
 type RawNode = Record<string, unknown>
@@ -96,5 +100,87 @@ describe('ground-pin heal', () => {
     expect(first.changed).toBe(true)
     const second = migrateVerticalSceneNodes(first.nodes)
     expect(second.changed).toBe(false)
+  })
+})
+
+// Scenes saved before levels stored a height, from the plate corpus.
+const PLATE_CORPUS = new URL('../lib/__fixtures__/plate-corpus/', import.meta.url)
+const legacyCorpus = ['legacy-load', 'frozen-gate', 'review', 'migrations']
+  .flatMap((folder) =>
+    readdirSync(new URL(`${folder}/`, PLATE_CORPUS))
+      .filter((file) => file.endsWith('.json'))
+      .sort()
+      .map((file) => {
+        const fixture = JSON.parse(readFileSync(new URL(`${folder}/${file}`, PLATE_CORPUS), 'utf8'))
+        const stored = (fixture.nodes ?? fixture) as Record<string, unknown>
+        return {
+          scene: `${folder}/${file}`,
+          nodes: healSceneNodes(normalizeLegacyStructure(stored)).nodes,
+        }
+      }),
+  )
+  .filter(({ nodes }) =>
+    Object.values(nodes).some(
+      (node) => (node as RawNode).type === 'level' && !('height' in (node as RawNode)),
+    ),
+  )
+
+type LegacyNode = Record<string, any>
+
+/**
+ * How the editor drew a level before levels stored a height: a wall stood on
+ * its slab when the slab was above the floor and rose by its height, 2.5 m
+ * when none was stored; the storey was as tall as its tallest wall top or
+ * ceiling (2.5 m when the ceiling stored none).
+ */
+function legacyStorey(levelId: string, nodes: Record<string, LegacyNode>) {
+  const children = ((nodes[levelId]!.children ?? []) as string[])
+    .map((id) => nodes[id])
+    .filter((child): child is LegacyNode => child !== undefined)
+  const slabs = children.filter((child) => child.type === 'slab')
+  const walls = children.filter((child) => child.type === 'wall')
+  const wallTops = new Map<string, number>()
+  for (const wall of walls) {
+    const base = computeWallSlabSupport(wall as never, slabs as never, walls as never).elevation
+    wallTops.set(wall.id, Math.max(0, base) + (wall.height ?? 2.5))
+  }
+  const ceilings = children.filter((child) => child.type === 'ceiling').map((c) => c.height ?? 2.5)
+  const tallest = Math.max(0, ...wallTops.values(), ...ceilings)
+  return { height: tallest > 0 ? tallest : 2.5, wallTops }
+}
+
+describe('legacy corpus loads as the editor drew it', () => {
+  test('the corpus holds scenes saved before levels stored a height', () => {
+    expect(legacyCorpus.length).toBeGreaterThan(0)
+  })
+
+  test.each(legacyCorpus)('$scene: storeys keep their height and no wall rises above its storey', ({
+    nodes,
+  }) => {
+    const migrated = migrateVerticalSceneNodes(nodes).nodes as Record<string, LegacyNode>
+    for (const [levelId, level] of Object.entries(nodes as Record<string, LegacyNode>)) {
+      if (level?.type !== 'level' || 'height' in level) continue
+      const before = legacyStorey(levelId, nodes as Record<string, LegacyNode>)
+      const plane = migrated[levelId]!.height as number
+      const rounded = (value: number) => Math.round(value * 1e6) / 1e6
+      expect({ levelId, height: rounded(plane) }).toEqual({
+        levelId,
+        height: rounded(before.height),
+      })
+      const slabs = (migrated[levelId]!.children as string[])
+        .map((id) => migrated[id])
+        .filter((child): child is LegacyNode => child?.type === 'slab')
+      const walls = (migrated[levelId]!.children as string[])
+        .map((id) => migrated[id])
+        .filter((child): child is LegacyNode => child?.type === 'wall')
+      for (const wall of walls) {
+        const base = computeWallSlabSupport(wall as never, slabs as never, walls as never).elevation
+        const top = resolveWallTop(wall as never, plane, base)
+        // Never above the storey it belongs to (it would cut the floor or
+        // roof above), and moved only by the snap onto the storey plane.
+        expect(top).toBeLessThanOrEqual(plane + 1e-9)
+        expect(Math.abs(top - before.wallTops.get(wall.id)!)).toBeLessThan(0.2)
+      }
+    }
   })
 })

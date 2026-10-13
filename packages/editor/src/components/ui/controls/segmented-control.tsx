@@ -22,7 +22,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={cn(
-        'flex h-9 w-full items-center rounded-lg border border-border/50 bg-[#2C2C2E] p-[3px]',
+        'flex h-9 w-full items-center rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] p-[3px]',
         disabled && 'opacity-60',
         className,
       )}
@@ -31,12 +31,14 @@ export function SegmentedControl<T extends string>({
         const isSelected = !mixed && value === option.value
         return (
           <button
+            aria-pressed={isSelected}
             className={cn(
               'relative flex h-full flex-1 items-center justify-center rounded-md font-medium text-xs transition-all duration-200',
               isSelected
-                ? 'bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
-                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
-              disabled && 'cursor-not-allowed hover:bg-transparent hover:text-muted-foreground',
+                ? 'bg-white dark:bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
+                : 'text-muted-foreground hover:bg-black/4 dark:hover:bg-white/5 hover:text-foreground',
+              disabled &&
+                'cursor-not-allowed hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent',
             )}
             disabled={disabled}
             key={option.value}

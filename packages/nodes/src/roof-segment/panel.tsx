@@ -631,6 +631,23 @@ export default function RoofSegmentPanel() {
           unit="m"
           value={node.shingleThickness}
         />
+        <ToggleControl
+          checked={node.fascia ?? false}
+          label="Fascia"
+          onChange={(checked) => handleUpdate({ fascia: checked })}
+        />
+        {node.fascia && (
+          <SliderControl
+            label="Fascia height"
+            max={0.6}
+            min={0.1}
+            onChange={(v) => handleUpdate({ fasciaHeight: v })}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={node.fasciaHeight ?? 0.184}
+          />
+        )}
       </PanelSection>
 
       <PanelSection title="Position">
@@ -714,7 +731,7 @@ export default function RoofSegmentPanel() {
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={handleDelete}
           />

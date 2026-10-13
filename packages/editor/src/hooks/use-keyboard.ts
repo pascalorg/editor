@@ -36,6 +36,7 @@ import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
+import { isTypingTarget } from '../lib/typing-target'
 import { leaveUnitFocus } from '../lib/units'
 import { selectWallDrawVariant } from '../lib/wall-draw-variant'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
@@ -202,12 +203,13 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
 /**
  * B: the wall tool on Rectangle — the quickest room — with the Build panel
  * showing, so the lit tile says what is in hand. The panel's tiles still pick
- * another shape for the session.
+ * another shape for the session. The panel opens before the tool is armed: a
+ * host may drop the armed tool when the panel changes.
  */
 export const armWallToolFromShortcut = () => {
   selectWallDrawVariant('rectangle')
-  useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
   openSidebarPanel(['build'])
+  useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
 }
 
 /** 1: site, 2: the building — each back on the select tool. Returns whether `key` was one. */
@@ -219,11 +221,11 @@ export const switchPhaseFromShortcut = (key: string): boolean => {
   return true
 }
 
-/** F: the item tool with the items catalog showing. */
+/** F: the item tool with the items catalog showing, opened first as B's is. */
 export const openItemCatalogFromShortcut = () => {
-  useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
   openSidebarPanel(['items'])
   useEditor.getState().setActiveSidebarPanel('items')
+  useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
 }
 
 /** P: paint mode, with the Paint panel showing (the Build panel where a host has no Paint tab). */
@@ -273,7 +275,13 @@ export function blocksSnappingShortcut(
 ): boolean {
   if (!target) return false
   if (target.tagName === 'INPUT' && target.hasAttribute('data-run-length-input')) return false
-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable ||
+    isTypingTarget(target as HTMLElement)
+  )
 }
 
 /** E on one selected node: the kind's own E action, else its mechanism. False when neither applies. */
@@ -344,12 +352,8 @@ export const useKeyboard = ({
         return
       }
 
-      // Don't handle shortcuts if user is typing in an input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) {
+      // Editable controls own their keyboard events.
+      if (isTypingTarget(e.target)) {
         return
       }
 
@@ -805,11 +809,7 @@ export const useKeyboard = ({
     const handleSessionGroupKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Shift') shiftTapClean = false
       if (e.key !== 'Control' && e.key !== 'Meta') ctrlTapClean = false
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) {
+      if (isTypingTarget(e.target)) {
         return
       }
       if (useDeleteConfirmation.getState().request) return

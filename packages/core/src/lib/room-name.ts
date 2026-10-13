@@ -1,5 +1,8 @@
 const NUMBERED_ROOM = /^Room (\d+)$/
 
+/** A name the allocator gave, which no person has changed. */
+export const isAllocatedRoomName = (name: string | undefined) => NUMBERED_ROOM.test(name ?? '')
+
 /**
  * Names rooms nobody named: "Room N" with the lowest number no zone on the level
  * uses yet. Only exact "Room N" names count. Called once per level, in a

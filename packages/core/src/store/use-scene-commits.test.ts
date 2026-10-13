@@ -14,9 +14,11 @@ import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { migrateCeilingRoomLinks, migrateRoomZones } from '../utils/room-zone-migration'
 import {
+  acquireSceneCommitAuthor,
   areSceneSnapshotsEqual,
   pauseSceneHistory,
   resumeSceneHistory,
+  runAsSceneCommitAuthor,
   runAsSingleSceneHistoryStep,
   type SceneCommit,
   type SceneSnapshot,
@@ -1397,5 +1399,88 @@ describe('scene commit boundary', () => {
     }
 
     expect(areSceneSnapshotsEqual(left, right)).toBe(true)
+  })
+})
+
+describe('commit author', () => {
+  beforeEach(() => {
+    unsubscribe()
+    resetScene()
+  })
+
+  afterEach(() => {
+    unsubscribe()
+    unsubscribe = () => {}
+  })
+
+  function wall(id: string) {
+    return WallNode.parse({ id, parentId: LEVEL_ID, start: [0, 0], end: [4, 0] })
+  }
+
+  test("an agent scope tags its commits; the person's edits stay untagged", () => {
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    runAsSceneCommitAuthor('agent', () =>
+      useScene.getState().createNode(wall('wall_agent'), LEVEL_ID),
+    )
+    useScene.getState().createNode(wall('wall_person'), LEVEL_ID)
+
+    expect(commits.map((commit) => commit.author)).toEqual(['agent', undefined])
+    expect(commits[1]).not.toHaveProperty('author')
+  })
+
+  test('one undo step written by an agent is one tagged commit', () => {
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    runAsSceneCommitAuthor('agent', () =>
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().createNode(wall('wall_a'), LEVEL_ID)
+        useScene.getState().createNode(wall('wall_b'), LEVEL_ID)
+      }),
+    )
+
+    expect(commits).toHaveLength(1)
+    expect(commits[0]?.author).toBe('agent')
+    expect(commits[0]?.origin).toBe('local')
+  })
+
+  test('a held author tags every commit until released', () => {
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    const release = acquireSceneCommitAuthor('agent')
+    useScene.getState().createNode(wall('wall_held_a'), LEVEL_ID)
+    useScene.getState().createNode(wall('wall_held_b'), LEVEL_ID)
+    release()
+    release()
+    useScene.getState().createNode(wall('wall_after'), LEVEL_ID)
+
+    expect(commits.map((commit) => commit.author)).toEqual(['agent', 'agent', undefined])
+  })
+
+  test('a load keeps its origin under an agent scope', () => {
+    const commits: SceneCommit[] = []
+    const snapshot = currentSnapshot()
+    const loaded = wall('wall_loaded')
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    runAsSceneCommitAuthor('agent', () =>
+      applySceneSnapshot(
+        {
+          ...snapshot,
+          nodes: {
+            ...snapshot.nodes,
+            [loaded.id]: loaded,
+            [LEVEL_ID]: { ...snapshot.nodes[LEVEL_ID], children: [loaded.id] } as AnyNode,
+          },
+        },
+        { origin: 'load' },
+      ),
+    )
+
+    expect(commits).toHaveLength(1)
+    expect(commits[0]?.origin).toBe('load')
   })
 })
