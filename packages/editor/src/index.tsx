@@ -774,6 +774,7 @@ export {
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
+export { showSidebarPanel } from './lib/sidebar-panel'
 export {
   clearSlabSnapFeedback,
   resolveSlabEdgeBandSnap,
