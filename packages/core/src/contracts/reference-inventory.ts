@@ -1000,7 +1000,11 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'terrainSample',
   ]),
   ...described('Registry extension key, not scene-node metadata.', ['pascal:editor/floorplan']),
-  ...described('Next.js page metadata export, not scene-node metadata.', ['title']),
+  ...described('Next.js page metadata export, not scene-node metadata.', [
+    'robots',
+    'robots.index',
+    'title',
+  ]),
   ...described('An authored object: what it stands in for, as add_object was told.', ['reason']),
 ]
 
