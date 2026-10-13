@@ -336,6 +336,65 @@ describe('the roof line', () => {
   })
 })
 
+describe('the house label', () => {
+  test('the roof level is not a storey: a bungalow under it reads 1-STORY', () => {
+    const wall = (id: string, start: [number, number], end: [number, number]) => ({
+      id,
+      type: 'wall',
+      parentId: 'level_0',
+      start,
+      end,
+      thickness: 0.2,
+      height: 2.8,
+      children: [],
+      metadata: {},
+    })
+    const nodes = {
+      site_1: {
+        id: 'site_1',
+        type: 'site',
+        polygon: { type: 'polygon', points: lot30() },
+        children: ['bldg'],
+      },
+      bldg: {
+        id: 'bldg',
+        type: 'building',
+        parentId: 'site_1',
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        children: ['level_0', 'level_roof'],
+      },
+      level_0: {
+        id: 'level_0',
+        type: 'level',
+        level: 0,
+        parentId: 'bldg',
+        children: ['w1', 'w2', 'w3', 'w4'],
+      },
+      level_roof: {
+        id: 'level_roof',
+        type: 'level',
+        level: 1,
+        parentId: 'bldg',
+        children: [],
+        metadata: { role: 'roof' },
+      },
+      w1: wall('w1', [-5, -4], [5, -4]),
+      w2: wall('w2', [5, -4], [5, 4]),
+      w3: wall('w3', [5, 4], [-5, 4]),
+      w4: wall('w4', [-5, 4], [-5, -4]),
+    }
+    const drawing = buildSitePlanDrawing({
+      nodes,
+      rootNodeIds: [],
+      collections: {},
+      materials: {},
+    } as unknown as SceneSnapshot)
+    const texts = drawing.primitives.map((g) => (g as { text?: string }).text ?? '')
+    expect(texts.join('\n')).toContain('1-STORY RESIDENCE')
+  })
+})
+
 function lot30(): [number, number][] {
   return [
     [-15, -15],
