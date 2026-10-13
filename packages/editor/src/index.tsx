@@ -87,6 +87,7 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { PLUGINS_VIEW_ID } from './components/editor/views/use-editor-views'
 export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
@@ -774,6 +775,7 @@ export {
   captureElementActionOrigin,
   completeElementAction,
   type ElementActionOrigin,
+  selectZoneOrRoom,
 } from './lib/room-zone-routing'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor, getSavedSceneDocument } from './lib/scene'
@@ -842,6 +844,7 @@ export {
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
 export { isTypingTarget } from './lib/typing-target'
+export { enterUnitFocus } from './lib/units'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 export { useLinearDisplay } from './lib/use-linear-display'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
@@ -853,6 +856,7 @@ export {
   applyViewerHover,
   framedLookAt,
   frameViewerCamera,
+  frameViewerNode,
   useViewerFloorDisplay,
   type ViewerPick,
   type ViewerSource,
