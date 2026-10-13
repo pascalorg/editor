@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   BuildingNode,
+  getActiveRoofHeight,
   LevelNode,
   RoofNode,
   RoofSegmentNode,
@@ -134,7 +135,22 @@ export const CREATE_ROOF_CASES: AgentToolCase[] = [
     tool: 'create_roof',
     scene: house({ topWalls: 3 }),
     input: {},
-    expect: { result: { coveredLevelId: 'level_g' }, check: onRoofLevel('level_g', 0.5) },
+    expect: {
+      result: { coveredLevelId: 'level_g' },
+      check: (result, nodes) => {
+        const level = nodes[result.roofLevelId as string] as LevelNode | undefined
+        const rise = (result.segmentIds as string[]).map((id) =>
+          getActiveRoofHeight(nodes[id] as RoofSegmentNode),
+        )
+        // The new roof level is as tall as the roof rises over it, the eave's lift included.
+        return [
+          ...onRoofLevel('level_g', 0.5)(result, nodes),
+          ...(Math.abs((level?.height ?? 0) - (0.5 + Math.max(...rise))) < 1e-6
+            ? []
+            : [`the roof level is ${level?.height} m tall, under its roof`]),
+        ]
+      },
+    },
   },
   {
     name: 'no level named: the top storey, whichever floor the person is viewing',

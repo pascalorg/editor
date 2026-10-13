@@ -26,26 +26,28 @@ export function isRoofLevel(node: AnyNode | undefined): boolean {
   return node?.type === 'level' && node.metadata?.role === 'roof'
 }
 
+/** A level declared to carry structure, not rooms (`metadata.role: 'support'`). */
+const isSupportLevel = (level: LevelNode) => level.metadata?.role === 'support'
+
 const childrenOf = (nodes: Nodes, level: LevelNode) =>
   level.children.map((id) => nodes[id]).filter((child): child is AnyNode => child !== undefined)
 
 /**
  * A level that is its building's roof level: declared, whatever it holds (`verify_scene` reports a
- * declared one someone walled), or holding roofs and nothing a storey holds (a roof level written
- * before levels declared it). The one rule every reader of a level's role goes by (`list_levels`,
+ * declared one someone walled), or, unless declared a support, holding roofs and nothing a storey
+ * holds (a roof level written before levels declared it). The one rule every reader of a level's role goes by (`list_levels`,
  * `verify_scene`, the agents' refusals, the editor's level stack).
  */
 export function servesAsRoofLevel(nodes: Nodes, level: LevelNode): boolean {
   if (isRoofLevel(level)) return true
+  // A declared support level stays one, roofs on it or not.
+  if (isSupportLevel(level)) return false
   const children = childrenOf(nodes, level)
   return (
     children.some((child) => child.type === 'roof') &&
     !children.some((child) => STOREY_CONTENT.has(child.type))
   )
 }
-
-/** A level declared to carry structure, not rooms (`metadata.role: 'support'`). */
-const isSupportLevel = (level: LevelNode) => level.metadata?.role === 'support'
 
 const elevationsOf = (nodes: Nodes) =>
   getLevelElevations(nodes as Parameters<typeof getLevelElevations>[0])

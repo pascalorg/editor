@@ -364,10 +364,17 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
     seated as Record<string, AnyNode>,
   )
   const roof = { ...placed, position: [roofX, elevation, roofZ] as [number, number, number] }
+  // A roof level made for it is as tall as the roof rises over it, the eave's lift included.
+  if (plan.create)
+    changes.create[0] = {
+      node: { ...plan.create, height: Math.max(elevation + wallHeight + peak, 0.2) },
+      parentId: plan.create.parentId ?? undefined,
+    }
   changes.create.push({ node: roof, parentId: plan.levelId }, ...draft.slice(1))
 
   return {
     result: {
+      ok: true,
       roofId: roof.id,
       roofLevelId: plan.levelId,
       createdRoofLevelId: plan.create?.id ?? null,

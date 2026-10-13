@@ -109,6 +109,18 @@ describe('planRoofLevel', () => {
     expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({ kind: 'storey', levelId: 'level_e' })
   })
 
+  test('a support level holding a roof stays a support: the roof level goes above it', () => {
+    const nodes = house(
+      { id: 'level_g', content: 'walls' },
+      { id: 'level_s', content: 'roof', metadata: { role: 'support' } },
+    )
+    expect(planRoofLevel(nodes, 'level_g', 2)).toMatchObject({
+      kind: 'roof',
+      create: { level: 2 },
+      update: [],
+    })
+  })
+
   // Two rules disagreed: list_levels and verify_scene called a walled Roof level the roof level,
   // and this service a storey, so a '+' stacked a floor above it while the agents refused its walls.
   test('a declared roof level someone walled stays the roof level, kept on top', () => {
