@@ -93,11 +93,14 @@ export {
 } from './riser-diagram'
 export {
   isRoofLevel,
+  isRoofOnStoreyWalls,
   planRoofLevel,
   planRoofsOffStorey,
   type RoofLevelPlan,
   type RoofMove,
+  roofLevelAbove,
   roofsOver,
+  servesAsRoofLevel,
   storeyCoveredBy,
   storeyInsertIndex,
 } from './roof-level'
