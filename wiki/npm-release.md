@@ -23,6 +23,10 @@ Do this from a fresh clone of `pascalorg/editor`, never from a working tree you 
 7. Create the CLI runtime release: `gh release create "@pascal-app/cli@<version>"` and upload the archive and its `.sha256`. The published npm tarball points at that exact URL, so verify it resolves and that the digest matches before announcing.
 8. Publish the repo-level release: `gh release edit v<version> --target <full release SHA> --notes-file … --draft=false --latest`. A shortened SHA is rejected with `422 target_commitish is invalid`.
 
+## The container
+
+The same `release.yml` run publishes `ghcr.io/pascalorg/pascal-editor` after the npm packages: one native build per architecture (amd64 and arm64 runners, a Next build under QEMU takes most of an hour), stitched into one manifest tagged `<version>` and `latest` (or `beta`). The Dockerfile stages the runtime exactly like `stage-runtime` does for the CLI asset, so a release's container and its CLI runtime are the same files. `docker.yml` builds and smoke-tests the image on PRs that touch what shapes it; a tag that failed the container job can be re-published by hand with `docker buildx build --platform linux/amd64,linux/arm64 --push -t ghcr.io/pascalorg/pascal-editor:<version> .` from the tagged commit.
+
 ## After a release
 
 - A repository that pins this one as a git submodule bumps the pin to the release commit and runs `bun install`: its root lockfile records the workspace versions, so it changes with the pin.

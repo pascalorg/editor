@@ -649,7 +649,7 @@ function VRButton({
   )
 }
 
-export function CommunityViewerToolbarLeft() {
+export function EditorViewerToolbarLeft() {
   return (
     <>
       <CollapseSidebarButton />
@@ -657,7 +657,7 @@ export function CommunityViewerToolbarLeft() {
   )
 }
 
-export function CommunityViewerToolbarRight({
+export function EditorViewerToolbarRight({
   onVRToggle,
   vrButton,
   vrActive = false,
