@@ -541,7 +541,7 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SwatchBook className="h-4 w-4" />
-            <span>Theme</span>
+            <span>Scene theme</span>
             <span className="ml-auto truncate text-muted-foreground text-xs">
               {activeTheme.name}
             </span>

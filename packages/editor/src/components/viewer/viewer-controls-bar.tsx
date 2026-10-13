@@ -103,6 +103,7 @@ function VisibilityMenu({
           className="hover:bg-white/5 hover:text-foreground"
           label="Visibility"
           size="icon"
+          tooltipClassName="dark"
           tooltipSide="top"
           variant="ghost"
         >
@@ -160,6 +161,7 @@ function DisplayMenu() {
           className="hover:bg-white/5 hover:text-foreground"
           label="Display settings"
           size="icon"
+          tooltipClassName="dark"
           tooltipSide="top"
           variant="ghost"
         >
@@ -232,7 +234,7 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SwatchBook className="h-4 w-4" />
-            <span>Theme</span>
+            <span>Scene theme</span>
             <span className="ml-auto truncate text-muted-foreground text-xs">
               {activeTheme.name}
             </span>
@@ -360,6 +362,7 @@ export const ViewerControlsBar = ({
               useViewer.getState().setLevelMode(modes[nextIndex] ?? 'stacked')
             }}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >
@@ -383,6 +386,7 @@ export const ViewerControlsBar = ({
                 useViewer.getState().setWallMode(modes[nextIndex] ?? 'cutaway')
               }}
               size="icon"
+              tooltipClassName="dark"
               tooltipSide="top"
               variant="ghost"
             >
@@ -406,6 +410,7 @@ export const ViewerControlsBar = ({
             label={`Walkthrough: ${walkthroughActive ? 'On' : 'Off'}`}
             onClick={onWalkthroughToggle}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >
@@ -420,6 +425,7 @@ export const ViewerControlsBar = ({
             label="Orbit left"
             onClick={() => emitter.emit('camera-controls:orbit-ccw')}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >
@@ -435,6 +441,7 @@ export const ViewerControlsBar = ({
             label="Orbit right"
             onClick={() => emitter.emit('camera-controls:orbit-cw')}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >
@@ -450,6 +457,7 @@ export const ViewerControlsBar = ({
             label="Top view"
             onClick={() => emitter.emit('camera-controls:top-view')}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >

@@ -566,7 +566,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const captureDisabled = captureState !== 'idle' || (mode === 'area' && !hasSelection)
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
+    <div className="dark pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
       {/* Walk / drone keep the walkthrough's centered pointer (the ring means
           E opens the door / window under it) — the capture overlay replaces
           the walkthrough HUD, so the crosshair rides along here. */}
