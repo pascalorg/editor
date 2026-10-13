@@ -3,19 +3,19 @@ import { deriveLegacyLevelHeight } from '../services/level-height'
 
 /** A write's operations, as apply_patch and update_node carry them. */
 export type LevelHeightWrite =
-  | { op: 'create'; node: AnyNode }
+  | { op: 'create'; node: AnyNode; parentId?: string }
   | { op: 'update'; id: string; data: Record<string, unknown> }
   | { op: 'delete'; id: string }
 
 const round = (value: number) => Math.round(value * 100) / 100
 
 /**
- * A level written without a height reads as legacy data: the editor's load derives its storey
- * plane from what it holds and rewrites its walls, stairs and ceilings to match, while a session
- * that wrote it reads 2.5 m (L68). A write that creates a level without one, or clears it, gets
- * the height the editor would derive, from what the level holds once the whole write lands (an
- * empty level: the default storey height), so every reader agrees. Fills the operations in place
- * and returns a note per level filled, for the write's answer.
+ * A level written without a height reads as legacy data: the editor's load derives its storey plane
+ * from what it holds and rewrites its walls, stairs and ceilings to match, while a session that
+ * wrote it reads 2.5 m. A write that creates a level without one, or clears it, gets the height the
+ * editor would derive, from what the level holds once the whole write lands (an empty level: the
+ * default storey height), so every reader agrees. Fills the operations in place and returns a note
+ * per level filled, for the write's answer.
  */
 export function fillLevelHeights(
   ops: LevelHeightWrite[],
@@ -23,7 +23,9 @@ export function fillLevelHeights(
 ): string[] {
   const after: Record<string, AnyNode> = { ...scene }
   for (const op of ops) {
-    if (op.op === 'create') after[op.node.id] = op.node
+    // A create's own parentId wins over its node's, as the write applies it.
+    if (op.op === 'create')
+      after[op.node.id] = op.parentId ? ({ ...op.node, parentId: op.parentId } as AnyNode) : op.node
     else if (op.op === 'delete') delete after[op.id]
     else if (after[op.id]) after[op.id] = { ...after[op.id], ...op.data } as AnyNode
   }

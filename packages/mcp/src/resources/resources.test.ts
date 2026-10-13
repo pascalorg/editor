@@ -235,6 +235,7 @@ describe('pascal://agent-guide', () => {
     'editor_tab_hidden',
     'editor_tab_required',
     'invalid_input',
+    'roof_exists',
     'room_named_by_person',
     'scene_wipe_blocked',
   ]

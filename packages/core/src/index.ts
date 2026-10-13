@@ -140,20 +140,11 @@ export {
   computeCeilingSurfaceCells,
   parseCeilingRegionRole,
 } from './lib/ceiling-surface'
+export { cornerPair, fusesAtCorner } from './lib/corner-pair'
 export {
-  CORNER_REACH_M,
-  cornerPair,
-  windowCornerEnd,
-  windowNearCornerEnd,
-} from './lib/corner-pair'
-export {
-  CORNER_SNAP_ENTER_M,
-  CORNER_SNAP_EXIT_M,
   type CornerBlock,
   type CornerBlockReason,
   type CornerSnap,
-  cornerBlock,
-  cornerSnap,
   evaluateCorner,
 } from './lib/corner-snap'
 export { criticallyDamped } from './lib/critically-damped'
@@ -342,6 +333,7 @@ export {
   roundFloorElevation,
 } from './lib/room-floor-feasibility'
 export type { OpenWallEnd } from './lib/room-graph'
+export { isAllocatedRoomName } from './lib/room-name'
 export {
   type BoundaryNode,
   type BoundarySpan,
@@ -380,7 +372,7 @@ export {
   slotLabelFromId,
   slotPaintMaterial,
 } from './lib/slots'
-export { createSnapEaser, prefersReducedMotion, SNAP_EASE_MS } from './lib/snap-ease'
+export { createSnapEaser, prefersReducedMotion } from './lib/snap-ease'
 export {
   createRoomTopologyIndex,
   detectSpacesForLevel,
@@ -601,13 +593,6 @@ export {
   type ScenePreview,
   subscribeScenePreview,
 } from './store/scene-preview'
-export {
-  CORNER_BLOCK_NOTES,
-  type CornerHintRow,
-  type CornerSnapHint,
-  cornerHintRows,
-  useCornerSnapHint,
-} from './store/use-corner-snap-hint'
 export {
   type ControlValue,
   type DoorAnimationState,

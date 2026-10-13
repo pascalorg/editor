@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { newZone, walledRoomToName } from '@pascal-app/core'
+import { isAllocatedRoomName, isRoofLevel, newZone, walledRoomAt } from '@pascal-app/core'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -26,7 +26,7 @@ export function registerSetZone(server: McpServer, bridge: SceneOperations): voi
     {
       title: 'Set zone',
       description:
-        'Create a polygonal zone on the given level. label is stored as the zone name and properties are merged into metadata. A polygon along walls that already enclose a room still named "Room N" names that room instead of adding a zone.',
+        'Create a polygonal zone on the given level. label is stored as the zone name and properties are merged into metadata. A polygon along walls that already enclose a room is that room, never a second zone: a room still named "Room N", or already named label, takes the label and properties; a room a person named otherwise is refused (rename it with update_node only when the person asked).',
       inputSchema: setZoneInput,
       outputSchema: setZoneOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
@@ -42,23 +42,20 @@ export function registerSetZone(server: McpServer, bridge: SceneOperations): voi
           `Node ${levelId} is a ${parent.type}, expected level`,
         )
       }
-      if (
-        typeof parent.metadata === 'object' &&
-        parent.metadata !== null &&
-        'role' in parent.metadata &&
-        parent.metadata.role === 'roof'
-      ) {
+      if (isRoofLevel(parent)) {
         throwMcpError(
           ErrorCode.InvalidParams,
           `Roof support level ${levelId} is not an occupied story; create zones on an occupied level instead`,
         )
       }
 
-      const walled = walledRoomToName(
-        bridge.getNodes(),
-        levelId,
-        polygon as Array<[number, number]>,
-      )
+      const walled = walledRoomAt(bridge.getNodes(), levelId, polygon as Array<[number, number]>)
+      if (walled && !isAllocatedRoomName(walled.name) && walled.name !== label) {
+        throwMcpError(
+          ErrorCode.InvalidParams,
+          `The walls here already enclose the room "${walled.name}" (${walled.id}), which a person named; a zone "${label}" would stack a second room on it. Rename it with update_node only if the person asked; otherwise leave it.`,
+        )
+      }
       let id: AnyNodeId
       if (walled) {
         id = walled.id

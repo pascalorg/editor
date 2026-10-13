@@ -366,6 +366,62 @@ describe('scene clipboard', () => {
     expect(scriptedY).toBeCloseTo(3 / 2)
   })
 
+  // Pasted corner windows kept naming the originals, so the copies drew as plain windows that
+  // could not be joined while the originals stood.
+  test('a corner window pasted with both its walls joins its own copies; one side alone is plain', () => {
+    const south = WallNode.parse({
+      id: 'wall_clipboard-south',
+      parentId: sourceLevelId,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const east = WallNode.parse({
+      id: 'wall_clipboard-east',
+      parentId: sourceLevelId,
+      start: [4, 0],
+      end: [4, 3],
+    })
+    const onSouth = WindowNode.parse({
+      id: 'window_clipboard-south',
+      parentId: south.id,
+      wallId: south.id,
+      position: [3.4, 1.2, 0],
+      corner: { end: 'end', partnerId: 'window_clipboard-east', post: 'none' },
+    })
+    const onEast = WindowNode.parse({
+      id: 'window_clipboard-east',
+      parentId: east.id,
+      wallId: east.id,
+      position: [0.6, 1.2, 0],
+      corner: { end: 'start', partnerId: onSouth.id, post: 'none' },
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [sourceLevelId]: makeLevel(sourceLevelId, [south.id, east.id]),
+        [south.id]: { ...south, children: [onSouth.id] },
+        [east.id]: { ...east, children: [onEast.id] },
+        [onSouth.id]: onSouth,
+        [onEast.id]: onEast,
+      },
+    }))
+    const windowsOf = (wallIds: readonly AnyNodeId[]) =>
+      wallIds.flatMap((id) =>
+        (useScene.getState().nodes[id] as WallNode).children.map(
+          (child) => useScene.getState().nodes[child as AnyNodeId] as WindowNode,
+        ),
+      )
+
+    expect(copySelectedNodesToEditorClipboard([south.id, east.id])).toBe(true)
+    const [a, b] = windowsOf(pasteEditorClipboardToLevel(targetLevelId)!.pastedIds)
+    expect(a?.corner?.partnerId).toBe(b?.id)
+    expect(b?.corner?.partnerId).toBe(a?.id)
+
+    expect(copySelectedNodesToEditorClipboard([south.id])).toBe(true)
+    const [alone] = windowsOf(pasteEditorClipboardToLevel(targetLevelId)!.pastedIds)
+    expect(alone?.corner).toBeUndefined()
+  })
+
   test('a paste keeps collection membership on both sides in one undo step, or drops collections the scene lacks', () => {
     const collectionId = 'collection_clipboard-lighting' as CollectionId
     const lamp = ItemNode.parse({

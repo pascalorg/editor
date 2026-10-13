@@ -1,9 +1,9 @@
 import { refuse } from '../agent-tools/refusal'
 import { WallNode } from '../schema'
+import { isRoofLevel } from '../services/roof-level'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
 import { WALL_MIN_LENGTH } from '../systems/wall/wall-topology'
 import { type LevelTargetInput, targetLevel } from './level-target'
-import { levelRole } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
 type Pt = [number, number]
@@ -17,8 +17,7 @@ type AddWallInput = LevelTargetInput & {
 
 /** A level declared as the roof holds the roof, not rooms: walls and stairs stay off it. */
 export function refuseRoofLevel(nodes: SceneNodes, levelId: string, what: string) {
-  const level = nodes[levelId]
-  if (level && levelRole(nodes, level).metadataRole === 'roof')
+  if (isRoofLevel(nodes[levelId]))
     refuse(
       'roof_level',
       `${levelId} is a roof level, not a storey: ${what} belongs on an occupied storey. Add one with add_level if the building needs it.`,

@@ -84,6 +84,43 @@ describe('set_zone', () => {
     })
   })
 
+  // A second set_zone over the same room (a retry after an unclear answer) stacked a twin on it
+  // once the first had named it; another name for a room a person named did too.
+  test('again over the room it named, is that room; over a room a person named, refused', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const square: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]
+    for (const [i, start] of square.entries())
+      bridge.createNode(
+        WallNode.parse({ start, end: square[(i + 1) % 4]!, height: 2.5 }),
+        level.id as AnyNodeId,
+      )
+    const setZone = (label: string) =>
+      client.callTool({
+        name: 'set_zone',
+        arguments: { levelId: level.id, polygon: square, label },
+      })
+    const zones = () =>
+      Object.values(bridge.getNodes()).filter((n) => n.type === 'zone' && n.parentId === level.id)
+
+    const first = await setZone('Kitchen')
+    const again = await setZone('Kitchen')
+    expect(again.isError).toBeFalsy()
+    expect(JSON.parse((again.content as Array<{ text: string }>)[0]!.text).zoneId).toBe(
+      JSON.parse((first.content as Array<{ text: string }>)[0]!.text).zoneId,
+    )
+    expect(zones()).toHaveLength(1)
+
+    const other = await setZone('Pantry')
+    expect(other.isError).toBe(true)
+    expect((other.content as Array<{ text: string }>)[0]!.text).toContain('"Kitchen"')
+    expect(zones()).toHaveLength(1)
+  })
+
   test('rejects polygon with <3 vertices', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     const result = await client.callTool({

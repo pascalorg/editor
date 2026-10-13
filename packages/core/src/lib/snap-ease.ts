@@ -1,7 +1,7 @@
 /**
- * The ghost snapping to a corner (the owner, 8 October): a short eased move, never a jump or a
- * bounce. Under 200 ms and easing out, so it feels like the window was pulled in; it keeps following
- * the cursor while it eases, and does nothing at all under reduced motion.
+ * The ghost snapping to a corner: a short eased move, never a jump or a bounce. Under 200 ms and
+ * easing out, so it feels like the window was pulled in; it keeps following the cursor while it
+ * eases, and does nothing at all under reduced motion.
  */
 
 /** How long the ghost takes to move into, or out of, a snap (ms). */

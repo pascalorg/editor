@@ -1,14 +1,6 @@
 // The window tool's placement choices: the chips [O] Type and [L] Style.
 
-import {
-  CORNER_BLOCK_NOTES,
-  type CornerBlockReason,
-  type CornerSnapHint,
-  cornerHintRows,
-  type ToolHint,
-  useCornerSnapHint,
-  type WindowNode,
-} from '@pascal-app/core'
+import type { CornerBlockReason, ToolHint, WindowNode } from '@pascal-app/core'
 import {
   getWindowStyleOverrides,
   SILLLESS_WINDOW_TYPES,
@@ -18,6 +10,12 @@ import {
   windowTakesStyle,
   windowTypeFields,
 } from '@pascal-app/core/building'
+import {
+  CORNER_BLOCK_NOTES,
+  type CornerSnapHint,
+  cornerHintRows,
+  useCornerSnapHint,
+} from '@pascal-app/editor'
 import { create } from 'zustand'
 
 /** The window panel's Window Type row and the tool's Type chip. */
@@ -104,8 +102,8 @@ export const WINDOW_PLACEMENT_HINTS: ToolHint[] = [
 ]
 
 /**
- * What a click does while the ghost is inside a corner zone (the owner, 8 October), or why it is not
- * a corner: shown only there, so the hint appears when the window can join and goes when it leaves.
+ * What a click does while the ghost is inside a corner zone, or why it is not a corner: shown only
+ * there, so the hint appears when the window can join and goes when it leaves.
  */
 const HINTS_FOR: CornerSnapHint[] = [
   'join',

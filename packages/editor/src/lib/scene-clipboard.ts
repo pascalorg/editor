@@ -258,6 +258,13 @@ function remapNodeReferences(
     }
   }
 
+  // A corner window pasted with its partner joins the partner's copy; pasted alone, it is plain.
+  if (clone.type === 'window' && clone.corner) {
+    const partnerId = idMap.get(clone.corner.partnerId as AnyNodeId)
+    if (partnerId) clone.corner = { ...clone.corner, partnerId }
+    else delete clone.corner
+  }
+
   if (clone.type === 'stair') {
     const nextLevelId = getNextLevelId(targetLevel, nodes)
     ;(clone as StairNode).fromLevelId = targetLevel.id

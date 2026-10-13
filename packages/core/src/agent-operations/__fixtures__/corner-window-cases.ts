@@ -2,10 +2,10 @@ import { BuildingNode, LevelNode, WallNode, type WindowNode } from '../../schema
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
- * `add_corner_window` (L65): the 290's Bed 4 window wraps the corner of its bay; run 4 built one
- * window on one face and recorded it built. What goes wrong, written first: the two sides not
- * joined or not reaching the corner; a bay's 135° refused or squared; a side wider than its wall,
- * a point no two walls meet at, or a corner too shallow to be one, built anyway.
+ * `add_corner_window`: a window that wraps the corner of a bay, built as one window on one face and
+ * recorded built until this tool. What goes wrong, written first: the two sides not joined or not
+ * reaching the corner; a bay's 135° refused or squared; a side wider than its wall, a point no two
+ * walls meet at, or a corner too shallow to be one, built anyway.
  */
 
 /** Wall A runs into the corner at the origin; wall B leaves it at `degrees` from A. */
@@ -24,6 +24,34 @@ function cornerScene(degrees: number): SceneGraph {
   return {
     nodes: Object.fromEntries(nodes.map((node) => [node.id, node])),
     rootNodeIds: [building.id],
+  }
+}
+
+/** Two storeys of the same square corner, stacked: their walls end at the same plan points. */
+function stackedScene(): SceneGraph {
+  const ground = cornerScene(90)
+  const walls = ['wall_ca', 'wall_cb'].map((id) =>
+    WallNode.parse({
+      ...(ground.nodes[id] as WallNode),
+      id: `${id}_up`,
+      parentId: 'level_u',
+    }),
+  )
+  const upper = LevelNode.parse({
+    id: 'level_u',
+    parentId: 'building_c',
+    level: 1,
+    children: walls.map((wall) => wall.id),
+  })
+  const building = BuildingNode.parse({ id: 'building_c', children: ['level_c', upper.id] })
+  return {
+    nodes: {
+      ...ground.nodes,
+      building_c: building,
+      [upper.id]: upper,
+      ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+    },
+    rootNodeIds: ground.rootNodeIds,
   }
 }
 
@@ -87,5 +115,50 @@ export const CORNER_WINDOW_CASES: AgentToolCase[] = [
     scene: () => cornerScene(90),
     input: { corner: [0, 0], width: 1, windowType: 'sliding', style: 'double-hung' },
     expect: { refusal: 'style_needs_fixed_window', mentions: ["'fixed'", 'sliding'] },
+  },
+  // Stacked storeys share their corners' points: with no level named the corner was ambiguous on
+  // every multi-storey house, and two walls named from two floors made one window across both.
+  {
+    name: 'on a two-storey house, the corner of the level named',
+    tool: 'add_corner_window',
+    scene: stackedScene,
+    input: { corner: [0, 0], width: 1.2, levelId: 'level_u' },
+    expect: {
+      result: { ok: true, wallIds: ['wall_ca_up', 'wall_cb_up'] },
+      check: joined,
+    },
+  },
+  {
+    name: 'on a two-storey house, with no level named, the corner of the floor in view',
+    tool: 'add_corner_window',
+    scene: stackedScene,
+    // The MCP has no floor in view.
+    surfaces: ['core'],
+    context: { activeLevelId: 'level_u' },
+    input: { corner: [0, 0], width: 1.2 },
+    expect: { result: { ok: true, wallIds: ['wall_ca_up', 'wall_cb_up'] } },
+  },
+  {
+    name: 'two walls named from two floors are no corner',
+    tool: 'add_corner_window',
+    scene: stackedScene,
+    context: { activeLevelId: 'level_c' },
+    input: { corner: [0, 0], width: 1.2, wallIds: ['wall_ca', 'wall_cb_up'] },
+    expect: { refusal: 'no_corner', mentions: ['level_c'] },
+  },
+  // A casement keeps its frames at the corner: "fused glass" was offered, and drawn as frames.
+  {
+    name: 'a casement corner window meets at a post',
+    tool: 'add_corner_window',
+    scene: () => cornerScene(90),
+    input: { corner: [0, 0], width: 1, windowType: 'casement' },
+    expect: { result: { ok: true, post: 'post' }, check: joined },
+  },
+  {
+    name: 'fused glass on a casement corner window is refused',
+    tool: 'add_corner_window',
+    scene: () => cornerScene(90),
+    input: { corner: [0, 0], width: 1, windowType: 'casement', post: 'none' },
+    expect: { refusal: 'corner_not_fused', mentions: ['casement', 'fixed'] },
   },
 ]

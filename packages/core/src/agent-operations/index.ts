@@ -1,5 +1,6 @@
 import { AGENT_TOOL_CONTRACTS, BATCHABLE_TOOLS } from '../agent-tools'
 import { addColumn } from './add-column'
+import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addWall } from './add-wall'
 import { createBatchOperation } from './batch'
@@ -28,6 +29,7 @@ import { verifyScene } from './verify-scene'
 
 export * from './achieved'
 export * from './add-column'
+export * from './add-fence'
 export * from './add-level'
 export * from './add-object'
 export * from './add-wall'
@@ -35,6 +37,7 @@ export * from './apply-changes'
 export * from './apply-outcome'
 export * from './collections'
 export * from './corner-window'
+export * from './create-roof'
 export * from './create-room'
 export * from './create-stair'
 export * from './delete-node'
@@ -82,6 +85,7 @@ const SINGLE_OPERATIONS = {
   verify_scene: verifyScene,
   set_checkpoint: setCheckpoint,
   add_wall: addWall,
+  add_fence: addFence,
   add_corner_window: addCornerWindow,
   merge_windows: mergeWindowsOperation,
   add_level: addLevel,

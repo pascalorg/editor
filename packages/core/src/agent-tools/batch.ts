@@ -17,6 +17,7 @@ export const BATCHABLE_TOOLS = [
   'find_by_type',
   'create_roof',
   'add_wall',
+  'add_fence',
   'add_level',
   'create_stair',
   'add_corner_window',

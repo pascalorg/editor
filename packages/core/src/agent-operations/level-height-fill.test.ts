@@ -5,8 +5,8 @@ import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { migrateVerticalSceneNodes } from '../utils/scene-migrations'
 import { fillLevelHeights, type LevelHeightWrite } from './level-height-fill'
 
-// L68: a level written without a height is legacy to the editor's load, which derives its storey
-// plane; the session that wrote it read 2.5 m. A write gives it the height the load would derive.
+// A level written without a height is legacy to the editor's load, which derives its storey plane;
+// the session that wrote it read 2.5 m. A write gives it the height the load would derive.
 const building = BuildingNode.parse({ id: 'building_main' })
 const scene = { [building.id]: building } as Record<string, AnyNode>
 const heightless = (id: string) => {
@@ -54,6 +54,20 @@ describe('a level written without a height', () => {
     expect(notes).toEqual([
       `level level_up: height ${Math.round(height! * 100) / 100} m derived from its walls and ceilings, as the editor reads a level written without one`,
     ])
+  })
+
+  // apply_patch's wire format names a create's parent beside the node: the walls read as missing,
+  // so the level was saved at the default height under 3 m walls.
+  test('created with walls that name it only by the create’s own parentId', () => {
+    const walls = tallWalls('level_up').map(({ parentId: _parentId, ...wall }) => wall as AnyNode)
+    const ops: LevelHeightWrite[] = [
+      { op: 'create', node: heightless('level_up') },
+      ...walls.map((node) => ({ op: 'create' as const, node, parentId: 'level_up' })),
+    ]
+    fillLevelHeights(ops, scene)
+    expect((ops[0] as { node: { height?: number } }).node.height).toBe(
+      editorHeight('level_up', tallWalls('level_up'))!,
+    )
   })
 
   test('created empty, gets the default storey height', () => {

@@ -1,11 +1,12 @@
 import type {
+  AnyNodeId,
   FloorplanGeometry,
   FloorplanPoint,
   GeometryContext,
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { getWallBodyCenterOffset } from '@pascal-app/core'
+import { cornerPair, getWallBodyCenterOffset } from '@pascal-app/core'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   buildOpeningMarkAnnotation,
@@ -13,6 +14,69 @@ import {
 } from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
 import { resolveOpeningPlanPlane } from '../shared/opening-plane-offset'
+
+type Vec = readonly [number, number]
+const dot = (a: Vec, b: Vec) => a[0] * b[0] + a[1] * b[1]
+
+/**
+ * Where a corner window ends at its corner: on the mitre its wall meets the partner's wall along,
+ * which the 3D cut opens up to, so the two sides meet there and the corner reads as glass rather
+ * than a wall post. `at(v)` is the mitre's along-wall position (from the wall's start) at a
+ * perpendicular offset `v` from the wall's reference line. Null when the window is not one side of
+ * a corner pair.
+ */
+function cornerMitre(node: WindowNode, wall: WallNode, ctx: GeometryContext) {
+  const partnerId = node.corner?.partnerId as AnyNodeId | undefined
+  const partner = partnerId ? ctx.resolve<WindowNode>(partnerId) : undefined
+  const partnerWall = partner?.parentId
+    ? ctx.resolve<WallNode>(partner.parentId as AnyNodeId)
+    : undefined
+  if (partner?.type !== 'window' || partnerWall?.type !== 'wall') return null
+  const pair = cornerPair(
+    { [node.id]: node, [wall.id]: wall, [partner.id]: partner, [partnerWall.id]: partnerWall },
+    node,
+  )
+  if (!pair) return null
+  const into = (from: Vec, to: Vec): Vec => {
+    const length = Math.hypot(to[0] - from[0], to[1] - from[1])
+    return [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
+  }
+  const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  const dir = into(wall.start, wall.end)
+  const perp: Vec = [-dir[1], dir[0]]
+  const away = pair.end === 'start' ? dir : ([-dir[0], -dir[1]] as const)
+  const otherDir = into(partnerWall.start, partnerWall.end)
+  const otherPerp: Vec = [-otherDir[1], otherDir[0]]
+  const otherAway =
+    partner.corner?.end === 'start' ? otherDir : ([-otherDir[0], -otherDir[1]] as const)
+  const half = (wall.thickness ?? 0.1) / 2
+  const otherHalf = (partnerWall.thickness ?? 0.1) / 2
+  // Each wall's face toward the other meets the other's face toward it; the outer faces meet too.
+  const side = Math.sign(dot(otherAway, perp)) || 1
+  const otherSide = Math.sign(dot(away, otherPerp)) || 1
+  const inner = getWallBodyCenterOffset(wall) + side * half
+  const outer = getWallBodyCenterOffset(wall) - side * half
+  const otherInner = getWallBodyCenterOffset(partnerWall) + otherSide * otherHalf
+  const otherOuter = getWallBodyCenterOffset(partnerWall) - otherSide * otherHalf
+  // How far from the corner, along this wall, its face at `v` meets the other's face at `q`;
+  // capped where a wall's own miter stops, at five thicknesses.
+  const reach = 10 * half
+  const det = away[1] * otherAway[0] - away[0] * otherAway[1]
+  const meet = (v: number, q: number) => {
+    const rhs: Vec = [q * otherPerp[0] - v * perp[0], q * otherPerp[1] - v * perp[1]]
+    const t = (rhs[1] * otherAway[0] - rhs[0] * otherAway[1]) / det
+    return Math.max(-reach, Math.min(reach, t))
+  }
+  const tInner = meet(inner, otherInner)
+  const tOuter = meet(outer, otherOuter)
+  return {
+    end: pair.end,
+    at: (v: number) => {
+      const t = tInner + ((v - inner) * (tOuter - tInner)) / (outer - inner)
+      return pair.end === 'start' ? t : length - t
+    },
+  }
+}
 
 /**
  * Stage C floor-plan builder for window. Mirrors the legacy
@@ -59,76 +123,59 @@ export function buildWindowFloorplan(
   const cz = z1 + dirZ * distance + perpZ * across
   const halfWidth = width / 2
   const halfDepth = depth / 2
+  const halfWallDepth = wallDepth / 2
+  const plan = (along: number, v: number): FloorplanPoint => [
+    x1 + dirX * along + perpX * v,
+    z1 + dirZ * along + perpZ * v,
+  ]
+  // Where the window's side edge at perpendicular offset `v` lies along the wall, `inset` in from
+  // its jamb; a corner window's corner side runs to the mitre, with no jamb there.
+  const mitre = cornerMitre(node, wall, ctx)
+  const edge = (side: 'start' | 'end', v: number, inset = 0) =>
+    mitre?.end === side
+      ? mitre.at(v)
+      : side === 'start'
+        ? distance - halfWidth + inset
+        : distance + halfWidth - inset
+  const rectangle = (v: number, half: number, inset = 0): readonly FloorplanPoint[] => [
+    plan(edge('start', v + half, inset), v + half),
+    plan(edge('end', v + half, inset), v + half),
+    plan(edge('end', v - half, inset), v - half),
+    plan(edge('start', v - half, inset), v - half),
+  ]
   // An offset frame stands clear of the wall centre, but the wall is still
   // cut through its whole thickness: that hole is drawn too.
-  const wallX = x1 + dirX * distance + perpX * bodyOffset
-  const wallZ = z1 + dirZ * distance + perpZ * bodyOffset
-  const halfWallDepth = wallDepth / 2
-  const cutoutPoints: readonly FloorplanPoint[] | null =
-    plane.offset === 0
-      ? null
-      : [
-          [
-            wallX - dirX * halfWidth + perpX * halfWallDepth,
-            wallZ - dirZ * halfWidth + perpZ * halfWallDepth,
-          ],
-          [
-            wallX + dirX * halfWidth + perpX * halfWallDepth,
-            wallZ + dirZ * halfWidth + perpZ * halfWallDepth,
-          ],
-          [
-            wallX + dirX * halfWidth - perpX * halfWallDepth,
-            wallZ + dirZ * halfWidth - perpZ * halfWallDepth,
-          ],
-          [
-            wallX - dirX * halfWidth - perpX * halfWallDepth,
-            wallZ - dirZ * halfWidth - perpZ * halfWallDepth,
-          ],
-        ]
-
-  const points: readonly FloorplanPoint[] = [
-    [cx - dirX * halfWidth + perpX * halfDepth, cz - dirZ * halfWidth + perpZ * halfDepth],
-    [cx + dirX * halfWidth + perpX * halfDepth, cz + dirZ * halfWidth + perpZ * halfDepth],
-    [cx + dirX * halfWidth - perpX * halfDepth, cz + dirZ * halfWidth - perpZ * halfDepth],
-    [cx - dirX * halfWidth - perpX * halfDepth, cz - dirZ * halfWidth - perpZ * halfDepth],
-  ]
+  const cutoutPoints = plane.offset === 0 ? null : rectangle(bodyOffset, halfWallDepth)
+  const points = rectangle(across, halfDepth)
 
   const view = ctx.viewState
   const palette = view?.palette
   const isSelected = view?.selected ?? false
   const isHighlighted = view?.highlighted ?? false
+  const isHovered = view?.hovered ?? false
   const showSelectedChrome = isSelected || isHighlighted
 
   // Same selection treatment as door — selected windows get a full
-  // orange body + outline so they read as the active target.
-  const accentColor = showSelectedChrome ? '#f97316' : 'rgba(31, 41, 55, 0.92)'
+  // orange body + outline so they read as the active target. Hover takes the
+  // walls' hover stroke: the window a dragged one would join at a corner is
+  // outlined that way, as the 3D view outlines it.
+  const accentColor = showSelectedChrome
+    ? '#f97316'
+    : isHovered && palette
+      ? palette.wallHoverStroke
+      : 'rgba(31, 41, 55, 0.92)'
   const fillColor = showSelectedChrome ? '#fed7aa' : 'rgba(255, 255, 255, 0.96)'
 
   // Inner inset rectangle (the glass pane outline). Tangent inset
   // pulls the long sides in slightly; normal inset reduces the depth.
   const tangentInset = Math.min(width * 0.08, 0.12)
   const normalInset = Math.min(depth * 0.22, 0.07)
-  const innerStartA: FloorplanPoint = [
-    cx - dirX * (halfWidth - tangentInset) + perpX * (halfDepth - normalInset),
-    cz - dirZ * (halfWidth - tangentInset) + perpZ * (halfDepth - normalInset),
-  ]
-  const innerEndA: FloorplanPoint = [
-    cx + dirX * (halfWidth - tangentInset) + perpX * (halfDepth - normalInset),
-    cz + dirZ * (halfWidth - tangentInset) + perpZ * (halfDepth - normalInset),
-  ]
-  const innerEndB: FloorplanPoint = [
-    cx + dirX * (halfWidth - tangentInset) - perpX * (halfDepth - normalInset),
-    cz + dirZ * (halfWidth - tangentInset) - perpZ * (halfDepth - normalInset),
-  ]
-  const innerStartB: FloorplanPoint = [
-    cx - dirX * (halfWidth - tangentInset) - perpX * (halfDepth - normalInset),
-    cz - dirZ * (halfWidth - tangentInset) - perpZ * (halfDepth - normalInset),
-  ]
+  const innerPane = rectangle(across, halfDepth - normalInset, tangentInset)
 
   // Center mullion — from the midpoint of the left edge to the
   // midpoint of the right edge of the cutout.
-  const mullionStart: FloorplanPoint = [cx - dirX * halfWidth, cz - dirZ * halfWidth]
-  const mullionEnd: FloorplanPoint = [cx + dirX * halfWidth, cz + dirZ * halfWidth]
+  const mullionStart = plan(edge('start', across), across)
+  const mullionEnd = plan(edge('end', across), across)
 
   // A sheet draws the standard window symbol in plan-metre ink, so it prints
   // the same in every back end: the two wall faces carried across the opening
@@ -150,7 +197,7 @@ export function buildWindowFloorplan(
               points: cutoutPoints,
               fill: fillColor,
               stroke: accentColor,
-              strokeWidth: showSelectedChrome ? 1.9 : 1.25,
+              strokeWidth: showSelectedChrome || isHovered ? 1.9 : 1.25,
               vectorEffect: 'non-scaling-stroke',
               strokeLinejoin: 'round',
               metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
@@ -187,7 +234,7 @@ export function buildWindowFloorplan(
           points,
           fill: fillColor,
           stroke: accentColor,
-          strokeWidth: showSelectedChrome ? 1.9 : 1.25,
+          strokeWidth: showSelectedChrome || isHovered ? 1.9 : 1.25,
           vectorEffect: 'non-scaling-stroke',
           strokeLinejoin: 'round',
           metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
@@ -195,7 +242,7 @@ export function buildWindowFloorplan(
         // Inset glass-pane outline.
         {
           kind: 'polygon',
-          points: [innerStartA, innerEndA, innerEndB, innerStartB],
+          points: innerPane,
           fill: 'none',
           stroke: accentColor,
           strokeOpacity: 0.6,

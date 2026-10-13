@@ -1,9 +1,11 @@
-import { refuse } from '../agent-tools/refusal'
+import { type AgentRefusal, isAgentRefusal, refuse } from '../agent-tools/refusal'
 import {
   CORNER_REACH_M,
   cornerAngle,
+  cornerLinkClears,
   cornerPair,
-  DEGENERATE_CORNER_DEG,
+  fusesAtCorner,
+  isWrappableAngle,
   type WallEnd,
   wallEndPoint,
   wallLengthOf,
@@ -13,15 +15,15 @@ import type { AnyNode, AnyNodeId, WallNode, WindowNode } from '../schema'
 import { findWallChildOverlap, resolveWallOpeningCeiling } from './wall-openings'
 
 /**
- * Two windows that exist become one (the owner, 8 October): the one operation behind the editor's
- * Merge windows button, Wrap the corner when a window already waits at the corner, and the agents'
- * `merge_windows`.
+ * Two windows that exist become one: the one operation behind the editor's Merge windows button,
+ * Wrap the corner when a window already waits at the corner, and the agents' `merge_windows`.
  *
  * On two walls that meet at a corner, each reaching it within `CORNER_REACH_M`, they become one
  * corner window: both adopted, each slid to the corner keeping its width, the glass fused, one sill.
  * Side by side on one wall with at most `MERGE_GAP_M` between them and nothing between, they
  * become one window spanning both outer edges. The first window named is the one whose height, sill
- * and type (corner) or type and style (one wall) the result keeps.
+ * and type (corner) or type and style (one wall) the result keeps. A `corner` either had that no
+ * longer makes a pair (its partner moved off the corner) is cleared on both sides.
  */
 
 type Nodes = Readonly<Record<string, AnyNode>>
@@ -105,15 +107,16 @@ export function mergeWindows(nodes: Nodes, firstId: string, secondId: string): W
     [first.window, second.window],
     [second.window, first.window],
   ] as const) {
-    if (mine.corner && mine.corner.partnerId === other.id && cornerPair(nodes, mine))
+    const partnerId = cornerPair(nodes, mine)?.partner.id
+    if (partnerId === other.id)
       refuse('windows_already_joined', `${mine.id} and ${other.id} already wrap this corner.`, {
         windowIds: [mine.id, other.id],
       })
-    if (mine.corner && mine.corner.partnerId !== other.id && nodes[mine.corner.partnerId])
+    if (partnerId)
       refuse(
         'window_already_joined',
-        `Window ${mine.id} already wraps a corner with ${mine.corner.partnerId}; unwrap it before joining it to ${other.id}.`,
-        { windowId: mine.id, partnerId: mine.corner.partnerId },
+        `Window ${mine.id} already wraps a corner with ${partnerId}; unwrap it before joining it to ${other.id}.`,
+        { windowId: mine.id, partnerId },
       )
   }
   return first.wall.id === second.wall.id
@@ -122,6 +125,15 @@ export function mergeWindows(nodes: Nodes, firstId: string, secondId: string): W
 }
 
 type Side = { window: WindowNode; wall: WallNode }
+
+/** The links the merged windows' old, broken pairs leave on windows other than these two. */
+function brokenLinkClears(nodes: Nodes, ...windows: WindowNode[]) {
+  const ids = new Set<string>(windows.map((window) => window.id))
+  return windows
+    .flatMap((window) => cornerLinkClears(nodes, window.id))
+    .filter(({ id }) => !ids.has(id))
+    .map(({ id, data }) => ({ id: id as AnyNodeId, data: data as Partial<WindowNode> }))
+}
 
 function mergeOnOneWall(nodes: Nodes, first: Side, second: Side): WindowMerge {
   const wall = first.wall
@@ -135,8 +147,9 @@ function mergeOnOneWall(nodes: Nodes, first: Side, second: Side): WindowMerge {
       { windowIds: [a.id, b.id], gap, limit: MERGE_GAP_M },
     )
 
-  const outerLeft = leftOf.position[0] - leftOf.width / 2
-  const outerRight = rightOf.position[0] + rightOf.width / 2
+  // The union of the two: a window inside the other, or wider than it, does not shrink it.
+  const outerLeft = Math.min(a.position[0] - a.width / 2, b.position[0] - b.width / 2)
+  const outerRight = Math.max(a.position[0] + a.width / 2, b.position[0] + b.width / 2)
   const bottom = Math.min(sillOf(a), sillOf(b))
   const top = Math.max(headOf(a), headOf(b))
   const centre: [number, number] = [(outerLeft + outerRight) / 2, (bottom + top) / 2]
@@ -169,8 +182,14 @@ function mergeOnOneWall(nodes: Nodes, first: Side, second: Side): WindowMerge {
       update: [
         {
           id: a.id as AnyNodeId,
-          data: { width, height: top - bottom, position: [centre[0], centre[1], a.position[2]] },
+          data: {
+            width,
+            height: top - bottom,
+            position: [centre[0], centre[1], a.position[2]],
+            ...(a.corner ? { corner: undefined } : {}),
+          },
         },
+        ...brokenLinkClears(nodes, a, b),
       ],
       delete: [b.id as AnyNodeId],
     },
@@ -191,7 +210,7 @@ function mergeAtCorner(nodes: Nodes, first: Side, second: Side): WindowMerge {
     { wall: first.wall, end: joint.endA },
     { wall: second.wall, end: joint.endB },
   )
-  if (angle < DEGENERATE_CORNER_DEG || angle > 180 - DEGENERATE_CORNER_DEG)
+  if (!isWrappableAngle(angle))
     refuse(
       'corner_angle',
       `The walls meet at ${Math.round(angle)}°: too close to ${angle < 90 ? 'folded back' : 'straight'} for a corner window.`,
@@ -221,6 +240,7 @@ function mergeAtCorner(nodes: Nodes, first: Side, second: Side): WindowMerge {
     )
 
   // Each side slides to the corner, keeping its width, if no other opening is in the way.
+  const post = fusesAtCorner(a) ? 'none' : 'post'
   const centreAt = (window: WindowNode, wall: WallNode, end: WallEnd) =>
     end === 'start' ? window.width / 2 : wallLengthOf(wall) - window.width / 2
   const placed = sides.map(({ window, wall, end }, index) => {
@@ -233,11 +253,7 @@ function mergeAtCorner(nodes: Nodes, first: Side, second: Side): WindowMerge {
         `Sliding ${window.id} to the corner of wall ${wall.id} would overlap ${blocking.type} ${blocking.id}.`,
         { windowId: window.id, blockingId: blocking.id },
       )
-    const corner = {
-      end,
-      partnerId: sides[1 - index]!.window.id,
-      post: 'none' as const,
-    }
+    const corner = { end, partnerId: sides[1 - index]!.window.id, post } as const
     const aligned: Partial<WindowNode> =
       index === 0
         ? {}
@@ -256,25 +272,26 @@ function mergeAtCorner(nodes: Nodes, first: Side, second: Side): WindowMerge {
     sillHeight: sillOf(a),
     height: a.height,
     angle: round(angle),
-    changes: { update: placed, delete: [] },
-    message: `Joined ${a.id} and ${b.id} as one corner window across ${first.wall.id} and ${second.wall.id} (${Math.round(angle)}°), the glass fused at the corner. Both take ${a.id}'s height and sill (${metres(a.height)} tall from ${metres(sillOf(a))}) and type, as it was named first.`,
+    changes: { update: [...placed, ...brokenLinkClears(nodes, a, b)], delete: [] },
+    message: `Joined ${a.id} and ${b.id} as one corner window across ${first.wall.id} and ${second.wall.id} (${Math.round(angle)}°), ${post === 'none' ? 'the glass fused at the corner' : `the ${a.windowType} frames meeting at the corner`}. Both take ${a.id}'s height and sill (${metres(a.height)} tall from ${metres(sillOf(a))}) and type, as it was named first.`,
   }
 }
 
 /**
  * What the Merge windows button does for a selection: nothing unless exactly two windows are
- * selected; otherwise whether they can join, and if not, why, in the refusal's own words.
+ * selected; otherwise the merge they would make, or the refusal, whose code and details the panel
+ * words for a person (its message is written for agents, with node ids and metres).
  */
 export function windowMergeOffer(
   nodes: Nodes,
   selectedIds: readonly string[],
-): { reason: string | null } | null {
+): { merge: WindowMerge; refusal: null } | { merge: null; refusal: AgentRefusal } | null {
   if (selectedIds.length !== 2) return null
   if (selectedIds.some((id) => nodes[id]?.type !== 'window')) return null
   try {
-    mergeWindows(nodes, selectedIds[0]!, selectedIds[1]!)
-    return { reason: null }
+    return { merge: mergeWindows(nodes, selectedIds[0]!, selectedIds[1]!), refusal: null }
   } catch (error) {
-    return { reason: error instanceof Error ? error.message : 'These windows cannot be merged.' }
+    if (isAgentRefusal(error)) return { merge: null, refusal: error }
+    throw error
   }
 }

@@ -1,11 +1,9 @@
 // The rectangles a roof is built from, one roof segment each: the footprint's wings, each as long
 // as it runs inside the footprint, so they overlap where they meet. The roof renders their union,
 // so a wing's hips meet the body's slopes in valleys; wings cut where they meet put a hip end each
-// side of the cut, a notch along the joint (L41, Hawkesbury's hip-roof facade).
-// Coordinates scaled from a plan carry float noise that sliced the footprint into slivers (468 hip
-// segments on the Victor's top floor, which froze the page), so the footprint is snapped first,
-// balcony-thin strips join their larger neighbour, and a pathological footprint falls back to its
-// bounding box.
+// side of the cut, a notch along the joint. Coordinates scaled from a plan carry float noise that
+// slices the footprint into hundreds of slivers, so the footprint is snapped first, balcony-thin
+// strips join their larger neighbour, and a pathological footprint falls back to its bounding box.
 
 type Pt = [number, number]
 export type RoofRectangle = { minX: number; maxX: number; minZ: number; maxZ: number }
@@ -21,16 +19,19 @@ const MAX_HIP_WINGS = 6
 /** A footprint longer than this is a block, not a house: its roof is flat. */
 const BLOCK_LENGTH = 30
 
-function insideAny(polygons: readonly (readonly Pt[])[], x: number, z: number) {
-  let inside = false
-  for (const polygon of polygons)
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const [ax, az] = polygon[i]!
-      const [bx, bz] = polygon[j]!
-      if (az > z !== bz > z && x < ((bx - ax) * (z - az)) / (bz - az) + ax) inside = !inside
-    }
-  return inside
+function inside(polygon: readonly Pt[], x: number, z: number) {
+  let crossed = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [ax, az] = polygon[i]!
+    const [bx, bz] = polygon[j]!
+    if (az > z !== bz > z && x < ((bx - ax) * (z - az)) / (bz - az) + ax) crossed = !crossed
+  }
+  return crossed
 }
+
+/** The footprint is the union of its plates: where two slabs overlap, both cover it. */
+const insideAny = (polygons: readonly (readonly Pt[])[], x: number, z: number) =>
+  polygons.some((polygon) => inside(polygon, x, z))
 
 /**
  * A strip of cells thinner than a part keeps only what its larger neighbour along the other axis
@@ -260,8 +261,8 @@ function mergeWings(
 }
 
 /**
- * The frame a roof is swept in: the footprint's own axes, from its longest edge. Swept along the
- * world axes, a building turned 20° got a staircase of segments (Victor run 5). The rotation
+ * The frame a roof is swept in: the footprint's own axes, from its longest edge, so a rotated
+ * building gets whole wings, not a staircase of segments along the world axes. The rotation
  * convention is a roof node's: local (x, z) → (x c + z s, -x s + z c).
  */
 export function buildingFrame(polygons: readonly (readonly Pt[])[]) {

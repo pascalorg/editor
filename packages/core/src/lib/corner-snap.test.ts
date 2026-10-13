@@ -1,14 +1,19 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, LevelNode, WallNode, WindowNode } from '../schema'
-import { CORNER_SNAP_EXIT_M, cornerBlock, cornerSnap } from './corner-snap'
+import { type AnyNode, DoorNode, LevelNode, WallNode, WindowNode } from '../schema'
+import { CORNER_SNAP_EXIT_M, type CornerInput, evaluateCorner } from './corner-snap'
 
-// The owner (8 October): placing or dragging a window near a corner told you nothing about joining
-// the window on the other wall. The ghost snaps its edge to the corner inside a zone, the window
-// waiting there is found for the highlight, and the zone has hysteresis so the hint does not
-// flicker at its edge. Written first: no snap inside 0.30 m; snapping where no corner is; the zone
-// flickering at its threshold; the window waiting on the other wall not found, or a pair's taken.
+// Placing or dragging a window near a corner used to say nothing about joining the window on the
+// other wall. The ghost snaps its edge to the corner inside a zone, the window waiting there is
+// found for the highlight, and the zone has hysteresis so the hint does not flicker at its edge.
+// Written first: no snap inside 0.30 m; snapping where no corner is; the zone flickering at its
+// threshold; the window waiting on the other wall not found, or a pair's taken.
 
 const LEVEL = 'level_s'
+
+const cornerSnap = (nodes: Record<string, AnyNode>, input: CornerInput) =>
+  evaluateCorner(nodes, input).snap
+const cornerBlock = (nodes: Record<string, AnyNode>, input: CornerInput) =>
+  evaluateCorner(nodes, input).block
 
 /** Wall A (4 m) runs into the corner at the origin; wall B (3 m) leaves it at `degrees`. */
 function scene(degrees: number, extra: AnyNode[] = [], extraWalls: AnyNode[] = []) {
@@ -128,13 +133,25 @@ describe('the window waiting at the other wall’s corner', () => {
   })
 
   test('is not one that is already a side of a corner window', () => {
+    // The corner already holds a pair: wall_b's side, joined to the one on wall_a.
     const taken = onWall('window_taken', 'wall_b', 0.6, 1.2, {
-      corner: { end: 'start', partnerId: 'window_elsewhere', post: 'none' },
+      corner: { end: 'start', partnerId: 'window_partner', post: 'none' },
+    })
+    const partner = onWall('window_partner', 'wall_a', 4 - 0.6, 1.2, {
+      corner: { end: 'end', partnerId: 'window_taken', post: 'none' },
     })
 
     // Taken, it is not waiting; with it in the way the match has no room, so no corner is offered.
-    expect(cornerSnap(scene(90, [taken]), input)).toBeNull()
-    expect(cornerBlock(scene(90, [taken]), input)?.reason).toBe('no_room')
+    expect(cornerSnap(scene(90, [taken, partner]), input)).toBeNull()
+    expect(cornerBlock(scene(90, [taken, partner]), input)?.reason).toBe('no_room')
+  })
+
+  test('is one whose pair is broken: its partner was deleted', () => {
+    const orphan = onWall('window_orphan', 'wall_b', 0.6, 1.2, {
+      corner: { end: 'start', partnerId: 'window_gone', post: 'none' },
+    })
+
+    expect(cornerSnap(scene(90, [orphan]), input)?.waitingId).toBe('window_orphan')
   })
 
   test('is never a draft still being placed', () => {
@@ -152,10 +169,10 @@ describe('the window waiting at the other wall’s corner', () => {
   })
 })
 
-// The owner could not find "Wrap the corner" (8 October): a lone wall, a T-junction, a curved or
-// curtain wall, an angle out of range, or no room for the match show nothing, so the hint says why
-// where a window is placed or dragged within the zone. Written first: a reason where there is none,
-// no reason where the corner would join, and the zone's hysteresis leaving the reason flickering.
+// "Wrap the corner" was hard to find: a lone wall, a T-junction, a curved or curtain wall, an angle
+// out of range, or no room for the match show nothing, so the hint says why where a window is
+// placed or dragged within the zone. Written first: a reason where there is none, no reason where
+// the corner would join, and the zone's hysteresis leaving the reason flickering.
 describe('why a wall end is not a corner', () => {
   const input = { wallId: 'wall_a', centreX: centreAt(0.1), width: 1.2 }
 
@@ -211,13 +228,11 @@ describe('why a wall end is not a corner', () => {
   })
 
   test('no room for the match on the other wall: an opening already stands at its corner end', () => {
-    const taken = onWall('window_taken', 'wall_b', 0.6, 1.2, {
-      corner: { end: 'start', partnerId: 'window_elsewhere', post: 'none' },
-    })
+    const door = onWall('window_beside', 'wall_b', 0.6 + 1.25, 1.2)
 
-    expect(cornerBlock(scene(90, [taken]), input)?.reason).toBe('no_room')
-    // And the ghost does not snap to a corner it cannot join.
-    expect(cornerSnap(scene(90, [taken]), input)).toBeNull()
+    expect(
+      cornerBlock(scene(90, [door]), { ...input, width: 2.5, centreX: 4 - 0.1 - 1.25 })?.reason,
+    ).toBe('no_room')
   })
 
   test('a window waiting there needs no room: it is adopted', () => {
@@ -225,6 +240,43 @@ describe('why a wall end is not a corner', () => {
 
     expect(cornerBlock(scene(90, [waiting]), input)).toBeNull()
     expect(cornerSnap(scene(90, [waiting]), input)?.waitingId).toBe('window_waiting')
+  })
+
+  // The HUD read "Join as a corner window" where the join was then refused on the click, and a plain
+  // window was placed without a word: the join is checked before the click.
+  test('a window waiting there that cannot slide to the corner: something in the way', () => {
+    const self = onWall('window_self', 'wall_a', centreAt(0.1))
+    const waiting = onWall('window_waiting', 'wall_b', 0.6 + 0.25)
+    const door = DoorNode.parse({
+      id: 'door_corner',
+      parentId: 'wall_b',
+      wallId: 'wall_b',
+      position: [0.12, 1, 0],
+      width: 0.2,
+      height: 2,
+    })
+    const nodes = scene(90, [self, waiting, door])
+
+    expect(evaluateCorner(nodes, { ...input, ignoreId: 'window_self' })).toEqual({
+      snap: null,
+      block: { reason: 'in_the_way', end: 'end' },
+    })
+  })
+
+  test('a window waiting there too tall for this wall', () => {
+    const self = onWall('window_self', 'wall_a', centreAt(0.1))
+    const waiting = onWall('window_waiting', 'wall_b', 0.6, 1.2, {
+      position: [0.6, 2.2, 0],
+      height: 1.6,
+    })
+    const nodes = {
+      ...scene(90, [self, waiting]),
+      wall_a: { ...scene(90, [self]).wall_a!, height: 2.4 } as AnyNode,
+    }
+
+    expect(evaluateCorner(nodes, { ...input, ignoreId: 'window_self' }).block?.reason).toBe(
+      'too_tall',
+    )
   })
 
   test('keeps its reason across the zone’s edge like the snap does', () => {

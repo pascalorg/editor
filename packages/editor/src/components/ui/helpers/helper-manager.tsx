@@ -6,8 +6,6 @@ import {
   floorPlacedCollides,
   nodeRegistry,
   type TerrainVerb,
-  cornerHintRows,
-  useCornerSnapHint,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -68,6 +66,7 @@ import {
   usePaintRegionMode,
 } from '../../../lib/paint-region-mode'
 import { snapContextOf } from '../../../lib/snapping-mode'
+import { cornerHintRows, useCornerSnapHint } from '../../../store/use-corner-snap-hint'
 import useEditor, { getActiveContinuationContext } from '../../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,

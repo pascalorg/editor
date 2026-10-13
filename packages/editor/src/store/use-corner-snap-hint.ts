@@ -1,11 +1,11 @@
+import type { CornerBlockReason } from '@pascal-app/core'
 import { create } from 'zustand'
-import type { CornerBlockReason } from '../lib/corner-snap'
 
 /**
- * What the window being placed or dragged near a wall end says (the owner, 8 October): `join` when
- * a window already waits on the other wall, `new` when one would be created, the reason when the
- * end is not a corner a window can wrap, null away from a wall end. The tools write it; the HUD
- * reads it, so the hint is there only inside the zone.
+ * What the window being placed or dragged near a wall end says: `join` when a window already waits
+ * on the other wall, `new` when one would be created, the reason when the end is not a corner a
+ * window can wrap, null away from a wall end. The tools write it; the HUD reads it, so the hint is
+ * there only inside the zone.
  */
 export type CornerSnapHint = 'join' | 'new' | CornerBlockReason | null
 
@@ -25,6 +25,8 @@ export const CORNER_BLOCK_NOTES: Record<CornerBlockReason, string> = {
   curved: 'A curved wall takes no corner window',
   curtain: 'A curtain wall takes no corner window',
   no_room: 'No room for the matching window on the other wall',
+  in_the_way: 'Another opening is in the way at the corner',
+  too_tall: 'The window waiting there is taller than this wall',
 }
 
 export type CornerHintRow = { keys: string[]; label: string }
@@ -40,5 +42,6 @@ export function cornerHintRows(hint: CornerSnapHint): CornerHintRow[] {
       },
       { keys: ['Alt'], label: 'Place without the corner snap' },
     ]
-  return [{ keys: ['Corner'], label: CORNER_BLOCK_NOTES[hint] }]
+  // The HUD's notice row, as for a placement that does not fit: a note, not a key to press.
+  return [{ keys: ['!'], label: CORNER_BLOCK_NOTES[hint] }]
 }

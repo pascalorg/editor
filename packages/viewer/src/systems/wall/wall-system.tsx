@@ -56,6 +56,7 @@ import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
 import { timeSpan } from '../../lib/perf-tracks'
 import { isRevealWaiting } from '../../lib/reveal-pending'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
+import { cornerFrameStale } from '../window/corner-frame'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
   buildOpeningCutoutGeometry,
@@ -1231,6 +1232,10 @@ function updateWallGeometry(
     for (const child of childrenNodes) useScene.getState().markDirty(child.id)
   }
   mesh.userData.wallFrameKey = frameKey
+  // A wall moved apart from the other wall of a corner window, or back, makes or breaks the pair:
+  // its windows rebuild their frames once (they read the pair only then).
+  for (const child of childrenNodes)
+    if (cornerFrameStale(child, nodes)) useScene.getState().markDirty(child.id)
 }
 
 /**

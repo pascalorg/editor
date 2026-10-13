@@ -46,6 +46,19 @@
       }
     },
     {
+      "name": "add_fence",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds fence nodes along points on a level of the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "add_level",
       "annotations": {
         "readOnlyHint": false,
@@ -222,7 +235,7 @@
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It is not read-only because adds a roof node to the connected Pascal scene.",
+        "readOnlyHint": "It is not read-only because it adds a roof, and the building's roof level when it has none, to the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
       }

@@ -70,6 +70,7 @@ import { Input } from './../../../../../components/ui/primitives/input'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import { cn } from './../../../../../lib/utils'
 import { refusedObjectsNotice } from './../../../../../components/editor/group-actions'
+import { addStoreyOnTop } from './../../../../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { bringBuildArtifacts } from './../../../../../lib/scene-clipboard'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
@@ -416,9 +417,13 @@ function FloorSettingsSection() {
 
   if (!building) return null
 
-  const addLevel = (level: number) => {
+  const addFloor = () => {
+    const newLevel = addStoreyOnTop(building.id)
+    setSelection({ buildingId: building.id, levelId: newLevel.id })
+  }
+  const addBasement = () => {
     const newLevel = LevelNode.parse({
-      level,
+      level: Math.min(0, ...levels.map((level) => level.level)) - 1,
       height: DEFAULT_LEVEL_HEIGHT,
       children: [],
       parentId: building.id,
@@ -426,10 +431,6 @@ function FloorSettingsSection() {
     createNode(newLevel, building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
   }
-
-  const addFloor = () =>
-    addLevel(levels.length === 0 ? 0 : Math.max(0, ...levels.map((level) => level.level)) + 1)
-  const addBasement = () => addLevel(Math.min(0, ...levels.map((level) => level.level)) - 1)
 
   return (
     <div className="space-y-3">

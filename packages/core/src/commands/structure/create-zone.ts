@@ -5,7 +5,7 @@ import { segmentsIntersect } from '../../lib/polygon-relations'
 import { extractRooms } from '../../lib/room-graph'
 import { isAllocatedRoomName } from '../../lib/room-name'
 import { adoptableFace, zoneFaceFits } from '../../lib/room-zone-adoption'
-import { type AnyNodeId, SeparatorNode, type WallNode, ZoneNode } from '../../schema'
+import { type AnyNodeId, SeparatorNode, type WallNode, type ZoneNode } from '../../schema'
 import { getWallCurveFrameAt } from '../../systems/wall/wall-curve'
 import { planWallInsertion, uncoveredWallSegments } from '../../systems/wall/wall-topology'
 import { setZoneIntent, type ZoneIntentPatch } from './set-zone-intent'
@@ -58,8 +58,8 @@ export function outdoorRoomConflicts(nodes: StructureNodes, levelId: string, pol
 
 /**
  * The room walls already make where a room is drawn, to name rather than stack a second zone on
- * (run 6: walls first, then create_room, gave every room a "Room N" twin). Only when every edge of
- * the polygon runs along a wall, so nothing is built and the rooms stand as they are; the room the
+ * (walls first, then create_room, gave every room a "Room N" twin). Only when every edge of the
+ * polygon runs along a wall, so nothing is built and the rooms stand as they are; the room the
  * polygon fits by the reconciler's own adoption rule, and only while it keeps the name the
  * reconciler gave it.
  */
@@ -102,7 +102,7 @@ export function walledRoomAt(
  * The walled room a drawn polygon names instead of stacking a zone on: one that still has the name
  * the reconciler gave it, or any walled room when `adoptNamed` says its person's name may change.
  */
-export function walledRoomToName(
+function walledRoomToName(
   nodes: StructureNodes,
   levelId: string,
   polygon: Point[],

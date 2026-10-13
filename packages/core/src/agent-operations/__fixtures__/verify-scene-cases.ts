@@ -274,6 +274,46 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { contains: ['roof_level_no_roof'] },
   ),
   verify(
+    'a roof level below a storey of its building is reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_roof', 1, { metadata: { role: 'roof' } }),
+        level('level_2', 2),
+        ...room('level_0', 'ground'),
+        ...room('level_2', 'upper'),
+        ...stairOn('level_0'),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+      ),
+    { contains: ['roof_level_not_on_top'], mentions: ['level_2'] },
+  ),
+  verify(
+    'a roof level below an empty storey, a floor still to be built, is reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_roof', 1, { metadata: { role: 'roof' } }),
+        level('level_2', 2),
+        ...room('level_0', 'ground'),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+      ),
+    { contains: ['roof_level_not_on_top'], mentions: ['level_2'] },
+  ),
+  verify(
+    'a roof level on top of its storeys is quiet',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_roof', 1, { metadata: { role: 'roof' } }),
+        ...room('level_0', 'ground'),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+      ),
+    { lacks: ['roof_level_not_on_top'] },
+  ),
+  verify(
     'a roof on a storey is reported',
     () =>
       scene(
@@ -286,6 +326,12 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
       contains: ['roof_mixed_in_storey'],
       mentions: ['dedicated roof level'],
     },
+  ),
+  verify(
+    "a lower wing's roof at the upper storey's floor, where the Roof tool puts it, is quiet",
+    () =>
+      twoStoreys(...stairOn('level_0'), RoofNode.parse({ id: 'roof_porch', parentId: 'level_1' })),
+    { lacks: ['roof_mixed_in_storey'] },
   ),
   verify(
     'a wall taller than its storey in a multi-storey building is reported',

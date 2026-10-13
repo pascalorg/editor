@@ -1,15 +1,20 @@
-import { planCornerWindow } from '../building/corner-window'
+import { type CornerWindowInput, planCornerWindow } from '../building/corner-window'
 import { cornerPair, wallEndPoint, windowCornerEnd } from '../lib/corner-pair'
 import type { WallNode, WindowNode } from '../schema'
 import { achievedChanges } from './achieved'
+import { type LevelTargetInput, targetLevel } from './level-target'
 import type { AgentOperation, SceneChanges } from './types'
 import { registerSceneCheck, type SceneIssue } from './verify-scene'
 
-type AddCornerWindowInput = Parameters<typeof planCornerWindow>[1]
+type AddCornerWindowInput = Omit<CornerWindowInput, 'levelId'> & LevelTargetInput
 
-/** `add_corner_window` (L65): one window on each of the two walls meeting at a corner, joined. */
-export const addCornerWindow: AgentOperation<AddCornerWindowInput> = (nodes, input) => {
-  const { windows, wallIds, angle } = planCornerWindow(nodes, input)
+/**
+ * `add_corner_window`: one window on each of the two walls meeting at a corner, joined, on the level
+ * named, else the one in view: stacked storeys share their corners' plan points.
+ */
+export const addCornerWindow: AgentOperation<AddCornerWindowInput> = (nodes, input, context) => {
+  const level = targetLevel(nodes, input, context)
+  const { windows, wallIds, angle } = planCornerWindow(nodes, { ...input, levelId: level.id })
   const changes: SceneChanges = {
     create: windows.map((node) => ({ node: node as never, parentId: node.parentId! })),
   }
@@ -30,9 +35,9 @@ export const addCornerWindow: AgentOperation<AddCornerWindowInput> = (nodes, inp
 const round = (value: number) => Math.round(value * 100) / 100
 
 /**
- * Corner windows, checked (L65): two windows running to the same corner unjoined (run 4 built one
- * face of the 290's Bed 4 corner window and did not see the wrap), a pair whose sides drifted
- * apart, a window naming a partner that is gone.
+ * Corner windows, checked: two windows running to the same corner unjoined (one face of a corner
+ * window built, the wrap missed), a pair whose sides drifted apart, a window naming a partner that
+ * is gone.
  */
 export function cornerWindowIssues(nodes: Parameters<typeof cornerPair>[0]): SceneIssue[] {
   const issues: SceneIssue[] = []
@@ -41,10 +46,12 @@ export function cornerWindowIssues(nodes: Parameters<typeof cornerPair>[0]): Sce
     if (node.type !== 'window') continue
     const window = node as WindowNode
     const pair = cornerPair(nodes, window)
+    // Informational: what broke the pair (a side deleted or moved, a wall moved) was a choice.
     if (window.corner && !pair) {
       issues.push({
         type: 'corner_partner_missing',
-        message: `Window ${window.id} names corner partner ${window.corner.partnerId}, but one of them is gone, no longer joined back or no longer at the corner: it renders as a plain window. Rebuild the pair with add_corner_window.`,
+        severity: 'info',
+        message: `Window ${window.id} names corner partner ${window.corner.partnerId}, but they no longer make a corner window (one is gone or moved off the corner, or the walls no longer meet there): it renders as a plain window. Only if the person wants the corner wrapped again, merge_windows joins two windows there.`,
       })
       continue
     }
@@ -71,9 +78,11 @@ export function cornerWindowIssues(nodes: Parameters<typeof cornerPair>[0]): Sce
   for (const [key, windows] of atCorner) {
     if (new Set(windows.map((w) => w.parentId)).size < 2) continue
     const corner = key.split(':')[1]
+    // Informational: two windows meeting at a corner may be what the person drew.
     issues.push({
       type: 'corner_unjoined',
-      message: `Windows ${windows.map((w) => w.id).join(' and ')} both run to the corner (${corner}) without being joined: if the reference wraps the corner, add_corner_window builds them as one corner window, the glass fused or at a post.`,
+      severity: 'info',
+      message: `Windows ${windows.map((w) => w.id).join(' and ')} both run to the corner (${corner}) without being joined: if the reference wraps the corner, merge_windows joins them as one corner window, the glass fused.`,
     })
   }
   return issues

@@ -4,6 +4,7 @@ import {
   type BuildingNode,
   envelopeFrontEdge,
   type FloorplanGeometry,
+  isRoofLevel,
   type LevelNode,
   type SceneSnapshot,
   type SiteNode,
@@ -47,6 +48,7 @@ import {
   streetEdgeNames,
 } from './site-annotations'
 import {
+  aboveGradeLevels,
   findBuilding,
   findLowestLevel,
   findSite,
@@ -566,7 +568,11 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   }
 
   // ── The roof line, dashed over the footprint ─────────────────────────
-  for (const ring of roofOutlineRings(scene, level, building)) {
+  // Every storey's roofs, and the roof level's above them all.
+  const roofRings = aboveGradeLevels(scene, building).flatMap((roofed) =>
+    roofOutlineRings(scene, roofed, building),
+  )
+  for (const ring of roofRings) {
     primitives.push({
       kind: 'polygon',
       points: ring,
@@ -650,7 +656,9 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
     let storeys = 0
     for (const childId of building?.children ?? []) {
       const child = scene.nodes[childId as AnyNodeId] as AnyNode | undefined
-      if (child?.type === 'level' && (child as LevelNode).level >= 0) storeys++
+      // The roof level is not a storey: a bungalow under it is one storey.
+      if (child?.type === 'level' && (child as LevelNode).level >= 0 && !isRoofLevel(child))
+        storeys++
     }
     const cx = (footprintBounds.minX + footprintBounds.maxX) / 2
     const cy = (footprintBounds.minY + footprintBounds.maxY) / 2

@@ -2,13 +2,13 @@ import { BuildingNode, LevelNode, WallNode, WindowNode } from '../../schema'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
- * `merge_windows` (the owner, 8 October): two windows that already exist become one. On two walls
- * meeting at a corner, each reaching it within 0.30 m, they become one corner window (adopted, slid
- * to the corner, the glass fused, one sill); side by side on one wall with at most 0.30 m between
- * them and nothing between, one window spanning both. What goes wrong, written first: a window
- * recreated instead of adopted; the sides left on two sills; the second window's type or style
- * winning over the first's; a door, a window or an item between them swallowed; two windows that
- * are nowhere near each other joined anyway; a window already joined to another stolen.
+ * `merge_windows`: two windows that already exist become one. On two walls meeting at a corner,
+ * each reaching it within 0.30 m, they become one corner window (adopted, slid to the corner, the
+ * glass fused, one sill); side by side on one wall with at most 0.30 m between them and nothing
+ * between, one window spanning both. What goes wrong, written first: a window recreated instead of
+ * adopted; the sides left on two sills; the second window's type or style winning over the first's;
+ * a door, a window or an item between them swallowed; two windows that are nowhere near each other
+ * joined anyway; a window already joined to another stolen.
  */
 
 type WindowSpec = {
@@ -282,7 +282,8 @@ export const MERGE_WINDOWS_CASES: AgentToolCase[] = [
     tool: 'merge_windows',
     scene: () =>
       corner(90, [
-        { ...nearA, extra: { corner: { end: 'end', partnerId: 'window_c', post: 'none' } } },
+        // At the corner, joined to window_c: a pair that holds.
+        { ...nearA, x: 3.4, extra: { corner: { end: 'end', partnerId: 'window_c', post: 'none' } } },
         nearB,
         {
           id: 'window_c',
@@ -296,6 +297,58 @@ export const MERGE_WINDOWS_CASES: AgentToolCase[] = [
       ]),
     input: { windowIds: ['window_a', 'window_b'] },
     expect: { refusal: 'window_already_joined', mentions: ['window_a', 'window_c'] },
+  },
+  // A window dragged off its corner left both sides naming each other: the old pair held the window
+  // hostage ("unwrap it first") and its partner kept a link to a window gone elsewhere.
+  {
+    name: "a window whose old pair no longer holds joins, and the old partner's link is cleared",
+    tool: 'merge_windows',
+    scene: () =>
+      corner(90, [
+        // 0.10 m short of the corner: no longer one side of its pair with window_c.
+        { ...nearA, extra: { corner: { end: 'end', partnerId: 'window_c', post: 'none' } } },
+        nearB,
+        {
+          id: 'window_c',
+          wall: 'wall_cb',
+          x: 2.2,
+          width: 0.6,
+          sill: 0.5,
+          height: 1.5,
+          extra: { corner: { end: 'start', partnerId: 'window_a', post: 'none' } },
+        },
+      ]),
+    input: { windowIds: ['window_a', 'window_b'] },
+    expect: {
+      result: { ok: true, kind: 'corner', windowIds: ['window_a', 'window_b'] },
+      check: (_result, nodes) => {
+        const [a, c] = [nodes.window_a, nodes.window_c] as WindowNode[]
+        return [
+          ...(a?.corner?.partnerId === 'window_b' ? [] : [`window_a joined to ${a?.corner?.partnerId}`]),
+          ...(c?.corner ? [`window_c still names ${c.corner.partnerId}`] : []),
+        ]
+      },
+    },
+  },
+  {
+    name: 'a window inside another on one wall merges into their union, not a shrunk window',
+    tool: 'merge_windows',
+    scene: () =>
+      scene(
+        [wall5],
+        [
+          { id: 'window_l', wall: 'wall_m', x: 2.5, width: 4, sill: 0.5, height: 1.5 },
+          { id: 'window_r', wall: 'wall_m', x: 3.5, width: 1, sill: 0.5, height: 1.5 },
+        ],
+      ),
+    input: { windowIds: ['window_l', 'window_r'] },
+    expect: {
+      result: { ok: true, kind: 'same_wall', width: 4 },
+      check: (_result, nodes) => {
+        const merged = nodes.window_l as WindowNode
+        return merged?.position[0] === 2.5 ? [] : [`centre ${merged?.position[0]}`]
+      },
+    },
   },
   {
     name: 'the same window twice is refused',

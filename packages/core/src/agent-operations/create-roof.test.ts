@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { BuildingNode, LevelNode, WallNode } from '../schema'
-import { createRoof, grown, type RoofHost, roofHost } from './create-roof'
+import { planRoofLevel, type RoofLevelPlan } from '../services/roof-level'
+import { createRoof, grown } from './create-roof'
 import type { SceneNodes } from './types'
 
 type Pt = [number, number]
@@ -69,8 +70,9 @@ describe('create_roof: the level above the covered storey', () => {
   const created = (outcome: ReturnType<typeof createRoof>) =>
     (outcome.changes?.create ?? []).map(({ node }) => node)
 
-  // add_level always leaves a new storey empty: a person or an agent is about to build on it.
-  test('a storey added and not built yet is not the roof level: the roof goes above it', () => {
+  // The empty level directly above, with nothing over it, is where the roof goes: declared the
+  // roof level, so a floor added later goes under it.
+  test('an empty level directly above, the only one, becomes the roof level', () => {
     const empty = LevelNode.parse({
       id: 'level_added',
       parentId: 'building_a',
@@ -79,16 +81,11 @@ describe('create_roof: the level above the covered storey', () => {
     })
     const outcome = createRoof(house([empty]), {}, { activeLevelId: null })
 
-    const [roofLevel] = created(outcome).filter((node) => node.type === 'level')
-    expect(roofLevel).toMatchObject({
-      type: 'level',
-      level: 2,
-      parentId: 'building_a',
-      metadata: { role: 'roof' },
-    })
-    const roof = created(outcome).find((node) => node.type === 'roof')
-    expect(roof?.parentId).toBe(roofLevel?.id)
-    expect(roof?.parentId).not.toBe(empty.id)
+    expect(created(outcome).filter((node) => node.type === 'level')).toHaveLength(0)
+    expect(created(outcome).find((node) => node.type === 'roof')?.parentId).toBe(empty.id)
+    expect(outcome.changes?.update).toEqual([
+      { id: empty.id, data: { metadata: { role: 'roof' }, name: 'Roof' } },
+    ])
   })
 
   test('a roof level already above the storey is the roof level', () => {
@@ -157,9 +154,9 @@ describe('create_roof: the level above the covered storey', () => {
   })
 })
 
-// The host rule is one function and a table: each row is a house of one storey (level 0, 8 × 6 m)
-// with the levels listed above it, and what the roof is to stand on.
-describe('roofHost: the level a roof stands on', () => {
+// The rule is one function and a table: each row is a house of one storey (level 0, 8 × 6 m) with
+// the levels listed above it, and what the roof is to stand on.
+describe('planRoofLevel: the level a roof stands on', () => {
   type Spec = {
     id: string
     level: number
@@ -206,19 +203,18 @@ describe('roofHost: the level a roof stands on', () => {
       ...Object.fromEntries([...levels, ...walls].map((node) => [node.id, node])),
     } as SceneNodes
   }
-  const hostOf = (above: Spec[]): RoofHost =>
-    roofHost(scene(above), scene(above).level_0 as Parameters<typeof roofHost>[1])
+  const hostOf = (above: Spec[]): RoofLevelPlan => planRoofLevel(scene(above), 'level_0', 3)
 
   const rows: { name: string; above: Spec[]; host: Record<string, unknown> }[] = [
     {
       name: 'no level above: a roof level is built above the storey',
       above: [],
-      host: { kind: 'create', above: { id: 'level_0' } },
+      host: { kind: 'roof', create: { level: 1, metadata: { role: 'roof' } } },
     },
     {
       name: 'a roof level above: it is the host',
       above: [{ id: 'level_roof', level: 1, role: 'roof' }],
-      host: { kind: 'reuse', level: { id: 'level_roof' } },
+      host: { kind: 'roof', levelId: 'level_roof', create: null },
     },
     {
       name: 'two roof levels above: the lowest is the host',
@@ -226,22 +222,22 @@ describe('roofHost: the level a roof stands on', () => {
         { id: 'level_roof', level: 1, role: 'roof' },
         { id: 'level_roof_2', level: 2, role: 'roof' },
       ],
-      host: { kind: 'reuse', level: { id: 'level_roof' } },
+      host: { kind: 'roof', levelId: 'level_roof', create: null },
     },
     {
       name: 'a support level above, with nothing on it: not the host, the roof goes above it',
       above: [{ id: 'level_support', level: 1, role: 'support' }],
-      host: { kind: 'create', above: { id: 'level_support' } },
+      host: { kind: 'roof', create: { level: 2 } },
     },
     {
       name: 'a support level above, with things on it: not the host either',
       above: [{ id: 'level_support', level: 1, role: 'support', rooms: true }],
-      host: { kind: 'create', above: { id: 'level_support' } },
+      host: { kind: 'roof', create: { level: 2 } },
     },
     {
-      name: 'an empty occupied storey above: a floor to be built, the roof goes above it',
+      name: 'an empty storey above, alone: it becomes the roof level',
       above: [{ id: 'level_added', level: 1 }],
-      host: { kind: 'create', above: { id: 'level_added' } },
+      host: { kind: 'roof', levelId: 'level_added', create: null },
     },
     {
       name: 'several empty storeys and a support level stacked: the roof goes above the highest',
@@ -250,7 +246,7 @@ describe('roofHost: the level a roof stands on', () => {
         { id: 'level_added_2', level: 2 },
         { id: 'level_support', level: 3, role: 'support' },
       ],
-      host: { kind: 'create', above: { id: 'level_support' } },
+      host: { kind: 'roof', create: { level: 4 } },
     },
     {
       name: 'a roof level above several floors to be built is the host',
@@ -259,7 +255,7 @@ describe('roofHost: the level a roof stands on', () => {
         { id: 'level_support', level: 2, role: 'support' },
         { id: 'level_roof', level: 3, role: 'roof' },
       ],
-      host: { kind: 'reuse', level: { id: 'level_roof' } },
+      host: { kind: 'roof', levelId: 'level_roof', create: null },
     },
     {
       name: 'a roof level below a floor to be built is not above it: a new roof level goes above',
@@ -267,25 +263,25 @@ describe('roofHost: the level a roof stands on', () => {
         { id: 'level_roof', level: 1, role: 'roof' },
         { id: 'level_added', level: 2 },
       ],
-      host: { kind: 'create', above: { id: 'level_added' } },
+      host: { kind: 'roof', create: { level: 3 } },
     },
     {
-      name: 'a storey with rooms above: refused, naming it',
+      name: 'a storey with rooms above: it takes the roof (a lower wing), and create_roof refuses',
       above: [{ id: 'level_upper', level: 1, rooms: true }],
-      host: { kind: 'refuse', code: 'storey_above', storeyAbove: { id: 'level_upper' } },
+      host: { kind: 'storey', levelId: 'level_upper' },
     },
     {
-      name: 'a storey with rooms above a roof level: refused, the roof level does not hide it',
+      name: 'a storey with rooms above a roof level: the roof level does not hide it',
       above: [
         { id: 'level_roof', level: 1, role: 'roof' },
         { id: 'level_upper', level: 2, rooms: true },
       ],
-      host: { kind: 'refuse', code: 'storey_above', storeyAbove: { id: 'level_upper' } },
+      host: { kind: 'storey', levelId: 'level_upper' },
     },
     {
       name: 'a roof level of another building is not reused',
       above: [{ id: 'level_other_roof', level: 1, role: 'roof', building: 'building_b' }],
-      host: { kind: 'create', above: { id: 'level_0' } },
+      host: { kind: 'roof', create: { level: 1 } },
     },
   ]
 
@@ -301,12 +297,8 @@ describe('roofHost: the level a roof stands on', () => {
       [8, 6],
       [0, 6],
     ])
-    const orphan = { ...base.level_0, parentId: undefined } as unknown as Parameters<
-      typeof roofHost
-    >[1]
-    const nodes = { ...base, level_0: orphan } as SceneNodes
+    const nodes = { ...base, level_0: { ...base.level_0, parentId: undefined } } as SceneNodes
 
-    expect(roofHost(nodes, orphan)).toEqual({ kind: 'refuse', code: 'storey_without_building' })
     expect(() => createRoof(nodes, {}, { activeLevelId: null })).toThrow(/not in a building/)
   })
 

@@ -1,10 +1,12 @@
 import { isAgentRefusal } from '../agent-tools/refusal'
+import { mergeWindows } from '../building/merge-windows'
 import { planWallOpening } from '../building/wall-openings'
 import type { AnyNode, WallNode, WindowNode } from '../schema'
 import {
   CORNER_REACH_M,
   cornerAngle,
-  DEGENERATE_CORNER_DEG,
+  cornerPair,
+  isWrappableAngle,
   type WallEnd,
   wallEndPoint,
   wallLengthOf,
@@ -14,9 +16,9 @@ import {
 } from './corner-pair'
 
 /**
- * Placing or dragging a window near a corner (the owner, 8 October): inside the corner zone the
- * window snaps its edge to the corner and the window waiting on the other wall, if any, is found, so
- * the tool can highlight it and say the two will join. Pure: the tools read the answer.
+ * Placing or dragging a window near a corner: inside the corner zone the window snaps its edge to
+ * the corner and the window waiting on the other wall, if any, is found, so the tool can highlight
+ * it and say the two will join. Pure: the tools read the answer.
  */
 
 type Nodes = Readonly<Record<string, AnyNode>>
@@ -39,9 +41,10 @@ export type CornerSnap = {
 }
 
 /**
- * Why a wall end in the zone is not a corner window's: the owner could not find Wrap the corner
- * where a lone wall, a T-junction, a curved or curtain wall, a flat angle or a full wall gave
- * nothing at all, so the hint says it.
+ * Why a wall end in the zone is not a corner window's: a lone wall, a T-junction, a curved or
+ * curtain wall, a flat angle or a full wall would otherwise give no sign, so the hint says it. With
+ * a window waiting, why the two cannot join: an opening in the way of sliding them to the corner,
+ * or the waiting window too tall for this wall.
  */
 export type CornerBlockReason =
   | 'free_end'
@@ -50,6 +53,8 @@ export type CornerBlockReason =
   | 'curved'
   | 'curtain'
   | 'no_room'
+  | 'in_the_way'
+  | 'too_tall'
 
 export type CornerBlock = { reason: CornerBlockReason; end: WallEnd }
 
@@ -106,7 +111,7 @@ function evaluate(nodes: Nodes, input: CornerInput): Evaluation {
   const { wall: otherWall, end: otherEnd } = others[0]!
   if (isCurtain(wall as WallNode) || isCurtain(otherWall)) return blocked('curtain')
   const angle = cornerAngle({ wall: wall as WallNode, end }, { wall: otherWall, end: otherEnd })
-  if (angle < DEGENERATE_CORNER_DEG || angle > 180 - DEGENERATE_CORNER_DEG) return blocked('angle')
+  if (!isWrappableAngle(angle)) return blocked('angle')
 
   const waiting = Object.values(nodes)
     .filter(
@@ -114,11 +119,39 @@ function evaluate(nodes: Nodes, input: CornerInput): Evaluation {
         node.type === 'window' &&
         node.parentId === otherWall.id &&
         node.id !== input.ignoreId &&
-        !node.corner &&
+        // Free, or the partner of the window being dragged: dropped back, the pair holds.
+        [undefined, input.ignoreId].includes(cornerPair(nodes, node as WindowNode)?.partner.id) &&
         !(node.metadata as { isTransient?: boolean } | null)?.isTransient &&
         windowNearCornerEnd(nodes, node as WindowNode) === otherEnd,
     )
     .sort((a, b) => windowEndGap(otherWall, a, otherEnd) - windowEndGap(otherWall, b, otherEnd))[0]
+
+  const centreX = end === 'start' ? input.width / 2 : length - input.width / 2
+  // With a window waiting, the click merges the two: where that merge would be refused, the corner
+  // says why rather than placing a plain window on the click.
+  const self = input.ignoreId ? nodes[input.ignoreId] : undefined
+  if (waiting && self?.type === 'window') {
+    const height = input.height ?? self.height
+    const sill = input.sillHeight ?? self.position[1] - self.height / 2
+    const placed = {
+      ...self,
+      parentId: wall.id,
+      width: input.width,
+      height,
+      position: [centreX, sill + height / 2, self.position[2]],
+      corner: undefined,
+    } as WindowNode
+    try {
+      mergeWindows({ ...nodes, [placed.id]: placed }, waiting.id, placed.id)
+    } catch (error) {
+      if (!isAgentRefusal(error)) throw error
+      return error.code === 'height_exceeds_wall'
+        ? blocked('too_tall')
+        : error.code === 'opening_overlap'
+          ? blocked('in_the_way')
+          : null
+    }
+  }
 
   // With none waiting the click makes the match on the other wall: if that wall cannot take it,
   // the corner is not offered.
@@ -144,7 +177,7 @@ function evaluate(nodes: Nodes, input: CornerInput): Evaluation {
   return {
     snap: {
       end,
-      centreX: end === 'start' ? input.width / 2 : length - input.width / 2,
+      centreX,
       corner: [point[0]!, point[1]!],
       otherWall,
       otherEnd,
@@ -163,15 +196,4 @@ export function evaluateCorner(
     snap: found && 'snap' in found ? found.snap : null,
     block: found && 'block' in found ? found.block : null,
   }
-}
-
-export function cornerSnap(nodes: Nodes, input: CornerInput): CornerSnap | null {
-  const found = evaluate(nodes, input)
-  return found && 'snap' in found ? found.snap : null
-}
-
-/** Why a window within the corner zone gets no corner, or null where it does, or is out of the zone. */
-export function cornerBlock(nodes: Nodes, input: CornerInput): CornerBlock | null {
-  const found = evaluate(nodes, input)
-  return found && 'block' in found ? found.block : null
 }

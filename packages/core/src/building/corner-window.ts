@@ -2,8 +2,10 @@ import { refuse } from '../agent-tools/refusal'
 import {
   CORNER_REACH_M,
   cornerAngle,
+  cornerLinkClears,
   cornerPair,
-  DEGENERATE_CORNER_DEG,
+  fusesAtCorner,
+  isWrappableAngle,
   wallEndPoint,
   wallLengthOf,
   wallsEndingAt,
@@ -19,14 +21,13 @@ import {
   type WallOpeningInput,
 } from './wall-openings'
 
-export { cornerPair, windowCornerEnd } from '../lib/corner-pair'
-
 type Nodes = Readonly<Record<string, AnyNode>>
 type Point = [number, number]
 
 export type CornerWindowInput = {
   corner: Point
-  levelId?: string
+  /** The level whose walls meet at the corner. */
+  levelId: string
   /** The two walls, when more than two meet at the corner. */
   wallIds?: [string, string]
   /** How far the glass runs along each wall from the corner (m), unless `widths` names the wall. */
@@ -40,9 +41,9 @@ export type CornerWindowInput = {
 }
 
 /**
- * A corner window (L65): one window on each of the two walls meeting at `corner`, each running to
- * it, joined, at any angle the walls make. Each side is placed by add_window's rules, and the two
- * keep one sill: with none given, both are centred on the lower of the two walls.
+ * A corner window: one window on each of the two walls of `levelId` meeting at `corner`, each
+ * running to it, joined, at any angle the walls make. Each side is placed by add_window's rules,
+ * and the two keep one sill: with none given, both are centred on the lower of the two walls.
  */
 export function planCornerWindow(nodes: Nodes, input: CornerWindowInput) {
   const point = input.corner
@@ -52,8 +53,8 @@ export function planCornerWindow(nodes: Nodes, input: CornerWindowInput) {
   if (meeting.length < 2)
     refuse(
       'no_corner',
-      `No two walls end at (${point.join(', ')}): a corner window goes where two walls meet; get_walls gives their ends.`,
-      { corner: point },
+      `No two walls of level ${input.levelId}${input.wallIds ? ` among ${input.wallIds.join(', ')}` : ''} end at (${point.join(', ')}): a corner window goes where two walls of one level meet; get_walls gives their ends.`,
+      { corner: point, levelId: input.levelId },
     )
   if (meeting.length > 2)
     refuse(
@@ -63,7 +64,7 @@ export function planCornerWindow(nodes: Nodes, input: CornerWindowInput) {
     )
   const [a, b] = meeting as [(typeof meeting)[0], (typeof meeting)[0]]
   const angle = cornerAngle(a, b)
-  if (angle < DEGENERATE_CORNER_DEG || angle > 180 - DEGENERATE_CORNER_DEG)
+  if (!isWrappableAngle(angle))
     refuse(
       'corner_angle',
       `The walls at (${point.join(', ')}) meet at ${Math.round(angle)}°: too close to ${angle < 90 ? 'folded back' : 'straight'} for a corner window. Along a straight run, one add_window is the window.`,
@@ -100,8 +101,15 @@ export function planCornerWindow(nodes: Nodes, input: CornerWindowInput) {
       }).node as WindowNode,
     }
   })
-  const post = input.post ?? 'none'
   const [first, second] = windows as [(typeof windows)[0], (typeof windows)[0]]
+  const fuses = fusesAtCorner(first.node)
+  if (input.post === 'none' && !fuses)
+    refuse(
+      'corner_not_fused',
+      `A ${first.node.windowType} window keeps its frame at the corner, so its glass cannot fuse there: only a fixed window's does. Pass post "post", or windowType "fixed".`,
+      { windowType: first.node.windowType },
+    )
+  const post = input.post ?? (fuses ? 'none' : 'post')
   return {
     windows: [
       { ...first.node, corner: { end: first.end, partnerId: second.node.id, post } },
@@ -166,6 +174,8 @@ export function wrapCorner(
   if (others.length !== 1)
     refuse('no_corner', 'A corner window needs exactly one other wall ending at this corner.')
   const { wall: other, end: otherEnd } = others[0]!
+  if (!isWrappableAngle(cornerAngle({ wall, end }, { wall: other, end: otherEnd })))
+    refuse('corner_angle', 'The walls meet at too sharp or too flat an angle for a corner window.')
 
   // A window already waiting at the other wall's corner is adopted, the nearest first.
   const waiting = Object.values(nodes)
@@ -174,7 +184,7 @@ export function wrapCorner(
         node.type === 'window' &&
         node.parentId === other.id &&
         node.id !== window.id &&
-        !node.corner &&
+        !cornerPair(nodes, node as WindowNode) &&
         windowNearCornerEnd(nodes, node as WindowNode) === otherEnd,
     )
     .sort((a, b) => windowEndGap(other, a, otherEnd) - windowEndGap(other, b, otherEnd))[0]
@@ -198,7 +208,7 @@ export function wrapCorner(
     sillHeight,
     windowType: window.windowType,
   }).node as WindowNode
-  const post = 'none' as const
+  const post = fusesAtCorner(window) ? 'none' : 'post'
   const slidTo = end === 'start' ? window.width / 2 : wallLengthOf(wall) - window.width / 2
   return {
     create: {
@@ -208,6 +218,8 @@ export function wrapCorner(
       corner: { end: otherEnd, partnerId: window.id, post },
     } as WindowNode,
     updates: {
+      // The partner of a pair this window has left (it was dragged here) is plain again.
+      ...unwrapCorner(nodes, window.id),
       [window.id]: {
         corner: { end, partnerId: partner.id, post },
         ...(Math.abs(windowEndGap(wall, window, end)) > 1e-6
@@ -218,12 +230,23 @@ export function wrapCorner(
   }
 }
 
-/** The editor's Unwrap: both windows stay, plain, ending at the corner. */
+/** The editor's Unwrap: both windows stay, plain, where they are. */
 export function unwrapCorner(nodes: Nodes, windowId: string): Record<string, Partial<WindowNode>> {
-  const window = nodes[windowId] as WindowNode | undefined
-  const pair = window?.type === 'window' ? cornerPair(nodes, window) : null
-  if (!window || !pair) return {}
-  return { [window.id]: { corner: undefined }, [pair.partner.id]: { corner: undefined } }
+  return Object.fromEntries(cornerLinkClears(nodes, windowId).map(({ id, data }) => [id, data]))
+}
+
+/**
+ * After a window moved: its `corner` cleared on both sides when it is no longer one side of its
+ * pair (dragged off the corner, or onto another wall); nothing while the pair holds.
+ */
+export function strayCornerClears(
+  nodes: Nodes,
+  windowId: string,
+): Record<string, Partial<WindowNode>> {
+  const window = nodes[windowId]
+  if (window?.type !== 'window' || !window.corner || cornerPair(nodes, window as WindowNode))
+    return {}
+  return unwrapCorner(nodes, windowId)
 }
 
 /**

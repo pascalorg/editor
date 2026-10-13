@@ -198,8 +198,8 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'corner.partnerId',
     ...policy('node', 'connection', 'drop', 'strip'),
     targetKinds: ['window'],
-    remaps: ['clone-scene-graph'],
-    note: "A corner window's other side (L65). The whole-graph clone remaps it; a level or a selection copied otherwise renders its pair as two plain windows until wrapped again.",
+    remaps: [...CLONES, 'scene-clipboard'],
+    note: "A corner window's other side: copied with it, the copy names the partner's copy; copied alone, or once its partner is deleted, the link is cleared.",
   }),
   row({
     kind: 'window',
@@ -866,13 +866,6 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     ...policy('label', 'internal', 'drop', 'strip'),
     note: 'Offset group label.',
   }),
-  ...(['referenceLevelId', 'roofLevelId'] as const).map((key) =>
-    meta(key, {
-      ...policy('node', 'membership', 'drop', 'strip'),
-      targetKinds: ['level'],
-      note: 'Written by the MCP roof tools on roof levels and roofs.',
-    }),
-  ),
   meta('floorPlanUrl', { ...policy('asset', 'content', 'freeze', 'keep') }),
   ...(
     [
@@ -972,7 +965,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'ownerPose.runLength',
     'ownerPose.width',
   ]),
-  ...described('Display or authoring label written by the MCP tools.', ['label', 'name']),
+  ...described('Display or authoring label written by the MCP tools.', ['name']),
   ...described('IFC attribute copy: a value or IFC label, not an id.', [
     'elevation',
     'height',

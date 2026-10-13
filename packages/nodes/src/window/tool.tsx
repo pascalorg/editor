@@ -34,6 +34,7 @@ import {
   EDITOR_LAYER,
   getSideFromNormal,
   isMagneticSnapActive,
+  isTypingTarget,
   isValidWallSideFace,
   publishPlacementSurface,
   snapToHalf,
@@ -74,7 +75,7 @@ import {
   collectWallOpeningAlignmentCandidates,
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
-import { showCornerCue } from './corner-cue'
+import { showCornerCue, snappingTurnedOff } from './corner-cue'
 import { fuseAtCorner } from './corner-fuse'
 import { WindowFloorProjection } from './floor-projection'
 import { placedWindowFields, useWindowPlacement } from './placement'
@@ -223,11 +224,15 @@ const WindowTool: React.FC = () => {
     // to the last wall hover so the flip shows live before commit.
     let sideFlip = false
     let lastWallEvent: WallEvent | null = null
-    // Placing near a corner (the owner, 8 October): inside the corner zone the ghost snaps its edge
-    // to the corner, the window waiting on the other wall is outlined, and the HUD says what a click
-    // does. Alt places the window plain.
+    // Placing near a corner: inside the corner zone the ghost snaps its edge to the corner, the
+    // window waiting on the other wall is outlined, and the HUD says what a click does. Alt places
+    // the window plain.
     let cornerHeld: CornerSnap['end'] | null = null
+    // Whether Alt is held: from the keys, and from each new pointer event, which also catches a
+    // press made while the canvas did not have focus.
     let altDown = false
+    // Alt, or snapping off, places the window where it is clicked.
+    const cornerSnapOn = () => !altDown && !snappingTurnedOff()
     const cornerEaser = createSnapEaser()
     let cornerEaseFrame = 0
     const resetCorner = () => {
@@ -767,6 +772,8 @@ const WindowTool: React.FC = () => {
         showWallFallbackCursor(event)
         return
       }
+      // The Alt toggle re-runs the last event: only a new one says whether Alt is held.
+      if (event !== lastWallEvent) altDown = event.nativeEvent?.altKey === true
       lastWallEvent = event
 
       const faceSide = getSideFromNormal(event.normal)
@@ -791,7 +798,7 @@ const WindowTool: React.FC = () => {
         itemRotation,
         cursorRotationY: cursorRotation,
         applySnap: isMagneticSnapActive(),
-        cornerSnapOn: event.nativeEvent?.altKey !== true && !altDown,
+        cornerSnapOn: cornerSnapOn(),
       })
       event.stopPropagation()
     }
@@ -817,7 +824,7 @@ const WindowTool: React.FC = () => {
         draftRef.current.width,
         draftRef.current.height,
         isMagneticSnapActive(),
-        event.nativeEvent?.altKey !== true && !altDown,
+        event.nativeEvent?.altKey !== true && cornerSnapOn(),
         draftRef.current.id,
       )
       // Alt force-places over a collision (the draft stays red as a warning).
@@ -1124,8 +1131,7 @@ const WindowTool: React.FC = () => {
       if (key !== 'r' && key !== 'o' && key !== 'l') return
       if (key === 'l' && !windowTakesStyle(useWindowPlacement.getState().type)) return
       if (e.repeat) return
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (isTypingTarget(e.target)) return
       if (key !== 'r' && (e.metaKey || e.ctrlKey || e.altKey)) return
       e.preventDefault()
       if (key !== 'r') {
@@ -1169,7 +1175,8 @@ const WindowTool: React.FC = () => {
     emitter.on('tool:cancel', onCancel)
     // Alt turns the corner snap off, and pressing it while hovering says so at once.
     const onAltToggle = (e: KeyboardEvent) => {
-      if (e.key !== 'Alt') return
+      // A field's own Alt (a typed character) is not the placement's.
+      if (e.key !== 'Alt' || isTypingTarget(e.target)) return
       const held = e.type === 'keydown'
       if (held === altDown) return
       altDown = held

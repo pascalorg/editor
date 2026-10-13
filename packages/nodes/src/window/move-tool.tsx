@@ -34,6 +34,7 @@ import {
   getSideFromNormal,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   isValidWallSideFace,
   publishPlacementSurface,
   snapToHalf,
@@ -76,8 +77,8 @@ import {
   collectWallOpeningAlignmentCandidates,
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
-import { showCornerCue } from './corner-cue'
-import { fuseAtCorner } from './corner-fuse'
+import { showCornerCue, snappingTurnedOff } from './corner-cue'
+import { fuseAtCorner, settleMovedWindow } from './corner-fuse'
 import { WindowFloorProjection } from './floor-projection'
 import WindowPreview from './preview'
 import {
@@ -266,9 +267,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // The wall the window was grabbed from. Nulled the first time the anchor
     // seeds on any other host: the grab offset is then forgotten for good.
     let grabWallId: string | null = movingWindowNode.parentId
-    // Dragging near a corner (the owner, 8 October): the same zone as placing: the window snaps its
-    // edge to the corner, the window waiting on the other wall is outlined, and on release they
-    // join. Alt drops it plain.
+    // Dragging near a corner, the same zone as placing: the window snaps its edge to the corner,
+    // the window waiting on the other wall is outlined, and on release they join. Alt drops it
+    // plain.
     let cornerHeld: CornerSnap['end'] | null = null
     const cornerEaser = createSnapEaser()
     let cornerEaseFrame = 0
@@ -383,7 +384,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         ownWallIds: [original.wallId, currentHostId],
       })
 
-    const resolveMoveTarget = (event: WallEvent) => {
+    const resolveMoveTarget = (
+      event: WallEvent,
+      plain = event.nativeEvent?.altKey === true || altHeld,
+    ) => {
       if (!isValidWallSideFace(event.normal)) return
       if (isCurvedWall(event.node)) {
         hideCursor()
@@ -453,8 +457,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const { clampedY } = slid
       let clampedX = slid.clampedX
       // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
+      // Alt, or snapping off, places the window where it is dropped.
       const found =
-        event.nativeEvent?.altKey === true || altHeld
+        plain || snappingTurnedOff()
           ? { snap: null, block: null }
           : evaluateCorner(nodes, {
               wallId: event.node.id,
@@ -753,7 +758,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             roofSegmentId: undefined,
             visible: true,
           })
-          if (target.snap) fuseAtCorner(movingWindowNode.id, target.snap.waitingId)
+          settleMovedWindow(movingWindowNode.id, target.snap)
         })
 
         if (original.parentId && original.parentId !== target.wallId) {
@@ -1013,6 +1018,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             roofFace: undefined,
             visible: true,
           })
+          settleMovedWindow(movingWindowNode.id, null)
         })
         if (original.parentId && original.parentId !== target.dormer.id) {
           markHostDirty(original.parentId)
@@ -1225,6 +1231,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             roofFace: target.face.id,
             visible: true,
           })
+          settleMovedWindow(movingWindowNode.id, null)
         })
 
         if (original.parentId && original.parentId !== segmentId) {
@@ -1306,13 +1313,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const onKeyDown = (e: KeyboardEvent) => {
       if (committed) return
       if (e.key !== 'r' && e.key !== 'R') return
-      const target = e.target as HTMLElement | null
-      if (
-        target &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-      ) {
-        return
-      }
+      if (isTypingTarget(e.target)) return
       // Ignore OS key-repeat so a held R doesn't flip many times per press.
       if (e.repeat) return
       e.preventDefault()
@@ -1347,12 +1348,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // Alt toggles force-place — re-run the on-wall preview so the tint flips
     // green↔red live (pointer stationary). Commit gates still read alt fresh.
     const onAltToggle = (e: KeyboardEvent) => {
-      if (e.key !== 'Alt') return
+      // A field's own Alt (a typed character) is not the placement's.
+      if (e.key !== 'Alt' || isTypingTarget(e.target)) return
       const held = e.type === 'keydown'
       if (held === altHeld) return
       altHeld = held
-      // Holding Alt takes the corner join off the target at once: no hint, no fuse on the drop.
-      if (held && lastTarget?.snap) lastTarget = { ...lastTarget, snap: null, block: null }
+      // Alt takes the corner join off the target at once and gives it back on release: the hint
+      // and the drop follow without the pointer moving.
+      if (lastTarget) lastTarget = resolveMoveTarget(lastTarget.event, held) ?? lastTarget
       if (!committed && lastTarget) applyPreview(lastTarget)
     }
 

@@ -899,6 +899,13 @@ export {
   default as useConstructionReveal,
 } from './store/use-construction-reveal'
 export {
+  CORNER_BLOCK_NOTES,
+  type CornerHintRow,
+  type CornerSnapHint,
+  cornerHintRows,
+  useCornerSnapHint,
+} from './store/use-corner-snap-hint'
+export {
   DRAWING_TYPE_OPTIONS,
   default as useDrawingView,
   EDITOR_DRAWING_TYPE_OPTIONS,

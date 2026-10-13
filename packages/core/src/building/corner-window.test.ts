@@ -1,24 +1,26 @@
 import { describe, expect, test } from 'bun:test'
 import { cornerWindowIssues } from '../agent-operations/corner-window'
 import { isAgentRefusal } from '../agent-tools/refusal'
+import { cornerPair } from '../lib/corner-pair'
 import { type AnyNode, LevelNode, WallNode, WindowNode } from '../schema'
 import {
-  cornerPair,
+  type CornerWindowInput,
   cornerPartnerUpdates,
   cornerSideWidth,
-  planCornerWindow,
+  planCornerWindow as planOnLevel,
+  strayCornerClears,
   unwrapCorner,
   wrapCorner,
 } from './corner-window'
 
 /**
- * L65: the 290's Bed 4 window wraps the corner of its bay; Pascal had no corner window (a window
- * ends at its wall and the corner stays solid). A corner window is two windows, one per wall, both
- * running to the corner and joined, the glass fused at the corner (or meeting at a thin post), at
- * any angle the walls make. What goes wrong, written first: a window stopping short of the corner;
- * the two sides out of step (heights, sills); one wall's side placed on the wrong wall or end; a
- * square-only answer at a bay's 135° or an acute 60°; a degenerate corner accepted; unwrapping
- * deleting a window.
+ * A window that wraps the corner of a bay: Pascal had no corner window (a window ends at its wall
+ * and the corner stays solid). A corner window is two windows, one per wall, both running to the
+ * corner and joined, the glass fused at the corner (or meeting at a thin post), at any angle the
+ * walls make. What goes wrong, written first: a window stopping short of the corner; the two sides
+ * out of step (heights, sills); one wall's side placed on the wrong wall or end; a square-only
+ * answer at a bay's 135° or an acute 60°; a degenerate corner accepted; unwrapping deleting a
+ * window.
  */
 
 type Nodes = Record<string, AnyNode>
@@ -37,6 +39,9 @@ function cornerScene(degrees: number, extra: AnyNode[] = []): Nodes {
   const level = LevelNode.parse({ id: LEVEL, children: [a.id, b.id, ...extra.map((n) => n.id)] })
   return Object.fromEntries([level, a, b, ...extra].map((node) => [node.id, node]))
 }
+
+const planCornerWindow = (nodes: Nodes, input: Omit<CornerWindowInput, 'levelId'>) =>
+  planOnLevel(nodes, { ...input, levelId: LEVEL })
 
 const apply = (nodes: Nodes, windows: WindowNode[]) => ({
   ...nodes,
@@ -165,7 +170,7 @@ describe('by hand: wrap, keep in step, unwrap', () => {
     })
   })
 
-  // The owner (8 October): a window a few cm short of the corner showed no Corner section at all.
+  // A window a few cm short of the corner still has a Corner section to wrap it.
   const onWall = (id: string, wall: string, x: number, width = 1.2) =>
     WindowNode.parse({
       id,
@@ -217,14 +222,29 @@ describe('by hand: wrap, keep in step, unwrap', () => {
     })
   })
 
-  test('a window that is already one side of a pair is not adopted', () => {
+  // Dragged away, a side kept naming its old partner: it was never offered again, and the old
+  // partner kept a link to a window gone elsewhere.
+  test('a window waiting there whose pair is broken is adopted, and its old partner let go', () => {
     const near = onWall('window_near', 'wall_a', 3.3)
-    const taken = WindowNode.parse({
-      ...onWall('window_taken', 'wall_b', 0.7, 1),
-      corner: { end: 'start', partnerId: 'window_elsewhere', post: 'none' },
+    const stale = WindowNode.parse({
+      ...onWall('window_stale', 'wall_b', 0.7, 1),
+      corner: { end: 'start', partnerId: 'window_old', post: 'none' },
     })
-    const { create } = wrapCorner(apply(cornerScene(90), [near, taken]), near.id)
-    expect(create?.parentId).toBe('wall_b')
+    const old = WindowNode.parse({
+      ...onWall('window_old', 'wall_b', 3, 1),
+      corner: { end: 'start', partnerId: 'window_stale', post: 'none' },
+    })
+    const { create, updates } = wrapCorner(apply(cornerScene(90), [near, stale, old]), near.id)
+    expect(create).toBeNull()
+    expect(updates.window_stale?.corner?.partnerId).toBe('window_near')
+    expect(updates.window_old).toEqual({ corner: undefined })
+  })
+
+  test('a window at a corner nearly straight has none to wrap', () => {
+    const near = onWall('window_near', 'wall_a', 3.4)
+    expect(refusalOf(() => wrapCorner(apply(cornerScene(176), [near]), near.id))).toBe(
+      'corner_angle',
+    )
   })
 
   test('a height or sill changed on one side changes the other', () => {
@@ -237,6 +257,17 @@ describe('by hand: wrap, keep in step, unwrap', () => {
     expect(cornerPartnerUpdates(nodes, onA.id, { width: 2 })).toBeNull()
   })
 
+  test('unwrapping a pair that no longer holds still clears both links', () => {
+    const { windows } = planCornerWindow(cornerScene(90), { corner: [0, 0], width: 1.2 })
+    const [a, b] = windows as [WindowNode, WindowNode]
+    const moved = { ...a, position: [2, a.position[1], a.position[2]] as [number, number, number] }
+    const nodes = apply(cornerScene(90), [moved, b])
+    expect(Object.keys(unwrapCorner(nodes, a.id)).sort()).toEqual([a.id, b.id].sort())
+    // After a drag: off its corner, both sides let go; still at it, nothing changes.
+    expect(Object.keys(strayCornerClears(nodes, a.id)).sort()).toEqual([a.id, b.id].sort())
+    expect(strayCornerClears(apply(cornerScene(90), windows), a.id)).toEqual({})
+  })
+
   test('unwrapping keeps both windows, plain, ending at the corner', () => {
     const { windows } = planCornerWindow(cornerScene(90), { corner: [0, 0], width: 1.2 })
     const nodes = apply(cornerScene(90), windows)
@@ -247,12 +278,14 @@ describe('by hand: wrap, keep in step, unwrap', () => {
 })
 
 describe('verify_scene on corner windows', () => {
-  test('two plain windows running to the same corner are pointed at add_corner_window', () => {
+  test('two plain windows running to the same corner are pointed at merge_windows, as a note', () => {
     const { windows } = planCornerWindow(cornerScene(90), { corner: [0, 0], width: 1.2 })
     const plain = windows.map(({ corner: _corner, ...rest }) => rest as WindowNode)
     const issues = cornerWindowIssues(apply(cornerScene(90), plain))
-    expect(issues.map((issue) => issue.type)).toEqual(['corner_unjoined'])
-    expect(issues[0]!.message).toContain('add_corner_window')
+    expect(issues.map((issue) => [issue.type, issue.severity])).toEqual([
+      ['corner_unjoined', 'info'],
+    ])
+    expect(issues[0]!.message).toContain('merge_windows')
   })
 
   test('a joined pair in step is quiet; drifted apart, it is named', () => {
@@ -273,6 +306,27 @@ describe('one side wider or narrower', () => {
       width: 2,
       position: [3, onA.position[1], onA.position[2]],
     })
+  })
+
+  // Widened to its whole wall, a side reached both ends and was read as running to its start: the
+  // pair fell apart under the slider.
+  test('widened to its whole wall, it is still one side of the pair', () => {
+    const { windows } = planCornerWindow(cornerScene(90), { corner: [0, 0], width: 1.2 })
+    const nodes = apply(cornerScene(90), windows)
+    const onA = windows.find((w) => w.parentId === 'wall_a')!
+    const wide = { ...onA, ...cornerSideWidth(nodes, onA.id, 4) } as WindowNode
+    expect(cornerPair({ ...nodes, [wide.id]: wide }, wide)?.partner.parentId).toBe('wall_b')
+  })
+
+  // Moving a wall away left both windows "paired", their corner cut open and their jambs gone.
+  test('its walls moved apart, the pair no longer holds', () => {
+    const { windows } = planCornerWindow(cornerScene(90), { corner: [0, 0], width: 1.2 })
+    const nodes = apply(cornerScene(90), windows)
+    const apart = {
+      ...nodes,
+      wall_b: WallNode.parse({ ...nodes.wall_b, start: [0, 0.5], end: [0, 4.5] }),
+    }
+    expect(cornerPair(apart, windows[0]!)).toBeNull()
   })
 
   test('dragged off its corner, a window is no longer one side of the pair', () => {

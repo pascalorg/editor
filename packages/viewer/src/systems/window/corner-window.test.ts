@@ -12,13 +12,14 @@ import {
 import { planCornerWindow } from '@pascal-app/core/building'
 import * as THREE from 'three'
 import { generateExtrudedWall } from '../wall/wall-system'
+import { cornerFrameStale, FUSED_CORNER_SIDE } from './corner-frame'
 import { buildWindowPreviewMesh } from './window-system'
 
 /**
- * L65: a corner window opens the corner between its two walls, the glass fused there (`none`) or
- * meeting at the corner jambs (`post`), at any angle. What goes wrong, written first: the walls'
- * corner left solid (a stub post the user did not ask for); a fused corner still drawing its jamb;
- * the glass stopping short of the corner; a bay's 135° or an acute 60° cut as if square.
+ * A corner window opens the corner between its two walls, the glass fused there (`none`) or meeting
+ * at the corner jambs (`post`), at any angle. What goes wrong, written first: the walls' corner
+ * left solid (a stub post the user did not ask for); a fused corner still drawing its jamb; the
+ * glass stopping short of the corner; a bay's 135° or an acute 60° cut as if square.
  */
 
 const LEVEL = 'level_cw'
@@ -51,7 +52,7 @@ function scene(degrees: number, post: 'none' | 'post', paired = true) {
   for (const wall of [a, b]) sceneRegistry.nodes.set(wall.id, new THREE.Mesh())
   const level = LevelNode.parse({ id: LEVEL, children: [a.id, b.id] })
   const base: Record<string, AnyNode> = Object.fromEntries([level, a, b].map((n) => [n.id, n]))
-  const { windows } = planCornerWindow(base, { corner: [0, 0], width: 1.2, post })
+  const { windows } = planCornerWindow(base, { corner: [0, 0], levelId: LEVEL, width: 1.2, post })
   const placed = windows.map((window) => {
     if (paired) return window
     const { corner: _corner, ...plain } = window
@@ -157,3 +158,26 @@ for (const degrees of [90, 135, 60])
       }
     })
   })
+
+// A side deleted or a wall moved away broke the pair without the other window changing, so it kept
+// the frame built for the pair (no jamb at the corner) until something else rebuilt it.
+describe('a frame built for a pair that has changed', () => {
+  test('is stale once the pair is made or broken, and current when it matches', () => {
+    const { windows } = scene(90, 'none')
+    const [onA, onB] = windows as [WindowNode, WindowNode]
+    const mesh = new THREE.Mesh()
+    sceneRegistry.nodes.set(onA.id, mesh)
+    try {
+      const nodes = useScene.getState().nodes
+      mesh.userData[FUSED_CORNER_SIDE] = 1
+      expect(cornerFrameStale(onA, nodes)).toBe(false)
+      const { [onB.id]: _gone, ...withoutPartner } = nodes
+      expect(cornerFrameStale(onA, withoutPartner)).toBe(true)
+      mesh.userData[FUSED_CORNER_SIDE] = 0
+      expect(cornerFrameStale(onA, withoutPartner)).toBe(false)
+      expect(cornerFrameStale(onA, nodes)).toBe(true)
+    } finally {
+      sceneRegistry.nodes.delete(onA.id)
+    }
+  })
+})

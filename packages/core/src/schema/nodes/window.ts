@@ -99,8 +99,8 @@ export const WindowNode = BaseNode.extend({
   columnDividerThickness: z.number().default(0.03),
   rowDividerThickness: z.number().default(0.03),
 
-  // A corner window (L65): this window runs to its wall's `end` and is joined there to `partnerId`
-  // on the other wall, the glass fused at the corner (`none`) or meeting at a thin post.
+  // A corner window: this window runs to its wall's `end` and is joined there to `partnerId` on the
+  // other wall, the glass fused at the corner (`none`) or meeting at a thin post.
   corner: z
     .object({
       end: z.enum(['start', 'end']),
