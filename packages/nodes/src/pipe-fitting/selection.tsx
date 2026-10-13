@@ -16,6 +16,7 @@ import {
 import {
   ARROW_COLOR,
   EDITOR_LAYER,
+  isTypingTarget,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -258,8 +259,7 @@ const PipeFittingSelectionAffordance = () => {
     if (!hasSelectedFitting) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Alt' || e.repeat) return
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       e.preventDefault()
       cycleRotationAxis()
     }

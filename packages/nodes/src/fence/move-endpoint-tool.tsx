@@ -13,6 +13,7 @@ import {
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isTypingTarget,
   MeasurementPill,
   triggerSFX,
   useAlignmentGuides,
@@ -217,7 +218,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
   // event modifiers so the badge can toggle without a pointer move.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (isTypingTarget(e.target)) return
       if (e.key === 'Alt') setAltPressed(true)
     }
     const onKeyUp = (e: KeyboardEvent) => {

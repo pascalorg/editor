@@ -11,6 +11,7 @@ import {
 import {
   CursorSphere,
   consumePlacementDragRelease,
+  isTypingTarget,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -95,9 +96,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     let wasCommitted = false
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0

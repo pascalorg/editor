@@ -10,6 +10,7 @@ import {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   markToolCancelConsumed,
   publishPlacementSurface,
   triggerSFX,
@@ -1016,13 +1017,8 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
 
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      const tag = target?.tagName
       const isLengthField = target ? target.closest('[data-run-length-input]') !== null : false
-      if (
-        (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') &&
-        !isLengthField
-      )
-        return
+      if ((isTypingTarget(target) || target?.tagName === 'BUTTON') && !isLengthField) return
       if (event.key === 'Escape' && startRef.current) {
         event.preventDefault()
         event.stopImmediatePropagation()
