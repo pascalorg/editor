@@ -53,7 +53,7 @@ csgEvaluator.attributes = ['position', 'normal', 'uv', 'uv2']
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as any).computeBoundsTree = computeBoundsTree
-  ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
+  ;(geometry as any).computeBoundsTree({ targetLeafSize: 10 })
 }
 
 function prepareBrushForCSG(brush: Brush) {

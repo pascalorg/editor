@@ -209,7 +209,7 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
   }
   ;(merged as any).computeBoundsTree = computeBoundsTree
   ;(merged as any).disposeBoundsTree = disposeBoundsTree
-  ;(merged as any).computeBoundsTree({ maxLeafSize: 12, strategy: 0 })
+  ;(merged as any).computeBoundsTree({ targetLeafSize: 12, strategy: 0 })
   merged.computeBoundingBox()
 
   const mesh = new Mesh(merged, colliderMaterial)

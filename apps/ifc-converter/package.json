@@ -19,7 +19,7 @@
     "@pascal-app/nodes": "*",
     "@pascal-app/viewer": "*",
     "lucide-react": "^1.7.0",
-    "@react-three/drei": "^10.7.7",
+    "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
     "@tailwindcss/postcss": "^4.3.3",
     "clsx": "^2.1.1",

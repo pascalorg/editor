@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "three-bvh-csg": "^0.0.18",
-    "three-mesh-bvh": "^0.9.8",
+    "three-mesh-bvh": "~0.9.16",
     "zustand": "^5"
   },
   "devDependencies": {

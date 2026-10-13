@@ -60,7 +60,7 @@
     "pdfkit": "^0.19.1",
     "tailwind-merge": "^3.5.0",
     "three-bvh-csg": "^0.0.18",
-    "three-mesh-bvh": "~0.9.8",
+    "three-mesh-bvh": "~0.9.16",
     "zod": ">=4.5.4 <4.6",
     "zustand": "^5.0.11"
   },
