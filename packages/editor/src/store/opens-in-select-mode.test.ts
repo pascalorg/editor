@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { DEFAULT_PERSISTED_EDITOR_UI_STATE, editorUiStateOnOpen } from './use-editor'
 import { sceneLayout } from './view-layout'
 
@@ -90,5 +90,75 @@ describe('opening a project', () => {
 
   test('an empty blob opens on the defaults', () => {
     expect(editorUiStateOnOpen(null)).toEqual(DEFAULT_PERSISTED_EDITOR_UI_STATE)
+  })
+})
+
+const STORAGE_KEY = 'pascal-editor-ui-preferences'
+const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+afterEach(() => {
+  if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+  else Reflect.deleteProperty(globalThis, 'window')
+})
+
+/** A browser's localStorage, seeded with what an earlier session left behind. */
+function stubStorage(stored: Record<string, unknown> = {}) {
+  const values = new Map(
+    Object.entries(stored).map(([key, value]) => [key, JSON.stringify(value)] as const),
+  )
+  const localStorage: Partial<Storage> = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => void values.set(key, value),
+    removeItem: (key) => void values.delete(key),
+  }
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { localStorage } })
+  return { read: (key: string) => JSON.parse(values.get(key) ?? 'null') }
+}
+
+let fresh = 0
+/** The editor store as a page load creates it: not yet rehydrated (`skipHydration`). */
+async function loadEditorStore() {
+  const { default: useEditor } = await import(`./use-editor.tsx?load=${++fresh}`)
+  return useEditor as typeof import('./use-editor').default
+}
+
+describe('reopening the editor', () => {
+  // The editor rehydrates in a mount effect, after the host's own mount effects
+  // have written to the store. Every write used to save the whole state, so the
+  // defaults replaced the stored preferences before they were read, and the rail
+  // came back on Build after every reload.
+  test('a write before the store rehydrates leaves the stored panel to come back', async () => {
+    const storage = stubStorage({
+      [STORAGE_KEY]: { state: { sidebarPanels: { edit: 'ai' } }, version: 0 },
+    })
+    const useEditor = await loadEditorStore()
+
+    useEditor.getState().setCanFindNode(true)
+    await useEditor.persist.rehydrate()
+
+    expect(useEditor.getState().activeSidebarPanel).toBe('ai')
+    expect(useEditor.getState().canFindNode).toBe(true)
+    expect(storage.read(STORAGE_KEY).state.sidebarPanels).toEqual({ edit: 'ai' })
+  })
+
+  test('each workspace reopens its own panel, and a reload opens Edit on its own', async () => {
+    stubStorage()
+    const firstSession = await loadEditorStore()
+    await firstSession.persist.rehydrate()
+    const editor = () => firstSession.getState()
+
+    editor().setActiveSidebarPanel('ai')
+    editor().setWorkspaceMode('studio')
+    editor().setActiveSidebarPanel('studio-materials')
+    editor().setWorkspaceMode('edit')
+    expect(editor().activeSidebarPanel).toBe('ai')
+    editor().setWorkspaceMode('studio')
+    expect(editor().activeSidebarPanel).toBe('studio-materials')
+
+    const nextSession = await loadEditorStore()
+    await nextSession.persist.rehydrate()
+    expect(nextSession.getState().workspaceMode).toBe('edit')
+    expect(nextSession.getState().activeSidebarPanel).toBe('ai')
+    nextSession.getState().setWorkspaceMode('studio')
+    expect(nextSession.getState().activeSidebarPanel).toBe('studio-materials')
   })
 })

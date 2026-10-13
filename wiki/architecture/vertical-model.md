@@ -183,8 +183,13 @@ level only at the top of its stack (with a storey above it, it is a storey not b
 declared roof level someone walled counts as a storey. A roof placed by hand on the level above
 selects that level with it, so it stays in view.
 `verify_scene` reports a roof mixed into a storey (`roof_mixed_in_storey`) and a roof level below a
-storey (`roof_level_not_on_top`); existing scenes are not migrated. Unpainted gables on a roof
-level take the cladding of the storey's walls below (`levelWallCladdingRef`).
+storey (`roof_level_not_on_top`); existing scenes are not migrated. A roof on a storey with walls
+offers "Move to the roof level" on its panel (in 2D and 3D): `planRoofsOffStorey` moves every roof
+of that storey to the level the rule gives it in one undo step, each container dropped by
+`planRoofLevel`'s `storeyOffset` so it stands where it stood, and a roof following walls turns
+custom where the walls there would lift it. `storeyCoveredBy` reads the rule back: the storey a
+roof covers. Unpainted gables on a roof level take the cladding of the storey's walls below
+(`levelWallCladdingRef`).
 
 ## Stacked mezzanine rooms
 

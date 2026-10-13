@@ -306,7 +306,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     if (content.roofs > 0 && (content.walls > 0 || content.zones > 0 || content.stairs > 0))
       report(
         'roof_mixed_in_storey',
-        `${levelName} mixes roof geometry with occupied-level content; place roofs on a dedicated roof level for solo/exploded level views`,
+        `${levelName} mixes roof geometry with occupied-level content, so solo and exploded level views show the roof over its plan; place roofs on a dedicated roof level. By hand: select the roof and use "Move to the roof level" on its panel, which moves the storey's roofs there where they stand.`,
       )
   }
 

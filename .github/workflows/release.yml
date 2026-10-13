@@ -421,6 +421,9 @@ jobs:
         with:
           context: .
           platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
           outputs: type=image,name=ghcr.io/pascalorg/pascal-editor,push-by-digest=true,name-canonical=true,push=true
 
       - run: |

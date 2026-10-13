@@ -94,8 +94,11 @@ export {
 export {
   isRoofLevel,
   planRoofLevel,
+  planRoofsOffStorey,
   type RoofLevelPlan,
+  type RoofMove,
   roofsOver,
+  storeyCoveredBy,
   storeyInsertIndex,
 } from './roof-level'
 export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'

@@ -2,7 +2,12 @@
 
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
-import { openSidebarPanel, SIDEBAR_MIN_WIDTH, setSidebarTabIds } from '../../lib/sidebar-panel'
+import {
+  openSidebarPanel,
+  SIDEBAR_MIN_WIDTH,
+  setSidebarTabIds,
+  useShownSidebarPanel,
+} from '../../lib/sidebar-panel'
 import useEditor from '../../store/use-editor'
 
 import { useSidebarStore } from '../ui/primitives/sidebar'
@@ -33,7 +38,7 @@ function LeftColumn({
   const setWidth = useSidebarStore((s) => s.setWidth)
   const isDragging = useSidebarStore((s) => s.isDragging)
   const setIsDragging = useSidebarStore((s) => s.setIsDragging)
-  const activePanel = useEditor((s) => s.activeSidebarPanel)
+  const activePanel = useShownSidebarPanel(tabs)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
 
   const isResizing = useRef(false)
@@ -43,13 +48,6 @@ function LeftColumn({
     setSidebarTabIds(tabs.map((tab) => tab.id))
     return () => setSidebarTabIds([])
   }, [tabs])
-
-  // Ensure active panel is a valid tab
-  useEffect(() => {
-    if (tabs.length > 0 && !tabs.some((t) => t.id === activePanel)) {
-      setActivePanel(tabs[0]!.id)
-    }
-  }, [tabs, activePanel, setActivePanel])
 
   // A stage entry whose surface has left the stage (its view closed from the
   // view bar) hands the rail back to the panel that was open before it.

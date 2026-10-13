@@ -311,7 +311,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
       ),
     {
       contains: ['roof_mixed_in_storey'],
-      mentions: ['dedicated roof level'],
+      mentions: ['dedicated roof level', 'Move to the roof level'],
     },
   ),
   verify(

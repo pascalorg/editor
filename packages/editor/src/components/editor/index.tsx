@@ -1518,9 +1518,9 @@ function EditorContent({
           if (!failed) {
             setHasLoadedInitialScene(true)
             // A project opens in select mode. Rehydrate already drops the
-            // persisted tool, but rail panels arm their own mode when they
-            // mount (Build arms its first tool, Paint arms the brush), and
-            // with a restored rail tab that mount can land after rehydrate.
+            // persisted tool, but a host's rail panel may arm a mode of its
+            // own when it mounts, and with a restored rail tab that mount can
+            // land after rehydrate.
             useEditor.getState().armToolMode({ mode: 'select' })
           }
         }
