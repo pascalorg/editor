@@ -9,7 +9,7 @@ import {
 } from '../schema'
 import { resolveRoofElevation, roofWallTop } from '../systems/roof/roof-elevation'
 import { coveredStoreyId, planRoofLevel, type RoofLevelPlan, servesAsRoofLevel } from './roof-level'
-import { getLevelBelow, getLevelElevations } from './storey'
+import { getLevelElevations, type LevelElevation } from './storey'
 
 /**
  * Roofs written onto the storey whose walls carry them, before the roof level (or by a tool that
@@ -131,12 +131,34 @@ function standsOver(nodes: Nodes, roof: RoofNode, storeyId: string): boolean {
   )
 }
 
+/** The levels between a storey and a level above it in their building's stack, bottom up. */
+function levelsBetween(
+  elevations: Map<string, LevelElevation>,
+  storeyId: string,
+  levelId: string,
+): string {
+  const lower = elevations.get(storeyId)
+  const upper = elevations.get(levelId)
+  if (!lower || !upper) return ''
+  return [...elevations]
+    .filter(
+      ([, entry]) =>
+        entry.buildingId === upper.buildingId &&
+        entry.ordinal > lower.ordinal &&
+        entry.ordinal < upper.ordinal,
+    )
+    .sort(([, a], [, b]) => a.ordinal - b.ordinal)
+    .map(([id]) => id)
+    .join()
+}
+
 /**
- * A roof on the level above the storey it covers, at a height of its own (`support` level, as the
- * agents' and the auto roof's are, measured from that storey's floor), keeps its height over that
- * floor when its level rises or drops over the storey (the storey made taller or shorter), as it
- * did when it lived on the storey. The updates that keep it there from `before` to `after`; a roof
- * moved in between, or whose level stands over another storey now, is left where it is.
+ * A roof on a level above the storey it covers (`coveredStoreyId`), at a height of its own
+ * (`support` level, as the agents' and the auto roof's are, measured from that storey's floor),
+ * keeps its height over that floor when its level rises or drops over the storey (the storey, or a
+ * support level or a level still to be built between them, made taller or shorter), as it did when
+ * it lived on the storey. The updates that keep it there from `before` to `after`; a roof moved in
+ * between, or whose level stands over another storey or other levels now, is left where it is.
  */
 export function roofsKeptOverStorey(
   before: Nodes,
@@ -156,14 +178,17 @@ export function roofsKeptOverStorey(
       prior.position[1] !== roof.position[1]
     )
       continue
-    const storeyId = getLevelBelow(roof.parentId, after as Record<AnyNodeId, AnyNode>)?.id
-    if (
-      !storeyId ||
-      getLevelBelow(roof.parentId, before as Record<AnyNodeId, AnyNode>)?.id !== storeyId
-    )
+    const storeyId = coveredStoreyId(after, roof)
+    if (!storeyId || storeyId === roof.parentId || coveredStoreyId(before, prior) !== storeyId)
       continue
+    // A level put in, taken out or reordered between them: the roof moves with its level (#1039).
+    const between = levelsBetween(now, storeyId, roof.parentId)
+    if (between !== levelsBetween(was, storeyId, roof.parentId)) continue
     const drift = rise(now, roof.parentId, storeyId) - rise(was, roof.parentId, storeyId)
     if (Math.abs(drift) < 1e-6 || !standsOver(before, prior, storeyId)) continue
+    // Over levels between, only a roof on the storey's walls stays on them: one a new level lifted
+    // off them stays on top of that level.
+    if (between && !bearsOn(before, prior, storeyId)) continue
     const [x, y, z] = roof.position
     updates.push({ id: roof.id, data: { position: [x, y - drift, z] } })
   }

@@ -19,7 +19,7 @@ import {
   roofsOver,
   storeyInsertIndex,
 } from './roof-level'
-import { isRoofOnStoreyWalls, planRoofsOffStorey } from './roof-move'
+import { isRoofOnStoreyWalls, planRoofsOffStorey, roofsKeptOverStorey } from './roof-move'
 import { getLevelElevations } from './storey'
 
 // One rule for every roof writer (a roof made on the ground floor's level blocks the exploded
@@ -348,53 +348,53 @@ describe('isRoofOnStoreyWalls', () => {
 
 // Projects built before the rule hold their roofs on the ground floor: the roof's panel and
 // move_roofs_to_roof_level move them to the roof level, standing exactly where they stood.
+/** An 8 × 6 m room of walls 2.7 m tall on 2.5 m storeys, its gable roof `support` on `on`. */
+function roofedHouse(
+  on: string,
+  support: 'walls' | 'level',
+  stack: { id: string; content: Content; metadata?: Record<string, unknown> }[] = [
+    { id: 'level_g', content: 'walls' },
+  ],
+) {
+  const nodes = house(...stack)
+  const corners: [number, number][] = [
+    [0, 0],
+    [8, 0],
+    [8, 6],
+    [0, 6],
+  ]
+  const ground = nodes.level_g as LevelNode
+  const walls = corners.map((start, i) =>
+    WallNode.parse({
+      id: `wall_g${i}`,
+      parentId: 'level_g',
+      start,
+      end: corners[(i + 1) % 4],
+      height: 2.7,
+    }),
+  )
+  const segment = RoofSegmentNode.parse({ id: 'rseg_main', width: 8, depth: 6, wallHeight: 0 })
+  const roof = RoofNode.parse({
+    id: 'roof_main',
+    parentId: on,
+    position: [4, 2.7, 3],
+    support: { kind: support },
+    children: [segment.id],
+  })
+  nodes.level_g = { ...ground, children: walls.map((wall) => wall.id) }
+  for (const node of [...walls, roof, { ...segment, parentId: roof.id }]) nodes[node.id] = node
+  const level = nodes[on] as LevelNode
+  nodes[on] = { ...level, children: [...level.children, roof.id] }
+  return nodes
+}
+
+const worldEave = (nodes: Record<string, AnyNode>, roofId: string) => {
+  const roof = nodes[roofId] as RoofNode
+  const base = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(roof.parentId!)?.baseY
+  return (base ?? 0) + roof.position[1]
+}
+
 describe('planRoofsOffStorey', () => {
-  /** An 8 × 6 m room of walls 2.7 m tall on 2.5 m storeys, its gable roof `support` on `on`. */
-  function roofedHouse(
-    on: string,
-    support: 'walls' | 'level',
-    stack: { id: string; content: Content; metadata?: Record<string, unknown> }[] = [
-      { id: 'level_g', content: 'walls' },
-    ],
-  ) {
-    const nodes = house(...stack)
-    const corners: [number, number][] = [
-      [0, 0],
-      [8, 0],
-      [8, 6],
-      [0, 6],
-    ]
-    const ground = nodes.level_g as LevelNode
-    const walls = corners.map((start, i) =>
-      WallNode.parse({
-        id: `wall_g${i}`,
-        parentId: 'level_g',
-        start,
-        end: corners[(i + 1) % 4],
-        height: 2.7,
-      }),
-    )
-    const segment = RoofSegmentNode.parse({ id: 'rseg_main', width: 8, depth: 6, wallHeight: 0 })
-    const roof = RoofNode.parse({
-      id: 'roof_main',
-      parentId: on,
-      position: [4, 2.7, 3],
-      support: { kind: support },
-      children: [segment.id],
-    })
-    nodes.level_g = { ...ground, children: walls.map((wall) => wall.id) }
-    for (const node of [...walls, roof, { ...segment, parentId: roof.id }]) nodes[node.id] = node
-    const level = nodes[on] as LevelNode
-    nodes[on] = { ...level, children: [...level.children, roof.id] }
-    return nodes
-  }
-
-  const worldEave = (nodes: Record<string, AnyNode>, roofId: string) => {
-    const roof = nodes[roofId] as RoofNode
-    const base = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(roof.parentId!)?.baseY
-    return (base ?? 0) + roof.position[1]
-  }
-
   test('a bungalow roof on its walls’ level goes up to a new roof level, the eave where it was', () => {
     const nodes = roofedHouse('level_g', 'walls')
     const move = planRoofsOffStorey(nodes, 'level_g')
@@ -476,5 +476,58 @@ describe('planRoofsOffStorey', () => {
     expect(planRoofsOffStorey(house({ id: 'level_g', content: 'walls' }), 'level_g')).toBeNull()
     const nodes = house({ id: 'level_g', content: 'walls' }, { id: 'level_r', content: 'roof' })
     expect(planRoofsOffStorey(nodes, 'level_r')).toBeNull()
+  })
+})
+
+describe('roofsKeptOverStorey', () => {
+  const resized = (nodes: Record<string, AnyNode>, levelId: string, height: number) => ({
+    ...nodes,
+    [levelId]: { ...(nodes[levelId] as LevelNode), height },
+  })
+  const kept = (before: Record<string, AnyNode>, after: Record<string, AnyNode>) =>
+    applySceneChanges(after, { update: roofsKeptOverStorey(before, after) })
+  /** The bungalow's roof, at a height of its own, moved off its storey under `above`. */
+  function movedUnder(
+    above: { id: string; content: Content; metadata?: Record<string, unknown> }[],
+  ) {
+    const nodes = roofedHouse('level_g', 'level', [{ id: 'level_g', content: 'walls' }, ...above])
+    return applySceneChanges(nodes, planRoofsOffStorey(nodes, 'level_g')!.changes)
+  }
+
+  test('a moved roof stays on its walls as the storey under its roof level grows', () => {
+    const moved = movedUnder([{ id: 'level_r', content: 'empty', metadata: { role: 'roof' } }])
+    expect(worldEave(kept(moved, resized(moved, 'level_g', 3)), 'roof_main')).toBeCloseTo(2.7, 6)
+  })
+
+  test('with a support level between, it stays on the walls of the storey it covers', () => {
+    const moved = movedUnder([{ id: 'level_s', content: 'empty', metadata: { role: 'support' } }])
+    expect(worldEave(moved, 'roof_main')).toBeCloseTo(2.7, 6)
+    expect(worldEave(kept(moved, resized(moved, 'level_g', 3)), 'roof_main')).toBeCloseTo(2.7, 6)
+    expect(worldEave(kept(moved, resized(moved, 'level_s', 3)), 'roof_main')).toBeCloseTo(2.7, 6)
+  })
+
+  test('with a level still to be built between, it stays on the walls as either grows', () => {
+    const moved = movedUnder([
+      { id: 'level_1', content: 'empty' },
+      { id: 'level_r', content: 'empty', metadata: { role: 'roof' } },
+    ])
+    expect(moved.roof_main?.parentId).toBe('level_r')
+    expect(worldEave(kept(moved, resized(moved, 'level_g', 3)), 'roof_main')).toBeCloseTo(2.7, 6)
+    expect(worldEave(kept(moved, resized(moved, 'level_1', 3)), 'roof_main')).toBeCloseTo(2.7, 6)
+  })
+
+  test('a storey put in under the roof level lifts the roof with it, and it stays on top of it', () => {
+    const moved = movedUnder([{ id: 'level_r', content: 'empty', metadata: { role: 'roof' } }])
+    const building = moved.building_h as BuildingNode
+    // "+ level": the new storey takes the roof level's place and the roof level moves up one
+    const added: Record<string, AnyNode> = {
+      ...moved,
+      building_h: { ...building, children: [...building.children, 'level_1'] },
+      level_r: { ...(moved.level_r as LevelNode), level: 2 },
+      level_1: LevelNode.parse({ id: 'level_1', parentId: 'building_h', level: 1, height: 2.5 }),
+    }
+    expect(roofsKeptOverStorey(moved, added)).toEqual([])
+    expect(worldEave(added, 'roof_main')).toBeCloseTo(5.2, 6)
+    expect(roofsKeptOverStorey(added, resized(added, 'level_1', 3))).toEqual([])
   })
 })
