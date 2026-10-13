@@ -1,0 +1,80 @@
+name: Docker image
+
+# Builds the self-host image and drives it like a host would: health, the
+# login gate, a signed-in save. Runs when something that shapes the image
+# changes; the release workflow publishes the multi-arch image.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-compose.yml
+      - .github/workflows/docker.yml
+      - apps/editor/next.config.ts
+      - apps/editor/proxy.ts
+      - apps/editor/lib/self-host-auth.ts
+      - apps/editor/lib/scene-api-security.ts
+      - packages/cli/scripts/stage-runtime.ts
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: pascal-editor:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the image as a network host
+        run: |
+          set -euo pipefail
+          docker run -d --name pascal -p 3000:3000 \
+            -e PASCAL_ADMIN_PASSWORD=ci-password \
+            -e PASCAL_PUBLIC_URL=http://pascal.ci:3000 \
+            pascal-editor:ci
+          for _ in $(seq 1 60); do
+            curl -fsS -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/health && break
+            sleep 2
+          done
+          curl -fsS -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/health | grep '"status":"ok"'
+
+          # The gate: pages redirect to /login, the scene API refuses.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/)" = "307"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/scenes)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' -H 'Content-Type: application/json' \
+            -d '{"password":"wrong"}' http://127.0.0.1:3000/api/auth/login)" = "401"
+
+          # Sign in, then save and list a scene with the session.
+          curl -fsS -c cookies.txt -H 'Host: pascal.ci:3000' -H 'Content-Type: application/json' \
+            -d '{"password":"ci-password"}' http://127.0.0.1:3000/api/auth/login
+          curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' -H 'Content-Type: application/json' \
+            -d '{"name":"Smoke","graph":{"nodes":{},"rootNodeIds":[]}}' http://127.0.0.1:3000/api/scenes \
+            | grep '"ownerId":"admin"'
+          curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/ | grep -q 'Smoke'
+
+          # Public embeds: private until shared, then readable without a session.
+          ID=$(curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/scenes | sed -E 's/.*"id":"([^"]+)".*/\1/')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/embed/$ID)" = "404"
+          curl -fsS -b cookies.txt -H 'Host: pascal.ci:3000' -H 'Content-Type: application/json' \
+            -d '{"shared":true}' http://127.0.0.1:3000/api/scenes/$ID/share | grep -q '"shared":true'
+          curl -fsS -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/api/scenes/$ID/public | grep -q '"name":"Smoke"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pascal.ci:3000' http://127.0.0.1:3000/embed/$ID)" = "200"
+
+      - name: Container logs
+        if: always()
+        run: docker logs pascal || true

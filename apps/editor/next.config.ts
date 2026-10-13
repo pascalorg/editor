@@ -15,15 +15,26 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async headers() {
+    return [
+      {
+        source: '/embed/:path*',
+        headers: [{ key: 'Content-Security-Policy', value: 'frame-ancestors *' }],
+      },
+    ]
+  },
   // MCP / package metadata returns `/editor/<id>` (hosted route). This open-source
-  // app serves saved scenes at `/scene/<id>` — redirect so links and bookmarks work.
+  // app serves saved projects at `/project/<id>` — redirect so links and bookmarks work.
   async redirects() {
     return [
       {
         source: '/editor/:id',
-        destination: '/scene/:id',
+        destination: '/project/:id',
         permanent: false,
       },
+      // Former routes: the list moved to the home page, scenes became projects.
+      { source: '/scenes', destination: '/', permanent: false },
+      { source: '/scene/:id', destination: '/project/:id', permanent: false },
     ]
   },
   transpilePackages: [
