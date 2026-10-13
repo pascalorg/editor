@@ -62,9 +62,13 @@ jobs:
       # redacted by npm.
       NPM_CONFIG_LOGLEVEL: verbose
     steps:
+      # The `main` ruleset only lets admins and this deploy key push directly;
+      # the release commit and its tags go through that key, so the push below
+      # is not rejected with "Changes must be made through a pull request".
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - uses: oven-sh/setup-bun@v2
         with:
