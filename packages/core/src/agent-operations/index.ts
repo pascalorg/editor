@@ -23,6 +23,7 @@ import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
+import { getSite, placeBuilding } from './site'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperation, AgentOperations } from './types'
 import { verifyScene } from './verify-scene'
@@ -67,6 +68,7 @@ export * from './scene-queries'
 export * from './scene-view'
 export * from './search-assets'
 export * from './search-materials'
+export * from './site'
 export * from './stairs'
 export * from './types'
 export * from './verify-scene'
@@ -101,6 +103,8 @@ const SINGLE_OPERATIONS = {
   place_in_room: placeInRoom,
   search_assets: searchAssets,
   search_materials: searchMaterials,
+  get_site: getSite,
+  place_building: placeBuilding,
   ...ROOM_OPERATIONS,
 } as const
 

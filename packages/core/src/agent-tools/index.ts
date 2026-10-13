@@ -27,6 +27,7 @@ import { placeItemsTool } from './place-items'
 import { createRoofTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
+import { getSiteTool, placeBuildingTool } from './site'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
@@ -57,6 +58,7 @@ export * from './refusal'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
+export * from './site'
 export * from './stairs'
 export * from './verify-scene'
 export * from './view-scene'
@@ -105,6 +107,8 @@ export const AGENT_TOOL_CONTRACTS = [
   placeInRoomTool,
   searchAssetsTool,
   searchMaterialsTool,
+  getSiteTool,
+  placeBuildingTool,
   ...ROOM_TOOL_CONTRACTS,
   runBatchTool,
 ] as const satisfies readonly AgentToolContract[]

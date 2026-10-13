@@ -1,8 +1,11 @@
 import { refuse } from '../agent-tools/refusal'
-import { WallNode } from '../schema'
+import { levelFootprintLoops } from '../lib/building-footprint'
+import { lotOverhang } from '../lib/site-placement'
+import { type LevelNode, WallNode } from '../schema'
 import { isRoofLevel } from '../services/roof-level'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
 import { WALL_MIN_LENGTH } from '../systems/wall/wall-topology'
+import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import type { AgentOperation, SceneNodes } from './types'
 
@@ -51,6 +54,13 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ...(input.height === undefined ? {} : { height: input.height }),
     ...(curveOffset ? { curveOffset } : {}),
   })
+  // the wall's mitred band, curve and all: what crosses the lot line, not only its centreline
+  const after = applySceneChanges(nodes, { create: [{ node: wall, parentId: level.id }] })
+  const site = lotOverhang(
+    after,
+    level.id,
+    levelFootprintLoops(after, after[level.id] as LevelNode, null, new Set([wall.id])),
+  )
   return {
     result: {
       ok: true,
@@ -59,7 +69,12 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
       levelId: level.id,
       length: Math.round(length * 1000) / 1000,
       ...(curveOffset ? { curveOffset } : {}),
-      message: `Added wall "${wall.name}" on ${level.name ?? level.id}`,
+      ...(site ? { site } : {}),
+      message: `Added wall "${wall.name}" on ${level.name ?? level.id}${
+        site
+          ? `; it reaches ${site.overhangM} m past the lot line (${site.sides.join(', ')}): the house belongs inside the buildable area (get_site, place_building)`
+          : ''
+      }`,
     },
     changes: { create: [{ node: wall, parentId: level.id }] },
   }

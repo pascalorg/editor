@@ -131,6 +131,14 @@ export {
 } from './lib/assembly-stack'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
+  footprintOutline,
+  levelFootprintLoops,
+  levelFrame,
+  siteFrame,
+  turnPlanPoint,
+  yawOf,
+} from './lib/building-footprint'
+export {
   CEILING_SURFACE_ROLE,
   type CeilingSurfaceCell,
   ceilingPaintRegions,
@@ -347,12 +355,47 @@ export {
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   arcRuns,
+  castYardDimensionsOriented,
+  classifyEdges,
+  type EdgeRole,
+  edgeHeadingDeg,
+  edgeLength,
   envelopeFrontEdge,
   insetPolygon,
   type KeepOut,
+  mostNorthFacingEdge,
+  outwardNormal,
+  rayToPolygon,
+  resolveFrontEdge,
+  type SetbackInputs,
+  setbackEnvelope,
+  setbackForRole,
   sightTriangle,
   streetCorners,
+  type YardDimension,
+  type YardSide,
 } from './lib/setback-envelope'
+export {
+  type BuildableArea,
+  type BuildingPlacement,
+  buildingFootprintRings,
+  describeSiteBrief,
+  lotOverhang,
+  measureFootprint,
+  type PlaceBuildingInput,
+  type PlacementRefusal,
+  type PlanBounds,
+  type PlanSide,
+  placeBuildingPose,
+  resolveSiteBuilding,
+  roundedSiteBrief,
+  type SiteBrief,
+  type SiteFootprint,
+  siteBrief,
+  siteFrontEdge,
+  siteSetbackEnvelope,
+  type YardKey,
+} from './lib/site-placement'
 export {
   getRenderableSlabPolygon,
   prepareSlabPolygonContext,

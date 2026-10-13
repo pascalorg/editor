@@ -2,8 +2,17 @@ import { isAgentRefusal, refuse } from '../agent-tools/refusal'
 import { doorFacing, planWallOpening } from '../building/wall-openings'
 import { createZone, walledRoomAt } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
+import { levelFootprintLoops } from '../lib/building-footprint'
 import { isAllocatedRoomName } from '../lib/room-name'
-import { type AnyNode, type AnyNodeId, generateId, type WallNode, type ZoneNode } from '../schema'
+import { lotOverhang } from '../lib/site-placement'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  generateId,
+  type LevelNode,
+  type WallNode,
+  type ZoneNode,
+} from '../schema'
 import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, type Vec2 } from './plan-geometry'
@@ -222,6 +231,14 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
     (a, i) => wallsAlong(scene, level.id, a, polygon[(i + 1) % polygon.length]!)[0]?.id ?? null,
   )
   const reusedWalls = wallIds.filter((id) => id && nodes[id]).length
+  // the room and the walls it raised, their mitred bands: what crosses the lot line
+  const raised = new Set(
+    roomChanges.create.flatMap((entry) => (entry.node.type === 'wall' ? [entry.node.id] : [])),
+  )
+  const site = lotOverhang(scene, level.id, [
+    polygon,
+    ...levelFootprintLoops(scene, scene[level.id] as LevelNode, null, raised),
+  ])
   const result = {
     ok: true,
     zoneId: plan.zoneId,
@@ -233,6 +250,7 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
     doorIds,
     windowIds,
     ...(skippedOpenings.length ? { skippedOpenings } : {}),
+    ...(site ? { site } : {}),
     message: [
       plan.renamed
         ? `Named the ${input.outdoor ? 'outdoor room' : 'room'} the walls already enclose "${input.name}" (it was ${plan.renamed}) on ${level.name || level.id}`
@@ -242,6 +260,11 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
       ...(windowIds.length ? [plural(windowIds.length, 'window')] : []),
       ...(skippedOpenings.length
         ? [`skipped ${plural(skippedOpenings.length, 'opening')} (see skippedOpenings)`]
+        : []),
+      ...(site
+        ? [
+            `it reaches ${site.overhangM} m past the lot line (${site.sides.join(', ')}): the house belongs inside the buildable area (get_site, place_building)`,
+          ]
         : []),
     ].join(', '),
   }

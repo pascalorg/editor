@@ -2,15 +2,28 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  castYardDimensionsOriented,
+  classifyEdges,
+  edgeHeadingDeg,
+  edgeLength,
   envelopeFrontEdge,
   type FloorplanGeometry,
+  footprintOutline,
   isRoofLevel,
   type LevelNode,
+  levelFootprintLoops,
+  outwardNormal,
   type SceneSnapshot,
   type SiteNode,
+  setbackForRole,
   sightTriangle,
+  siteFrame,
+  siteFrontEdge,
+  siteSetbackEnvelope,
   streetCorners,
   terrainFieldOf,
+  type YardDimension,
+  yawOf,
 } from '@pascal-app/core'
 import { sitePlanContributions } from './contributors'
 import {
@@ -21,21 +34,11 @@ import {
 } from './coverage'
 import {
   type Bounds,
-  boundsInsidePolygon,
-  castYardDimensionsOriented,
-  classifyEdges,
   compassLabel,
-  edgeHeadingDeg,
-  edgeLength,
   formatFeetInches,
   METRES_PER_FOOT,
-  outwardNormal,
   type Pt,
   polygonBounds,
-  resolveFrontEdge,
-  setbackEnvelope,
-  setbackForRole,
-  type YardDimension,
 } from './geometry'
 import {
   contourPrimitives,
@@ -52,14 +55,10 @@ import {
   findBuilding,
   findLowestLevel,
   findSite,
-  footprintOutline,
-  levelFootprintLoops,
   roofOutlineRings,
-  siteFrame,
-  yawOf,
 } from './site-parts'
 
-export { footprintOutline, levelFootprintLoops, roofOutlineRings }
+export { roofOutlineRings }
 
 /** Contract shared by every drawing producer (see docs/construction-documents.md). */
 export interface SitePlanDrawing {
@@ -318,10 +317,10 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   const lot = (site?.polygon?.points ?? []) as Pt[]
   const building = findBuilding(scene, site)
   const level = findLowestLevel(scene, building)
-  const footprintLoops = levelFootprintLoops(scene, level, building)
+  const footprintLoops = levelFootprintLoops(scene.nodes, level, building)
   const footprintBounds = unionBounds(footprintLoops)
   const northRotation = site?.northRotation ?? 0
-  const frontEdge = resolveFrontEdge(lot, site?.frontEdge, northRotation)
+  const frontEdge = site ? siteFrontEdge(site) : 0
 
   const empty: SitePlanDrawing = {
     primitives: [],
@@ -395,9 +394,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
     typeof site?.sightTriangleFt === 'number' && site.sightTriangleFt > 0
       ? site.sightTriangleFt * METRES_PER_FOOT
       : 0
-  const envelope = site?.setbacks
-    ? setbackEnvelope(lot, site.setbacks, frontEdge, { streetEdges, sightTriangleM })
-    : []
+  const envelope = site ? siteSetbackEnvelope(site) : []
   // the corner sight triangles (clear-vision at a street intersection):
   // dashed, labelled with the leg — the ordinance's figure, verify locally
   const sightTriangles: Pt[][] = []
@@ -765,23 +762,4 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       coverage,
     },
   }
-}
-
-/**
- * Translation (site metres, `[dx, dz]`) that centres the building's footprint
- * on the lot centroid. `null` when there is nothing to move or the footprint
- * already sits inside the ring.
- */
-export function buildingRecentreOffset(
-  lot: readonly Pt[],
-  footprintBounds: Bounds | null,
-): [number, number] | null {
-  if (lot.length < 3 || !footprintBounds) return null
-  if (boundsInsidePolygon(lot, footprintBounds)) return null
-  const lotB = polygonBounds(lot)
-  const lotCx = (lotB.minX + lotB.maxX) / 2
-  const lotCy = (lotB.minY + lotB.maxY) / 2
-  const fpCx = (footprintBounds.minX + footprintBounds.maxX) / 2
-  const fpCy = (footprintBounds.minY + footprintBounds.maxY) / 2
-  return [lotCx - fpCx, lotCy - fpCy]
 }

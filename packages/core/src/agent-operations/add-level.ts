@@ -35,7 +35,7 @@ export function targetBuilding(
     (node): node is BuildingNode => node.type === 'building',
   )
   if (buildings.length === 1) return buildings[0]!
-  if (!buildings.length) refuse('no_building', 'The scene has no building to add a level to.')
+  if (!buildings.length) refuse('no_building', 'The scene has no building.')
   return refuse(
     'building_required',
     `The scene has ${buildings.length} buildings; say which: ${buildings.map((building) => building.id).join(', ')}.`,

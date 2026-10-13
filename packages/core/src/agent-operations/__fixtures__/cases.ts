@@ -26,6 +26,12 @@ import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { CORNER_WINDOW_CASES } from './corner-window-cases'
 import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
 import {
+  GET_SITE_CASES,
+  PLACE_BUILDING_CASES,
+  SITE_LINE_CASES,
+  SITE_VERIFY_CASES,
+} from './site-cases'
+import {
   ADD_FENCE_CASES,
   ADD_LEVEL_CASES,
   ADD_WALL_CASES,
@@ -908,4 +914,8 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...FIND_BY_TYPE_CASES,
   ...CORNER_WINDOW_CASES,
   ...MERGE_WINDOWS_CASES,
+  ...GET_SITE_CASES,
+  ...PLACE_BUILDING_CASES,
+  ...SITE_LINE_CASES,
+  ...SITE_VERIFY_CASES,
 ]

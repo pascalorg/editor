@@ -2,6 +2,7 @@ import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
+import { siteBrief } from '../lib/site-placement'
 import { nodeRegistry } from '../registry'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
 import { roofsOver } from '../services/roof-level'
@@ -521,6 +522,33 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
             `Stair ${stairName} opening extends outside slab ${slab.name ?? slab.id}`,
           )
     }
+  }
+
+  // Where each building stands on its lot: past the lot line or into the required yards is a
+  // problem, off-centre is not.
+  for (const building of Object.values(nodes)) {
+    if (building.type !== 'building') continue
+    const brief = siteBrief(nodes, { buildingId: building.id })
+    if (!brief) continue
+    const name = building.name ?? 'The building'
+    if (brief.buildable.state === 'none')
+      report(
+        'buildable_area_none',
+        `The setbacks leave nothing to build on this lot: check the site's setbacks before standing ${name} on it.`,
+      )
+    const footprint = brief.footprint
+    if (!footprint) continue
+    const sides = footprint.overhang.sides.join(', ')
+    if (footprint.fit === 'outside')
+      report(
+        'footprint_outside_site',
+        `${name} reaches ${footprint.overhang.lotM.toFixed(1)} m past the lot line (${sides}): place_building centres it in the buildable area; a plan bigger than the lot needs saying so.`,
+      )
+    else if (footprint.fit === 'lot' && brief.buildable.state !== 'none')
+      report(
+        'footprint_outside_setbacks',
+        `${name} stands ${footprint.overhang.setbacksM.toFixed(1)} m into the required yards (${sides}): place_building centres it in the buildable area.`,
+      )
   }
 
   const errors = schemaErrors(nodes)
