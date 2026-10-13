@@ -844,6 +844,7 @@ export {
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
 export { isTypingTarget } from './lib/typing-target'
+export { enterUnitFocus } from './lib/units'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 export { useLinearDisplay } from './lib/use-linear-display'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
