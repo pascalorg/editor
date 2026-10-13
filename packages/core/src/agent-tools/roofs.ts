@@ -60,3 +60,13 @@ export const createRoofTool = {
     name: z.string().max(120).optional().describe('What the user would call it (default "Roof").'),
   },
 }
+
+export const moveRoofsToRoofLevelTool = {
+  name: 'move_roofs_to_roof_level',
+  title: 'Move roofs to the roof level',
+  description:
+    "Move the roofs a storey holds on its own walls to the level the roof rule gives them, as a roof's panel does by hand (Move to the roof level): over the top storey, the building's roof level (made, named Roof, when there is none); under an upper storey, that storey. Each roof stands exactly where it stood, its segments, finishes and id kept: only the level holding it changes, so exploded and solo level views show the storey's plan with no roof over it. For a project built before roofs had their own level, when verify_scene reports roof_mixed_in_storey. Refused with a code: level_not_found, no_roof_on_walls (the storey holds no roof standing on its walls; a porch roof on its beam and a lower wing's roof on the storey above already sit where they belong). Returns the roofs moved (roofIds), the level they went to (roofLevelId) and the roof level made for them (createdRoofLevelId).",
+  input: {
+    levelId: NodeId.describe('The storey whose roofs move, by an id list_levels returned.'),
+  },
+}

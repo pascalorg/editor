@@ -7,9 +7,14 @@ import {
   type ChimneyNode,
   type DormerNode,
   type GutterNode,
+  getLevelDisplayName,
+  isRoofOnStoreyWalls,
+  type LevelNode,
+  planRoofsOffStorey,
   type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
+  roofLevelAbove,
   type SkylightNode,
   type SolarPanelNode,
   type TurbineVentNode,
@@ -148,6 +153,40 @@ export default function RoofPanel() {
     }),
   )
 
+  // A roof on the walls of the storey holding it (the agents' and the editor's roofs before the
+  // roof level) hides that storey's plan in solo and exploded views: offer to move it where it goes.
+  const levelMove = useScene(
+    useShallow((s) => {
+      if (!node || !isRoofOnStoreyWalls(s.nodes, node.id)) return null
+      const level = s.nodes[node.parentId as AnyNodeId] as LevelNode
+      const above = roofLevelAbove(s.nodes, level.id)
+      return {
+        storey: getLevelDisplayName(level),
+        label:
+          above.kind === 'roof'
+            ? 'Move to the roof level'
+            : `Move to ${getLevelDisplayName(above.level)}`,
+        roofs: level.children.filter((id) => isRoofOnStoreyWalls(s.nodes, id)).length,
+      }
+    }),
+  )
+
+  const handleMoveOffStorey = useCallback(() => {
+    if (!node?.parentId) return
+    const move = planRoofsOffStorey(useScene.getState().nodes, node.parentId)
+    if (!move) return
+    triggerSFX('sfx:item-place')
+    useScene.getState().applyNodeChanges({
+      create: move.changes.create.map((op) => ({
+        node: op.node,
+        parentId: op.parentId as AnyNodeId | undefined,
+      })),
+      update: move.changes.update.map(({ id, data }) => ({ id: id as AnyNodeId, data })),
+    })
+    // The storey in view hides the levels above it: the selection follows the roof up.
+    setSelection({ levelId: move.plan.levelId as LevelNode['id'], selectedIds: [node.id] })
+  }, [node, setSelection])
+
   const handleSelectElement = useCallback(
     (id: string) => {
       setSelection({ selectedIds: [id as AnyNode['id']] })
@@ -243,6 +282,25 @@ export default function RoofPanel() {
       title={node.name || 'Roof'}
       width={300}
     >
+      {levelMove && (
+        <PanelSection title="Level">
+          <div className="flex flex-col gap-2 px-1 pb-1">
+            <p className="text-muted-foreground text-xs">
+              On {levelMove.storey} with its walls, so it hides that floor's plan in solo and
+              exploded views.
+              {levelMove.roofs > 1 && ` The floor's ${levelMove.roofs} roofs move together.`}
+            </p>
+            <button
+              className="w-full rounded-full bg-foreground/[0.08] px-3 py-2 font-medium text-foreground text-xs transition-colors hover:bg-foreground/[0.14]"
+              onClick={handleMoveOffStorey}
+              type="button"
+            >
+              {levelMove.label}
+            </button>
+          </div>
+        </PanelSection>
+      )}
+
       <PanelSection title="Segments">
         <div className="flex flex-col gap-1">
           {segments.map((seg, i) => (
