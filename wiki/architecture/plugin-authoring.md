@@ -358,6 +358,7 @@ export const signageChat: PluginChatExtension = {
   cards: { signage_schedule: () => import('./schedule-card') },
   actions: [{ id: 'exit-signs', label: 'Exit signs', hint: 'Sign every exit', prompt: 'Place exit signs on every level.' }],
   accepts: ['.csv'],
+  start: () => import('./chat-start'),
 }
 ```
 
@@ -368,6 +369,7 @@ export const signageChat: PluginChatExtension = {
 - **The host decides.** Which tools a turn offers, to whom and at what cost, whether a `chatOnly` request is honoured, and how far `timeoutMs` may go are host policy, like a panel's `access`. Being in `installedPlugins` is necessary, not sufficient. These packages define the shapes; a host keeps its own catalog of the plugins it serves.
 - **Trusted code.** These exports run with the application's privileges: a zod schema is code, and an executor or a card runs in the page. Hosts load reviewed, pinned plugins. The purity rule keeps contracts loadable in a sandboxed workflow; it does not isolate them.
 - **Cards and outputs.** A card renders from the persisted call alone (`toolName`, `input`, `output`, `state`), so a reloaded chat shows the same card; its `actions` open a view, select nodes or send a prompt. A `ChatToolOutput` carries images by reference (`ref`), never bytes. `actions` add entries to the composer's `/` menu; `accepts` lists the file types the plugin's tools read.
+- **A start screen.** `start` is what the host's chat shows while its thread is empty. It acts only through its `ChatStartProps`: `send` a message (pictures by reference) or `attach` files to the composer, both at the level the plugin's tools run at, and `requirePro()` before a step that needs that level: it answers false after the host offered the upgrade, and changes nothing in the chat. Render registry icons with `IconRefGlyph`, as the editor does.
 
 The rules both surfaces follow for these tools are in [agent surfaces](agent-surfaces.md#plugin-tools).
 

@@ -253,6 +253,7 @@ export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-pane
 export { ToggleControl } from './components/ui/controls/toggle-control'
 export { ToolOptionsPanel } from './components/ui/controls/tool-options-panel'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
+export { IconRefGlyph, IconRefImage } from './components/ui/icon-ref'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 // A base plate's panel (one connected footprint's floor and foundation); the
 // slab kind's panel hands base plates to it.
@@ -725,6 +726,7 @@ export {
   resolvePlanarCursorPosition,
 } from './lib/planar-cursor-placement'
 export type {
+  ChatStartProps,
   ChatToolCardProps,
   ChatToolOutput,
   PluginChatExtension,
