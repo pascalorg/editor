@@ -92,7 +92,7 @@ export const placeBuilding: AgentOperation<PlaceBuildingInput> = (nodes, input, 
   const movedWithIt = placed.moved
     ? outdoorOnLevels(nodes, building.id, placed.footprint.rings)
     : []
-  const where = describeSiteBrief({ ...placed.brief, footprint: placed.footprint }).at(-1)
+  const where = `${describeSiteBrief({ ...placed.brief, footprint: placed.footprint }).at(-1)}.`
   const message = [
     placed.moved
       ? `${building.name ?? 'The building'} now stands at site [${r2(x)}, ${r2(z)}], ${rotationDeg}°. Its walls keep their level coordinates; draw new ones in the same frame.`
