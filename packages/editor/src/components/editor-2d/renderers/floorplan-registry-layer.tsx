@@ -2058,7 +2058,10 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   const phase = useEditor((state) => state.phase)
   const hoverTargetId =
     phase === 'site' ? (resolveCanvasBuildingId(node, nodes) ?? selectionProxyId) : selectionProxyId
-  const hovered = useViewer((state) => state.hoveredId === hoverTargetId)
+  // What a chat chip points at (`pointedIds`) lights as a hover does, as it does in 3D.
+  const hovered = useViewer(
+    (state) => state.hoveredId === hoverTargetId || state.pointedIds.includes(hoverTargetId),
+  )
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const referencedAnnotationRole = useViewer((state) =>
     floorplanEntryReferencedAnnotationRole(node, nodes, new Set(state.selection.selectedIds)),

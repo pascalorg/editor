@@ -28,10 +28,14 @@ import { RoomControls2D, RoomControls3D } from './room-controls'
 
 /**
  * A zone reached as a zone (hovered or selected through its area or pill, not
- * as a room) shows the room's outline, never a tinted volume.
+ * as a room, or the one a chat chip points at) shows the room's outline, never
+ * a tinted volume. With zones hidden, a pointed zone has nothing else to light.
  */
 function useZoneOutline() {
   const hoveredId = useViewer((state) => state.hoveredId)
+  const pointedId = useViewer((state) =>
+    state.pointedIds.length === 1 ? state.pointedIds[0] : null,
+  )
   const selectedId = useViewer(
     (state) =>
       state.selection.zoneId ??
@@ -39,7 +43,7 @@ function useZoneOutline() {
   )
   const unitFocused = useViewer((state) => !!state.focusedUnitId)
   const zone = useScene((state) => {
-    for (const id of [hoveredId, selectedId]) {
+    for (const id of [hoveredId, pointedId, selectedId]) {
       const node = id ? state.nodes[id as AnyNodeId] : undefined
       if (node?.type === 'zone') return node
     }
