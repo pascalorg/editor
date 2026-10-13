@@ -106,7 +106,7 @@
     },
     "packages/cli": {
       "name": "@pascal-app/cli",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "bin": {
         "pascal": "dist/bin/pascal.js",
       },
@@ -121,7 +121,7 @@
     },
     "packages/core": {
       "name": "@pascal-app/core",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "dependencies": {
         "@pascal-app/lingo": "^0.2.0",
         "dedent": "^1.7.1",
@@ -150,15 +150,15 @@
     },
     "packages/editor": {
       "name": "@pascal-app/editor",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "dependencies": {
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
         "@iconify/react": "^6.0.2",
         "@number-flow/react": "^0.6.0",
-        "@pascal-app/geometry-script": "^1.0.3",
-        "@pascal-app/ifc-converter": "^1.0.3",
+        "@pascal-app/geometry-script": "^1.0.4",
+        "@pascal-app/ifc-converter": "^1.0.4",
         "@pascal-app/lingo": "^0.2.0",
         "@radix-ui/react-alert-dialog": "^1.1.15",
         "@radix-ui/react-context-menu": "^2.2.16",
@@ -192,8 +192,8 @@
         "zustand": "^5.0.11",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.3",
-        "@pascal-app/viewer": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
+        "@pascal-app/viewer": "^1.0.4",
         "@pascal/typescript-config": "*",
         "@react-three/test-renderer": "^9.1.0",
         "@types/blob-stream": "^0.1.33",
@@ -207,8 +207,8 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.3",
-        "@pascal-app/viewer": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
+        "@pascal-app/viewer": "^1.0.4",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "next": ">=15",
@@ -236,9 +236,9 @@
     },
     "packages/geometry-script": {
       "name": "@pascal-app/geometry-script",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "dependencies": {
-        "@pascal-app/core": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
         "three-bvh-csg": "^0.0.18",
       },
       "devDependencies": {
@@ -253,9 +253,9 @@
     },
     "packages/ifc-converter": {
       "name": "@pascal-app/ifc-converter",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "dependencies": {
-        "@pascal-app/core": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
         "web-ifc": "^0.0.77",
       },
       "devDependencies": {
@@ -266,33 +266,33 @@
     },
     "packages/mcp": {
       "name": "@pascal-app/mcp",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "bin": {
         "pascal-mcp": "dist/bin/pascal-mcp.js",
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.30.0",
-        "@pascal-app/geometry-script": "^1.0.3",
+        "@pascal-app/geometry-script": "^1.0.4",
         "@pascal-app/lingo": "^0.2.0",
         "zod": ">=4.5.4 <4.6",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
         "@pascal/typescript-config": "*",
         "@types/node": "^22.19.20",
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
       },
     },
     "packages/nodes": {
       "name": "@pascal-app/nodes",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "devDependencies": {
-        "@pascal-app/core": "^1.0.3",
-        "@pascal-app/editor": "^1.0.3",
-        "@pascal-app/viewer": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
+        "@pascal-app/editor": "^1.0.4",
+        "@pascal-app/viewer": "^1.0.4",
         "@pascal/typescript-config": "*",
         "@react-three/test-renderer": "^9.1.0",
         "@types/bun": "^1.4.2",
@@ -303,9 +303,9 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.3",
-        "@pascal-app/editor": "^1.0.3",
-        "@pascal-app/viewer": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
+        "@pascal-app/editor": "^1.0.4",
+        "@pascal-app/viewer": "^1.0.4",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "lucide-react": "^1",
@@ -338,14 +338,14 @@
     },
     "packages/viewer": {
       "name": "@pascal-app/viewer",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "dependencies": {
         "three-bvh-csg": "^0.0.18",
         "three-mesh-bvh": "^0.9.8",
         "zustand": "^5",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
         "@pascal/typescript-config": "*",
         "@react-three/test-renderer": "^9.1.0",
         "@types/node": "^22",
@@ -355,7 +355,7 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.3",
+        "@pascal-app/core": "^1.0.4",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
