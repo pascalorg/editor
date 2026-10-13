@@ -2,8 +2,12 @@ import {
   type AnyNode,
   type AnyNodeId,
   getLevelElevations,
+  isRoofLevel,
   type LevelNode,
   planRoofLevel,
+  type RoofNode,
+  type RoofSegmentNode,
+  resolveRoofElevation,
   type SceneApi,
 } from '@pascal-app/core'
 import { applySceneChanges } from '@pascal-app/core/agent-operations'
@@ -61,6 +65,35 @@ export function drawnRoofLevelTarget(
   return levelHoldsWalls(nodes, levelId)
     ? roofLevelTarget(nodes, levelId, roofHeight)
     : { levelId, create: [], update: [], nodes }
+}
+
+/**
+ * How a roof drawn on the armed level stands: lifted onto the roof level over the armed storey, on
+ * that storey's walls, following their height as a roof over a room does; anywhere else (a lower
+ * wing's storey above, an empty level) on the level plane it was drawn on.
+ */
+export function drawnRoofSupport(
+  target: RoofLevelTarget,
+  armedLevelId: string,
+): NonNullable<RoofNode['support']> {
+  return target.levelId !== armedLevelId && isRoofLevel(target.nodes[target.levelId as AnyNodeId])
+    ? { kind: 'walls' }
+    : { kind: 'level' }
+}
+
+/** A roof's eave on the wall tops under it, read with the roof written into the target's scene. */
+export function seatedRoofElevation(
+  target: RoofLevelTarget,
+  roof: RoofNode,
+  segments: RoofSegmentNode[],
+): number {
+  const seated = applySceneChanges(target.nodes, {
+    create: [
+      { node: roof, parentId: target.levelId as AnyNodeId },
+      ...segments.map((segment) => ({ node: segment as AnyNode, parentId: roof.id as AnyNodeId })),
+    ],
+  })
+  return resolveRoofElevation(seated[roof.id as AnyNodeId] as RoofNode, seated)
 }
 
 /** How far above the armed level a target sits (m), to draw the roof's ghost where it lands. */

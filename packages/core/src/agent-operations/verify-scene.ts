@@ -4,6 +4,7 @@ import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { nodeRegistry } from '../registry'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
+import { roofsOver } from '../services/roof-level'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
 import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
@@ -306,10 +307,10 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
           'roof_level_occupied',
           `${levelName} is a roof support level but contains occupied-story content; move rooms, walls, stairs, slabs, ceilings, and items to an occupied story and keep the roof level for roof geometry only`,
         )
+      // An empty storey counts: it is a floor still to be built, and the roof goes above it.
       const storeyAbove = levels.find(
         (other) =>
           other.isOccupiedStory &&
-          !other.isEmpty &&
           other.floorIndex > level.floorIndex &&
           buildingOf(other.levelId) === buildingOf(level.levelId),
       )
@@ -328,7 +329,12 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       report('zones_no_ceilings', `${levelName} has zones but no ceilings`)
     if (content.walls > 0 && content.doors === 0)
       report('walls_no_doors', `${levelName} has walls but no doors`)
-    if (content.roofs > 0 && (content.walls > 0 || content.zones > 0 || content.stairs > 0))
+    // A roof on a storey that covers it (written on its own walls' level); a lower wing's roof
+    // here covers the storey below, where the rule puts it.
+    if (
+      roofsOver(nodes, level.levelId).some((roof) => roof.parentId === level.levelId) &&
+      (content.walls > 0 || content.zones > 0 || content.stairs > 0)
+    )
       report(
         'roof_mixed_in_storey',
         `${levelName} mixes roof geometry with occupied-level content; place roofs on a dedicated roof level for solo/exploded level views`,

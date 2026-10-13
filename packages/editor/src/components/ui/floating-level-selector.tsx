@@ -631,7 +631,7 @@ export function FloatingLevelSelector() {
     <>
       <div className={cn('pointer-events-auto absolute left-3 z-20', isMobile ? 'top-14' : 'top-3')}>
         <div className="relative">
-          {/* Floating + at top edge */}
+          {/* Floating + at top edge: a floor on top, under the roof level when one tops the stack */}
           {!draggingLevelId && (
             <button
               className={cn(addButtonClass, 'top-0 -translate-y-1/2')}
@@ -639,7 +639,7 @@ export function FloatingLevelSelector() {
               // read only from outside: nothing here depends on it.
               data-guide-target="level-add"
               onClick={handleAddAbove}
-              title="Add level above"
+              title={isRoofLevel(reversedLevels[0]) ? 'Add a floor under the roof' : 'Add level above'}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />

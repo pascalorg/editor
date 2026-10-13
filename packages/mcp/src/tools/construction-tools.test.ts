@@ -420,7 +420,7 @@ describe('construction tools', () => {
     const result = await client.callTool({ name: 'create_roof', arguments: {} })
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    expect(parsed).toMatchObject({ referenceLevelId: level.id, roofType: 'gable' })
+    expect(parsed).toMatchObject({ coveredLevelId: level.id, roofType: 'gable' })
     expect(bridge.getNode(parsed.roofId)).toMatchObject({ parentId: parsed.roofLevelId })
     // The floor plate reaches the walls' outer faces: 8 × 6 m between centrelines, 0.16 m walls.
     const segment = bridge.getNode(parsed.segmentIds[0])

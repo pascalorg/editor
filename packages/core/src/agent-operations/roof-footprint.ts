@@ -2,9 +2,8 @@
 // as it runs inside the footprint, so they overlap where they meet. The roof renders their union,
 // so a wing's hips meet the body's slopes in valleys; wings cut where they meet put a hip end each
 // side of the cut, a notch along the joint. Coordinates scaled from a plan carry float noise that
-// sliced the footprint into slivers (468 hip segments on one plan's top floor, which froze the
-// page), so the footprint is snapped first, balcony-thin strips join their larger neighbour, and a
-// pathological footprint falls back to its bounding box.
+// slices the footprint into hundreds of slivers, so the footprint is snapped first, balcony-thin
+// strips join their larger neighbour, and a pathological footprint falls back to its bounding box.
 
 type Pt = [number, number]
 export type RoofRectangle = { minX: number; maxX: number; minZ: number; maxZ: number }
@@ -262,9 +261,9 @@ function mergeWings(
 }
 
 /**
- * The frame a roof is swept in: the footprint's own axes, from its longest edge. Swept along the
- * world axes, a building turned 20° got a staircase of segments. The rotation convention is a roof
- * node's: local (x, z) → (x c + z s, -x s + z c).
+ * The frame a roof is swept in: the footprint's own axes, from its longest edge, so a rotated
+ * building gets whole wings, not a staircase of segments along the world axes. The rotation
+ * convention is a roof node's: local (x, z) → (x c + z s, -x s + z c).
  */
 export function buildingFrame(polygons: readonly (readonly Pt[])[]) {
   let longest = { length: 0, dx: 1, dz: 0 }

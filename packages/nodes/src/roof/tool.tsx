@@ -64,8 +64,10 @@ import {
 import useRoofFootprintSource from './roof-footprint-source'
 import {
   drawnRoofLevelTarget,
+  drawnRoofSupport,
   roofLevelTarget,
   roofLevelTargetOffset,
+  seatedRoofElevation,
   writeRoofNodes,
 } from './roof-level-target'
 import useRoofPlacementMode, { type RoofPlacementMode } from './roof-placement-mode'
@@ -336,22 +338,29 @@ export const commitRoofPlacement = (
     rotation: placement.rotation,
   })
 
-  // Create the roof container. Segment-shaped params (roofType, pitch, …) are
-  // dropped by the RoofNode schema; surface materials in `defaults` carry over.
-  const roof = RoofNode.parse({
-    ...defaults,
-    name,
-    position: [centerX, 0, centerZ],
-    support: { kind: 'level' },
-    children: [segment.id],
-  })
-
   // Drawn over a storey's walls, the roof goes on the level above them.
   const target = drawnRoofLevelTarget(
     nodes,
     levelId,
     segment.wallHeight + getActiveRoofHeight(segment),
   )
+  const support = drawnRoofSupport(target, levelId)
+  // Create the roof container. Segment-shaped params (roofType, pitch, …) are
+  // dropped by the RoofNode schema; surface materials in `defaults` carry over.
+  const placed = RoofNode.parse({
+    ...defaults,
+    name,
+    position: [centerX, 0, centerZ],
+    support,
+    children: [segment.id],
+  })
+  const roof =
+    support.kind === 'walls'
+      ? RoofNode.parse({
+          ...placed,
+          position: [centerX, seatedRoofElevation(target, placed, [segment]), centerZ],
+        })
+      : placed
   // Create roof first (so segment can be parented to it), then segment
   writeRoofNodes(sceneApi, target, [
     { node: roof, parentId: target.levelId },

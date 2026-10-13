@@ -109,13 +109,23 @@ describe('planRoofLevel', () => {
     expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({ kind: 'storey', levelId: 'level_e' })
   })
 
-  test('a declared roof level someone walled is a storey', () => {
+  // Two rules disagreed: list_levels and verify_scene called a walled Roof level the roof level,
+  // and this service a storey, so a '+' stacked a floor above it while the agents refused its walls.
+  test('a declared roof level someone walled stays the roof level, kept on top', () => {
     const nodes = house(
       { id: 'level_g', content: 'walls' },
       { id: 'level_r', content: 'walls', metadata: { role: 'roof' } },
     )
-    expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({ kind: 'storey', levelId: 'level_r' })
-    expect(storeyInsertIndex(nodes, 'building_h')).toEqual({ floorIndex: 2, shift: [] })
+    expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({
+      kind: 'roof',
+      levelId: 'level_r',
+      create: null,
+      update: [],
+    })
+    expect(storeyInsertIndex(nodes, 'building_h')).toEqual({
+      floorIndex: 1,
+      shift: [{ id: 'level_r', data: { level: 2 } }],
+    })
   })
 })
 
@@ -138,6 +148,22 @@ describe('roofsOver', () => {
     const nodes = house({ id: 'level_g', content: 'walls' }, { id: 'level_1', content: 'walls' })
     expect(roofsOver(nodes, 'level_g')).toEqual([])
   })
+
+  // A porch roof drawn by hand stands on the upper storey, by the rule, at its floor: it covered
+  // the upper storey too, so create_roof refused the house's own roof as roof_exists.
+  test("a lower wing's roof on the storey above covers the storey below, not that one", () => {
+    const nodes = house({ id: 'level_g', content: 'walls' }, { id: 'level_1', content: 'walls' })
+    const porch = RoofNode.parse({ id: 'roof_porch', parentId: 'level_1', position: [8, 0, 0] })
+    const legacy = RoofNode.parse({ id: 'roof_old', parentId: 'level_1', position: [3, 2.5, 2] })
+    const level = nodes.level_1 as LevelNode
+    nodes.level_1 = { ...level, children: [...level.children, porch.id, legacy.id] }
+    nodes[porch.id] = porch
+    nodes[legacy.id] = legacy
+
+    expect(roofsOver(nodes, 'level_g').map((roof) => roof.id)).toEqual(['roof_porch'])
+    // On its own walls' level, at their tops: written before roof levels, it covers that storey.
+    expect(roofsOver(nodes, 'level_1').map((roof) => roof.id)).toEqual(['roof_old'])
+  })
 })
 
 describe('storeyInsertIndex', () => {
@@ -152,6 +178,13 @@ describe('storeyInsertIndex', () => {
   test('with no roof level, above the highest level', () => {
     const nodes = house({ id: 'level_g', content: 'walls' }, { id: 'level_e', content: 'empty' })
     expect(storeyInsertIndex(nodes, 'building_h')).toEqual({ floorIndex: 2, shift: [] })
+  })
+
+  test('a building whose only level holds a roof (a carport) gets its new storey on top', () => {
+    expect(storeyInsertIndex(house({ id: 'level_c', content: 'roof' }), 'building_h')).toEqual({
+      floorIndex: 1,
+      shift: [],
+    })
   })
 
   test('a building with no level starts at the ground floor', () => {

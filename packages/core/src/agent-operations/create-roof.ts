@@ -1,4 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
+import { gapBridges } from '../building/wall-gaps'
+import { exteriorWallLoops, exteriorWallOutlines } from '../lib/exterior-wall-loops'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -6,6 +8,7 @@ import {
   RoofNode,
   RoofSegmentNode,
   type RoofType,
+  type WallNode,
 } from '../schema'
 import { planRoofLevel, roofsOver } from '../services/roof-level'
 import { resolveRoofElevation } from '../systems/roof/roof-elevation'
@@ -36,17 +39,9 @@ type CreateRoofInput = {
   name?: string
 }
 
-const isStorey = (nodes: SceneNodes, level: Level) => levelRole(nodes, level).role !== 'roof'
-
-/** A storey's floor plates, else its rooms: the footprint a roof covers. */
-function footprintPolygons(nodes: SceneNodes, storeyId: string): Pt[][] {
-  const on = (type: 'slab' | 'zone') =>
-    Object.values(nodes).filter(
-      (node) => node.type === type && node.parentId === storeyId,
-    ) as (AnyNode & { polygon: Pt[] })[]
-  const plates = on('slab')
-  return (plates.length ? plates : on('zone')).map((node) => node.polygon)
-}
+/** A storey a roof can cover: one with a footprint (`footprintPolygons`). */
+const hasFootprint = (nodes: SceneNodes, levelId: string) =>
+  footprintPolygons(nodes, levelId).length > 0
 
 const buildingLevels = (nodes: SceneNodes, level: Level) =>
   levelsOf(nodes).filter((other) => other.parentId === level.parentId)
@@ -60,6 +55,9 @@ function fasciaFields({ fasciaHeight, fasciaMaterialPreset }: CreateRoofInput) {
     ...(fasciaMaterialPreset ? { fasciaMaterialPreset } : {}),
   }
 }
+
+/** A level a roof can cap: not a roof level, not a support level. */
+const isStorey = (nodes: SceneNodes, level: Level) => levelRole(nodes, level).role === 'occupied'
 
 /**
  * The storey a roof covers: the one named when it has a footprint, else the highest storey of its
@@ -83,11 +81,7 @@ function coveredStorey(
     )
   const named = levelId ?? level
   const requested = named ? requireLevel(nodes, named) : null
-  if (
-    requested &&
-    isStorey(nodes, requested) &&
-    (rectangle || footprintPolygons(nodes, requested.id).length > 0)
-  )
+  if (requested && isStorey(nodes, requested) && (rectangle || hasFootprint(nodes, requested.id)))
     return { storey: requested }
   const viewed = context.activeLevelId ? nodes[context.activeLevelId] : undefined
   const scope = requested ?? (viewed?.type === 'level' ? viewed : null)
@@ -96,9 +90,16 @@ function coveredStorey(
   )
   const eligible = rectangle
     ? candidates.filter((candidate) => candidate.children.length > 0)
-    : candidates.filter((candidate) => footprintPolygons(nodes, candidate.id).length > 0)
-  // With no level in view (the MCP), the last level by ordinal would pick a building by its id.
-  const buildingIds = [...new Set(eligible.map((candidate) => candidate.parentId))]
+    : candidates.filter((candidate) => hasFootprint(nodes, candidate.id))
+  // With no level in view (the MCP), the last level by ordinal would pick a building by its id;
+  // a rectangle with no level holding anything falls back to every candidate, so asks of those.
+  const buildingIds = [
+    ...new Set(
+      (rectangle && !eligible.length ? candidates : eligible).map(
+        (candidate) => candidate.parentId,
+      ),
+    ),
+  ]
   if (!scope && buildingIds.length > 1)
     refuse(
       'building_required',
@@ -114,16 +115,112 @@ function coveredStorey(
   if (!storey)
     refuse(
       'no_rooms',
-      `No rooms on ${requested ? `${requested.id} or any other level of its building` : 'any level'}: create rooms first, or pass width and depth to roof a rectangle of your own.`,
+      `No rooms or closed walls on ${requested ? `${requested.id} or any other level of its building` : 'any level'}: create rooms first, or pass width and depth to roof a rectangle of your own.`,
       requested ? { levelId: requested.id } : {},
     )
   return {
     storey,
     ...(requested &&
       requested.id !== storey.id && {
-        note: `Level ${requested.id} has no rooms; the roof covers ${storey.name ?? storey.id} (${storey.id}), the highest level with rooms.`,
+        note: `Level ${requested.id} has no rooms or closed walls; the roof covers ${storey.name ?? storey.id} (${storey.id}), the highest level with rooms.`,
       }),
   }
+}
+
+/**
+ * The storey's outline from its walls, every gap bridged as L5 finds them: a roof covers the
+ * building, not only the rooms closed so far (the 290 traced from its PNG, its doors and windows
+ * still gaps, got a roof over a few rooms only).
+ */
+function wallOutline(nodes: SceneNodes, storeyId: string) {
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode => node.type === 'wall' && node.parentId === storeyId,
+  )
+  if (walls.length < 3) return []
+  const bridges = gapBridges(walls).map(
+    (gap, index) =>
+      ({
+        ...walls[0],
+        id: `wall_roof_gap_${index}`,
+        start: gap.start,
+        end: gap.end,
+        thickness: gap.thickness,
+        curveOffset: 0,
+      }) as WallNode,
+  )
+  // Ends a few centimetres apart are one corner: a vectorised plan's near-misses.
+  const closed = [...walls, ...bridges]
+  const outlines = exteriorWallOutlines(closed, NEAR_MISS)
+  if (!outlines.length) return []
+  // Out to the walls' outer faces, as a floor plate reaches: half the outline walls' thickness.
+  const thickness = new Map(closed.map((wall) => [wall.id, wall.thickness ?? 0.2]))
+  const onOutline = exteriorWallLoops(closed, NEAR_MISS)
+    .flat()
+    .map((face) => thickness.get(face.wallId) ?? 0.2)
+    .sort((a, b) => a - b)
+  const half = (onOutline[Math.floor(onOutline.length / 2)] ?? 0.2) / 2
+  return outlines.map((polygon) => grown(polygon, half))
+}
+
+/**
+ * How far a mitre may reach, in multiples of the distance moved: past it (a corner under about
+ * 29°, or an edge folding back on itself) the corner is bevelled, as an SVG stroke's is.
+ */
+const MITER_LIMIT = 4
+
+/** A polygon moved out by `distance` along each edge's outward normal, corners mitred up to the limit. */
+export function grown(polygon: Pt[], distance: number): Pt[] {
+  const n = polygon.length
+  let area = 0
+  for (let i = 0; i < n; i++) {
+    const [ax, az] = polygon[i]!
+    const [bx, bz] = polygon[(i + 1) % n]!
+    area += ax * bz - bx * az
+  }
+  const side = area > 0 ? 1 : -1
+  const normal = (a: Pt, b: Pt): Pt => {
+    const [dx, dz] = [b[0] - a[0], b[1] - a[1]]
+    const length = Math.hypot(dx, dz) || 1
+    return [(side * dz) / length, (-side * dx) / length]
+  }
+  return polygon.flatMap((point, i): Pt[] => {
+    const before = normal(polygon[(i - 1 + n) % n]!, point)
+    const after = normal(point, polygon[(i + 1) % n]!)
+    const dot = before[0] * after[0] + before[1] * after[1]
+    // The mitre reaches distance × √(2 / (1 + dot)): unbounded as the edges fold onto each other.
+    if (1 + dot < 2 / MITER_LIMIT ** 2)
+      return [
+        [point[0] + before[0] * distance, point[1] + before[1] * distance],
+        [point[0] + after[0] * distance, point[1] + after[1] * distance],
+      ]
+    // Along the bisector, as far as both edges move by `distance`.
+    const scale = distance / (1 + dot)
+    return [[point[0] + (before[0] + after[0]) * scale, point[1] + (before[1] + after[1]) * scale]]
+  })
+}
+
+const NEAR_MISS = 0.1
+
+/**
+ * A storey's footprint: its walls' outline, every gap bridged, else its floor plates (a balcony's
+ * left out; overlapping plates are one footprint), else its rooms.
+ */
+function footprintPolygons(nodes: SceneNodes, storeyId: string): Pt[][] {
+  const outline = wallOutline(nodes, storeyId)
+  if (outline.length) return outline
+  const on = (type: 'slab' | 'zone') =>
+    Object.values(nodes).filter(
+      (node) =>
+        node.type === type &&
+        node.parentId === storeyId &&
+        !(
+          node.type === 'slab' &&
+          node.metadata &&
+          (node.metadata as { balcony?: unknown }).balcony
+        ),
+    ) as (AnyNode & { polygon: Pt[] })[]
+  const plates = on('slab')
+  return (plates.length ? plates : on('zone')).map((node) => node.polygon)
 }
 
 /** Rectangles in the storey's own frame and the turn back to the world, from its footprint. */
@@ -144,6 +241,14 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
     input.materialPreset === undefined
       ? undefined
       : requireMaterialRef(input.materialPreset, 'materialPreset', finishSurface('roof'))
+  const fasciaMaterialPreset =
+    input.fasciaMaterialPreset === undefined
+      ? undefined
+      : requireMaterialRef(
+          input.fasciaMaterialPreset,
+          'fasciaMaterialPreset',
+          finishSurface('roof'),
+        )
   if ((width === undefined) !== (depth === undefined))
     refuse(
       'rectangle_incomplete',
@@ -153,6 +258,12 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
   const rectangle = width !== undefined && depth !== undefined
   const { storey, note } = coveredStorey(nodes, input, rectangle, context)
 
+  if (!storey.parentId)
+    refuse(
+      'storey_without_building',
+      `${storey.name ?? storey.id} (${storey.id}) is not in a building, so no roof level can stand above it. Put the level in a building first.`,
+      { levelId: storey.id },
+    )
   const existing = roofsOver(nodes, storey.id)
   if (existing.length)
     refuse(
@@ -209,7 +320,7 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
       position: [(r.minX + r.maxX) / 2 - centerX, 0, (r.minZ + r.maxZ) / 2 - centerZ],
       ...(input.pitch !== undefined && { pitch: input.pitch }),
       ...(input.overhang !== undefined && { overhang: input.overhang }),
-      ...fasciaFields(input),
+      ...fasciaFields({ ...input, fasciaMaterialPreset }),
     })
   })
 

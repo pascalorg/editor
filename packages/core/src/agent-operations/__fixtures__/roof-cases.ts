@@ -258,6 +258,43 @@ export const CREATE_ROOF_CASES: AgentToolCase[] = [
     expect: { refusal: 'building_required', mentions: ['building_r', 'building_o'] },
   },
   {
+    name: 'a rectangle on a site of two empty buildings, with no level named: which one is asked',
+    tool: 'create_roof',
+    scene: () =>
+      graph(
+        BuildingNode.parse({ id: 'building_r', children: ['level_g'] }),
+        LevelNode.parse({ id: 'level_g', parentId: 'building_r', level: 0, height: 2.5 }),
+        BuildingNode.parse({ id: 'building_o', children: ['level_o'] }),
+        LevelNode.parse({ id: 'level_o', parentId: 'building_o', level: 0, height: 2.5 }),
+      ),
+    input: { width: 4, depth: 3 },
+    context: { activeLevelId: null },
+    expect: { refusal: 'building_required', mentions: ['building_r', 'building_o'] },
+  },
+  {
+    name: 'a fascia finish the library lacks is refused, as the roof finish is',
+    tool: 'create_roof',
+    scene: house(),
+    input: { fasciaMaterialPreset: 'library:no-such-fascia' },
+    expect: { refusal: 'unknown_material', mentions: ['fasciaMaterialPreset'] },
+  },
+  {
+    name: "a two-storey house with a porch roof drawn on the upper storey still takes its own roof",
+    tool: 'create_roof',
+    scene: () => {
+      const two = house({ storeys: 2 })()
+      const porch = RoofNode.parse({ id: 'roof_porch', parentId: 'level_1', position: [10, 0, 3] })
+      const upper = two.nodes.level_1 as LevelNode
+      return graph(
+        ...(Object.values(two.nodes) as AnyNode[]).filter((node) => node.id !== 'level_1'),
+        { ...upper, children: [...upper.children, porch.id] },
+        porch,
+      )
+    },
+    input: {},
+    expect: { result: { coveredLevelId: 'level_1' } },
+  },
+  {
     name: 'a roof level named stands for the storey under it',
     tool: 'create_roof',
     scene: house({ above: 'empty' }),

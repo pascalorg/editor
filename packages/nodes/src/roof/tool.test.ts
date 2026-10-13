@@ -86,11 +86,14 @@ test('room creation on the top floor puts the roof on a new Roof level, on the w
   expect(roof.node).toMatchObject({ support: { kind: 'walls' }, position: [2, -0.5, 1.5] })
 })
 
-test('a rectangle drawn on a walled storey goes on the level above its walls, declared the roof', () => {
+// Lifted onto the roof level, a drawn rectangle stayed on that level's plane: walls taller or
+// lower than their storey left it floating or buried, and it never followed their height.
+test('a rectangle drawn on a walled storey goes on its roof level, standing on its walls', () => {
   const { level, upper, created, updated, sceneApi } = setup()
   commitRoofPlacement(sceneApi, level.id, [0, 0, 0], [4, 0, 3], [], false, 'ground')
   const roof = created.find(({ node }) => node.type === 'roof')!
   expect(roof.parentId).toBe(upper.id)
-  expect(roof.node).toMatchObject({ support: { kind: 'level' }, position: [2, 0, 1.5] })
+  // 2.5 m walls under a 3 m storey: the eave 0.5 m below the roof level's floor.
+  expect(roof.node).toMatchObject({ support: { kind: 'walls' }, position: [2, -0.5, 1.5] })
   expect(updated).toEqual([{ id: upper.id, data: { metadata: { role: 'roof' }, name: 'Roof' } }])
 })
