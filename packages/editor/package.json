@@ -10,6 +10,7 @@
     "./procedural-items": "./src/components/procedural-items/inspector.tsx"
   },
   "scripts": {
+    "bench:room-labels": "bun run src/components/editor/__bench__/room-label-placement.bench.ts",
     "check-types": "tsgo --noEmit",
     "test": "bun test src"
   },
