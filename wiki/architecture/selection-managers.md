@@ -112,7 +112,12 @@ phase: 'building'  → everything on the active level: walls, slabs, ceilings, r
 ```
 
 Room label pills (`RoomLabels3D`, `RoomLabels2D`, one `RoomPill`) show while nothing but the
-site, building or level is selected. Only the pill itself takes the pointer, and it goes through
+site, building or level is selected. Once the view rests, each pill shows as much as fits inside
+its room's outline on screen, inside the pane and 4 px clear of the others (`placePills`): name
+and area, the name, its colour dot, or nothing, so the detail follows the zoom. The room under the
+pointer (the ray met with each room's floor in 3D, the plan point in 2D; the smallest room holding
+it wins, whatever mesh is in the way) or a focused pill opens one detail chip with the whole label,
+and the pills it covers fade out. Only a pill or that chip takes a click, and it goes through
 the same zone-area rule as a zone's fill or label in the plan (`hoverZoneArea` / `clickZoneArea`
 in `lib/room-zone-routing.ts`): a room room-first, a modifier or a zone that bounds no room as the
 zone (its outline, its panel and outline editor). Zones show tinted volumes only while a unit's

@@ -22,6 +22,7 @@ import {
 import { RoomAssemblyMesh } from '../editor/room-highlight'
 import {
   RoomLabelAnchor3D,
+  type RoomLabelEntry,
   RoomPillChip,
   RoomPillsLayer3D,
   roomLabelEntries,
@@ -103,38 +104,45 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
     })
   }, [focusedUnitId, hoveredId, levelId, nodes, walkthrough, zoneId])
 
+  const pill = (entry: RoomLabelEntry, elements?: Map<string, HTMLElement>) => {
+    const zone = nodes[entry.zoneId]
+    if (zone?.type !== 'zone') return null
+    return (
+      <RoomPillChip
+        areaM2={entry.area}
+        color={zone.color}
+        detail={!elements}
+        elements={elements}
+        name={zoneLabel(zone)}
+        onClick={() => selectViewerRoom(zone.id, source)}
+        onHover={() => useViewer.getState().setHoveredId(zone.id)}
+        onLeave={() => {
+          if (useViewer.getState().hoveredId === zone.id) useViewer.getState().setHoveredId(null)
+        }}
+        view="3d"
+        zoneId={zone.id}
+      />
+    )
+  }
+
   return (
     <>
       {pillsPresent && levelId ? (
         <RoomPillsLayer3D
           entries={entries}
           levelObject={() => source.objectFor(levelId)}
-          renderLabel={(entry, anchors, elements) => {
-            const zone = nodes[entry.zoneId]
-            if (zone?.type !== 'zone') return null
-            return (
+          renderDetail={(entry) => pill(entry)}
+          renderLabel={(entry, anchors, elements) =>
+            nodes[entry.zoneId]?.type === 'zone' ? (
               <RoomLabelAnchor3D
                 anchors={anchors}
                 entry={entry}
                 floorY={roomFloorElevation(nodes as Record<string, AnyNode>, entry.zoneId)}
               >
-                <RoomPillChip
-                  areaM2={entry.area}
-                  color={zone.color}
-                  elements={elements}
-                  name={zoneLabel(zone)}
-                  onClick={() => selectViewerRoom(zone.id, source)}
-                  onHover={() => useViewer.getState().setHoveredId(zone.id)}
-                  onLeave={() => {
-                    if (useViewer.getState().hoveredId === zone.id)
-                      useViewer.getState().setHoveredId(null)
-                  }}
-                  view="3d"
-                  zoneId={zone.id}
-                />
+                {pill(entry, elements)}
               </RoomLabelAnchor3D>
-            )
-          }}
+            ) : null
+          }
           shown={pillsShown}
         />
       ) : null}
