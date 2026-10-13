@@ -247,12 +247,14 @@ describe('by hand: wrap, keep in step, unwrap', () => {
 })
 
 describe('verify_scene on corner windows', () => {
-  test('two plain windows running to the same corner are pointed at add_corner_window', () => {
+  test('two plain windows running to the same corner are pointed at merge_windows, as a note', () => {
     const { windows } = planCornerWindow(cornerScene(90), { corner: [0, 0], width: 1.2 })
     const plain = windows.map(({ corner: _corner, ...rest }) => rest as WindowNode)
     const issues = cornerWindowIssues(apply(cornerScene(90), plain))
-    expect(issues.map((issue) => issue.type)).toEqual(['corner_unjoined'])
-    expect(issues[0]!.message).toContain('add_corner_window')
+    expect(issues.map((issue) => [issue.type, issue.severity])).toEqual([
+      ['corner_unjoined', 'info'],
+    ])
+    expect(issues[0]!.message).toContain('merge_windows')
   })
 
   test('a joined pair in step is quiet; drifted apart, it is named', () => {

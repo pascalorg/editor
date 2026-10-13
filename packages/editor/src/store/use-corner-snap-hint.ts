@@ -1,5 +1,5 @@
+import type { CornerBlockReason } from '@pascal-app/core'
 import { create } from 'zustand'
-import type { CornerBlockReason } from '../lib/corner-snap'
 
 /**
  * What the window being placed or dragged near a wall end says: `join` when a window already waits

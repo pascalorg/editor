@@ -1,4 +1,5 @@
-import { type CornerBlock, type CornerSnap, useCornerSnapHint } from '@pascal-app/core'
+import type { CornerBlock, CornerSnap } from '@pascal-app/core'
+import { useCornerSnapHint } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 
 // What a window placed or dragged near a corner shows: the HUD hint says what a click will do, and

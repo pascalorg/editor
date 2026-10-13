@@ -602,13 +602,6 @@ export {
   subscribeScenePreview,
 } from './store/scene-preview'
 export {
-  CORNER_BLOCK_NOTES,
-  type CornerHintRow,
-  type CornerSnapHint,
-  cornerHintRows,
-  useCornerSnapHint,
-} from './store/use-corner-snap-hint'
-export {
   type ControlValue,
   type DoorAnimationState,
   type DoorInteractiveState,

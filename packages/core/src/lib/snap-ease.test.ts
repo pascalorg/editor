@@ -27,6 +27,20 @@ describe('createSnapEaser', () => {
     expect(end).toBe(3.4)
   })
 
+  test('is eased out: most of the move comes first, with no overshoot', () => {
+    const easer = createSnapEaser()
+    easer.display(0, false, 0, false)
+    easer.display(1, true, 0, false)
+
+    const half = easer.display(1, true, SNAP_EASE_MS / 2, false)
+    const samples = [0.1, 0.3, 0.5, 0.7, 0.9, 1].map((p) =>
+      easer.display(1, true, p * SNAP_EASE_MS, false),
+    )
+
+    expect(half).toBeGreaterThan(0.5)
+    for (const value of samples) expect(value).toBeLessThanOrEqual(1 + 1e-9)
+  })
+
   test('keeps following the cursor while it eases', () => {
     const easer = createSnapEaser()
     easer.display(3.0, false, 0, false)

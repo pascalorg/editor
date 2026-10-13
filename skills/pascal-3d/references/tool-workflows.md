@@ -59,7 +59,7 @@ Where a photo's glass meets at a corner with no wall between the panes, build on
 
 1. `get_walls` on the level: the corner is the point the two walls end at, `[x, z]`.
 2. `add_corner_window({ corner, width?, post? })`: one window on each wall, both running to the corner and joined; `post: "post"` puts a thin post at the corner, the default fuses the glass. Pass `wallIds` only when more than two walls end there.
-3. Read `windowIds`, `wallIds` and `angle` in the answer. `corner_angle` means the walls meet under 10° or over 170°: along a straight run one `add_window` is the window. `verify_scene` points two unjoined windows at one corner back to this tool.
+3. Read `windowIds`, `wallIds` and `angle` in the answer. `corner_angle` means the walls meet under 10° or over 170°: along a straight run one `add_window` is the window. `verify_scene` notes two unjoined windows that run to one corner (`corner_unjoined`).
 4. Two windows already built that open a corner (one on each wall, each within 0.30 m of it) or sit side by side on one wall (at most 0.30 m between, nothing between): `merge_windows({ windowIds: [a, b] })` makes them one window instead of building a new pair. Name first the window whose height, sill and type you want kept. It refuses, with a code and a sentence, anything it cannot join (`windows_not_adjacent`, `opening_between`, `window_not_at_corner`, `corner_angle`, `window_already_joined`).
 
 ## Name a room the walls already enclose

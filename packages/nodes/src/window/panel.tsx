@@ -171,15 +171,8 @@ export default function WindowPanel() {
       : cornerState === 'wrappable'
         ? { paired: false as const }
         : null
-  const writeWindows = (updates: Record<string, Partial<WindowNode>>) => {
-    const scene = useScene.getState()
-    for (const [id, update] of Object.entries(updates)) {
-      scene.updateNode(id as AnyNodeId, update)
-      scene.dirtyNodes.add(id as AnyNodeId)
-      const parentId = scene.nodes[id as AnyNodeId]?.parentId
-      if (parentId) scene.dirtyNodes.add(parentId as AnyNodeId)
-    }
-  }
+  const writeWindows = (updates: Record<string, Partial<WindowNode>>) =>
+    writeWindowChanges({ create: null, updates, remove: [] })
   const wrapTheCorner = () => {
     if (!selectedId) return
     const { create, updates } = wrapCorner(useScene.getState().nodes, selectedId)
@@ -529,7 +522,7 @@ export default function WindowPanel() {
                   Wraps the corner with {corner.partner.name || 'its partner'}
                 </span>
                 <button
-                  className="rounded-full border border-border/50 px-3 py-1 text-xs hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
+                  className="rounded-full border border-border/50 px-3 py-1 text-xs transition-colors hover:bg-foreground/[0.06]"
                   onClick={() =>
                     selectedId && writeWindows(unwrapCorner(useScene.getState().nodes, selectedId))
                   }
@@ -559,8 +552,8 @@ export default function WindowPanel() {
               <SegmentedControl
                 onChange={setCornerPost}
                 options={[
-                  { label: 'None', value: 'none' },
-                  { label: 'Post', value: 'post' },
+                  { label: 'Fused glass', value: 'none' },
+                  { label: 'Corner post', value: 'post' },
                 ]}
                 value={node.corner?.post ?? 'none'}
               />
@@ -568,7 +561,7 @@ export default function WindowPanel() {
           ) : (
             <div className="px-1 pb-1">
               <button
-                className="w-full rounded-full border border-border/50 px-3 py-2 text-xs hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
+                className="w-full rounded-full border border-border/50 px-3 py-2 text-xs transition-colors hover:bg-foreground/[0.06]"
                 onClick={wrapTheCorner}
                 type="button"
               >

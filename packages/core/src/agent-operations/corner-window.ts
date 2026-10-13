@@ -71,9 +71,11 @@ export function cornerWindowIssues(nodes: Parameters<typeof cornerPair>[0]): Sce
   for (const [key, windows] of atCorner) {
     if (new Set(windows.map((w) => w.parentId)).size < 2) continue
     const corner = key.split(':')[1]
+    // Informational: two windows meeting at a corner may be what the person drew.
     issues.push({
       type: 'corner_unjoined',
-      message: `Windows ${windows.map((w) => w.id).join(' and ')} both run to the corner (${corner}) without being joined: if the reference wraps the corner, add_corner_window builds them as one corner window, the glass fused or at a post.`,
+      severity: 'info',
+      message: `Windows ${windows.map((w) => w.id).join(' and ')} both run to the corner (${corner}) without being joined: if the reference wraps the corner, merge_windows joins them as one corner window, the glass fused.`,
     })
   }
   return issues
