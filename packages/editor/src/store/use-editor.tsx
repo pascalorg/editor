@@ -564,9 +564,10 @@ type EditorState = {
   // Each workspace keeps its own view layout.
   workspaceMode: WorkspaceMode
   setWorkspaceMode: (mode: WorkspaceMode) => void
-  // The rail panel picked in the current workspace. While the rail lacks it (a
-  // plugin panel registers once the scene's plugins load), the layout shows its
-  // first panel and leaves the choice in place (`useShownSidebarPanel`).
+  // The rail panel on screen. Setting it picks it for the current workspace.
+  // While the rail lacks the pick (a plugin panel registers once the scene's
+  // plugins load), the layout shows its first panel and leaves the pick in
+  // `sidebarPanels` (`useShownSidebarPanel`).
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
   // The panel last picked in each workspace: entering one reopens its own.
@@ -1599,8 +1600,9 @@ const useEditor = create<EditorState>()(
       workspaceMode: 'edit' as WorkspaceMode,
       setWorkspaceMode: (mode) => {
         if (get().workspaceMode === mode) return
-        // Each workspace reopens on its last panel; one with none picked yet
-        // shows its first (`useShownSidebarPanel`).
+        // Each workspace reopens on its last pick. One with no pick keeps the
+        // panel open now when its rail has it, else shows its first
+        // (`useShownSidebarPanel`).
         const activeSidebarPanel = get().sidebarPanels[mode] ?? get().activeSidebarPanel
         // Every non-'edit' workspace (studio's clean canvas, sheets' paper
         // space) enters the same way: drop the editing chrome. The view layout
