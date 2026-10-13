@@ -5,6 +5,7 @@ import {
   achievedChanges,
   addObject,
   authoredObject,
+  editedScriptLanguage,
   editedScriptParams,
   readSourceResult,
   requireAddObjectReason,
@@ -14,9 +15,10 @@ import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-ap
 import {
   type AnyNode,
   type CompiledGeometryScript,
-  GEOMETRY_SCRIPT_MIME_TYPE,
+  GEOMETRY_SCRIPT_MIME_TYPES,
   GeometryArtifactMetadata,
   GeometryReuseFields,
+  type GeometryScriptLanguage,
   type GeometryScriptParamValue,
   generateId,
 } from '@pascal-app/core/schema'
@@ -34,6 +36,7 @@ import { toPatches } from './shared-tools'
 export type GeometryScriptHost = {
   compile(input: {
     code: string
+    language: GeometryScriptLanguage
     params?: Record<string, GeometryScriptParamValue>
   }): Promise<CompiledGeometryScript & { glb: Uint8Array }>
   storeArtifact(input: {
@@ -53,10 +56,11 @@ export type GeometryScriptHost = {
   build?(input: {
     sceneId: string
     code: string
+    language: GeometryScriptLanguage
     params?: Record<string, GeometryScriptParamValue>
     /** What the script builds, for the host to name it to the user. */
     kind: ScriptedKind
-    nodeId?: string
+    nodeId: string
     metadata?: GeometryArtifactMetadata
   }): Promise<CompiledGeometryScript>
 }
@@ -67,8 +71,15 @@ export type ScriptedKind = 'object' | 'window' | 'door' | 'column'
 export async function compileAndStore(
   host: GeometryScriptHost,
   sceneId: string,
-  code: string,
-  params: Record<string, GeometryScriptParamValue> | undefined,
+  {
+    code,
+    language,
+    params,
+  }: {
+    code: string
+    language: GeometryScriptLanguage
+    params: Record<string, GeometryScriptParamValue> | undefined
+  },
   kind: ScriptedKind,
   context: { nodeId?: string; metadata?: GeometryArtifactMetadata } = {},
 ): Promise<CompiledGeometryScript> {
@@ -78,8 +89,11 @@ export async function compileAndStore(
     kind: kind === 'object' ? 'item' : kind,
   })
   if (host.build)
-    return { ...(await host.build({ sceneId, code, params, kind, nodeId, metadata })), nodeId }
-  const { glb, ...compiled } = await host.compile({ code, params })
+    return {
+      ...(await host.build({ sceneId, code, language, params, kind, nodeId, metadata })),
+      nodeId,
+    }
+  const { glb, ...compiled } = await host.compile({ code, language, params })
   metadata.mount = compiled.mount
   const [sha256] = await Promise.all([
     host.storeArtifact({
@@ -96,7 +110,7 @@ export async function compileAndStore(
       metadata,
       sha256: compiled.script,
       bytes: new TextEncoder().encode(code),
-      mimeType: GEOMETRY_SCRIPT_MIME_TYPE,
+      mimeType: GEOMETRY_SCRIPT_MIME_TYPES[language],
     }),
   ])
   return { ...compiled, sha256, nodeId }
@@ -151,8 +165,9 @@ export function registerAddObject(
             : refuseMissingCode())
         const nodes = bridge.getNodes() as Record<string, AnyNode>
         const previous = args.nodeId ? nodes[args.nodeId] : undefined
+        const language = editedScriptLanguage(previous, args)
         const params = editedScriptParams(previous, args.params)
-        compiled = await compileAndStore(host, scene.id, code, params, 'object', {
+        compiled = await compileAndStore(host, scene.id, { code, language, params }, 'object', {
           nodeId: args.nodeId,
           metadata: {
             ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),

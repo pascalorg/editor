@@ -1,12 +1,12 @@
 # Authored objects
 
-*Geometry an agent writes as plain three.js, kept as an `item` with a script source.*
+*Geometry an agent writes as plain three.js or a Blender `bpy` module, kept as an `item` with a script source.*
 
-Applies to: `packages/geometry-script/**`, `item.source` in `packages/core/src/schema/nodes/item.ts`, `packages/core/src/agent-operations/author-object.ts`, `packages/core/src/lib/geometry-surfaces.ts`.
+Applies to: `packages/geometry-script/**` (including `bpy/runner.py`), `item.source` in `packages/core/src/schema/nodes/item.ts`, `packages/core/src/agent-operations/author-object.ts`, `packages/core/src/lib/geometry-surfaces.ts`.
 
 ## The model
 
-An authored object is an `item` whose `source` holds the hash of its module (`script`), its `params`, the hash of the GLB it compiled to (`artifact`) and the `manifest` read from it. The code never rides in the scene: it is a `text/javascript` artifact that only people who may edit the project can read, so publishing geometry never publishes the code. The manifest stays inline because placement, cuts and queries read it synchronously; the compiler keeps it under 24 KiB (outlines thinned, then the smallest surfaces dropped). `asset.src` is `artifact://<sha256>` and `asset.dimensions` are the compiled bounds, so everything items already do (paint, hosting, lights, the move tool, plan footprint, collections, bake, export) applies unchanged. A catalog item is the same node without `source`.
+An authored object is an `item` whose `source` holds its module's `language` (`three` or `bpy`), the hash of its module (`script`), its `params`, the hash of the GLB it compiled to (`artifact`) and the `manifest` read from it. The code never rides in the scene: it is a `text/javascript` (or `text/x-python`) artifact that only people who may edit the project can read, so publishing geometry never publishes the code. The manifest stays inline because placement, cuts and queries read it synchronously; the compiler keeps it under 24 KiB (outlines thinned, then the smallest surfaces dropped). `asset.src` is `artifact://<sha256>` and `asset.dimensions` are the compiled bounds, so everything items already do (paint, hosting, lights, the move tool, plan footprint, collections, bake, export) applies unchanged. A catalog item is the same node without `source`.
 
 A `window` or `door` takes the same `source` when its fields cannot express the design (a fan grille, tracery, a carved leaf): `add_window`/`add_door` accept `code` and `params`. Everything script-side is shared with items: the renderer shows the artifact through the item's model path (`ScriptedOpeningModel`), the wall cuts its `cutout` mesh, the Parameters panel replaces the parametric frame's fields, an `open` clip is the Open control, and `get_source` reads it. It is created and rebuilt through its own tool (`add_window`/`add_door`, with `nodeId` to rebuild), where the opening's guidance lives; `add_object` is for objects and points an opening's id there. The kind keeps what makes it an opening: mark, schedule row, plan symbol, opening rules, `IfcWindow`/`IfcDoor`. Width and height are the compiled bounds; params named `width` and `height` are its size controls.
 
@@ -27,6 +27,19 @@ export default function build({ params, THREE }) { /* … */ return group }
 
 Allowed imports: `three`, `three/addons/…` (BufferGeometryUtils, RoundedBoxGeometry, ConvexGeometry, LoftGeometry, ParametricGeometry) and `three-bvh-csg`. No network, DOM, `eval`, dynamic import or `process`.
 
+## Blender modules
+
+```python
+import bpy, bmesh
+PARAMS = {"width": {"default": 1.8, "min": 1.2, "max": 2.6, "step": 0.05, "unit": "m"}}
+MOUNT = "floor"
+def build(params): ...  # adds objects to the empty scene it is given
+```
+
+`bpy/runner.py` runs the module in a fresh empty scene, resolves `PARAMS` the way `resolveParams` does, and exports everything in the scene as a GLB (modifiers applied, Y up, no images). `compileBlenderBuild` (`@pascal-app/geometry-script/blender`) loads that GLB and hands it to the same `finishBuild` a three.js build goes through, so the manifest, limits and conventions are one implementation; it re-resolves the params and refuses a run that used other values. It runs no model code, so any host may call it. The conventions in Blender terms: Z up and the front faces −Y (Blender's Front view, which the glTF export turns into +Z); convention names are object names, `userData` is custom properties, `slot_<id>` is a material name; a clip is one action, assigned to every object it moves; a light's brightness is its `intensity` custom property (default 2), since Blender's watts do not map onto Pascal's lights. A material whose shader still has the default base colour takes its viewport `diffuse_color`.
+
+Blender cannot run in a browser, so a bpy module is built by its host: the editor calls the `BlenderScriptBuilder` the host configured (`configureBlenderScriptBuilder`) and refuses bpy without one; a params-only rebuild goes the same way. `runBlenderLocally` (`@pascal-app/geometry-script/blender-local`) runs a local Blender binary with no sandbox, for a developer's own machine.
+
 ## Naming conventions read into the manifest
 
 | In the output | Becomes |
@@ -43,11 +56,11 @@ The compiler also derives upward surfaces (where things rest) and undersides (wh
 
 ## Compiling
 
-`@pascal-app/geometry-script` compiles a module to a GLB and manifest in a browser worker, Bun or Node, and returns both hashes. The host decides the isolation: the editor runs it in a worker with network and storage removed; an MCP server receives a `GeometryScriptHost` (compile, store, read) or answers `scripts_unavailable`. The default in-memory artifact store lasts one session. Local MCP and the standalone editor use a disk store beside the SQLite database that holds their saved scenes (`<database-path>.artifacts/<sha256>`). Keep this directory with the database. Writes verify the hash and publish complete bytes atomically without replacing existing artifacts. Local MCP compilation is opt-in (`PASCAL_SERVER_SCRIPT_COMPILE=1`); reading saved source does not require compilation.
+`@pascal-app/geometry-script` compiles a module to a GLB and manifest in a browser worker, Bun or Node, and returns both hashes. The host decides the isolation: the editor runs it in a worker with network and storage removed; an MCP server receives a `GeometryScriptHost` (compile, store, read) or answers `scripts_unavailable`. The default in-memory artifact store lasts one session. Local MCP and the standalone editor use a disk store beside the SQLite database that holds their saved scenes (`<database-path>.artifacts/<sha256>`). Keep this directory with the database. Writes verify the hash and publish complete bytes atomically without replacing existing artifacts. Local MCP compilation is opt-in (`PASCAL_SERVER_SCRIPT_COMPILE=1`; bpy modules run in the Blender binary `PASCAL_BLENDER` names); reading saved source does not require compilation.
 
 ## Agent tools
 
-`add_object` (create, or edit by `nodeId`: new code, or params alone to rebuild the stored script), `get_source` (the module and its params, for an edit) and `find_by_type` (nodes and typed parts of one type) are shared contracts in `@pascal-app/core/agent-tools`, one operation each; only the compile step differs per surface. See [agent-surfaces.md](agent-surfaces.md).
+`add_object` (create, or edit by `nodeId`: new code, or params alone to rebuild the stored script; `language` picks `three` or `bpy` and defaults to the object's own), `get_source` (the module, its language and its params, for an edit) and `find_by_type` (nodes and typed parts of one type) are shared contracts in `@pascal-app/core/agent-tools`, one operation each; only the compile step differs per surface. See [agent-surfaces.md](agent-surfaces.md).
 
 A new object carries a `reason`, what it stands in for, kept in `metadata.reason`; `verify_scene` lists every authored object with it (`authoredObjects`), so each names something Pascal has no type for. On a level, a floor object that is a plain box (12 triangles) with a wall's size (≤ 0.45 m thin, ≥ 1 m long, ≥ 2 m high), or a floor plate (≤ 0.35 m thick, ≥ 2 m both ways, on the floor), is refused (`use_walls`, `use_slab`). A detailed object with a wall's size (a bookcase's shelves, a screen's holes) is built with a `hint` naming `add_wall`, as is a name whose head word is something Pascal builds, with that tool. These apply to creation only: an edit, which is also the inspector's rebuild path, is never refused for its shape.
 

@@ -51,7 +51,7 @@ If a live-sync version conflict occurs, call `load_scene`, inspect the newer gra
 
 ## Build a scripted object (hosted)
 
-`add_object`, and `add_window`, `add_door` or `add_column` with `code` or new params on a scripted node, compile in the user's open Pascal editor tab of the project. When none is open the call answers `editor_tab_required` with `editorUrl` and `mutationApplied: false`; nothing changed. Show the user the link, wait until they confirm the tab is open, and repeat the same call. `editor_tab_timeout` means the tab stopped answering; ask whether it is still open, then retry. `script_failed` is the module's own error: fix the code.
+`add_object`, and `add_window`, `add_door` or `add_column` with `code` or new params on a scripted node, compile in the user's open Pascal editor tab of the project (a `bpy` module builds in Pascal's Blender service instead, with no tab). When none is open the call answers `editor_tab_required` with `editorUrl` and `mutationApplied: false`; nothing changed. Show the user the link, wait until they confirm the tab is open, and repeat the same call. `editor_tab_timeout` means the tab stopped answering; ask whether it is still open, then retry. `script_failed` is the module's own error: fix the code.
 
 ## Wrap a window around a corner
 
@@ -64,7 +64,7 @@ Where a photo's glass meets at a corner with no wall between the panes, build on
 
 ## Look at the result
 
-`view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) and `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat). A server with no renderer answers `view_unavailable`. A picture is not a measure.
+`view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. `interior: { levelId }` looks inside one floor, the other floors, its roof and its ceilings left out and everything on it, walls, openings and furniture alike, cut at 0.65 of the storey's height; the live view is not changed. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) and `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat). A server with no renderer answers `view_unavailable`. A picture is not a measure.
 
 ## Start over
 

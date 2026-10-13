@@ -19,9 +19,11 @@ import {
 } from './levels'
 import { mergeWindowsTool } from './merge-windows'
 import { deleteNodeTool, getNodeTool } from './nodes'
+import { paintTool } from './paint'
 import { placeItemsTool } from './place-items'
 import { createRoofTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
+import { searchMaterialsTool } from './search-materials'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
@@ -46,10 +48,12 @@ export * from './measurement'
 export * from './merge-windows'
 export { NodeId } from './node-id'
 export * from './nodes'
+export * from './paint'
 export * from './place-items'
 export * from './refusal'
 export * from './roofs'
 export * from './room-structure'
+export * from './search-materials'
 export * from './stairs'
 export * from './verify-scene'
 export * from './view-scene'
@@ -94,5 +98,7 @@ export const AGENT_TOOL_CONTRACTS = [
   createRoomTool,
   furnishRoomTool,
   searchAssetsTool,
+  paintTool,
+  searchMaterialsTool,
   ...ROOM_TOOL_CONTRACTS,
 ] as const satisfies readonly AgentToolContract[]

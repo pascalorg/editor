@@ -12,6 +12,7 @@ import { geometryRestingHeight, resettledPosition } from '../lib/geometry-surfac
 import {
   type AnyNode,
   type CompiledGeometryScript,
+  type GeometryScriptLanguage,
   type GeometryScriptMount,
   type GeometryScriptParamValue,
   generateId,
@@ -395,6 +396,18 @@ export function editedScriptParams(
   return isScriptedNode(node) ? { ...node.source.params, ...params } : params
 }
 
+/**
+ * The language a build of `node` runs in: new code's own (the node's when not
+ * given), and the stored script's for a params-only rebuild.
+ */
+export function editedScriptLanguage(
+  node: AnyNode | undefined,
+  input: { code?: string; language?: GeometryScriptLanguage },
+): GeometryScriptLanguage {
+  const stored = isScriptedNode(node) ? node.source.language : 'three'
+  return input.code ? (input.language ?? stored) : stored
+}
+
 /** The scripted node `get_source` and a params-only rebuild act on, or a refusal. */
 export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): ScriptedNode {
   const node = nodes[nodeId]
@@ -452,6 +465,7 @@ export function readSourceResult(node: ScriptedNode, code: string) {
     nodeId: node.id,
     type: node.type,
     name: node.name,
+    language: node.source.language,
     code,
     params: node.source.manifest.params.map((spec) => ({
       ...spec,

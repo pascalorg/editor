@@ -220,6 +220,8 @@ The host tells the directory about the open project with `setPluginDirectoryCont
 
 Host panels mount lazily inside an error boundary. Use host CSS variables, keep CSS scoped to the plugin, and do not write global styles.
 
+The rail remembers the panel last open in each workspace (Edit, Studio, …) with the editor's preferences (`sidebarPanels`): entering a workspace reopens its own, and a reload opens Edit on its last panel, the sidebar's width and collapse kept. A remembered panel the rail does not have — a plugin's panels join once the scene's `installedPlugins` load, or the plugin was uninstalled — leaves the first panel showing and is not overwritten by it (`useShownSidebarPanel`). A restored panel opens in select mode, so a panel that arms a tool arms it when the user opens it, not when it mounts (the community Paint panel; on mobile, tapping Items arms the item tool). Host code that sets a persisted editor field before the editor mounts waits for `useEditor.persist.onFinishHydration`: until the editor rehydrates, writes are not saved, and the stored preferences replace them.
+
 ## Host views
 
 The stage is one or two panes, and each pane shows a *view*: the 3D scene, the 2D plan, or a view a host or plugin registered. A view is the place for a surface that wants the room of the canvas — a schedule, a directory, a gallery — rather than the width of the rail. A plugin can ship panels, views or both, and as many of each as it needs; each view carries the plugin's `pluginId`:

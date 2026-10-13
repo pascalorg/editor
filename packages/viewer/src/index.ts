@@ -63,6 +63,7 @@ export {
 } from './components/viewer/scene-atmosphere'
 export { SceneEnvironment } from './components/viewer/scene-environment'
 export {
+  claimSceneGround,
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
@@ -197,6 +198,7 @@ export {
   type HiddenReason,
   hideFromScene,
   showInScene,
+  temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'

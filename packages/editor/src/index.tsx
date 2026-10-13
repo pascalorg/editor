@@ -570,7 +570,9 @@ export {
   createFreshPlacementSubtree,
 } from './lib/fresh-planar-placement'
 export {
+  type BlenderScriptBuilder,
   compileAndStoreGeometryScript,
+  configureBlenderScriptBuilder,
   rebuildAuthoredObject,
   storedScript,
 } from './lib/geometry-script/author'

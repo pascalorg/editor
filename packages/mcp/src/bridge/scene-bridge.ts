@@ -21,13 +21,14 @@ import {
   structureChangeBatch,
 } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import type { AnyNode, Collection, CollectionId } from '@pascal-app/core/schema'
+import type { AnyNode, Collection, CollectionId, SceneMaterialId } from '@pascal-app/core/schema'
 import {
   type AnyNodeId,
   AnyNode as AnyNodeSchema,
   type AnyNodeType,
   generateId,
   parseNode,
+  SceneMaterial,
 } from '@pascal-app/core/schema'
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
 import useScene from '@pascal-app/core/store'
@@ -44,7 +45,9 @@ export type ValidationResult = {
 export type CreatePatch = { op: 'create'; node: AnyNode; parentId?: AnyNodeId }
 export type UpdatePatch = { op: 'update'; id: AnyNodeId; data: Partial<AnyNode> }
 export type DeletePatch = { op: 'delete'; id: AnyNodeId; cascade?: boolean }
-export type Patch = CreatePatch | UpdatePatch | DeletePatch
+/** Adds or replaces a scene material, written before the nodes of the same patch. */
+export type MaterialUpsertPatch = { op: 'upsert_material'; material: SceneMaterial }
+export type Patch = CreatePatch | UpdatePatch | DeletePatch | MaterialUpsertPatch
 export type ActiveSceneMeta = Pick<
   SceneMeta,
   'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version' | 'graphHash'
@@ -61,6 +64,8 @@ type SetSceneExtra = Parameters<ReturnType<typeof useScene.getState>['setScene']
  * `flushDirty()` for observability.
  */
 export class SceneBridge {
+  /** `applyPatch` takes `upsert_material` patches, in the patch's one history step. */
+  readonly supportsMaterialUpserts = true
   private activeScene: ActiveSceneMeta | null = null
 
   /**
@@ -192,6 +197,10 @@ export class SceneBridge {
 
   getCollections(): Record<CollectionId, Collection> {
     return useScene.getState().collections
+  }
+
+  getMaterials(): Record<SceneMaterialId, SceneMaterial> {
+    return useScene.getState().materials
   }
 
   setCollections(collections: Record<CollectionId, Collection>): void {
@@ -408,11 +417,19 @@ export class SceneBridge {
     // Zod-normalised copy (which has a generated id if the caller omitted one)
     // instead of the unparsed input.
     const parsedCreateNodes = new Map<number, AnyNode>()
+    const materialUpserts = new Map<string, SceneMaterial>()
 
     for (let i = 0; i < patches.length; i++) {
       const p = patches[i]
       if (!p) throw new Error(`invalid patch: patches[${i}] is undefined`)
-      if (p.op === 'create') {
+      if (p.op === 'upsert_material') {
+        const parsed = SceneMaterial.safeParse(p.material)
+        if (!parsed.success)
+          throw new Error(
+            `invalid patch: patches[${i}] material failed schema: ${parsed.error.message}`,
+          )
+        materialUpserts.set(parsed.data.id, parsed.data)
+      } else if (p.op === 'create') {
         const res = parseNode(p.node)
         if (!res.success) {
           throw new Error(
@@ -483,7 +500,7 @@ export class SceneBridge {
           if (patch.data.parentId !== undefined) created.parentId = patch.data.parentId as AnyNodeId
         } else
           updateOps.set(patch.id, { ...updateOps.get(patch.id), ...patch.data } as Partial<AnyNode>)
-      } else {
+      } else if (patch.op === 'delete') {
         deleteIds.add(patch.id)
         createOps.delete(patch.id)
         updateOps.delete(patch.id)
@@ -512,6 +529,8 @@ export class SceneBridge {
     runAsSingleSceneHistoryStep(useScene, () => {
       pauseSpaceDetection()
       try {
+        for (const material of materialUpserts.values())
+          useScene.getState().addSceneMaterial(material)
         useScene.getState().createNodes([...createOps.values(), ...planned.create])
         useScene.getState().updateNodes([...updateOps].map(([id, data]) => ({ id, data })))
         useScene.getState().deleteNodes(planned.delete)
