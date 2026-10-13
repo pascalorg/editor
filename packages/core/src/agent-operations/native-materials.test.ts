@@ -272,6 +272,23 @@ describe('native custom paint: contract v1.1', () => {
     )
   })
 
+  test('a batch on a host with no materials map refuses a native finish and applies nothing', () => {
+    const { nodes } = nativeMaterialScene()
+    const before = structuredClone(nodes)
+    const error = refusal(() =>
+      run('run_batch', nodes, {
+        calls: [
+          { tool: 'paint', input: mountainPaint() },
+          { tool: 'paint', input: mountainPaint(['wall_material_east']) },
+        ],
+      }),
+    )
+
+    expect(error.code).toBe('batch_call_refused')
+    expect(error.message).toContain('materials_unavailable')
+    expect(nodes).toEqual(before)
+  })
+
   test('a refused later batch call leaks neither node edits nor created materials', () => {
     const { nodes } = nativeMaterialScene()
     const before = structuredClone(nodes)
