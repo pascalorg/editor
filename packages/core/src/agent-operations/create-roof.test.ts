@@ -103,6 +103,58 @@ describe('create_roof: the level above the covered storey', () => {
     expect(created(outcome).filter((node) => node.type === 'level')).toHaveLength(0)
     expect(created(outcome).find((node) => node.type === 'roof')?.parentId).toBe('level_roof')
   })
+
+  // A roof level between the storey and a built storey above is not the top of the building: the
+  // walk looks past it, so the roof is not parented under that upper storey.
+  test('a storey with rooms above a roof level is a storey above the covered one', () => {
+    const roofLevel = LevelNode.parse({
+      id: 'level_roof',
+      parentId: 'building_a',
+      level: 1,
+      metadata: { role: 'roof' },
+    })
+    const upperWall = WallNode.parse({
+      id: 'wall_upper',
+      parentId: 'level_upper',
+      start: [0, 0],
+      end: [8, 0],
+    })
+    const upper = LevelNode.parse({
+      id: 'level_upper',
+      parentId: 'building_a',
+      level: 2,
+      children: [upperWall.id],
+    })
+    const nodes = { ...house([roofLevel, upper]), [upperWall.id]: upperWall } as SceneNodes
+
+    let refusal: AgentRefusal | undefined
+    try {
+      createRoof(nodes, {}, { activeLevelId: null })
+    } catch (error) {
+      if (isAgentRefusal(error)) refusal = error
+      else throw error
+    }
+
+    expect(refusal?.code).toBe('storey_above')
+    expect(refusal?.details).toMatchObject({ levelId: 'level_0', storeyAboveId: 'level_upper' })
+  })
+
+  test('a storey not built yet above a roof level is a floor to be built: the roof goes above it', () => {
+    const roofLevel = LevelNode.parse({
+      id: 'level_roof',
+      parentId: 'building_a',
+      level: 1,
+      metadata: { role: 'roof' },
+    })
+    const empty = LevelNode.parse({ id: 'level_added', parentId: 'building_a', level: 2 })
+    const outcome = createRoof(house([roofLevel, empty]), {}, { activeLevelId: null })
+
+    const [roofLevelCreated] = created(outcome).filter((node) => node.type === 'level')
+    expect(roofLevelCreated).toMatchObject({ level: 3, metadata: { role: 'roof' } })
+    expect(created(outcome).find((node) => node.type === 'roof')?.parentId).toBe(
+      roofLevelCreated?.id,
+    )
+  })
 })
 
 describe('create_roof: a finish the library lacks', () => {

@@ -229,28 +229,24 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
   const rectangle = width !== undefined && depth !== undefined
   const { storey, note } = coveredStorey(nodes, input, rectangle, context)
 
-  // The roof stands on a roof level above the storey. A storey above it with rooms means this is
-  // not the top one (a roof over it would cut through that storey); one with nothing on it yet
-  // (add_level leaves it so) is a floor to be built, so the roof goes above it.
-  let top = storey
-  let host: Level | undefined
-  for (
-    let next = buildingLevels(nodes, top).find((other) => other.level === top.level + 1);
-    next;
-    next = buildingLevels(nodes, top).find((other) => other.level === top.level + 1)
-  ) {
-    if (levelRole(nodes, next).role !== 'occupied') {
-      host = next
-      break
-    }
-    if (next.children.length > 0)
-      refuse(
-        'storey_above',
-        `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${next.name ?? next.id} (${next.id}): a roof caps the top storey. Pass the top storey (with width and depth when it has no rooms).`,
-        { levelId: storey.id, storeyAboveId: next.id },
-      )
-    top = next
-  }
+  // The roof stands on a roof level above the storey. A storey above it with rooms, whatever
+  // roof or support level lies between, means this is not the top one (a roof over it would cut
+  // through that storey); one with nothing on it yet (add_level leaves it so) is a floor to be
+  // built, so the roof goes above the highest of those.
+  const storeysAbove = buildingLevels(nodes, storey)
+    .filter((other) => other.level > storey.level && levelRole(nodes, other).role === 'occupied')
+    .sort((a, b) => a.level - b.level)
+  const built = storeysAbove.find((other) => other.children.length > 0)
+  if (built)
+    refuse(
+      'storey_above',
+      `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${built.name ?? built.id} (${built.id}): a roof caps the top storey. Pass the top storey (with width and depth when it has no rooms).`,
+      { levelId: storey.id, storeyAboveId: built.id },
+    )
+  const top = storeysAbove.at(-1) ?? storey
+  const host: Level | undefined = buildingLevels(nodes, top).find(
+    (other) => other.level === top.level + 1,
+  )
 
   let rectangles: RoofRectangle[]
   let chosenType: RoofType
