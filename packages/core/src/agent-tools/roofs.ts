@@ -18,7 +18,7 @@ export const createRoofTool = {
   name: 'create_roof',
   title: 'Create roof',
   description:
-    "Cap a storey with a roof over its footprint (its floor plates, else its rooms), swept in the building's own axes into rectangles, one roof segment each. Without a roofType: a gable for one rectangle, hips for a few wings, flat for a large block. The roof goes on a roof level of its own above the storey: the level directly above when it is a roof level or empty, else a new one. Call it once the storeys and their exterior walls stand. Refused with a code: a storey with another storey above it (a roof caps the top one), and no rooms on any level of the building (pass width and depth to roof a rectangle of your own).",
+    "Cap a storey with a roof over its footprint (its floor plates, else its rooms), swept in the building's own axes into rectangles, one roof segment each. Without a roofType: a gable for one rectangle, hips for a few wings, flat for a large block. The roof goes on a roof level of its own above the storey: the level directly above when it is a roof level, else a new one above any storey that is still empty. Call it once the storeys and their exterior walls stand. Refused with a code: a storey with another storey above it (a roof caps the top one), and no rooms on any level of the building (pass width and depth to roof a rectangle of your own).",
   input: {
     levelId: NodeId.optional().describe(
       'The storey to cover, by an id list_levels returned. Default: the top storey with rooms. A level without rooms stands for the highest storey of its building that has some.',

@@ -51,6 +51,60 @@ describe('create_roof: a roof outline that stays on the walls', () => {
   })
 })
 
+describe('create_roof: the level above the covered storey', () => {
+  const house = (above: ReturnType<typeof LevelNode.parse>[]) => {
+    const nodes = storey([
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ])
+    const building = nodes.building_a as ReturnType<typeof BuildingNode.parse>
+    return {
+      ...nodes,
+      building_a: { ...building, children: [...building.children, ...above.map((l) => l.id)] },
+      ...Object.fromEntries(above.map((level) => [level.id, level])),
+    } as SceneNodes
+  }
+  const created = (outcome: ReturnType<typeof createRoof>) =>
+    (outcome.changes?.create ?? []).map(({ node }) => node)
+
+  // add_level always leaves a new storey empty: a person or an agent is about to build on it.
+  test('a storey added and not built yet is not the roof level: the roof goes above it', () => {
+    const empty = LevelNode.parse({
+      id: 'level_added',
+      parentId: 'building_a',
+      level: 1,
+      height: 2.8,
+    })
+    const outcome = createRoof(house([empty]), {}, { activeLevelId: null })
+
+    const [roofLevel] = created(outcome).filter((node) => node.type === 'level')
+    expect(roofLevel).toMatchObject({
+      type: 'level',
+      level: 2,
+      parentId: 'building_a',
+      metadata: { role: 'roof' },
+    })
+    const roof = created(outcome).find((node) => node.type === 'roof')
+    expect(roof?.parentId).toBe(roofLevel?.id)
+    expect(roof?.parentId).not.toBe(empty.id)
+  })
+
+  test('a roof level already above the storey is the roof level', () => {
+    const roofLevel = LevelNode.parse({
+      id: 'level_roof',
+      parentId: 'building_a',
+      level: 1,
+      metadata: { role: 'roof' },
+    })
+    const outcome = createRoof(house([roofLevel]), {}, { activeLevelId: null })
+
+    expect(created(outcome).filter((node) => node.type === 'level')).toHaveLength(0)
+    expect(created(outcome).find((node) => node.type === 'roof')?.parentId).toBe('level_roof')
+  })
+})
+
 describe('create_roof: a finish the library lacks', () => {
   const house = () =>
     storey([

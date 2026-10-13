@@ -229,15 +229,28 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
   const rectangle = width !== undefined && depth !== undefined
   const { storey, note } = coveredStorey(nodes, input, rectangle, context)
 
-  // The roof stands on the level directly above: a roof level or an empty one. A storey there
-  // means this is not the top one; a roof over it would cut through the storey above.
-  const above = buildingLevels(nodes, storey).find((other) => other.level === storey.level + 1)
-  if (above && levelRole(nodes, above).role === 'occupied' && above.children.length > 0)
-    refuse(
-      'storey_above',
-      `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${above.name ?? above.id} (${above.id}): a roof caps the top storey. Pass the top storey (with width and depth when it has no rooms).`,
-      { levelId: storey.id, storeyAboveId: above.id },
-    )
+  // The roof stands on a roof level above the storey. A storey above it with rooms means this is
+  // not the top one (a roof over it would cut through that storey); one with nothing on it yet
+  // (add_level leaves it so) is a floor to be built, so the roof goes above it.
+  let top = storey
+  let host: Level | undefined
+  for (
+    let next = buildingLevels(nodes, top).find((other) => other.level === top.level + 1);
+    next;
+    next = buildingLevels(nodes, top).find((other) => other.level === top.level + 1)
+  ) {
+    if (levelRole(nodes, next).role !== 'occupied') {
+      host = next
+      break
+    }
+    if (next.children.length > 0)
+      refuse(
+        'storey_above',
+        `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${next.name ?? next.id} (${next.id}): a roof caps the top storey. Pass the top storey (with width and depth when it has no rooms).`,
+        { levelId: storey.id, storeyAboveId: next.id },
+      )
+    top = next
+  }
 
   let rectangles: RoofRectangle[]
   let chosenType: RoofType
@@ -292,14 +305,14 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
   })
 
   const changes: Required<Pick<SceneChanges, 'create'>> = { create: [] }
-  let roofLevelId = above?.id ?? storey.id
+  let roofLevelId = host?.id ?? storey.id
   let createdRoofLevelId: string | null = null
-  if (!above && storey.parentId) {
+  if (!host && storey.parentId) {
     const peak = Math.max(...segments.map((segment) => getActiveRoofHeight(segment)))
     const roofLevel = LevelNode.parse({
       name: 'Roof',
       parentId: storey.parentId,
-      level: storey.level + 1,
+      level: top.level + 1,
       height: Math.max(wallHeight + peak, 0.2),
       metadata: { role: 'roof', label: 'Roof', referenceLevelId: storey.id },
     })
