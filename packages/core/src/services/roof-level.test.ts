@@ -524,6 +524,26 @@ describe('roofsKeptOverStorey', () => {
     expect(worldEave(kept(moved, resized(moved, 'level_1', 3)), 'roof_main')).toBeCloseTo(2.7, 6)
   })
 
+  test('a roof that followed walls, moved over a level between, keeps its height and its walls', () => {
+    for (const between of [
+      [{ id: 'level_s', content: 'empty' as const, metadata: { role: 'support' } }],
+      [
+        { id: 'level_1', content: 'empty' as const },
+        { id: 'level_r', content: 'empty' as const, metadata: { role: 'roof' } },
+      ],
+    ]) {
+      const nodes = roofedHouse('level_g', 'walls', [
+        { id: 'level_g', content: 'walls' },
+        ...between,
+      ])
+      const moved = applySceneChanges(nodes, planRoofsOffStorey(nodes, 'level_g')!.changes)
+      // the follow reads only the roof level's walls and those directly under it: not the storey's
+      expect((moved.roof_main as RoofNode).support.kind).toBe('level')
+      expect(worldEave(moved, 'roof_main')).toBeCloseTo(2.7, 6)
+      expect(worldEave(kept(moved, resized(moved, 'level_g', 3)), 'roof_main')).toBeCloseTo(2.7, 6)
+    }
+  })
+
   test('a storey put in under the roof level lifts the roof with it, and it stays on top of it', () => {
     const moved = movedUnder([{ id: 'level_r', content: 'empty', metadata: { role: 'roof' } }])
     const building = moved.building_h as BuildingNode

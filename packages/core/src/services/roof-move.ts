@@ -9,7 +9,7 @@ import {
 } from '../schema'
 import { resolveRoofElevation, roofWallTop } from '../systems/roof/roof-elevation'
 import { coveredStoreyId, planRoofLevel, type RoofLevelPlan, servesAsRoofLevel } from './roof-level'
-import { getLevelElevations, type LevelElevation } from './storey'
+import { getLevelBelow, getLevelElevations, type LevelElevation } from './storey'
 
 /**
  * Roofs written onto the storey whose walls carry them, before the roof level (or by a tool that
@@ -63,8 +63,9 @@ export type RoofMove = {
  * The repair for roofs written onto the storey whose walls carry them (`isRoofOnStoreyWalls`):
  * each goes to the level the rule gives it, its container dropped by the storey's offset so it
  * stands where it stood. A roof that follows walls keeps following where the walls it finds there
- * seat it at the same height; where they would lift it, it keeps its height instead. Null when the
- * storey holds no such roof. Pure: one set of changes, so one undo step.
+ * seat it at the same height; where they would lift it, or it would not find the storey's, it keeps
+ * its height instead. Null when the storey holds no such roof. Pure: one set of changes, so one
+ * undo step.
  */
 export function planRoofsOffStorey(nodes: Nodes, storeyId: string): RoofMove | null {
   const storey = nodes[storeyId]
@@ -122,11 +123,15 @@ export function planRoofsOffStorey(nodes: Nodes, storeyId: string): RoofMove | n
     ...moves,
   ]
   const moved = applySceneChanges(nodes, { create, update })
+  // The follow reads the walls of the level holding a roof and of the one directly under it: over
+  // a support level or a level still to be built it would not see the storey's.
+  const followSeesStorey =
+    getLevelBelow(plan.levelId, moved as Record<AnyNodeId, AnyNode>)?.id === storeyId
   for (const { id, data } of moves) {
     const roof = moved[id] as RoofNode
     if (
       roof.support?.kind === 'walls' &&
-      Math.abs(resolveRoofElevation(roof, moved) - roof.position[1]) > 1e-4
+      (!followSeesStorey || Math.abs(resolveRoofElevation(roof, moved) - roof.position[1]) > 1e-4)
     )
       data.support = { kind: 'level' }
   }
