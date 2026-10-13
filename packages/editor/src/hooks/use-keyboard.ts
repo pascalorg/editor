@@ -202,12 +202,13 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
 /**
  * B: the wall tool on Rectangle — the quickest room — with the Build panel
  * showing, so the lit tile says what is in hand. The panel's tiles still pick
- * another shape for the session.
+ * another shape for the session. The panel opens before the tool is armed: a
+ * host may drop the armed tool when the panel changes.
  */
 export const armWallToolFromShortcut = () => {
   selectWallDrawVariant('rectangle')
-  useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
   openSidebarPanel(['build'])
+  useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
 }
 
 /** 1: site, 2: the building — each back on the select tool. Returns whether `key` was one. */
@@ -219,11 +220,11 @@ export const switchPhaseFromShortcut = (key: string): boolean => {
   return true
 }
 
-/** F: the item tool with the items catalog showing. */
+/** F: the item tool with the items catalog showing, opened first as B's is. */
 export const openItemCatalogFromShortcut = () => {
-  useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
   openSidebarPanel(['items'])
   useEditor.getState().setActiveSidebarPanel('items')
+  useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
 }
 
 /** P: paint mode, with the Paint panel showing (the Build panel where a host has no Paint tab). */
