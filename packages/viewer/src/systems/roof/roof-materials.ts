@@ -145,37 +145,24 @@ export function getRoofMaterialArray(
     return roleArray
   }
 
-  // Textures-on default appearance: catalog finishes per slot (terracotta
-  // shingle, soft-white deck/soffit, wall-coloured trim). Used both when the
-  // roof is unpainted and to fill any individual unpainted slot below.
-  const defaultArray: RoofMaterialArray = [
-    resolveSlotDefaultMaterial(wallCladdingRef ?? ROOF_DEFAULT_REFS[0], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[1], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[2], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[3], shading),
-  ]
-
   const resolve = (spec: typeof top) =>
     createResolvedMaterial(spec.material, spec.materialPreset, sceneMaterials, shading)
   const topMaterial = resolve(top)
   const edgeMaterial = resolve(edge)
   const wallMaterial = resolve(wall)
 
-  if (!(topMaterial || edgeMaterial || wallMaterial)) {
-    roofMaterialArrayCache.set(cacheKey, defaultArray)
-    return defaultArray
-  }
-
   // Each slot resolves to its own role only, then the declared default — never
   // another role. Cross-role fallback here used to splatter a single painted
   // surface (e.g. the edge) across the shingle and soffit slots. The legacy
   // catch-all still fills every role because `getEffectiveRoofSurfaceMaterial`
   // returns it for top/edge/wall alike.
+  // Resolve an unpainted slot's catalog default lazily: painted roofs must
+  // not load unused finish assets (or make capture readiness depend on them).
   const materialArray: RoofMaterialArray = [
-    edgeMaterial ?? defaultArray[0],
-    wallMaterial ?? defaultArray[1],
-    wallMaterial ?? defaultArray[2],
-    topMaterial ?? defaultArray[3],
+    edgeMaterial ?? resolveSlotDefaultMaterial(wallCladdingRef ?? ROOF_DEFAULT_REFS[0], shading),
+    wallMaterial ?? resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[1], shading),
+    wallMaterial ?? resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[2], shading),
+    topMaterial ?? resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[3], shading),
   ]
 
   roofMaterialArrayCache.set(cacheKey, materialArray)

@@ -18,6 +18,7 @@ import {
   type HorizontalConstructionPlane,
   isAngleSnapActive,
   isGridSnapActive,
+  isTypingTarget,
   markToolCancelConsumed,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
@@ -259,6 +260,7 @@ export const SlabTool: React.FC = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return
       if (e.key === 'Enter') {
         e.preventDefault()
         finishDrawing('keyboard')

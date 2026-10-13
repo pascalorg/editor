@@ -3,7 +3,9 @@ import { area, intersection } from '../../lib/polygon-boolean'
 import { polygonInteriorPoint } from '../../lib/polygon-label'
 import { segmentsIntersect } from '../../lib/polygon-relations'
 import { extractRooms } from '../../lib/room-graph'
-import { type AnyNodeId, SeparatorNode, type WallNode } from '../../schema'
+import { isAllocatedRoomName } from '../../lib/room-name'
+import { adoptableFace, zoneFaceFits } from '../../lib/room-zone-adoption'
+import { type AnyNodeId, SeparatorNode, type WallNode, ZoneNode } from '../../schema'
 import { getWallCurveFrameAt } from '../../systems/wall/wall-curve'
 import { planWallInsertion, uncoveredWallSegments } from '../../systems/wall/wall-topology'
 import { setZoneIntent, type ZoneIntentPatch } from './set-zone-intent'
@@ -29,6 +31,8 @@ export type CreateZoneInput = {
   name?: string
   intent?: ZoneIntentPatch
   enclose?: boolean
+  /** Name the walled room a person already named, instead of stacking a zone on it (an agent's explicit rename). */
+  adoptNamed?: boolean
   wall?: Pick<Partial<WallNode>, 'height' | 'thickness' | 'justification'>
   mintId: StructureMintId
 }
@@ -52,10 +56,66 @@ export function outdoorRoomConflicts(nodes: StructureNodes, levelId: string, pol
   )
 }
 
+/**
+ * The room walls already make where a room is drawn, to name rather than stack a second zone on
+ * (run 6: walls first, then create_room, gave every room a "Room N" twin). Only when every edge of
+ * the polygon runs along a wall, so nothing is built and the rooms stand as they are; the room the
+ * polygon fits by the reconciler's own adoption rule, and only while it keeps the name the
+ * reconciler gave it.
+ */
+export function walledRoomAt(
+  nodes: StructureNodes,
+  levelId: string,
+  polygon: Point[],
+): ZoneNode | undefined {
+  const walls = boundaries(nodes, levelId).filter((n): n is WallNode => n.type === 'wall')
+  const walled = polygon.every((start, i) => {
+    const end = polygon[(i + 1) % polygon.length]!
+    return (
+      Math.hypot(end[0] - start[0], end[1] - start[1]) < 1e-8 ||
+      uncoveredWallSegments(start, end, walls).length === 0
+    )
+  })
+  if (!walled) return
+  const rooms = Object.values(nodes).filter(
+    (node): node is ZoneNode =>
+      node.type === 'zone' &&
+      node.parentId === levelId &&
+      node.spaceRole === 'room' &&
+      node.autoFromWalls &&
+      node.enclosureStatus !== 'open',
+  )
+  const fit = adoptableFace(
+    zoneFaceFits(
+      { id: '', polygon },
+      rooms.map((room) => ({
+        key: room.id,
+        polygon: { outer: room.polygon, holes: room.holes ?? [] },
+        clear: { outer: [], holes: [] },
+      })),
+    ),
+  )
+  return fit && rooms[fit.face]
+}
+
+/**
+ * The walled room a drawn polygon names instead of stacking a zone on: one that still has the name
+ * the reconciler gave it, or any walled room when `adoptNamed` says its person's name may change.
+ */
+export function walledRoomToName(
+  nodes: StructureNodes,
+  levelId: string,
+  polygon: Point[],
+  adoptNamed = false,
+): ZoneNode | undefined {
+  const room = walledRoomAt(nodes, levelId, polygon)
+  return room && (adoptNamed || isAllocatedRoomName(room.name)) ? room : undefined
+}
+
 export function createZone(
   nodes: StructureNodes,
   input: CreateZoneInput,
-): StructurePlan & { zoneId: string } {
+): StructurePlan & { zoneId: string; renamed?: string } {
   if (nodes[input.levelId]?.type !== 'level') throw Error('Select an editable floor.')
   if ([input.polygon, input.boundaryIds, input.edges].filter(Boolean).length !== 1)
     throw Error('Supply exactly one polygon, boundary set or edge list.')
@@ -120,6 +180,22 @@ export function createZone(
     )
   )
     throw Error('A room needs a valid polygon.')
+  const walledRoom = walledRoomToName(nodes, input.levelId, polygon, input.adoptNamed)
+  if (walledRoom) {
+    scratch[walledRoom.id] = { ...walledRoom, name: input.name ?? walledRoom.name }
+    if (input.intent)
+      scratch = applyToScratch(
+        scratch,
+        structureChangeBatch(
+          setZoneIntent(scratch, { zoneId: walledRoom.id, patch: input.intent }).changes,
+        ),
+      )
+    return {
+      changes: diffStructure(nodes, scratch),
+      zoneId: walledRoom.id,
+      renamed: walledRoom.name,
+    }
+  }
   if (input.enclose === false) {
     const conflicts = outdoorRoomConflicts(nodes, input.levelId, polygon)
     if (conflicts.length) return { changes: [], conflicts, zoneId: '' }

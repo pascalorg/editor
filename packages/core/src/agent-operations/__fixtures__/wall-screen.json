@@ -1,0 +1,152 @@
+{
+  "item_7j1l6855lxvbemw5": {
+    "id": "item_7j1l6855lxvbemw5",
+    "name": "Cinema projection screen and acoustic surround",
+    "side": "back",
+    "type": "item",
+    "asset": {
+      "id": "script_e7cfd4230ebe68b8",
+      "src": "artifact://e7cfd4230ebe68b8e53ad95ffede08c327f8bec15c674b57bbd22e4e3b0eac86",
+      "name": "Cinema projection screen and acoustic surround",
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "source": "mine",
+      "attachTo": "wall-side",
+      "category": "media wall",
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "thumbnail": "",
+      "dimensions": [
+        6.6,
+        2.5,
+        0.3325
+      ]
+    },
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "slots": {
+      "bronze": "library:metal-brass",
+      "acoustic": "library:preset-nearblack"
+    },
+    "object": "node",
+    "source": {
+      "kind": "script",
+      "images": {
+        "artifact": "e7cfd4230ebe68b8e53ad95ffede08c327f8bec15c674b57bbd22e4e3b0eac86",
+        "floorPlan": "2a73476859e3049fc748b7698ae05b307d0a65f9499e27170e9a043e745f6712",
+        "thumbnail": "f3505f5dba792e817a108f99106b609bee9d97de4f27e623b59d8b3e230bc955"
+      },
+      "params": {},
+      "script": "cf2085198e5a1deb42f5a7778acb7f2c0a0c149364970eeb22bf5ec19fa53f38",
+      "artifact": "e7cfd4230ebe68b8e53ad95ffede08c327f8bec15c674b57bbd22e4e3b0eac86",
+      "language": "three",
+      "manifest": {
+        "bounds": {
+          "max": [
+            3.3,
+            2.5,
+            0.3325
+          ],
+          "min": [
+            -3.3,
+            0,
+            0
+          ]
+        },
+        "parts": [
+          {
+            "id": "screen_surround",
+            "type": "panel",
+            "bounds": {
+              "max": [
+                3.3,
+                2.5,
+                0.3325
+              ],
+              "min": [
+                -3.3,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "cutout": false,
+        "triangles": 852
+      }
+    },
+    "wallId": "wall_fseg8ncv7q8u5kqn",
+    "visible": true,
+    "children": [],
+    "metadata": {
+      "reason": "A wide projection screen with fluted acoustic panels and integrated speakers completes the private eight-seat cinema"
+    },
+    "parentId": "wall_fseg8ncv7q8u5kqn",
+    "position": [
+      4.5,
+      0.55,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ]
+  },
+  "wall_fseg8ncv7q8u5kqn": {
+    "id": "wall_fseg8ncv7q8u5kqn",
+    "end": [
+      -12,
+      3
+    ],
+    "name": "Wall 9",
+    "type": "wall",
+    "slots": {
+      "a": "scene:mat_14hp4rf0rgo1wpb8",
+      "b": "scene:mat_14hp4rf0rgo1wpb8"
+    },
+    "start": [
+      -3,
+      3
+    ],
+    "object": "node",
+    "visible": true,
+    "backSide": "interior",
+    "children": [
+      "item_7j1l6855lxvbemw5"
+    ],
+    "metadata": {},
+    "parentId": "level_qqolzyn207xv0jj9",
+    "frontSide": "interior",
+    "thickness": 0.22
+  },
+  "level_qqolzyn207xv0jj9": {
+    "id": "level_qqolzyn207xv0jj9",
+    "name": "Ground \u00b7 Reception & Entertaining",
+    "type": "level",
+    "level": 0,
+    "height": 3.8,
+    "object": "node",
+    "visible": true,
+    "children": [
+      "wall_fseg8ncv7q8u5kqn"
+    ],
+    "metadata": {},
+    "parentId": null,
+    "baseElevation": 0
+  }
+}

@@ -23,6 +23,7 @@ import {
   photoCropSize,
   type SceneViewBox,
   sceneViewBounds,
+  sceneViewFacing,
   sceneViewInterior,
   sceneViewNote,
   sceneViewPlan,
@@ -372,6 +373,8 @@ describe("the photo's camera", () => {
   })
 })
 
+// Run 3 (2026-10-05) compared whole facades with view_scene and never recorded what the photo
+// showed: the note a view comes with invites the inventory until one exists (L15).
 describe('the note a view comes with', () => {
   test('says a view is a picture to compare, not a measure', () => {
     expect(sceneViewNote()).toContain('not a measure')
@@ -848,5 +851,30 @@ describe('a building away from the origin', () => {
     const { pose } = sceneViewPlan(turned, { target: 'window_face' })
     expect(framesBox(pose, box)).toBe(true)
     expect(pose.position[0]).toBeLessThan(box.min[0])
+  })
+})
+
+// Follow Pascal looks at an opening from the way it faces; the agent's own view of it takes the same side.
+describe('which way an opening faces', () => {
+  test('outward, in the site plan, whichever way its wall was drawn', () => {
+    for (const outside of ['back', 'front'] as const) {
+      expect(sceneViewFacing(facadeScene(outside), 'door_face')).toEqual([0, -1])
+      expect(sceneViewFacing(facadeScene(outside), 'window_face')).toEqual([0, -1])
+    }
+  })
+
+  test('turned with the building', () => {
+    const facing = sceneViewFacing(
+      facadeScene('back', { position: [5.7, 0, 16.5], rotation: [0, Math.PI / 2, 0] }),
+      'door_face',
+    )!
+    expect(facing[0]).toBeCloseTo(-1, 9)
+    expect(facing[1]).toBeCloseTo(0, 9)
+  })
+
+  test('nothing for what is not an opening', () => {
+    expect(sceneViewFacing(facadeScene('back'), 'wall_face')).toBeNull()
+    expect(sceneViewFacing(facadeScene('back'), 'item_lamp')).toBeNull()
+    expect(sceneViewFacing(facadeScene('back'), 'nothing_here')).toBeNull()
   })
 })

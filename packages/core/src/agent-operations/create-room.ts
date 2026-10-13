@@ -1,8 +1,9 @@
 import { isAgentRefusal, refuse } from '../agent-tools/refusal'
 import { doorFacing, planWallOpening } from '../building/wall-openings'
-import { createZone } from '../commands/structure/create-zone'
+import { createZone, walledRoomAt } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
-import { type AnyNode, generateId, type WallNode } from '../schema'
+import { isAllocatedRoomName } from '../lib/room-name'
+import { type AnyNode, type AnyNodeId, generateId, type WallNode, type ZoneNode } from '../schema'
 import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, type Vec2 } from './plan-geometry'
@@ -27,6 +28,7 @@ type CreateRoomInput = LevelTargetInput & {
   wallHeight?: number
   wallThickness?: number
   outdoor?: boolean
+  rename?: boolean
   doors?: OpeningSpec[]
   windows?: OpeningSpec[]
 }
@@ -98,6 +100,8 @@ function derivedSurfaces(nodes: SceneNodes, levelId: string, zoneId: string) {
   return { slabId: slab?.id ?? null, ceilingId: ceiling?.id ?? null }
 }
 
+const roundArea = (value: number) => Math.round(value * 100) / 100
+
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`
 
 /**
@@ -115,6 +119,18 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
     )
   const polygon = input.polygon as Vec2[]
 
+  // A room a person named stands where these walls are: no twin zone, and no silent rename. The
+  // agent passes rename: true to give it the new name, or asks the person.
+  const named = walledRoomAt(nodes, level.id, polygon)
+  if (named && !isAllocatedRoomName(named.name) && !input.rename)
+    refuse(
+      'room_named_by_person',
+      named.name === input.name
+        ? `The walls here already enclose the room "${named.name}", with a name of its own, so there is nothing to create: its walls, doors and windows are there. Add what is missing with add_door and add_window.`
+        : `The walls here already enclose the room "${named.name}", which has a name of its own (not a number the editor gave it). Creating "${input.name}" would stack a second room on it. To give it the name "${input.name}", pass rename: true only if the person asked for the rename; otherwise ask them whether to rename it. To keep it, leave it as it is.`,
+      { zoneId: named.id, roomName: named.name },
+    )
+
   let plan: ReturnType<typeof createZone>
   try {
     plan = createZone(nodes, {
@@ -122,6 +138,7 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
       polygon,
       name: input.name,
       enclose: !input.outdoor,
+      ...(input.rename ? { adoptNamed: true } : {}),
       ...(input.outdoor
         ? { intent: { hasCeiling: false } }
         : {
@@ -151,7 +168,18 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
     )
 
   const roomChanges = structureChangeBatch(plan.changes)
-  if (input.color)
+  if (input.color && plan.renamed)
+    roomChanges.update = [
+      ...roomChanges.update.filter((entry) => entry.id !== plan.zoneId),
+      {
+        id: plan.zoneId as AnyNodeId,
+        data: {
+          ...roomChanges.update.find((entry) => entry.id === plan.zoneId)?.data,
+          color: input.color,
+        },
+      },
+    ]
+  else if (input.color)
     roomChanges.create = roomChanges.create.map((entry) =>
       entry.node.id === plan.zoneId
         ? { ...entry, node: { ...entry.node, color: input.color } as AnyNode }
@@ -199,12 +227,16 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
     zoneId: plan.zoneId,
     wallIds,
     reusedWalls,
-    areaSqMeters: Math.round(polygonArea(polygon) * 100) / 100,
+    areaSqMeters: roundArea(
+      polygonArea(plan.renamed ? (nodes[plan.zoneId] as ZoneNode).polygon : polygon),
+    ),
     doorIds,
     windowIds,
     ...(skippedOpenings.length ? { skippedOpenings } : {}),
     message: [
-      `Created ${input.outdoor ? 'outdoor room' : 'room'} "${input.name}" on ${level.name || level.id}`,
+      plan.renamed
+        ? `Named the ${input.outdoor ? 'outdoor room' : 'room'} the walls already enclose "${input.name}" (it was ${plan.renamed}) on ${level.name || level.id}`
+        : `Created ${input.outdoor ? 'outdoor room' : 'room'} "${input.name}" on ${level.name || level.id}`,
       ...(reusedWalls ? [`reused ${plural(reusedWalls, 'wall')} already there`] : []),
       ...(doorIds.length ? [plural(doorIds.length, 'door')] : []),
       ...(windowIds.length ? [plural(windowIds.length, 'window')] : []),

@@ -1,6 +1,14 @@
 // The window tool's placement choices: the chips [O] Type and [L] Style.
 
-import type { ToolHint, WindowNode } from '@pascal-app/core'
+import {
+  CORNER_BLOCK_NOTES,
+  type CornerBlockReason,
+  type CornerSnapHint,
+  cornerHintRows,
+  type ToolHint,
+  useCornerSnapHint,
+  type WindowNode,
+} from '@pascal-app/core'
 import {
   getWindowStyleOverrides,
   SILLLESS_WINDOW_TYPES,
@@ -94,3 +102,33 @@ export const WINDOW_PLACEMENT_HINTS: ToolHint[] = [
     },
   },
 ]
+
+/**
+ * What a click does while the ghost is inside a corner zone (the owner, 8 October), or why it is not
+ * a corner: shown only there, so the hint appears when the window can join and goes when it leaves.
+ */
+const HINTS_FOR: CornerSnapHint[] = [
+  'join',
+  'new',
+  ...(Object.keys(CORNER_BLOCK_NOTES) as CornerBlockReason[]),
+]
+
+/** The plain click row, which gives way to the corner rows where a click does something else. */
+export const WINDOW_PLAIN_PLACE_VISIBLE = {
+  subscribe: (onChange: () => void) => useCornerSnapHint.subscribe(onChange),
+  value: () => {
+    const hint = useCornerSnapHint.getState().hint
+    return hint !== 'join' && hint !== 'new'
+  },
+}
+
+export const WINDOW_CORNER_HINTS: ToolHint[] = HINTS_FOR.flatMap((hint) =>
+  cornerHintRows(hint).map((row) => ({
+    key: row.keys.join('+'),
+    label: row.label,
+    visible: {
+      subscribe: (onChange: () => void) => useCornerSnapHint.subscribe(onChange),
+      value: () => useCornerSnapHint.getState().hint === hint,
+    },
+  })),
+)

@@ -145,6 +145,7 @@ export {
 export {
   DoorNode,
   DoorSegment,
+  FRENCH_DOOR_SEGMENTS,
   OpeningConstructionType,
   OpeningDimensionReference,
 } from './nodes/door'
@@ -286,6 +287,7 @@ export {
   getPitchFromActiveRoofHeight,
   getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
+  getSegmentFasciaMaterial,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   isBandedShedSegment,

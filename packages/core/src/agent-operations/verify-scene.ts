@@ -1,15 +1,22 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
+import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
+import { nodeRegistry } from '../registry'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
-import { getStoredLevelHeight } from '../services/storey'
+import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
 import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
 import { measureStair } from '../systems/stair/stair-sizing'
 import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/opening-bounds'
+import {
+  type CeilingObjectObservation,
+  ceilingObjectObservations,
+} from './ceiling-object-observations'
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import { EMPTY_SESSION } from './scene-checkpoint'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
   type ContentCounts,
@@ -19,11 +26,28 @@ import {
   levelsOf,
   nodesOnLevel,
 } from './scene-queries'
+import { reviewSince } from './scene-review'
 import type { AgentOperation, SceneNodes } from './types'
+import { type WallObjectObservation, wallObjectObservations } from './wall-object-observations'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
 export type SceneIssue =
+  | CeilingObjectObservation
+  | WallObjectObservation
   | { type: string; message: string; severity?: 'info' }
+  | {
+      type: 'wall_covering_slab_contact'
+      message: string
+      severity?: 'info'
+      wallId: string
+      slabId: string
+      levelId: string
+      wallTop: number
+      slabUnderside: number
+      slabTop: number
+      penetration: number
+      coplanar: boolean
+    }
   | {
       type: 'wall_open_end'
       message: string
@@ -198,7 +222,8 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
 function schemaErrors(nodes: SceneNodes) {
   const errors: { nodeId: string; path: string; message: string }[] = []
   for (const [id, node] of Object.entries(nodes)) {
-    const parsed = AnyNodeSchema.safeParse(node)
+    const schema = nodeRegistry.get(node.type)?.schema ?? AnyNodeSchema
+    const parsed = schema.safeParse(node)
     if (parsed.success) continue
     for (const issue of parsed.error.issues)
       errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
@@ -297,6 +322,34 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
         'roof_mixed_in_storey',
         `${levelName} mixes roof geometry with occupied-level content; place roofs on a dedicated roof level for solo/exploded level views`,
       )
+  }
+
+  for (const level of levels) {
+    for (const wall of ofType(onLevel(level.levelId), 'wall')) {
+      const base = wallSupportForNodes(wall, nodes).elevation
+      const wallTop = getWallTop(wall, level.levelId, nodes, base)
+      for (const { slab, top: slabTop, underside: slabUnderside } of getWallCoveringSlabs(
+        wall,
+        level.levelId,
+        nodes,
+      )) {
+        const penetration = Math.max(0, Math.min(wallTop, slabTop) - Math.max(base, slabUnderside))
+        const coplanar = Math.abs(wallTop - slabTop) <= 1e-6
+        if (penetration <= 1e-6 && !coplanar) continue
+        issues.push({
+          type: 'wall_covering_slab_contact',
+          message: `Wall ${wall.id} top at ${wallTop.toFixed(3)}m intersects covering slab ${slab.id} [${slabUnderside.toFixed(3)}, ${slabTop.toFixed(3)}]m${coplanar ? ' and is coplanar with its walking surface' : ''}; check the wall height or the slab opening.`,
+          wallId: wall.id,
+          slabId: slab.id,
+          levelId: level.levelId,
+          wallTop,
+          slabUnderside,
+          slabTop,
+          penetration,
+          coplanar,
+        })
+      }
+    }
   }
 
   // Storeys are counted per building: separate buildings need no stair between them, and a wall
@@ -461,13 +514,20 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
   issues.push(...layoutIssuesFromScene(Object.values(nodes)))
+  issues.push(...ceilingObjectObservations(nodes))
+  issues.push(...wallObjectObservations(nodes))
   for (const check of checks)
     if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
   // What the edits since the host's checkpoint lost, by place.
-  const since = context.checkpoint
+  const hosted = context.checkpoint
     ? changesSince(context.checkpoint as SceneCheckpoint, nodes)
     : null
-  if (since) issues.push(...since.issues)
+  if (hosted) issues.push(...hosted.issues)
+  // The look back: what the agent did since a moment it named. The places the registered families
+  // lost count as issues, as a window gone from its place always did.
+  const session = context.session ?? EMPTY_SESSION
+  const since = typeof input?.since === 'string' ? reviewSince(session, input.since, nodes) : null
+  if (since?.places) issues.push(...since.places.issues)
   for (const check of checks)
     if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
 
@@ -487,9 +547,13 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       hasIssues: issues.some((issue) => issue.severity !== 'info'),
       ...authoredObjects(nodes),
       ...Object.assign({}, ...reports.map((report) => report.run(nodes))),
-      ...(since && {
-        sinceCheckpoint: { name: context.checkpoint!.name, changes: since.changes },
+      ...(Object.keys(session.checkpoints).length
+        ? { checkpoints: Object.keys(session.checkpoints) }
+        : {}),
+      ...(hosted && {
+        sinceCheckpoint: { name: context.checkpoint!.name, changes: hosted.changes },
       }),
+      ...(since && { since }),
     },
   }
 }

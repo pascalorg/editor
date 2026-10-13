@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { ActionButton } from '../ui/action-menu/action-button'
+import { FollowPascalToggle } from '../ui/action-menu/follow-pascal-toggle'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -413,6 +414,9 @@ export const ViewerControlsBar = ({
           </ActionButton>
 
           <div className="mx-1 h-5 w-px bg-border/40" />
+
+          {/* Follow Pascal */}
+          <FollowPascalToggle className="hidden sm:inline-flex" />
 
           {/* Camera actions */}
           <ActionButton

@@ -72,6 +72,7 @@ import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
 import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
 import { AudioSettingsDialog } from './audio-settings-dialog'
+import { ConstructionAnimationSetting } from './construction-animation-setting'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
 import { PrintExportButton } from './print-export-button'
@@ -275,7 +276,8 @@ function SettingsSubheading({ children }: { children: ReactNode }) {
   return <h4 className="font-medium text-muted-foreground text-xs">{children}</h4>
 }
 
-function SettingsSwitchRow({
+/** One on/off preference: a label, a line on what it does, a switch. Hosts use it for their rows. */
+export function SettingsSwitchRow({
   checked,
   description,
   label,
@@ -311,6 +313,8 @@ export interface SettingsPanelProps {
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
   ) => Promise<void>
+  /** Rows a host adds under Preferences, for its own features (SettingsSwitchRow). */
+  preferences?: ReactNode
 }
 
 function FloorSettingsSection() {
@@ -435,6 +439,7 @@ export function SettingsPanel({
   projectName,
   projectVisibility,
   onVisibilityChange,
+  preferences,
 }: SettingsPanelProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const copyResetTimeoutRef = useRef<number | null>(null)
@@ -1184,7 +1189,12 @@ export function SettingsPanel({
           />
         </SettingsSection>
 
-        <SettingsSection description="Sound levels and keyboard shortcuts." title="Preferences">
+        <SettingsSection
+          description="Sound levels, the construction animation and keyboard shortcuts."
+          title="Preferences"
+        >
+          <ConstructionAnimationSetting />
+          {preferences}
           <div className="grid gap-2 @sm:grid-cols-2">
             <AudioSettingsDialog />
             <KeyboardShortcutsDialog />

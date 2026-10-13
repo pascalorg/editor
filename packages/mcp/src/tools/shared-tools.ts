@@ -2,17 +2,21 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   AGENT_OPERATIONS,
   type AgentContext,
+  type AgentHostRuntime,
   type AgentOperation,
   achievedChanges,
   applyAgentOutcome,
   type SceneChanges,
+  startOfSession,
   writeCollections,
 } from '@pascal-app/core/agent-operations'
 import {
   type AgentToolAnnotations,
   type AgentToolContract,
+  addCornerWindowTool,
   addLevelTool,
   addWallTool,
+  createRoofTool,
   createRoomTool,
   createStairTool,
   deleteNodeTool,
@@ -26,11 +30,16 @@ import {
   getZonesTool,
   listLevelsTool,
   measureStairTool,
+  mergeWindowsTool,
   paintTool,
+  placeInRoomTool,
   placeItemsTool,
   ROOM_TOOL_CONTRACTS,
+  refuse,
+  runBatchTool,
   searchAssetsTool,
   searchMaterialsTool,
+  setCheckpointTool,
   verifySceneTool,
 } from '@pascal-app/core/agent-tools'
 import {
@@ -212,6 +221,13 @@ const SHARED_TOOLS: SharedTool[] = [
           message: z.string(),
           severity: z.literal('info').optional(),
           wallId: z.string().optional(),
+          slabId: z.string().optional(),
+          levelId: z.string().optional(),
+          wallTop: z.number().optional(),
+          slabUnderside: z.number().optional(),
+          slabTop: z.number().optional(),
+          penetration: z.number().optional(),
+          coplanar: z.boolean().optional(),
           end: z.enum(['start', 'end']).optional(),
           reason: z.enum(['gap', 'crosses', 'parallel', 'rejected']).optional(),
           gap: z.number().optional(),
@@ -219,6 +235,8 @@ const SHARED_TOOLS: SharedTool[] = [
         }),
       ),
       hasIssues: z.boolean(),
+      checkpoints: z.array(z.string()).optional(),
+      since: jsonObject.optional(),
       authoredObjects: z
         .array(
           z.object({
@@ -233,9 +251,24 @@ const SHARED_TOOLS: SharedTool[] = [
     envelope: (bridge) => ({ activeSceneId: bridge.getActiveScene()?.id ?? null }),
   },
   {
+    contract: setCheckpointTool,
+    operation: AGENT_OPERATIONS.set_checkpoint,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
     contract: addWallTool,
     operation: AGENT_OPERATIONS.add_wall,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addCornerWindowTool,
+    operation: AGENT_OPERATIONS.add_corner_window,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: mergeWindowsTool,
+    operation: AGENT_OPERATIONS.merge_windows,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
   },
   {
     contract: addLevelTool,
@@ -245,6 +278,11 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: createStairTool,
     operation: AGENT_OPERATIONS.create_stair,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: createRoofTool,
+    operation: AGENT_OPERATIONS.create_roof,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
@@ -308,12 +346,6 @@ const SHARED_TOOLS: SharedTool[] = [
     },
   },
   {
-    contract: searchAssetsTool,
-    operation: AGENT_OPERATIONS.search_assets,
-    annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    catalog: true,
-  },
-  {
     contract: paintTool,
     operation: AGENT_OPERATIONS.paint,
     annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
@@ -330,6 +362,30 @@ const SHARED_TOOLS: SharedTool[] = [
     },
   },
   {
+    contract: placeInRoomTool,
+    operation: AGENT_OPERATIONS.place_in_room,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    catalog: true,
+    outputSchema: {
+      ok: z.literal(true),
+      itemId: z.string(),
+      kind: z.string(),
+      placed: z.object({ position: z.array(z.number()), rotationDeg: z.number() }),
+      against: z.object({ edge: z.number(), wall: z.string() }).optional(),
+      around: z.string().optional(),
+      facing: z.string().optional(),
+      message: z.string(),
+      ...achievedOutput,
+      ...liveSyncOutput,
+    },
+  },
+  {
+    contract: searchAssetsTool,
+    operation: AGENT_OPERATIONS.search_assets,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    catalog: true,
+  },
+  {
     contract: searchMaterialsTool,
     operation: AGENT_OPERATIONS.search_materials,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -343,6 +399,11 @@ const SHARED_TOOLS: SharedTool[] = [
       outputSchema: { ...structureOutput, ...achievedOutput },
     }
   }),
+  {
+    contract: runBatchTool,
+    operation: AGENT_OPERATIONS.run_batch,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+  },
 ]
 
 export function toPatches(changes: SceneChanges): Patch[] {
@@ -364,6 +425,31 @@ export function toPatches(changes: SceneChanges): Patch[] {
       cascade: true,
     })),
   ]
+}
+
+/** How an outcome reaches this bridge: its patches, its derived construction, its session record. */
+export function agentRuntime(bridge: SceneOperations): AgentHostRuntime {
+  return {
+    getNodes: () => bridge.getNodes(),
+    applyChanges: (changes) => {
+      if (
+        changes.materials?.length &&
+        (bridge.supportsMaterialUpserts !== true || bridge.getMaterials?.() === undefined)
+      )
+        refuse(
+          'materials_unavailable',
+          'This host cannot atomically persist native materials; nothing was painted.',
+        )
+      const next = toPatches(changes)
+      if (next.length) bridge.applyPatch(next)
+      if (changes.collections && Object.keys(changes.collections).length)
+        bridge.setCollections(writeCollections(bridge.getCollections(), changes.collections))
+    },
+    reconcile: () => {
+      bridge.deriveStructure()
+    },
+    keep: (keep) => bridge.agentSession?.keep(keep),
+  }
 }
 
 function writesScene(changes: SceneChanges | undefined): boolean {
@@ -409,12 +495,26 @@ export function registerOperationTool(
       // A copy of the map: a host may write its own in place (the hosted bridge does), and a
       // "before" that grows with the call reads every creation as unchanged.
       const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      // The agent's session begins with its first call, before anything is written.
+      const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
+      if (first) bridge.agentSession?.keep(first)
+      const batchPlacesInRoom =
+        tool.contract.name === runBatchTool.name &&
+        Array.isArray(input.calls) &&
+        input.calls.some(
+          (call) =>
+            typeof call === 'object' &&
+            call !== null &&
+            'tool' in call &&
+            call.tool === placeInRoomTool.name,
+        )
       const context: AgentContext = {
         activeLevelId: null,
-        ...(tool.catalog && { catalog: await catalog() }),
         ...(bridge.supportsMaterialUpserts && bridge.getMaterials
           ? { materials: bridge.getMaterials() }
           : {}),
+        session: bridge.agentSession?.read(),
+        ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
       }
       try {
         outcome = tool.operation(before, input as never, context)
@@ -427,22 +527,12 @@ export function registerOperationTool(
       // follow-up it plans once the host has reconciled; any of them is one history step.
       if (writesScene(outcome.changes) || outcome.afterReconcile) {
         result = bridge.runAsSingleHistoryStep(() =>
-          applyAgentOutcome(outcome, {
-            getNodes: () => bridge.getNodes(),
-            applyChanges: (changes) => {
-              const next = toPatches(changes)
-              if (next.length) bridge.applyPatch(next)
-              if (changes.collections && Object.keys(changes.collections).length)
-                bridge.setCollections(
-                  writeCollections(bridge.getCollections(), changes.collections),
-                )
-            },
-            reconcile: () => {
-              bridge.deriveStructure()
-            },
-          }),
+          applyAgentOutcome(outcome, agentRuntime(bridge)),
         )
         persistence = persistencePayload(await publishLiveSceneSnapshot(bridge, tool.contract.name))
+      } else if (outcome.keep) {
+        // A checkpoint: kept with the session, nothing in the scene to save.
+        result = applyAgentOutcome(outcome, agentRuntime(bridge))
       }
       // What the scene holds after the call, not only what the call says it built.
       const achieved = outcome.changes ? achievedChanges(before, outcome.changes) : null

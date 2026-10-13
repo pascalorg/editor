@@ -343,7 +343,12 @@ describe('standalone history source invalidation', () => {
       mockShared('react', () => ({ ...react, useEffect: () => {}, useRef: current => ({ current }) }))
       const frames = []
       const fiber = await importShared('@react-three/fiber')
-      mockShared('@react-three/fiber', () => ({ ...fiber, useFrame: frame => frames.push(frame) }))
+      // DoorSystem and WindowSystem register their materials for scene capture through useThree.
+      mockShared('@react-three/fiber', () => ({
+        ...fiber,
+        useFrame: frame => frames.push(frame),
+        useThree: select => select({ scene: {} }),
+      }))
       const selector = store => Object.assign(fn => fn(store.getState()), store)
       mockShared('@pascal-app/core', () => ({ ...core, useScene: selector(scene), useLiveNodeOverrides: selector(overrides) }))
       const viewer = await importShared('@pascal-app/viewer')

@@ -28,10 +28,14 @@ type FurnishRoomInput = LevelTargetInput & {
 // A door belongs to a room edge when it stands this close to the edge's line, within its span.
 const DOOR_EDGE_TOLERANCE = 0.25
 // Clearance between a piece's back and the wall's centreline: half a wall and a hand's width.
-const WALL_GAP = 0.1
+export const WALL_GAP = 0.1
 
 /** The room asked for: a zone's level and outline, or a polygon on the level named. */
-function roomToFurnish(nodes: SceneNodes, input: FurnishRoomInput, context: AgentContext) {
+export function roomToFurnish(
+  nodes: SceneNodes,
+  input: LevelTargetInput & Pick<FurnishRoomInput, 'zoneId' | 'polygon'>,
+  context: AgentContext,
+) {
   if (input.zoneId) {
     const zone = nodes[input.zoneId]
     if (!zone)
@@ -81,7 +85,7 @@ function doorsOfRoom(nodes: SceneNodes, levelId: string, polygon: Vec2[]) {
 }
 
 /** A polygon edge seen from inside the room: its middle, its direction, and the way into the room. */
-function edgeFrame(polygon: Vec2[], index: number, center: Vec2) {
+export function edgeFrame(polygon: Vec2[], index: number, center: Vec2) {
   const a = polygon[index % polygon.length]!
   const b = polygon[(index + 1) % polygon.length]!
   const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1

@@ -118,6 +118,51 @@ afterAll(() => {
 })
 
 describe('SFX audio context lifecycle', () => {
+  test('editor startup warms assets without playing and repeated init does not duplicate delivery', () => {
+    initSFXBus()
+    const warmed = [...instances]
+    expect(warmed.length).toBeGreaterThan(0)
+    expect(warmed.every((sound) => sound.playCount === 0)).toBe(true)
+    initSFXBus()
+    expect(instances).toHaveLength(warmed.length)
+    triggerSFX('sfx:item-place')
+    expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
+  })
+
+  test('a one-shot requested before loading is dropped, not replayed on load', () => {
+    initialState = 'loading'
+    initSFXBus()
+    triggerSFX('sfx:item-place')
+    for (const sound of instances) sound.finishLoading()
+    expect(instances.every((sound) => sound.playCount === 0)).toBe(true)
+    // A different fresh cue avoids relying on the per-name repeat clock.
+    triggerSFX('sfx:structure-build')
+    expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
+  })
+
+  test('muted startup neither starts audio nor consumes a later fresh cue', () => {
+    muted = true
+    initSFXBus()
+    triggerSFX('sfx:item-place')
+    expect(instances.every((sound) => sound.playCount === 0)).toBe(true)
+    muted = false
+    updateSFXVolumes()
+    triggerSFX('sfx:item-place')
+    expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
+  })
+
+  test('cleanup detaches delivery and unloads resources once, then remount plays once', () => {
+    initSFXBus()
+    const warmed = [...instances]
+    disposeSFXBus()
+    disposeSFXBus()
+    triggerSFX('sfx:item-place')
+    expect(warmed.every((sound) => sound.playCount === 0 && sound.unloadCount === 1)).toBe(true)
+    initSFXBus()
+    triggerSFX('sfx:item-place')
+    expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
+  })
+
   test('reuses the preloaded cache while the Howler context is unchanged', () => {
     preloadSFX()
     const initialCount = instances.length

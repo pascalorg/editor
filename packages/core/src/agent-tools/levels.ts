@@ -30,7 +30,7 @@ export const getWallsTool = {
   name: 'get_walls',
   title: 'Get walls',
   description:
-    'Get the walls of a level: start and end in metres, length, stored and resolved height, thickness, and their doors and windows.',
+    'Get the walls of a level: start and end in metres, length, stored and resolved height, thickness, and their doors and windows. wallFaceChains gives base-chain provenance for geometric faces a (left of start → end) and b (right): ref (authored face slot), legacy (inline spec), or default (declared fallback ref). These are not final rendered finishes: room intent, face paint regions, exterior assembly cladding and reference availability can change appearance. A chosen white or default-matching ref is legitimate; fallback alone is not a defect or a requirement to paint.',
   input: levelTarget,
 }
 
@@ -38,7 +38,7 @@ export const getZonesTool = {
   name: 'get_zones',
   title: 'Get zones',
   description:
-    'Get the zones (rooms) of a level: name, colour, polygon and holes in metres, area in m² (holes taken out), bounding size, and floor_choices: the floor plates the room can take (key, plateId, name, current; drawn and mezzanine flags). A room shares its floor plate with the rooms next to it unless detached.',
+    'Get the zones (rooms) of a level: name, colour, polygon and holes in metres, area in m² (holes taken out), bounding size, and floor_choices: the floor plates the room can take (key, plateId, name, current; drawn and mezzanine flags). A room shares its floor plate with the rooms next to it unless detached. Persisted authored wall intent is wallMaterial (string, or null when absent) and wallOverrides (records of wallId, geometric face a or b, and finish; [] when absent). This is not a final rendered finish or visual verification: local overrides and face paint can take precedence, and absent room intent is not a defect or a requirement to paint.',
   input: levelTarget,
 }
 

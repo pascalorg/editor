@@ -5,6 +5,7 @@ import {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
   isIsolationActive,
+  isNodeRevealing,
   SCENE_LAYER,
   useViewer,
   type WallMode,
@@ -290,6 +291,20 @@ export function collectWallBatchCandidates(
  * pays off once enough walls have drifted out, so a single edit leaves the
  * floor's merged mesh exactly where it was.
  */
+/**
+ * A wall still rising from a construction reveal moves every frame, and a
+ * merge would freeze it mid-rise — or, if it were left out, keep it out until
+ * enough walls drift to re-sew the floor. Its level waits for the whole rise.
+ */
+function levelHasRevealingWalls(levelId: string): boolean {
+  const nodes = useScene.getState().nodes
+  const level = nodes[levelId as AnyNodeId]
+  if (level?.type !== 'level') return false
+  return level.children.some(
+    (childId) => nodes[childId]?.type === 'wall' && isNodeRevealing(childId),
+  )
+}
+
 function unbatchedWallCount(
   levelId: string,
   excludedNodeIds: ReadonlySet<string> = EMPTY_IDS,
@@ -478,6 +493,16 @@ export function runBatchFrame(
   }
   changedWalls.clear()
 
+  // A wall going out in a reverse play (an undo) moves its own mesh while the merged mesh keeps
+  // drawing it whole: it draws itself until the host takes it out. Its level waits for it
+  // (`levelHasRevealingWalls`), so it is not sewn back in under the play.
+  for (const [nodeId, record] of [...batchByNode]) {
+    if (!isNodeRevealing(nodeId)) continue
+    staleLevels.add(record.levelId)
+    releaseWall(nodeId)
+    changed = true
+  }
+
   // A tinted wall paints itself through materials the merged mesh never reads,
   // so it goes back to drawing its own geometry for as long as it is lit. It
   // stays out afterwards: one wall short of a batch is not worth re-sewing a
@@ -584,10 +609,22 @@ export function runBatchFrame(
     return
   }
 
+  const revealingLevels = new Set<string>()
   for (const levelId of staleLevels) {
+    if (levelHasRevealingWalls(levelId)) {
+      revealingLevels.add(levelId)
+      continue
+    }
     if (unbatchedWallCount(levelId, excludedNodeIds) >= MIN_BATCH_WALLS) {
       mergeLevel(levelId, excludedNodeIds)
     }
   }
   staleLevels.clear()
+  if (revealingLevels.size === 0) return
+  for (const levelId of revealingLevels) staleLevels.add(levelId)
+  if (wakeRef.current) clearTimeout(wakeRef.current)
+  wakeRef.current = setTimeout(() => {
+    wakeRef.current = null
+    invalidate()
+  }, BATCH_SETTLE_MS + 20)
 }

@@ -20,6 +20,19 @@
       }
     },
     {
+      "name": "add_corner_window",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds two joined window nodes on the walls meeting at a corner of the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "add_door",
       "annotations": {
         "readOnlyHint": false,
@@ -683,6 +696,19 @@
       }
     },
     {
+      "name": "merge_windows",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it joins two existing window nodes into one corner window or one wide window in the connected Pascal scene.",
+        "destructiveHint": "Merging two windows on one wall removes one of them and widens the other; on a corner it moves both to the corner.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "merge_zones",
       "annotations": {
         "readOnlyHint": false,
@@ -745,6 +771,19 @@
         "readOnlyHint": "It is not read-only because it creates a design node on a level, wall, ceiling or design surface in the connected Pascal scene.",
         "destructiveHint": "It only creates: it refuses existing ids and never deletes or replaces existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene and the design supplied in the call without accessing the public internet."
+      }
+    },
+    {
+      "name": "place_in_room",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds one item from the item catalog to a room in the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds one new item and does not delete or replace existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
       }
     },
     {
@@ -826,6 +865,19 @@
       }
     },
     {
+      "name": "run_batch",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it runs scene tools that create, change and delete nodes, applied as one step.",
+        "destructiveHint": "Its calls can delete nodes (delete_node), with their descendants.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "save_scene",
       "annotations": {
         "readOnlyHint": false,
@@ -862,6 +914,19 @@
         "readOnlyHint": "It searches the Pascal material library without painting anything or changing a scene.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It reads only the material library built into Pascal and does not access the public internet."
+      }
+    },
+    {
+      "name": "set_checkpoint",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it records a named checkpoint of the connected Pascal scene in the agent's session record.",
+        "destructiveHint": "It only adds a checkpoint to the session record; it changes no scene content and removes or replaces nothing but a checkpoint of the same name.",
+        "openWorldHint": "It operates only on the connected Pascal scene and does not access the public internet."
       }
     },
     {

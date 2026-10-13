@@ -1,6 +1,11 @@
 import { refuseParamsWithoutScript } from '../agent-operations/add-object'
 import { refuse } from '../agent-tools/refusal'
-import { matchScriptSlotsToLibrary, scriptedSize, scriptSource } from '../lib/geometry-script-node'
+import {
+  matchScriptSlotsToLibrary,
+  requireMeasured,
+  scriptedSize,
+  scriptSource,
+} from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
@@ -15,10 +20,9 @@ import {
 } from '../schema'
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
 import type { DoorType, WindowType } from '../schema/nodes/opening-types'
-import { getWallPlaneTop } from '../services/storey'
+import { getWallTop } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
-import { resolveWallTop } from '../systems/wall/wall-top'
 import {
   type DoorStyle,
   doorStyleLook,
@@ -49,11 +53,8 @@ export function resolveWallOpeningCeiling(
 ): number {
   const support = wallSupportForNodes(wall, nodes)
   return (
-    resolveWallTop(
-      wall,
-      getWallPlaneTop(wall, wall.parentId ?? '', nodes as Record<string, AnyNode>),
-      support.elevation,
-    ) - support.elevation
+    getWallTop(wall, wall.parentId ?? '', nodes as Record<string, AnyNode>, support.elevation) -
+    support.elevation
   )
 }
 
@@ -103,7 +104,7 @@ export function findWallChildOverlap(
   clampedY: number,
   width: number,
   height: number,
-  ignoreId?: string,
+  ignoreId?: string | readonly string[],
 ): AnyNode | null {
   const wallNode = nodes[wallId] as WallNode | undefined
   if (!wallNode) return null
@@ -113,7 +114,7 @@ export function findWallChildOverlap(
   const newRight = clampedX + width / 2
 
   for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
-    if (childId === ignoreId) continue
+    if (typeof ignoreId === 'string' ? childId === ignoreId : ignoreId?.includes(childId)) continue
     const child = nodes[childId]
     if (!child || child.metadata.isTransient) continue
 
@@ -160,7 +161,7 @@ export function hasWallChildOverlap(
   clampedY: number,
   width: number,
   height: number,
-  ignoreId?: string,
+  ignoreId?: string | readonly string[],
 ): boolean {
   if (!nodes[wallId]) return true
   return findWallChildOverlap(wallId, nodes, clampedX, clampedY, width, height, ignoreId) !== null
@@ -199,12 +200,28 @@ export type WallOpeningInput = {
 
 const equalRatios = (count: number) => Array.from({ length: count }, () => 1 / count)
 
+/** A window's size when none is given. Its sill is not a number: see `centredWindowSill`. */
+export const DEFAULT_WINDOW = { width: 1.5, height: 1.5 } as const
+
 const DEFAULTS = {
   door: { width: 0.9, height: 2.1 },
-  window: { width: 1.5, height: 1.5, sillHeight: 0.9 },
+  window: DEFAULT_WINDOW,
 } as const
 
 const metres = (value: number) => `${value.toFixed(2)} m`
+
+/**
+ * The sill that centres a window of `height` vertically on the lowest of `walls`, or 0 when it is
+ * taller than they are. What a window with no sill given takes, on every agent surface.
+ */
+export function centredWindowSill(
+  walls: readonly WallNode[],
+  height: number,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+): number {
+  const ceiling = Math.min(...walls.map((wall) => resolveWallOpeningCeiling(wall, nodes)))
+  return Math.max(0, (ceiling - height) / 2)
+}
 
 /**
  * Plan a door or window on a wall with the editor's rules, or refuse with a code: the one
@@ -282,6 +299,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   const { compiled } = input
   if (compiled && compiled.mount !== 'wall')
     refuse('wrong_mount', `A ${kind}'s script uses mount 'wall'.`, { mount: compiled.mount })
+  if (compiled) requireMeasured(compiled, { label: `A ${kind}`, tool: `add_${kind}` })
   const [scriptedWidth, scriptedHeight] = compiled ? scriptedSize(compiled.manifest) : []
   const width = scriptedWidth ?? input.width ?? DEFAULTS[kind].width
   const height = scriptedHeight ?? input.height ?? DEFAULTS[kind].height
@@ -294,8 +312,14 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     )
 
   const rawX = along * wallLength
-  const sillHeight = input.sillHeight ?? DEFAULTS.window.sillHeight
-  const rawY = kind === 'door' ? height / 2 : sillHeight + height / 2
+  // A window with no sill given is centred on its wall, taller than the wall or not: the clamp
+  // below stands one that is too tall on the floor and reports it clamped.
+  const rawY =
+    kind === 'door'
+      ? height / 2
+      : input.sillHeight === undefined
+        ? resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) / 2
+        : input.sillHeight + height / 2
   const { clampedX, clampedY } =
     kind === 'door'
       ? clampDoorToWall(wall, rawX, width, height)

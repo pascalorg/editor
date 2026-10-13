@@ -14,9 +14,8 @@ import {
   findLevelBelowId,
   getLevelElevations,
   getWallCoveringSlabUnderside,
-  getWallPlaneTop,
+  getWallTop,
 } from '../services/storey'
-import { resolveWallTop } from '../systems/wall/wall-top'
 import {
   automaticFloorHeight,
   floorPlateAtGroundContact,
@@ -518,11 +517,7 @@ export function floorIntentConflicts(
         getOpeningFloorTarget(host, opening, graph) +
         opening.position[1] +
         opening.height / 2 -
-        resolveWallTop(
-          host,
-          getWallPlaneTop(host, host.parentId!, graph),
-          wallSupportForNodes(host, graph).elevation,
-        )
+        getWallTop(host, host.parentId!, graph, wallSupportForNodes(host, graph).elevation)
       )
     }
     const after = excess(draft, node)
@@ -551,11 +546,8 @@ export function floorIntentConflicts(
     )
       continue
     const excess = (graph: Readonly<Record<string, AnyNode>>, wall: typeof node) =>
-      resolveWallTop(
-        wall,
-        getWallPlaneTop(wall, wall.parentId!, graph),
-        wallSupportForNodes(wall, graph).elevation,
-      ) - (getWallCoveringSlabUnderside(wall, wall.parentId!, graph) ?? Infinity)
+      getWallTop(wall, wall.parentId!, graph, wallSupportForNodes(wall, graph).elevation) -
+      (getWallCoveringSlabUnderside(wall, wall.parentId!, graph) ?? Infinity)
     const after = excess(draft, node)
     const previous = nodes[node.id]
     const before = previous?.type === 'wall' ? excess(nodes, previous) : -Infinity

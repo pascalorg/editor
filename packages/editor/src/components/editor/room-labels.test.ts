@@ -330,6 +330,34 @@ describe('applying placements', () => {
     expect(has(again.elements.get('far'), 'roomLabelHidden')).toBe(false)
   })
 
+  // A browser's setTimeout and clearTimeout throw "Illegal invocation" when called as methods of
+  // another object, which is what a default stored on the placer and called as `this.schedule()` did.
+  test('the default timers are called as functions, not as methods of the placer', () => {
+    const real = { set: globalThis.setTimeout, clear: globalThis.clearTimeout }
+    const window = (name: string, call: (...args: never[]) => unknown) =>
+      function (this: unknown, ...args: never[]) {
+        if (this !== undefined && this !== globalThis) {
+          throw new TypeError(`Failed to execute '${name}' on 'Window': Illegal invocation`)
+        }
+        return call(...args)
+      }
+    globalThis.setTimeout = window('setTimeout', real.set as never) as unknown as typeof setTimeout
+    globalThis.clearTimeout = window(
+      'clearTimeout',
+      real.clear as never,
+    ) as unknown as typeof clearTimeout
+    try {
+      const element = { dataset: {}, style: { translate: '' } } as unknown as HTMLElement
+      const placer = new PillPlacer(new Map([['far', element]]), () => {})
+      placer.apply(new Map<string, PillPlacement>([['far', { mode: 'hidden', dy: 0 }]]), 180)
+      placer.apply(new Map<string, PillPlacement>([['far', full()]]), 180)
+      expect('roomLabelHidden' in element.dataset).toBe(false)
+    } finally {
+      globalThis.setTimeout = real.set
+      globalThis.clearTimeout = real.clear
+    }
+  })
+
   test('hidden pills can refresh their text measurements without becoming visible', () => {
     const { elements, timers, placer } = setup()
     placer.apply(new Map<string, PillPlacement>([['far', { mode: 'hidden', dy: 0 }]]), 180)

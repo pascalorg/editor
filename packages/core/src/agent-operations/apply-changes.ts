@@ -5,6 +5,16 @@ const childrenOf = (node: AnyNode | undefined): string[] | null =>
   node && 'children' in node && Array.isArray(node.children) ? (node.children as string[]) : null
 
 /**
+ * A node with a patch applied. A field the patch sets to `undefined` is removed, as the store's
+ * updateNode removes it: optional fields encode a mode by their absence.
+ */
+function patched(node: AnyNode, data: Partial<AnyNode>): AnyNode {
+  const merged: Record<string, unknown> = { ...node, ...data }
+  for (const [key, value] of Object.entries(data)) if (value === undefined) delete merged[key]
+  return merged as AnyNode
+}
+
+/**
  * The scene after an operation's changes, without a store: for checks and previews. Same order as
  * the store's applyNodeChanges — updates, creates, then deletes — so an opening moved off a wall
  * being replaced is no longer among that wall's children when it goes.
@@ -30,7 +40,7 @@ export function applySceneChanges(
       detach(current.parentId, id)
       attach(data.parentId, id)
     }
-    next[id] = { ...current, ...data } as AnyNode
+    next[id] = patched(current, data)
   }
   for (const { node, parentId } of changes?.create ?? []) {
     next[node.id] = parentId ? ({ ...node, parentId } as AnyNode) : node
@@ -74,7 +84,7 @@ export function mergeSceneChanges(
       const entry = created.get(id)
       if (entry)
         created.set(id, {
-          node: { ...entry.node, ...data } as AnyNode,
+          node: patched(entry.node, data),
           parentId: (data.parentId as string | undefined) ?? entry.parentId,
         })
       else updated.set(id, { ...updated.get(id), ...data } as Partial<AnyNode>)
@@ -95,5 +105,6 @@ export function mergeSceneChanges(
     update: [...updated].map(([id, data]) => ({ id, data })),
     delete: [...deleted],
     collections,
+    ...(materials.size ? { materials: [...materials.values()] } : {}),
   }
 }

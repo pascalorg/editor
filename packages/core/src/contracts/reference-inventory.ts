@@ -80,6 +80,7 @@ const MATERIAL_FIELDS = [
   'material',
   'edgeMaterial',
   'exteriorMaterial',
+  'fasciaMaterial',
   'glassMaterial',
   'interiorMaterial',
   'panelMaterial',
@@ -191,6 +192,14 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     dependents: ['roofFace', 'side'],
     remaps: CLONES,
     note: 'Roof accessories, and doors/windows/items on a segment wall face.',
+  }),
+  row({
+    kind: 'window',
+    path: 'corner.partnerId',
+    ...policy('node', 'connection', 'drop', 'strip'),
+    targetKinds: ['window'],
+    remaps: ['clone-scene-graph'],
+    note: "A corner window's other side (L65). The whole-graph clone remaps it; a level or a selection copied otherwise renders its pair as two plain windows until wrapped again.",
   }),
   row({
     kind: 'window',
@@ -896,6 +905,11 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     ...policy('source', 'content', 'freeze', 'strip'),
     note: 'Import provenance: the source element ids an importer recorded (the /next converter writes them); find_nodes filters on them.',
   }),
+  meta('balcony.id', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    targetKinds: ['slab'],
+    note: 'The deck a balcony railing or deck belongs to.',
+  }),
 ]
 
 const described = (reason: string, paths: readonly string[]) =>
@@ -1006,6 +1020,15 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'title',
   ]),
   ...described('An authored object: what it stands in for, as add_object was told.', ['reason']),
+  ...described('Balcony state: a snapshot, flag or label; names nothing.', [
+    'balcony.options',
+    'balcony.role',
+    'balcony.source',
+    'balcony.guardBoundaryIndices',
+    'balcony.hiddenByStyle',
+    'balcony.options.depth',
+    'balcony.options.railing',
+  ]),
 ]
 
 const bare = (path: string) => path.replace(/^metadata\./, '').replace(/\[\]/g, '')

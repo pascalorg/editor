@@ -430,6 +430,20 @@ function outwardOf(opening: AnyNode & { rotation?: number[] }, wall: WallNode, y
 }
 
 /**
+ * Which way a door or a window faces, outward, as a unit vector in the site's plan (x, z): what a
+ * view of it is taken from, and what a camera that follows the build looks at it along. Null for
+ * anything that is not an opening in a wall.
+ */
+export function sceneViewFacing(
+  nodes: Readonly<Record<string, AnyNode>>,
+  id: string,
+): [number, number] | null {
+  const opening = openingOf(nodes, nodes[id])
+  if (!opening) return null
+  return outwardOf(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
+}
+
+/**
  * Where a building stands on its site. What is under a building (levels, walls, openings, roofs)
  * is drawn in the building's own frame, which the editor puts at the building's position and yaw:
  * a view planned in that frame alone looks at the site's origin, not at the building.

@@ -7,7 +7,6 @@ import {
   add,
   diffuseColor,
   mix,
-  mrt,
   normalView,
   normalWorldGeometry,
   oscSine,
@@ -32,11 +31,12 @@ import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { createEdgeDepthSampler, inkedEdges } from '../../lib/ink-edges'
 import { refreshIsolation } from '../../lib/isolation'
 import { LayerPassIndex, LayerPassNode } from '../../lib/layer-pass'
-import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
+import { OVERLAY_LAYER, SCENE_LAYER, scenePassLayers, ZONE_LAYER } from '../../lib/layers'
 import { isLiveFrameHeld } from '../../lib/live-frame-hold'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { PostProcessingResources } from '../../lib/post-processing-resources'
+import { scenePassMrt } from '../../lib/scene-pass-mrt'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
@@ -259,13 +259,10 @@ const PostProcessingPasses = ({
   // picking), so without this the gizmos/handles/tool previews land in the
   // depth+normal MRT and get inked / AO'd as if they were geometry. The grid is
   // kept in here (not the overlay pass) so scene geometry depth-occludes it; it's
-  // a flat, depth-non-writing plane so the ink never picks it up.
-  const sceneOnlyLayers = useMemo(() => {
-    const l = new Layers()
-    l.set(SCENE_LAYER)
-    l.enable(GRID_LAYER)
-    return l
-  }, [])
+  // a flat, depth-non-writing plane. The dust shares the layer and writes alpha 0 to
+  // the normal and diffuse attachments, which `scenePassMrt` blends, so the ink
+  // never sees its quads.
+  const sceneOnlyLayers = useMemo(scenePassLayers, [])
   // Editor overlays render in their own pass, composited on top after the ink
   // and outlines so they read as crisp UI rather than scene geometry.
   const overlayLayers = useMemo(() => {
@@ -273,7 +270,10 @@ const PostProcessingPasses = ({
     l.set(OVERLAY_LAYER)
     return l
   }, [])
-  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const hoverMode = useViewer((s) => s.hoverHighlightMode)
+  // Elements a chat chip points at draw in the `point` style whatever the editor's hover mode is.
+  const hasPointedIds = useViewer((s) => s.pointedIds.length > 0)
+  const hoverHighlightMode = hasPointedIds ? 'point' : hoverMode
   const hoverVisibleColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.visibleColor)), [])
   const hoverHiddenColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.hiddenColor)), [])
   const hoverStrength = useMemo(() => uniform(DEFAULT_HOVER_STYLE.strength), [])
@@ -470,7 +470,7 @@ const PostProcessingPasses = ({
       let scenePassNormal: any = null
       if (needsNormalMRT) {
         scenePass.setMRT(
-          mrt({
+          scenePassMrt({
             output,
             diffuseColor,
             normal: packNormalToRGB(normalView),

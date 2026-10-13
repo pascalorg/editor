@@ -97,7 +97,13 @@ import {
   type FirstPersonColliderWorld,
   type FirstPersonSpawn,
 } from './first-person/build-collider-world'
-import { mechanismHudInteract, mechanismTargetIds } from './first-person/mechanism-targets'
+import {
+  hasNativeLeaf,
+  mechanismHudInteract,
+  mechanismTargetIds,
+  nativeOpeningIds,
+  watchScriptedDoors,
+} from './first-person/mechanism-targets'
 
 const CAMERA_EYE_OFFSET = 0.45
 const LOOK_SENSITIVITY = 0.002
@@ -838,6 +844,7 @@ export const FirstPersonControls = () => {
       const node = nodes[doorId as AnyNodeId]
       if (node?.type !== 'door') continue
       if (node.openingKind === 'opening') continue
+      if (!hasNativeLeaf(node)) continue
       if (node.segments.every((segment) => segment.type === 'empty')) continue
 
       const object = sceneRegistry.nodes.get(doorId)
@@ -936,6 +943,7 @@ export const FirstPersonControls = () => {
       const node = nodes[windowId as AnyNodeId]
       if (node?.type !== 'window') continue
       if (node.openingKind === 'opening') continue
+      if (!hasNativeLeaf(node)) continue
       if (!isOperableWindowType(node.windowType)) continue
 
       const object = sceneRegistry.nodes.get(windowId)
@@ -1082,9 +1090,9 @@ export const FirstPersonControls = () => {
         closestDistance = hit.distance
       }
     }
-    // Doors and windows have their own walkthrough targets (resolveInteractable*Id).
-    for (const rawId of sceneRegistry.byType.door ?? []) covered.add(rawId)
-    for (const rawId of sceneRegistry.byType.window ?? []) covered.add(rawId)
+    // Doors and windows have their own walkthrough targets (resolveInteractable*Id), except those
+    // built from a script: their clips run through the mechanism target below.
+    for (const id of nativeOpeningIds()) covered.add(id)
     for (const id of mechanismTargetIds(covered)) {
       const object = sceneRegistry.nodes.get(id)
       const hit = object && proceduralInteractionRaycaster.intersectObject(object, true)[0]
@@ -1298,9 +1306,12 @@ export const FirstPersonControls = () => {
     if (isDroneMode) return
     emitter.on('door:animation-completed', rebuildColliderWorld)
     emitter.on('window:animation-completed', rebuildColliderWorld)
+    // A door built from a script opens by its model's clip, which reports no animation end.
+    const stopWatching = watchScriptedDoors(rebuildColliderWorld)
     return () => {
       emitter.off('door:animation-completed', rebuildColliderWorld)
       emitter.off('window:animation-completed', rebuildColliderWorld)
+      stopWatching()
     }
   }, [isDroneMode, rebuildColliderWorld])
 

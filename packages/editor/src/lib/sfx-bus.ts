@@ -92,6 +92,7 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:terrain-sculpt-start', handleTerrainSculptStart)
   sfxEmitter.on('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
   unsubscribeAudio = useAudio.subscribe(updateSFXVolumes)
+  updateSFXVolumes()
 }
 
 export function disposeSFXBus() {

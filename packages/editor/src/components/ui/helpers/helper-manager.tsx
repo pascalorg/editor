@@ -6,6 +6,8 @@ import {
   floorPlacedCollides,
   nodeRegistry,
   type TerrainVerb,
+  cornerHintRows,
+  useCornerSnapHint,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -309,6 +311,7 @@ export function HelperManager() {
   const openingShape = useOpeningDraft((s) => (s.host ? s.shape : null))
   const terraceShape = useTerraceDraft((s) => (s.host ? s.shape : null))
   const movingNode = useMovingNode()
+  const cornerHint = useCornerSnapHint((s) => s.hint)
   // A tool whose kind gives placement notices: its transient draft is the node in hand.
   const toolNotices = !!(tool && nodeRegistry.get(tool)?.placementNotice)
   const toolDraftId = useScene((s) => (toolNotices ? transientDraftId(s.nodes) : null))
@@ -560,6 +563,10 @@ export function HelperManager() {
         continuationContext={movingContinuationContext}
         notice={placementNotice?.line}
         showEsc
+        extraHints={movingNode.type === 'window' ? cornerHintRows(cornerHint) : []}
+        replacesPlace={
+          movingNode.type === 'window' && (cornerHint === 'join' || cornerHint === 'new')
+        }
         showForce={collisionValidatesDrop}
         snapContext={snapContext}
         title={movingTitle}

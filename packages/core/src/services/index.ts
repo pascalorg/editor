@@ -120,6 +120,7 @@ export {
   getLevelFloorToFloorHeight,
   getStoredLevelHeight,
   getWallPlaneTop,
+  getWallTop,
   type LevelElevation,
 } from './storey'
 export {

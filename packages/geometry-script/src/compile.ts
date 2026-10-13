@@ -151,6 +151,59 @@ function assertFinite(geometry: THREE.BufferGeometry, label: string) {
   }
 }
 
+const AXES = ['x', 'y', 'z'] as const
+
+/** What a transform component holds when it is no finite number: "NaN", "a MeshStandardMaterial". */
+function describeValue(value: unknown): string {
+  if (typeof value === 'number') return String(value)
+  if (value && typeof value === 'object') return `a ${value.constructor?.name ?? 'object'}`
+  return String(value)
+}
+
+/** The first position, rotation or scale component of this object that is not a finite number. */
+function transformFault(object: THREE.Object3D): string | null {
+  const vectors = { position: object.position, rotation: object.rotation, scale: object.scale }
+  for (const [field, vector] of Object.entries(vectors)) {
+    for (const axis of AXES) {
+      const value: unknown = vector[axis]
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return `${field}.${axis} = ${describeValue(value)}`
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Why a box of visible geometry has no finite corner. `Box3.isEmpty()` is false for a NaN corner,
+ * so a mesh at a position that is not a number (a helper called one argument short passes it a
+ * material) would otherwise build NaN bounds, and from them an item that fails its own schema.
+ */
+function unmeasurable(root: THREE.Object3D): Error {
+  const meshes: THREE.Mesh[] = []
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (mesh.isMesh && !isHelper(mesh)) meshes.push(mesh)
+  })
+  for (const mesh of meshes) assertFinite(mesh.geometry, mesh.name || 'A mesh')
+  for (const [index, mesh] of meshes.entries()) {
+    for (let object: THREE.Object3D | null = mesh; object; object = object.parent) {
+      const fault = transformFault(object)
+      if (!fault) continue
+      const place = `mesh ${index + 1} of ${meshes.length}`
+      const who = object.name
+        ? `"${object.name}"`
+        : object === mesh
+          ? `an unnamed ${mesh.geometry.type} mesh (${place})`
+          : `an unnamed ${object.type.toLowerCase()} holding ${place}`
+      return new Error(
+        `The object cannot be measured: ${who} has ${fault}, which is not a finite number. Positions, rotations and scales take numbers (metres, radians); a helper called one argument short passes the next value, a material for instance, in its place.`,
+      )
+    }
+  }
+  return new Error('The object cannot be measured: its size is not a finite number.')
+}
+
 /** Bounds of the visible geometry: helpers (cutout, collider) and lights do not count. */
 function visibleBounds(root: THREE.Object3D): THREE.Box3 {
   const box = new THREE.Box3()
@@ -171,6 +224,7 @@ function visibleBounds(root: THREE.Object3D): THREE.Box3 {
 
 function originFor(box: THREE.Box3, mount: GeometryScriptMount): THREE.Vector3 {
   const center = box.getCenter(new THREE.Vector3())
+  if (mount === 'ceiling') return new THREE.Vector3(center.x, box.max.y, center.z)
   if (mount === 'wall-side') return new THREE.Vector3(center.x, box.min.y, box.min.z)
   return new THREE.Vector3(center.x, box.min.y, center.z)
 }
@@ -790,6 +844,9 @@ export async function finishBuild({
   root.add(built)
   const box = visibleBounds(root)
   if (box.isEmpty()) throw new Error('build() returned no visible meshes')
+  if (![box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z].every(Number.isFinite)) {
+    throw unmeasurable(root)
+  }
   const size = box.getSize(new THREE.Vector3())
   if (Math.max(size.x, size.y, size.z) > GEOMETRY_SCRIPT_LIMITS.extent) {
     throw new Error(

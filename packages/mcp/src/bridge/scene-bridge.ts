@@ -33,6 +33,7 @@ import {
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
 import useScene from '@pascal-app/core/store'
 import type { SceneMeta } from '../storage/types'
+import { InMemoryAgentSession } from './agent-session'
 
 export type ValidationError = { nodeId: string; path: string; message: string }
 export type ValidationResult = {
@@ -68,6 +69,9 @@ export class SceneBridge {
   readonly supportsMaterialUpserts = true
   private activeScene: ActiveSceneMeta | null = null
 
+  /** What the agent's session has kept: its named moments, and what it made. */
+  readonly agentSession = new InMemoryAgentSession()
+
   /**
    * Scene identity currently bound to this bridge. MCP tools use this to know
    * which editor scene should receive live events after mutations.
@@ -94,6 +98,7 @@ export class SceneBridge {
 
   /** Load initial state; if empty, creates default Site → Building → Level. */
   loadDefault(): void {
+    this.agentSession.replace()
     useScene.getState().loadScene()
   }
 
@@ -103,6 +108,7 @@ export class SceneBridge {
     rootNodeIds: AnyNodeId[],
     extra?: SetSceneExtra,
   ): void {
+    this.agentSession.replace()
     useScene.getState().setScene(nodes, rootNodeIds, extra)
   }
 
@@ -408,6 +414,7 @@ export class SceneBridge {
   } {
     const state = useScene.getState()
     const nodes = state.nodes
+    if (state.readOnly) throw new Error('scene_read_only')
 
     // Track synthesized state as we dry-run so later ops can reference
     // earlier-created ids and reflect earlier-deleted ids.

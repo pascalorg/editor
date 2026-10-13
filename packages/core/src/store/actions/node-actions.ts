@@ -1068,6 +1068,11 @@ function refreshDefaultGuttersForRoofIds(
 let pendingRafId: number | null = null
 let pendingUpdates: Set<AnyNodeId> = new Set()
 
+/** Authored updates whose deferred dirty intent has not reached render systems yet. */
+export function getPendingNodeUpdateCount(): number {
+  return pendingUpdates.size
+}
+
 function buildWallMergePlans(
   nodes: Record<AnyNodeId, AnyNode>,
   idsToDelete: AnyNodeId[],

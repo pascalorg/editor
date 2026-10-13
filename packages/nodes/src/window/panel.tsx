@@ -3,20 +3,25 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  cornerPair,
   scriptImages,
   useInteractive,
   useScene,
   type WindowNode,
 } from '@pascal-app/core'
 import {
+  cornerPartnerUpdates,
+  cornerSideWidth,
   getWindowStyleOverrides,
   SHAPED_WINDOW_TYPES,
   SILLLESS_WINDOW_TYPES,
+  unwrapCorner,
   WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
   windowStylesOf,
   windowTakesStyle,
   windowTypeChange,
+  wrapCorner,
 } from '@pascal-app/core/building'
 import {
   ActionButton,
@@ -30,6 +35,7 @@ import {
   ToggleControl,
   triggerSFX,
   useEditor,
+  writeWindowChanges,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
@@ -78,6 +84,19 @@ function normalizeWindowCornerRadii(
   return next.map((radius) => radius * scale) as [number, number, number, number]
 }
 
+/** A change to one side of a corner window that both share, made on its partner too (L65). */
+function syncCornerPartner(windowId: string, updates: Partial<WindowNode>) {
+  const scene = useScene.getState()
+  const partnerUpdate = cornerPartnerUpdates(scene.nodes, windowId, updates)
+  const partnerId = (scene.nodes[windowId as AnyNodeId] as WindowNode | undefined)?.corner
+    ?.partnerId
+  if (!partnerUpdate || !partnerId) return
+  scene.updateNode(partnerId as AnyNodeId, partnerUpdate)
+  scene.dirtyNodes.add(partnerId as AnyNodeId)
+  const parentId = scene.nodes[partnerId as AnyNodeId]?.parentId
+  if (parentId) scene.dirtyNodes.add(parentId as AnyNodeId)
+}
+
 export default function WindowPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -118,9 +137,61 @@ export default function WindowPanel() {
       const scene = useScene.getState()
       scene.dirtyNodes.add(selectedId as AnyNodeId)
       if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
+      syncCornerPartner(selectedId, updates)
     },
     [selectedId],
   )
+
+  // A corner window's sides (L65): its partner, and whether this window can wrap its corner.
+  const cornerState = useScene((s) => {
+    const live = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    if (live?.type !== 'window') return 'none'
+    if (cornerPair(s.nodes, live as WindowNode)) return 'paired'
+    // Within 0.30 m of a corner, not only at it: the window waiting there is adopted, or a partner made.
+    try {
+      wrapCorner(s.nodes, live.id)
+      return 'wrappable'
+    } catch {
+      return 'none'
+    }
+  })
+  const cornerPartner = useScene((s) => {
+    const live = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    const partnerId = live?.type === 'window' ? (live as WindowNode).corner?.partnerId : undefined
+    const partner = partnerId ? s.nodes[partnerId as AnyNodeId] : undefined
+    return partner?.type === 'window' ? (partner as WindowNode) : undefined
+  })
+  const corner =
+    cornerState === 'paired' && cornerPartner
+      ? { paired: true as const, partner: cornerPartner }
+      : cornerState === 'wrappable'
+        ? { paired: false as const }
+        : null
+  const writeWindows = (updates: Record<string, Partial<WindowNode>>) => {
+    const scene = useScene.getState()
+    for (const [id, update] of Object.entries(updates)) {
+      scene.updateNode(id as AnyNodeId, update)
+      scene.dirtyNodes.add(id as AnyNodeId)
+      const parentId = scene.nodes[id as AnyNodeId]?.parentId
+      if (parentId) scene.dirtyNodes.add(parentId as AnyNodeId)
+    }
+  }
+  const wrapTheCorner = () => {
+    if (!selectedId) return
+    const { create, updates } = wrapCorner(useScene.getState().nodes, selectedId)
+    writeWindowChanges({ create, updates, remove: [] })
+  }
+  const setCornerWidth = (windowId: string, width: number) => {
+    const update = cornerSideWidth(useScene.getState().nodes, windowId, width)
+    if (update) writeWindows({ [windowId]: update })
+  }
+  const setCornerPost = (post: 'none' | 'post') => {
+    if (!(selectedId && corner?.paired && node?.corner)) return
+    writeWindows({
+      [selectedId]: { corner: { ...node.corner, post } },
+      [corner.partner.id]: { corner: { ...corner.partner.corner!, post } },
+    })
+  }
 
   const previewWindowUpdate = <K extends keyof WindowNode>(key: K, value: WindowNode[K]) =>
     preview?.preview({ [key]: value } as Partial<WindowNode>)
@@ -438,19 +509,80 @@ export default function WindowPanel() {
         </PanelSection>
       )}
 
+      {corner && (
+        <PanelSection title="Corner">
+          {corner.paired ? (
+            <div className="flex flex-col gap-2 px-1 pb-1">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">
+                  Wraps the corner with {corner.partner.name || 'its partner'}
+                </span>
+                <button
+                  className="rounded-full border border-border/50 px-3 py-1 text-xs hover:bg-[#3e3e3e]"
+                  onClick={() =>
+                    selectedId && writeWindows(unwrapCorner(useScene.getState().nodes, selectedId))
+                  }
+                  type="button"
+                >
+                  Unwrap
+                </button>
+              </div>
+              <SliderControl
+                label="This side"
+                min={0.1}
+                onChange={(v) => selectedId && setCornerWidth(selectedId, v)}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={node.width}
+              />
+              <SliderControl
+                label="Other side"
+                min={0.1}
+                onChange={(v) => setCornerWidth(corner.partner.id, v)}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={corner.partner.width}
+              />
+              <SegmentedControl
+                onChange={setCornerPost}
+                options={[
+                  { label: 'None', value: 'none' },
+                  { label: 'Post', value: 'post' },
+                ]}
+                value={node.corner?.post ?? 'none'}
+              />
+            </div>
+          ) : (
+            <div className="px-1 pb-1">
+              <button
+                className="w-full rounded-full border border-border/50 px-3 py-2 text-xs hover:bg-[#3e3e3e]"
+                onClick={wrapTheCorner}
+                type="button"
+              >
+                Wrap the corner
+              </button>
+            </div>
+          )}
+        </PanelSection>
+      )}
+
       <PanelSection title="Position">
-        <SliderControl
-          label={
-            <>
-              X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
-            </>
-          }
-          onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
-          precision={2}
-          step={0.1}
-          unit="m"
-          value={node.position[0]}
-        />
+        {!corner?.paired && (
+          <SliderControl
+            label={
+              <>
+                X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              </>
+            }
+            onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
+            precision={2}
+            step={0.1}
+            unit="m"
+            value={node.position[0]}
+          />
+        )}
         <SliderControl
           label={
             <>
@@ -484,26 +616,32 @@ export default function WindowPanel() {
               Size is limited to the wall, including clearance for the opening frame.
             </p>
           )}
-          <SliderControl
-            label="Width"
-            max={limits?.width}
-            min={0.01}
-            onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
-            onCommit={(v) => preview?.commit(getDimensionUpdates({ width: v }))}
-            onCancel={() => preview?.cancel()}
-            previewWhileTyping
-            precision={2}
-            restoreOnCommit={false}
-            step={0.01}
-            unit="m"
-            value={node.width}
-          />
+          {!corner?.paired && (
+            <SliderControl
+              label="Width"
+              max={limits?.width}
+              min={0.01}
+              onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
+              onCommit={(v) => preview?.commit(getDimensionUpdates({ width: v }))}
+              onCancel={() => preview?.cancel()}
+              previewWhileTyping
+              precision={2}
+              restoreOnCommit={false}
+              step={0.01}
+              unit="m"
+              value={node.width}
+            />
+          )}
           <SliderControl
             label="Height"
             max={limits?.height}
             min={0.01}
             onChange={(v) => preview?.preview(getDimensionUpdates({ height: v }))}
-            onCommit={(v) => preview?.commit(getDimensionUpdates({ height: v }))}
+            onCommit={(v) => {
+              const updates = getDimensionUpdates({ height: v })
+              preview?.commit(updates)
+              if (selectedId) syncCornerPartner(selectedId, updates)
+            }}
             onCancel={() => preview?.cancel()}
             previewWhileTyping
             precision={2}

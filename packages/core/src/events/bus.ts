@@ -1,6 +1,7 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
+import type { PointAskPin, PointAskStatus } from '../agent-operations/point-context'
 import type { SceneViewInterior } from '../agent-operations/scene-view'
 import type {
   BlockNode,
@@ -381,6 +382,13 @@ export interface RoomPresetCreateEvent {
   zoneId: ZoneNode['id']
 }
 
+type PointAskEvents = {
+  /** The chat's word on an ask's turn, for its pin. */
+  'point-ask:status': PointAskStatus
+  /** The pin tells the chat to light or open the ask's turn. */
+  'point-ask:pin': PointAskPin
+}
+
 type RoomPresetEvents = {
   'room-preset:create': RoomPresetCreateEvent
 }
@@ -412,6 +420,7 @@ type EditorEvents = GridEvents &
   ThumbnailEvents &
   SnapshotEvents &
   AIChatEvents &
+  PointAskEvents &
   RoomPresetEvents &
   SelectionEvents
 

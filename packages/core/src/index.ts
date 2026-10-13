@@ -1,3 +1,13 @@
+export type {
+  PointAskPin,
+  PointAskStatus,
+  PointAskSubmit,
+  PointAskSubmitResult,
+  PointCamera,
+  PointContext,
+  PointImage,
+  PointTarget,
+} from './agent-operations/point-context'
 export * from './commands/structure'
 export type {
   BlockEvent,
@@ -130,6 +140,23 @@ export {
   computeCeilingSurfaceCells,
   parseCeilingRegionRole,
 } from './lib/ceiling-surface'
+export {
+  CORNER_REACH_M,
+  cornerPair,
+  windowCornerEnd,
+  windowNearCornerEnd,
+} from './lib/corner-pair'
+export {
+  CORNER_SNAP_ENTER_M,
+  CORNER_SNAP_EXIT_M,
+  type CornerBlock,
+  type CornerBlockReason,
+  type CornerSnap,
+  cornerBlock,
+  cornerSnap,
+  evaluateCorner,
+} from './lib/corner-snap'
+export { criticallyDamped } from './lib/critically-damped'
 export { isCutterName, resolveCutterHost } from './lib/cutter-host'
 export {
   clampDoorOperationState,
@@ -256,6 +283,13 @@ export {
   roomFinishRole,
 } from './lib/plate-surface'
 export {
+  hasPointAskHandler,
+  type PointAskHandler,
+  registerPointAskHandler,
+  submitPointAsk,
+  useHasPointAskHandler,
+} from './lib/point-ask'
+export {
   area,
   containsPoint,
   difference,
@@ -346,6 +380,7 @@ export {
   slotLabelFromId,
   slotPaintMaterial,
 } from './lib/slots'
+export { createSnapEaser, prefersReducedMotion, SNAP_EASE_MS } from './lib/snap-ease'
 export {
   createRoomTopologyIndex,
   detectSpacesForLevel,
@@ -503,6 +538,7 @@ export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   collectionIdsOf,
+  getPendingNodeUpdateCount,
   joinCollections,
   type NodeDeletionPlan,
   type NodeDeletionScene,
@@ -521,16 +557,20 @@ export {
   isDerivedNode,
 } from './store/derived-node-guard'
 export {
+  acquireSceneCommitAuthor,
   acquireSceneHistoryPause,
   activeSceneCommitNodeIds,
   beginSceneHistoryPauseSession,
   getSceneHistoryPauseDepth,
   isApplyingRemoteSceneChange,
+  isRestoringSceneHistory,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
+  runAsSceneCommitAuthor,
   runAsSingleSceneHistoryStep,
   type SceneCommit,
+  type SceneCommitAuthor,
   type SceneCommitListener,
   type SceneCommitOrigin,
   type SceneHistoryPauseSession,
@@ -554,6 +594,20 @@ export {
   withSceneNodeBuildImages,
   writeSceneNodeField,
 } from './store/scene-annotations'
+export {
+  beginScenePreview,
+  endScenePreview,
+  isScenePreviewing,
+  type ScenePreview,
+  subscribeScenePreview,
+} from './store/scene-preview'
+export {
+  CORNER_BLOCK_NOTES,
+  type CornerHintRow,
+  type CornerSnapHint,
+  cornerHintRows,
+  useCornerSnapHint,
+} from './store/use-corner-snap-hint'
 export {
   type ControlValue,
   type DoorAnimationState,
@@ -902,6 +956,7 @@ export {
   MIN_WALL_HEIGHT,
   resolveWallEffectiveHeight,
   resolveWallTop,
+  wallFollowsStorey,
 } from './systems/wall/wall-top'
 export {
   findOpenWallEnds,
@@ -915,6 +970,7 @@ export {
 } from './systems/wall/wall-topology'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
+export { areSemanticValuesEqual } from './utils/semantic-equal'
 export { isObject } from './utils/types'
 export {
   checkOpeningWithinWall,
