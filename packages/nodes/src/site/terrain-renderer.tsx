@@ -1,8 +1,10 @@
 'use client'
 
 import { type Ring, type SiteNode, terrainFieldOf, useLiveTerrain } from '@pascal-app/core'
+import { SITE_GROUND } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Material } from 'three'
+import { useGroundAsideRef } from './ground-aside'
 import { lotMaskedMaterial } from './lot-mask'
 import { skirtRing } from './terrain-geometry'
 import {
@@ -109,17 +111,28 @@ export const TerrainRenderer = ({
     })
   }, [site.id])
 
+  const groundAsideRef = useGroundAsideRef()
+
   if (!target) return null
 
   return (
     <>
-      <mesh castShadow geometry={target.geometry} material={surfaceMaterial} receiveShadow />
+      <mesh
+        castShadow
+        geometry={target.geometry}
+        material={surfaceMaterial}
+        receiveShadow
+        ref={groundAsideRef}
+        userData={{ [SITE_GROUND]: true }}
+      />
       {target.holeBoundary && (
         <mesh
           castShadow
           geometry={target.holeBoundary.geometry}
           material={surfaceMaterial}
           receiveShadow
+          ref={groundAsideRef}
+          userData={{ [SITE_GROUND]: true }}
         />
       )}
       {/*
@@ -129,7 +142,13 @@ export const TerrainRenderer = ({
         round the lot. `receiveShadow` for the same reason the surface has it — a raised edge
         is lit ground that a building next to it should darken.
       */}
-      <mesh geometry={target.skirt.geometry} material={material} receiveShadow />
+      <mesh
+        geometry={target.skirt.geometry}
+        material={material}
+        receiveShadow
+        ref={groundAsideRef}
+        userData={{ [SITE_GROUND]: true }}
+      />
     </>
   )
 }

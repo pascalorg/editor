@@ -162,6 +162,7 @@ export {
   getStoredLevelHeight,
   getWallPlaneTop,
   getWallTop,
+  isLevelBelowGrade,
   type LevelElevation,
 } from './storey'
 export {

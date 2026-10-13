@@ -132,6 +132,12 @@ type ViewerState = {
    * is not written.
    */
   nodesRevealing: readonly string[]
+  /**
+   * The site's ground is set aside: the active level lies below grade, so its floor is seen, and
+   * clicked, where the ground was. Set by the host's level display beside
+   * `hideLevelsAboveSelection`; never persisted.
+   */
+  groundAside: boolean
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -463,6 +469,7 @@ const useViewer = create<ViewerState>()(
       hideLevelsAboveSelection: false,
       levelsRevealing: [],
       nodesRevealing: [],
+      groundAside: false,
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),

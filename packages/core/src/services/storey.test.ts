@@ -13,6 +13,7 @@ import {
   getLevelElevations,
   getStoredLevelHeight,
   getWallPlaneTop,
+  isLevelBelowGrade,
 } from './storey'
 
 const buildNodes = (list: AnyNode[]): Record<AnyNodeId, AnyNode> =>
@@ -627,5 +628,57 @@ describe('getCeilingMinHeight', () => {
 
   test('an unresolvable level keeps the caller floor', () => {
     expect(getCeilingMinHeight('level_missing', roofStack(), 0.5)).toBe(0.5)
+  })
+})
+
+describe('isLevelBelowGrade', () => {
+  /** A basement and the storey over it, each standing on one slab: the owner's numbers (13 Oct). */
+  const stack = (
+    basement: { baseElevation: number; height: number },
+    slabTop: number,
+    position: [number, number, number] = [0, 0, 0],
+  ) => {
+    const slab = (id: string, parentId: string) =>
+      SlabNode.parse({
+        id,
+        parentId,
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 4],
+        ],
+        elevation: slabTop,
+      })
+    return buildNodes([
+      BuildingNode.parse({ id: 'building_a', children: ['level_b', 'level_g'], position }),
+      level('level_b', -1, { ...basement, parentId: 'building_a', children: ['slab_b'] }),
+      level('level_g', 0, { height: 3, parentId: 'building_a', children: ['slab_g'] }),
+      slab('slab_b', 'level_b'),
+      slab('slab_g', 'level_g'),
+    ])
+  }
+  // The villa: Lower Ground at -3.63 m, 3.4 m tall, on a 0.28 m plate: its floor at -3.35 m.
+  const villa = stack({ baseElevation: -3.63, height: 3.4 }, 0.28)
+  // The Victor: parking at -2.66 m but 2.5 m tall, on 0.05 m slabs: Floor 1 sits at -0.11 m.
+  const victor = stack({ baseElevation: -2.66, height: 2.5 }, 0.05)
+
+  test("the villa's Lower Ground is below grade and the storey over it is not", () => {
+    expect(isLevelBelowGrade(villa, 'level_b')).toBe(true)
+    expect(isLevelBelowGrade(villa, 'level_g')).toBe(false)
+  })
+
+  test("the Victor's parking is below grade; its Floor 1, a few centimetres under the lawn, is not", () => {
+    expect(isLevelBelowGrade(victor, 'level_b')).toBe(true)
+    expect(isLevelBelowGrade(victor, 'level_g')).toBe(false)
+  })
+
+  test("the building's own height on the site lifts its floors", () => {
+    const raised = stack({ baseElevation: -3.63, height: 3.4 }, 0.28, [0, 3.5, 0])
+    expect(isLevelBelowGrade(raised, 'level_b')).toBe(false)
+  })
+
+  test('an id that is no level is not below grade', () => {
+    expect(isLevelBelowGrade(villa, 'level_missing')).toBe(false)
+    expect(isLevelBelowGrade(villa, 'slab_b')).toBe(false)
   })
 })

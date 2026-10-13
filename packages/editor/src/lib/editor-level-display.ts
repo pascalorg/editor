@@ -1,6 +1,7 @@
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import type { CaptureMode } from '../store/use-editor'
+import useEditor, { type CaptureMode } from '../store/use-editor'
+import { useGroundAside } from './ground-aside'
 
 /**
  * Whether the editor shows every level. Preview and the walkthrough show the
@@ -27,9 +28,12 @@ export function showsWholeBuilding(state: {
  *
  * The walkthrough shows the whole building, so the upper levels come back
  * while it is on; Preview hands the display to the viewer's own floor rule
- * (`useViewerFloorDisplay`).
+ * (`useViewerFloorDisplay`). A level below grade sets the ground aside, except
+ * on the site, where the ground is what is being worked on.
  */
 export function useEditorLevelDisplay(showWholeBuilding: boolean) {
+  const sitePhase = useEditor((state) => state.phase === 'site')
+  useGroundAside(!(showWholeBuilding || sitePhase))
   useEffect(() => {
     if (showWholeBuilding) return
     const keepStacked = (mode: string) => {

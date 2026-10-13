@@ -19,7 +19,7 @@ import type {
   WallNode,
 } from '../schema'
 import { getActiveRoofHeight } from '../schema'
-import { getLevelElevations } from '../services/storey'
+import { getLevelElevations, isLevelBelowGrade } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 
 /**
@@ -812,6 +812,17 @@ function cameraPose(
   }
 }
 
+/** A level below grade is seen from inside: from outside, the ground covers it. */
+function belowGradeInterior(
+  nodes: Readonly<Record<string, AnyNode>>,
+  target: AnyNode | undefined,
+): SceneViewInterior | undefined {
+  return target?.type === 'level' &&
+    isLevelBelowGrade(nodes as Record<AnyNodeId, AnyNode>, target.id)
+    ? { levelId: target.id }
+    : undefined
+}
+
 /**
  * The view to render, its size and its light: through a camera given whole (a photo's, at the
  * photo's aspect so the two lay one beside the other, or the person's own, which the host passes
@@ -831,15 +842,17 @@ export function sceneViewPlan(
 } {
   const { camera } = input
   const crop = cropOf(input.photo)
-  const inside = input.interior && sceneViewInterior(nodes, input.interior.levelId)
-  const interior = input.interior && { levelId: input.interior.levelId }
+  const target = input.target ? nodes[input.target] : undefined
+  const interior = input.interior
+    ? { levelId: input.interior.levelId }
+    : belowGradeInterior(nodes, target)
+  const inside = interior && sceneViewInterior(nodes, interior.levelId)
   const lighting = input.lighting === 'current' ? undefined : input.lighting
   const extras = {
     ...(crop ? { crop } : {}),
     ...(interior ? { interior } : {}),
     ...(lighting ? { lighting } : {}),
   }
-  const target = input.target ? nodes[input.target] : undefined
   // An interior view shows this floor alone, without its roofs and ceilings: a target left out of
   // the picture would frame nothing shown.
   if (interior && inside && target) {

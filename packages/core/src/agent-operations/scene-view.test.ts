@@ -235,6 +235,65 @@ describe('a look inside one floor', () => {
   })
 })
 
+/**
+ * The two-storey house over a basement with the owner's villa numbers (13 Oct): the Lower Ground at
+ * -3.63 m, 3.4 m tall, standing on a 0.28 m plate, so its floor lies 3.35 m under the lawn.
+ */
+function houseOverBasement(): Record<string, AnyNode> {
+  const nodes = building()
+  const corners: [number, number][] = [
+    [0, 0],
+    [20, 0],
+    [20, 10],
+    [0, 10],
+  ]
+  const walls = corners.map((start, index) =>
+    WallNode.parse({
+      id: `wall_level_b_${index}`,
+      parentId: 'level_b',
+      start,
+      end: corners[(index + 1) % corners.length],
+    }),
+  )
+  const plate = SlabNode.parse({
+    id: 'slab_b',
+    parentId: 'level_b',
+    polygon: corners,
+    elevation: 0.28,
+  })
+  const basement = LevelNode.parse({
+    id: 'level_b',
+    parentId: 'building_main',
+    level: -1,
+    baseElevation: -3.63,
+    height: 3.4,
+    children: [...walls.map((wall) => wall.id), plate.id],
+  })
+  const house = nodes.building_main as BuildingNode
+  return {
+    ...nodes,
+    building_main: { ...house, children: [basement.id, ...house.children] },
+    ...Object.fromEntries([basement, plate, ...walls].map((node) => [node.id, node])),
+  } as Record<string, AnyNode>
+}
+
+// From outside, the ground covers a floor below it: a picture of that floor looks inside it.
+describe('a floor below grade', () => {
+  test('targeted, it is looked into from above, the whole floor in frame', () => {
+    const nodes = houseOverBasement()
+    const plan = sceneViewPlan(nodes, { target: 'level_b' })
+    expect(plan.interior).toEqual({ levelId: 'level_b' })
+    expect(framesBox(plan.pose, sceneViewBounds(nodes, 'level_b'))).toBe(true)
+    const [x, y, z] = plan.pose.position
+    const [tx, ty, tz] = plan.pose.target
+    expect(Math.atan2(y - ty, Math.hypot(x - tx, z - tz))).toBeCloseTo((55 * Math.PI) / 180, 2)
+  })
+
+  test('a floor at grade, targeted, is still seen from outside', () => {
+    expect(sceneViewPlan(houseOverBasement(), { target: 'level_0' }).interior).toBeUndefined()
+  })
+})
+
 function refusalOf(run: () => unknown): string | undefined {
   try {
     run()

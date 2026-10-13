@@ -22,6 +22,7 @@ import {
   getSceneTheme,
   horizonHazeColor,
   NodeRenderer,
+  SITE_GROUND,
   useImmersiveXRPresentation,
   useNodeEvents,
   useSceneAtmosphere,
@@ -48,6 +49,7 @@ import {
   vec2,
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
+import { useGroundAsideRef } from './ground-aside'
 import {
   buildPatternedRibbon,
   PROPERTY_LINE_PATTERN,
@@ -537,6 +539,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useEffect(() => () => groundGeometry?.dispose(), [groundGeometry])
 
   const handlers = useNodeEvents(node, 'site')
+  const groundAsideRef = useGroundAsideRef()
 
   // Terrain replaces the flat ground fill rather than sitting on top of it: two
   // coplanar ground surfaces z-fight, and the flat one would poke through any
@@ -580,7 +583,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           material={groundMaterial}
           position={[0, -0.05, 0]}
           receiveShadow
+          ref={groundAsideRef}
           rotation={[-Math.PI / 2, 0, 0]}
+          userData={{ [SITE_GROUND]: true }}
         />
       )}
 
@@ -592,8 +597,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
           raycast={noopRaycast}
           receiveShadow
+          ref={groundAsideRef}
           rotation={[-Math.PI / 2, 0, 0]}
-          userData={{ pascalExport: 'strip' }}
+          userData={{ pascalExport: 'strip', [SITE_GROUND]: true }}
         />
       )}
 

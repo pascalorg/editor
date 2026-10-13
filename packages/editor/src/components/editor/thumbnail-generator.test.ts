@@ -1,9 +1,31 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, emitter, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  emitter,
+  getLevelElevations,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { type SceneViewPose, sceneViewPlan } from '@pascal-app/core/agent-operations'
 import { BuildingNode, CeilingNode, LevelNode, WallNode } from '@pascal-app/core/schema'
-import { hideFromScene, SCENE_LAYER, useViewer } from '@pascal-app/viewer'
-import { Group, Layers, Mesh, OrthographicCamera, PerspectiveCamera, Vector2 } from 'three'
+import { hideFromScene, SCENE_LAYER, SITE_GROUND, useViewer } from '@pascal-app/viewer'
+import {
+  Group,
+  Layers,
+  Mesh,
+  type Object3D,
+  OrthographicCamera,
+  PerspectiveCamera,
+  PlaneGeometry,
+  Raycaster,
+  Scene,
+  Vector2,
+  Vector3,
+} from 'three'
 import { CanvasTarget, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
+import victorSeattle from '../../lib/__fixtures__/owner-victor-seattle-parking.json'
+import villaAurelia from '../../lib/__fixtures__/owner-villa-aurelia-basement.json'
 import {
   atCaptureSize,
   capturesOrthographically,
@@ -327,6 +349,100 @@ describe('an interior view of a floor', () => {
     house()
     sceneRegistry.nodes.delete('level_ground')
     expect(() => interiorCutaway('level_ground', () => {})).toThrow('not built yet')
+  })
+})
+
+// The owner's two scenes (13 Oct), trimmed to their levels, slabs and basement walls: the villa's
+// Lower Ground 3.35 m under the lawn, the Victor's parking 2.61 m under it and past its west lot line.
+describe('an interior view of a floor below grade', () => {
+  const owners = [
+    {
+      name: 'the villa Aurelia',
+      nodes: villaAurelia.nodes as unknown as Record<AnyNodeId, AnyNode>,
+      basement: 'level_68jf2zqaukfjof3m',
+      atGrade: 'level_ztimtvrgdzzd6c9f',
+    },
+    {
+      name: 'the Victor Seattle',
+      nodes: victorSeattle.nodes as unknown as Record<AnyNodeId, AnyNode>,
+      basement: 'level_q209tmgwuzcahwzj',
+      atGrade: 'level_wj5tz664u03eolux',
+    },
+  ]
+
+  /**
+   * The scene as the editor holds it: every level's object at its height, a floor in the basement,
+   * and the site's lawn (wider than any frame) with its lot line.
+   */
+  function editorScene(nodes: Record<AnyNodeId, AnyNode>, basement: string) {
+    useScene.setState({ nodes } as never)
+    const scene = new Scene()
+    for (const [levelId, { baseY }] of getLevelElevations(nodes)) {
+      const level = new Group()
+      level.position.y = baseY
+      scene.add(level)
+      sceneRegistry.nodes.set(levelId, level)
+    }
+    const floor = new Mesh(new PlaneGeometry(400, 400).rotateX(-Math.PI / 2))
+    sceneRegistry.nodes.get(basement)?.add(floor)
+    const ground = new Mesh(new PlaneGeometry(400, 400).rotateX(-Math.PI / 2))
+    ground.position.y = -0.05
+    ground.userData[SITE_GROUND] = true
+    const lotLine = new Mesh()
+    const site = new Group().add(ground, lotLine)
+    scene.add(site)
+    sceneRegistry.nodes.set('site_owner', site)
+    sceneRegistry.byType.site?.add('site_owner')
+    return { scene, floor, ground, lotLine }
+  }
+
+  /** The first thing the capture camera draws on the line from its eye to its aim. */
+  function firstSeen(scene: Scene, pose: SceneViewPose): Object3D | undefined {
+    const eye = new Vector3(...pose.position)
+    const ray = new Raycaster(eye, new Vector3(...pose.target).sub(eye).normalize())
+    ray.layers.set(SCENE_LAYER)
+    scene.updateMatrixWorld(true)
+    const drawn = (object: Object3D | null): boolean =>
+      !object || (object.visible && drawn(object.parent))
+    return ray.intersectObject(scene, true).find((hit) => drawn(hit.object))?.object
+  }
+
+  let previousScene: ReturnType<typeof useScene.getState>
+  beforeEach(() => {
+    previousScene = useScene.getState()
+  })
+  afterEach(() => {
+    sceneRegistry.clear()
+    useScene.setState(previousScene, true)
+  })
+
+  for (const owner of owners)
+    test(`the agent's picture of ${owner.name}'s basement sees its floor, not the lawn`, () => {
+      const plan = sceneViewPlan(owner.nodes, { target: owner.basement })
+      const { scene, floor, ground, lotLine } = editorScene(owner.nodes, owner.basement)
+      expect(firstSeen(scene, plan.pose)).toBe(ground)
+
+      const restorers: (() => void)[] = []
+      interiorCutaway(owner.basement, (restore) => restorers.push(restore))
+      expect(firstSeen(scene, plan.pose)).toBe(floor)
+      expect(lotLine.layers.isEnabled(SCENE_LAYER)).toBe(true)
+
+      for (const restore of restorers.reverse()) restore()
+      expect(firstSeen(scene, plan.pose)).toBe(ground)
+    })
+
+  test('a floor at grade is pictured on its ground, even while the person has it set aside', () => {
+    const [villa] = owners
+    if (!villa) throw new Error('the villa fixture is missing')
+    const { ground } = editorScene(villa.nodes, villa.basement)
+    hideFromScene(ground, 'ground-aside')
+
+    const restorers: (() => void)[] = []
+    interiorCutaway(villa.atGrade, (restore) => restorers.push(restore))
+    expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
+
+    for (const restore of restorers.reverse()) restore()
+    expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(false)
   })
 })
 

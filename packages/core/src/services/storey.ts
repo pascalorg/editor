@@ -121,6 +121,38 @@ export function getAuthoredLevelElevations(
   return elevations
 }
 
+/**
+ * How far under the ground a floor has to sit to be below grade. A ground floor a few centimetres
+ * under the lawn (a basement deeper than it is tall pushes the stack down) stays a ground floor.
+ */
+const BELOW_GRADE_TOLERANCE = 0.3
+
+/**
+ * Whether `levelId`'s floor lies below grade: its world floor (the stacked base, the building's
+ * height on the site and the top of the highest slab it stands on) more than
+ * {@link BELOW_GRADE_TOLERANCE} under the ground. The ground is the flat site's, at Y 0; sculpted
+ * terrain is not consulted yet. `false` for an id that is no level.
+ */
+export function isLevelBelowGrade(nodes: Record<AnyNodeId, AnyNode>, levelId: string): boolean {
+  const elevation = getLevelElevations(nodes).get(levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (!elevation || level?.type !== 'level') return false
+  const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
+  const siteY = building?.type === 'building' ? building.position[1] : 0
+  return siteY + elevation.baseY + standingSlabTop(nodes, level) < -BELOW_GRADE_TOLERANCE
+}
+
+/** The top of the highest slab a level stands on, in its own Y; 0 for a level with none. */
+function standingSlabTop(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): number {
+  let top: number | null = null
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (child?.type !== 'slab' || child.recessed === true) continue
+    top = Math.max(top ?? child.elevation, child.elevation)
+  }
+  return top ?? 0
+}
+
 function resolveLevelFloorToFloorHeight(
   levelId: string,
   elevations: Map<string, LevelElevation>,

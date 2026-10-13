@@ -12,6 +12,7 @@ import {
   setKeyLightDirectionOverride,
   setProceduralEmission,
   setSlotDefaultOverrides,
+  siteSurfaces,
   temporarilyHideNodeTypes,
   useSceneAtmosphere,
   useViewer,
@@ -90,20 +91,6 @@ async function settledHeroFraming() {
     previous = next
   }
   return framing
-}
-
-/** The site's own surfaces (ground fill, horizon disc, property ribbons) —
- *  not its registered children (buildings, items), which are groups. */
-function siteSurfaces(): Object3D[] {
-  const surfaces: Object3D[] = []
-  for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of sceneRegistry.nodes.get(siteId)?.children ?? []) {
-      if (child.visible && !(child.type === 'Group' && child.children.length > 0)) {
-        surfaces.push(child)
-      }
-    }
-  }
-  return surfaces
 }
 
 /**

@@ -3,6 +3,7 @@
 import {
   emitter,
   isCaptureSessionOn,
+  isLevelBelowGrade,
   sceneRegistry,
   subscribeCaptureSessions,
   type ThumbnailGenerateEvent,
@@ -21,10 +22,12 @@ import {
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
   type SnapshotPipeline,
+  siteGroundSurfaces,
   snapLevelsToTruePositions,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
   temporarilyHideNodeTypes,
+  temporarilySetGroundAside,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
   useSceneAtmosphere,
@@ -522,10 +525,12 @@ function clipSceneFor(
  * floors and this floor's roofs and ceilings out of the picture, everything
  * on it cut where core says (sceneViewInterior, from the scene as this editor
  * has it) and its shadows with it, and whatever the user's solo or isolation
- * holds back on it shown.
+ * holds back on it shown. The site's ground follows this floor, not the
+ * user's: set aside under a floor below grade, standing under one at grade.
  */
 export function interiorCutaway(levelId: string, restore: (callback: () => void) => void) {
-  const { cutHeight, hiddenIds } = sceneViewInterior(useScene.getState().nodes, levelId)
+  const { nodes } = useScene.getState()
+  const { cutHeight, hiddenIds } = sceneViewInterior(nodes, levelId)
   const floor = sceneRegistry.nodes.get(levelId)
   if (!floor) throw new Error('The floor to look inside is not built yet. Try again.')
   for (const id of hiddenIds) {
@@ -538,6 +543,7 @@ export function interiorCutaway(levelId: string, restore: (callback: () => void)
   }
   restore(temporarilyShowPresentation(floor))
   restore(clipSceneFor(floor, [{ normal: [0, -1, 0], constant: cutHeight }], true))
+  restore(temporarilySetGroundAside(siteGroundSurfaces(), isLevelBelowGrade(nodes, levelId)))
 }
 
 /**
@@ -937,6 +943,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               if (interior) {
                 interiorCutaway(interior.levelId, restore)
                 restore(lightInterior(scene, thumbnailCamera))
+              } else if (snapLevels || pose || cameraPose) {
+                // the whole building stands on its ground, whatever level the user is on
+                restore(temporarilySetGroundAside(siteGroundSurfaces(), false))
               }
             }
             // The scene pass is a FRAME-updated node: it renders once per node
