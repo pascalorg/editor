@@ -66,6 +66,7 @@
   ],
   "patchedDependencies": {
     "iwer@2.3.0": "patches/iwer@2.3.0.patch",
-    "three@0.186.1": "patches/three@0.186.1.patch"
+    "three@0.186.1": "patches/three@0.186.1.patch",
+    "three-bvh-csg@0.0.18": "patches/three-bvh-csg@0.0.18.patch"
   }
 }
