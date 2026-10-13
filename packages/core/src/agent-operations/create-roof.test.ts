@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { BuildingNode, LevelNode, WallNode } from '../schema'
-import { createRoof, grown } from './create-roof'
+import { createRoof, grown, type RoofHost, roofHost } from './create-roof'
 import type { SceneNodes } from './types'
 
 type Pt = [number, number]
@@ -154,6 +154,177 @@ describe('create_roof: the level above the covered storey', () => {
     expect(created(outcome).find((node) => node.type === 'roof')?.parentId).toBe(
       roofLevelCreated?.id,
     )
+  })
+})
+
+// The host rule is one function and a table: each row is a house of one storey (level 0, 8 × 6 m)
+// with the levels listed above it, and what the roof is to stand on.
+describe('roofHost: the level a roof stands on', () => {
+  type Spec = {
+    id: string
+    level: number
+    role?: 'roof' | 'support'
+    rooms?: boolean
+    building?: string
+  }
+  const level = (spec: Spec) =>
+    LevelNode.parse({
+      id: spec.id,
+      parentId: spec.building ?? 'building_a',
+      level: spec.level,
+      ...(spec.role ? { metadata: { role: spec.role } } : {}),
+      ...(spec.rooms ? { children: [`wall_on_${spec.id}`] } : {}),
+    })
+  const scene = (above: Spec[]) => {
+    const base = storey([
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ])
+    const levels = above.map(level)
+    const walls = above
+      .filter((spec) => spec.rooms)
+      .map((spec) =>
+        WallNode.parse({
+          id: `wall_on_${spec.id}`,
+          parentId: spec.id,
+          start: [0, 0],
+          end: [8, 0],
+        }),
+      )
+    const building = base.building_a as ReturnType<typeof BuildingNode.parse>
+    return {
+      ...base,
+      building_a: {
+        ...building,
+        children: [
+          ...building.children,
+          ...levels.filter((l) => l.parentId === 'building_a').map((l) => l.id),
+        ],
+      },
+      ...Object.fromEntries([...levels, ...walls].map((node) => [node.id, node])),
+    } as SceneNodes
+  }
+  const hostOf = (above: Spec[]): RoofHost =>
+    roofHost(scene(above), scene(above).level_0 as Parameters<typeof roofHost>[1])
+
+  const rows: { name: string; above: Spec[]; host: Record<string, unknown> }[] = [
+    {
+      name: 'no level above: a roof level is built above the storey',
+      above: [],
+      host: { kind: 'create', above: { id: 'level_0' } },
+    },
+    {
+      name: 'a roof level above: it is the host',
+      above: [{ id: 'level_roof', level: 1, role: 'roof' }],
+      host: { kind: 'reuse', level: { id: 'level_roof' } },
+    },
+    {
+      name: 'two roof levels above: the lowest is the host',
+      above: [
+        { id: 'level_roof', level: 1, role: 'roof' },
+        { id: 'level_roof_2', level: 2, role: 'roof' },
+      ],
+      host: { kind: 'reuse', level: { id: 'level_roof' } },
+    },
+    {
+      name: 'a support level above, with nothing on it: not the host, the roof goes above it',
+      above: [{ id: 'level_support', level: 1, role: 'support' }],
+      host: { kind: 'create', above: { id: 'level_support' } },
+    },
+    {
+      name: 'a support level above, with things on it: not the host either',
+      above: [{ id: 'level_support', level: 1, role: 'support', rooms: true }],
+      host: { kind: 'create', above: { id: 'level_support' } },
+    },
+    {
+      name: 'an empty occupied storey above: a floor to be built, the roof goes above it',
+      above: [{ id: 'level_added', level: 1 }],
+      host: { kind: 'create', above: { id: 'level_added' } },
+    },
+    {
+      name: 'several empty storeys and a support level stacked: the roof goes above the highest',
+      above: [
+        { id: 'level_added', level: 1 },
+        { id: 'level_added_2', level: 2 },
+        { id: 'level_support', level: 3, role: 'support' },
+      ],
+      host: { kind: 'create', above: { id: 'level_support' } },
+    },
+    {
+      name: 'a roof level above several floors to be built is the host',
+      above: [
+        { id: 'level_added', level: 1 },
+        { id: 'level_support', level: 2, role: 'support' },
+        { id: 'level_roof', level: 3, role: 'roof' },
+      ],
+      host: { kind: 'reuse', level: { id: 'level_roof' } },
+    },
+    {
+      name: 'a roof level below a floor to be built is not above it: a new roof level goes above',
+      above: [
+        { id: 'level_roof', level: 1, role: 'roof' },
+        { id: 'level_added', level: 2 },
+      ],
+      host: { kind: 'create', above: { id: 'level_added' } },
+    },
+    {
+      name: 'a storey with rooms above: refused, naming it',
+      above: [{ id: 'level_upper', level: 1, rooms: true }],
+      host: { kind: 'refuse', code: 'storey_above', storeyAbove: { id: 'level_upper' } },
+    },
+    {
+      name: 'a storey with rooms above a roof level: refused, the roof level does not hide it',
+      above: [
+        { id: 'level_roof', level: 1, role: 'roof' },
+        { id: 'level_upper', level: 2, rooms: true },
+      ],
+      host: { kind: 'refuse', code: 'storey_above', storeyAbove: { id: 'level_upper' } },
+    },
+    {
+      name: 'a roof level of another building is not reused',
+      above: [{ id: 'level_other_roof', level: 1, role: 'roof', building: 'building_b' }],
+      host: { kind: 'create', above: { id: 'level_0' } },
+    },
+  ]
+
+  for (const row of rows)
+    test(row.name, () => {
+      expect(hostOf(row.above)).toMatchObject(row.host)
+    })
+
+  test('a storey with no building: refused, there is no roof level to build', () => {
+    const base = storey([
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ])
+    const orphan = { ...base.level_0, parentId: undefined } as unknown as Parameters<
+      typeof roofHost
+    >[1]
+    const nodes = { ...base, level_0: orphan } as SceneNodes
+
+    expect(roofHost(nodes, orphan)).toEqual({ kind: 'refuse', code: 'storey_without_building' })
+    expect(() => createRoof(nodes, {}, { activeLevelId: null })).toThrow(/not in a building/)
+  })
+
+  test('over a support level the roof stands on a roof level built above it, not on the support', () => {
+    const outcome = createRoof(
+      scene([{ id: 'level_support', level: 1, role: 'support' }]),
+      {},
+      { activeLevelId: null },
+    )
+    const created = (outcome.changes?.create ?? []).map(({ node }) => node)
+    const [roofLevel] = created.filter((node) => node.type === 'level')
+
+    expect(roofLevel).toMatchObject({
+      level: 2,
+      parentId: 'building_a',
+      metadata: { role: 'roof' },
+    })
+    expect(created.find((node) => node.type === 'roof')?.parentId).toBe(roofLevel?.id)
   })
 })
 

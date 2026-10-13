@@ -201,6 +201,42 @@ function footprintOf(nodes: SceneNodes, storeyId: string) {
   return { rectangles, roofType, angle: frame.angle, toWorld: frame.toWorld }
 }
 
+/** Where a roof over a storey goes: a level to reuse, a level to build above, or a refusal. */
+export type RoofHost =
+  | { kind: 'reuse'; level: Level }
+  | { kind: 'create'; above: Level; buildingId: string }
+  | { kind: 'refuse'; code: 'storey_above'; storeyAbove: Level }
+  | { kind: 'refuse'; code: 'storey_without_building' }
+
+/**
+ * The roof's host, from the levels above the covered storey in its building. One rule, a table:
+ *
+ *   storey has no building                         refused: storey_without_building
+ *   an occupied storey with rooms above            refused: storey_above, the lowest such storey
+ *   else, above: empty occupied storeys (floors    the roof goes above the highest of them
+ *     to be built) and support levels
+ *   a roof level above all of those                reused: the lowest such roof level
+ *   none                                           a new roof level above the highest one (or
+ *                                                  above the storey, when nothing lies above)
+ *
+ * Only a level whose role is roof, in the same building, is ever reused: a storey or a support
+ * level never holds the roof, and a roof level below a floor to be built is not above it.
+ */
+export function roofHost(nodes: SceneNodes, storey: Level): RoofHost {
+  if (!storey.parentId) return { kind: 'refuse', code: 'storey_without_building' }
+  const above = buildingLevels(nodes, storey)
+    .filter((other) => other.level > storey.level)
+    .sort((a, b) => a.level - b.level)
+    .map((level) => ({ level, role: levelRole(nodes, level).role }))
+  const built = above.find(({ level, role }) => role === 'occupied' && level.children.length > 0)
+  if (built) return { kind: 'refuse', code: 'storey_above', storeyAbove: built.level }
+  const top = above.filter(({ role }) => role !== 'roof').at(-1)?.level ?? storey
+  const roof = above.find(({ level, role }) => role === 'roof' && level.level > top.level)
+  return roof
+    ? { kind: 'reuse', level: roof.level }
+    : { kind: 'create', above: top, buildingId: storey.parentId }
+}
+
 /**
  * `create_roof`: a roof over a storey, one segment per rectangle of its footprint (or the one
  * rectangle asked for), on a roof level above it.
@@ -229,24 +265,22 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
   const rectangle = width !== undefined && depth !== undefined
   const { storey, note } = coveredStorey(nodes, input, rectangle, context)
 
-  // The roof stands on a roof level above the storey. A storey above it with rooms, whatever
-  // roof or support level lies between, means this is not the top one (a roof over it would cut
-  // through that storey); one with nothing on it yet (add_level leaves it so) is a floor to be
-  // built, so the roof goes above the highest of those.
-  const storeysAbove = buildingLevels(nodes, storey)
-    .filter((other) => other.level > storey.level && levelRole(nodes, other).role === 'occupied')
-    .sort((a, b) => a.level - b.level)
-  const built = storeysAbove.find((other) => other.children.length > 0)
-  if (built)
+  const placement = roofHost(nodes, storey)
+  if (placement.kind === 'refuse') {
+    if (placement.code === 'storey_above') {
+      const above = placement.storeyAbove
+      refuse(
+        'storey_above',
+        `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${above.name ?? above.id} (${above.id}): a roof caps the top storey. Pass the top storey (with width and depth when it has no rooms).`,
+        { levelId: storey.id, storeyAboveId: above.id },
+      )
+    }
     refuse(
-      'storey_above',
-      `${storey.name ?? storey.id} (${storey.id}) has a storey above it, ${built.name ?? built.id} (${built.id}): a roof caps the top storey. Pass the top storey (with width and depth when it has no rooms).`,
-      { levelId: storey.id, storeyAboveId: built.id },
+      'storey_without_building',
+      `${storey.name ?? storey.id} (${storey.id}) is not in a building, so no roof level can stand above it. Put the level in a building first.`,
+      { levelId: storey.id },
     )
-  const top = storeysAbove.at(-1) ?? storey
-  const host: Level | undefined = buildingLevels(nodes, top).find(
-    (other) => other.level === top.level + 1,
-  )
+  }
 
   let rectangles: RoofRectangle[]
   let chosenType: RoofType
@@ -301,20 +335,23 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
   })
 
   const changes: Required<Pick<SceneChanges, 'create'>> = { create: [] }
-  let roofLevelId = host?.id ?? storey.id
-  let createdRoofLevelId: string | null = null
-  if (!host && storey.parentId) {
-    const peak = Math.max(...segments.map((segment) => getActiveRoofHeight(segment)))
-    const roofLevel = LevelNode.parse({
-      name: 'Roof',
-      parentId: storey.parentId,
-      level: top.level + 1,
-      height: Math.max(wallHeight + peak, 0.2),
-      metadata: { role: 'roof', label: 'Roof', referenceLevelId: storey.id },
-    })
-    roofLevelId = createdRoofLevelId = roofLevel.id
-    changes.create.push({ node: roofLevel, parentId: storey.parentId })
-  }
+  const roofLevel =
+    placement.kind === 'reuse'
+      ? placement.level
+      : LevelNode.parse({
+          name: 'Roof',
+          parentId: placement.buildingId,
+          level: placement.above.level + 1,
+          height: Math.max(
+            wallHeight + Math.max(...segments.map((segment) => getActiveRoofHeight(segment))),
+            0.2,
+          ),
+          metadata: { role: 'roof', label: 'Roof', referenceLevelId: storey.id },
+        })
+  const roofLevelId = roofLevel.id
+  const createdRoofLevelId = placement.kind === 'create' ? roofLevelId : null
+  if (placement.kind === 'create')
+    changes.create.push({ node: roofLevel, parentId: placement.buildingId })
 
   const [roofX, roofZ] = toWorld([centerX, centerZ])
   const roof = RoofNode.parse({
