@@ -1,6 +1,25 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, BuildingNode, LevelNode, RoofNode, WallNode, ZoneNode } from '../schema'
-import { isRoofLevel, planRoofLevel, roofsOver, storeyInsertIndex } from './roof-level'
+import { applySceneChanges } from '../agent-operations/apply-changes'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  BuildingNode,
+  LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+  WallNode,
+  ZoneNode,
+} from '../schema'
+import { resolveRoofElevation } from '../systems/roof/roof-elevation'
+import {
+  isRoofLevel,
+  planRoofLevel,
+  planRoofsOffStorey,
+  roofsOver,
+  storeyCoveredBy,
+  storeyInsertIndex,
+} from './roof-level'
+import { getLevelElevations } from './storey'
 
 // One rule for every roof writer (the owner, 12 October: a roof made on the ground floor's level
 // blocks the exploded view): a roof lives on the level directly above the storey whose walls carry
@@ -53,6 +72,8 @@ describe('planRoofLevel', () => {
     expect(plan.create).toMatchObject({ name: 'Roof', level: 1, height: 3, parentId: 'building_h' })
     expect(isRoofLevel(plan.create!)).toBe(true)
     expect(plan.levelId).toBe(plan.create!.id)
+    // the new level stands on the storey: its floor is the storey's height up
+    expect(plan.storeyOffset).toBe(-2.5)
   })
 
   test('over the top of two storeys, the roof level goes above the upper one', () => {
@@ -65,7 +86,11 @@ describe('planRoofLevel', () => {
 
   test('over a storey with a storey above it, that storey: a lower roof covers part of it', () => {
     const nodes = house({ id: 'level_g', content: 'walls' }, { id: 'level_1', content: 'walls' })
-    expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({ kind: 'storey', levelId: 'level_1' })
+    expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({
+      kind: 'storey',
+      levelId: 'level_1',
+      storeyOffset: -2.5,
+    })
   })
 
   test('the declared roof level above is reused as it is', () => {
@@ -76,6 +101,7 @@ describe('planRoofLevel', () => {
     expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({
       kind: 'roof',
       levelId: 'level_r',
+      storeyOffset: -2.5,
       create: null,
       update: [],
     })
@@ -106,7 +132,7 @@ describe('planRoofLevel', () => {
       { id: 'level_e', content: 'empty' },
       { id: 'level_2', content: 'walls' },
     )
-    expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({ kind: 'storey', levelId: 'level_e' })
+    expect(planRoofLevel(nodes, 'level_g', 2)).toMatchObject({ kind: 'storey', levelId: 'level_e' })
   })
 
   test('a declared roof level someone walled is a storey', () => {
@@ -114,7 +140,7 @@ describe('planRoofLevel', () => {
       { id: 'level_g', content: 'walls' },
       { id: 'level_r', content: 'walls', metadata: { role: 'roof' } },
     )
-    expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({ kind: 'storey', levelId: 'level_r' })
+    expect(planRoofLevel(nodes, 'level_g', 2)).toMatchObject({ kind: 'storey', levelId: 'level_r' })
     expect(storeyInsertIndex(nodes, 'building_h')).toEqual({ floorIndex: 2, shift: [] })
   })
 })
@@ -156,5 +182,118 @@ describe('storeyInsertIndex', () => {
 
   test('a building with no level starts at the ground floor', () => {
     expect(storeyInsertIndex(house(), 'building_h')).toEqual({ floorIndex: 0, shift: [] })
+  })
+})
+
+describe('storeyCoveredBy', () => {
+  test('a roof on the roof level covers the storey under it; one on a storey, that storey', () => {
+    const nodes = house({ id: 'level_g', content: 'walls' }, { id: 'level_r', content: 'roof' })
+    expect(storeyCoveredBy(nodes, 'roof_level_r')?.id).toBe('level_g')
+    const mixed = RoofNode.parse({ id: 'roof_low', parentId: 'level_g' })
+    nodes.level_g = { ...(nodes.level_g as LevelNode), children: ['wall_level_g', mixed.id] }
+    nodes[mixed.id] = mixed
+    expect(storeyCoveredBy(nodes, 'roof_low')?.id).toBe('level_g')
+  })
+})
+
+// The owner's projects built before the rule hold their roofs on the ground floor: the roof's
+// panel moves them to the roof level, standing exactly where they stood.
+describe('planRoofsOffStorey', () => {
+  /** An 8 × 6 m room of walls 2.7 m tall on 2.5 m storeys, its gable roof `support` on `on`. */
+  function roofedHouse(
+    on: string,
+    support: 'walls' | 'level',
+    stack: { id: string; content: Content }[] = [{ id: 'level_g', content: 'walls' }],
+  ) {
+    const nodes = house(...stack)
+    const corners: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ]
+    const ground = nodes.level_g as LevelNode
+    const walls = corners.map((start, i) =>
+      WallNode.parse({
+        id: `wall_g${i}`,
+        parentId: 'level_g',
+        start,
+        end: corners[(i + 1) % 4],
+        height: 2.7,
+      }),
+    )
+    const segment = RoofSegmentNode.parse({ id: 'rseg_main', width: 8, depth: 6, wallHeight: 0 })
+    const roof = RoofNode.parse({
+      id: 'roof_main',
+      parentId: on,
+      position: [4, 2.7, 3],
+      support: { kind: support },
+      children: [segment.id],
+    })
+    nodes.level_g = { ...ground, children: walls.map((wall) => wall.id) }
+    for (const node of [...walls, roof, { ...segment, parentId: roof.id }]) nodes[node.id] = node
+    const level = nodes[on] as LevelNode
+    nodes[on] = { ...level, children: [...level.children, roof.id] }
+    return nodes
+  }
+
+  const worldEave = (nodes: Record<string, AnyNode>, roofId: string) => {
+    const roof = nodes[roofId] as RoofNode
+    const base = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(roof.parentId!)?.baseY
+    return (base ?? 0) + roof.position[1]
+  }
+
+  test('a bungalow roof on its walls’ level goes up to a new roof level, the eave where it was', () => {
+    const nodes = roofedHouse('level_g', 'walls')
+    const move = planRoofsOffStorey(nodes, 'level_g')
+    expect(move?.plan.kind).toBe('roof')
+    if (move?.plan.kind !== 'roof') return
+    expect(move.plan.create).toMatchObject({ name: 'Roof', level: 1 })
+    const moved = applySceneChanges(nodes, move.changes)
+    const roof = moved.roof_main as RoofNode
+    expect(roof.parentId).toBe(move.plan.levelId)
+    expect((moved[move.plan.levelId] as LevelNode).children).toEqual(['roof_main'])
+    expect((moved.level_g as LevelNode).children).not.toContain('roof_main')
+    expect(worldEave(moved, 'roof_main')).toBeCloseTo(2.7, 6)
+    // still following the walls, and they seat it where it stands
+    expect(roof.support.kind).toBe('walls')
+    expect(resolveRoofElevation(roof, moved)).toBeCloseTo(roof.position[1], 6)
+  })
+
+  test('a roof at a height of its own keeps it, measured from the roof level', () => {
+    const nodes = roofedHouse('level_g', 'level')
+    const move = planRoofsOffStorey(nodes, 'level_g')!
+    const moved = applySceneChanges(nodes, move.changes)
+    expect((moved.roof_main as RoofNode).support.kind).toBe('level')
+    expect(worldEave(moved, 'roof_main')).toBeCloseTo(2.7, 6)
+  })
+
+  test('the roof level already there takes it', () => {
+    const nodes = roofedHouse('level_g', 'walls', [
+      { id: 'level_g', content: 'walls' },
+      { id: 'level_r', content: 'roof', metadata: { role: 'roof' } },
+    ])
+    const move = planRoofsOffStorey(nodes, 'level_g')!
+    expect(move.plan).toMatchObject({ kind: 'roof', levelId: 'level_r', create: null })
+    expect(move.changes.create).toEqual([])
+  })
+
+  test('under an upper storey, onto it; its walls would lift the roof, so it keeps its height', () => {
+    const nodes = roofedHouse('level_g', 'walls', [
+      { id: 'level_g', content: 'walls' },
+      { id: 'level_1', content: 'walls' },
+    ])
+    const move = planRoofsOffStorey(nodes, 'level_g')!
+    expect(move.plan).toMatchObject({ kind: 'storey', levelId: 'level_1' })
+    const moved = applySceneChanges(nodes, move.changes)
+    expect(moved.roof_main?.parentId).toBe('level_1')
+    expect((moved.roof_main as RoofNode).support.kind).toBe('level')
+    expect(worldEave(moved, 'roof_main')).toBeCloseTo(2.7, 6)
+  })
+
+  test('nothing to move on a storey without roofs, or on the roof level', () => {
+    expect(planRoofsOffStorey(house({ id: 'level_g', content: 'walls' }), 'level_g')).toBeNull()
+    const nodes = house({ id: 'level_g', content: 'walls' }, { id: 'level_r', content: 'roof' })
+    expect(planRoofsOffStorey(nodes, 'level_r')).toBeNull()
   })
 })
