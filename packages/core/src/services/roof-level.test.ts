@@ -99,6 +99,24 @@ describe('planRoofLevel', () => {
     if (plan.kind !== 'roof') return
     expect(plan.update[0]?.data).toEqual({ metadata: { role: 'roof' }, name: 'Attic' })
   })
+
+  test('an empty level with a storey above it is a storey not built yet, not a roof level', () => {
+    const nodes = house(
+      { id: 'level_g', content: 'walls' },
+      { id: 'level_e', content: 'empty' },
+      { id: 'level_2', content: 'walls' },
+    )
+    expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({ kind: 'storey', levelId: 'level_e' })
+  })
+
+  test('a declared roof level someone walled is a storey', () => {
+    const nodes = house(
+      { id: 'level_g', content: 'walls' },
+      { id: 'level_r', content: 'walls', metadata: { role: 'roof' } },
+    )
+    expect(planRoofLevel(nodes, 'level_g', 2)).toEqual({ kind: 'storey', levelId: 'level_r' })
+    expect(storeyInsertIndex(nodes, 'building_h')).toEqual({ floorIndex: 2, shift: [] })
+  })
 })
 
 describe('roofsOver', () => {

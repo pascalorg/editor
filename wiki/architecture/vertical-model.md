@@ -176,8 +176,12 @@ the roof level to reuse, declare or create), `roofsOver` (the roofs over a store
 `storeyInsertIndex` (a new top storey goes under the roof level, which moves up one) and
 `isRoofLevel`. The agents' `create_roof` and the editor's roof tool (a room's footprint, a
 rectangle drawn on a walled storey, a cone over a curved wall) place roofs by it; `add_level` and
-the editor's "add a floor" insert under the roof level. A level that holds only roofs (written
-before levels declared their role) counts as the roof level and is declared when reused.
+the editor's "add a floor" insert under the roof level, and the level selector refuses a drop that
+puts a roof level under a storey. A level that holds only roofs (written before levels declared
+their role) counts as the roof level and is declared when reused; an empty level becomes the roof
+level only at the top of its stack (with a storey above it, it is a storey not built yet), and a
+declared roof level someone walled counts as a storey. A roof placed by hand on the level above
+selects that level with it, so it stays in view.
 `verify_scene` reports a roof mixed into a storey (`roof_mixed_in_storey`) and a roof level below a
 storey (`roof_level_not_on_top`); existing scenes are not migrated. Unpainted gables on a roof
 level take the cladding of the storey's walls below (`levelWallCladdingRef`).
