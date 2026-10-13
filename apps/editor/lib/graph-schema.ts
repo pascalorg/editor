@@ -64,8 +64,7 @@ type ScanResult = { path: (string | number)[]; reason: 'url' | 'too-complex' }
 /**
  * First URL-shaped string `AssetUrl` rejects, or a breach of the walk bounds.
  *
- * The node's own `type` is exempt: a namespaced kind (`trees:tree`) is
- * scheme-shaped by construction, and the envelope has already validated it.
+ * Namespaced kinds and attachment slot identifiers are not asset URLs.
  */
 function findRejectedUrl(root: unknown): ScanResult | null {
   let budget = MAX_SCAN_VALUES
@@ -85,6 +84,16 @@ function findRejectedUrl(root: unknown): ScanResult | null {
     if (value && typeof value === 'object') {
       for (const [key, child] of Object.entries(value)) {
         if (depth === 0 && key === 'type') continue
+        // Attachment slots can be namespaced, such as wall-point:<node-id>.
+        // Only identifier characters qualify; URL paths and controls still scan.
+        if (
+          depth === 0 &&
+          key === 'slotId' &&
+          typeof child === 'string' &&
+          /^[\w.-]+(?::[\w.-]+)*$/.test(child)
+        ) {
+          continue
+        }
         const hit = walk(child, [...path, key], depth + 1)
         if (hit) return hit
       }

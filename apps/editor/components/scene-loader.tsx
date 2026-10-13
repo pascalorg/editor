@@ -187,6 +187,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
   // store must never overwrite a populated server copy.
   const serverNodeCountRef = useRef(meta.nodeCount)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
+  const pendingGraphSignaturesRef = useRef(new Set<string>())
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -249,6 +250,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         return
       }
 
+      pendingGraphSignaturesRef.current.add(graphJson)
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
           method: 'PUT',
@@ -285,11 +287,15 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         }
 
         const next = (await response.json()) as SceneMeta
-        versionRef.current = next.version
-        serverNodeCountRef.current = next.nodeCount
+        if (next.version >= versionRef.current) {
+          versionRef.current = next.version
+          serverNodeCountRef.current = next.nodeCount
+        }
         setSaveError(null)
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
+      } finally {
+        pendingGraphSignaturesRef.current.delete(graphJson)
       }
     },
     [meta.id, meta.name],
@@ -310,7 +316,11 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
 
       versionRef.current = payload.version
       serverNodeCountRef.current = countGraphNodes(payload.graph)
-      lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
+      const signature = sceneGraphSignature(payload.graph)
+      // SSE can deliver our save before its HTTP response. Reapplying that
+      // graph would reset tools and selection while the user keeps editing.
+      if (pendingGraphSignaturesRef.current.has(signature)) return
+      lastRemoteGraphJsonRef.current = signature
       suppressRemoteSaveUntilRef.current = Date.now() + 2500
       applySceneGraphToEditor(payload.graph)
       setConflict(false)
