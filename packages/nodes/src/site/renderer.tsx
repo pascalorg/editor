@@ -2,10 +2,10 @@
 
 import {
   type AnyNodeId,
-  resolveFrontEdge,
   type SiteNode,
-  setbackEnvelope,
   sightTriangle,
+  siteFrontEdge,
+  siteSetbackEnvelope,
   streetCorners,
   type TerrainField,
   terrainContours,
@@ -385,13 +385,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     let envelopeGeometry: BufferGeometry | null = null
     const triangleGeometries: BufferGeometry[] = []
     const points = polygonPoints.map(([x, z]) => [x ?? 0, z ?? 0] as [number, number])
-    const front = resolveFrontEdge(points, node.frontEdge, node.northRotation ?? 0)
+    // the live ring, measured the one way the site plan and the agents measure it
+    const lot = { ...node, polygon: { type: 'polygon' as const, points } }
+    const front = siteFrontEdge(lot)
     const streetEdges = node.streetEdges ?? []
     const sightTriangleM =
       typeof node.sightTriangleFt === 'number' && node.sightTriangleFt > 0
         ? node.sightTriangleFt * 0.3048
         : 0
-    const envelope = setbackEnvelope(points, setbacks, front, { streetEdges, sightTriangleM })
+    const envelope = siteSetbackEnvelope(lot)
     if (envelope.length >= 3) {
       const draped = buildDrapedPolyline({
         points: envelope,

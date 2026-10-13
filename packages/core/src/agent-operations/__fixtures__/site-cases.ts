@@ -214,6 +214,54 @@ export const GET_SITE_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'setbacks of zero exclude nothing: the whole lot is buildable',
+    tool: 'get_site',
+    scene: () => scene(site({ setbacks: { front: 0, side: 0, rear: 0 } }), building(), level()),
+    input: {},
+    expect: {
+      result: {
+        buildable: {
+          state: 'setbacks',
+          centre: [0, 0],
+          ring: [
+            [-15, -15],
+            [15, -15],
+            [15, 15],
+            [-15, 15],
+          ],
+        },
+      },
+    },
+  },
+  {
+    name: 'a street edge and no front edge: the setbacks and the street both measure from it',
+    tool: 'get_site',
+    // the south edge (2, z = 40) is the street: front 6 from it, rear 2 from z = 0, sides 1
+    scene: () =>
+      scene(
+        site({
+          polygon: STRAIGHT.polygon,
+          streetEdges: [2],
+          setbacks: { front: 6, side: 1, rear: 2 },
+        }),
+        building(),
+        level(),
+      ),
+    input: {},
+    expect: {
+      result: { street: { side: 'south', edge: 2 }, buildable: { state: 'setbacks', centre: [10, 18] } },
+    },
+  },
+  {
+    name: 'a house bridging the notch of a U lot reaches past it by its middle, not its corners',
+    tool: 'get_site',
+    // the piece outside is x 10..20 across the notch; its middle is 5 m from both notch sides
+    scene: () =>
+      scene(site(U_LOT), building(), level(), ...box('level_ground', 'h', [5, 15], 20, 10)),
+    input: {},
+    expect: { result: { footprint: { fit: 'outside', overhang: { lotM: 5 } } } },
+  },
+  {
     name: 'no site: refused',
     tool: 'get_site',
     scene: () => scene(BuildingNode.parse({ id: 'building_main' }), level()),
@@ -406,6 +454,77 @@ export const PLACE_BUILDING_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'a house about to rise on a turned parcel stands square to the street, in the setbacks',
+    tool: 'place_building',
+    // 14 × 10 m fits the 15 × 20 m envelope only squared to it
+    scene: () => scene(site(TILTED), building({ position: [3, 0, 2] }), level()),
+    input: {
+      outline: [
+        [0, 0],
+        [14, 0],
+        [14, 10],
+        [0, 10],
+      ],
+    },
+    expect: { result: { moved: true, rotationDeg: -20, fit: 'buildable' } },
+  },
+  {
+    name: 'yards with a new rotation are measured from the street as the house will face it',
+    tool: 'place_building',
+    // turned 90°, the house still has its front 3 m from the north street: site z 3..7, x centred
+    scene: () => scene(site(STRAIGHT), building(), level()),
+    input: {
+      outline: [
+        [-2, -2],
+        [2, -2],
+        [2, 2],
+        [-2, 2],
+      ],
+      rotationDeg: 90,
+      yards: { front: 3 },
+    },
+    expect: { result: { position: [10, 0, 5], rotationDeg: 90, yards: { front: 3 } } },
+  },
+  {
+    name: 'replayed, yards with a new rotation move nothing',
+    tool: 'place_building',
+    scene: () =>
+      scene(site(STRAIGHT), building({ position: [10, 0, 5], rotation: [0, Math.PI / 2, 0] }), level()),
+    input: {
+      outline: [
+        [-2, -2],
+        [2, -2],
+        [2, 2],
+        [-2, 2],
+      ],
+      rotationDeg: 90,
+      yards: { front: 3 },
+    },
+    expect: { result: { moved: false, position: [10, 0, 5] } },
+  },
+  {
+    name: 'a front and a side yard on a lot askew to the house are both met',
+    tool: 'place_building',
+    // on a lot turned 30° each yard's move changes the other's
+    scene: () =>
+      scene(
+        site({ polygon: { type: 'polygon', points: turnedLot([0, 0], 30, 30, 30) }, frontEdge: 0 }),
+        building(),
+        level(),
+      ),
+    input: {
+      outline: [
+        [-2, -2],
+        [2, -2],
+        [2, 2],
+        [-2, 2],
+      ],
+      rotationDeg: 0,
+      yards: { front: 10, left: 10 },
+    },
+    expect: { result: { moved: true, rotationDeg: 0, yards: { front: 10, left: 10 } } },
+  },
+  {
     name: 'front and rear yards together: refused',
     tool: 'place_building',
     scene: () =>
@@ -521,7 +640,8 @@ export const SITE_LINE_CASES: AgentToolCase[] = [
     expect: {
       result: { site: { fit: 'outside', sides: ['east'] } },
       check: (result) =>
-        near(Number((result.site as { overhangM?: number }).overhangM), 5, 0.01)
+        // to the outer face of its 0.1 m walls
+        near(Number((result.site as { overhangM?: number }).overhangM), 5.05, 0.01)
           ? []
           : [`overhang ${(result.site as { overhangM?: number }).overhangM}`],
     },
@@ -542,11 +662,35 @@ export const SITE_LINE_CASES: AgentToolCase[] = [
     expect: { result: { ok: true }, check: (result) => ('site' in result ? ['site flag'] : []) },
   },
   {
+    name: 'a room drawn to the lot line has walls past it',
+    tool: 'create_room',
+    scene: () => scene(site(), building(), level()),
+    input: {
+      name: 'Study',
+      polygon: [
+        [10, 0],
+        [15, 0],
+        [15, 4],
+        [10, 4],
+      ],
+      wallThickness: 0.2,
+    },
+    expect: { result: { site: { fit: 'outside', overhangM: 0.1, sides: ['east'] } } },
+  },
+  {
     name: 'a wall past the lot line says so',
     tool: 'add_wall',
     scene: () => scene(site(), building(), level()),
     input: { start: [0, 20], end: [8, 20] },
     expect: { result: { site: { fit: 'outside', sides: ['south'] } } },
+  },
+  {
+    name: 'a curved wall whose chord stays on the lot bows past it',
+    tool: 'add_wall',
+    // the chord runs at z = 13; bowed 3 m south, the wall reaches z 16.05
+    scene: () => scene(site(), building(), level()),
+    input: { start: [-5, 13], end: [5, 13], curveOffset: -3 },
+    expect: { result: { site: { fit: 'outside', overhangM: 1.05, sides: ['south'] } } },
   },
 ]
 

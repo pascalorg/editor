@@ -2,8 +2,9 @@ import { isAgentRefusal, refuse } from '../agent-tools/refusal'
 import { doorFacing, planWallOpening } from '../building/wall-openings'
 import { createZone } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
+import { levelFootprintLoops } from '../lib/building-footprint'
 import { lotOverhang } from '../lib/site-placement'
-import { type AnyNode, generateId, type WallNode } from '../schema'
+import { type AnyNode, generateId, type LevelNode, type WallNode } from '../schema'
 import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, type Vec2 } from './plan-geometry'
@@ -195,7 +196,14 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
     (a, i) => wallsAlong(scene, level.id, a, polygon[(i + 1) % polygon.length]!)[0]?.id ?? null,
   )
   const reusedWalls = wallIds.filter((id) => id && nodes[id]).length
-  const site = lotOverhang(nodes, level.id, [polygon])
+  // the room and the walls it raised, their mitred bands: what crosses the lot line
+  const raised = new Set(
+    roomChanges.create.flatMap((entry) => (entry.node.type === 'wall' ? [entry.node.id] : [])),
+  )
+  const site = lotOverhang(scene, level.id, [
+    polygon,
+    ...levelFootprintLoops(scene, scene[level.id] as LevelNode, null, raised),
+  ])
   const result = {
     ok: true,
     zoneId: plan.zoneId,

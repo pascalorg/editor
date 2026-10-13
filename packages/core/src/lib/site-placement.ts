@@ -179,25 +179,44 @@ function readSiteNode(node: SiteNode): SiteNode {
   return Object.keys(patch).length > 0 ? { ...node, ...patch } : node
 }
 
+type SiteEdges = Pick<SiteNode, 'polygon' | 'frontEdge' | 'streetEdges' | 'northRotation'>
+
+/** The street edge the site records: its front edge, else its first street edge; never a guess. */
+function recordedStreetEdge(site: SiteEdges): number | undefined {
+  const n = site.polygon?.points?.length ?? 0
+  const valid = (i: unknown): i is number =>
+    Number.isInteger(i) && (i as number) >= 0 && (i as number) < n
+  return valid(site.frontEdge) ? site.frontEdge : site.streetEdges?.find(valid)
+}
+
+/**
+ * The lot's front edge, which the setbacks, the yards and the street are all measured from: the
+ * street edge the site records, else the edge facing most nearly north.
+ */
+export function siteFrontEdge(site: SiteEdges): number {
+  return resolveFrontEdge(
+    (site.polygon?.points ?? []) as P[],
+    recordedStreetEdge(site),
+    site.northRotation ?? 0,
+  )
+}
+
 /**
  * The lot's buildable envelope, in site metres, as the site plan and the 3D site draw it: every
  * lot line pushed in by its setback from the front edge's roles, the corner sight triangles kept
- * clear. Empty when the site records no setbacks, or when they leave nothing.
+ * clear. Empty when the site records no setbacks, when none of them is more than zero, or when
+ * they leave nothing.
  */
 export function siteSetbackEnvelope(
-  site: Pick<
-    SiteNode,
-    'polygon' | 'setbacks' | 'frontEdge' | 'streetEdges' | 'sightTriangleFt' | 'northRotation'
-  >,
+  site: SiteEdges & Pick<SiteNode, 'setbacks' | 'sightTriangleFt'>,
 ): P[] {
   const points = (site.polygon?.points ?? []) as P[]
   if (!site.setbacks || points.length < 3) return []
-  const front = resolveFrontEdge(points, site.frontEdge, site.northRotation ?? 0)
   const sightTriangleM =
     typeof site.sightTriangleFt === 'number' && site.sightTriangleFt > 0
       ? site.sightTriangleFt * 0.3048
       : 0
-  return setbackEnvelope(points, site.setbacks, front, {
+  return setbackEnvelope(points, site.setbacks, siteFrontEdge(site), {
     streetEdges: (site.streetEdges ?? []).filter((i) => Number.isFinite(i)),
     sightTriangleM,
   }).map((p) => [p[0], p[1]])
@@ -208,8 +227,11 @@ function buildableInSite(site: SiteNode): { state: BuildableArea['state']; ring:
   const lot = (site.polygon?.points ?? []) as P[]
   if (!site.setbacks) return { state: 'lot', ring: lot }
   const envelope = siteSetbackEnvelope(site)
-  if (envelope.length < 3) return { state: 'none', ring: [] }
-  return { state: selfIntersects(envelope) ? 'advisory' : 'setbacks', ring: envelope }
+  if (envelope.length >= 3)
+    return { state: selfIntersects(envelope) ? 'advisory' : 'setbacks', ring: envelope }
+  // setbacks of zero exclude nothing (the envelope is empty because there is nothing to draw)
+  const excludes = Object.values(site.setbacks).some((m) => typeof m === 'number' && m > 0)
+  return excludes ? { state: 'none', ring: [] } : { state: 'setbacks', ring: lot }
 }
 
 /* ------------------------------------------------- what stands where */
@@ -335,7 +357,10 @@ function spill(
   let reachM = 0
   const sides = new Set<PlanSide>()
   for (const piece of outside) {
-    for (const p of [piece.outer, ...piece.holes].flat()) {
+    // a piece's corners can all lie on the line it crosses (a house bridging a notch); its most
+    // interior point is at least as far past the line as it is from the piece's own edges
+    const pole = polygonInteriorPoint({ polygon: piece.outer, holes: piece.holes })
+    for (const p of [...[piece.outer, ...piece.holes].flat(), pole]) {
       const d = distanceToBoundary(boundary, p)
       if (d <= 0.005) continue
       reachM = Math.max(reachM, d)
@@ -384,25 +409,27 @@ function streetFaces(front: PlanSide): Record<YardKey, PlanSide> {
   return { front, rear: OPPOSITE[front], left: OPPOSITE[right], right }
 }
 
-function streetOf(site: SiteNode, toLevel: (x: number, z: number) => Pt, yaw: number) {
+/**
+ * The recorded street edge seen from a building turned `yaw`: the plan side it lies on, and the
+ * yaw nearest `yaw` that squares the house to it, in radians.
+ */
+function streetAt(site: SiteNode, yaw: number) {
   const lot = (site.polygon?.points ?? []) as P[]
   const n = lot.length
-  const named =
-    typeof site.frontEdge === 'number' && site.frontEdge >= 0 && site.frontEdge < n
-      ? site.frontEdge
-      : site.streetEdges?.find((i) => Number.isInteger(i) && i >= 0 && i < n)
+  const named = recordedStreetEdge(site)
   if (named === undefined || n < 3) return null
   const [nx, nz] = outwardNormal(lot, named)
-  const origin = toLevel(0, 0)
-  const tip = toLevel(nx, nz)
-  const side = sideOf(tip[0] - origin[0], tip[1] - origin[1])
+  const [lx, lz] = turnPlanPoint(nx, nz, -yaw)
   const p = lot[named] as P
   const q = lot[(named + 1) % n] as P
   // the house's local x runs along site angle −yaw; square to the edge when −yaw ≡ α (mod 90°)
   const alpha = Math.atan2(q[1] - p[1], q[0] - p[0])
   const quarter = Math.PI / 2
-  const square = -alpha + Math.round((yaw + alpha) / quarter) * quarter
-  return { side, edge: named, squareRotationDeg: round(square * DEG, 10) }
+  return {
+    side: sideOf(lx, lz),
+    edge: named,
+    squareYaw: -alpha + Math.round((yaw + alpha) / quarter) * quarter,
+  }
 }
 
 function formatAddress(site: SiteNode): string | null {
@@ -450,16 +477,22 @@ export function measureFootprint(
 
 /**
  * Where new geometry on a level (rings in its level coordinates) crosses its lot line: null
- * while it stays on the lot, or when the level's building has no site.
+ * while it stays on the lot, or when the level's building has no site. Only the lot is read, so
+ * a program drawing room by room pays for no footprint.
  */
 export function lotOverhang(
   nodes: Nodes,
   levelId: string,
   rings: readonly (readonly Pt[])[],
 ): { fit: 'outside'; overhangM: number; sides: PlanSide[] } | null {
-  const brief = siteBrief(nodes, { levelId })
-  if (!brief) return null
-  const past = spill(rings, brief.lot.ring)
+  const building = resolveSiteBuilding(nodes, { levelId }).building
+  const lot = (siteOfBuilding(nodes, building)?.polygon?.points ?? []) as P[]
+  if (lot.length < 3) return null
+  const toLevel = levelFrame(building)
+  const past = spill(
+    rings,
+    lot.map((p) => toLevel(p[0], p[1])),
+  )
   if (past.areaM2 === 0) return null
   return { fit: 'outside', overhangM: round(past.reachM), sides: past.sides }
 }
@@ -499,7 +532,14 @@ export function siteBrief(
     ...(site.setbacks ? { setbacks: site.setbacks } : {}),
     ...(site.setbacksSource ? { source: site.setbacksSource } : {}),
   }
-  const street = streetOf(site, toLevel, yaw)
+  const facing = streetAt(site, yaw)
+  const street = facing
+    ? {
+        side: facing.side,
+        edge: facing.edge,
+        squareRotationDeg: round(facing.squareYaw * DEG, 10),
+      }
+    : null
   const parcel = site.parcel
   const lot: SiteBrief['lot'] = {
     ring,
@@ -594,7 +634,7 @@ export type PlaceBuildingInput = {
   outline?: readonly Pt[]
   /** Metres from the lot line, square to the house: at most one of front / rear and of left / right. */
   yards?: Partial<Record<YardKey, number>>
-  /** The building's rotation; absent, it keeps the one it has. */
+  /** The building's rotation; absent, a house standing keeps its own, one about to rise is squared to the street. */
   rotationDeg?: number
 }
 
@@ -629,12 +669,19 @@ export function placeBuildingPose(
   if (!building) return refusal('no_building', 'The scene has no building to place.')
   const site = readSiteNode(siteOfBuilding(nodes, building) as SiteNode)
 
+  const standing = buildingFootprintRings(nodes, building)
+  const current = building.rotation?.[1] ?? 0
+  // a standing house keeps its facing; one about to rise faces the street square
   const yaw =
-    input.rotationDeg === undefined ? (building.rotation?.[1] ?? 0) : input.rotationDeg / DEG
+    input.rotationDeg !== undefined
+      ? input.rotationDeg / DEG
+      : standing.length === 0
+        ? (streetAt(site, current)?.squareYaw ?? current)
+        : current
   const rings: P[][] =
     input.outline && input.outline.length >= 3
       ? [input.outline.map((p) => [p[0], p[1]] as P)]
-      : buildingFootprintRings(nodes, building)
+      : standing
   if (rings.length === 0)
     return refusal(
       'needs_footprint',
@@ -689,29 +736,59 @@ export function placeBuildingPose(
   }
 
   if (given.length > 0) {
-    const faces = streetFaces((before.street as NonNullable<SiteBrief['street']>).side)
-    for (let pass = 0; pass < 2; pass++) {
-      const toLevel = levelFrame({ position: [at[0], 0, at[1]], rotation: [0, yaw, 0] })
-      const lot = lotSite.map((p) => toLevel(p[0], p[1]))
-      const now = planYards(rings, lot)
-      let shift: P = [0, 0]
-      for (const key of given) {
-        const side = faces[key]
-        const yard = now[side]
-        if (yard === null)
-          return refusal('yards_infeasible', `The ${key} face does not look onto a lot line.`)
-        const [dx, dz] = SIDES[side]
-        const by = yard - (yards[key] as number)
-        shift = [shift[0] + dx * by, shift[1] + dz * by]
-      }
-      const [sx, sz] = turnPlanPoint(shift[0], shift[1], yaw)
-      at = [at[0] + sx, at[1] + sz]
-    }
-    const toLevel = levelFrame({ position: [at[0], 0, at[1]], rotation: [0, yaw, 0] })
-    const placed = planYards(
-      rings,
-      lotSite.map((p) => toLevel(p[0], p[1])),
+    // the street's side as the house will face it, not as it faces now
+    const faces = streetFaces(
+      (streetAt(site, yaw) as NonNullable<ReturnType<typeof streetAt>>).side,
     )
+    const yardsAt = (p: Pt) => {
+      const toLevel = levelFrame({ position: [p[0], 0, p[1]], rotation: [0, yaw, 0] })
+      return planYards(
+        rings,
+        lotSite.map((q) => toLevel(q[0], q[1])),
+      )
+    }
+    const misses = (p: Pt) => {
+      const now = yardsAt(p)
+      return given.map((key) => {
+        const yard = now[faces[key]]
+        return yard === null ? null : yard - (yards[key] as number)
+      })
+    }
+    // Each yard is moved along its own face's normal; on a turned lot moving one moves the other,
+    // so both are solved together. Straight lot lines make it exact in one step.
+    const along = given.map((key) => turnPlanPoint(...SIDES[faces[key]], yaw))
+    const step = 0.5
+    for (let pass = 0; pass < 6; pass++) {
+      const miss = misses(at)
+      const blind = given.find((_, i) => miss[i] === null)
+      if (blind)
+        return refusal('yards_infeasible', `The ${blind} face does not look onto a lot line.`)
+      const [r0 = 0, r1 = 0] = miss as number[]
+      if (Math.abs(r0) < 1e-3 && Math.abs(r1) < 1e-3) break
+      // how each miss changes per metre moved along each face's normal (one yard: a 1×1 system)
+      const slope = along.map(([dx, dz]) =>
+        (misses([at[0] + dx * step, at[1] + dz * step]) as number[]).map(
+          (m, i) => (m - (miss[i] as number)) / step,
+        ),
+      )
+      const [[a = 0, c = 0] = [], [b = 0, d = 1] = []] = slope
+      const det = a * d - b * c
+      if (Math.abs(det) < 1e-6) break
+      const moves = [(r1 * b - r0 * d) / det, (r0 * c - r1 * a) / det]
+      at = along.reduce<P>(
+        (p, [dx, dz], i) => [p[0] + dx * (moves[i] ?? 0), p[1] + dz * (moves[i] ?? 0)],
+        [at[0], at[1]],
+      )
+    }
+    const placed = yardsAt(at)
+    for (const key of given) {
+      const yard = placed[faces[key]]
+      if (yard === null || Math.abs(yard - (yards[key] as number)) > 0.01)
+        return refusal(
+          'yards_infeasible',
+          `No place on this lot gives a ${yards[key]} m ${key} yard with the other yards asked: give one of them, or turn the house square to the street (rotationDeg).`,
+        )
+    }
     for (const key of given) {
       const across = placed[OPPOSITE[faces[key]]]
       if (across === null || across < 0)
@@ -883,18 +960,27 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
     Math.abs(((brief.northDeg + 180) % 360) - 180) < 0.5
       ? 'plan up'
       : `${num(brief.northDeg)}° clockwise of plan up`
+  const squared = !street || Math.abs(street.squareRotationDeg - brief.pose.rotationDeg) < 0.06
+  const squaring = street ? `place_building rotationDeg ${num(street.squareRotationDeg)}` : ''
+  // a house yet to rise is squared by place_building itself: naming a rotation for it reads as
+  // one to draw the plan at
+  const facing = !footprint
+    ? 'a new house is stood square to it'
+    : squared
+      ? 'the house square to it'
+      : `${squaring} squares the house to it`
   lines.push(
-    `${
-      street
-        ? `street: ${street.side} (lot edge ${street.edge}; place_building rotationDeg ${num(street.squareRotationDeg)} squares the house to it)`
-        : 'street: not set'
-    } · north: ${north}`,
+    `${street ? `street: ${street.side} (lot edge ${street.edge}; ${facing})` : 'street: not set'} · north: ${north}`,
   )
 
   if (!footprint) {
     const aim = centre ?? boundsCentre(lot.bounds)
     lines.push(
-      `footprint: none yet — centre it on ${fmtPt(aim)} (a 12×10 m footprint spans ${span({ minX: aim[0] - 6, maxX: aim[0] + 6, minZ: aim[1] - 5, maxZ: aim[1] + 5 })})`,
+      `footprint: none yet — centre it on ${fmtPt(aim)} (a 12×10 m footprint spans ${span({ minX: aim[0] - 6, maxX: aim[0] + 6, minZ: aim[1] - 5, maxZ: aim[1] + 5 })})${
+        squared
+          ? ''
+          : '; place_building with its outline first stands it there square to the street'
+      }`,
     )
     return lines
   }
@@ -912,7 +998,9 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
   const fix = centred
     ? tooBig
       ? `: it is bigger than the buildable area (${size(room)}) even centred, so say so`
-      : ': even centred, the shape of the lot leaves it out: give yards or reshape the plan'
+      : squared
+        ? ': even centred, the shape of the lot leaves it out: give yards or reshape the plan'
+        : `: even centred, it stands askew to the lot: ${squaring} squares it to the street`
     : `: place_building centres it${tooBig ? `, but it is bigger than the buildable area (${size(room)}): say so` : ''}`
   const where =
     footprint.fit === 'outside'
