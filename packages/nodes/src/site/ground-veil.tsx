@@ -1,3 +1,4 @@
+import type { TerrainField } from '@pascal-app/core'
 import {
   groundVeiled,
   hideFromScene,
@@ -9,7 +10,9 @@ import { useCallback } from 'react'
 import { type BufferGeometry, DoubleSide, type Material, type Object3D } from 'three'
 import { color, float, mrt, output, positionWorld, select, smoothstep, vec2, vec4 } from 'three/tsl'
 import { MeshBasicNodeMaterial, type Node } from 'three/webgpu'
+import { buildPatternedRibbon } from './line-ribbon'
 import { insideLotNode } from './lot-mask'
+import { buildDrapedPolyline } from './terrain-drape'
 
 // The ground over a level below grade: the solid surfaces step aside and a veil is drawn in their
 // place, so the floor under them is seen and clicked while grade still reads.
@@ -79,9 +82,29 @@ export function horizonVeilMaterial(
   return veilMaterial(groundColor, select(outsideLot, fade.mul(VEIL_OPACITY), float(0)))
 }
 
+/** The grade ring: dark as the lot line, a little narrower, just over the ground. */
+const GRADE_RING_COLOR = '#1c1917'
+const GRADE_RING_WIDTH = 0.16
+const GRADE_RING_LIFT = 0.015
+/** One run, never broken: a ribbon pattern with no gap. */
+const UNBROKEN: readonly number[] = [Number.POSITIVE_INFINITY, 0]
+
+/** The grade ring's ribbon along one outline where the ground meets a level below grade. */
+export function gradeRingGeometry(
+  outline: ReadonlyArray<Point>,
+  field: TerrainField | null,
+): BufferGeometry {
+  const drape = buildDrapedPolyline({ points: outline, field, lift: GRADE_RING_LIFT, closed: true })
+  return buildPatternedRibbon(drape.positions, UNBROKEN, GRADE_RING_WIDTH)
+}
+
+export function gradeRingMaterial() {
+  return new MeshBasicNodeMaterial({ color: GRADE_RING_COLOR, side: DoubleSide })
+}
+
 /**
- * The veil drawn in place of one solid ground surface while the ground is veiled: the same
- * geometry in the same place. A direct child of the site, as the surface it stands for, so the
+ * Drawn only while the ground is veiled: the veil of one solid ground surface (the same geometry
+ * in the same place), or the grade ring. A direct child of the site, as the surfaces are, so the
  * captures find it (`siteGround`) and hide it with the site's other surfaces.
  */
 export function GroundVeil({

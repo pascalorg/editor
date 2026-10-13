@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { createTerrainField, encodeTerrainField, SiteNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  BuildingNode,
+  createTerrainField,
+  encodeTerrainField,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  useScene,
+} from '@pascal-app/core'
 import { SCENE_LAYER, SITE_GROUND, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import { DoubleSide, type Line, type Mesh, type Object3D, Raycaster, Vector3 } from 'three'
+import { Box3, DoubleSide, type Line, type Mesh, type Object3D, Raycaster, Vector3 } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import { SiteRenderer } from './renderer'
 
@@ -46,11 +56,17 @@ function groundPickedFromAbove(root: Object3D) {
 
 const drawn = (surface: Object3D) => surface.visible && surface.layers.isEnabled(SCENE_LAYER)
 
-let previous: ReturnType<typeof useViewer.getState>
+let previous: {
+  viewer: ReturnType<typeof useViewer.getState>
+  scene: ReturnType<typeof useScene.getState>
+}
 beforeEach(() => {
-  previous = useViewer.getState()
+  previous = { viewer: useViewer.getState(), scene: useScene.getState() }
 })
-afterEach(() => useViewer.setState(previous, true))
+afterEach(() => {
+  useViewer.setState(previous.viewer, true)
+  useScene.setState(previous.scene, true)
+})
 
 test('the flat lot veils its fill and the horizon disc, and keeps the lot line', async () => {
   const renderer = await create(<SiteRenderer node={lot(false)} />)
@@ -121,6 +137,65 @@ test('a sculpted lot veils its terrain, cut edges and skirt too', async () => {
     expect(solid.some(drawn)).toBe(false)
     expect(ground(scene, 'veil').length).toBe(solid.length)
     expect(groundPickedFromAbove(scene)).toHaveLength(0)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a grade ring is drawn, with the veil, where the ground meets a level below grade', async () => {
+  // A basement with the villa's numbers (13 Oct): -3.63 m, on a 0.28 m plate 6 × 4 m.
+  const basement: AnyNode[] = [
+    BuildingNode.parse({ id: 'building_a', children: ['level_b'] }),
+    LevelNode.parse({
+      id: 'level_b',
+      parentId: 'building_a',
+      level: -1,
+      baseElevation: -3.63,
+      height: 3.4,
+      children: ['slab_b'],
+    }),
+    SlabNode.parse({
+      id: 'slab_b',
+      parentId: 'level_b',
+      elevation: 0.28,
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 4],
+        [0, 4],
+      ],
+    }),
+  ]
+  useScene.setState({
+    nodes: Object.fromEntries(basement.map((node) => [node.id, node])) as Record<
+      AnyNodeId,
+      AnyNode
+    >,
+  })
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const veils = ground(scene, 'veil')
+    // The fill's and the disc's veils, and the ring.
+    expect(veils).toHaveLength(3)
+    const ring = veils.find((veil) => {
+      veil.geometry.computeBoundingBox()
+      const box = veil.geometry.boundingBox ?? new Box3()
+      return box.max.x - box.min.x < 7
+    })
+    expect(ring).toBeDefined()
+    const box = ring?.geometry.boundingBox ?? new Box3()
+    // The plate's outline, widened by the ribbon's half-width (8 cm) on every side.
+    const on = (side: number, plateSide: number) => Math.abs(side - plateSide) < 0.1
+    expect([on(box.min.x, 0), on(box.max.x, 6), on(box.min.z, 0), on(box.max.z, 4)]).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ])
+
+    await act(async () => useViewer.setState({ belowGrade: true }))
+    expect(ring && drawn(ring)).toBe(true)
   } finally {
     await renderer.unmount()
   }

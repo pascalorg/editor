@@ -1,5 +1,6 @@
 'use client'
 
+import { type GroundMode, useViewer } from '@pascal-app/viewer'
 import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff, X } from 'lucide-react'
 import { type ReactNode, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
@@ -126,6 +127,40 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
   )
 }
 
+const GROUND_MODES = [
+  { mode: 'auto', label: 'Auto', title: 'Veil the ground over a level below grade' },
+  { mode: 'solid', label: 'Solid', title: 'Keep the ground solid' },
+] as const satisfies ReadonlyArray<{ mode: GroundMode; label: string; title: string }>
+
+/**
+ * Over a level below grade the ground is veiled so its rooms show, and the bar says so: the
+ * person can keep the ground solid instead (Ground: Auto / Solid).
+ */
+export function GroundModeToggle() {
+  const belowGrade = useViewer((s) => s.belowGrade)
+  const groundMode = useViewer((s) => s.groundMode)
+  if (!belowGrade) return null
+  return (
+    <div aria-label="Ground" className={GROUP} role="group">
+      <span className="flex items-center px-2.5 text-muted-foreground text-xs">
+        Below grade · ground {groundMode === 'auto' ? 'veiled' : 'solid'}
+      </span>
+      {GROUND_MODES.map(({ mode, label, title }) => (
+        <button
+          aria-pressed={groundMode === mode}
+          className={cn(SEGMENT, groundMode === mode ? ACTIVE : IDLE)}
+          key={mode}
+          onClick={() => useViewer.getState().setGroundMode(mode)}
+          title={title}
+          type="button"
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /** Split toggle and, split, the swap — at the right end of the last pane's bar. */
 function SplitControls() {
   const split = useActiveViewLayout().split
@@ -180,6 +215,7 @@ export function ViewBarRow({ leading }: { leading?: ReactNode }) {
             style={{ left: `${left * 100}%`, width: `${(right - left) * 100}%` }}
           >
             <ViewTabs pane={pane} />
+            {isSceneView(layout.panes[pane]) && <GroundModeToggle />}
             {pane === 0 && leading}
             <span className="flex-1" />
             {isLast && !isMobile && <SplitControls />}

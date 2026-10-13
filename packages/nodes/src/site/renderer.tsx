@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  belowGradeFootprints,
   type SiteNode,
   sightTriangle,
   siteFrontEdge,
@@ -51,6 +52,8 @@ import {
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 import {
   GroundVeil,
+  gradeRingGeometry,
+  gradeRingMaterial,
   groundVeilMaterial,
   horizonVeilMaterial,
   noopRaycast,
@@ -329,6 +332,28 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     slabPolygonsCache.current = next
     return next
   })
+
+  // Where the ground meets the levels below grade: the grade ring runs there under the veil.
+  const buriedFootprintsCache = useRef<[number, number][][]>([])
+  const buriedFootprints = useScene((state: S) => {
+    const next = belowGradeFootprints(state.nodes)
+    const prev = buriedFootprintsCache.current
+    if (polygonsMatch(next, prev)) return prev
+    buriedFootprintsCache.current = next
+    return next
+  })
+  const gradeRings = useMemo(
+    () => buriedFootprints.map((outline) => gradeRingGeometry(outline, persistedField)),
+    [buriedFootprints, persistedField],
+  )
+  useEffect(
+    () => () => {
+      for (const ring of gradeRings) ring.dispose()
+    },
+    [gradeRings],
+  )
+  const gradeRing = useMemo(gradeRingMaterial, [])
+  useEffect(() => () => gradeRing.dispose(), [gradeRing])
 
   // Ground shape: site polygon with slab footprints punched as holes
   const groundShape = useMemo(() => {
@@ -637,6 +662,11 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           rotation={FLAT_ON_THE_GROUND}
         />
       )}
+
+      {showSiteSurfaces &&
+        gradeRings.map((geometry, index) => (
+          <GroundVeil geometry={geometry} key={index} material={gradeRing} />
+        ))}
 
       {showSiteSurfaces && ribbons && (
         <>
