@@ -113,6 +113,12 @@ type PointAskState = {
   playful: boolean
   /** Pascal is on a turn, so a new ask will wait its turn (the Send button says Queue). */
   busy: boolean
+  /**
+   * Messages already wait in the chat's queue, or are held there after an error: a new ask goes
+   * behind them (the Send button says Queue) though no turn runs. Apart from `busy`, which says a
+   * turn runs and ends Follow Pascal and settles the pins.
+   */
+  behindQueue: boolean
   /** The pin whose card is open (hover or focus of the pin, or its own 4 s opening). */
   cardFor: string | null
   /** The rectangle being dragged or just released. */
@@ -141,6 +147,7 @@ type PointAskState = {
   removePin: (askId: string) => void
   setPlayful: (playful: boolean) => void
   setBusy: (busy: boolean) => void
+  setBehindQueue: (behindQueue: boolean) => void
   openCard: (askId: string | null) => void
 }
 
@@ -156,6 +163,7 @@ export const usePointAsk = create<PointAskState>((set) => ({
   pinOrder: [],
   playful: true,
   busy: false,
+  behindQueue: false,
   cardFor: null,
   closeKind: 'dismiss',
   region: null,
@@ -227,7 +235,13 @@ export const usePointAsk = create<PointAskState>((set) => ({
     }),
   setPlayful: (playful) => set((state) => (state.playful === playful ? state : { playful })),
   setBusy: (busy) => set((state) => (state.busy === busy ? state : { busy })),
+  setBehindQueue: (behindQueue) =>
+    set((state) => (state.behindQueue === behindQueue ? state : { behindQueue })),
   openCard: (askId) => set((state) => (state.cardFor === askId ? state : { cardFor: askId })),
 }))
+
+/** Whether a new ask waits its turn: a turn runs, or messages already wait in the queue. */
+export const asksWait = (state: Pick<PointAskState, 'busy' | 'behindQueue'>) =>
+  state.busy || state.behindQueue
 
 export { createPin }

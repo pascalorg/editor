@@ -28,7 +28,7 @@ import {
   suggestionsFor,
 } from '../../lib/point-ask/suggestions'
 import { pointRoomHasContents } from '../../lib/point-ask/target-scope'
-import { type PointBubble, usePointAsk } from '../../store/use-point-ask'
+import { asksWait, type PointBubble, usePointAsk } from '../../store/use-point-ask'
 import { finishOptionalAnimations, pointMotionCalm, usePointMotionCalm } from './optional-motion'
 
 const ARROW = (
@@ -147,7 +147,7 @@ function BubbleView({
   })
   const bubbleRef = useRef(bubble)
   bubbleRef.current = bubble
-  const busy = usePointAsk((s) => s.busy)
+  const busy = usePointAsk(asksWait)
   const [listening, setListening] = useState(false)
   const dictation = useRef<Dictation | null>(null)
   const dictationBase = useRef('')

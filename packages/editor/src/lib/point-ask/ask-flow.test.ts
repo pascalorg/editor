@@ -10,8 +10,8 @@ import {
   useScene,
   WallNode,
 } from '@pascal-app/core'
-import { type BubbleTarget, usePointAsk } from '../../store/use-point-ask'
-import { setPointAskBusy } from './host-api'
+import { asksWait, type BubbleTarget, usePointAsk } from '../../store/use-point-ask'
+import { setPointAskBehindQueue, setPointAskBusy } from './host-api'
 import { endCompare, sendBubble, startCompare, startPointAskSession } from './session'
 
 // The whole ask path with the real stores (hold to see before; an ask while Pascal is working): the session listening to the chat's
@@ -346,5 +346,35 @@ describe("which pin takes the scene's changes", () => {
     const pin = usePointAsk.getState().pins[stale]?.model
     expect(pin?.committed).toBe(false)
     expect(pin?.state).not.toBe('working')
+  })
+})
+
+describe('messages already queued or held', () => {
+  // The chat queues an ask behind messages that wait (a queue held after an error needs Resume),
+  // with no turn running: the bubble must say Queue, but nothing is working.
+  test('a new ask waits behind them: the bubble says Queue, and no turn is said to run', () => {
+    expect(asksWait(usePointAsk.getState())).toBe(false)
+    setPointAskBehindQueue(true)
+    const state = usePointAsk.getState()
+    expect(asksWait(state)).toBe(true)
+    expect(state.busy).toBe(false)
+    setPointAskBehindQueue(false)
+    expect(asksWait(usePointAsk.getState())).toBe(false)
+  })
+
+  test('a running turn makes asks wait too, whether or not anything is queued', () => {
+    setPointAskBusy(true)
+    expect(asksWait(usePointAsk.getState())).toBe(true)
+    setPointAskBusy(false)
+    expect(asksWait(usePointAsk.getState())).toBe(false)
+  })
+
+  test('they do not refuse a hold, nor settle a pin the way an idle chat does', async () => {
+    const askId = await sendAsk()
+    status(askId, { status: 'working', sentence: 'Raising the wall' })
+    agentWrite(() => useScene.getState().updateNode(wall.id, { height: 3.4 }))
+    status(askId, { status: 'ended', outcome: 'completed', asked: false, wroteScene: true })
+    setPointAskBehindQueue(true)
+    expect(startCompare(askId)).toBe(true)
   })
 })
