@@ -1,10 +1,14 @@
 import {
+  getBarrelRoofFaces,
   getConicalRoofCoverage,
+  getGlazedRoofFaces,
   getRoofModuleFaces,
   getRoofSegmentSurfaceY,
   getRoofShapeInsets,
   getRoofShapeRatios,
   getSegmentSlopeFrame,
+  glazedRoofFacePoint,
+  isGlazedRoofSegment,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
 } from '@pascal-app/core'
@@ -94,6 +98,7 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
   const conicalCoverage = getConicalRoofCoverage(segment)
   return [
     segment.roofType,
+    segment.roofSystem,
     segment.width,
     segment.depth,
     segment.wallHeight,
@@ -102,6 +107,8 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
     segment.overhang,
     segment.shingleThickness,
     segment.pitch,
+    segment.barrelRise,
+    segment.barrelSegments,
     conicalCoverage.startAngle,
     conicalCoverage.sweepAngle,
     segment.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio,
@@ -115,6 +122,18 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
 }
 
 function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
+  if (isGlazedRoofSegment(segment) || segment.roofType === 'barrel')
+    return (
+      isGlazedRoofSegment(segment) ? getGlazedRoofFaces(segment) : getBarrelRoofFaces(segment)
+    )
+      .filter((face) => face.normal[1] > 0)
+      .map((face) => {
+        const vertices = face.polygon.map(([u, v]) => {
+          const [x, y, z] = glazedRoofFacePoint(face, u, v)
+          return { x, y, z }
+        })
+        return { vertices, polygon: vertices.map(({ x, z }): RoofSurfacePoint2D => [x, z]) }
+      })
   const conicalCoverage = getConicalRoofCoverage(segment)
   const { roofType, width, depth, wallHeight, wallThickness, deckThickness, overhang } = segment
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
@@ -414,6 +433,15 @@ export function getAnalyticalNormal(
   const slope = getSegmentSlopeFrame(seg)
   if (slope.activeRh === 0 || slope.tanTheta === 0) {
     return out.set(0, 1, 0)
+  }
+  if (roofType === 'barrel') {
+    const face = getBarrelRoofFaces(seg).find(
+      (face) =>
+        face.normal[1] > 0 &&
+        (lz - face.origin[2]) / face.v[2] >= -1e-6 &&
+        (lz - face.origin[2]) / face.v[2] <= face.length + 1e-6,
+    )
+    return face ? out.set(...face.normal) : out.set(0, 1, 0)
   }
   const primaryTan = slope.tanTheta
   const halfW = width / 2

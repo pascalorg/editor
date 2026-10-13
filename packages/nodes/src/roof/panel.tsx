@@ -32,6 +32,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { RoofGlazingPanel } from '../roof/glazing-panel'
 
 export default function RoofPanel() {
   const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent' | 'turbine-vent'>('box-vent')
@@ -243,6 +244,7 @@ export default function RoofPanel() {
       title={node.name || 'Roof'}
       width={300}
     >
+      <RoofGlazingPanel segments={segments} />
       <PanelSection title="Segments">
         <div className="flex flex-col gap-1">
           {segments.map((seg, i) => (

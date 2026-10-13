@@ -13,6 +13,7 @@ import {
   roofSegmentRotateAffordance,
 } from './floorplan-affordances'
 import { matchRoofSegmentMeasurementFeature, roofSegmentMeasurementFeatures } from './measurement'
+import { roofSegmentPaint, roofSegmentSlots } from './paint'
 import { roofSegmentParametrics } from './parametrics'
 import { RoofSegmentNode } from './schema'
 
@@ -132,6 +133,13 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
         }
       }
 
+      if (initial.roofType === 'barrel')
+        return {
+          depth: newDepth,
+          barrelRise: Math.min(newDepth / 2, getActiveRoofHeight(initial)),
+          position: [newCenterX, initial.position[1], newCenterZ],
+        }
+
       // Preserve peak height — back-solve pitch for the new depth so
       // the assembled roof height matches what it was before the drag.
       const originalRoofHeight = getActiveRoofHeight(initial)
@@ -233,6 +241,8 @@ function roofSegmentPitchHandle(): HandleDescriptor<RoofSegmentNodeType> {
     visible: (n) => !n.managedByParent,
     apply: (initial, newPeakHeight) => {
       const roofHeight = Math.max(0, newPeakHeight - initial.wallHeight)
+      if (initial.roofType === 'barrel')
+        return { barrelRise: Math.max(0.01, Math.min(initial.depth / 2, roofHeight)) }
       const pitch = getPitchFromActiveRoofHeight({
         roofType: initial.roofType,
         width: initial.width,
@@ -314,7 +324,7 @@ function resolveRoofSegmentHandles(
  */
 export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   kind: 'roof-segment',
-  schemaVersion: 5,
+  schemaVersion: 7,
   schema: RoofSegmentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -334,6 +344,8 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   },
 
   capabilities: {
+    paint: roofSegmentPaint,
+    slots: (node) => roofSegmentSlots(node as RoofSegmentNodeType),
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

@@ -641,6 +641,7 @@ export { useMaterialCatalogModel } from './lib/material-catalog-model'
 export {
   type ActivePaintMaterial,
   buildResetSurfaceMaterialUpdates,
+  buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
@@ -739,6 +740,7 @@ export {
   setPluginDirectoryContext,
   setPluginInstallLocks,
 } from './lib/plugin-panels'
+export { buildPrintableRoofSegmentSolids } from './lib/print-roof-solids'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {

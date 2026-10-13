@@ -1,3 +1,4 @@
+import { getBarrelRoofProfile } from './barrel-roof'
 import { ROOF_SHAPE_DEFAULTS, type RoofType } from './roof-segment'
 
 export type RoofShapeFaceVertex = {
@@ -14,6 +15,7 @@ export function getRoofShapeEaveSides(type: RoofType): RoofShapeEaveSide[] {
       return []
     case 'shed':
       return ['+Z']
+    case 'barrel':
     case 'gable':
     case 'gambrel':
       return ['+Z', '-Z']
@@ -299,6 +301,45 @@ export function getRoofModuleFaces(input: {
 }): RoofShapeFaceVertex[][] {
   const v = (x: number, y: number, z: number): RoofShapeFaceVertex => ({ x, y, z })
   const { iF = 0, iB = 0, iL = 0, iR = 0 } = input.insets
+
+  if (input.type === 'barrel' && input.rh > 0) {
+    const profile = getBarrelRoofProfile(input.d, input.rh, 32)
+    const left = profile.map(([z, y]) => v(-input.w / 2, input.wh + y, z))
+    const right = profile.map(([z, y]) => v(input.w / 2, input.wh + y, z))
+    const faces = [
+      [
+        v(-input.w / 2, input.baseY, -input.d / 2),
+        v(-input.w / 2, input.baseY, input.d / 2),
+        ...[...left].reverse(),
+      ],
+      [
+        v(input.w / 2, input.baseY, input.d / 2),
+        v(input.w / 2, input.baseY, -input.d / 2),
+        ...right,
+      ],
+      [
+        v(-input.w / 2, input.baseY, input.d / 2),
+        v(input.w / 2, input.baseY, input.d / 2),
+        right.at(-1)!,
+        left.at(-1)!,
+      ],
+      [
+        v(input.w / 2, input.baseY, -input.d / 2),
+        v(-input.w / 2, input.baseY, -input.d / 2),
+        left[0]!,
+        right[0]!,
+      ],
+      [
+        v(-input.w / 2, input.baseY, -input.d / 2),
+        v(input.w / 2, input.baseY, -input.d / 2),
+        v(input.w / 2, input.baseY, input.d / 2),
+        v(-input.w / 2, input.baseY, input.d / 2),
+      ],
+    ]
+    for (let i = 0; i < profile.length - 1; i++)
+      faces.push([left[i]!, left[i + 1]!, right[i + 1]!, right[i]!])
+    return faces
+  }
 
   if (input.type === 'conical') {
     const startAngle = Number.isFinite(input.conicalStartAngle) ? input.conicalStartAngle! : 0

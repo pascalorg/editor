@@ -5,7 +5,7 @@ import { cn } from '../../../lib/utils'
 interface SegmentedControlProps<T extends string> {
   value: T
   onChange: (value: T) => void
-  options: { label: React.ReactNode; value: T }[]
+  options: { label: React.ReactNode; value: T; disabled?: boolean }[]
   className?: string
   disabled?: boolean
   mixed?: boolean
@@ -29,6 +29,7 @@ export function SegmentedControl<T extends string>({
     >
       {options.map((option) => {
         const isSelected = !mixed && value === option.value
+        const isDisabled = disabled || option.disabled === true
         return (
           <button
             className={cn(
@@ -36,9 +37,10 @@ export function SegmentedControl<T extends string>({
               isSelected
                 ? 'bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
                 : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
-              disabled && 'cursor-not-allowed hover:bg-transparent hover:text-muted-foreground',
+              isDisabled && 'cursor-not-allowed hover:bg-transparent hover:text-muted-foreground',
+              option.disabled && 'opacity-40',
             )}
-            disabled={disabled}
+            disabled={isDisabled}
             key={option.value}
             onClick={() => onChange(option.value)}
             type="button"

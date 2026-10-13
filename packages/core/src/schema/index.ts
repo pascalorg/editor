@@ -139,6 +139,7 @@ export {
   CurtainGrid,
   CurtainPanelType,
   CurtainWallConfig,
+  curtainGridPositions,
   DEFAULT_CURTAIN_WALL,
   getCurtainWallConfig,
 } from './nodes/curtain-wall'
@@ -271,6 +272,30 @@ export {
 } from './nodes/ridge-vent'
 export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
+export {
+  clipGlazedRoofPolygon,
+  DEFAULT_ROOF_GLAZING,
+  type GlazedRoofFace,
+  type GlazedRoofLayout,
+  type GlazedRoofPiece,
+  type GlazedRoofPoint,
+  getBarrelRoofFaces,
+  getBarrelRoofSolidPieces,
+  getGlazedRoofFaces,
+  getGlazedRoofLayout,
+  getGlazedRoofPanelType,
+  getGlazedRoofPieceFaces,
+  getGlazedRoofPieces,
+  getGlazedRoofPlanLines,
+  getRoofGlazing,
+  glazedRoofFacePoint,
+  glazedRoofSupportsPoint,
+  insetGlazedRoofPolygon,
+  isGlazedRoofSegment,
+  RoofGlazing,
+  RoofSystemType,
+  supportsRoofGlazing,
+} from './nodes/roof-glazing'
 export type {
   DutchRoofMetrics,
   RoofSegmentSurfaceMaterialRole,

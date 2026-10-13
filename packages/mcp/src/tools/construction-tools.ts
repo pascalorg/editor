@@ -2,7 +2,14 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createZone, generateId } from '@pascal-app/core'
 import { unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
-import { getActiveRoofHeight, LevelNode, RoofNode, RoofSegmentNode } from '@pascal-app/core/schema'
+import {
+  getActiveRoofHeight,
+  LevelNode,
+  RoofGlazing,
+  RoofNode,
+  RoofSegmentNode,
+  RoofSystemType,
+} from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -19,6 +26,7 @@ const ROOF_TYPES = [
   'mansard',
   'flat',
   'conical',
+  'barrel',
 ] as const
 export const createStoryShellInput = {
   levelId: NodeIdSchema,
@@ -80,6 +88,13 @@ export const createRoofInput = {
   width: measurement('length', 'm', { positive: true, description: 'Roof width.' }),
   depth: measurement('length', 'm', { positive: true, description: 'Roof depth.' }),
   roofType: z.enum(ROOF_TYPES).default('hip'),
+  roofSystem: RoofSystemType.default('standard'),
+  glazing: RoofGlazing.optional(),
+  barrelRise: measurement('length', 'm', {
+    positive: true,
+    description: 'Barrel arch rise, up to half the span.',
+  }).optional(),
+  barrelSegments: z.number().int().min(4).max(32).optional(),
   pitch: measurement('angle', 'deg', { min: 0, max: 85, description: 'Roof pitch.' }).default(35),
   wallHeight: measurement('length', 'm', { min: 0, description: 'Knee-wall height.' }).default(
     0.35,
@@ -329,6 +344,10 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       width,
       depth,
       roofType,
+      roofSystem,
+      glazing,
+      barrelRise,
+      barrelSegments,
       pitch,
       wallHeight,
       wallThickness,
@@ -338,12 +357,22 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
     }) => {
       const preset = unknownMaterialPresetRefusal({ materialPreset })
       if (preset) throw new Error(preset)
+      if (
+        roofSystem === 'glazed' &&
+        roofType !== 'gable' &&
+        roofType !== 'shed' &&
+        roofType !== 'barrel'
+      )
+        throw new Error('Glazed roofs support gable, straight shed, and barrel shapes.')
+      if (roofType === 'barrel' && barrelRise !== undefined && barrelRise > depth / 2)
+        throw new Error('Barrel rise must not exceed half the span.')
       const effectiveWidth = roofType === 'conical' ? Math.max(width, depth) : width
       const effectiveDepth = roofType === 'conical' ? effectiveWidth : depth
       // Peak height is derived from pitch + footprint + type; we still
       // need it to size the auto-generated roof level container below.
       const peakHeight = getActiveRoofHeight({
         roofType,
+        barrelRise,
         pitch,
         width: effectiveWidth,
         depth: effectiveDepth,
@@ -380,6 +409,10 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       }
 
       const segment = RoofSegmentNode.parse({
+        roofSystem,
+        glazing,
+        barrelRise,
+        barrelSegments,
         roofType,
         width: effectiveWidth,
         depth: effectiveDepth,

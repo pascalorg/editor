@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   hasSegmentMaterialOverride,
+  isGlazedRoofSegment,
   type RoofNode,
   type RoofSegmentNode,
   useLiveNodeOverrides,
@@ -70,7 +71,12 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
       for (const segmentId of node.children ?? []) {
         const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
         if (!seg) continue
-        if (hasSegmentMaterialOverride(seg)) ids.push(segmentId as AnyNodeId)
+        if (
+          hasSegmentMaterialOverride(seg) ||
+          isGlazedRoofSegment(seg) ||
+          seg.roofType === 'barrel'
+        )
+          ids.push(segmentId as AnyNodeId)
       }
       return ids
     }),
@@ -81,7 +87,12 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
       for (const segmentId of node.children ?? []) {
         const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
         if (!seg) continue
-        if (!hasSegmentMaterialOverride(seg)) ids.push(segmentId as AnyNodeId)
+        if (
+          !hasSegmentMaterialOverride(seg) &&
+          !isGlazedRoofSegment(seg) &&
+          seg.roofType !== 'barrel'
+        )
+          ids.push(segmentId as AnyNodeId)
       }
       return ids
     }),

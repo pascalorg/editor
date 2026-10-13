@@ -2,11 +2,14 @@
 
 import {
   type AnyNodeId,
+  getEffectiveNode,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
+  isGlazedRoofSegment,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSegmentSurfaceMaterialRole,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -15,15 +18,20 @@ import {
   getRoofMaterialArray,
   levelWallCladdingRef,
   resolveMaterialRef,
+  SHADOW_ONLY_LAYER,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { createGlazedRoofMaterials } from '../roof/glazed-materials'
 import { getRoofDebugMaterials, getRoofMaterials } from '../roof/roof-materials'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 
-export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
+export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNode }) => {
+  useLiveNodeOverrides((state) => state.overrides.get(storedNode.id))
+  const node = getEffectiveNode(storedNode)
+  const glazed = isGlazedRoofSegment(node)
   const ref = useRef<THREE.Mesh>(null!)
   const nodes = useScene((state) => state.nodes)
   const sceneMaterials = useScene((state) => state.materials)
@@ -47,6 +55,7 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     : undefined
   // 4 groups map 1:1 to the roof's 4-material array (see getRoofMaterialArray).
   const placeholderGeometry = useMemo(() => createPlaceholderGeometry(4), [])
+  const shadowPlaceholder = useMemo(() => createPlaceholderGeometry(1), [])
 
   // Segment material precedence, per-role:
   //   1. Segment's role-specific override (topMaterial, edgeMaterial, wallMaterial).
@@ -123,18 +132,35 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     sceneTheme,
   ])
 
-  const material = debugColors
-    ? getRoofDebugMaterials(shading)
-    : customMaterial || getRoofMaterials(shading, textures, colorPreset)
+  const { glazing, slots } = node
+  const glazingMaterials = useMemo(
+    () => (glazed ? createGlazedRoofMaterials({ glazing, slots }, shading, sceneMaterials) : null),
+    [glazed, glazing, slots, shading, sceneMaterials],
+  )
+  useEffect(
+    () => () => {
+      for (const material of glazingMaterials?.owned ?? []) material.dispose()
+    },
+    [glazingMaterials],
+  )
+
+  const material =
+    glazingMaterials?.visible ??
+    (debugColors
+      ? getRoofDebugMaterials(shading)
+      : customMaterial || getRoofMaterials(shading, textures, colorPreset))
 
   useEffect(() => {
     return () => {
       placeholderGeometry.dispose()
+      shadowPlaceholder.dispose()
     }
-  }, [placeholderGeometry])
+  }, [placeholderGeometry, shadowPlaceholder])
 
   return (
     <mesh
+      castShadow={!glazed}
+      receiveShadow
       geometry={placeholderGeometry}
       material={material}
       position={node.position}
@@ -142,7 +168,19 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
       rotation-y={node.rotation}
       visible={node.visible}
       {...handlers}
-    />
+    >
+      <mesh
+        name="glazed-roof-shadow"
+        userData={{ pascalExport: 'strip' }}
+        geometry={shadowPlaceholder}
+        layers={SHADOW_ONLY_LAYER}
+        castShadow
+        visible={glazed}
+        raycast={() => {}}
+      >
+        <meshBasicMaterial />
+      </mesh>
+    </mesh>
   )
 }
 

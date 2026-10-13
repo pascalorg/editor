@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
+import { getBarrelRoofProfile } from './barrel-roof'
+import { RoofGlazing, RoofSystemType } from './roof-glazing'
 
 export const RoofType = z.enum([
   'hip',
@@ -13,6 +15,7 @@ export const RoofType = z.enum([
   'mansard',
   'flat',
   'conical',
+  'barrel',
 ])
 
 export type RoofType = z.infer<typeof RoofType>
@@ -112,6 +115,11 @@ export const RoofSegmentNode = BaseNode.extend({
   rotation: z.number().default(0),
   // Roof shape type
   roofType: RoofType.default('gable'),
+  barrelRise: z.number().finite().positive().optional(),
+  barrelSegments: z.number().int().min(4).max(32).optional(),
+  roofSystem: RoofSystemType.optional(),
+  glazing: RoofGlazing.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Footprint dimensions
   width: z.number().default(8),
   depth: z.number().default(6),
@@ -238,7 +246,9 @@ export const RoofSegmentNode = BaseNode.extend({
   Roof segment node - an individual roof module within a roof group.
   Each segment generates a complete architectural volume (walls + roof).
   Multiple segments can be combined to form complex roof shapes.
-  - roofType: hip, gable, shed, gambrel, dutch, mansard, flat, conical
+  - roofType: hip, gable, shed, gambrel, dutch, mansard, flat, conical, barrel
+  - barrelRise: arch rise in metres, limited to half the depth/span
+  - barrelSegments: 4–32 flat arch bays, default 12
   - width/depth: footprint dimensions
   - conicalStartAngle / conicalSweepAngle: angular extent of a conical sector (radians)
   - conicalFullCircle: temporarily render the complete cone while preserving the sector angles
@@ -577,8 +587,17 @@ export type SegmentSlopeFrame = {
  * silently drifted when a new roof type was added.
  */
 export function getSegmentSlopeFrame(
-  node: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'width' | 'depth'> & Partial<ShapeRatios>,
+  node: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'width' | 'depth'> &
+    Partial<ShapeRatios> &
+    Pick<Partial<RoofSegmentNode>, 'barrelRise' | 'barrelSegments'>,
 ): SegmentSlopeFrame {
+  if (node.roofType === 'barrel') {
+    const run = Math.max(0.005, node.depth / 2)
+    const rise = Math.min(run, node.barrelRise ?? run / 2)
+    const tanTheta = rise / run
+    const cosTheta = 1 / Math.sqrt(1 + tanTheta * tanTheta)
+    return { run, rise, tanTheta, cosTheta, sinTheta: tanTheta * cosTheta, activeRh: rise }
+  }
   const ratios = withRatioDefaults(node)
   const run = getPrimarySlopeRun(ratios)
   // `!(pitch > 0)` (not `pitch <= 0`) so a missing/NaN pitch — e.g. a segment
@@ -621,13 +640,15 @@ export function getRoofSegmentVisibleTopBounds(
   const width = finitePositive(segment.width, DEFAULT_ROOF_SEGMENT_WIDTH)
   const depth = finitePositive(segment.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
   const trim = normalizeRoofSegmentTrim({ ...segment, width, depth })
-  const horizontalOverhang = finiteNonNegative(segment.overhang) * cosTheta
+  const horizontalOverhang =
+    finiteNonNegative(segment.overhang) * (segment.roofType === 'barrel' ? 1 : cosTheta)
   const deckExt = finiteNonNegative(segment.wallThickness) / 2 + horizontalOverhang
-  const shingleOverhang = finiteNonNegative(segment.shingleThickness) * sinTheta
+  const shingleOverhang =
+    segment.roofSystem === 'glazed' ? 0 : finiteNonNegative(segment.shingleThickness) * sinTheta
 
   let xExt = deckExt
-  let frontExt = deckExt
-  let backExt = deckExt
+  let frontExt = segment.roofType === 'barrel' ? 0 : deckExt
+  let backExt = segment.roofType === 'barrel' ? 0 : deckExt
 
   if (
     segment.roofType === 'hip' ||
@@ -695,6 +716,17 @@ export function getRoofSegmentSurfaceY(
 ): number {
   const slopeFrame = getSegmentSlopeFrame(node)
   const activeRh = slopeFrame.activeRh
+  if (node.roofType === 'barrel') {
+    const profile = getBarrelRoofProfile(node.depth, activeRh, node.barrelSegments ?? 12)
+    const z = Math.max(-node.depth / 2, Math.min(node.depth / 2, localZ))
+    for (let i = 1; i < profile.length; i++) {
+      const a = profile[i - 1]!,
+        b = profile[i]!
+      if (z <= b[0] + 1e-8)
+        return node.wallHeight + a[1] + ((b[1] - a[1]) * (z - a[0])) / (b[0] - a[0])
+    }
+    return node.wallHeight
+  }
   const peakY = node.wallHeight + activeRh
   if (activeRh === 0) return node.wallHeight
 
