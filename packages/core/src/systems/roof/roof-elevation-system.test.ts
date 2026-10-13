@@ -154,6 +154,22 @@ describe('RoofElevationSystem', () => {
     expect(currentRoof(roof.id).support).toEqual({ kind: 'level' })
   })
 
+  test('a roof above its storey at a height of its own keeps its height over that storey as the storey grows', async () => {
+    const { level, roof, manual } = setup()
+    await Promise.resolve()
+    useScene.getState().updateNode(roof.id, { support: { kind: 'level' }, position: [2, 0, 1] })
+    await Promise.resolve()
+    // the walls stay 3 m tall: the roof stays on them, 0.5 m under the risen roof level's floor
+    useScene.getState().updateNode(level.id, { height: 3.5 })
+    await Promise.resolve()
+    expect(currentRoof(roof.id).position).toEqual([2, -0.5, 1])
+    expect(currentRoof(manual.id).position).toEqual([6, 7, 8])
+    useScene.temporal.getState().undo()
+    await Promise.resolve()
+    expect((useScene.getState().nodes[level.id] as LevelNode).height).toBe(3)
+    expect(currentRoof(roof.id).position).toEqual([2, 0, 1])
+  })
+
   test('undo and redo restore custom/follow mode and Y together', async () => {
     const { roof } = setup()
     await Promise.resolve()

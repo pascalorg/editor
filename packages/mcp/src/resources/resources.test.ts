@@ -236,6 +236,8 @@ describe('pascal://agent-guide', () => {
     'editor_tab_required',
     'invalid_input',
     'roof_exists',
+    // verify_scene's issue type, which names move_roofs_to_roof_level
+    'roof_mixed_in_storey',
     'room_named_by_person',
     'scene_wipe_blocked',
   ]

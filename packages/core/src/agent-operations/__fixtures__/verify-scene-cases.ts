@@ -7,6 +7,7 @@ import {
   ItemNode,
   LevelNode,
   RoofNode,
+  RoofSegmentNode,
   SlabNode,
   StairNode,
   StairSegmentNode,
@@ -84,6 +85,17 @@ function room(levelId: string, tag: string): AnyNode[] {
     CeilingNode.parse({ id: `ceiling_${tag}`, parentId: levelId, polygon: ROOM }),
   ]
 }
+
+/** A roof over the 4 × 3 m room, held by `levelId`, its segment bearing `y` above that floor. */
+const roofOver = (levelId: string, y: number): AnyNode[] => [
+  RoofNode.parse({
+    id: 'roof_low',
+    parentId: levelId,
+    position: [2, y, 1.5],
+    children: ['rseg_low'],
+  }),
+  RoofSegmentNode.parse({ id: 'rseg_low', parentId: 'roof_low', width: 4, depth: 3, wallHeight: 0 }),
+]
 
 const STAIR_HOLE: [number, number][] = [
   [1.5, 0.2],
@@ -274,6 +286,24 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { contains: ['roof_level_no_roof'] },
   ),
   verify(
+    "a roof level holding a plugin's roof planes has its roof",
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_roof', 1, { metadata: { role: 'roof' } }),
+        ...room('level_0', 'ground'),
+        {
+          object: 'node',
+          id: 'roofplane_south',
+          type: 'procedural:roof-plane',
+          parentId: 'level_roof',
+          visible: true,
+        } as unknown as AnyNode,
+      ),
+    { lacks: ['roof_level_no_roof'] },
+  ),
+  verify(
     'a roof level below a storey of its building is reported',
     () =>
       scene(
@@ -328,10 +358,50 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     },
   ),
   verify(
+    'a roof on the walls of the storey holding it is reported, naming the move',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ...roofOver('level_0', 2.5),
+      ),
+    {
+      contains: ['roof_mixed_in_storey'],
+      mentions: ['dedicated roof level', 'move_roofs_to_roof_level', 'Move to the roof level'],
+    },
+  ),
+  verify(
     "a lower wing's roof at the upper storey's floor, where the Roof tool puts it, is quiet",
     () =>
       twoStoreys(...stairOn('level_0'), RoofNode.parse({ id: 'roof_porch', parentId: 'level_1' })),
     { lacks: ['roof_mixed_in_storey'] },
+  ),
+  verify(
+    "a lower storey's roof on the storey above it, bearing on the lower walls, is quiet",
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_1', 1),
+        ...room('level_0', 'ground'),
+        ...room('level_1', 'upper'),
+        ...stairOn('level_0'),
+        // the upper storey's floor is 2.8 m up; the ground floor's walls top out at 2.5 m
+        ...roofOver('level_1', -0.3),
+      ),
+    { lacks: ['roof_mixed_in_storey'] },
+  ),
+  verify(
+    'a porch roof on its beam, under the walls’ tops, is still reported on its storey',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ...roofOver('level_0', 2.1),
+      ),
+    { contains: ['roof_mixed_in_storey'], mentions: ['dedicated roof level'] },
   ),
   verify(
     'a wall taller than its storey in a multi-storey building is reported',

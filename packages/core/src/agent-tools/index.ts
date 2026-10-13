@@ -24,7 +24,7 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
-import { createRoofTool } from './roofs'
+import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { getSiteTool, placeBuildingTool } from './site'
@@ -94,6 +94,7 @@ export const AGENT_TOOL_CONTRACTS = [
   placeItemsTool,
   createStairTool,
   createRoofTool,
+  moveRoofsToRoofLevelTool,
   deleteNodeTool,
   addObjectTool,
   getSourceTool,
