@@ -2,6 +2,7 @@
 
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useShownSidebarPanel } from '../../lib/sidebar-panel'
 import useEditor from '../../store/use-editor'
 import { MobileTabBar } from '../ui/sidebar/mobile-tab-bar'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
@@ -58,7 +59,7 @@ export function EditorLayoutMobile({
 }: EditorLayoutMobileProps) {
   const hasScene = useSceneSpan() !== null
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
-  const activePanel = useEditor((s) => s.activeSidebarPanel)
+  const activePanel = useShownSidebarPanel(sidebarTabs)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
   const panelSheetHeight = useEditor((s) => s.mobilePanelSheetHeight)
   const isDark = useViewer((s) => getSceneTheme(s.sceneTheme).appearance === 'dark')
@@ -75,29 +76,18 @@ export function EditorLayoutMobile({
 
   const currentTab = sidebarTabs.find((t) => t.id === activePanel)
 
-  // Keep active panel valid
-  useEffect(() => {
-    if (sidebarTabs.length > 0 && !sidebarTabs.some((t) => t.id === activePanel)) {
-      setActivePanel(sidebarTabs[0]!.id)
-    }
-  }, [sidebarTabs, activePanel, setActivePanel])
-
   // Sync the editor mode with the active tab:
   // - Entering Chat always drops to Select (chat is a composing context).
-  // - Entering Items arms the item tool (matches the desktop F shortcut,
-  //   which itself opens the Items panel).
   // - Leaving Items with the item tool still armed exits the build mode.
+  // Arming the item tool on entering Items belongs to the tap (`handleTabPress`):
+  // a tab restored on load opens in select mode.
   useEffect(() => {
     const { armToolMode, mode, tool } = useEditor.getState()
     if (activePanel === 'ai' && mode === 'build') {
       armToolMode({ mode: 'select' })
       return
     }
-    if (activePanel === 'items') {
-      if (mode !== 'build') armToolMode({ mode: 'build', tool: 'item' })
-      return
-    }
-    if (mode === 'build' && tool === 'item') {
+    if (activePanel !== 'items' && mode === 'build' && tool === 'item') {
       armToolMode({ mode: 'select' })
     }
   }, [activePanel])
@@ -159,6 +149,10 @@ export function EditorLayoutMobile({
       const defaultPx = getDefaultSnap(tab) * middleH
       if (id !== activePanel) {
         setActivePanel(id)
+        // Tapping Items arms the item tool, as F does on desktop.
+        if (id === 'items' && useEditor.getState().mode !== 'build') {
+          useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
+        }
         sheetRef.current?.snapTo(defaultPx)
         return
       }
