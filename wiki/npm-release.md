@@ -10,6 +10,10 @@ npm has deprecated 2FA-bypass granular tokens, so `NPM_TOKEN` in CI fails with `
 
 The publishing account is `two-factor auth: auth-and-writes`, so a local publish needs a browser approval per package. 1.0.0 shipped that way.
 
+## Pushing the release commit
+
+The `main` ruleset requires pull requests and the `quality` check, with a bypass only for repository admins and the release deploy key. `GITHUB_TOKEN` is neither, so the workflow checks out with `secrets.RELEASE_DEPLOY_KEY` (environment `npm`) and the commit-and-tags push goes over SSH with that key. Release #67 (2026-10-13) published every package and then died on that push with `GH013: Repository rule violations`; a rerun with the same bump recovers it, since published versions are skipped. Rotating the key: `ssh-keygen -t ed25519 -N "" -f release-deploy-key`, add the public half as a deploy key with write access, keep it in the ruleset's bypass list, store the private half in the `npm` environment as `RELEASE_DEPLOY_KEY`.
+
 ## Adding a package
 
 Trusted publishing cannot create a package: the token exchange answers `package not found` for a name that has never been published, exactly as it does for a missing trusted publisher. So a package added to `PACKAGES` in the workflow needs, once, by a maintainer:
