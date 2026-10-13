@@ -886,7 +886,7 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
   lines.push(
     `${
       street
-        ? `street: ${street.side} (lot edge ${street.edge}; rotationDeg ${num(street.squareRotationDeg)} squares the house to it)`
+        ? `street: ${street.side} (lot edge ${street.edge}; place_building rotationDeg ${num(street.squareRotationDeg)} squares the house to it)`
         : 'street: not set'
     } · north: ${north}`,
   )
