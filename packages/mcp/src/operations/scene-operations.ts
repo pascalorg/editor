@@ -33,7 +33,6 @@ export type CreateSceneOperationsOptions = {
 
 export interface SceneOperations {
   readonly hasBridge: boolean
-  readonly supportsMaterialUpserts?: boolean
   readonly hasStore: boolean
   readonly hasSceneEvents: boolean
   readonly canAppendSceneEvents: boolean
@@ -43,6 +42,11 @@ export interface SceneOperations {
   readonly storeBackend: SceneStore['backend'] | null
   /** What the agent's session has kept (named moments, what it made); absent on a host with none. */
   readonly agentSession?: AgentSession
+  /**
+   * Whether `applyPatch` takes `upsert_material` patches with the nodes that use them, in one
+   * history step. A host that does lends `getMaterials`, and paint keeps native materials there.
+   */
+  readonly supportsMaterialUpserts?: boolean
 
   setActiveScene(meta: ActiveSceneMeta): void
   getActiveScene(): ActiveSceneMeta | null
@@ -55,8 +59,7 @@ export interface SceneOperations {
   getNode(id: AnyNodeId): AnyNode | null
   getNodes(): Record<AnyNodeId, AnyNode>
   getCollections(): Record<CollectionId, Collection>
-  /** Undefined for a host that cannot atomically apply native material upserts with nodes. */
-  getMaterials?(): Readonly<Record<SceneMaterialId, SceneMaterial>> | undefined
+  getMaterials?(): Readonly<Record<SceneMaterialId, SceneMaterial>>
   /** Replace the scene's collections (one undo step, like any edit). */
   setCollections(collections: Record<CollectionId, Collection>): void
   getRootNodeIds(): AnyNodeId[]
@@ -127,10 +130,7 @@ class SceneOperationsFacade implements SceneOperations {
   }
 
   get supportsMaterialUpserts(): boolean {
-    return (
-      this.#bridge?.supportsMaterialUpserts === true &&
-      typeof this.#bridge.getMaterials === 'function'
-    )
+    return this.#bridge?.supportsMaterialUpserts === true
   }
 
   get agentSession(): AgentSession | undefined {
@@ -218,11 +218,8 @@ class SceneOperationsFacade implements SceneOperations {
     return this.requireBridge().getCollections()
   }
 
-  getMaterials(): Readonly<Record<SceneMaterialId, SceneMaterial>> | undefined {
-    const bridge = this.requireBridge()
-    return bridge.supportsMaterialUpserts === true && typeof bridge.getMaterials === 'function'
-      ? bridge.getMaterials()
-      : undefined
+  getMaterials(): Readonly<Record<SceneMaterialId, SceneMaterial>> {
+    return this.requireBridge().getMaterials()
   }
 
   setCollections(collections: Record<CollectionId, Collection>): void {

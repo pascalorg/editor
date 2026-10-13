@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   emitter,
   sceneRegistry,
-  type ThumbnailCapturePolicy,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -519,27 +518,7 @@ const NodeBatchSystemActive = () => {
   // off the scene layer — exactly where batched sources sit. Hand every node
   // its own meshes back before the clone; the settle window re-sews after.
   useEffect(() => {
-    const restoreForCapture = (policy: undefined | ThumbnailCapturePolicy) => {
-      if (policy?.readOnly) {
-        if (!policy.restore) return
-        const nodes = useScene.getState().nodes
-        const hidden = new Set(policy.hiddenNodeIds)
-        const excluded = new Set<string>()
-        for (const nodeId of store.nodeIds()) {
-          let node = nodes[nodeId as AnyNodeId]
-          const visited = new Set<string>()
-          while (node && !visited.has(node.id)) {
-            if (hidden.has(node.id) || node.visible === false) {
-              excluded.add(nodeId)
-              break
-            }
-            visited.add(node.id)
-            node = nodes[node.parentId as AnyNodeId]
-          }
-        }
-        policy.restore(store.temporarilyHideNodes(excluded))
-        return
-      }
+    const restoreForCapture = () => {
       for (const nodeId of [...store.nodeIds()]) {
         releaseNode(nodeId)
         staleNodes.add(nodeId)

@@ -53,21 +53,19 @@ export function showInScene(obj: Object3D, reason: HiddenReason): void {
 }
 
 export function temporarilyShowShadowOnly(root: Object3D): () => void {
-  return temporarilyShowReasons(root, ['shadow-only'])
+  return temporarilyShowHeld(root, ['shadow-only'])
 }
 
-/** Lift live floor/selection presentation without releasing batch ownership. */
-export function temporarilyShowPresentation(
-  root: Object3D,
-  { wallBatches = false }: { wallBatches?: boolean } = {},
-): () => void {
-  return temporarilyShowReasons(
-    root,
-    wallBatches ? ['shadow-only', 'isolated', 'wall-batched'] : ['shadow-only', 'isolated'],
-  )
+/**
+ * Lifts what the user's view holds back under `root` — solo's shadow-only
+ * levels and isolation — for one capture: an interior view shows its floor
+ * whole, whatever the user isolated.
+ */
+export function temporarilyShowPresentation(root: Object3D): () => void {
+  return temporarilyShowHeld(root, ['shadow-only', 'isolated'])
 }
 
-function temporarilyShowReasons(root: Object3D, lifted: readonly HiddenReason[]): () => void {
+function temporarilyShowHeld(root: Object3D, lifted: readonly HiddenReason[]): () => void {
   const masks = new Map<Object3D, number>()
   root.traverse((obj) => {
     const hold = (obj as Holder)[HOLD]
@@ -75,8 +73,8 @@ function temporarilyShowReasons(root: Object3D, lifted: readonly HiddenReason[])
     masks.set(obj, obj.layers.mask)
     const reasons = new Set(hold.reasons)
     for (const reason of lifted) reasons.delete(reason)
-    // Only explicitly lifted reasons are ignored for this draw. Keep editor
-    // overlays and other batch ownership, and leave the live hold untouched.
+    // A capture needs the original scene geometry, while editor overlays and
+    // the reasons not lifted (batching) must retain their own masks.
     if (reasons.size === 0) obj.layers.mask = hold.original
     else applyHold(obj, { original: hold.original, reasons })
   })

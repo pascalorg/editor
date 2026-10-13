@@ -63,6 +63,7 @@ export {
 } from './components/viewer/scene-atmosphere'
 export { SceneEnvironment } from './components/viewer/scene-environment'
 export {
+  claimSceneGround,
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
@@ -169,7 +170,6 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height'
-export { pendingSceneBuildNodeIds } from './lib/pending-scene-build'
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
@@ -190,7 +190,6 @@ export {
   type RendererPowerPreference,
 } from './lib/renderer-capability'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
-export { sceneCaptureInputsReady } from './lib/scene-capture-inputs'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,

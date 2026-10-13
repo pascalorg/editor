@@ -250,6 +250,7 @@ export async function dropInLot(
   let roadsFailure = ''
   if (options.roads !== false && data.originLngLat) {
     for (let attempt = 0; attempt < 2 && !roads; attempt++) {
+      const asked = Date.now()
       try {
         const [lng, lat] = data.originLngLat
         const r = (await provider('roads', {
@@ -265,6 +266,9 @@ export async function dropInLot(
       } catch (error) {
         roadsFailure = error instanceof Error ? error.message : 'road lookup failed'
       }
+      // a quick miss is worth one more ask; a slow one (every mirror timed out) would only be
+      // slow again, and the lot is waiting — the front edge falls back instead
+      if (!roads && Date.now() - asked > 4000) break
     }
   } else if (options.roads === false) {
     roadsFailure = 'skipped'

@@ -121,7 +121,7 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
     (level) => level.parentId === building.id || building.children.includes(level.id),
   )
 
-  const changes: Required<Pick<SceneChanges, 'create' | 'update' | 'delete' | 'collections'>> = {
+  const changes: Required<Omit<SceneChanges, 'materials'>> = {
     create: [],
     update: [],
     delete: [],

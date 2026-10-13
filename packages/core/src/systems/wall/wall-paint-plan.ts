@@ -1,9 +1,11 @@
-import type { AnyNode, WallFace, WallFaceRegion, WallNode, ZoneNode } from '../../schema'
+import type { AnyNode } from '../../schema'
+import type { WallFace, WallFaceRegion, WallNode } from '../../schema/nodes/wall'
+import type { ZoneNode } from '../../schema/nodes/zone'
 import {
-  type WallPaintRole as CoreWallPaintRole,
   getWallLevelZones,
   getWallZoneSpans,
   resolveWallFaceChain,
+  type WallPaintRole,
 } from './wall-finish'
 
 /**
@@ -21,7 +23,6 @@ import {
  *   - a room: its wall finish, every override, and on each face turned to it
  *     the face's own paint and the regions over the room's part of the face.
  */
-export type WallPaintRole = CoreWallPaintRole
 
 type Nodes = Readonly<Record<string, AnyNode | undefined>>
 type Span = { wallId: string; face: WallFace; u0: number; u1: number }

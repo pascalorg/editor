@@ -100,6 +100,7 @@ export function mergeSceneChanges(
     }
   }
   return {
+    ...(materials.size ? { materials: [...materials.values()] } : {}),
     create: [...created.values()],
     update: [...updated].map(([id, data]) => ({ id, data })),
     delete: [...deleted],

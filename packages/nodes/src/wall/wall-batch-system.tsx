@@ -1,13 +1,6 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  emitter,
-  sceneRegistry,
-  type ThumbnailCapturePolicy,
-  useScene,
-  type WallNode,
-} from '@pascal-app/core'
+import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
 import {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
@@ -118,25 +111,11 @@ function showOwnGeometry(nodeId: string) {
   if (mesh) revealBatchedWall(mesh)
 }
 
-export function revealBatchedWallsForCapture(policy?: ThumbnailCapturePolicy): void {
-  if (policy?.readOnly) {
-    if (!policy.restore) return
-    for (const records of batchesByLevel.values()) {
-      for (const { mesh } of records) {
-        const visible = mesh.visible
-        policy.restore(() => {
-          mesh.visible = visible
-        })
-        mesh.visible = false
-      }
-    }
-    return
-  }
+export function revealBatchedWallsForCapture(): void {
   for (const nodeId of batchByNode.keys()) showOwnGeometry(nodeId)
 }
 
-export function holdBatchedWallsAfterCapture(policy?: ThumbnailCapturePolicy): void {
-  if (policy?.readOnly) return
+export function holdBatchedWallsAfterCapture(): void {
   for (const nodeId of batchByNode.keys()) {
     const mesh = sceneRegistry.nodes.get(nodeId)
     if (mesh) hideBatchedWall(mesh)

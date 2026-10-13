@@ -738,13 +738,13 @@
       "name": "paint",
       "annotations": {
         "readOnlyHint": false,
-        "destructiveHint": false,
+        "destructiveHint": true,
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It is not read-only because gives walls, columns, slabs, fences, doors, windows or roofs a finish in the connected Pascal scene.",
-        "destructiveHint": "Its intended operation sets finishes on existing elements without deleting or replacing Pascal scene or project state.",
-        "openWorldHint": "It operates on the connected Pascal scene and the material library without accessing the public internet."
+        "readOnlyHint": "It is not read-only because it writes finishes onto walls, slabs, ceilings, openings and roofs of the connected Pascal scene, and may add a scene material.",
+        "destructiveHint": "It replaces the finish a surface had, and erase removes a surface's own finish.",
+        "openWorldHint": "It operates on the connected Pascal scene and its material library without accessing the public internet."
       }
     },
     {
@@ -911,9 +911,9 @@
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It searches the built-in material library by words without painting or changing a scene.",
+        "readOnlyHint": "It searches the Pascal material library without painting anything or changing a scene.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
-        "openWorldHint": "It reads only the material library bundled with Pascal and does not access the public internet."
+        "openWorldHint": "It reads only the material library built into Pascal and does not access the public internet."
       }
     },
     {

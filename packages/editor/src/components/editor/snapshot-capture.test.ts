@@ -15,9 +15,6 @@ import {
   enqueueSnapshotCapture,
   isOverlaySnapshotSave,
   runSnapshotCapture,
-  SCENE_BUILD_MAX_MS,
-  SCENE_BUILD_STALL_MS,
-  waitForSceneBuilt,
 } from './snapshot-capture'
 
 test('manual capture feedback ignores background requests and other projects', () => {
@@ -469,87 +466,5 @@ describe('an ephemeral capture', () => {
       stored.push(frame)
     })
     expect(stored).toEqual([blob])
-  })
-})
-
-describe('waiting for the scene to be built', () => {
-  /** A scene whose pending count and holders are scripted, on a clock the wait itself advances. */
-  function scene(
-    count: (elapsedMs: number) => number,
-    holders: (elapsedMs: number) => string[] = () => [],
-  ) {
-    let elapsed = 0
-    let hidden = false
-    return {
-      setHidden(value: boolean) {
-        hidden = value
-      },
-      get elapsed() {
-        return elapsed
-      },
-      deps: {
-        assertVisible: () => {
-          if (hidden) throw new Error('The Pascal tab is in the background')
-        },
-        count: () => count(elapsed),
-        ids: () => new Set(holders(elapsed)),
-        now: () => elapsed,
-        sleep: async (ms: number) => {
-          elapsed += ms
-        },
-      },
-    }
-  }
-
-  test('a built scene is not waited for', async () => {
-    const built = scene(() => 0)
-    expect(await waitForSceneBuilt(built.deps)).toEqual({
-      pending: 0,
-      stalled: false,
-      unsettled: new Set(),
-    })
-    expect(built.elapsed).toBe(0)
-  })
-
-  test('a scene that is building is waited for while its count moves, however long that takes', async () => {
-    // 30 nodes settle one every 3 s: 90 s, far past the stall window, never stalled
-    const building = scene((elapsed) => Math.max(0, 30 - Math.floor(elapsed / 3000)))
-    const wait = await waitForSceneBuilt(building.deps)
-    expect(wait.pending).toBe(0)
-    expect(wait.stalled).toBe(false)
-    expect(building.elapsed).toBeGreaterThan(SCENE_BUILD_STALL_MS)
-    expect(building.elapsed).toBeLessThan(SCENE_BUILD_MAX_MS)
-  })
-
-  test('a count that stops moving is a node no system settles: the wait ends and names the holders', async () => {
-    // the walls settle in the first seconds; a pool plugin's mark is never cleared
-    const stuck = scene(
-      (elapsed) => (elapsed < 2000 ? 3 : 1),
-      (elapsed) => (elapsed < 2000 ? ['wall_a', 'wall_b', 'pool_a'] : ['pool_a']),
-    )
-    const wait = await waitForSceneBuilt(stuck.deps)
-    expect(wait).toEqual({ pending: 1, stalled: true, unsettled: new Set(['pool_a']) })
-    // the stall window runs from the last movement
-    expect(stuck.elapsed).toBeGreaterThan(2000 + SCENE_BUILD_STALL_MS)
-    expect(stuck.elapsed).toBeLessThan(2000 + SCENE_BUILD_STALL_MS + 1000)
-  })
-
-  test('a count still moving at the longest wait is not stalled: nothing is set aside', async () => {
-    // one node more every 10 s, never settling
-    const growing = scene(
-      (elapsed) => 1 + Math.floor(elapsed / 10_000),
-      () => ['pool_a'],
-    )
-    const wait = await waitForSceneBuilt(growing.deps)
-    expect(wait.stalled).toBe(false)
-    expect(wait.unsettled).toEqual(new Set())
-    expect(wait.pending).toBeGreaterThan(0)
-    expect(growing.elapsed).toBeGreaterThan(SCENE_BUILD_MAX_MS)
-  })
-
-  test('a background tab ends the wait with its own words', async () => {
-    const stuck = scene(() => 2)
-    stuck.setHidden(true)
-    await expect(waitForSceneBuilt(stuck.deps)).rejects.toThrow('background')
   })
 })

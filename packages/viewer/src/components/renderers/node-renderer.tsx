@@ -6,11 +6,9 @@ import {
   nodeRegistry,
   onRegistryChange,
   type RendererSource,
-  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense, useCallback, useSyncExternalStore } from 'react'
-import { CommittedSceneNodeInput } from '../../lib/scene-capture-inputs'
 import { useRevealPending } from '../../systems/construction-reveal/construction-reveal'
 import { ParametricNodeRenderer } from './parametric-node-renderer'
 
@@ -33,8 +31,6 @@ export function getRegistryRenderer(
 
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
   const node = useScene((state) => state.nodes[nodeId])
-  const materials = useScene((state) => state.materials)
-  const liveOverrides = useLiveNodeOverrides((state) => state.get(nodeId))
   const installedPlugins = useScene((state) => state.installedPlugins)
   // Plugins register after the first mount (async discovery). Subscribe to this
   // node's own kind only: a registration re-renders the nodes of that kind and
@@ -59,17 +55,11 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
     return (
       <Suspense fallback={null}>
         <Renderer node={node} />
-        <CommittedSceneNodeInput liveOverrides={liveOverrides} materials={materials} node={node} />
       </Suspense>
     )
   }
   if (def.geometry) {
-    return (
-      <>
-        <ParametricNodeRenderer node={node} />
-        <CommittedSceneNodeInput liveOverrides={liveOverrides} materials={materials} node={node} />
-      </>
-    )
+    return <ParametricNodeRenderer node={node} />
   }
   return null
 }

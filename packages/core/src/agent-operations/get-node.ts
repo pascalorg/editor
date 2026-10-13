@@ -4,8 +4,11 @@ import { getOpeningFloorDatum } from '../lib/opening-floor-datum'
 import { referencedSceneMaterialIds } from './scene-materials'
 import type { AgentOperation } from './types'
 
-/** `get_node`: a node, whole; a door or window also says where its floor is and what it hangs from. */
-export const getNode: AgentOperation<{ id: string }> = (nodes, { id }, context) => {
+/**
+ * `get_node`: a node, whole; a door or window also says where its floor is and what it hangs from;
+ * with the scene's materials lent, the ones its finishes use.
+ */
+export const getNode: AgentOperation<{ id: string }> = (nodes, { id }, { materials }) => {
   const node = nodes[id]
   if (!node) refuse('node_not_found', `Node not found: ${id}.`, { id })
   const wall = node.parentId ? nodes[node.parentId] : undefined
@@ -16,19 +19,19 @@ export const getNode: AgentOperation<{ id: string }> = (nodes, { id }, context) 
           anchor: isFloorAnchoredOpening(node) ? 'floor' : 'wall',
         }
       : undefined
-  const refs = referencedSceneMaterialIds(node)
-  const materials =
-    context.materials === undefined
-      ? undefined
-      : Object.fromEntries(
-          Object.values(context.materials)
-            .filter((material) => refs.has(material.id))
-            .map((material) => [material.id, material]),
-        )
+  const used = referencedSceneMaterialIds(node)
   return {
     result: {
       node: resolvedOpening ? { ...node, resolvedOpening } : node,
-      ...(materials !== undefined ? { materials } : {}),
+      ...(materials
+        ? {
+            materials: Object.fromEntries(
+              Object.values(materials)
+                .filter((material) => used.has(material.id))
+                .map((material) => [material.id, material]),
+            ),
+          }
+        : {}),
     },
   }
 }

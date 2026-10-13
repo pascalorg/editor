@@ -8,7 +8,9 @@ export type SceneNodes = Readonly<Record<string, AnyNode>>
  * passes the agent's session so far (the moments it named, what it made), which verify_scene
  * compares the scene with. A host with an item library passes it as `catalog` (the chat and the
  * hosted MCP: the published library; the standalone MCP: its built-in list), resolved before the
- * call, as the operations are sync.
+ * call, as the operations are sync. A host that can store scene materials with the nodes that use
+ * them passes the scene's `materials`: paint then checks scene refs against them and keeps a native
+ * material as one.
  */
 export type AgentContext = {
   activeLevelId: string | null
@@ -17,13 +19,12 @@ export type AgentContext = {
   /** The agent's session so far. The host keeps it where its sessions live; it is never scene data. */
   session?: SessionRecord
   catalog?: readonly AssetInput[]
-  /** Absent when the host cannot author native scene materials. */
   materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
 }
 
 /** Edits an operation asks for; each surface applies them its own way, in one undo step. */
 export type SceneChanges = {
-  /** Material upserts, committed before dependent nodes in the same undo step. */
+  /** Scene materials to add, written before the nodes that use them. */
   materials?: readonly SceneMaterial[]
   create?: { node: AnyNode; parentId?: string }[]
   update?: { id: string; data: Partial<AnyNode> }[]

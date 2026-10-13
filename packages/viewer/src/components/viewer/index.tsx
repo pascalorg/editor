@@ -5,7 +5,9 @@ import {
   nodeRegistry,
   RoofElevationSystem,
   StairOpeningSystem,
+  sceneRegistry,
   useInteractive,
+  useScene,
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
 import {
@@ -23,14 +25,8 @@ import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
-import {
-  countPendingSceneBuild,
-  hasCommittedSceneRoot,
-  hasPendingSceneBuildNode,
-} from '../../lib/pending-scene-build'
 import { choosePointerEvents } from '../../lib/pointer-events'
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
-import { SceneCaptureInputFrames } from '../../lib/scene-capture-inputs'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
@@ -91,6 +87,17 @@ extend(THREE as any)
 const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
 const SCENE_READY_SETTLED_FRAMES = 2
 const SCENE_READY_MAX_WAIT_FRAMES = 180
+const DIRTY_BUILD_KINDS = new Set([
+  'ceiling',
+  'door',
+  'item',
+  'roof',
+  'roof-segment',
+  'stair',
+  'stair-segment',
+  'wall',
+  'window',
+])
 
 const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
 
@@ -274,14 +281,58 @@ function ImmersiveXRBackground() {
   return <color args={[background]} attach="background" />
 }
 
+function isPendingSceneBuild(
+  id: AnyNodeId,
+  { nodes, rootNodeIds }: Pick<ReturnType<typeof useScene.getState>, 'nodes' | 'rootNodeIds'>,
+): boolean {
+  const node = nodes[id]
+  if (!node) return false
+  // Unreachable nodes (orphaned by a broken detach: the parent doesn't list
+  // them in `children`, or no parent and not a root) never render — every
+  // renderer enumerates the parent's `children` array — so no system will
+  // ever build them or clear their mark. They must not hold scene-ready
+  // hostage (observed in prod scene data: two dangling windows kept every
+  // bake of that scene waiting out the full readiness cap).
+  const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+  const reachable = parent
+    ? (parent as { children?: string[] }).children?.includes(id) === true
+    : rootNodeIds.includes(id)
+  if (!reachable) return false
+  const def = nodeRegistry.get(node.type)
+  return Boolean(
+    def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type),
+  )
+}
+
+function hasPendingSceneBuildWork() {
+  const state = useScene.getState()
+  for (const id of state.dirtyNodes) {
+    if (isPendingSceneBuild(id, state)) return true
+  }
+  return false
+}
+
 /**
  * The scene-ready gate's own test as a count — nodes still to build or load
  * (an item holds its mark until its model settles), 1 while the graph has
  * not mounted. A capture waits on it, and reads a count that stops moving
- * as a node no system will ever settle: `except` sets those aside.
+ * as a node no system will ever settle.
  */
-export function pendingSceneBuildCount(options?: { except?: ReadonlySet<string> }): number {
-  return countPendingSceneBuild(getPendingRoofMergeCount(), options?.except)
+export function pendingSceneBuildCount(): number {
+  if (!hasCommittedSceneRoot()) return 1
+  const state = useScene.getState()
+  // A roof's dirty mark clears when its merged shell is queued, frames before it is built.
+  let count = getPendingRoofMergeCount()
+  for (const id of state.dirtyNodes) {
+    if (isPendingSceneBuild(id, state)) count++
+  }
+  return count
+}
+
+function hasCommittedSceneRoot() {
+  const { nodes, rootNodeIds } = useScene.getState()
+  if (rootNodeIds.length === 0) return Object.keys(nodes).length === 0
+  return rootNodeIds.some((id) => sceneRegistry.nodes.has(id))
 }
 
 function SceneReadyTracker({
@@ -327,7 +378,7 @@ function SceneReadyTracker({
     const capReached = sceneReadyMaxWaitMs
       ? performance.now() - waitStartRef.current >= sceneReadyMaxWaitMs
       : waitedFramesRef.current >= SCENE_READY_MAX_WAIT_FRAMES
-    if (!capReached && (!hasCommittedSceneRoot() || hasPendingSceneBuildNode())) {
+    if (!capReached && (!hasCommittedSceneRoot() || hasPendingSceneBuildWork())) {
       settledFramesRef.current = 0
       invalidate()
       return
@@ -750,7 +801,6 @@ function ViewerScene({
   return (
     <>
       <ViewerCamera immersiveXR={immersiveXR} />
-      <SceneCaptureInputFrames />
       {immersiveXR && <ImmersiveXRBackground />}
       <PointerRaycastLayers />
       <GPUDeviceWatcher intentionalWebGL={immersiveXR} />

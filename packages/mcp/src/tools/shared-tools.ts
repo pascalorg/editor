@@ -28,7 +28,6 @@ import {
   getNodeTool,
   getWallsTool,
   getZonesTool,
-  isAgentRefusal,
   listLevelsTool,
   measureStairTool,
   mergeWindowsTool,
@@ -349,7 +348,7 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: paintTool,
     operation: AGENT_OPERATIONS.paint,
-    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     outputSchema: {
       ok: z.literal(true),
       painted: z.array(z.object({ id: z.string(), roles: z.array(z.string()) })),
@@ -409,10 +408,7 @@ const SHARED_TOOLS: SharedTool[] = [
 
 export function toPatches(changes: SceneChanges): Patch[] {
   return [
-    ...(changes.materials ?? []).map((material) => ({
-      op: 'upsert_material' as const,
-      material,
-    })),
+    ...(changes.materials ?? []).map((material) => ({ op: 'upsert_material' as const, material })),
     ...(changes.create ?? []).map(({ node, parentId }) => ({
       op: 'create' as const,
       node,
@@ -514,7 +510,9 @@ export function registerOperationTool(
         )
       const context: AgentContext = {
         activeLevelId: null,
-        materials: bridge.supportsMaterialUpserts === true ? bridge.getMaterials?.() : undefined,
+        ...(bridge.supportsMaterialUpserts && bridge.getMaterials
+          ? { materials: bridge.getMaterials() }
+          : {}),
         session: bridge.agentSession?.read(),
         ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
       }

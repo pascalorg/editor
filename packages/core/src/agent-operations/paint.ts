@@ -11,7 +11,18 @@ import {
 } from '../node-slots'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import type { SlotDeclaration } from '../registry/types'
-import type { AnyNode, ColumnNode, FenceNode, MaterialSchema, WallNode } from '../schema'
+import {
+  type AnyNode,
+  type ColumnNode,
+  type FenceNode,
+  getEffectiveSegmentSurfaceMaterial,
+  type MaterialSchema,
+  type RoofSegmentNode,
+  type SceneMaterial,
+  type WallFace,
+  type WallNode,
+} from '../schema'
+import { buildWallFinishLayout, getWallLevelZones } from '../systems/wall/wall-finish'
 import { planWallPaint } from '../systems/wall/wall-paint-plan'
 import { roomSideFaces } from '../systems/wall/wall-room-sides'
 import { finishSurface, requireMaterialRef } from './material-refs'
@@ -19,13 +30,12 @@ import { resolveInlinePaintMaterial } from './scene-materials'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
 /**
- * `paint` (L46): a finish in one call, as the editor's paint gives it. Run 3 took five attempts to
- * paint a pier grey through patches: `material: {color}` was stored as `{}`, `materialPreset:
- * null` was refused, and an unknown preset fell back to grey. A colour is the nearest of the
- * library's flat colours, said with how near; inline PBR is persisted as a native scene material.
- * Existing refs are checked when the host supplies its registry; slots are written
- * as the editor's slot paint writes them, a wall's faces through its paint plan, a roof's role
- * through its role field.
+ * `paint`: a finish in one call, as the editor's Paint gives it. Through patches an agent once took
+ * five tries to paint a pier grey: `material: {color}` was stored as `{}`, `materialPreset: null`
+ * was refused and an unknown preset fell back to grey. A colour is the nearest of the library's
+ * flat colours, said with how near; a native material is kept as a scene material. Slots are
+ * written as the editor's slot paint writes them, a wall's faces through its paint plan, a roof's
+ * role through its role field.
  */
 
 type PaintInput = {
@@ -72,25 +82,29 @@ function slotsOf(node: AnyNode): SlotDeclaration[] | null {
   }
 }
 
-/** The finish asked for, as the ref written, or undefined to erase; refused when it is unknown. */
-function finishOf(input: PaintInput, surface: MaterialSurface | undefined, context: AgentContext) {
+type Finish = {
+  /** The ref written, or undefined to erase. */
+  ref: string | undefined
+  note?: string
+  sceneMaterial?: SceneMaterial
+  created?: boolean
+}
+
+/** The finish asked for, as the ref it writes; refused when it is unknown. */
+function finishOf(
+  input: PaintInput,
+  surface: MaterialSurface | undefined,
+  context: AgentContext,
+): Finish {
   const given = [input.color, input.material, input.erase].filter((value) => value !== undefined)
   if (given.length !== 1)
     refuse(
       'finish_required',
-      'Give one finish: color (#rrggbb), material (an existing ref or native MaterialSchema), or erase: true.',
+      'Give one finish: color (#rrggbb), material (a library or scene ref, or a native material), or erase: true.',
     )
-  if (
-    input.materialName !== undefined &&
-    (typeof input.material !== 'object' ||
-      !input.materialName.trim() ||
-      input.materialName.trim().length > 120)
-  )
-    refuse(
-      'invalid_material_name',
-      'materialName (1–120 characters) is only for an inline material.',
-    )
-  if (input.erase) return { ref: undefined, note: null }
+  if (input.materialName !== undefined && typeof input.material !== 'object')
+    refuse('invalid_material_name', 'materialName names a native material only.')
+  if (input.erase) return { ref: undefined }
   if (input.color) {
     const match = nearestLibraryColorRef(input.color)
     if (!match) refuse('invalid_color', `${input.color} is no colour: give #rrggbb.`)
@@ -99,26 +113,16 @@ function finishOf(input: PaintInput, surface: MaterialSurface | undefined, conte
       note: `${input.color}: nearest library colour ${match.name} (${match.color}), ΔE ${Math.round(match.distance)}.`,
     }
   }
-  if (typeof input.material === 'object') {
-    const resolution = resolveInlinePaintMaterial(
-      context.materials,
-      input.material,
-      input.materialName?.trim(),
-    )
-    return { ...resolution, note: null }
-  }
+  if (typeof input.material === 'object')
+    return resolveInlinePaintMaterial(context.materials, input.material, input.materialName)
   const ref = requireMaterialRef(input.material!, undefined, surface, {
     paint: true,
     materials: context.materials,
   })
-  return {
-    ref,
-    note: null,
-    sceneMaterial:
-      context.materials &&
-      Object.values(context.materials).find((entry) => `scene:${entry.id}` === ref),
-    created: false,
-  }
+  const sceneMaterial = context.materials
+    ? Object.values(context.materials).find((entry) => `scene:${entry.id}` === ref)
+    : undefined
+  return { ref, ...(sceneMaterial ? { sceneMaterial } : {}) }
 }
 
 /** A node's data for an update: what changed, and `undefined` for the fields it lost. */
@@ -134,24 +138,55 @@ function changedData(before: AnyNode, after: AnyNode): Partial<AnyNode> {
   return data as Partial<AnyNode>
 }
 
+/** A roof's or a segment's role written, its inline material for that role gone with it. */
+function paintRoofRole(node: AnyNode, role: RoofRole, ref: string | undefined): AnyNode {
+  const next = { ...node } as Record<string, unknown>
+  delete next[`${role}Material`]
+  if (ref) next[`${role}MaterialPreset`] = ref
+  else delete next[`${role}MaterialPreset`]
+  return next as AnyNode
+}
+
+/**
+ * A wall face painted whole, as the editor's Paint paints each part of it: the face's own finish,
+ * and the finish of each room it is turned to, which shows over the face's own. Painted parts
+ * (regions) stay on top, as they do under a room's paint.
+ */
+function paintWallFace(
+  nodes: SceneNodes,
+  wall: WallNode,
+  face: WallFace,
+  ref: string | undefined,
+): Record<string, AnyNode> {
+  const plan = planWallPaint(nodes, wall, { kind: 'slot', slotId: face }, ref)
+  const rooms = buildWallFinishLayout(wall, getWallLevelZones(wall, nodes)).spans[face]
+  for (const zoneId of new Set(rooms.map((span) => span.zoneId))) {
+    const scene = { ...nodes, ...plan }
+    Object.assign(
+      plan,
+      planWallPaint(scene, scene[wall.id] as WallNode, { kind: 'room-face', zoneId, face }, ref),
+    )
+  }
+  return plan
+}
+
 export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
-  if (!input.targets.length) refuse('target_not_found', 'Give at least one node to paint.')
   // A refused material's nearest are the first target's kind: a roof is offered roofing.
   const first = input.targets[0] ? nodes[input.targets[0]] : undefined
   const finish = finishOf(input, first && finishSurface(first.type, input.role), context)
-  const { ref, note } = finish
-  const sceneMaterial = 'sceneMaterial' in finish ? finish.sceneMaterial : undefined
+  const { ref } = finish
   const written: Record<string, AnyNode> = {}
   const current = (id: string) => (written[id] ?? nodes[id]) as AnyNode | undefined
   const scene = () => ({ ...nodes, ...written }) as SceneNodes
   const painted: { id: string; roles: string[] }[] = []
+  const keptParts: string[] = []
 
   for (const id of input.targets) {
     const node = current(id)
     if (!node)
       refuse(
         'target_not_found',
-        `Nothing to paint: ${id} is not in the current scene. Read the current scene for native target IDs before retrying; room edits may retire earlier wall IDs. Nothing in this paint call was applied.`,
+        `Nothing to paint: ${id} is not in the scene (a room edit may have replaced its walls: read the scene again). Nothing was painted.`,
         { target: id },
       )
 
@@ -162,28 +197,22 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
           target: id,
           roles: [...ROOF_ROLES],
         })
-      const field = `${role}MaterialPreset`
-      // A segment's own role, then its catch-all, come before its roof's.
       if (node.type === 'roof') {
-        const hiding = (node.children as string[]).flatMap((childId) => {
-          const segment = current(childId) as (AnyNode & Record<string, unknown>) | undefined
-          return segment
-            ? [field, 'materialPreset']
-                .filter((key) => typeof segment[key] === 'string' && segment[key])
-                .map((key) => `${segment.id}.${key}`)
-            : []
+        // A segment's own finish for the role, or its catch-all, shows over its roof's.
+        const shadowing = node.children.filter((childId) => {
+          const segment = current(childId)
+          if (segment?.type !== 'roof-segment') return false
+          const own = getEffectiveSegmentSurfaceMaterial(segment as RoofSegmentNode, role)
+          return own.material !== undefined || own.materialPreset !== undefined
         })
-        if (hiding.length)
+        if (shadowing.length)
           refuse(
             'shadowed_field',
-            `The roof's ${role} would not show: ${hiding.join(', ')} hides it. Paint the segments, or clear those fields (null).`,
-            { target: id, fields: hiding },
+            `The roof's ${role} would not show: segments ${shadowing.join(', ')} have their own. Paint the segments instead.`,
+            { target: id, segments: shadowing },
           )
       }
-      const next = { ...node } as Record<string, unknown>
-      if (ref) next[field] = ref
-      else delete next[field]
-      written[id] = next as AnyNode
+      written[id] = paintRoofRole(node, role, ref)
       painted.push({ id, roles: [role] })
       continue
     }
@@ -193,22 +222,17 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
       refuse(
         'not_paintable',
         `A ${node.type} has no finish paint gives: paint walls, columns, slabs, ceilings, fences, doors, windows or roofs.`,
-        {
-          target: id,
-          type: node.type,
-        },
+        { target: id, type: node.type },
       )
     const ids = slots.map((slot) => slot.slotId)
     let roles: string[]
     if (input.role === 'exterior' || input.role === 'interior') {
-      if (node.type !== 'wall')
+      // A curtain wall has frame, glass and panels where a wall has faces.
+      if (node.type !== 'wall' || !ids.includes('a'))
         refuse(
           'unknown_role',
-          `Only a wall has an ${input.role}: a ${node.type}'s roles are ${ids.join(', ')}.`,
-          {
-            target: id,
-            roles: ids,
-          },
+          `A ${node.type === 'wall' ? 'curtain wall' : node.type} has no ${input.role} face: its roles are ${ids.join(', ')}.`,
+          { target: id, roles: ids },
         )
       const sides = roomSideFaces(scene() as never, id)
       const face = input.role === 'interior' ? sides.inside : sides.outside
@@ -227,11 +251,26 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
         })
       roles = [input.role]
     } else roles = (DEFAULT_ROLES[node.type] ?? []).filter((role) => ids.includes(role))
+    if (!roles.length)
+      refuse('unknown_role', `Name the ${node.type}'s surface: its roles are ${ids.join(', ')}.`, {
+        target: id,
+        roles: ids,
+      })
 
     for (const role of roles) {
       const target = current(id)!
       if (target.type === 'wall') {
-        Object.assign(written, planWallPaint(scene(), target, { kind: 'slot', slotId: role }, ref))
+        const face = role === 'a' || role === 'b' ? role : null
+        Object.assign(
+          written,
+          face
+            ? paintWallFace(scene(), target, face, ref)
+            : planWallPaint(scene(), target, { kind: 'slot', slotId: role }, ref),
+        )
+        const parts =
+          face && ref ? target.faceRegions?.filter((region) => region.face === face) : []
+        if (parts?.length)
+          keptParts.push(`${id} ${face}: ${parts.map((region) => region.id).join(', ')}`)
         continue
       }
       const next = { ...((target as AnyNode & { slots?: Record<string, string> }).slots ?? {}) }
@@ -246,25 +285,24 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
     const data = changedData(nodes[id]!, node)
     return Object.keys(data).length ? [{ id, data }] : []
   })
-  if ('created' in finish && finish.created && !update.length)
-    refuse(
-      'no_paint_effect',
-      'No surface changed, so the inline material was not created. Name a paintable role explicitly.',
-    )
-  const createdMaterial =
-    'created' in finish && finish.created && update.length ? sceneMaterial : undefined
+  const createdMaterial = finish.created ? finish.sceneMaterial : undefined
+  const note = [
+    finish.note,
+    keptParts.length && `Painted parts keep their own finish (${keptParts.join('; ')}).`,
+  ]
+    .filter(Boolean)
+    .join(' ')
   return {
     result: {
       ok: true,
       painted,
       finish: ref ?? 'default',
-      ...(sceneMaterial ? { materialId: sceneMaterial.id, material: sceneMaterial.material } : {}),
+      ...(finish.sceneMaterial
+        ? { materialId: finish.sceneMaterial.id, material: finish.sceneMaterial.material }
+        : {}),
       ...(createdMaterial ? { createdMaterial } : {}),
       ...(note ? { note } : {}),
     },
-    changes: {
-      update,
-      ...(createdMaterial ? { materials: [createdMaterial] } : {}),
-    },
+    changes: { update, ...(createdMaterial ? { materials: [createdMaterial] } : {}) },
   }
 }

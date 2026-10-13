@@ -48,8 +48,7 @@ export function ConstructionDust({ pool, clock }: { pool: DustPool; clock: { cur
   useEffect(() => {
     scene.add(dust.mesh)
     // A capture clones the scene in the same tick: no dust in it, whatever the camera layers.
-    const hide = (policy: undefined | { readOnly: true }) => {
-      if (policy?.readOnly) return
+    const hide = () => {
       dust.mesh.visible = false
       dust.mesh.count = 0
     }

@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   type SceneViewCrop,
-  type SceneViewInteriorPolicy,
+  type SceneViewInterior,
   type SceneViewPose,
   sceneViewNote,
   sceneViewPlan,
@@ -32,7 +32,8 @@ export type SceneViewHost = {
     projectId: string
     pose: SceneViewPose
     size: { w: number; h: number }
-    interior?: SceneViewInteriorPolicy
+    /** A look inside this floor: the editor leaves the rest out and cuts everything on it. */
+    interior?: SceneViewInterior
   }): Promise<SceneViewCapture>
   /** Crops the reference photo to a region; without it a view with a photo is refused. */
   crop?(

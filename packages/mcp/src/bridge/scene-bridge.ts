@@ -46,6 +46,7 @@ export type ValidationResult = {
 export type CreatePatch = { op: 'create'; node: AnyNode; parentId?: AnyNodeId }
 export type UpdatePatch = { op: 'update'; id: AnyNodeId; data: Partial<AnyNode> }
 export type DeletePatch = { op: 'delete'; id: AnyNodeId; cascade?: boolean }
+/** Adds or replaces a scene material, written before the nodes of the same patch. */
 export type MaterialUpsertPatch = { op: 'upsert_material'; material: SceneMaterial }
 export type Patch = CreatePatch | UpdatePatch | DeletePatch | MaterialUpsertPatch
 export type ActiveSceneMeta = Pick<
@@ -64,6 +65,7 @@ type SetSceneExtra = Parameters<ReturnType<typeof useScene.getState>['setScene']
  * `flushDirty()` for observability.
  */
 export class SceneBridge {
+  /** `applyPatch` takes `upsert_material` patches, in the patch's one history step. */
   readonly supportsMaterialUpserts = true
   private activeScene: ActiveSceneMeta | null = null
 
@@ -413,7 +415,6 @@ export class SceneBridge {
     const state = useScene.getState()
     const nodes = state.nodes
     if (state.readOnly) throw new Error('scene_read_only')
-    const materialUpserts = new Map<string, SceneMaterial>()
 
     // Track synthesized state as we dry-run so later ops can reference
     // earlier-created ids and reflect earlier-deleted ids.
@@ -423,15 +424,18 @@ export class SceneBridge {
     // Zod-normalised copy (which has a generated id if the caller omitted one)
     // instead of the unparsed input.
     const parsedCreateNodes = new Map<number, AnyNode>()
+    const materialUpserts = new Map<string, SceneMaterial>()
 
     for (let i = 0; i < patches.length; i++) {
       const p = patches[i]
       if (!p) throw new Error(`invalid patch: patches[${i}] is undefined`)
       if (p.op === 'upsert_material') {
-        const material = SceneMaterial.parse(p.material)
-        if (!material.id || ['__proto__', 'constructor', 'prototype'].includes(material.id))
-          throw new Error(`invalid patch: patches[${i}] invalid scene material id`)
-        materialUpserts.set(material.id, material)
+        const parsed = SceneMaterial.safeParse(p.material)
+        if (!parsed.success)
+          throw new Error(
+            `invalid patch: patches[${i}] material failed schema: ${parsed.error.message}`,
+          )
+        materialUpserts.set(parsed.data.id, parsed.data)
       } else if (p.op === 'create') {
         const res = parseNode(p.node)
         if (!res.success) {

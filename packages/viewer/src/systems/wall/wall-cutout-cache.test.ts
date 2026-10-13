@@ -25,7 +25,12 @@ import {
 } from 'three'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { applyMaterialPresetToMaterials } from '../../lib/materials'
-import { getWallHideState, runWallCutoutFrame, WALL_CUTOUT_FRAME_PRIORITY } from './wall-cutout'
+import {
+  getWallHideState,
+  runWallCutoutFrame,
+  WALL_CUTOUT_FRAME_PRIORITY,
+  wallsForCapture,
+} from './wall-cutout'
 import {
   sameMaterialArray,
   WALL_FACING_HYSTERESIS,
@@ -33,7 +38,7 @@ import {
   type WallCutoutViewerState,
   wallFacingNegative,
 } from './wall-cutout-cache'
-import { getMaterialsForWall } from './wall-materials'
+import { getMaterialsForWall, type WallMaterialsResolver } from './wall-materials'
 import {
   drainRebuiltWalls,
   notifyWallRebuilt,
@@ -715,4 +720,39 @@ test('legacy wall extensions preserve the viewer-to-nodes dependency boundary', 
     expect(source.split('\n')[0]).toContain('New kind-specific modules belong in nodes')
     expect(source.split('\n')[1]).toContain('viewer-owned')
   }
+})
+
+describe('walls for a capture', () => {
+  // A curtain wall draws its frame, glass and panels from the resolver its renderer mounts the
+  // cutout with: a capture that drew it with the plain wall palette turned its glass opaque.
+  const glass = new MeshBasicMaterial({ transparent: true, opacity: 0.3 })
+  const curtainAware: WallMaterialsResolver = (wall, ...rest) =>
+    getMaterialsForWall(wall, rest[0], rest[1], rest[2], rest[3], rest[4], rest[5], {
+      hash: 'curtain',
+      create: () => ({ visible: [glass, glass, glass] }),
+    })
+
+  test("draws every wall whole with the renderer's own palette, then puts the view back", () => {
+    viewerStore.setState({ textures: true })
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    const cutaway = mesh.material
+    expect(mesh.userData.wallHidden).toBe(true)
+
+    const restore = wallsForCapture(curtainAware, viewerStore, true)
+    expect(mesh.material).toBe(curtainAware(node, 'solid', true, 'clay', 'studio', {}, []).visible)
+    expect((mesh.material as Material[])[1]).toBe(glass)
+    restore()
+    expect(mesh.material).toBe(cutaway)
+  })
+
+  test('leaves the wall mode alone for a capture that does not ask for whole walls', () => {
+    const { mesh } = addWall()
+    cache.update(camera, 1)
+    const cutaway = mesh.material
+    const restore = wallsForCapture(curtainAware, viewerStore, false)
+    expect(mesh.material).toBe(cutaway)
+    restore()
+    expect(mesh.material).toBe(cutaway)
+  })
 })

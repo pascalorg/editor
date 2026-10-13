@@ -7,7 +7,7 @@ import {
   type SceneMaterialId,
 } from '../schema/scene-material'
 
-/** Compare parsed schema values independent of object key order. */
+/** Whether two parsed values are the same, whatever their keys' order. */
 function equal(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false
@@ -26,20 +26,23 @@ function equal(a: unknown, b: unknown): boolean {
   )
 }
 
-/** Pure equivalent of the UI slot-paint mint/reuse resolution, normalized by its schema. */
+/**
+ * A native material as the editor's Paint keeps a one-off: the scene's equal material when it has
+ * one (compared as the schema reads both), else a new scene material. Refused where the host
+ * cannot store scene materials, so no node points at a material nothing keeps.
+ */
 export function resolveInlinePaintMaterial(
   materials: Readonly<Record<SceneMaterialId, SceneMaterial>> | undefined,
   input: MaterialSchema,
   name?: string,
 ): { ref: string; sceneMaterial: SceneMaterial; created: boolean } {
-  if (materials === undefined)
+  if (!materials)
     refuse(
       'materials_unavailable',
-      'This host cannot persist inline materials. Use an existing material ref or color instead; nothing was painted.',
+      'This host cannot keep native materials: give a library material or a colour. Nothing was painted.',
     )
   const parsed = MaterialSchema.safeParse(input)
-  if (!parsed.success)
-    refuse('invalid_material', `Invalid native material: ${parsed.error.message}`)
+  if (!parsed.success) refuse('invalid_material', `Not a native material: ${parsed.error.message}`)
   for (const existing of Object.values(materials)) {
     const normalized = MaterialSchema.safeParse(existing.material)
     if (normalized.success && equal(normalized.data, parsed.data))
@@ -55,7 +58,7 @@ export function resolveInlinePaintMaterial(
   return { ref: toSceneMaterialRef(id), sceneMaterial, created: true }
 }
 
-/** Scene refs used in a node/graph, including native role fields and finish regions. */
+/** The scene materials a node points at, in its slots and its role fields alike. */
 export function referencedSceneMaterialIds(value: unknown): Set<string> {
   const ids = new Set<string>()
   const visit = (entry: unknown) => {

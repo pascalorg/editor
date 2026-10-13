@@ -5,73 +5,7 @@ import {
   type SnapshotSavedEvent,
   type ThumbnailGenerateEvent,
 } from '@pascal-app/core'
-import { type Camera, MathUtils, type Mesh, type Object3D, type PerspectiveCamera } from 'three'
-
-/**
- * Pause the actual host controller without snapping its transition endpoint
- * or reconstructing private velocity/options state. Works for public controls
- * hosts too, independently of the editor's frame-loop wrapper.
- */
-export function holdSnapshotControls(controller: unknown): () => void {
-  if (!controller || typeof (controller as { update?: unknown }).update !== 'function')
-    return () => {}
-  const descriptor = Object.getOwnPropertyDescriptor(controller, 'update')
-  Object.defineProperty(controller, 'update', {
-    configurable: true,
-    writable: true,
-    value: () => false,
-  })
-  let restored = false
-  return () => {
-    if (restored) return
-    if (descriptor) Object.defineProperty(controller, 'update', descriptor)
-    else if (!Reflect.deleteProperty(controller as object, 'update'))
-      throw new Error('Snapshot controls restoration failed')
-    restored = true
-  }
-}
-
-/**
- * Render updates matrices even for untouched objects. Preserve the live values,
- * not just a pose from which a different matrix could later be reconstructed.
- */
-export function preserveSnapshotObjectState(root: Object3D): () => void {
-  const saved = new Map<Object3D, () => void>()
-  const visit = (object: Object3D) => {
-    if (saved.has(object)) return
-    const position = object.position.clone()
-    const quaternion = object.quaternion.clone()
-    const scale = object.scale.clone()
-    const matrix = object.matrix.clone()
-    const matrixWorld = object.matrixWorld.clone()
-    const needsUpdate = object.matrixWorldNeedsUpdate
-    const visible = object.visible
-    const mask = object.layers.mask
-    const mesh = object as Mesh
-    const material = mesh.material
-    const camera = object as Camera
-    const inverse = camera.isCamera ? camera.matrixWorldInverse.clone() : null
-    saved.set(object, () => {
-      object.position.copy(position)
-      if (!object.quaternion.equals(quaternion)) object.quaternion.copy(quaternion)
-      object.scale.copy(scale)
-      object.matrix.copy(matrix)
-      object.matrixWorld.copy(matrixWorld)
-      object.matrixWorldNeedsUpdate = needsUpdate
-      object.visible = visible
-      object.layers.mask = mask
-      if (mesh.isMesh) mesh.material = material
-      if (inverse) camera.matrixWorldInverse.copy(inverse)
-    })
-    const light = object as Object3D & { target?: Object3D; shadow?: { camera?: Object3D } }
-    light.target?.traverse(visit)
-    light.shadow?.camera?.traverse(visit)
-  }
-  root.traverse(visit)
-  return () => {
-    for (const restore of saved.values()) restore()
-  }
-}
+import { MathUtils, type PerspectiveCamera } from 'three'
 
 export function isOverlaySnapshotSave(event: SnapshotSavedEvent | undefined, projectId: string) {
   return !event?.requestId && (!event?.projectId || event.projectId === projectId)
@@ -233,52 +167,4 @@ export function deliverSnapshot<T extends object & { resolution?: { w: number; h
     return
   }
   return onCapture(blob, cameraData)
-}
-
-/** A scene that stops settling for this long holds a node no system will ever build. */
-export const SCENE_BUILD_STALL_MS = 15_000
-/** However busy the scene, a capture waits no longer than this for it. */
-export const SCENE_BUILD_MAX_MS = 120_000
-
-export type SceneBuildWait = {
-  /** The count left when the wait ended; 0 when the scene is built. */
-  pending: number
-  /** The count stopped moving: what is left is held by nodes no system will ever settle. */
-  stalled: boolean
-  /** Those nodes (only when `stalled`); a node dirtied later is not among them. */
-  unsettled: ReadonlySet<string>
-}
-
-/**
- * Waits until the scene has built what a picture shows. Progress-based: a count that keeps moving
- * (a slow GPU loading a big house) is waited for up to `SCENE_BUILD_MAX_MS`; a count that stops
- * moving for `SCENE_BUILD_STALL_MS` is held by nodes no system settles (a plugin kind that never
- * clears its own dirty mark), and the wait ends naming them so the caller can set those aside.
- */
-export async function waitForSceneBuilt(deps: {
-  /** Throws when the capture cannot run (a background tab draws no frames). */
-  assertVisible: () => void
-  count: () => number
-  ids: () => Set<string>
-  now: () => number
-  sleep: (ms: number) => Promise<void>
-}): Promise<SceneBuildWait> {
-  const started = deps.now()
-  let pending = deps.count()
-  let changedAt = started
-  while (pending > 0) {
-    deps.assertVisible()
-    const now = deps.now()
-    if (now - changedAt > SCENE_BUILD_STALL_MS) {
-      return { pending, stalled: true, unsettled: deps.ids() }
-    }
-    if (now - started > SCENE_BUILD_MAX_MS) return { pending, stalled: false, unsettled: new Set() }
-    await deps.sleep(100)
-    const next = deps.count()
-    if (next !== pending) {
-      pending = next
-      changedAt = deps.now()
-    }
-  }
-  return { pending, stalled: false, unsettled: new Set() }
 }

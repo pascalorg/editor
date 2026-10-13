@@ -29,30 +29,54 @@ cp .env.example .env
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `PORT` | No | Dev server port (default: 3002) |
-| `MINT_PASCAL_HOST_ORIGIN` | No | Public editor origin used by Mint sign-in and request checks. Set it for self-hosted deployments. |
+| `PASCAL_PUBLIC_URL` | No | The address people use to reach the editor. Read per request; set it when Pascal is hosted outside localhost (Mint sign-in and agent links use it). |
+| `PASCAL_ADMIN_PASSWORD` | On a network host | The one password that unlocks a self-hosted editor. See "Self-hosting". |
+| `PASCAL_AUTH` | No | `proxy` lets a reverse proxy that already authenticates every request replace the password. |
+| `PASCAL_SCENE_API_TOKEN` | No | Bearer token for agents and scripts calling `/api/scenes`. |
+| `PASCAL_DATA_DIR` | No | Directory holding `pascal.db` and artifacts (default: `~/.pascal/data`). |
 
 Local development and the official hosted editor work without any environment variables.
 
-## Docker
+## Self-hosting
+
+The editor ships as one container, `ghcr.io/pascalorg/pascal-editor`, tagged with
+the same version as the `@pascal-app/*` packages (`latest` follows stable releases,
+`beta` the prereleases). It holds the same portable runtime the CLI installs.
 
 ```bash
-docker compose up -d
+PASCAL_ADMIN_PASSWORD=change-me PASCAL_PUBLIC_URL=https://pascal.example.com docker compose up -d
 ```
 
-The editor will be running at **http://localhost:3000**. Saved scenes live in
-the `pascal-data` volume, so they survive `docker compose down`.
+The editor is then at your public URL. Saved scenes live in the `pascal-data` volume
+(`/data` in the container), so they survive `docker compose down` and image updates.
+`docker compose build` rebuilds the image from your checkout instead of pulling it.
 
-Docker defaults `MINT_PASCAL_HOST_ORIGIN` to `http://localhost:3000`. Override
-it when hosting Pascal at another origin:
+How it is protected, by `apps/editor/lib/self-host-auth.ts`:
 
-```bash
-MINT_PASCAL_HOST_ORIGIN=https://pascal.example.com docker compose up -d
-```
+- **One workspace behind one password.** `PASCAL_ADMIN_PASSWORD` gates every page and API
+  behind `/login`. There is one account; everyone who signs in shares the scenes. Sessions
+  are signed with a digest of the password, so changing it signs everyone out.
+- **Agents use a bearer.** Set `PASCAL_SCENE_API_TOKEN` and send it as
+  `Authorization: Bearer …` to `/api/scenes` and `/api/artifacts`; the settings page shows the
+  endpoint under "Connect an agent".
+- **Fail closed.** A host that is not loopback with no password set serves a setup page
+  listing the variables and nothing else. `PASCAL_AUTH=proxy` opts out when a reverse proxy
+  (basic auth, SSO) already authenticates every request.
+- **Loopback stays open.** `bun dev`, the CLI's managed editor and `docker run` reached at
+  `localhost` need no password. Opening a dev server to another device on your LAN counts
+  as a network host: set `PASCAL_ADMIN_PASSWORD` in `.env.local` for that.
 
-Keep the container port at 3000: the `/scenes` page fetches its own API through
-a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
-value at build time, so remapping the port to something else makes the page
-return 500.
+Nothing is fixed at build time: `PASCAL_PUBLIC_URL` and the port are read when a request
+comes in, so one image serves any domain. `/api/health` answers without a session.
+
+**Public embeds.** Nothing is public by default. The **Share** button in the editor's navbar
+has a "Public link" switch: turning it on makes the project viewable, read-only, at
+`/embed/<id>`, which needs no password and can be put in an `<iframe>` (the panel gives
+the snippet). The page looks like the editor's Preview mode; `/embed/<id>?ui=0` (the
+panel's "Hide controls" switch) shows only the 3D view, without the header, the toolbar
+or the 3D/2D switcher. Turning the link off makes that URL a 404 again. Besides the embed page itself,
+`/api/scenes/<id>/public` is the only unauthenticated read of scene data, and it answers
+only for shared projects; the files a shared scene references are served to it as well.
 
 ## CLI-managed editor
 

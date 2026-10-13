@@ -100,22 +100,15 @@ One contract (`viewSceneTool`) and one plan (`sceneViewPlan` in `core/agent-oper
 
 The answer is the picture plus the pose it was taken from, and which tab rendered it and when. A picture is not a measure: sizes and counts come from the tools.
 
-Optional `interior: { levelId }` selects one explicit floor for a capture-only cutaway. Core
-validates the level even with an explicit camera, and plans world storey bounds, a horizontal
-cut and excluded node IDs alongside a compact order-independent graph fingerprint. The same
-policy traverses `SceneViewHost`, hosted screenshot jobs and the native thumbnail event.
+Views are planned on the site: a building's position and yaw move and turn the boxes of what stands under it, so a building away from the origin is looked at where it stands. A roof, or a roof level holding only roofs, frames its segments from its seat to its peak.
 
-The existing offscreen pipeline clips only the requested level subtree (including its static
-furniture batches), hides other levels and the floor's roof/ceiling, and restores before async
-readback. Read-only before/after events skip destructive reveals/dust/batch release; reversible
-renderer work can register cleanup in that synchronous transaction. No scene/presentation store
-is toggled, and a scoped frame-update hold preserves in-flight camera controls. Pending or
-failed models/textures, unfinished reveals and changed planned/rendered graphs refuse an image;
-readiness is conservative across the scene/material cache. The existing model-facing image
-conversion remains the only converter. Ordinary views without `interior` keep their behavior.
+**Inside a floor.** `interior: { levelId }` looks into one floor. The plan checks the level (`interior_level_invalid`, also for a level holding only roofs and ceilings; `interior_hidden` for a hidden level or ancestor, a hidden site excepted, since it hides only its ground; `interior_transform_unsupported` for a tipped building) and that a target is on it and in the picture (`interior_target_elsewhere`, also for its roofs and ceilings), frames the floor from 55° above unless a target, an eye or a camera is given, and hands the host only the level id. The editor that renders it works out the rest from its own scene with `sceneViewInterior`: for that one render the other floors and this floor's roofs and ceilings are hidden, everything on the floor (walls, openings, furniture) and its shadows are cut at 0.65 of the storey height, its walls are drawn whole whatever the user's wall mode, and the user's solo and isolation are lifted on it. Everything is put back right after the render, so the live view does not change.
 
-By hand, orbiting a floor with existing presentation settings is an alternative; the API's
-cutaway is temporary, not a new viewer mode or mandatory review method.
+## Finishes: `paint` and `search_materials`
+
+`paint` gives surfaces a finish as the editor's Paint does, in one call and one undo step: the slots the editor's slot paint writes, a wall's faces through the same paint plan (`planWallPaint` in core, shared with the editor's wall paint), a roof's or a segment's `top`, `edge` or `wall` role field. `exterior` and `interior` resolve to a wall's faces from the rooms on its sides. A face is painted whole: its own slot, and an override in each room whose wall finish would otherwise show over it, as the editor's Paint writes a click on that room's face; painted parts (regions) keep their own finish and the result's `note` names them. A colour paints with the nearest library colour, and the result says how near. `search_materials` finds `library:<id>` refs by whole words (a short or common word is dropped), shade and surface, and names the words the library does not answer; a flat colour suits every `surface`.
+
+A native material (an exact PBR finish) is kept as a scene material, reused when the scene holds one the material schema reads as equal. The operation returns it in `SceneChanges.materials`; a host writes it before the nodes that use it, in the same step. It needs the scene's materials in `AgentContext.materials`: the MCP lends them when its `SceneOperations` sets `supportsMaterialUpserts` and has `getMaterials`, and applies them as `upsert_material` patches (an internal op, not part of `apply_patch`'s schema). A host without them refuses a native material (`materials_unavailable`) and still paints library refs and colours. `get_node` returns the scene materials a node's finishes use when the host lends them.
 
 ## Emptying a project: `clear_scene`
 

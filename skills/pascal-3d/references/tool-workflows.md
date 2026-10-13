@@ -80,9 +80,7 @@ The arguments are the wrong shape or type for the tool's schema, and nothing ran
 
 ## Look at the result
 
-`view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat), and `editor_tab_busy` means it is open but busy or still loading, and carries no link (wait a few seconds and repeat; if it is still busy after about a minute, tell the person; do not ask them to open anything). A server with no renderer answers `view_unavailable`. A picture is not a measure.
-
-Optional `view_scene({ interior: { levelId } })` looks into one explicit floor as a capture-only cutaway, excluding its roof/ceiling and other floors. It preserves the live view and refuses pending/failed assets or a scene that changed since planning. A person may instead orbit the floor with existing presentation settings; neither path imposes a construction or review recipe.
+`view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. `interior: { levelId }` looks inside one floor, the other floors, its roof and its ceilings left out and everything on it, walls, openings and furniture alike, cut at 0.65 of the storey's height; the live view is not changed. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat), and `editor_tab_busy` means it is open but busy or still loading, and carries no link (wait a few seconds and repeat; if it is still busy after about a minute, tell the person; do not ask them to open anything). A server with no renderer answers `view_unavailable`. A picture is not a measure.
 
 ## Start over
 

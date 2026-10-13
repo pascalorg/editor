@@ -26,7 +26,6 @@ import {
 } from '../../lib/materials'
 import { createNodeTopSurfaceHeightSampler } from '../../lib/node-top-surface-height'
 import { timeSpan } from '../../lib/perf-tracks'
-import { useCommittedSceneMaterialInput } from '../../lib/scene-capture-inputs'
 import { createSceneSupportHeightSampler } from '../../lib/scene-support-height'
 import useViewer from '../../store/use-viewer'
 
@@ -129,8 +128,6 @@ export const GeometrySystem = () => {
       useScene.getState().markDirty(node.id as AnyNodeId)
     }
   }, [sceneMaterials])
-
-  useCommittedSceneMaterialInput(sceneMaterials)
 
   useFrame(() => {
     if (dirtyNodes.size === 0 && liveBuildIds.current.size === 0) return

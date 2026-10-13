@@ -60,7 +60,7 @@ import {
   terrainGridKey,
   updateDrapedHeights,
 } from './terrain-drape'
-import { HORIZON_PLANE_Y, terrainFootprint } from './terrain-geometry'
+import { HORIZON_PLANE_Y, terrainBlockBase } from './terrain-geometry'
 import { TerrainRenderer } from './terrain-renderer'
 
 const Y_OFFSET = 0.01
@@ -324,10 +324,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return shape
   }, [polygonPoints, slabPolygons])
 
-  // The terrain footprint is punched out alongside the recessed slabs, and for the
-  // same reason: the disc must not cap ground that is modelled below it.
-  //
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `terrainKey` is the grid signature the footprint is a function of; depending on the field itself would rebuild an 800 m disc every dab.
+  // With terrain the lot is a block — its ground cut to the property line, its
+  // skirt dropping to one flat base — and the disc lies just under that base, so
+  // nothing of it caps the lot and nothing of the block stands proud of it from
+  // the far side. The recessed slabs are still punched: a basement can go deeper.
+  const horizonY = useMemo(
+    () => (terrainGrid ? terrainBlockBase(terrainGrid) - 0.02 : HORIZON_PLANE_Y),
+    [terrainGrid],
+  )
+
   const horizonGeometry = useMemo(() => {
     if (!fadeBounds || groundReplaced) return null
     const radius = Math.max(fadeBounds.radius * 8, 400)
@@ -339,10 +344,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       shape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
     }
     shape.closePath()
-    const holes = terrainGrid ? [...slabPolygons, terrainFootprint(terrainGrid)] : slabPolygons
-    addSlabHoles(shape, holes, fadeBounds.cx, fadeBounds.cz)
+    addSlabHoles(shape, slabPolygons, fadeBounds.cx, fadeBounds.cz)
     return new ShapeGeometry(shape)
-  }, [fadeBounds, slabPolygons, terrainKey, groundReplaced])
+  }, [fadeBounds, slabPolygons, groundReplaced])
   useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
   useEffect(() => () => horizonMaterial?.dispose(), [horizonMaterial])
 
@@ -558,7 +562,12 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
       {/* Sculpted ground, when the site has terrain */}
       {showSiteSurfaces && showTerrain && (
-        <TerrainRenderer holes={slabPolygons} material={groundMaterial} site={node} />
+        <TerrainRenderer
+          holes={slabPolygons}
+          material={groundMaterial}
+          polygon={polygonPoints}
+          site={node}
+        />
       )}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
@@ -577,7 +586,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         <mesh
           geometry={horizonGeometry}
           material={horizonMaterial}
-          position={[fadeBounds.cx, HORIZON_PLANE_Y, fadeBounds.cz]}
+          position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
           raycast={noopRaycast}
           receiveShadow
           rotation={[-Math.PI / 2, 0, 0]}

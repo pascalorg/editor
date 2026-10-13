@@ -13,6 +13,7 @@ import {
   LevelNode,
   RoofNode,
   RoofSegmentNode,
+  SiteNode,
   SlabNode,
   StairNode,
   WallNode,
@@ -23,6 +24,7 @@ import {
   type SceneViewBox,
   sceneViewBounds,
   sceneViewFacing,
+  sceneViewInterior,
   sceneViewNote,
   sceneViewPlan,
   sceneViewPose,
@@ -90,35 +92,156 @@ function building(): Record<string, AnyNode> {
 
 const box: SceneViewBox = { min: [0, 0, 0], max: [20, 6, 10] }
 
-describe('an explicitly requested floor interior', () => {
-  // Capture-only policy: preserve authored geometry and exact camera choice.
-  // The mounted renderer test, not these plan assertions, proves visible interiors.
-  test('plans the floor without changing the scene or the ordinary exterior request', () => {
-    const nodes = building()
+/** The two-storey house with a ceiling over the ground floor and a roof on the upper one. */
+function finishedBuilding(): Record<string, AnyNode> {
+  const nodes = building()
+  const ceiling = CeilingNode.parse({
+    id: 'ceiling_0',
+    parentId: 'level_0',
+    polygon: [
+      [0, 0],
+      [20, 0],
+      [20, 10],
+      [0, 10],
+    ],
+  })
+  const roof = RoofNode.parse({ id: 'roof_1', parentId: 'level_1' })
+  const level = (id: string) => nodes[id] as LevelNode
+  return {
+    ...nodes,
+    level_0: { ...level('level_0'), children: [...level('level_0').children, ceiling.id] },
+    level_1: { ...level('level_1'), children: [...level('level_1').children, roof.id] },
+    [ceiling.id]: ceiling,
+    [roof.id]: roof,
+  } as Record<string, AnyNode>
+}
+
+// Inside a floor the walls, the floors above and the ceilings hide the rooms: an interior view leaves
+// the rest of the house out of the picture, for the picture only.
+describe('a look inside one floor', () => {
+  test('frames the floor from above, the other floors and its ceilings left out', () => {
+    const nodes = finishedBuilding()
     const before = structuredClone(nodes)
+    const inside = sceneViewInterior(nodes, 'level_0')
+    expect(inside.bounds).toEqual({ min: [0, 0, 0], max: [20, 3, 10] })
+    expect(inside.cutHeight).toBeCloseTo(1.95, 6)
+    expect(inside.hiddenIds.sort()).toEqual(['ceiling_0', 'level_1'])
+
+    const plan = sceneViewPlan(nodes, { interior: { levelId: 'level_0' } })
+    expect(plan.interior).toEqual({ levelId: 'level_0' })
+    expect(framesBox(plan.pose, inside.bounds)).toBe(true)
+    // It looks down into the rooms over the cut walls.
+    const [x, y, z] = plan.pose.position
+    const [tx, ty, tz] = plan.pose.target
+    expect(Math.atan2(y - ty, Math.hypot(x - tx, z - tz))).toBeCloseTo((55 * Math.PI) / 180, 2)
+    expect(nodes).toEqual(before)
+  })
+
+  test('the upper floor is cut on its own storey, the ground floor and its roof left out', () => {
+    const inside = sceneViewInterior(finishedBuilding(), 'level_1')
+    expect([inside.bounds.min[1], inside.bounds.max[1]]).toEqual([3, 6])
+    expect(inside.cutHeight).toBeCloseTo(4.95, 6)
+    expect(inside.hiddenIds.sort()).toEqual(['level_0', 'roof_1'])
+  })
+
+  test('a target in the floor frames it, and an eye given is kept', () => {
+    const nodes = finishedBuilding()
+    const wall = sceneViewPlan(nodes, {
+      interior: { levelId: 'level_0' },
+      target: 'wall_level_0_0',
+    })
+    expect(framesBox(wall.pose, sceneViewBounds(nodes, 'wall_level_0_0'))).toBe(true)
+    const street = sceneViewPlan(nodes, { interior: { levelId: 'level_0' }, eyeHeight: 1.7 })
+    expect(street.pose.position[1]).toBe(1.7)
+    // The upper floor is left out of the picture: its wall would frame nothing shown.
+    expect(
+      refusalOf(() =>
+        sceneViewPlan(nodes, { interior: { levelId: 'level_0' }, target: 'wall_level_1_0' }),
+      ),
+    ).toBe('interior_target_elsewhere')
+  })
+
+  test("the floor's roofs and ceilings are no target: the picture leaves them out", () => {
+    const nodes = finishedBuilding()
+    for (const [levelId, target] of [
+      ['level_1', 'roof_1'],
+      ['level_0', 'ceiling_0'],
+    ] as const)
+      expect(refusalOf(() => sceneViewPlan(nodes, { interior: { levelId }, target }))).toBe(
+        'interior_target_elsewhere',
+      )
+  })
+
+  test('a roof level has no inside, its roofs left out of the picture: the floor below has', () => {
+    expect(refusalOf(() => sceneViewInterior(hipHouse(), 'level_roof'))).toBe(
+      'interior_level_invalid',
+    )
+    expect(sceneViewInterior(hipHouse(), 'level_0').hiddenIds).toEqual(['level_roof'])
+  })
+
+  test("a photo's camera keeps its pose, and the floor is still checked", () => {
+    const nodes = finishedBuilding()
     const camera = { position: [25, 14, 18], target: [10, 1, 5], fov: 53, aspect: 4 / 3 }
     const ordinary = sceneViewPlan(nodes, { camera })
     const interior = sceneViewPlan(nodes, { camera, interior: { levelId: 'level_0' } })
     expect(ordinary.interior).toBeUndefined()
     expect(interior.pose).toEqual(ordinary.pose)
     expect(interior.size).toEqual(ordinary.size)
-    expect(interior.interior).toMatchObject({
-      levelId: 'level_0',
-      bounds: { min: [0, 0, 0], max: [20, 3, 10] },
-    })
-    expect(interior.interior!.cutHeight).toBeGreaterThan(0)
-    expect(interior.interior!.cutHeight).toBeLessThan(3)
-    expect(nodes).toEqual(before)
+    expect(interior.interior).toEqual({ levelId: 'level_0' })
+    for (const levelId of ['level_missing', 'building_main', 'wall_level_0_0'])
+      expect(refusalOf(() => sceneViewPlan(nodes, { camera, interior: { levelId } }))).toBe(
+        'interior_level_invalid',
+      )
   })
 
-  test('an exact camera does not bypass validation of the requested interior level', () => {
-    const nodes = building()
-    const camera = { position: [25, 14, 18], target: [10, 1, 5], fov: 53, aspect: 4 / 3 }
-    for (const levelId of ['level_missing', 'building_main', 'wall_level_0_0']) {
-      expect(() => sceneViewPlan(nodes, { camera, interior: { levelId } })).toThrow()
-    }
+  test('a hidden floor, or a building tipped off the vertical, has no inside to show', () => {
+    const nodes = finishedBuilding()
+    const hidden = { ...nodes, level_0: { ...nodes.level_0!, visible: false } } as typeof nodes
+    expect(refusalOf(() => sceneViewInterior(hidden, 'level_0'))).toBe('interior_hidden')
+    const tipped = {
+      ...nodes,
+      building_main: { ...nodes.building_main!, rotation: [0.2, 0, 0] },
+    } as typeof nodes
+    expect(refusalOf(() => sceneViewInterior(tipped, 'level_0'))).toBe(
+      'interior_transform_unsupported',
+    )
+  })
+
+  test('a hidden site hides its ground only: the floors on it are still shown', () => {
+    const nodes = finishedBuilding()
+    const site = SiteNode.parse({ id: 'site_main', visible: false, children: ['building_main'] })
+    const onHiddenSite = {
+      ...nodes,
+      [site.id]: site,
+      building_main: { ...nodes.building_main!, parentId: site.id },
+    } as typeof nodes
+    expect(sceneViewInterior(onHiddenSite, 'level_0').bounds).toEqual(
+      sceneViewInterior(nodes, 'level_0').bounds,
+    )
+  })
+
+  test('a floor of a building away from the origin is cut where it stands', () => {
+    const nodes = finishedBuilding()
+    const moved = {
+      ...nodes,
+      building_main: { ...nodes.building_main!, position: [5.7, 0.5, 16.5] },
+    } as typeof nodes
+    const inside = sceneViewInterior(moved, 'level_0')
+    expect(inside.bounds.min.map((v) => Math.round(v * 100) / 100)).toEqual([5.7, 0.5, 16.5])
+    expect(inside.bounds.max.map((v) => Math.round(v * 100) / 100)).toEqual([25.7, 3.5, 26.5])
+    expect(inside.cutHeight).toBeCloseTo(2.45, 6)
   })
 })
+
+function refusalOf(run: () => unknown): string | undefined {
+  try {
+    run()
+  } catch (error) {
+    if (isAgentRefusal(error)) return error.code
+    throw error
+  }
+  return undefined
+}
 
 /** Every corner of the box inside the frame of a camera at the pose. */
 function framesBox(pose: ReturnType<typeof sceneViewPose>, target: SceneViewBox) {
@@ -591,11 +714,8 @@ describe('a close-up of a hosted item', () => {
   })
 })
 
-/** A 10 x 8 m house on a 2.45 m storey under a 22.5 degree hip roof seated on its top. */
-function hipHouse({ rotation = 0 }: { rotation?: number } = {}) {
-  const building = BuildingNode.parse({ id: 'building_main' })
-  const storey = LevelNode.parse({ id: 'level_0', parentId: building.id, level: 0, height: 2.45 })
-  const roofLevel = LevelNode.parse({ id: 'level_roof', parentId: building.id, level: 1 })
+/** A 10 x 8 m house on a 2.45 m storey under a 22.5 degree hip roof, on a roof level of its own. */
+function hipHouse({ rotation = 0 }: { rotation?: number } = {}): Record<string, AnyNode> {
   const corners: [number, number][] = [
     [0, 0],
     [10, 0],
@@ -605,7 +725,7 @@ function hipHouse({ rotation = 0 }: { rotation?: number } = {}) {
   const walls = corners.map((start, index) =>
     WallNode.parse({
       id: `wall_${index}`,
-      parentId: storey.id,
+      parentId: 'level_0',
       start,
       end: corners[(index + 1) % 4]!,
     }),
@@ -621,37 +741,35 @@ function hipHouse({ rotation = 0 }: { rotation?: number } = {}) {
   })
   const roof = RoofNode.parse({
     id: 'roof_main',
-    parentId: roofLevel.id,
+    parentId: 'level_roof',
     position: [5, 0, 4],
     rotation,
     children: [segment.id],
   })
-  const nodes = [building, storey, roofLevel, ...walls, roof, segment].map((node) => ({
-    ...node,
-    children: 'children' in node && Array.isArray(node.children) ? node.children : [],
-  })) as unknown as AnyNode[]
-  const byId = Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<string, AnyNode>
-  const attach = (parentId: string, ids: string[]) => {
-    ;(byId[parentId] as { children: string[] }).children = ids
-  }
-  attach(building.id, [storey.id, roofLevel.id])
-  attach(
-    storey.id,
-    walls.map((wall) => wall.id),
-  )
-  attach(roofLevel.id, [roof.id])
-  return { nodes: byId }
+  const nodes: AnyNode[] = [
+    BuildingNode.parse({ id: 'building_main', children: ['level_0', 'level_roof'] }),
+    LevelNode.parse({
+      id: 'level_0',
+      parentId: 'building_main',
+      level: 0,
+      height: 2.45,
+      children: walls.map((wall) => wall.id),
+    }),
+    LevelNode.parse({ id: 'level_roof', parentId: 'building_main', level: 1, children: [roof.id] }),
+    ...walls,
+    roof,
+    segment,
+  ]
+  return Object.fromEntries(nodes.map((node) => [node.id, node]))
 }
 
-// A look at a roof defect asks to see the roof: its level held nothing a view could frame, so the
-// look failed with nothing_to_view where the defect was.
+// A roof on a roof level of its own holds no wall: a look at it, or at its level, framed nothing.
 describe('a close-up of a roof', () => {
   const r = (v: number) => Math.round(v * 100) / 100
-  const house = () => hipHouse().nodes
 
   test('a roof, and the level it is on, frame its footprint from its seat to its peak', () => {
     for (const target of ['roof_main', 'level_roof']) {
-      const box = sceneViewBounds(house(), target)
+      const box = sceneViewBounds(hipHouse(), target)
       // 10 × 8 m about (5, 4), seated on the 2.45 m storey; a 22.5° hip over the 4 m half-span.
       expect([r(box.min[0]), r(box.max[0]), r(box.min[2]), r(box.max[2])]).toEqual([0, 10, 0, 8])
       expect(r(box.min[1])).toBe(2.45)
@@ -660,18 +778,18 @@ describe('a close-up of a roof', () => {
   })
 
   test('a turned roof frames the footprint it covers in the plan', () => {
-    const box = sceneViewBounds(hipHouse({ rotation: Math.PI / 2 }).nodes, 'roof_main')
+    const box = sceneViewBounds(hipHouse({ rotation: Math.PI / 2 }), 'roof_main')
     // A quarter turn about its centre swaps the half-extents: 8 m east-west, 10 m north-south.
     expect([r(box.max[0] - box.min[0]), r(box.max[2] - box.min[2])]).toEqual([8, 10])
   })
 
-  test('the building still frames its walls, and the roof level is not in its frame', () => {
-    const box = sceneViewBounds(house(), 'building_main')
+  test('the building still frames its walls', () => {
+    const box = sceneViewBounds(hipHouse(), 'building_main')
     expect([r(box.min[1]), r(box.max[1])]).toEqual([0, 2.45])
   })
 
   test('the picture is taken from outside the roof, centred on it', () => {
-    const { pose } = sceneViewPlan(house(), {
+    const { pose } = sceneViewPlan(hipHouse(), {
       target: 'roof_main',
       from: 'south-west',
       elevation: 35,
@@ -682,9 +800,8 @@ describe('a close-up of a roof', () => {
   })
 })
 
-// The plancrafters cottage stands at [5.7, 0, 16.5] on its site. Everything under a building is
-// drawn in that building's frame, and the views were planned in it unmoved: a window as target
-// framed bare ground 16 m north of the house, a wall showed the house off to one side.
+// Everything under a building is drawn in that building's frame, and the views were planned in it
+// unmoved: a window of a building standing at (5.7, 16.5) as target framed bare ground beside it.
 describe('a building away from the origin', () => {
   const at: [number, number, number] = [5.7, 0, 16.5]
   const placed = () => facadeScene('back', { position: at })
@@ -695,7 +812,7 @@ describe('a building away from the origin', () => {
     max: [box.max[0] + at[0], box.max[1] + at[1], box.max[2] + at[2]],
   })
 
-  test('every target frames where it stands: the box it has at the origin, moved with the building', () => {
+  test('every target frames where it stands: its box at the origin, moved with the building', () => {
     for (const target of [
       'door_face',
       'window_face',
@@ -716,36 +833,24 @@ describe('a building away from the origin', () => {
   test('the eye looks at the window, and from its outside', () => {
     const { pose } = sceneViewPlan(placed(), { target: 'window_face' })
     const window = sceneViewBounds(placed(), 'window_face')
-    expect(framesBox(pose as never, window)).toBe(true)
+    expect(framesBox(pose, window)).toBe(true)
     // The wall is drawn so its outside is the north (-z) side, as it was at the origin.
     expect(pose.position[2]).toBeLessThan(window.min[2])
   })
 
   test('a turned building turns its boxes and the side an opening is seen from', () => {
-    const quarter: [number, number, number] = [0, Math.PI / 2, 0]
-    const turned = facadeScene('back', { position: at, rotation: quarter })
+    const turned = facadeScene('back', { position: at, rotation: [0, Math.PI / 2, 0] })
     const local = sceneViewBounds(facadeScene('back'), 'window_face')
-    const centre = [
-      (local.min[0] + local.max[0]) / 2,
-      (local.min[1] + local.max[1]) / 2,
-      (local.min[2] + local.max[2]) / 2,
-    ]
-    // A quarter turn about the building's origin: local (x, z) lands at (z, -x) in the site.
-    const expected = [at[0] + centre[2]!, centre[1]!, at[2] - centre[0]!].map(r)
+    const centre = (box: SceneViewBox) =>
+      [0, 1, 2].map((axis) => (box.min[axis]! + box.max[axis]!) / 2) as [number, number, number]
+    const [lx, ly, lz] = centre(local)
+    // A quarter turn about the building's origin: local (x, z) lands at (z, -x) on the site.
     const box = sceneViewBounds(turned, 'window_face')
-    expect(
-      [
-        (box.min[0] + box.max[0]) / 2,
-        (box.min[1] + box.max[1]) / 2,
-        (box.min[2] + box.max[2]) / 2,
-      ].map(r),
-    ).toEqual(expected)
-    // Its outside was north (-z) in the building's frame: after the turn, one side of the site.
+    expect(centre(box).map(r)).toEqual([at[0] + lz, ly, at[2] - lx].map(r))
+    // Its outside was north (-z) in the building's frame: after the turn, west (-x) on the site.
     const { pose } = sceneViewPlan(turned, { target: 'window_face' })
-    expect(framesBox(pose as never, box)).toBe(true)
-    expect(Math.abs(pose.position[0] - (box.min[0] + box.max[0]) / 2)).toBeGreaterThan(
-      Math.abs(pose.position[2] - (box.min[2] + box.max[2]) / 2),
-    )
+    expect(framesBox(pose, box)).toBe(true)
+    expect(pose.position[0]).toBeLessThan(box.min[0])
   })
 })
 

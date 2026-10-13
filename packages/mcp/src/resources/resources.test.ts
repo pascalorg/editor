@@ -238,6 +238,14 @@ describe('pascal://agent-guide', () => {
     'room_named_by_person',
     'scene_wipe_blocked',
   ]
+  // Hosted-only tools: the hosted server registers them beside the package's.
+  const HOSTED_ONLY_TOOLS = [
+    'search_project_chats',
+    'read_project_chat',
+    'get_project_assets',
+    'read_project_asset',
+    'list_project_members',
+  ]
   test('every tool the guide names is a tool the server serves', async () => {
     const bridge = new SceneBridge()
     const server = createPascalMcpServer({ bridge, store: new InMemorySceneStore() })
@@ -250,7 +258,10 @@ describe('pascal://agent-guide', () => {
       const res = await pair.client.readResource({ uri: 'pascal://agent-guide' })
       const text = (res.contents[0] as { text?: string }).text ?? ''
       const named = [...new Set([...text.matchAll(/`([a-z]+(?:_[a-z]+)+)`/g)].map((m) => m[1]!))]
-      const unknown = named.filter((name) => !(served.has(name) || REFUSAL_CODES.includes(name)))
+      const unknown = named.filter(
+        (name) =>
+          !(served.has(name) || REFUSAL_CODES.includes(name) || HOSTED_ONLY_TOOLS.includes(name)),
+      )
       expect(unknown).toEqual([])
       expect(text).not.toContain('get_capabilities')
     } finally {

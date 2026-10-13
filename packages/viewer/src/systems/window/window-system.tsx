@@ -29,7 +29,6 @@ import {
   resolveMaterialRef,
 } from '../../lib/materials'
 import { timeSpan } from '../../lib/perf-tracks'
-import { useCommittedSceneMaterialInput } from '../../lib/scene-capture-inputs'
 import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
@@ -109,8 +108,6 @@ export const WindowSystem = () => {
       useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
     }
   }, [sceneMaterials])
-
-  useCommittedSceneMaterialInput(sceneMaterials)
 
   useFrame(() => {
     if (dirtyNodes.size === 0 && pendingWindowAnimationRebuilds.size === 0) return

@@ -3,6 +3,8 @@
 import { type Ring, type SiteNode, terrainFieldOf, useLiveTerrain } from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Material } from 'three'
+import { lotMaskedMaterial } from './lot-mask'
+import { skirtRing } from './terrain-geometry'
 import {
   applyTerrainPatch,
   createTerrainGeometry,
@@ -34,11 +36,18 @@ export const TerrainRenderer = ({
   material,
   site,
   holes,
+  polygon,
 }: {
   /** Owned by `SiteRenderer` so the ground material stays defined in one place. */
   material: Material
   site: SiteNode
   holes: Ring[]
+  /**
+   * The lot's property line (live while it is being edited). With one, the
+   * ground is the lot alone — cut to the line, closed by a skirt down to a flat
+   * base — rather than the field's padded box.
+   */
+  polygon?: ReadonlyArray<readonly [number, number]> | null
 }) => {
   const targetRef = useRef<TerrainGeometry | null>(null)
 
@@ -52,8 +61,22 @@ export const TerrainRenderer = ({
   const target = useMemo(() => {
     const field = useLiveTerrain.getState().fieldOf(site.id) ?? persistedField
     if (!field) return null
-    return createTerrainGeometry(field, holes)
-  }, [persistedField, site.id, holes])
+    const ring = polygon && polygon.length >= 3 ? skirtRing(field, polygon) : null
+    return createTerrainGeometry(field, holes, ring && ring.length >= 6 ? ring : null)
+  }, [persistedField, site.id, holes, polygon])
+
+  // The surface (and the cut edges round recessed slabs) stop at the property
+  // line; the skirt keeps the plain material — it *is* the line.
+  const surfaceMaterial = useMemo(
+    () => (polygon && polygon.length >= 3 ? lotMaskedMaterial(material, polygon) : material),
+    [material, polygon],
+  )
+  useEffect(
+    () => () => {
+      if (surfaceMaterial !== material) surfaceMaterial.dispose()
+    },
+    [surfaceMaterial, material],
+  )
 
   targetRef.current = target
   useEffect(
@@ -90,19 +113,20 @@ export const TerrainRenderer = ({
 
   return (
     <>
-      <mesh castShadow geometry={target.geometry} material={material} receiveShadow />
+      <mesh castShadow geometry={target.geometry} material={surfaceMaterial} receiveShadow />
       {target.holeBoundary && (
         <mesh
           castShadow
           geometry={target.holeBoundary.geometry}
-          material={material}
+          material={surfaceMaterial}
           receiveShadow
         />
       )}
       {/*
-        The edge curtain. Not `castShadow`: it hangs a metre below the ground it
-        closes, so it would cast a rim of shade onto the horizon disc all round the
-        lot. `receiveShadow` for the same reason the surface has it — a raised edge
+        The edge curtain — along the property line when there is one, from the
+        ground down to the block's flat base. Not `castShadow`: it hangs below the
+        ground it closes, so it would cast a rim of shade onto the horizon disc all
+        round the lot. `receiveShadow` for the same reason the surface has it — a raised edge
         is lit ground that a building next to it should darken.
       */}
       <mesh geometry={target.skirt.geometry} material={material} receiveShadow />

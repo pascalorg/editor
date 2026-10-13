@@ -2011,8 +2011,7 @@ export function startConstructionReveal(
       }
     }),
   ]
-  const onCapture = (policy: undefined | { readOnly: true }) => {
-    if (policy?.readOnly) return
+  const onCapture = () => {
     if (currentDriver === token) finishReveals()
   }
   emitter.on('thumbnail:before-capture', onCapture)

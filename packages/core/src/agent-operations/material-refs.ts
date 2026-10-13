@@ -75,32 +75,33 @@ export function nearestLibraryMaterials(
 
 /**
  * A material ref that renders: a library id the catalog holds (`library:<id>`, or the bare id), or
- * a scene material (`scene:<id>`, which only the host's store can check). Anything else would fall
- * back to a default with no word (an unknown preset came out grey), so it is refused, naming
- * the nearest library ids for the surface; when the library has nothing of the kind like it, the
- * refusal says so, and that a colour is the nearest (a corrugated roof was once offered bricks).
+ * a scene material (`scene:<id>`, checked against the scene's materials when the host lends them).
+ * Anything else would fall back to a default with no word (an unknown preset came out grey), so it
+ * is refused, naming the nearest library ids for the surface; when the library has nothing of the
+ * kind like it, the refusal says so, and that a colour is the nearest (a corrugated roof was once
+ * offered bricks).
  */
 export function requireMaterialRef(
   asked: string,
   field?: string,
   surface?: MaterialSurface,
-  /** Whether to point to `paint` for a colour (paint passes it); else a flat library colour. */
   {
     paint = false,
     materials,
   }: {
+    /** Whether to point to `paint` for a colour (paint passes it); else a flat library colour. */
     paint?: boolean
+    /** The scene's materials, when the host has them. */
     materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
   } = {},
 ): string {
   const parsed = parseMaterialRef(asked.includes(':') ? asked : `library:${asked}`)
   if (parsed?.kind === 'scene') {
-    if (materials !== undefined && !Object.hasOwn(materials, parsed.id))
-      refuse(
-        'unknown_material',
-        `Scene material ${asked} is not in this scene; nothing was painted.`,
-        { material: asked },
-      )
+    if (materials && !Object.hasOwn(materials, parsed.id))
+      refuse('unknown_material', `${asked} is not one of this scene's materials.`, {
+        material: asked,
+        ...(field ? { field } : {}),
+      })
     return asked
   }
   // A community material (`library:mtl_…`): the host checks it against its catalog.
@@ -123,13 +124,9 @@ export function requireMaterialRef(
           kind.length ? kind.slice(0, 5).map(named).join(', ') : 'none'
         }.${byName.length ? ` Nearest by name: ${byName.join(', ')}.` : ''} Or ${colour} is the nearest.`
       : `${head}. Nearest: ${nearest.join(', ')}; or give ${colour}.`
-  return refuse(
-    'unknown_material',
-    `${message} search_materials finds a library material by words.`,
-    {
-      material: asked,
-      ...(field ? { field } : {}),
-      nearest,
-    },
-  )
+  return refuse('unknown_material', `${message} search_materials finds one by words.`, {
+    material: asked,
+    ...(field ? { field } : {}),
+    nearest,
+  })
 }

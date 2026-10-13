@@ -2,7 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type { PointAskPin, PointAskStatus } from '../agent-operations/point-context'
-import type { SceneViewInteriorPolicy } from '../agent-operations/scene-view'
+import type { SceneViewInterior } from '../agent-operations/scene-view'
 import type {
   BlockNode,
   BoxVentNode,
@@ -230,7 +230,6 @@ export interface SnapshotCapturedEvent {
 
 export interface ThumbnailGenerateEvent {
   projectId: string
-  interior?: SceneViewInteriorPolicy
   requestId?: string
   /** World-space pose for a standard capture without moving the viewport camera. */
   cameraPose?: SnapshotCapturePose
@@ -281,6 +280,8 @@ export interface ThumbnailGenerateEvent {
   ephemeral?: boolean
   /** World clipping planes for this frame (a section's cut). */
   clip?: readonly { normal: [number, number, number]; constant: number }[]
+  /** Look inside this floor for the frame: the rest of the house left out, its walls cut (view_scene). */
+  interior?: SceneViewInterior
   /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
   supersample?: number
 }
@@ -358,17 +359,10 @@ type WindowAnimationEvents = {
   }
 }
 
-export type ThumbnailCapturePolicy = {
-  readOnly: true
-  /** Excluded ancestors whose packed draws must also be hidden for this render. */
-  hiddenNodeIds?: readonly string[]
-  /** Reversible renderer changes join the synchronous capture transaction. */
-  restore?: (callback: () => void) => void
-}
-
 type ThumbnailEvents = {
-  'thumbnail:before-capture': undefined | ThumbnailCapturePolicy
-  'thumbnail:after-capture': undefined | ThumbnailCapturePolicy
+  /** `wholeWalls`: every wall drawn whole for the frame, whatever the wall mode (an authored pose, an interior view). */
+  'thumbnail:before-capture': { wholeWalls?: boolean } | undefined
+  'thumbnail:after-capture': undefined
 }
 
 type SnapshotEvents = {
