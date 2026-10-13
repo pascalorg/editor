@@ -40,5 +40,6 @@ export function cornerHintRows(hint: CornerSnapHint): CornerHintRow[] {
       },
       { keys: ['Alt'], label: 'Place without the corner snap' },
     ]
-  return [{ keys: ['Corner'], label: CORNER_BLOCK_NOTES[hint] }]
+  // The HUD's notice row, as for a placement that does not fit: a note, not a key to press.
+  return [{ keys: ['!'], label: CORNER_BLOCK_NOTES[hint] }]
 }
