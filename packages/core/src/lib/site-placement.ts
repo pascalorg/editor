@@ -10,7 +10,7 @@
  * −z, +x, +z and −x; true north is given separately.
  */
 import type { AnyNode, BuildingNode, LevelNode, SiteNode, SiteSetbacks } from '../schema'
-import { migrateSiteMetadata } from '../schema/nodes/site'
+import { migrateSiteMetadata } from '../schema/nodes/site-facts'
 import {
   footprintOutline,
   levelFootprintLoops,
@@ -381,7 +381,7 @@ function streetFaces(front: PlanSide): Record<YardKey, PlanSide> {
   const [fx, fz] = SIDES[front]
   // facing the house is −front; its right hand, with z pointing south, is (−dz, dx)
   const right = sideOf(fz, -fx)
-  return { front, rear: OPPOSITE[front], right, left: OPPOSITE[right] }
+  return { front, rear: OPPOSITE[front], left: OPPOSITE[right], right }
 }
 
 function streetOf(site: SiteNode, toLevel: (x: number, z: number) => Pt, yaw: number) {
@@ -809,6 +809,22 @@ const fmtPt = (p: Pt) => `[${num(p[0])}, ${num(p[1])}]`
 const span = (b: PlanBounds) => `x ${num(b.minX)}..${num(b.maxX)}, z ${num(b.minZ)}..${num(b.maxZ)}`
 const size = (b: PlanBounds) => `${num(b.maxX - b.minX)}×${num(b.maxZ - b.minZ)} m`
 
+/** `18×32 m` for a rectangular lot, whatever its turn; null for any other shape. */
+function rectangleSize(ring: readonly Pt[]): string | null {
+  if (ring.length !== 4) return null
+  const side = (i: number) => {
+    const a = ring[i] as Pt
+    const b = ring[(i + 1) % 4] as Pt
+    return [b[0] - a[0], b[1] - a[1]] as const
+  }
+  for (let i = 0; i < 4; i++) {
+    const [ax, az] = side(i)
+    const [bx, bz] = side((i + 1) % 4)
+    if (Math.abs(ax * bx + az * bz) > 1e-3 * Math.hypot(ax, az) * Math.hypot(bx, bz)) return null
+  }
+  return `${num(Math.hypot(...side(0)))}×${num(Math.hypot(...side(1)))} m`
+}
+
 function describeSetbacks(setbacks: SiteSetbacks): string {
   const parts = [`front ${num(setbacks.front)}`]
   if (setbacks.left !== undefined || setbacks.right !== undefined)
@@ -839,7 +855,8 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
     }`,
   ]
 
-  const facts = [`lot ${size(lot.bounds)} (${Math.round(lot.areaM2)} m²)`]
+  const dims = rectangleSize(lot.ring)
+  const facts = [`lot ${dims ? `${dims}, ` : ''}${Math.round(lot.areaM2)} m²`]
   if (brief.placeholder)
     facts.push('the new-project placeholder: no address or parcel, real property lines unknown')
   if (brief.address) facts.push(brief.address)
@@ -881,9 +898,12 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
     )
     return lines
   }
-  const yards = Object.entries(footprint.yards)
-    .map(([key, m]) => `${key} ${m === null || m === undefined ? '?' : num(m)}`)
-    .join(', ')
+  const measured = Object.entries(footprint.yards).filter(
+    (entry): entry is [string, number] => typeof entry[1] === 'number',
+  )
+  const yards = measured.length
+    ? ` · yards ${measured.map(([key, m]) => `${key} ${num(m)}`).join(', ')} m`
+    : ''
   const room = buildable.ring.length >= 3 ? boundsOf(buildable.ring) : lot.bounds
   const tooBig =
     footprint.bounds.maxX - footprint.bounds.minX > room.maxX - room.minX ||
@@ -905,7 +925,7 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
           ? 'inside the buildable area, on its centre'
           : `inside the buildable area, ${num(footprint.offCentreM)} m off its centre`
   lines.push(
-    `footprint: ${size(footprint.bounds)} centred ${fmtPt(footprint.centre)} · yards ${yards} m · ${where}`,
+    `footprint: ${size(footprint.bounds)} centred ${fmtPt(footprint.centre)}${yards} · ${where}`,
   )
   return lines
 }
