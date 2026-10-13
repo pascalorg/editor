@@ -59,7 +59,7 @@ export function FloorplanModeCoordinator() {
       <span>{notice.message}</span>
       {notice.kind === 'switch-to-expert' ? (
         <button
-          className="shrink-0 rounded-md bg-cyan-500/15 px-2.5 py-1 font-medium text-cyan-400 hover:bg-cyan-500/25"
+          className="shrink-0 rounded-md bg-cyan-500/15 px-2.5 py-1 font-medium text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/25"
           onClick={() => {
             setFloorplanMode('expert')
             dismissNotice()
@@ -71,7 +71,7 @@ export function FloorplanModeCoordinator() {
       ) : null}
       <button
         aria-label="Dismiss"
-        className="shrink-0 rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        className="shrink-0 rounded p-1 text-muted-foreground hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
         onClick={dismissNotice}
         type="button"
       >

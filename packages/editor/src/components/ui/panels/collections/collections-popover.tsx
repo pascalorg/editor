@@ -106,7 +106,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
             </span>
           </div>
           <button
-            className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+            className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
             onClick={() => {
               setShowCreateInput((v) => !v)
               setCreateName('')
@@ -120,7 +120,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
 
         {/* Create input */}
         {showCreateInput && (
-          <div className="flex items-center gap-1.5 border-border/50 border-b bg-white/5 px-3 py-2">
+          <div className="flex items-center gap-1.5 border-border/50 border-b bg-black/4 dark:bg-white/5 px-3 py-2">
             <input
               autoFocus
               className="min-w-0 flex-1 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-foreground text-xs outline-none placeholder:text-muted-foreground/60 focus:border-ring focus:ring-1 focus:ring-ring/30"
@@ -144,7 +144,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
               <Check className="h-3.5 w-3.5" />
             </button>
             <button
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10"
               onClick={() => {
                 setShowCreateInput(false)
                 setCreateName('')
@@ -186,7 +186,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
                       </span>
                       <div className="flex shrink-0 items-center gap-1">
                         <button
-                          className="rounded-md bg-red-500/20 px-2 py-0.5 font-medium text-[11px] text-red-400 transition-colors hover:bg-red-500/30"
+                          className="rounded-md bg-red-500/20 px-2 py-0.5 font-medium text-[11px] text-red-600 dark:text-red-400 transition-colors hover:bg-red-500/30"
                           onClick={() => {
                             deleteCollection(collection.id)
                             setDeletingId(null)
@@ -196,7 +196,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
                           Delete
                         </button>
                         <button
-                          className="rounded-md px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-white/10"
+                          className="rounded-md px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10"
                           onClick={() => setDeletingId(null)}
                           type="button"
                         >
@@ -229,7 +229,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
                         <Check className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10"
                         onClick={() => setRenamingId(null)}
                         type="button"
                       >
@@ -241,7 +241,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
 
                 return (
                   <li key={collection.id}>
-                    <div className="group flex items-center gap-2 px-3 py-2 transition-colors hover:bg-white/5">
+                    <div className="group flex items-center gap-2 px-3 py-2 transition-colors hover:bg-black/4 dark:hover:bg-white/5">
                       {/* Color dot — click to pick color */}
                       <ColorDot
                         color={collection.color ?? '#6366f1'}
@@ -299,7 +299,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
                       <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <button
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-colors hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
                             type="button"
                           >
                             <MoreHorizontal className="h-3.5 w-3.5" />

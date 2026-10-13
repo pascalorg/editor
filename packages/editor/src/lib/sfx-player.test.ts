@@ -1,10 +1,10 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
+import useAudio from '../store/use-audio'
 
 type FakeContext = { id: string }
 
 let activeContext: FakeContext = { id: 'first' }
 let initialState: 'loaded' | 'loading' = 'loaded'
-let muted = false
 let throwOnPlay = false
 const instances: FakeHowl[] = []
 
@@ -92,12 +92,6 @@ const fakeHowler = {
 }
 
 mock.module('howler', () => ({ Howl: FakeHowl, Howler: fakeHowler }))
-mock.module('../store/use-audio', () => ({
-  default: {
-    getState: () => ({ masterVolume: 100, muted, sfxVolume: 100 }),
-    subscribe: () => () => {},
-  },
-}))
 
 const { disposeSFX, playSFX, preloadSFX, startLoopSFX, stopLoopSFX, updateSFXVolumes } =
   await import('./sfx-player')
@@ -107,7 +101,7 @@ beforeEach(() => {
   disposeSFXBus()
   activeContext = { id: 'first' }
   initialState = 'loaded'
-  muted = false
+  useAudio.setState({ masterVolume: 100, muted: false, sfxVolume: 100 })
   throwOnPlay = false
   instances.length = 0
 })
@@ -141,11 +135,11 @@ describe('SFX audio context lifecycle', () => {
   })
 
   test('muted startup neither starts audio nor consumes a later fresh cue', () => {
-    muted = true
+    useAudio.setState({ muted: true })
     initSFXBus()
     triggerSFX('sfx:item-place')
     expect(instances.every((sound) => sound.playCount === 0)).toBe(true)
-    muted = false
+    useAudio.setState({ muted: false })
     updateSFXVolumes()
     triggerSFX('sfx:item-place')
     expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
@@ -279,7 +273,7 @@ describe('SFX audio context lifecycle', () => {
     startLoopSFX('terrainLower')
     const lower = instances.find((sound) => sound.loop && sound.playCount === 1)
 
-    muted = true
+    useAudio.setState({ muted: true })
     updateSFXVolumes()
 
     expect(lower?.fadeCalls.at(-1)).toEqual([0.2, 0, 90, 1])

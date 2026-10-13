@@ -151,7 +151,9 @@ export function BuildToolTile({
         // Small tiles grow to two label lines ("Spawn point"); a grid row's
         // tiles stretch together, so a row keeps one height.
         size === 'lg' ? 'h-[104px] gap-1.5 px-1.5 pt-2 pb-2.5' : 'min-h-[74px] gap-1 px-1 pt-1.5 pb-2',
-        active ? 'bg-primary/10 ring-1 ring-primary/50' : 'bg-muted/40 hover:bg-muted',
+        active
+          ? 'bg-primary/10 ring-1 ring-primary/50'
+          : 'bg-black/4 hover:bg-black/8 dark:bg-muted/40 dark:hover:bg-muted',
         className,
       )}
       type="button"

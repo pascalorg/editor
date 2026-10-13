@@ -146,8 +146,8 @@ export function MeasurementControl() {
           className={cn(
             'rounded-r-none p-0 text-muted-foreground',
             isControlActive
-              ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
-              : 'hover:bg-cyan-500/15 hover:text-cyan-400',
+              ? 'bg-cyan-500/20 text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-400 dark:hover:text-accent-foreground'
+              : 'hover:bg-cyan-500/15 hover:text-cyan-700 dark:hover:text-cyan-400',
           )}
           label={`Measure: ${selectedLabel}`}
           onClick={handlePrimaryClick}
@@ -166,8 +166,8 @@ export function MeasurementControl() {
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
               isOpen
-                ? 'bg-cyan-500/15 text-cyan-400'
-                : 'hover:bg-cyan-500/10 hover:text-cyan-400',
+                ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400'
+                : 'hover:bg-cyan-500/10 hover:text-cyan-700 dark:hover:text-cyan-400',
             )}
             type="button"
           >
@@ -198,8 +198,8 @@ export function MeasurementControl() {
                 className={cn(
                   'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
                   isSelected
-                    ? 'bg-white/10 text-foreground'
-                    : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                    ? 'bg-black/6 dark:bg-white/10 text-foreground'
+                    : 'text-muted-foreground hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground',
                 )}
                 key={option.kind}
                 onClick={() => {
@@ -234,8 +234,8 @@ export function MeasurementControl() {
                     className={cn(
                       'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
                       isSelected
-                        ? 'bg-white/10 text-foreground'
-                        : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                        ? 'bg-black/6 dark:bg-white/10 text-foreground'
+                        : 'text-muted-foreground hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground',
                     )}
                     key={`${option.mode}-${option.chainMode}`}
                     onClick={() => {

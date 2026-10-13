@@ -182,7 +182,7 @@ A `SceneTheme` (`lib/scene-themes.ts`) bundles everything that defines a "look":
 | `toneMappingExposure` | Renderer exposure. |
 | `clayTints?` | Per-`SurfaceRole` colour overrides layered on top of `colorPreset` (see [resolving a colour](#resolving-a-colour)). |
 
-The editor UI chrome is always dark (a fixed `document.body.classList.add('dark')`) and is independent of `appearance`.
+The editor UI chrome follows the host's theme and is independent of `appearance`. The editor sets no `dark` class itself: its chrome and every portal resolve against the host's `.dark` ancestor (the open-source app adds `dark` to `<body>` while its editor page is mounted; Pascal's hosted app lets next-themes set it on `<html>`). Chrome colour literals have a light base with the dark value under `dark:` (`bg-black/4 dark:bg-[#2C2C2E]`), so a new control needs both. `dark:hover:*` ties with `disabled:hover:*` and is emitted later, so a control that resets its hover when disabled resets it under `dark:disabled:hover:` too. Presentation HUDs (Preview, walkthrough, the viewer's controls with their menus and tooltips) and self-contained overlays (cursor badges, room labels, the snapshot viewfinder, the Point and ask layer) stay dark in either theme. A host that owns the theme setting passes `InterfaceThemeRow` (System / Light / Dark) to `SettingsPanel` through `preferences`.
 
 ## Adding a theme
 

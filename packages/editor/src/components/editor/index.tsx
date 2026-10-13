@@ -1566,13 +1566,6 @@ function EditorContent({
     if (!isPreviewMode) setPreviewStageMode('3d')
   }, [isPreviewMode])
 
-  useEffect(() => {
-    document.body.classList.add('dark')
-    return () => {
-      document.body.classList.remove('dark')
-    }
-  }, [])
-
   const handleSceneReadyChange = useCallback((ready: boolean) => {
     setIsViewerSceneReady(ready)
   }, [])
@@ -1824,7 +1817,7 @@ function EditorContent({
   const overlayLeft = LAYOUT_PADDING + (isSidebarCollapsed ? 8 : sidebarWidth) + LAYOUT_GAP
 
   return (
-    <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
+    <div className="flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
       <FloorplanModeCoordinator />
       {visibleLoader && (
         <div className="fixed inset-0 z-60">

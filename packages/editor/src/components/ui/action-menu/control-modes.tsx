@@ -30,16 +30,16 @@ const controls: ControlConfig[] = [
     imageSrc: '/icons/select.webp',
     label: 'Select',
     shortcut: 'V',
-    color: 'hover:bg-blue-500/20 hover:text-blue-400',
-    activeColor: 'bg-blue-500/20 text-blue-400',
+    color: 'hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400',
+    activeColor: 'bg-blue-500/20 text-blue-600 dark:text-blue-400 dark:hover:text-accent-foreground',
   },
   {
     id: 'delete',
     icon: Trash2,
     label: 'Delete',
     shortcut: 'X',
-    color: 'hover:bg-red-500/20 hover:text-red-400',
-    activeColor: 'bg-red-500/20 text-red-400',
+    color: 'hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-400',
+    activeColor: 'bg-red-500/20 text-red-600 dark:text-red-400 dark:hover:text-accent-foreground',
   },
 ]
 
@@ -87,8 +87,8 @@ export function ControlModes() {
                 'group text-muted-foreground',
                 !(isImageMode || isActive) && c.color,
                 !isImageMode && isActive && c.activeColor,
-                isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
-                isImageMode && !isActive && 'hover:bg-white/5',
+                isImageMode && isActive && 'bg-black/6 hover:bg-black/6 dark:bg-white/10',
+                isImageMode && !isActive && 'hover:bg-black/4',
               )}
               // A static hook for a host app that wants to point a first-run
               // tour at this button. Nothing here reads it.

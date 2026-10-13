@@ -30,7 +30,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
         <>
           {/* Orbit CCW */}
           <ActionButton
-            className="group hover:bg-white/5"
+            className="group hover:bg-black/4"
             label="Orbit Left"
             onClick={orbitCCW}
             size="icon"
@@ -47,7 +47,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
 
           {/* Orbit CW */}
           <ActionButton
-            className="group hover:bg-white/5"
+            className="group hover:bg-black/4"
             label="Orbit Right"
             onClick={orbitCW}
             size="icon"
@@ -70,7 +70,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
       {/* Top View */}
       {!is2dOnly && (
         <ActionButton
-          className="group hover:bg-white/5"
+          className="group hover:bg-black/4"
           label="Top View"
           onClick={goToTopView}
           size="icon"

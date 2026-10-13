@@ -104,13 +104,14 @@ function VisibilityMenu({
           className="hover:bg-white/5 hover:text-foreground"
           label="Visibility"
           size="icon"
+          tooltipClassName="dark"
           tooltipSide="top"
           variant="ghost"
         >
           <Eye className="h-5 w-5" />
         </ActionButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="min-w-44" side="top">
+      <DropdownMenuContent align="center" className="dark min-w-44" side="top">
         {canShowScans && (
           <DropdownMenuItem
             onSelect={(e) => keepOpen(e, () => useViewer.getState().setShowScans(!showScans))}
@@ -161,13 +162,14 @@ function DisplayMenu() {
           className="hover:bg-white/5 hover:text-foreground"
           label="Display settings"
           size="icon"
+          tooltipClassName="dark"
           tooltipSide="top"
           variant="ghost"
         >
           <SlidersHorizontal className="h-5 w-5" />
         </ActionButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="min-w-56" side="top">
+      <DropdownMenuContent align="center" className="dark min-w-56" side="top">
         <DropdownMenuItem
           onSelect={(e) => keepOpen(e, () => useViewer.getState().setShadows(!shadows))}
         >
@@ -208,7 +210,7 @@ function DisplayMenu() {
             <span>Render</span>
             <span className="ml-auto text-muted-foreground text-xs">{activeShading.name}</span>
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-56">
+          <DropdownMenuSubContent className="dark min-w-56">
             {SHADING_OPTIONS.map((option) => {
               const OptionIcon = option.icon
               return (
@@ -233,12 +235,12 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SwatchBook className="h-4 w-4" />
-            <span>Theme</span>
+            <span>Scene theme</span>
             <span className="ml-auto truncate text-muted-foreground text-xs">
               {activeTheme.name}
             </span>
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-48">
+          <DropdownMenuSubContent className="dark min-w-48">
             {SCENE_THEMES.map((t) => {
               const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
                 (role) => t.clayTints?.[role] ?? CLAY_PALETTE[role],
@@ -271,7 +273,7 @@ function DisplayMenu() {
             <span>Edges</span>
             <span className="ml-auto text-muted-foreground text-xs">{activeEdges.name}</span>
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-56">
+          <DropdownMenuSubContent className="dark min-w-56">
             {EDGE_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.id}
@@ -361,6 +363,7 @@ export const ViewerControlsBar = ({
               useViewer.getState().setLevelMode(modes[nextIndex] ?? 'stacked')
             }}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >
@@ -384,6 +387,7 @@ export const ViewerControlsBar = ({
                 useViewer.getState().setWallMode(modes[nextIndex] ?? 'cutaway')
               }}
               size="icon"
+              tooltipClassName="dark"
               tooltipSide="top"
               variant="ghost"
             >
@@ -407,6 +411,7 @@ export const ViewerControlsBar = ({
             label={`Walkthrough: ${walkthroughActive ? 'On' : 'Off'}`}
             onClick={onWalkthroughToggle}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >
@@ -416,7 +421,7 @@ export const ViewerControlsBar = ({
           <div className="mx-1 h-5 w-px bg-border/40" />
 
           {/* Follow Pascal */}
-          <FollowPascalToggle className="hidden sm:inline-flex" />
+          <FollowPascalToggle className="hidden sm:inline-flex" tooltipClassName="dark" />
 
           {/* Camera actions */}
           <ActionButton
@@ -424,6 +429,7 @@ export const ViewerControlsBar = ({
             label="Orbit left"
             onClick={() => emitter.emit('camera-controls:orbit-ccw')}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >
@@ -439,6 +445,7 @@ export const ViewerControlsBar = ({
             label="Orbit right"
             onClick={() => emitter.emit('camera-controls:orbit-cw')}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >
@@ -454,6 +461,7 @@ export const ViewerControlsBar = ({
             label="Top view"
             onClick={() => emitter.emit('camera-controls:top-view')}
             size="icon"
+            tooltipClassName="dark"
             tooltipSide="top"
             variant="ghost"
           >

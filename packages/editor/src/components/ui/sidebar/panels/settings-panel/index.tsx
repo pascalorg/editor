@@ -26,9 +26,12 @@ import {
   Layers,
   ListTree,
   Map as MapIcon,
+  Monitor,
+  Moon,
   Save,
   ChevronDown,
   Send,
+  Sun,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -55,6 +58,7 @@ import {
   sendGlbToLocalApp,
   waitForLocalImport,
 } from '../../../../../lib/send-to-app'
+import { SegmentedControl } from './../../../../../components/ui/controls/segmented-control'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -302,6 +306,65 @@ export function SettingsSwitchRow({
   )
 }
 
+export type InterfaceTheme = 'system' | 'light' | 'dark'
+
+const INTERFACE_THEME_OPTIONS: { label: ReactNode; value: InterfaceTheme }[] = [
+  {
+    label: (
+      <>
+        <Monitor className="size-3.5" />
+        System
+      </>
+    ),
+    value: 'system',
+  },
+  {
+    label: (
+      <>
+        <Sun className="size-3.5" />
+        Light
+      </>
+    ),
+    value: 'light',
+  },
+  {
+    label: (
+      <>
+        <Moon className="size-3.5" />
+        Dark
+      </>
+    ),
+    value: 'dark',
+  },
+]
+
+/**
+ * The interface theme as a System / Light / Dark row. The editor applies no theme itself: its
+ * chrome follows the host's `.dark` class, so a host that owns the setting passes this row.
+ */
+export function InterfaceThemeRow({
+  onChange,
+  value,
+}: {
+  onChange: (value: InterfaceTheme) => void
+  value: InterfaceTheme
+}) {
+  const labelId = useId()
+  return (
+    <div className="flex flex-col gap-2 py-1 @sm:flex-row @sm:items-center @sm:justify-between @sm:gap-4">
+      <div className="min-w-0 space-y-0.5">
+        <p className="font-medium text-sm" id={labelId}>
+          Interface theme
+        </p>
+        <p className="text-muted-foreground text-xs">System follows your device’s appearance.</p>
+      </div>
+      <div aria-labelledby={labelId} className="w-full shrink-0 @sm:w-60" role="group">
+        <SegmentedControl onChange={onChange} options={INTERFACE_THEME_OPTIONS} value={value} />
+      </div>
+    </div>
+  )
+}
+
 export interface SettingsPanelProps {
   /** Merged onto the scrolling root so hosts can restyle padding (e.g. inside a dialog). */
   className?: string
@@ -313,7 +376,10 @@ export interface SettingsPanelProps {
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
   ) => Promise<void>
-  /** Rows a host adds under Preferences, for its own features (SettingsSwitchRow). */
+  /**
+   * Rows a host adds under Preferences, for its own features and settings (SettingsSwitchRow,
+   * InterfaceThemeRow).
+   */
   preferences?: ReactNode
 }
 
@@ -1214,7 +1280,7 @@ export function SettingsPanel({
                 </Button>
               </div>
             </DialogTrigger>
-            <DialogContent className="h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
+            <DialogContent className="dark h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
               <DialogTitle className="sr-only">Scene Graph</DialogTitle>
               <div
                 className="flex h-full min-h-0 w-full min-w-0 *:h-full *:w-full *:overflow-y-auto"
