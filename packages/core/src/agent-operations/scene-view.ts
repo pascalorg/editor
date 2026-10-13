@@ -137,8 +137,11 @@ export type SceneViewPose =
       viewWidth: number
     }
 
-/** The picture's size: enough to read a facade's bays, few tokens. */
-export const VIEW_SIZE = { w: 1280, h: 800 } as const
+/**
+ * The picture's size, the most of each side: a shelf's books and a door's handles read. Vision
+ * models scale a picture down past ~1568 px on its long side, so more costs bytes and nothing seen.
+ */
+export const VIEW_SIZE = { w: 1920, h: 1200 } as const
 const ASPECT = VIEW_SIZE.w / VIEW_SIZE.h
 
 /** A crop comes back at most this long on either host: the region as the photo has it, never larger than a view. */
