@@ -71,6 +71,11 @@
       "import": "./dist/lib/plan-footprint.js",
       "default": "./dist/lib/plan-footprint.js"
     },
+    "./site-placement": {
+      "types": "./dist/lib/site-placement.d.ts",
+      "import": "./dist/lib/site-placement.js",
+      "default": "./dist/lib/site-placement.js"
+    },
     "./wall": {
       "types": "./dist/systems/wall/wall-footprint.d.ts",
       "import": "./dist/systems/wall/wall-footprint.js",
