@@ -1,7 +1,8 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
-import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
+import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, type LevelNode } from '../schema'
+import { isRoofOnStoreyWalls } from '../services/roof-level'
 import { getStoredLevelHeight } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
 import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
@@ -271,7 +272,8 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       })
     }
     if (level.role === 'roof') {
-      if (content.roofs === 0)
+      // Roof geometry a plugin draws (roof planes) is no `roof` node, and is still the roof.
+      if (onLevel(level.levelId).length === 0)
         report(
           'roof_level_no_roof',
           `${levelName} is a roof support level but has no roof geometry; add or move roof geometry there rather than deleting the support level to satisfy story count`,
@@ -303,10 +305,13 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       report('zones_no_ceilings', `${levelName} has zones but no ceilings`)
     if (content.walls > 0 && content.doors === 0)
       report('walls_no_doors', `${levelName} has walls but no doors`)
-    if (content.roofs > 0 && (content.walls > 0 || content.zones > 0 || content.stairs > 0))
+    const onWalls = (nodes[level.levelId] as LevelNode).children.filter((id) =>
+      isRoofOnStoreyWalls(nodes, id),
+    )
+    if (onWalls.length > 0)
       report(
         'roof_mixed_in_storey',
-        `${levelName} mixes roof geometry with occupied-level content, so solo and exploded level views show the roof over its plan; place roofs on a dedicated roof level. By hand: select the roof and use "Move to the roof level" on its panel, which moves the storey's roofs there where they stand.`,
+        `${levelName} holds ${onWalls.join(', ')} on its own walls, mixing roof geometry with occupied-level content, so solo and exploded level views show the roof over its plan; place roofs on a dedicated roof level. move_roofs_to_roof_level with levelId ${level.levelId} moves them there where they stand (never delete and rebuild them); by hand, "Move to the roof level" on the roof's panel.`,
       )
   }
 

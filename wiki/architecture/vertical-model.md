@@ -182,14 +182,23 @@ their role) counts as the roof level and is declared when reused; an empty level
 level only at the top of its stack (with a storey above it, it is a storey not built yet), and a
 declared roof level someone walled counts as a storey. A roof placed by hand on the level above
 selects that level with it, so it stays in view.
-`verify_scene` reports a roof mixed into a storey (`roof_mixed_in_storey`) and a roof level below a
-storey (`roof_level_not_on_top`); existing scenes are not migrated. A roof on a storey with walls
-offers "Move to the roof level" on its panel (in 2D and 3D): `planRoofsOffStorey` moves every roof
-of that storey to the level the rule gives it in one undo step, each container dropped by
-`planRoofLevel`'s `storeyOffset` so it stands where it stood, and a roof following walls turns
-custom where the walls there would lift it. `storeyCoveredBy` reads the rule back: the storey a
-roof covers. Unpainted gables on a roof level take the cladding of the storey's walls below
-(`levelWallCladdingRef`).
+Which storey a roof covers is read off where it bears, so nothing is recorded on the roof
+(`storeyCoveredBy`): a roof on a roof level covers the storey under it; a roof on a storey covers the
+storey below when its segments bear on that storey's wall tops and not on its own level's (a lower
+wing's roof, where the rule puts it), else the storey holding it. `roofsOver` lists the roofs
+covering a storey, on it or on the level directly above. A roof held by the storey whose wall tops
+it bears on (within 0.15 m: a porch roof on its beam bears lower) is a roof the rule moves
+(`isRoofOnStoreyWalls`): `verify_scene` reports it (`roof_mixed_in_storey`), and a roof level below
+a storey too (`roof_level_not_on_top`); existing scenes are not migrated. Such a roof offers "Move
+to the roof level" on its panel (in 2D and 3D), and agents have `move_roofs_to_roof_level`: both
+run `planRoofsOffStorey`, which moves the storey's roofs on its walls to the level the rule gives
+them in one undo step, each container dropped by `planRoofLevel`'s `storeyOffset` so it stands
+where it stood, a roof following walls turning custom where the walls there would lift it. A roof
+above the storey it covers at a height of its own (`support` level, as moved roofs, the agents'
+and the auto roof's are, measured from that storey's floor) keeps its height over that floor when
+the storey's height changes: the roof elevation sync moves it (`roofsKeptOverStorey`) without an
+undo step of its own, as it does a roof following walls. Unpainted gables on a roof level take the cladding of the storey's
+walls below (`levelWallCladdingRef`).
 
 ## Stacked mezzanine rooms
 

@@ -8,12 +8,13 @@ import {
   type DormerNode,
   type GutterNode,
   getLevelDisplayName,
+  isRoofOnStoreyWalls,
   type LevelNode,
-  planRoofLevel,
   planRoofsOffStorey,
   type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
+  roofLevelAbove,
   type SkylightNode,
   type SolarPanelNode,
   type TurbineVentNode,
@@ -152,23 +153,20 @@ export default function RoofPanel() {
     }),
   )
 
-  // A roof on a storey with walls (the agents' and the editor's roofs before the roof level) hides
-  // that storey's plan in solo and exploded views: offer to move the storey's roofs where they go.
+  // A roof on the walls of the storey holding it (the agents' and the editor's roofs before the
+  // roof level) hides that storey's plan in solo and exploded views: offer to move it where it goes.
   const levelMove = useScene(
     useShallow((s) => {
-      const level = node?.parentId ? s.nodes[node.parentId as AnyNodeId] : undefined
-      if (level?.type !== 'level') return null
-      const held = level.children.map((id) => s.nodes[id as AnyNodeId])
-      if (!held.some((child) => child?.type === 'wall')) return null
-      const plan = planRoofLevel(s.nodes, level.id, 0)
-      const target = s.nodes[plan.levelId as AnyNodeId] as LevelNode | undefined
+      if (!node || !isRoofOnStoreyWalls(s.nodes, node.id)) return null
+      const level = s.nodes[node.parentId as AnyNodeId] as LevelNode
+      const above = roofLevelAbove(s.nodes, level.id)
       return {
         storey: getLevelDisplayName(level),
         label:
-          plan.kind === 'roof' || !target
+          above.kind === 'roof'
             ? 'Move to the roof level'
-            : `Move to ${getLevelDisplayName(target)}`,
-        roofs: held.filter((child) => child?.type === 'roof').length,
+            : `Move to ${getLevelDisplayName(above.level)}`,
+        roofs: level.children.filter((id) => isRoofOnStoreyWalls(s.nodes, id)).length,
       }
     }),
   )
@@ -293,7 +291,7 @@ export default function RoofPanel() {
               {levelMove.roofs > 1 && ` The floor's ${levelMove.roofs} roofs move together.`}
             </p>
             <button
-              className="w-full rounded-full border border-border/50 px-3 py-2 text-xs transition-colors hover:bg-foreground/[0.06]"
+              className="w-full rounded-full bg-foreground/[0.08] px-3 py-2 font-medium text-foreground text-xs transition-colors hover:bg-foreground/[0.14]"
               onClick={handleMoveOffStorey}
               type="button"
             >

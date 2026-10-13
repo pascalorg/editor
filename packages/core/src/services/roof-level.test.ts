@@ -13,6 +13,7 @@ import {
 import { resolveRoofElevation } from '../systems/roof/roof-elevation'
 import {
   isRoofLevel,
+  isRoofOnStoreyWalls,
   planRoofLevel,
   planRoofsOffStorey,
   roofsOver,
@@ -61,6 +62,67 @@ function house(...stack: { id: string; content: Content; metadata?: Record<strin
     })
     for (const child of children) nodes[child.id] = child
   })
+  return nodes
+}
+
+/**
+ * A 12 × 8 m ground floor and a 6 × 8 m first floor over its west half, walls 2.7 m tall on 2.5 m
+ * storeys; `roofs` places roofs as `[id, levelId, centre x, y, width]`, 8 m deep, at custom heights.
+ */
+function wingHouse(roofs: [string, string, number, number, number][]) {
+  const nodes: Record<string, AnyNode> = {}
+  const rect = (prefix: string, levelId: string, corners: [number, number][]) =>
+    corners.map((start, i) =>
+      WallNode.parse({
+        id: `${prefix}${i}`,
+        parentId: levelId,
+        start,
+        end: corners[(i + 1) % corners.length],
+        height: 2.7,
+      }),
+    )
+  const walls = {
+    level_g: rect('wall_g', 'level_g', [
+      [0, 0],
+      [12, 0],
+      [12, 8],
+      [0, 8],
+    ]),
+    level_1: rect('wall_u', 'level_1', [
+      [0, 0],
+      [6, 0],
+      [6, 8],
+      [0, 8],
+    ]),
+  }
+  nodes.building_h = BuildingNode.parse({ id: 'building_h', children: ['level_g', 'level_1'] })
+  for (const [index, levelId] of (['level_g', 'level_1'] as const).entries()) {
+    const held = roofs.filter(([, on]) => on === levelId).map(([id]) => id)
+    nodes[levelId] = LevelNode.parse({
+      id: levelId,
+      parentId: 'building_h',
+      level: index,
+      height: 2.5,
+      children: [...walls[levelId].map((wall) => wall.id), ...held],
+    })
+    for (const wall of walls[levelId]) nodes[wall.id] = wall
+  }
+  for (const [id, levelId, x, y, width] of roofs) {
+    const segment = RoofSegmentNode.parse({
+      id: `rseg_${id}`,
+      parentId: id,
+      width,
+      depth: 8,
+      wallHeight: 0,
+    })
+    nodes[id] = RoofNode.parse({
+      id,
+      parentId: levelId,
+      position: [x, y, 4],
+      children: [segment.id],
+    })
+    nodes[segment.id] = segment
+  }
   return nodes
 }
 
@@ -194,6 +256,21 @@ describe('storeyCoveredBy', () => {
     nodes[mixed.id] = mixed
     expect(storeyCoveredBy(nodes, 'roof_low')?.id).toBe('level_g')
   })
+
+  test("a lower wing's roof on the storey above, on the lower walls' tops, covers the lower storey", () => {
+    // the upper floor stands 2.5 m up; the ground floor's walls top out 0.2 m over it
+    const nodes = wingHouse([['roof_wing', 'level_1', 9, 0.2, 6]])
+    expect(storeyCoveredBy(nodes, 'roof_wing')?.id).toBe('level_g')
+    expect(roofsOver(nodes, 'level_g').map((roof) => roof.id)).toEqual(['roof_wing'])
+    expect(roofsOver(nodes, 'level_1')).toEqual([])
+    expect(isRoofOnStoreyWalls(nodes, 'roof_wing')).toBe(false)
+  })
+
+  test('a roof on the walls of the storey holding it covers that storey, standing on its walls', () => {
+    const nodes = wingHouse([['roof_up', 'level_1', 3, 2.7, 6]])
+    expect(storeyCoveredBy(nodes, 'roof_up')?.id).toBe('level_1')
+    expect(isRoofOnStoreyWalls(nodes, 'roof_up')).toBe(true)
+  })
 })
 
 // The owner's projects built before the rule hold their roofs on the ground floor: the roof's
@@ -289,6 +366,32 @@ describe('planRoofsOffStorey', () => {
     expect(moved.roof_main?.parentId).toBe('level_1')
     expect((moved.roof_main as RoofNode).support.kind).toBe('level')
     expect(worldEave(moved, 'roof_main')).toBeCloseTo(2.7, 6)
+  })
+
+  test("a second move leaves the wing roof the first put on the storey above: it is the lower storey's", () => {
+    const nodes = wingHouse([
+      ['roof_wing', 'level_g', 9, 2.7, 6],
+      ['roof_up', 'level_1', 3, 2.7, 6],
+    ])
+    const first = planRoofsOffStorey(nodes, 'level_g')!
+    expect(first.plan).toMatchObject({ kind: 'storey', levelId: 'level_1' })
+    const once = applySceneChanges(nodes, first.changes)
+    expect(once.roof_wing?.parentId).toBe('level_1')
+    expect(storeyCoveredBy(once, 'roof_wing')?.id).toBe('level_g')
+    const second = planRoofsOffStorey(once, 'level_1')!
+    expect(second.plan.kind).toBe('roof')
+    expect(second.changes.update.map(({ id }) => id)).not.toContain('roof_wing')
+    const twice = applySceneChanges(once, second.changes)
+    expect(twice.roof_wing?.parentId).toBe('level_1')
+    expect(twice.roof_up?.parentId).toBe(second.plan.levelId)
+    expect(roofsOver(twice, 'level_g').map((roof) => roof.id)).toEqual(['roof_wing'])
+    expect(roofsOver(twice, 'level_1').map((roof) => roof.id)).toEqual(['roof_up'])
+  })
+
+  test("a porch roof on its beam, under the walls' tops, is not moved", () => {
+    expect(
+      planRoofsOffStorey(wingHouse([['roof_porch', 'level_g', 9, 2.3, 6]]), 'level_g'),
+    ).toBeNull()
   })
 
   test('nothing to move on a storey without roofs, or on the roof level', () => {
