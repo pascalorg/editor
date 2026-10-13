@@ -21,16 +21,19 @@ const MAX_HIP_WINGS = 6
 /** A footprint longer than this is a block, not a house: its roof is flat. */
 const BLOCK_LENGTH = 30
 
-function insideAny(polygons: readonly (readonly Pt[])[], x: number, z: number) {
-  let inside = false
-  for (const polygon of polygons)
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const [ax, az] = polygon[i]!
-      const [bx, bz] = polygon[j]!
-      if (az > z !== bz > z && x < ((bx - ax) * (z - az)) / (bz - az) + ax) inside = !inside
-    }
-  return inside
+function inside(polygon: readonly Pt[], x: number, z: number) {
+  let crossed = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [ax, az] = polygon[i]!
+    const [bx, bz] = polygon[j]!
+    if (az > z !== bz > z && x < ((bx - ax) * (z - az)) / (bz - az) + ax) crossed = !crossed
+  }
+  return crossed
 }
+
+/** The footprint is the union of its plates: where two slabs overlap, both cover it. */
+const insideAny = (polygons: readonly (readonly Pt[])[], x: number, z: number) =>
+  polygons.some((polygon) => inside(polygon, x, z))
 
 /**
  * A strip of cells thinner than a part keeps only what its larger neighbour along the other axis
