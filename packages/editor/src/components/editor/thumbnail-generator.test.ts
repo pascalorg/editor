@@ -372,7 +372,8 @@ describe('an interior view of a floor below grade', () => {
 
   /**
    * The scene as the editor holds it: every level's object at its height, a floor in the basement,
-   * and the site's lawn (wider than any frame) with its lot line.
+   * and the site's lawn (wider than any frame) with its veil, hidden, and its lot line. The veil is
+   * never picked, as GroundVeil mounts it: the ray below sees through it.
    */
   function editorScene(nodes: Record<AnyNodeId, AnyNode>, basement: string) {
     useScene.setState({ nodes } as never)
@@ -387,13 +388,18 @@ describe('an interior view of a floor below grade', () => {
     sceneRegistry.nodes.get(basement)?.add(floor)
     const ground = new Mesh(new PlaneGeometry(400, 400).rotateX(-Math.PI / 2))
     ground.position.y = -0.05
-    ground.userData[SITE_GROUND] = true
+    ground.userData[SITE_GROUND] = 'solid'
+    const veil = new Mesh(ground.geometry)
+    veil.position.y = -0.05
+    veil.userData[SITE_GROUND] = 'veil'
+    veil.visible = false
+    veil.raycast = () => {}
     const lotLine = new Mesh()
-    const site = new Group().add(ground, lotLine)
+    const site = new Group().add(ground, veil, lotLine)
     scene.add(site)
     sceneRegistry.nodes.set('site_owner', site)
     sceneRegistry.byType.site?.add('site_owner')
-    return { scene, floor, ground, lotLine }
+    return { scene, floor, ground, veil, lotLine }
   }
 
   /** The first thing the capture camera draws on the line from its eye to its aim. */
@@ -419,30 +425,35 @@ describe('an interior view of a floor below grade', () => {
   for (const owner of owners)
     test(`the agent's picture of ${owner.name}'s basement sees its floor, not the lawn`, () => {
       const plan = sceneViewPlan(owner.nodes, { target: owner.basement })
-      const { scene, floor, ground, lotLine } = editorScene(owner.nodes, owner.basement)
+      const { scene, floor, ground, veil, lotLine } = editorScene(owner.nodes, owner.basement)
       expect(firstSeen(scene, plan.pose)).toBe(ground)
 
       const restorers: (() => void)[] = []
       interiorCutaway(owner.basement, (restore) => restorers.push(restore))
       expect(firstSeen(scene, plan.pose)).toBe(floor)
+      expect(veil.visible).toBe(true)
       expect(lotLine.layers.isEnabled(SCENE_LAYER)).toBe(true)
 
       for (const restore of restorers.reverse()) restore()
       expect(firstSeen(scene, plan.pose)).toBe(ground)
+      expect(veil.visible).toBe(false)
     })
 
-  test('a floor at grade is pictured on its ground, even while the person has it set aside', () => {
+  test('a floor at grade is pictured on solid ground, even while the person has it veiled', () => {
     const [villa] = owners
     if (!villa) throw new Error('the villa fixture is missing')
-    const { ground } = editorScene(villa.nodes, villa.basement)
+    const { ground, veil } = editorScene(villa.nodes, villa.basement)
     hideFromScene(ground, 'ground-aside')
+    veil.visible = true
 
     const restorers: (() => void)[] = []
     interiorCutaway(villa.atGrade, (restore) => restorers.push(restore))
     expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expect(veil.visible).toBe(false)
 
     for (const restore of restorers.reverse()) restore()
     expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    expect(veil.visible).toBe(true)
   })
 })
 

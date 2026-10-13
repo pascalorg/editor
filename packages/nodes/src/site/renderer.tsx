@@ -49,7 +49,13 @@ import {
   vec2,
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
-import { useGroundAsideRef } from './ground-aside'
+import {
+  GroundVeil,
+  groundVeilMaterial,
+  horizonVeilMaterial,
+  noopRaycast,
+  useGroundAsideRef,
+} from './ground-veil'
 import {
   buildPatternedRibbon,
   PROPERTY_LINE_PATTERN,
@@ -68,9 +74,9 @@ import { TerrainRenderer } from './terrain-renderer'
 
 const Y_OFFSET = 0.01
 
-// The horizon disc is presentation-only — clicks must fall through to the
-// real site polygon / grid, so its raycast is a no-op.
-const noopRaycast = () => {}
+/** The flat lot's fill, just under grade; the plan's shapes lie in XY, turned to lie flat. */
+const GROUND_FILL_POSITION: [number, number, number] = [0, -0.05, 0]
+const FLAT_ON_THE_GROUND: [number, number, number] = [-Math.PI / 2, 0, 0]
 
 /**
  * The site boundary line, laid on the ground rather than across it.
@@ -300,6 +306,18 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     fadeBounds,
     groundReplaced,
   ])
+
+  // Over a level below grade the ground is drawn as a veil (ground-veil.tsx).
+  const groundVeil = useMemo(() => groundVeilMaterial(bgColor), [bgColor])
+  useEffect(() => () => groundVeil.dispose(), [groundVeil])
+  const horizonVeil = useMemo(
+    () =>
+      fadeBounds && polygonPoints && !groundReplaced
+        ? horizonVeilMaterial(bgColor, polygonPoints, fadeBounds)
+        : null,
+    [bgColor, fadeBounds, polygonPoints, groundReplaced],
+  )
+  useEffect(() => () => horizonVeil?.dispose(), [horizonVeil])
 
   // Cache computed polygons to keep the selector stable across unrelated store updates.
   const slabPolygonsCache = useRef<[number, number][][]>([])
@@ -573,20 +591,29 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           material={groundMaterial}
           polygon={polygonPoints}
           site={node}
+          veil={groundVeil}
         />
       )}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
       {showSiteSurfaces && groundGeometry && !showTerrain && (
-        <mesh
-          geometry={groundGeometry}
-          material={groundMaterial}
-          position={[0, -0.05, 0]}
-          receiveShadow
-          ref={groundAsideRef}
-          rotation={[-Math.PI / 2, 0, 0]}
-          userData={{ [SITE_GROUND]: true }}
-        />
+        <>
+          <mesh
+            geometry={groundGeometry}
+            material={groundMaterial}
+            position={GROUND_FILL_POSITION}
+            receiveShadow
+            ref={groundAsideRef}
+            rotation={FLAT_ON_THE_GROUND}
+            userData={{ [SITE_GROUND]: 'solid' }}
+          />
+          <GroundVeil
+            geometry={groundGeometry}
+            material={groundVeil}
+            position={GROUND_FILL_POSITION}
+            rotation={FLAT_ON_THE_GROUND}
+          />
+        </>
       )}
 
       {/* Infinite-ground presentation disc fading into the sky at the horizon */}
@@ -598,8 +625,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           raycast={noopRaycast}
           receiveShadow
           ref={groundAsideRef}
-          rotation={[-Math.PI / 2, 0, 0]}
-          userData={{ pascalExport: 'strip', [SITE_GROUND]: true }}
+          rotation={FLAT_ON_THE_GROUND}
+          userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
+        />
+      )}
+      {!immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
+        <GroundVeil
+          geometry={horizonGeometry}
+          material={horizonVeil}
+          position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
+          rotation={FLAT_ON_THE_GROUND}
         />
       )}
 

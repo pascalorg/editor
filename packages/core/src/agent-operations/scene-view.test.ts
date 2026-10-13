@@ -292,6 +292,14 @@ describe('a floor below grade', () => {
   test('a floor at grade, targeted, is still seen from outside', () => {
     expect(sceneViewPlan(houseOverBasement(), { target: 'level_0' }).interior).toBeUndefined()
   })
+
+  test("the picture's note says the ground over it is drawn as a veil", () => {
+    const nodes = houseOverBasement()
+    const { interior } = sceneViewPlan(nodes, { target: 'level_b' })
+    expect(sceneViewNote(nodes, interior)).toContain('below grade')
+    expect(sceneViewNote(nodes, { levelId: 'level_0' })).not.toContain('below grade')
+    expect(sceneViewNote(nodes)).not.toContain('below grade')
+  })
 })
 
 function refusalOf(run: () => unknown): string | undefined {

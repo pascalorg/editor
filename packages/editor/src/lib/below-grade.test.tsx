@@ -4,8 +4,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import useEditor from '../store/use-editor'
 import villaAurelia from './__fixtures__/owner-villa-aurelia-basement.json'
+import { belowGradeShown, followBelowGrade } from './below-grade'
 import { useEditorLevelDisplay } from './editor-level-display'
-import { followGroundAside, groundAsideFor } from './ground-aside'
 
 // The owner's villa (13 Oct), trimmed: its Lower Ground lies 3.35 m under the lawn.
 const villa = villaAurelia.nodes as unknown as Record<AnyNodeId, AnyNode>
@@ -36,38 +36,38 @@ afterEach(() => {
   useEditor.setState(previous.editor, true)
 })
 
-describe('when the ground steps aside', () => {
+describe('when a level below grade is shown', () => {
   test('a level below grade, the storeys above it hidden', () => {
-    expect(groundAsideFor(shown(lowerGround), villa)).toBe(true)
+    expect(belowGradeShown(shown(lowerGround), villa)).toBe(true)
   })
 
   test('never for a level at grade', () => {
-    expect(groundAsideFor(shown(pianoNobile), villa)).toBe(false)
+    expect(belowGradeShown(shown(pianoNobile), villa)).toBe(false)
   })
 
   test('never while the whole building stands', () => {
-    expect(groundAsideFor(shown(lowerGround, false), villa)).toBe(false)
+    expect(belowGradeShown(shown(lowerGround, false), villa)).toBe(false)
   })
 })
 
-test('the flag follows the level shown, and the ground stands back when it stops', () => {
+test('the flag follows the level shown, and clears when it stops', () => {
   useViewer.setState({ hideLevelsAboveSelection: true })
   useViewer.getState().setSelection({ levelId: pianoNobile })
-  const stop = followGroundAside()
-  expect(useViewer.getState().groundAside).toBe(false)
+  const stop = followBelowGrade()
+  expect(useViewer.getState().belowGrade).toBe(false)
 
   useViewer.getState().setSelection({ levelId: lowerGround })
-  expect(useViewer.getState().groundAside).toBe(true)
+  expect(useViewer.getState().belowGrade).toBe(true)
   useViewer.setState({ hideLevelsAboveSelection: false })
-  expect(useViewer.getState().groundAside).toBe(false)
+  expect(useViewer.getState().belowGrade).toBe(false)
   useViewer.setState({ hideLevelsAboveSelection: true })
-  expect(useViewer.getState().groundAside).toBe(true)
+  expect(useViewer.getState().belowGrade).toBe(true)
 
   stop()
-  expect(useViewer.getState().groundAside).toBe(false)
+  expect(useViewer.getState().belowGrade).toBe(false)
 })
 
-test("the editor's level display sets the ground aside, except on the site, where the ground is the work", async () => {
+test("the editor's level display marks it, except on the site, where the ground is the work", async () => {
   useViewer.getState().setSelection({ levelId: lowerGround })
   useEditor.setState({ phase: 'site' })
   function LevelDisplay() {
@@ -77,12 +77,12 @@ test("the editor's level display sets the ground aside, except on the site, wher
   const renderer = await create(<LevelDisplay />)
   try {
     expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
-    expect(useViewer.getState().groundAside).toBe(false)
+    expect(useViewer.getState().belowGrade).toBe(false)
 
     await act(async () => useEditor.setState({ phase: 'building' }))
-    expect(useViewer.getState().groundAside).toBe(true)
+    expect(useViewer.getState().belowGrade).toBe(true)
   } finally {
     await renderer.unmount()
   }
-  expect(useViewer.getState().groundAside).toBe(false)
+  expect(useViewer.getState().belowGrade).toBe(false)
 })

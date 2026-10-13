@@ -3,10 +3,10 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 
 /**
- * Whether the site's ground steps aside: the storeys above the selected level are hidden and that
- * level lies below grade, so the ground would lie over its floor.
+ * Whether the level shown lies below grade: the storeys above the selected level are hidden and
+ * that level's floor lies under the ground, which is then veiled over it.
  */
-export function groundAsideFor(
+export function belowGradeShown(
   viewer: { hideLevelsAboveSelection: boolean; selection: { levelId: string | null } },
   nodes: Record<AnyNodeId, AnyNode>,
 ): boolean {
@@ -15,13 +15,13 @@ export function groundAsideFor(
 }
 
 /**
- * Keeps the viewer's `groundAside` on {@link groundAsideFor} while the selection, the level display
- * and the scene change. The returned function stops and stands the ground back.
+ * Keeps the viewer's `belowGrade` on {@link belowGradeShown} while the selection, the level display
+ * and the scene change. The returned function stops, and the ground stands solid again.
  */
-export function followGroundAside(): () => void {
+export function followBelowGrade(): () => void {
   const update = () => {
-    const aside = groundAsideFor(useViewer.getState(), useScene.getState().nodes)
-    if (useViewer.getState().groundAside !== aside) useViewer.setState({ groundAside: aside })
+    const belowGrade = belowGradeShown(useViewer.getState(), useScene.getState().nodes)
+    if (useViewer.getState().belowGrade !== belowGrade) useViewer.setState({ belowGrade })
   }
   update()
   // The flag itself is watched too: the other host's level display, handing over, resets it.
@@ -29,7 +29,7 @@ export function followGroundAside(): () => void {
     if (
       state.selection.levelId !== previous.selection.levelId ||
       state.hideLevelsAboveSelection !== previous.hideLevelsAboveSelection ||
-      state.groundAside !== previous.groundAside
+      state.belowGrade !== previous.belowGrade
     )
       update()
   })
@@ -39,11 +39,11 @@ export function followGroundAside(): () => void {
   return () => {
     stopViewer()
     stopScene()
-    useViewer.setState({ groundAside: false })
+    useViewer.setState({ belowGrade: false })
   }
 }
 
-/** The ground steps aside under a level below grade while `active`: a host's level display. */
-export function useGroundAside(active: boolean) {
-  useEffect(() => (active ? followGroundAside() : undefined), [active])
+/** A host's level display marks a level below grade as shown while `active`. */
+export function useBelowGrade(active: boolean) {
+  useEffect(() => (active ? followBelowGrade() : undefined), [active])
 }

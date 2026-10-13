@@ -6,11 +6,12 @@ type Point = readonly [number, number]
 
 /**
  * True for a fragment inside the lot polygon (even-odd crossing count on its
- * local x, z). Unrolled edge by edge into the graph: a parcel has tens of
- * corners, so a loop and a uniform array would buy nothing.
+ * x, z: local, where the geometry is laid out in the site's plan as the
+ * terrain is; world for a mesh placed and turned there). Unrolled edge by edge
+ * into the graph: a parcel has tens of corners, so a loop and a uniform array
+ * would buy nothing.
  */
-export function insideLotNode(polygon: ReadonlyArray<Point>) {
-  const at = positionLocal.xz
+export function insideLotNode(polygon: ReadonlyArray<Point>, at: Node<'vec2'> = positionLocal.xz) {
   let crossings: Node<'float'> = float(0)
   for (let i = 0; i < polygon.length; i++) {
     const [ax, az] = polygon[i] as Point

@@ -27,7 +27,7 @@ import {
   Sphere,
   Vector3,
 } from 'three'
-import { useGroundAside } from './ground-aside'
+import { useBelowGrade } from './below-grade'
 import { nodeDisplayLabel } from './node-display-label'
 import { roomFloorElevation } from './room-handle-drag'
 import { RoomSelectionIndex, type RoomSelectionRecord, resolveRoomHit } from './room-selection'
@@ -224,14 +224,14 @@ export function resolveViewerHover(
 /**
  * The current floor reads as the editor shows it: the levels above it step
  * aside (in the stacked display) so its rooms are in view and in reach, and the
- * ground with them when it lies below grade. Mount it in the surface's DOM tree,
+ * ground is veiled over it when it lies below grade. Mount it in the surface's DOM tree,
  * beside the editor's own level display, so one hands the flag to the other in
  * order.
  */
 export function useViewerFloorDisplay() {
   // A walkthrough tours the whole building.
   const walking = useViewer((s) => s.walkthroughMode)
-  useGroundAside(!walking)
+  useBelowGrade(!walking)
   useEffect(() => {
     if (walking) return
     useViewer.setState({ hideLevelsAboveSelection: true })

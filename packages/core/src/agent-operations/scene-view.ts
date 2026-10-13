@@ -771,9 +771,22 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewPoseInput): Sce
   }
 }
 
-/** What a view comes with, on both surfaces: a picture to compare, not a measure. */
-export function sceneViewNote() {
-  return 'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
+/** What a picture into a floor below grade shows over it, said so the agent describes it right. */
+const BELOW_GRADE_NOTE =
+  'The floor lies below grade: the ground over it is drawn as a faint veil, so its rooms show through it.'
+
+/** What a view comes with, on both surfaces: a picture to compare, not a measure; a floor below grade is seen through the veiled ground. */
+export function sceneViewNote(
+  nodes?: Readonly<Record<string, AnyNode>>,
+  interior?: SceneViewInterior,
+) {
+  const note =
+    'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
+  return nodes &&
+    interior &&
+    isLevelBelowGrade(nodes as Record<AnyNodeId, AnyNode>, interior.levelId)
+    ? `${note} ${BELOW_GRADE_NOTE}`
+    : note
 }
 
 /** A picture of `w` × `h`, made smaller to `maxPx` on its longest side, `VIEW_MAX_PX` at most. */

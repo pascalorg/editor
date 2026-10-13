@@ -219,12 +219,17 @@ export {
   type HiddenReason,
   hideFromScene,
   showInScene,
-  temporarilySetGroundAside,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
-export { SITE_GROUND, siteGroundSurfaces, siteSurfaces } from './lib/site-surfaces'
+export {
+  SITE_GROUND,
+  type SiteGroundRole,
+  siteGround,
+  siteSurfaces,
+  temporarilyVeilGround,
+} from './lib/site-surfaces'
 export {
   createPlainSnapshotPipeline,
   createSnapshotPipeline,
@@ -259,6 +264,8 @@ export { catalogLightSource, useItemLightPool } from './store/use-item-light-poo
 export {
   applyCountryUnitDefault,
   default as useViewer,
+  type GroundMode,
+  groundVeiled,
   type MetricNotation,
   type WallMode,
 } from './store/use-viewer'

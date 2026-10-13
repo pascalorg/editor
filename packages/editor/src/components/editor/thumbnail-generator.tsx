@@ -22,14 +22,13 @@ import {
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
   type SnapshotPipeline,
-  siteGroundSurfaces,
   snapLevelsToTruePositions,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
   temporarilyHideNodeTypes,
-  temporarilySetGroundAside,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
+  temporarilyVeilGround,
   useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
@@ -526,7 +525,7 @@ function clipSceneFor(
  * on it cut where core says (sceneViewInterior, from the scene as this editor
  * has it) and its shadows with it, and whatever the user's solo or isolation
  * holds back on it shown. The site's ground follows this floor, not the
- * user's: set aside under a floor below grade, standing under one at grade.
+ * user's: veiled over a floor below grade, solid under one at grade.
  */
 export function interiorCutaway(levelId: string, restore: (callback: () => void) => void) {
   const { nodes } = useScene.getState()
@@ -543,7 +542,7 @@ export function interiorCutaway(levelId: string, restore: (callback: () => void)
   }
   restore(temporarilyShowPresentation(floor))
   restore(clipSceneFor(floor, [{ normal: [0, -1, 0], constant: cutHeight }], true))
-  restore(temporarilySetGroundAside(siteGroundSurfaces(), isLevelBelowGrade(nodes, levelId)))
+  restore(temporarilyVeilGround(isLevelBelowGrade(nodes, levelId)))
 }
 
 /**
@@ -944,8 +943,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 interiorCutaway(interior.levelId, restore)
                 restore(lightInterior(scene, thumbnailCamera))
               } else if (snapLevels || pose || cameraPose) {
-                // the whole building stands on its ground, whatever level the user is on
-                restore(temporarilySetGroundAside(siteGroundSurfaces(), false))
+                // the whole building stands on solid ground, whatever level the user is on
+                restore(temporarilyVeilGround(false))
               }
             }
             // The scene pass is a FRAME-updated node: it renders once per node

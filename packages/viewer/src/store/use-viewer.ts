@@ -133,11 +133,14 @@ type ViewerState = {
    */
   nodesRevealing: readonly string[]
   /**
-   * The site's ground is set aside: the active level lies below grade, so its floor is seen, and
-   * clicked, where the ground was. Set by the host's level display beside
-   * `hideLevelsAboveSelection`; never persisted.
+   * The level shown lies below grade, the storeys above it hidden. Set by the host's level display
+   * beside `hideLevelsAboveSelection`; never persisted. Whether the ground over it is veiled also
+   * depends on `groundMode`: read both through `groundVeiled`.
    */
-  groundAside: boolean
+  belowGrade: boolean
+  /** The person's choice for the ground over a level below grade. Not persisted. */
+  groundMode: GroundMode
+  setGroundMode: (mode: GroundMode) => void
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -469,7 +472,9 @@ const useViewer = create<ViewerState>()(
       hideLevelsAboveSelection: false,
       levelsRevealing: [],
       nodesRevealing: [],
-      groundAside: false,
+      belowGrade: false,
+      groundMode: 'auto',
+      setGroundMode: (mode) => set({ groundMode: mode }),
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),
@@ -631,6 +636,17 @@ const useViewer = create<ViewerState>()(
     },
   ),
 )
+
+/**
+ * Over a level below grade the ground is `auto`: drawn as a faint veil, so the floor under it is
+ * seen and clicked; `solid` keeps it as it is everywhere else.
+ */
+export type GroundMode = 'auto' | 'solid'
+
+/** Whether the site's ground is drawn as a veil: a level below grade is shown, the ground on auto. */
+export function groundVeiled(state: { belowGrade: boolean; groundMode: GroundMode }): boolean {
+  return state.belowGrade && state.groundMode === 'auto'
+}
 
 /** Apply an authoritative country code (e.g. IP-derived by the host app) as
  * the unit default. Stronger signal than the timezone heuristic used at store
