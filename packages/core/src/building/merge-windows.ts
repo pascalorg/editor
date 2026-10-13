@@ -13,9 +13,8 @@ import type { AnyNode, AnyNodeId, WallNode, WindowNode } from '../schema'
 import { findWallChildOverlap, resolveWallOpeningCeiling } from './wall-openings'
 
 /**
- * Two windows that exist become one (the owner, 8 October): the one operation behind the editor's
- * Merge windows button, Wrap the corner when a window already waits at the corner, and the agents'
- * `merge_windows`.
+ * Two windows that exist become one: the one operation behind the editor's Merge windows button,
+ * Wrap the corner when a window already waits at the corner, and the agents' `merge_windows`.
  *
  * On two walls that meet at a corner, each reaching it within `CORNER_REACH_M`, they become one
  * corner window: both adopted, each slid to the corner keeping its width, the glass fused, one sill.

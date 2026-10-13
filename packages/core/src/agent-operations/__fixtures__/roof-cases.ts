@@ -12,9 +12,8 @@ import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
  * `create_roof`, one tool where the chat and the MCP had one each with two level rules: the roof
- * over a building's top storey goes on its roof level, the level directly above (the owner: a
- * roof made on the ground floor's level blocked the exploded view), and stands on the storey's
- * wall tops.
+ * over a building's top storey goes on its roof level, the level directly above (a roof made on the
+ * ground floor's level blocked the exploded view), and stands on the storey's wall tops.
  *
  * A building of 2.5 m storeys, each an 8 × 6 m room walled round; the top one is `walls` tall.
  */

@@ -5,8 +5,8 @@ import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { migrateVerticalSceneNodes } from '../utils/scene-migrations'
 import { fillLevelHeights, type LevelHeightWrite } from './level-height-fill'
 
-// L68: a level written without a height is legacy to the editor's load, which derives its storey
-// plane; the session that wrote it read 2.5 m. A write gives it the height the load would derive.
+// A level written without a height is legacy to the editor's load, which derives its storey plane;
+// the session that wrote it read 2.5 m. A write gives it the height the load would derive.
 const building = BuildingNode.parse({ id: 'building_main' })
 const scene = { [building.id]: building } as Record<string, AnyNode>
 const heightless = (id: string) => {

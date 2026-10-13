@@ -7,7 +7,7 @@ import { registerSceneCheck, type SceneIssue } from './verify-scene'
 
 type AddCornerWindowInput = Parameters<typeof planCornerWindow>[1]
 
-/** `add_corner_window` (L65): one window on each of the two walls meeting at a corner, joined. */
+/** `add_corner_window`: one window on each of the two walls meeting at a corner, joined. */
 export const addCornerWindow: AgentOperation<AddCornerWindowInput> = (nodes, input) => {
   const { windows, wallIds, angle } = planCornerWindow(nodes, input)
   const changes: SceneChanges = {
@@ -30,9 +30,9 @@ export const addCornerWindow: AgentOperation<AddCornerWindowInput> = (nodes, inp
 const round = (value: number) => Math.round(value * 100) / 100
 
 /**
- * Corner windows, checked (L65): two windows running to the same corner unjoined (run 4 built one
- * face of the 290's Bed 4 corner window and did not see the wrap), a pair whose sides drifted
- * apart, a window naming a partner that is gone.
+ * Corner windows, checked: two windows running to the same corner unjoined (one face of a corner
+ * window built, the wrap missed), a pair whose sides drifted apart, a window naming a partner that
+ * is gone.
  */
 export function cornerWindowIssues(nodes: Parameters<typeof cornerPair>[0]): SceneIssue[] {
   const issues: SceneIssue[] = []

@@ -2,13 +2,13 @@ import { BuildingNode, LevelNode, WallNode, WindowNode } from '../../schema'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
- * `merge_windows` (the owner, 8 October): two windows that already exist become one. On two walls
- * meeting at a corner, each reaching it within 0.30 m, they become one corner window (adopted, slid
- * to the corner, the glass fused, one sill); side by side on one wall with at most 0.30 m between
- * them and nothing between, one window spanning both. What goes wrong, written first: a window
- * recreated instead of adopted; the sides left on two sills; the second window's type or style
- * winning over the first's; a door, a window or an item between them swallowed; two windows that
- * are nowhere near each other joined anyway; a window already joined to another stolen.
+ * `merge_windows`: two windows that already exist become one. On two walls meeting at a corner,
+ * each reaching it within 0.30 m, they become one corner window (adopted, slid to the corner, the
+ * glass fused, one sill); side by side on one wall with at most 0.30 m between them and nothing
+ * between, one window spanning both. What goes wrong, written first: a window recreated instead of
+ * adopted; the sides left on two sills; the second window's type or style winning over the first's;
+ * a door, a window or an item between them swallowed; two windows that are nowhere near each other
+ * joined anyway; a window already joined to another stolen.
  */
 
 type WindowSpec = {

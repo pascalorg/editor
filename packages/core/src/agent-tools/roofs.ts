@@ -45,8 +45,7 @@ export const createRoofTool = {
       .optional()
       .describe("The rectangle's centre [x, z] in metres (default [0, 0])."),
     materialPreset: z.string().optional().describe('The roof finish, a library material.'),
-    // Hawkesbury's flat roofs wear a black fascia about 0.3 m tall, which only apply_patch could
-    // draw (2026-10-03).
+    // A flat roof's fascia band (often about 0.3 m tall), which only apply_patch could draw before.
     fasciaHeight: measurement('length', 'm', {
       positive: true,
       description:

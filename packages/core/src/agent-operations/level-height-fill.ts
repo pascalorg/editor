@@ -10,12 +10,12 @@ export type LevelHeightWrite =
 const round = (value: number) => Math.round(value * 100) / 100
 
 /**
- * A level written without a height reads as legacy data: the editor's load derives its storey
- * plane from what it holds and rewrites its walls, stairs and ceilings to match, while a session
- * that wrote it reads 2.5 m (L68). A write that creates a level without one, or clears it, gets
- * the height the editor would derive, from what the level holds once the whole write lands (an
- * empty level: the default storey height), so every reader agrees. Fills the operations in place
- * and returns a note per level filled, for the write's answer.
+ * A level written without a height reads as legacy data: the editor's load derives its storey plane
+ * from what it holds and rewrites its walls, stairs and ceilings to match, while a session that
+ * wrote it reads 2.5 m. A write that creates a level without one, or clears it, gets the height the
+ * editor would derive, from what the level holds once the whole write lands (an empty level: the
+ * default storey height), so every reader agrees. Fills the operations in place and returns a note
+ * per level filled, for the write's answer.
  */
 export function fillLevelHeights(
   ops: LevelHeightWrite[],

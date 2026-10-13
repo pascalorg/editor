@@ -84,7 +84,7 @@ function normalizeWindowCornerRadii(
   return next.map((radius) => radius * scale) as [number, number, number, number]
 }
 
-/** A change to one side of a corner window that both share, made on its partner too (L65). */
+/** A change to one side of a corner window that both share, made on its partner too. */
 function syncCornerPartner(windowId: string, updates: Partial<WindowNode>) {
   const scene = useScene.getState()
   const partnerUpdate = cornerPartnerUpdates(scene.nodes, windowId, updates)
@@ -142,7 +142,7 @@ export default function WindowPanel() {
     [selectedId],
   )
 
-  // A corner window's sides (L65): its partner, and whether this window can wrap its corner.
+  // A corner window's sides: its partner, and whether this window can wrap its corner.
   const cornerState = useScene((s) => {
     const live = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
     if (live?.type !== 'window') return 'none'

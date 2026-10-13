@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { type AnyNode, BuildingNode, LevelNode, RoofNode, WallNode, ZoneNode } from '../schema'
 import { isRoofLevel, planRoofLevel, roofsOver, storeyInsertIndex } from './roof-level'
 
-// One rule for every roof writer (the owner, 12 October: a roof made on the ground floor's level
-// blocks the exploded view): a roof lives on the level directly above the storey whose walls carry
-// it, and over the top storey that is the building's roof level.
+// One rule for every roof writer (a roof made on the ground floor's level blocks the exploded
+// view): a roof lives on the level directly above the storey whose walls carry it, and over the top
+// storey that is the building's roof level.
 
 type Content = 'walls' | 'roof' | 'empty'
 

@@ -40,9 +40,9 @@ export type CornerWindowInput = {
 }
 
 /**
- * A corner window (L65): one window on each of the two walls meeting at `corner`, each running to
- * it, joined, at any angle the walls make. Each side is placed by add_window's rules, and the two
- * keep one sill: with none given, both are centred on the lower of the two walls.
+ * A corner window: one window on each of the two walls meeting at `corner`, each running to it,
+ * joined, at any angle the walls make. Each side is placed by add_window's rules, and the two keep
+ * one sill: with none given, both are centred on the lower of the two walls.
  */
 export function planCornerWindow(nodes: Nodes, input: CornerWindowInput) {
   const point = input.corner

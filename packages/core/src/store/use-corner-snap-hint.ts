@@ -2,10 +2,10 @@ import { create } from 'zustand'
 import type { CornerBlockReason } from '../lib/corner-snap'
 
 /**
- * What the window being placed or dragged near a wall end says (the owner, 8 October): `join` when
- * a window already waits on the other wall, `new` when one would be created, the reason when the
- * end is not a corner a window can wrap, null away from a wall end. The tools write it; the HUD
- * reads it, so the hint is there only inside the zone.
+ * What the window being placed or dragged near a wall end says: `join` when a window already waits
+ * on the other wall, `new` when one would be created, the reason when the end is not a corner a
+ * window can wrap, null away from a wall end. The tools write it; the HUD reads it, so the hint is
+ * there only inside the zone.
  */
 export type CornerSnapHint = 'join' | 'new' | CornerBlockReason | null
 

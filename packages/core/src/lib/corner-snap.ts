@@ -14,9 +14,9 @@ import {
 } from './corner-pair'
 
 /**
- * Placing or dragging a window near a corner (the owner, 8 October): inside the corner zone the
- * window snaps its edge to the corner and the window waiting on the other wall, if any, is found, so
- * the tool can highlight it and say the two will join. Pure: the tools read the answer.
+ * Placing or dragging a window near a corner: inside the corner zone the window snaps its edge to
+ * the corner and the window waiting on the other wall, if any, is found, so the tool can highlight
+ * it and say the two will join. Pure: the tools read the answer.
  */
 
 type Nodes = Readonly<Record<string, AnyNode>>
@@ -39,9 +39,8 @@ export type CornerSnap = {
 }
 
 /**
- * Why a wall end in the zone is not a corner window's: the owner could not find Wrap the corner
- * where a lone wall, a T-junction, a curved or curtain wall, a flat angle or a full wall gave
- * nothing at all, so the hint says it.
+ * Why a wall end in the zone is not a corner window's: a lone wall, a T-junction, a curved or
+ * curtain wall, a flat angle or a full wall would otherwise give no sign, so the hint says it.
  */
 export type CornerBlockReason =
   | 'free_end'

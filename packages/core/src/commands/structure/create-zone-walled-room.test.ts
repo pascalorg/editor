@@ -10,9 +10,9 @@ import {
 } from '../../schema'
 import { createZone } from './create-zone'
 
-// Walls first, then a room drawn over them (run 6): the editor's own draw (a terrace over a walled
-// courtyard) and an agent's create_room both go through createZone. What it does stays what a person
-// meets by hand; the agent's refusal over a room a person named lives in create_room, not here.
+// Walls first, then a room drawn over them: the editor's own draw (a terrace over a walled
+// courtyard) and an agent's create_room both go through createZone. What it does stays what a
+// person meets by hand; the agent's refusal over a room a person named lives in create_room.
 
 const SQUARE: [number, number][] = [
   [0, 0],

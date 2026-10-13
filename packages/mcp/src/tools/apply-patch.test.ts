@@ -90,8 +90,8 @@ describe('apply_patch', () => {
     expect(bridge.getNode(wall.id)).not.toHaveProperty('materialPreset')
   })
 
-  // L68: a level written without a height is legacy to the editor's load, which derives its storey
-  // from what it holds; the session read 2.5 m. The write now gets the derived height, said in notes.
+  // A level written without a height is legacy to the editor's load, which derives its storey from
+  // what it holds; the session read 2.5 m. The write now gets the derived height, said in notes.
   test('a level created without a height gets the height its walls give, and says so', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const { height: _height, ...level } = LevelNode.parse({ parentId: building.id, level: 1 })

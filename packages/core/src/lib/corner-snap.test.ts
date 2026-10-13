@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { type AnyNode, LevelNode, WallNode, WindowNode } from '../schema'
 import { CORNER_SNAP_EXIT_M, cornerBlock, cornerSnap } from './corner-snap'
 
-// The owner (8 October): placing or dragging a window near a corner told you nothing about joining
-// the window on the other wall. The ghost snaps its edge to the corner inside a zone, the window
-// waiting there is found for the highlight, and the zone has hysteresis so the hint does not
-// flicker at its edge. Written first: no snap inside 0.30 m; snapping where no corner is; the zone
-// flickering at its threshold; the window waiting on the other wall not found, or a pair's taken.
+// Placing or dragging a window near a corner used to say nothing about joining the window on the
+// other wall. The ghost snaps its edge to the corner inside a zone, the window waiting there is
+// found for the highlight, and the zone has hysteresis so the hint does not flicker at its edge.
+// Written first: no snap inside 0.30 m; snapping where no corner is; the zone flickering at its
+// threshold; the window waiting on the other wall not found, or a pair's taken.
 
 const LEVEL = 'level_s'
 
@@ -152,10 +152,10 @@ describe('the window waiting at the other wall’s corner', () => {
   })
 })
 
-// The owner could not find "Wrap the corner" (8 October): a lone wall, a T-junction, a curved or
-// curtain wall, an angle out of range, or no room for the match show nothing, so the hint says why
-// where a window is placed or dragged within the zone. Written first: a reason where there is none,
-// no reason where the corner would join, and the zone's hysteresis leaving the reason flickering.
+// "Wrap the corner" was hard to find: a lone wall, a T-junction, a curved or curtain wall, an angle
+// out of range, or no room for the match show nothing, so the hint says why where a window is
+// placed or dragged within the zone. Written first: a reason where there is none, no reason where
+// the corner would join, and the zone's hysteresis leaving the reason flickering.
 describe('why a wall end is not a corner', () => {
   const input = { wallId: 'wall_a', centreX: centreAt(0.1), width: 1.2 }
 

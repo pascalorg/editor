@@ -223,9 +223,9 @@ const WindowTool: React.FC = () => {
     // to the last wall hover so the flip shows live before commit.
     let sideFlip = false
     let lastWallEvent: WallEvent | null = null
-    // Placing near a corner (the owner, 8 October): inside the corner zone the ghost snaps its edge
-    // to the corner, the window waiting on the other wall is outlined, and the HUD says what a click
-    // does. Alt places the window plain.
+    // Placing near a corner: inside the corner zone the ghost snaps its edge to the corner, the
+    // window waiting on the other wall is outlined, and the HUD says what a click does. Alt places
+    // the window plain.
     let cornerHeld: CornerSnap['end'] | null = null
     let altDown = false
     const cornerEaser = createSnapEaser()

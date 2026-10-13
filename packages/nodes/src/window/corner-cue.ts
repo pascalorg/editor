@@ -1,10 +1,10 @@
 import { type CornerBlock, type CornerSnap, useCornerSnapHint } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 
-// What a window placed or dragged near a corner shows (the owner, 8 October): the HUD hint says
-// what a click will do, and the window already waiting on the other wall is outlined in the
-// editor's hover colour, so the join is visible before it happens. Where a wall end is not a
-// corner a window can wrap, the HUD says why instead of showing nothing.
+// What a window placed or dragged near a corner shows: the HUD hint says what a click will do, and
+// the window already waiting on the other wall is outlined in the editor's hover colour, so the
+// join is visible before it happens. Where a wall end is not a corner a window can wrap, the HUD
+// says why instead of showing nothing.
 
 let outlined: string | null = null
 

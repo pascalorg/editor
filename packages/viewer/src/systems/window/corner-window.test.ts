@@ -15,10 +15,10 @@ import { generateExtrudedWall } from '../wall/wall-system'
 import { buildWindowPreviewMesh } from './window-system'
 
 /**
- * L65: a corner window opens the corner between its two walls, the glass fused there (`none`) or
- * meeting at the corner jambs (`post`), at any angle. What goes wrong, written first: the walls'
- * corner left solid (a stub post the user did not ask for); a fused corner still drawing its jamb;
- * the glass stopping short of the corner; a bay's 135° or an acute 60° cut as if square.
+ * A corner window opens the corner between its two walls, the glass fused there (`none`) or meeting
+ * at the corner jambs (`post`), at any angle. What goes wrong, written first: the walls' corner
+ * left solid (a stub post the user did not ask for); a fused corner still drawing its jamb; the
+ * glass stopping short of the corner; a bay's 135° or an acute 60° cut as if square.
  */
 
 const LEVEL = 'level_cw'

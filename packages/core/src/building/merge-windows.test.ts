@@ -2,10 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { type AnyNode, LevelNode, WallNode, WindowNode } from '../schema'
 import { MERGE_GAP_M, mergeWindows, windowMergeOffer } from './merge-windows'
 
-// The Merge windows button (the owner, 8 October): offered when exactly two windows are selected,
-// disabled with the reason when they cannot join, and silent for any other selection.
+// The Merge windows button: offered when exactly two windows are selected, disabled with the
+// reason when they cannot join, and silent for any other selection.
 
-const wall = new Map<string, AnyNode>()
 const nodes = (extra: AnyNode[] = []) => {
   const a = WallNode.parse({
     id: 'wall_m',

@@ -266,9 +266,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // The wall the window was grabbed from. Nulled the first time the anchor
     // seeds on any other host: the grab offset is then forgotten for good.
     let grabWallId: string | null = movingWindowNode.parentId
-    // Dragging near a corner (the owner, 8 October): the same zone as placing: the window snaps its
-    // edge to the corner, the window waiting on the other wall is outlined, and on release they
-    // join. Alt drops it plain.
+    // Dragging near a corner, the same zone as placing: the window snaps its edge to the corner,
+    // the window waiting on the other wall is outlined, and on release they join. Alt drops it
+    // plain.
     let cornerHeld: CornerSnap['end'] | null = null
     const cornerEaser = createSnapEaser()
     let cornerEaseFrame = 0

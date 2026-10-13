@@ -613,8 +613,8 @@ export const CREATE_ROOM_CASES: AgentToolCase[] = [
       },
     },
   },
-  // The owner (7 October): a room a person named is never renamed silently, and never twinned: the
-  // refusal names it, and the agent either passes rename: true or asks the person.
+  // A room a person named is never renamed silently, and never twinned: the refusal names it, and
+  // the agent either passes rename: true or asks the person.
   {
     name: 'a room a person named is refused with a choice, never twinned or renamed silently',
     tool: 'create_room',

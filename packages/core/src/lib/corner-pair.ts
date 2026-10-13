@@ -1,8 +1,8 @@
 import type { AnyNode, WallNode, WindowNode } from '../schema'
 
 /**
- * Corner windows (L65): a window joined at its wall's end to a window on the wall that meets it
- * there. The lookups the viewer and the editor read; planning one lives in building/corner-window.
+ * Corner windows: a window joined at its wall's end to a window on the wall that meets it there.
+ * The lookups the viewer and the editor read; planning one lives in building/corner-window.
  */
 
 type Nodes = Readonly<Record<string, AnyNode>>

@@ -58,8 +58,8 @@ export function outdoorRoomConflicts(nodes: StructureNodes, levelId: string, pol
 
 /**
  * The room walls already make where a room is drawn, to name rather than stack a second zone on
- * (run 6: walls first, then create_room, gave every room a "Room N" twin). Only when every edge of
- * the polygon runs along a wall, so nothing is built and the rooms stand as they are; the room the
+ * (walls first, then create_room, gave every room a "Room N" twin). Only when every edge of the
+ * polygon runs along a wall, so nothing is built and the rooms stand as they are; the room the
  * polygon fits by the reconciler's own adoption rule, and only while it keeps the name the
  * reconciler gave it.
  */

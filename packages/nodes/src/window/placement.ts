@@ -104,8 +104,8 @@ export const WINDOW_PLACEMENT_HINTS: ToolHint[] = [
 ]
 
 /**
- * What a click does while the ghost is inside a corner zone (the owner, 8 October), or why it is not
- * a corner: shown only there, so the hint appears when the window can join and goes when it leaves.
+ * What a click does while the ghost is inside a corner zone, or why it is not a corner: shown only
+ * there, so the hint appears when the window can join and goes when it leaves.
  */
 const HINTS_FOR: CornerSnapHint[] = [
   'join',

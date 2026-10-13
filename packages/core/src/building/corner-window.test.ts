@@ -12,13 +12,13 @@ import {
 } from './corner-window'
 
 /**
- * L65: the 290's Bed 4 window wraps the corner of its bay; Pascal had no corner window (a window
- * ends at its wall and the corner stays solid). A corner window is two windows, one per wall, both
- * running to the corner and joined, the glass fused at the corner (or meeting at a thin post), at
- * any angle the walls make. What goes wrong, written first: a window stopping short of the corner;
- * the two sides out of step (heights, sills); one wall's side placed on the wrong wall or end; a
- * square-only answer at a bay's 135° or an acute 60°; a degenerate corner accepted; unwrapping
- * deleting a window.
+ * A window that wraps the corner of a bay: Pascal had no corner window (a window ends at its wall
+ * and the corner stays solid). A corner window is two windows, one per wall, both running to the
+ * corner and joined, the glass fused at the corner (or meeting at a thin post), at any angle the
+ * walls make. What goes wrong, written first: a window stopping short of the corner; the two sides
+ * out of step (heights, sills); one wall's side placed on the wrong wall or end; a square-only
+ * answer at a bay's 135° or an acute 60°; a degenerate corner accepted; unwrapping deleting a
+ * window.
  */
 
 type Nodes = Record<string, AnyNode>
@@ -165,7 +165,7 @@ describe('by hand: wrap, keep in step, unwrap', () => {
     })
   })
 
-  // The owner (8 October): a window a few cm short of the corner showed no Corner section at all.
+  // A window a few cm short of the corner still has a Corner section to wrap it.
   const onWall = (id: string, wall: string, x: number, width = 1.2) =>
     WindowNode.parse({
       id,

@@ -3380,9 +3380,9 @@ function addShapedLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
 }
 
 /**
- * The side of a corner window fused at the corner (L65), in the window's own frame: 1 its +x side,
- * -1 its -x side, 0 none. A window facing its wall's back is turned half round, so its +x then
- * points to the wall's start.
+ * The side of a corner window fused at the corner, in the window's own frame: 1 its +x side, -1 its
+ * -x side, 0 none. A window facing its wall's back is turned half round, so its +x then points to
+ * the wall's start.
  */
 function fusedCornerSide(node: WindowNode, rotationY: number): -1 | 0 | 1 {
   const pair = cornerPair(useScene.getState().nodes, node)
@@ -3517,7 +3517,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
     return true
   }
 
-  // A corner window fused at the corner (L65): no jamb on that side, the glass runs to the corner.
+  // A corner window fused at the corner: no jamb on that side, the glass runs to the corner.
   const fused = fusedCornerSide(node, placement.rotation[1])
   const innerW = width - (fused ? 1 : 2) * frameThickness
   const innerX = (fused * frameThickness) / 2

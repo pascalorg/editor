@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { CORNER_BLOCK_NOTES, cornerHintRows } from './use-corner-snap-hint'
 
-// The HUD near a wall end (the owner, 8 October): what a click does where a window can join, and
-// why not where it cannot, in one wording for the placement HUD and the move HUD.
+// The HUD near a wall end: what a click does where a window can join, and why not where it cannot,
+// in one wording for the placement HUD and the move HUD.
 describe('cornerHintRows', () => {
   test('says nothing away from a wall end', () => {
     expect(cornerHintRows(null)).toEqual([])

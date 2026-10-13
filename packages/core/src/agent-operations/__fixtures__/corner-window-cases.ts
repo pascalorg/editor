@@ -2,10 +2,10 @@ import { BuildingNode, LevelNode, WallNode, type WindowNode } from '../../schema
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
- * `add_corner_window` (L65): the 290's Bed 4 window wraps the corner of its bay; run 4 built one
- * window on one face and recorded it built. What goes wrong, written first: the two sides not
- * joined or not reaching the corner; a bay's 135° refused or squared; a side wider than its wall,
- * a point no two walls meet at, or a corner too shallow to be one, built anyway.
+ * `add_corner_window`: a window that wraps the corner of a bay, built as one window on one face and
+ * recorded built until this tool. What goes wrong, written first: the two sides not joined or not
+ * reaching the corner; a bay's 135° refused or squared; a side wider than its wall, a point no two
+ * walls meet at, or a corner too shallow to be one, built anyway.
  */
 
 /** Wall A runs into the corner at the origin; wall B leaves it at `degrees` from A. */
