@@ -421,7 +421,7 @@ export const ViewerControlsBar = ({
           <div className="mx-1 h-5 w-px bg-border/40" />
 
           {/* Follow Pascal */}
-          <FollowPascalToggle className="hidden sm:inline-flex" />
+          <FollowPascalToggle className="hidden sm:inline-flex" tooltipClassName="dark" />
 
           {/* Camera actions */}
           <ActionButton

@@ -17,7 +17,7 @@ export function FollowPascalPill() {
       {shows ? (
         <motion.button
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          className="-translate-x-1/2 fixed bottom-24 left-1/2 z-50 rounded-full border border-violet-400/40 bg-background/90 px-4 py-2 font-medium text-sm text-violet-200 shadow-xl backdrop-blur-md active:scale-[0.97]"
+          className="-translate-x-1/2 fixed bottom-24 left-1/2 z-50 rounded-full border border-violet-400/40 bg-background/90 px-4 py-2 font-medium text-sm text-violet-700 shadow-xl dark:text-violet-200 backdrop-blur-md active:scale-[0.97]"
           exit={{ opacity: 0, y: reduced ? 0 : 8, scale: reduced ? 1 : 0.96 }}
           initial={{ opacity: 0, y: reduced ? 0 : 8, scale: reduced ? 1 : 0.96 }}
           onClick={resume}

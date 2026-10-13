@@ -518,7 +518,7 @@ export default function WindowPanel() {
                   Wraps the corner with {corner.partner.name || 'its partner'}
                 </span>
                 <button
-                  className="rounded-full border border-border/50 px-3 py-1 text-xs hover:bg-[#3e3e3e]"
+                  className="rounded-full border border-border/50 px-3 py-1 text-xs hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                   onClick={() =>
                     selectedId && writeWindows(unwrapCorner(useScene.getState().nodes, selectedId))
                   }
@@ -557,7 +557,7 @@ export default function WindowPanel() {
           ) : (
             <div className="px-1 pb-1">
               <button
-                className="w-full rounded-full border border-border/50 px-3 py-2 text-xs hover:bg-[#3e3e3e]"
+                className="w-full rounded-full border border-border/50 px-3 py-2 text-xs hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 onClick={wrapTheCorner}
                 type="button"
               >
