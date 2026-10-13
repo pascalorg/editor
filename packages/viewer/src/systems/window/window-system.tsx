@@ -32,6 +32,7 @@ import { timeSpan } from '../../lib/perf-tracks'
 import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
+import { cornerFrameStale, FUSED_CORNER_SIDE } from './corner-frame'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
@@ -170,6 +171,10 @@ export const WindowSystem = () => {
       if (!built) continue
       clearDirty(id as AnyNodeId)
       rebuiltWindowsThisFrame += 1
+      // This window's change can make or break its pair: the partner's frame follows.
+      const partnerId = (node as WindowNode).corner?.partnerId as AnyNodeId | undefined
+      const partner = partnerId ? nodes[partnerId] : undefined
+      if (partner && cornerFrameStale(partner, nodes)) useScene.getState().markDirty(partner.id)
 
       // Rebuild the parent wall so its cutout reflects the updated window geometry
       // Avoid triggering expensive wall CSG rebuilds while the window is being interactively moved/duplicated.
@@ -3393,6 +3398,7 @@ function fusedCornerSide(node: WindowNode, rotationY: number): -1 | 0 | 1 {
 
 function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
   currentWindowSlot = undefined
+  mesh.userData[FUSED_CORNER_SIDE] = 0
 
   // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
@@ -3519,6 +3525,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
 
   // A corner window fused at the corner: no jamb on that side, the glass runs to the corner.
   const fused = fusedCornerSide(node, placement.rotation[1])
+  mesh.userData[FUSED_CORNER_SIDE] = fused
   const innerW = width - (fused ? 1 : 2) * frameThickness
   const innerX = (fused * frameThickness) / 2
   const innerH = height - 2 * frameThickness

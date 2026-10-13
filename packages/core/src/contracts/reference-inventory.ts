@@ -198,8 +198,8 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'corner.partnerId',
     ...policy('node', 'connection', 'drop', 'strip'),
     targetKinds: ['window'],
-    remaps: ['clone-scene-graph'],
-    note: "A corner window's other side. The whole-graph clone remaps it; a level or a selection copied otherwise renders its pair as two plain windows until wrapped again.",
+    remaps: [...CLONES, 'scene-clipboard'],
+    note: "A corner window's other side: copied with it, the copy names the partner's copy; copied alone, or once its partner is deleted, the link is cleared.",
   }),
   row({
     kind: 'window',

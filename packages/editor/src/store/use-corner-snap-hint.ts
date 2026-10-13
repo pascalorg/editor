@@ -25,6 +25,8 @@ export const CORNER_BLOCK_NOTES: Record<CornerBlockReason, string> = {
   curved: 'A curved wall takes no corner window',
   curtain: 'A curtain wall takes no corner window',
   no_room: 'No room for the matching window on the other wall',
+  in_the_way: 'Another opening is in the way at the corner',
+  too_tall: 'The window waiting there is taller than this wall',
 }
 
 export type CornerHintRow = { keys: string[]; label: string }

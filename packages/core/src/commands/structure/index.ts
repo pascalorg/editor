@@ -11,7 +11,6 @@ export {
   createZone,
   outdoorRoomConflicts,
   walledRoomAt,
-  walledRoomToName,
 } from './create-zone'
 export { type DeleteZonePayload, deleteZone, SHARED_WALLS_DELETE_MESSAGE } from './delete-zone'
 export {

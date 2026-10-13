@@ -411,3 +411,29 @@ describe('unit member remap', () => {
     ).toBe(true)
   })
 })
+
+// A level duplicated kept its corner windows naming the originals: the copies rendered as two plain
+// windows and could not be joined while the originals stood.
+describe('corner window partner remap', () => {
+  test('a level clone joins the copied sides to each other', () => {
+    const level = makeNode('level_1', 'level', { children: ['wall_a', 'wall_b'] })
+    const wallA = makeNode('wall_a', 'wall', { parentId: 'level_1', children: ['window_a'] })
+    const wallB = makeNode('wall_b', 'wall', { parentId: 'level_1', children: ['window_b'] })
+    const windowA = makeNode('window_a', 'window', {
+      parentId: 'wall_a',
+      corner: { end: 'end', partnerId: 'window_b', post: 'none' },
+    })
+    const windowB = makeNode('window_b', 'window', {
+      parentId: 'wall_b',
+      corner: { end: 'start', partnerId: 'window_a', post: 'none' },
+    })
+    const nodes = Object.fromEntries(
+      [level, wallA, wallB, windowA, windowB].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+
+    const { clonedNodes, idMap } = cloneLevelSubtree(nodes, 'level_1' as AnyNodeId)
+    const copyOf = (id: string) => clonedNodes.find((node) => node.id === idMap.get(id))
+    expect(copyOf('window_a')).toMatchObject({ corner: { partnerId: idMap.get('window_b') } })
+    expect(copyOf('window_b')).toMatchObject({ corner: { partnerId: idMap.get('window_a') } })
+  })
+})

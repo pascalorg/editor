@@ -1,5 +1,6 @@
-import { useScene } from '@pascal-app/core'
-import { mergeWindows, wrapCorner } from '@pascal-app/core/building'
+import { type CornerSnap, useScene } from '@pascal-app/core'
+import { isAgentRefusal } from '@pascal-app/core/agent-tools'
+import { mergeWindows, strayCornerClears, wrapCorner } from '@pascal-app/core/building'
 import { writeWindowChanges } from '@pascal-app/editor'
 
 /**
@@ -21,7 +22,20 @@ export function fuseAtCorner(windowId: string, waitingId: string | null) {
     }
     const { create, updates } = wrapCorner(useScene.getState().nodes, windowId)
     writeWindowChanges({ create, updates, remove: [] })
-  } catch {
-    // The window stays a plain window at the corner.
+  } catch (error) {
+    if (!isAgentRefusal(error)) throw error
   }
+}
+
+/**
+ * A window moved and dropped: joined at the corner it was dropped at, else, when it was one side of
+ * a corner window and no longer is (dragged off its corner), both sides plain again.
+ */
+export function settleMovedWindow(windowId: string, snap: CornerSnap | null) {
+  if (snap) {
+    fuseAtCorner(windowId, snap.waitingId)
+    return
+  }
+  const updates = strayCornerClears(useScene.getState().nodes, windowId)
+  if (Object.keys(updates).length) writeWindowChanges({ create: null, updates, remove: [] })
 }

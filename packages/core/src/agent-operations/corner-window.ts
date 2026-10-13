@@ -1,15 +1,20 @@
-import { planCornerWindow } from '../building/corner-window'
+import { type CornerWindowInput, planCornerWindow } from '../building/corner-window'
 import { cornerPair, wallEndPoint, windowCornerEnd } from '../lib/corner-pair'
 import type { WallNode, WindowNode } from '../schema'
 import { achievedChanges } from './achieved'
+import { type LevelTargetInput, targetLevel } from './level-target'
 import type { AgentOperation, SceneChanges } from './types'
 import { registerSceneCheck, type SceneIssue } from './verify-scene'
 
-type AddCornerWindowInput = Parameters<typeof planCornerWindow>[1]
+type AddCornerWindowInput = Omit<CornerWindowInput, 'levelId'> & LevelTargetInput
 
-/** `add_corner_window`: one window on each of the two walls meeting at a corner, joined. */
-export const addCornerWindow: AgentOperation<AddCornerWindowInput> = (nodes, input) => {
-  const { windows, wallIds, angle } = planCornerWindow(nodes, input)
+/**
+ * `add_corner_window`: one window on each of the two walls meeting at a corner, joined, on the level
+ * named, else the one in view: stacked storeys share their corners' plan points.
+ */
+export const addCornerWindow: AgentOperation<AddCornerWindowInput> = (nodes, input, context) => {
+  const level = targetLevel(nodes, input, context)
+  const { windows, wallIds, angle } = planCornerWindow(nodes, { ...input, levelId: level.id })
   const changes: SceneChanges = {
     create: windows.map((node) => ({ node: node as never, parentId: node.parentId! })),
   }
@@ -41,10 +46,12 @@ export function cornerWindowIssues(nodes: Parameters<typeof cornerPair>[0]): Sce
     if (node.type !== 'window') continue
     const window = node as WindowNode
     const pair = cornerPair(nodes, window)
+    // Informational: what broke the pair (a side deleted or moved, a wall moved) was a choice.
     if (window.corner && !pair) {
       issues.push({
         type: 'corner_partner_missing',
-        message: `Window ${window.id} names corner partner ${window.corner.partnerId}, but one of them is gone, no longer joined back or no longer at the corner: it renders as a plain window. Rebuild the pair with add_corner_window.`,
+        severity: 'info',
+        message: `Window ${window.id} names corner partner ${window.corner.partnerId}, but they no longer make a corner window (one is gone or moved off the corner, or the walls no longer meet there): it renders as a plain window. Only if the person wants the corner wrapped again, merge_windows joins two windows there.`,
       })
       continue
     }

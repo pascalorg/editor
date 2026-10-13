@@ -8,9 +8,9 @@ import {
   runAsSingleSceneHistoryStep,
   useScene,
 } from '@pascal-app/core'
-import { mergeWindows, windowMergeOffer } from '@pascal-app/core/building'
+import { unwrapCorner, windowMergeOffer } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
-import { Building2, Copy, Group, Merge, Trash2, Ungroup } from 'lucide-react'
+import { Building2, Copy, Group, Merge, Split, Trash2, Ungroup } from 'lucide-react'
 import { useMemo } from 'react'
 import { deleteSelection, duplicateSelectionAndPickUp } from '../../editor/group-actions'
 import { formatLinearMeasurement } from '../../../lib/measurements'
@@ -67,8 +67,6 @@ function mergeRefusalNote(
       ? 'an item'
       : `a ${blocking.type}`
   switch (refusal.code) {
-    case 'windows_already_joined':
-      return 'They already wrap this corner.'
     case 'window_already_joined':
       return 'One of them already wraps another corner. Unwrap it first.'
     case 'window_not_on_wall':
@@ -95,8 +93,8 @@ function mergeRefusalNote(
 /**
  * Merge windows: with exactly two windows selected, one window across both, or one corner window
  * when they sit on two walls that meet. Windows ride their wall, so they have no floating group
- * menu, and this is where the wall merge's twin lives. The window selected first keeps its height,
- * sill and type; when they cannot join, the panel says why.
+ * menu, and this is where the wall merge's twin lives. Two that already wrap their corner get
+ * Unwrap instead; two that cannot join, the reason.
  */
 function MergeWindowsAction() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -106,6 +104,25 @@ function MergeWindowsAction() {
   const metricNotation = useViewer((s) => s.metricNotation)
   const offer = useMemo(() => windowMergeOffer(nodes, selectedIds), [nodes, selectedIds])
   if (!offer) return null
+  if (offer.refusal?.code === 'windows_already_joined')
+    return (
+      <ActionButton
+        className="basis-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
+        disabled={readOnly}
+        icon={<Split className="h-4 w-4" />}
+        label="Unwrap the corner"
+        onClick={() => {
+          writeWindowChanges({
+            create: null,
+            updates: unwrapCorner(useScene.getState().nodes, selectedIds[0]!),
+            remove: [],
+          })
+          triggerSFX('sfx:structure-build')
+        }}
+        title="Unwrap the corner: both windows stay, each framed at the corner"
+      />
+    )
+  const { merge } = offer
   const note = offer.refusal
     ? mergeRefusalNote(offer.refusal, nodes, (meters) =>
         formatLinearMeasurement(meters, unit, metricNotation),
@@ -115,11 +132,11 @@ function MergeWindowsAction() {
     <>
       <ActionButton
         className="basis-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={readOnly || note !== null}
+        disabled={readOnly || !merge}
         icon={<Merge className="h-4 w-4" />}
         label="Merge windows"
         onClick={() => {
-          const merge = mergeWindows(useScene.getState().nodes, selectedIds[0]!, selectedIds[1]!)
+          if (!merge) return
           runAsSingleSceneHistoryStep(useScene, () =>
             writeWindowChanges({
               create: null,
@@ -130,7 +147,12 @@ function MergeWindowsAction() {
           triggerSFX('sfx:structure-build')
           useViewer.getState().setSelection({ selectedIds: merge.windowIds as AnyNodeId[] })
         }}
-        title={note ?? 'Merge windows: the one you selected first keeps its height, sill and type'}
+        title={
+          note ??
+          (merge?.kind === 'corner'
+            ? 'Merge windows into a corner window: both take the height, sill and type of the one you selected first'
+            : 'Merge windows into one across both: it keeps the type and style of the one you selected first')
+        }
       />
       {note ? <p className="basis-full px-1 text-muted-foreground text-xs">{note}</p> : null}
     </>

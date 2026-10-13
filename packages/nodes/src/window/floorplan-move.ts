@@ -29,8 +29,8 @@ import {
   resolveOpeningPlacement,
   snapLocalXToNeighbors,
 } from '../shared/wall-attach-target'
-import { showCornerCue } from './corner-cue'
-import { fuseAtCorner } from './corner-fuse'
+import { showCornerCue, snappingTurnedOff } from './corner-cue'
+import { settleMovedWindow } from './corner-fuse'
 import { clampToWall, DEFAULT_WINDOW_SILL_M, hasWallChildOverlap } from './window-math'
 
 /**
@@ -210,17 +210,19 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       const slid = clampToWall(hit.wall, snappedLocalX, startLocalY, node.width, node.height, nodes)
       const { clampedY } = slid
       let clampedX = slid.clampedX
-      const corner = forcePlace
-        ? { snap: null, block: null }
-        : evaluateCorner(nodes, {
-            wallId: hit.wall.id,
-            centreX: clampedX,
-            width: node.width,
-            height: node.height,
-            sillHeight: clampedY - node.height / 2,
-            ignoreId: nodeId,
-            held: cornerSnap?.end ?? null,
-          })
+      // Alt, or snapping off, drops the window where it is.
+      const corner =
+        forcePlace || snappingTurnedOff()
+          ? { snap: null, block: null }
+          : evaluateCorner(nodes, {
+              wallId: hit.wall.id,
+              centreX: clampedX,
+              width: node.width,
+              height: node.height,
+              sillHeight: clampedY - node.height / 2,
+              ignoreId: nodeId,
+              held: cornerSnap?.end ?? null,
+            })
       cornerSnap = corner.snap
       // A curtain wall's margin can keep the window off its corner: then it is no corner.
       if (cornerSnap) {
@@ -311,7 +313,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       // At a corner the window lands already joined, as one undo step.
       runAsSingleSceneHistoryStep(useScene, () => {
         useScene.getState().updateNodes([{ id: nodeId, data: placed }])
-        if (cornerSnap) fuseAtCorner(nodeId, cornerSnap.waitingId)
+        settleMovedWindow(nodeId, cornerSnap)
       })
     },
   }

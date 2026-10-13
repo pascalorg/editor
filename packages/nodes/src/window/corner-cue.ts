@@ -1,5 +1,5 @@
 import type { CornerBlock, CornerSnap } from '@pascal-app/core'
-import { useCornerSnapHint } from '@pascal-app/editor'
+import { getActiveSnapContext, getActiveSnappingMode, useCornerSnapHint } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 
 // What a window placed or dragged near a corner shows: the HUD hint says what a click will do, and
@@ -25,3 +25,10 @@ export function showCornerCue(snap: CornerSnap | null, block: CornerBlock | null
   }
   outlined = next
 }
+
+/**
+ * Whether the person turned snapping off for what they are doing (no context, no choice made):
+ * the corner snap is a snap, and goes with it.
+ */
+export const snappingTurnedOff = () =>
+  getActiveSnapContext() !== null && getActiveSnappingMode() === 'off'

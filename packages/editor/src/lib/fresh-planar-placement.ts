@@ -122,6 +122,8 @@ export function prepareFreshPlacementRootDuplicate(node: AnyNode): AnyNode {
     metadata?: unknown
   }
   delete duplicate.id
+  // A copy of one side of a corner window is a plain window: its partner stays with the original.
+  delete duplicate.corner
   if (Array.isArray(duplicate.children)) duplicate.children = []
   duplicate.metadata = {
     ...getPlacementMetadataRecord(stripPlacementMetadataFlags(duplicate.metadata)),

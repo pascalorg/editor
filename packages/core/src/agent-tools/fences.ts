@@ -28,12 +28,12 @@ export const addFenceTool = {
       'slat | rail | privacy | horizontal | guard | picket (default privacy).',
     ),
     baseStyle: FenceBaseStyle.optional().describe(
-      'grounded (default: on the ground), floating (raised off it) or raised (on a low plinth).',
+      'grounded (default: a kickboard on the ground), floating (the panel held off the ground on its posts) or raised (a bottom rail held above the ground, the posts to the ground: a deck guard).',
     ),
     materialPreset: z
       .string()
       .optional()
-      .describe('A library material (library:<id>, as search_assets names them).'),
+      .describe('A library material (library:<id>), found with search_materials.'),
     ...levelTarget,
   },
 }

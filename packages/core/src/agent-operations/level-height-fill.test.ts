@@ -56,6 +56,20 @@ describe('a level written without a height', () => {
     ])
   })
 
+  // apply_patch's wire format names a create's parent beside the node: the walls read as missing,
+  // so the level was saved at the default height under 3 m walls.
+  test('created with walls that name it only by the create’s own parentId', () => {
+    const walls = tallWalls('level_up').map(({ parentId: _parentId, ...wall }) => wall as AnyNode)
+    const ops: LevelHeightWrite[] = [
+      { op: 'create', node: heightless('level_up') },
+      ...walls.map((node) => ({ op: 'create' as const, node, parentId: 'level_up' })),
+    ]
+    fillLevelHeights(ops, scene)
+    expect((ops[0] as { node: { height?: number } }).node.height).toBe(
+      editorHeight('level_up', tallWalls('level_up'))!,
+    )
+  })
+
   test('created empty, gets the default storey height', () => {
     const ops: LevelHeightWrite[] = [{ op: 'create', node: heightless('level_empty') }]
     expect(fillLevelHeights(ops, scene)).toEqual([

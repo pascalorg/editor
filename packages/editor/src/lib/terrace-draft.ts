@@ -53,7 +53,8 @@ const OPEN_GROUND = 500
  * Why a terrace outline cannot be built, or its plan: an outdoor room of the
  * outline, closed with separators where no wall runs, without a ceiling.
  * Core refuses an outline over a room (the same rule MCP's outdoor
- * `create_room` follows) and names the room.
+ * `create_room` follows) and names the room, except the numbered room its
+ * walls enclose exactly: a walled courtyard, which becomes the terrace.
  */
 export function planTerrace(
   nodes: Record<string, AnyNode>,

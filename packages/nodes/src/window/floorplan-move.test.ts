@@ -105,6 +105,17 @@ describe('2D window move near a corner', () => {
     expect(windowNode('window_moving').position[0]).toBeCloseTo(5.4, 6)
   })
 
+  // Dragged off its corner, a side kept naming its partner: the partner lost its jamb for good and
+  // verify_scene asked the agent to rebuild the pair the person had just taken apart.
+  test('a side dragged off its corner leaves both windows plain', () => {
+    const moving = seed()
+    drop(moving, [5.3, 0])
+    expect(windowNode('window_waiting').corner?.partnerId).toBe('window_moving')
+    drop(windowNode('window_moving'), [2, 0])
+    expect(windowNode('window_moving').corner).toBeUndefined()
+    expect(windowNode('window_waiting').corner).toBeUndefined()
+  })
+
   test('Alt drops it plain', () => {
     const moving = seed()
     drop(moving, [5.3, 0], true)

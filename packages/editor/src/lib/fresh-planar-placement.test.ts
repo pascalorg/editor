@@ -324,6 +324,16 @@ describe('commitFreshPlacementSubtree', () => {
     expect((source as AnyNode & { children: AnyNodeId[] }).children).toEqual(['item_original'])
   })
 
+  // A copy of one side of a corner window kept naming the original's partner, which never named it
+  // back: a link that made the copy refuse to join another window.
+  test('a copy of one side of a corner window is a plain window', () => {
+    const side = WindowNode.parse({
+      corner: { end: 'end', partnerId: 'window_partner', post: 'none' },
+    })
+    expect((prepareFreshPlacementRootDuplicate(side) as WindowNode).corner).toBeUndefined()
+    expect(side.corner?.partnerId).toBe('window_partner')
+  })
+
   test('commits a duplicated cabinet draft without deleting the original modules', () => {
     seedCabinetRun()
     useScene.temporal.getState().clear()

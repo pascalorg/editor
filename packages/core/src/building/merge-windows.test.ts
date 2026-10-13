@@ -40,8 +40,11 @@ describe('windowMergeOffer', () => {
     expect(windowMergeOffer(scene, ['window_a', 'missing'])).toBeNull()
   })
 
-  test('is offered with no refusal for two windows that can join', () => {
-    expect(windowMergeOffer(scene, ['window_a', 'window_b'])).toEqual({ refusal: null })
+  test('is offered with the merge, no refusal, for two windows that can join', () => {
+    expect(windowMergeOffer(scene, ['window_a', 'window_b'])).toMatchObject({
+      merge: { kind: 'same-wall', windowIds: ['window_a'] },
+      refusal: null,
+    })
   })
 
   test('is offered with the refusal, for the panel to word, for two that cannot', () => {
