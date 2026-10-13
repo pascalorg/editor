@@ -6731,6 +6731,8 @@ export function FloorplanPanel({
       // A saved view with nothing to measure: its target, at the zoom the person has.
       centre = toLocal(pose.target[0], pose.target[2])
     } else return
+    // A floor change has just reset the view to the whole floor: glide from there, not from nothing.
+    latestViewportRef.current ??= latestFittedViewportRef.current
     applyFloorplanNavigationView(centre, userRotationDeg, width, { smooth: framingAnimates() })
   }, [
     applyFloorplanNavigationView,
