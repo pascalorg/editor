@@ -206,6 +206,30 @@ jobs:
           echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "channel=$NPM_TAG" >> "$GITHUB_OUTPUT"
 
+      # OIDC trusted publishing can only mint a token for a package that already
+      # exists on npm with a trusted publisher. A package that was never
+      # published answers "package not found" at the token exchange, and because
+      # packages publish one after another that used to surface halfway through
+      # a release (core already on npm, nothing tagged). Fail here instead, before
+      # any build or publish, and say what to do.
+      - name: Every package must already exist on npm
+        run: |
+          MISSING=""
+          for pkg in core geometry-script viewer editor nodes mcp ifc-converter cli; do
+            if ! npm view "@pascal-app/$pkg" name >/dev/null 2>&1; then
+              MISSING="$MISSING @pascal-app/$pkg"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::Never published to npm:$MISSING"
+            echo "A new package needs one publish by a maintainer before the workflow can release it:"
+            echo "  cd packages/<pkg> && bun run build && npm publish --access public --tag latest --ignore-scripts"
+            echo "then on npmjs.com, package settings > Trusted publisher: GitHub Actions, organization pascalorg,"
+            echo "repository editor, workflow release.yml, environment npm. See wiki/npm-release.md."
+            exit 1
+          fi
+          echo "All @pascal-app packages exist on npm"
+
       - name: Validate portable editor runtime
         env:
           PASCAL_PORTABLE_BUILD: "1"
