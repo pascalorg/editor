@@ -30,9 +30,10 @@ export type ChatToolCardProps = {
 
 /**
  * What a plugin's start screen does through the host's chat, before anything is said. `send` sends
- * a message now, its pictures by reference (a host-stored image); `attach` puts files on the next
- * message, in the composer; `requirePro` moves the chat to the level that runs the plugin's tools,
- * and answers false, after offering the upgrade, when the person's plan does not include it.
+ * a message now, its pictures by reference (a host-stored image), and `attach` puts files on the
+ * next message, in the composer: both at the level that runs the plugin's tools. `requirePro` only
+ * asks whether the person's plan includes that level ("Pro" is the hosted product's name for it):
+ * it answers false after offering the upgrade, and changes nothing in the chat.
  */
 export type ChatStartProps = {
   send(text: string, images?: readonly { url: string; name: string }[]): void
