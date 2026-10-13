@@ -52,12 +52,14 @@ export function levelFrame(
 
 /**
  * Per-wall plan footprints for a level, mitred, then transformed by the building's site
- * placement (`siteFrame`); with no building, in the level's own coordinates.
+ * placement (`siteFrame`); with no building, in the level's own coordinates. `only` keeps the
+ * named walls, still mitred against every wall on the level.
  */
 export function levelFootprintLoops(
   nodes: Nodes,
   level: LevelNode | null,
   building: BuildingNode | null,
+  only?: ReadonlySet<string>,
 ): Pt[][] {
   if (!level) return []
   const walls: WallNode[] = []
@@ -71,6 +73,7 @@ export function levelFootprintLoops(
   const toSite = siteFrame(building)
   const loops: Pt[][] = []
   for (const wall of walls) {
+    if (only && !only.has(wall.id)) continue
     const poly = getWallPlanFootprint(wall, miters)
     if (poly.length < 3) continue
     loops.push(poly.map((p) => toSite(p.x, p.y)))

@@ -1,10 +1,11 @@
 import { refuse } from '../agent-tools/refusal'
+import { levelFootprintLoops } from '../lib/building-footprint'
 import { lotOverhang } from '../lib/site-placement'
-import { WallNode } from '../schema'
+import { type LevelNode, WallNode } from '../schema'
 import { isRoofLevel } from '../services/roof-level'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
-import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
 import { WALL_MIN_LENGTH } from '../systems/wall/wall-topology'
+import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import type { AgentOperation, SceneNodes } from './types'
 
@@ -53,17 +54,13 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ...(input.height === undefined ? {} : { height: input.height }),
     ...(curveOffset ? { curveOffset } : {}),
   })
-  // the wall's band, square ends: what crosses the lot line, not only its centreline
-  const half = (wall.thickness ?? DEFAULT_WALL_THICKNESS) / 2
-  const [nx, nz] = [(-(end[1] - start[1]) / length) * half, ((end[0] - start[0]) / length) * half]
-  const site = lotOverhang(nodes, level.id, [
-    [
-      [start[0] + nx, start[1] + nz],
-      [end[0] + nx, end[1] + nz],
-      [end[0] - nx, end[1] - nz],
-      [start[0] - nx, start[1] - nz],
-    ],
-  ])
+  // the wall's mitred band, curve and all: what crosses the lot line, not only its centreline
+  const after = applySceneChanges(nodes, { create: [{ node: wall, parentId: level.id }] })
+  const site = lotOverhang(
+    after,
+    level.id,
+    levelFootprintLoops(after, after[level.id] as LevelNode, null, new Set([wall.id])),
+  )
   return {
     result: {
       ok: true,

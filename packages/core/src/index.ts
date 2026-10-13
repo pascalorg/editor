@@ -392,6 +392,7 @@ export {
   type SiteBrief,
   type SiteFootprint,
   siteBrief,
+  siteFrontEdge,
   siteSetbackEnvelope,
   type YardKey,
 } from './lib/site-placement'

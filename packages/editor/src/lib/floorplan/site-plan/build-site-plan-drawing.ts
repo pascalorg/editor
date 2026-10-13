@@ -13,12 +13,12 @@ import {
   type LevelNode,
   levelFootprintLoops,
   outwardNormal,
-  resolveFrontEdge,
   type SceneSnapshot,
   type SiteNode,
   setbackForRole,
   sightTriangle,
   siteFrame,
+  siteFrontEdge,
   siteSetbackEnvelope,
   streetCorners,
   terrainFieldOf,
@@ -320,7 +320,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   const footprintLoops = levelFootprintLoops(scene.nodes, level, building)
   const footprintBounds = unionBounds(footprintLoops)
   const northRotation = site?.northRotation ?? 0
-  const frontEdge = resolveFrontEdge(lot, site?.frontEdge, northRotation)
+  const frontEdge = site ? siteFrontEdge(site) : 0
 
   const empty: SitePlanDrawing = {
     primitives: [],
