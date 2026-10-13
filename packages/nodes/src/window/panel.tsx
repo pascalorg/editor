@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   cornerPair,
+  runAsSingleSceneHistoryStep,
   scriptImages,
   useInteractive,
   useScene,
@@ -133,11 +134,14 @@ export default function WindowPanel() {
       })
       if (!hasChange) return
 
-      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
-      const scene = useScene.getState()
-      scene.dirtyNodes.add(selectedId as AnyNodeId)
-      if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
-      syncCornerPartner(selectedId, updates)
+      // A corner window's partner follows in the same undo step, so undo never splits the pair.
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
+        const scene = useScene.getState()
+        scene.dirtyNodes.add(selectedId as AnyNodeId)
+        if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
+        syncCornerPartner(selectedId, updates)
+      })
     },
     [selectedId],
   )
@@ -195,8 +199,15 @@ export default function WindowPanel() {
 
   const previewWindowUpdate = <K extends keyof WindowNode>(key: K, value: WindowNode[K]) =>
     preview?.preview({ [key]: value } as Partial<WindowNode>)
+  // A committed change a corner window shares with its partner (its height, frame, sill) takes the
+  // partner along, in the same undo step.
+  const commitPreview = (updates: Partial<WindowNode>) =>
+    runAsSingleSceneHistoryStep(useScene, () => {
+      preview?.commit(updates)
+      if (selectedId) syncCornerPartner(selectedId, updates)
+    })
   const commitWindowPreview = <K extends keyof WindowNode>(key: K, value: WindowNode[K]) =>
-    preview?.commit({ [key]: value } as Partial<WindowNode>)
+    commitPreview({ [key]: value } as Partial<WindowNode>)
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -637,11 +648,7 @@ export default function WindowPanel() {
             max={limits?.height}
             min={0.01}
             onChange={(v) => preview?.preview(getDimensionUpdates({ height: v }))}
-            onCommit={(v) => {
-              const updates = getDimensionUpdates({ height: v })
-              preview?.commit(updates)
-              if (selectedId) syncCornerPartner(selectedId, updates)
-            }}
+            onCommit={(v) => commitPreview(getDimensionUpdates({ height: v }))}
             onCancel={() => preview?.cancel()}
             previewWhileTyping
             precision={2}
