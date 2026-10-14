@@ -43,12 +43,12 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.184.1",
-    "next": "16.4.0",
+    "next": "16.4.1",
     "react-grab": "0.2.0",
     "three": "0.186.1",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "@react-three/fiber": "9.8.1"
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "@react-three/fiber": "9.8.2"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-darwin-arm64": "4.3.3",

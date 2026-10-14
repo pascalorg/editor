@@ -128,7 +128,7 @@
     "three": "^0.186"
   },
   "dependencies": {
-    "@pascal-app/lingo": "^0.2.0",
+    "@pascal-app/lingo": "^0.5.0",
     "dedent": "^1.7.2",
     "idb-keyval": "^6.3.0",
     "mitt": "^3.0.1",
