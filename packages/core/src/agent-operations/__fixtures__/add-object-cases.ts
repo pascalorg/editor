@@ -178,23 +178,29 @@ const create = (
 })
 
 export const ADD_OBJECT_CASES: AddObjectCase[] = [
-  // A roof level holds roofs: an object aimed at it belongs on the storey it covers, named so one
-  // retry lands. place_items refused the same write while add_object made it.
+  // A roof just placed selects its level: an object given no host then landed among the roofs, the
+  // storey's plan short of it. Refused, naming the storey it covers so one retry lands.
   {
-    name: 'an object on the roof level is refused, naming the storey it covers',
-    scene: roofedFloorScene,
-    input: { code: CODE, name: 'Side table', reason: 'Pascal has no side table.', parentId: 'level_roof' },
-    compiled: compiledSolid([0.5, 0.6, 0.5]),
-    expect: { refusal: 'roof_level', mentions: ['"Side table"', 'level_0'] },
-  },
-  {
-    name: 'an object given no host while the roof level is in view is refused the same way',
+    name: 'an object given no host while the roof level is in view is refused, naming the storey it covers',
     scene: roofedFloorScene,
     input: { code: CODE, name: 'Side table', reason: 'Pascal has no side table.' },
     compiled: compiledSolid([0.5, 0.6, 0.5]),
     context: { activeLevelId: 'level_roof' },
     surfaces: ['core', 'chat'],
-    expect: { refusal: 'roof_level', mentions: ['level_0'] },
+    expect: { refusal: 'roof_level', mentions: ['"Side table"', 'level_0'] },
+  },
+  // Named onto the roof level, it goes up with the roof.
+  {
+    name: 'an object named onto the roof level is made there: it goes up with the roof',
+    scene: roofedFloorScene,
+    input: {
+      code: CODE,
+      name: 'Chimney cap',
+      reason: 'Pascal has no chimney cap.',
+      parentId: 'level_roof',
+    },
+    compiled: compiledSolid([0.6, 0.4, 0.6]),
+    expect: { result: { mount: 'floor' }, node: { parentId: 'level_roof' } },
   },
   create(
     'a new object keeps what it stands in for',

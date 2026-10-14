@@ -283,8 +283,12 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     )
   }
   if (compiled.mount === 'floor' && parent.type === 'level') {
-    // A level in view or named that holds the roofs: the object belongs on the storey it covers.
-    const onRoofLevel = roofLevelRefusal(nodes, parent.id, `"${input.name ?? 'the object'}"`)
+    // Given no host while the roof level is in view (a roof just placed selects it), the object
+    // belongs on the storey it covers; one named onto the roof level goes up with the roof (a
+    // chimney cap, a gable louvre).
+    const onRoofLevel = input.parentId
+      ? null
+      : roofLevelRefusal(nodes, parent.id, `"${input.name ?? 'the object'}"`)
     if (onRoofLevel) throw onRoofLevel
     refuseWallOrSlabShape(compiled, input)
   }
