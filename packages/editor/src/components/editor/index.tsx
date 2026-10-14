@@ -268,13 +268,13 @@ export interface EditorProps {
   isLoading?: boolean
 
   /**
-   * Replaces the loading surface in both layouts. The editor still owns when
-   * it is visible and always shows its error/retry surface when loading fails.
+   * Replaces the loading surface inside the canvas panes in both layouts.
+   * Loading failures always use the editor's error/retry surface.
    * Omit (or pass null) to use the default SceneLoader.
    */
   loadingSlot?: ReactNode
 
-  // Fires when the full-screen scene loader shows/hides — lets hosts measure
+  // Fires when scene loading starts/finishes — lets hosts measure
   // open-to-interactive time without reaching into internal loader state.
   onLoaderChange?: (visible: boolean) => void
 
@@ -1107,6 +1107,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isStudioMode,
   hasLoadedInitialScene,
   showLoader,
+  isSceneDataLoading,
+  loadingOverlay,
   sceneReadyKey,
   onSceneReadyChange,
   onThumbnailCapture,
@@ -1123,6 +1125,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isStudioMode: boolean
   hasLoadedInitialScene: boolean
   showLoader: boolean
+  isSceneDataLoading: boolean
+  loadingOverlay: ReactNode
   sceneReadyKey: number
   onSceneReadyChange: (ready: boolean) => void
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
@@ -1236,18 +1240,22 @@ const ViewerCanvas = memo(function ViewerCanvas({
         >
           {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
           <div
+            aria-busy={isSceneDataLoading}
             className="relative min-w-0 overflow-hidden"
+            data-pascal-viewer-2d
             data-view-pane={pane2d ?? undefined}
             onPointerDownCapture={pane2d === null ? undefined : focusPane(pane2d)}
             style={paneStyle(pane2d)}
           >
-            <div className="h-full w-full overflow-hidden">
+            <div className="relative isolate h-full w-full overflow-hidden">
               <FloorplanPanel compassHost={viewerAreaEl} floorplanSceneSlot={floorplanSceneSlot} />
             </div>
+            {isSceneDataLoading && loadingOverlay}
           </div>
 
           {/* 3D viewer — always mounted, hidden via CSS to avoid destroying the WebGL context */}
           <div
+            aria-busy={showLoader}
             className="relative min-w-0 overflow-hidden"
             data-pascal-viewer-3d
             data-view-pane={pane3d ?? undefined}
@@ -1255,51 +1263,54 @@ const ViewerCanvas = memo(function ViewerCanvas({
             ref={viewer3dRef}
             style={paneStyle(pane3d)}
           >
-            <DeleteCursorLayer
-              containerRef={viewer3dRef}
-              isVersionPreviewMode={isVersionPreviewMode}
-            />
-            <PaintCursorLayer
-              containerRef={viewer3dRef}
-              isVersionPreviewMode={isVersionPreviewMode}
-            />
-            {!isVersionPreviewMode && <PointAskLayer />}
-            {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
-              <ViewerCanvasControlsHint
-                belowTopMenu={hintBelowTopMenu}
-                onDismiss={dismissCameraControlsHint}
-              />
-            ) : null}
-            <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
-            <Viewer
-              defaultRender={EDITOR_DEFAULT_RENDER}
-              disablePostFx={disablePostFx}
-              hoverStyles={EDITOR_HOVER_STYLES}
-              isolate={presetIsolation}
-              // Preset captures isolate one subtree and keep the exterior transparent.
-              // Other modes retain the viewer's configured background policy.
-              transparent={presetIsolation === null ? undefined : true}
-              onSceneReadyChange={onSceneReadyChange}
-              renderContext="editor"
-              renderPaused={!show3d && !showLoader}
-              sceneReadyKey={sceneReadyKey}
-              immersive={immersive}
-              // Walk/drone framing during snapshot capture is camera-only: the
-              // viewer's default selection manager would hover-highlight whatever
-              // the cursor crosses, which orbit capture never does.
-              selectionManager={isFirstPersonMode && !isCaptureMode ? 'default' : 'custom'}
-            >
-              <ViewerSceneContent
-                isFirstPersonMode={isFirstPersonMode}
-                isLoading={showLoader}
-                isXRMode={immersive != null}
-                isStudioMode={isStudioMode}
+            <div className="relative isolate h-full">
+              <DeleteCursorLayer
+                containerRef={viewer3dRef}
                 isVersionPreviewMode={isVersionPreviewMode}
-                onThumbnailCapture={onThumbnailCapture}
-                presentationsReady={presentationsReady}
-                viewerSceneSlot={viewerSceneSlot}
               />
-            </Viewer>
+              <PaintCursorLayer
+                containerRef={viewer3dRef}
+                isVersionPreviewMode={isVersionPreviewMode}
+              />
+              {!isVersionPreviewMode && <PointAskLayer />}
+              {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
+                <ViewerCanvasControlsHint
+                  belowTopMenu={hintBelowTopMenu}
+                  onDismiss={dismissCameraControlsHint}
+                />
+              ) : null}
+              <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
+              <Viewer
+                defaultRender={EDITOR_DEFAULT_RENDER}
+                disablePostFx={disablePostFx}
+                hoverStyles={EDITOR_HOVER_STYLES}
+                isolate={presetIsolation}
+                // Preset captures isolate one subtree and keep the exterior transparent.
+                // Other modes retain the viewer's configured background policy.
+                transparent={presetIsolation === null ? undefined : true}
+                onSceneReadyChange={onSceneReadyChange}
+                renderContext="editor"
+                renderPaused={!show3d && !showLoader}
+                sceneReadyKey={sceneReadyKey}
+                immersive={immersive}
+                // Walk/drone framing during snapshot capture is camera-only: the
+                // viewer's default selection manager would hover-highlight whatever
+                // the cursor crosses, which orbit capture never does.
+                selectionManager={isFirstPersonMode && !isCaptureMode ? 'default' : 'custom'}
+              >
+                <ViewerSceneContent
+                  isFirstPersonMode={isFirstPersonMode}
+                  isLoading={showLoader}
+                  isXRMode={immersive != null}
+                  isStudioMode={isStudioMode}
+                  isVersionPreviewMode={isVersionPreviewMode}
+                  onThumbnailCapture={onThumbnailCapture}
+                  presentationsReady={presentationsReady}
+                  viewerSceneSlot={viewerSceneSlot}
+                />
+              </Viewer>
+            </div>
+            {showLoader && loadingOverlay}
           </div>
 
           {hostPanes.map((pane) => {
@@ -1338,6 +1349,7 @@ function PreviewStage({
   onModeChange,
   projectName,
   showLoader,
+  loadingOverlay,
   viewerContent,
 }: {
   isFirstPersonMode: boolean
@@ -1345,6 +1357,7 @@ function PreviewStage({
   onModeChange: (mode: ViewerStageMode) => void
   projectName?: string | null
   showLoader: boolean
+  loadingOverlay: ReactNode
   viewerContent: ReactNode
 }) {
   const hasFloorplan = useScene((state) =>
@@ -1386,6 +1399,7 @@ function PreviewStage({
         switcherClassName={`${PREVIEW_STAGE_SWITCHER_POSITION} ${showLoader ? 'z-[70]' : ''}`}
       >
         {viewerContent}
+        {showLoader && loadingOverlay}
       </ViewerStage>
     </div>
   )
@@ -1528,6 +1542,10 @@ function EditorContent({
   // Load on mount, project switches, and explicit retry attempts.
   useEffect(() => {
     let cancelled = false
+    // The shell stays usable while loading; scene commands must not edit the
+    // unloaded graph. Release synchronously before hydration so its normal
+    // migrations and derived geometry can write, and retain the lock on error.
+    let releaseLoadingLock = acquireSceneReadOnlyLease()
 
     async function load(attempt: number) {
       beginSceneLoad()
@@ -1544,6 +1562,7 @@ function EditorContent({
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
         if (!cancelled && attempt === sceneLoadAttempt) {
+          releaseLoadingLock()
           applySceneGraphToEditor(sceneGraph)
           // The store holds the loaded graph: autosave resumes now, not on a
           // frame — a tab loaded while hidden never gets one.
@@ -1556,6 +1575,8 @@ function EditorContent({
         // state: nothing may be written until a load actually succeeds.
         failed = true
         if (!cancelled) {
+          releaseLoadingLock()
+          releaseLoadingLock = acquireSceneReadOnlyLease()
           console.error('[editor] scene load failed', error)
           setSceneLoadError(error ?? new Error('Scene load failed'))
         }
@@ -1578,6 +1599,7 @@ function EditorContent({
 
     return () => {
       cancelled = true
+      releaseLoadingLock()
     }
   }, [onLoad, beginSceneLoad, completeSceneLoad, sceneLoadAttempt])
 
@@ -1624,7 +1646,8 @@ function EditorContent({
     return () => window.clearTimeout(timer)
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
 
-  const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
+  const isSceneDataLoading = isLoading || isSceneLoading || !hasLoadedInitialScene
+  const showLoader = isSceneDataLoading || !isViewerSceneReady
   const visibleLoader =
     showLoader &&
     !(
@@ -1702,6 +1725,16 @@ function EditorContent({
     </Viewer>
   )
 
+  const loadingOverlay = showLoader ? (
+    <div className="absolute inset-0 z-50" data-scene-loading>
+      {sceneLoadError ? (
+        <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
+      ) : (
+        (loadingSlot ?? <SceneLoader className="bg-background" />)
+      )}
+    </div>
+  ) : null
+
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
@@ -1709,8 +1742,10 @@ function EditorContent({
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
+      isSceneDataLoading={isSceneDataLoading}
       isStudioMode={isStudioMode}
       isVersionPreviewMode={isVersionPreviewMode}
+      loadingOverlay={loadingOverlay}
       onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
       presentationsReady={presentationsReady}
@@ -1777,19 +1812,10 @@ function EditorContent({
     return (
       <>
         <FloorplanModeCoordinator />
-        {visibleLoader && (
-          <div className="fixed inset-0 z-60">
-            {sceneLoadError ? (
-              <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
-            ) : (
-              (loadingSlot ?? <SceneLoader className="bg-background" />)
-            )}
-          </div>
-        )}
-
         {!isLoading && isPreviewMode ? (
           <PreviewStage
             isFirstPersonMode={isFirstPersonMode}
+            loadingOverlay={loadingOverlay}
             mode={previewStageMode}
             onModeChange={setPreviewStageMode}
             projectName={projectName}
@@ -1872,19 +1898,10 @@ function EditorContent({
   return (
     <div className="flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
       <FloorplanModeCoordinator />
-      {visibleLoader && (
-        <div className="fixed inset-0 z-60">
-          {sceneLoadError ? (
-            <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
-          ) : (
-            (loadingSlot ?? <SceneLoader className="bg-background" />)
-          )}
-        </div>
-      )}
-
       {!isLoading && isPreviewMode ? (
         <PreviewStage
           isFirstPersonMode={isFirstPersonMode}
+          loadingOverlay={loadingOverlay}
           mode={previewStageMode}
           onModeChange={setPreviewStageMode}
           projectName={projectName}
