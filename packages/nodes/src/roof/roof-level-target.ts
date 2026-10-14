@@ -8,10 +8,14 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   resolveRoofElevation,
+  resolveRoomRoofFootprintOnLevel,
   type SceneApi,
   seatRoofs,
+  useScene,
+  wallsUnder,
 } from '@pascal-app/core'
 import { applySceneChanges } from '@pascal-app/core/agent-operations'
+import { selectPlacedNode } from '@pascal-app/editor'
 
 /**
  * Where a roof drawn by hand goes, by core's rule for every roof writer (`planRoofLevel`): on the
@@ -26,9 +30,43 @@ export type RoofLevelTarget = {
   nodes: Readonly<Record<AnyNodeId, AnyNode>>
 }
 
-const levelHoldsWalls = (nodes: Readonly<Record<string, AnyNode>>, levelId: string) => {
+/** A roof drawn by hand, in the plan of the level it was drawn on: its footprint and form. */
+export type DrawnRoof = {
+  center: [number, number]
+  /** Along plan x and z (a cone: its diameter both ways). */
+  width: number
+  depth: number
+  roofType: string
+}
+
+/**
+ * Whether a roof drawn on a level stands over that storey: an edge of it bears on the level's walls
+ * (core's bearing test: a wall along the edge, open air past it), or it covers one of the rooms its
+ * walls enclose (a rectangle drawn loosely over a house). A porch or portico over posts beside the
+ * house does neither, and stays on the storey with its posts.
+ */
+function overStorey(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  levelId: LevelNode['id'],
+  drawn: DrawnRoof,
+): boolean {
   const level = nodes[levelId]
-  return level?.type === 'level' && level.children.some((id) => nodes[id]?.type === 'wall')
+  if (level?.type !== 'level' || !level.children.some((id) => nodes[id]?.type === 'wall'))
+    return false
+  const shape = {
+    cx: drawn.center[0],
+    cz: drawn.center[1],
+    yaw: 0,
+    hw: drawn.width / 2,
+    hd: drawn.depth / 2,
+    reach: 0,
+    roofType: drawn.roofType,
+    peak: 0,
+  }
+  return (
+    wallsUnder(nodes, levelId, shape).length > 0 ||
+    resolveRoomRoofFootprintOnLevel(levelId, nodes, drawn.center) !== null
+  )
 }
 
 /** The target of a roof carried by `storeyId`'s walls, `roofHeight` its rise over its eaves. */
@@ -55,15 +93,17 @@ export function roofLevelTarget(
 }
 
 /**
- * The target of a roof drawn on the armed level: over its walls when it holds some, else the
- * level itself (an empty upper level or the roof level, already above what it covers).
+ * The target of a roof drawn on the armed level: over that storey (`overStorey`), the level above
+ * its walls; else the level itself (a porch on its posts, an empty upper level or the roof level,
+ * already above what it covers).
  */
 export function drawnRoofLevelTarget(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   levelId: LevelNode['id'],
   roofHeight: number,
+  drawn: DrawnRoof,
 ): RoofLevelTarget {
-  return levelHoldsWalls(nodes, levelId)
+  return overStorey(nodes, levelId, drawn)
     ? roofLevelTarget(nodes, levelId, roofHeight)
     : { levelId, create: [], update: [], nodes }
 }
@@ -142,4 +182,23 @@ export function writeSeatedRoofEdit(
   // creates first: a roof the seat moves goes to a Roof level the seat creates
   for (const op of changes.create ?? []) sceneApi.upsert(op.node, op.parentId)
   for (const { id, data } of changes.update ?? []) sceneApi.update(id, data)
+}
+
+/**
+ * A roof edit from the plan or an inspector (a move, a turn, a resize, a field), committed through
+ * the seat (`seatRoofs`) in one store call: an edit that puts a storey-held roof on its walls takes
+ * it to the level above them, and the selection follows `selectId` there.
+ */
+export function commitSeatedRoofEdit(
+  update: { id: AnyNodeId; data: Partial<AnyNode> }[],
+  selectId: AnyNodeId,
+): void {
+  const scene = useScene.getState()
+  const { changes, notes } = seatRoofs(scene.nodes, { update })
+  if (!notes.length) {
+    scene.updateNodes(update)
+    return
+  }
+  scene.applyNodeChanges(changes)
+  selectPlacedNode(selectId)
 }

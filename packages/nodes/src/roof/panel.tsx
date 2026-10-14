@@ -23,11 +23,11 @@ import {
 import {
   ActionButton,
   ActionGroup,
-  commitParametricNodeFields,
   duplicateNodeAndPickUp,
   formatLinearMeasurement,
   PanelSection,
   PanelWrapper,
+  parametricNodeUpdates,
   SegmentedControl,
   SliderControl,
   triggerSFX,
@@ -37,6 +37,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { commitSeatedRoofEdit } from './roof-level-target'
 
 export default function RoofPanel() {
   const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent' | 'turbine-vent'>('box-vent')
@@ -197,7 +198,11 @@ export default function RoofPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<RoofNode>) => {
       if (!selectedId) return
-      commitParametricNodeFields(selectedId as AnyNode['id'], updates)
+      // Moved or turned onto the walls that carry it, it goes to the level above them.
+      commitSeatedRoofEdit(
+        parametricNodeUpdates(selectedId as AnyNode['id'], updates),
+        selectedId as AnyNode['id'],
+      )
     },
     [selectedId],
   )

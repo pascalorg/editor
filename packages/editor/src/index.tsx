@@ -712,7 +712,7 @@ export {
   type PanelRow,
 } from './lib/panel-rows'
 export { type PanelToolOption, usePanelToolHints } from './lib/panel-tool-options'
-export { commitParametricNodeFields } from './lib/parametric-node-update'
+export { commitParametricNodeFields, parametricNodeUpdates } from './lib/parametric-node-update'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,

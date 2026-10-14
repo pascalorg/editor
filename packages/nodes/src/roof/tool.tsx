@@ -220,7 +220,12 @@ export const commitRoofPlacement = (
       width: diameter,
       depth: diameter,
     })
-    const target = drawnRoofLevelTarget(nodes, levelId, curbHeight + getActiveRoofHeight(cone))
+    const target = drawnRoofLevelTarget(nodes, levelId, curbHeight + getActiveRoofHeight(cone), {
+      center: [centerX, centerZ],
+      width: diameter,
+      depth: diameter,
+      roofType,
+    })
     const resolved = resolveConicalRoofPlacement({
       nodes: target.nodes,
       levelId: target.levelId,
@@ -346,6 +351,7 @@ export const commitRoofPlacement = (
     nodes,
     levelId,
     segment.wallHeight + getActiveRoofHeight(segment),
+    { center: [centerX, centerZ], width: footprintWidth, depth: footprintDepth, roofType },
   )
   const support = drawnRoofSupport(target, levelId)
   // Create the roof container. Segment-shaped params (roofType, pitch, …) are
@@ -753,7 +759,12 @@ export const RoofTool: React.FC = () => {
         const defaults = useEditor.getState().toolDefaults.roof
         const curbHeight =
           typeof defaults?.wallHeight === 'number' ? defaults.wallHeight : DEFAULT_WALL_HEIGHT
-        const target = drawnRoofLevelTarget(sceneApi.nodes(), currentLevelId, 0)
+        const target = drawnRoofLevelTarget(sceneApi.nodes(), currentLevelId, 0, {
+          center: [centerX, centerZ],
+          width: diameter,
+          depth: diameter,
+          roofType,
+        })
         const placement = resolveConicalRoofPlacement({
           nodes: target.nodes,
           levelId: target.levelId,
@@ -1065,10 +1076,15 @@ export const RoofTool: React.FC = () => {
   // A roof drawn over the armed level's walls lands on the level above them; its ghost does too.
   const drawTarget = useMemo(
     () =>
-      currentLevelId && footprintSource === 'draw'
-        ? drawnRoofLevelTarget(nodes, currentLevelId, 0)
+      currentLevelId && footprintSource === 'draw' && previewDimensions
+        ? drawnRoofLevelTarget(nodes, currentLevelId, 0, {
+            center: [previewDimensions.centerX, previewDimensions.centerZ],
+            width: previewDimensions.length,
+            depth: previewDimensions.width,
+            roofType,
+          })
         : null,
-    [currentLevelId, footprintSource, nodes],
+    [currentLevelId, footprintSource, nodes, previewDimensions, roofType],
   )
   const drawLift =
     drawTarget && currentLevelId ? roofLevelTargetOffset(drawTarget, currentLevelId) : 0
