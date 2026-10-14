@@ -12,6 +12,7 @@ import {
 } from '../schema'
 import { coveredStoreyId, planRoofsOffStorey, seatRoofs, servesAsRoofLevel } from '../services'
 import {
+  building,
   bungalow,
   bungalow8ft,
   gablePorch,
@@ -19,6 +20,7 @@ import {
   mainRoof,
   portico,
   roof,
+  scene,
   shedPorch,
   TOP,
 } from './__fixtures__/roof-bearing-cases'
@@ -185,6 +187,13 @@ describe('seatWrittenRoofs', () => {
       "Roof (level_x) moved up to floor index 1: a building's roof level stays above its storeys.",
     ])
     expect(ops.slice(1)).toEqual([{ op: 'update', id: 'level_x', data: { level: 1 } }])
+  })
+
+  test('a storey created over a carport, a ground level holding only its roof on posts, leaves the carport where it is', () => {
+    const carport = level('level_c', 0)
+    const ops = creates(level('level_1', 1))
+    expect(seatWrittenRoofs(ops, scene(building(), carport, ...portico('level_c')))).toEqual([])
+    expect(ops).toHaveLength(1)
   })
 
   test('a roof created on its walls’ storey: a Roof level and the roof’s move are appended', () => {

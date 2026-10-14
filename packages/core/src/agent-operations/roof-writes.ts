@@ -156,11 +156,16 @@ export function seatWrittenRoofs(ops: NodeWrite[], scene: SceneNodes): string[] 
   for (const buildingId of new Set(created.map((level) => level.parentId))) {
     if (!buildingId) continue
     const levels = levelsOf(after, buildingId)
-    const top = Math.max(
-      ...levels.filter((level) => !servesAsRoofLevel(after, level)).map((level) => level.level),
+    // As `storeyInsertIndex` reads a stack: the lowest level is a storey unless declared the roof
+    // level (a carport's roof on its posts is its ground floor).
+    const bottom = Math.min(...levels.map((level) => level.level))
+    const roofLevels = levels.filter(
+      (level) => servesAsRoofLevel(after, level) && (isRoofLevel(level) || level.level > bottom),
     )
-    levels
-      .filter((level) => servesAsRoofLevel(after, level))
+    const top = Math.max(
+      ...levels.filter((level) => !roofLevels.includes(level)).map((level) => level.level),
+    )
+    roofLevels
       .sort((a, b) => a.level - b.level)
       .forEach((level, i) => {
         const floor = Math.max(level.level, top + 1 + i)

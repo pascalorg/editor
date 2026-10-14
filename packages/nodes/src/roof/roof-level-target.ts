@@ -139,6 +139,7 @@ export function writeSeatedRoofEdit(
     sceneApi.applyChanges(changes)
     return
   }
-  for (const { id, data } of changes.update ?? []) sceneApi.update(id, data)
+  // creates first: a roof the seat moves goes to a Roof level the seat creates
   for (const op of changes.create ?? []) sceneApi.upsert(op.node, op.parentId)
+  for (const { id, data } of changes.update ?? []) sceneApi.update(id, data)
 }
