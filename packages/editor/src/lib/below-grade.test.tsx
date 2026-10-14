@@ -4,7 +4,13 @@ import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import useEditor from '../store/use-editor'
 import villaAurelia from './__fixtures__/owner-villa-aurelia-basement.json'
-import { belowGradeShown, followBelowGrade } from './below-grade'
+import {
+  belowGradeShown,
+  followBelowGrade,
+  followGroundWindowBox,
+  gradeStandingShown,
+  groundWindowBoxShown,
+} from './below-grade'
 import { useEditorLevelDisplay } from './editor-level-display'
 
 // The owner's villa (13 Oct), trimmed: its Lower Ground lies 3.35 m under the lawn.
@@ -50,6 +56,27 @@ describe('when a level below grade is shown', () => {
   })
 })
 
+describe('the ground window’s box', () => {
+  test('the shown level’s box while its upper storeys are hidden, the building’s while it stands', () => {
+    const levelBox = groundWindowBoxShown(shown(lowerGround), villa)
+    const buildingBox = groundWindowBoxShown(shown(lowerGround, false), villa)
+    expect(levelBox).not.toBeNull()
+    expect(buildingBox).not.toBeNull()
+    // The building wraps the level: no wider claim than that is this test's to make.
+    expect(buildingBox?.min[1]).toBeLessThanOrEqual(levelBox?.min[1] ?? 0)
+    expect(buildingBox?.max[1]).toBeGreaterThan(levelBox?.max[1] ?? 0)
+  })
+
+  test('it follows the display and closes when it stops', () => {
+    useViewer.setState({ hideLevelsAboveSelection: true })
+    useViewer.getState().setSelection({ levelId: lowerGround })
+    const stop = followGroundWindowBox()
+    expect(useViewer.getState().groundWindowBox).not.toBeNull()
+    stop()
+    expect(useViewer.getState().groundWindowBox).toBeNull()
+  })
+})
+
 test('the flag follows the level shown, and clears when it stops', () => {
   useViewer.setState({ hideLevelsAboveSelection: true })
   useViewer.getState().setSelection({ levelId: pianoNobile })
@@ -58,6 +85,8 @@ test('the flag follows the level shown, and clears when it stops', () => {
 
   useViewer.getState().setSelection({ levelId: lowerGround })
   expect(useViewer.getState().belowGrade).toBe(true)
+  expect(useViewer.getState().gradeStanding).toBe('below-grade')
+  expect(gradeStandingShown(shown(lowerGround), villa)).toBe('below-grade')
   useViewer.setState({ hideLevelsAboveSelection: false })
   expect(useViewer.getState().belowGrade).toBe(false)
   useViewer.setState({ hideLevelsAboveSelection: true })
@@ -65,6 +94,7 @@ test('the flag follows the level shown, and clears when it stops', () => {
 
   stop()
   expect(useViewer.getState().belowGrade).toBe(false)
+  expect(useViewer.getState().gradeStanding).toBe('at-grade')
 })
 
 test("the editor's level display marks it, except on the site, where the ground is the work", async () => {
@@ -78,11 +108,14 @@ test("the editor's level display marks it, except on the site, where the ground 
   try {
     expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
     expect(useViewer.getState().belowGrade).toBe(false)
+    expect(useViewer.getState().groundWindowBox).toBeNull()
 
     await act(async () => useEditor.setState({ phase: 'building' }))
     expect(useViewer.getState().belowGrade).toBe(true)
+    expect(useViewer.getState().groundWindowBox).not.toBeNull()
   } finally {
     await renderer.unmount()
   }
   expect(useViewer.getState().belowGrade).toBe(false)
+  expect(useViewer.getState().groundWindowBox).toBeNull()
 })

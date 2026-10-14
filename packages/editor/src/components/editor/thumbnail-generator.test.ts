@@ -9,7 +9,13 @@ import {
 } from '@pascal-app/core'
 import { type SceneViewPose, sceneViewPlan } from '@pascal-app/core/agent-operations'
 import { BuildingNode, CeilingNode, LevelNode, WallNode } from '@pascal-app/core/schema'
-import { hideFromScene, SCENE_LAYER, SITE_GROUND, useViewer } from '@pascal-app/viewer'
+import {
+  groundWindowBoxNow,
+  hideFromScene,
+  SCENE_LAYER,
+  SITE_GROUND,
+  useViewer,
+} from '@pascal-app/viewer'
 import {
   Group,
   Layers,
@@ -24,6 +30,7 @@ import {
   Vector3,
 } from 'three'
 import { CanvasTarget, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
+import hillside from '../../../../core/src/lib/__fixtures__/owner-hillside-grade.json'
 import victorSeattle from '../../lib/__fixtures__/owner-victor-seattle-parking.json'
 import villaAurelia from '../../lib/__fixtures__/owner-villa-aurelia-basement.json'
 import {
@@ -454,6 +461,77 @@ describe('an interior view of a floor below grade', () => {
     for (const restore of restorers.reverse()) restore()
     expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(false)
     expect(veil.visible).toBe(true)
+  })
+})
+
+// The owner's hillside house (14 Oct), trimmed in core: no floor buried, a 6 m plateau on
+// the street side. A capture from the street sees the house through the ground window —
+// from its own camera, whatever the person's view holds.
+describe('a capture from uphill', () => {
+  const nodes = hillside.nodes as unknown as Record<AnyNodeId, AnyNode>
+  const garden = Object.values(nodes).find(
+    (node) => node.type === 'level' && node.name === 'Garden level · walk-out',
+  )
+
+  let previousScene: ReturnType<typeof useScene.getState>
+  beforeEach(() => {
+    previousScene = useScene.getState()
+  })
+  afterEach(() => {
+    sceneRegistry.clear()
+    useScene.setState(previousScene, true)
+  })
+
+  function hillsideScene() {
+    useScene.setState({ nodes } as never)
+    const scene = new Scene()
+    for (const [levelId, { baseY }] of getLevelElevations(nodes)) {
+      const level = new Group()
+      level.position.y = baseY
+      scene.add(level)
+      sceneRegistry.nodes.set(levelId, level)
+    }
+    const ground = new Mesh(new PlaneGeometry(400, 400).rotateX(-Math.PI / 2))
+    ground.userData[SITE_GROUND] = 'solid'
+    const veil = new Mesh(ground.geometry)
+    veil.userData[SITE_GROUND] = 'veil'
+    veil.visible = false
+    const site = new Group().add(ground, veil)
+    scene.add(site)
+    sceneRegistry.nodes.set('site_hillside', site)
+    sceneRegistry.byType.site?.add('site_hillside')
+    return { ground, veil }
+  }
+
+  const cameraAt = (position: [number, number, number]) => {
+    const camera = new PerspectiveCamera()
+    camera.position.set(...position)
+    return camera
+  }
+
+  test('from the street side the window opens for the frame and closes after it', () => {
+    if (!garden) throw new Error('the hillside fixture is missing its garden level')
+    const { ground, veil } = hillsideScene()
+    const restorers: (() => void)[] = []
+    interiorCutaway(garden.id, (restore) => restorers.push(restore), cameraAt([0, 7, -20]))
+    expect(groundWindowBoxNow()).not.toBeNull()
+    expect(veil.visible).toBe(true)
+    // The solid ground stays drawn: its window is cut per fragment, not by hiding it.
+    expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
+
+    for (const restore of restorers.reverse()) restore()
+    expect(groundWindowBoxNow()).toBeNull()
+    expect(veil.visible).toBe(false)
+  })
+
+  test('from the garden side the ground stands solid and no window opens', () => {
+    if (!garden) throw new Error('the hillside fixture is missing its garden level')
+    const { veil } = hillsideScene()
+    const restorers: (() => void)[] = []
+    interiorCutaway(garden.id, (restore) => restorers.push(restore), cameraAt([0, 3, 20]))
+    expect(groundWindowBoxNow()).toBeNull()
+    expect(veil.visible).toBe(false)
+    for (const restore of restorers.reverse()) restore()
   })
 })
 

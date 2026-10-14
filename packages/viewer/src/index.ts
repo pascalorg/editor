@@ -107,6 +107,15 @@ export { disposeObject3DResources } from './lib/dispose-object3d'
 export type { EdgeMode } from './lib/edge-style'
 export { PERF_OVERLAY_ENABLED } from './lib/gpu-perf'
 export {
+  groundWindowBoxNow,
+  groundWindowContains,
+  groundWindowEnabledNode,
+  groundWindowMaskNode,
+  inGroundWindowNode,
+  setGroundWindow,
+  temporarilyGroundWindowForCapture,
+} from './lib/ground-window'
+export {
   computeHeroFraming,
   DEFAULT_FRAMING_EXCLUDED_TYPES,
   type HeroFraming,
@@ -262,6 +271,7 @@ export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {
+  anyGroundVeiled,
   applyCountryUnitDefault,
   default as useViewer,
   type GroundMode,

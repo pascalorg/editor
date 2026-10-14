@@ -134,17 +134,29 @@ const GROUND_MODES = [
 
 /**
  * Over a level below grade the ground is veiled so its rooms show, and the bar says so: the
- * person can keep the ground solid instead (Ground: Auto / Solid).
+ * person can keep the ground solid instead (Ground: Auto / Solid). The same word covers the
+ * ground window — a hillside in the eye's way, veiled only where it hides the house — over
+ * a level at grade or only partly below it.
  */
 export function GroundModeToggle() {
   const belowGrade = useViewer((s) => s.belowGrade)
+  const gradeStanding = useViewer((s) => s.gradeStanding)
+  const groundWindowVeiled = useViewer((s) => s.groundWindowVeiled)
   const groundMode = useViewer((s) => s.groundMode)
-  if (!belowGrade) return null
+  if (!(belowGrade || groundWindowVeiled)) return null
+  const veiled =
+    groundMode === 'auto' &&
+    ((belowGrade && gradeStanding !== 'partly-below-grade') || groundWindowVeiled)
+  const ground = veiled ? 'veiled' : 'solid'
+  const label =
+    gradeStanding === 'partly-below-grade'
+      ? `Partly below grade · ground ${ground}`
+      : gradeStanding === 'below-grade'
+        ? `Below grade · ground ${ground}`
+        : `Ground ${ground}`
   return (
     <div aria-label="Ground" className={GROUP} role="group">
-      <span className="flex items-center px-2.5 text-muted-foreground text-xs">
-        Below grade · ground {groundMode === 'auto' ? 'veiled' : 'solid'}
-      </span>
+      <span className="flex items-center px-2.5 text-muted-foreground text-xs">{label}</span>
       {GROUND_MODES.map(({ mode, label, title }) => (
         <button
           aria-pressed={groundMode === mode}

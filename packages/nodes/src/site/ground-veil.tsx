@@ -1,7 +1,10 @@
 import type { TerrainField } from '@pascal-app/core'
 import {
+  anyGroundVeiled,
   groundVeiled,
+  groundWindowEnabledNode,
   hideFromScene,
+  inGroundWindowNode,
   SITE_GROUND,
   showInScene,
   useViewer,
@@ -54,7 +57,14 @@ function veilMaterial(groundColor: string, opacity: Node<'float'>) {
     side: DoubleSide,
   })
   material.colorNode = color(groundColor)
-  material.opacityNode = opacity
+  // Wholesale, the veil is the whole ground at `opacity`. While the ground window is open
+  // (the hillside in the way, not a floor under it), only the ground in the window veils —
+  // at the same faintness — and the rest of this sheet draws nothing over the solid ground.
+  material.opacityNode = select(
+    groundWindowEnabledNode(),
+    select(inGroundWindowNode(), float(VEIL_OPACITY), float(0)),
+    opacity,
+  )
   // The plain field too: Follow's sight reads it, not the node, to tell what it sees through.
   material.opacity = VEIL_OPACITY
   material.mrtNode = mrt({ output, diffuseColor: vec4(0), normal: vec4(0) })
@@ -118,7 +128,7 @@ export function GroundVeil({
   position?: [number, number, number]
   rotation?: [number, number, number]
 }) {
-  const veiled = useViewer(groundVeiled)
+  const veiled = useViewer(anyGroundVeiled)
   return (
     <mesh
       geometry={geometry}

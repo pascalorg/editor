@@ -200,3 +200,63 @@ test('a grade ring is drawn, with the veil, where the ground meets a level below
     await renderer.unmount()
   }
 })
+
+test('through the ground window the solid ground stays drawn and the veil stands with it', async () => {
+  const renderer = await create(<SiteRenderer node={lot(true)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    // No floor below grade: a hillside in the eye's way only (the system has said so).
+    await act(async () =>
+      useViewer.setState({ belowGrade: false, groundWindowVeiled: true, groundMode: 'auto' }),
+    )
+    // Solid stays on the scene layer — the window is cut from it per fragment — and the
+    // veil sheet is up, drawing only inside the window.
+    expect(ground(scene, 'solid').every(drawn)).toBe(true)
+    expect(ground(scene, 'veil').every(drawn)).toBe(true)
+    expect(groundPickedFromAbove(scene).length).toBeGreaterThan(0)
+
+    // The solid surfaces carry the window's mask; the veil's opacity follows it too.
+    for (const surface of ground(scene, 'solid')) {
+      const material = surface.material as MeshBasicNodeMaterial
+      expect(material.maskNode).not.toBeNull()
+    }
+
+    // Ground: Solid closes the window's veil as it closes the wholesale one.
+    await act(async () => useViewer.setState({ groundMode: 'solid' }))
+    expect(ground(scene, 'veil').some(drawn)).toBe(false)
+    expect(ground(scene, 'solid').every(drawn)).toBe(true)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a click on ground the window veils falls through to what it reveals', async () => {
+  const site = lot(true)
+  useScene.setState({ nodes: { [site.id]: site } as Record<AnyNodeId, AnyNode> })
+  const renderer = await create(<SiteRenderer node={site} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    expect(groundPickedFromAbove(scene).length).toBeGreaterThan(0)
+
+    // A box under the middle of the lot (a basement plate): from the test camera the flat
+    // ground stands between the eye and it, so the system opens the window for it.
+    await act(async () => {
+      useViewer.setState({
+        groundMode: 'auto',
+        groundWindowBox: { min: [-2, -3, -2], max: [2, -0.5, 2] },
+      })
+      await renderer.advanceFrames(3, 0.05)
+    })
+    expect(useViewer.getState().groundWindowVeiled).toBe(true)
+    expect(groundPickedFromAbove(scene)).toHaveLength(0)
+
+    // Ground: Solid closes the window and the ground takes clicks again.
+    await act(async () => {
+      useViewer.setState({ groundMode: 'solid' })
+      await renderer.advanceFrames(3, 0.05)
+    })
+    expect(groundPickedFromAbove(scene).length).toBeGreaterThan(0)
+  } finally {
+    await renderer.unmount()
+  }
+})

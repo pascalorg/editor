@@ -21,6 +21,7 @@ import {
   backdropGradient,
   deepSkyColor,
   getSceneTheme,
+  groundWindowMaskNode,
   horizonHazeColor,
   NodeRenderer,
   SITE_GROUND,
@@ -59,6 +60,7 @@ import {
   noopRaycast,
   useGroundAsideRef,
 } from './ground-veil'
+import { GroundWindowSystem } from './ground-window-system'
 import {
   buildPatternedRibbon,
   PROPERTY_LINE_PATTERN,
@@ -245,6 +247,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     material.polygonOffset = true
     material.polygonOffsetFactor = 1
     material.polygonOffsetUnits = 1
+    // The ground window cuts the solid ground where it stands in the eye's way
+    // (viewer lib/ground-window); with the window closed the mask passes everywhere.
+    ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
     return material
   }, [bgColor])
 
@@ -298,6 +303,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     material.polygonOffset = true
     material.polygonOffsetFactor = 2
     material.polygonOffsetUnits = 2
+    ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
     return material
   }, [
     atmosphere,
@@ -604,6 +610,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   return (
     <group ref={ref} {...handlers}>
+      <GroundWindowSystem />
       {/* Render children (buildings and items) */}
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />

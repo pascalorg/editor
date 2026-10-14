@@ -6,6 +6,8 @@ import {
   VIEW_MAX_PX,
   type VIEW_SIDES,
 } from '../agent-tools/view-scene'
+import { levelGradeStanding } from '../lib/grade-standing'
+import { buildingGroundBox, levelGroundBox, terrainBetweenEyeAndBox } from '../lib/ground-window'
 import { buildingStreet } from '../lib/site-placement'
 import type {
   AnyNode,
@@ -19,7 +21,7 @@ import type {
   WallNode,
 } from '../schema'
 import { getActiveRoofHeight } from '../schema'
-import { getLevelElevations, isLevelBelowGrade } from '../services/storey'
+import { getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 
 /**
@@ -774,19 +776,36 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewPoseInput): Sce
 /** What a picture into a floor below grade shows over it, said so the agent describes it right. */
 const BELOW_GRADE_NOTE =
   'The floor lies below grade: the ground over it is drawn as a faint veil, so its rooms show through it.'
+const PARTLY_BELOW_GRADE_NOTE =
+  'The floor lies partly below grade: the ground stands over part of it and is drawn as a faint veil there, so its rooms show through it.'
+const GROUND_IN_THE_WAY_NOTE =
+  'Ground stands between this viewpoint and the building: where it would hide it, the ground is drawn as a faint veil; the rest of the ground is solid.'
 
-/** What a view comes with, on both surfaces: a picture to compare, not a measure; a floor below grade is seen through the veiled ground. */
+/**
+ * What a view comes with, on both surfaces: a picture to compare, not a measure; a floor below grade
+ * is seen through the veiled ground. With the picture's `pose`, also the fact of ground standing
+ * between that viewpoint and the building, veiled where it would hide it.
+ */
 export function sceneViewNote(
   nodes?: Readonly<Record<string, AnyNode>>,
   interior?: SceneViewInterior,
+  pose?: SceneViewPose,
 ) {
-  const note =
-    'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
-  return nodes &&
-    interior &&
-    isLevelBelowGrade(nodes as Record<AnyNodeId, AnyNode>, interior.levelId)
-    ? `${note} ${BELOW_GRADE_NOTE}`
-    : note
+  const notes = [
+    'A picture to compare with the reference, not a measure: take sizes and counts from the tools.',
+  ]
+  if (nodes && interior) {
+    const standing = levelGradeStanding(nodes as Record<AnyNodeId, AnyNode>, interior.levelId)
+    if (standing === 'below-grade') notes.push(BELOW_GRADE_NOTE)
+    if (standing === 'partly-below-grade') notes.push(PARTLY_BELOW_GRADE_NOTE)
+  }
+  if (nodes && pose) {
+    const asNodes = nodes as Record<AnyNodeId, AnyNode>
+    const box = interior ? levelGroundBox(asNodes, interior.levelId) : buildingGroundBox(asNodes)
+    if (box && terrainBetweenEyeAndBox(asNodes, pose.position, box))
+      notes.push(GROUND_IN_THE_WAY_NOTE)
+  }
+  return notes.join(' ')
 }
 
 /** A picture of `w` × `h`, made smaller to `maxPx` on its longest side, `VIEW_MAX_PX` at most. */
@@ -825,13 +844,17 @@ function cameraPose(
   }
 }
 
-/** A level below grade is seen from inside: from outside, the ground covers it. */
+/**
+ * A level below grade on all of its footprint is seen from inside: from outside, the ground
+ * covers it. One only partly below grade keeps its outside view — the ground in the way is
+ * veiled in the picture instead.
+ */
 function belowGradeInterior(
   nodes: Readonly<Record<string, AnyNode>>,
   target: AnyNode | undefined,
 ): SceneViewInterior | undefined {
   return target?.type === 'level' &&
-    isLevelBelowGrade(nodes as Record<AnyNodeId, AnyNode>, target.id)
+    levelGradeStanding(nodes as Record<AnyNodeId, AnyNode>, target.id) === 'below-grade'
     ? { levelId: target.id }
     : undefined
 }

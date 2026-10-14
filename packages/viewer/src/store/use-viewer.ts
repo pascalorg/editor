@@ -4,6 +4,8 @@ import type {
   AnyNode,
   BaseNode,
   BuildingNode,
+  GroundBox,
+  LevelGradeStanding,
   LevelNode,
   UnitNode,
   ZoneNode,
@@ -138,6 +140,20 @@ type ViewerState = {
    * depends on `groundMode`: read both through `groundVeiled`.
    */
   belowGrade: boolean
+  /**
+   * The shown level's standing against the sculpted terrain, set beside `belowGrade`:
+   * only partly below grade, the ground veils just where it stands in the way (the ground
+   * window), not wholesale.
+   */
+  gradeStanding: LevelGradeStanding
+  /**
+   * The box the ground window opens for: the shown level, or the whole building when it is
+   * shown. Set by the host (never on the site phase, where the ground is the work); never
+   * persisted. `null` closes the window.
+   */
+  groundWindowBox: GroundBox | null
+  /** Ground stands between the eye and `groundWindowBox` now, set by the site renderer. */
+  groundWindowVeiled: boolean
   /** The person's choice for the ground over a level below grade. Not persisted. */
   groundMode: GroundMode
   setGroundMode: (mode: GroundMode) => void
@@ -473,6 +489,9 @@ const useViewer = create<ViewerState>()(
       levelsRevealing: [],
       nodesRevealing: [],
       belowGrade: false,
+      gradeStanding: 'at-grade',
+      groundWindowBox: null,
+      groundWindowVeiled: false,
       groundMode: 'auto',
       setGroundMode: (mode) => set({ groundMode: mode }),
 
@@ -643,9 +662,29 @@ const useViewer = create<ViewerState>()(
  */
 export type GroundMode = 'auto' | 'solid'
 
-/** Whether the site's ground is drawn as a veil: a level below grade is shown, the ground on auto. */
-export function groundVeiled(state: { belowGrade: boolean; groundMode: GroundMode }): boolean {
-  return state.belowGrade && state.groundMode === 'auto'
+/**
+ * Whether the site's ground is drawn as a veil wholesale: a level below grade is shown, the
+ * ground on auto. A level only partly below grade is the exception — there the ground window
+ * veils just the ground in the way, and the rest stays solid.
+ */
+export function groundVeiled(state: {
+  belowGrade: boolean
+  groundMode: GroundMode
+  gradeStanding?: LevelGradeStanding
+}): boolean {
+  return (
+    state.belowGrade && state.groundMode === 'auto' && state.gradeStanding !== 'partly-below-grade'
+  )
+}
+
+/** Whether any ground is veiled now, wholesale or through the eye's window. */
+export function anyGroundVeiled(state: {
+  belowGrade: boolean
+  groundMode: GroundMode
+  gradeStanding?: LevelGradeStanding
+  groundWindowVeiled: boolean
+}): boolean {
+  return groundVeiled(state) || (state.groundMode === 'auto' && state.groundWindowVeiled)
 }
 
 /** Apply an authoritative country code (e.g. IP-derived by the host app) as

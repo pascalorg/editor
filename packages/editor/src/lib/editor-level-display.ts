@@ -1,7 +1,7 @@
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import useEditor, { type CaptureMode } from '../store/use-editor'
-import { useBelowGrade } from './below-grade'
+import { useBelowGrade, useGroundWindowBox } from './below-grade'
 
 /**
  * Whether the editor shows every level. Preview and the walkthrough show the
@@ -34,6 +34,9 @@ export function showsWholeBuilding(state: {
 export function useEditorLevelDisplay(showWholeBuilding: boolean) {
   const sitePhase = useEditor((state) => state.phase === 'site')
   useBelowGrade(!(showWholeBuilding || sitePhase))
+  // The ground window (a hillside in the eye's way) follows the shown level, and the whole
+  // building while it stands whole — except on the site, where the ground is the work.
+  useGroundWindowBox(!sitePhase)
   useEffect(() => {
     if (showWholeBuilding) return
     const keepStacked = (mode: string) => {

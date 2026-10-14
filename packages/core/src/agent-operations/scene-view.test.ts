@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { z } from 'zod'
 import { isAgentRefusal, viewSceneTool } from '../agent-tools'
+import hillside from '../lib/__fixtures__/owner-hillside-grade.json'
 import {
   type AnyNode,
   BuildingNode,
@@ -299,6 +300,26 @@ describe('a floor below grade', () => {
     expect(sceneViewNote(nodes, interior)).toContain('below grade')
     expect(sceneViewNote(nodes, { levelId: 'level_0' })).not.toContain('below grade')
     expect(sceneViewNote(nodes)).not.toContain('below grade')
+  })
+
+  test('the note states the fact of ground between the viewpoint and the hillside house', () => {
+    // The owner's hillside house (14 Oct): a 6 m plateau on the street side (-z), the pad
+    // under the house flat at 0 — no floor buried, the hill in the way from the street.
+    const nodes = hillside.nodes as unknown as Record<string, AnyNode>
+    const fromStreet = sceneViewNote(nodes, undefined, {
+      projection: 'perspective',
+      position: [0, 7, -20],
+      target: [0, 1, 0],
+      fov: 45,
+    })
+    expect(fromStreet).toContain('Ground stands between this viewpoint and the building')
+    const fromGarden = sceneViewNote(nodes, undefined, {
+      projection: 'perspective',
+      position: [0, 3, 20],
+      target: [0, 1, 0],
+      fov: 45,
+    })
+    expect(fromGarden).not.toContain('Ground stands between')
   })
 })
 

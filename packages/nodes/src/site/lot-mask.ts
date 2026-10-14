@@ -36,6 +36,9 @@ export function insideLotNode(polygon: ReadonlyArray<Point>, at: Node<'vec2'> = 
  */
 export function lotMaskedMaterial(material: Material, polygon: ReadonlyArray<Point>): Material {
   const masked = material.clone() as unknown as NodeMaterial
-  masked.maskNode = insideLotNode(polygon)
+  // Keep a mask the material already carries (the ground window's): the ground is cut to
+  // the lot AND out of the window, not one instead of the other.
+  const inside = insideLotNode(polygon)
+  masked.maskNode = masked.maskNode ? (masked.maskNode as Node<'bool'>).and(inside) : inside
   return masked as unknown as Material
 }

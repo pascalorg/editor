@@ -223,6 +223,13 @@ export {
   nearestPointIn,
   resettledPosition,
 } from './lib/geometry-surfaces'
+export { type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
+export {
+  buildingGroundBox,
+  type GroundBox,
+  levelGroundBox,
+  terrainBetweenEyeAndBox,
+} from './lib/ground-window'
 export {
   type ExposedInterval,
   exposedIntervals,

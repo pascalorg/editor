@@ -1,5 +1,6 @@
 import type { AnyNode, AnyNodeId } from '../schema'
-import { getLevelElevations, isLevelBelowGrade } from '../services/storey'
+import { getLevelElevations } from '../services/storey'
+import { levelGradeStanding } from './grade-standing'
 import { type Point2D, unionPolygons } from './polygon-union'
 import { levelLocalToWorldXZ } from './terrain-support-query'
 
@@ -13,7 +14,7 @@ export function belowGradeFootprints(nodes: Record<AnyNodeId, AnyNode>): Point2D
   const elevations = getLevelElevations(nodes)
   const outlines: Point2D[][] = []
   for (const level of Object.values(nodes)) {
-    if (level.type !== 'level' || !isLevelBelowGrade(nodes, level.id)) continue
+    if (level.type !== 'level' || levelGradeStanding(nodes, level.id) === 'at-grade') continue
     const buildingId = elevations.get(level.id)?.buildingId
     const building = buildingId ? nodes[buildingId as AnyNodeId] : undefined
     const placed = building?.type === 'building' ? building : null

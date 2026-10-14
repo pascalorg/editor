@@ -3,7 +3,7 @@
 import {
   emitter,
   isCaptureSessionOn,
-  isLevelBelowGrade,
+  levelGradeStanding,
   sceneRegistry,
   subscribeCaptureSessions,
   type ThumbnailGenerateEvent,
@@ -25,6 +25,7 @@ import {
   snapLevelsToTruePositions,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
+  temporarilyGroundWindowForCapture,
   temporarilyHideNodeTypes,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
@@ -525,9 +526,15 @@ function clipSceneFor(
  * on it cut where core says (sceneViewInterior, from the scene as this editor
  * has it) and its shadows with it, and whatever the user's solo or isolation
  * holds back on it shown. The site's ground follows this floor, not the
- * user's: veiled over a floor below grade, solid under one at grade.
+ * user's: veiled wholesale over a floor below grade; over one only partly
+ * below grade, or at grade behind a hillside, veiled only where it stands
+ * between this frame's camera and the floor (the ground window).
  */
-export function interiorCutaway(levelId: string, restore: (callback: () => void) => void) {
+export function interiorCutaway(
+  levelId: string,
+  restore: (callback: () => void) => void,
+  camera?: THREE.Camera,
+) {
   const { nodes } = useScene.getState()
   const { cutHeight, hiddenIds } = sceneViewInterior(nodes, levelId)
   const floor = sceneRegistry.nodes.get(levelId)
@@ -542,7 +549,13 @@ export function interiorCutaway(levelId: string, restore: (callback: () => void)
   }
   restore(temporarilyShowPresentation(floor))
   restore(clipSceneFor(floor, [{ normal: [0, -1, 0], constant: cutHeight }], true))
-  restore(temporarilyVeilGround(isLevelBelowGrade(nodes, levelId)))
+  const standing = levelGradeStanding(nodes, levelId)
+  if (standing === 'below-grade' || !camera) {
+    restore(temporarilyVeilGround(standing !== 'at-grade'))
+  } else {
+    restore(temporarilyVeilGround(false))
+    restore(temporarilyGroundWindowForCapture(camera, nodes, levelId))
+  }
 }
 
 /**
@@ -940,11 +953,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // and restore fog afterwards so the atmosphere never leaks in.
               restore(refreshIsolation(scene))
               if (interior) {
-                interiorCutaway(interior.levelId, restore)
+                interiorCutaway(interior.levelId, restore, thumbnailCamera)
                 restore(lightInterior(scene, thumbnailCamera))
               } else if (snapLevels || pose || cameraPose) {
-                // the whole building stands on solid ground, whatever level the user is on
+                // the whole building stands on solid ground, whatever level the user is
+                // on — but a view_scene pose still sees it through the ground window
+                // where a hillside stands between its camera and the house
                 restore(temporarilyVeilGround(false))
+                if (cameraPose)
+                  restore(
+                    temporarilyGroundWindowForCapture(thumbnailCamera, useScene.getState().nodes),
+                  )
               }
             }
             // The scene pass is a FRAME-updated node: it renders once per node
