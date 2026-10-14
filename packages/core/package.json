@@ -132,7 +132,7 @@
     "dedent": "^1.7.2",
     "idb-keyval": "^6.3.0",
     "mitt": "^3.0.1",
-    "nanoid": "^5.1.6",
+    "nanoid": "^6.0.2",
     "polygon-clipping": "0.15.7",
     "zod": ">=4.6.7 <4.7",
     "zundo": "^2.3.0",
@@ -143,8 +143,9 @@
     "@types/bun": "^1.4.3",
     "@types/react": "19.3.0",
     "@types/three": "^0.184.0",
+    "@typescript/typescript6": "6.0.2",
     "fake-indexeddb": "^6.2.5",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "keywords": [
     "3d",
