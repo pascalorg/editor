@@ -4,6 +4,7 @@ import type { NextConfig } from 'next'
 
 const appDirectory = path.dirname(fileURLToPath(import.meta.url))
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
+const localBathSpaceRoot = portableBuild ? undefined : process.env.PASCAL_LOCAL_BATH_SPACE_ROOT
 const nextConfig: NextConfig = {
   ...(portableBuild
     ? { output: 'standalone' as const, outputFileTracingRoot: path.join(appDirectory, '../..') }
@@ -73,6 +74,13 @@ const nextConfig: NextConfig = {
     },
   },
   experimental: {
+    ...(localBathSpaceRoot
+      ? {
+          turbopackAdditionalRoots: {
+            bathSpace: { path: path.resolve(localBathSpaceRoot, '../..') },
+          },
+        }
+      : {}),
     serverActions: {
       bodySizeLimit: '100mb',
     },

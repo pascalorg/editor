@@ -36,7 +36,7 @@
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
-        "@pascal-app/plugin-bath-space": "github:sudhir9297/pascal-cluster#685f2f8542348925e43947ee6cb566cd19144b49",
+        "@pascal-app/plugin-bath-space": "github:sudhir9297/pascal-cluster#70cffa9a6878122acf6e3fdbde5725db4908f737",
         "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
         "@pascal-app/plugin-environment": "github:AxiomeCG/environment#1aa0bc3cbed273dbf751e9af79e446f6de105c90",
         "@pascal-app/plugin-landscape": "github:sudhir9297/pascal-cluster#c7f555a89863fae67400a915d25c74e132f17472",
@@ -830,7 +830,7 @@
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
 
-    "@pascal-app/plugin-bath-space": ["@pascal-app/plugin-bath-space@github:sudhir9297/pascal-cluster#685f2f8", { "dependencies": { "@tanstack/react-virtual": "^3.14.13" }, "peerDependencies": { "@pascal-app/core": "^1.0.1", "@pascal-app/editor": "^1.0.1", "@pascal-app/viewer": "^1.0.1", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.186.0", "zod": ">=4.5.4 <4.6" } }, "sudhir9297-pascal-cluster-685f2f8", "sha512-2j9wdq3Hm/5TOSfiDNJUV4kWvKqVjkH+xl/zf2h00/AfbxCbLsYhEeY+hkDQ9Hfdp+02AQ7XFFni4azLQyU68w=="],
+    "@pascal-app/plugin-bath-space": ["@pascal-app/plugin-bath-space@github:sudhir9297/pascal-cluster#70cffa9", { "dependencies": { "@tanstack/react-virtual": "^3.14.13" }, "peerDependencies": { "@pascal-app/core": "^1.0.1", "@pascal-app/editor": "^1.0.1", "@pascal-app/viewer": "^1.0.1", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.186.0", "zod": ">=4.5.4 <4.6" } }, "sudhir9297-pascal-cluster-70cffa9", "sha512-TtSJe5zxn8hfHgguCMx+3eFMR+NoROkdQXfWduh9pWl7KE4JVC4Qs4IPiDjpH7aUzxtr505O9hwY4ChLXzubCA=="],
 
     "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@github:pascalorg/plugin-bones#5679260", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-bones-5679260", "sha512-uQkyHHOl/VuYx2+d/MmcJui/KEAQZ2UUnO4ywp1XaopmD2YfN+Yx/fR/lS/VL2joEoyyZeBLC3KaXK1Sx5qEvg=="],
 
