@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { WallNode } from '@pascal-app/core/schema'
+import {
+  type AnyNode,
+  type LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+  WallNode,
+} from '@pascal-app/core/schema'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerSaveScene } from './save-scene'
 import {
@@ -87,6 +93,53 @@ describe('save_scene', () => {
     const parsed = parseToolText(result.content as StoredTextContent[])
     expect(parsed.name).toBe('From Graph')
     expect(parsed.nodeCount).toBe(1)
+  })
+
+  // The graph is judged against the scene in hand, as apply_patch's writes are: a roof it puts on
+  // the walls of the storey holding it is saved on the level above them.
+  test('a provided graph’s roof on its walls’ storey is saved on a Roof level, said in notes', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const corners: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ]
+    const roof = RoofNode.parse({
+      parentId: level.id,
+      position: [4, 0, 3],
+      support: { kind: 'walls' },
+    })
+    const segment = RoofSegmentNode.parse({ parentId: roof.id, width: 8, depth: 6 })
+    const walls = corners.map((start, i) =>
+      WallNode.parse({ parentId: level.id, start, end: corners[(i + 1) % 4], height: 2.5 }),
+    )
+    const exported = bridge.exportJSON()
+    const graph = {
+      ...exported,
+      nodes: {
+        ...exported.nodes,
+        [level.id]: {
+          ...level,
+          children: [...(level as LevelNode).children, ...walls.map((w) => w.id), roof.id],
+        },
+        ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+        [roof.id]: { ...roof, children: [segment.id] },
+        [segment.id]: segment,
+      },
+    }
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Roofed', includeCurrentScene: false, graph },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = parseToolText(result.content as StoredTextContent[])
+    const saved = (await store.load(parsed.id as string))!.graph.nodes as Record<string, AnyNode>
+    const roofLevel = saved[saved[roof.id]!.parentId!] as LevelNode
+    expect(roofLevel.metadata).toMatchObject({ role: 'roof' })
+    expect(roofLevel.children).toEqual([roof.id])
+    expect((saved[level.id] as LevelNode).children).not.toContain(roof.id)
+    expect(parsed.notes).toHaveLength(1)
   })
 
   test('rejects a graph with a malicious URL (P4 security fix)', async () => {
