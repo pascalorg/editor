@@ -148,10 +148,10 @@ export function seatWrittenRoofs(ops: NodeWrite[], scene: SceneNodes): string[] 
 
   const notes: string[] = []
   const appended: NodeWrite[] = []
+  // A storey created at or above a roof level, or a roof level created at or under a storey: the
+  // building's roof levels go up over its storeys.
   const created = writes.flatMap((write) =>
-    write.op === 'create' && write.node.type === 'level' && !isRoofLevel(write.node)
-      ? [after[write.node.id] as LevelNode]
-      : [],
+    write.op === 'create' && write.node.type === 'level' ? [after[write.node.id] as LevelNode] : [],
   )
   for (const buildingId of new Set(created.map((level) => level.parentId))) {
     if (!buildingId) continue

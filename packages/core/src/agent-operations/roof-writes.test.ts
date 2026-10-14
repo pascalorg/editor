@@ -179,6 +179,14 @@ describe('seatWrittenRoofs', () => {
     expect(ops.slice(1)).toEqual([{ op: 'update', id: 'level_r', data: { level: 2 } }])
   })
 
+  test('a roof level created under a storey goes up over it', () => {
+    const ops = creates({ ...level('level_x', 0, { role: 'roof' }), name: 'Roof' })
+    expect(seatWrittenRoofs(ops, bungalow())).toEqual([
+      "Roof (level_x) moved up to floor index 1: a building's roof level stays above its storeys.",
+    ])
+    expect(ops.slice(1)).toEqual([{ op: 'update', id: 'level_x', data: { level: 1 } }])
+  })
+
   test('a roof created on its walls’ storey: a Roof level and the roof’s move are appended', () => {
     const nodes = bungalow()
     const ops = creates(...mainRoof())
