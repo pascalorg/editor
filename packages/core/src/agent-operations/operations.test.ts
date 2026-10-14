@@ -29,9 +29,11 @@ describe('agent operations', () => {
         : undefined
       const operation = AGENT_OPERATIONS[c.tool as keyof typeof AGENT_OPERATIONS]
       expect(operation).toBeDefined()
+      // A scene's materials, as both hosts keep them: a native finish becomes one.
       const context = {
         activeLevelId: c.context?.activeLevelId ?? null,
         catalog: c.context?.catalog,
+        materials: {},
       }
       // As on both surfaces, the operation gets the input its contract parsed ("36 in" → metres).
       const contract = AGENT_TOOL_CONTRACTS.find((candidate) => candidate.name === c.tool)!

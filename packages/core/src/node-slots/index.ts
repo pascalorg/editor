@@ -20,7 +20,7 @@ import {
 } from './roof-accessories'
 import { shelfSlots } from './shelf'
 import { slabSlots } from './slab'
-import { stairSlots } from './stair'
+import { stairSegmentSlots, stairSlots } from './stair'
 import { wallSlots } from './wall'
 import { windowSlots } from './window'
 
@@ -91,6 +91,8 @@ export function nodeSlotDeclarations(node: AnyNode): SlotDeclaration[] | null {
       return slabSlots()
     case 'stair':
       return stairSlots(node)
+    case 'stair-segment':
+      return stairSegmentSlots()
     case 'turbine-vent':
       return turbineVentSlots()
     case 'wall':

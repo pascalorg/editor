@@ -1,11 +1,19 @@
 import {
+  getDynamicLibraryMaterials,
   MATERIAL_CATALOG,
   type MaterialCatalogItem,
+  type MaterialCategory,
   type MaterialSurface,
 } from '../material-library'
 import type { AgentOperation } from './types'
 
-type SearchMaterialsInput = { queries: { query: string; surface?: MaterialSurface }[] }
+type SearchMaterialsInput = {
+  queries: { query?: string; kind?: MaterialCategory; surface?: MaterialSurface }[]
+}
+
+/** The most a group lists: a search's best, a browse's first by name. */
+const SEARCH_RESULTS = 12
+const BROWSE_RESULTS = 150
 
 /**
  * Building words as the library writes them: a plan or a brief says timber, weatherboard, render
@@ -98,41 +106,72 @@ function answers(material: MaterialCatalogItem, text: readonly string[], word: s
   return !!surface && !!material.surfaces?.includes(surface)
 }
 
-/** `search_materials`: the library's materials by words, best first, and the words none answers. */
-export const searchMaterials: AgentOperation<SearchMaterialsInput> = (_nodes, { queries }) => ({
-  result: {
-    groups: queries.map(({ query, surface }) => {
-      const words = wordsOf(query).filter((word) => word.length > 2 && !STOP_WORDS.has(word))
-      const scored = MATERIAL_CATALOG.filter(
-        (material) => !surface || suits(material, surface),
-      ).map((material) => {
-        const text = wordsOf(
-          `${material.id} ${material.label} ${material.category} ${material.description ?? ''}`,
-        )
-        return { material, hits: words.filter((word) => answers(material, text, word)) }
-      })
-      const missing = words.filter((word) => !scored.some(({ hits }) => hits.includes(word)))
-      const best = scored
-        .filter(({ hits }) => hits.length)
-        .sort(
-          (a, b) =>
-            b.hits.length - a.hits.length || a.material.label.localeCompare(b.material.label),
-        )
-        .slice(0, 12)
-      return {
-        query,
-        ...(surface ? { surface } : {}),
-        results: best.map(({ material }) => ({
-          ref: `library:${material.id}`,
-          label: material.label,
-          kind: material.category,
-          surfaces: material.surfaces ?? [],
-          ...(material.previewColor ? { color: material.previewColor } : {}),
-        })),
-        ...(missing.length ? { missing } : {}),
-      }
-    }),
-    message:
-      'Materials best first, as library:<id> refs for paint. The words no material answers are under missing: the library lacks them.',
-  },
+/** Pascal's library, then what the host registered besides (a registration never shadows one). */
+function libraryMaterials(): MaterialCatalogItem[] {
+  const pascal = new Set(MATERIAL_CATALOG.map((material) => material.id))
+  return [
+    ...MATERIAL_CATALOG,
+    ...getDynamicLibraryMaterials().filter((material) => !pascal.has(material.id)),
+  ]
+}
+
+const asResult = (material: MaterialCatalogItem) => ({
+  ref: `library:${material.id}`,
+  label: material.label,
+  kind: material.category,
+  surfaces: material.surfaces ?? [],
+  ...(material.previewColor ? { color: material.previewColor } : {}),
 })
+
+/**
+ * `search_materials`: the library's materials by words, best first, and the words none answers;
+ * without words, a browse of a kind, a surface or the whole library.
+ */
+export const searchMaterials: AgentOperation<SearchMaterialsInput> = (_nodes, { queries }) => {
+  const library = libraryMaterials()
+  return {
+    result: {
+      groups: queries.map(({ query = '', kind, surface }) => {
+        const words = wordsOf(query).filter((word) => word.length > 2 && !STOP_WORDS.has(word))
+        const pool = library.filter(
+          (material) =>
+            (!kind || material.category === kind) && (!surface || suits(material, surface)),
+        )
+        const asked = {
+          ...(query ? { query } : {}),
+          ...(kind ? { kind } : {}),
+          ...(surface ? { surface } : {}),
+        }
+        if (!words.length) {
+          const listed = [...pool].sort((a, b) => a.label.localeCompare(b.label))
+          return {
+            ...asked,
+            results: listed.slice(0, BROWSE_RESULTS).map(asResult),
+            ...(listed.length > BROWSE_RESULTS ? { more: listed.length - BROWSE_RESULTS } : {}),
+          }
+        }
+        const scored = pool.map((material) => {
+          const text = wordsOf(
+            `${material.id} ${material.label} ${material.category} ${material.description ?? ''}`,
+          )
+          return { material, hits: words.filter((word) => answers(material, text, word)) }
+        })
+        const missing = words.filter((word) => !scored.some(({ hits }) => hits.includes(word)))
+        const best = scored
+          .filter(({ hits }) => hits.length)
+          .sort(
+            (a, b) =>
+              b.hits.length - a.hits.length || a.material.label.localeCompare(b.material.label),
+          )
+          .slice(0, SEARCH_RESULTS)
+        return {
+          ...asked,
+          results: best.map(({ material }) => asResult(material)),
+          ...(missing.length ? { missing } : {}),
+        }
+      }),
+      message:
+        'Materials as library:<id> refs for paint: a search best first, a browse by name. The words no material answers are under missing: the library lacks them.',
+    },
+  }
+}
