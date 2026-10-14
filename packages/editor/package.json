@@ -55,9 +55,9 @@
     "lucide-react": "^1.57.0",
     "manifold-3d": "3.5.4",
     "mitt": "^3.0.1",
-    "motion": "^12.34.3",
-    "nanoid": "^5.1.6",
-    "pdfkit": "^0.19.1",
+    "motion": "^14.2.0",
+    "nanoid": "^6.0.2",
+    "pdfkit": "^0.20.2",
     "tailwind-merge": "^3.7.0",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "~0.9.8",
@@ -77,7 +77,7 @@
     "@types/react-dom": "19.3.0",
     "@types/three": "^0.184.0",
     "fast-xml-parser": "^5.11.2",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "repository": {
     "type": "git",
