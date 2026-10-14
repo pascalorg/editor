@@ -5,21 +5,9 @@ import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 import { getBarrelRoofProfile } from './barrel-roof'
 import { RoofGlazing, RoofSystemType } from './roof-glazing'
+import { RoofType } from './roof-type'
 
-export const RoofType = z.enum([
-  'hip',
-  'gable',
-  'shed',
-  'gambrel',
-  'dutch',
-  'mansard',
-  'flat',
-  'conical',
-  'barrel',
-])
-
-export type RoofType = z.infer<typeof RoofType>
-
+export { RoofType } from './roof-type'
 export const MIN_ROOF_SEGMENT_TRIM_SPAN = 0.1
 const DEFAULT_ROOF_SEGMENT_WIDTH = 8
 const DEFAULT_ROOF_SEGMENT_DEPTH = 6

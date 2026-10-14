@@ -104,12 +104,4 @@ export const roofSegmentPaint: PaintCapability = {
   },
 }
 
-export function roofSegmentSlots(node: RoofSegmentNode) {
-  if (!isGlazedRoofSegment(node)) return []
-  const config = getRoofGlazing(node)
-  return GLAZED_ROOF_SLOTS.map((slotId, index) => ({
-    slotId,
-    label: ['Frame', 'Glass', 'Solid panels'][index]!,
-    default: index === 1 ? config.glassColor : config.frameColor,
-  }))
-}
+export { roofSegmentSlots } from '@pascal-app/core'

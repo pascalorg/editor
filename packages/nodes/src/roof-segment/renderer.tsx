@@ -24,6 +24,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { syncGlazedRoofShadow } from '../roof/glazed-geometry'
 import { createGlazedRoofMaterials } from '../roof/glazed-materials'
 import { getRoofDebugMaterials, getRoofMaterials } from '../roof/roof-materials'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
@@ -134,8 +135,26 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
 
   const { glazing, slots } = node
   const glazingMaterials = useMemo(
-    () => (glazed ? createGlazedRoofMaterials({ glazing, slots }, shading, sceneMaterials) : null),
-    [glazed, glazing, slots, shading, sceneMaterials],
+    () =>
+      glazed
+        ? createGlazedRoofMaterials({ glazing, slots }, shading, sceneMaterials, {
+            textures,
+            colorPreset,
+            sceneTheme,
+            debugColors,
+          })
+        : null,
+    [
+      glazed,
+      glazing,
+      slots,
+      shading,
+      sceneMaterials,
+      textures,
+      colorPreset,
+      sceneTheme,
+      debugColors,
+    ],
   )
   useEffect(
     () => () => {
@@ -149,6 +168,10 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
     (debugColors
       ? getRoofDebugMaterials(shading)
       : customMaterial || getRoofMaterials(shading, textures, colorPreset))
+
+  useLayoutEffect(() => {
+    if (glazed && ref.current) syncGlazedRoofShadow(ref.current, material)
+  }, [glazed, material])
 
   useEffect(() => {
     return () => {

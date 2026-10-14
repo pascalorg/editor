@@ -10,6 +10,7 @@ import { elevatorSlots } from './elevator'
 import { fenceSlots } from './fence'
 import { leanToSlots } from './lean-to-extension'
 import { proceduralItemSlots } from './procedural-item'
+import { roofSegmentSlots } from './roof'
 import {
   boxVentSlots,
   cupolaSlots,
@@ -34,6 +35,7 @@ export * from './elevator'
 export * from './fence'
 export * from './lean-to-extension'
 export * from './procedural-item'
+export * from './roof'
 export * from './roof-accessories'
 export * from './shelf'
 export * from './slab'
@@ -85,6 +87,8 @@ export function nodeSlotDeclarations(node: AnyNode): SlotDeclaration[] | null {
       return leanToSlots()
     case 'procedural-item':
       return proceduralItemSlots(node)
+    case 'roof-segment':
+      return roofSegmentSlots(node)
     case 'shelf':
       return shelfSlots(node)
     case 'slab':

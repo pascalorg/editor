@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import { PanelSection, SegmentedControl, ToggleControl } from '@pascal-app/editor'
 import { useEffect, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   GLAZING_INFILL_OPTIONS,
   GlazingColor,
@@ -22,7 +23,9 @@ import { GlazingPanelEditor } from './glazing-panel-editor'
 import { createRoofGlazingPreview } from './glazing-preview'
 
 export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentNode[] }) {
-  useLiveNodeOverrides((state) => state.overrides)
+  useLiveNodeOverrides(
+    useShallow((state) => segments.map((segment) => state.overrides.get(segment.id))),
+  )
   const idKey = segments.map((segment) => segment.id).join(',')
   const preview = useMemo(
     () => createRoofGlazingPreview(idKey ? (idKey.split(',') as AnyNodeId[]) : []),

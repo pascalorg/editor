@@ -321,6 +321,7 @@ export {
   RoofSegmentTrim,
   RoofType,
 } from './nodes/roof-segment'
+export { getRoofSegmentResizePatch } from './nodes/roof-segment-resize'
 export type {
   DutchRoofShapeMetrics,
   RoofShapeEaveSide,

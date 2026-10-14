@@ -24,6 +24,10 @@ afterEach(() => {
 for (const roofType of ['gable', 'barrel'] as const)
   test(`${roofType} renders glazed segments separately and restores standard construction`, async () => {
     await loadPlugin(builtinPlugin)
+    const segmentLoader = nodeRegistry.get('roof-segment')!.renderer!
+    if (segmentLoader.kind !== 'parametric')
+      throw new Error('Roof segment must expose its renderer')
+    await segmentLoader.module()
     const definition = nodeRegistry.get('roof')!
     const loader = definition.renderer!
     if (loader.kind !== 'parametric') throw new Error('Roof must expose its registered renderer')

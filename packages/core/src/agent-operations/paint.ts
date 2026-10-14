@@ -5,6 +5,7 @@ import {
   columnSlots,
   doorSlots,
   fenceSlots,
+  roofSegmentSlots,
   slabSlots,
   wallSlots,
   windowSlots,
@@ -16,6 +17,7 @@ import {
   type ColumnNode,
   type FenceNode,
   getEffectiveSegmentSurfaceMaterial,
+  isGlazedRoofSegment,
   type MaterialSchema,
   type RoofSegmentNode,
   type SceneMaterial,
@@ -59,6 +61,7 @@ const DEFAULT_ROLES: Record<string, readonly string[]> = {
   fence: ['posts', 'infill', 'base', 'rail'],
   door: ['panel', 'frame'],
   window: ['frame'],
+  'roof-segment': ['glazing-frame', 'glazing-solid'],
 }
 
 function slotsOf(node: AnyNode): SlotDeclaration[] | null {
@@ -77,6 +80,8 @@ function slotsOf(node: AnyNode): SlotDeclaration[] | null {
       return doorSlots()
     case 'window':
       return windowSlots()
+    case 'roof-segment':
+      return isGlazedRoofSegment(node) ? roofSegmentSlots(node) : null
     default:
       return null
   }
@@ -181,7 +186,19 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
   const painted: { id: string; roles: string[] }[] = []
   const keptParts: string[] = []
 
-  for (const id of input.targets) {
+  const targets = [
+    ...new Set(
+      input.targets.flatMap((id) => {
+        const node = nodes[id]
+        if (node?.type !== 'roof') return [id]
+        const segments = node.children
+          .map((childId) => nodes[childId])
+          .filter((child): child is RoofSegmentNode => child?.type === 'roof-segment')
+        return segments.some(isGlazedRoofSegment) ? segments.map((segment) => segment.id) : [id]
+      }),
+    ),
+  ]
+  for (const id of targets) {
     const node = current(id)
     if (!node)
       refuse(
@@ -190,7 +207,7 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
         { target: id },
       )
 
-    if (node.type === 'roof' || node.type === 'roof-segment') {
+    if (node.type === 'roof' || (node.type === 'roof-segment' && !isGlazedRoofSegment(node))) {
       const role = (input.role ?? 'top') as RoofRole
       if (!ROOF_ROLES.includes(role))
         refuse('unknown_role', `A roof's roles are ${ROOF_ROLES.join(', ')}.`, {

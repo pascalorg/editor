@@ -9,6 +9,7 @@ import {
   SkylightNode,
   useLiveNodeOverrides,
   useScene,
+  WindowNode,
 } from '@pascal-app/core'
 import {
   buildGlazedRoofGeometry,
@@ -17,7 +18,7 @@ import {
   createRoofGlazingPreview,
   glazedRoofGeometryAdapter,
 } from '@pascal-app/nodes'
-import { getRoofOuterSurfaceFrameAtPoint } from '@pascal-app/viewer'
+import { createSurfaceRoleMaterial, getRoofOuterSurfaceFrameAtPoint } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 
 globalThis.requestAnimationFrame ??= () => 0
@@ -273,5 +274,61 @@ test('barrel end frame corners expose one face instead of overlapping border str
     }
   } finally {
     geometry.dispose()
+  }
+})
+
+for (const roofSystem of ['standard', 'glazed'] as const)
+  test(`${roofSystem} barrel wall openings leave the covering intact`, async () => {
+    await loadPlugin(builtinPlugin)
+    const node = segment({ roofType: 'barrel', roofSystem, wallThickness: 0.1, wallHeight: 0.5 })
+    const opening = WindowNode.parse({
+      roofSegmentId: node.id,
+      roofFace: 'right',
+      parentId: node.id,
+      position: [1.69, 1, 0],
+      width: 1,
+      height: 3,
+    })
+    const host = { ...node, children: [opening.id] }
+    const geometry = buildGlazedRoofGeometry(host, { [host.id]: host, [opening.id]: opening })
+    try {
+      const hits = rayHits(geometry, 1.97, 0.31)
+      expect(hits.length).toBeGreaterThan(0)
+      expect(hits[0]!.face?.materialIndex).toBe(roofSystem === 'glazed' ? 1 : 3)
+      const mesh = new Mesh(
+        geometry,
+        Array.from({ length: 4 }, () => new MeshBasicMaterial({ side: DoubleSide })),
+      )
+      const wallHits = new Raycaster(
+        new Vector3(10, 0.6, 0.31),
+        new Vector3(-1, 0, 0),
+      ).intersectObject(mesh)
+      expect(wallHits.some((hit) => hit.point.x > 1.8)).toBe(false)
+    } finally {
+      geometry.dispose()
+    }
+  })
+
+test('glazed appearance follows palettes and debug mode without mutating shared materials', () => {
+  const node = segment({ slots: { 'glazing-frame': '#ff0000' } })
+  const palette = createGlazedRoofMaterials(
+    node,
+    'solid',
+    {},
+    { textures: false, colorPreset: 'blueprint', sceneTheme: 'dark' },
+  )
+  const cached = createSurfaceRoleMaterial('roof', 'blueprint', undefined, 'dark')
+  const debug = createGlazedRoofMaterials(node, 'rendered', {}, { debugColors: true })
+  try {
+    expect((palette.visible[0] as MeshBasicMaterial).color.getHex()).toBe(
+      (cached as MeshBasicMaterial).color.getHex(),
+    )
+    expect(palette.visible[0]).not.toBe(cached)
+    expect(palette.visible[1]!.transparent).toBe(true)
+    expect(palette.visible[1]!.opacity).toBe(node.glazing!.glassOpacity)
+    expect(debug.visible[1]!.transparent).toBe(false)
+    expect(debug.visible[1]!.opacity).toBe(1)
+  } finally {
+    for (const material of [...palette.owned, ...debug.owned]) material.dispose()
   }
 })

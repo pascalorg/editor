@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type GlazedRoofPiece,
   getBarrelRoofFaces,
   getBarrelRoofSolidPieces,
   getConicalRoofCoverage,
@@ -9,6 +10,7 @@ import {
   getEffectiveNode,
   getGlazedRoofFaces,
   getGlazedRoofPieceFaces,
+  getGlazedRoofPieces,
   getRoofModuleFaces,
   getRoofPlanBounds,
   getRoofSegmentSurfaceY,
@@ -1911,6 +1913,88 @@ export function getRoofSegmentBrushes(
   return null
 }
 
+function buildIndependentRoofSegmentGeometry(
+  node: RoofSegmentNode,
+  nodes?: Record<string, AnyNode>,
+): THREE.BufferGeometry | null {
+  const pieces = isGlazedRoofSegment(node)
+    ? getGlazedRoofPieces(node)
+    : node.roofType === 'barrel'
+      ? getBarrelRoofSolidPieces(node)
+      : null
+  if (!pieces) return null
+  const build = (pieces: GlazedRoofPiece[]) => {
+    const parts = pieces.map((piece) =>
+      createGeometryFromFaces(
+        getGlazedRoofPieceFaces(piece).map((face) =>
+          face.map(({ x, y, z }) => new THREE.Vector3(x, y, z)),
+        ),
+        piece.slot,
+      ),
+    )
+    const geometry =
+      (parts.length ? mergeGeometries(parts, true) : null) ?? new THREE.BufferGeometry()
+    geometry.groups.forEach((group, index) => {
+      group.materialIndex = parts[index]?.groups[0]?.materialIndex ?? 0
+    })
+    for (const part of parts) part.dispose()
+    ensureRenderableGeometryAttributes(geometry)
+    return geometry
+  }
+  let covering = build(pieces.filter((piece) => piece.face.normal[1] > 0))
+  let walls = build(pieces.filter((piece) => piece.face.normal[1] <= 0))
+  const subtract = (geometry: THREE.BufferGeometry, cutter: Brush): THREE.BufferGeometry => {
+    if (!geometry.getAttribute('position')?.count) return geometry
+    const brush = new Brush(geometry, dummyMats)
+    prepareBrushForCSG(brush)
+    const result = csgEvaluator.evaluate(brush, cutter, SUBTRACTION) as Brush
+    const next = result.geometry.clone()
+    const indices = new Map(dummyMats.map((material, index) => [material, index]))
+    for (const group of next.groups)
+      group.materialIndex = mapRoofGroupMaterialIndex(
+        group.materialIndex,
+        csgMaterials(result),
+        indices,
+      )
+    result.geometry.dispose()
+    geometry.dispose()
+    return next
+  }
+  for (const id of node.children ?? []) {
+    const stored = nodes?.[id]
+    if (!stored) continue
+    const child = getEffectiveNode(stored)
+    if (child.metadata?.isTransient) continue
+    const capability = nodeRegistry.get(child.type)?.capabilities.roofAccessory
+    const cutGeometry = capability?.buildCut?.(child, node)
+    if (!cutGeometry) continue
+    const cutter = new Brush(cutGeometry, dummyMats[0])
+    try {
+      prepareBrushForCSG(cutter)
+      if (capability?.cutScope !== 'wall') covering = subtract(covering, cutter)
+      walls = subtract(walls, cutter)
+    } finally {
+      cutGeometry.dispose()
+    }
+  }
+  const parts = [covering, walls]
+    .filter((part) => part.getAttribute('position')?.count)
+    .map((part) => (part.index ? part.toNonIndexed() : part.clone()))
+  let geometry = (parts.length ? mergeGeometries(parts, false) : null) ?? new THREE.BufferGeometry()
+  let offset = 0
+  for (const part of parts) {
+    for (const group of part.groups)
+      geometry.addGroup(offset + group.start, group.count, group.materialIndex)
+    offset += part.getAttribute('position').count
+    part.dispose()
+  }
+  covering.dispose()
+  walls.dispose()
+  geometry = clipGeometryBySegmentTrim(geometry, node) ?? geometry
+  ensureRenderableGeometryAttributes(geometry)
+  return geometry
+}
+
 export function generateRoofSegmentGeometry(
   node: RoofSegmentNode,
   nodes?: Record<string, AnyNode>,
@@ -1926,22 +2010,8 @@ export function generateRoofSegmentGeometry(
     node.rotation ?? 0,
   )
   const directSegmentGeometry = withSegmentUvMatrix(segmentWorldMatrix, () => {
-    if (node.roofType === 'barrel') {
-      const parts = getBarrelRoofSolidPieces(node).map((piece) =>
-        createGeometryFromFaces(
-          getGlazedRoofPieceFaces(piece).map((face) =>
-            face.map(({ x, y, z }) => new THREE.Vector3(x, y, z)),
-          ),
-          piece.slot,
-        ),
-      )
-      const geometry = mergeGeometries(parts, true) ?? new THREE.BufferGeometry()
-      geometry.groups.forEach((group, index) => {
-        group.materialIndex = parts[index]?.groups[0]?.materialIndex ?? 0
-      })
-      for (const part of parts) part.dispose()
-      return clipGeometryBySegmentTrim(geometry, node) ?? geometry
-    }
+    const independent = buildIndependentRoofSegmentGeometry(node, nodes)
+    if (independent) return independent
     return buildCustomShedGeometry(node, nodes) ?? buildDirectConicalSectorGeometry(node)
   })
   if (directSegmentGeometry) {

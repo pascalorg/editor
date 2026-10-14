@@ -13,6 +13,7 @@ import {
   type AgentToolContract,
   addLevelTool,
   addWallTool,
+  createRoofTool,
   createRoomTool,
   createStairTool,
   deleteNodeTool,
@@ -241,6 +242,20 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: addLevelTool,
     operation: AGENT_OPERATIONS.add_level,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: createRoofTool,
+    operation: AGENT_OPERATIONS.create_roof,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      referenceLevelId: z.string(),
+      roofLevelId: z.string(),
+      createdRoofLevelId: z.string().nullable(),
+      roofId: z.string(),
+      roofSegmentId: z.string(),
+      ...achievedOutput,
+      ...liveSyncOutput,
+    },
   },
   {
     contract: createStairTool,

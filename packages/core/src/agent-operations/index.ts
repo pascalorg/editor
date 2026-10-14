@@ -1,5 +1,6 @@
 import { addLevel } from './add-level'
 import { addWall } from './add-wall'
+import { createRoof } from './create-roof'
 import { createRoom } from './create-room'
 import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
@@ -26,6 +27,7 @@ export * from './add-wall'
 export * from './apply-changes'
 export * from './apply-outcome'
 export * from './collections'
+export * from './create-roof'
 export * from './create-room'
 export * from './create-stair'
 export * from './delete-node'
@@ -71,6 +73,7 @@ export const AGENT_OPERATIONS = {
   add_wall: addWall,
   add_level: addLevel,
   create_stair: createStair,
+  create_roof: createRoof,
   place_items: placeItems,
   delete_node: deleteNode,
   find_by_type: findByType,

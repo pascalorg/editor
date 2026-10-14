@@ -510,3 +510,22 @@ describe('a roof', () => {
     expect(edge.result).toMatchObject({ painted: [{ id: 'roof_paint', roles: ['edge'] }] })
   })
 })
+
+for (const role of [undefined, 'glazing-glass', 'glazing-solid'] as const)
+  test(`glazed roof paint ${role ?? 'defaults'} writes visible slots on its segments`, () => {
+    const segment = RoofSegmentNode.parse({ roofType: 'barrel', roofSystem: 'glazed' })
+    const roof = RoofNode.parse({ children: [segment.id] })
+    const nodes = { [roof.id]: roof, [segment.id]: { ...segment, parentId: roof.id } }
+    const outcome = paint(nodes, { targets: [roof.id], role, material: 'library:preset-softwhite' })
+    const result = applySceneChanges(nodes, outcome.changes)
+    expect((result[segment.id] as RoofSegmentNode).slots).toEqual(
+      role
+        ? { [role]: 'library:preset-softwhite' }
+        : {
+            'glazing-frame': 'library:preset-softwhite',
+            'glazing-solid': 'library:preset-softwhite',
+          },
+    )
+    expect(result[roof.id]).toEqual(roof)
+    expect(() => paint(nodes, { targets: [segment.id], role: 'top', color: '#ff0000' })).toThrow()
+  })

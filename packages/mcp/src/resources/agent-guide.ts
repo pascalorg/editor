@@ -45,7 +45,7 @@ export const AGENT_GUIDE = [
   '- For complete homes, create exterior shell, interior rooms, openings, roof, furniture, then landscaping.',
   '- For doors/windows, use `t` or `position` from 0 to 1 along the wall unless a tool explicitly says otherwise.',
   '- X/Z are floor-plan axes and Y is vertical; dimensions are meters.',
-  '- Use `create_roof` for roofs. A dedicated roof support level is valid and should not count as an occupied story.',
+  '- Use `create_roof` for roofs. A dedicated roof support level is valid and should not count as an occupied story. Set roofSystem to glazed for a gable, straight shed or barrel greenhouse roof. For barrel, depth is the span and barrelRise is the arch rise, at most half the span. glazing configures the frame, glass, grids and panels. Paint with glazing-frame, glazing-glass or glazing-solid; without a role, frame and solid panels are painted while glass keeps its finish.',
   '',
   '## Stairs',
   '',

@@ -18,6 +18,7 @@ import {
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeItemsTool } from './place-items'
+import { createRoofTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
@@ -44,6 +45,7 @@ export * from './nodes'
 export * from './paint'
 export * from './place-items'
 export * from './refusal'
+export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
 export * from './stairs'
@@ -76,6 +78,7 @@ export const AGENT_TOOL_CONTRACTS = [
   addLevelTool,
   placeItemsTool,
   createStairTool,
+  createRoofTool,
   deleteNodeTool,
   addObjectTool,
   getSourceTool,

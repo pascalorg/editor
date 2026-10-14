@@ -6,7 +6,10 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { roofSegmentResizeAffordance } from './floorplan-affordances'
+import { builtinPlugin } from '@pascal-app/nodes'
+
+const roofSegmentResizeAffordance = builtinPlugin.nodes.find((def) => def.kind === 'roof-segment')!
+  .floorplanAffordances!['roof-segment-resize']!
 
 globalThis.requestAnimationFrame ??= (callback) => {
   callback(0)
@@ -57,3 +60,30 @@ describe('roof-segment floor-plan resize affordance', () => {
     })
   })
 })
+
+for (const depth of [6, 1])
+  test(`barrel plan span resize to ${depth}m preserves or physically clamps its default rise`, () => {
+    const node = RoofSegmentNode.parse({ roofType: 'barrel', depth: 4, position: [10, 0, 20] })
+    useScene.setState({ nodes: { [node.id]: node } } as never)
+    const definition = builtinPlugin.nodes.find((def) => def.kind === 'roof-segment')!
+    const affordance = definition.floorplanAffordances!['roof-segment-resize']!
+    const session = affordance.start({
+      node,
+      payload: { axis: 'z', side: 1 },
+      nodes: useScene.getState().nodes,
+      initialPlanPoint: [10, 22],
+      gridSnapStep: 0,
+    })
+    session.apply({ planPoint: [10, 22 + depth - 4], modifiers: { ...modifiers, altKey: true } })
+    expect(useLiveNodeOverrides.getState().get(node.id)).toMatchObject({
+      depth,
+      barrelRise: Math.min(1, depth / 2),
+      position: [10, 0, 20 + (depth - 4) / 2],
+    })
+    expect(useScene.getState().nodes[node.id]).toBe(node)
+    session.commit?.()
+    expect(useScene.getState().nodes[node.id]).toMatchObject({
+      depth,
+      barrelRise: Math.min(1, depth / 2),
+    })
+  })
