@@ -20,6 +20,7 @@ import {
   mainRoof,
   portico,
   roof,
+  room,
   scene,
   shedPorch,
   TOP,
@@ -211,6 +212,39 @@ describe('seatWrittenRoofs', () => {
     const after = landed(nodes, ops)
     expect((after[made.node.id] as LevelNode).children).toEqual(['roof_main'])
     expect((after.level_g as LevelNode).children).not.toContain('roof_main')
+  })
+
+  // The seat put a lower storey's roof on an empty storey with one built above it: that level is a
+  // storey still to be built. Running the rule again, or adding a level elsewhere, leaves it there.
+  test('a roof seated on the storey above, under a built one, stays put on a second pass and on a new level', () => {
+    const nodes = bungalow(level('level_1', 1), level('level_2', 2), ...room('level_2', 'u'))
+    const ops = creates(...mainRoof())
+    seatWrittenRoofs(ops, nodes)
+    const after = landed(nodes, ops)
+    expect(after.roof_main!.parentId).toBe('level_1')
+    const again = [...ops]
+    expect(seatWrittenRoofs(again, nodes)).toEqual([])
+    expect(again).toEqual(ops)
+    const basement = creates(level('level_b', -1))
+    expect(seatWrittenRoofs(basement, after)).toEqual([])
+    expect(basement).toHaveLength(1)
+  })
+
+  test('walls redrawn on a storey holding only a lower wing’s roof, under the roof level, are not refused', () => {
+    const nodes = bungalow(
+      level('level_1', 1),
+      ...roof(
+        'roof_wing',
+        'level_1',
+        { position: [5, 0, 4] },
+        { id: 'rseg_wing', width: 4, depth: 8 },
+      ),
+      level('level_r', 2, { role: 'roof' }),
+    )
+    const wall = WallNode.parse({ parentId: 'level_1', start: [0, 0], end: [4, 0] })
+    const ops = creates(wall)
+    expect(seatWrittenRoofs(ops, nodes)).toEqual([])
+    expect(ops).toHaveLength(1)
   })
 
   test('a roof created on the roof level appends nothing', () => {

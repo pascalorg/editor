@@ -1,7 +1,14 @@
 import { AgentRefusal, refuse } from '../agent-tools/refusal'
 import { getLevelDisplayName } from '../lib/level-name'
-import { type AnyNode, type LevelNode, parseNode } from '../schema'
-import { isRoofLevel, isStoreyContent, servesAsRoofLevel, storeyOf } from '../services/roof-level'
+import { type AnyNode, parseNode } from '../schema'
+import {
+  isRoofLevel,
+  isStoreyContent,
+  liftRoofLevels,
+  roofLevelOrderBreach,
+  servesAsRoofLevel,
+  storeyOf,
+} from '../services/roof-level'
 import { planRoofSeats } from '../services/roof-move'
 import { applySceneWrites } from './apply-changes'
 import type { NodeWrite, SceneNodes } from './types'
@@ -51,11 +58,6 @@ export function refuseRoofLevel(nodes: SceneNodes, levelId: string, what: string
   const refusal = roofLevelRefusal(nodes, levelId, what)
   if (refusal) throw refusal
 }
-
-const levelsOf = (nodes: SceneNodes, buildingId: string) =>
-  Object.values(nodes).filter(
-    (node): node is LevelNode => node.type === 'level' && node.parentId === buildingId,
-  )
 
 const roleOf = (write: NodeWrite) =>
   write.op === 'create'
@@ -119,62 +121,52 @@ export function seatWrittenRoofs(ops: NodeWrite[], scene: SceneNodes): string[] 
       )
   })
 
-  const reordered = writes.flatMap((write, index) =>
-    write.op === 'update' && 'level' in write.data && scene[write.id]?.type === 'level'
-      ? [{ index, id: write.id }]
-      : [],
+  const floors = new Map(
+    writes.flatMap((write) =>
+      write.op === 'update' &&
+      typeof write.data.level === 'number' &&
+      scene[write.id]?.type === 'level'
+        ? [[write.id, write.data.level] as const]
+        : [],
+    ),
   )
-  for (const { index, id } of reordered) {
-    const buildingId = after[id]?.parentId
-    if (!buildingId) continue
-    const levels = levelsOf(after, buildingId)
-    for (const roof of levels.filter((level) => servesAsRoofLevel(after, level)))
-      for (const storey of levels.filter((level) => !servesAsRoofLevel(after, level))) {
-        const was = [scene[roof.id], scene[storey.id]]
-        if (
-          !([roof.id, storey.id] as string[]).includes(id) ||
-          was.some((node) => node?.type !== 'level')
-        )
-          continue
-        const [roofBefore, storeyBefore] = was as LevelNode[]
-        if (roof.level < storey.level && roofBefore!.level > storeyBefore!.level)
-          refuse(
-            'roof_level_on_top',
-            `This write puts ${nameOf(after, roof.id)}, the roof level, under the storey ${nameOf(after, storey.id)}: a building's roof level stays above its storeys. Keep its floor index over theirs; a new storey goes under it (add_level).`,
-            { index, id, levelId: roof.id, storeyId: storey.id },
-          )
-      }
+  const breach = floors.size ? roofLevelOrderBreach(scene, floors) : null
+  if (breach) {
+    const index = writes.findIndex(
+      (write) =>
+        write.op === 'update' &&
+        floors.has(write.id) &&
+        (write.id === breach.roofId || write.id === breach.storeyId),
+    )
+    refuse(
+      'roof_level_on_top',
+      `This write puts ${nameOf(after, breach.roofId)}, the roof level, under the storey ${nameOf(after, breach.storeyId)}: a building's roof level stays above its storeys. Keep its floor index over theirs; a new storey goes under it (add_level).`,
+      {
+        index,
+        id: (writes[index] as { id: string }).id,
+        levelId: breach.roofId,
+        storeyId: breach.storeyId,
+      },
+    )
   }
 
   const notes: string[] = []
   const appended: NodeWrite[] = []
   // A storey created at or above a roof level, or a roof level created at or under a storey: the
   // building's roof levels go up over its storeys.
-  const created = writes.flatMap((write) =>
-    write.op === 'create' && write.node.type === 'level' ? [after[write.node.id] as LevelNode] : [],
+  const buildings = new Set(
+    writes.flatMap((write) =>
+      write.op === 'create' && write.node.type === 'level' ? [after[write.node.id]?.parentId] : [],
+    ),
   )
-  for (const buildingId of new Set(created.map((level) => level.parentId))) {
+  for (const buildingId of buildings) {
     if (!buildingId) continue
-    const levels = levelsOf(after, buildingId)
-    // As `storeyInsertIndex` reads a stack: the lowest level is a storey unless declared the roof
-    // level (a carport's roof on its posts is its ground floor).
-    const bottom = Math.min(...levels.map((level) => level.level))
-    const roofLevels = levels.filter(
-      (level) => servesAsRoofLevel(after, level) && (isRoofLevel(level) || level.level > bottom),
-    )
-    const top = Math.max(
-      ...levels.filter((level) => !roofLevels.includes(level)).map((level) => level.level),
-    )
-    roofLevels
-      .sort((a, b) => a.level - b.level)
-      .forEach((level, i) => {
-        const floor = Math.max(level.level, top + 1 + i)
-        if (floor === level.level) return
-        appended.push({ op: 'update', id: level.id, data: { level: floor } })
-        notes.push(
-          `${nameOf(after, level.id)} moved up to floor index ${floor}: a building's roof level stays above its storeys.`,
-        )
-      })
+    for (const { id, data } of liftRoofLevels(scene, after, buildingId)) {
+      appended.push({ op: 'update', id, data })
+      notes.push(
+        `${nameOf(after, id)} moved up to floor index ${data.level}: a building's roof level stays above its storeys.`,
+      )
+    }
   }
 
   const seat = planRoofSeats(scene, applySceneWrites(after, appended))

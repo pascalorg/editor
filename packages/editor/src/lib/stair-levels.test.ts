@@ -37,6 +37,31 @@ describe('stair level helpers', () => {
     expect(plan?.createdLevel?.parentId).toBe(building.id)
   })
 
+  // Every generated one-storey house has a Roof level: the stair tool sent its flight up into it.
+  test('climbs to a new storey under the roof level, which moves up over it', () => {
+    const ground = LevelNode.parse({ level: 0, children: [] })
+    const roofLevel = LevelNode.parse({ level: 1, children: [], metadata: { role: 'roof' } })
+    const building = BuildingNode.parse({ children: [ground.id, roofLevel.id] })
+    const nodes = {
+      [building.id]: building,
+      [ground.id]: { ...ground, parentId: building.id },
+      [roofLevel.id]: { ...roofLevel, parentId: building.id },
+    } as Record<AnyNodeId, AnyNode>
+
+    const plan = resolveStairDestinationLevel({
+      createMissing: true,
+      fromLevelId: ground.id,
+      nodes,
+    })
+
+    expect(plan?.toLevel.id).toBe(plan?.createdLevel?.id)
+    expect(plan?.createdLevel?.level).toBe(1)
+    expect(plan?.liftedLevels).toEqual([{ id: roofLevel.id, data: { level: 2 } }])
+    expect(resolveStairDestinationLevel({ fromLevelId: ground.id, nodes })?.toLevel.id).toBe(
+      ground.id,
+    )
+  })
+
   test('uses the nearest higher sibling level instead of creating one', () => {
     const building = BuildingNode.parse({})
     const ground = LevelNode.parse({ level: 0, parentId: building.id })

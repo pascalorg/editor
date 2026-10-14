@@ -51,7 +51,12 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
-import { getDefaultLevelName, getLevelDisplayName, servesAsRoofLevel } from '@pascal-app/core'
+import {
+  getDefaultLevelName,
+  getLevelDisplayName,
+  roofLevelOrderBreach,
+  servesAsRoofLevel,
+} from '@pascal-app/core'
 import { addStoreyOnTop } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
@@ -596,12 +601,12 @@ export function FloatingLevelSelector() {
       if (oldIndex === -1 || newIndex === -1) return
 
       const reorderedVisualLevels = arrayMove(visualLevels, oldIndex, newIndex)
-      // The roof level stays above every storey (top first here): a drop under a storey is refused.
-      const nodes = useScene.getState().nodes
-      const isRoof = (level: LevelNode) => servesAsRoofLevel(nodes, level)
-      const firstStorey = reorderedVisualLevels.findIndex((level) => !isRoof(level))
-      if (firstStorey >= 0 && reorderedVisualLevels.slice(firstStorey + 1).some(isRoof)) return
       const levelNumbersDescending = levels.map((level) => level.level).sort((a, b) => b - a)
+      // The roof level stays above every storey: a drop putting it under one it stood over is refused.
+      const floors = new Map(
+        reorderedVisualLevels.map((level, index) => [level.id, levelNumbersDescending[index]!]),
+      )
+      if (roofLevelOrderBreach(useScene.getState().nodes, floors)) return
 
       const updates = reorderedVisualLevels
         .map((level, index) => ({

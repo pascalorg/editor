@@ -32,10 +32,14 @@ import { resolveRoofElevation } from '../systems/roof/roof-elevation'
 import {
   coveredStoreyId,
   isRoofLevel,
+  liftRoofLevels,
   planRoofLevel,
   roofLevelAbove,
+  roofLevelOrderBreach,
   roofsOver,
+  servesAsRoofLevel,
   storeyInsertIndex,
+  storeyOf,
 } from './roof-level'
 import {
   isRoofOnStoreyWalls,
@@ -317,6 +321,175 @@ describe('storeyInsertIndex', () => {
 
   test('a building with no level starts at the ground floor', () => {
     expect(storeyInsertIndex(house(), 'building_h')).toEqual({ floorIndex: 0, shift: [] })
+  })
+})
+
+// The roof level is the declared one, else the run of roof-only levels topping the stack: a level
+// holding only a lower wing's roof under a storey (or beside a declared roof level) is a storey still
+// to be built, and the walls redrawn on it are not sent down a floor.
+describe('servesAsRoofLevel', () => {
+  const W = { content: 'walls' as const }
+  const R = { content: 'roof' as const }
+  const E = { content: 'empty' as const }
+  const ROOF = { role: 'roof' }
+  const cases: [string, Parameters<typeof house>, string, boolean][] = [
+    [
+      'declared, on top',
+      [
+        { id: 'level_g', ...W },
+        { id: 'level_r', ...R, metadata: ROOF },
+      ],
+      'level_r',
+      true,
+    ],
+    [
+      'declared, walled',
+      [
+        { id: 'level_g', ...W },
+        { id: 'level_r', ...W, metadata: ROOF },
+      ],
+      'level_r',
+      true,
+    ],
+    [
+      'roof-only on top, none declared',
+      [
+        { id: 'level_g', ...W },
+        { id: 'level_r', ...R },
+      ],
+      'level_r',
+      true,
+    ],
+    [
+      'roof-only under a roof-only top',
+      [
+        { id: 'level_g', ...W },
+        { id: 'level_1', ...R },
+        { id: 'level_r', ...R },
+      ],
+      'level_1',
+      true,
+    ],
+    [
+      'roof-only under a storey',
+      [
+        { id: 'level_g', ...W },
+        { id: 'level_1', ...R },
+        { id: 'level_2', ...W },
+      ],
+      'level_1',
+      false,
+    ],
+    [
+      'roof-only under an empty level',
+      [
+        { id: 'level_g', ...W },
+        { id: 'level_1', ...R },
+        { id: 'level_2', ...E },
+      ],
+      'level_1',
+      false,
+    ],
+    [
+      'roof-only under a declared roof level',
+      [
+        { id: 'level_g', ...W },
+        { id: 'level_1', ...R },
+        { id: 'level_r', ...R, metadata: ROOF },
+      ],
+      'level_1',
+      false,
+    ],
+    [
+      'roof-only and lowest (a carport)',
+      [
+        { id: 'level_c', ...R },
+        { id: 'level_1', ...W },
+      ],
+      'level_c',
+      false,
+    ],
+    ['roof-only and alone', [{ id: 'level_c', ...R }], 'level_c', false],
+    [
+      'a support level holding a roof',
+      [
+        { id: 'level_g', ...W },
+        { id: 'level_s', ...R, metadata: { role: 'support' } },
+      ],
+      'level_s',
+      false,
+    ],
+  ]
+  for (const [name, stack, id, serves] of cases)
+    test(`${name}: ${serves ? 'the roof level' : 'a storey'}`, () => {
+      const nodes = house(...stack)
+      expect(servesAsRoofLevel(nodes, nodes[id] as LevelNode)).toBe(serves)
+      expect(storeyOf(nodes, id) === id).toBe(!serves)
+    })
+})
+
+describe('liftRoofLevels', () => {
+  test('a storey added at the top run’s floor index lifts the roof level over it', () => {
+    const before = house({ id: 'level_g', content: 'walls' }, { id: 'level_r', content: 'roof' })
+    const after = applySceneChanges(before, {
+      create: [{ node: LevelNode.parse({ id: 'level_1', parentId: 'building_h', level: 1 }) }],
+    })
+    expect(liftRoofLevels(before, after, 'building_h')).toEqual([
+      { id: 'level_r', data: { level: 2 } },
+    ])
+  })
+
+  test('a basement added under a stack leaves a roof-only level between storeys where it is', () => {
+    const before = house(
+      { id: 'level_g', content: 'walls' },
+      { id: 'level_1', content: 'roof' },
+      { id: 'level_2', content: 'walls' },
+    )
+    const after = applySceneChanges(before, {
+      create: [{ node: LevelNode.parse({ id: 'level_b', parentId: 'building_h', level: -1 }) }],
+    })
+    expect(liftRoofLevels(before, after, 'building_h')).toEqual([])
+  })
+})
+
+describe('roofLevelOrderBreach', () => {
+  const stack = house(
+    { id: 'level_c', content: 'roof' },
+    { id: 'level_1', content: 'walls' },
+    { id: 'level_2', content: 'walls' },
+    { id: 'level_r', content: 'roof' },
+  )
+  test('swapping two storeys over a carport ground passes', () => {
+    expect(
+      roofLevelOrderBreach(
+        stack,
+        new Map([
+          ['level_1', 2],
+          ['level_2', 1],
+        ]),
+      ),
+    ).toBeNull()
+  })
+
+  test('the roof level dropped under a storey it stood over is named', () => {
+    expect(
+      roofLevelOrderBreach(
+        stack,
+        new Map([
+          ['level_r', 2],
+          ['level_2', 3],
+        ]),
+      ),
+    ).toEqual({ roofId: 'level_r', storeyId: 'level_2' })
+  })
+
+  test('an order a legacy stack already had passes', () => {
+    const legacy = house(
+      { id: 'level_g', content: 'walls' },
+      { id: 'level_r', content: 'roof', metadata: { role: 'roof' } },
+      { id: 'level_2', content: 'walls' },
+    )
+    expect(roofLevelOrderBreach(legacy, new Map([['level_2', 5]]))).toBeNull()
   })
 })
 
