@@ -35,7 +35,7 @@
     "ultracite": "^7.8.2"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22"
   },
   "packageManager": "bun@1.4.2",
   "overrides": {
