@@ -157,8 +157,22 @@ const BEYOND = 0.3
 
 export type Bearing = { id: string; name: string; top: number; rise: number }
 
-/** A level's visible walls and its rooms, read once for a bearing test. */
-function planOf(nodes: Nodes, levelId: string) {
+type LevelPlan = { walls: WallNode[]; rooms: ZoneNode[]; spans: Map<string, WallSpan> }
+
+// Identity-keyed, as `getLevelElevations` is: `nodes` is an immutable scene snapshot, so one seat
+// or verify pass reads each level's walls, rooms and wall tops once, however many segments it tests
+// against them (a 500-node paste of 450 segments read the whole scene per wall per segment: 13 s).
+const planMemo = new WeakMap<object, Map<string, LevelPlan>>()
+
+/** A level's visible walls, its rooms and where its walls stand. */
+function planOf(nodes: Nodes, levelId: string): LevelPlan {
+  let memo = planMemo.get(nodes)
+  if (!memo) {
+    memo = new Map()
+    planMemo.set(nodes, memo)
+  }
+  const hit = memo.get(levelId)
+  if (hit) return hit
   const walls: WallNode[] = []
   const rooms: ZoneNode[] = []
   for (const node of Object.values(nodes)) {
@@ -166,7 +180,9 @@ function planOf(nodes: Nodes, levelId: string) {
     if (node.type === 'wall' && node.visible !== false) walls.push(node)
     else if (node.type === 'zone' && node.polygon.length >= 3) rooms.push(node)
   }
-  return { walls, rooms }
+  const plan = { walls, rooms, spans: wallSpans(nodes, levelId) }
+  memo.set(levelId, plan)
+  return plan
 }
 
 /** Whether the far side of a wall, at `probe`, is indoors: in a room, or labelled interior on a level with no rooms. */
@@ -198,11 +214,7 @@ function inSector(shape: RoofShape, angle: number): boolean {
 }
 
 /** The walls of a level a cone sits on: along its eave circle, within its sector, open air past them. */
-function coneWallsUnder(
-  { walls, rooms }: ReturnType<typeof planOf>,
-  shape: RoofShape,
-  spans: Map<string, WallSpan>,
-): Bearing[] {
+function coneWallsUnder({ walls, rooms, spans }: LevelPlan, shape: RoofShape): Bearing[] {
   const found: Bearing[] = []
   for (const wall of walls) {
     const top = spans.get(wall.id)?.top
@@ -228,9 +240,8 @@ function coneWallsUnder(
 
 /** The walls of a level a roof sits on, each with its top and the least the roof rises over it. */
 export function wallsUnder(nodes: Nodes, levelId: string, shape: RoofShape): Bearing[] {
-  const spans = wallSpans(nodes, levelId)
   const plan = planOf(nodes, levelId)
-  if (shape.roofType === 'conical') return coneWallsUnder(plan, shape, spans)
+  if (shape.roofType === 'conical') return coneWallsUnder(plan, shape)
   const found: Bearing[] = []
   for (const wall of plan.walls) {
     const a = toLocal(shape, wall.start)
@@ -257,7 +268,7 @@ export function wallsUnder(nodes: Nodes, levelId: string, shape: RoofShape): Bea
       const intoHouse =
         (Math.min(ua, ub) < -half - ON_EDGE && indoorsAt(-half - BEYOND, -out)) ||
         (Math.max(ua, ub) > half + ON_EDGE && indoorsAt(half + BEYOND, -out))
-      const top = spans.get(wall.id)?.top
+      const top = plan.spans.get(wall.id)?.top
       if (top !== undefined && !intoHouse && !indoorsAt((u0 + u1) / 2, out))
         found.push(
           bearing(wall, top, Math.min(riseAt(shape, ...point(u0)), riseAt(shape, ...point(u1)))),
