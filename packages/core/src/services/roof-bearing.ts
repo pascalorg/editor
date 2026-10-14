@@ -157,18 +157,20 @@ const BEYOND = 0.3
 
 export type Bearing = { id: string; name: string; top: number; rise: number }
 
-const visibleWallsOf = (nodes: Nodes, levelId: string) =>
-  Object.values(nodes).filter(
-    (node): node is WallNode =>
-      node.type === 'wall' && node.parentId === levelId && node.visible !== false,
-  )
+/** A level's visible walls and its rooms, read once for a bearing test. */
+function planOf(nodes: Nodes, levelId: string) {
+  const walls: WallNode[] = []
+  const rooms: ZoneNode[] = []
+  for (const node of Object.values(nodes)) {
+    if (node.parentId !== levelId) continue
+    if (node.type === 'wall' && node.visible !== false) walls.push(node)
+    else if (node.type === 'zone' && node.polygon.length >= 3) rooms.push(node)
+  }
+  return { walls, rooms }
+}
 
 /** Whether the far side of a wall, at `probe`, is indoors: in a room, or labelled interior on a level with no rooms. */
-function indoors(nodes: Nodes, levelId: string, wall: WallNode, probe: Vec2): boolean {
-  const rooms = Object.values(nodes).filter(
-    (node): node is ZoneNode =>
-      node.type === 'zone' && node.parentId === levelId && node.polygon.length >= 3,
-  )
+function indoors(rooms: readonly ZoneNode[], wall: WallNode, probe: Vec2): boolean {
   if (rooms.length) return rooms.some((room) => pointInPolygon(probe, room.polygon as Vec2[]))
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
@@ -197,13 +199,12 @@ function inSector(shape: RoofShape, angle: number): boolean {
 
 /** The walls of a level a cone sits on: along its eave circle, within its sector, open air past them. */
 function coneWallsUnder(
-  nodes: Nodes,
-  levelId: string,
+  { walls, rooms }: ReturnType<typeof planOf>,
   shape: RoofShape,
   spans: Map<string, WallSpan>,
 ): Bearing[] {
   const found: Bearing[] = []
-  for (const wall of visibleWallsOf(nodes, levelId)) {
+  for (const wall of walls) {
     const top = spans.get(wall.id)?.top
     if (top === undefined) continue
     const points = sampleWallCenterline(wall, 24).map(({ x, y }) => toLocal(shape, [x, y]))
@@ -219,7 +220,7 @@ function coneWallsUnder(
     const stretch = points.filter((_, i) => onEave[i])
     const [lx, lz] = stretch[Math.floor(stretch.length / 2)]!
     const out = (shape.hw + (wall.thickness ?? 0.15) / 2 + BEYOND) / (Math.hypot(lx, lz) || 1)
-    if (!indoors(nodes, levelId, wall, toPlan(shape, [lx * out, lz * out])))
+    if (!indoors(rooms, wall, toPlan(shape, [lx * out, lz * out])))
       found.push(bearing(wall, top, 0))
   }
   return found
@@ -228,9 +229,10 @@ function coneWallsUnder(
 /** The walls of a level a roof sits on, each with its top and the least the roof rises over it. */
 export function wallsUnder(nodes: Nodes, levelId: string, shape: RoofShape): Bearing[] {
   const spans = wallSpans(nodes, levelId)
-  if (shape.roofType === 'conical') return coneWallsUnder(nodes, levelId, shape, spans)
+  const plan = planOf(nodes, levelId)
+  if (shape.roofType === 'conical') return coneWallsUnder(plan, shape, spans)
   const found: Bearing[] = []
-  for (const wall of visibleWallsOf(nodes, levelId)) {
+  for (const wall of plan.walls) {
     const a = toLocal(shape, wall.start)
     const b = toLocal(shape, wall.end)
     for (const [across, at] of [
@@ -248,7 +250,7 @@ export function wallsUnder(nodes: Nodes, levelId: string, shape: RoofShape): Bea
       const point = (u: number, off = 0): Vec2 => (across === 1 ? [u, at + off] : [at + off, u])
       const out = Math.sign(at) * ((wall.thickness ?? 0.15) / 2 + BEYOND)
       const indoorsAt = (u: number, off: number) =>
-        indoors(nodes, levelId, wall, toPlan(shape, point(u, off)))
+        indoors(plan.rooms, wall, toPlan(shape, point(u, off)))
       // A wall running on past the roof's end with rooms on the roof's side there belongs to a
       // house the roof dies into (a porch box buried in it, a full-width porch flush with its
       // sides): the roof does not sit on it.
