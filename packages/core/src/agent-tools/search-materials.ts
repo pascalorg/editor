@@ -34,7 +34,7 @@ export const searchMaterialsTool = {
   name: 'search_materials',
   title: 'Search materials',
   description:
-    "Search or browse the material library (the finishes paint gives), several queries in one call: find a library material's ref here rather than guessing it. The library is Pascal's materials and those this editor holds besides (the community's, yours, your workspace's). A query's words match the words of a material's id, name and kind, building words as the library writes them (timber is wood, weatherboard is siding, render is stucco), colour words by its shade (dark, light, white, grey) and surface words (roof, wall, floor, ceiling) by what it suits. Without words, a query browses: every material of its kind, or that suits its surface (flat colours suit every one), or the whole library. Returns one group per query: each material's ref (library:<id>), name, kind, the surfaces it suits and its colour, best first (a browse by name), the words no material answers (missing), so a finish the library lacks is said, not guessed, and how many more a long browse holds (more).",
+    "Search or browse the material library (the finishes paint gives), several queries in one call: find a library material's ref here rather than guessing it. The library is Pascal's materials and those this editor holds besides (the community's, yours, your workspace's). A query's words match the words of a material's id, name and kind, or a piece of its id (plank48), building words as the library writes them (timber is wood, weatherboard is siding, render is stucco), colour words by its shade (dark, light, white, grey) and surface words (roof, wall, floor, ceiling) by what it suits. Without words, a query browses by name: every material of its kind, or that suits its surface (flat colours suit every one), or the whole library, 150 at a time (more and next say what is left). Returns one group per query: each material's ref (library:<id>), name, kind, the surfaces it suits and its colour, best first (a browse by name), the words no material answers (missing), so a finish the library lacks is said, not guessed, and on a long browse how many more there are (more) and the offset that lists them (next).",
   input: {
     queries: z
       .array(
@@ -51,6 +51,12 @@ export const searchMaterialsTool = {
             .enum(SURFACES)
             .optional()
             .describe('Only materials that suit this surface; flat colours suit every one.'),
+          offset: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe("A browse's next page: the next a long browse returned."),
         }),
       )
       .min(1)

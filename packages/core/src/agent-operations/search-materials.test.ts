@@ -13,6 +13,7 @@ type Group = {
   results: { ref: string; label: string; kind: string; surfaces: string[]; color?: string }[]
   missing?: string[]
   more?: number
+  next?: number
 }
 
 function search(
@@ -20,6 +21,7 @@ function search(
     query?: string
     kind?: string
     surface?: 'roof' | 'wall' | 'floor' | 'ceiling'
+    offset?: number
   }[]
 ) {
   const { result } = AGENT_OPERATIONS.search_materials({}, { queries } as never, {
@@ -110,6 +112,28 @@ describe('search_materials', () => {
       ])
     } finally {
       unregisterLibraryMaterials([community.id, shadow.id])
+    }
+  })
+
+  test('pages a long browse: more and next list the rest, each material once', () => {
+    const extra = Array.from({ length: 160 }, (_, index) => ({
+      id: `mtl_page_${String(index).padStart(3, '0')}`,
+      label: `Paged finish ${String(index).padStart(3, '0')}`,
+      category: 'other' as const,
+      preset: MATERIAL_CATALOG[0]!.preset,
+    }))
+    registerLibraryMaterials(extra)
+    try {
+      const [first] = search({ kind: 'other' })
+      expect(first!.results).toHaveLength(150)
+      expect(first).toMatchObject({ more: 10, next: 150 })
+      const [rest] = search({ kind: 'other', offset: first!.next })
+      expect(rest!.more).toBeUndefined()
+      expect([...refs(first!), ...refs(rest!)]).toEqual(
+        extra.map((material) => `library:${material.id}`),
+      )
+    } finally {
+      unregisterLibraryMaterials(extra.map((material) => material.id))
     }
   })
 })

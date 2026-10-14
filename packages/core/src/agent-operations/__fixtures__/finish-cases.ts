@@ -16,6 +16,7 @@ import {
   WallNode,
   WindowNode,
 } from '../../schema'
+import { MATERIAL_CATALOG } from '../../material-library'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -81,7 +82,11 @@ function finishScene(): SceneGraph {
   })
   const ceiling = CeilingNode.parse({ id: 'ceiling_finish', parentId: level, polygon: footprint })
   const segments = [
-    RoofSegmentNode.parse({ id: 'rseg_plain', parentId: 'roof_finish' }),
+    RoofSegmentNode.parse({
+      id: 'rseg_plain',
+      parentId: 'roof_finish',
+      fasciaMaterialPreset: 'library:preset-nearblack',
+    }),
     RoofSegmentNode.parse({ id: 'rseg_own', parentId: 'roof_finish', topMaterialPreset: CLAY_TILES }),
     RoofSegmentNode.parse({ id: 'rseg_legacy', parentId: 'roof_finish', materialPreset: CLAY_TILES }),
   ]
@@ -111,6 +116,7 @@ function finishScene(): SceneGraph {
       src: '/items/vase/model.glb',
       dimensions: [0.3, 0.5, 0.3],
     },
+    slots: { glaze: 'library:preset-navy' },
   })
   const parts = [door, window, slab, ceiling, roof, ...segments, block, stair, flight, cabinet, item]
   const nodes: AnyNode[] = [
@@ -306,6 +312,35 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: "a fascia band with a finish of its own keeps it under role wall; role fascia paints the boards on every segment",
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['rseg_own'], role: 'fascia', material: SOFT_WHITE },
+    expect: {
+      result: { painted: [{ id: 'roof_finish', roles: ['fascia'] }] },
+      after: {
+        rseg_plain: { fasciaMaterialPreset: SOFT_WHITE },
+        rseg_own: { fasciaMaterialPreset: SOFT_WHITE },
+        rseg_legacy: { fasciaMaterialPreset: SOFT_WHITE },
+      },
+      check: gone('roof_finish', 'fasciaMaterialPreset'),
+    },
+  },
+  {
+    name: "roof_soffit's fascia on a segment with a catch-all finish (Architect's own writer, settleRoofPaint gone): role wall shows on it",
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['roof_finish'], role: 'wall', material: 'library:preset-nearblack' },
+    expect: {
+      result: { painted: [{ id: 'roof_finish', roles: ['wall'] }] },
+      after: {
+        roof_finish: { wallMaterialPreset: 'library:preset-nearblack' },
+        rseg_legacy: { topMaterialPreset: CLAY_TILES, edgeMaterialPreset: CLAY_TILES },
+      },
+      check: gone('rseg_legacy', 'materialPreset', 'wallMaterialPreset'),
+    },
+  },
+  {
     name: "set_material's standing seam (ROOFING metal_black, a metal colour): paint a native metal material",
     tool: 'paint',
     scene: finishScene,
@@ -416,11 +451,32 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
     expect: { refusal: 'unknown_role', mentions: ['treads', 'body'] },
   },
   {
-    name: "set_material wrote a catalog item's slots unchecked; paint refuses: the item's surfaces are its model's",
+    name: "set_material on a catalog item's slot ('body', its model's slot_body): paint role body writes it, as the editor's Paint does",
     tool: 'paint',
     scene: finishScene,
     input: { targets: ['item_vase'], role: 'body', material: SOFT_WHITE },
-    expect: { refusal: 'not_paintable', mentions: ['item_vase', "editor's Paint"] },
+    expect: {
+      result: { painted: [{ id: 'item_vase', roles: ['body'] }] },
+      after: { item_vase: { slots: { glaze: 'library:preset-navy', body: SOFT_WHITE } } },
+      mentions: ["an item's surfaces are its model's"],
+    },
+  },
+  {
+    name: "set_material with no slot on an item wrote a 'surface' it may lack; paint asks for the role, naming those painted",
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['item_vase'], material: SOFT_WHITE },
+    expect: { refusal: 'unknown_role', mentions: ['item_vase', 'glaze'] },
+  },
+  {
+    name: "set_material took a bare community id ('mtl_…'): paint writes it as library:<id>",
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['block_pier'], material: 'mtl_terrazzo_green' },
+    expect: {
+      result: { finish: 'library:mtl_terrazzo_green' },
+      after: { block_pier: { slots: { body: 'library:mtl_terrazzo_green' } } },
+    },
   },
   {
     name: 'set_material skipped an id not in the scene and painted the rest; paint refuses the call, painting nothing',
@@ -441,17 +497,23 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
 /** What list_materials served: the whole library, a surface, a kind, a word. */
 export const LIST_MATERIALS_CASES: AgentToolCase[] = [
   {
-    name: 'list_materials with no filter listed the library: a browse with no words lists it by name',
+    name: 'list_materials with no filter listed the library: a browse with no words lists all of it by name',
     tool: 'search_materials',
     scene: finishScene,
     input: { queries: [{}] },
     expect: {
       result: {},
       check: (result) => {
-        const [group] = result.groups as { results: { ref: string }[]; more?: number }[]
-        const refs = group!.results.map((material) => material.ref)
+        const [group] = result.groups as { results: { ref: string; label: string }[]; more?: number }[]
+        const refs = new Set(group!.results.map((material) => material.ref))
+        const labels = group!.results.map((material) => material.label)
         return [
-          ...(refs.includes(SIDING) && refs.includes(SHINGLES) ? [] : ['the library is not listed']),
+          ...MATERIAL_CATALOG.filter((material) => !refs.has(`library:${material.id}`)).map(
+            (material) => `${material.id} is not listed`,
+          ),
+          ...(labels.join() === [...labels].sort((a, b) => a.localeCompare(b)).join()
+            ? []
+            : ['not by name']),
           ...(group!.more === undefined ? [] : [`${group!.more} materials left out`]),
         ]
       },
@@ -524,6 +586,21 @@ export const LIST_MATERIALS_CASES: AgentToolCase[] = [
       check: (result) => {
         const [group] = result.groups as { results: { ref: string }[] }[]
         return group!.results[0]?.ref === 'library:concrete-stucco' ? [] : ['stucco is not first']
+      },
+    },
+  },
+  {
+    name: "list_materials matched any piece of an id ('plank48', '48'): so does a search",
+    tool: 'search_materials',
+    scene: finishScene,
+    input: { queries: [{ query: 'plank48' }, { query: '48' }] },
+    expect: {
+      result: {},
+      check: (result) => {
+        const groups = result.groups as { results: { ref: string }[] }[]
+        return groups
+          .filter((group) => !group.results.some(({ ref }) => ref === 'library:wood-woodplank48'))
+          .map((_, index) => `query ${index}: no wood-woodplank48`)
       },
     },
   },

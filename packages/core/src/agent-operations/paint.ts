@@ -38,8 +38,11 @@ type PaintInput = {
   erase?: true
 }
 
-const ROOF_ROLES = ['top', 'edge', 'wall'] as const
+const ROOF_ROLES = ['top', 'edge', 'wall', 'fascia'] as const
 type RoofRole = (typeof ROOF_ROLES)[number]
+/** The surfaces the roof itself holds; its fascia is held by each of its segments. */
+const SHELL_ROLES = ['top', 'edge', 'wall'] as const
+type ShellRole = (typeof SHELL_ROLES)[number]
 
 /** The surfaces painted when no role is named: what "paint the column" means. */
 const DEFAULT_ROLES: Record<string, readonly string[]> = {
@@ -116,23 +119,23 @@ function changedData(before: AnyNode, after: AnyNode): Partial<AnyNode> {
   return data as Partial<AnyNode>
 }
 
-/** A roof's role written, its inline material for that role gone with it. */
-function paintRoofRole(roof: RoofNode, role: RoofRole, ref: string | undefined): RoofNode {
-  const next = { ...roof } as Record<string, unknown>
+/** A node's role written as `<role>MaterialPreset`, its inline material for that role gone with it. */
+function paintRoleField<T extends AnyNode>(node: T, role: RoofRole, ref: string | undefined): T {
+  const next = { ...node } as Record<string, unknown>
   delete next[`${role}Material`]
   if (ref) next[`${role}MaterialPreset`] = ref
   else delete next[`${role}MaterialPreset`]
-  return next as RoofNode
+  return next as T
 }
 
 /**
  * A segment without a finish of its own for a role, so its roof's shows there. A catch-all finish
  * (`material`, `materialPreset`) goes too, written on the segment's other roles, which keep it.
  */
-function withoutOwnRole(segment: RoofSegmentNode, role: RoofRole): RoofSegmentNode {
+function withoutOwnRole(segment: RoofSegmentNode, role: ShellRole): RoofSegmentNode {
   const next = { ...segment } as Record<string, unknown>
   if (segment.material !== undefined || segment.materialPreset !== undefined) {
-    for (const other of ROOF_ROLES) {
+    for (const other of SHELL_ROLES) {
       if (other === role) continue
       const shown = getEffectiveSegmentSurfaceMaterial(segment, other)
       next[`${other}Material`] = shown.material
@@ -199,6 +202,7 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
   const painted: { id: string; roles: string[] }[] = []
   const keptParts: string[] = []
   const throughRoof: string[] = []
+  const modelRoles: string[] = []
 
   for (const id of input.targets) {
     const node = current(id)
@@ -221,26 +225,48 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
         refuse('not_paintable', `Roof segment ${id} has no roof to paint.`, { target: id })
       if (node.type === 'roof-segment') throughRoof.push(id)
       if (painted.some((entry) => entry.id === roof.id && entry.roles.includes(role))) continue
-      written[roof.id] = paintRoofRole(roof, role, ref)
-      // The roof's finish shows on every segment: none keeps one of its own for the role.
-      for (const childId of roof.children) {
+      const segments = roof.children.flatMap((childId) => {
         const segment = current(childId)
-        if (segment?.type === 'roof-segment') written[childId] = withoutOwnRole(segment, role)
+        return segment?.type === 'roof-segment' ? [segment] : []
+      })
+      if (role === 'fascia') {
+        // Each segment holds its fascia: the boards take it on every segment of the roof.
+        for (const segment of segments) written[segment.id] = paintRoleField(segment, role, ref)
+      } else {
+        written[roof.id] = paintRoleField(roof as RoofNode, role, ref)
+        // The roof's finish shows on every segment: none keeps one of its own for the role.
+        for (const segment of segments) written[segment.id] = withoutOwnRole(segment, role)
       }
       painted.push({ id: roof.id, roles: [role] })
       continue
     }
 
-    const slots = nodeSlotDeclarations(node)
-    if (!slots?.length)
+    // A catalog item's surfaces are its model's (slot_<id> materials), which a headless host
+    // cannot read: its role is written by name, as the editor's Paint writes the one clicked.
+    const declared = nodeSlotDeclarations(node)
+    if (!declared && node.type === 'item') {
+      const own = Object.keys((node as AnyNode & { slots?: Record<string, string> }).slots ?? {})
+      if (!input.role || input.role === 'exterior' || input.role === 'interior')
+        refuse(
+          'unknown_role',
+          `Item ${id}'s surfaces are its model's: name one as role${own.length ? ` (painted so far: ${own.join(', ')})` : ''}.`,
+          { target: id, roles: own },
+        )
+      const slots = { ...((node as AnyNode & { slots?: Record<string, string> }).slots ?? {}) }
+      if (ref) slots[input.role] = ref
+      else delete slots[input.role]
+      written[id] = { ...node, slots } as AnyNode
+      modelRoles.push(`${id} ${input.role}`)
+      painted.push({ id, roles: [input.role] })
+      continue
+    }
+    if (!declared?.length)
       refuse(
         'not_paintable',
-        node.type === 'item'
-          ? `Item ${id}'s surfaces come from its model, which paint cannot read: the editor's Paint reaches them.`
-          : `A ${node.type} has no surface paint gives: paint walls, slabs, ceilings, roofs, columns, fences, doors, windows, stairs, blocks, cabinets, shelves and the other built parts.`,
+        `A ${node.type} has no surface paint gives: paint walls, slabs, ceilings, roofs, columns, fences, doors, windows, stairs, blocks, cabinets, shelves, items and the other built parts.`,
         { target: id, type: node.type },
       )
-    const ids = slots.map((slot) => slot.slotId)
+    const ids = declared.map((slot) => slot.slotId)
     let roles: string[]
     if (input.role === 'exterior' || input.role === 'interior') {
       // A curtain wall has frame, glass and panels where a wall has faces.
@@ -305,6 +331,8 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
     throughRoof.length &&
       `${throughRoof.join(', ')} ${throughRoof.length === 1 ? 'is a roof segment' : 'are roof segments'}: the finish went on the roof, which shows one finish per surface.`,
     keptParts.length && `Painted parts keep their own finish (${keptParts.join('; ')}).`,
+    modelRoles.length &&
+      `${modelRoles.join(', ')}: an item's surfaces are its model's, so a role its model lacks does not show.`,
   ]
     .filter(Boolean)
     .join(' ')

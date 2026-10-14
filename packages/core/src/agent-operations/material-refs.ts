@@ -105,7 +105,7 @@ export function requireMaterialRef(
     return asked
   }
   // A community material (`library:mtl_…`): the host checks it against its catalog.
-  if (parsed?.kind === 'library' && parsed.id.startsWith('mtl_')) return asked
+  if (parsed?.kind === 'library' && parsed.id.startsWith('mtl_')) return `library:${parsed.id}`
   if (parsed?.kind === 'library' && getCatalogMaterialById(parsed.id)) return `library:${parsed.id}`
   const words = wordsOf(asked)
   const shares = (text: string) => words.some((word) => text.toLowerCase().includes(word))

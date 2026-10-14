@@ -8,7 +8,7 @@ import {
 import type { AgentOperation } from './types'
 
 type SearchMaterialsInput = {
-  queries: { query?: string; kind?: MaterialCategory; surface?: MaterialSurface }[]
+  queries: { query?: string; kind?: MaterialCategory; surface?: MaterialSurface; offset?: number }[]
 }
 
 /** The most a group lists: a search's best, a browse's first by name. */
@@ -75,6 +75,9 @@ function shadeOf(hex: string | undefined): Shade | null {
 
 const stem = (word: string) => (word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word)
 
+/** A word that searches: three letters or more, or any word with a digit ("48" of a plank). */
+const searches = (word: string) => (word.length > 2 || /\d/.test(word)) && !STOP_WORDS.has(word)
+
 /** Words that tell no material from another: "white render for the walls" asks for three things. */
 const STOP_WORDS = new Set(['and', 'the', 'for', 'with', 'from', 'into', 'some', 'like', 'its'])
 
@@ -98,6 +101,9 @@ function answers(material: MaterialCatalogItem, text: readonly string[], word: s
   const said = (token: string, form: string) =>
     token === form || stem(token) === form || (form.length >= 4 && token.startsWith(form))
   if (forms.some((form) => text.some((token) => said(token, form)))) return true
+  // A piece of an id ("plank48" of wood-woodplank48): its words run together there.
+  const id = material.id.toLowerCase().replace(/[^a-z0-9]/g, '')
+  if ((word.length >= 4 || /\d/.test(word)) && id.includes(word)) return true
   const shade = SHADES[word]
   const colour = shadeOf(material.previewColor)
   if (shade && colour && shade(colour)) return true
@@ -131,8 +137,8 @@ export const searchMaterials: AgentOperation<SearchMaterialsInput> = (_nodes, { 
   const library = libraryMaterials()
   return {
     result: {
-      groups: queries.map(({ query = '', kind, surface }) => {
-        const words = wordsOf(query).filter((word) => word.length > 2 && !STOP_WORDS.has(word))
+      groups: queries.map(({ query = '', kind, surface, offset = 0 }) => {
+        const words = wordsOf(query).filter(searches)
         const pool = library.filter(
           (material) =>
             (!kind || material.category === kind) && (!surface || suits(material, surface)),
@@ -143,11 +149,15 @@ export const searchMaterials: AgentOperation<SearchMaterialsInput> = (_nodes, { 
           ...(surface ? { surface } : {}),
         }
         if (!words.length) {
-          const listed = [...pool].sort((a, b) => a.label.localeCompare(b.label))
+          const listed = [...pool].sort(
+            (a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id),
+          )
+          const more = listed.length - offset - BROWSE_RESULTS
           return {
             ...asked,
-            results: listed.slice(0, BROWSE_RESULTS).map(asResult),
-            ...(listed.length > BROWSE_RESULTS ? { more: listed.length - BROWSE_RESULTS } : {}),
+            ...(offset ? { offset } : {}),
+            results: listed.slice(offset, offset + BROWSE_RESULTS).map(asResult),
+            ...(more > 0 ? { more, next: offset + BROWSE_RESULTS } : {}),
           }
         }
         const scored = pool.map((material) => {
@@ -171,7 +181,7 @@ export const searchMaterials: AgentOperation<SearchMaterialsInput> = (_nodes, { 
         }
       }),
       message:
-        'Materials as library:<id> refs for paint: a search best first, a browse by name. The words no material answers are under missing: the library lacks them.',
+        'Materials as library:<id> refs for paint: a search best first, a browse by name (a long one says how many more, and the offset that lists them: next). The words no material answers are under missing: the library lacks them.',
     },
   }
 }
