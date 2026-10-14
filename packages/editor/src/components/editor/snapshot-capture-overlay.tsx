@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
+import { isTypingTarget } from '../../lib/typing-target'
 import { requestWalkthroughPointerLock } from '../../lib/walkthrough-pointer-lock'
 import useEditor, {
   CAPTURE_FOV_MAX,
@@ -467,7 +468,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         return
       }
       if (e.key !== 'Enter') return
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (isTypingTarget(e.target)) return
       e.preventDefault()
       handleCapture()
     }

@@ -25,6 +25,7 @@ import {
   isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
+  isTypingTarget,
   MeasurementPill,
   markToolCancelConsumed,
   resolveEndpointWallSplit,
@@ -625,9 +626,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
       if (event.key === 'Alt') {
         setAltState(true)
       }
