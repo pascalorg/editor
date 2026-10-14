@@ -44,6 +44,7 @@ import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { isSceneView } from '../../lib/editor-views'
 import { useGestureLifecycleOwner } from '../../lib/gesture-lifecycle'
+import { shouldShowEditingControls } from '../../lib/interaction/overlay-policy'
 import {
   createLocalProjectPresentationPersistence,
   type LocalProjectPresentationPersistence,
@@ -1478,6 +1479,12 @@ function EditorContent({
   const [previewStageMode, setPreviewStageMode] = useState<ViewerStageMode>('3d')
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const readOnly = useScene((s) => s.readOnly)
+  // Chrome only steps down for the top menu while the menu is actually there.
+  const topMenuShown =
+    dockMenuOnTop &&
+    !(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
+    shouldShowEditingControls(readOnly)
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
@@ -1690,7 +1697,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
-      hintBelowTopMenu={dockMenuOnTop}
+      hintBelowTopMenu={topMenuShown}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
@@ -1791,9 +1798,9 @@ function EditorContent({
                     {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
                     {!(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
                       (dockMenuOnTop ? (
-                        // Its own row under the host toolbar row, centred on the scene panes.
-                        // No transform here: the menu's pill is fixed to the scene region.
-                        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center">
+                        // Own row under the toolbar, below the level selector's opening list (z-20).
+                        // No transform: the menu's fixed pill must anchor to the scene region.
+                        <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center">
                           <div className="pointer-events-auto">
                             <ActionMenu inline placement="top" />
                           </div>
@@ -1807,7 +1814,7 @@ function EditorContent({
                   </SceneRegion>
                   {/* The inspector and the shortcuts card share one right column. */}
                   <RightStack
-                    belowTopMenu={dockMenuOnTop}
+                    belowTopMenu={topMenuShown}
                     reserveBottomMenu={!dockMenuOnTop}
                     helper={isCaptureMode ? null : <HelperManager />}
                     inspector={
