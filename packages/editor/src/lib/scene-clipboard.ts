@@ -217,7 +217,7 @@ function getNextLevelId(level: LevelNode, nodes: Record<AnyNodeId, AnyNode>) {
 function remapNodeReferences(
   node: AnyNode,
   oldId: AnyNodeId,
-  pastedLevel: LevelNode,
+  targetLevel: LevelNode,
   idMap: Map<AnyNodeId, AnyNodeId>,
   materialIdMap: Map<SceneMaterialId, SceneMaterialId>,
   rootIds: Set<AnyNodeId>,
@@ -225,12 +225,6 @@ function remapNodeReferences(
 ) {
   const clone = remapSceneMaterialRefs(JSON.parse(JSON.stringify(node)) as AnyNode, materialIdMap)
   ;(clone as Record<string, unknown>).id = idMap.get(oldId)
-  // Walls, rooms, stairs and items pasted on a roof level go to the storey it covers: the row in
-  // view was the roof's, the plan is the storey's.
-  const targetLevel = isStoreyContent(node.type)
-    ? ((nodes[storeyOf(nodes, pastedLevel.id) as AnyNodeId] as LevelNode | undefined) ??
-      pastedLevel)
-    : pastedLevel
 
   if (rootIds.has(oldId)) {
     const buildingId = targetLevel.parentId as AnyNodeId | null
@@ -599,11 +593,21 @@ function applyClipboardPayloadToLevel(
   targetLevelId?: AnyNodeId,
   { ids: refused, reason: refusal }: Refused = NONE_REFUSED,
 ): PasteResult | null {
-  const targetLevel = getPasteTargetLevel(targetLevelId)
-  if (!targetLevel) return null
+  const aimedLevel = getPasteTargetLevel(targetLevelId)
+  if (!aimedLevel) return null
   const payload = refused.size > 0 ? withoutRefusedSubtrees(copied, refused) : copied
 
   const scene = useScene.getState()
+  // A paste lands on one level. On a roof level, one carrying anything a storey holds (walls,
+  // rooms, items, cabinets, …) goes to the storey it covers, whole: the row in view was the roof's,
+  // the plan is the storey's, and a roof in it that bears there is seated back up.
+  const rootIdSet = new Set(payload.rootIds)
+  const targetLevel = payload.nodes.some(
+    (node) => rootIdSet.has(node.id as AnyNodeId) && isStoreyContent(node.type),
+  )
+    ? ((scene.nodes[storeyOf(scene.nodes, aimedLevel.id) as AnyNodeId] as LevelNode | undefined) ??
+      aimedLevel)
+    : aimedLevel
   const idMap = new Map<AnyNodeId, AnyNodeId>()
   const materialIdMap = new Map<SceneMaterialId, SceneMaterialId>()
   const materialsToCreate: SceneMaterial[] = []
@@ -624,7 +628,6 @@ function applyClipboardPayloadToLevel(
     materialsToCreate.push({ ...material, id: nextId })
   }
 
-  const rootIdSet = new Set(payload.rootIds)
   const pastedNodes: AnyNode[] = []
   const skippedIds: AnyNodeId[] = []
 

@@ -437,6 +437,39 @@ describe('scene clipboard', () => {
     expect(useViewer.getState().selection.levelId).toBe(storey.id)
   })
 
+  // Measurements, cabinets and the like stayed on the roof level at its floor while the walls
+  // copied with them went down: a paste lands on one level.
+  test('a paste carrying walls lands whole on the storey a roof level covers', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const roofLevel = LevelNode.parse({ level: 1, metadata: { role: 'roof' } })
+    const { walls } = seedHouse(storey, roofLevel)
+    const measurement = MeasurementNode.parse({
+      parentId: sourceLevelId,
+      measurement: {
+        kind: 'distance',
+        points: [
+          [0, 0, 0],
+          [8, 0, 0],
+        ],
+      },
+    })
+    useScene.setState((state) => {
+      const source = state.nodes[sourceLevelId] as LevelNode
+      return {
+        nodes: {
+          ...state.nodes,
+          [measurement.id]: measurement,
+          [sourceLevelId]: { ...source, children: [...source.children, measurement.id] },
+        },
+      }
+    })
+    expect(copySelectedNodesToEditorClipboard([walls[0]!.id, measurement.id])).toBe(true)
+    const { pastedIds } = pasteEditorClipboardToLevel(roofLevel.id)!
+    const nodes = useScene.getState().nodes
+    expect(pastedIds.map((id) => nodes[id]?.parentId)).toEqual([storey.id, storey.id])
+    expect((nodes[roofLevel.id] as LevelNode).children).toEqual([])
+  })
+
   // Pasted corner windows kept naming the originals, so the copies drew as plain windows that
   // could not be joined while the originals stood.
   test('a corner window pasted with both its walls joins its own copies; one side alone is plain', () => {
