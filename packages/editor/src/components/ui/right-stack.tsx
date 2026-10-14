@@ -2,6 +2,8 @@
 
 import { createContext, type ReactNode, useContext, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
+import { cn } from '../../lib/utils'
+import { TOP_MENU_CLEARANCE } from './action-menu/placement'
 
 const RightStackContext = createContext(false)
 
@@ -60,11 +62,14 @@ export function RightStack({
   inspector,
   helper,
   reserveBottomMenu = true,
+  belowTopMenu = false,
 }: {
   inspector: ReactNode
   helper: ReactNode
   // Keep clear of an action menu docked at the bottom; off when it sits at the top.
   reserveBottomMenu?: boolean
+  // Start below an action menu docked at the top of the stage.
+  belowTopMenu?: boolean
 }) {
   const isMobile = useIsMobile()
   const stackRef = useRef<HTMLDivElement>(null)
@@ -134,11 +139,12 @@ export function RightStack({
   return (
     <RightStackContext.Provider value={true}>
       <div
-        className={`pointer-events-none fixed right-4 z-40 flex flex-col items-end gap-2 ${reserveBottomMenu ? 'bottom-[74px]' : 'bottom-4'}`}
-        // Below the right side of the viewer toolbar, which can grow; 80px by default.
-        style={{
-          top: 'calc(var(--viewer-toolbar-right-bottom, var(--viewer-toolbar-bottom, 2.75rem)) + 2.25rem)',
-        }}
+        className={cn(
+          'pointer-events-none fixed right-4 z-40 flex flex-col items-end gap-2',
+          reserveBottomMenu ? 'bottom-[74px]' : 'bottom-4',
+          !belowTopMenu && 'top-20',
+        )}
+        style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
         data-right-stack
         ref={stackRef}
       >

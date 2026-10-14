@@ -59,6 +59,7 @@ import {
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUnitFocusRules } from '../../lib/units'
+import { cn } from '../../lib/utils'
 import { useViewerFloorDisplay } from '../../lib/viewer-selection'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
@@ -75,7 +76,7 @@ import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
-import type { ActionMenuPlacement } from '../ui/action-menu/placement'
+import { type ActionMenuPlacement, TOP_MENU_CLEARANCE } from '../ui/action-menu/placement'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -602,13 +603,12 @@ function ViewerCanvasControlsHint({
   }
 
   return (
-    // Sits under the whole viewer toolbar as the layout reports it; without one,
-    // under a top-docked action menu or the default toolbar height.
     <div
-      className="pointer-events-none absolute left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2"
-      style={{
-        top: `calc(var(--viewer-toolbar-full-bottom, ${belowTopMenu ? '4.375rem' : '2.75rem'}) + 0.75rem)`,
-      }}
+      className={cn(
+        'pointer-events-none absolute left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2',
+        !belowTopMenu && 'top-14',
+      )}
+      style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
     >
       <section
         aria-label="Camera controls hint"
@@ -1690,7 +1690,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
-      hintBelowTopMenu={actionMenuPlacement === 'top' && !isMobile}
+      hintBelowTopMenu={dockMenuOnTop}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
@@ -1791,9 +1791,12 @@ function EditorContent({
                     {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
                     {!(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
                       (dockMenuOnTop ? (
-                        // Docked at the top centre of the scene panes, clear of the canvas.
-                        <div className="pointer-events-auto absolute top-3 left-1/2 z-20 -translate-x-1/2">
-                          <ActionMenu inline placement="top" />
+                        // Its own row under the host toolbar row, centred on the scene panes.
+                        // No transform here: the menu's pill is fixed to the scene region.
+                        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center">
+                          <div className="pointer-events-auto">
+                            <ActionMenu inline placement="top" />
+                          </div>
                         </div>
                       ) : (
                         <div className="pointer-events-auto">
@@ -1804,6 +1807,7 @@ function EditorContent({
                   </SceneRegion>
                   {/* The inspector and the shortcuts card share one right column. */}
                   <RightStack
+                    belowTopMenu={dockMenuOnTop}
                     reserveBottomMenu={!dockMenuOnTop}
                     helper={isCaptureMode ? null : <HelperManager />}
                     inspector={

@@ -3,6 +3,9 @@ import { createContext, useContext } from 'react'
 /** Viewport edge the action menu docks to. */
 export type ActionMenuPlacement = 'bottom' | 'top'
 
+/** Where chrome under a top-docked menu starts: below the host toolbar row and the menu itself. */
+export const TOP_MENU_CLEARANCE = '7.25rem'
+
 const ActionMenuPlacementContext = createContext<ActionMenuPlacement>('bottom')
 
 export const ActionMenuPlacementProvider = ActionMenuPlacementContext.Provider
