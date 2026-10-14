@@ -29,6 +29,7 @@ import {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   isValidWallSideFace,
   markToolCancelConsumed,
   movementSfxStepKey,
@@ -1653,8 +1654,7 @@ const CabinetTool = () => {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      const tag = (event.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(event.target)) return
       const dimensionEditor = usePlacementPreview.getState()
       if (event.key === 'Tab' && dimensionEditor.dimensions.length > 0) {
         const currentIndex = dimensionEditor.dimensions.findIndex(

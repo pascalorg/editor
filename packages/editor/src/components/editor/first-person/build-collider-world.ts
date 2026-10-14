@@ -5,6 +5,7 @@ import {
   getGarageVisibleOpeningRatio,
   getLevelElevations,
   isOperationDoorType,
+  nodeMechanism,
   nodeRegistry,
   sceneRegistry,
   terrainFieldOf,
@@ -280,6 +281,10 @@ function shouldSkipColliderNode(node: AnyNode) {
 function createDoorLeafColliderGeometry(root: THREE.Object3D, node: DoorNode) {
   const hasLeafContent = node.segments.some((segment) => segment.type !== 'empty')
   if (!hasLeafContent) return null
+
+  // A door built from a script opens by its model's `open` clip, which the mechanism runs through
+  // its own control: the native `operationState` below never moves for it, so open is read there.
+  if (node.source && nodeMechanism(node)?.isOn(node, useInteractive.getState())) return null
 
   const leafW = node.width - 2 * node.frameThickness
   const leafH = node.height - node.frameThickness

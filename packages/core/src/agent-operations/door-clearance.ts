@@ -7,6 +7,8 @@
  * See docs/layout-clearance-error-log.md for pitfalls (levels, gap sign, scale).
  */
 
+import type { Vec3 } from '../procedural-items/recipe'
+import { boxCorners, rotateVector } from '../procedural-items/spatial'
 import { type AnyNode, getScaledDimensions } from '../schema'
 import { type Vec2, wallLength } from './plan-geometry'
 
@@ -154,11 +156,45 @@ export function itemNodePlanAabb(node: AnyNode): PlanAabb | null {
   ) {
     return null
   }
-  return itemPlanAabb(
-    node.position,
-    [Math.abs(width), Math.abs(height), Math.abs(depth)],
-    rotationY,
-  )
+  const corners = itemNodePlanCorners(node)
+  if (!corners.every((corner) => corner.every(Number.isFinite))) return null
+  return {
+    minX: Math.min(...corners.map(([x]) => x)),
+    maxX: Math.max(...corners.map(([x]) => x)),
+    minZ: Math.min(...corners.map(([, z]) => z)),
+    maxZ: Math.max(...corners.map(([, z]) => z)),
+  }
+}
+
+/**
+ * Script bounds need not be centred on the item origin, and the asset's own corrective scale,
+ * rotation and offset sit inside the node's scale, as `scriptItemBoundsInLevel` measures them;
+ * catalog bounds are normalized.
+ */
+export function itemNodePlanCorners(node: Extract<AnyNode, { type: 'item' }>): Vec2[] {
+  const yaw = node.rotation?.[1] ?? 0
+  const place = (lx: number, lz: number): Vec2 => [
+    node.position[0] + lx * Math.cos(yaw) + lz * Math.sin(yaw),
+    node.position[2] - lx * Math.sin(yaw) + lz * Math.cos(yaw),
+  ]
+  const bounds = node.source?.manifest.bounds
+  if (!bounds) {
+    const [width, , depth] = node.asset.dimensions
+    return [-width / 2, width / 2].flatMap((x) =>
+      [-depth / 2, depth / 2].map((z) => place(x * node.scale[0], z * node.scale[2])),
+    )
+  }
+  const assetScale = node.asset.scale ?? [1, 1, 1]
+  return boxCorners(bounds.min, bounds.max).map((point) => {
+    const [x, , z] = rotateVector(
+      point.map((value, axis) => value * assetScale[axis]!) as Vec3,
+      node.asset.rotation,
+    )
+    return place(
+      (x + node.asset.offset[0]) * node.scale[0],
+      (z + node.asset.offset[2]) * node.scale[2],
+    )
+  })
 }
 
 export function inspectItemPlanFootprint(
@@ -234,9 +270,11 @@ export function inspectItemPlanFootprint(
     return { ok: false, reason: 'non_positive_plan_dimensions' }
   }
 
+  const aabb = itemNodePlanAabb(node)
+  if (!aabb) return { ok: false, reason: 'non_finite_dimensions' }
   return {
     ok: true,
-    aabb: itemPlanAabb(node.position, effectiveDimensions, rotationY),
+    aabb,
     sourceDimensions: [width, height, depth],
     effectiveDimensions,
     rotationY,

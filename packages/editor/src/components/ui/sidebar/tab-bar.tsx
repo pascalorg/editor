@@ -47,8 +47,8 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
             className={cn(
               'relative h-7 rounded-md px-3 font-medium text-sm transition-colors',
               isActive
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                ? 'bg-sidebar-accent text-foreground'
+                : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground',
             )}
             key={tab.id}
             onClick={() => {
@@ -101,8 +101,8 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
             className={cn(
               'group flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
               showActive
-                ? 'bg-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
+                ? 'bg-sidebar-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
+                : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
             )}
             onClick={() => {
               triggerSFX('sfx:menu-click')

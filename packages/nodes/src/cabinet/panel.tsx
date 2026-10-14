@@ -128,7 +128,7 @@ const EMPTY_MODULES: CabinetModuleNodeType[] = []
 const EMPTY_MODULE_IDS: AnyNodeId[] = []
 
 const PRESET_BUTTON_CLASS =
-  'flex h-9 items-center justify-center rounded-md border border-border/40 bg-[#252527] px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-[#303033]'
+  'flex h-9 items-center justify-center rounded-md border border-border/40 bg-black/3 dark:bg-[#252527] px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-black/6 dark:hover:bg-[#303033]'
 const REFLOW_REJECTED_MESSAGE =
   'No space in this run. No base cabinet can shrink enough to fit this item.'
 
@@ -803,7 +803,7 @@ export default function CabinetPanel() {
               </>
             )}
             {ceilingOverflow > 1e-4 && (
-              <div className="flex gap-1.5 px-1 text-xs leading-5 text-red-300">
+              <div className="flex gap-1.5 px-1 text-xs leading-5 text-red-700 dark:text-red-300">
                 <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
                 <span>
                   Finished height extends {(ceilingOverflow * 1000).toFixed(0)} mm above the
@@ -821,7 +821,7 @@ export default function CabinetPanel() {
             <div className="space-y-1 px-1 pb-2 text-xs leading-5">
               {planningReport.errors.map((planningIssue) => (
                 <div
-                  className="flex gap-1.5 text-red-300"
+                  className="flex gap-1.5 text-red-700 dark:text-red-300"
                   key={`${planningIssue.severity}-${planningIssue.code}-${planningIssue.nodeIds.join('-')}`}
                 >
                   <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
@@ -830,7 +830,7 @@ export default function CabinetPanel() {
               ))}
               {planningReport.warnings.map((planningIssue) => (
                 <div
-                  className={`flex gap-1.5 ${planningIssue.code === 'ceiling-overflow' ? 'text-red-300' : 'text-amber-300'}`}
+                  className={`flex gap-1.5 ${planningIssue.code === 'ceiling-overflow' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}
                   key={`${planningIssue.severity}-${planningIssue.code}-${planningIssue.nodeIds.join('-')}`}
                 >
                   <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
@@ -866,7 +866,7 @@ export default function CabinetPanel() {
                     ? 'Close cabinet'
                     : 'Open cabinet'
               }
-              className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-[#3e3e3e]"
+              className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-black/4 dark:bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
               onClick={() => {
                 if (isAnimating) {
                   stopAnimation()
@@ -896,7 +896,7 @@ export default function CabinetPanel() {
         {reflowNotice ? (
           <p
             aria-live="polite"
-            className="px-1 pb-2 text-xs leading-5 text-amber-400"
+            className="px-1 pb-2 text-xs leading-5 text-amber-700 dark:text-amber-400"
             role="status"
           >
             {reflowNotice.message}

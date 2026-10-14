@@ -5,6 +5,7 @@ import {
   getEffectiveNode,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
+  getSegmentFasciaMaterial,
   isGlazedRoofSegment,
   type RoofNode,
   type RoofSegmentNode,
@@ -15,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   createMaterial,
+  createMaterialFromPresetRef,
   getRoofMaterialArray,
   levelWallCladdingRef,
   resolveMaterialRef,
@@ -38,6 +40,11 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
   const sceneMaterials = useScene((state) => state.materials)
 
   useRegistry(node.id, 'roof-segment', ref)
+  // A segment mounted after its roof (one dropping into an assembling roof)
+  // still gets its own build: the roof system dropped its mark while it was unmounted.
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
   // The renderer loads lazily, so the scene-load dirty mark can be consumed
   // before this mesh registers. A painted segment is built only from its own
   // mesh (the merged shell skips it), so it would keep its empty placeholder.
@@ -104,8 +111,17 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
     const edge = resolveSlot('edge')
     const wall = resolveSlot('wall')
     const top = resolveSlot('top')
+    // Slot 2 holds the fascia and rake boards: their own finish, else the wall role's.
+    const fasciaSpec = getSegmentFasciaMaterial(node)
+    const fascia = fasciaSpec
+      ? typeof fasciaSpec.materialPreset === 'string'
+        ? createMaterialFromPresetRef(fasciaSpec.materialPreset, shading)
+        : fasciaSpec.material !== undefined
+          ? createMaterial(fasciaSpec.material, shading)
+          : null
+      : null
 
-    if (!(edge || wall || top)) {
+    if (!(edge || wall || top || fascia)) {
       return themedArray
     }
 
@@ -114,7 +130,12 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
     // Per-role only, then the themed parent slot — no cross-role fallback, so
     // painting one segment surface never bleeds onto its other surfaces.
     const slot = (i: number) => themedArray?.[i] ?? new THREE.MeshStandardMaterial()
-    return [edge ?? slot(0), wall ?? slot(1), wall ?? slot(2), top ?? slot(3)] as THREE.Material[]
+    return [
+      edge ?? slot(0),
+      wall ?? slot(1),
+      fascia ?? wall ?? slot(2),
+      top ?? slot(3),
+    ] as THREE.Material[]
   }, [
     node.material,
     node.materialPreset,
@@ -125,6 +146,8 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
     node.edgeMaterialPreset,
     node.wallMaterial,
     node.wallMaterialPreset,
+    node.fasciaMaterial,
+    node.fasciaMaterialPreset,
     parentNode,
     sceneMaterials,
     shading,

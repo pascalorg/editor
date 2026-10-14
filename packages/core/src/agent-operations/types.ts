@@ -1,19 +1,23 @@
 import type { AnyNode, AssetInput, Collection, SceneMaterial, SceneMaterialId } from '../schema'
+import type { SessionKeep, SessionRecord } from './scene-checkpoint'
 
 export type SceneNodes = Readonly<Record<string, AnyNode>>
 
 /**
- * What a surface knows beyond the scene: the chat knows the floor a person is viewing; a host that
- * keeps checkpoints passes the one asked for, and verify_scene compares the scene with it. A host
- * with an item library passes it as `catalog` (the chat and the hosted MCP: the published library;
- * the standalone MCP: its built-in list), resolved before the call, as the operations are sync.
- * A host that can store scene materials with the nodes that use them passes the scene's
- * `materials`: paint then checks scene refs against them and keeps a native material as one.
+ * What a surface knows beyond the scene: the chat knows the floor a person is viewing; a host
+ * passes the agent's session so far (the moments it named, what it made), which verify_scene
+ * compares the scene with. A host with an item library passes it as `catalog` (the chat and the
+ * hosted MCP: the published library; the standalone MCP: its built-in list), resolved before the
+ * call, as the operations are sync. A host that can store scene materials with the nodes that use
+ * them passes the scene's `materials`: paint then checks scene refs against them and keeps a native
+ * material as one.
  */
 export type AgentContext = {
   activeLevelId: string | null
   /** Opaque here: its measure is the measure module's (scene-measure), which reads it. */
   checkpoint?: { name: string; measure: unknown }
+  /** The agent's session so far. The host keeps it where its sessions live; it is never scene data. */
+  session?: SessionRecord
   catalog?: readonly AssetInput[]
   materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
 }
@@ -32,6 +36,8 @@ export type SceneChanges = {
 
 export type AgentOperationOutcome = {
   result: Record<string, unknown>
+  /** What the operation asks the host to keep with the session: a checkpoint it took. */
+  keep?: SessionKeep
   changes?: SceneChanges
   /**
    * For an edit that depends on construction the host derives from `changes` (rooms re-derived

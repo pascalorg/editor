@@ -154,6 +154,13 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
 
 export function SceneLoader(props: SceneLoaderProps) {
   const webXRInstalled = useWebXRInstalled()
+  // The editor follows its host's `.dark` class, and this app keeps the editor
+  // dark: the page root carries it from the first paint, and <body> for the
+  // menus and dialogs the editor portals there.
+  useEffect(() => {
+    document.body.classList.add('dark')
+    return () => document.body.classList.remove('dark')
+  }, [])
   return (
     <WebXRFeatureRuntime enabled={webXRInstalled}>
       <SceneEditor {...props} />
@@ -331,7 +338,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
   )
 
   return (
-    <div className="relative h-screen w-screen">
+    <div className="dark relative h-screen w-screen">
       {conflict && (
         <div className="dark pointer-events-auto absolute top-14 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 text-foreground shadow-xl">
           <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>

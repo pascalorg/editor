@@ -16,8 +16,8 @@ import {
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallFaceOffsets,
-  getWallPlaneTop,
   getWallPlanFootprint,
+  getWallTop,
   hidesDescendants,
   type ImportedMeshNode,
   intersection,
@@ -27,7 +27,6 @@ import {
   measureStair,
   prepareSlabPolygonContext,
   resolveCeilingHeight,
-  resolveWallTop,
   type SlabNode,
   type StairNode,
   type StairSegmentNode,
@@ -863,11 +862,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       const chord = Math.hypot(endPlan[0] - startPlan[0], endPlan[1] - startPlan[1])
       const support = wallSupportForNodes(wall, nodes)
       const base = support.elevation
-      const top = resolveWallTop(
-        wall,
-        getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>),
-        base,
-      )
+      const top = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base)
       const cells = wallBaseCells(wall, support, top)
       if (chord < 1e-6 || cells.every((cell) => top - cell.bottom <= 1e-4)) {
         skipped.push({ nodeId: wall.id, type: wall.type, reason: 'degenerate' })

@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { extractRooms } from '../../lib/room-graph'
+import { type AnyNode, LevelNode } from '../../schema'
 import { WallNode } from '../../schema/nodes/wall'
 import { ZoneNode } from '../../schema/nodes/zone'
 import {
   buildWallFinishLayout,
+  getWallLevelZones,
   getWallZoneSpans,
   resolveWallFaceChain,
   resolveWallFinish,
@@ -45,7 +47,7 @@ function tJunction(host: Partial<WallNode> = {}) {
       ...extra,
     })
   }
-  return { host: walls[0]!, zone }
+  return { host: walls[0]!, partition: walls[4]!, zone }
 }
 
 const describeHit = (hit: WallFinishHit) =>
@@ -76,6 +78,47 @@ describe('wall face spans from zones', () => {
 })
 
 describe('wall finish resolution order', () => {
+  test('shared and reversed walls keep each room local finish on its geometric face', () => {
+    const { host, partition, zone } = tJunction()
+    const zones = [
+      zone('A', {
+        wallMaterial: 'library:room-a',
+        wallOverrides: [{ wallId: partition.id, face: 'a', finish: 'library:local-a' }],
+      }),
+      zone('B', {
+        wallMaterial: 'library:room-b',
+        wallOverrides: [{ wallId: host.id, face: 'b', finish: 'library:local-b' }],
+      }),
+    ]
+    const shared = buildWallFinishLayout(partition, zones)
+    expect(describeHit(resolveWallFinish(shared, 'a', 2, 1))).toBe('override:library:local-a')
+    expect(describeHit(resolveWallFinish(shared, 'b', 2, 1))).toBe('zone:library:room-b')
+    const reversed = buildWallFinishLayout({ ...host, start: host.end, end: host.start }, zones)
+    expect(describeHit(resolveWallFinish(reversed, 'b', 2, 1))).toBe('override:library:local-b')
+    expect(describeHit(resolveWallFinish(reversed, 'b', 6, 1))).toBe('zone:library:room-a')
+    expect(describeHit(resolveWallFinish(reversed, 'a', 2, 1))).toBe('slot')
+  })
+
+  test('coincident rooms on another storey cannot supply a wall finish', () => {
+    const { host, zone } = tJunction()
+    const ground = zone('A', { wallMaterial: 'library:ground' })
+    const upper = zone('B', {
+      id: 'zone_upper',
+      parentId: 'level_upper',
+      wallMaterial: 'library:upper',
+    })
+    const level = LevelNode.parse({ id: 'level_t', level: 0, children: [host.id, ground.id] })
+    const upstairs = LevelNode.parse({ id: 'level_upper', level: 1, children: [upper.id] })
+    const nodes: Record<string, AnyNode> = Object.fromEntries(
+      [level, upstairs, host, ground, upper].map((node) => [node.id, node]),
+    )
+    const zones = getWallLevelZones(host, nodes)
+    expect(zones.map((entry) => entry.id)).toEqual([ground.id])
+    const layout = buildWallFinishLayout(host, zones)
+    expect(describeHit(resolveWallFinish(layout, 'a', 2, 1))).toBe('zone:library:ground')
+    expect(describeHit(resolveWallFinish(layout, 'a', 6, 1))).toBe('slot')
+  })
+
   // region > zone override for this face > zone wallMaterial > wall face slot > kind default
   test('each level wins over the ones below it, per span of the T-junction', () => {
     const { host, zone } = tJunction({

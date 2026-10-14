@@ -42,6 +42,11 @@ type ViewerState = {
    * selection paths without changing the local user's editable selection. */
   externalSelectedIds: BaseNode['id'][]
   setExternalSelectedIds: (ids: BaseNode['id'][]) => void
+  /** Elements a chat context chip points at (Point and ask), drawn in the `point` outline style.
+   * Its own slot, so a teammate's highlight in `externalSelectedIds` is never clobbered. */
+  pointedIds: BaseNode['id'][]
+  /** `null` clears it. */
+  setPointedIds: (ids: BaseNode['id'][] | null) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
@@ -362,6 +367,18 @@ const useViewer = create<ViewerState>()(
             return state
           }
           return { externalSelectedIds: ids }
+        }),
+      pointedIds: [],
+      setPointedIds: (ids) =>
+        set((state) => {
+          const next = ids ?? []
+          if (
+            state.pointedIds.length === next.length &&
+            state.pointedIds.every((id, index) => id === next[index])
+          ) {
+            return state
+          }
+          return { pointedIds: next }
         }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>

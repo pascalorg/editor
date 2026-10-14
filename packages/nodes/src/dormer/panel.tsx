@@ -266,7 +266,7 @@ export default function DormerPanel() {
                   'flex min-h-10 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs transition-colors',
                   isSelected
                     ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                    : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                 )}
                 key={option.value}
                 onClick={() => setSection(option.value)}
@@ -342,7 +342,7 @@ export default function DormerPanel() {
                       'flex min-h-10 items-center justify-center rounded-lg border px-2 py-2 text-xs transition-colors',
                       isSelected
                         ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                        : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                        : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                     )}
                     key={option.value}
                     onClick={() => handleUpdate({ roofType: option.value })}
@@ -366,7 +366,7 @@ export default function DormerPanel() {
                         'flex min-h-10 items-center justify-center rounded-lg border px-2 py-2 text-xs transition-colors',
                         isSelected
                           ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                          : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                          : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                       )}
                       key={option.value}
                       onClick={() => handleUpdate({ shedHighSide: option.value })}

@@ -137,8 +137,11 @@ export type SceneViewPose =
       viewWidth: number
     }
 
-/** The picture's size: enough to read a facade's bays, few tokens. */
-export const VIEW_SIZE = { w: 1280, h: 800 } as const
+/**
+ * The picture's size, the most of each side: a shelf's books and a door's handles read. Vision
+ * models scale a picture down past ~1568 px on its long side, so more costs bytes and nothing seen.
+ */
+export const VIEW_SIZE = { w: 1920, h: 1200 } as const
 const ASPECT = VIEW_SIZE.w / VIEW_SIZE.h
 
 /** A crop comes back at most this long on either host: the region as the photo has it, never larger than a view. */
@@ -427,6 +430,20 @@ function outwardOf(opening: AnyNode & { rotation?: number[] }, wall: WallNode, y
   const [ux, uz] = [(-dz * sign) / length, (dx * sign) / length]
   // `+ 0` so a vector along an axis reads 0, not -0.
   return [ux * Math.cos(yaw) + uz * Math.sin(yaw) + 0, -ux * Math.sin(yaw) + uz * Math.cos(yaw) + 0]
+}
+
+/**
+ * Which way a door or a window faces, outward, as a unit vector in the site's plan (x, z): what a
+ * view of it is taken from, and what a camera that follows the build looks at it along. Null for
+ * anything that is not an opening in a wall.
+ */
+export function sceneViewFacing(
+  nodes: Readonly<Record<string, AnyNode>>,
+  id: string,
+): [number, number] | null {
+  const opening = openingOf(nodes, nodes[id])
+  if (!opening) return null
+  return outwardOf(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
 }
 
 /**

@@ -70,10 +70,15 @@ The navigation (`ViewerSceneHeader`, given a `ViewerSource`) is the breadcrumb �
 room › element, where an element shows the room it stands in without selecting it — and the floor
 list with, under the current floor, its Units, Rooms and Zones (empty sections left out). A crumb,
 a floor or a row selects and frames (`camera-controls:frame`: the node's saved view, else its box at
-about 45° along the current heading); the canvas never frames. `ViewerRooms` draws the editor's room
-pills (same visibility rule, same declutter) and the editor's room highlight for the selected or
-hovered room and a focused unit's rooms. `useViewerFloorDisplay` hides the levels above the current
-floor outside the walkthrough.
+about 45° along the current heading); the canvas never frames. Hosts frame through the same
+`frameViewerNode`, and a unit through `enterUnitFocus`, as the site panel does. Framing jumps
+instead of gliding under reduced motion. The plan follows the framed camera; with no 3D view on
+screen it answers the request itself, once the selection that came with it has rendered (so a node
+on another floor or building is placed with that building's transform), fitting the node's box to
+the pane at the current turn and aspect, or centring a saved view's target at the current zoom.
+`ViewerRooms` draws the editor's room pills (same visibility rule, same declutter) and the editor's
+room highlight for the selected or hovered room and a focused unit's rooms. `useViewerFloorDisplay`
+hides the levels above the current floor outside the walkthrough.
 
 Preview borrows the shared store: `setPreviewMode(true)` saves the editor's `selection` and
 `focusedUnitId` and opens Preview on the editor's floor with nothing else selected;
@@ -112,13 +117,21 @@ phase: 'building'  → everything on the active level: walls, slabs, ceilings, r
 ```
 
 Room label pills (`RoomLabels3D`, `RoomLabels2D`, one `RoomPill`) show while nothing but the
-site, building or level is selected. Only the pill itself takes the pointer, and it goes through
+site, building or level is selected. Once the view rests, each pill shows as much as fits inside
+its room's outline on screen (the part in front of the camera), inside the pane and 4 px clear
+of the others (`placePills`): name and area, the name, its colour dot, or nothing, so the detail
+follows the zoom. A zone drawn inside a room is a hole in it (`roomLabelEntries`). The room under
+the pointer (in 3D where its ray meets each room's floor, whatever mesh is in the way: the nearest
+floor, then the smallest room on it; in 2D the plan point) or a focused pill opens one read-only
+detail chip with the whole label, over the canvas's flags, and the pills it covers fade out;
+Escape closes it. Only a pill takes a click (or Enter or Space), and it goes through
 the same zone-area rule as a zone's fill or label in the plan (`hoverZoneArea` / `clickZoneArea`
 in `lib/room-zone-routing.ts`): a room room-first, a modifier or a zone that bounds no room as the
-zone (its outline, its panel and outline editor). Zones show tinted volumes only while a unit's
-membership is painted; otherwise a zone looks like a room. A new zone is written with a palette
-colour picked from its id (`newZone` / `zoneColorForSeed` in core), a captured room from its capture's
-id, unless its creator chose one;
+zone (its outline, its panel and outline editor). A list that names a zone, the Rooms list or a
+host's chat reference, selects it through `selectZoneOrRoom` (exported for hosts) by the same rule.
+Zones show tinted volumes only while a unit's membership is painted; otherwise a zone looks like a
+room. A new zone is written with a palette colour picked from its id (`newZone` /
+`zoneColorForSeed` in core), a captured room from its capture's id, unless its creator chose one;
 existing zones keep their stored colour.
 
 Inside the building no click changes the phase. Site is entered from the Scene panel's site header

@@ -73,14 +73,16 @@ function ShortcutSequence({
                   <span className="text-[9px] text-muted-foreground/70">/</span>
                 ) : null}
                 <ShortcutToken
-                  className={cn(TOKEN_CLASS, active && 'border-white bg-white text-black shadow-sm')}
+                  className={cn(TOKEN_CLASS, active &&
+                      'border-foreground bg-foreground text-background shadow-sm dark:border-white dark:bg-white dark:text-black')}
                   value={alternative}
                 />
               </Fragment>
             ))
           ) : (
             <ShortcutToken
-              className={cn(TOKEN_CLASS, active && 'border-white bg-white text-black shadow-sm')}
+              className={cn(TOKEN_CLASS, active &&
+                      'border-foreground bg-foreground text-background shadow-sm dark:border-white dark:bg-white dark:text-black')}
               value={entry}
             />
           )}
@@ -431,7 +433,7 @@ function HintRow({ hint }: { hint: ContextualShortcutHint }) {
         <div
           className={cn(
             'text-xs leading-5',
-            hint.active ? 'font-medium text-white' : 'text-muted-foreground',
+            hint.active ? 'font-medium text-foreground dark:text-white' : 'text-muted-foreground',
           )}
         >
           {hint.label}

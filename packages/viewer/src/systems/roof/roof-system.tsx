@@ -42,6 +42,7 @@ import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
+import { isRevealAssembling } from '../construction-reveal/construction-reveal'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -172,6 +173,27 @@ const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
 const MAX_SEGMENTS_PER_FRAME = 3
 
+/** What each roof's shell was last merged from: its node and its segments, as the store held them. */
+const mergedFrom = new Map<AnyNodeId, Map<string, AnyNode>>()
+
+function rememberMergedInputs(roof: RoofNode, nodes: Record<string, AnyNode>) {
+  const inputs = new Map<string, AnyNode>()
+  for (const id of [roof.id, ...(roof.children ?? [])]) {
+    const node = nodes[id]
+    if (node) inputs.set(id, node)
+  }
+  mergedFrom.set(roof.id as AnyNodeId, inputs)
+}
+
+/** Whether nothing a roof's shell is made of has changed since it was merged. */
+function mergedFromStillHolds(roofId: AnyNodeId, nodes: Record<string, AnyNode>): boolean {
+  const inputs = mergedFrom.get(roofId)
+  const roof = nodes[roofId]
+  if (!inputs || roof?.type !== 'roof') return false
+  const ids = [roofId, ...(roof.children ?? [])]
+  return ids.length === inputs.size && ids.every((id) => inputs.get(id) === nodes[id])
+}
+
 /**
  * Roofs whose merged shell is still to build: until it is, the roof shows its segments apart (or
  * an old shell), and a capture would show that. Only roofs on screen count, a first merge (a
@@ -300,6 +322,7 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
       pendingIndependentSegments.clear()
       previousRoofPlanBounds.clear()
       warnedMergedRoofNaNIds.clear()
+      mergedFrom.clear()
       for (const cached of mergedRoofSegmentGeometryCache.values()) {
         disposeCachedMergedRoofSegmentGeometrySet(cached)
       }
@@ -393,14 +416,13 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
           clearDirty(id as AnyNodeId)
         }
         pendingIndependentSegments.delete(id)
-        // Cascade-driven rebuilds consume the same budget without restarting the cascade.
-        if (effectiveSegment.parentId && !independentCascade) {
-          queueSiblingRoofUpdates(
-            effectiveSegment.parentId as AnyNodeId,
-            nodes,
-            geometryAdapter,
-            id,
-          )
+        const parentId = effectiveSegment.parentId as AnyNodeId | null
+        if (
+          parentId &&
+          !independentCascade &&
+          !(isRevealAssembling(parentId) && mergedFromStillHolds(parentId, nodes))
+        ) {
+          queueSiblingRoofUpdates(parentId, nodes, geometryAdapter, id)
         }
       } else if (node.type === 'roof') {
         queueSiblingRoofUpdates(id as AnyNodeId, nodes, geometryAdapter)
@@ -416,6 +438,7 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
       const node = nodes[id]
       if (node?.type !== 'roof') {
         pendingRoofUpdates.delete(id)
+        mergedFrom.delete(id)
         continue
       }
 
@@ -425,11 +448,11 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
       const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
       if (!mergedMesh) continue
 
-      if (mergedMesh.visible !== false) {
-        // Only rebuild when visible — RoofEditSystem re-triggers via markDirty on edit mode exit
-        updateMergedRoofGeometry(node as RoofNode, group, nodes, geometryAdapter)
-        roofsProcessed++
-      }
+      // Built even while hidden: a roof assembling from its segments (construction
+      // reveal) hides its shell, and must show it whole the moment it is captured.
+      rememberMergedInputs(node as RoofNode, nodes)
+      updateMergedRoofGeometry(node as RoofNode, group, nodes, geometryAdapter)
+      roofsProcessed++
 
       pendingRoofUpdates.delete(id)
     }
@@ -1475,7 +1498,10 @@ function buildFasciaBoards(
   tanTheta: number,
 ): THREE.BufferGeometry | null {
   const { roofType, width, depth } = node
-  const { thickness: bt, height: bh } = FASCIA_BOARD
+  const bt = node.fasciaDepth ?? FASCIA_BOARD.thickness
+  const bh = node.fasciaHeight ?? FASCIA_BOARD.height
+  // A flat roof's boards sized on purpose reach its top, over the membrane's edge: a coping band.
+  const flatTopY = node.fasciaHeight !== undefined ? eaveTopY + node.shingleThickness : eaveTopY
   const out = bt / 2 - FASCIA_EMBED
   const halfD = depth / 2 + deckExt
   const zE = halfD + out
@@ -1532,10 +1558,10 @@ function buildFasciaBoards(
       board([sx * xE, ridgeY, 0], [sx * xE, eaveTopY, -zE], [1, 0])
     }
   } else if (roofType === 'hip' || roofType === 'flat') {
-    for (const sz of [-1, 1]) board([-xL, eaveTopY, sz * zE], [xL, eaveTopY, sz * zE], [0, 1])
+    const y = roofType === 'flat' ? flatTopY : eaveTopY
+    for (const sz of [-1, 1]) board([-xL, y, sz * zE], [xL, y, sz * zE], [0, 1])
     // the side boards butt the eave boards' backs
-    for (const sx of [-1, 1])
-      board([sx * xE, eaveTopY, -zE + bt / 2], [sx * xE, eaveTopY, zE - bt / 2], [1, 0])
+    for (const sx of [-1, 1]) board([sx * xE, y, -zE + bt / 2], [sx * xE, y, zE - bt / 2], [1, 0])
   } else if (roofType === 'shed') {
     // the low eave at +z, the slope rising to −z
     const highY = eaveTopY + 2 * halfD * tanTheta

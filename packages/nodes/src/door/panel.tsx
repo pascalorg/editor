@@ -307,9 +307,9 @@ export default function DoorPanel() {
                       'flex min-h-12 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                       isSelected
                         ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                        : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                        : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                       !option.available &&
-                        'cursor-not-allowed opacity-45 hover:bg-[#2C2C2E] hover:text-muted-foreground',
+                        'cursor-not-allowed opacity-45 hover:bg-black/4 dark:hover:bg-[#2C2C2E] hover:text-muted-foreground',
                     )}
                     disabled={!option.available}
                     key={option.value}
@@ -336,7 +336,7 @@ export default function DoorPanel() {
                   'flex min-h-10 items-center rounded-lg border px-3 py-2 text-left text-xs transition-colors',
                   doorStyles.includes(style)
                     ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                    : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                 )}
                 key={style}
                 onClick={() => handleUpdate(doorStyleLook(style))}
@@ -924,7 +924,9 @@ export default function DoorPanel() {
                 return (
                   <div className="mb-2 flex flex-col gap-1" key={i}>
                     <div className="flex items-center justify-between pb-1">
-                      <span className="font-medium text-white/80 text-xs">Segment {i + 1}</span>
+                      <span className="font-medium text-foreground/80 dark:text-white/80 text-xs">
+                        Segment {i + 1}
+                      </span>
                     </div>
 
                     <SegmentedControl
@@ -1060,7 +1062,7 @@ export default function DoorPanel() {
                 />
                 {node.segments.length > 1 && (
                   <ActionButton
-                    className="text-white/60 hover:text-white"
+                    className="text-foreground/60 hover:text-foreground dark:text-white/60 dark:hover:text-white"
                     label="- Remove"
                     onClick={() => handleUpdate({ segments: node.segments.slice(0, -1) })}
                   />
@@ -1081,7 +1083,7 @@ export default function DoorPanel() {
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={handleDelete}
           />

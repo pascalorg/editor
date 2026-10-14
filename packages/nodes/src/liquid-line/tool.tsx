@@ -15,6 +15,7 @@ import {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -467,8 +468,7 @@ const LiquidLineTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       if (e.key === 'f' || e.key === 'F') {
         e.preventDefault()
         useLiquidLineToolOptions.getState().toggleFollow()

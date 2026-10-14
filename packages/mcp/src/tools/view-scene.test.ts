@@ -86,7 +86,7 @@ describe('view_scene over the MCP', () => {
       const { isError, content } = await view.call({ from: 'south', eyeHeight: 1.7 })
       expect(isError).toBe(false)
       expect(asked).toMatchObject([
-        { projectId: 'project_a', pose: { projection: 'perspective' }, size: { w: 1280, h: 800 } },
+        { projectId: 'project_a', pose: { projection: 'perspective' }, size: { w: 1920, h: 1200 } },
       ])
       expect((asked[0] as { pose: { position: number[] } }).pose.position[1]).toBe(1.7)
       expect(content.find((part) => part.type === 'image')).toEqual({
@@ -96,7 +96,7 @@ describe('view_scene over the MCP', () => {
       })
       expect(json(content)).toMatchObject({
         status: 'viewed',
-        size: { width: 1280, height: 800 },
+        size: { width: 1920, height: 1200 },
         tab: 'tab_1',
         capturedAt: '2026-10-05T15:30:00.000Z',
       })
@@ -183,7 +183,7 @@ describe('view_scene over the MCP', () => {
     try {
       const camera = { position: [6, 1.6, 20], target: [6, 2, 4], fov: 50, aspect: 1.5, shift: 0 }
       expect((await view.call({ camera })).isError).toBe(false)
-      expect(sizes).toEqual([{ w: 1280, h: 853 }])
+      expect(sizes).toEqual([{ w: 1920, h: 1280 }])
     } finally {
       await view.close()
     }

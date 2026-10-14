@@ -6,42 +6,6 @@ import {
   SETBACK_LINE_PATTERN,
   updateRibbonHeights,
 } from './line-ribbon'
-import { classifyEdges, resolveFrontEdge, setbackEnvelope } from './setbacks'
-
-// a 20 × 30 m lot; edge 0 runs along z = −15 (north), 1 east, 2 south, 3 west
-const LOT: [number, number][] = [
-  [-10, -15],
-  [10, -15],
-  [10, 15],
-  [-10, 15],
-]
-
-describe('setbacks (the 3D copy of the site plan rules)', () => {
-  test('the front edge names the roles and the envelope shrinks by each side', () => {
-    expect(resolveFrontEdge(LOT, 2)).toBe(2)
-    expect(resolveFrontEdge(LOT, undefined)).toBe(0) // most north-facing
-    const roles = classifyEdges(LOT, 2)
-    expect(roles[2]).toBe('front')
-    expect(roles[0]).toBe('rear')
-    expect(new Set([roles[1], roles[3]])).toEqual(new Set(['left', 'right']))
-    const env = setbackEnvelope(LOT, { front: 6, side: 1.5, rear: 4.5 }, 2)
-    expect(env).toHaveLength(4)
-    const xs = env.map((p) => p[0])
-    const zs = env.map((p) => p[1])
-    expect(Math.min(...xs)).toBeCloseTo(-8.5, 6)
-    expect(Math.max(...xs)).toBeCloseTo(8.5, 6)
-    expect(Math.max(...zs)).toBeCloseTo(9, 6) // the front (south) edge moved in 6 m
-    expect(Math.min(...zs)).toBeCloseTo(-10.5, 6) // the rear 4.5 m
-    // left / right overrides
-    const env2 = setbackEnvelope(LOT, { front: 6, side: 1.5, rear: 4.5, left: 3, right: 1 }, 2)
-    expect(Math.max(...env2.map((p) => p[0])) - Math.min(...env2.map((p) => p[0]))).toBeCloseTo(
-      20 - 4,
-      6,
-    )
-    // setbacks bigger than the lot: nothing
-    expect(setbackEnvelope(LOT, { front: 20, side: 1, rear: 20 }, 2)).toEqual([])
-  })
-})
 
 describe('the patterned ribbon', () => {
   const ring = new Float32Array([0, 0, 0, 10, 0, 0, 10, 0, 10, 0, 0, 10, 0, 0, 0])

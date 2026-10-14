@@ -3,6 +3,7 @@ import { artifactUrl } from '../lib/artifact-store'
 import {
   isScriptedNode,
   matchScriptSlotsToLibrary,
+  requireMeasured,
   type ScriptedNode,
   scriptedSize,
   scriptInteractive,
@@ -206,12 +207,13 @@ export function requireAddObjectReason(input: { nodeId?: string; reason?: string
   if (!input.nodeId && !input.reason?.trim())
     refuse(
       'reason_required',
-      'Say what this object stands in for (reason): why no Pascal tool or catalog item builds it. The scene check lists every authored object with its reason.',
+      'Give its design intent (reason): why the authored shape, size or style suits the request. The scene check lists every authored object with its reason; no catalog-exhaustion proof is required.',
     )
 }
 
 export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context) => {
   const { compiled } = input
+  requireMeasured(compiled, { label: input.name, nodeId: input.nodeId, tool: 'add_object' })
   const rotation: Vec3 | undefined =
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
@@ -290,7 +292,11 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     parentId: parent.id,
     ...(parent.type === 'wall' ? { wallId: parent.id, side: input.side ?? 'front' } : {}),
     position: (input.position as Vec3 | undefined) ?? [0, 0, 0],
-    rotation: rotation ?? [0, 0, 0],
+    rotation: rotation ?? [
+      0,
+      compiled.mount === 'wall-side' && input.side === 'back' ? Math.PI : 0,
+      0,
+    ],
     source: scriptSource(compiled, itemSourceMeta(input)),
     slots: matchScriptSlotsToLibrary(compiled.manifest),
     asset,
@@ -343,6 +349,11 @@ export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, inp
     refuse('wrong_mount', `A ${previous.type}'s script uses mount 'wall'.`, {
       mount: compiled.mount,
     })
+  requireMeasured(compiled, {
+    label: input.name ?? previous.name,
+    nodeId: input.nodeId,
+    tool: `add_${previous.type}`,
+  })
   const [width, height] = scriptedSize(compiled.manifest)
   // Given a position, that is where it goes; otherwise its bottom edge stays put.
   const [x, y, z] = previous.position

@@ -18,7 +18,7 @@ export const furnishRoomTool = {
   name: 'furnish_room',
   title: 'Furnish room',
   description:
-    "Furnish a room for its type from the host's item catalog: the bed, sofa, counters or toilet against the wall facing the door, the rest along a side wall, each set off its wall by its own depth. Name the room by zoneId (its level and outline come with it), or give its polygon and level. The door wall is the edge a door of the room stands on, else doorWallIndex, else edge 0. Nothing lands in a door's clear zone or on another item: a piece that does not fit is nudged, else skipped, and skipped says why. Items stand on the room's level.",
+    "Place a fixed catalog furniture set for a room type; this is generic furnishing, not style matching or custom furniture. The bed, sofa, counters or toilet go against the wall facing the door, the rest along a side wall, each set off its wall by its own depth. Name the room by zoneId (its level and outline come with it), or give its polygon and level. The door wall is the edge a door of the room stands on, else doorWallIndex, else edge 0. Nothing lands in a door's clear zone or on another item: a piece that does not fit is nudged, else skipped, and skipped says why. Items stand on the room's level.",
   input: {
     zoneId: NodeId.optional().describe(
       'The room: zoneId from create_room, or an id from get_zones.',
