@@ -22,6 +22,12 @@ export type AgentContext = {
   materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
 }
 
+/** A write's operations in order, as apply_patch and update_node carry them. */
+export type NodeWrite =
+  | { op: 'create'; node: AnyNode; parentId?: string }
+  | { op: 'update'; id: string; data: Record<string, unknown> }
+  | { op: 'delete'; id: string }
+
 /** Edits an operation asks for; each surface applies them its own way, in one undo step. */
 export type SceneChanges = {
   /** Scene materials to add, written before the nodes that use them. */

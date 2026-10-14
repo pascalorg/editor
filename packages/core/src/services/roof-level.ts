@@ -21,6 +21,10 @@ const STOREY_CONTENT: ReadonlySet<string> = new Set([
   'stair',
 ])
 
+/** Whether a node of this kind belongs on a storey, never on a roof level. */
+export const isStoreyContent = (type: string | undefined): boolean =>
+  type !== undefined && STOREY_CONTENT.has(type)
+
 /** A level declared for its building's roofs (`metadata.role: 'roof'`). */
 export function isRoofLevel(node: AnyNode | undefined): boolean {
   return node?.type === 'level' && node.metadata?.role === 'roof'
@@ -45,7 +49,7 @@ export function servesAsRoofLevel(nodes: Nodes, level: LevelNode): boolean {
   const children = childrenOf(nodes, level)
   return (
     children.some((child) => child.type === 'roof') &&
-    !children.some((child) => STOREY_CONTENT.has(child.type))
+    !children.some((child) => isStoreyContent(child.type))
   )
 }
 
@@ -181,24 +185,45 @@ export function planRoofLevel(nodes: Nodes, storeyId: string, roofHeight: number
 }
 
 /**
- * The storey a roof covers. On a roof level, the highest storey below it that holds something
- * (levels still to be built and support levels between are passed over), else the level directly
- * below. On a storey, the storey below when the roof stands near its floor (a porch's or a lower
- * wing's roof, seated on the walls under it, as the rule places it); else the storey itself (a roof
- * written on its own walls' level, before roof levels). Null off a level.
+ * The storey under a roof level: the highest below it that holds something (levels still to be
+ * built and support levels between are passed over), else the level directly below; the level
+ * itself with none below.
+ */
+function storeyUnder(nodes: Nodes, level: LevelNode): string {
+  const below = stackOf(nodes, level.id, 'below')
+  return (
+    below.find(
+      (other) =>
+        !servesAsRoofLevel(nodes, other) && !isSupportLevel(other) && other.children.length > 0,
+    ) ??
+    below[0] ??
+    level
+  ).id
+}
+
+/**
+ * The storey a level stands for: for a level serving as a roof level, the storey it covers
+ * (`storeyUnder`); else the level itself. Where storey content aimed at a roof level goes.
+ */
+export function storeyOf(nodes: Nodes, levelId: string): string {
+  const level = nodes[levelId]
+  return level?.type === 'level' && servesAsRoofLevel(nodes, level)
+    ? storeyUnder(nodes, level)
+    : levelId
+}
+
+/**
+ * The storey a roof covers. On a roof level, the storey under it (`storeyUnder`). On a storey, the
+ * storey below when the roof stands near its floor (a porch's or a lower wing's roof, seated on the
+ * walls under it, as the rule places it); else the storey itself (a roof written on its own walls'
+ * level, before roof levels). Null off a level.
  */
 export function coveredStoreyId(nodes: Nodes, roof: RoofNode): string | null {
   const level = roof.parentId ? nodes[roof.parentId] : undefined
   if (level?.type !== 'level') return null
+  if (servesAsRoofLevel(nodes, level)) return storeyUnder(nodes, level)
   const below = stackOf(nodes, level.id, 'below')
   if (!below.length) return level.id
-  if (servesAsRoofLevel(nodes, level))
-    return (
-      below.find(
-        (other) =>
-          !servesAsRoofLevel(nodes, other) && !isSupportLevel(other) && other.children.length > 0,
-      ) ?? below[0]!
-    ).id
   const height = elevationsOf(nodes).get(level.id)?.height ?? 0
   return roof.position[1] < height / 2 ? below[0]!.id : level.id
 }
