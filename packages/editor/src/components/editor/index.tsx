@@ -267,6 +267,13 @@ export interface EditorProps {
   // Loading indicator (e.g. project fetching in community mode)
   isLoading?: boolean
 
+  /**
+   * Replaces the loading surface in both layouts. The editor still owns when
+   * it is visible and always shows its error/retry surface when loading fails.
+   * Omit (or pass null) to use the default SceneLoader.
+   */
+  loadingSlot?: ReactNode
+
   // Fires when the full-screen scene loader shows/hides — lets hosts measure
   // open-to-interactive time without reaching into internal loader state.
   onLoaderChange?: (visible: boolean) => void
@@ -1410,6 +1417,7 @@ function EditorContent({
   previewScene,
   isVersionPreviewMode = false,
   isLoading = false,
+  loadingSlot,
   onLoaderChange,
   onThumbnailCapture,
   disablePostFx = false,
@@ -1774,7 +1782,7 @@ function EditorContent({
             {sceneLoadError ? (
               <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
             ) : (
-              <SceneLoader className="bg-background" />
+              (loadingSlot ?? <SceneLoader className="bg-background" />)
             )}
           </div>
         )}
@@ -1869,7 +1877,7 @@ function EditorContent({
           {sceneLoadError ? (
             <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
           ) : (
-            <SceneLoader className="bg-background" />
+            (loadingSlot ?? <SceneLoader className="bg-background" />)
           )}
         </div>
       )}
