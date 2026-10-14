@@ -61,7 +61,12 @@ import { positionLocal, smoothstep, time } from 'three/tsl'
 import { BlockFaceHostFrame } from '../shared/block-face-host'
 import { canRegisterItemLight } from '../shared/item-light-placement'
 import { RoofFaceHostFrame } from '../shared/roof-face-host'
-import { cancelItemModelLoad, getUnavailableItemAsset, ItemGLTFLoader } from './model-loader'
+import {
+  cancelItemModelLoad,
+  getItemResourceFailures,
+  getUnavailableItemAsset,
+  ItemGLTFLoader,
+} from './model-loader'
 
 type MutableMaterial = Material & {
   depthTest?: boolean
@@ -395,9 +400,9 @@ const UnavailableItemModel = ({
 }
 
 /**
- * Expected network failures resolve through ItemGLTFLoader as an unavailable
- * scene so they never become React render errors. Parse and renderer failures
- * still reach this boundary and remain visible to developers.
+ * Expected network and malformed nonbinary JSON failures resolve through
+ * ItemGLTFLoader as an unavailable scene so they never become React render
+ * errors. Other parser and renderer failures still reach this boundary.
  */
 const ModelWithRetry = ({
   node,
@@ -612,7 +617,7 @@ const ModelRenderer = ({
 }
 
 const LoadedModelRenderer = ({
-  gltf: { scene, nodes, animations },
+  gltf: { scene, nodes, animations, userData },
   node,
   markSettled,
   events,
@@ -632,8 +637,12 @@ const LoadedModelRenderer = ({
     // keep such items out of static batches (shared/node-batch/candidates).
     const group = sceneRegistry.nodes.get(node.id)
     if (group) group.userData.itemHasAnimations = animations.length > 0
+    const failedResources = getItemResourceFailures({ userData })
+    if (failedResources.length)
+      useViewer.getState().reportItemLoadFailure(node.id, failedResources[0]!)
     markSettled()
-  }, [markSettled, node.id, animations])
+    if (failedResources.length) return () => useViewer.getState().clearItemLoadFailure(node.id)
+  }, [markSettled, node.id, animations, userData])
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)

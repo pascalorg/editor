@@ -9,7 +9,12 @@ import {
   SHADOW_ONLY_LAYER,
   setSurfaceRaycastLayers,
 } from './layers'
-import { hideFromScene, showInScene, temporarilyShowShadowOnly } from './scene-visibility'
+import {
+  hideFromScene,
+  showInScene,
+  temporarilyShowPresentation,
+  temporarilyShowShadowOnly,
+} from './scene-visibility'
 
 function sceneObject(): THREE.Object3D {
   const obj = new THREE.Object3D()
@@ -46,6 +51,32 @@ describe('scene visibility', () => {
     expect(geometry.layers.isEnabled(SCENE_LAYER)).toBe(true)
     showInScene(isolated, 'shadow-only')
     expect(isolated.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  })
+
+  test('an interior capture shows the isolated and soloed parts of its floor, never batched sources', () => {
+    const root = new THREE.Group()
+    const isolated = sceneObject()
+    const soloed = sceneObject()
+    const batched = sceneObject()
+    const elsewhere = sceneObject()
+    root.add(isolated, soloed, batched)
+    hideFromScene(isolated, 'isolated')
+    hideFromScene(soloed, 'shadow-only')
+    hideFromScene(batched, 'isolated')
+    hideFromScene(batched, 'wall-batched')
+    hideFromScene(elsewhere, 'isolated')
+    const original = [isolated, soloed, batched, elsewhere].map((obj) => obj.layers.mask)
+    const captureLayers = new THREE.Layers()
+
+    const restore = temporarilyShowPresentation(root)
+    expect(isolated.layers.test(captureLayers)).toBe(true)
+    expect(soloed.layers.test(captureLayers)).toBe(true)
+    expect(batched.layers.test(captureLayers)).toBe(false)
+    expect(batched.layers.isEnabled(BATCHED_LAYER)).toBe(true)
+    expect(elsewhere.layers.test(captureLayers)).toBe(false)
+    restore()
+
+    expect([isolated, soloed, batched, elsewhere].map((obj) => obj.layers.mask)).toEqual(original)
   })
 
   test('one reason hides and gives the exact mask back', () => {

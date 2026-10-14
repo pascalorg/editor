@@ -385,6 +385,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   },
 
   capabilities: {
+    reveal: { phase: 'structure', style: 'drop', height: 4 },
     batchable: columnBatchable,
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },

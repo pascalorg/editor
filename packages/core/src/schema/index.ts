@@ -38,12 +38,14 @@ export {
   type CompiledGeometryScript,
   GEOMETRY_MANIFEST_MAX_BYTES,
   GEOMETRY_SCRIPT_MAX_BYTES,
-  GEOMETRY_SCRIPT_MIME_TYPE,
+  GEOMETRY_SCRIPT_MIME_TYPES,
   GeometryArtifactManifest,
+  GeometryScriptLanguage,
   GeometryScriptMount,
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
   GeometryScriptSource,
+  isGeometryScriptMimeType,
 } from './geometry-source'
 export type {
   MaterialMapProperties,
@@ -143,6 +145,7 @@ export {
 export {
   DoorNode,
   DoorSegment,
+  FRENCH_DOOR_SEGMENTS,
   OpeningConstructionType,
   OpeningDimensionReference,
 } from './nodes/door'
@@ -284,6 +287,7 @@ export {
   getPitchFromActiveRoofHeight,
   getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
+  getSegmentFasciaMaterial,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   isBandedShedSegment,
@@ -327,14 +331,14 @@ export {
 } from './nodes/scan'
 export { SeparatorNode } from './nodes/separator'
 export { ShelfNode } from './nodes/shelf'
+export { SiteDossier, SiteNode } from './nodes/site'
 export {
   migrateSiteMetadata,
   SiteAddress,
-  SiteDossier,
-  SiteNode,
+  type SiteMetadataPatch,
   SiteParcel,
   SiteSetbacks,
-} from './nodes/site'
+} from './nodes/site-facts'
 export {
   SKYLIGHT_TYPE_ORDER,
   SKYLIGHT_TYPE_PRESETS,

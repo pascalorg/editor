@@ -64,6 +64,7 @@ import {
   resumeSceneHistory,
   runAsRemoteSceneChange,
   runAsSceneHistoryRestore,
+  runSceneWriteGuards,
   runWithSceneCommitNodeIds,
   type SceneCommitOrigin,
   type SceneSnapshot,
@@ -1494,6 +1495,7 @@ const useScene: UseSceneStore = createSceneStore(
       setReadOnly: (readOnly: boolean) => set({ readOnly }),
 
       unloadScene: () => {
+        runSceneWriteGuards()
         invalidatePendingHydration()
         set({
           hydrationToken: null,
@@ -1517,6 +1519,7 @@ const useScene: UseSceneStore = createSceneStore(
       },
 
       setScene: (nodes, rootNodeIds, extra) => {
+        runSceneWriteGuards()
         // Apply backward compatibility migrations
         const { nodes: patchedNodes, mintedMaterials } = migrateNodes(nodes)
         // Scene materials minted by the legacy→slots migrations join the
@@ -1794,14 +1797,18 @@ const useScene: UseSceneStore = createSceneStore(
         const state = config(set, get, store)
         return {
           ...state,
-          undo: (steps = 1) =>
-            runTemporalJump(get().pastStates.slice().splice(-steps, steps)[0], () =>
+          undo: (steps = 1) => {
+            runSceneWriteGuards()
+            return runTemporalJump(get().pastStates.slice().splice(-steps, steps)[0], () =>
               state.undo(steps),
-            ),
-          redo: (steps = 1) =>
-            runTemporalJump(get().futureStates.slice().splice(-steps, steps)[0], () =>
+            )
+          },
+          redo: (steps = 1) => {
+            runSceneWriteGuards()
+            return runTemporalJump(get().futureStates.slice().splice(-steps, steps)[0], () =>
               state.redo(steps),
-            ),
+            )
+          },
         }
       },
       limit: 50, // Limit to last 50 actions
@@ -2267,6 +2274,7 @@ export function applySceneOperationPatch(
   changes: SceneOperationPatch,
   options: ApplySceneOperationPatchOptions = {},
 ): boolean {
+  runSceneWriteGuards()
   const beforeState = useScene.getState()
   if (
     changes.nodeUpdates.length === 0 &&
@@ -2412,6 +2420,7 @@ export function applySceneSnapshot(
   snapshot: SceneSnapshot,
   options: ApplySceneSnapshotOptions,
 ): boolean {
+  runSceneWriteGuards()
   const before = sceneHistorySnapshotFromState(useScene.getState())
   const temporalState = useScene.temporal.getState()
   if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0 || hasSceneHistoryDrafts()) {

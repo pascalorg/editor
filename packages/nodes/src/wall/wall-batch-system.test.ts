@@ -289,3 +289,79 @@ test('wall batches keep waiting for pending neighbours even after the dirty cens
     queue.mockRestore()
   }
 })
+
+test('walls still rising stay out of the merge; their level merges once the rise ends', () => {
+  const rising = new Set(Array.from({ length: 8 }, (_, index) => `wall_${index}`))
+  const revealing = spyOn(viewerExports, 'isNodeRevealing').mockImplementation((id) =>
+    rising.has(id),
+  )
+  try {
+    // An agent's new floor: every wall is new, dirty and rising.
+    const root = new Object3D()
+    const material = new MeshBasicMaterial()
+    const walls = [...rising].map((id) => registerWall(id, material))
+    for (const wall of walls) root.add(wall)
+    sceneRegistry.nodes.set('level', root)
+    sceneRegistry.byType.level.add('level')
+    registeredIds.push('level')
+    useScene.setState({
+      nodes: {
+        level: { id: 'level', type: 'level', children: [...rising] },
+        ...Object.fromEntries(
+          [...rising].map((id) => [id, { id, type: 'wall', parentId: 'level', visible: true }]),
+        ),
+      },
+      rootNodeIds: ['level'],
+      dirtyNodes: new Set(rising),
+    } as never)
+    useViewer.setState({ wallMode: 'up' } as never)
+    nowMs = 1000
+    runFrame()
+    useScene.setState({ dirtyNodes: new Set() } as never)
+    nowMs = 1200
+    runFrame()
+    nowMs = 1400
+    runFrame()
+
+    expect(root.children.some((child) => child.name === 'wall-batch')).toBe(false)
+    expect(walls.every((wall) => wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+
+    rising.clear()
+    nowMs = 1600
+    runFrame()
+
+    expect(root.children.filter((child) => child.name === 'wall-batch')).toHaveLength(1)
+    expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  } finally {
+    revealing.mockRestore()
+  }
+})
+
+test('batched walls whose reverse play begins draw themselves again, and the level does not re-merge under them', () => {
+  const { root, walls } = setupBatchedLevel()
+  expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  const going = new Set<string>()
+  const revealing = spyOn(viewerExports, 'isNodeRevealing').mockImplementation((id) =>
+    going.has(id),
+  )
+  try {
+    going.add('wall_0')
+    going.add('wall_1')
+    nowMs = 300
+    runFrame()
+    // The merged mesh draws them whole whatever pose their own meshes are given.
+    expect(walls[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expect(walls[1]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expect(walls[2]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+
+    nowMs = 600
+    runFrame()
+    nowMs = 900
+    runFrame()
+    expect(root.children.filter((child) => child.name === 'wall-batch')).toHaveLength(1)
+    expect(walls[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expect(walls[1]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  } finally {
+    revealing.mockRestore()
+  }
+})

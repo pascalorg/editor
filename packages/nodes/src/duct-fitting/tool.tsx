@@ -6,6 +6,7 @@ import {
   EDITOR_LAYER,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   triggerSFX,
   useEditor,
   useInteractionScope,
@@ -285,8 +286,7 @@ const DuctFittingTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       const key = e.key
       if (key === 'r' || key === 'R' || key === 't' || key === 'T') {
         // Capture-phase + stopPropagation so the editor's selection-rotate

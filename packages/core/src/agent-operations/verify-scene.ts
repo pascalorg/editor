@@ -1,15 +1,25 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
+import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
-import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
-import { getStoredLevelHeight } from '../services/storey'
+import { siteBrief } from '../lib/site-placement'
+import { nodeRegistry } from '../registry'
+import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, type LevelNode } from '../schema'
+import { roofsOver } from '../services/roof-level'
+import { isRoofOnStoreyWalls } from '../services/roof-move'
+import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
 import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
 import { measureStair } from '../systems/stair/stair-sizing'
 import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/opening-bounds'
+import {
+  type CeilingObjectObservation,
+  ceilingObjectObservations,
+} from './ceiling-object-observations'
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import { EMPTY_SESSION } from './scene-checkpoint'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
   type ContentCounts,
@@ -19,11 +29,28 @@ import {
   levelsOf,
   nodesOnLevel,
 } from './scene-queries'
+import { reviewSince } from './scene-review'
 import type { AgentOperation, SceneNodes } from './types'
+import { type WallObjectObservation, wallObjectObservations } from './wall-object-observations'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
 export type SceneIssue =
+  | CeilingObjectObservation
+  | WallObjectObservation
   | { type: string; message: string; severity?: 'info' }
+  | {
+      type: 'wall_covering_slab_contact'
+      message: string
+      severity?: 'info'
+      wallId: string
+      slabId: string
+      levelId: string
+      wallTop: number
+      slabUnderside: number
+      slabTop: number
+      penetration: number
+      coplanar: boolean
+    }
   | {
       type: 'wall_open_end'
       message: string
@@ -198,7 +225,8 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
 function schemaErrors(nodes: SceneNodes) {
   const errors: { nodeId: string; path: string; message: string }[] = []
   for (const [id, node] of Object.entries(nodes)) {
-    const parsed = AnyNodeSchema.safeParse(node)
+    const schema = nodeRegistry.get(node.type)?.schema ?? AnyNodeSchema
+    const parsed = schema.safeParse(node)
     if (parsed.success) continue
     for (const issue of parsed.error.issues)
       errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
@@ -239,6 +267,11 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     }
   })
 
+  const buildingOf = (levelId: string) =>
+    levelBuildingId(
+      nodes as Record<AnyNodeId, AnyNode>,
+      nodes[levelId] as AnyNode & { type: 'level' },
+    )
   const issues: SceneIssue[] = []
   const report = (type: string, message: string, informational = false) =>
     issues.push({ type, message, ...(informational ? { severity: 'info' as const } : {}) })
@@ -266,7 +299,8 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       })
     }
     if (level.role === 'roof') {
-      if (content.roofs === 0)
+      // Roof geometry a plugin draws (roof planes) is no `roof` node, and is still the roof.
+      if (onLevel(level.levelId).length === 0)
         report(
           'roof_level_no_roof',
           `${levelName} is a roof support level but has no roof geometry; add or move roof geometry there rather than deleting the support level to satisfy story count`,
@@ -276,11 +310,17 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
           'roof_level_occupied',
           `${levelName} is a roof support level but contains occupied-story content; move rooms, walls, stairs, slabs, ceilings, and items to an occupied story and keep the roof level for roof geometry only`,
         )
-      const reference = level.referenceLevelId ? nodes[level.referenceLevelId] : undefined
-      if (reference?.type === 'level' && level.floorIndex <= reference.level)
+      // An empty storey counts: it is a floor still to be built, and the roof goes above it.
+      const storeyAbove = levels.find(
+        (other) =>
+          other.isOccupiedStory &&
+          other.floorIndex > level.floorIndex &&
+          buildingOf(other.levelId) === buildingOf(level.levelId),
+      )
+      if (storeyAbove)
         report(
-          'roof_level_below_reference',
-          `${levelName} roof support level should be above its reference occupied level ${reference.name ?? reference.id}`,
+          'roof_level_not_on_top',
+          `${levelName} is a roof level below the storey ${storeyAbove.levelName} (${storeyAbove.levelId}): exploded and solo views show its roof inside the building. A building's roof level stays above its storeys: move the storey under it, or the roof onto the roof level on top.`,
         )
       continue
     }
@@ -292,11 +332,52 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       report('zones_no_ceilings', `${levelName} has zones but no ceilings`)
     if (content.walls > 0 && content.doors === 0)
       report('walls_no_doors', `${levelName} has walls but no doors`)
-    if (content.roofs > 0 && (content.walls > 0 || content.zones > 0 || content.stairs > 0))
+    // A roof on a storey that covers it (written on its own walls' level), or one standing on the
+    // walls of the storey holding it; a lower wing's roof here covers the storey below, where the
+    // rule puts it. Those on its walls are the ones move_roofs_to_roof_level takes off.
+    const held = (nodes[level.levelId] as LevelNode).children
+    const onWalls = held.filter((id) => isRoofOnStoreyWalls(nodes, id))
+    if (
+      onWalls.length > 0 ||
+      (roofsOver(nodes, level.levelId).some((roof) => roof.parentId === level.levelId) &&
+        (content.walls > 0 || content.zones > 0 || content.stairs > 0))
+    )
       report(
         'roof_mixed_in_storey',
-        `${levelName} mixes roof geometry with occupied-level content; place roofs on a dedicated roof level for solo/exploded level views`,
+        `${levelName} mixes roof geometry with occupied-level content; place roofs on a dedicated roof level for solo/exploded level views${
+          onWalls.length > 0
+            ? `. On its own walls: ${onWalls.join(', ')}; move_roofs_to_roof_level with levelId ${level.levelId} moves them there as they stand (never delete and rebuild them); by hand, "Move to the roof level" on the roof's panel`
+            : ''
+        }`,
       )
+  }
+
+  for (const level of levels) {
+    for (const wall of ofType(onLevel(level.levelId), 'wall')) {
+      const base = wallSupportForNodes(wall, nodes).elevation
+      const wallTop = getWallTop(wall, level.levelId, nodes, base)
+      for (const { slab, top: slabTop, underside: slabUnderside } of getWallCoveringSlabs(
+        wall,
+        level.levelId,
+        nodes,
+      )) {
+        const penetration = Math.max(0, Math.min(wallTop, slabTop) - Math.max(base, slabUnderside))
+        const coplanar = Math.abs(wallTop - slabTop) <= 1e-6
+        if (penetration <= 1e-6 && !coplanar) continue
+        issues.push({
+          type: 'wall_covering_slab_contact',
+          message: `Wall ${wall.id} top at ${wallTop.toFixed(3)}m intersects covering slab ${slab.id} [${slabUnderside.toFixed(3)}, ${slabTop.toFixed(3)}]m${coplanar ? ' and is coplanar with its walking surface' : ''}; check the wall height or the slab opening.`,
+          wallId: wall.id,
+          slabId: slab.id,
+          levelId: level.levelId,
+          wallTop,
+          slabUnderside,
+          slabTop,
+          penetration,
+          coplanar,
+        })
+      }
+    }
   }
 
   // Storeys are counted per building: separate buildings need no stair between them, and a wall
@@ -453,6 +534,33 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     }
   }
 
+  // Where each building stands on its lot: past the lot line or into the required yards is a
+  // problem, off-centre is not.
+  for (const building of Object.values(nodes)) {
+    if (building.type !== 'building') continue
+    const brief = siteBrief(nodes, { buildingId: building.id })
+    if (!brief) continue
+    const name = building.name ?? 'The building'
+    if (brief.buildable.state === 'none')
+      report(
+        'buildable_area_none',
+        `The setbacks leave nothing to build on this lot: check the site's setbacks before standing ${name} on it.`,
+      )
+    const footprint = brief.footprint
+    if (!footprint) continue
+    const sides = footprint.overhang.sides.join(', ')
+    if (footprint.fit === 'outside')
+      report(
+        'footprint_outside_site',
+        `${name} reaches ${footprint.overhang.lotM.toFixed(1)} m past the lot line (${sides}): place_building centres it in the buildable area; a plan bigger than the lot needs saying so.`,
+      )
+    else if (footprint.fit === 'lot' && brief.buildable.state !== 'none')
+      report(
+        'footprint_outside_setbacks',
+        `${name} stands ${footprint.overhang.setbacksM.toFixed(1)} m into the required yards (${sides}): place_building centres it in the buildable area.`,
+      )
+  }
+
   const errors = schemaErrors(nodes)
   for (const error of errors.slice(0, 5))
     report('schema_invalid', `Schema: ${error.nodeId}.${error.path} ${error.message}`)
@@ -461,13 +569,20 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
   issues.push(...layoutIssuesFromScene(Object.values(nodes)))
+  issues.push(...ceilingObjectObservations(nodes))
+  issues.push(...wallObjectObservations(nodes))
   for (const check of checks)
     if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
   // What the edits since the host's checkpoint lost, by place.
-  const since = context.checkpoint
+  const hosted = context.checkpoint
     ? changesSince(context.checkpoint as SceneCheckpoint, nodes)
     : null
-  if (since) issues.push(...since.issues)
+  if (hosted) issues.push(...hosted.issues)
+  // The look back: what the agent did since a moment it named. The places the registered families
+  // lost count as issues, as a window gone from its place always did.
+  const session = context.session ?? EMPTY_SESSION
+  const since = typeof input?.since === 'string' ? reviewSince(session, input.since, nodes) : null
+  if (since?.places) issues.push(...since.places.issues)
   for (const check of checks)
     if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
 
@@ -487,9 +602,13 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       hasIssues: issues.some((issue) => issue.severity !== 'info'),
       ...authoredObjects(nodes),
       ...Object.assign({}, ...reports.map((report) => report.run(nodes))),
-      ...(since && {
-        sinceCheckpoint: { name: context.checkpoint!.name, changes: since.changes },
+      ...(Object.keys(session.checkpoints).length
+        ? { checkpoints: Object.keys(session.checkpoints) }
+        : {}),
+      ...(hosted && {
+        sinceCheckpoint: { name: context.checkpoint!.name, changes: hosted.changes },
       }),
+      ...(since && { since }),
     },
   }
 }

@@ -565,7 +565,7 @@ export default function ElevatorPanel() {
               From
             </div>
             <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-sm text-foreground"
+              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-sm text-foreground"
               onChange={(event) => handleServiceBoundaryChange('fromLevelId', event.target.value)}
               value={fromLevelId}
             >
@@ -582,7 +582,7 @@ export default function ElevatorPanel() {
               To
             </div>
             <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-sm text-foreground"
+              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-sm text-foreground"
               onChange={(event) => handleServiceBoundaryChange('toLevelId', event.target.value)}
               value={toLevelId}
             >
@@ -600,7 +600,7 @@ export default function ElevatorPanel() {
             Default Floor
           </div>
           <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+            className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
             onChange={(event) => handleUpdate({ defaultLevelId: event.target.value || null })}
             value={selectedDefaultLevelId}
           >
@@ -658,7 +658,7 @@ export default function ElevatorPanel() {
             Shaft Style
           </div>
           <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+            className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
             onChange={(event) =>
               handleUpdate({ shaftStyle: event.target.value as ElevatorNode['shaftStyle'] })
             }
@@ -715,7 +715,7 @@ export default function ElevatorPanel() {
             Opening Style
           </div>
           <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+            className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
             onChange={(event) =>
               handleUpdate({ doorStyle: event.target.value as ElevatorNode['doorStyle'] })
             }
@@ -733,7 +733,7 @@ export default function ElevatorPanel() {
             Door Type
           </div>
           <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+            className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
             onChange={(event) =>
               handleUpdate({
                 doorPanelStyle: event.target.value as ElevatorNode['doorPanelStyle'],
@@ -782,7 +782,7 @@ export default function ElevatorPanel() {
 
             return (
               <div
-                className="flex items-center justify-between gap-2 rounded-lg border border-border/45 bg-[#2C2C2E] px-2.5 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg border border-border/45 bg-black/4 dark:bg-[#2C2C2E] px-2.5 py-2"
                 key={level.id}
               >
                 <span className="min-w-0 truncate text-sm">{getLevelDisplayName(level)}</span>
@@ -790,8 +790,8 @@ export default function ElevatorPanel() {
                   <button
                     className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
                       isServiceOnly
-                        ? 'border-sky-300/45 bg-sky-400/15 text-sky-100'
-                        : 'border-border/50 bg-black/15 text-muted-foreground hover:text-foreground'
+                        ? 'border-sky-600/40 bg-sky-400/15 text-sky-800 dark:border-sky-300/45 dark:text-sky-100'
+                        : 'border-border/50 bg-black/4 dark:bg-black/15 text-muted-foreground hover:text-foreground'
                     } ${isDisabled ? 'cursor-not-allowed opacity-45' : ''}`}
                     disabled={isDisabled}
                     onClick={() => toggleLevelAccess('serviceOnlyLevelIds', level.id)}
@@ -802,8 +802,8 @@ export default function ElevatorPanel() {
                   <button
                     className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
                       isDisabled
-                        ? 'border-red-300/45 bg-red-400/15 text-red-100'
-                        : 'border-border/50 bg-black/15 text-muted-foreground hover:text-foreground'
+                        ? 'border-red-600/40 bg-red-400/15 text-red-700 dark:border-red-300/45 dark:text-red-100'
+                        : 'border-border/50 bg-black/4 dark:bg-black/15 text-muted-foreground hover:text-foreground'
                     }`}
                     onClick={() => toggleLevelAccess('disabledLevelIds', level.id)}
                     type="button"
@@ -828,10 +828,10 @@ export default function ElevatorPanel() {
               <button
                 className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-2.5 text-left transition-colors ${
                   isDisabled
-                    ? 'cursor-not-allowed border-border/35 bg-[#202024] text-muted-foreground/55'
+                    ? 'cursor-not-allowed border-border/35 bg-black/3 dark:bg-[#202024] text-muted-foreground/55'
                     : isActive
-                      ? 'border-emerald-400/45 bg-emerald-400/15 text-emerald-100'
-                      : 'border-border/50 bg-[#2C2C2E] text-foreground hover:bg-[#3e3e3e]'
+                      ? 'border-emerald-600/45 bg-emerald-400/15 text-emerald-800 dark:border-emerald-400/45 dark:text-emerald-100'
+                      : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e]'
                 }`}
                 disabled={isDisabled}
                 key={level.id}
@@ -857,7 +857,7 @@ export default function ElevatorPanel() {
                   )}
                 </span>
                 <span
-                  className={`flex h-6 min-w-6 items-center justify-center rounded-full border border-white/15 bg-black/20 ${
+                  className={`flex h-6 min-w-6 items-center justify-center rounded-full border border-black/15 dark:border-white/15 bg-black/5 dark:bg-black/20 ${
                     stopOrder ? 'px-1.5 font-mono text-[11px] font-semibold' : ''
                   }`}
                 >

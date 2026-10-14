@@ -91,6 +91,22 @@ export {
   type RiserLine,
   type RiserMarker,
 } from './riser-diagram'
+export {
+  coveredStoreyId,
+  isRoofLevel,
+  planRoofLevel,
+  type RoofLevelPlan,
+  roofLevelAbove,
+  roofsOver,
+  servesAsRoofLevel,
+  storeyInsertIndex,
+} from './roof-level'
+export {
+  isRoofOnStoreyWalls,
+  planRoofsOffStorey,
+  type RoofMove,
+  roofsKeptOverStorey,
+} from './roof-move'
 export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'
 export {
   DEFAULT_ANGLE_STEP,
@@ -120,6 +136,7 @@ export {
   getLevelFloorToFloorHeight,
   getStoredLevelHeight,
   getWallPlaneTop,
+  getWallTop,
   type LevelElevation,
 } from './storey'
 export {

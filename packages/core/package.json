@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/core",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Core library for Pascal 3D building editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -70,6 +70,11 @@
       "types": "./dist/lib/plan-footprint.d.ts",
       "import": "./dist/lib/plan-footprint.js",
       "default": "./dist/lib/plan-footprint.js"
+    },
+    "./site-placement": {
+      "types": "./dist/lib/site-placement.d.ts",
+      "import": "./dist/lib/site-placement.js",
+      "default": "./dist/lib/site-placement.js"
     },
     "./wall": {
       "types": "./dist/systems/wall/wall-footprint.d.ts",

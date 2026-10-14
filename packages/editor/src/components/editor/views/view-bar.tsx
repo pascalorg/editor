@@ -24,8 +24,9 @@ const GROUP = cn(
 )
 const SEGMENT =
   'flex items-center justify-center gap-1.5 px-2.5 font-medium text-xs transition-colors'
-const ACTIVE = 'bg-white/10 text-foreground'
-const IDLE = 'text-muted-foreground/70 hover:bg-white/8 hover:text-muted-foreground'
+const ACTIVE = 'bg-black/6 dark:bg-white/10 text-foreground'
+const IDLE =
+  'text-muted-foreground/70 hover:bg-black/5 dark:hover:bg-white/8 hover:text-muted-foreground'
 
 /** The views of one pane: its pinned views, the one it shows, and a menu with the rest. */
 export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?: string }) {
@@ -184,7 +185,7 @@ function MoreViewsMenu({
                   aria-label={pinned ? `Unpin ${view.label}` : `Pin ${view.label}`}
                   aria-pressed={pinned}
                   className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-white/10',
+                    'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-black/6 dark:hover:bg-white/10',
                     pinned ? 'text-foreground' : 'text-muted-foreground/60',
                   )}
                   onClick={(event) => {

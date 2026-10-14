@@ -27,7 +27,7 @@ import { AuthoredParams } from '../item/authored-params'
 import { planColumnEdit } from './hosted-resize'
 
 const SELECT_CLASS =
-  'h-10 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
+  'h-10 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
 
 const MANAGED_LEAN_TO_LAYOUT_FIELDS = new Set<keyof ColumnNode>([
   'position',
@@ -387,7 +387,7 @@ export default function ColumnPanel() {
                       'flex min-h-12 items-center rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                       isSelected
                         ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                        : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                        : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                     )}
                     key={option.value}
                     onClick={() => {
@@ -526,7 +526,7 @@ export default function ColumnPanel() {
                           'group flex flex-col items-center justify-center gap-1.5 rounded-lg border py-2.5 transition-all',
                           isSelected
                             ? 'border-orange-400/60 bg-orange-400/10 text-foreground shadow-[0_0_0_1px_rgba(251,146,60,0.25)_inset]'
-                            : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:border-border hover:bg-[#3e3e3e] hover:text-foreground',
+                            : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:border-border hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                         )}
                         key={option.value}
                         onClick={() => handleUpdate({ crossSection: option.value })}
@@ -535,7 +535,9 @@ export default function ColumnPanel() {
                         <span
                           className={cn(
                             'flex h-7 w-7 items-center justify-center',
-                            isSelected ? 'text-orange-300' : 'text-muted-foreground/80',
+                            isSelected
+                              ? 'text-orange-700 dark:text-orange-300'
+                              : 'text-muted-foreground/80',
                           )}
                         >
                           {option.icon}
@@ -1157,7 +1159,7 @@ export default function ColumnPanel() {
         <ActionGroup>
           <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
           <ActionButton
-            className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+            className="border-red-500/40 text-red-700 dark:text-red-200 hover:bg-red-500/15"
             icon={<Trash2 className="h-4 w-4" />}
             label="Delete"
             onClick={handleDelete}

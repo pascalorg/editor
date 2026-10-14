@@ -12,6 +12,7 @@ import {
 import {
   getPendingWallRebuildCount,
   isIsolationActive,
+  isNodeRevealing,
   publishPerfBatchStats,
   registerMaterialCacheCleanup,
   useViewer,
@@ -303,6 +304,15 @@ function processBatchFrame(
     changed = true
   }
 
+  // A node going out in a reverse play (an undo) moves its own meshes; the batch copy would stay
+  // whole until the host took it out. It draws itself, and `deferred` below keeps it out until then.
+  for (const nodeId of [...store.nodeIds()]) {
+    if (!isNodeRevealing(nodeId)) continue
+    releaseNode(nodeId)
+    staleNodes.add(nodeId)
+    changed = true
+  }
+
   // A live override on a batched node — a collaborator's remote drag, a
   // programmatic move — has no local selection to tint it; the batch copy
   // would freeze at the join pose while the real meshes move.
@@ -420,6 +430,8 @@ function processBatchFrame(
         (wallsPending || surfaceLevelReadyAt.has(node.parentId ?? ''))) ||
       tinted.has(nodeId) ||
       dirty.has(nodeId as AnyNodeId) ||
+      // Still growing in from a construction reveal: its transform moves every frame.
+      isNodeRevealing(nodeId) ||
       overrides.get(nodeId) !== undefined ||
       useLiveTransforms.getState().get(nodeId) !== undefined ||
       isSlotPaintPreviewActive(nodeId)

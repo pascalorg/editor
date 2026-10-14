@@ -344,14 +344,13 @@ function expandByZone(target: Box3, zone: ZoneNode, source: ViewerSource) {
   }
 }
 
-/** The frame request for a node: its saved view, else the box it spans. */
+/** The frame request for a node: the box it spans, and its saved view when it has one. */
 function viewerFrameEvent(id: string, source: ViewerSource): CameraControlFrameEvent | null {
   const node = source.nodes[id]
   if (!node) return null
   const saved = node.camera
-  if (saved?.position && saved.target) {
-    return { bounds: null, pose: { position: saved.position, target: saved.target } }
-  }
+  const pose =
+    saved?.position && saved.target ? { position: saved.position, target: saved.target } : null
   box.makeEmpty()
   if (node.type === 'zone') expandByZone(box, node, source)
   else if (node.type === 'unit') {
@@ -363,8 +362,16 @@ function viewerFrameEvent(id: string, source: ViewerSource): CameraControlFrameE
     const object = source.objectFor(id)
     if (object) box.setFromObject(object)
   }
-  if (box.isEmpty()) return null
-  return { bounds: { min: box.min.toArray(), max: box.max.toArray() } }
+  const bounds = box.isEmpty() ? null : { min: box.min.toArray(), max: box.max.toArray() }
+  if (pose) return { bounds, pose }
+  return bounds ? { bounds } : null
+}
+
+/** Framing glides to its pose, or jumps there when the person asks for reduced motion. */
+export function framingAnimates(): boolean {
+  return !(
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  )
 }
 
 export function frameViewerNode(id: string, source: ViewerSource) {
@@ -426,13 +433,14 @@ export function frameViewerCamera(
       : undefined,
   )
   if (!pose) return
-  control.setLookAt(...pose.position, ...pose.target, true)
+  const animate = framingAnimates()
+  control.setLookAt(...pose.position, ...pose.target, animate)
   if ((camera as OrthographicCamera).isOrthographicCamera && event.bounds && !event.pose) {
     box.min.set(...event.bounds.min)
     box.max.set(...event.bounds.max)
     box.getBoundingSphere(frameSphere)
     frameSphere.radius = Math.max(frameSphere.radius * 1.3, 1)
-    control.fitToSphere(frameSphere, true)
+    control.fitToSphere(frameSphere, animate)
   }
 }
 

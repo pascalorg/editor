@@ -6,7 +6,10 @@ import type {
   AnyNodeType,
   Collection,
   CollectionId,
+  SceneMaterial,
+  SceneMaterialId,
 } from '@pascal-app/core/schema'
+import type { AgentSession } from '../bridge/agent-session'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
   ProjectCreateOptions,
@@ -37,6 +40,13 @@ export interface SceneOperations {
   readonly canCreateProject: boolean
   readonly canGetProjectStatus: boolean
   readonly storeBackend: SceneStore['backend'] | null
+  /** What the agent's session has kept (named moments, what it made); absent on a host with none. */
+  readonly agentSession?: AgentSession
+  /**
+   * Whether `applyPatch` takes `upsert_material` patches with the nodes that use them, in one
+   * history step. A host that does lends `getMaterials`, and paint keeps native materials there.
+   */
+  readonly supportsMaterialUpserts?: boolean
 
   setActiveScene(meta: ActiveSceneMeta): void
   getActiveScene(): ActiveSceneMeta | null
@@ -49,6 +59,7 @@ export interface SceneOperations {
   getNode(id: AnyNodeId): AnyNode | null
   getNodes(): Record<AnyNodeId, AnyNode>
   getCollections(): Record<CollectionId, Collection>
+  getMaterials?(): Readonly<Record<SceneMaterialId, SceneMaterial>>
   /** Replace the scene's collections (one undo step, like any edit). */
   setCollections(collections: Record<CollectionId, Collection>): void
   getRootNodeIds(): AnyNodeId[]
@@ -116,6 +127,14 @@ class SceneOperationsFacade implements SceneOperations {
 
   get hasBridge(): boolean {
     return this.#bridge !== undefined
+  }
+
+  get supportsMaterialUpserts(): boolean {
+    return this.#bridge?.supportsMaterialUpserts === true
+  }
+
+  get agentSession(): AgentSession | undefined {
+    return (this.#bridge as { agentSession?: AgentSession } | undefined)?.agentSession
   }
 
   get hasStore(): boolean {
@@ -199,6 +218,10 @@ class SceneOperationsFacade implements SceneOperations {
     return this.requireBridge().getCollections()
   }
 
+  getMaterials(): Readonly<Record<SceneMaterialId, SceneMaterial>> {
+    return this.requireBridge().getMaterials()
+  }
+
   setCollections(collections: Record<CollectionId, Collection>): void {
     this.requireBridge().setCollections(collections)
   }
@@ -244,6 +267,8 @@ class SceneOperationsFacade implements SceneOperations {
     deletedIds: AnyNodeId[]
     createdIds: AnyNodeId[]
   } {
+    if (patches.some((patch) => patch.op === 'upsert_material') && !this.supportsMaterialUpserts)
+      throw new Error('materials_unavailable')
     return this.requireBridge().applyPatch(patches)
   }
 

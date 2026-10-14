@@ -29,6 +29,19 @@ export type ChatToolCardProps = {
 }
 
 /**
+ * What a plugin's start screen does through the host's chat, before anything is said. `send` sends
+ * a message now, its pictures by reference (a host-stored image), and `attach` puts files on the
+ * next message, in the composer: both at the level that runs the plugin's tools. `requirePro` only
+ * asks whether the person's plan includes that level ("Pro" is the hosted product's name for it):
+ * it answers false after offering the upgrade, and changes nothing in the chat.
+ */
+export type ChatStartProps = {
+  send(text: string, images?: readonly { url: string; name: string }[]): void
+  attach(files: readonly File[]): void
+  requirePro(): boolean
+}
+
+/**
  * A plugin's contribution to a host's chat, exported from its browser entry beside its panels and
  * views; its tool contracts are its `./agent-tools` export. Which tools a turn offers, and to whom,
  * is the host's decision.
@@ -47,4 +60,6 @@ export type PluginChatExtension = {
   actions?: readonly { id: string; label: string; hint: string; prompt: string }[]
   /** File extensions or MIME types the plugin's tools read, which the composer then accepts. */
   accepts?: readonly string[]
+  /** What the chat shows while its thread is empty, loaded lazily. */
+  start?: () => Promise<{ default: ComponentType<ChatStartProps> }>
 }

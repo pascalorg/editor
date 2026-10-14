@@ -5,6 +5,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  type CameraControlFrameEvent,
   type CeilingNode,
   CeilingNode as CeilingNodeSchema,
   type ColumnNode,
@@ -134,6 +135,7 @@ import {
   zoneAtLevelPoint,
 } from '../../lib/units'
 import { cn } from '../../lib/utils'
+import { framingAnimates } from '../../lib/viewer-selection'
 import { getWallDrawVariant } from '../../lib/wall-draw-variant'
 import {
   addWallPolygonDraftCorner,
@@ -165,7 +167,13 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
-import { activeViewLayout, isViewVisible, VIEW_2D, visibleScene } from '../../store/view-layout'
+import {
+  activeViewLayout,
+  isViewVisible,
+  VIEW_2D,
+  VIEW_3D,
+  visibleScene,
+} from '../../store/view-layout'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -6683,6 +6691,58 @@ export function FloorplanPanel({
     stopFloorplanViewAnimation,
   ])
 
+  // A frame request ("show me this node") moves the 3D camera and the plan follows its pose; with no
+  // 3D view on screen no pose reaches the plan, so it frames the node itself. The request waits for
+  // the selection it came with to render: a node on another floor or in another building is placed
+  // with that building's transform, after the floor change has reset the view.
+  const [pendingFrame, setPendingFrame] = useState<CameraControlFrameEvent | null>(null)
+  useEffect(() => {
+    const frame = (event: CameraControlFrameEvent) => {
+      if (isFloorplanOpenRef.current && !isViewVisible(useEditor.getState(), VIEW_3D))
+        setPendingFrame(event)
+    }
+    emitter.on('camera-controls:frame', frame)
+    return () => emitter.off('camera-controls:frame', frame)
+  }, [])
+
+  useEffect(() => {
+    if (!pendingFrame) return
+    setPendingFrame(null)
+    const userRotationDeg = latestFloorplanUserRotationDegRef.current
+    const toLocal = (x: number, z: number) =>
+      worldToFloorplanLocalPoint(x, z, buildingPosition, buildingRotationY)
+    const { bounds, pose } = pendingFrame
+    let centre: SvgPoint
+    let width: number | undefined
+    if (bounds) {
+      // The box's corners as the plan shows them now, so it fits the pane at any turn and aspect.
+      const sceneRotationDeg = FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
+      const shown = [bounds.min[0], bounds.max[0]].flatMap((x) =>
+        [bounds.min[2], bounds.max[2]].map((z) => rotateSvgPoint(toLocal(x, z), sceneRotationDeg)),
+      )
+      const xs = shown.map((point) => point.x)
+      const ys = shown.map((point) => point.y)
+      centre = toLocal((bounds.min[0] + bounds.max[0]) / 2, (bounds.min[2] + bounds.max[2]) / 2)
+      width = Math.max(
+        Math.max(...xs) - Math.min(...xs) + FLOORPLAN_PADDING * 2,
+        (Math.max(...ys) - Math.min(...ys) + FLOORPLAN_PADDING * 2) * svgAspectRatio,
+      )
+    } else if (pose) {
+      // A saved view with nothing to measure: its target, at the zoom the person has.
+      centre = toLocal(pose.target[0], pose.target[2])
+    } else return
+    // A floor change has just reset the view to the whole floor: glide from there, not from nothing.
+    latestViewportRef.current ??= latestFittedViewportRef.current
+    applyFloorplanNavigationView(centre, userRotationDeg, width, { smooth: framingAnimates() })
+  }, [
+    applyFloorplanNavigationView,
+    buildingPosition,
+    buildingRotationDeg,
+    buildingRotationY,
+    pendingFrame,
+    svgAspectRatio,
+  ])
+
   const viewBox = useMemo(() => {
     const currentViewport = viewport ?? fittedViewport
     const width = currentViewport.width
@@ -11265,7 +11325,7 @@ export function FloorplanPanel({
             }}
           >
             <div className="mb-3 flex items-start gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-white/5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-black/4 dark:bg-white/5">
                 <Ruler className="h-4 w-4 text-foreground/80" />
               </div>
               <div className="min-w-0">
@@ -11277,7 +11337,7 @@ export function FloorplanPanel({
               </div>
             </div>
 
-            <div className="mb-3 rounded-xl border border-border/70 bg-white/5 px-3 py-2">
+            <div className="mb-3 rounded-xl border border-border/70 bg-black/4 dark:bg-white/5 px-3 py-2">
               <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
                 Drawn line
               </div>
@@ -11340,7 +11400,7 @@ export function FloorplanPanel({
 
             <div className="mt-4 flex justify-end gap-2">
               <button
-                className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-white/8 hover:text-foreground"
+                className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground"
                 onClick={() => setPendingReferenceScale(null)}
                 type="button"
               >

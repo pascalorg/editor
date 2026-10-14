@@ -6,8 +6,10 @@ import { X } from 'lucide-react'
 import { useMemo } from 'react'
 import useEditor from '../../store/use-editor'
 
-const WASTE_COLOR = '#0ea5e9'
-const VENT_COLOR = '#a855f7'
+// Set per theme on the panel root; the light values are darker so the 9-unit
+// diameter labels read on white.
+const WASTE_COLOR = 'var(--riser-waste)'
+const VENT_COLOR = 'var(--riser-vent)'
 const MARKER_COLOR = '#1e293b'
 const PADDING = 32
 /** Meters → SVG units. The iso projection is in meters; scale up so a
@@ -45,14 +47,14 @@ function RiserDiagramContent() {
   const ty = diagram ? -diagram.bounds.minY * SCALE + PADDING : 0
 
   return (
-    <div className="dark pointer-events-auto absolute top-4 right-4 z-30 flex max-h-[80vh] w-[26rem] flex-col overflow-hidden rounded-2xl border border-border/40 bg-background/95 text-foreground shadow-lg backdrop-blur-xl">
+    <div className="pointer-events-auto absolute top-4 right-4 z-30 flex max-h-[80vh] w-[26rem] flex-col overflow-hidden rounded-2xl border border-border/40 bg-background/95 text-foreground shadow-lg backdrop-blur-xl [--riser-vent:#9333ea] [--riser-waste:#0369a1] dark:[--riser-vent:#a855f7] dark:[--riser-waste:#0ea5e9]">
       <div className="flex items-center justify-between border-border/40 border-b px-4 py-2.5">
         <div className="flex flex-col">
           <span className="font-medium text-sm">Riser Diagram</span>
           <span className="text-muted-foreground text-xs">DWV plumbing isometric</span>
         </div>
         <button
-          className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white/10"
+          className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-black/6 dark:hover:bg-white/10"
           onClick={() => setRiserOpen(false)}
         >
           <X className="h-4 w-4 text-muted-foreground" />
@@ -87,18 +89,18 @@ function RiserDiagramContent() {
                     <line
                       className="cursor-pointer"
                       onClick={() => select(line.nodeId)}
-                      stroke={color}
                       strokeDasharray={line.system === 'vent' ? '5 4' : undefined}
                       strokeLinecap="round"
                       strokeWidth={(line.vertical ? 3.5 : 2.5) + (isSel ? 2 : 0)}
+                      style={{ stroke: color }}
                       x1={line.from[0] * SCALE}
                       x2={line.to[0] * SCALE}
                       y1={line.from[1] * SCALE}
                       y2={line.to[1] * SCALE}
                     />
                     <text
-                      fill={color}
                       fontSize={9}
+                      style={{ fill: color }}
                       x={((line.from[0] + line.to[0]) / 2) * SCALE + 4}
                       y={((line.from[1] + line.to[1]) / 2) * SCALE - 3}
                     >
@@ -115,7 +117,12 @@ function RiserDiagramContent() {
                   transform={`translate(${marker.point[0] * SCALE}, ${marker.point[1] * SCALE})`}
                 >
                   {marker.kind === 'vent-termination' ? (
-                    <path d="M -5 0 L 0 -7 L 5 0" fill="none" stroke={VENT_COLOR} strokeWidth={2} />
+                    <path
+                      d="M -5 0 L 0 -7 L 5 0"
+                      fill="none"
+                      strokeWidth={2}
+                      style={{ stroke: VENT_COLOR }}
+                    />
                   ) : (
                     <circle fill={MARKER_COLOR} r={3} stroke={MARKER_COLOR} strokeWidth={1.5} />
                   )}

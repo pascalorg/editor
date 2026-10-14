@@ -1,6 +1,11 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import {
+  endScenePreview,
+  isScenePreviewing,
+  subscribeScenePreview,
+  useScene,
+} from '@pascal-app/core'
 import { useCallback, useEffect, useRef } from 'react'
 import { getSavedSceneDocument, type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
@@ -164,6 +169,11 @@ export function useAutoSave({
     let lastInstalledPluginsRef = useScene.getState().installedPlugins
 
     async function executeSave() {
+      // A held scene preview is on screen, not in the document: wait for it to end.
+      if (isScenePreviewing()) {
+        pendingSaveRef.current = true
+        return
+      }
       if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
         pendingSaveRef.current = true
         setSaveStatus('paused')
@@ -230,6 +240,10 @@ export function useAutoSave({
         return
       }
 
+      // The store shows another state for a moment: it is not a change, and the live scene it
+      // gives back is what the last snapshot already holds.
+      if (isScenePreviewing()) return
+
       if (isVersionPreviewModeRef.current) {
         setSaveStatus('paused')
         lastNodesSnapshot = JSON.stringify(state.nodes)
@@ -279,6 +293,8 @@ export function useAutoSave({
     // would otherwise drop the change entirely. `pagehide` fires in cases
     // (mobile Safari, bfcache) where `beforeunload` does not.
     function flushOnExit() {
+      // What is on screen may be a preview: write the live scene, never that.
+      endScenePreview()
       const { nodes, rootNodeIds, collections, materials, installedPlugins } =
         getSavedSceneDocument()
       const currentNodeCount = Object.keys(nodes).length
@@ -325,7 +341,15 @@ export function useAutoSave({
     window.addEventListener('beforeunload', flushOnExit)
     window.addEventListener('pagehide', flushOnExit)
 
+    // A save that came due under a held preview was deferred; the live scene is back.
+    const stopWatchingPreview = subscribeScenePreview((previewing) => {
+      if (previewing || !pendingSaveRef.current || isSavingRef.current) return
+      if (isLoadingSceneRef.current || saveTimeoutRef.current) return
+      executeSaveRef.current?.()
+    })
+
     return () => {
+      stopWatchingPreview()
       executeSaveRef.current = null
       window.removeEventListener('beforeunload', flushOnExit)
       window.removeEventListener('pagehide', flushOnExit)
@@ -370,6 +394,7 @@ export function useAutoSave({
   // in the loop. A write already in flight only arms the follow-up.
   const saveNow = useCallback(() => {
     if (isLoadingSceneRef.current) return
+    endScenePreview()
 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current)

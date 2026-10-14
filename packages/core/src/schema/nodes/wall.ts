@@ -297,6 +297,7 @@ export const WallNode = BaseNode.extend({
   // Extend downward from the authored wall base to the terrain while keeping
   // the wall body height and top unchanged.
   fillToTerrain: z.boolean().optional(),
+  cap: z.boolean().optional(),
   // The finish and the foundation carried below the base — see WallUnderpinning.
   underpinning: WallUnderpinning.optional(),
   skirting: WallTrimConfig.optional(),

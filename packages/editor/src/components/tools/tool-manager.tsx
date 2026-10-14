@@ -16,6 +16,7 @@ import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import { useRegisteredToolEnabled } from '../../hooks/use-registered-tool-enabled'
 import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import type { ReshapeKind } from '../../lib/interaction/scope'
+import { selectPlacedNode } from '../../lib/level-selection'
 import { paintRegionTargets, usePaintRegionMode } from '../../lib/paint-region-mode'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Tool } from '../../store/use-editor'
@@ -184,10 +185,10 @@ export const ToolManager: React.FC = () => {
       activeLevelId: activeLevelId ?? null,
       isCameraDragging: () => useViewer.getState().cameraDragging,
       sceneApi: registrySceneApi,
-      selectNode: (nodeId: AnyNodeId) => setSelection({ selectedIds: [nodeId] }),
+      selectNode: selectPlacedNode,
       unit,
     }),
-    [activeLevelId, registrySceneApi, setSelection, unit],
+    [activeLevelId, registrySceneApi, unit],
   )
 
   // Building transform for the local group — all building-relative tools live inside this group

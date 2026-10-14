@@ -20,6 +20,19 @@
       }
     },
     {
+      "name": "add_corner_window",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds two joined window nodes on the walls meeting at a corner of the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "add_door",
       "annotations": {
         "readOnlyHint": false,
@@ -30,6 +43,19 @@
         "readOnlyHint": "It is not read-only because adds a door node to an existing wall in the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_fence",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds fence nodes along points on a level of the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -209,7 +235,7 @@
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It is not read-only because adds a roof node to the connected Pascal scene.",
+        "readOnlyHint": "It is not read-only because it adds a roof, and the building's roof level when it has none, to the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
       }
@@ -527,6 +553,19 @@
       }
     },
     {
+      "name": "get_site",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It reads the site a building stands on, its lot, setbacks and footprint, from the connected Pascal scene without changing it.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
       "name": "get_source",
       "annotations": {
         "readOnlyHint": true,
@@ -683,6 +722,19 @@
       }
     },
     {
+      "name": "merge_windows",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it joins two existing window nodes into one corner window or one wide window in the connected Pascal scene.",
+        "destructiveHint": "Merging two windows on one wall removes one of them and widens the other; on a corner it moves both to the corner.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "merge_zones",
       "annotations": {
         "readOnlyHint": false,
@@ -693,6 +745,19 @@
         "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
         "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
+      "name": "move_roofs_to_roof_level",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it moves a storey's roofs onto the building's roof level, or the storey above, in the connected Pascal scene.",
+        "destructiveHint": "It changes the level that holds existing roof nodes and their heights there, and can declare an existing empty level the roof level.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -709,6 +774,19 @@
       }
     },
     {
+      "name": "paint",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it writes finishes onto walls, slabs, ceilings, openings and roofs of the connected Pascal scene, and may add a scene material.",
+        "destructiveHint": "It replaces the finish a surface had, and erase removes a surface's own finish.",
+        "openWorldHint": "It operates on the connected Pascal scene and its material library without accessing the public internet."
+      }
+    },
+    {
       "name": "photo_to_scene",
       "annotations": {
         "readOnlyHint": false,
@@ -722,6 +800,19 @@
       }
     },
     {
+      "name": "place_building",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It moves a building node on its site in the connected scene.",
+        "destructiveHint": "It replaces the building's stored position and rotation, in one undoable edit; what stands on its levels moves with it.",
+        "openWorldHint": "It operates on the connected scene and its configured live persistence transport without accessing the public internet."
+      }
+    },
+    {
       "name": "place_design",
       "annotations": {
         "readOnlyHint": false,
@@ -732,6 +823,19 @@
         "readOnlyHint": "It is not read-only because it creates a design node on a level, wall, ceiling or design surface in the connected Pascal scene.",
         "destructiveHint": "It only creates: it refuses existing ids and never deletes or replaces existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene and the design supplied in the call without accessing the public internet."
+      }
+    },
+    {
+      "name": "place_in_room",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds one item from the item catalog to a room in the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds one new item and does not delete or replace existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
       }
     },
     {
@@ -813,6 +917,19 @@
       }
     },
     {
+      "name": "run_batch",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it runs scene tools that create, change and delete nodes, applied as one step.",
+        "destructiveHint": "Its calls can delete nodes (delete_node), with their descendants.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "save_scene",
       "annotations": {
         "readOnlyHint": false,
@@ -836,6 +953,32 @@
         "readOnlyHint": "It searches Pascal asset catalog data available to the connected service without placing an asset or changing a scene.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "search_materials",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It searches the Pascal material library without painting anything or changing a scene.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It reads only the material library built into Pascal and does not access the public internet."
+      }
+    },
+    {
+      "name": "set_checkpoint",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it records a named checkpoint of the connected Pascal scene in the agent's session record.",
+        "destructiveHint": "It only adds a checkpoint to the session record; it changes no scene content and removes or replaces nothing but a checkpoint of the same name.",
+        "openWorldHint": "It operates only on the connected Pascal scene and does not access the public internet."
       }
     },
     {

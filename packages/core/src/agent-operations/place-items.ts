@@ -40,6 +40,7 @@ type Placed =
       side?: 'front' | 'back'
       /** The authored host's part it came to rest on, or hangs from. */
       restingOn?: string
+      info?: { code: 'rotation_ignored'; message: string }
     }
   | { ok: false; assetId: string; code: string; error: string }
 
@@ -151,7 +152,7 @@ function onWall(wall: WallNode, entry: Entry, asset: AssetInput): Pose | Placed 
   const left = -dz * (entry.x - wall.start[0]) + dx * (entry.z - wall.start[1]) >= 0
   const side = left ? 'front' : 'back'
   const z = asset.attachTo === 'wall-side' ? getWallLocalFaceZ(wall, left ? 'a' : 'b') : 0
-  const turn = (left ? 0 : Math.PI) + ((entry.rotation ?? 0) * Math.PI) / 180
+  const turn = left ? 0 : Math.PI
   return {
     parentId: wall.id,
     position: [x, y, z],
@@ -267,6 +268,15 @@ export const placeItems: AgentOperation<PlaceItemsInput> = (nodes, input, contex
         hostId: host.id,
         ...(pose.side ? { side: pose.side } : {}),
         ...(pose.restingOn ? { restingOn: pose.restingOn } : {}),
+        ...(host.type === 'wall' && entry.rotation !== undefined
+          ? {
+              info: {
+                code: 'rotation_ignored' as const,
+                message:
+                  'Rotation is ignored on a wall host: the item faces its selected wall side in the wall’s local frame.',
+              },
+            }
+          : {}),
       }
     }
 

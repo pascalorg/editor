@@ -59,6 +59,7 @@ import {
   surfaceFramePose,
   updateSurfaceNode as writeSurfaceNode,
 } from '../../../lib/surface-attachment'
+import { isTypingTarget } from '../../../lib/typing-target'
 import {
   projectAlignmentGuidesWorldToActiveBuildingLocal,
   resolveAlignmentForActiveBuilding,
@@ -2432,9 +2433,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       // Don't intercept keys when focus is inside a text input
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const draft = draftNode.current
       if (!draft) return

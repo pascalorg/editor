@@ -1,8 +1,18 @@
-import type { AnyNode, Collection } from '../schema'
+import type { AnyNode, Collection, SceneMaterial } from '../schema'
 import type { SceneChanges, SceneNodes } from './types'
 
 const childrenOf = (node: AnyNode | undefined): string[] | null =>
   node && 'children' in node && Array.isArray(node.children) ? (node.children as string[]) : null
+
+/**
+ * A node with a patch applied. A field the patch sets to `undefined` is removed, as the store's
+ * updateNode removes it: optional fields encode a mode by their absence.
+ */
+function patched(node: AnyNode, data: Partial<AnyNode>): AnyNode {
+  const merged: Record<string, unknown> = { ...node, ...data }
+  for (const [key, value] of Object.entries(data)) if (value === undefined) delete merged[key]
+  return merged as AnyNode
+}
 
 /**
  * The scene after an operation's changes, without a store: for checks and previews. Same order as
@@ -30,7 +40,7 @@ export function applySceneChanges(
       detach(current.parentId, id)
       attach(data.parentId, id)
     }
-    next[id] = { ...current, ...data } as AnyNode
+    next[id] = patched(current, data)
   }
   for (const { node, parentId } of changes?.create ?? []) {
     next[node.id] = parentId ? ({ ...node, parentId } as AnyNode) : node
@@ -54,11 +64,14 @@ export function applySceneChanges(
  * step. Updates to a node the batch created are folded into its creation, and a node created then
  * deleted never appears; updates only reach nodes that existed before, deletes come last.
  */
-export function mergeSceneChanges(sets: readonly SceneChanges[]): Required<SceneChanges> {
+export function mergeSceneChanges(
+  sets: readonly SceneChanges[],
+): Required<Omit<SceneChanges, 'materials'>> & Pick<SceneChanges, 'materials'> {
   const created = new Map<string, { node: AnyNode; parentId?: string }>()
   const updated = new Map<string, Partial<AnyNode>>()
   const deleted = new Set<string>()
   const collections: Record<string, Collection | null> = {}
+  const materials = new Map<string, SceneMaterial>()
   const dropCreated = (id: string) => {
     created.delete(id)
     for (const [childId, entry] of [...created])
@@ -66,11 +79,12 @@ export function mergeSceneChanges(sets: readonly SceneChanges[]): Required<Scene
   }
   for (const set of sets) {
     Object.assign(collections, set.collections)
+    for (const material of set.materials ?? []) materials.set(material.id, material)
     for (const { id, data } of set.update ?? []) {
       const entry = created.get(id)
       if (entry)
         created.set(id, {
-          node: { ...entry.node, ...data } as AnyNode,
+          node: patched(entry.node, data),
           parentId: (data.parentId as string | undefined) ?? entry.parentId,
         })
       else updated.set(id, { ...updated.get(id), ...data } as Partial<AnyNode>)
@@ -86,9 +100,11 @@ export function mergeSceneChanges(sets: readonly SceneChanges[]): Required<Scene
     }
   }
   return {
+    ...(materials.size ? { materials: [...materials.values()] } : {}),
     create: [...created.values()],
     update: [...updated].map(([id, data]) => ({ id, data })),
     delete: [...deleted],
     collections,
+    ...(materials.size ? { materials: [...materials.values()] } : {}),
   }
 }

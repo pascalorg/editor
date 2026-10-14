@@ -19,6 +19,15 @@ cuts overlapping room ceilings, and keeps wall support unchanged. See
 Deleting an auto plate explicitly writes `hasFloor: false` on its linked zones; removing a
 manual cover allows an eligible room to join a generated plate again.
 
+A room drawn where walls already enclose one (every polygon edge on a wall) names that room
+instead of stacking a second zone on it (`walledRoomAt`, by the reconciler's adoption
+rule), as long as it still has the "Room N" name the reconciler gave it. `create_room` does the
+same, and so does an outdoor room drawn there (the terrace tool, `create_room` with `outdoor`): the
+walls round a courtyard make it the outdoor room. Over a room a person named, `create_room` refuses
+(`room_named_by_person`) unless `rename: true`, so a name is never changed silently. `set_zone`
+over such walls is that room: it names a numbered one, is a no-op on one already named its label
+(a retry), and refuses a room a person named otherwise.
+
 User wall deletion goes through `planWallDeletion` at `deleteNodes` and the MCP bridges.
 An unshared room boundary becomes a separator over the same reference-line span in the
 deleting operation, preserving room identity, finishes, plate and ceiling. Shared spans

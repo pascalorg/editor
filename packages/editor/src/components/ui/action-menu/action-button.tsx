@@ -15,6 +15,8 @@ interface ActionButtonProps extends React.ComponentProps<typeof Button> {
   isActive?: boolean
   tooltipContent?: React.ReactNode
   tooltipSide?: 'top' | 'right' | 'bottom' | 'left'
+  /** The tooltip portals to `<body>`, so a button in a themed scope passes the scope here. */
+  tooltipClassName?: string
 }
 
 export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
@@ -27,6 +29,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
       isActive,
       tooltipContent,
       tooltipSide,
+      tooltipClassName,
       onClick,
       onMouseEnter,
       ...props
@@ -70,7 +73,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side={tooltipSide ?? popupSide}>
+        <TooltipContent className={tooltipClassName} side={tooltipSide ?? popupSide}>
           {tooltipContent || (
             <p>
               {label} {shortcut && `(${shortcut})`}

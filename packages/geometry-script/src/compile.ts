@@ -1,6 +1,7 @@
 import type {
   CompiledGeometryScript,
   GeometryArtifactManifest,
+  GeometryScriptLanguage,
   GeometryScriptMount,
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
@@ -56,7 +57,7 @@ const LIB = {
   csg,
 }
 
-const MOUNTS = new Set<GeometryScriptMount>(['floor', 'wall', 'wall-side', 'ceiling'])
+export const MOUNTS = new Set<GeometryScriptMount>(['floor', 'wall', 'wall-side', 'ceiling'])
 
 type RawParam =
   | GeometryScriptParamValue
@@ -71,7 +72,7 @@ type RawParam =
       options?: string[]
     }
 
-function readParamSpecs(raw: unknown): GeometryScriptParamSpec[] {
+export function readParamSpecs(raw: unknown): GeometryScriptParamSpec[] {
   if (raw == null) return []
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('`params` must be an object of { id: default | { default, min, max, step } }')
@@ -102,7 +103,7 @@ function readParamSpecs(raw: unknown): GeometryScriptParamSpec[] {
   })
 }
 
-function resolveParams(
+export function resolveParams(
   specs: GeometryScriptParamSpec[],
   overrides: Record<string, GeometryScriptParamValue>,
 ): Record<string, GeometryScriptParamValue> {
@@ -150,6 +151,59 @@ function assertFinite(geometry: THREE.BufferGeometry, label: string) {
   }
 }
 
+const AXES = ['x', 'y', 'z'] as const
+
+/** What a transform component holds when it is no finite number: "NaN", "a MeshStandardMaterial". */
+function describeValue(value: unknown): string {
+  if (typeof value === 'number') return String(value)
+  if (value && typeof value === 'object') return `a ${value.constructor?.name ?? 'object'}`
+  return String(value)
+}
+
+/** The first position, rotation or scale component of this object that is not a finite number. */
+function transformFault(object: THREE.Object3D): string | null {
+  const vectors = { position: object.position, rotation: object.rotation, scale: object.scale }
+  for (const [field, vector] of Object.entries(vectors)) {
+    for (const axis of AXES) {
+      const value: unknown = vector[axis]
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return `${field}.${axis} = ${describeValue(value)}`
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Why a box of visible geometry has no finite corner. `Box3.isEmpty()` is false for a NaN corner,
+ * so a mesh at a position that is not a number (a helper called one argument short passes it a
+ * material) would otherwise build NaN bounds, and from them an item that fails its own schema.
+ */
+function unmeasurable(root: THREE.Object3D): Error {
+  const meshes: THREE.Mesh[] = []
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (mesh.isMesh && !isHelper(mesh)) meshes.push(mesh)
+  })
+  for (const mesh of meshes) assertFinite(mesh.geometry, mesh.name || 'A mesh')
+  for (const [index, mesh] of meshes.entries()) {
+    for (let object: THREE.Object3D | null = mesh; object; object = object.parent) {
+      const fault = transformFault(object)
+      if (!fault) continue
+      const place = `mesh ${index + 1} of ${meshes.length}`
+      const who = object.name
+        ? `"${object.name}"`
+        : object === mesh
+          ? `an unnamed ${mesh.geometry.type} mesh (${place})`
+          : `an unnamed ${object.type.toLowerCase()} holding ${place}`
+      return new Error(
+        `The object cannot be measured: ${who} has ${fault}, which is not a finite number. Positions, rotations and scales take numbers (metres, radians); a helper called one argument short passes the next value, a material for instance, in its place.`,
+      )
+    }
+  }
+  return new Error('The object cannot be measured: its size is not a finite number.')
+}
+
 /** Bounds of the visible geometry: helpers (cutout, collider) and lights do not count. */
 function visibleBounds(root: THREE.Object3D): THREE.Box3 {
   const box = new THREE.Box3()
@@ -170,6 +224,7 @@ function visibleBounds(root: THREE.Object3D): THREE.Box3 {
 
 function originFor(box: THREE.Box3, mount: GeometryScriptMount): THREE.Vector3 {
   const center = box.getCenter(new THREE.Vector3())
+  if (mount === 'ceiling') return new THREE.Vector3(center.x, box.max.y, center.z)
   if (mount === 'wall-side') return new THREE.Vector3(center.x, box.min.y, box.min.z)
   return new THREE.Vector3(center.x, box.min.y, center.z)
 }
@@ -764,52 +819,34 @@ async function digest(bytes: BufferSource): Promise<string> {
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-// A deterrent, not the isolation boundary: hosts run this in a locked-down worker or process.
-const SOURCE_GUARD =
-  /\bimport\s*\(|\beval\s*\(|\bFunction\s*\(|\.constructor\s*\(|\bprocess\b|\brequire\s*\(/
-
-export async function compileGeometryScript(
-  input: GeometryScriptCompileInput,
-): Promise<GeometryScriptCompileOutput> {
-  if (new TextEncoder().encode(input.code).byteLength > GEOMETRY_SCRIPT_MAX_BYTES) {
-    throw new Error(`The script is longer than ${GEOMETRY_SCRIPT_MAX_BYTES / 1024} KiB`)
-  }
-  if (SOURCE_GUARD.test(input.code)) {
-    throw new Error(
-      'Geometry scripts cannot use dynamic import, eval, Function constructors, process or require',
-    )
-  }
-  const body = transformModule(input.code, MODULES)
-  // Evaluating the model's module is the compiler's job; callers run it in a locked-down worker.
-  const factory = new Function('__modules', 'THREE', 'lib', body) as (
-    modules: ModuleTable,
-    three: typeof THREE,
-    lib: typeof LIB,
-  ) => { build?: unknown; params?: unknown; mount?: unknown }
-  const exported = factory(MODULES, THREE, LIB)
-  if (typeof exported.build !== 'function') {
-    throw new Error('The script must `export default function build({ params, THREE, lib })`')
-  }
-  const mount = (exported.mount ?? 'floor') as GeometryScriptMount
-  if (!MOUNTS.has(mount)) throw new Error(`\`mount\` must be one of ${[...MOUNTS].join(', ')}`)
-  const specs = readParamSpecs(exported.params)
-  const params = resolveParams(specs, input.params ?? {})
-
-  const built = await (exported.build as (ctx: unknown) => unknown)({
-    params,
-    inputs: {},
-    THREE,
-    lib: LIB,
-  })
-  if (!(built instanceof THREE.Object3D)) {
-    throw new Error('build() must return a THREE.Object3D (usually a THREE.Group)')
-  }
-
+/**
+ * Everything after a module has built its object, whatever the language:
+ * re-origins it for its mount, reads the conventions into the manifest, samples
+ * its clips and exports the GLB. `built.animations` holds its clips.
+ */
+export async function finishBuild({
+  built,
+  mount,
+  specs,
+  params,
+  code,
+  language,
+}: {
+  built: THREE.Object3D
+  mount: GeometryScriptMount
+  specs: GeometryScriptParamSpec[]
+  params: Record<string, GeometryScriptParamValue>
+  code: string
+  language: GeometryScriptLanguage
+}): Promise<GeometryScriptCompileOutput> {
   const root = new THREE.Group()
   root.name = 'pascal_script_root'
   root.add(built)
   const box = visibleBounds(root)
   if (box.isEmpty()) throw new Error('build() returned no visible meshes')
+  if (![box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z].every(Number.isFinite)) {
+    throw unmeasurable(root)
+  }
   const size = box.getSize(new THREE.Vector3())
   if (Math.max(size.x, size.y, size.z) > GEOMETRY_SCRIPT_LIMITS.extent) {
     throw new Error(
@@ -841,7 +878,8 @@ export async function compileGeometryScript(
   return {
     glb,
     sha256: await digest(glb),
-    script: await digest(new TextEncoder().encode(input.code)),
+    script: await digest(new TextEncoder().encode(code)),
+    language,
     mount,
     params,
     manifest: compactManifest({
@@ -863,4 +901,52 @@ export async function compileGeometryScript(
       triangles: conventions.triangles,
     }),
   }
+}
+
+// A deterrent, not the isolation boundary: hosts run this in a locked-down worker or process.
+const SOURCE_GUARD =
+  /\bimport\s*\(|\beval\s*\(|\bFunction\s*\(|\.constructor\s*\(|\bprocess\b|\brequire\s*\(/
+
+export function assertScriptSize(code: string) {
+  if (new TextEncoder().encode(code).byteLength > GEOMETRY_SCRIPT_MAX_BYTES) {
+    throw new Error(`The script is longer than ${GEOMETRY_SCRIPT_MAX_BYTES / 1024} KiB`)
+  }
+}
+
+export async function compileGeometryScript(
+  input: GeometryScriptCompileInput,
+): Promise<GeometryScriptCompileOutput> {
+  assertScriptSize(input.code)
+  if (SOURCE_GUARD.test(input.code)) {
+    throw new Error(
+      'Geometry scripts cannot use dynamic import, eval, Function constructors, process or require',
+    )
+  }
+  const body = transformModule(input.code, MODULES)
+  // Evaluating the model's module is the compiler's job; callers run it in a locked-down worker.
+  const factory = new Function('__modules', 'THREE', 'lib', body) as (
+    modules: ModuleTable,
+    three: typeof THREE,
+    lib: typeof LIB,
+  ) => { build?: unknown; params?: unknown; mount?: unknown }
+  const exported = factory(MODULES, THREE, LIB)
+  if (typeof exported.build !== 'function') {
+    throw new Error('The script must `export default function build({ params, THREE, lib })`')
+  }
+  const mount = (exported.mount ?? 'floor') as GeometryScriptMount
+  if (!MOUNTS.has(mount)) throw new Error(`\`mount\` must be one of ${[...MOUNTS].join(', ')}`)
+  const specs = readParamSpecs(exported.params)
+  const params = resolveParams(specs, input.params ?? {})
+
+  const built = await (exported.build as (ctx: unknown) => unknown)({
+    params,
+    inputs: {},
+    THREE,
+    lib: LIB,
+  })
+  if (!(built instanceof THREE.Object3D)) {
+    throw new Error('build() must return a THREE.Object3D (usually a THREE.Group)')
+  }
+
+  return finishBuild({ built, mount, specs, params, code: input.code, language: 'three' })
 }

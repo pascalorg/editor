@@ -65,7 +65,7 @@ export function IconRail({
           <button
             className={cn(
               'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
-              isActive ? 'bg-accent' : 'hover:bg-accent',
+              isActive ? 'bg-sidebar-accent' : 'hover:bg-sidebar-accent',
             )}
             onClick={() => onPanelChange(panel.id)}
             type="button"
@@ -107,7 +107,7 @@ export function IconRail({
               <button
                 className={cn(
                   'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
-                  isActive ? 'bg-accent' : 'hover:bg-accent',
+                  isActive ? 'bg-sidebar-accent' : 'hover:bg-sidebar-accent',
                 )}
                 onClick={() => onPanelChange(panel.id)}
                 type="button"
@@ -138,7 +138,7 @@ export function IconRail({
               <button
                 className={cn(
                   'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
-                  isActive ? 'bg-accent' : 'hover:bg-accent',
+                  isActive ? 'bg-sidebar-accent' : 'hover:bg-sidebar-accent',
                 )}
                 onClick={() => onPanelChange(panel.id)}
                 type="button"

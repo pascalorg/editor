@@ -118,7 +118,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
           options={UNIT_KIND_OPTIONS}
           value={node.kind}
         />
-        <label className="flex h-10 items-center justify-between gap-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm">
+        <label className="flex h-10 items-center justify-between gap-3 rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm">
           <span className="text-muted-foreground">Color</span>
           <span className="flex items-center gap-2">
             <span className="font-mono text-muted-foreground text-xs">{node.color}</span>
@@ -140,7 +140,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
         ) : (
           report.members.map((member) => (
             <div
-              className="flex h-9 items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-xs"
+              className="flex h-9 items-center gap-2 rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-xs"
               key={member.zoneId}
             >
               <span className="min-w-0 flex-1 truncate text-foreground">
@@ -154,7 +154,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
               </span>
               <button
                 aria-label={`Remove ${member.name || 'zone'} from unit`}
-                className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={() => removeMember(member.zoneId)}
                 type="button"
               >
@@ -164,7 +164,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
           ))
         )}
         {warningMessages.length > 0 ? (
-          <ul className="flex flex-col gap-1 text-amber-300 text-xs leading-snug">
+          <ul className="flex flex-col gap-1 text-amber-700 dark:text-amber-300 text-xs leading-snug">
             {warningMessages.map((message, index) => (
               <li key={warnings[index]?.code}>{message}</li>
             ))}

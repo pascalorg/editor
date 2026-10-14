@@ -60,6 +60,7 @@ import {
   surfaceAttachmentUpdates,
   updateSurfaceNode,
 } from '../../../lib/surface-attachment'
+import { isTypingTarget } from '../../../lib/typing-target'
 import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, {
   getActiveSnappingMode,
@@ -1247,6 +1248,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
     // item placement keys (and the "Rotate" hints the move HUD shows). Applied
     // imperatively + mirrored to the live transform; committed on drop.
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return
       // Hold Alt (free place) to force placement on an invalid (red) footprint,
       // matching the GLB item tool. Recolour the box to green while held.
       if (e.key === 'Alt') {

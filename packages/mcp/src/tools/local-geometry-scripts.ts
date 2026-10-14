@@ -1,14 +1,28 @@
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import type { CompiledGeometryScript } from '@pascal-app/core'
+import { compileBlenderBuild } from '@pascal-app/geometry-script/blender'
+import { runBlenderLocally } from '@pascal-app/geometry-script/blender-local'
 import { DiskArtifactStore } from '../storage/disk-artifact-store'
 import type { GeometryScriptHost } from './add-object'
 
-/** Local compile is opt-in: a separate process is not an untrusted-code sandbox. */
+/**
+ * Local compile is opt-in: a separate process is not an untrusted-code sandbox.
+ * three.js modules need PASCAL_SERVER_SCRIPT_COMPILE=1; bpy modules run in the
+ * Blender binary PASCAL_BLENDER names.
+ */
 export function localGeometryScripts(projectPath: string): GeometryScriptHost {
   const artifacts = new DiskArtifactStore(projectPath)
   return {
     compile: async (input) => {
+      if (input.language === 'bpy') {
+        const blender = process.env.PASCAL_BLENDER
+        if (!blender)
+          throw new Error('bpy scripts need PASCAL_BLENDER, the path to a Blender binary')
+        const run = await runBlenderLocally({ blender, code: input.code, params: input.params })
+        const { glb, ...compiled } = await compileBlenderBuild({ ...input, run })
+        return { ...compiled, glb: new Uint8Array(glb) }
+      }
       if (process.env.PASCAL_SERVER_SCRIPT_COMPILE !== '1') {
         throw new Error('Local script compilation requires PASCAL_SERVER_SCRIPT_COMPILE=1')
       }

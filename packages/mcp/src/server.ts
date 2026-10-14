@@ -1,5 +1,10 @@
 import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { HostedServiceExecutor } from '@pascal-app/core/agent-operations'
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
+import {
+  type HostedServiceExecutor,
+  recordMade,
+  type SceneNodes,
+} from '@pascal-app/core/agent-operations'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
@@ -54,11 +59,15 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   // A client shows these before the agent's first call.
   const server = new McpServer(
     { name: opts.name ?? 'pascal-mcp-server', version: opts.version ?? version },
-    opts.instructions ? { instructions: opts.instructions } : undefined,
+    {
+      instructions: `Pascal builds and edits 3D buildings; the agent guide is the resource pascal://agent-guide.${opts.instructions ? `\n${opts.instructions}` : ''}`,
+    },
   )
-  if (opts.executeTool) installToolExecutor(server, opts.executeTool)
+  answerInvalidInputWithCode(server)
   const operations =
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
+  const executeTool = recordingWhatToolsMake(operations, opts.executeTool)
+  if (executeTool) installToolExecutor(server, executeTool)
   const catalog = opts.catalog ? cachedCatalog(opts.catalog) : undefined
   registerTools(server, operations, {
     catalog,
@@ -71,6 +80,56 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)
   return server
+}
+
+/**
+ * Arguments a tool's schema rejects come back with the code `invalid_input`, as every other refusal
+ * names its code and as the chat answers them: the SDK's own answer is a bare message. The SDK
+ * checks the arguments in its server's validateToolInput and turns what it throws into the tool's
+ * error text, so a JSON message carries the code; `server-invalid-input.test` fails if an SDK upgrade
+ * moves that check.
+ */
+function answerInvalidInputWithCode(server: McpServer): void {
+  const sdk = server as unknown as {
+    validateToolInput(tool: unknown, args: unknown, name: string): Promise<unknown>
+  }
+  const validate = sdk.validateToolInput.bind(server)
+  sdk.validateToolInput = async (tool, args, name) => {
+    try {
+      return await validate(tool, args, name)
+    } catch (error) {
+      if (!(error instanceof McpError && error.code === ErrorCode.InvalidParams)) throw error
+      throw new Error(
+        JSON.stringify({
+          error: error.message.replace(/^MCP error -?\d+: /, ''),
+          code: 'invalid_input',
+        }),
+      )
+    }
+  }
+}
+
+/**
+ * Inside the host's executor, so that what a call made is in the session by the time the host
+ * saves it: every tool that writes, however it writes, leaves what it created with the agent's
+ * session, and the first call of any kind begins it.
+ */
+function recordingWhatToolsMake(
+  operations: SceneOperations,
+  outer: PascalMcpToolExecutor | undefined,
+): PascalMcpToolExecutor | undefined {
+  const session = operations.agentSession
+  if (!session) return outer
+  const recording: PascalMcpToolExecutor = (input) =>
+    recordMade(
+      {
+        getNodes: () => operations.getNodes() as SceneNodes,
+        readSession: () => session.read(),
+        keep: (keep) => session.keep(keep),
+      },
+      input.execute,
+    )
+  return outer ? (input) => outer({ ...input, execute: () => recording(input) }) : recording
 }
 
 function installToolExecutor(server: McpServer, executeTool: PascalMcpToolExecutor): void {

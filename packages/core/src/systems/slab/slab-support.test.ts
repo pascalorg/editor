@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'bun:test'
-import { SlabNode, WallNode } from '../../schema'
-import { MIN_WALL_HEIGHT } from '../wall/wall-top'
 import {
   clampSlabElevationForWalls,
   computeWallSlabSupport,
   getSlabElevationUpperBound,
-} from './slab-support'
+  MIN_WALL_HEIGHT,
+  SlabNode,
+  WallNode,
+} from '../../index'
 
 // 4×3 room slab drawn on the wall centerlines, like an auto-slab.
 const SQUARE: Array<[number, number]> = [
@@ -38,6 +39,24 @@ describe('clampSlabElevationForWalls', () => {
 
     expect(result.clamped).toBe(true)
     expect(result.elevation).toBeCloseTo(BOUND)
+  })
+
+  it('bounds authored storey-height walls but not taller or ground-hosted walls', () => {
+    const slab = roomSlab(0.05)
+    for (const { height, supportSlabId, follows } of [
+      { height: STOREY_HEIGHT, follows: true },
+      { height: STOREY_HEIGHT + 0.3, follows: false },
+      { height: STOREY_HEIGHT, supportSlabId: 'ground' as const, follows: false },
+    ]) {
+      const walls = roomWalls(height).map((wall) => ({ ...wall, supportSlabId }))
+      const result = clampSlabElevationForWalls(2.5, slab, walls, [slab], STOREY_HEIGHT)
+
+      expect(result.clamped).toBe(follows)
+      expect(result.elevation).toBeCloseTo(follows ? BOUND : 2.5)
+      expect(getSlabElevationUpperBound(slab, walls, [slab], STOREY_HEIGHT)).toBe(
+        follows ? BOUND : Number.POSITIVE_INFINITY,
+      )
+    }
   })
 
   it('leaves proposals at or below the bound untouched', () => {

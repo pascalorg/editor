@@ -2,6 +2,7 @@ import {
   type AnyNode,
   BuildingNode,
   CeilingNode,
+  type FenceNode,
   LevelNode,
   SiteNode,
   SlabNode,
@@ -170,6 +171,94 @@ export const ADD_WALL_CASES: AgentToolCase[] = [
   },
 ]
 
+const fencesOn = (nodes: Readonly<Record<string, AnyNode>>, levelId: string) =>
+  Object.values(nodes).filter(
+    (node): node is FenceNode => node.type === 'fence' && node.parentId === levelId,
+  )
+
+export const ADD_FENCE_CASES: AgentToolCase[] = [
+  {
+    name: 'one fence per side along the points, privacy panels unless asked',
+    tool: 'add_fence',
+    scene: storeysScene,
+    input: {
+      levelId: 'level_ground',
+      points: [
+        [0, 0],
+        [8, 0],
+        [8, 6],
+      ],
+    },
+    expect: {
+      result: { ok: true, count: 2, levelId: 'level_ground', length: 14 },
+      check: (_, nodes) => {
+        const fences = fencesOn(nodes, 'level_ground')
+        return fences.length === 2 && fences.every((fence) => fence.style === 'privacy')
+          ? []
+          : [`${fences.length} fences on the ground floor, styles ${fences.map((f) => f.style)}`]
+      },
+    },
+  },
+  {
+    name: "closed runs back to the first point, a lot's boundary",
+    tool: 'add_fence',
+    scene: storeysScene,
+    input: {
+      levelId: 'level_ground',
+      closed: true,
+      style: 'picket',
+      points: [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+      ],
+    },
+    expect: { result: { ok: true, count: 4, length: 40 } },
+  },
+  {
+    name: 'a side shorter than 10 cm is refused, nothing built',
+    tool: 'add_fence',
+    scene: storeysScene,
+    input: {
+      levelId: 'level_ground',
+      points: [
+        [0, 0],
+        [4, 0],
+        [4, 0.05],
+      ],
+    },
+    expect: { refusal: 'fence_too_short' },
+  },
+  {
+    name: 'a roof level takes no fence',
+    tool: 'add_fence',
+    scene: storeysScene,
+    input: {
+      levelId: 'level_roof',
+      points: [
+        [0, 0],
+        [4, 0],
+      ],
+    },
+    expect: { refusal: 'roof_level', mentions: ['level_roof'] },
+  },
+  {
+    name: 'a finish the library lacks is refused with the nearest',
+    tool: 'add_fence',
+    scene: storeysScene,
+    input: {
+      levelId: 'level_ground',
+      materialPreset: 'library:unobtainium',
+      points: [
+        [0, 0],
+        [4, 0],
+      ],
+    },
+    expect: { refusal: 'unknown_material' },
+  },
+]
+
 export const ADD_LEVEL_CASES: AgentToolCase[] = [
   {
     name: 'above the highest level of the viewed building, at the default storey height',
@@ -180,6 +269,16 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     surfaces: ['core', 'chat'],
     expect: {
       result: { ok: true, buildingId: 'building_house', floorIndex: 2, name: 'Attic', height: 2.5 },
+    },
+  },
+  {
+    name: 'on top of the storeys, under the roof level, which moves up one',
+    tool: 'add_level',
+    scene: storeysScene,
+    input: { buildingId: 'building_roofed' },
+    expect: {
+      result: { ok: true, floorIndex: 1, shiftedLevelIds: ['level_roof'] },
+      after: { level_roof: { level: 2 } },
     },
   },
   {

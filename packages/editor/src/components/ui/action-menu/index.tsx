@@ -11,6 +11,7 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
+import { FollowPascalPill } from './follow-pascal-pill'
 import { type ActionMenuPlacement, ActionMenuPlacementProvider } from './placement'
 import { SecondaryToggles } from './view-toggles'
 
@@ -63,6 +64,7 @@ export function ActionMenu({
   return (
     <ActionMenuPlacementProvider value={effectivePlacement}>
       <TooltipProvider>
+        <FollowPascalPill />
         <motion.div
           className={cn(
             'z-50',

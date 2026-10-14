@@ -113,6 +113,69 @@ new local pose. Ordinary hosted 3D previews retain their mounted local frame.
 `packages/nodes/src/cabinet/__tests__/hosting-preview-pose.test.tsx` mounts the movers,
 renderers and frame systems together to check this.
 
+### Construction reveal
+
+`ConstructionReveal` (mounted by the host inside `<Viewer>`, with a `reveals(commit)` policy and a
+`level`) stages the new nodes of the commits it selects — the hosted editor selects commits whose
+`author` is `agent` (`runAsSceneCommitAuthor` / `acquireSceneCommitAuthor` in core). It is
+presentation only: the store write is done and is one undo step. A new node whose kind declares
+`capabilities.reveal` stays unmounted (`NodeRenderer` returns null) until its start time, so its
+geometry builds over frames. The order is phase (`foundation` → `structure` → `circulation` →
+`openings` → `roof` → `furnishing`); every floor plays a phase at once, its nodes in a scattered
+order (a stable hash of the id), evenly spaced, hosts before what they host; every start lands
+within about 6 s by compressing the gaps, never by skipping a node.
+
+A started node stays hidden until its first build clears its dirty mark, then moves in its
+declared style, each a pose of `t` in [0, 1] that ends exactly at rest (`revealPoseAt`):
+
+| Style | Motion | Built-in kinds |
+|---|---|---|
+| `rise` | scales Y up from its base | wall, fence |
+| `scale` | grows from the base of its bounds' centre | (the `simple` level's fallback) |
+| `settle` | lowered its declared `height` onto its support, soft landing | slab, ceiling |
+| `drop` | falls its declared `height` like a load, lands with a squash and a small hop | column, stair, item, shelf, cabinet, procedural item |
+| `cut` | pops from its centre with a small overshoot | door, window |
+| `assemble` | holds still while its parts drop in one by one from its `height` | roof (its segments) |
+
+Durations live in `REVEAL_TIMING.durationMs`, heights in each kind's declaration. The pose is
+composed on the registered root by swapping its `updateMatrix`: a scale about the style's pivot
+after the root's own transform, then a lift premultiplied in the parent's frame (so a root's own
+non-uniform scale never stretches a fall). `position`, `quaternion` and `scale` stay owned by the
+renderer, `FloorElevationSystem` and `LevelSystem`, and a rebuild keeps the pose.
+
+An `assemble` node's new children that declare no reveal of their own are its parts: each drops in
+on its own turn, including parts written in a later commit while the node still assembles.
+`isRevealAssembling` / `subscribeRevealAssembling` tell its renderer to draw them apart; the roof
+hides its merged shell and shows its segments, `RoofSystem` builds the shell meanwhile, and the
+callback flips back synchronously, so a capture that ends the reveal sees the whole shell.
+
+The host's `level` sets how much plays: `off` shows the build at once; `simple` keeps the order
+with `rise` and `scale` only (no parts, no dust); `full` plays every style and the dust;
+`framing` is `full` in the viewer, for plugins that stage their own members. Rising walls puff
+dust along their base and landing drops around their foot: one instanced mesh of a fixed
+512-sprite pool on `OVERLAY_LAYER`, the oldest sprite recycled when full.
+
+It ends at once on a `load` commit or a new hydration, an undo or redo, `thumbnail:before-capture`
+(synchronously, before the clone, dust included), an export, and for selected nodes, their hosts
+and an assembled node's parts. It never plays under `prefers-reduced-motion`, at `off`, in
+`renderContext: 'viewer'`, or on a level that is hidden or shadow-only — a level hidden mid-reveal
+re-plans the rest so it holds no slot. Both batches keep revealing nodes out (`isNodeRevealing`):
+the node batch defers them, and the wall batch holds the level's merge until its walls have risen.
+`subscribeRevealPhases` reports each (phase, level) group once as it starts; the viewer plays no
+sound, the host does.
+
+The 2D floor plan follows the same schedule (E-006): an entry whose node waits
+(`useRevealPending`) is not drawn; a `rise` node with a centreline (its `hit-line`) grows along it
+from its start, everything else fades in, from `getRevealPlanState` on each
+`subscribeRevealTicks` step. When only the plan shows, the canvas stops its frames, so the reveal
+keeps its own clock (its steps capped at 50 ms, like the frame clock).
+
+The events it says, the weight of a landing, the roof that lifts for the furniture, the reverse play for an undo (`retractNodes`) and Follow Pascal are in [construction-animation](construction-animation.md).
+
+A presentation that plays beside the reveal (a plugin's own layer, landing before a group ends)
+reads `planRevealWindows(commit)`: when each (phase, level) group of that commit starts and ends,
+from the reveal's first frame, planned as if nothing else were revealing.
+
 ## Pattern
 
 A kind's system is a React component that renders nothing and does its per-frame work in `useFrame`, shipped as the kind's `def.system`:

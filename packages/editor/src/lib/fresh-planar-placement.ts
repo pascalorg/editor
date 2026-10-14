@@ -16,6 +16,7 @@ import {
   type SurfaceRejectReason,
   useScene,
 } from '@pascal-app/core'
+import { remapNodeReferences } from '@pascal-app/core/clone-scene-graph'
 import { evaluateRecipe, isProceduralItem } from '@pascal-app/core/procedural-items'
 import useInteractionScope from '../store/use-interaction-scope'
 import usePlacementPreview from '../store/use-placement-preview'
@@ -37,6 +38,47 @@ function cleanPlacementMetadata<N extends AnyNode>(node: N): N {
 function parentIdOf(node: AnyNode): AnyNodeId | undefined {
   const parentId = (node as { parentId?: AnyNodeId | null }).parentId
   return parentId ?? undefined
+}
+
+/**
+ * The nodes the draft root names, outside its subtree and other than its parent, that name it
+ * back (a corner window's partner, joined while the draft was in hand). The commit gives the
+ * root a new id, so they are rewritten to name the committed node, never the deleted draft.
+ */
+function peerReferenceUpdates(
+  nodes: Readonly<Record<string, AnyNode>>,
+  root: AnyNode,
+  subtreeIds: ReadonlySet<string>,
+  committedId: AnyNodeId,
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const named = new Set<string>()
+  const visit = (value: unknown) => {
+    if (typeof value === 'string') {
+      if (nodes[value] && !subtreeIds.has(value) && value !== root.parentId) named.add(value)
+    } else if (Array.isArray(value)) value.forEach(visit)
+    else if (value && typeof value === 'object') Object.values(value).forEach(visit)
+  }
+  const {
+    id: _id,
+    parentId: _parentId,
+    children: _children,
+    ...fields
+  } = root as AnyNode & {
+    children?: unknown
+  }
+  visit(fields)
+  const ids = new Map([[root.id, committedId as string]])
+  return [...named].flatMap((id) => {
+    const peer = nodes[id]!
+    const remapped = remapNodeReferences(peer, ids) as Record<string, unknown>
+    const data = Object.fromEntries(
+      Object.entries(remapped).filter(
+        ([key, value]) =>
+          JSON.stringify(value) !== JSON.stringify((peer as Record<string, unknown>)[key]),
+      ),
+    )
+    return Object.keys(data).length ? [{ id: id as AnyNodeId, data: data as Partial<AnyNode> }] : []
+  })
 }
 
 /**
@@ -80,6 +122,8 @@ export function prepareFreshPlacementRootDuplicate(node: AnyNode): AnyNode {
     metadata?: unknown
   }
   delete duplicate.id
+  // A copy of one side of a corner window is a plain window: its partner stays with the original.
+  delete duplicate.corner
   if (Array.isArray(duplicate.children)) duplicate.children = []
   duplicate.metadata = {
     ...getPlacementMetadataRecord(stripPlacementMetadataFlags(duplicate.metadata)),
@@ -269,6 +313,9 @@ export function commitFreshPlacementSubtree(
     if (previous === -1) updates.push(merged)
     else updates[previous] = merged
   }
+  const subtreeIds = new Set([rootId, ...descendants.map((node) => node.id)])
+  for (const update of peerReferenceUpdates(scene.nodes, root, subtreeIds, cloned.rootId))
+    if (!updates.some((entry) => entry.id === update.id)) updates.push(update)
 
   const scope = useInteractionScope.getState()
   const factoryCreated =

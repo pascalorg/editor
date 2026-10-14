@@ -1,6 +1,8 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
+import type { PointAskPin, PointAskStatus } from '../agent-operations/point-context'
+import type { SceneViewInterior } from '../agent-operations/scene-view'
 import type {
   BlockNode,
   BoxVentNode,
@@ -278,6 +280,8 @@ export interface ThumbnailGenerateEvent {
   ephemeral?: boolean
   /** World clipping planes for this frame (a section's cut). */
   clip?: readonly { normal: [number, number, number]; constant: number }[]
+  /** Look inside this floor for the frame: the rest of the house left out, its walls cut (view_scene). */
+  interior?: SceneViewInterior
   /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
   supersample?: number
 }
@@ -356,7 +360,8 @@ type WindowAnimationEvents = {
 }
 
 type ThumbnailEvents = {
-  'thumbnail:before-capture': undefined
+  /** `wholeWalls`: every wall drawn whole for the frame, whatever the wall mode (an authored pose, an interior view). */
+  'thumbnail:before-capture': { wholeWalls?: boolean } | undefined
   'thumbnail:after-capture': undefined
 }
 
@@ -375,6 +380,13 @@ type AIChatEvents = {
 
 export interface RoomPresetCreateEvent {
   zoneId: ZoneNode['id']
+}
+
+type PointAskEvents = {
+  /** The chat's word on an ask's turn, for its pin. */
+  'point-ask:status': PointAskStatus
+  /** The pin tells the chat to light or open the ask's turn. */
+  'point-ask:pin': PointAskPin
 }
 
 type RoomPresetEvents = {
@@ -408,6 +420,7 @@ type EditorEvents = GridEvents &
   ThumbnailEvents &
   SnapshotEvents &
   AIChatEvents &
+  PointAskEvents &
   RoomPresetEvents &
   SelectionEvents
 

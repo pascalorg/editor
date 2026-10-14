@@ -136,7 +136,7 @@ export function FunctionTreePanel({
                       'relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
                       isActive
                         ? 'bg-primary/10 ring-1 ring-primary/50'
-                        : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                        : 'bg-black/4 opacity-70 grayscale hover:bg-black/8 hover:opacity-100 hover:grayscale-0 dark:bg-muted/40 dark:hover:bg-muted',
                     )}
                     onClick={() => {
                       triggerSFX('sfx:menu-click')
