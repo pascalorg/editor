@@ -47,7 +47,7 @@
   "devDependencies": {
     "@pascal/typescript-config": "*",
     "@types/howler": "^2.2.12",
-    "@types/node": "^22.19.12",
+    "@types/node": "^26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "agentation": "^3.0.2",

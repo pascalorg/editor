@@ -72,7 +72,7 @@
   "devDependencies": {
     "@pascal-app/core": "^1.0.4",
     "@pascal/typescript-config": "*",
-    "@types/node": "^22.19.20",
+    "@types/node": "^26.6.5",
     "typescript": "6.0.3"
   },
   "keywords": [
