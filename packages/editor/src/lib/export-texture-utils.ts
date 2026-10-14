@@ -56,7 +56,6 @@ export function createExportTextureUtils(
 ): ExportTextureUtils {
   let pending: Promise<WebGPURenderer> | null = null
   let disposed = false
-  const quad = new QuadMesh()
 
   return {
     async decompress(texture, maxTextureSize = Number.POSITIVE_INFINITY) {
@@ -67,7 +66,7 @@ export function createExportTextureUtils(
       const renderer = await pending
 
       // Everything below the await is synchronous, which is what lets
-      // overlapping calls share `quad` and the renderer's colour space.
+      // overlapping calls share the renderer's size and colour space.
       const image = texture.image as { width: number; height: number }
       const width = Math.min(image.width, maxTextureSize)
       const height = Math.min(image.height, maxTextureSize)
@@ -77,9 +76,8 @@ export function createExportTextureUtils(
       const previousColorSpace = renderer.outputColorSpace
       renderer.setSize(width, height)
       renderer.outputColorSpace = texture.colorSpace
-      quad.material = material
       try {
-        quad.render(renderer)
+        new QuadMesh(material).render(renderer)
       } finally {
         renderer.outputColorSpace = previousColorSpace
         material.dispose()

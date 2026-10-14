@@ -100,7 +100,7 @@
         "@types/node": "^22.19.12",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "@types/three": "^0.184.0",
+        "@types/three": "^0.186.0",
         "typescript": "7.0.2",
       },
     },
@@ -137,7 +137,7 @@
         "@pascal/typescript-config": "*",
         "@types/bun": "^1.4.2",
         "@types/react": "19.3.0",
-        "@types/three": "^0.184.0",
+        "@types/three": "^0.186.0",
         "fake-indexeddb": "^6.2.5",
         "typescript": "6.0.3",
       },
@@ -202,7 +202,7 @@
         "@types/pdfkit": "^0.17.6",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "@types/three": "^0.184.0",
+        "@types/three": "^0.186.0",
         "fast-xml-parser": "^5.11.2",
         "typescript": "6.0.3",
       },
@@ -244,7 +244,7 @@
       "devDependencies": {
         "@pascal/typescript-config": "*",
         "@types/bun": "^1.4.2",
-        "@types/three": "^0.184.0",
+        "@types/three": "^0.186.0",
         "typescript": "6.0.3",
       },
       "peerDependencies": {
@@ -299,7 +299,7 @@
         "@types/node": "^22.19.12",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "@types/three": "^0.184.0",
+        "@types/three": "^0.186.0",
         "typescript": "6.0.3",
       },
       "peerDependencies": {
@@ -351,7 +351,7 @@
         "@types/node": "^22",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "@types/three": "^0.184.0",
+        "@types/three": "^0.186.0",
         "typescript": "6.0.3",
       },
       "peerDependencies": {
@@ -376,7 +376,7 @@
     "@react-three/fiber": "9.8.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@types/three": "0.184.1",
+    "@types/three": "0.186.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -1010,7 +1010,7 @@
 
     "@types/stats.js": ["@types/stats.js@0.17.4", "", {}, "sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA=="],
 
-    "@types/three": ["@types/three@0.184.1", "", { "dependencies": { "@dimforge/rapier3d-compat": "~0.12.0", "@tweenjs/tween.js": "~23.1.3", "@types/stats.js": "*", "@types/webxr": ">=0.5.17", "fflate": "~0.8.2", "meshoptimizer": "~1.1.1" } }, "sha512-6q4VdiqVsrTRqmk62/BnlcAvIrnDM0zf2ZDVKI5kZiniWrSaOHaQzmbp+BNzoggc/8tgW412pL//wZIxu2PPTA=="],
+    "@types/three": ["@types/three@0.186.0", "", { "dependencies": { "@dimforge/rapier3d-compat": "~0.12.0", "@tweenjs/tween.js": "~23.1.3", "@types/stats.js": "*", "@types/webxr": ">=0.5.17", "fflate": "~0.8.3", "meshoptimizer": "~1.1.1" } }, "sha512-mxYSBpDC+D0pLfSP6sW4WZTcT+nrtmZcimMqnVmy36Hte3XpeYSrvgg4TRdaM1GemGog1AWzI5qL2VoIfMXbJQ=="],
 
     "@types/webxr": ["@types/webxr@0.5.24", "", {}, "sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg=="],
 
