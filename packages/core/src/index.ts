@@ -201,6 +201,7 @@ export {
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
 export {
+  ceilingSeatY,
   isScriptedNode,
   matchScriptSlotsToLibrary,
   type ScriptedNode,

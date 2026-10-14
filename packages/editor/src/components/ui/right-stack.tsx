@@ -2,6 +2,8 @@
 
 import { createContext, type ReactNode, useContext, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
+import { cn } from '../../lib/utils'
+import { TOP_MENU_CLEARANCE } from './action-menu/placement'
 
 const RightStackContext = createContext(false)
 
@@ -56,7 +58,19 @@ function inspectorHeights(slot: HTMLElement): { natural: number; header: number 
  * and the card scrolls instead. Neither hides the other. On a phone the two
  * keep their own layouts (sheet / no card).
  */
-export function RightStack({ inspector, helper }: { inspector: ReactNode; helper: ReactNode }) {
+export function RightStack({
+  inspector,
+  helper,
+  reserveBottomMenu = true,
+  belowTopMenu = false,
+}: {
+  inspector: ReactNode
+  helper: ReactNode
+  // Keep clear of an action menu docked at the bottom; off when it sits at the top.
+  reserveBottomMenu?: boolean
+  // Start below an action menu docked at the top of the stage.
+  belowTopMenu?: boolean
+}) {
   const isMobile = useIsMobile()
   const stackRef = useRef<HTMLDivElement>(null)
   const inspectorRef = useRef<HTMLDivElement>(null)
@@ -125,7 +139,12 @@ export function RightStack({ inspector, helper }: { inspector: ReactNode; helper
   return (
     <RightStackContext.Provider value={true}>
       <div
-        className="pointer-events-none fixed top-20 right-4 bottom-[74px] z-40 flex flex-col items-end gap-2"
+        className={cn(
+          'pointer-events-none fixed right-4 z-40 flex flex-col items-end gap-2',
+          reserveBottomMenu ? 'bottom-[74px]' : 'bottom-4',
+          !belowTopMenu && 'top-20',
+        )}
+        style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
         data-right-stack
         ref={stackRef}
       >

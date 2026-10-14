@@ -38,11 +38,13 @@ import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
+import { useIsMobile } from '../../hooks/use-mobile'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { isSceneView } from '../../lib/editor-views'
 import { useGestureLifecycleOwner } from '../../lib/gesture-lifecycle'
+import { shouldShowEditingControls } from '../../lib/interaction/overlay-policy'
 import {
   createLocalProjectPresentationPersistence,
   type LocalProjectPresentationPersistence,
@@ -58,6 +60,7 @@ import {
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUnitFocusRules } from '../../lib/units'
+import { cn } from '../../lib/utils'
 import { useViewerFloorDisplay } from '../../lib/viewer-selection'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
@@ -74,6 +77,7 @@ import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
+import { type ActionMenuPlacement, TOP_MENU_CLEARANCE } from '../ui/action-menu/placement'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -196,6 +200,8 @@ function initializeEditorRuntime(): () => void {
 export interface EditorProps {
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
+  // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
+  actionMenuPlacement?: ActionMenuPlacement
 
   // UI slots (v1)
   appMenuButton?: ReactNode
@@ -580,7 +586,13 @@ function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
   )
 }
 
-function ViewerCanvasControlsHint({ onDismiss }: { onDismiss: () => void }) {
+function ViewerCanvasControlsHint({
+  belowTopMenu = false,
+  onDismiss,
+}: {
+  belowTopMenu?: boolean
+  onDismiss: () => void
+}) {
   const all = CAMERA_CONTROL_HINTS
   // A host teaching one gesture at a time narrows this to the one it is asking
   // for, and to nothing once it is done. Null — the default — is all of them.
@@ -592,7 +604,13 @@ function ViewerCanvasControlsHint({ onDismiss }: { onDismiss: () => void }) {
   }
 
   return (
-    <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
+    <div
+      className={cn(
+        'pointer-events-none absolute left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2',
+        !belowTopMenu && 'top-14',
+      )}
+      style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
+    >
       <section
         aria-label="Camera controls hint"
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
@@ -1090,6 +1108,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   floorplanSceneSlot,
   disablePostFx = false,
   immersive,
+  hintBelowTopMenu = false,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -1105,6 +1124,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
   immersive?: ViewerImmersiveSession
+  hintBelowTopMenu?: boolean
 }) {
   const layout = useActiveViewLayout()
   const views = useEditorViews()
@@ -1238,7 +1258,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
             />
             {!isVersionPreviewMode && <PointAskLayer />}
             {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
-              <ViewerCanvasControlsHint onDismiss={dismissCameraControlsHint} />
+              <ViewerCanvasControlsHint
+                belowTopMenu={hintBelowTopMenu}
+                onDismiss={dismissCameraControlsHint}
+              />
             ) : null}
             <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
             <Viewer
@@ -1364,6 +1387,7 @@ function PreviewStage({
 function EditorContent({
   guardAgainstSceneWipe,
   layoutVersion = 'v1',
+  actionMenuPlacement,
   appMenuButton,
   sidebarTop,
   navbarSlot,
@@ -1398,6 +1422,9 @@ function EditorContent({
   extraSidebarPanels,
   commandPaletteEmptyAction,
 }: EditorProps) {
+  const isMobile = useIsMobile()
+  // A top-docked menu sits at the top of the scene panes on desktop (layout v2).
+  const dockMenuOnTop = actionMenuPlacement === 'top' && !isMobile
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
@@ -1452,6 +1479,12 @@ function EditorContent({
   const [previewStageMode, setPreviewStageMode] = useState<ViewerStageMode>('3d')
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const readOnly = useScene((s) => s.readOnly)
+  // Chrome only steps down for the top menu while the menu is actually there.
+  const topMenuShown =
+    dockMenuOnTop &&
+    !(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
+    shouldShowEditingControls(readOnly)
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
@@ -1664,6 +1697,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
+      hintBelowTopMenu={topMenuShown}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
@@ -1762,15 +1796,26 @@ function EditorContent({
                 <>
                   <SceneRegion>
                     {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
-                    {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
-                      <div className="pointer-events-auto">
-                        <ActionMenu />
-                      </div>
-                    )}
+                    {!(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
+                      (dockMenuOnTop ? (
+                        // Own row under the toolbar, below the level selector's opening list (z-20).
+                        // No transform: the menu's fixed pill must anchor to the scene region.
+                        <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center">
+                          <div className="pointer-events-auto">
+                            <ActionMenu inline placement="top" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="pointer-events-auto">
+                          <ActionMenu placement={actionMenuPlacement} />
+                        </div>
+                      ))}
                     {sceneOverlay}
                   </SceneRegion>
                   {/* The inspector and the shortcuts card share one right column. */}
                   <RightStack
+                    belowTopMenu={topMenuShown}
+                    reserveBottomMenu={!dockMenuOnTop}
                     helper={isCaptureMode ? null : <HelperManager />}
                     inspector={
                       isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
@@ -1858,9 +1903,13 @@ function EditorContent({
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
             <div className="pointer-events-auto">
-              <ActionMenu />
+              <ActionMenu placement={actionMenuPlacement} />
             </div>
-            <RightStack helper={<HelperManager />} inspector={<PanelManager />} />
+            <RightStack
+              helper={<HelperManager />}
+              inspector={<PanelManager />}
+              reserveBottomMenu={actionMenuPlacement !== 'top' || isMobile}
+            />
             <RiserDiagramPanel />
             {isFirstPersonMode && (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />

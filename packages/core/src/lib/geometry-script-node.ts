@@ -158,6 +158,24 @@ export function scriptedOrigin(node: ScriptedNode): [number, number, number] {
 }
 
 /**
+ * Where a ceiling item's origin sits in the ceiling's frame (y = 0 is the ceiling plane): a recessed
+ * fixture seats flush; a scripted object is origined at its top (the compiler's ceiling mount), so
+ * it hangs from its bounds' top; a catalog model is origined at its bottom and hangs its full height.
+ */
+export function ceilingSeatY(
+  item: {
+    asset: { recessed?: boolean }
+    source?: { manifest: { bounds: { max: readonly number[] } } }
+    scale?: readonly number[]
+  },
+  height: number,
+): number {
+  if (item.asset.recessed) return 0
+  if (item.source) return -(item.source.manifest.bounds.max[1] ?? 0) * (item.scale?.[1] ?? 1)
+  return -height
+}
+
+/**
  * The item's controls from what the module emitted: a light switch for its
  * lights, an open/close toggle for an `open` clip (closing plays `close`, or
  * `open` reversed), a `loop` clip that runs throughout, and a play toggle per
