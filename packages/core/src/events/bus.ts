@@ -330,6 +330,12 @@ type CameraControlEvents = {
   'camera-controls:fit-scene': CameraControlFitSceneEvent
   'camera-controls:frame': CameraControlFrameEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
+  /**
+   * A run of captures as one session (a sheet's pictures, an agent's view): while `active`, the
+   * editor presents the finished house (full-height walls, the storeys stacked, the materials' own
+   * look) and the viewport keeps its last frame, so the person never sees the switch.
+   */
+  'camera-controls:capture-session': { owner: string; active: boolean }
   'camera-controls:apply-pose': CameraPose
   'camera-controls:cancel-pose': undefined
   'camera-controls:interaction-start': undefined

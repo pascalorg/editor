@@ -443,6 +443,30 @@ export function presentFinished(): () => void {
   }
 }
 
+/**
+ * The runs of captures on now (`camera-controls:capture-session`): the first to start presents the
+ * pictures' scene (`present` returns what puts the user's view back), the last to end puts it back.
+ */
+export function captureSessions(present: () => () => void) {
+  const owners = new Set<string>()
+  let restore: (() => void) | null = null
+  const end = () => {
+    owners.clear()
+    restore?.()
+    restore = null
+  }
+  return {
+    on({ owner, active }: { owner: string; active: boolean }) {
+      if (!owner) return
+      if (active) {
+        if (owners.size === 0) restore = present()
+        owners.add(owner)
+      } else if (owners.delete(owner) && owners.size === 0) end()
+    },
+    end,
+  }
+}
+
 /** A yield to the next macrotask through a MessageChannel — unlike a timer, never throttled in a hidden tab. */
 function macrotask(): Promise<void> {
   return new Promise((resolve) => {
@@ -1158,37 +1182,27 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     [gl, scene, getThree, orthoPipeline, advance, clock],
   )
 
-  // A sheet's run of captures sets the shared scene
-  // up for its pictures — the finished presentation, the ground hidden — so
-  // for the run the viewport keeps its last frame and the viewer shows the
-  // finished house whatever view the user was in; `active: false` puts the
-  // user's view back, then (a few commits later) the viewport resumes.
+  // A run of captures (a sheet's pictures, an agent's view) sets the shared
+  // scene up for its pictures — the finished presentation, the ground hidden —
+  // so while any run is on the viewport keeps its last frame and the viewer
+  // shows the finished house whatever view the user was in; the last run's
+  // `active: false` puts the user's view back, then (a few commits later) the
+  // viewport resumes. Runs overlap (a sheet and an agent's view): the user's
+  // view is the one before the first, never a run's finished presentation.
   // `camera-controls:capture-session` `{ owner, active }`.
   useEffect(() => {
-    const sessions = new Map<string, () => void>()
-    const end = (owner: string) => {
-      sessions.get(owner)?.()
-      sessions.delete(owner)
-    }
-    const onSession = (event: { owner?: string; active?: boolean }) => {
-      if (!event?.owner) return
-      end(event.owner)
-      if (!event.active) return
+    const sessions = captureSessions(() => {
       const releaseLiveFrame = holdLiveFrame(HOLD_MAX_MS)
       const restorePresentation = presentFinished()
-      sessions.set(event.owner, () => {
+      return () => {
         restorePresentation()
         setTimeout(releaseLiveFrame, SESSION_RESUME_MS)
-      })
-    }
-    const bus = emitter as unknown as {
-      on: (name: string, handler: typeof onSession) => void
-      off: (name: string, handler: typeof onSession) => void
-    }
-    bus.on('camera-controls:capture-session', onSession)
+      }
+    })
+    emitter.on('camera-controls:capture-session', sessions.on)
     return () => {
-      bus.off('camera-controls:capture-session', onSession)
-      for (const owner of [...sessions.keys()]) end(owner)
+      emitter.off('camera-controls:capture-session', sessions.on)
+      sessions.end()
     }
   }, [])
 

@@ -6,6 +6,7 @@ import { Group, Layers, Mesh, OrthographicCamera, PerspectiveCamera, Vector2 } f
 import { CanvasTarget, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
 import {
   atCaptureSize,
+  captureSessions,
   capturesOrthographically,
   interiorCutaway,
   presentFinished,
@@ -176,6 +177,26 @@ describe('a sheet capture session', () => {
     presentFinished()()
     unsubscribe()
     expect(writes).toBe(0)
+  })
+
+  // A sheet's pictures and an agent's view can overlap: the user's view is the one before the
+  // first, never a run's finished presentation.
+  test('runs that overlap present once and put the view back after the last', () => {
+    const steps: string[] = []
+    const sessions = captureSessions(() => {
+      steps.push('present')
+      return () => steps.push('restore')
+    })
+    sessions.on({ owner: 'sheets-a', active: true })
+    sessions.on({ owner: 'view-b', active: true })
+    sessions.on({ owner: 'sheets-a', active: false })
+    expect(steps).toEqual(['present'])
+    sessions.on({ owner: 'nobody', active: false })
+    sessions.on({ owner: 'view-b', active: false })
+    expect(steps).toEqual(['present', 'restore'])
+    sessions.on({ owner: 'view-c', active: true })
+    sessions.end()
+    expect(steps).toEqual(['present', 'restore', 'present', 'restore'])
   })
 })
 
