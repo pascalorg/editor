@@ -34,7 +34,9 @@ export function AudioSettingsDialog() {
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Audio settings</DialogTitle>
-          <DialogDescription>Adjust volume levels and mute settings</DialogDescription>
+          <DialogDescription>
+            Volume levels apply to every tab. Muting applies to this tab only.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
           {/* Master Volume */}
@@ -90,7 +92,7 @@ export function AudioSettingsDialog() {
               variant={muted ? 'default' : 'outline'}
             >
               {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-              {muted ? 'Unmute All Sounds' : 'Mute All Sounds'}
+              {muted ? 'Unmute this tab' : 'Mute this tab'}
             </Button>
           </div>
         </div>
