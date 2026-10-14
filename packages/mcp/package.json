@@ -67,7 +67,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@pascal-app/geometry-script": "^1.0.4",
     "@pascal-app/lingo": "^0.2.0",
-    "zod": ">=4.5.4 <4.6"
+    "zod": ">=4.6.7 <4.7"
   },
   "devDependencies": {
     "@pascal-app/core": "^1.0.4",
