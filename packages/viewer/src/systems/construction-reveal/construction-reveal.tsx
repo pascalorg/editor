@@ -44,7 +44,9 @@ import {
   setRevealPose,
 } from '../../lib/reveal-pose'
 import {
+  LAZY_REVEAL_TIMING,
   type PlannedReveal,
+  planLazyReveal,
   planRetract,
   planReveal,
   REVEAL_TIMING,
@@ -89,6 +91,8 @@ type ActiveReveal = {
   /** A drop's anticipation, and how heavy it lands: the last piece of a build is heavier. */
   lead: number
   weight: number
+  /** A rise's or a scale's overshoot past its rest before it settles (the lazy schedule's). */
+  overshoot: number
   /** The last piece of the plan to arrive; the reveal says when it has. */
   finale: boolean
   finaleSaid: boolean
@@ -208,6 +212,8 @@ const MIN_SCALE = 1e-3
 const FULL_DUST_DROP_M = 4
 /** The last piece of a build lands this much heavier: a bigger squash, a bigger puff. */
 const FINALE_WEIGHT = 1.7
+/** On the lazy schedule a drop lifts this share of its height before it falls (anticipation). */
+const LAZY_DROP_LEAD = 0.08
 /** A lifted node rises over this many seconds, and comes back a little quicker. */
 const LIFT_RESPONSE_UP_S = 0.55
 const LIFT_RESPONSE_DOWN_S = 0.45
@@ -251,6 +257,10 @@ const foot = [new Vector3(), new Vector3(), new Vector3(), new Vector3()]
 
 const pending = revealPending
 let queue: PlannedReveal[] = []
+/** The plan's entries still to start, by id: when each moves in, and its preroll before. */
+const planned = new Map<string, PlannedReveal>()
+/** How long a plugin plays before a node of the lazy schedule moves in (its preroll), if it plays any. */
+let prerollOf: ((candidate: RevealCandidate) => number) | null = null
 let unplanned = false
 /** The plan is to be made again, once what mounts up front has drawn. */
 let replanning = false
@@ -525,6 +535,45 @@ export function getRevealPlanState(id: string): RevealPlanState | null {
   const durationMs = reveal.style === 'assemble' ? REVEAL_TIMING.durationMs.drop : reveal.durationMs
   const progress = (clockMs - reveal.startedAt) / Math.max(1, durationMs)
   return { style: reveal.style, progress: Math.min(1, Math.max(0, progress)) }
+}
+
+/**
+ * When a waiting node of the plan moves in, on the reveal's clock (`revealClockMs`), and how long its
+ * preroll plays before: a plugin that stages its own pieces for it (a wall's frame and boards) plays
+ * them in `[startMs - prerollMs, startMs]`. Null once it has started, or when it is not planned.
+ */
+export function getRevealTurn(id: string): { startMs: number; prerollMs: number } | null {
+  const entry = planned.get(id)
+  return entry ? { startMs: entry.startMs, prerollMs: entry.prerollMs ?? 0 } : null
+}
+
+/** The reveal's own clock: what `getRevealTurn` counts in. */
+export function revealClockMs(): number {
+  return clockMs
+}
+
+/**
+ * Lets a plugin ask for a preroll before nodes of the lazy schedule (the `framing` level) move in:
+ * the plan leaves `prerollOf(candidate)` ms before each, and the plugin plays its own pieces then.
+ * Asked once per node when the plan is made; 0 for none. Null takes it back.
+ */
+export function setRevealPreroll(next: ((candidate: RevealCandidate) => number) | null): void {
+  prerollOf = next
+}
+
+const puffFoot = [new Vector3(), new Vector3(), new Vector3(), new Vector3()]
+
+/**
+ * A puff of the reveal's dust around `centre` (world), `radius` metres out, `strength` in (0, 1]:
+ * for a plugin's own pieces landing. Nothing when no dust plays (the simple level, no reveal).
+ */
+export function emitRevealPuff(centre: Vector3, radius: number, strength: number): void {
+  if (!(dust && dustOn())) return
+  puffFoot[0]!.set(centre.x - radius, centre.y, centre.z - radius)
+  puffFoot[1]!.set(centre.x + radius, centre.y, centre.z - radius)
+  puffFoot[2]!.set(centre.x + radius, centre.y, centre.z + radius)
+  puffFoot[3]!.set(centre.x - radius, centre.y, centre.z + radius)
+  emitAroundFoot(dust, puffFoot, Math.min(1, Math.max(0.05, strength)), clockMs)
 }
 
 /** Calls `listener` after every reveal step while anything reveals, and once when it all ends. */
@@ -929,6 +978,10 @@ function announce(candidate: RevealCandidate) {
 function revealCandidates(commit: SceneCommit, at: ConstructionRevealLevel): StagedCandidate[] {
   const candidates = commitRevealCandidates(commit, at, arrivals)
   arrivals += candidates.length
+  // A kind that declares no reveal may have come in on its own (a default reveal): on a host still
+  // assembling, it is one of its parts instead; on a host still coming in, it comes in with it.
+  const staged = new Set(candidates.map((candidate) => candidate.id))
+  const replaced = new Set<string>()
   const { before, current } = commit
   for (const id in current.nodes) {
     if (before.nodes[id as AnyNodeId]) continue
@@ -936,6 +989,8 @@ function revealCandidates(commit: SceneCommit, at: ConstructionRevealLevel): Sta
     if (!node || nodeRegistry.get(node.type)?.capabilities?.reveal) continue
     const hostId = node.parentId as string | null
     const host = hostId ? (pending.get(hostId) ?? active.get(hostId)?.candidate) : undefined
+    // Under a host still waiting or moving in, it is drawn inside it and comes in with it.
+    if (staged.has(id) && hostId && (pending.has(hostId) || active.has(hostId))) replaced.add(id)
     if (host?.style === 'assemble') {
       candidates.push({
         ...host,
@@ -948,7 +1003,10 @@ function revealCandidates(commit: SceneCommit, at: ConstructionRevealLevel): Sta
       })
     }
   }
-  return candidates
+  if (replaced.size === 0) return candidates
+  return candidates.filter(
+    (candidate) => !(replaced.has(candidate.id) && candidate.host === undefined),
+  )
 }
 
 function levelShown(levelId: string | null): boolean {
@@ -993,6 +1051,7 @@ function settle(id: string) {
 
 function startReveal(candidate: RevealCandidate, now: number, animate: boolean) {
   if (!pending.delete(candidate.id)) return
+  planned.delete(candidate.id)
   // A node shows only inside its host: a host still waiting starts with it.
   const nodes = useScene.getState().nodes
   let parentId = nodes[candidate.id as AnyNodeId]?.parentId as AnyNodeId | null | undefined
@@ -1015,20 +1074,29 @@ function startReveal(candidate: RevealCandidate, now: number, animate: boolean) 
   lastStartMs = now
   announce(candidate)
   groupReleased(candidate)
+  // The lazy schedule overdoes it a little: higher falls, an anticipation, an overshoot.
+  const lazy = lazyOn()
+  const timing = lazy ? LAZY_REVEAL_TIMING : REVEAL_TIMING
   active.set(candidate.id, {
     id: candidate.id,
     candidate,
     style: candidate.style,
-    height: candidate.height,
+    height: lazy
+      ? Math.max(candidate.height, LAZY_REVEAL_TIMING.minHeightM[candidate.style] ?? 0)
+      : candidate.height,
     levelId: candidate.levelId,
     startedAt: now,
-    durationMs: REVEAL_TIMING.durationMs[candidate.style],
+    durationMs: timing.durationMs[candidate.style],
     clockStart: null,
     pivot: null,
     base: null,
     landed: false,
     root: null,
-    lead: candidate.lead ?? 0,
+    lead:
+      lazy && candidate.style === 'drop'
+        ? Math.max(candidate.lead ?? 0, LAZY_DROP_LEAD)
+        : (candidate.lead ?? 0),
+    overshoot: lazy ? LAZY_REVEAL_TIMING.overshoot : 0,
     weight: 'finale' in candidate && candidate.finale ? FINALE_WEIGHT : 1,
     finale: 'finale' in candidate && candidate.finale === true,
     finaleSaid: false,
@@ -1132,6 +1200,9 @@ const climbToBuilding = (id: string): string | null => {
   }
   return null
 }
+
+/** Whether the plan is the lazy, nested one: the framing level. */
+const lazyOn = () => revealLevel() === 'framing'
 
 /** Whether lifts play at the person's level: the full construction only. */
 const liftsPlay = () => revealLevel() === 'full' || revealLevel() === 'framing'
@@ -1748,6 +1819,38 @@ function stepWarm(now: number) {
     warmWaiting = false
 }
 
+/**
+ * The plan for what waits, from `now`. On the lazy schedule, a node whose preroll has begun keeps its
+ * turn (its plugin is playing it), and the rest are planned around it with their prerolls.
+ */
+function planPending(now: number): PlannedReveal[] {
+  if (!lazyOn()) {
+    return planReveal([...pending.values()], Math.max(now, lastStartMs + REVEAL_TIMING.nodeGapMs))
+  }
+  const kept: PlannedReveal[] = []
+  for (const entry of queue) {
+    if (pending.has(entry.id) && entry.prerollMs && entry.startMs - entry.prerollMs <= now)
+      kept.push(entry)
+  }
+  const keptIds = new Set(kept.map((entry) => entry.id))
+  const waiting: RevealCandidate[] = []
+  for (const candidate of pending.values()) {
+    if (keptIds.has(candidate.id)) continue
+    let prerollMs = 0
+    try {
+      prerollMs = prerollOf?.(candidate) ?? 0
+    } catch (error) {
+      console.error('[viewer] reveal preroll failed', error)
+    }
+    waiting.push(prerollMs > 0 ? { ...candidate, prerollMs } : candidate)
+  }
+  // What comes next waits for the prerolls already playing: nothing of it can pull their node in early.
+  const from = Math.max(now, ...kept.map((entry) => entry.startMs))
+  return [...kept, ...planLazyReveal(waiting, from)].sort(
+    (left, right) => left.startMs - right.startMs || left.seq - right.seq,
+  )
+}
+
 function tickReveals(now: number, frameMs?: number) {
   clockMs = now
   frameQuiet = frameMs === undefined || frameMs < WARM_QUIET_FRAME_MS
@@ -1764,11 +1867,14 @@ function tickReveals(now: number, frameMs?: number) {
   stepWarm(now)
   if (replanning && !warmWaiting) {
     replanning = false
-    queue = planReveal([...pending.values()], Math.max(now, lastStartMs + REVEAL_TIMING.nodeGapMs))
+    queue = planPending(now)
+    planned.clear()
+    for (const entry of queue) planned.set(entry.id, entry)
   }
   let due = 0
   while (due < queue.length && (queue[due]?.startMs ?? Number.POSITIVE_INFINITY) <= now) {
     const entry = queue[due++]!
+    planned.delete(entry.id)
     if (pending.has(entry.id)) startReveal(entry, now, levelShown(entry.levelId))
   }
   if (due > 0) queue = queue.slice(due)
@@ -1807,6 +1913,7 @@ function finishReveals(keepHeld = false) {
   const busy = waiting.length > 0 || active.size > 0 || retracts.size > 0
   pending.clear()
   queue = []
+  planned.clear()
   unplanned = false
   replanning = false
   warmWaiting = false
@@ -1841,6 +1948,7 @@ function finishNode(id: string) {
     const root = sceneRegistry.nodes.get(id)
     if (root) clearRevealPose(root)
   }
+  planned.delete(id)
   const waiting = pending.get(id)
   if (waiting && pending.delete(id)) {
     released(waiting)

@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type LevelNode,
   nodeRegistry,
+  type RevealConfig,
   type RevealStyle,
   type SceneCommit,
 } from '@pascal-app/core'
@@ -11,8 +12,10 @@ import type { RevealCandidate } from './reveal-schedule'
 /**
  * How much of the construction plays. `off` shows a build at once; `simple`
  * keeps the scattered order with only `rise` and `scale`; `full` adds the
- * falls, settles, cuts, assembled roofs and the dust. `framing` is `full` in
- * the viewer: plugins that stage their own members (the framing) read it.
+ * falls, settles, cuts, assembled roofs and the dust. `framing` plays the
+ * same motions on the lazy, nested schedule (floor by floor, room by room,
+ * piece by piece; `planLazyReveal`), overdone a little, and plugins that stage
+ * their own members (the framing) read it and play them in the prerolls.
  */
 export type ConstructionRevealLevel = 'off' | 'simple' | 'full' | 'framing'
 
@@ -28,6 +31,47 @@ export function styleAt(style: RevealStyle, at: ConstructionRevealLevel): Reveal
   return 'scale'
 }
 
+/** Kinds that hold the others: staging one would unmount everything under it. */
+const CONTAINERS: ReadonlySet<string> = new Set(['site', 'building', 'level'])
+
+/**
+ * The reveal a new node of a kind that declares none comes in with, so nothing a build adds pops in
+ * at once: by where it stands (on a roof, it falls onto it) and what it is. Null for the containers,
+ * the annotations and the kinds that draw nothing.
+ */
+function defaultReveal(node: AnyNode, nodes: Record<AnyNodeId, AnyNode>): RevealConfig | null {
+  const definition = nodeRegistry.get(node.type)
+  if (!definition || CONTAINERS.has(node.type)) return null
+  if (definition.category === 'analysis' || !(definition.renderer || definition.geometry))
+    return null
+  let parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+  for (let guard = 0; parent && guard < 32; guard += 1) {
+    if (parent.type === 'roof') return { phase: 'roof', style: 'drop', height: 2 }
+    if (parent.type === 'level') break
+    parent = parent.parentId ? nodes[parent.parentId as AnyNodeId] : undefined
+  }
+  switch (definition.category) {
+    case 'structure':
+      return { phase: 'structure', style: 'scale' }
+    case 'utility':
+      return { phase: 'openings', style: 'scale' }
+    case 'site':
+      return { phase: 'foundation', style: 'scale' }
+    default:
+      return { phase: 'furnishing', style: 'drop', height: 0.3 }
+  }
+}
+
+/** Whether `node` comes in with a new host the commit stages (it is drawn inside it), not on its own. */
+function ridesWithHost(
+  node: AnyNode,
+  before: SceneCommit['before'],
+  current: SceneCommit['current'],
+) {
+  const parent = node.parentId ? current.nodes[node.parentId as AnyNodeId] : undefined
+  return Boolean(parent && !CONTAINERS.has(parent.type) && !before.nodes[parent.id as AnyNodeId])
+}
+
 /** What a node declares and where it stands: its candidate, or null for a kind that declares no reveal. */
 function candidateOf(
   node: AnyNode,
@@ -35,8 +79,11 @@ function candidateOf(
   at: ConstructionRevealLevel,
   source: string | null,
   seq: number,
+  fallback = false,
 ): StagedCandidate | null {
-  const reveal = nodeRegistry.get(node.type)?.capabilities?.reveal
+  const reveal =
+    nodeRegistry.get(node.type)?.capabilities?.reveal ??
+    (fallback ? defaultReveal(node, nodes) : null)
   if (!reveal) return null
   let depth = 0
   let levelId: string | null = null
@@ -68,7 +115,10 @@ function candidateOf(
 /**
  * What `commit` stages at `at`: each node it creates whose kind declares a
  * reveal, and the new parts (children declaring none) of each one that
- * assembles. `seq` counts on from `firstSeq` in arrival order.
+ * assembles. A new node of a kind that declares none comes in with a default
+ * reveal when what holds it was already there (under a new host, it comes in
+ * with the host). `seq` counts on from `firstSeq` in arrival order. Each
+ * candidate carries its room and its place in it (`layoutRevealCandidates`).
  */
 export function commitRevealCandidates(
   { before, current, author }: SceneCommit,
@@ -80,7 +130,16 @@ export function commitRevealCandidates(
   for (const id in current.nodes) {
     if (before.nodes[id as AnyNodeId]) continue
     const node = current.nodes[id as AnyNodeId]
-    const candidate = node && candidateOf(node, current.nodes, at, author ?? null, seq)
+    const candidate =
+      node &&
+      candidateOf(
+        node,
+        current.nodes,
+        at,
+        author ?? null,
+        seq,
+        !ridesWithHost(node, before, current),
+      )
     if (!(node && candidate)) continue
     seq += 1
     candidates.push(candidate)
@@ -105,7 +164,206 @@ export function commitRevealCandidates(
       })
     }
   }
+  layoutRevealCandidates(candidates, current.nodes)
   return candidates
+}
+
+type Pt = readonly [number, number]
+
+const isPt = (value: unknown): value is Pt =>
+  Array.isArray(value) &&
+  value.length === 2 &&
+  typeof value[0] === 'number' &&
+  typeof value[1] === 'number'
+
+function polygonOf(node: AnyNode): Pt[] | null {
+  const polygon = (node as { polygon?: unknown }).polygon
+  return Array.isArray(polygon) && polygon.length >= 3 && polygon.every(isPt) ? polygon : null
+}
+
+function centroidOf(polygon: readonly Pt[]): Pt {
+  let x = 0
+  let z = 0
+  for (const [px, pz] of polygon) {
+    x += px
+    z += pz
+  }
+  return [x / polygon.length, z / polygon.length]
+}
+
+function areaOf(polygon: readonly Pt[]): number {
+  let twice = 0
+  for (let index = 0; index < polygon.length; index += 1) {
+    const [x0, z0] = polygon[index]!
+    const [x1, z1] = polygon[(index + 1) % polygon.length]!
+    twice += x0 * z1 - x1 * z0
+  }
+  return Math.abs(twice) / 2
+}
+
+function inside([x, z]: Pt, polygon: readonly Pt[]): boolean {
+  let within = false
+  for (let index = 0, last = polygon.length - 1; index < polygon.length; last = index++) {
+    const [xi, zi] = polygon[index]!
+    const [xj, zj] = polygon[last]!
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) within = !within
+  }
+  return within
+}
+
+/** Where a node stands in its level's plan: a wall's middle, a polygon's centre, a placed node's spot. */
+function planPointOf(node: AnyNode): Pt | null {
+  const { start, end, position } = node as { start?: unknown; end?: unknown; position?: unknown }
+  if (isPt(start) && isPt(end)) return [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
+  const polygon = polygonOf(node)
+  if (polygon) return centroidOf(polygon)
+  if (Array.isArray(position) && typeof position[0] === 'number' && typeof position[2] === 'number')
+    return [position[0], position[2]]
+  return null
+}
+
+/** The node right under the level that `id` stands in (itself, or the host it hangs on). */
+function standingOf(id: string, nodes: Record<AnyNodeId, AnyNode>): AnyNode | null {
+  let node = nodes[id as AnyNodeId]
+  for (let guard = 0; node && guard < 32; guard += 1) {
+    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    if (!parent || parent.type === 'level') return node
+    node = parent
+  }
+  return null
+}
+
+/** Walls a run holds before the next run of the same outline starts beside it. */
+const WALLS_PER_RUN = 6
+/** Wall ends closer than this (m) meet. */
+const MEETS_M = 0.05
+
+/**
+ * Gives each candidate its room for the lazy schedule: the zone it stands in (a wall, the zone on
+ * either side of its middle), else, for a wall, a run of the walls it meets end to end; its room's
+ * sweep across the floor; and its place in the room (around the room's centre, or along the run).
+ * What stands in no room keeps none: it belongs to the floor.
+ */
+export function layoutRevealCandidates(
+  candidates: StagedCandidate[],
+  nodes: Record<AnyNodeId, AnyNode>,
+): void {
+  const zonesByLevel = new Map<string, { id: string; polygon: Pt[]; centre: Pt }[]>()
+  const zonesOf = (levelId: string) => {
+    let zones = zonesByLevel.get(levelId)
+    if (zones) return zones
+    zones = []
+    const level = nodes[levelId as AnyNodeId] as (AnyNode & { children?: unknown[] }) | undefined
+    for (const childId of level?.children ?? []) {
+      const child = typeof childId === 'string' ? nodes[childId as AnyNodeId] : undefined
+      const polygon = child?.type === 'zone' ? polygonOf(child) : null
+      if (child && polygon) zones.push({ id: child.id, polygon, centre: centroidOf(polygon) })
+    }
+    zones.sort((left, right) => areaOf(left.polygon) - areaOf(right.polygon))
+    zonesByLevel.set(levelId, zones)
+    return zones
+  }
+  const turnAround = (centre: Pt, point: Pt) => {
+    const angle = Math.atan2(point[1] - centre[1], point[0] - centre[0])
+    return angle < 0 ? angle + 2 * Math.PI : angle
+  }
+  // Walls in no zone, by level: they make runs; what they host follows them.
+  const loose = new Map<string, { candidate: StagedCandidate; wall: AnyNode }[]>()
+  const onLooseWalls: { candidate: StagedCandidate; wallId: string; point: Pt }[] = []
+  for (const candidate of candidates) {
+    if (!candidate.levelId) continue
+    const standing = standingOf(candidate.host ?? candidate.id, nodes)
+    const point = standing && planPointOf(standing)
+    if (!(standing && point)) continue
+    const zones = zonesOf(candidate.levelId)
+    let probes: Pt[] = [point]
+    if (standing.type === 'wall') {
+      const { start, end } = standing as unknown as { start: Pt; end: Pt }
+      const length = Math.hypot(end[0] - start[0], end[1] - start[1]) || 1
+      const nx = -(end[1] - start[1]) / length
+      const nz = (end[0] - start[0]) / length
+      probes = [
+        [point[0] + nx * 0.3, point[1] + nz * 0.3],
+        [point[0] - nx * 0.3, point[1] - nz * 0.3],
+      ]
+    }
+    const zone = zones.find((candidateZone) =>
+      probes.some((probe) => inside(probe, candidateZone.polygon)),
+    )
+    if (zone) {
+      candidate.cluster = zone.id
+      candidate.sweep = zone.centre[0] + zone.centre[1]
+      candidate.order = turnAround(zone.centre, point)
+      continue
+    }
+    if (standing.type === 'wall' && standing.id === candidate.id) {
+      const list = loose.get(candidate.levelId) ?? []
+      list.push({ candidate, wall: standing })
+      loose.set(candidate.levelId, list)
+      continue
+    }
+    if (standing.type === 'wall') onLooseWalls.push({ candidate, wallId: standing.id, point })
+    candidate.order = point[0] + point[1]
+  }
+  for (const [levelId, walls] of loose) layoutRuns(levelId, walls)
+  if (onLooseWalls.length === 0) return
+  const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]))
+  for (const { candidate, wallId } of onLooseWalls) {
+    const wall = byId.get(wallId)
+    if (!wall?.cluster) continue
+    candidate.cluster = wall.cluster
+    candidate.sweep = wall.sweep
+    candidate.order = wall.order
+  }
+}
+
+/** Walls in no room: the walls that meet end to end make an outline, cut in runs along it. */
+function layoutRuns(levelId: string, walls: { candidate: StagedCandidate; wall: AnyNode }[]) {
+  const key = ([x, z]: Pt) => `${Math.round(x / MEETS_M)}:${Math.round(z / MEETS_M)}`
+  const byEnd = new Map<string, number[]>()
+  const ends = walls.map(({ wall }) => {
+    const { start, end } = wall as unknown as { start: Pt; end: Pt }
+    return [key(start), key(end)] as const
+  })
+  ends.forEach((pair, index) => {
+    for (const end of pair) byEnd.set(end, [...(byEnd.get(end) ?? []), index])
+  })
+  const midOf = (index: number) => planPointOf(walls[index]!.wall) ?? [0, 0]
+  const sweepOf = (index: number) => {
+    const [x, z] = midOf(index)
+    return x + z
+  }
+  const seen = new Set<number>()
+  const starts = walls
+    .map((_, index) => index)
+    .sort((left, right) => sweepOf(left) - sweepOf(right))
+  let outline = 0
+  for (const first of starts) {
+    if (seen.has(first)) continue
+    // Walk the outline from its first wall in the sweep, wall to the wall it meets.
+    const order: number[] = []
+    const queue = [first]
+    seen.add(first)
+    while (queue.length > 0) {
+      const index = queue.shift()!
+      order.push(index)
+      for (const end of ends[index]!) {
+        for (const next of byEnd.get(end) ?? []) {
+          if (seen.has(next)) continue
+          seen.add(next)
+          queue.push(next)
+        }
+      }
+    }
+    order.forEach((index, rank) => {
+      const run = Math.floor(rank / WALLS_PER_RUN)
+      const candidate = walls[index]!.candidate
+      candidate.cluster = `${levelId}:run:${outline}:${run}`
+      candidate.sweep = sweepOf(order[run * WALLS_PER_RUN]!)
+      candidate.order = rank
+    })
+    outline += 1
+  }
 }
 
 /** Moved less than this (metres, radians) and a piece is where it was. */

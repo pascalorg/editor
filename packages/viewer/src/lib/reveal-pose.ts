@@ -118,7 +118,15 @@ export type RevealPoseOptions = {
   lead?: number
   /** A heavier drop lands with a bigger squash and hop; 1 by default. The last piece of a build is heavier. */
   weight?: number
+  /**
+   * A rise, a scale or a settle goes past its rest and comes back (GSAP's `back.out` strength,
+   * 1.7 is GSAP's default); 0, the default, is a plain ease out.
+   */
+  overshoot?: number
 }
+
+/** GSAP's `back.out(s)`: past 1 by a little near the end, exactly 1 at the end. */
+const easeOutBack = (t: number, s: number) => 1 + (s + 1) * (t - 1) ** 3 + s * (t - 1) ** 2
 
 /**
  * Where a `style` reveal holds its node at `t` in [0, 1]: a lift in metres
@@ -137,17 +145,19 @@ export function revealPoseAt(
   out.scale.set(1, 1, 1)
   if (t >= 1 || style === 'assemble') return out
   const at = Math.max(0, t)
+  const overshoot = Math.max(0, options.overshoot ?? 0)
+  const eased = overshoot > 0 ? easeOutBack(at, overshoot) : easeOutCubic(at)
   switch (style) {
     case 'rise':
-      out.scale.y = Math.max(MIN_SCALE, easeOutCubic(at))
+      out.scale.y = Math.max(MIN_SCALE, eased)
       break
     case 'scale': {
-      const f = Math.max(MIN_SCALE, easeOutCubic(at))
+      const f = Math.max(MIN_SCALE, eased)
       out.scale.set(f, f, f)
       break
     }
     case 'settle':
-      out.lift = height * (1 - easeOutCubic(at))
+      out.lift = height * (1 - eased)
       break
     case 'drop': {
       const lead = Math.max(0, options.lead ?? 0)

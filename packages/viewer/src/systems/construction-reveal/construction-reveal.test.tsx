@@ -25,7 +25,7 @@ import { NodeRenderer } from '../../components/renderers/node-renderer'
 import { DustPool } from '../../lib/construction-dust'
 import { OVERLAY_LAYER, scenePassLayers } from '../../lib/layers'
 import { hasRevealPose } from '../../lib/reveal-pose'
-import { RETRACT_TIMING, REVEAL_TIMING } from '../../lib/reveal-schedule'
+import { LAZY_REVEAL_TIMING, RETRACT_TIMING, REVEAL_TIMING } from '../../lib/reveal-schedule'
 import useViewer from '../../store/use-viewer'
 import { GeometrySystem } from '../geometry/geometry-system'
 import { ConstructionDust } from './construction-dust'
@@ -39,6 +39,7 @@ import {
   type ConstructionRevealDriver,
   type ConstructionRevealLevel,
   getRevealPlanState,
+  getRevealTurn,
   isNodeRevealing,
   isRevealAssembling,
   isRevealWaiting,
@@ -46,7 +47,9 @@ import {
   type RevealEvent,
   type RevealPhaseEvent,
   retractNodes,
+  revealClockMs,
   seatLiftedNow,
+  setRevealPreroll,
   startConstructionReveal,
   subscribeRevealAssembling,
   subscribeRevealEvents,
@@ -305,6 +308,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  setRevealPreroll(null)
   await act(async () => driver?.stop())
   driver = null
   await renderer?.unmount()
@@ -2547,5 +2551,99 @@ describe('a warm start', () => {
       highest = Math.max(highest, lift(roof))
     }
     expect(highest).toBeGreaterThan(2)
+  })
+})
+
+describe('nothing a build adds pops in at once', () => {
+  for (const at of ['full', 'framing'] as const) {
+    test(`${at}: a kind that declares no reveal, added on a level already there, waits for its turn`, async () => {
+      level = at
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start()
+      const wall = make(Wall)
+      const loose = make(Part)
+      await agentWrites(() =>
+        useScene.getState().createNodes([
+          { node: wall, parentId: levelId! },
+          { node: loose, parentId: levelId! },
+        ]),
+      )
+      expect(root(loose.id)).toBeUndefined()
+      expect(isRevealWaiting(loose.id)).toBe(true)
+      await until(
+        () => !isNodeRevealing(loose.id) && !isNodeRevealing(wall.id),
+        LAZY_REVEAL_TIMING.capMs,
+      )
+      expect(root(loose.id)).toBeDefined()
+      expect(hasRevealPose(root(loose.id)!)).toBe(false)
+    })
+  }
+})
+
+describe('the framing level: the lazy schedule and its prerolls', () => {
+  test('a wall waits out its preroll, unmounted, on the reveal clock a plugin reads; then it rises past its top and settles', async () => {
+    level = 'framing'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    setRevealPreroll((candidate) => (candidate.style === 'rise' ? 1500 : 0))
+    const slab = make(Slab)
+    const walls = [make(Wall), make(Wall)]
+    await agentWrites(() =>
+      useScene
+        .getState()
+        .createNodes([
+          { node: slab, parentId: levelId! },
+          ...walls.map((node) => ({ node, parentId: levelId! })),
+        ]),
+    )
+    await until(() => getRevealTurn(walls[0]!.id) !== null)
+    expect(revealClockMs()).toBe(now)
+    const turns = walls.map((wall) => getRevealTurn(wall.id)!)
+    for (const turn of turns) expect(turn.prerollMs).toBe(1500)
+    // Its preroll: the plugin plays, the wall waits, unmounted or (the first of its kind, drawn up
+    // front for its shaders) hidden.
+    const unseen = (id: string) => {
+      const wallRoot = root(id)
+      return !wallRoot || yScale(wallRoot) < 0.01
+    }
+    while (revealClockMs() + 20 < turns[0]!.startMs) {
+      await frame()
+      expect(unseen(walls[0]!.id)).toBe(true)
+      expect(isRevealWaiting(walls[0]!.id)).toBe(true)
+    }
+    let tallest = 0
+    while (isNodeRevealing(walls[0]!.id)) {
+      await frame()
+      expect(now).toBeLessThan(turns[0]!.startMs + 3000)
+      const wallRoot = root(walls[0]!.id)
+      if (wallRoot?.children.length) tallest = Math.max(tallest, yScale(wallRoot))
+    }
+    expect(getRevealTurn(walls[0]!.id)).toBeNull()
+    // Overdone a little: past its full height, then back to exactly its own transform.
+    expect(tallest).toBeGreaterThan(1.01)
+    expect(composed(root(walls[0]!.id)!).elements).toEqual(own(root(walls[0]!.id)!).elements)
+  })
+
+  test('a capture ends a preroll at once: the wall stands whole', async () => {
+    level = 'framing'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    setRevealPreroll((candidate) => (candidate.style === 'rise' ? 4000 : 0))
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId!))
+    await until(() => getRevealTurn(wall.id) !== null)
+    await frames(200)
+    const waiting = root(wall.id)
+    expect(!waiting || yScale(waiting) < 0.01).toBe(true)
+    await act(async () => {
+      emitter.emit('thumbnail:before-capture', undefined)
+    })
+    await frame()
+    expect(isNodeRevealing(wall.id)).toBe(false)
+    expect(getRevealTurn(wall.id)).toBeNull()
+    expect(root(wall.id)).toBeDefined()
   })
 })

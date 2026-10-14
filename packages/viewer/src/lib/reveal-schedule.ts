@@ -49,6 +49,20 @@ export type RevealCandidate = {
   source?: string | null
   /** A drop's anticipation, as a share of its height (see `RevealPoseOptions.lead`). */
   lead?: number
+  /**
+   * The room (or wall run) it is built with, for the lazy schedule: rooms of a floor build side
+   * by side, a beat apart. Absent: it belongs to its floor as a whole (a slab under every room).
+   */
+  cluster?: string
+  /** Where its room comes in its floor's sweep: the lower first. */
+  sweep?: number
+  /** Its place in its room: a wall's turn around the room's outline. */
+  order?: number
+  /**
+   * How long a plugin's own presentation plays at its turn before the node itself moves in (a wall's
+   * frame and boards, Bones): the lazy schedule leaves the time, and the node starts after it.
+   */
+  prerollMs?: number
 }
 
 export type PlannedReveal = RevealCandidate & {
@@ -134,6 +148,182 @@ export function planReveal(
       ...entry.candidate,
       group: revealGroupKey(entry.candidate),
       startMs: startMs + entry.offset * compression,
+      ...(entry === finale ? { finale: true } : {}),
+    }))
+}
+
+/**
+ * The lazy, nested schedule (the `framing` level): floors a beat apart, the rooms of a floor a beat
+ * apart, the pieces of a room a beat apart, each with a little jitter, so many small builds progress
+ * side by side instead of one global pulse. A big build takes proportionally longer, up to `capMs`.
+ */
+export type LazyRevealTiming = {
+  /** Between one floor's build and the next one's: floors go up side by side, offset. */
+  floorOffsetMs: number
+  /** Between one room (or wall run) of a floor and the next, in each phase. */
+  roomOffsetMs: number
+  /** Between two pieces of one room, by phase: a room's walls go up one after the other. */
+  elementOffsetMs: Record<RevealPhase, number>
+  /** After a floor's phase has started its last piece, before its next phase starts. */
+  phaseGapMs: number
+  /** Each start moves by up to this share of its offset, either way (never mechanical). */
+  jitter: number
+  /** A plan longer than this is pulled together to end by it: a huge build does not take forever. */
+  capMs: number
+  /** How long each style moves its node at this level. */
+  durationMs: Record<RevealStyle, number>
+  /** The overshoot of a rise or a scale (GSAP's `back.out` strength; 0 is a plain ease out). */
+  overshoot: number
+  /** Drops and settles fall from at least this high (m), whatever their kind declares. */
+  minHeightM: Partial<Record<RevealStyle, number>>
+}
+
+/** The one place to tune the lazy schedule and the framing level's motion. */
+export const LAZY_REVEAL_TIMING: LazyRevealTiming = {
+  floorOffsetMs: 1200,
+  roomOffsetMs: 420,
+  elementOffsetMs: {
+    foundation: 200,
+    structure: 360,
+    circulation: 260,
+    openings: 140,
+    roof: 180,
+    furnishing: 110,
+  },
+  phaseGapMs: 260,
+  jitter: 0.3,
+  capMs: 40_000,
+  durationMs: { rise: 760, scale: 520, settle: 640, drop: 820, cut: 320, assemble: 0 },
+  overshoot: 1.6,
+  minHeightM: { drop: 1.8, settle: 0.6 },
+}
+
+/** A stable share in [0, 1) from an id: the same jitter every time. */
+function jitterKey(id: string): number {
+  return (scatterKey(`${id}#jitter`) % 10_007) / 10_007
+}
+
+const STAGE_A: readonly RevealPhase[] = ['foundation', 'structure', 'circulation', 'openings']
+
+/**
+ * Start times for `candidates` on the lazy, nested schedule, from `startMs`:
+ * - each floor builds its foundation, structure, stairs and openings, a phase after the other, and
+ *   the floors go up side by side, `floorOffsetMs` apart;
+ * - in a phase, the rooms (`cluster`) start `roomOffsetMs` apart in their sweep order, and the
+ *   pieces of a room `elementOffsetMs` apart around it; what belongs to the whole floor comes first;
+ * - roofs come once every floor is up, then the furniture, floor by floor and room by room again;
+ * - a piece with a preroll starts after it (its plugin plays then), and its room's next phase waits.
+ * Every start is jittered. The plan grows with the build (its biggest room, its rooms, its floors),
+ * and is pulled together only past `capMs`. `startMs` of a planned entry is when the node itself
+ * moves; its preroll plays before.
+ */
+export function planLazyReveal(
+  candidates: readonly RevealCandidate[],
+  startMs: number,
+  timing: LazyRevealTiming = LAZY_REVEAL_TIMING,
+): PlannedReveal[] {
+  type Placed = { candidate: RevealCandidate; motion: number; preroll: number }
+  const placed: Placed[] = []
+  const floors = new Map<string, RevealCandidate[]>()
+  for (const candidate of candidates) {
+    const floor = `${candidate.levelIndex}:${candidate.levelId ?? ''}`
+    const list = floors.get(floor)
+    if (list) list.push(candidate)
+    else floors.set(floor, [candidate])
+  }
+  const lanes = [...floors.entries()].sort(([left], [right]) =>
+    left.localeCompare(right, undefined, { numeric: true }),
+  )
+  const jittered = (id: string, offset: number) => (2 * jitterKey(id) - 1) * timing.jitter * offset
+
+  /** Places one floor's nodes of one phase from `from`; returns when its last piece moves, or null. */
+  const placePhase = (nodes: readonly RevealCandidate[], phase: RevealPhase, from: number) => {
+    if (nodes.length === 0) return null
+    const rooms = new Map<string, RevealCandidate[]>()
+    for (const node of nodes) {
+      const room = node.cluster ?? ''
+      const list = rooms.get(room)
+      if (list) list.push(node)
+      else rooms.set(room, [node])
+    }
+    const sweepOf = (members: readonly RevealCandidate[]) =>
+      Math.min(...members.map((member) => member.sweep ?? Number.NEGATIVE_INFINITY))
+    const ordered = [...rooms.entries()].sort(
+      ([leftKey, left], [rightKey, right]) =>
+        // What belongs to the whole floor first, then the rooms in their sweep.
+        (leftKey === '' ? -1 : 0) - (rightKey === '' ? -1 : 0) ||
+        sweepOf(left) - sweepOf(right) ||
+        leftKey.localeCompare(rightKey),
+    )
+    const step = timing.elementOffsetMs[phase]
+    let last = from
+    ordered.forEach(([room, members], index) => {
+      const roomStart =
+        from +
+        index * timing.roomOffsetMs +
+        jittered(`${room}:${phase}`, index > 0 ? timing.roomOffsetMs : 0)
+      members.sort(
+        (left, right) =>
+          left.depth - right.depth ||
+          (left.order ?? 0) - (right.order ?? 0) ||
+          scatterKey(left.id) - scatterKey(right.id) ||
+          left.seq - right.seq,
+      )
+      members.forEach((candidate, rank) => {
+        const turn = Math.max(from, roomStart + rank * step + jittered(candidate.id, step))
+        const preroll = Math.max(0, candidate.prerollMs ?? 0)
+        placed.push({ candidate, motion: turn + preroll, preroll })
+        last = Math.max(last, turn + preroll)
+      })
+    })
+    return last
+  }
+
+  const phaseOf = (nodes: readonly RevealCandidate[], phase: RevealPhase) =>
+    nodes.filter((node) => node.phase === phase)
+  /** Every floor builds `phases` from `from`, `floorOffsetMs` apart; returns when the last piece moves. */
+  const stage = (phases: readonly RevealPhase[], from: number) => {
+    let end: number | null = null
+    let lane = 0
+    for (const [, nodes] of lanes) {
+      const own = phases.flatMap((phase) => phaseOf(nodes, phase))
+      if (own.length === 0) continue
+      let cursor = from + lane * timing.floorOffsetMs
+      lane += 1
+      for (const phase of phases) {
+        const last = placePhase(phaseOf(nodes, phase), phase, cursor)
+        if (last === null) continue
+        end = Math.max(end ?? last, last)
+        cursor = last + timing.phaseGapMs
+      }
+    }
+    return end
+  }
+
+  let cursor = 0
+  for (const phases of [STAGE_A, ['roof'], ['furnishing']] as const) {
+    const end = stage(phases, cursor)
+    if (end !== null) cursor = end + timing.phaseGapMs
+  }
+
+  const longest = Math.max(0, ...placed.map(({ candidate }) => timing.durationMs[candidate.style]))
+  const lastMotion = Math.max(0, ...placed.map(({ motion }) => motion))
+  const room = Math.max(0, timing.capMs - longest)
+  const compression = lastMotion > room ? room / lastMotion : 1
+  const arrival = ({ candidate, motion }: Placed) =>
+    motion * compression + timing.durationMs[candidate.style] * REVEAL_ARRIVAL[candidate.style]
+  let finale: Placed | null = null
+  for (const entry of placed) {
+    if (entry.candidate.style === 'assemble') continue
+    if (!finale || arrival(entry) >= arrival(finale)) finale = entry
+  }
+  return placed
+    .sort((left, right) => left.motion - right.motion || left.candidate.seq - right.candidate.seq)
+    .map((entry) => ({
+      ...entry.candidate,
+      group: revealGroupKey(entry.candidate),
+      startMs: startMs + entry.motion * compression,
+      ...(entry.preroll > 0 ? { prerollMs: entry.preroll * compression } : {}),
       ...(entry === finale ? { finale: true } : {}),
     }))
 }
