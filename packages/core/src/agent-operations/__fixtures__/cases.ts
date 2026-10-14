@@ -17,6 +17,7 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import { ADD_STAIR_CASES } from './add-stair-cases'
 import { CREATE_ROOM_CASES, FURNISH_ROOM_CASES } from './build-room-cases'
 import { PLACE_ITEMS_CASES } from './place-items-cases'
 import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
@@ -912,6 +913,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...MOVE_ROOFS_CASES,
   ...ADD_LEVEL_CASES,
   ...CREATE_STAIR_CASES,
+  ...ADD_STAIR_CASES,
   ...PLACE_ITEMS_CASES,
   ...FIND_BY_TYPE_CASES,
   ...CORNER_WINDOW_CASES,

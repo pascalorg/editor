@@ -85,7 +85,7 @@ Hosted service tools have public contracts in `core/agent-tools` and a shared re
 
 | Capability | Shared contract | Shared operation | MCP | Hosted AI chat |
 |---|---|---|---|---|
-| `create_stair` | `createStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.create_stair` | Shared-tool adapter; sizes the flight as the editor's stair tool does (`planStairCreation`) and owns the floor openings it cuts | Same contract and operation, one undo step |
+| `create_stair` | `createStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.create_stair` | Shared-tool adapter; lays out a straight, L or U stair as `fit_stair` does (`planStairPreset`) and owns the floor openings it cuts | Same contract and operation, one undo step |
 | `measure_stair` | `measureStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.measure_stair` | Shared-tool adapter; read-only measurements and layout alternatives | Same contract and operation, read-only |
 | `fit_stair` | `fitStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.fit_stair` | Shared-tool adapter; applies the planned changes atomically | Same contract and operation, one undo step |
 

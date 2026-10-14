@@ -734,4 +734,76 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     input: { levelId: 'level_missing', x: 1, z: 1 },
     expect: { refusal: 'level_not_found', mentions: ['level_missing'] },
   },
+  {
+    // The default opening as given is the stair's footprint, whatever its shape.
+    name: "a U's opening as given spans the stair's footprint, the margin round it",
+    tool: 'create_stair',
+    scene: ceiledScene,
+    input: {
+      levelId: 'level_ground',
+      x: 1,
+      z: 0.5,
+      layout: 'u',
+      openingWidth: 2.2,
+      createSourceCeilingOpening: false,
+    },
+    expect: {
+      // 2 m across the two flights, 1 + 2.24 m along: 2.2 m across as asked, 0.08 m round it.
+      result: { ok: true, slabHoleCut: true, footprint: { minX: 0.5, minZ: 0.5, maxX: 2.5 } },
+      check: (_result, nodes) => {
+        const [opening] = openingsOf(nodes)
+        return spans(opening?.polygon, [0.32, 0.42, 2.68, 3.82])
+          ? []
+          : [`spans ${opening && extent(opening.polygon)}`]
+      },
+    },
+  },
+  {
+    name: 'a turn or lower flight with no L or U is refused',
+    tool: 'create_stair',
+    scene: storeysScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, turn: 'right' },
+    expect: { refusal: 'stair_layout_required', mentions: ['layout'] },
+  },
+  {
+    name: 'a lower flight that leaves the upper one no riser is refused with the range',
+    tool: 'create_stair',
+    scene: storeysScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, layout: 'l', lowerSteps: 16 },
+    expect: { refusal: 'stair_layout', mentions: ['1 to 15'] },
+  },
+  {
+    name: 'an L of fewer than four risers is refused',
+    tool: 'create_stair',
+    scene: storeysScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, layout: 'l', steps: 3 },
+    expect: { refusal: 'stair_layout', mentions: ['4 risers'] },
+  },
+  {
+    name: 'a flight to no level with an opening asked is refused',
+    tool: 'create_stair',
+    scene: storeysScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, toLevelId: null, openingWidth: 1.2 },
+    expect: { refusal: 'no_level_above', mentions: ['toLevelId'] },
+  },
+  {
+    name: 'from the top storey, a flight to no level makes no level',
+    tool: 'create_stair',
+    scene: soloScene,
+    input: { x: 1, z: 1, toLevelId: null, height: '18 in' },
+    expect: {
+      result: { ok: true, upperLevelId: null, createdUpperLevel: false, stepCount: 3, rise: 0.457 },
+      check: (_result, nodes) => {
+        const levels = Object.values(nodes).filter((node) => node.type === 'level')
+        return levels.length === 1 ? [] : [`${levels.length} levels`]
+      },
+    },
+  },
+  {
+    name: 'a railing finish the library lacks is refused, naming the field',
+    tool: 'create_stair',
+    scene: storeysScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, railingMaterial: 'library:brass-rail' },
+    expect: { refusal: 'unknown_material', mentions: ['railingMaterial', 'library:brass-rail'] },
+  },
 ]
