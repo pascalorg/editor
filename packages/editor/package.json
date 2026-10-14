@@ -57,7 +57,7 @@
     "mitt": "^3.0.1",
     "motion": "^12.34.3",
     "nanoid": "^5.1.6",
-    "pdfkit": "^0.19.1",
+    "pdfkit": "^0.20.2",
     "tailwind-merge": "^3.5.0",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "~0.9.8",
