@@ -29,12 +29,12 @@
   },
   "dependencies": {
     "@pascal-app/core": "^1.0.4",
-    "web-ifc": "^0.0.77"
+    "web-ifc": "^0.0.78"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.4.2",
-    "typescript": "6.0.3"
+    "@types/bun": "^1.4.3",
+    "typescript": "7.0.2"
   },
   "repository": {
     "type": "git",

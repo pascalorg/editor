@@ -47,7 +47,8 @@ export const nextJsConfig = [
     plugins: {
       'react-hooks': pluginReactHooks,
     },
-    settings: { react: { version: 'detect' } },
+    // eslint-plugin-react's 'detect' calls context.getFilename(), which ESLint 10 removed
+    settings: { react: { version: '19.3' } },
     rules: {
       ...pluginReactHooks.configs.recommended.rules,
       // React scope no longer necessary with new JSX transform.

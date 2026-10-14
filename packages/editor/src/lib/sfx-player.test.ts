@@ -302,4 +302,26 @@ describe('SFX audio context lifecycle', () => {
 
     expect(lower?.playCount).toBe(0)
   })
+
+  test('turn cues play at the master and effects volume, and not in a muted tab', () => {
+    const cues = ['sfx:turn-done', 'sfx:turn-failed', 'sfx:turn-needs-input'] as const
+    useAudio.setState({ masterVolume: 50, muted: true, sfxVolume: 40 })
+    initSFXBus()
+
+    for (const cue of cues) triggerSFX(cue)
+    expect(instances.every((sound) => sound.playCount === 0)).toBe(true)
+
+    useAudio.setState({ muted: false })
+    for (const cue of cues) triggerSFX(cue)
+
+    const played = instances.filter((sound) => sound.playCount === 1)
+    expect(played.map((sound) => sound.src)).toEqual([
+      '/audios/sfx/turn_done.mp3',
+      '/audios/sfx/turn_failed.mp3',
+      '/audios/sfx/turn_needs_input.mp3',
+    ])
+    for (const sound of played) {
+      expect(sound.volumeCalls.find(([, id]) => id === 1)?.[0]).toBeCloseTo(0.2)
+    }
+  })
 })
