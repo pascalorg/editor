@@ -23,6 +23,15 @@ function use(name: 'localStorage' | 'sessionStorage', storage: ReturnType<typeof
 /** One browser profile: its tabs share `localStorage`, each has its own `sessionStorage`. */
 let browser = memoryStorage()
 
+/** Another tab of the profile saves the settings: the browser stores them and tells this tab. */
+function savedInAnotherTab(state: Record<string, unknown>) {
+  const value = JSON.stringify({ state, version: 0 })
+  browser.setItem(AUDIO_SETTINGS_STORAGE_KEY, value)
+  globalThis.dispatchEvent(
+    Object.assign(new Event('storage'), { key: AUDIO_SETTINGS_STORAGE_KEY, newValue: value }),
+  )
+}
+
 /** The editor loading in a tab: a new one, or the same one reloaded (its session kept). */
 async function loadIn(tab: ReturnType<typeof memoryStorage>) {
   use('sessionStorage', tab)
@@ -86,21 +95,28 @@ describe('muting a tab', () => {
     expect(next.muted).toBe(false)
   })
 
-  test('muting a tab leaves a volume another tab set since it loaded', async () => {
+  test("a volume another tab sets reaches this one at once, and this tab's saves carry it", async () => {
     await loadIn(memoryStorage())
     useAudio.getState().setSfxVolume(30)
+    useAudio.getState().setRadioPlaying(true)
     const stored = JSON.parse(browser.getItem(AUDIO_SETTINGS_STORAGE_KEY)!)
-    const setElsewhere = JSON.stringify({ ...stored, state: { ...stored.state, sfxVolume: 80 } })
-    browser.setItem(AUDIO_SETTINGS_STORAGE_KEY, setElsewhere)
 
+    savedInAnotherTab({ ...stored.state, isRadioPlaying: false, muted: true, sfxVolume: 80 })
+
+    expect(useAudio.getState()).toMatchObject({ isRadioPlaying: true, muted: false, sfxVolume: 80 })
+    const setElsewhere = browser.getItem(AUDIO_SETTINGS_STORAGE_KEY)
     useAudio.getState().setMuted(true)
-
     expect(browser.getItem(AUDIO_SETTINGS_STORAGE_KEY)).toBe(setElsewhere)
+    // The radio pausing as the tab is hidden saves every setting: the other tab's volume stays.
+    useAudio.getState().setRadioPlaying(false)
     useAudio.getState().setMasterVolume(60)
-    expect(JSON.parse(browser.getItem(AUDIO_SETTINGS_STORAGE_KEY)!).state.masterVolume).toBe(60)
+    expect(JSON.parse(browser.getItem(AUDIO_SETTINGS_STORAGE_KEY)!).state).toMatchObject({
+      masterVolume: 60,
+      sfxVolume: 80,
+    })
   })
 
-  test("a mute saved when it was every tab's still holds", async () => {
+  test("a mute saved when it was every tab's still holds, in settings the old build still reads", async () => {
     browser.setItem(
       AUDIO_SETTINGS_STORAGE_KEY,
       JSON.stringify({ state: { masterVolume: 40, muted: true, sfxVolume: 50 }, version: 0 }),
@@ -111,10 +127,10 @@ describe('muting a tab', () => {
     expect(state.muted).toBe(true)
     expect(state.masterVolume).toBe(40)
     expect((await loadIn(memoryStorage())).muted).toBe(true)
-    expect(JSON.parse(browser.getItem(AUDIO_SETTINGS_STORAGE_KEY)!)).toMatchObject({
-      state: { masterVolume: 40 },
-      version: 1,
-    })
+    useAudio.getState().setSfxVolume(45)
+    const saved = JSON.parse(browser.getItem(AUDIO_SETTINGS_STORAGE_KEY)!)
+    expect(saved).toMatchObject({ state: { masterVolume: 40, sfxVolume: 45 }, version: 0 })
+    expect(saved.state).not.toHaveProperty('muted')
   })
 
   test('a tab still on the old settings does not undo a choice made since', async () => {

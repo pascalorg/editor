@@ -7,7 +7,7 @@
  *
  * Each cue is two struck notes: a raised-cosine attack, an exponential decay per partial (the
  * upper ones die first, which keeps it warm), a few quiet echoes, a fade to silence by 600 ms.
- * The three are matched on their loudest moment as played, under the editor's other cues, and
+ * The three are matched on their loudest moment as played, level with `item_place`, and
  * encoded mono 44.1 kHz with bit-exact output: ffmpeg 8.1.2 with LAME 3.100 gives the same bytes
  * on every run.
  */
@@ -33,9 +33,10 @@ const SAMPLE_RATE = 44_100
  * The loudest 400 ms (EBU momentary) as played, the mono file on both speakers. The other cues,
  * measured the same way with their playback gain: `success` -15.5, `structure_build_end` -17.6,
  * `item_place` -19.9, `menu_click` -26.1. A short cue is heard by its loudest moment, so that is
- * what the three are matched on.
+ * what the three are matched on, level with `item_place`: they are meant to be heard from another
+ * app, and still sit under `success`.
  */
-const TARGET_MOMENTARY_LUFS = -23
+const TARGET_MOMENTARY_LUFS = -20
 /** Where the first, measuring pass renders, far from clipping. */
 const PRESCALE_DB = -20
 

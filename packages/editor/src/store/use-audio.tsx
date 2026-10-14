@@ -68,10 +68,11 @@ function chooseMuted(muted: boolean) {
   return { muted }
 }
 
-// The settings as this tab last read or wrote them. A save carries every setting, so a save that
-// changes none (a mute, which is this tab's own) is skipped: this tab's copy may be older than a
-// volume another tab has set since.
+// The settings as this tab last read, wrote or took from another tab. A save carries every
+// setting, so a save that changes none (a mute, which is this tab's own) is skipped.
 let heldSettings: string | null = null
+// Set while this tab takes another tab's volumes: that is no choice of its own to save back.
+let adopting = false
 
 const settingsStorage = createJSONStorage<StoredSettings>(() => ({
   getItem: (key) => {
@@ -81,7 +82,7 @@ const settingsStorage = createJSONStorage<StoredSettings>(() => ({
   setItem: (key, value) => {
     if (value === heldSettings) return
     heldSettings = value
-    writeStored('localStorage', key, value)
+    if (!adopting) writeStored('localStorage', key, value)
   },
   removeItem: (key) => {
     try {
@@ -111,7 +112,6 @@ const useAudio = create<AudioState>()(
     {
       name: AUDIO_SETTINGS_STORAGE_KEY,
       storage: settingsStorage,
-      version: 1,
       partialize: ({ masterVolume, sfxVolume, radioVolume, isRadioPlaying, autoplay }) => ({
         masterVolume,
         sfxVolume,
@@ -119,26 +119,51 @@ const useAudio = create<AudioState>()(
         isRadioPlaying,
         autoplay,
       }),
-      // Version 0 kept one mute for every tab in these settings: whoever had muted stays muted.
-      // A choice made since wins over it (a tab still on version 0 can write it again).
-      migrate: (persisted, version) => {
-        const { muted, ...settings } = (persisted ?? {}) as StoredSettings & { muted?: unknown }
+      // The settings once held one mute for every tab: whoever had muted stays muted, unless a tab
+      // has chosen since (a tab still on that build can write it again). The format is unchanged,
+      // so that build reads these settings back with only the mute gone.
+      merge: (persisted, current) => {
+        const { muted, ...settings } = (persisted ?? {}) as Partial<StoredSettings> & {
+          muted?: unknown
+        }
         if (
-          version === 0 &&
           typeof muted === 'boolean' &&
           readStored('localStorage', AUDIO_MUTED_STORAGE_KEY) === null
         ) {
           writeStored('localStorage', AUDIO_MUTED_STORAGE_KEY, String(muted))
         }
-        return settings
+        return { ...current, ...settings, muted: tabMuted() }
       },
-      merge: (persisted, current) => ({
-        ...current,
-        ...(persisted as Partial<StoredSettings> | undefined),
-        muted: tabMuted(),
-      }),
     },
   ),
 )
+
+/**
+ * Another tab saved the settings: the volumes are every tab's, so this tab takes them at once, and
+ * a later save of its own carries them. Its mute and whether its radio plays stay its own.
+ */
+function adoptOtherTabSettings(event: StorageEvent) {
+  if (event.key !== AUDIO_SETTINGS_STORAGE_KEY || event.newValue === null) return
+  let stored: Partial<Record<keyof StoredSettings, unknown>> | undefined
+  try {
+    stored = JSON.parse(event.newValue)?.state
+  } catch {
+    return
+  }
+  const shared: Partial<StoredSettings> = {}
+  for (const key of ['masterVolume', 'sfxVolume', 'radioVolume'] as const) {
+    const value = stored?.[key]
+    if (typeof value === 'number') shared[key] = value
+  }
+  if (typeof stored?.autoplay === 'boolean') shared.autoplay = stored.autoplay
+  adopting = true
+  try {
+    useAudio.setState(shared)
+  } finally {
+    adopting = false
+  }
+}
+
+globalThis.addEventListener?.('storage', adoptOtherTabSettings)
 
 export default useAudio
