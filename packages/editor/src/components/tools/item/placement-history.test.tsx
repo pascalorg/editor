@@ -500,6 +500,11 @@ describe('item placement selection', () => {
       const click = new Event('click', { cancelable: true })
       window.dispatchEvent(click)
       expect(click.defaultPrevented).toBe(true)
+      // Only that one click: once the swallow window closes, a click reaches the editor again.
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      const next = new Event('click', { cancelable: true })
+      window.dispatchEvent(next)
+      expect(next.defaultPrevented).toBe(false)
     } finally {
       await renderer.unmount()
     }
