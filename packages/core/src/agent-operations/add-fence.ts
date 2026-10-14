@@ -1,8 +1,8 @@
 import { refuse } from '../agent-tools/refusal'
 import { FenceNode } from '../schema'
-import { refuseRoofLevel } from './add-wall'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { finishSurface, requireMaterialRef } from './material-refs'
+import { refuseRoofLevel } from './roof-writes'
 import type { AgentOperation } from './types'
 
 type Pt = [number, number]

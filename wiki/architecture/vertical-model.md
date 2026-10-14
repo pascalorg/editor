@@ -205,12 +205,16 @@ so exploded and solo level views lift the roof off the plan. One core service,
 `services/roof-level.ts`, states it for every roof writer: `planRoofLevel` (the storey above, or
 the roof level to reuse, declare or create), `roofsOver` (the roofs over a storey),
 `storeyInsertIndex` (a new top storey goes under the roof level, which moves up one),
-`servesAsRoofLevel` (the one test of a level's role, which `list_levels`, `verify_scene` and the
-agents' refusals read) and `isRoofLevel` (declared). The agents' `create_roof` and the editor's
-roof tool (a room's footprint, a rectangle drawn on a walled storey, a cone over a curved wall)
-place roofs by it; `add_level` and the editor's "add a floor" insert under the roof level, and the
-level selector refuses a drop that puts a roof level under a storey; with a roof level on top, its
-top "+" reads *Add a floor under the roof*.
+`liftRoofLevels` (after a write adds levels, the roof levels topping the stack go back over every
+other level), `roofLevelOrderBreach` (a reorder putting a roof level under a storey it stood over),
+`servesAsRoofLevel` (the one test of a level's role, which `list_levels`, `verify_scene`, the
+agents' refusals and the editor's tools read) and `isRoofLevel` (declared). The agents'
+`create_roof` and the editor's roof tool (a room's footprint, a rectangle or cone drawn over a
+walled storey, a cone over a curved wall) place roofs by it; `add_level`, the editor's "add a
+floor" and the stair tool's new upper floor insert under the roof level; the level selector, the
+chat's `reorder_level`, the capture app's REST reorder and `apply_patch` refuse an order
+`roofLevelOrderBreach` names; with a roof level on top, the selector's top "+" reads *Add a floor
+under the roof*.
 
 `planRoofLevel`, from the levels above the storey in its building:
 
@@ -223,12 +227,18 @@ top "+" reads *Add a floor under the roof*.
 | nothing | on a new Roof level directly above |
 
 A declared level is the roof level whatever it holds (`verify_scene` reports walls on it as
-`roof_level_occupied`); a level that holds only roofs (written before levels declared their role)
-counts as one. A building's lowest level is always a storey, so a carport's roof on its posts gets
-a new floor on top. A roof placed by hand on the level above selects that level with it, so it
-stays in view; a rectangle drawn onto the roof level stands on the storey's walls
-(`support: 'walls'`), as a room's roof does, while one drawn onto a storey above (a lower wing)
-keeps that level's plane.
+`roof_level_occupied`). In a building that declares none, a level that holds only roofs (written
+before levels declared their role) counts as one when only such levels stand above it: the run at
+the top of the stack. A level holding only roofs under a storey, or beside a declared roof level,
+is a storey still to be built with a lower wing's roof on it, so walls can be drawn on it, a write
+that adds a level elsewhere leaves it where it is, and a roof seated on it never turns it into the
+building's roof. A building's lowest level is always a storey, so a carport's roof on its posts
+gets a new floor on top. A roof placed by hand on the level above selects that level with it, so
+it stays in view. A rectangle or cone drawn on a walled storey goes to the level above when an edge
+of it bears on the storey's walls or it covers a room they enclose, standing on the walls
+(`support: 'walls'`) as a room's roof does; a porch or portico drawn over posts beside the house
+does neither and stays on the storey, and one drawn onto a storey above (a lower wing) keeps that
+level's plane.
 
 Which storey a roof covers is derived, never stored (`coveredStoreyId`): on a roof level, the
 highest storey below that holds something; on a storey, the storey below when the roof stands near
@@ -236,24 +246,59 @@ its floor (a porch's or a lower wing's roof, where the rule puts it), else the s
 roof written on its own walls' level). `roofsOver` reads it, so a porch roof on the upper storey
 does not stop `create_roof` capping that storey; a lower wing's roof that follows walls follows the
 walls below only, not the upper storey's along its edge; and `verify_scene` reports a roof mixed
-into a storey (`roof_mixed_in_storey`) only for a roof covering its own storey or standing on its
-walls (below), and a roof level below a storey, an empty one still to be built included
+into a storey (`roof_mixed_in_storey`) exactly for a roof standing on its walls (below), the ones
+the repair moves, and a roof level below a storey, an empty one still to be built included
 (`roof_level_not_on_top`). Existing scenes are not migrated. Unpainted gables on a roof level take the cladding of the storey's walls below
 (`levelWallCladdingRef`).
 
-A roof held by the storey whose wall tops it bears on (within 0.15 m: a porch roof on its beam
-bears lower; a lower wing's roof on the storey above bears on the walls below) is a roof the rule
-moves (`isRoofOnStoreyWalls`, in `services/roof-move.ts`); `verify_scene`'s `roof_mixed_in_storey`
-names the move for it. Such a roof offers "Move to the roof level" on its panel (in 2D and 3D;
-"Move to <storey>" under an upper storey, as `roofLevelAbove` reads it), and agents have
-`move_roofs_to_roof_level`: both run `planRoofsOffStorey`, which moves the storey's roofs on its
-walls to the level the rule gives them in one undo step, each container dropped by
-`planRoofLevel`'s `storeyOffset` so it stands where it stood, a roof following walls turning custom
-where the walls there would lift it. A roof above the storey it covers at a height of its own
-(`support` level, as moved roofs, the agents' and the auto roof's are, measured from that storey's
-floor) keeps its height over that floor when the storey's height changes: the roof elevation sync
-moves it (`roofsKeptOverStorey`) without an undo step of its own, as it does a roof following
-walls.
+A roof held by the storey whose walls carry it is a roof the rule moves (`isRoofOnStoreyWalls`,
+in `services/roof-move.ts`). Bearing is read at a roof's edges (`segmentBearing`,
+`services/roof-bearing.ts`, the Architect's test moved into core): the walls of the storey along a
+segment's edges with open air past them, a cone's curved wall under its sector, and the eave they
+need, their tops less the roof's rise over them. A roof bears on them when it follows walls or its
+segment's base or eave stands within 0.15 m of that eave (knee walls on the plate, or its own
+walls rising to it). A wall with a room past it is one the roof dies into, and a wall that runs on
+past the roof's end into rooms belongs to the house a porch is buried in, so a porch or a portico
+on its posts and beam (a full-width one flush with the house's sides too) and a lower wing's roof
+on the storey above are not moved. `verify_scene`'s `roof_mixed_in_storey` names the move for it.
+Such a roof offers "Move to the roof level" on its panel (in 2D and 3D; "Move to <storey>" under an
+upper storey, as `roofLevelAbove` reads it), and agents have `move_roofs_to_roof_level`: both run
+`planRoofsOffStorey`, which moves the storey's roofs on its walls to the level the rule gives them
+in one undo step, each container dropped by `planRoofLevel`'s `storeyOffset` so it stands where it
+stood; a roof following walls keeps following where its follow on the target still reads the
+storey's walls, and turns custom over a support level or a level still to be built.
+
+Every writer seats the roofs it writes, in the store call that writes them, so undo and remote
+clients see the write as made and nothing corrects it afterwards. A UI writer passes its changes
+through `seatRoofs` (paste, cut and paste and Duplicate, a fresh placement dropped by the move tool,
+a roof moved or turned, a segment moved, resized or turned in 2D or drawn into the selected roof,
+a roof's or a segment's inspector fields, and
+`buildLevelDuplicateCreateOps` for `duplicate_level`, the level selector and the site panel): a
+roof the write puts on its walls' storey goes where the repair would put it, its create entry
+rewritten in place and the roof level created after its building. Agent writes that name nodes and
+parents themselves (apply_patch's `roof-levels` guard on every bridge, `save_scene`'s graph) run
+`seatWrittenRoofs`, which appends the seat as ops with a note each, so a refusal still points at
+the model's own op. `save_scene` judges a graph against the scene it is saved over (the session's
+when the save goes to it, else the stored one) and saves a graph with no scene under it as it is.
+A roof the write only edits, written on its walls before the rule, stays where it is
+(`verify_scene` keeps reporting it). Bearing reads each level's walls, rooms and wall tops once per
+scene snapshot, however many segments a write or a verify pass tests.
+
+What the rule cannot place is redirected in the UI and refused to agents. Storey content
+(`isStoreyContent`: walls, rooms, slabs, ceilings, items, stairs, and every kind that stands on a
+floor, `capabilities.floorPlaced`) aimed at a roof level goes to the storey it covers (`storeyOf`):
+a paste carrying any lands there whole, the selection with it, and a tool placing it, armed while a
+roof level is active (a roof just placed selects its level), switches to that storey. Agents are
+refused, with the covered storey's id so one retry lands: storey content on a level serving as the
+roof level (`roof_level`, `refuseRoofLevel`; `place_items` per item, `add_object` on a level), a
+walled level declared the roof level
+(`roof_level_holds_storey`) and floor indexes putting a roof level under a storey
+(`roof_level_on_top`); a storey an agent creates at or above the roof level moves it up instead.
+
+A roof above the storey it covers at a height of its own (`support` level, as moved roofs, the
+agents' and the auto roof's are, measured from that storey's floor) keeps its height over that
+floor when the storey's height changes: the roof elevation sync moves it (`roofsKeptOverStorey`)
+without an undo step of its own, as it does a roof following walls.
 
 ## Stacked mezzanine rooms
 

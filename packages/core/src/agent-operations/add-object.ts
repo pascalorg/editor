@@ -20,6 +20,7 @@ import {
   ItemNode,
 } from '../schema'
 import { targetLevel } from './level-target'
+import { roofLevelRefusal } from './roof-writes'
 import type { AgentOperation } from './types'
 
 type Vec3 = [number, number, number]
@@ -281,7 +282,16 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       { mount: compiled.mount, parentType: parent.type },
     )
   }
-  if (compiled.mount === 'floor' && parent.type === 'level') refuseWallOrSlabShape(compiled, input)
+  if (compiled.mount === 'floor' && parent.type === 'level') {
+    // Given no host while the roof level is in view (a roof just placed selects it), the object
+    // belongs on the storey it covers; one named onto the roof level goes up with the roof (a
+    // chimney cap, a gable louvre).
+    const onRoofLevel = input.parentId
+      ? null
+      : roofLevelRefusal(nodes, parent.id, `"${input.name ?? 'the object'}"`)
+    if (onRoofLevel) throw onRoofLevel
+    refuseWallOrSlabShape(compiled, input)
+  }
   requireAddObjectReason(input)
   const asset = scriptAsset(compiled, input, undefined)
   const node = ItemNode.parse({

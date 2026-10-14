@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { WallNode } from '@pascal-app/core/schema'
+import {
+  type AnyNode,
+  type LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+  WallNode,
+} from '@pascal-app/core/schema'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerSaveScene } from './save-scene'
 import {
@@ -87,6 +93,99 @@ describe('save_scene', () => {
     const parsed = parseToolText(result.content as StoredTextContent[])
     expect(parsed.name).toBe('From Graph')
     expect(parsed.nodeCount).toBe(1)
+  })
+
+  /** The default scene's level with a walled 8 × 6 room and a roof on its walls, as a graph. */
+  function roofedGraph() {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level') as LevelNode
+    const corners: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ]
+    const roof = RoofNode.parse({
+      parentId: level.id,
+      position: [4, 0, 3],
+      support: { kind: 'walls' },
+    })
+    const segment = RoofSegmentNode.parse({ parentId: roof.id, width: 8, depth: 6 })
+    const walls = corners.map((start, i) =>
+      WallNode.parse({ parentId: level.id, start, end: corners[(i + 1) % 4], height: 2.5 }),
+    )
+    const exported = bridge.exportJSON()
+    const graph = {
+      ...exported,
+      nodes: {
+        ...exported.nodes,
+        [level.id]: {
+          ...level,
+          children: [...level.children, ...walls.map((w) => w.id), roof.id],
+        },
+        ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+        [roof.id]: { ...roof, children: [segment.id] },
+        [segment.id]: segment,
+      },
+    }
+    return { graph, level, roof }
+  }
+
+  // The graph is judged against the scene it is saved over, as apply_patch's writes are: a roof it
+  // puts on the walls of the storey holding it is saved on the level above them.
+  test('a provided graph’s roof on its walls’ storey is saved on a Roof level, said in notes', async () => {
+    const { graph, level, roof } = roofedGraph()
+    const first = await client.callTool({ name: 'save_scene', arguments: { name: 'Base' } })
+    const { id } = parseToolText(first.content as StoredTextContent[])
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { id, name: 'Roofed', includeCurrentScene: false, graph },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = parseToolText(result.content as StoredTextContent[])
+    const saved = (await store.load(parsed.id as string))!.graph.nodes as Record<string, AnyNode>
+    const roofLevel = saved[saved[roof.id]!.parentId!] as LevelNode
+    expect(roofLevel.metadata).toMatchObject({ role: 'roof' })
+    expect(roofLevel.children).toEqual([roof.id])
+    expect((saved[level.id] as LevelNode).children).not.toContain(roof.id)
+    expect(parsed.notes).toHaveLength(1)
+  })
+
+  // A fresh session holds the default scene: a project's graph saved over its stored scene from
+  // there is judged against that scene, so its legacy roof is not read as a new write.
+  test('a graph saved over a stored scene the session does not hold is judged against that one', async () => {
+    const { graph, level, roof } = roofedGraph()
+    const stored = await store.save({ name: 'Legacy', graph: graph as never })
+    bridge.setScene({}, [])
+    bridge.loadDefault()
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { id: stored.id, name: 'Legacy', includeCurrentScene: false, graph },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = parseToolText(result.content as StoredTextContent[])
+    expect(parsed.notes).toBeUndefined()
+    const saved = (await store.load(stored.id))!.graph.nodes as Record<string, AnyNode>
+    expect(saved[roof.id]!.parentId).toBe(level.id)
+  })
+
+  test('a graph with no scene under it is saved as it is, a walled declared roof level included', async () => {
+    const { graph, level, roof } = roofedGraph()
+    const legacy = {
+      ...graph,
+      nodes: {
+        ...graph.nodes,
+        [level.id]: { ...graph.nodes[level.id], metadata: { role: 'roof' } },
+      },
+    }
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Imported', includeCurrentScene: false, graph: legacy },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = parseToolText(result.content as StoredTextContent[])
+    const saved = (await store.load(parsed.id as string))!.graph.nodes as Record<string, AnyNode>
+    expect(saved[roof.id]!.parentId).toBe(level.id)
+    expect(parsed.notes).toBeUndefined()
   })
 
   test('rejects a graph with a malicious URL (P4 security fix)', async () => {

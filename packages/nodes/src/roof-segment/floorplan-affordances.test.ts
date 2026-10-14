@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
+  type AnyNode,
   type AnyNodeId,
+  BuildingNode,
+  LevelNode,
   RoofNode,
   RoofSegmentNode,
   useLiveNodeOverrides,
   useScene,
+  WallNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import { roofSegmentResizeAffordance } from './floorplan-affordances'
 
@@ -55,5 +60,59 @@ describe('roof-segment floor-plan resize affordance', () => {
       depth: 8,
       position: [10, 0, 20],
     })
+  })
+})
+
+// A reshape that puts a storey-held roof on its walls is a write the rule seats, as a drag is.
+describe('roof-segment floor-plan resize onto the walls', () => {
+  test('an edge drawn out onto the room’s wall takes the roof to a new Roof level', () => {
+    const corners: [number, number][] = [
+      [0, 0],
+      [10, 0],
+      [10, 8],
+      [0, 8],
+    ]
+    const walls = corners.map((start, i) =>
+      WallNode.parse({ parentId: 'level_g', start, end: corners[(i + 1) % 4], height: 2.7 }),
+    )
+    const zone = ZoneNode.parse({ parentId: 'level_g', name: 'Room', polygon: corners })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_cover',
+      parentId: 'roof_cover',
+      width: 8,
+      depth: 8,
+      wallHeight: 0,
+    })
+    const roof = RoofNode.parse({
+      id: 'roof_cover',
+      parentId: 'level_g',
+      position: [5, 2.7, 4],
+      children: [segment.id],
+    })
+    const level = LevelNode.parse({
+      id: 'level_g',
+      parentId: 'building_h',
+      level: 0,
+      height: 3,
+      children: [...walls.map((wall) => wall.id), zone.id, roof.id],
+    })
+    const building = BuildingNode.parse({ id: 'building_h', children: [level.id] })
+    const nodes = Object.fromEntries(
+      [building, level, ...walls, zone, roof, segment].map((node) => [node.id, node as AnyNode]),
+    )
+    useScene.setState({ nodes, rootNodeIds: [building.id] } as never)
+    const session = roofSegmentResizeAffordance.start({
+      node: segment,
+      payload: { axis: 'x', side: 1 },
+      nodes: useScene.getState().nodes,
+      initialPlanPoint: [9, 4],
+      gridSnapStep: 0.1,
+    })
+    session.apply({ planPoint: [10, 4], modifiers })
+    session.commit?.()
+    const after = useScene.getState().nodes
+    const holder = after[after[roof.id]!.parentId as AnyNodeId] as LevelNode
+    expect(holder).toMatchObject({ level: 1, metadata: { role: 'roof' } })
+    expect(after[segment.id]).toMatchObject({ width: 9 })
   })
 })

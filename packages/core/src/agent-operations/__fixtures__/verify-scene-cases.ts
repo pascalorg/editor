@@ -344,7 +344,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { lacks: ['roof_level_not_on_top'] },
   ),
   verify(
-    'a roof on a storey is reported',
+    'a roof with no segments on a storey stands on no walls, so nothing is reported to move',
     () =>
       scene(
         building(),
@@ -352,10 +352,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
         ...room('level_0', 'ground'),
         RoofNode.parse({ id: 'roof_low', parentId: 'level_0' }),
       ),
-    {
-      contains: ['roof_mixed_in_storey'],
-      mentions: ['dedicated roof level'],
-    },
+    { lacks: ['roof_mixed_in_storey'] },
   ),
   verify(
     'a roof on the walls of the storey holding it is reported, naming the move',
@@ -393,7 +390,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { lacks: ['roof_mixed_in_storey'] },
   ),
   verify(
-    'a porch roof on its beam, under the walls’ tops, is still reported on its storey',
+    'a porch roof on its beam, under the walls’ tops, stays on its storey unreported',
     () =>
       scene(
         building(),
@@ -401,7 +398,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
         ...room('level_0', 'ground'),
         ...roofOver('level_0', 2.1),
       ),
-    { contains: ['roof_mixed_in_storey'], mentions: ['dedicated roof level'] },
+    { lacks: ['roof_mixed_in_storey'] },
   ),
   verify(
     'a wall taller than its storey in a multi-storey building is reported',
