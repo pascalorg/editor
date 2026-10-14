@@ -1244,23 +1244,20 @@ export const SelectionManager = () => {
 
     const onLeave = (event: NodeEvent) => {
       if (isCeilingGridHit(event)) return
-      const interaction = getPaintInteraction(event)
-      // A surface behind the hovered one (under an opening that never stops
-      // the pointer) leaving says nothing about the hover.
-      if (!interaction || interaction.hoveredId !== hoveredNodeId) return
+      // Only the hovered node leaving ends the hover; a surface behind it (under
+      // an opening that never stops the pointer) leaving says nothing about it.
+      // This goes by the node, not by resolving the hit again: a leave event's
+      // ray no longer meets the node, so that resolved to nothing and every
+      // leave was ignored — the last surface stayed previewed, with its HUD.
+      if (event.node.id !== hoveredNodeId) return
 
       // Leaving any surface → the HUD shows the "hover a surface" hint again.
       hoveredNodeId = null
       lastEnterEvent = null
       useEditor.getState().setPaintHover(null)
       usePaintOutline.setState({ surfaces: null })
-
-      if (activePreview?.key !== interaction.key) {
-        return
-      }
-
       clearActivePreview()
-      if (useViewer.getState().hoveredId === interaction.hoveredId) {
+      if (useViewer.getState().hoveredId === event.node.id) {
         useViewer.setState({ hoveredId: null })
       }
       setHoverHighlightMode('default')
