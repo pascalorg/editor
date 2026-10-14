@@ -2,7 +2,7 @@ import { refuse } from '../agent-tools/refusal'
 import type { MaterialSurface } from '../material-kinds'
 import {
   getCatalogMaterialById,
-  getDynamicLibraryMaterials,
+  isCommunityMaterialId,
   MATERIAL_CATALOG,
   parseMaterialRef,
 } from '../material-library'
@@ -75,13 +75,12 @@ export function nearestLibraryMaterials(
 }
 
 /**
- * Whether a library id renders: the catalog's, or a community material's (`mtl_…`) while the host
- * has registered no materials to check it against (the hosted MCP checks its database before the
- * call; the editor registers its library, against which an id it lacks is refused).
+ * Whether a library id renders: the catalog's, or a well-formed community material's (`mtl_…`),
+ * which the host checks (the hosted MCP against its database, before the call). The materials a
+ * host registered can be a part of its library (those its scene uses), so they never refuse one.
  */
 export function isLibraryMaterialId(id: string): boolean {
-  if (getCatalogMaterialById(id)) return true
-  return id.startsWith('mtl_') && getDynamicLibraryMaterials().length === 0
+  return !!getCatalogMaterialById(id) || isCommunityMaterialId(id)
 }
 
 /**

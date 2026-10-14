@@ -3,11 +3,6 @@ import { z } from 'zod'
 import { AGENT_TOOL_CONTRACTS, isAgentRefusal } from '../agent-tools'
 import { slotPaintMaterial } from '../lib/slots'
 import {
-  MATERIAL_CATALOG,
-  registerLibraryMaterials,
-  unregisterLibraryMaterials,
-} from '../material-library'
-import {
   type AnyNode,
   BuildingNode,
   CeilingNode,
@@ -374,23 +369,12 @@ describe('paint refuses the whole call', () => {
     })
   }
 
-  test("a community material the editor's library lacks, once it has registered its library", () => {
+  test('a community id, which the host checks, is written; a malformed one never could be', () => {
     const nodes = room()
-    const terrazzo = {
-      id: 'mtl_terrazzo_green',
-      label: 'Green terrazzo',
-      category: 'stone' as const,
-      preset: MATERIAL_CATALOG[0]!.preset,
-    }
-    registerLibraryMaterials([terrazzo])
-    try {
-      const misspelt = { targets: ['wall_south'], role: 'a', material: 'mtl_terazzo_green' }
-      expect(refusal(() => paint(nodes, misspelt))).toBe('unknown_material')
-      const known = paint(nodes, { ...misspelt, material: terrazzo.id })
-      expect(known.result.finish).toBe('library:mtl_terrazzo_green')
-    } finally {
-      unregisterLibraryMaterials([terrazzo.id])
-    }
+    const terrazzo = { targets: ['wall_south'], role: 'a', material: 'mtl_terrazzo_green' }
+    expect(paint(nodes, terrazzo).result.finish).toBe('library:mtl_terrazzo_green')
+    for (const material of ['library:mtl_missing.', 'mtl_', 'mtl_terrazzo green'])
+      expect(refusal(() => paint(nodes, { ...terrazzo, material }))).toBe('unknown_material')
   })
 
   test("a curtain wall's exterior: it has frame, glass and panels, no faces", () => {

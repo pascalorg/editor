@@ -7,6 +7,14 @@ import {
   MaterialTarget as MaterialTargetSchema,
 } from './schema/material'
 
+// The library's kinds and surfaces, kept apart so a tool contract names them without the catalog.
+export {
+  MATERIAL_CATEGORIES,
+  MATERIAL_SURFACES,
+  type MaterialCategory,
+  type MaterialSurface,
+} from './material-kinds'
+
 export type MaterialSource = 'pascal' | 'community' | 'mine' | 'workspace'
 
 export type MaterialCatalogItem = {
@@ -4721,6 +4729,11 @@ export function getMaterialsForCategory(category: MaterialCategory): MaterialCat
     if (item.category === category && !STATIC_CATALOG_IDS.has(item.id)) items.push(item)
   }
   return items
+}
+
+/** A community material's id (`mtl_…`, as the host's database mints them), well formed. */
+export function isCommunityMaterialId(id: string): boolean {
+  return /^mtl_[\w-]+$/.test(id)
 }
 
 export function getCatalogMaterialById(id?: string): MaterialCatalogItem | undefined {
