@@ -51,7 +51,7 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
-import { getDefaultLevelName, getLevelDisplayName, isRoofLevel } from '@pascal-app/core'
+import { getDefaultLevelName, getLevelDisplayName, servesAsRoofLevel } from '@pascal-app/core'
 import { addStoreyOnTop } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
@@ -501,6 +501,11 @@ export function FloatingLevelSelector() {
     }),
   )
 
+  const topIsRoofLevel = useScene((state) => {
+    const top = levels.at(-1)
+    return top ? servesAsRoofLevel(state.nodes, top) : false
+  })
+
   const handleAddAbove = useCallback(() => {
     if (!resolvedBuildingId) return
     const newLevel = addStoreyOnTop(resolvedBuildingId)
@@ -592,8 +597,10 @@ export function FloatingLevelSelector() {
 
       const reorderedVisualLevels = arrayMove(visualLevels, oldIndex, newIndex)
       // The roof level stays above every storey (top first here): a drop under a storey is refused.
-      const firstStorey = reorderedVisualLevels.findIndex((level) => !isRoofLevel(level))
-      if (firstStorey >= 0 && reorderedVisualLevels.slice(firstStorey + 1).some(isRoofLevel)) return
+      const nodes = useScene.getState().nodes
+      const isRoof = (level: LevelNode) => servesAsRoofLevel(nodes, level)
+      const firstStorey = reorderedVisualLevels.findIndex((level) => !isRoof(level))
+      if (firstStorey >= 0 && reorderedVisualLevels.slice(firstStorey + 1).some(isRoof)) return
       const levelNumbersDescending = levels.map((level) => level.level).sort((a, b) => b - a)
 
       const updates = reorderedVisualLevels
@@ -639,7 +646,7 @@ export function FloatingLevelSelector() {
               // read only from outside: nothing here depends on it.
               data-guide-target="level-add"
               onClick={handleAddAbove}
-              title={isRoofLevel(reversedLevels[0]) ? 'Add a floor under the roof' : 'Add level above'}
+              title={topIsRoofLevel ? 'Add a floor under the roof' : 'Add level above'}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />

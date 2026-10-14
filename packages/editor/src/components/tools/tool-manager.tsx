@@ -5,14 +5,17 @@ import {
   type CeilingNode,
   createSceneApi,
   type FenceNode,
+  isStoreyContent,
+  type LevelNode,
   nodeRegistry,
   type SlabNode,
+  storeyOf,
   useScene,
   type WallNode,
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { type ComponentType, lazy, Suspense, useMemo } from 'react'
+import { type ComponentType, lazy, Suspense, useEffect, useMemo } from 'react'
 import { useRegisteredToolEnabled } from '../../hooks/use-registered-tool-enabled'
 import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import type { ReshapeKind } from '../../lib/interaction/scope'
@@ -179,6 +182,13 @@ export const ToolManager: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
+  // Placing a roof makes its level active (selectPlacedNode); a wall, room, slab, stair or item tool
+  // armed there, then or after a level change, draws on the storey the roof level covers.
+  useEffect(() => {
+    if (!(tool && activeLevelId && isStoreyContent(tool))) return
+    const storeyId = storeyOf(useScene.getState().nodes, activeLevelId)
+    if (storeyId !== activeLevelId) setSelection({ levelId: storeyId as LevelNode['id'] })
+  }, [tool, activeLevelId, setSelection])
   const registrySceneApi = useMemo(() => createSceneApi(useScene), [])
   const registryToolContext = useMemo(
     () => ({

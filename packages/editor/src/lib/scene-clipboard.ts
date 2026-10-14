@@ -6,14 +6,18 @@ import {
   generateSceneMaterialId,
   getArtifactStore,
   isDerivedNode,
+  isStoreyContent,
   type LevelNode,
   nodeRegistry,
   type ParsedBuildJson,
   remapMeasurementReferences,
+  runAsSingleSceneHistoryStep,
   SceneMaterial,
   type SceneMaterialId,
   type StairNode,
   scriptedSize,
+  seatRoofs,
+  storeyOf,
   useScene,
 } from '@pascal-app/core'
 import { clampDoorToWall, clampWindowToWall } from '@pascal-app/core/building'
@@ -213,7 +217,7 @@ function getNextLevelId(level: LevelNode, nodes: Record<AnyNodeId, AnyNode>) {
 function remapNodeReferences(
   node: AnyNode,
   oldId: AnyNodeId,
-  targetLevel: LevelNode,
+  pastedLevel: LevelNode,
   idMap: Map<AnyNodeId, AnyNodeId>,
   materialIdMap: Map<SceneMaterialId, SceneMaterialId>,
   rootIds: Set<AnyNodeId>,
@@ -221,6 +225,12 @@ function remapNodeReferences(
 ) {
   const clone = remapSceneMaterialRefs(JSON.parse(JSON.stringify(node)) as AnyNode, materialIdMap)
   ;(clone as Record<string, unknown>).id = idMap.get(oldId)
+  // Walls, rooms, stairs and items pasted on a roof level go to the storey it covers: the row in
+  // view was the roof's, the plan is the storey's.
+  const targetLevel = isStoreyContent(node.type)
+    ? ((nodes[storeyOf(nodes, pastedLevel.id) as AnyNodeId] as LevelNode | undefined) ??
+      pastedLevel)
+    : pastedLevel
 
   if (rootIds.has(oldId)) {
     const buildingId = targetLevel.parentId as AnyNodeId | null
@@ -653,12 +663,10 @@ function applyClipboardPayloadToLevel(
     }
   }
 
-  for (const material of materialsToCreate) {
-    scene.addSceneMaterial(material)
-  }
   const sourceIds = new Map([...idMap].map(([source, copy]) => [copy, source]))
-  scene.createNodes(
-    pastedNodes.map((node) => ({
+  // A roof pasted onto the walls that carry it goes to the level above them, in the paste itself.
+  const { changes } = seatRoofs(scene.nodes, {
+    create: pastedNodes.map((node) => ({
       node,
       parentId: (node.parentId as AnyNodeId | null) ?? undefined,
       // A copy is in its source's collections; an item brings them in its own `collectionIds`.
@@ -666,15 +674,21 @@ function applyClipboardPayloadToLevel(
         collectionIds: collectionIdsOf(scene.collections, sourceIds.get(node.id as AnyNodeId)!),
       }),
     })),
-  )
+  })
+  runAsSingleSceneHistoryStep(useScene, () => {
+    for (const material of materialsToCreate) scene.addSceneMaterial(material)
+    scene.applyNodeChanges(changes)
+  })
 
+  const nodes = useScene.getState().nodes
   const pastedNodeIds = new Set(pastedNodes.map((node) => node.id as AnyNodeId))
   const pastedRootIds = payload.rootIds
     .map((rootId) => idMap.get(rootId))
     .filter((id): id is AnyNodeId => !!id && pastedNodeIds.has(id))
+  const rootLevel = nodes[(nodes[pastedRootIds[0]!]?.parentId ?? '') as AnyNodeId]
 
   useViewer.getState().setSelection({
-    levelId: targetLevel.id,
+    levelId: rootLevel?.type === 'level' ? rootLevel.id : targetLevel.id,
     selectedIds: pastedRootIds,
   })
 

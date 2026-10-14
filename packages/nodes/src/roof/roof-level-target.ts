@@ -9,6 +9,7 @@ import {
   type RoofSegmentNode,
   resolveRoofElevation,
   type SceneApi,
+  seatRoofs,
 } from '@pascal-app/core'
 import { applySceneChanges } from '@pascal-app/core/agent-operations'
 
@@ -119,4 +120,25 @@ export function writeRoofNodes(
     return
   }
   for (const op of create) sceneApi.upsert(op.node, op.parentId)
+}
+
+/**
+ * A roof edit written through the seat every roof writer runs (`seatRoofs`): a segment added to a
+ * roof held by a storey that puts it on that storey's walls takes the roof to the level above them,
+ * in the same store call.
+ */
+export function writeSeatedRoofEdit(
+  sceneApi: SceneApi,
+  edit: {
+    create?: { node: AnyNode; parentId?: AnyNodeId }[]
+    update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
+  },
+): void {
+  const { changes } = seatRoofs(sceneApi.nodes(), edit)
+  if (sceneApi.applyChanges) {
+    sceneApi.applyChanges(changes)
+    return
+  }
+  for (const { id, data } of changes.update ?? []) sceneApi.update(id, data)
+  for (const op of changes.create ?? []) sceneApi.upsert(op.node, op.parentId)
 }

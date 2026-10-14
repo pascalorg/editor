@@ -4,11 +4,17 @@ import {
   type FloorplanMoveTarget,
   type RoofNode,
   type RoofSegmentNode,
+  seatRoofs,
   snapScalar,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { getSegmentGridStep, isAngleSnapActive, isGridSnapActive } from '@pascal-app/editor'
+import {
+  getSegmentGridStep,
+  isAngleSnapActive,
+  isGridSnapActive,
+  selectPlacedNode,
+} from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
@@ -252,7 +258,13 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
     },
     commit() {
       useLiveNodeOverrides.getState().clear(segmentId)
-      useScene.getState().updateNode(segmentId, { position: lastLocal })
+      // Dragged onto the walls that carry it, its roof goes to the level above them.
+      const scene = useScene.getState()
+      const { changes, notes } = seatRoofs(scene.nodes, {
+        update: [{ id: segmentId, data: { position: lastLocal } }],
+      })
+      scene.applyNodeChanges(changes)
+      if (notes.length) selectPlacedNode(segmentId)
     },
   }
 }

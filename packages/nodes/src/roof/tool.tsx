@@ -69,6 +69,7 @@ import {
   roofLevelTargetOffset,
   seatedRoofElevation,
   writeRoofNodes,
+  writeSeatedRoofEdit,
 } from './roof-level-target'
 import useRoofPlacementMode, { type RoofPlacementMode } from './roof-placement-mode'
 
@@ -309,7 +310,9 @@ export const commitRoofPlacement = (
       rotation: placement.rotation,
     })
 
-    sceneApi.upsert(segment, targetRoofId as AnyNode['id'])
+    writeSeatedRoofEdit(sceneApi, {
+      create: [{ node: segment, parentId: targetRoofId as AnyNode['id'] }],
+    })
     triggerSFX('sfx:structure-build')
     return segment.id // Returns segment ID so it can be selected immediately
   }
