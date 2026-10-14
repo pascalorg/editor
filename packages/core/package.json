@@ -129,18 +129,18 @@
   },
   "dependencies": {
     "@pascal-app/lingo": "^0.2.0",
-    "dedent": "^1.7.1",
-    "idb-keyval": "^6.2.2",
+    "dedent": "^1.7.2",
+    "idb-keyval": "^6.3.0",
     "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
     "polygon-clipping": "0.15.7",
-    "zod": ">=4.5.4 <4.6",
+    "zod": ">=4.6.7 <4.7",
     "zundo": "^2.3.0",
     "zustand": "^5"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.4.2",
+    "@types/bun": "^1.4.3",
     "@types/react": "19.3.0",
     "@types/three": "^0.184.0",
     "fake-indexeddb": "^6.2.5",

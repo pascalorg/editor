@@ -48,7 +48,7 @@
   "devDependencies": {
     "@pascal-app/core": "^1.0.4",
     "@pascal/typescript-config": "*",
-    "@react-three/test-renderer": "^9.1.0",
+    "@react-three/test-renderer": "^9.1.1",
     "@types/node": "^22",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
