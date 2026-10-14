@@ -77,7 +77,7 @@
     "@types/react-dom": "19.3.0",
     "@types/three": "^0.184.0",
     "fast-xml-parser": "^5.11.2",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "repository": {
     "type": "git",

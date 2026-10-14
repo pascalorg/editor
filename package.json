@@ -28,10 +28,11 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
     "@typescript/native-preview": "7.0.0-dev.20260624.1",
+    "@typescript/typescript6": "6.0.2",
     "dotenv-cli": "^11.0.0",
     "fast-xml-parser": "^5.11.2",
     "turbo": "^2.9.17",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "ultracite": "^7.8.2"
   },
   "engines": {
