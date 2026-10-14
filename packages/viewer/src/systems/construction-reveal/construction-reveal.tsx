@@ -45,6 +45,7 @@ import {
 } from '../../lib/reveal-pose'
 import {
   LAZY_REVEAL_TIMING,
+  type LazyRevealTiming,
   type PlannedReveal,
   planLazyReveal,
   planRetract,
@@ -1096,7 +1097,10 @@ function startReveal(candidate: RevealCandidate, now: number, animate: boolean) 
       lazy && candidate.style === 'drop'
         ? Math.max(candidate.lead ?? 0, LAZY_DROP_LEAD)
         : (candidate.lead ?? 0),
-    overshoot: lazy ? LAZY_REVEAL_TIMING.overshoot : 0,
+    overshoot:
+      lazy && candidate.style in LAZY_REVEAL_TIMING.overshoot
+        ? LAZY_REVEAL_TIMING.overshoot[candidate.style as keyof LazyRevealTiming['overshoot']]
+        : 0,
     weight: 'finale' in candidate && candidate.finale ? FINALE_WEIGHT : 1,
     finale: 'finale' in candidate && candidate.finale === true,
     finaleSaid: false,

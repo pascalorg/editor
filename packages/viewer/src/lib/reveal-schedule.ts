@@ -172,8 +172,11 @@ export type LazyRevealTiming = {
   capMs: number
   /** How long each style moves its node at this level. */
   durationMs: Record<RevealStyle, number>
-  /** The overshoot of a rise or a scale (GSAP's `back.out` strength; 0 is a plain ease out). */
-  overshoot: number
+  /**
+   * How far a rise, a scale or a settle goes past its rest before it settles (GSAP's `back.out`
+   * strength; 0 is a plain ease out). A rise's is gentler: a wall 2 % past its top, not into the slab over it.
+   */
+  overshoot: Record<'rise' | 'scale' | 'settle', number>
   /** Drops and settles fall from at least this high (m), whatever their kind declares. */
   minHeightM: Partial<Record<RevealStyle, number>>
 }
@@ -194,7 +197,7 @@ export const LAZY_REVEAL_TIMING: LazyRevealTiming = {
   jitter: 0.3,
   capMs: 40_000,
   durationMs: { rise: 760, scale: 520, settle: 640, drop: 820, cut: 320, assemble: 0 },
-  overshoot: 1.6,
+  overshoot: { rise: 0.7, scale: 1.6, settle: 1.6 },
   minHeightM: { drop: 1.8, settle: 0.6 },
 }
 
