@@ -29,6 +29,7 @@ export function PlacementControl() {
     <Popover onOpenChange={setIsOpen} open={isOpen}>
       <PopoverTrigger asChild>
         <ActionButton
+          aria-label="Menu position"
           className="group text-muted-foreground hover:bg-white/5"
           isActive={isOpen}
           label="Menu position"
