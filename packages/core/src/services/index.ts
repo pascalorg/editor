@@ -99,6 +99,7 @@ export {
   segmentBearing,
   segmentShape,
   shapeOfRect,
+  standsOverStorey,
   type WallSpan,
   wallSpans,
   wallsUnder,

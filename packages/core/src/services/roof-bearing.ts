@@ -5,10 +5,12 @@ import {
   type AnyNodeId,
   getConicalRoofCoverage,
   getSegmentSlopeFrame,
+  type LevelNode,
   type SlabNode,
   type WallNode,
   type ZoneNode,
 } from '../schema'
+import { resolveRoomRoofFootprintOnLevel } from '../systems/roof/roof-footprint'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { sampleWallCenterline } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
@@ -292,4 +294,18 @@ export function segmentBearing(
   const shape = segmentShape(nodes, segmentId)
   const walls = shape ? wallsUnder(nodes, levelId, shape) : []
   return { walls, need: seatOn(walls) }
+}
+
+/**
+ * Whether a roof footprint with no segment of its own yet (a rectangle drawn by hand, an imported
+ * roof plane) stands over a storey: an edge of it bears on the level's walls (`wallsUnder`), or it
+ * covers a room those walls enclose (a rectangle drawn loosely over a house). A porch or portico
+ * over posts beside the house does neither, and stays on the storey with its posts.
+ */
+export function standsOverStorey(nodes: Nodes, levelId: string, shape: RoofShape): boolean {
+  return (
+    wallsUnder(nodes, levelId, shape).length > 0 ||
+    resolveRoomRoofFootprintOnLevel(levelId as LevelNode['id'], nodes, [shape.cx, shape.cz]) !==
+      null
+  )
 }

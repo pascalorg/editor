@@ -8,11 +8,10 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   resolveRoofElevation,
-  resolveRoomRoofFootprintOnLevel,
   type SceneApi,
   seatRoofs,
+  standsOverStorey,
   useScene,
-  wallsUnder,
 } from '@pascal-app/core'
 import { applySceneChanges } from '@pascal-app/core/agent-operations'
 import { selectPlacedNode } from '@pascal-app/editor'
@@ -39,12 +38,7 @@ export type DrawnRoof = {
   roofType: string
 }
 
-/**
- * Whether a roof drawn on a level stands over that storey: an edge of it bears on the level's walls
- * (core's bearing test: a wall along the edge, open air past it), or it covers one of the rooms its
- * walls enclose (a rectangle drawn loosely over a house). A porch or portico over posts beside the
- * house does neither, and stays on the storey with its posts.
- */
+/** Whether a roof drawn on a walled level stands over that storey (core's `standsOverStorey`). */
 function overStorey(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   levelId: LevelNode['id'],
@@ -53,7 +47,7 @@ function overStorey(
   const level = nodes[levelId]
   if (level?.type !== 'level' || !level.children.some((id) => nodes[id]?.type === 'wall'))
     return false
-  const shape = {
+  return standsOverStorey(nodes, levelId, {
     cx: drawn.center[0],
     cz: drawn.center[1],
     yaw: 0,
@@ -62,11 +56,7 @@ function overStorey(
     reach: 0,
     roofType: drawn.roofType,
     peak: 0,
-  }
-  return (
-    wallsUnder(nodes, levelId, shape).length > 0 ||
-    resolveRoomRoofFootprintOnLevel(levelId, nodes, drawn.center) !== null
-  )
+  })
 }
 
 /** The target of a roof carried by `storeyId`'s walls, `roofHeight` its rise over its eaves. */
