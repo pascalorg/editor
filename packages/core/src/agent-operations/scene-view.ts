@@ -1,5 +1,11 @@
 import { refuse } from '../agent-tools/refusal'
-import type { VIEW_SIDES } from '../agent-tools/view-scene'
+import type {
+  COMPASS_SIDES,
+  STREET_SIDES,
+  VIEW_LIGHTING,
+  VIEW_SIDES,
+} from '../agent-tools/view-scene'
+import { siteStreet } from '../lib/site-placement'
 import type {
   AnyNode,
   AnyNodeId,
@@ -22,6 +28,10 @@ import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 
 export type SceneViewBox = { min: [number, number, number]; max: [number, number, number] }
 export type SceneViewSide = (typeof VIEW_SIDES)[number]
+type CompassSide = (typeof COMPASS_SIDES)[number]
+type StreetSide = (typeof STREET_SIDES)[number]
+/** The light a host renders a view in; the scene's own when absent. */
+export type SceneViewLighting = Exclude<(typeof VIEW_LIGHTING)[number], 'current'>
 
 export type SceneViewInput = {
   target?: string
@@ -32,8 +42,25 @@ export type SceneViewInput = {
   eyeHeight?: number
   fov?: number
   projection?: 'perspective' | 'orthographic'
-  camera?: { position: number[]; target: number[]; fov: number; aspect: number }
+  camera?: 'current' | { position: number[]; target: number[]; fov: number; aspect: number }
+  lighting?: (typeof VIEW_LIGHTING)[number]
+  maxPx?: number
   photo?: { source: string; region: number[] }
+}
+
+/**
+ * The person's own view, as the host's editor shows it now: what `camera: 'current'` looks
+ * through. A host with no person's view (the MCP) has none.
+ */
+export type SceneViewCurrentCamera = {
+  position: [number, number, number]
+  target: [number, number, number]
+  projection: 'perspective' | 'orthographic'
+  fov?: number
+  /** Metres across the view at its target, for an orthographic camera. */
+  viewWidth?: number
+  /** The canvas' width over its height. */
+  aspect: number
 }
 
 /** A region of the reference photo the host crops and returns beside the view. */
@@ -167,7 +194,7 @@ type Pt = [number, number]
 type V3 = [number, number, number]
 
 /** In plan, x runs east and z south: north is the plan's top edge. */
-const COMPASS: Record<Exclude<SceneViewSide, 'above'>, Pt> = {
+const COMPASS: Record<CompassSide, Pt> = {
   north: [0, -1],
   'north-east': [Math.SQRT1_2, -Math.SQRT1_2],
   east: [1, 0],
@@ -178,11 +205,47 @@ const COMPASS: Record<Exclude<SceneViewSide, 'above'>, Pt> = {
   'north-west': [-Math.SQRT1_2, -Math.SQRT1_2],
 }
 
+/** How far each street side turns from the street toward the street viewer's left, in degrees. */
+const STREET_TURN: Record<StreetSide, number> = {
+  street: 0,
+  'street-left': 45,
+  left: 90,
+  'back-left': 135,
+  back: 180,
+  'back-right': -135,
+  right: -90,
+  'street-right': -45,
+}
+
+const isStreetSide = (side: SceneViewSide): side is StreetSide => Object.hasOwn(STREET_TURN, side)
+
 /**
- * What a view frames: the walls of the target (a building, a level, a wall) or a zone's outline,
- * each at its storey's height; every wall by default. Plan guides never count: an imported plan
- * is drawn much larger than its building.
+ * Where a street side stands in the plan, from the street the target's site records. Standing in
+ * the street facing the house you look along -toward, and in this frame (x east, z south, y up)
+ * your left hand points along (-toward.z, toward.x): on a lot whose street is north, that is east.
  */
+function streetDirection(
+  nodes: Readonly<Record<string, AnyNode>>,
+  side: StreetSide,
+  target: AnyNode | undefined,
+): Pt {
+  const building = target && ancestry(nodes, target).find((node) => node.type === 'building')
+  const street = siteStreet(nodes, building?.id)
+  if (!street)
+    refuse(
+      'no_street',
+      `The site records no street edge, so ${side} means nothing yet: look from a compass side (north is the plan's top edge), or set the site's frontEdge first.`,
+      { from: side },
+    )
+  const [fx, fz] = street.toward
+  const turn = (STREET_TURN[side] * Math.PI) / 180
+  // `+ 0` so a vector along an axis reads 0, not -0.
+  return [
+    fx * Math.cos(turn) - fz * Math.sin(turn) + 0,
+    fz * Math.cos(turn) + fx * Math.sin(turn) + 0,
+  ]
+}
+
 /** A door or a window and the wall it is in, when the target is one. */
 function openingOf(nodes: Readonly<Record<string, AnyNode>>, target: AnyNode | undefined) {
   if (target?.type !== 'door' && target?.type !== 'window') return null
@@ -409,7 +472,7 @@ function outsideSide(
   opening: AnyNode & { rotation?: number[] },
   wall: WallNode,
   yaw: number,
-): SceneViewSide {
+): CompassSide {
   const [nx, nz] = outwardOf(opening, wall, yaw)
   return (Object.keys(COMPASS) as (keyof typeof COMPASS)[]).reduce((best, side) =>
     COMPASS[side][0] * nx + COMPASS[side][1] * nz > COMPASS[best][0] * nx + COMPASS[best][1] * nz
@@ -493,6 +556,11 @@ function placedBox(box: SceneViewBox, at: Standing): SceneViewBox {
   }
 }
 
+/**
+ * What a view frames: the walls of the target (a building, a level, a wall) or a zone's outline,
+ * each at its storey's height, and the roofs over them up to their peaks; every storey by default.
+ * Plan guides never count: an imported plan is drawn much larger than its building.
+ */
 export function sceneViewBounds(
   nodes: Readonly<Record<string, AnyNode>>,
   targetId?: string,
@@ -527,8 +595,9 @@ export function sceneViewBounds(
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
   // With no walls yet, what the level holds frames it: furniture placed from a plan before the
-  // walls are built, a site with its paving and fences.
+  // walls are built, a site with its paving and fences. The roofs frame with the walls.
   const held: SceneViewBox[] = []
+  const roofs: SceneViewBox[] = []
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
     if (level?.type !== 'level') continue
@@ -552,14 +621,10 @@ export function sceneViewBounds(
     else if (node.type === 'item') held.push(placedBox(itemBox(node, baseOf(level.id)), at))
     else {
       const box = levelChildBox(nodes, node, baseOf(level.id))
-      if (box) held.push(placedBox(box, at))
+      if (box) (node.type === 'roof' ? roofs : held).push(placedBox(box, at))
     }
   }
-  if (!outlines.length && held.length)
-    return {
-      min: [0, 1, 2].map((axis) => Math.min(...held.map((box) => box.min[axis]!))) as V3,
-      max: [0, 1, 2].map((axis) => Math.max(...held.map((box) => box.max[axis]!))) as V3,
-    }
+  if (!outlines.length && (held.length || roofs.length)) return union([...held, ...roofs])
   if (!outlines.length)
     refuse(
       'nothing_to_view',
@@ -582,7 +647,15 @@ export function sceneViewBounds(
       max[2] = Math.max(max[2], z)
     }
   }
-  return { min, max }
+  return union([{ min, max }, ...roofs])
+}
+
+/** The box around boxes. */
+function union(boxes: SceneViewBox[]): SceneViewBox {
+  return {
+    min: [0, 1, 2].map((axis) => Math.min(...boxes.map((box) => box.min[axis]!))) as V3,
+    max: [0, 1, 2].map((axis) => Math.max(...boxes.map((box) => box.max[axis]!))) as V3,
+  }
 }
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
@@ -598,12 +671,18 @@ const unit = (a: V3): V3 => {
 }
 const round = (value: number) => Math.round(value * 100) / 100
 
+/** A viewpoint of the eye's own, the side it stands on a compass side, above, or a plan direction. */
+export type SceneViewPoseInput = Pick<
+  SceneViewInput,
+  'position' | 'elevation' | 'eyeHeight' | 'fov' | 'projection'
+> & { from?: CompassSide | 'above' | Pt }
+
 /**
  * Where the eye stands: on the side asked (south-west by default), a few degrees up, far enough
  * that the whole target is in frame; or at a street-level height; or exactly where it is put.
  * The orthographic view looks square on and is as wide as the target seen from there.
  */
-export function sceneViewPose(box: SceneViewBox, input: SceneViewInput): SceneViewPose {
+export function sceneViewPose(box: SceneViewBox, input: SceneViewPoseInput): SceneViewPose {
   const centre: V3 = [
     (box.min[0] + box.max[0]) / 2,
     (box.min[1] + box.max[1]) / 2,
@@ -613,7 +692,8 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewInput): SceneVi
   const side = input.from ?? 'south-west'
   const elevation =
     ((side === 'above' ? 89 : (input.elevation ?? DEFAULT_ELEVATION)) * Math.PI) / 180
-  const [dx, dz] = side === 'above' ? COMPASS.south : COMPASS[side]
+  const [dx, dz] =
+    side === 'above' ? COMPASS.south : typeof side === 'string' ? COMPASS[side] : side
   const direction: V3 = [Math.cos(elevation) * dx, Math.sin(elevation), Math.cos(elevation) * dz]
   const corners: V3[] = []
   for (const x of [box.min[0], box.max[0]])
@@ -668,28 +748,74 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewInput): SceneVi
   }
 }
 
-/**
- * The view to render and its size: from a photo's camera at the photo's aspect, so the two lay
- * one beside the other; else framing the target at the standard size.
- */
 /** What a view comes with, on both surfaces: a picture to compare, not a measure. */
 export function sceneViewNote() {
   return 'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
 }
 
+/** A picture of `w` × `h`, made smaller to `maxPx` on its longest side when asked. */
+function sized(w: number, h: number, maxPx?: number): { w: number; h: number } {
+  const scale = maxPx ? Math.min(1, maxPx / Math.max(w, h)) : 1
+  return { w: Math.round(w * scale), h: Math.round(h * scale) }
+}
+
+/** The pose of a camera given whole: a photo's, or the person's own. */
+function cameraPose(
+  camera: Exclude<SceneViewInput['camera'], undefined>,
+  current: SceneViewCurrentCamera | null | undefined,
+): { pose: SceneViewPose; aspect: number } {
+  if (camera !== 'current')
+    return {
+      pose: {
+        projection: 'perspective',
+        position: camera.position as V3,
+        target: camera.target as V3,
+        fov: camera.fov,
+      },
+      aspect: camera.aspect,
+    }
+  if (!current)
+    refuse(
+      'no_current_camera',
+      "There is no view of the person's to look through here: give a side (from), a position or a photo's camera.",
+    )
+  const { position, target, aspect } = current
+  return {
+    pose:
+      current.projection === 'orthographic' && current.viewWidth
+        ? { projection: 'orthographic', position, target, viewWidth: current.viewWidth }
+        : { projection: 'perspective', position, target, fov: current.fov ?? DEFAULT_FOV },
+    aspect,
+  }
+}
+
+/**
+ * The view to render, its size and its light: through a camera given whole (a photo's, at the
+ * photo's aspect so the two lay one beside the other, or the person's own, which the host passes
+ * as `currentCamera`); else framing the target at the standard size, from a compass side or a side
+ * of the street the site records.
+ */
 export function sceneViewPlan(
   nodes: Readonly<Record<string, AnyNode>>,
   input: SceneViewInput,
+  { currentCamera }: { currentCamera?: SceneViewCurrentCamera | null } = {},
 ): {
   pose: SceneViewPose
   size: { w: number; h: number }
   crop?: SceneViewCrop
   interior?: SceneViewInterior
+  lighting?: SceneViewLighting
 } {
   const { camera } = input
   const crop = cropOf(input.photo)
   const inside = input.interior && sceneViewInterior(nodes, input.interior.levelId)
   const interior = input.interior && { levelId: input.interior.levelId }
+  const lighting = input.lighting === 'current' ? undefined : input.lighting
+  const extras = {
+    ...(crop ? { crop } : {}),
+    ...(interior ? { interior } : {}),
+    ...(lighting ? { lighting } : {}),
+  }
   const target = input.target ? nodes[input.target] : undefined
   // An interior view shows this floor alone, without its roofs and ceilings: a target left out of
   // the picture would frame nothing shown.
@@ -712,40 +838,37 @@ export function sceneViewPlan(
     if (own.length)
       refuse(
         'camera_and_viewpoint',
-        `Give the photo's camera or a viewpoint of your own, not both (${own.join(', ')}).`,
+        `Give a camera or a viewpoint of your own, not both (${own.join(', ')}).`,
         { fields: own },
       )
-    return {
-      pose: {
-        projection: 'perspective',
-        position: camera.position as V3,
-        target: camera.target as V3,
-        fov: camera.fov,
-      },
-      size: { w: VIEW_SIZE.w, h: Math.round(VIEW_SIZE.w / camera.aspect) },
-      ...(crop ? { crop } : {}),
-      ...(interior ? { interior } : {}),
-    }
+    const { pose, aspect } = cameraPose(camera, currentCamera)
+    return { pose, size: sized(VIEW_SIZE.w, VIEW_SIZE.w / aspect, input.maxPx), ...extras }
   }
   const opening = openingOf(nodes, target)
-  const from =
-    input.from ??
-    (opening && !input.position
+  const side = input.from
+  const from = side
+    ? isStreetSide(side)
+      ? streetDirection(nodes, side, target)
+      : side
+    : opening && !input.position
       ? outsideSide(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
-      : undefined)
+      : undefined
   // Inside a floor, the eye looks down into it over the cut walls.
   const lookDown = inside && input.elevation === undefined && input.eyeHeight === undefined
+  const { position, elevation, eyeHeight, fov, projection } = input
   return {
     pose: sceneViewPose(
       input.target || !inside ? sceneViewBounds(nodes, input.target) : inside.bounds,
       {
-        ...input,
-        ...(lookDown ? { elevation: INTERIOR_ELEVATION } : {}),
-        ...(from ? { from } : {}),
+        position,
+        elevation: lookDown ? INTERIOR_ELEVATION : elevation,
+        eyeHeight,
+        fov,
+        projection,
+        from,
       },
     ),
-    size: { ...VIEW_SIZE },
-    ...(crop ? { crop } : {}),
-    ...(interior ? { interior } : {}),
+    size: sized(VIEW_SIZE.w, VIEW_SIZE.h, input.maxPx),
+    ...extras,
   }
 }

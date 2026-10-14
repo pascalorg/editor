@@ -202,6 +202,25 @@ export function siteFrontEdge(site: SiteEdges): number {
 }
 
 /**
+ * The street a building faces, as its site records it: the recorded street edge and the way from
+ * the lot toward it, a unit vector in the site's plan (x, z). Null when the site records no street
+ * edge: then front, back, left and right mean nothing yet, and no edge is guessed.
+ */
+export function siteStreet(
+  nodes: Nodes,
+  buildingId?: string | null,
+): { edge: number; toward: P } | null {
+  const building = buildingId ? nodes[buildingId] : undefined
+  const stored = siteOfBuilding(nodes, building?.type === 'building' ? building : null)
+  if (!stored) return null
+  const site = readSiteNode(stored)
+  const lot = (site.polygon?.points ?? []) as P[]
+  const edge = recordedStreetEdge(site)
+  if (edge === undefined || lot.length < 3) return null
+  return { edge, toward: outwardNormal(lot, edge) as P }
+}
+
+/**
  * The lot's buildable envelope, in site metres, as the site plan and the 3D site draw it: every
  * lot line pushed in by its setback from the front edge's roles, the corner sight triangles kept
  * clear. Empty when the site records no setbacks, when none of them is more than zero, or when

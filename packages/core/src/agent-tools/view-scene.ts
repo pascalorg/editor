@@ -2,7 +2,8 @@ import { z } from 'zod'
 
 const point = z.array(z.number()).length(3)
 
-export const VIEW_SIDES = [
+/** Sides on the plan's compass: north is its top edge (z grows south, x east). */
+export const COMPASS_SIDES = [
   'north',
   'north-east',
   'east',
@@ -11,20 +12,42 @@ export const VIEW_SIDES = [
   'south-west',
   'west',
   'north-west',
-  'above',
 ] as const
+
+/**
+ * Sides as a front photo names them, standing in the street facing the house: left and right are
+ * that viewer's hands. They turn with the street the site records.
+ */
+export const STREET_SIDES = [
+  'street',
+  'street-left',
+  'street-right',
+  'left',
+  'right',
+  'back',
+  'back-left',
+  'back-right',
+] as const
+
+export const VIEW_SIDES = [...COMPASS_SIDES, ...STREET_SIDES, 'above'] as const
+
+/** The light a view is rendered in: the scene's own, or one a reference photo was taken in. */
+export const VIEW_LIGHTING = ['current', 'day', 'overcast', 'sunset', 'dusk', 'night'] as const
+
+/** The longest side of a view, in pixels: past it a vision model scales the picture down. */
+export const VIEW_MAX_PX = 1920
 
 export const viewSceneTool = {
   name: 'view_scene',
   title: 'Look at the scene',
   description:
-    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic); the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. To see inside a floor, give interior {levelId}: the other floors and that floor's roofs and ceilings are left out of the picture, and everything on it, walls, openings and furniture alike, is cut at 0.65 of the storey's height (about two thirds), so a tall wardrobe or a door head is cut, not short; a roof level has no inside; with no eye given it looks down into the floor, or into the room or zone you target. The live view is not changed. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), a tab in the background must be brought to the front (editor_tab_hidden), and a tab that is open but busy or still loading answers editor_tab_busy: call view_scene again in a few seconds, the user need not be asked. A picture is not a measure: take sizes and counts from the tools.",
+    "Look at the building in 3D from a viewpoint you pick and get the picture back: the finished house, every storey and the roof, whatever floor or view mode the person has on. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic); the massing from above, or an aerial view (elevation 35 to 60). from is a compass side (north is the plan's top edge, z grows south, x east) or a side as a front photo names it, standing in the street facing the house, from the street the site records (its front edge, else a street edge): 'street' straight at the front, 'street-left' and 'street-right' its front corners, 'left', 'right', 'back', 'back-left', 'back-right'; a site that records no street refuses them (no_street). camera 'current' looks through the person's own view as their editor shows it now. lighting renders the picture in a photo's light (dusk: twilight, the lights on), maxPx smaller. The view frames the target (a building, a level, a wall or a zone; the whole building, its roof included, by default) from outside, unless you place the eye yourself with position or camera. To see inside a floor, give interior {levelId}: the other floors and that floor's roofs and ceilings are left out of the picture, and everything on it, walls, openings and furniture alike, is cut at 0.65 of the storey's height (about two thirds), so a tall wardrobe or a door head is cut, not short; a roof level has no inside; with no eye given it looks down into the floor, or into the room or zone you target. The live view is not changed. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), a tab in the background must be brought to the front (editor_tab_hidden), and a tab that is open but busy or still loading answers editor_tab_busy: call view_scene again in a few seconds, the user need not be asked. The MCP has no view of the person's to look through: camera 'current' is refused there (no_current_camera). A picture is not a measure: take sizes and counts from the tools.",
   input: {
     target: z
       .string()
       .optional()
       .describe(
-        'A building, level, wall, zone, door, window or floor item id to frame. Default: every wall in the scene.',
+        'A building, level, wall, zone, door, window or floor item id to frame. Default: every storey in the scene, walls and roofs.',
       ),
     interior: z
       .object({ levelId: z.string().min(1) })
@@ -35,13 +58,17 @@ export const viewSceneTool = {
     from: z
       .enum(VIEW_SIDES)
       .optional()
-      .describe('The side the eye stands on, as a compass on the plan. Default south-west.'),
+      .describe(
+        "The side the eye stands on: a compass side on the plan, a side as seen from the site's street, or above. Default south-west.",
+      ),
     elevation: z
       .number()
       .min(-10)
       .max(89)
       .optional()
-      .describe('Degrees above the horizon the eye looks down from. Default 12.'),
+      .describe(
+        'Degrees above the horizon the eye looks down from: 35 to 60 for an aerial view. Default 12.',
+      ),
     eyeHeight: z
       .number()
       .min(0)
@@ -62,16 +89,32 @@ export const viewSceneTool = {
       .optional()
       .describe('orthographic for a square-on elevation of a face, no perspective.'),
     camera: z
-      .looseObject({
-        position: point,
-        target: point,
-        fov: z.number().min(5).max(120),
-        aspect: z.number().min(0.2).max(5),
-      })
+      .union([
+        z.literal('current'),
+        z.looseObject({
+          position: point,
+          target: point,
+          fov: z.number().min(5).max(120),
+          aspect: z.number().min(0.2).max(5),
+        }),
+      ])
       .optional()
       .describe(
-        "A photo's camera (position, target, fov, aspect): the render takes its eye, aim and field of view at the photo's aspect. Not with from, position, elevation, eyeHeight, fov or projection.",
+        "A photo's camera (position, target, fov, aspect): the render takes its eye, aim and field of view at the photo's aspect. Or 'current': the person's own view, as their editor shows it now. Not with from, position, elevation, eyeHeight, fov or projection.",
       ),
+    lighting: z
+      .enum(VIEW_LIGHTING)
+      .optional()
+      .describe(
+        "The light the picture is rendered in: the scene's own (current, the default), or day, overcast, sunset, dusk (twilight, the lights on) or night, as a reference photo was taken in.",
+      ),
+    maxPx: z
+      .number()
+      .int()
+      .min(64)
+      .max(VIEW_MAX_PX)
+      .optional()
+      .describe("The picture's longest side in pixels, for a smaller one. Default 1920 by 1200."),
     photo: z
       .looseObject({
         source: z
