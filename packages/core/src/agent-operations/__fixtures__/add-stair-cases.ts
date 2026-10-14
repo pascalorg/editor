@@ -283,6 +283,15 @@ export const ADD_STAIR_CASES: AgentToolCase[] = [
     { x: 3, z: 0.3, toLevelId: null, height: 1.2, width: 1.83, railingMode: 'none' },
     { chain: ['flight 7'], railing: { mode: 'none' }, toLevelId: null, rise: 1.2 },
   ),
+  // Two risers at least, as the editor's stair tool draws a flight: add_stair's one-riser flight
+  // (a rise under 7-3/4 in) is a single step, not a stair, and is the one call it served that this
+  // one does not.
+  covers(
+    { climb: 'south', totalRise: 0.38, width: 1.2 },
+    'two steps up to a porch, 0.38 m',
+    { x: 3, z: 0.3, toLevelId: null, height: 0.38, steps: 2, width: 1.2 },
+    { chain: ['flight 2'], toLevelId: null, rise: 0.38 },
+  ),
   covers(
     { climb: 'south', totalRise: 3.05, ...TO_UPPER },
     'a rise given, to the floor above',

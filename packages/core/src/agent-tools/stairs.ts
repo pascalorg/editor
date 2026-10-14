@@ -80,7 +80,7 @@ export const createStairTool = {
     steps: z
       .number()
       .int()
-      .min(3)
+      .min(2)
       .optional()
       .describe(
         'Number of risers in all. Omit it to derive ~18 cm risers from the rise; pass it when the run was planned from a step count.',
