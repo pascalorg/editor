@@ -607,6 +607,29 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (mesh) reconcileDraftRaycast(mesh)
     }
 
+    // Eat the click the browser fires after a pointer-up that committed, so it
+    // neither commits a second time through a surface `:click` handler nor reaches
+    // the grid, in select mode by then, as a click on empty ground.
+    const swallowNextClick = () => {
+      const swallow = (e: Event) => {
+        e.stopPropagation()
+        e.preventDefault()
+      }
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
+    }
+    // True between a press's pointer-up and the click the browser fires after it.
+    // Surface `:click` events are synthesized on pointer-up (use-node-events), so a
+    // commit they trigger still has that click to come; a `grid:click` commit is
+    // that click.
+    let releasing = false
+    const onPointerUpCapture = () => {
+      releasing = true
+    }
+    const onClickCapture = () => {
+      releasing = false
+    }
+
     const finishCommittedPlacement = (
       committedId: string | null,
       wasAdopted: boolean,
@@ -629,6 +652,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // lands on the just-placed (now selected) node instead of a tool-less build
       // limbo. Repeat placements took the early return above and stay armed.
       useEditor.getState().setMode('select')
+      if (releasing) swallowNextClick()
     }
 
     const commitDraft = (
@@ -1054,16 +1078,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // replays it. Captured once at setup — a fresh coordinator mounts per move.
     const dragMode = useEditor.getState().placementDragMode
     let releaseCommit: (() => void) | null = null
-    // Eat the click the browser fires after pointer-up so the surface
-    // `:click` handlers don't commit a second time.
-    const swallowNextClick = () => {
-      const swallow = (e: Event) => {
-        e.stopPropagation()
-        e.preventDefault()
-      }
-      window.addEventListener('click', swallow, { capture: true, once: true })
-      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
-    }
     const onReleaseCommit = () => {
       gridDispatch.flush()
       if (!releaseCommit) return
@@ -2797,11 +2811,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
     emitter.on('node:click', commitFloorOnSurfaceClick as never)
     if (dragMode) window.addEventListener('pointerup', onReleaseCommit)
+    window.addEventListener('pointerup', onPointerUpCapture, true)
+    window.addEventListener('click', onClickCapture, true)
 
     return () => {
       tearingDown = true
       feedback.clear()
       if (dragMode) window.removeEventListener('pointerup', onReleaseCommit)
+      window.removeEventListener('pointerup', onPointerUpCapture, true)
+      window.removeEventListener('click', onClickCapture, true)
       unsubDraftWatch()
       useAlignmentGuides.getState().clear()
       // Clear every live preview channel before restoring or deleting the draft.
