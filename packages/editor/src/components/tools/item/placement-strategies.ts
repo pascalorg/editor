@@ -15,6 +15,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import {
+  ceilingSeatY,
   clampRectToRoofWallFace,
   clearFaceHostItemFields,
   createSceneApi,
@@ -747,9 +748,7 @@ export const ceilingStrategy = {
     // use the ceiling hit's local position rather than world position.
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
-    // Recessed fixtures seat flush with the ceiling plane (body rising into the
-    // void above); everything else hangs its full height below the ceiling.
-    const seatY = ctx.asset.recessed ? 0 : -itemHeight
+    const seatY = ceilingSeatY(ctx.draftItem ?? { asset: ctx.asset }, itemHeight)
     const worldSnapped = event.object.localToWorld(new Vector3(x, seatY, z))
 
     return {
@@ -781,9 +780,7 @@ export const ceilingStrategy = {
 
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
-    // Recessed fixtures seat flush with the ceiling plane (body rising into the
-    // void above); everything else hangs its full height below the ceiling.
-    const seatY = ctx.draftItem.asset.recessed ? 0 : -itemHeight
+    const seatY = ceilingSeatY(ctx.draftItem, itemHeight)
     const worldSnapped = event.object.localToWorld(new Vector3(x, seatY, z))
 
     return {
