@@ -48,7 +48,7 @@ export const saveSceneInput = {
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      "Full SceneGraph { nodes, rootNodeIds, collections? } to save instead of the bridge state. Judged against the session's scene as apply_patch is: a roof it puts on the walls of the storey holding it goes to the level above them, said in notes, and storey content on a roof level is refused.",
+      "Full SceneGraph { nodes, rootNodeIds, collections? } to save instead of the bridge state. Judged against the scene it is saved over (the session's scene when the save goes to it, else the stored scene `id` names) as apply_patch is: a roof it puts on the walls of the storey holding it goes to the level above them, said in notes, and storey content on a roof level is refused. A graph with no scene under it is saved as it is.",
     ),
 }
 
@@ -99,6 +99,28 @@ function writesOver(
   }
   for (const id of Object.keys(scene)) if (!nodes[id]) writes.push({ op: 'delete', id })
   return writes
+}
+
+/**
+ * The scene a provided graph is saved over, as it stands: the session's when the save goes to the
+ * scene in hand, else the stored one. Null for a new scene: a graph with nothing under it is saved
+ * as it is, its roofs never judged against an unrelated scene (a legacy project saved from a fresh
+ * session would otherwise read as all new writes, and be migrated or refused).
+ */
+async function savedOver(
+  bridge: SceneOperations,
+  target: { id?: string; projectId?: string },
+): Promise<Readonly<Record<string, AnyNode>> | null> {
+  const active = bridge.getActiveScene()
+  const inHand =
+    active &&
+    (target.id !== undefined
+      ? active.id === target.id
+      : target.projectId !== undefined && active.projectId === target.projectId)
+  if (inHand) return bridge.getNodes() as Record<string, AnyNode>
+  if (target.id === undefined) return null
+  const stored = await bridge.loadStoredScene(target.id).catch(() => null)
+  return (stored?.graph.nodes as Record<string, AnyNode> | undefined) ?? null
 }
 
 /** A saved scene that is more than the default site, building and level. */
@@ -205,22 +227,23 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         if (errors.length > 0) {
           throwMcpError(ErrorCode.InvalidParams, 'graph_invalid', { errors })
         }
-        // The roof-level rule, as apply_patch holds it: what the graph changes in the scene in hand.
-        const scene = bridge.getNodes() as Record<string, AnyNode>
-        const writes = writesOver(scene, migration.nodes as Record<string, AnyNode>)
-        const written = writes.length
-        try {
-          notes = seatWrittenRoofs(writes, scene)
-        } catch (error) {
-          if (!isAgentRefusal(error)) throw error
-          // An index into the graph's writes means nothing to the caller; the ids do.
-          const { index: _index, ...details } = error.details
-          return toolError(error.message, { code: error.code, ...details })
+        // The roof-level rule, as apply_patch holds it: what the graph changes in the scene it
+        // replaces.
+        const scene = await savedOver(bridge, { id, projectId })
+        let nodes = migration.nodes as Record<string, AnyNode>
+        if (scene) {
+          const writes = writesOver(scene, nodes)
+          const written = writes.length
+          try {
+            notes = seatWrittenRoofs(writes, scene)
+          } catch (error) {
+            if (!isAgentRefusal(error)) throw error
+            // An index into the graph's writes means nothing to the caller; the ids do.
+            const { index: _index, ...details } = error.details
+            return toolError(error.message, { code: error.code, ...details })
+          }
+          nodes = applySceneWrites(nodes, writes.slice(written))
         }
-        const nodes = applySceneWrites(
-          migration.nodes as Record<string, AnyNode>,
-          writes.slice(written),
-        )
         sceneGraph = { ...graph, nodes } as unknown as SceneGraph
       }
 

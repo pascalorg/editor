@@ -139,6 +139,27 @@ function floorScene(): SceneGraph {
   }
 }
 
+/** The floor with its declared roof level over it, the level a roof just placed brings into view. */
+function roofedFloorScene(): SceneGraph {
+  const { nodes, rootNodeIds } = floorScene()
+  const roofLevel = LevelNode.parse({
+    id: 'level_roof',
+    parentId: 'building_main',
+    level: 1,
+    height: 2,
+    metadata: { role: 'roof' },
+  })
+  const building = nodes.building_main as BuildingNode
+  return {
+    nodes: {
+      ...nodes,
+      [building.id]: { ...building, children: [...building.children, roofLevel.id] },
+      [roofLevel.id]: roofLevel,
+    },
+    rootNodeIds,
+  }
+}
+
 const CODE = 'export default function build({ THREE }) { return new THREE.Group() }'
 
 const create = (
@@ -157,6 +178,24 @@ const create = (
 })
 
 export const ADD_OBJECT_CASES: AddObjectCase[] = [
+  // A roof level holds roofs: an object aimed at it belongs on the storey it covers, named so one
+  // retry lands. place_items refused the same write while add_object made it.
+  {
+    name: 'an object on the roof level is refused, naming the storey it covers',
+    scene: roofedFloorScene,
+    input: { code: CODE, name: 'Side table', reason: 'Pascal has no side table.', parentId: 'level_roof' },
+    compiled: compiledSolid([0.5, 0.6, 0.5]),
+    expect: { refusal: 'roof_level', mentions: ['"Side table"', 'level_0'] },
+  },
+  {
+    name: 'an object given no host while the roof level is in view is refused the same way',
+    scene: roofedFloorScene,
+    input: { code: CODE, name: 'Side table', reason: 'Pascal has no side table.' },
+    compiled: compiledSolid([0.5, 0.6, 0.5]),
+    context: { activeLevelId: 'level_roof' },
+    surfaces: ['core', 'chat'],
+    expect: { refusal: 'roof_level', mentions: ['level_0'] },
+  },
   create(
     'a new object keeps what it stands in for',
     {
