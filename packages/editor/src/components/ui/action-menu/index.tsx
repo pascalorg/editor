@@ -13,6 +13,7 @@ import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
 import { FollowPascalPill } from './follow-pascal-pill'
 import { type ActionMenuPlacement, ActionMenuPlacementProvider } from './placement'
+import { PlacementControl } from './placement-control'
 import { SecondaryToggles } from './view-toggles'
 
 // Mobile bottom offset matches the viewer's overlap behind the sheet's
@@ -60,6 +61,7 @@ export function ActionMenu({
 
   // Mobile keeps the bottom rail: the sheet owns the rest of the screen.
   const effectivePlacement = isMobile ? 'bottom' : placement
+  const vertical = effectivePlacement === 'left' || effectivePlacement === 'right'
 
   return (
     <ActionMenuPlacementProvider value={effectivePlacement}>
@@ -72,9 +74,13 @@ export function ActionMenu({
               ? 'absolute left-1/2 origin-bottom -translate-x-1/2 scale-90'
               : inline
                 ? 'relative'
-                : effectivePlacement === 'top'
-                  ? 'fixed top-3 left-1/2 -translate-x-1/2'
-                  : 'fixed bottom-6 left-1/2 -translate-x-1/2',
+                : effectivePlacement === 'left'
+                  ? 'fixed top-1/2 left-4 -translate-y-1/2'
+                  : effectivePlacement === 'right'
+                    ? 'fixed top-1/2 right-4 -translate-y-1/2'
+                  : effectivePlacement === 'top'
+                    ? 'fixed top-3 left-1/2 -translate-x-1/2'
+                    : 'fixed bottom-6 left-1/2 -translate-x-1/2',
             'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
             'transition-colors duration-200 ease-out',
             className,
@@ -95,12 +101,19 @@ export function ActionMenu({
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-1 px-2 py-1.5">
+            <div
+              className={cn(
+                'flex items-center justify-center gap-1',
+                vertical ? 'flex-col px-1.5 py-2' : 'px-2 py-1.5',
+              )}
+            >
               <ControlModes />
-              <div className="mx-1 h-5 w-px bg-border" />
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
               <SecondaryToggles />
-              <div className="mx-1 h-5 w-px bg-border" />
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
               <CameraActions />
+              <div className={vertical ? 'my-1 h-px w-5 bg-border' : 'mx-1 h-5 w-px bg-border'} />
+              <PlacementControl />
             </div>
           )}
         </motion.div>

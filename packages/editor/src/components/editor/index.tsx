@@ -78,6 +78,7 @@ import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
 import { type ActionMenuPlacement, TOP_MENU_CLEARANCE } from '../ui/action-menu/placement'
+import { useActionMenuPlacementPreference } from '../ui/action-menu/placement-preference'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -1445,8 +1446,13 @@ function EditorContent({
   commandPaletteEmptyAction,
 }: EditorProps) {
   const isMobile = useIsMobile()
+  // The user's own pick wins over the host's default placement.
+  const userMenuPlacement = useActionMenuPlacementPreference((state) => state.placement)
+  const menuPlacement = userMenuPlacement ?? actionMenuPlacement ?? 'bottom'
   // A top-docked menu sits at the top of the scene panes on desktop (layout v2).
-  const dockMenuOnTop = actionMenuPlacement === 'top' && !isMobile
+  const dockMenuOnTop = menuPlacement === 'top' && !isMobile
+  const dockMenuOnRight = menuPlacement === 'right' && !isMobile
+  const reserveBottomMenu = menuPlacement === 'bottom' || isMobile
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
@@ -1841,7 +1847,7 @@ function EditorContent({
                         </div>
                       ) : (
                         <div className="pointer-events-auto">
-                          <ActionMenu placement={actionMenuPlacement} />
+                          <ActionMenu placement={menuPlacement} />
                         </div>
                       ))}
                     {sceneOverlay}
@@ -1849,7 +1855,8 @@ function EditorContent({
                   {/* The inspector and the shortcuts card share one right column. */}
                   <RightStack
                     belowTopMenu={topMenuShown}
-                    reserveBottomMenu={!dockMenuOnTop}
+                    besideRightMenu={dockMenuOnRight}
+                    reserveBottomMenu={reserveBottomMenu}
                     helper={isCaptureMode ? null : <HelperManager />}
                     inspector={
                       isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
@@ -1928,12 +1935,13 @@ function EditorContent({
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
             <div className="pointer-events-auto">
-              <ActionMenu placement={actionMenuPlacement} />
+              <ActionMenu placement={menuPlacement} />
             </div>
             <RightStack
               helper={<HelperManager />}
               inspector={<PanelManager />}
-              reserveBottomMenu={actionMenuPlacement !== 'top' || isMobile}
+              besideRightMenu={dockMenuOnRight}
+              reserveBottomMenu={reserveBottomMenu}
             />
             <RiserDiagramPanel />
             {isFirstPersonMode && (

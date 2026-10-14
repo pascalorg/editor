@@ -5,6 +5,7 @@ import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { Fragment } from 'react'
 import { cn } from './../../../lib/utils'
+import { useActionMenuVertical } from './placement'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 import { MeasurementControl } from './measurement-control'
@@ -44,6 +45,7 @@ const controls: ControlConfig[] = [
 ]
 
 export function ControlModes() {
+  const vertical = useActionMenuVertical()
   const mode = useEditor((state) => state.mode)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
   const armToolMode = useEditor((state) => state.armToolMode)
@@ -68,7 +70,7 @@ export function ControlModes() {
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center gap-1', vertical && 'flex-col')}>
       {controls.map((c) => {
         const ModeIcon = c.icon
         const isImageMode = Boolean(c.imageSrc)

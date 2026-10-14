@@ -2,12 +2,15 @@
 
 import { emitter } from '@pascal-app/core'
 import Image from 'next/image'
+import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { visibleScene } from '../../../store/view-layout'
 import { ActionButton } from './action-button'
 import { FollowPascalToggle } from './follow-pascal-toggle'
+import { useActionMenuVertical } from './placement'
 
 export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
+  const vertical = useActionMenuVertical()
   // Orbit stays useful in 2D-only (it spins the synced floorplan view), but
   // top view only tilts the hidden 3D camera — pointless without the canvas.
   const is2dOnly = useEditor((s) => visibleScene(s) === '2d')
@@ -25,7 +28,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center gap-1', vertical && 'flex-col')}>
       {!hideOrbit && (
         <>
           {/* Orbit CCW */}
