@@ -36,8 +36,9 @@ const CLAY_TILES = 'library:roof-claytiles'
  * A 6 × 4 m house of two rooms (a partition at x = 3) under a roof of three segments: one plain,
  * one with a covering of its own, one with a catch-all finish from an older paint. Its walls run
  * counter-clockwise, so each outside wall's face a is in, b out. Beside it, a terrace, a garden wall
- * no room touches, whose stored sides say its front faces out (as a generator writes them), and
- * the parts set_material reached beyond walls and roofs.
+ * no room touches, whose stored sides say its front faces out (as a generator writes them), a
+ * retaining wall whose sides nothing stored, and the parts set_material reached beyond walls and
+ * roofs.
  */
 function finishScene(): SceneGraph {
   const level = 'level_finish'
@@ -62,6 +63,8 @@ function finishScene(): SceneGraph {
     wall('wall_w', [0, 4], [0, 0]),
     wall('wall_mid', [3, 0], [3, 4]),
     wall('wall_garden', [8, 0], [12, 0], { frontSide: 'exterior', backSide: 'interior' }),
+    // A retaining wall as add_wall leaves it: no room, sides unknown.
+    wall('wall_free', [8, 3], [12, 3]),
   ]
   const footprint: [number, number][] = [
     [0, 0],
@@ -137,6 +140,40 @@ function finishScene(): SceneGraph {
   return {
     nodes: Object.fromEntries(nodes.map((node) => [node.id, node])),
     rootNodeIds: ['site_finish'],
+  }
+}
+
+/**
+ * A 10 m wall with a room the whole length of its north face (face a) and a room along only the
+ * first 6 m of its south face (face b): past that, its south face is the garden's.
+ */
+function junctionScene(): SceneGraph {
+  const level = 'level_junction'
+  const wall = (id: string, start: [number, number], end: [number, number]) =>
+    WallNode.parse({ id, parentId: level, start, end })
+  const walls = [
+    wall('wall_long', [0, 0], [10, 0]),
+    wall('wall_ne', [10, 0], [10, 4]),
+    wall('wall_nn', [10, 4], [0, 4]),
+    wall('wall_nw', [0, 4], [0, 0]),
+    wall('wall_sw', [0, 0], [0, -3]),
+    wall('wall_ss', [0, -3], [6, -3]),
+    wall('wall_se', [6, -3], [6, 0]),
+  ]
+  const nodes: AnyNode[] = [
+    SiteNode.parse({ id: 'site_junction', children: ['building_junction'] }),
+    BuildingNode.parse({ id: 'building_junction', parentId: 'site_junction', children: [level] }),
+    LevelNode.parse({
+      id: level,
+      parentId: 'building_junction',
+      level: 0,
+      children: walls.map((node) => node.id),
+    }),
+    ...walls,
+  ]
+  return {
+    nodes: Object.fromEntries(nodes.map((node) => [node.id, node])),
+    rootNodeIds: ['site_junction'],
   }
 }
 
@@ -216,6 +253,27 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
       result: { painted: [{ id: 'wall_garden', roles: ['a'] }] },
       after: { wall_garden: { slots: { a: SIDING } } },
     },
+  },
+  {
+    name: "set_material 'exterior' on a wall no room touches and no side stored painted face b (its guess); paint asks for the face",
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['wall_free'], role: 'exterior', material: SIDING },
+    expect: { refusal: 'side_unknown', mentions: ['wall_free', 'a or b'] },
+  },
+  {
+    name: "set_material 'interior' on a wall with rooms along all of one face and part of the other painted its stored side; paint asks for the face, as the part face is the garden's past its room",
+    tool: 'paint',
+    scene: junctionScene,
+    input: { targets: ['wall_long'], role: 'interior', material: SOFT_WHITE },
+    expect: { refusal: 'side_unknown', mentions: ['wall_long', 'face b', 'a or b'] },
+  },
+  {
+    name: "set_material 'exterior' on that wall painted its stored side; paint asks for the face",
+    tool: 'paint',
+    scene: junctionScene,
+    input: { targets: ['wall_long'], role: 'exterior', material: SIDING },
+    expect: { refusal: 'side_unknown', mentions: ['wall_long', 'face b', 'a or b'] },
   },
   {
     name: 'set_material with no slot on a wall painted both faces: paint with no role does too',
@@ -324,6 +382,29 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
         rseg_legacy: { fasciaMaterialPreset: SOFT_WHITE },
       },
       check: gone('roof_finish', 'fasciaMaterialPreset'),
+    },
+  },
+  {
+    name: 'a native material on the fascia boards is kept as a scene material each segment shows',
+    tool: 'paint',
+    scene: finishScene,
+    input: {
+      targets: ['roof_finish'],
+      role: 'fascia',
+      material: { preset: 'custom', properties: { color: '#1f2a36', roughness: 0.6, metalness: 0 } },
+      materialName: 'Fascia, slate blue',
+    },
+    expect: {
+      result: {
+        painted: [{ id: 'roof_finish', roles: ['fascia'] }],
+        createdMaterial: { name: 'Fascia, slate blue' },
+      },
+      check: (result, nodes) =>
+        ['rseg_plain', 'rseg_own', 'rseg_legacy']
+          .filter(
+            (id) => fields(nodes, id).fasciaMaterialPreset !== `scene:${String(result.materialId)}`,
+          )
+          .map((id) => `${id}'s boards do not show the material`),
     },
   },
   {
@@ -462,6 +543,16 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: "set_material on an item's slot named 'exterior' (its model's slot_exterior): on an item it is the slot's name",
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['item_vase'], role: 'exterior', material: SOFT_WHITE },
+    expect: {
+      result: { painted: [{ id: 'item_vase', roles: ['exterior'] }] },
+      after: { item_vase: { slots: { glaze: 'library:preset-navy', exterior: SOFT_WHITE } } },
+    },
+  },
+  {
     name: "set_material with no slot on an item wrote a 'surface' it may lack; paint asks for the role, naming those painted",
     tool: 'paint',
     scene: finishScene,
@@ -590,6 +681,48 @@ export const LIST_MATERIALS_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: "list_materials listed every match of a word ('wood', 23 then): a search lists 12 at a time, saying how many more and the offset that lists them",
+    tool: 'search_materials',
+    scene: finishScene,
+    input: { queries: [{ query: 'wood' }, { query: 'wood', offset: 12 }] },
+    expect: {
+      result: {},
+      check: (result) => {
+        const [first, second] = result.groups as {
+          results: { ref: string }[]
+          more?: number
+          next?: number
+        }[]
+        const more = first!.more ?? 0
+        const refs = [...first!.results, ...second!.results].map(({ ref }) => ref)
+        return [
+          ...(first!.results.length === 12 && first!.next === 12 && more > 0
+            ? []
+            : ['the first page does not say what is left']),
+          ...(second!.results.length === Math.min(12, more) &&
+          (second!.more ?? 0) === more - second!.results.length
+            ? []
+            : ['the next page does not list the rest']),
+          ...(new Set(refs).size === refs.length ? [] : ['a material listed twice']),
+        ]
+      },
+    },
+  },
+  {
+    name: "list_materials matched nothing for a word too short or common ('tv', 'for the'): a search lists none, never the whole library",
+    tool: 'search_materials',
+    scene: finishScene,
+    input: { queries: [{ query: 'tv' }, { query: 'for the' }] },
+    expect: {
+      result: {
+        groups: [
+          { query: 'tv', results: [], missing: ['tv'] },
+          { query: 'for the', results: [], missing: ['for', 'the'] },
+        ],
+      },
+    },
+  },
+  {
     name: "list_materials matched any piece of an id ('plank48', '48'): so does a search",
     tool: 'search_materials',
     scene: finishScene,
@@ -601,6 +734,21 @@ export const LIST_MATERIALS_CASES: AgentToolCase[] = [
         return groups
           .filter((group) => !group.results.some(({ ref }) => ref === 'library:wood-woodplank48'))
           .map((_, index) => `query ${index}: no wood-woodplank48`)
+      },
+    },
+  },
+  {
+    name: "list_materials matched three letters inside an id ('cco' of concrete-stucco): a search does when no word answers them",
+    tool: 'search_materials',
+    scene: finishScene,
+    input: { queries: [{ query: 'cco' }] },
+    expect: {
+      result: {},
+      check: (result) => {
+        const [group] = result.groups as { results: { ref: string }[]; missing?: string[] }[]
+        return group!.results.some(({ ref }) => ref === 'library:concrete-stucco') && !group!.missing
+          ? []
+          : ['no stucco found']
       },
     },
   },

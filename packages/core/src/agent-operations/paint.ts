@@ -1,5 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
-import type { MaterialSurface } from '../material-library'
+import type { MaterialSurface } from '../material-kinds'
 import { nodeSlotDeclarations } from '../node-slots'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../schema'
 import { buildWallFinishLayout, getWallLevelZones } from '../systems/wall/wall-finish'
 import { planWallPaint } from '../systems/wall/wall-paint-plan'
-import { roomFaces } from '../systems/wall/wall-room-sides'
+import { roomFaceCover } from '../systems/wall/wall-room-sides'
 import { finishSurface, requireMaterialRef } from './material-refs'
 import { resolveInlinePaintMaterial } from './scene-materials'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
@@ -176,19 +176,27 @@ function paintWallFace(
 /**
  * The faces of a wall turned out of its rooms, or into them: by the rooms on its sides, else by
  * the sides it keeps (`frontSide` and `backSide`, as a generator or the room structure wrote
- * them). A partition, with a room on each face, is interior on both.
+ * them). A partition, with a room on each face, is interior on both. A face rooms stand on only in
+ * part (a wall running on past its rooms, into a garden) is both: it is refused, so the caller
+ * names the face to paint whole.
  */
 function wallFacesTurned(
   scene: SceneNodes,
   wall: WallNode,
   side: 'exterior' | 'interior',
 ): WallFace[] {
-  const roomed = roomFaces(scene as never, wall.id)
-  if (roomed.size)
-    return (['a', 'b'] as const).filter((face) => roomed.has(face) === (side === 'interior'))
-  return (['a', 'b'] as const).filter(
-    (face) => (face === 'a' ? wall.frontSide : wall.backSide) === side,
-  )
+  const cover = roomFaceCover(scene as never, wall.id)
+  const faces = ['a', 'b'] as const
+  const part = faces.find((face) => cover[face] === 'part')
+  if (part)
+    refuse(
+      'side_unknown',
+      `Wall ${wall.id}'s face ${part} is in a room for part of its length and outside for the rest: name the face to paint whole, a or b.`,
+      { target: wall.id },
+    )
+  if (cover.a === 'none' && cover.b === 'none')
+    return faces.filter((face) => (face === 'a' ? wall.frontSide : wall.backSide) === side)
+  return faces.filter((face) => (cover[face] === 'whole') === (side === 'interior'))
 }
 
 export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
@@ -246,7 +254,7 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
     const declared = nodeSlotDeclarations(node)
     if (!declared && node.type === 'item') {
       const own = Object.keys((node as AnyNode & { slots?: Record<string, string> }).slots ?? {})
-      if (!input.role || input.role === 'exterior' || input.role === 'interior')
+      if (!input.role)
         refuse(
           'unknown_role',
           `Item ${id}'s surfaces are its model's: name one as role${own.length ? ` (painted so far: ${own.join(', ')})` : ''}.`,
@@ -268,15 +276,16 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
       )
     const ids = declared.map((slot) => slot.slotId)
     let roles: string[]
-    if (input.role === 'exterior' || input.role === 'interior') {
+    // On a wall, exterior and interior are its faces' sides; elsewhere they are slots by name.
+    if (node.type === 'wall' && (input.role === 'exterior' || input.role === 'interior')) {
       // A curtain wall has frame, glass and panels where a wall has faces.
-      if (node.type !== 'wall' || !ids.includes('a'))
+      if (!ids.includes('a'))
         refuse(
           'unknown_role',
-          `A ${node.type === 'wall' ? 'curtain wall' : node.type} has no ${input.role} face: its roles are ${ids.join(', ')}.`,
+          `A curtain wall has no ${input.role} face: its roles are ${ids.join(', ')}.`,
           { target: id, roles: ids },
         )
-      roles = wallFacesTurned(scene(), node as WallNode, input.role)
+      roles = wallFacesTurned(scene(), node, input.role)
       if (!roles.length)
         refuse(
           'side_unknown',

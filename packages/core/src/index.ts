@@ -529,6 +529,12 @@ export {
   type ZoneQuantityValue,
 } from './lib/zone-quantities'
 export {
+  MATERIAL_CATEGORIES,
+  MATERIAL_SURFACES,
+  type MaterialCategory,
+  type MaterialSurface,
+} from './material-kinds'
+export {
   getCatalogMaterialById,
   getDynamicLibraryMaterials,
   getLibraryMaterialIdFromRef,
@@ -538,13 +544,9 @@ export {
   getSceneMaterialIdFromRef,
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
-  MATERIAL_CATEGORIES,
-  MATERIAL_SURFACES,
   type MaterialCatalogItem,
-  type MaterialCategory,
   type MaterialRef,
   type MaterialSource,
-  type MaterialSurface,
   materialColorPaint,
   type ParsedMaterialRef,
   parseMaterialColor,

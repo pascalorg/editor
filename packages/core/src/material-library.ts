@@ -1,3 +1,4 @@
+import type { MaterialCategory, MaterialSurface } from './material-kinds'
 import {
   type MaterialPresetPayload,
   MaterialProperties,
@@ -61,36 +62,6 @@ const ROOF_TARGETS: MaterialTarget[] = [
 ]
 
 const CEILING_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.ceiling]
-
-export const MATERIAL_CATEGORIES = [
-  'colors',
-  'wood',
-  'stone',
-  'brick',
-  'tile',
-  'wallpaper',
-  'concrete',
-  'metal',
-  'plastic',
-  'fabric',
-  'carpet',
-  'leather',
-  'roofing',
-  'ground',
-  'glass',
-  'other',
-] as const
-export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number]
-
-export const MATERIAL_SURFACES = [
-  'floor',
-  'wall',
-  'ceiling',
-  'roof',
-  'furniture',
-  'outdoor',
-] as const
-export type MaterialSurface = (typeof MATERIAL_SURFACES)[number]
 
 export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
