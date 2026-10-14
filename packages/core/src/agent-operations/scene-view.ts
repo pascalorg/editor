@@ -777,7 +777,7 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewPoseInput): Sce
 const BELOW_GRADE_NOTE =
   'The floor lies below grade: the ground over it is drawn as a faint veil, so its rooms show through it.'
 const PARTLY_BELOW_GRADE_NOTE =
-  'The floor lies partly below grade: the ground stands over part of it and is drawn as a faint veil there, so its rooms show through it.'
+  'The floor lies partly below grade: the ground stands over part of it.'
 const GROUND_IN_THE_WAY_NOTE =
   'Ground stands between this viewpoint and the building: where it would hide it, the ground is drawn as a faint veil; the rest of the ground is solid.'
 

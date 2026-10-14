@@ -559,6 +559,22 @@ export function interiorCutaway(
 }
 
 /**
+ * The ground of an exterior picture, for one render: solid, whatever level the person is
+ * on — but a posed frame (an authored snapshot pose, or the caller's own perspective or
+ * orthographic view, which is how both agent lanes ask) decides its own ground window from
+ * its own camera, never inheriting the person's. An unposed frame (the person's viewport,
+ * the hero shot) makes no such decision: the window is the person's to hold.
+ */
+export function exteriorGroundForCapture(
+  restore: (callback: () => void) => void,
+  posed: boolean,
+  camera: THREE.Camera,
+) {
+  restore(temporarilyVeilGround(false))
+  if (posed) restore(temporarilyGroundWindowForCapture(camera, useScene.getState().nodes))
+}
+
+/**
  * A caller's own orthographic view, or with no view of its own an
  * orthographic main camera, captures orthographically; a caller's perspective
  * view (view_scene's), the auto-save hero shot and an authored snapshot pose
@@ -956,14 +972,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 interiorCutaway(interior.levelId, restore, thumbnailCamera)
                 restore(lightInterior(scene, thumbnailCamera))
               } else if (snapLevels || pose || cameraPose) {
-                // the whole building stands on solid ground, whatever level the user is
-                // on — but a view_scene pose still sees it through the ground window
-                // where a hillside stands between its camera and the house
-                restore(temporarilyVeilGround(false))
-                if (cameraPose)
-                  restore(
-                    temporarilyGroundWindowForCapture(thumbnailCamera, useScene.getState().nodes),
-                  )
+                exteriorGroundForCapture(restore, Boolean(cameraPose || pose), thumbnailCamera)
               }
             }
             // The scene pass is a FRAME-updated node: it renders once per node

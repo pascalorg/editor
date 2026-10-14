@@ -50,9 +50,11 @@ const SIGHT_CLEARANCE = 0.05
 const MAX_MARCH_STEPS = 240
 
 /**
- * Whether sculpted ground stands between `eye` and `box`: any of the sight lines to the box's
- * floor corners and centre passes under the terrain before it reaches the box. Pure height
- * field arithmetic — the few throttled CPU rays the view bar's word and the window's on/off
+ * Whether sculpted ground stands between `eye` and `box`: any of the sight lines to a grid
+ * over the box's floor passes under the terrain before it reaches the floor — a grid, not
+ * just the corners, because ground sculpted over the middle of a partly buried floor hides
+ * the rooms under it from above while every corner stays visible. Pure height field
+ * arithmetic — the few throttled CPU rays the view bar's word and the window's on/off
  * are decided by; the window's shape itself is per-fragment in the renderer. `false` on a
  * flat site, and for an eye inside the box (a walkthrough sees out, not through a window).
  */
@@ -74,33 +76,37 @@ export function terrainBetweenEyeAndBox(
   )
     return false
   const floorY = box.min[1]
-  const targets: Array<[number, number, number]> = [
-    [box.min[0], floorY, box.min[2]],
-    [box.min[0], floorY, box.max[2]],
-    [box.max[0], floorY, box.min[2]],
-    [box.max[0], floorY, box.max[2]],
-    [(box.min[0] + box.max[0]) / 2, floorY, (box.min[2] + box.max[2]) / 2],
-  ]
-  return targets.some((target) => sightLineBuried(field, eye, target, box))
+  for (const fx of [0, 0.25, 0.5, 0.75, 1])
+    for (const fz of [0, 0.25, 0.5, 0.75, 1]) {
+      const target: [number, number, number] = [
+        box.min[0] + (box.max[0] - box.min[0]) * fx,
+        floorY,
+        box.min[2] + (box.max[2] - box.min[2]) * fz,
+      ]
+      if (sightLineBuried(field, eye, target)) return true
+    }
+  return false
 }
 
 function sightLineBuried(
   field: NonNullable<ReturnType<typeof terrainFieldOf>>,
   eye: readonly [number, number, number],
   target: readonly [number, number, number],
-  box: GroundBox,
 ): boolean {
   const dx = target[0] - eye[0]
   const dz = target[2] - eye[2]
   const planLength = Math.hypot(dx, dz)
-  if (planLength < 1e-6) return false
+  // Straight down: the ground at the eye's own XZ is what the floor under it is seen through.
+  if (planLength < 1e-6) return heightAt(field, eye[0], eye[2]) > target[1] + SIGHT_CLEARANCE
   const steps = Math.min(MAX_MARCH_STEPS, Math.max(2, Math.ceil(planLength / field.spacing)))
   for (let step = 1; step < steps; step += 1) {
     const t = step / steps
     const x = eye[0] + dx * t
     const z = eye[2] + dz * t
-    // Ground under the house itself is not "between" the eye and it.
-    if (x >= box.min[0] && x <= box.max[0] && z >= box.min[2] && z <= box.max[2]) continue
+    // Samples over the footprint count too: from above, ground sculpted over part of a
+    // partly buried floor is exactly what stands between the eye and its rooms. A pad at
+    // the floor's own height never trips this — the sight line only reaches it at the
+    // target, where the clearance absorbs it.
     const sightY = eye[1] + (target[1] - eye[1]) * t
     if (heightAt(field, x, z) > sightY + SIGHT_CLEARANCE) return true
   }

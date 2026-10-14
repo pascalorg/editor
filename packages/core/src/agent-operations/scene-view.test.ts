@@ -3,6 +3,8 @@ import { PerspectiveCamera, Vector3 } from 'three'
 import { z } from 'zod'
 import { isAgentRefusal, viewSceneTool } from '../agent-tools'
 import hillside from '../lib/__fixtures__/owner-hillside-grade.json'
+import { encodeTerrainField } from '../lib/terrain-codec'
+import { createTerrainField } from '../lib/terrain-field'
 import {
   type AnyNode,
   BuildingNode,
@@ -320,6 +322,61 @@ describe('a floor below grade', () => {
       fov: 45,
     })
     expect(fromGarden).not.toContain('Ground stands between')
+  })
+
+  test('a floor partly below grade: the note states the standing, and a veil only where the viewpoint is blocked', () => {
+    // The review's plate (14 Oct): [-5,5] × [-4,4] at Y 0.2, terrain 2 m only inside
+    // x 0…4, z -3…3, one wall along its south edge so the floor frames.
+    const field = createTerrainField({ cols: 25, rows: 25, spacing: 1, origin: [-12, -12] })
+    const heights = new Int16Array(field.heights)
+    for (let row = 0; row < field.rows; row += 1)
+      for (let col = 0; col < field.cols; col += 1) {
+        const x = field.origin[0] + col * field.spacing
+        const z = field.origin[1] + row * field.spacing
+        if (x >= 0 && x <= 4 && z >= -3 && z <= 3) heights[row * field.cols + col] = 200
+      }
+    const list: AnyNode[] = [
+      SiteNode.parse({
+        id: 'site_a',
+        children: ['building_a'],
+        terrain: encodeTerrainField({ ...field, heights }),
+      }),
+      BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_0'] }),
+      LevelNode.parse({
+        id: 'level_0',
+        level: 0,
+        height: 3,
+        parentId: 'building_a',
+        children: ['slab_0', 'wall_0'],
+      }),
+      SlabNode.parse({
+        id: 'slab_0',
+        parentId: 'level_0',
+        elevation: 0.2,
+        polygon: [
+          [-5, -4],
+          [5, -4],
+          [5, 4],
+          [-5, 4],
+        ],
+      }),
+      WallNode.parse({ id: 'wall_0', parentId: 'level_0', start: [-5, -4], end: [5, -4] }),
+    ]
+    const nodes = Object.fromEntries(list.map((node) => [node.id, node])) as Record<string, AnyNode>
+    // Targeted, it keeps its outside view: only a floor buried everywhere is looked into.
+    expect(sceneViewPlan(nodes, { target: 'level_0' }).interior).toBeUndefined()
+    const interior = { levelId: 'level_0' }
+    const overhead = {
+      projection: 'perspective',
+      position: [0, 15, 0],
+      target: [0, 0, 0],
+      fov: 45,
+    } as const
+    const note = sceneViewNote(nodes, interior, overhead)
+    expect(note).toContain('The floor lies partly below grade: the ground stands over part of it.')
+    expect(note).toContain('Ground stands between this viewpoint and the building')
+    // Without a viewpoint the note makes no veil claim it cannot back.
+    expect(sceneViewNote(nodes, interior)).not.toContain('faint veil')
   })
 })
 

@@ -2,18 +2,28 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  createTerrainField,
   emitter,
+  encodeTerrainField,
   getLevelElevations,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { type SceneViewPose, sceneViewPlan } from '@pascal-app/core/agent-operations'
-import { BuildingNode, CeilingNode, LevelNode, WallNode } from '@pascal-app/core/schema'
+import {
+  BuildingNode,
+  CeilingNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  WallNode,
+} from '@pascal-app/core/schema'
 import {
   groundWindowBoxNow,
   hideFromScene,
   SCENE_LAYER,
   SITE_GROUND,
+  setGroundWindow,
   useViewer,
 } from '@pascal-app/viewer'
 import {
@@ -36,6 +46,7 @@ import villaAurelia from '../../lib/__fixtures__/owner-villa-aurelia-basement.js
 import {
   atCaptureSize,
   capturesOrthographically,
+  exteriorGroundForCapture,
   interiorCutaway,
   presentFinished,
   presentWhileCapturing,
@@ -532,6 +543,130 @@ describe('a capture from uphill', () => {
     expect(groundWindowBoxNow()).toBeNull()
     expect(veil.visible).toBe(false)
     for (const restore of restorers.reverse()) restore()
+  })
+
+  // Both agent lanes ask with a perspective/orthographic pose of their own, not a
+  // cameraPose: the posed exterior frame must decide its window from its own eye
+  // ([0,7,-20] here, the review's eye), not inherit the person's closed one.
+  test('a posed exterior capture decides its own window, and gives the person’s back', () => {
+    const { veil } = hillsideScene()
+    const restorers: (() => void)[] = []
+    exteriorGroundForCapture((restore) => restorers.push(restore), true, cameraAt([0, 7, -20]))
+    expect(groundWindowBoxNow()).not.toBeNull()
+    expect(veil.visible).toBe(true)
+    for (const restore of restorers.reverse()) restore()
+    expect(groundWindowBoxNow()).toBeNull()
+    expect(veil.visible).toBe(false)
+
+    // The person's window, open for their eye, closes for a garden-side frame and returns.
+    const persons = {
+      min: [-6, 0, -7] as [number, number, number],
+      max: [6, 3, 7] as [number, number, number],
+    }
+    setGroundWindow(persons)
+    const again: (() => void)[] = []
+    exteriorGroundForCapture((restore) => again.push(restore), true, cameraAt([0, 3, 20]))
+    expect(groundWindowBoxNow()).toBeNull()
+    for (const restore of again.reverse()) restore()
+    expect(groundWindowBoxNow()).toBe(persons)
+    setGroundWindow(null)
+  })
+
+  test('an unposed capture makes no window decision of its own', () => {
+    hillsideScene()
+    const persons = {
+      min: [-6, 0, -7] as [number, number, number],
+      max: [6, 3, 7] as [number, number, number],
+    }
+    setGroundWindow(persons)
+    const restorers: (() => void)[] = []
+    exteriorGroundForCapture((restore) => restorers.push(restore), false, cameraAt([0, 3, 20]))
+    expect(groundWindowBoxNow()).toBe(persons)
+    for (const restore of restorers.reverse()) restore()
+    expect(groundWindowBoxNow()).toBe(persons)
+    setGroundWindow(null)
+  })
+})
+
+// The review's plate (14 Oct): [-5,5] × [-4,4] at Y 0.2, terrain 2 m only inside
+// x 0…4, z -3…3. An interior capture from overhead must open the window over the
+// buried eastern rooms — partly below grade has no wholesale veil to fall back on.
+describe('an interior capture of a floor partly below grade', () => {
+  let previousScene: ReturnType<typeof useScene.getState>
+  beforeEach(() => {
+    previousScene = useScene.getState()
+  })
+  afterEach(() => {
+    sceneRegistry.clear()
+    useScene.setState(previousScene, true)
+  })
+
+  test('from overhead the window opens over the buried rooms, and closes after', () => {
+    const field = createTerrainField({ cols: 25, rows: 25, spacing: 1, origin: [-12, -12] })
+    const heights = new Int16Array(field.heights)
+    for (let row = 0; row < field.rows; row += 1)
+      for (let col = 0; col < field.cols; col += 1) {
+        const x = field.origin[0] + col * field.spacing
+        const z = field.origin[1] + row * field.spacing
+        if (x >= 0 && x <= 4 && z >= -3 && z <= 3) heights[row * field.cols + col] = 200
+      }
+    const list: AnyNode[] = [
+      SiteNode.parse({
+        id: 'site_a',
+        children: ['building_a'],
+        terrain: encodeTerrainField({ ...field, heights }),
+      }),
+      BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_0'] }),
+      LevelNode.parse({
+        id: 'level_0',
+        level: 0,
+        height: 3,
+        parentId: 'building_a',
+        children: ['slab_0', 'wall_0'],
+      }),
+      SlabNode.parse({
+        id: 'slab_0',
+        parentId: 'level_0',
+        elevation: 0.2,
+        polygon: [
+          [-5, -4],
+          [5, -4],
+          [5, 4],
+          [-5, 4],
+        ],
+      }),
+      WallNode.parse({ id: 'wall_0', parentId: 'level_0', start: [-5, -4], end: [5, -4] }),
+    ]
+    const nodes = Object.fromEntries(list.map((node) => [node.id, node])) as Record<
+      AnyNodeId,
+      AnyNode
+    >
+    useScene.setState({ nodes } as never)
+    const scene = new Scene()
+    const level = new Group()
+    scene.add(level)
+    sceneRegistry.nodes.set('level_0', level)
+    const ground = new Mesh(new PlaneGeometry(400, 400).rotateX(-Math.PI / 2))
+    ground.userData[SITE_GROUND] = 'solid'
+    const veil = new Mesh(ground.geometry)
+    veil.userData[SITE_GROUND] = 'veil'
+    veil.visible = false
+    const site = new Group().add(ground, veil)
+    scene.add(site)
+    sceneRegistry.nodes.set('site_a', site)
+    sceneRegistry.byType.site?.add('site_a')
+
+    const camera = new PerspectiveCamera()
+    camera.position.set(0, 15, 0)
+    const restorers: (() => void)[] = []
+    interiorCutaway('level_0', (restore) => restorers.push(restore), camera)
+    expect(groundWindowBoxNow()).not.toBeNull()
+    expect(veil.visible).toBe(true)
+    expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
+
+    for (const restore of restorers.reverse()) restore()
+    expect(groundWindowBoxNow()).toBeNull()
+    expect(veil.visible).toBe(false)
   })
 })
 
