@@ -57,6 +57,7 @@ import {
   revealGroupKey,
   revealTimingAt,
 } from '../../lib/reveal-schedule'
+import { clearRiseTextureScale, setRiseTextureScale } from '../../lib/reveal-texture-scale'
 import useViewer from '../../store/use-viewer'
 import { resolveLevelVisibility } from '../level/level-utils'
 import { ConstructionDust } from './construction-dust'
@@ -1046,7 +1047,10 @@ function levelShown(levelId: string | null): boolean {
 }
 
 function endReveal(reveal: ActiveReveal, forced = false) {
-  if (reveal.root) clearRevealPose(reveal.root)
+  if (reveal.root) {
+    clearRevealPose(reveal.root)
+    clearRiseTextureScale(reveal.root)
+  }
   active.delete(reveal.id)
   settle(reveal.id)
   closeNode(reveal.id, clockMs, forced)
@@ -1169,7 +1173,10 @@ function stepReveal(reveal: ActiveReveal, now: number) {
     return
   }
   if (reveal.root !== root) {
-    if (reveal.root) clearRevealPose(reveal.root)
+    if (reveal.root) {
+      clearRevealPose(reveal.root)
+      clearRiseTextureScale(reveal.root)
+    }
     reveal.root = root
   }
   // An assembled node holds still; it is done once its last part has landed.
@@ -1198,6 +1205,7 @@ function stepReveal(reveal: ActiveReveal, now: number) {
   if (t < 1) {
     revealPoseAt(reveal.style, t, reveal.height, sample, reveal)
     setRevealPose(root, reveal.pivot ?? ORIGIN, sample.scale, sample.lift)
+    if (reveal.style === 'rise') setRiseTextureScale(root, sample.scale.y, reveal.pivot?.y ?? 0)
   }
   if (!reveal.landed && revealHasLanded(reveal.style, t)) {
     reveal.landed = true

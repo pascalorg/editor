@@ -1,5 +1,6 @@
 import {
   getCurtainWallConfig,
+  getMaterialPresetByRef,
   type SceneMaterial,
   type SceneMaterialId,
   type WallNode,
@@ -28,6 +29,7 @@ export function createCurtainWallMaterials(
         return [
           ref,
           ref?.startsWith('scene:') ? materials?.[ref.slice(6) as SceneMaterialId] : null,
+          getMaterialPresetByRef(ref),
         ]
       }),
     }),

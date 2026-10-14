@@ -604,6 +604,45 @@ describe('WallCutoutCache', () => {
     }
   })
 
+  test('a late library finish on a legacy painted face replaces the fallback without a camera move', () => {
+    const { node, mesh } = addWall()
+    const id = 'mtl_wall_legacy_continuity'
+    const painted = WallNode.parse({ ...node, materialPreset: `library:${id}` })
+    useScene.setState({ nodes: { [node.id]: painted } })
+    viewerStore.setState({ wallMode: 'up', textures: true, shading: 'rendered' })
+    cache.update(camera, 1)
+    const fallback = (mesh.material as Material[])[1]
+    try {
+      registerLibraryMaterials([
+        {
+          id,
+          label: 'Late wall finish',
+          category: 'colors',
+          preset: MaterialPresetPayloadSchema.parse({
+            maps: {},
+            mapProperties: { color: '#2468ac', roughness: 0.27, metalness: 0.63 },
+          }),
+        },
+      ])
+      cache.update(camera, 1.02)
+      const resolved = (mesh.material as Material[])[1] as Material & {
+        color: { getHexString(): string }
+        roughness: number
+        metalness: number
+      }
+      expect(resolved).not.toBe(fallback)
+      expect(resolved.color.getHexString()).toBe('2468ac')
+      expect(resolved.roughness).toBe(0.27)
+      expect(resolved.metalness).toBe(0.63)
+      for (const time of [1.04, 1.2, 2]) {
+        cache.update(camera, time)
+        expect((mesh.material as Material[])[1]).toBe(resolved)
+      }
+    } finally {
+      unregisterLibraryMaterials([id])
+    }
+  })
+
   test('selected wall clones pick up a late texture with a stationary full-height camera', async () => {
     const { node, mesh } = addWall()
     viewerStore.setState({
