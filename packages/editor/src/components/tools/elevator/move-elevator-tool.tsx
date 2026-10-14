@@ -17,6 +17,7 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { consumePlacementDragRelease } from '../../../lib/placement-drag-release'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { isTypingTarget } from '../../../lib/typing-target'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -217,9 +218,7 @@ export function MoveElevatorTool({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0

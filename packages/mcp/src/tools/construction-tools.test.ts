@@ -394,12 +394,42 @@ describe('construction tools', () => {
       },
     })
     expect(shell.isError).toBe(true)
+    expect(JSON.parse((shell.content as Array<{ text: string }>)[0]!.text)).toMatchObject({
+      code: 'roof_level',
+      storeyId: level.id,
+    })
 
     const stair = await client.callTool({
       name: 'create_stair',
       arguments: { levelId: level.id, toLevelId: roofLevel.id, x: 0, z: 0 },
     })
     expect(stair.isError).toBe(true)
+  })
+
+  test('create_story_shell on a level that only holds a roof is refused like a declared one', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const roofOnly = LevelNode.parse({ level: 1 })
+    bridge.createNode(roofOnly, building.id)
+    bridge.createNode(RoofNode.parse({}), roofOnly.id)
+    const shell = await client.callTool({
+      name: 'create_story_shell',
+      arguments: {
+        levelId: roofOnly.id,
+        footprint: [
+          [-4, -3],
+          [4, -3],
+          [4, 3],
+          [-4, 3],
+        ],
+      },
+    })
+    expect(shell.isError).toBe(true)
+    expect(JSON.parse((shell.content as Array<{ text: string }>)[0]!.text)).toMatchObject({
+      code: 'roof_level',
+      levelId: roofOnly.id,
+      storeyId: level.id,
+    })
   })
 
   test('create_roof with no arguments covers the rooms a story shell derived', async () => {
@@ -428,7 +458,7 @@ describe('construction tools', () => {
     expect(bridge.validateScene().valid).toBe(true)
   })
 
-  test('verify_scene flags roofs mixed into occupied levels', async () => {
+  test('verify_scene flags a roof standing on the walls of the storey holding it', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     await client.callTool({
       name: 'create_story_shell',
@@ -443,16 +473,16 @@ describe('construction tools', () => {
       },
     })
     const segment = RoofSegmentNode.parse({ width: 8, depth: 6 })
-    const roof = RoofNode.parse({})
+    const roof = RoofNode.parse({ support: { kind: 'walls' } })
     bridge.createNode(roof, level.id as AnyNodeId)
     bridge.createNode(segment, roof.id as AnyNodeId)
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
-      'dedicated roof level',
-    )
+    const messages = parsed.issues.map((issue: { message: string }) => issue.message).join('\n')
+    expect(messages).toContain('dedicated roof level')
+    expect(messages).toContain(`move_roofs_to_roof_level with levelId ${level.id}`)
   })
 
   // Main's sizing of a new flight (#1000), on create_stair: the run and the risers come from the

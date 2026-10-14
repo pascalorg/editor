@@ -14,6 +14,7 @@ import {
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
+  seatRoofs,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -26,7 +27,9 @@ import {
   DragBoundingBox,
   getFloorStackPreviewPosition,
   isMagneticSnapActive,
+  isTypingTarget,
   resolvePlanarCursorPosition,
+  selectPlacedNode,
   stripPlacementMetadataFlags,
   triggerSFX,
   useAlignmentGuides,
@@ -431,18 +434,25 @@ export const MoveRoofTool: React.FC<{
       } else {
         // The store still holds the original values (we didn't update during drag).
         // Resume temporal and apply the final state as a single undoable step.
-        useScene.temporal.getState().resume()
-        useScene.getState().updateNode(movingNode.id, {
+        const patch = {
           position,
           rotation: pendingRotation,
           metadata: committedMeta,
           ...supportPatch,
-        })
+        }
+        useScene.temporal.getState().resume()
+        if (movingNode.type === 'roof' || movingNode.type === 'roof-segment') {
+          // Moved or turned onto the walls that carry it, a roof goes to the level above them.
+          const scene = useScene.getState()
+          scene.applyNodeChanges(
+            seatRoofs(scene.nodes, { update: [{ id: movingNode.id, data: patch }] }).changes,
+          )
+        } else useScene.getState().updateNode(movingNode.id, patch)
         useScene.temporal.getState().pause()
       }
 
       triggerSFX('sfx:item-place')
-      useViewer.getState().setSelection({ selectedIds: [committedId] })
+      selectPlacedNode(committedId)
       clearHostedPreview()
       useLiveTransforms.getState().clear(movingNode.id)
       useEditor.getState().setMovingNodeOrigin('3d')
@@ -474,9 +484,7 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0

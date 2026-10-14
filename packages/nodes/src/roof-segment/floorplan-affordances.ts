@@ -9,6 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { getSegmentGridStep, isAngleSnapActive, isGridSnapActive } from '@pascal-app/editor'
+import { commitSeatedRoofEdit } from '../roof/roof-level-target'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
@@ -87,7 +88,11 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
         commit() {
           useLiveNodeOverrides.getState().clear(segmentId)
           const diameter = lastRadius * 2
-          useScene.getState().updateNode(segmentId, { width: diameter, depth: diameter })
+          // Grown onto the walls that carry it, its roof goes to the level above them.
+          commitSeatedRoofEdit(
+            [{ id: segmentId, data: { width: diameter, depth: diameter } }],
+            segmentId,
+          )
         },
       }
     }
@@ -157,7 +162,7 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
             : axis === 'x'
               ? { width: lastValue }
               : { depth: lastValue }
-        useScene.getState().updateNode(segmentId, { ...dimensions, position })
+        commitSeatedRoofEdit([{ id: segmentId, data: { ...dimensions, position } }], segmentId)
       },
     }
   },
@@ -197,7 +202,7 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
       },
       commit() {
         useLiveNodeOverrides.getState().clear(segmentId)
-        useScene.getState().updateNode(segmentId, { rotation: lastRotation })
+        commitSeatedRoofEdit([{ id: segmentId, data: { rotation: lastRotation } }], segmentId)
       },
     }
   },
@@ -252,7 +257,8 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
     },
     commit() {
       useLiveNodeOverrides.getState().clear(segmentId)
-      useScene.getState().updateNode(segmentId, { position: lastLocal })
+      // Dragged onto the walls that carry it, its roof goes to the level above them.
+      commitSeatedRoofEdit([{ id: segmentId, data: { position: lastLocal } }], segmentId)
     },
   }
 }

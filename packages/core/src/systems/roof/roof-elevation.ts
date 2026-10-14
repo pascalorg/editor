@@ -26,6 +26,89 @@ export function resolveRoofWallTopElevation(
   )
 }
 
+/**
+ * The walls among `wallIds` a roof stands on: those under its segments' footprints, closed room or
+ * not (a room missing a wall, an L-shaped room whose centre falls outside, or a redrawn enclosure
+ * all still hold the roof up); a cone's, its round wall. Null for a roof with no segments yet.
+ */
+function wallsUnderRoof(
+  roof: RoofNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+  wallIds: readonly string[],
+): string[] | null {
+  const segments = roof.children
+    .map((id) => nodes[id])
+    .filter((node): node is RoofSegmentNode => node?.type === 'roof-segment')
+  if (segments.length === 0) return null
+  const cos = Math.cos(roof.rotation)
+  const sin = Math.sin(roof.rotation)
+  const toLevel = (x: number, z: number): [number, number] => [
+    roof.position[0] + x * cos + z * sin,
+    roof.position[2] - x * sin + z * cos,
+  ]
+  const conicalSegments = segments.filter((segment) => segment.roofType === 'conical')
+  if (conicalSegments.length)
+    return wallIds.filter((id) => {
+      const wall = nodes[id]
+      if (wall?.type !== 'wall') return false
+      const arc = getWallArcData(wall)
+      if (!arc) return false
+      return conicalSegments.some((segment) => {
+        const [centerX, centerZ] = toLevel(segment.position[0], segment.position[2])
+        return (
+          Math.hypot(arc.center.x - centerX, arc.center.y - centerZ) <= 1e-4 &&
+          Math.abs(arc.radius - segment.width / 2) <= 1e-4
+        )
+      })
+    })
+  // The band test is curve- and thickness-aware and boundary-inclusive, so perimeter walls on the
+  // footprint edge count.
+  const footprints = segments.map((segment) => {
+    const c = Math.cos(segment.rotation)
+    const s = Math.sin(segment.rotation)
+    const halfW = segment.width / 2
+    const halfD = segment.depth / 2
+    const corners: Array<[number, number]> = [
+      [-halfW, -halfD],
+      [halfW, -halfD],
+      [halfW, halfD],
+      [-halfW, halfD],
+    ]
+    return corners.map(([x, z]) =>
+      toLevel(segment.position[0] + x * c + z * s, segment.position[2] - x * s + z * c),
+    )
+  })
+  return wallIds.filter((id) => {
+    const wall = nodes[id]
+    return (
+      wall?.type === 'wall' &&
+      footprints.some((polygon) => wallOverlapsSlabFootprint(wall, polygon))
+    )
+  })
+}
+
+/** The tallest of these walls' tops, from `targetLevelId`'s floor; undefined for none. */
+function highestWallTop(
+  targetLevelId: string,
+  wallIds: readonly string[],
+  nodes: Readonly<Record<string, AnyNode>>,
+  elevations: ReturnType<typeof getLevelElevations>,
+): number | undefined {
+  let highest: number | undefined
+  for (const id of wallIds) {
+    const wall = nodes[id]
+    if (wall?.type !== 'wall') continue
+    const top = resolveRoofWallTopElevation(
+      targetLevelId as LevelNode['id'],
+      wall,
+      nodes,
+      elevations,
+    )
+    highest = highest === undefined ? top : Math.max(highest, top)
+  }
+  return highest
+}
+
 export function resolveRoofElevation(
   roof: RoofNode,
   nodes: Readonly<Record<string, AnyNode>>,
@@ -48,80 +131,36 @@ export function resolveRoofElevation(
     .map((id) => (id ? nodes[id] : undefined))
     .filter((node): node is LevelNode => node?.type === 'level')
     .flatMap((level) => level.children)
-
-  const conicalSegments = roof.children
-    .map((id) => nodes[id])
-    .filter(
-      (node): node is RoofSegmentNode =>
-        node?.type === 'roof-segment' && node.roofType === 'conical',
-    )
-  const cos = Math.cos(roof.rotation)
-  const sin = Math.sin(roof.rotation)
-  const toLevel = (x: number, z: number): [number, number] => [
-    roof.position[0] + x * cos + z * sin,
-    roof.position[2] - x * sin + z * cos,
-  ]
-  // Walls under the footprint, closed room or not: a room missing a wall, an
-  // L-shaped room whose centre falls outside, or a redrawn enclosure all still
-  // hold the roof up. The band test is curve- and thickness-aware and
-  // boundary-inclusive, so perimeter walls on the footprint edge count.
-  const footprints = roof.children
-    .map((id) => nodes[id])
-    .filter((node): node is RoofSegmentNode => node?.type === 'roof-segment')
-    .map((segment) => {
-      const c = Math.cos(segment.rotation)
-      const s = Math.sin(segment.rotation)
-      const halfW = segment.width / 2
-      const halfD = segment.depth / 2
-      const corners: Array<[number, number]> = [
-        [-halfW, -halfD],
-        [halfW, -halfD],
-        [halfW, halfD],
-        [-halfW, halfD],
-      ]
-      return corners.map(([x, z]) =>
-        toLevel(segment.position[0] + x * c + z * s, segment.position[2] - x * s + z * c),
+  const wallIds =
+    wallsUnderRoof(roof, nodes, candidateWallIds) ??
+    supportLevelIds
+      .map((id) =>
+        id
+          ? resolveRoomRoofFootprintOnLevel(id as LevelNode['id'], nodes, [
+              roof.position[0],
+              roof.position[2],
+            ])
+          : null,
       )
-    })
-  const wallIds = conicalSegments.length
-    ? candidateWallIds.filter((id) => {
-        const wall = nodes[id]
-        if (wall?.type !== 'wall') return false
-        const arc = getWallArcData(wall)
-        if (!arc) return false
-        return conicalSegments.some((segment) => {
-          const [centerX, centerZ] = toLevel(segment.position[0], segment.position[2])
-          return (
-            Math.hypot(arc.center.x - centerX, arc.center.y - centerZ) <= 1e-4 &&
-            Math.abs(arc.radius - segment.width / 2) <= 1e-4
-          )
-        })
-      })
-    : footprints.length
-      ? candidateWallIds.filter((id) => {
-          const wall = nodes[id]
-          return (
-            wall?.type === 'wall' &&
-            footprints.some((polygon) => wallOverlapsSlabFootprint(wall, polygon))
-          )
-        })
-      : (supportLevelIds
-          .map((id) =>
-            id
-              ? resolveRoomRoofFootprintOnLevel(id as LevelNode['id'], nodes, [
-                  roof.position[0],
-                  roof.position[2],
-                ])
-              : null,
-          )
-          .find((target) => target !== null)?.wallIds ?? [])
+      .find((target) => target !== null)?.wallIds ??
+    []
+  return highestWallTop(levelId, wallIds, nodes, elevations) ?? roof.position[1]
+}
 
-  let highest: number | undefined
-  for (const id of wallIds) {
-    const wall = nodes[id]
-    if (wall?.type !== 'wall') continue
-    const top = resolveRoofWallTopElevation(levelId as LevelNode['id'], wall, nodes, elevations)
-    highest = highest === undefined ? top : Math.max(highest, top)
-  }
-  return highest ?? roof.position[1]
+/**
+ * The tallest top of `levelId`'s walls a roof stands on, from the floor of the level holding the
+ * roof (m); null when it stands on none of them, or has no segments to stand with.
+ */
+export function roofWallTop(
+  roof: RoofNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+  levelId: string,
+): number | null {
+  const level = nodes[levelId]
+  if (level?.type !== 'level') return null
+  const wallIds = wallsUnderRoof(roof, nodes, level.children)
+  if (!wallIds) return null
+  return (
+    highestWallTop(resolveLevelId(roof, nodes), wallIds, nodes, getLevelElevations(nodes)) ?? null
+  )
 }

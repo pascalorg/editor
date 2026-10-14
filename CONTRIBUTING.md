@@ -6,7 +6,7 @@ Thanks for your interest in contributing! We welcome all kinds of contributions 
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) 1.3+ and Node.js 20.9+
+- [Bun](https://bun.sh/) 1.3+ and Node.js 22+
 
 ### Setup
 

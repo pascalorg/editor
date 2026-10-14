@@ -4,8 +4,8 @@ import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { siteBrief } from '../lib/site-placement'
 import { nodeRegistry } from '../registry'
-import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
-import { roofsOver } from '../services/roof-level'
+import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, type LevelNode } from '../schema'
+import { isRoofOnStoreyWalls } from '../services/roof-move'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
 import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
@@ -298,7 +298,8 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       })
     }
     if (level.role === 'roof') {
-      if (content.roofs === 0)
+      // Roof geometry a plugin draws (roof planes) is no `roof` node, and is still the roof.
+      if (onLevel(level.levelId).length === 0)
         report(
           'roof_level_no_roof',
           `${levelName} is a roof support level but has no roof geometry; add or move roof geometry there rather than deleting the support level to satisfy story count`,
@@ -330,15 +331,15 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       report('zones_no_ceilings', `${levelName} has zones but no ceilings`)
     if (content.walls > 0 && content.doors === 0)
       report('walls_no_doors', `${levelName} has walls but no doors`)
-    // A roof on a storey that covers it (written on its own walls' level); a lower wing's roof
-    // here covers the storey below, where the rule puts it.
-    if (
-      roofsOver(nodes, level.levelId).some((roof) => roof.parentId === level.levelId) &&
-      (content.walls > 0 || content.zones > 0 || content.stairs > 0)
+    // A roof standing on the walls of the storey holding it: the ones move_roofs_to_roof_level
+    // takes off. A porch's on its posts, a lower wing's on the walls below, are where they belong.
+    const onWalls = (nodes[level.levelId] as LevelNode).children.filter((id) =>
+      isRoofOnStoreyWalls(nodes, id),
     )
+    if (onWalls.length > 0)
       report(
         'roof_mixed_in_storey',
-        `${levelName} mixes roof geometry with occupied-level content; place roofs on a dedicated roof level for solo/exploded level views`,
+        `${levelName} mixes roof geometry with occupied-level content; place roofs on a dedicated roof level for solo/exploded level views. On its own walls: ${onWalls.join(', ')}; move_roofs_to_roof_level with levelId ${level.levelId} moves them there as they stand (never delete and rebuild them); by hand, "Move to the roof level" on the roof's panel`,
       )
   }
 

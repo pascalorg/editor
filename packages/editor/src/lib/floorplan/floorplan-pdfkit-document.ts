@@ -1,6 +1,10 @@
+/// <reference path="./pdfkit-standard-fonts.d.ts" />
 import type PdfKitDocument from 'pdfkit'
 
 type PdfKitDocumentInstance = InstanceType<typeof PdfKitDocument>
+
+/** pdfkit 0.20's browser-build export, which @types/pdfkit does not describe. */
+type PdfKitStandardFontRegistry = { registerStdFonts?: (...fonts: unknown[]) => void }
 
 type PdfTextOptions = {
   align?: 'left' | 'center' | 'right'
@@ -461,16 +465,29 @@ export async function createFloorplanPdfDocument(
   defaultPageSize: readonly [number, number],
   options: { title?: string } = {},
 ) {
-  const [{ default: PDFDocument }, { default: blobStream }, fonts] = await Promise.all([
-    import('pdfkit/js/pdfkit.standalone'),
-    import('blob-stream'),
-    // an export in the standard fonts beats no export when the font files are unreachable
-    loadFloorplanPdfFonts().catch((error: unknown) => {
-      console.warn('[floorplan-export] Falling back to the standard PDF fonts', error)
-      return null
-    }),
-  ])
-  const raw = new PDFDocument({
+  const [pdfkit, helvetica, helveticaBold, courier, courierBold, { default: blobStream }, fonts] =
+    await Promise.all([
+      import('pdfkit'),
+      import('pdfkit/standard-fonts/Helvetica'),
+      import('pdfkit/standard-fonts/HelveticaBold'),
+      import('pdfkit/standard-fonts/Courier'),
+      import('pdfkit/standard-fonts/CourierBold'),
+      import('blob-stream'),
+      // an export in the standard fonts beats no export when the font files are unreachable
+      loadFloorplanPdfFonts().catch((error: unknown) => {
+        console.warn('[floorplan-export] Falling back to the standard PDF fonts', error)
+        return null
+      }),
+    ])
+  // The browser build has no standard-font metrics until they are registered, and
+  // the constructor already sets Helvetica; the Node build loads its own and has no registry.
+  ;(pdfkit as PdfKitStandardFontRegistry).registerStdFonts?.(
+    helvetica.default,
+    helveticaBold.default,
+    courier.default,
+    courierBold.default,
+  )
+  const raw = new pdfkit.default({
     autoFirstPage: false,
     compress: true,
     margin: 0,

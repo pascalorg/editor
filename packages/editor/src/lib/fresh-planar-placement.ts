@@ -14,6 +14,7 @@ import {
   resolveSurfacePlacement,
   runSceneHistoryDraftWrite,
   type SurfaceRejectReason,
+  seatRoofs,
   useScene,
 } from '@pascal-app/core'
 import { remapNodeReferences } from '@pascal-app/core/clone-scene-graph'
@@ -317,6 +318,9 @@ export function commitFreshPlacementSubtree(
   for (const update of peerReferenceUpdates(scene.nodes, root, subtreeIds, cloned.rootId))
     if (!updates.some((entry) => entry.id === update.id)) updates.push(update)
 
+  // A roof dropped onto the walls that carry it goes to the level above them, in the same step.
+  const seated = seatRoofs(scene.nodes, { create, update: updates, delete: [rootId] }).changes
+
   const scope = useInteractionScope.getState()
   const factoryCreated =
     scope.ownedSubtree?.creation.rootId === rootId || scope.pendingSubtree?.rootId === rootId
@@ -329,13 +333,13 @@ export function commitFreshPlacementSubtree(
       useScene.getState().deleteNode(rootId)
     })
     recordPlacementStep(rootId, wasTracking, () =>
-      useScene.getState().applyNodeChanges({ create, update: updates }),
+      useScene.getState().applyNodeChanges({ create: seated.create, update: seated.update }),
     )
   } else {
     recordPlacementStep(rootId, wasTracking, () => {
       try {
         // applyNodeChanges validates the complete proposed graph before publishing any part of it.
-        scene.applyNodeChanges({ delete: [rootId], create, update: updates })
+        scene.applyNodeChanges(seated)
         for (const node of [subtree.root, ...subtree.descendants]) scene.clearDirty(node.id)
       } catch (error) {
         // Zustand publishes before notifying subscribers. A subscriber error must restore

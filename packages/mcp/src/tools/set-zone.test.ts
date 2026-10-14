@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { type AnyNodeId, WallNode, type ZoneNode } from '@pascal-app/core/schema'
+import {
+  type AnyNodeId,
+  LevelNode,
+  RoofNode,
+  WallNode,
+  type ZoneNode,
+} from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerSetZone } from './set-zone'
 
@@ -151,5 +157,31 @@ describe('set_zone', () => {
       },
     })
     expect(result.isError).toBe(true)
+  })
+
+  test('on a level that only holds a roof is refused, naming the storey it covers', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const storey = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const roofLevel = LevelNode.parse({ level: 1 })
+    bridge.createNode(roofLevel, building.id as AnyNodeId)
+    bridge.createNode(RoofNode.parse({}), roofLevel.id)
+    const result = await client.callTool({
+      name: 'set_zone',
+      arguments: {
+        levelId: roofLevel.id,
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 4],
+        ],
+        label: 'Attic',
+      },
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.parse((result.content as Array<{ text: string }>)[0]!.text)).toMatchObject({
+      code: 'roof_level',
+      levelId: roofLevel.id,
+      storeyId: storey.id,
+    })
   })
 })

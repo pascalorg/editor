@@ -340,3 +340,98 @@ export const CREATE_ROOF_CASES: AgentToolCase[] = [
     expect: { refusal: 'no_rooms', mentions: ['width and depth'] },
   },
 ]
+
+/** `scene` with a roof over `levelId`'s 8 × 6 m room on that level, its segment bearing at `y`. */
+function roofedOn(
+  scene: () => SceneGraph,
+  levelId: string,
+  y: number,
+  support: 'walls' | 'level' = 'walls',
+) {
+  return (): SceneGraph => {
+    const nodes = { ...(scene().nodes as Record<string, AnyNode>) }
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_low',
+      parentId: 'roof_low',
+      width: 8,
+      depth: 6,
+      wallHeight: 0,
+    })
+    const roof = RoofNode.parse({
+      id: 'roof_low',
+      parentId: levelId,
+      position: [4, y, 3],
+      support: { kind: support },
+      children: [segment.id],
+    })
+    const level = nodes[levelId] as LevelNode
+    return graph(
+      ...Object.values(nodes).filter((node) => node.id !== levelId),
+      { ...level, children: [...level.children, roof.id] },
+      roof,
+      segment,
+    )
+  }
+}
+
+/**
+ * `move_roofs_to_roof_level`: a project built before the rule holds its roofs on the storey whose
+ * walls carry them; the roof's panel moves them by hand, and this tool for agents, standing where
+ * they stood.
+ */
+export const MOVE_ROOFS_CASES: AgentToolCase[] = [
+  {
+    name: 'a bungalow roof on its walls goes up to a new Roof level, its eave where it was',
+    tool: 'move_roofs_to_roof_level',
+    scene: roofedOn(house(), 'level_g', 2.5),
+    input: { levelId: 'level_g' },
+    expect: {
+      result: { roofIds: ['roof_low'] },
+      check: (result, nodes) => {
+        const roof = nodes.roof_low as RoofNode
+        const level = nodes[result.roofLevelId as string] as LevelNode | undefined
+        return [
+          ...(result.createdRoofLevelId === result.roofLevelId ? [] : ['no Roof level was made']),
+          ...(level?.level === 1 && level.metadata.role === 'roof'
+            ? []
+            : ['the roof level is not declared right above the storey']),
+          ...(roof.parentId === result.roofLevelId ? [] : [`the roof is on ${roof.parentId}`]),
+          // the roof level's floor is the storey's 2.5 m up: the eave stays on the 2.5 m walls
+          ...(Math.abs(roof.position[1]) < 1e-6 ? [] : [`the eave moved: y ${roof.position[1]}`]),
+          ...(roof.children.includes('rseg_low') ? [] : ['the segment was not kept']),
+        ]
+      },
+    },
+  },
+  {
+    name: 'a lower storey’s roof goes onto the storey above it',
+    tool: 'move_roofs_to_roof_level',
+    scene: roofedOn(house({ storeys: 2 }), 'level_g', 2.5, 'level'),
+    input: { levelId: 'level_g' },
+    expect: {
+      result: { roofIds: ['roof_low'], roofLevelId: 'level_1', createdRoofLevelId: null },
+      after: { roof_low: { parentId: 'level_1', position: [4, 0, 3] } },
+    },
+  },
+  {
+    name: 'a roof already on the roof level leaves nothing to move',
+    tool: 'move_roofs_to_roof_level',
+    scene: house({ above: 'roof' }),
+    input: { levelId: 'level_g' },
+    expect: { refusal: 'no_roof_on_walls', mentions: ['level_g'] },
+  },
+  {
+    name: 'a porch roof on its beam, under the walls’ tops, stays on its storey',
+    tool: 'move_roofs_to_roof_level',
+    scene: roofedOn(house(), 'level_g', 2.1, 'level'),
+    input: { levelId: 'level_g' },
+    expect: { refusal: 'no_roof_on_walls' },
+  },
+  {
+    name: 'a level that does not exist is refused',
+    tool: 'move_roofs_to_roof_level',
+    scene: house(),
+    input: { levelId: 'level_x' },
+    expect: { refusal: 'level_not_found' },
+  },
+]

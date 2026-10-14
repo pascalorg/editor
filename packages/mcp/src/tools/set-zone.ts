@@ -1,10 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { isAllocatedRoomName, isRoofLevel, newZone, walledRoomAt } from '@pascal-app/core'
+import { isAllocatedRoomName, newZone, walledRoomAt } from '@pascal-app/core'
+import { roofLevelRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
-import { ErrorCode, throwMcpError } from './errors'
+import { ErrorCode, refusalResult, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema, Vec2Schema } from './schemas'
 
@@ -42,12 +43,8 @@ export function registerSetZone(server: McpServer, bridge: SceneOperations): voi
           `Node ${levelId} is a ${parent.type}, expected level`,
         )
       }
-      if (isRoofLevel(parent)) {
-        throwMcpError(
-          ErrorCode.InvalidParams,
-          `Roof support level ${levelId} is not an occupied story; create zones on an occupied level instead`,
-        )
-      }
+      const onRoofLevel = roofLevelRefusal(bridge.getNodes(), levelId, 'a zone')
+      if (onRoofLevel) return refusalResult(onRoofLevel)
 
       const walled = walledRoomAt(bridge.getNodes(), levelId, polygon as Array<[number, number]>)
       if (walled && !isAllocatedRoomName(walled.name) && walled.name !== label) {

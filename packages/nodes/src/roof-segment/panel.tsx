@@ -30,6 +30,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Check, Copy, Move, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { commitSeatedRoofEdit } from '../roof/roof-level-target'
 
 const ROOF_TYPE_OPTIONS: { label: string; value: RoofType }[] = [
   { label: 'Hip', value: 'hip' },
@@ -124,9 +125,13 @@ export default function RoofSegmentPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<RoofSegmentNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
+      // Reshaped or moved onto the walls that carry it, its roof goes to the level above them.
+      commitSeatedRoofEdit(
+        [{ id: selectedId as AnyNodeId, data: updates }],
+        selectedId as AnyNodeId,
+      )
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleRoofTypeChange = useCallback(

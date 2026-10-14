@@ -115,6 +115,7 @@ const TOOL_POLICIES = [
       'lock_outside_faces',
       'merge_windows',
       'merge_zones',
+      'move_roofs_to_roof_level',
       'paint',
       'delete_scene',
       'get_project_status',

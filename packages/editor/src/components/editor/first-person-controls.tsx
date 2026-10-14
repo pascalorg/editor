@@ -81,6 +81,7 @@ import {
   isOperationDoorType,
   toggleDoorOpenState,
 } from '../../lib/door-interaction'
+import { isTypingTarget } from '../../lib/typing-target'
 import {
   closeWindowOpenState,
   getDisplayedWindowValue,
@@ -1467,9 +1468,7 @@ export const FirstPersonControls = () => {
     const canvas = gl.domElement
 
     const applyMovementKey = (event: KeyboardEvent, active: boolean) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return false
-      }
+      if (isTypingTarget(event.target)) return false
 
       const movement = getMovementInputForKey(event.code, active)
       if (!movement) return false
@@ -1484,9 +1483,7 @@ export const FirstPersonControls = () => {
       const handledMovement = applyMovementKey(event, true)
       if (handledMovement) return
 
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
         // While paused (P), crouch is frozen as-is — ⌃⇧⌘4 (clipboard

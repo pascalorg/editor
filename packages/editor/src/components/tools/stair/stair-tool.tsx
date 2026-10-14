@@ -31,14 +31,13 @@ import {
   resolveStairDestinationLevel,
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
-
+import { isTypingTarget } from '../../../lib/typing-target'
 import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../../store/use-editor'
-
 import useFacingPose from '../../../store/use-facing-pose'
 import { useStairBuildPreview } from '../../../store/use-stair-build-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -188,7 +187,7 @@ function commitStairPlacement(
   rotation: number,
   supportSurface: PointerSupportSurface | null,
 ): void {
-  const { createNodes, nodes } = useScene.getState()
+  const { applyNodeChanges, nodes } = useScene.getState()
   const placementLevelId = resolveStairPlacementLevelId(
     nodes,
     levelId,
@@ -271,11 +270,14 @@ function commitStairPlacement(
       ? [{ node: createdLevel, parentId: destinationPlan.buildingId }]
       : []
 
-  createNodes([
-    ...levelCreateOps,
-    { node: committedStair, parentId: placementLevelId },
-    { node: segment, parentId: committedStair.id },
-  ])
+  applyNodeChanges({
+    create: [
+      ...levelCreateOps,
+      { node: committedStair, parentId: placementLevelId },
+      { node: segment, parentId: committedStair.id },
+    ],
+    update: destinationPlan?.liftedLevels ?? [],
+  })
 
   sfxEmitter.emit('sfx:structure-build')
 }
@@ -621,9 +623,7 @@ export const StairTool: React.FC = () => {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0

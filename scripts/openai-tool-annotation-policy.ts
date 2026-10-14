@@ -72,6 +72,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   merge_windows: policy(false, true, false),
   merge_zones: policy(false, true, false),
   move_zone: policy(false, true, false),
+  move_roofs_to_roof_level: policy(false, true, false),
   paint: policy(false, true, false),
   photo_to_scene: policy(false, true, true),
   place_building: policy(false, true, false),

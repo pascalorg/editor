@@ -33,6 +33,7 @@ import {
   listLevelsTool,
   measureStairTool,
   mergeWindowsTool,
+  moveRoofsToRoofLevelTool,
   paintTool,
   placeBuildingTool,
   placeInRoomTool,
@@ -292,6 +293,11 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: createRoofTool,
     operation: AGENT_OPERATIONS.create_roof,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: moveRoofsToRoofLevelTool,
+    operation: AGENT_OPERATIONS.move_roofs_to_roof_level,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
   },
   {
     contract: placeItemsTool,

@@ -21,6 +21,7 @@ import {
   getSpatialPointerId,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -424,8 +425,7 @@ const DuctTerminalTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       const key = e.key
       if (key === 'm' || key === 'M') {
         e.preventDefault()

@@ -20,6 +20,7 @@ import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
+import { useActionMenuPopupSide } from './placement'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
@@ -170,6 +171,7 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
 // ── Guides toggle + dropdown ────────────────────────────────────────────────
 
 function GuidesControl() {
+  const popupSide = useActionMenuPopupSide()
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
   const setSelection = useViewer((state) => state.setSelection)
@@ -252,7 +254,7 @@ function GuidesControl() {
       <PopoverContent
         align="center"
         className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div className="space-y-3">
@@ -349,6 +351,7 @@ function GuidesControl() {
 // ── Scans toggle + dropdown ─────────────────────────────────────────────────
 
 function ScansControl() {
+  const popupSide = useActionMenuPopupSide()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const setSelection = useViewer((state) => state.setSelection)
@@ -427,7 +430,7 @@ function ScansControl() {
       <PopoverContent
         align="center"
         className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div className="space-y-3">
@@ -657,6 +660,7 @@ function ReferenceListSection({
 }
 
 function ReferencesControl() {
+  const popupSide = useActionMenuPopupSide()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const showGuides = useViewer((state) => state.showGuides)
@@ -726,7 +730,7 @@ function ReferencesControl() {
       <PopoverContent
         align="center"
         className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div className="space-y-3">
@@ -765,6 +769,7 @@ function ReferencesControl() {
 // ── Reference floor control ────────────────────────────────────────────────────────────────────
 
 function ReferenceFloorControl() {
+  const popupSide = useActionMenuPopupSide()
   const showReferenceFloor = useEditor((state) => state.showReferenceFloor)
   const toggleReferenceFloor = useEditor((state) => state.toggleReferenceFloor)
   const referenceFloorOffset = useEditor((state) => state.referenceFloorOffset)
@@ -832,7 +837,7 @@ function ReferenceFloorControl() {
       <PopoverContent
         align="center"
         className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.55),0_6px_16px_-10px_rgba(15,23,42,0.2)] backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div className="space-y-3">
