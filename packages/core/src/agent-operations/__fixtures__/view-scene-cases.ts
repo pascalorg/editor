@@ -81,11 +81,23 @@ const LOT: Pt[] = [
  */
 function house(
   site: Record<string, unknown> | null,
-  { at = [9, 0, 11], yaw = 0 }: { at?: [number, number, number]; yaw?: number } = {},
+  {
+    at = [9, 0, 11],
+    yaw = 0,
+    roof = 'core',
+    suffix = '',
+  }: {
+    at?: [number, number, number]
+    yaw?: number
+    /** Core's hip roof, or Architect's roof planes (a plugin's nodes core cannot measure). */
+    roof?: 'core' | 'planes'
+    /** Ids of a second house in the same scene. */
+    suffix?: string
+  } = {},
 ): Record<string, AnyNode> {
-  const lot = site && SiteNode.parse({ id: 'site_lot', children: [], ...site })
+  const lot = site && SiteNode.parse({ id: `site_lot${suffix}`, children: [], ...site })
   const building = BuildingNode.parse({
-    id: 'building_house',
+    id: `building_house${suffix}`,
     ...(lot ? { parentId: lot.id } : {}),
     children: [],
     position: at,
@@ -93,7 +105,7 @@ function house(
   })
   const storeys = [0, 1].map((index) =>
     LevelNode.parse({
-      id: `level_${index}`,
+      id: `level_${index}${suffix}`,
       parentId: building.id,
       level: index,
       height: 2.7,
@@ -117,35 +129,52 @@ function house(
     ),
   )
   const roofLevel = LevelNode.parse({
-    id: 'level_roof',
+    id: `level_roof${suffix}`,
     parentId: building.id,
     level: 2,
+    height: 3,
     children: [],
   })
   const segment = RoofSegmentNode.parse({
-    id: 'rseg_house',
-    parentId: 'roof_house',
+    id: `rseg_house${suffix}`,
+    parentId: `roof_house${suffix}`,
     roofType: 'hip',
     width: 12,
     depth: 8,
     pitch: 30,
     wallHeight: 0,
   })
-  const roof = RoofNode.parse({
-    id: 'roof_house',
-    parentId: roofLevel.id,
-    position: [6, 0, 4],
-    children: [segment.id],
-  })
-  return scene(
-    ...(lot ? [lot] : []),
-    building,
-    ...storeys,
-    ...walls,
-    roofLevel,
-    roof,
-    segment,
-  )
+  const roofNodes: AnyNode[] =
+    roof === 'core'
+      ? [
+          RoofNode.parse({
+            id: `roof_house${suffix}`,
+            parentId: roofLevel.id,
+            position: [6, 0, 4],
+            children: [segment.id],
+          }),
+          segment,
+        ]
+      : [
+          {
+            id: `roofplane_house${suffix}`,
+            type: 'procedural:roof-plane',
+            parentId: roofLevel.id,
+            polygon: [
+              [-0.5, -0.5],
+              [12.5, -0.5],
+              [12.5, 4],
+              [-0.5, 4],
+            ],
+            baseline: [
+              [-0.5, -0.5],
+              [12.5, -0.5],
+            ],
+            baseHeight: 0,
+            pitch: 12,
+          } as unknown as AnyNode,
+        ]
+  return scene(...(lot ? [lot] : []), building, ...storeys, ...walls, roofLevel, ...roofNodes)
 }
 
 const PEAK = 5.4 + 4 * Math.tan(Math.PI / 6)
@@ -170,6 +199,19 @@ const STREET_SIDES: { from: SceneViewInput['from']; toward: Pt; words: string }[
   { from: 'back-left', toward: [-H, H], words: 'the back-left corner, the south-west' },
   { from: 'back-right', toward: [-H, -H], words: 'the back-right corner, the north-west' },
 ]
+
+/** Two lots side by side, each with a house: the west lot's street is north, the east lot's east. */
+function twoLots(): Record<string, AnyNode> {
+  const west = house({ polygon: { type: 'polygon', points: LOT }, frontEdge: 0 })
+  const east = house(
+    {
+      polygon: { type: 'polygon', points: LOT.map(([x, z]) => [x + 40, z]) },
+      frontEdge: 1,
+    },
+    { at: [49, 0, 11], suffix: '_east' },
+  )
+  return { ...west, ...east }
+}
 
 const PERSON: SceneViewCurrentCamera = {
   position: [-6, 9, 30],
@@ -233,6 +275,46 @@ export const VIEW_SCENE_CASES: readonly ViewSceneCase[] = [
       ),
     input: { from: 'street' },
     expect: { eyeToward: [1, 0], frames: { min: [15, 0, 3], max: [23, PEAK, 15] } },
+  },
+  {
+    name: "a roof of Architect's roof planes is framed to its roof level's top",
+    was: "screenshot_3d {} over a roof drawn with create_roof_plane (it framed every level's top)",
+    scene: () =>
+      house({ polygon: { type: 'polygon', points: LOT }, frontEdge: 1 }, { roof: 'planes' }),
+    input: { from: 'street' },
+    // The roof level's 3 m over the two storeys' 5.4 m.
+    expect: { eyeToward: [1, 0], frames: { min: [9, 0, 11], max: [21, 8.4, 19] } },
+  },
+  {
+    name: 'an empty site beside the one the house stands on takes nothing from the view',
+    was: "screenshot_3d { view: 'street' }",
+    scene: () => ({
+      ...house({ polygon: { type: 'polygon', points: LOT }, frontEdge: 1 }),
+      site_empty: SiteNode.parse({ id: 'site_empty', children: [] }),
+    }),
+    input: { from: 'street' },
+    expect: { eyeToward: [1, 0], frames: WHOLE_HOUSE },
+  },
+  {
+    name: 'houses on two lots, each facing its own street, need the house as target',
+    was: "screenshot_3d { view: 'street' } (it took the lowest storey it found)",
+    scene: twoLots,
+    input: { from: 'street' },
+    expect: { refusal: 'which_building' },
+  },
+  {
+    name: 'the house on the east lot, as target, is seen from its own street',
+    was: "screenshot_3d { view: 'street' }",
+    scene: twoLots,
+    input: { from: 'street', target: 'building_house_east' },
+    expect: { eyeToward: [1, 0], frames: { min: [49, 0, 11], max: [61, PEAK, 19] } },
+  },
+  {
+    name: 'the house on the west lot, as target, is seen from its own street (north)',
+    was: "screenshot_3d { view: 'street' }",
+    scene: twoLots,
+    input: { from: 'street', target: 'building_house' },
+    expect: { eyeToward: [0, -1], frames: WHOLE_HOUSE },
   },
   {
     name: 'a lot that records no street refuses street sides instead of guessing north',

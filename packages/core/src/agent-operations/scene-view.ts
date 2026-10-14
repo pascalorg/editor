@@ -229,8 +229,7 @@ function streetDirection(
   side: StreetSide,
   target: AnyNode | undefined,
 ): Pt {
-  const building = target && ancestry(nodes, target).find((node) => node.type === 'building')
-  const street = siteStreet(nodes, building?.id)
+  const street = siteStreet(nodes, framedBuilding(nodes, target)?.id)
   if (!street)
     refuse(
       'no_street',
@@ -244,6 +243,23 @@ function streetDirection(
     fx * Math.cos(turn) - fz * Math.sin(turn) + 0,
     fz * Math.cos(turn) + fx * Math.sin(turn) + 0,
   ]
+}
+
+/**
+ * The building a view is of: the target's, else the scene's. Buildings on several sites each face
+ * their own street, so a street side then needs the building as target.
+ */
+function framedBuilding(nodes: Readonly<Record<string, AnyNode>>, target: AnyNode | undefined) {
+  if (target) return ancestry(nodes, target).find((node) => node.type === 'building') ?? null
+  const buildings = Object.values(nodes).filter((node) => node.type === 'building')
+  const sites = new Set(buildings.map((building) => building.parentId ?? null))
+  if (sites.size > 1)
+    refuse(
+      'which_building',
+      `The scene has buildings on ${sites.size} sites, each facing its own street: give the building as target.`,
+      { buildings: buildings.map((building) => building.id) },
+    )
+  return buildings[0] ?? null
 }
 
 /** A door or a window and the wall it is in, when the target is one. */
@@ -595,9 +611,11 @@ export function sceneViewBounds(
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
   // With no walls yet, what the level holds frames it: furniture placed from a plan before the
-  // walls are built, a site with its paving and fences. The roofs frame with the walls.
+  // walls are built, a site with its paving and fences. The roofs frame with the walls, and so does
+  // a plugin's node (a roof plane), whose shape core cannot read: up to its storey's top.
   const held: SceneViewBox[] = []
   const roofs: SceneViewBox[] = []
+  let pluginTop = Number.NEGATIVE_INFINITY
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
     if (level?.type !== 'level') continue
@@ -619,12 +637,17 @@ export function sceneViewBounds(
         levelId: level.id,
       })
     else if (node.type === 'item') held.push(placedBox(itemBox(node, baseOf(level.id)), at))
-    else {
+    else if (node.type.includes(':')) {
+      const storey = elevations.get(level.id)
+      if (storey) pluginTop = Math.max(pluginTop, storey.baseY + storey.height + at.y)
+    } else {
       const box = levelChildBox(nodes, node, baseOf(level.id))
       if (box) (node.type === 'roof' ? roofs : held).push(placedBox(box, at))
     }
   }
-  if (!outlines.length && (held.length || roofs.length)) return union([...held, ...roofs])
+  const upTo = (box: SceneViewBox): SceneViewBox =>
+    pluginTop > box.max[1] ? { min: box.min, max: [box.max[0], pluginTop, box.max[2]] } : box
+  if (!outlines.length && (held.length || roofs.length)) return upTo(union([...held, ...roofs]))
   if (!outlines.length)
     refuse(
       'nothing_to_view',
@@ -647,7 +670,7 @@ export function sceneViewBounds(
       max[2] = Math.max(max[2], z)
     }
   }
-  return union([{ min, max }, ...roofs])
+  return upTo(union([{ min, max }, ...roofs]))
 }
 
 /** The box around boxes. */
