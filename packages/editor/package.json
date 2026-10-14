@@ -56,7 +56,7 @@
     "manifold-3d": "3.5.1",
     "mitt": "^3.0.1",
     "motion": "^12.34.3",
-    "nanoid": "^5.1.6",
+    "nanoid": "^6.0.2",
     "pdfkit": "^0.19.1",
     "tailwind-merge": "^3.5.0",
     "three-bvh-csg": "^0.0.18",

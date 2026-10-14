@@ -127,7 +127,7 @@
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
         "mitt": "^3.0.1",
-        "nanoid": "^5.1.6",
+        "nanoid": "^6.0.2",
         "polygon-clipping": "0.15.7",
         "zod": ">=4.5.4 <4.6",
         "zundo": "^2.3.0",
@@ -183,7 +183,7 @@
         "manifold-3d": "3.5.1",
         "mitt": "^3.0.1",
         "motion": "^12.34.3",
-        "nanoid": "^5.1.6",
+        "nanoid": "^6.0.2",
         "pdfkit": "^0.19.1",
         "tailwind-merge": "^3.5.0",
         "three-bvh-csg": "^0.0.18",
@@ -1724,7 +1724,7 @@
 
     "multipasta": ["multipasta@0.2.7", "", {}, "sha512-KPA58d68KgGil15oDqXjkUBEBYc00XvbPj5/X+dyzeo/lWm9Nc25pQRlf1D+gv4OpK7NM0J1odrbu9JNNGvynA=="],
 
-    "nanoid": ["nanoid@5.1.11", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-v+KEsUv2ps74PaSKv0gHTxTCgMXOIfBEbaqa6w6ISIGC7ZsvHN4N9oJ8d4cmf0n5oTzQz2SLmThbQWhjd/8eKg=="],
+    "nanoid": ["nanoid@6.0.2", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-hIvVOb9Qr1p/9CNNLOe0OlWvgx/ziTsVwKN/GDSsuArN2K0wDiafP3s0SWmsm7o2BdnyS8Z9Z64NFBUbn6ziBg=="],
 
     "natural-compare": ["natural-compare@1.4.0", "", {}, "sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw=="],
 
