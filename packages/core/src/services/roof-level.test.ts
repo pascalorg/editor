@@ -319,6 +319,16 @@ describe('storeyInsertIndex', () => {
     })
   })
 
+  // Bugbot on #1057: the walk stopped at the lowest level, declared or not, so a storey went on top
+  // of a building's only level when that level was its declared roof level.
+  test('a building whose only level is its declared roof level gets its new storey under it', () => {
+    const nodes = house({ id: 'level_r', content: 'roof', metadata: { role: 'roof' } })
+    expect(storeyInsertIndex(nodes, 'building_h')).toEqual({
+      floorIndex: 0,
+      shift: [{ id: 'level_r', data: { level: 1 } }],
+    })
+  })
+
   test('a building with no level starts at the ground floor', () => {
     expect(storeyInsertIndex(house(), 'building_h')).toEqual({ floorIndex: 0, shift: [] })
   })

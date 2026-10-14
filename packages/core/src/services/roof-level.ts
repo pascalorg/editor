@@ -264,11 +264,14 @@ export function roofsOver(nodes: Nodes, storeyId: string): RoofNode[] {
   )
 }
 
-/** The roof levels topping a building's stack (`servesAsRoofLevel`), bottom up. */
+/**
+ * The roof levels topping a building's stack (`servesAsRoofLevel`, which keeps an undeclared lowest
+ * level a storey), bottom up: a building whose only level is declared the roof level has that one.
+ */
 function topRoofLevels(nodes: Nodes, buildingId: string): LevelNode[] {
   const levels = levelsOf(nodes, buildingId).sort((a, b) => a.level - b.level)
   let top = levels.length
-  while (top > 1 && servesAsRoofLevel(nodes, levels[top - 1]!)) top--
+  while (top > 0 && servesAsRoofLevel(nodes, levels[top - 1]!)) top--
   return levels.slice(top)
 }
 
