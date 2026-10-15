@@ -681,16 +681,16 @@ async function disposeRevealFixture(fixture: RevealFixture) {
   useViewer.setState(fixture.savedViewer)
 }
 
-test.each([
-  'solid',
-  'rendered',
-] as const)('%s painted and textured wall faces keep their materials and UVs while rising and joining a batch', async (shading) => {
-  const fixture = createRevealFixture(shading)
-  try {
-    await mountRevealFixture(fixture)
-    await advanceRevealFixture(fixture)
-    expectSettledRevealBatch(fixture)
-  } finally {
-    await disposeRevealFixture(fixture)
-  }
-})
+test.each(['solid', 'rendered'] as const)(
+  '%s painted and textured wall faces keep their materials and UVs while rising and joining a batch',
+  async (shading) => {
+    const fixture = createRevealFixture(shading)
+    try {
+      await mountRevealFixture(fixture)
+      await advanceRevealFixture(fixture)
+      expectSettledRevealBatch(fixture)
+    } finally {
+      await disposeRevealFixture(fixture)
+    }
+  },
+)

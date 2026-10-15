@@ -568,83 +568,83 @@ test.each([
   { person: 'up' as const, written: ['cutaway'] },
   // The person already cuts the walls away: a build never puts them up in between.
   { person: 'cutaway' as const, written: [] as string[] },
-])('a full build with Follow on (structure, openings, furnishing, roof) keeps the single cutaway, from $person', async ({
-  person,
-  written: expected,
-}) => {
-  const building = BuildingNode.parse({ id: 'building_follow' })
-  const level = LevelNode.parse({ id: 'level_ground', parentId: building.id, level: 0 })
-  building.children = [level.id]
-  useScene
-    .getState()
-    .setScene(Object.fromEntries([building, level].map((node) => [node.id, node])), [building.id])
-  useViewer.getState().setSelection({ buildingId: building.id, levelId: level.id })
-  useViewer.setState({ levelMode: 'stacked', hideLevelsAboveSelection: false })
-  useViewer.getState().setWallMode(person)
-  renderer = await create(
-    <>
-      <group name="scene-renderer" />
-      <FollowPascal />
-    </>,
-  )
-  shell = new Mesh(new BoxGeometry(6, 6, 6), new MeshBasicMaterial({ side: DoubleSide }))
-  shell.position.set(2, 0.5, 2)
-  renderer.scene.instance.getObjectByName('scene-renderer')!.add(shell)
-  shell.updateWorldMatrix(true, true)
-  const written: string[] = []
-  const stop = useViewer.subscribe((state, before) => {
-    if (state.wallMode !== before.wallMode) written.push(state.wallMode)
-  })
-  driver = startConstructionReveal({ reveals: (commit) => commit.author === 'agent' })
-  usePointAsk.getState().setBusy(true)
-  const wall = WallNode.parse({
-    id: 'wall_east',
-    parentId: level.id,
-    start: [4, 0],
-    end: [4, 4],
-    frontSide: 'interior',
-    backSide: 'exterior',
-  })
-  const window = WindowNode.parse({
-    id: 'window_east',
-    parentId: wall.id,
-    wallId: wall.id,
-    position: [1, 1.2, 0],
-  })
-  const sofa = ItemNode.parse({
-    id: 'item_sofa',
-    parentId: level.id,
-    position: [1, 0, 1],
-    asset: {
-      id: 'sofa',
-      category: 'furniture',
-      name: 'Sofa',
-      thumbnail: '',
-      src: '/sofa.glb',
-      dimensions: [2, 1, 1],
-    },
-  })
-  const roof = RoofNode.parse({ id: 'roof_east', parentId: level.id })
-  await act(async () => {
-    runAsSceneCommitAuthor('agent', () => {
-      useScene.getState().createNode(wall, level.id)
-      useScene.getState().createNode(window, wall.id)
-      useScene.getState().createNode(sofa, level.id)
-      useScene.getState().createNode(roof, level.id)
+])(
+  'a full build with Follow on (structure, openings, furnishing, roof) keeps the single cutaway, from $person',
+  async ({ person, written: expected }) => {
+    const building = BuildingNode.parse({ id: 'building_follow' })
+    const level = LevelNode.parse({ id: 'level_ground', parentId: building.id, level: 0 })
+    building.children = [level.id]
+    useScene
+      .getState()
+      .setScene(Object.fromEntries([building, level].map((node) => [node.id, node])), [building.id])
+    useViewer.getState().setSelection({ buildingId: building.id, levelId: level.id })
+    useViewer.setState({ levelMode: 'stacked', hideLevelsAboveSelection: false })
+    useViewer.getState().setWallMode(person)
+    renderer = await create(
+      <>
+        <group name="scene-renderer" />
+        <FollowPascal />
+      </>,
+    )
+    shell = new Mesh(new BoxGeometry(6, 6, 6), new MeshBasicMaterial({ side: DoubleSide }))
+    shell.position.set(2, 0.5, 2)
+    renderer.scene.instance.getObjectByName('scene-renderer')!.add(shell)
+    shell.updateWorldMatrix(true, true)
+    const written: string[] = []
+    const stop = useViewer.subscribe((state, before) => {
+      if (state.wallMode !== before.wallMode) written.push(state.wallMode)
     })
-    for (const id of ['wall_east', 'window_east', 'item_sofa', 'roof_east'])
-      sceneRegistry.nodes.set(id, new Group())
-    for (let at = 50; at <= 20000; at += 50) {
-      driver!.tick(at)
-      await renderer!.advanceFrames(1, 0.02)
-    }
-    await renderer!.advanceFrames(10, 0.1)
-  })
-  stop()
-  // The build was followed (the camera moved) and the walls were cut away once, never put up between.
-  expect(poses.length).toBeGreaterThan(0)
-  expect(written).toEqual(expected)
-  expect(useViewer.getState().wallMode).toBe('cutaway')
-  turnOver()
-  expect(useViewer.getState().wallMode).toBe(person)
-})
+    driver = startConstructionReveal({ reveals: (commit) => commit.author === 'agent' })
+    usePointAsk.getState().setBusy(true)
+    const wall = WallNode.parse({
+      id: 'wall_east',
+      parentId: level.id,
+      start: [4, 0],
+      end: [4, 4],
+      frontSide: 'interior',
+      backSide: 'exterior',
+    })
+    const window = WindowNode.parse({
+      id: 'window_east',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [1, 1.2, 0],
+    })
+    const sofa = ItemNode.parse({
+      id: 'item_sofa',
+      parentId: level.id,
+      position: [1, 0, 1],
+      asset: {
+        id: 'sofa',
+        category: 'furniture',
+        name: 'Sofa',
+        thumbnail: '',
+        src: '/sofa.glb',
+        dimensions: [2, 1, 1],
+      },
+    })
+    const roof = RoofNode.parse({ id: 'roof_east', parentId: level.id })
+    await act(async () => {
+      runAsSceneCommitAuthor('agent', () => {
+        useScene.getState().createNode(wall, level.id)
+        useScene.getState().createNode(window, wall.id)
+        useScene.getState().createNode(sofa, level.id)
+        useScene.getState().createNode(roof, level.id)
+      })
+      for (const id of ['wall_east', 'window_east', 'item_sofa', 'roof_east'])
+        sceneRegistry.nodes.set(id, new Group())
+      for (let at = 50; at <= 20000; at += 50) {
+        driver!.tick(at)
+        await renderer!.advanceFrames(1, 0.02)
+      }
+      await renderer!.advanceFrames(10, 0.1)
+    })
+    stop()
+    // The build was followed (the camera moved) and the walls were cut away once, never put up between.
+    expect(poses.length).toBeGreaterThan(0)
+    expect(written).toEqual(expected)
+    expect(useViewer.getState().wallMode).toBe('cutaway')
+    turnOver()
+    expect(useViewer.getState().wallMode).toBe(person)
+  },
+)

@@ -47,22 +47,24 @@ function staged(type: string, at: 'full' | 'framing', parentId: string) {
 describe('every built-in kind an agent can create', () => {
   const kinds = (builtinPlugin.nodes ?? []).map((definition) => definition.kind)
 
-  test.each(
-    kinds.filter((kind) => !DRAWS_NOTHING_OF_ITS_OWN.has(kind)),
-  )('%s is staged, on a level and on a roof, at the full and the framing levels', (kind) => {
-    for (const at of ['full', 'framing'] as const) {
-      for (const parentId of ['level', 'roof']) {
-        const [candidate] = staged(kind, at, parentId)
-        expect(candidate?.id).toBe('added')
+  test.each(kinds.filter((kind) => !DRAWS_NOTHING_OF_ITS_OWN.has(kind)))(
+    '%s is staged, on a level and on a roof, at the full and the framing levels',
+    (kind) => {
+      for (const at of ['full', 'framing'] as const) {
+        for (const parentId of ['level', 'roof']) {
+          const [candidate] = staged(kind, at, parentId)
+          expect(candidate?.id).toBe('added')
+        }
       }
-    }
-  })
+    },
+  )
 
-  test.each([
-    ...DRAWS_NOTHING_OF_ITS_OWN,
-  ])('%s stages nothing: it draws nothing of its own', (kind) => {
-    expect(staged(kind, 'full', 'level')).toEqual([])
-  })
+  test.each([...DRAWS_NOTHING_OF_ITS_OWN])(
+    '%s stages nothing: it draws nothing of its own',
+    (kind) => {
+      expect(staged(kind, 'full', 'level')).toEqual([])
+    },
+  )
 
   test('the exemptions are kinds that exist', () => {
     for (const kind of DRAWS_NOTHING_OF_ITS_OWN) expect(kinds).toContain(kind)
@@ -80,11 +82,12 @@ describe('the fields an edit replays a node for', () => {
       expect(kinds).toContain(kind)
   })
 
-  test.each(
-    withEdits.map((definition) => [definition.kind, definition] as const),
-  )('%s lists only fields its schema has', (_kind, definition) => {
-    const shape = (definition.schema as unknown as { shape: Record<string, unknown> }).shape
-    for (const field of definition.capabilities?.revealOnEdit ?? [])
-      expect(shape).toHaveProperty(field)
-  })
+  test.each(withEdits.map((definition) => [definition.kind, definition] as const))(
+    '%s lists only fields its schema has',
+    (_kind, definition) => {
+      const shape = (definition.schema as unknown as { shape: Record<string, unknown> }).shape
+      for (const field of definition.capabilities?.revealOnEdit ?? [])
+        expect(shape).toHaveProperty(field)
+    },
+  )
 })
