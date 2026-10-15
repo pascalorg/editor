@@ -93,7 +93,7 @@ import {
 } from './placement-snap'
 import useCabinetPlacementStatus from './placement-status'
 import useCabinetPlacementType from './placement-type'
-import { cabinetPresetById } from './presets'
+import { cabinetPresetById, WALL_CABINET_ELEVATION } from './presets'
 import {
   moduleMaxX,
   planRunModuleInsertion,
@@ -846,7 +846,7 @@ const CabinetPlacementTool = () => {
       bypassCollision: boolean,
     ): CabinetPlacement => {
       if (wallCabinet && !next.insertionPreview)
-        next = { ...next, position: [next.position[0], 1.5, next.position[2]] }
+        next = { ...next, position: [next.position[0], WALL_CABINET_ELEVATION, next.position[2]] }
       if (bypassCollision) {
         return { ...next, conflictIds: [], valid: !next.insertionFailure }
       }
@@ -977,7 +977,9 @@ const CabinetPlacementTool = () => {
       const raw = resolveRawPosition(event)
       lastRawPositionRef.current = raw
       const forcePlacement = isForcePlacementEvent(event)
+      // Alt forces past every snap, a run's magnetic join included (E-004).
       const neighbor =
+        !forcePlacement &&
         !islandModeRef.current &&
         isMagneticSnapActive() &&
         useEditor.getState().getContinuation('cabinet') === 'single'
@@ -1433,6 +1435,8 @@ const CabinetPlacementTool = () => {
         run,
       )
 
+      const history = useScene.temporal.getState()
+      const recorded = new Set(history.pastStates)
       try {
         return runAsSingleSceneHistoryStep(useScene, () => {
           const id = applyCabinetModuleInsertion({
@@ -1461,6 +1465,14 @@ const CabinetPlacementTool = () => {
           return id
         })
       } catch {
+        // A failure part-way leaves nothing behind: undo the writes it recorded, then forget them.
+        const added = useScene.temporal
+          .getState()
+          .pastStates.filter((state) => !recorded.has(state)).length
+        if (added > 0) {
+          useScene.temporal.getState().undo(added)
+          useScene.temporal.setState({ futureStates: history.futureStates })
+        }
         return null
       }
     }

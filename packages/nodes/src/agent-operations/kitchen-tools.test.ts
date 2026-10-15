@@ -1,14 +1,18 @@
 import { expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { nodeRegistry, registerNode } from '@pascal-app/core'
 import { CabinetModuleNode, CabinetNode, LevelNode, WallNode } from '@pascal-app/core/schema'
+import { SceneBridge } from '@pascal-app/mcp/bridge'
+import { createSceneOperations } from '@pascal-app/mcp/operations'
+import { registerOperationTool } from '@pascal-app/mcp/tools/shared-tools'
 import { cabinetDefinition, cabinetModuleDefinition } from '@pascal-app/nodes'
 import { builtinAgentOperations } from '@pascal-app/nodes/agent-operations'
 import { builtinAgentTools } from '@pascal-app/nodes/agent-tools'
-import { SceneBridge } from '../bridge/scene-bridge'
-import { createPascalMcpServer } from '../server'
 
+// The kitchen tools as a host registers them: the plugin's contracts and operations, the host's
+// annotations, through the shared-tool runner and a real client.
 for (const action of ['fill', 'align'] as const) {
   test(`kitchen ${action}: shared operation and real MCP client agree and undo together`, async () => {
     const restore = nodeRegistry._snapshot()
@@ -37,25 +41,27 @@ for (const action of ['fill', 'align'] as const) {
     const bridge = new SceneBridge()
     bridge.setScene(nodes, [level.id])
     bridge.clearHistory()
-    const server = createPascalMcpServer({
-      bridge,
-      operationTools: builtinAgentTools.tools.map((contract) => ({
+    const server = new McpServer({ name: 'kitchen-test', version: '0.0.0' })
+    const operations = createSceneOperations({ bridge })
+    for (const contract of builtinAgentTools.tools) {
+      if (contract.runsIn !== 'operation') continue
+      registerOperationTool(server, operations, {
         contract,
-        operation: builtinAgentOperations[contract.name],
+        operation: builtinAgentOperations[contract.name]!,
         annotations: {
           readOnlyHint: contract.name === 'kitchen_check_clearance',
           destructiveHint: false,
           openWorldHint: false,
         },
-      })),
-    })
-    const client = new Client({ name: 'kitchen-test', version: '1' })
+      })
+    }
+    const client = new Client({ name: 'kitchen-test', version: '0.0.0' })
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
     try {
       const list = await client.listTools()
       expect(list.tools.find((tool) => tool.name === 'kitchen_finish_run')?.description).toBe(
-        builtinAgentTools.tools[0].description,
+        builtinAgentTools.tools[0]!.description,
       )
       const result = await client.callTool({
         name: 'kitchen_finish_run',

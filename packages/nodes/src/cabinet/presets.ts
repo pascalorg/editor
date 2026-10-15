@@ -25,6 +25,9 @@ export type CabinetPresetId =
   | 'fridge-single'
   | 'wall-cabinet'
 
+/** Where a wall cabinet placed on its own hangs: its bottom, above the floor. */
+export const WALL_CABINET_ELEVATION = 1.5
+
 export type CabinetPreset = {
   id: CabinetPresetId
   label: string

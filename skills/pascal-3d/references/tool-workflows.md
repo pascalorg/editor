@@ -100,19 +100,6 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.
 
-## Kitchen finishing (when offered by the host)
-
-Use `kitchen_finish_run` with a cabinet run ID and `action: "align"` to match
-base heights, backs, reveals and handles, or `action: "fill"` to close 50–150 mm
-wall gaps at exposed ends. Both use the inspector’s planner and preserve hosted
-items or refuse with `hosted_items_unsupported`; move the affected countertop
-items before retrying. Each edit is one undo step.
-
-`kitchen_check_clearance` checks a run or module and returns advisory opening
-clearance warnings. It uses the same check as placement, movement and inspection.
-The envelopes are conservative; curved walls and wall openings are not resolved.
-These are plugin tools: use them only when the host lists them.
-
 ## Greenhouse and barrel roofs
 
 Use `create_roof` with `roofSystem: "glazed"` for a gable, straight shed or barrel greenhouse roof. For a barrel roof, `depth` is the span and `barrelRise` is the arch rise, no more than half the span. `barrelSegments` controls faceting. `glazing` sets frame dimensions, glass appearance, grid layouts, glazed ends and individual glass, solid or empty panels. Standard barrel construction uses a solid covering.

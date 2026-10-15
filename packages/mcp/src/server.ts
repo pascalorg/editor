@@ -18,7 +18,6 @@ import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerProjectFileTools } from './tools/project-files'
 import { answerRetiredTools } from './tools/retired-tools'
-import { type OperationTool, registerOperationTool } from './tools/shared-tools'
 import type { SceneViewHost } from './tools/view-scene'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
@@ -33,8 +32,6 @@ export type PascalMcpToolExecutor = <Result>(input: {
 
 export type CreatePascalMcpServerOptions = {
   bridge: SceneBridge
-  /** Reviewed plugin operations; the host supplies contracts, operations and annotations. */
-  operationTools?: readonly OperationTool[]
   operations?: SceneOperations
   /** Required for persistence tools. Hosted apps and CLIs inject their own store. */
   store?: SceneStore
@@ -82,7 +79,6 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     geometryScripts: opts.geometryScripts,
     sceneViews: opts.sceneViews,
   })
-  for (const tool of opts.operationTools ?? []) registerOperationTool(server, operations, tool)
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)
   if (opts.files) registerProjectFileTools(server, opts.files)

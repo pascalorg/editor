@@ -48,17 +48,19 @@ agents execute the same finishing planner, including hosted-item support checks.
   and inspection. It checks conservative envelopes against visible floor objects
   and straight walls; curved walls and wall openings are not resolved.
 
-Hosts that install the plugin supply reviewed operations to the MCP server.
-Load the plugin definitions into the scene registry as usual: clearance queries
-read each installed kind’s floor-placement capability.
+A host that installs the plugin registers its tools on its MCP server with
+`registerOperationTool`, the shared tools' runner, under its own reviewed
+annotations (see the MCP README's plugin tools). Load the plugin definitions into
+the scene registry as usual: clearance queries read each installed kind's
+floor-placement capability.
 
 ```ts
-import { builtinAgentTools } from '@pascal-app/nodes/agent-tools'
+import { registerOperationTool } from '@pascal-app/mcp/tools/shared-tools'
 import { builtinAgentOperations } from '@pascal-app/nodes/agent-operations'
+import { builtinAgentTools } from '@pascal-app/nodes/agent-tools'
 
-createPascalMcpServer({
-  bridge,
-  operationTools: builtinAgentTools.tools.map((contract) => ({
+for (const contract of builtinAgentTools.tools) {
+  registerOperationTool(server, operations, {
     contract,
     operation: builtinAgentOperations[contract.name],
     annotations: {
@@ -66,8 +68,8 @@ createPascalMcpServer({
       destructiveHint: false,
       openWorldHint: false,
     },
-  })),
-})
+  })
+}
 ```
 
 Hosted chat declares the same contracts and applies the same operation outcomes

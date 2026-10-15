@@ -535,11 +535,3 @@ bun run --cwd packages/mcp smoke
 ## License
 
 MIT
-
-## Plugin operations
-
-`createPascalMcpServer({ bridge, operationTools })` accepts host-reviewed plugin
-contracts, operations, and annotations. The framework does not import node packs
-or trust their annotation hints automatically. The built-in kitchen tools are
-exported by [`@pascal-app/nodes`](../nodes/README.md#kitchen-agent-tools); register
-the same contracts and operations in MCP and hosted chat.

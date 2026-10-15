@@ -7,14 +7,18 @@ import {
   resolveLevelId,
 } from '@pascal-app/core'
 import { type Frame, nodeLevelFrame } from '@pascal-app/core/procedural-items'
-import { cabinetOpeningConflicts } from './opening-clearance'
+import {
+  type ClearanceObstacle,
+  cabinetOpeningConflicts,
+  cabinetOpeningObstacles,
+} from './opening-clearance'
 
 export function cabinetPlacementNotice(
   node: CabinetNode | CabinetModuleNode,
   { nodes, live }: { nodes: Readonly<Record<string, AnyNode>>; live?: LiveTransformLike },
 ): PlacementNotice | null {
   const effective = live ? { ...node, position: live.position, rotation: live.rotation } : node
-  const scene = { ...nodes, [node.id]: effective }
+  const scene = live || nodes[node.id] !== node ? { ...nodes, [node.id]: effective } : nodes
   const levelId = resolveLevelId(effective, scene)
   if (!levelId) return null
   const cache = new Map<string, Frame>()
@@ -29,6 +33,9 @@ export function cabinetPlacementNotice(
     }
   }
   visit(effective)
+  // Read once, when a module has an opening to check.
+  let obstacles: ClearanceObstacle[] | undefined
+  const levelObstacles = () => (obstacles ??= cabinetOpeningObstacles(levelId, scene))
   for (const module of modules) {
     const pose = nodeLevelFrame(module.id, scene, new Set(), { cache })
     if (
@@ -38,6 +45,8 @@ export function cabinetPlacementNotice(
         Math.atan2(pose.axes[2][0], pose.axes[2][2]),
         levelId,
         scene,
+        [],
+        levelObstacles,
       ).length
     )
       return { line: 'Opening clearance: nearby objects may block a door or drawer' }

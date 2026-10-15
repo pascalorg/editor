@@ -1,4 +1,4 @@
-import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, CabinetModuleNode, CabinetNode } from '@pascal-app/core'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 
 export const KITCHEN_ITEMS = CABINET_PRESETS.map((preset) => ({
@@ -46,4 +46,19 @@ export function kitchenPresetForModule(
   if (node.cabinetType === 'tall') return 'tall-pantry'
   if (types.length > 0 && types.every((type) => type === 'drawer')) return 'drawer-base'
   return 'base-door'
+}
+
+/** The kitchen's placed modules a query names; fillers are part of their run, not items. */
+export function findKitchenItems(
+  nodes: Readonly<Record<string, AnyNode>>,
+  query: string,
+): CabinetModuleNode[] {
+  return Object.values(nodes).filter((node): node is CabinetModuleNode => {
+    if (node.type !== 'cabinet-module' || node.moduleKind !== 'standard') return false
+    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    const id = kitchenPresetForModule(node, parent?.type === 'cabinet' ? parent : undefined)
+    return (
+      kitchenItemMatches(id, query) || (node.name ?? '').toLowerCase().includes(query.toLowerCase())
+    )
+  })
 }

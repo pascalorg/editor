@@ -7,28 +7,19 @@ import {
   resolveLevelId,
   useScene,
 } from '@pascal-app/core'
-import { useCommandRegistry, useEditor } from '@pascal-app/editor'
+import { useCommandPalette, useCommandRegistry, useEditor } from '@pascal-app/editor'
 import {
   beginKitchenPlacement,
+  findKitchenItems,
   KITCHEN_ITEMS,
   KitchenCollection,
-  kitchenItemMatches,
   kitchenPresetForModule,
 } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
-function findKitchenItems(nodes: ReturnType<typeof useScene.getState>['nodes'], query: string) {
-  return Object.values(nodes).filter((node) => {
-    if (node.type !== 'cabinet-module' || node.moduleKind === 'corner-filler') return false
-    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
-    const id = kitchenPresetForModule(node, parent?.type === 'cabinet' ? parent : undefined)
-    return (
-      kitchenItemMatches(id, query) || (node.name ?? '').toLowerCase().includes(query.toLowerCase())
-    )
-  })
-}
+const NO_ITEMS: never[] = []
 
 function focusKitchenItem(id: AnyNodeId) {
   const nodes = useScene.getState().nodes
@@ -50,7 +41,10 @@ function focusKitchenItem(id: AnyNodeId) {
 export function KitchenBrowser({ query = '' }: { query?: string }) {
   const defaults = useEditor((state) => state.toolDefaults.cabinet)
   const mode = useEditor((state) => state.mode)
-  const matches = useScene(useShallow((state) => findKitchenItems(state.nodes, query)))
+  // Read the scene only while a query asks for placed items.
+  const matches = useScene(
+    useShallow((state) => (query.trim() ? findKitchenItems(state.nodes, query) : NO_ITEMS)),
+  )
   const active = KITCHEN_ITEMS.find((item) => item.id === defaults?.kitchenPreset)
   return (
     <div className="space-y-4">
@@ -92,18 +86,28 @@ export function KitchenBrowser({ query = '' }: { query?: string }) {
 
 export function KitchenCommands() {
   const register = useCommandRegistry((state) => state.register)
-  const modules = useScene(useShallow((state) => findKitchenItems(state.nodes, '')))
+  // Always mounted: the placed items are read only while the palette is open to list them.
+  const paletteOpen = useCommandPalette((state) => state.open)
+  const modules = useScene(
+    useShallow((state) => (paletteOpen ? findKitchenItems(state.nodes, '') : NO_ITEMS)),
+  )
   useEffect(
     () =>
-      register([
-        ...KITCHEN_ITEMS.map((item) => ({
+      register(
+        KITCHEN_ITEMS.map((item) => ({
           id: `kitchen.add.${item.id}`,
           label: `Add ${item.label}`,
           group: 'Kitchen · Add',
           keywords: item.keywords.split(' '),
           execute: () => beginKitchenPlacement(item.id),
         })),
-        ...modules.map((node) => {
+      ),
+    [register],
+  )
+  useEffect(
+    () =>
+      register(
+        modules.map((node) => {
           const nodes = useScene.getState().nodes
           const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
           const preset =
@@ -122,7 +126,7 @@ export function KitchenCommands() {
             execute: () => focusKitchenItem(node.id),
           }
         }),
-      ]),
+      ),
     [register, modules],
   )
   return null

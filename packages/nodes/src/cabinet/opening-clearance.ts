@@ -93,78 +93,117 @@ export function openingFootprintsOverlap(a: OpeningFootprint, b: OpeningFootprin
   })
 }
 
+/** Something a cabinet's openings can run into, with the ids of it and its ancestors. */
+export type ClearanceObstacle = {
+  id: string
+  chain: ReadonlySet<string>
+  footprints: OpeningFootprint[]
+}
+
+/**
+ * What openings on a level can run into: its visible straight walls and colliding floor-placed
+ * objects. One pass over the scene, shared by every module a check reads.
+ */
+export function cabinetOpeningObstacles(
+  levelId: string,
+  nodes: Readonly<Record<string, AnyNode>>,
+): ClearanceObstacle[] {
+  const scene = nodes as Record<AnyNodeId, AnyNode>
+  const cache = new Map<string, Frame>()
+  const obstacles: ClearanceObstacle[] = []
+  for (const candidate of Object.values(scene)) {
+    const straightWall = candidate.type === 'wall' && !candidate.curveOffset
+    const capability = straightWall
+      ? undefined
+      : nodeRegistry.get(candidate.type)?.capabilities?.floorPlaced
+    if (
+      !straightWall &&
+      !(
+        capability &&
+        floorPlacedCollides(capability, candidate) &&
+        (!capability.applies || capability.applies(candidate))
+      )
+    )
+      continue
+    const chain = new Set<string>()
+    let current: AnyNode | undefined = candidate
+    let hidden = false
+    while (current && !chain.has(current.id)) {
+      if (current.visible === false) {
+        hidden = true
+        break
+      }
+      chain.add(current.id)
+      current = current.parentId ? scene[current.parentId as AnyNodeId] : undefined
+    }
+    if (hidden || resolveLevelId(candidate, scene) !== levelId) continue
+    if (candidate.type === 'wall') {
+      const body = getWallBodyLine({ ...candidate, thickness: candidate.thickness ?? 0.2 })
+      const dx = body.end.x - body.start.x,
+        dz = body.end.y - body.start.y
+      const level = scene[levelId as AnyNodeId]
+      obstacles.push({
+        id: candidate.id,
+        chain,
+        footprints: [
+          {
+            position: [
+              (body.start.x + body.end.x) / 2,
+              nodeLevelFrame(candidate.id, scene, new Set(), { cache }).position[1],
+              (body.start.y + body.end.y) / 2,
+            ],
+            dimensions: [
+              Math.hypot(dx, dz),
+              candidate.height ?? (level?.type === 'level' ? (level.height ?? 3) : 3),
+              candidate.thickness ?? 0.2,
+            ],
+            rotation: [0, -Math.atan2(dz, dx), 0],
+          },
+        ],
+      })
+      continue
+    }
+    const pose = nodeLevelFrame(candidate.id, scene, new Set(), { cache })
+    const yaw = Math.atan2(pose.axes[2][0], pose.axes[2][2])
+    // Composite footprints include the node's pose. Resolve them at its origin before
+    // composing the hosting frame, so neither translation nor yaw is applied twice.
+    const local = {
+      ...candidate,
+      position: [0, 0, 0],
+      rotation: typeof ('rotation' in candidate && candidate.rotation) === 'number' ? 0 : [0, 0, 0],
+    } as AnyNode
+    obstacles.push({
+      id: candidate.id,
+      chain,
+      footprints: getFloorPlacedFootprints(capability!, local, { nodes: scene }).map((fp) => ({
+        position: transformPoint(pose, fp.position ?? [0, 0, 0]),
+        dimensions: fp.dimensions,
+        rotation: [0, yaw + (fp.rotation?.[1] ?? 0), 0] as [number, number, number],
+      })),
+    })
+  }
+  return obstacles
+}
+
 export function cabinetOpeningConflicts(
   node: CabinetModuleNode,
   position: [number, number, number],
   yaw: number,
   levelId: string,
-  nodes: Record<AnyNodeId, AnyNode>,
+  nodes: Readonly<Record<string, AnyNode>>,
   ignoreIds: readonly string[] = [],
+  obstacles: () => readonly ClearanceObstacle[] = () => cabinetOpeningObstacles(levelId, nodes),
 ) {
   const openings = cabinetOpeningFootprints(node, position, yaw)
   if (!openings.length) return []
-  const ignored = new Set([...ignoreIds, node.id])
-  const ignoredNode = (candidate: AnyNode) => {
-    let current: AnyNode | undefined = candidate
-    const visited = new Set<string>()
-    while (current && !visited.has(current.id)) {
-      if (ignored.has(current.id) || current.visible === false) return true
-      visited.add(current.id)
-      current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
-    }
-    return false
-  }
-  const cache = new Map<string, Frame>()
-  return Object.values(nodes)
-    .filter((candidate) => {
-      if (ignoredNode(candidate) || resolveLevelId(candidate, nodes) !== levelId) return false
-      if (candidate.type === 'wall' && !candidate.curveOffset) {
-        const body = getWallBodyLine({ ...candidate, thickness: candidate.thickness ?? 0.2 })
-        const dx = body.end.x - body.start.x,
-          dz = body.end.y - body.start.y
-        const level = nodes[levelId as AnyNodeId]
-        const wall: OpeningFootprint = {
-          position: [
-            (body.start.x + body.end.x) / 2,
-            nodeLevelFrame(candidate.id, nodes, new Set(), { cache }).position[1],
-            (body.start.y + body.end.y) / 2,
-          ],
-          dimensions: [
-            Math.hypot(dx, dz),
-            candidate.height ?? (level?.type === 'level' ? (level.height ?? 3) : 3),
-            candidate.thickness ?? 0.2,
-          ],
-          rotation: [0, -Math.atan2(dz, dx), 0],
-        }
-        return openings.some((opening) => openingFootprintsOverlap(opening, wall))
-      }
-      const capability = nodeRegistry.get(candidate.type)?.capabilities?.floorPlaced
-      if (
-        !capability ||
-        !floorPlacedCollides(capability, candidate) ||
-        (capability.applies && !capability.applies(candidate))
-      )
-        return false
-      const pose = nodeLevelFrame(candidate.id, nodes, new Set(), { cache })
-      // Composite footprints include the node's pose. Resolve them at its origin before
-      // composing the hosting frame, so neither translation nor yaw is applied twice.
-      const local = {
-        ...candidate,
-        position: [0, 0, 0],
-        rotation:
-          typeof ('rotation' in candidate && candidate.rotation) === 'number' ? 0 : [0, 0, 0],
-      } as AnyNode
-      return getFloorPlacedFootprints(capability, local, { nodes }).some((fp) => {
-        const position = transformPoint(pose, fp.position ?? [0, 0, 0])
-        const yaw = Math.atan2(pose.axes[2][0], pose.axes[2][2])
-        return openings.some((opening) =>
-          openingFootprintsOverlap(opening, {
-            position,
-            dimensions: fp.dimensions,
-            rotation: [0, yaw + (fp.rotation?.[1] ?? 0), 0],
-          }),
-        )
-      })
-    })
-    .map((candidate) => candidate.id)
+  const ignored = [...ignoreIds, node.id]
+  return obstacles()
+    .filter(
+      (obstacle) =>
+        !ignored.some((id) => obstacle.chain.has(id)) &&
+        obstacle.footprints.some((footprint) =>
+          openings.some((opening) => openingFootprintsOverlap(opening, footprint)),
+        ),
+    )
+    .map((obstacle) => obstacle.id)
 }
