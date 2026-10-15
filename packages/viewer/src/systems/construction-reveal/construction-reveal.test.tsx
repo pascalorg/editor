@@ -1406,6 +1406,37 @@ describe('an edit that changes a picture plays again', () => {
     expect(took[2]!).toBeLessThan(took[0.5]! / 1.5)
   })
 
+  test('many edits begin spread over the same time, not piled on its last frame', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const beams = Array.from({ length: 24 }, () => make(Beam))
+    await agentWrites(() =>
+      useScene.getState().createNodes(beams.map((node) => ({ node, parentId: levelId }))),
+    )
+    await until(() => beams.every((b) => !isNodeRevealing(b.id) && root(b.id)), 30000)
+    const starts: number[] = []
+    const stop = subscribeRevealEvents((event) => {
+      if (event.type === 'node-start') starts.push(event.atMs)
+    })
+    await agentWrites(() =>
+      useScene
+        .getState()
+        .updateNodes(
+          beams.map((b) => ({ id: b.id as AnyNodeId, data: { scale: [1, 1, 2] } as never })),
+        ),
+    )
+    await until(() => beams.every((b) => !isNodeRevealing(b.id)), 12000)
+    stop()
+    expect(starts).toHaveLength(24)
+    const span = Math.max(...starts) - Math.min(...starts)
+    expect(span).toBeLessThanOrEqual(1300)
+    // No frame starts more than a few: the last ones are not clamped onto one moment.
+    const perMoment = new Map<number, number>()
+    for (const at of starts) perMoment.set(at, (perMoment.get(at) ?? 0) + 1)
+    expect(Math.max(...perMoment.values())).toBeLessThanOrEqual(3)
+  })
+
   test('with the animation off, an edit is instant', async () => {
     level = 'off'
     const { beam } = await builtBeam()

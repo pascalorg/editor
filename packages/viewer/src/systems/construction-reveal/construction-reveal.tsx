@@ -904,6 +904,8 @@ function flushChanges(now: number) {
   if (waiting.length === 0) return
   registerChanges(waiting, now)
   const atOnce: ChangeCandidate[] = []
+  // However many move, they begin spread over the same time, never piled on the last frame.
+  const stagger = Math.min(GLIDE_STAGGER_MS, GLIDE_STAGGER_CAP_MS / waiting.length)
   let delay = 0
   for (const change of waiting) {
     const root = sceneRegistry.nodes.get(change.id)
@@ -911,11 +913,11 @@ function flushChanges(now: number) {
       poseGlide(change, root, 1)
       glides.set(change.id, {
         change,
-        startAt: now + Math.min(delay, GLIDE_STAGGER_CAP_MS),
+        startAt: now + delay,
         state: { x: 1, v: 0 },
         began: false,
       })
-      delay += GLIDE_STAGGER_MS
+      delay += stagger
       const group = changeGroups.get(changeGroupOf.get(change.id) ?? '')
       if (group) group.animated = true
       if (changeRun) changeRun.animated = true
