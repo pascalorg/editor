@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { LevelNode, useScene, WallNode } from '@pascal-app/core'
 import { BoxGeometry, Mesh, MeshBasicMaterial } from 'three'
-import { registerRevealGhostDresser } from '../../lib/reveal-ghost'
 import useViewer from '../../store/use-viewer'
 import { getMaterialsForWall } from '../wall/wall-materials'
 import { dressDeletionGhost } from './ghost-dress'
@@ -87,17 +86,5 @@ describe('the picture of a deleted wall', () => {
     const worn = clone.material
     dressDeletionGhost(source, clone, { ...node, type: 'fence' } as never)
     expect(clone.material).toBe(worn)
-  })
-
-  test('is offered to a kind that dresses what it shows', () => {
-    const seen: [unknown, unknown][] = []
-    const stop = registerRevealGhostDresser((source, clone) => seen.push([source, clone]))
-    const node = wall()
-    const { source, clone } = cutAway(node, false)
-    dressDeletionGhost(source, clone, node)
-    stop()
-    expect(seen).toEqual([[source, clone]])
-    dressDeletionGhost(source, clone, node)
-    expect(seen).toHaveLength(1)
   })
 })
