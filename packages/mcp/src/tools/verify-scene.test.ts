@@ -49,20 +49,22 @@ async function verify(bridge: SceneBridge, gadget: Record<string, unknown>) {
   const result = await client.callTool({ name: 'verify_scene', arguments: {} })
   return JSON.parse((result.content as Array<{ text: string }>)[0]!.text) as {
     valid: boolean
-    issues: { type: string; nodeId?: string; path?: string }[]
+    issues: { type: string; nodeId?: string; path?: string; kind?: string }[]
   }
 }
 
 // validate_scene checked nodes by the bridge's own schema; verify_scene, which took it over, does
-// too when the bridge lends one.
+// too when the bridge lends one. Without it, a plugin's kind is no error: no schema here reads it.
 describe('verify_scene checks nodes by the schema the bridge lends', () => {
-  test("a kind the host's schema accepts is valid there, and core's rejects it elsewhere", async () => {
+  test("a kind the host's schema accepts is valid there, and named once as unknown elsewhere", async () => {
     const lamp = { type: 'gadget:lamp', watts: 40 }
-    expect(await verify(new PluginHostBridge(), lamp)).toMatchObject({ valid: true })
+    const hosted = await verify(new PluginHostBridge(), lamp)
+    expect(hosted.valid).toBe(true)
+    expect(hosted.issues.map((issue) => issue.type)).not.toContain('schema_unknown_kind')
     const plain = await verify(new SceneBridge(), lamp)
-    expect(plain.valid).toBe(false)
+    expect(plain.valid).toBe(true)
     expect(plain.issues).toContainEqual(
-      expect.objectContaining({ type: 'schema_invalid', nodeId: 'g' }),
+      expect.objectContaining({ type: 'schema_unknown_kind', kind: 'gadget:lamp', nodeIds: ['g'] }),
     )
   })
 

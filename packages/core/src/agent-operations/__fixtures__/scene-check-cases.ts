@@ -75,6 +75,16 @@ const withNodes = (...extra: Record<string, unknown>[]) =>
     rootNodeIds: ['building_main'],
   }) satisfies SceneGraph
 
+/** A node of a plugin's kind no schema here knows. */
+const pluginNode = (id: string, type: string) => ({
+  object: 'node',
+  id,
+  type,
+  parentId: 'level_0',
+  visible: true,
+  metadata: {},
+})
+
 const badZone = (id: string, fields: Record<string, unknown>) => ({
   ...ZoneNode.parse({ id, parentId: 'level_0', name: 'Patio', polygon: rect(10, 0, 12, 2) }),
   ...fields,
@@ -166,20 +176,42 @@ export const VALIDATE_SCENE_CASES: AgentToolCase[] = [
       },
     },
   ),
+  // A plugin's node on a surface without the plugin: method.ts calls these expected, so they are
+  // named once per kind, as info, where validate_scene listed zod's whole list of kinds per node.
   verify(
-    'validate_scene {} with a node of no known kind (its type rejected): schema_invalid on that node',
-    () =>
-      withNodes({
-        object: 'node',
-        id: 'gadget_odd',
-        type: 'gadget',
-        parentId: 'level_0',
-        visible: true,
-        metadata: {},
-      }),
+    'validate_scene {} with a node of no known kind (its type rejected): schema_unknown_kind (info) names the kind and the node, and the scene stays valid',
+    () => withNodes(pluginNode('gadget_odd', 'gadget')),
     {
-      result: { valid: false },
-      contains: [{ type: 'schema_invalid', nodeId: 'gadget_odd' }],
+      result: { valid: true, hasIssues: false },
+      contains: [
+        {
+          type: 'schema_unknown_kind',
+          severity: 'info',
+          kind: 'gadget',
+          count: 1,
+          nodeIds: ['gadget_odd'],
+        },
+      ],
+      lacks: [{ type: 'schema_invalid' }],
+    },
+  ),
+  verify(
+    "validate_scene {} with 300 nodes of a plugin's kind (300 errors of the whole list of kinds): one schema_unknown_kind with the count and five ids, the answer small",
+    () =>
+      withNodes(...Array.from({ length: 300 }, (_, i) => pluginNode(`beam_${i}`, 'acme:beam'))),
+    {
+      result: { valid: true, hasIssues: false },
+      contains: [{ type: 'schema_unknown_kind', kind: 'acme:beam', count: 300 }],
+      check: (result) => {
+        const found = issuesOf(result, 'schema_unknown_kind')
+        const size = JSON.stringify(result).length
+        return [
+          ...(found.length === 1 && (found[0]!.nodeIds as string[]).length === 5
+            ? []
+            : [`${found.length} schema_unknown_kind, not one naming five of the nodes`]),
+          ...(size < 8_000 ? [] : [`the answer is ${size} bytes`]),
+        ]
+      },
     },
   ),
   verify(
@@ -198,6 +230,51 @@ export const VALIDATE_SCENE_CASES: AgentToolCase[] = [
       ],
     },
   ),
+  verify(
+    "validate_scene {} with a hidden site its schema rejects (the error and the hidden site's warning): schema_invalid and site_hidden on the site",
+    () => {
+      const site = { ...SiteNode.parse({ id: 'site_lot', visible: false }), children: null }
+      return { nodes: { [site.id]: site }, rootNodeIds: [site.id] }
+    },
+    {
+      result: { valid: false },
+      contains: [
+        { type: 'schema_invalid', nodeId: 'site_lot', path: 'children' },
+        { type: 'site_hidden', nodeId: 'site_lot' },
+      ],
+    },
+  ),
+  verify(
+    'validate_scene {} on a level stored with no children, which its schema fills (valid): valid, the level read with none',
+    () => {
+      const graph = ground()
+      const { children: _, ...stored } = graph.nodes.level_0 as Record<string, unknown>
+      graph.nodes.level_0 = stored
+      return graph
+    },
+    { result: { valid: true, levels: [{ levelId: 'level_0' }] } },
+  ),
+  // Measured around a wall it could not read, the room would read open, its door off its wall and
+  // the level with no door: the level waits for the fix.
+  verify(
+    "validate_scene {} with a finished room's wall its schema rejects (the error alone): schema_invalid on the wall, the level unread, no finding read around it",
+    () => {
+      const graph = ground(...living())
+      graph.nodes.wall_living_0 = { ...(graph.nodes.wall_living_0 as object), thickness: 'thick' }
+      return graph
+    },
+    {
+      result: { valid: false, levels: [{ levelId: 'level_0', unread: ['wall_living_0'] }] },
+      contains: [{ type: 'schema_invalid', nodeId: 'wall_living_0', path: 'thickness' }],
+      lacks: [
+        { type: 'room_not_enclosed' },
+        { type: 'space_no_room' },
+        { type: 'opening_not_on_wall' },
+        { type: 'walls_no_doors' },
+        { type: 'wall_open_end' },
+      ],
+    },
+  ),
 ]
 
 export const CHECK_ROOMS_CASES: AgentToolCase[] = [
@@ -209,8 +286,76 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
         hasIssues: false,
         levels: [{ levelId: 'level_0', content: { walls: 4, zones: 1 }, spaces: 1 }],
       },
-      lacks: [{ type: 'space_no_room' }, { type: 'room_not_enclosed' }, { type: 'room_unnamed' }],
+      lacks: [
+        { type: 'space_no_room' },
+        { type: 'space_many_rooms' },
+        { type: 'room_not_enclosed' },
+        { type: 'room_unnamed' },
+      ],
     },
+  ),
+  verify(
+    'check_rooms { levelId } on a space two drawn zones split beside the room the walls gave it ("space … : Room 1 + Kitchen + Dining"): space_many_rooms with the three zones',
+    () =>
+      ground(
+        ...wallRing('level_0', 'plan', ROOM),
+        roomZone('zone_room1', 'level_0', 'Room 1', ROOM, { autoFromWalls: true }),
+        ZoneNode.parse({
+          id: 'zone_kitchen',
+          parentId: 'level_0',
+          name: 'Kitchen',
+          polygon: rect(0, 0, 2, 3),
+        }),
+        ZoneNode.parse({
+          id: 'zone_dining',
+          parentId: 'level_0',
+          name: 'Dining',
+          polygon: rect(2, 0, 4, 3),
+        }),
+      ),
+    {
+      result: { hasIssues: true, levels: [{ levelId: 'level_0', spaces: 1 }] },
+      contains: [{ type: 'space_many_rooms', levelId: 'level_0' }],
+      check: (result) => {
+        const found = issuesOf(result, 'space_many_rooms')
+        const ids = (found[0]?.zoneIds ?? []) as string[]
+        return found.length === 1 &&
+          ids.length === 3 &&
+          ids.includes('zone_kitchen') &&
+          ids.includes('zone_dining')
+          ? []
+          : [`${found.length} space_many_rooms over ${ids.join(', ')}: one, over the three zones`]
+      },
+    },
+  ),
+  verify(
+    'check_rooms { levelId } on a room drawn inside the room the walls gave a space, its twin ("space … : Room 1 + Kitchen"): space_many_rooms with both',
+    () =>
+      ground(
+        ...wallRing('level_0', 'twin', ROOM),
+        roomZone('zone_room1', 'level_0', 'Room 1', ROOM, { autoFromWalls: true }),
+        roomZone('zone_kitchen', 'level_0', 'Kitchen', rect(0.5, 0.5, 3.5, 2.5)),
+      ),
+    {
+      contains: [{ type: 'space_many_rooms', levelId: 'level_0' }],
+      check: (result) => {
+        const ids = (issuesOf(result, 'space_many_rooms')[0]?.zoneIds ?? []) as string[]
+        return ids.length === 2 && ids.includes('zone_kitchen')
+          ? []
+          : [`space_many_rooms over ${ids.join(', ')}: the room and its twin`]
+      },
+    },
+  ),
+  verify(
+    'a mezzanine over its room does not split the space',
+    () =>
+      ground(
+        ...living(),
+        roomZone('zone_mezzanine', 'level_0', 'Mezzanine', rect(0, 0, 2, 3), {
+          floor: { support: 'open', elevation: 1.4 },
+        }),
+      ),
+    { lacks: [{ type: 'space_many_rooms' }] },
   ),
   // A store (the MCP's, the editor's) numbers a room for every space its walls enclose when it
   // loads a scene, and the reconciler after every edit, so a space with no zone is a graph read as
@@ -315,13 +460,16 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
     { contains: [{ type: 'room_not_enclosed', zoneId: 'zone_gone' }] },
   ),
   verify(
-    'check_rooms { levelId } on a zone three walls bound, left generic as set_zone draws one no room adopts ("… walls do not close around it"): room_not_enclosed',
+    'check_rooms { levelId } on a zone three walls bound, left generic as set_zone draws one no room adopts ("… walls do not close around it"): room_not_enclosed, info, as it may be a courtyard',
     () =>
       ground(
         ...wallRing('level_0', 'drawn', ROOM, true),
         ZoneNode.parse({ id: 'zone_drawn', parentId: 'level_0', name: 'Kitchen', polygon: ROOM }),
       ),
-    { contains: [{ type: 'room_not_enclosed', zoneId: 'zone_drawn' }] },
+    {
+      contains: [{ type: 'room_not_enclosed', zoneId: 'zone_drawn', severity: 'info' }],
+      mentions: ['a room missing a wall or a courtyard'],
+    },
   ),
   verify(
     'check_rooms { levelId } on such a zone named Zone ("… walls do not close around it unnamed"): room_not_enclosed and room_unnamed',
@@ -379,5 +527,51 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
         }),
       ),
     { lacks: [{ type: 'room_not_enclosed' }, { type: 'room_unnamed' }] },
+  ),
+  verify(
+    "a courtyard the house's rooms bound on three sides is no defect: room_not_enclosed on it is info, and the scene clean",
+    () =>
+      ground(
+        ...finished('west', 'Living', rect(0, 0, 3, 5)),
+        ...finished('east', 'Kitchen', rect(7, 0, 10, 5)),
+        ...finished('north', 'Hall', rect(3, -3, 7, 0)),
+        ZoneNode.parse({
+          id: 'zone_court',
+          parentId: 'level_0',
+          name: 'Courtyard',
+          polygon: rect(3, 0, 7, 5),
+        }),
+      ),
+    {
+      result: { hasIssues: false },
+      contains: [{ type: 'room_not_enclosed', zoneId: 'zone_court', severity: 'info' }],
+    },
+  ),
+  verify(
+    'an open-air courtyard behind garden walls, no floor and no ceiling, is no room',
+    () => {
+      const court = rect(6, 0, 10, 3)
+      return ground(
+        ...living(),
+        ...court.slice(0, -1).map((start, i) =>
+          WallNode.parse({
+            id: `wall_garden_${i}`,
+            parentId: 'level_0',
+            start,
+            end: court[i + 1],
+            height: 0.6,
+          }),
+        ),
+        ZoneNode.parse({
+          id: 'zone_court',
+          parentId: 'level_0',
+          name: 'Courtyard',
+          polygon: court,
+          hasFloor: false,
+          hasCeiling: false,
+        }),
+      )
+    },
+    { lacks: [{ type: 'room_not_enclosed' }] },
   ),
 ]

@@ -30,6 +30,6 @@ export const RETIRED_MCP_TOOLS: Readonly<Record<string, RetiredTool>> = {
   // The schema check, into the one scene check.
   validate_scene: {
     replacement: 'verify_scene',
-    how: "its valid is validate_scene's valid; each field a node's schema rejects is an issue of type schema_invalid with its nodeId, path and message, every one as validate_scene listed them; a hidden site, validate_scene's warning, is the issue site_hidden (severity info).",
+    how: "its valid is validate_scene's valid; each field a node's schema rejects is an issue of type schema_invalid with its nodeId, path and message, every one as validate_scene listed them; nodes of a kind no schema here knows (a plugin's), each an error there, are one issue schema_unknown_kind (severity info) per kind, with its count and a few nodeIds; a hidden site, validate_scene's warning, is the issue site_hidden (severity info).",
   },
 }

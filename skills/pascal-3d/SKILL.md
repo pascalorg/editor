@@ -85,8 +85,8 @@ After a meaningful edit:
 
 1. Call `verify_scene`: schema validity (`valid`, each `schema_invalid` with its node and path) and practical scene issues.
 2. Resolve relevant reported issues or state them plainly.
-4. Call `save_scene` with `saveMode: "draft"` for working progress. Use `saveMode: "checkpoint"` only for a meaningful milestone or when the user requests a durable version.
-5. Call `get_project_status` after the save and use its returned `editorUrl`, version, node count, and graph hash as the handoff evidence.
+3. Call `save_scene` with `saveMode: "draft"` for working progress. Use `saveMode: "checkpoint"` only for a meaningful milestone or when the user requests a durable version.
+4. Call `get_project_status` after the save and use its returned `editorUrl`, version, node count, and graph hash as the handoff evidence.
 
 An HTTP success, a tool response with `isError: false`, or a non-empty scene ID does not by itself prove the requested result. For example, `export_glb` currently returns a structured `not_implemented` status in the open-source headless MCP server. Report that as unsupported; do not claim a file exists.
 

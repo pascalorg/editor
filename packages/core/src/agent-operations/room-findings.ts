@@ -6,22 +6,32 @@ import type { AnyNode } from '../schema'
 import { nodesOnLevel } from './scene-queries'
 import type { SceneNodes } from './types'
 
+/** A space the walls and separators enclose, where a finding about it places it. */
+type SpacePlace = {
+  levelId: string
+  /** The space's floor area, m². */
+  area: number
+  /** A point inside the space, in plan [x, z]. */
+  at: [number, number]
+  wallIds: string[]
+}
+
 /**
  * A level's rooms against the spaces its walls and separators enclose (the editor's detected
- * spaces): a space no zone covers, a room the walls do not close, a room with no name.
+ * spaces): a space no zone covers, a space several zones split, a room the walls do not close, a
+ * room with no name.
  */
 export type RoomFinding =
+  | ({ type: 'space_no_room'; message: string } & SpacePlace)
+  | ({ type: 'space_many_rooms'; message: string; zoneIds: string[] } & SpacePlace)
   | {
-      type: 'space_no_room'
+      type: 'room_not_enclosed'
       message: string
+      /** On a zone left generic: a room still missing a wall, or a courtyard. */
+      severity?: 'info'
       levelId: string
-      /** The space's floor area, m². */
-      area: number
-      /** A point inside the space, in plan [x, z]. */
-      at: [number, number]
-      wallIds: string[]
+      zoneId: string
     }
-  | { type: 'room_not_enclosed'; message: string; levelId: string; zoneId: string }
   | { type: 'room_unnamed'; message: string; severity: 'info'; levelId: string; zoneId: string }
 
 type Zone = AnyNode & { type: 'zone' }
@@ -31,7 +41,7 @@ type Shape = { polygon: Polygon; box: [number, number, number, number]; area: nu
 /** No name, or the bare word an older scene or a blank name leaves: "Room", "Zone". */
 const PLACEHOLDER_NAME = /^\s*(room|zone)?\s*$/i
 
-/** A space is covered, a room enclosed, and a zone walled like a room, past half. */
+/** A space is covered, a room enclosed, a zone in a space, and a zone walled like a room, past half. */
 const HALF = 0.5
 /** How far past a wall's face its outline may run and still be walled, m. */
 const ALONG_WALL = 0.1
@@ -94,13 +104,19 @@ function walled(zone: Zone, walls: readonly Wall[]): number {
   return samples > 0 ? along / samples : 0
 }
 
+const label = (zone: Zone) =>
+  PLACEHOLDER_NAME.test(zone.name) ? zone.id : `"${zone.name}" (${zone.id})`
+
 /**
- * Every space the walls enclose wants a zone over it (any zone: a drawn one is adopted as the room
- * on load). Every room wants walls or separators closing around it, and a name: a zone with
- * `spaceRole: 'room'`, or one walls bound along most of its outline (a room drawn before its last
- * wall, which no reconcile could adopt). A terrace closes with separators, so it is enclosed; a
- * room a person declared open (`enclosureStatus: 'open'` on a room the walls never derived) needs
- * no walls; an automatic room the reconciler opened when its walls stopped closing it does.
+ * Every space the walls enclose wants one zone over it (any zone: a drawn one is adopted as the
+ * room on load): none, or several lying in it (the reconciler's "Room N" beside a zone drawn over
+ * it, a plan's rooms split by lines no wall draws), is a finding. Every room wants walls or
+ * separators closing around it, and a name: a zone with `spaceRole: 'room'`, or a generic one walls
+ * bound along most of its outline, which may be a room drawn before its last wall (no reconcile
+ * could adopt it) or a courtyard, so what is found on it is info; a generic zone with no floor or
+ * no ceiling is open-air. A terrace closes with separators, so it is enclosed; a room a person
+ * declared open (`enclosureStatus: 'open'` on a room the walls never derived) needs no walls; an
+ * automatic room the reconciler opened when its walls stopped closing it does.
  */
 export function roomFindings(
   nodes: SceneNodes,
@@ -123,32 +139,57 @@ export function roomFindings(
 
   spaces.forEach((space, index) => {
     const shape = spaceShapes[index]!
-    if (covered(shape, zoneShapes) >= HALF) return
+    // A mezzanine stands over its room, it does not split the space.
+    const inside = zones.filter(
+      (zone, z) => zone.floor?.support !== 'open' && covered(zoneShapes[z]!, [shape]) >= HALF,
+    )
+    const noRoom = covered(shape, zoneShapes) < HALF
+    if (!noRoom && inside.length < 2) return
     const spaceArea = round(shape.area)
     const [x, z] = polygonInteriorPoint(space, true).map(round) as [number, number]
-    issues.push({
-      type: 'space_no_room',
-      message: `On ${levelName}, walls ${space.wallIds.join(', ')} enclose a ${spaceArea.toFixed(1)} m² space at (${x.toFixed(2)}, ${z.toFixed(2)}) with no room over it.`,
+    const place = {
       levelId,
       area: spaceArea,
-      at: [x, z],
+      at: [x, z] as [number, number],
       wallIds: space.wallIds,
-    })
+    }
+    const where = `On ${levelName}, walls ${space.wallIds.join(', ')} enclose a ${spaceArea.toFixed(1)} m² space at (${x.toFixed(2)}, ${z.toFixed(2)})`
+    issues.push(
+      noRoom
+        ? { type: 'space_no_room', message: `${where} with no room over it.`, ...place }
+        : {
+            type: 'space_many_rooms',
+            message: `${where} with ${inside.length} rooms over it and no wall between them: ${inside.map(label).join(', ')}. Keep one room per space: name the space's room (create_room over the whole space names it) and delete the others, or divide the space with a wall or separator.`,
+            ...place,
+            zoneIds: inside.map((zone) => zone.id),
+          },
+    )
   })
 
   zones.forEach((zone, index) => {
-    if (zone.spaceRole !== 'room' && walled(zone, walls) < HALF) return
+    const room = zone.spaceRole === 'room'
+    const openAir = zone.hasFloor === false || zone.hasCeiling === false
+    if (!room && (openAir || walled(zone, walls) < HALF)) return
     const unnamed = PLACEHOLDER_NAME.test(zone.name)
-    const label = unnamed ? zone.id : `"${zone.name}" (${zone.id})`
     const declaredOpen = zone.enclosureStatus === 'open' && !zone.autoFromWalls
     const opened = zone.enclosureStatus === 'open' && zone.autoFromWalls
     if (!declaredOpen && (opened || covered(zoneShapes[index]!, spaceShapes) < HALF))
-      issues.push({
-        type: 'room_not_enclosed',
-        message: `Room ${label} on ${levelName}: its walls do not close around it.`,
-        levelId,
-        zoneId: zone.id,
-      })
+      issues.push(
+        room
+          ? {
+              type: 'room_not_enclosed',
+              message: `Room ${label(zone)} on ${levelName}: its walls do not close around it.`,
+              levelId,
+              zoneId: zone.id,
+            }
+          : {
+              type: 'room_not_enclosed',
+              message: `Zone ${label(zone)} on ${levelName}: walls run along most of it and do not close around it, a room missing a wall or a courtyard.`,
+              severity: 'info',
+              levelId,
+              zoneId: zone.id,
+            },
+      )
     if (unnamed)
       issues.push({
         type: 'room_unnamed',
