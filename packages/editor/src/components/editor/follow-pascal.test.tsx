@@ -9,11 +9,12 @@ import {
   loadPlugin,
   nodeRegistry,
   runAsSceneCommitAuthor,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { startConstructionReveal, useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import { BoxGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
+import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import useEditor from '../../store/use-editor'
 import useFollowPascal from '../../store/use-follow-pascal'
 import { usePointAsk } from '../../store/use-point-ask'
@@ -68,6 +69,7 @@ afterEach(async () => {
   await renderer?.unmount()
   renderer = null
   restoreRegistry()
+  sceneRegistry.nodes.delete('item_follow')
   useScene.setState(previousScene)
   useViewer.setState(previousViewer)
   useEditor.setState(previousEditor)
@@ -90,6 +92,8 @@ type FollowSetup = {
   /** Walls all round the target, so no eye sees it clear and Follow falls back to cutaway. */
   enclosed?: boolean
   hideAbove?: boolean
+  /** How long the reveal plays before the test looks (long enough to play the item in, by default). */
+  playMs?: number
 }
 
 async function followItem(
@@ -144,7 +148,13 @@ async function followItem(
         target.id,
       ),
     )
-    driver!.tick(20)
+    // The item's renderer has mounted its root, as it does once the reveal lets the item in.
+    sceneRegistry.nodes.set('item_follow', new Group())
+    // The reveal plays whatever floor the person has: its words come as each piece starts.
+    for (let at = 50; at <= (setup.playMs ?? 6000); at += 50) {
+      driver!.tick(at)
+      await renderer!.advanceFrames(1, 0.02)
+    }
     await renderer!.advanceFrames(10, 0.1)
   })
   return { building, target }
@@ -170,6 +180,23 @@ test.each([
     buildingId: building.id,
     levelId: fromUpper ? 'level_upper' : 'level_ground',
   })
+})
+
+// The owner, 15 October: a person on the ground floor with the floors above hidden did not see the
+// animation of a build on the floor above. With Follow off the build still plays on show, and the
+// person's own floor is not touched.
+test('with Follow off, a build on the floor above plays on show and the person keeps their floor', async () => {
+  useFollowPascal.setState({ on: false })
+  const { target } = await followItem(false, 'stacked', { playMs: 200 })
+  expect(useViewer.getState().selection.levelId).toBe('level_ground')
+  expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
+  expect(useViewer.getState().levelsRevealing).toEqual([target.id])
+  expect(poses.length).toBe(0)
+  await act(async () => {
+    for (let at = 250; at <= 9000; at += 50) driver!.tick(at)
+  })
+  expect(useViewer.getState().levelsRevealing).toEqual([])
+  expect(useViewer.getState().selection.levelId).toBe('level_ground')
 })
 
 test('an obstacle appearing after arrival causes one calm flight to a clear view', async () => {

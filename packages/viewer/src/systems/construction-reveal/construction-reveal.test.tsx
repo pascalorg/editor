@@ -137,6 +137,12 @@ const Plate = revealKind(
   { phase: 'foundation', style: 'settle', height: 0.08 },
   () => new BoxGeometry(4, 0.2, 4).translate(2, -0.1, 2),
 )
+const Flight = revealKind(
+  'fixture:flight',
+  'fxflight',
+  { phase: 'circulation', style: 'drop', height: 2.5 },
+  () => new BoxGeometry(1, 2.5, 3).translate(0, 1.25, 1.5),
+)
 const Pane = revealKind('fixture:pane', 'fxpane', { phase: 'openings', style: 'cut' }, () =>
   new BoxGeometry(1, 1.2, 0.1).translate(0, 1.5, 0),
 )
@@ -301,6 +307,7 @@ beforeEach(async () => {
       Item.definition,
       Post.definition,
       Plate.definition,
+      Flight.definition,
       Pane.definition,
       Roof.definition,
       Lid.definition,
@@ -702,30 +709,6 @@ describe('always instant', () => {
     await agentWrites(() => useScene.getState().createNode(wall, levelId))
     expect(root(wall.id)).toBeDefined()
   })
-
-  test('a level nobody sees shows at once and holds no slot', async () => {
-    const levelIds = loadLevels(2)
-    await mount(levelIds)
-    useViewer.setState({
-      hideLevelsAboveSelection: true,
-      selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
-    } as never)
-    start()
-    const below = make(Wall)
-    const above = make(Wall)
-    await agentWrites(() =>
-      useScene.getState().createNodes([
-        { node: above, parentId: levelIds[1]! },
-        { node: below, parentId: levelIds[0]! },
-      ]),
-    )
-    await frame()
-
-    expect(root(above.id)).toBeDefined()
-    expect(isNodeRevealing(above.id)).toBe(false)
-    expect(root(below.id)).toBeDefined()
-    expect(isNodeRevealing(below.id)).toBe(true)
-  })
 })
 
 describe('the root stays its own', () => {
@@ -1087,37 +1070,182 @@ describe('the plan view reads the same reveal', () => {
   })
 })
 
-describe('failure mode 10: a level nobody sees', () => {
-  test('hidden after planning, it stops holding the visible level back', async () => {
+describe('the level the work is on shows while it plays', () => {
+  const GROUND_ONLY = (levelIds: AnyNodeId[]) =>
+    useViewer.setState({
+      hideLevelsAboveSelection: true,
+      selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
+    } as never)
+
+  test('a wall built above the selected level is revealed, and its level is on show meanwhile', async () => {
     const levelIds = loadLevels(2)
     await mount(levelIds)
+    GROUND_ONLY(levelIds)
     start()
-    const below = [make(Wall), make(Wall)]
-    const above = Array.from({ length: 24 }, () => make(Wall))
-    const item = make(Item)
+    const below = make(Wall)
+    const above = make(Wall)
+    await agentWrites(() =>
+      useScene.getState().createNodes([
+        { node: above, parentId: levelIds[1]! },
+        { node: below, parentId: levelIds[0]! },
+      ]),
+    )
+    await frame()
+    expect(isNodeRevealing(above.id)).toBe(true)
+    expect(isNodeRevealing(below.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toContain(levelIds[1]!)
+
+    await until(() => Boolean(root(above.id)) && hasRevealPose(root(above.id)!))
+    await until(() => !isNodeRevealing(above.id) && !isNodeRevealing(below.id), 9000)
+    expect(composed(root(above.id)!).equals(own(root(above.id)!))).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual([])
+  })
+
+  test('the solo view of the ground floor does not hide a storey being built', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    useViewer.setState({
+      levelMode: 'solo',
+      selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
+    } as never)
+    start()
+    const above = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(above, levelIds[1]!))
+    await frame()
+    expect(isNodeRevealing(above.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+  })
+
+  test('a level the author hid still shows its build at once and holds no slot', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    useScene.getState().updateNode(levelIds[1]!, { visible: false } as never)
+    start()
+    const hidden = make(Wall)
+    const seen = make(Wall)
+    await agentWrites(() =>
+      useScene.getState().createNodes([
+        { node: hidden, parentId: levelIds[1]! },
+        { node: seen, parentId: levelIds[0]! },
+      ]),
+    )
+    await frame()
+    expect(root(hidden.id)).toBeDefined()
+    expect(isNodeRevealing(hidden.id)).toBe(false)
+    expect(isNodeRevealing(seen.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).not.toContain(levelIds[1]!)
+  })
+
+  test('a volume over two storeys plays on both while the person watches the ground floor', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    GROUND_ONLY(levelIds)
+    start()
+    const walls = [make(Wall), make(Wall)]
+    const upperWalls = [make(Wall), make(Wall)]
+    const upperRoof = make(Roof)
     await agentWrites(() =>
       useScene
         .getState()
         .createNodes([
-          ...below.map((node) => ({ node, parentId: levelIds[0]! })),
-          ...above.map((node) => ({ node, parentId: levelIds[1]! })),
-          { node: item, parentId: levelIds[0]! },
+          ...walls.map((node) => ({ node, parentId: levelIds[0]! })),
+          ...upperWalls.map((node) => ({ node, parentId: levelIds[1]! })),
+          { node: upperRoof, parentId: levelIds[1]! },
         ]),
     )
-    await frames(60)
+    await frame()
+    for (const node of [...walls, ...upperWalls, upperRoof]) {
+      expect(isNodeRevealing(node.id)).toBe(true)
+    }
+    await until(
+      () => [...walls, ...upperWalls, upperRoof].every((node) => !isNodeRevealing(node.id)),
+      12000,
+    )
+    expect(useViewer.getState().levelsRevealing).toEqual([])
+  })
+
+  test('a stair across two storeys plays on the upper one too', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    GROUND_ONLY(levelIds)
+    start()
+    const flight = make(Flight)
+    const landing = make(Plate)
+    await agentWrites(() =>
+      useScene.getState().createNodes([
+        { node: flight, parentId: levelIds[0]! },
+        { node: landing, parentId: levelIds[1]! },
+      ]),
+    )
+    await frame()
+    expect(isNodeRevealing(flight.id)).toBe(true)
+    expect(isNodeRevealing(landing.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual(
+      expect.arrayContaining([levelIds[0]!, levelIds[1]!]),
+    )
+  })
+
+  test("the person's later choice of level does not cut the animation short", async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    GROUND_ONLY(levelIds)
+    start()
+    const upperWalls = Array.from({ length: 4 }, () => make(Wall))
+    await agentWrites(() =>
+      useScene.getState().createNodes(upperWalls.map((node) => ({ node, parentId: levelIds[1]! }))),
+    )
+    await frames(200)
+    // They look at the ground floor again, then at the upper one: the build is on show either way.
     await act(async () =>
       useViewer.setState({
-        hideLevelsAboveSelection: true,
         selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
       } as never),
     )
     await frame()
-    for (const wall of above) expect(isNodeRevealing(wall.id)).toBe(false)
+    expect(upperWalls.some((node) => isNodeRevealing(node.id))).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+    await until(() => upperWalls.every((node) => !isNodeRevealing(node.id)), 9000)
+    for (const node of upperWalls) {
+      expect(composed(root(node.id)!).equals(own(root(node.id)!))).toBe(true)
+    }
+  })
 
-    // Planned with the upper floor, the item would wait for its 24 walls (about 1.9 s).
-    const hiddenAt = now
-    await until(() => Boolean(root(item.id)))
-    expect(now - hiddenAt).toBeLessThan(900)
+  test('a piece the agent moves on an upper level glides while the person watches the ground floor', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    start()
+    const piece = make(Movable, { position: [0, 0, 0] })
+    await agentWrites(() => useScene.getState().createNode(piece, levelIds[1]!))
+    await until(() => !isNodeRevealing(piece.id) && root(piece.id) !== undefined, 9000)
+    GROUND_ONLY(levelIds)
+    await agentWrites(() =>
+      useScene
+        .getState()
+        .updateNodes([{ id: piece.id as AnyNodeId, data: { position: [3, 0, 2] } as never }]),
+    )
+    await frame()
+    expect(isNodeRevealing(piece.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+  })
+
+  test('an undo plays back a build on an upper level the display hides', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    start()
+    const above = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(above, levelIds[1]!))
+    await until(() => !isNodeRevealing(above.id) && root(above.id) !== undefined, 9000)
+    GROUND_ONLY(levelIds)
+    let result: RetractResult | null = null
+    await act(async () => {
+      retractNodes([above.id]).then((value) => {
+        result = value
+      })
+    })
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+    await until(() => result !== null, 6000)
+    expect((result as RetractResult | null)?.retracted).toEqual([above.id])
+    expect((result as RetractResult | null)?.instant).toBe(false)
   })
 })
 
@@ -1979,6 +2107,20 @@ describe('undo plays the build in reverse', () => {
     }
     return { result: result as RetractResult | null, took: now - begun }
   }
+
+  test('a kind that declares no reveal, which came in with a default one, goes out the same way', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const loose = make(Part)
+    await agentWrites(() => useScene.getState().createNode(loose, levelId))
+    await until(() => !isNodeRevealing(loose.id) && root(loose.id) !== undefined, 9000)
+
+    const { result } = await retract([loose.id])
+    expect(result?.instant).toBe(false)
+    expect(result?.retracted).toEqual([loose.id])
+    expect(result?.skipped).toEqual([])
+  })
 
   test('the last phase goes first, back to the slab, each saying so, and all are hidden after', async () => {
     const { slab, walls, pane, crates, all } = await builtHouse()

@@ -59,7 +59,6 @@ import {
 } from '../../lib/reveal-schedule'
 import { clearRiseTextureScale, setRiseTextureScale } from '../../lib/reveal-texture-scale'
 import useViewer from '../../store/use-viewer'
-import { resolveLevelVisibility } from '../level/level-utils'
 import { ConstructionDust } from './construction-dust'
 
 /**
@@ -73,8 +72,9 @@ import { ConstructionDust } from './construction-dust'
  * The host decides which commits reveal (`reveals`) and how much animation
  * plays (`level`); the viewer knows no agent. A reveal ends at once on a load
  * or hydration, an undo, a capture or export, and for selected nodes; it
- * never plays under reduced motion or in a read-only viewer, and never for a
- * level nobody sees.
+ * never plays under reduced motion or in a read-only viewer. A level the person's
+ * display hides (the levels above the selected one, solo) shows while its work plays,
+ * so the build is seen; a level the author hid shows its build at once.
  */
 
 export type { ConstructionRevealLevel } from '../../lib/reveal-candidates'
@@ -1026,24 +1026,38 @@ function revealCandidates(commit: SceneCommit, at: ConstructionRevealLevel): Sta
   )
 }
 
-function levelShown(levelId: string | null): boolean {
-  if (!levelId) return true
-  const nodes = useScene.getState().nodes
-  const level = nodes[levelId as AnyNodeId]
-  if (level?.type !== 'level') return true
-  const viewer = useViewer.getState()
-  const selectedId = viewer.selection.levelId
-  const selected = selectedId ? nodes[selectedId as AnyNodeId] : undefined
-  const { visible, shadowOnly } = resolveLevelVisibility({
-    levelMode: viewer.levelMode,
-    hideAbove: viewer.hideLevelsAboveSelection,
-    hasSelectedLevel: Boolean(selectedId),
-    isSelected: level.id === selectedId,
-    index: level.level,
-    selectedIndex: selected?.type === 'level' ? selected.level : undefined,
-    nodeVisible: level.visible !== false,
-  })
-  return visible && !shadowOnly
+/** The author's own eye on a level (the sidebar's) is the one thing that keeps its work out of sight. */
+function levelHiddenByAuthor(levelId: string | null): boolean {
+  if (!levelId) return false
+  const level = useScene.getState().nodes[levelId as AnyNodeId]
+  return level?.type === 'level' && level.visible === false
+}
+
+/** The levels the reveal has work on: what waits, moves, goes out or is carried to a new place. */
+function levelsAtWork(): string[] {
+  const levels = new Set<string>()
+  const add = (levelId: string | null) => {
+    if (levelId) levels.add(levelId)
+  }
+  for (const candidate of pending.values()) add(candidate.levelId)
+  for (const reveal of active.values()) add(reveal.levelId)
+  for (const retract of retracts.values()) add(retract.group.levelId)
+  for (const glide of glides.values()) add(glide.change.levelId)
+  for (const change of changeQueue) add(change.levelId)
+  return [...levels]
+}
+
+/**
+ * Tells the viewer which levels the reveal is working on, so each shows while its work plays: a build
+ * on the storey above the one the person has selected, or in the solo view of another, is seen, not
+ * played to nobody. The person's own choice of level is left as it is; the level steps aside again
+ * when its work is done.
+ */
+function publishLevelsAtWork() {
+  const next = levelsAtWork()
+  const current = useViewer.getState().levelsRevealing
+  if (next.length === current.length && next.every((levelId) => current.includes(levelId))) return
+  useViewer.setState({ levelsRevealing: next })
 }
 
 function endReveal(reveal: ActiveReveal, forced = false) {
@@ -1166,7 +1180,8 @@ function puffAroundFoot(reveal: ActiveReveal, root: Object3D, now: number) {
 
 function stepReveal(reveal: ActiveReveal, now: number) {
   const { nodes, dirtyNodes } = useScene.getState()
-  if (!nodes[reveal.id as AnyNodeId] || !levelShown(reveal.levelId)) return endReveal(reveal)
+  if (!nodes[reveal.id as AnyNodeId] || levelHiddenByAuthor(reveal.levelId))
+    return endReveal(reveal)
   const root = sceneRegistry.nodes.get(reveal.id)
   if (!root) {
     if (now - reveal.startedAt > MOUNT_TIMEOUT_MS) endReveal(reveal)
@@ -1594,7 +1609,7 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
       !pending.has(candidate.id) &&
       !retracts.has(candidate.id) &&
       !held.has(candidate.id) &&
-      levelShown(candidate.levelId),
+      !levelHiddenByAuthor(candidate.levelId),
   )
   const taken = new Set(staged.map((candidate) => candidate.id))
   const skipped = asked.filter((id) => !taken.has(id))
@@ -1687,6 +1702,7 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
       // A plan entry that draws it hears that it is going.
       notifyPending(entry.id)
     }
+    publishLevelsAtWork()
     // With a roof to lift first, the first group is said to start now: the camera and the card move
     // with the roof, not a beat after it, and its pieces follow once the way is clear.
     const first = groups.get(plan[0]!.group)
@@ -1770,7 +1786,7 @@ function chooseWarm(now: number) {
       }
       if (kinds.has(kind)) continue
     }
-    if (!levelShown(candidate.levelId) || hasWaitingAncestor(candidate.id, nodes)) continue
+    if (levelHiddenByAuthor(candidate.levelId) || hasWaitingAncestor(candidate.id, nodes)) continue
     kinds.add(kind)
     warming.set(candidate.id, { culled: new Map(), builtTicks: 0 })
     notifyPending(candidate.id)
@@ -1896,7 +1912,7 @@ function tickReveals(now: number, frameMs?: number) {
   if (unplanned) {
     unplanned = false
     for (const candidate of [...pending.values()]) {
-      if (!levelShown(candidate.levelId)) startReveal(candidate, now, false)
+      if (levelHiddenByAuthor(candidate.levelId)) startReveal(candidate, now, false)
     }
     chooseWarm(now)
     replanning = true
@@ -1912,7 +1928,7 @@ function tickReveals(now: number, frameMs?: number) {
   while (due < queue.length && (queue[due]?.startMs ?? Number.POSITIVE_INFINITY) <= now) {
     const entry = queue[due++]!
     planned.delete(entry.id)
-    if (pending.has(entry.id)) startReveal(entry, now, levelShown(entry.levelId))
+    if (pending.has(entry.id)) startReveal(entry, now, !levelHiddenByAuthor(entry.levelId))
   }
   if (due > 0) queue = queue.slice(due)
   for (const reveal of active.values()) stepReveal(reveal, now)
@@ -1937,6 +1953,7 @@ function tickReveals(now: number, frameMs?: number) {
   }
   const busy =
     building || retracts.size > 0 || held.size > 0 || glides.size > 0 || changeQueue.length > 0
+  publishLevelsAtWork()
   if (busy || tickedBusy) notifyTicks()
   tickedBusy = busy
 }
@@ -1976,6 +1993,7 @@ function finishReveals(keepHeld = false) {
   finishRetracts(keepHeld)
   finishChanges()
   completeBuild(clockMs, true)
+  publishLevelsAtWork()
   if (busy) notifyTicks()
 }
 
@@ -2099,9 +2117,10 @@ export function startConstructionReveal(
       const changes = commitChangeCandidates(commit, revealLevel()).filter(
         (change) =>
           !(pending.has(change.id) || active.has(change.id) || isNodeRevealing(change.id)) &&
-          levelShown(change.levelId),
+          !levelHiddenByAuthor(change.levelId),
       )
       if (changes.length > 0) queueChanges(changes)
+      publishLevelsAtWork()
       if (candidates.length === 0) return
       registerCandidates(candidates, clockMs)
       if (instant()) {
@@ -2122,6 +2141,7 @@ export function startConstructionReveal(
         notifyPending(candidate.id)
       }
       for (const hostId of assembling) notifyAssembly(hostId, true)
+      publishLevelsAtWork()
       unplanned = true
     }),
     useScene.subscribe((state, previous) => {
@@ -2152,14 +2172,6 @@ export function startConstructionReveal(
           ...state.externalSelectedIds,
           ...state.previewSelectedIds,
         ])
-      }
-      if (
-        pending.size > 0 &&
-        (state.levelMode !== previous.levelMode ||
-          state.selection.levelId !== previous.selection.levelId ||
-          state.hideLevelsAboveSelection !== previous.hideLevelsAboveSelection)
-      ) {
-        unplanned = true
       }
     }),
   ]

@@ -82,6 +82,7 @@ let batchingSuspended = false
 let lastLevelMode: string | undefined
 let lastHideAbove: boolean | undefined
 let lastSelectedLevel: string | null | undefined
+let lastLevelsRevealing: readonly string[] | undefined
 
 type AppearanceInputs = {
   shading: unknown
@@ -135,6 +136,7 @@ export function resetNodeBatchState() {
   lastLevelMode = undefined
   lastHideAbove = undefined
   lastSelectedLevel = undefined
+  lastLevelsRevealing = undefined
   lastAppearance.shading = undefined
   lastAppearance.textures = undefined
   lastAppearance.colorPreset = undefined
@@ -286,11 +288,13 @@ function processBatchFrame(
   if (
     lastLevelMode !== viewer.levelMode ||
     lastHideAbove !== viewer.hideLevelsAboveSelection ||
-    lastSelectedLevel !== viewer.selection.levelId
+    lastSelectedLevel !== viewer.selection.levelId ||
+    lastLevelsRevealing !== viewer.levelsRevealing
   ) {
     lastLevelMode = viewer.levelMode
     lastHideAbove = viewer.hideLevelsAboveSelection
     lastSelectedLevel = viewer.selection.levelId
+    lastLevelsRevealing = viewer.levelsRevealing
     // Shadow-only sources were rejected and dropped from the previous join wave.
     for (const nodeId of nodeIds) if (!store.has(nodeId)) staleNodes.add(nodeId)
     changed = true

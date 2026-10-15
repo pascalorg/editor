@@ -12,6 +12,7 @@ export const LevelSystem = () => {
     const levelMode = useViewer.getState().levelMode
     const hideAbove = useViewer.getState().hideLevelsAboveSelection
     const selectedLevel = useViewer.getState().selection.levelId
+    const levelsRevealing = useViewer.getState().levelsRevealing
 
     const levelElevations = getLevelElevations(nodes)
     type LevelEntry = {
@@ -57,6 +58,7 @@ export const LevelSystem = () => {
         index,
         selectedIndex,
         nodeVisible: level?.visible !== false,
+        revealing: levelsRevealing.includes(levelId),
       })
       if (shadowOnly) {
         applyShadowOnly(obj)

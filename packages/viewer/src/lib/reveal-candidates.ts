@@ -452,21 +452,27 @@ export function commitChangeCandidates(
 
 /**
  * What taking `ids` back reveals: each of them, and everything under them (a wall's openings, a
- * room's furniture), whose kind declares a reveal, as the build would have staged it. An
- * assembled node (a roof) goes whole, not part by part.
+ * room's furniture), as the build would have staged it: by what its kind declares, or the default
+ * reveal a kind that declares none came in with. What stands in a host that goes (a segment of a
+ * stair, a part of a pool) goes with it; an assembled node (a roof) goes whole, not part by part.
  */
 export function nodeRevealCandidates(
   ids: Iterable<string>,
   nodes: Record<AnyNodeId, AnyNode>,
   at: ConstructionRevealLevel,
 ): RevealCandidate[] {
+  const asked = new Set(ids)
   const seen = new Set<string>()
   const candidates: RevealCandidate[] = []
   const visit = (id: string, guard = 0) => {
     const node = nodes[id as AnyNodeId]
     if (!node || seen.has(id) || guard > 64) return
     seen.add(id)
-    const candidate = candidateOf(node, nodes, at, null, candidates.length)
+    const host = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    const goesWithHost = Boolean(
+      host && !CONTAINERS.has(host.type) && (asked.has(host.id) || seen.has(host.id)),
+    )
+    const candidate = candidateOf(node, nodes, at, null, candidates.length, !goesWithHost)
     if (candidate) candidates.push(candidate)
     // An assembled node's parts are not staged on their own.
     if (candidate?.style === 'assemble') return
@@ -474,6 +480,6 @@ export function nodeRevealCandidates(
       if (typeof childId === 'string') visit(childId, guard + 1)
     }
   }
-  for (const id of ids) visit(id)
+  for (const id of asked) visit(id)
   return candidates
 }

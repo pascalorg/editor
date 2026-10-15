@@ -85,6 +85,7 @@ afterEach(() => {
   useViewer.setState({
     levelMode: previousViewerState.levelMode,
     hideLevelsAboveSelection: false,
+    levelsRevealing: [],
     selection: previousViewerState.selection,
   })
 })
@@ -169,6 +170,42 @@ describe("the editor's level display", () => {
     expect(objects[1]!.layers.isEnabled(0)).toBe(true)
     restore()
     expect(objects[1]!.layers.isEnabled(0)).toBe(false)
+  })
+})
+
+describe('a level a construction reveal is playing on', () => {
+  test('shows above the selected level while its work plays, and steps aside after', async () => {
+    const { levels, objects } = setupLevels([0, 0])
+    setLevelMode('stacked', levels[0]!.id)
+    useViewer.setState({ hideLevelsAboveSelection: true })
+    await updateLevelPresentation(1 / 12)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(false)
+
+    useViewer.setState({ levelsRevealing: [levels[1]!.id] })
+    await updateLevelPresentation(1 / 12)
+    expect(objects[1]!.visible).toBe(true)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(true)
+
+    useViewer.setState({ levelsRevealing: [] })
+    await updateLevelPresentation(1 / 12)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(false)
+  })
+
+  test('shows in solo, where every other level is hidden', async () => {
+    const { levels, objects } = setupLevels([0, 0])
+    setLevelMode('solo', levels[0]!.id)
+    useViewer.setState({ levelsRevealing: [levels[1]!.id] })
+    await updateLevelPresentation(1 / 12)
+    expect(objects.map((object) => object.visible)).toEqual([true, true])
+  })
+
+  test('stays hidden when the author hid it', async () => {
+    const { levels, objects } = setupLevels([0, 0])
+    hideLevel(levels[1]!.id)
+    setLevelMode('stacked', levels[0]!.id)
+    useViewer.setState({ levelsRevealing: [levels[1]!.id] })
+    await updateLevelPresentation(1 / 12)
+    expect(objects[1]!.visible).toBe(false)
   })
 })
 

@@ -35,6 +35,10 @@ export function getLevelPresentationY(
  * shadow map so the sun still shadows the selected floor through them.
  * A level the author hid never enters that shadow-caster branch: its shadows
  * on the floor below would be exactly what hiding it was meant to remove.
+ *
+ * A level a construction reveal is playing on (`revealing`) shows whatever the
+ * presentation hides, so the animation is seen; only the author's own hiding
+ * keeps it out.
  */
 export function resolveLevelVisibility({
   levelMode,
@@ -44,6 +48,7 @@ export function resolveLevelVisibility({
   index,
   selectedIndex,
   nodeVisible,
+  revealing,
 }: {
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   hideAbove: boolean
@@ -52,8 +57,10 @@ export function resolveLevelVisibility({
   index: number
   selectedIndex: number | undefined
   nodeVisible: boolean
+  revealing: boolean
 }): { visible: boolean; shadowOnly: boolean } {
   if (!nodeVisible) return { visible: false, shadowOnly: false }
+  if (revealing) return { visible: true, shadowOnly: false }
 
   const hidden =
     (levelMode === 'solo' && hasSelectedLevel && !isSelected) ||
