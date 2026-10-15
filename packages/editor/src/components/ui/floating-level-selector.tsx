@@ -57,7 +57,7 @@ import {
   roofLevelOrderBreach,
   servesAsRoofLevel,
 } from '@pascal-app/core'
-import { addStoreyOnTop } from '../../lib/add-storey'
+import { addStoreyBelow, addStoreyOnTop } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
 import { useLinearDisplay } from '../../lib/use-linear-display'
@@ -519,16 +519,9 @@ export function FloatingLevelSelector() {
 
   const handleAddBelow = useCallback(() => {
     if (!resolvedBuildingId) return
-    const minLevel = levels.length > 0 ? Math.min(...levels.map((l) => l.level)) : 1
-    const newLevel = LevelNode.parse({
-      level: minLevel - 1,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: resolvedBuildingId,
-    })
-    createNode(newLevel, resolvedBuildingId)
+    const newLevel = addStoreyBelow(resolvedBuildingId)
     setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
-  }, [resolvedBuildingId, levels, createNode, setSelection])
+  }, [resolvedBuildingId, setSelection])
 
   const handleInsertBetween = useCallback(
     (lowerIndex: number) => {
