@@ -21,6 +21,7 @@ import {
   hasSegmentMaterialOverride,
   isBandedShedSegment,
   isGlazedRoofSegment,
+  isIndependentRoofSegment,
   nodeRegistry,
   normalizeRoofSegmentTrim,
   pointInPolygon2D,
@@ -219,17 +220,15 @@ export function countPendingRoofShells(
 function queueSiblingRoofUpdates(
   roofId: AnyNodeId,
   nodes: Record<string, AnyNode>,
-  adapter?: RoofGeometryAdapter,
   changedSegmentId?: AnyNodeId,
 ) {
   const queueIndependent = (roof: RoofNode) => {
-    if (!adapter) return
     for (const id of roof.children) {
       const segment = nodes[id]
       if (
         segment?.type === 'roof-segment' &&
         segment.id !== changedSegmentId &&
-        adapter.independent(getEffectiveNode(segment))
+        isIndependentRoofSegment(getEffectiveNode(segment))
       )
         pendingIndependentSegments.add(segment.id)
     }
@@ -297,13 +296,9 @@ function queueSiblingRoofUpdates(
 // ROOF SYSTEM
 // ============================================================================
 
+/** What a plugin adds to a segment mesh after its geometry is rebuilt. */
 export type RoofGeometryAdapter = {
-  independent: (node: RoofSegmentNode) => boolean
-  syncGeometry?: (node: RoofSegmentNode, mesh: THREE.Mesh) => void
-  buildGeometry: (
-    node: RoofSegmentNode,
-    nodes: Record<string, AnyNode>,
-  ) => THREE.BufferGeometry | null
+  syncGeometry: (node: RoofSegmentNode, mesh: THREE.Mesh) => void
 }
 
 export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometryAdapter } = {}) => {
@@ -364,7 +359,7 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
         const seg = segId ? (nodes[segId as AnyNodeId] as RoofSegmentNode | undefined) : undefined
         if (roofAccessory.buildCut && seg?.parentId) {
           pendingRoofUpdates.add(seg.parentId as AnyNodeId)
-          if (geometryAdapter?.independent(seg)) useScene.getState().markDirty(seg.id)
+          if (isIndependentRoofSegment(seg)) useScene.getState().markDirty(seg.id)
         }
         clearDirty(id as AnyNodeId)
         return
@@ -423,10 +418,10 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
           !independentCascade &&
           !(isRevealAssembling(parentId) && mergedFromStillHolds(parentId, nodes))
         ) {
-          queueSiblingRoofUpdates(parentId, nodes, geometryAdapter, id)
+          queueSiblingRoofUpdates(parentId, nodes, id)
         }
       } else if (node.type === 'roof') {
-        queueSiblingRoofUpdates(id as AnyNodeId, nodes, geometryAdapter)
+        queueSiblingRoofUpdates(id as AnyNodeId, nodes)
         clearDirty(id as AnyNodeId)
       }
     })
@@ -452,7 +447,7 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
       // Built even while hidden: a roof assembling from its segments (construction
       // reveal) hides its shell, and must show it whole the moment it is captured.
       rememberMergedInputs(node as RoofNode, nodes)
-      updateMergedRoofGeometry(node as RoofNode, group, nodes, geometryAdapter)
+      updateMergedRoofGeometry(node as RoofNode, group, nodes)
       roofsProcessed++
 
       pendingRoofUpdates.delete(id)
@@ -472,8 +467,7 @@ function updateRoofSegmentGeometry(
   nodes?: Record<string, AnyNode>,
   adapter?: RoofGeometryAdapter,
 ) {
-  const newGeo =
-    adapter?.buildGeometry(node, nodes ?? {}) ?? generateRoofSegmentGeometry(node, nodes)
+  const newGeo = generateRoofSegmentGeometry(node, nodes)
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
@@ -481,7 +475,7 @@ function updateRoofSegmentGeometry(
 
   mesh.position.set(node.position[0], node.position[1], node.position[2])
   mesh.rotation.y = node.rotation
-  adapter?.syncGeometry?.(node, mesh)
+  adapter?.syncGeometry(node, mesh)
 }
 
 /**
@@ -646,7 +640,6 @@ function updateMergedRoofGeometry(
   roofNode: RoofNode,
   group: THREE.Group,
   nodes: Record<string, AnyNode>,
-  adapter?: RoofGeometryAdapter,
 ) {
   const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
   if (!mergedMesh) return
@@ -667,7 +660,7 @@ function updateMergedRoofGeometry(
     })
     .filter(
       (n): n is RoofSegmentNode =>
-        n !== undefined && !hasSegmentMaterialOverride(n) && !adapter?.independent(n),
+        n !== undefined && !hasSegmentMaterialOverride(n) && !isIndependentRoofSegment(n),
     )
 
   if (children.length === 0) {
@@ -1952,12 +1945,10 @@ function buildIndependentRoofSegmentGeometry(
   node: RoofSegmentNode,
   nodes?: Record<string, AnyNode>,
 ): THREE.BufferGeometry | null {
+  if (!isIndependentRoofSegment(node)) return null
   const pieces = isGlazedRoofSegment(node)
     ? getGlazedRoofPieces(node)
-    : node.roofType === 'barrel'
-      ? getBarrelRoofSolidPieces(node)
-      : null
-  if (!pieces) return null
+    : getBarrelRoofSolidPieces(node)
   const build = (pieces: GlazedRoofPiece[]) => {
     const parts = pieces.map((piece) =>
       createGeometryFromFaces(

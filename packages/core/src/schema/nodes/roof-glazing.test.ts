@@ -1,9 +1,15 @@
 import { afterEach, expect, test } from 'bun:test'
 import {
+  type GlazedRoofPiece,
+  getBarrelRoofSolidPieces,
   getGlazedRoofFaces,
   getGlazedRoofLayout,
+  getGlazedRoofPieceFaces,
+  getGlazedRoofPieces,
   getGlazedRoofPlanLines,
+  getRoofGlazing,
   getRoofSegmentSurfaceY,
+  getRoofSegmentWallFace,
   glazedRoofFacePoint,
   glazedRoofSupportsPoint,
   isGlazedRoofSegment,
@@ -123,4 +129,57 @@ test('barrel span and rise define symmetric arch bays and arched end infill', ()
   expect(glazedRoofSupportsPoint(empty, x, z)).toBe(false)
   expect(RoofSegmentNode.parse(JSON.parse(JSON.stringify(empty)))).toEqual(empty)
   expect(getGlazedRoofPlanLines(node).length).toBeGreaterThan(12)
+})
+
+const vertices = (pieces: GlazedRoofPiece[]) =>
+  pieces.flatMap((piece) => getGlazedRoofPieceFaces(piece).flat())
+const extent = (points: { x: number; y: number; z: number }[], axis: 'x' | 'y' | 'z') => [
+  Math.min(...points.map((point) => point[axis])),
+  Math.max(...points.map((point) => point[axis])),
+]
+
+for (const roofType of ['gable', 'shed'] as const)
+  test(`a glazed ${roofType} stands on walls centred on its footprint, and nothing rises through its covering`, () => {
+    const node = RoofSegmentNode.parse({
+      roofType,
+      roofSystem: 'glazed',
+      width: 8,
+      depth: 6,
+      pitch: 30,
+      overhang: 0.3,
+      wallThickness: 0.2,
+      wallHeight: 0.5,
+    })
+    const pieces = getGlazedRoofPieces(node)
+    const walls = vertices(pieces.filter((piece) => piece.face.normal[1] === 0 && piece.slot === 2))
+    expect(extent(walls, 'x')).toEqual([-4.1, 4.1].map((x) => expect.closeTo(x)))
+    expect(extent(walls, 'z')).toEqual([-3.1, 3.1].map((z) => expect.closeTo(z)))
+    expect(extent(walls, 'y')[0]).toBeCloseTo(0)
+    // Everything under the covering's top stays below its frame depth: no face shares its plane.
+    const depth = getRoofGlazing(node).frameDepth
+    const under = vertices(pieces.filter((piece) => piece.face.normal[1] === 0))
+    for (const { x, y, z } of under)
+      expect(y).toBeLessThanOrEqual(getRoofSegmentSurfaceY(node, x, z) - depth + 1e-6)
+
+    expect(
+      extent(vertices(getGlazedRoofPieces({ ...node, wallShell: 'omit' })), 'y')[0],
+    ).toBeGreaterThan(0)
+  })
+
+test('a barrel stands on walls centred on its footprint, as doors and windows place on them', () => {
+  const node = RoofSegmentNode.parse({
+    roofType: 'barrel',
+    width: 6,
+    depth: 4,
+    barrelRise: 1,
+    wallThickness: 0.2,
+    wallHeight: 0.5,
+  })
+  const walls = vertices(
+    getBarrelRoofSolidPieces(node).filter((piece) => piece.face.normal[1] === 0),
+  )
+  expect(extent(walls, 'x')).toEqual([-3.1, 3.1].map((x) => expect.closeTo(x)))
+  expect(extent(walls, 'z')).toEqual([-2.1, 2.1].map((z) => expect.closeTo(z)))
+  expect(getRoofSegmentWallFace(node, 'right').length).toBeCloseTo(4.2)
+  expect(getRoofSegmentWallFace(node, 'front').length).toBeCloseTo(6.2)
 })

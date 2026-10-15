@@ -24,6 +24,13 @@ export function isGlazedRoofSegment(
   return node.roofSystem === 'glazed' && supportsRoofGlazing(node)
 }
 
+/** Built from its own pieces rather than the merged roof shell: a glazed segment, or a barrel. */
+export function isIndependentRoofSegment(
+  node: Pick<RoofSegmentNode, 'roofType' | 'arc' | 'roofSystem'>,
+): boolean {
+  return node.roofType === 'barrel' || isGlazedRoofSegment(node)
+}
+
 export function getRoofGlazing(node: { glazing?: RoofGlazing }): RoofGlazing {
   return node.glazing ?? DEFAULT_ROOF_GLAZING
 }
@@ -101,6 +108,12 @@ export function getGlazedRoofFaces(node: RoofSegmentNode): GlazedRoofFace[] {
           [endLength, 0],
           [0, rise],
         ]
+  const polygon = fitBelowCovering(
+    node,
+    profile,
+    [-node.depth / 2, node.wallHeight],
+    glazingCoveringDepth(node),
+  )
   for (const side of [-1, 1]) {
     faces.push({
       id: side < 0 ? 'end-left' : 'end-right',
@@ -110,7 +123,7 @@ export function getGlazedRoofFaces(node: RoofSegmentNode): GlazedRoofFace[] {
       normal: [side, 0, 0],
       width: endLength,
       length: rise,
-      polygon: profile,
+      polygon,
     })
   }
   return faces
@@ -135,31 +148,156 @@ function clipGlazedRoofHalfPlane(
   return result
 }
 
-/** End infill fits below the inward thickness of the arch covering. */
-function fitBarrelEndInfill(
+/** The covering's top across the span, as (z, y) points, front to back in +z. */
+function coveringTopLine(node: RoofSegmentNode): [number, number][] {
+  const half = node.depth / 2
+  const rise = getActiveRoofHeight(node)
+  const eave = node.wallHeight
+  if (node.roofType === 'barrel')
+    return getBarrelRoofProfile(node.depth, rise, node.barrelSegments ?? 12).map(([z, y]) => [
+      z,
+      y + eave,
+    ])
+  if (node.roofType === 'gable')
+    return [
+      [-half, eave],
+      [0, eave + rise],
+      [half, eave],
+    ]
+  // A shed falls toward +z.
+  return [
+    [-half, eave + rise],
+    [half, eave],
+  ]
+}
+
+/** How deep the glazed covering reaches below its top. */
+function glazingCoveringDepth(node: RoofSegmentNode): number {
+  const config = getRoofGlazing(node)
+  return Math.max(config.frameDepth, config.glassThickness)
+}
+
+/**
+ * Clip a polygon in a plane across the span, (u, v) placed at `origin` = (z, y), to below the
+ * covering's underside: end infill and walls meet the covering instead of running through it.
+ */
+function fitBelowCovering(
   node: RoofSegmentNode,
   polygon: [number, number][],
+  origin: readonly [number, number],
   coveringDepth: number,
 ): [number, number][] {
-  const profile = getBarrelRoofProfile(
-    node.depth,
-    getActiveRoofHeight(node),
-    node.barrelSegments ?? 12,
-  )
+  const line = coveringTopLine(node)
   let result = polygon
-  for (let i = 1; i < profile.length; i++) {
-    const a = profile[i - 1]!,
-      b = profile[i]!
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!,
+      b = line[i]!
     const dy = b[1] - a[1],
       dz = b[0] - a[0]
     const length = Math.hypot(dy, dz)
-    const nx = -dy / length,
+    const nz = -dy / length,
       ny = dz / length
-    const signed = ([u, v]: [number, number]) =>
-      nx * (u - node.depth / 2 - a[0]) + ny * (v - a[1]) + coveringDepth
-    result = clipGlazedRoofHalfPlane(result, signed)
+    result = clipGlazedRoofHalfPlane(
+      result,
+      ([u, v]) => nz * (u + origin[0] - a[0]) + ny * (v + origin[1] - a[1]) + coveringDepth,
+    )
   }
   return result
+}
+
+/** A wall piece: a cross-section in (z, y), run along x from `minX` to `maxX`. */
+function wallPiece(
+  id: string,
+  minX: number,
+  maxX: number,
+  polygon: [number, number][],
+  slot: number,
+): GlazedRoofPiece {
+  const zs = polygon.map(([z]) => z)
+  const ys = polygon.map(([, y]) => y)
+  return {
+    face: {
+      id,
+      origin: [maxX, 0, 0],
+      u: [0, 0, 1],
+      v: [0, 1, 0],
+      normal: [1, 0, 0],
+      width: Math.max(...zs) - Math.min(...zs),
+      length: Math.max(...ys) - Math.min(...ys),
+      polygon,
+    },
+    polygon,
+    depth: maxX - minX,
+    slot,
+  }
+}
+
+const rect = (minZ: number, maxZ: number, minY: number, maxY: number): [number, number][] => [
+  [minZ, minY],
+  [maxZ, minY],
+  [maxZ, maxY],
+  [minZ, maxY],
+]
+
+/**
+ * The walls under a segment, centred on its footprint like every roof's, up to the wall top; a
+ * solid barrel's ends rise on to its arch, where a glazed one has its glazing. A gable's or a
+ * shed's covering reaches past the walls, so they fit below it; a barrel's arch springs from the
+ * wall top, so only its arched ends do.
+ */
+function getRoofWallPieces(
+  node: RoofSegmentNode,
+  coveringDepth: number,
+  slot: number,
+): GlazedRoofPiece[] {
+  const t = node.wallThickness
+  if (node.wallShell === 'omit' || !(t > 0)) return []
+  const halfW = node.width / 2,
+    halfD = node.depth / 2,
+    wallTop = node.wallHeight
+  const barrel = node.roofType === 'barrel'
+  const fit = (polygon: [number, number][]) =>
+    barrel ? polygon : fitBelowCovering(node, polygon, [0, 0], coveringDepth)
+  const pieces: GlazedRoofPiece[] = []
+  for (const side of [-1, 1]) {
+    const minX = side * halfW - t / 2,
+      maxX = side * halfW + t / 2
+    const id = side < 0 ? 'end-left' : 'end-right'
+    if (wallTop > 0)
+      pieces.push(
+        wallPiece(id, minX, maxX, fit(rect(-halfD - t / 2, halfD + t / 2, 0, wallTop)), slot),
+      )
+    if (barrel && !isGlazedRoofSegment(node))
+      pieces.push(
+        wallPiece(
+          `${id}-arch`,
+          minX,
+          maxX,
+          fitBelowCovering(
+            node,
+            rect(-halfD, halfD, wallTop, wallTop + getActiveRoofHeight(node)),
+            [0, 0],
+            coveringDepth,
+          ),
+          slot,
+        ),
+      )
+  }
+  if (wallTop > 0)
+    for (const side of [-1, 1]) {
+      const inner = side * (halfD - t / 2),
+        outer = side * (halfD + t / 2)
+      pieces.push(
+        wallPiece(
+          side < 0 ? 'back' : 'front',
+          -halfW + t / 2,
+          halfW - t / 2,
+          fit(rect(Math.min(inner, outer), Math.max(inner, outer), 0, wallTop)),
+          slot,
+        ),
+      )
+    }
+  return pieces.filter((piece) => piece.polygon.length >= 3)
 }
 
 /** Circular arch, represented by planar glazing bays. The stored span stays at the eaves. */
@@ -215,10 +353,11 @@ export function getBarrelRoofFaces(node: RoofSegmentNode): GlazedRoofFace[] {
         normal: [side, 0, 0],
         width: node.depth,
         length: rise,
-        polygon: fitBarrelEndInfill(
+        polygon: fitBelowCovering(
           node,
           profile,
-          Math.max(getRoofGlazing(node).frameDepth, getRoofGlazing(node).glassThickness),
+          [-half, node.wallHeight],
+          glazingCoveringDepth(node),
         ),
       })
   }
@@ -235,53 +374,7 @@ export function getBarrelRoofSolidPieces(node: RoofSegmentNode): GlazedRoofPiece
       depth: node.deckThickness + node.shingleThickness,
       slot: 3,
     }))
-  if (node.wallShell !== 'omit' && node.wallThickness > 0) {
-    const rise = getActiveRoofHeight(node)
-    const profile = getBarrelRoofProfile(node.depth, rise, node.barrelSegments ?? 12)
-    for (const side of [-1, 1]) {
-      const face: GlazedRoofFace = {
-        id: side < 0 ? 'end-left' : 'end-right',
-        origin: [(side * node.width) / 2, 0, -node.depth / 2],
-        u: [0, 0, 1],
-        v: [0, 1, 0],
-        normal: [side, 0, 0],
-        width: node.depth,
-        length: node.wallHeight + rise,
-        polygon: [
-          [0, 0],
-          [node.depth, 0],
-          ...[...profile]
-            .reverse()
-            .map(([z, y]): [number, number] => [z + node.depth / 2, y + node.wallHeight]),
-        ],
-      }
-      face.polygon = fitBarrelEndInfill(
-        node,
-        face.polygon.map(([u, v]): [number, number] => [u, v - node.wallHeight]),
-        node.deckThickness + node.shingleThickness,
-      ).map(([u, v]) => [u, v + node.wallHeight])
-      pieces.push({ face, polygon: face.polygon, depth: node.wallThickness, slot: 2 })
-    }
-    if (node.wallHeight > 0)
-      for (const side of [-1, 1]) {
-        const face: GlazedRoofFace = {
-          id: side < 0 ? 'back' : 'front',
-          origin: [-node.width / 2 + node.wallThickness, 0, (side * node.depth) / 2],
-          u: [1, 0, 0],
-          v: [0, 1, 0],
-          normal: [0, 0, side],
-          width: Math.max(0, node.width - 2 * node.wallThickness),
-          length: node.wallHeight,
-          polygon: [
-            [0, 0],
-            [Math.max(0, node.width - 2 * node.wallThickness), 0],
-            [Math.max(0, node.width - 2 * node.wallThickness), node.wallHeight],
-            [0, node.wallHeight],
-          ],
-        }
-        pieces.push({ face, polygon: face.polygon, depth: node.wallThickness, slot: 2 })
-      }
-  }
+  pieces.push(...getRoofWallPieces(node, node.deckThickness + node.shingleThickness, 2))
   return pieces.filter((piece) => piece.depth > 0)
 }
 
@@ -542,6 +635,8 @@ export function getGlazedRoofPieces(node: RoofSegmentNode): GlazedRoofPiece[] {
       add(face, border, config.frameDepth, 0)
     }
   }
+  for (const wall of getRoofWallPieces(node, glazingCoveringDepth(node), 2))
+    add(wall.face, wall.polygon, wall.depth, wall.slot)
   return pieces
 }
 

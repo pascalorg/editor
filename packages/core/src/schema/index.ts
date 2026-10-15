@@ -293,6 +293,7 @@ export {
   glazedRoofSupportsPoint,
   insetGlazedRoofPolygon,
   isGlazedRoofSegment,
+  isIndependentRoofSegment,
   RoofGlazing,
   RoofSystemType,
   supportsRoofGlazing,

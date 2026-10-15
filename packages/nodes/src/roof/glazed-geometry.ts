@@ -1,24 +1,11 @@
-import { type AnyNode, isGlazedRoofSegment, type RoofSegmentNode } from '@pascal-app/core'
-import { generateRoofSegmentGeometry } from '@pascal-app/viewer'
-import type { BufferGeometry, Mesh } from 'three'
+import { isGlazedRoofSegment, type RoofSegmentNode } from '@pascal-app/core'
+import type { RoofGeometryAdapter } from '@pascal-app/viewer'
+import type { Mesh } from 'three'
 
-/** The adapter, placement previews and public roof generator share one geometry kernel. */
-export function buildGlazedRoofGeometry(
-  node: RoofSegmentNode,
-  nodes: Readonly<Record<string, AnyNode>> = {},
-): BufferGeometry {
-  return generateRoofSegmentGeometry(node, nodes as Record<string, AnyNode>)
-}
-
-export const glazedRoofGeometryAdapter = {
-  independent: (node: RoofSegmentNode) => isGlazedRoofSegment(node) || node.roofType === 'barrel',
+export const glazedRoofGeometryAdapter: RoofGeometryAdapter = {
   syncGeometry(node: RoofSegmentNode, mesh: Mesh) {
     if (isGlazedRoofSegment(node)) syncGlazedRoofShadow(mesh)
   },
-  buildGeometry: (node: RoofSegmentNode, nodes: Record<string, AnyNode>) =>
-    isGlazedRoofSegment(node) || node.roofType === 'barrel'
-      ? buildGlazedRoofGeometry(node, nodes)
-      : null,
 }
 
 export function syncGlazedRoofShadow(mesh: Mesh, appearance = mesh.material) {

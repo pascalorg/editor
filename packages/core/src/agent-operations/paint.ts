@@ -1,6 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
 import type { MaterialSurface } from '../material-kinds'
-import { nodeSlotDeclarations } from '../node-slots'
+import { GLAZED_ROOF_SLOTS, nodeSlotDeclarations } from '../node-slots'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
   type AnyNode,
@@ -214,6 +214,8 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
   const throughRoof: string[] = []
   const modelRoles: string[] = []
 
+  // A roof with glazed segments: its roles go on the roof for its standard segments, its glazing's
+  // on each glazed segment; a role only one kind has paints that kind.
   const targets = [
     ...new Set(
       input.targets.flatMap((id) => {
@@ -222,7 +224,17 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
         const segments = node.children
           .map((childId) => nodes[childId])
           .filter((child): child is RoofSegmentNode => child?.type === 'roof-segment')
-        return segments.some(isGlazedRoofSegment) ? segments.map((segment) => segment.id) : [id]
+        const glazed = segments.filter(isGlazedRoofSegment).map((segment) => segment.id)
+        if (!glazed.length) return [id]
+        const standard = glazed.length < segments.length
+        const roles = [...(standard ? ROOF_ROLES : []), ...GLAZED_ROOF_SLOTS]
+        if (input.role !== undefined && !roles.includes(input.role as never))
+          refuse('unknown_role', `Roof ${id}'s roles are ${roles.join(', ')}.`, {
+            target: id,
+            roles,
+          })
+        const roofRole = input.role === undefined || ROOF_ROLES.includes(input.role as RoofRole)
+        return [...(standard && roofRole ? [id] : []), ...(roofRole && input.role ? [] : glazed)]
       }),
     ),
   ]

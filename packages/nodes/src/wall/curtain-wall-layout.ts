@@ -5,8 +5,6 @@ import {
   type DoorNode,
 } from '@pascal-app/core'
 
-export { curtainGridPositions } from '@pascal-app/core'
-
 export type CurtainWallPiece = {
   left: number
   right: number

@@ -80,8 +80,8 @@ function getWallVolumeFrame(node: SegmentWallInputs): WallVolumeFrame {
   const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
   if (node.roofType === 'barrel')
     return {
-      wV: node.width,
-      dV: node.depth,
+      wV: node.width + (node.wallThickness ?? 0.1),
+      dV: node.depth + (node.wallThickness ?? 0.1),
       eaveY: node.wallHeight,
       peakY: node.wallHeight + activeRh,
       tanTheta,
@@ -149,12 +149,15 @@ function buildFaceProfile(
         getSegmentSlopeFrame(node).activeRh,
         node.barrelSegments ?? 12,
       )
+      // The arch springs from the eaves' centre lines; the walls' outer halves stop at their top.
       return [
         [0, 0],
         [length, 0],
+        [length, node.wallHeight],
         ...profile
           .reverse()
           .map(([z, y]): [number, number] => [z + length / 2, y + node.wallHeight]),
+        [0, node.wallHeight],
       ]
     }
     case 'gable': {
