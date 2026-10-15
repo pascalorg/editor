@@ -304,6 +304,28 @@ export const GET_SITE_CASES: AgentToolCase[] = [
     expect: { result: { ground: { state: 'sloped', reliefM: 2 } } },
   },
   {
+    name: 'a terrain finer than the coordinates can hold: the fall heightAt shows, not its samples',
+    tool: 'get_site',
+    // at 1e16 the coordinates step 2 m, so the middle sample (5 m), 10 nm from the field's west
+    // column, is at no point of the lot: the ground shows the flat columns either side of it
+    scene: () => {
+      const field = createTerrainField({ origin: [1e16, 0], spacing: 1e-8, cols: 3, rows: 3 })
+      field.heights[4] = quantize(field, 5)
+      const lot = {
+        type: 'polygon',
+        points: [
+          [1e16 - 4, -4],
+          [1e16 + 4, -4],
+          [1e16 + 4, 4],
+          [1e16 - 4, 4],
+        ],
+      }
+      return scene(site({ polygon: lot, terrain: encodeTerrainField(field) }), building(), level())
+    },
+    input: {},
+    expect: { result: { ground: { state: 'sloped', reliefM: 0 } } },
+  },
+  {
     name: 'a lot widening away from its street: the front is the edge facing it, not the longer rear',
     tool: 'get_site',
     // 10 m on the street (z = 0) and 100 m at the back (z = 20), 1 m setbacks

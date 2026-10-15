@@ -32,7 +32,7 @@ import {
   resolveFrontEdge,
   setbackEnvelope,
 } from './setback-envelope'
-import { heightAt, heightAtSample, type TerrainField } from './terrain-field'
+import { heightAt, type TerrainField } from './terrain-field'
 import { persistedTerrainFieldOf } from './terrain-source-persisted'
 
 type Nodes = Readonly<Record<string, AnyNode>>
@@ -376,7 +376,9 @@ function terrainFall(field: TerrainField, lot: readonly Pt[]): number {
     for (let k = 0; k + 1 < crossings.length; k += 2) {
       const first = Math.max(0, Math.ceil(((crossings[k] as number) - ox) / s))
       const last = Math.min(field.cols - 1, Math.floor(((crossings[k + 1] as number) - ox) / s))
-      for (let col = first; col <= last; col++) take(heightAtSample(field, col, row))
+      // as heightAt shows it at the sample's place: a spacing finer than the coordinates can
+      // hold puts some samples where no point of the lot is
+      for (let col = first; col <= last; col++) take(heightAt(field, ox + col * s, z))
     }
   }
   return high - low
