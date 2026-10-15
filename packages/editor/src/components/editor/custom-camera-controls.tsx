@@ -109,11 +109,11 @@ function orbitGroundY(
  * ground it was over (a deep level shown is looked at through the hole, not from under the lid),
  * unless the person has dived.
  */
-function keepEyeOverGround(x: number, eyeY: number, z: number): number {
+function keepEyeOverGround(x: number, eyeY: number, z: number, previousEyeY = eyeY): number {
   const { nodes } = useScene.getState()
   const siteId = sceneRegistry.byType.site?.values().next().value as AnyNodeId | undefined
   const groundY = groundHeightAt(siteId ? nodes[siteId] : null, nodes, x, z)
-  return overviewEyeY(eyeY, groundY, useViewer.getState().eyeUnderGround)
+  return overviewEyeY(eyeY, previousEyeY, groundY, useViewer.getState().eyeUnderGround)
 }
 
 function levelOf(nodeId: string): string | null {
@@ -608,7 +608,15 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     if (!controls.current) return
     if (firstLoad.current) {
       firstLoad.current = false
-      controls.current.setLookAt(20, 20 + targetY, 20, 0, targetY, 0, true)
+      controls.current.setLookAt(
+        20,
+        keepEyeOverGround(20, 20 + targetY, 20, 20),
+        20,
+        0,
+        targetY,
+        0,
+        true,
+      )
     }
     controls.current.getOrbitTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
@@ -619,7 +627,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     controls.current.getPosition(tempPosition, false)
     const movedEyeY = tempPosition.y + targetY - currentTarget.y
     const eyeY = isPerspectiveCamera(camera)
-      ? keepEyeOverGround(tempPosition.x, movedEyeY, tempPosition.z)
+      ? keepEyeOverGround(tempPosition.x, movedEyeY, tempPosition.z, tempPosition.y)
       : movedEyeY
     if (eyeY > movedEyeY) {
       controls.current.setLookAt(
@@ -696,7 +704,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       const focusedX = tempPosition.x + tempDelta.x
       const focusedZ = tempPosition.z + tempDelta.z
       const focusedY = isPerspectiveCamera(camera)
-        ? keepEyeOverGround(focusedX, tempPosition.y + tempDelta.y, focusedZ)
+        ? keepEyeOverGround(focusedX, tempPosition.y + tempDelta.y, focusedZ, tempPosition.y)
         : tempPosition.y + tempDelta.y
       const floorMinY = isPerspectiveCamera(camera) ? controls.current.floorLimitY : null
       controls.current.setLookAt(
@@ -1352,7 +1360,15 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       const groundY = orbitGroundY(lastLevelId.current)
       if (!bounds) {
         // Restore default framing pose when no bounds were computed.
-        controls.current.setLookAt(20, 20 + groundY, 20, 0, groundY, 0, true)
+        controls.current.setLookAt(
+          20,
+          keepEyeOverGround(20, 20 + groundY, 20, 20),
+          20,
+          0,
+          groundY,
+          0,
+          true,
+        )
         return
       }
       const [cx, cz] = bounds.center
@@ -1364,7 +1380,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       const height = Math.max(maxExtent * 0.8, 10)
       controls.current.setLookAt(
         cx + distance * 0.7,
-        keepEyeOverGround(cx + distance * 0.7, height + groundY, cz + distance * 0.7),
+        keepEyeOverGround(cx + distance * 0.7, height + groundY, cz + distance * 0.7, height),
         cz + distance * 0.7,
         cx,
         groundY,

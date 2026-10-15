@@ -113,12 +113,19 @@ export function glideFloorLimit(current: number | null, target: number, delta: n
 export const OVERVIEW_GROUND_CLEARANCE = 2
 
 /**
- * The height an overview eye is kept at when its pivot moves to another level: `eyeY` as the move
- * leaves it, lifted to {@link OVERVIEW_GROUND_CLEARANCE} over the ground at the eye when the eye
- * was above the ground (`wasUnder` false) and the move would sink it under. An eye already under
- * the ground (the person dived) goes where the move puts it.
+ * The height an overview eye is kept at when its pivot moves to another level: `movedEyeY` as the
+ * move leaves it (the eye following the pivot down), unless that would sink the eye under the
+ * ground (the eye was above it, `wasUnder` false): then the eye stays where it was, over the ground
+ * (at least {@link OVERVIEW_GROUND_CLEARANCE} over it), and looks down at the new pivot. An eye
+ * already under the ground (the person dived) goes where the move puts it.
  */
-export function overviewEyeY(eyeY: number, groundY: number, wasUnder: boolean): number {
-  if (wasUnder) return eyeY
-  return Math.max(eyeY, groundY + OVERVIEW_GROUND_CLEARANCE)
+export function overviewEyeY(
+  movedEyeY: number,
+  previousEyeY: number,
+  groundY: number,
+  wasUnder: boolean,
+): number {
+  const lowest = groundY + OVERVIEW_GROUND_CLEARANCE
+  if (wasUnder || movedEyeY >= lowest) return movedEyeY
+  return Math.max(previousEyeY, lowest)
 }
