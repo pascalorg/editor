@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { RevealPhase } from '@pascal-app/core'
 import {
+  ANIMATION_SPEEDS,
   FRAMING_PACE,
   LAZY_REVEAL_BASE_TIMING,
   LAZY_REVEAL_TIMING,
+  lazyTimingAt,
+  normalizeAnimationSpeed,
   pacedLazyTiming,
   planLazyReveal,
   planRetract,
@@ -11,6 +14,8 @@ import {
   RETRACT_TIMING,
   REVEAL_TIMING,
   type RevealCandidate,
+  retractTimingAt,
+  revealTimingAt,
 } from './reveal-schedule'
 
 let seq = 0
@@ -385,5 +390,64 @@ describe('the full level keeps its own schedule', () => {
     expect(now.map((entry) => [entry.id, entry.startMs])).toEqual(
       then.map((entry) => [entry.id, entry.startMs]),
     )
+  })
+})
+
+describe('the animation speed', () => {
+  const nodes = [...houseFloor(0, 3), ...houseFloor(1, 3)]
+  const endOfFull = (speed: number) => {
+    const timing = revealTimingAt(speed)
+    return Math.max(
+      ...planReveal(nodes, 0, timing).map(
+        (entry) => entry.startMs + timing.durationMs[entry.style],
+      ),
+    )
+  }
+  const endOfFraming = (speed: number) => {
+    const timing = lazyTimingAt(speed)
+    return Math.max(
+      ...planLazyReveal(nodes, 0, timing).map(
+        (entry) => entry.startMs + timing.durationMs[entry.style],
+      ),
+    )
+  }
+  const endOfRewind = (speed: number) => {
+    const rewind = retractTimingAt(speed)
+    return Math.max(
+      ...planRetract(nodes, 0, rewind, revealTimingAt(speed)).map(
+        (entry) => entry.startMs + entry.durationMs,
+      ),
+    )
+  }
+
+  test('the steps are ×0.5, ×0.75, ×1, ×1.5 and ×2; anything else snaps to one, junk is ×1', () => {
+    expect([...ANIMATION_SPEEDS]).toEqual([0.5, 0.75, 1, 1.5, 2])
+    expect(normalizeAnimationSpeed(1.2)).toBe(1)
+    expect(normalizeAnimationSpeed(1.3)).toBe(1.5)
+    expect(normalizeAnimationSpeed(9)).toBe(2)
+    expect(normalizeAnimationSpeed(0.01)).toBe(0.5)
+    for (const junk of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '2', null, undefined])
+      expect(normalizeAnimationSpeed(junk)).toBe(1)
+  })
+
+  test('×1 is every table as shipped: the very same objects, at Full and at Framing', () => {
+    expect(revealTimingAt(1)).toBe(REVEAL_TIMING)
+    expect(lazyTimingAt(1)).toBe(LAZY_REVEAL_TIMING)
+    expect(retractTimingAt(1)).toBe(RETRACT_TIMING)
+    expect(lazyTimingAt(1)).toEqual(pacedLazyTiming(LAZY_REVEAL_BASE_TIMING, FRAMING_PACE))
+  })
+
+  test.each([...ANIMATION_SPEEDS])('×%d plays a build in exactly 1/speed of its time', (speed) => {
+    expect(endOfFull(speed)).toBeCloseTo(endOfFull(1) / speed, 6)
+    expect(endOfFraming(speed)).toBeCloseTo(endOfFraming(1) / speed, 6)
+    expect(endOfRewind(speed)).toBeCloseTo(endOfRewind(1) / speed, 6)
+  })
+
+  test('the caps scale with it, so a big build is neither squeezed nor stretched past them', () => {
+    for (const speed of ANIMATION_SPEEDS) {
+      expect(revealTimingAt(speed).capMs).toBeCloseTo(REVEAL_TIMING.capMs / speed, 9)
+      expect(lazyTimingAt(speed).capMs).toBeCloseTo(LAZY_REVEAL_TIMING.capMs / speed, 9)
+      expect(retractTimingAt(speed).capMs).toBeCloseTo(RETRACT_TIMING.capMs / speed, 9)
+    }
   })
 })

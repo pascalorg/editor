@@ -191,14 +191,21 @@ export {
 } from './lib/renderer-capability'
 export { commitRevealCandidates } from './lib/reveal-candidates'
 export {
+  ANIMATION_SPEEDS,
+  type AnimationSpeed,
+  DEFAULT_ANIMATION_SPEED,
   FRAMING_PACE,
   LAZY_REVEAL_BASE_TIMING,
   LAZY_REVEAL_TIMING,
   type LazyRevealTiming,
+  lazyTimingAt,
+  normalizeAnimationSpeed,
   type PlannedReveal,
   pacedLazyTiming,
   planLazyReveal,
   type RevealCandidate,
+  retractTimingAt,
+  revealTimingAt,
 } from './lib/reveal-schedule'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
@@ -270,6 +277,7 @@ export {
   type ConstructionRevealLevel,
   type ConstructionRevealOptions,
   emitRevealPuff,
+  getRevealPlanSpeed,
   getRevealPlanState,
   getRevealTurn,
   isNodeRevealing,

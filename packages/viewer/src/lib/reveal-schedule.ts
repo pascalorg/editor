@@ -234,6 +234,62 @@ export const LAZY_REVEAL_TIMING: LazyRevealTiming = pacedLazyTiming(
   FRAMING_PACE,
 )
 
+/**
+ * The person's animation speed: how fast the build animations play, as a multiple of today's.
+ * Higher is faster, so every time of a schedule is divided by it: ×2 plays a build in half the
+ * time, ×0.5 in twice as long. ×1 is every table exactly as shipped (the very same objects).
+ */
+export const ANIMATION_SPEEDS = [0.5, 0.75, 1, 1.5, 2] as const
+export type AnimationSpeed = (typeof ANIMATION_SPEEDS)[number]
+export const DEFAULT_ANIMATION_SPEED: AnimationSpeed = 1
+
+/** The step nearest to `value`; anything that is not a finite positive number is ×1. */
+export function normalizeAnimationSpeed(value: unknown): AnimationSpeed {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+    return DEFAULT_ANIMATION_SPEED
+  return ANIMATION_SPEEDS.reduce((best, step) =>
+    Math.abs(step - value) < Math.abs(best - value) ? step : best,
+  )
+}
+
+/** `timing` with every time divided by `speed`: durations, gaps and the cap. */
+export function pacedRevealTiming(timing: RevealTiming, speed: number): RevealTiming {
+  return {
+    nodeGapMs: timing.nodeGapMs / speed,
+    groupGapMs: timing.groupGapMs / speed,
+    capMs: timing.capMs / speed,
+    durationMs: scaleTimes(timing.durationMs, 1 / speed),
+  }
+}
+
+/** `timing` with every time divided by `speed`; the share `speed` of its pace is not a time. */
+export function pacedRetractTiming(timing: RetractTiming, speed: number): RetractTiming {
+  return {
+    ...timing,
+    nodeGapMs: timing.nodeGapMs / speed,
+    capMs: timing.capMs / speed,
+    durationMs: scaleTimes(timing.durationMs, 1 / speed),
+  }
+}
+
+function scaleTimes<K extends string>(table: Record<K, number>, factor: number): Record<K, number> {
+  return Object.fromEntries(
+    (Object.entries(table) as [K, number][]).map(([key, ms]) => [key, ms * factor]),
+  ) as Record<K, number>
+}
+
+/** The Full level's schedule at `speed`; at ×1 it is `REVEAL_TIMING` itself. */
+export const revealTimingAt = (speed: number): RevealTiming =>
+  speed === 1 ? REVEAL_TIMING : pacedRevealTiming(REVEAL_TIMING, speed)
+
+/** The Framing level's schedule at `speed`; at ×1 it is `LAZY_REVEAL_TIMING` itself. */
+export const lazyTimingAt = (speed: number): LazyRevealTiming =>
+  speed === 1 ? LAZY_REVEAL_TIMING : pacedLazyTiming(LAZY_REVEAL_BASE_TIMING, FRAMING_PACE / speed)
+
+/** The reverse play's schedule at `speed`; at ×1 it is `RETRACT_TIMING` itself. */
+export const retractTimingAt = (speed: number): RetractTiming =>
+  speed === 1 ? RETRACT_TIMING : pacedRetractTiming(RETRACT_TIMING, speed)
+
 /** A stable share in [0, 1) from an id: the same jitter every time. */
 function jitterKey(id: string): number {
   return (scatterKey(`${id}#jitter`) % 10_007) / 10_007
@@ -400,8 +456,9 @@ export function planRetract(
   candidates: readonly RevealCandidate[],
   startMs: number,
   timing: RetractTiming = RETRACT_TIMING,
+  build: RevealTiming = REVEAL_TIMING,
 ): PlannedRetract[] {
-  const forward = planReveal(candidates, 0)
+  const forward = planReveal(candidates, 0, build)
   const byPhase = new Map<RevealPhase, PlannedReveal[]>()
   for (const entry of forward)
     byPhase.set(entry.phase, [...(byPhase.get(entry.phase) ?? []), entry])
@@ -414,7 +471,7 @@ export function planRetract(
     const last = Math.max(...entries.map((entry) => entry.startMs))
     for (const entry of entries)
       placed.push({ entry, offset: cursor + (last - entry.startMs) * timing.speed })
-    cursor += (last - first + REVEAL_TIMING.groupGapMs) * timing.speed
+    cursor += (last - first + build.groupGapMs) * timing.speed
   }
   const longest = Math.max(0, ...placed.map(({ entry }) => timing.durationMs[entry.style]))
   const lastStart = Math.max(0, ...placed.map(({ offset }) => offset))

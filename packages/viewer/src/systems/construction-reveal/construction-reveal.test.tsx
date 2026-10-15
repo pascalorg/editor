@@ -25,7 +25,13 @@ import { NodeRenderer } from '../../components/renderers/node-renderer'
 import { DustPool } from '../../lib/construction-dust'
 import { OVERLAY_LAYER, scenePassLayers } from '../../lib/layers'
 import { hasRevealPose } from '../../lib/reveal-pose'
-import { LAZY_REVEAL_TIMING, RETRACT_TIMING, REVEAL_TIMING } from '../../lib/reveal-schedule'
+import {
+  LAZY_REVEAL_TIMING,
+  lazyTimingAt,
+  RETRACT_TIMING,
+  REVEAL_TIMING,
+  revealTimingAt,
+} from '../../lib/reveal-schedule'
 import useViewer from '../../store/use-viewer'
 import { GeometrySystem } from '../geometry/geometry-system'
 import { ConstructionDust } from './construction-dust'
@@ -38,6 +44,7 @@ import {
   ConstructionReveal,
   type ConstructionRevealDriver,
   type ConstructionRevealLevel,
+  getRevealPlanSpeed,
   getRevealPlanState,
   getRevealTurn,
   isNodeRevealing,
@@ -252,12 +259,13 @@ async function agentWrites(write: () => void) {
   })
 }
 
-function start(options: { prefersReducedMotion?: () => boolean } = {}) {
+function start(options: { prefersReducedMotion?: () => boolean; speed?: () => number } = {}) {
   dust = new DustPool()
   driver = startConstructionReveal({
     reveals: (commit) => commit.author === 'agent',
     prefersReducedMotion: options.prefersReducedMotion ?? (() => false),
     level: () => level,
+    ...(options.speed ? { speed: options.speed } : {}),
     dust,
   })
 }
@@ -2645,5 +2653,72 @@ describe('the framing level: the lazy schedule and its prerolls', () => {
     expect(isNodeRevealing(wall.id)).toBe(false)
     expect(getRevealTurn(wall.id)).toBeNull()
     expect(root(wall.id)).toBeDefined()
+  })
+})
+
+describe('the animation speed', () => {
+  /** One wall written by the agent, and the progress it makes per frame once it moves. */
+  async function wallProgress(frameMs: number) {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    return { levelId: levelId! }
+  }
+
+  test('is read when the plan is made: the build plays at the speed the person had then', async () => {
+    let speed = 2
+    const { levelId } = await wallProgress(20)
+    start({ speed: () => speed })
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNodes([{ node: wall, parentId: levelId }]))
+    // The build waits a few frames for its shaders, then is planned: at the speed asked for then.
+    for (let elapsed = 0; elapsed < 2000 && getRevealPlanSpeed() !== 2; elapsed += 20)
+      await frame(20)
+    expect(getRevealPlanSpeed()).toBe(2)
+    // Played at ×2, the wall rises in half the shipped time: its progress per frame is doubled.
+    let before = -1
+    let after = -1
+    for (let elapsed = 0; elapsed < 4000 && after < 0; elapsed += 20) {
+      await frame(20)
+      const state = getRevealPlanState(wall.id)
+      if (state && state.progress > 0.05 && state.progress < 0.8) {
+        before = state.progress
+        await frame(20)
+        after = getRevealPlanState(wall.id)!.progress
+      }
+    }
+    expect(before).toBeGreaterThan(0)
+    expect(after - before).toBeCloseTo(20 / revealTimingAt(2).durationMs.rise, 3)
+    speed = 1
+  })
+
+  test('a change applies to the next build and never moves one playing', async () => {
+    let speed = 1
+    const { levelId } = await wallProgress(20)
+    start({ speed: () => speed })
+    const first = make(Wall)
+    await agentWrites(() => useScene.getState().createNodes([{ node: first, parentId: levelId }]))
+    let mid = -1
+    for (let elapsed = 0; elapsed < 4000 && mid < 0; elapsed += 20) {
+      await frame(20)
+      const state = getRevealPlanState(first.id)
+      if (state && state.progress > 0.1) mid = state.progress
+    }
+    expect(mid).toBeGreaterThan(0.1)
+    // The person turns it up while this wall is rising: it keeps its own pace.
+    speed = 2
+    await frame(20)
+    const next = getRevealPlanState(first.id)!.progress
+    expect(next - mid).toBeCloseTo(20 / REVEAL_TIMING.durationMs.rise, 3)
+    // The next build is planned at the new speed.
+    const second = make(Wall)
+    await agentWrites(() => useScene.getState().createNodes([{ node: second, parentId: levelId }]))
+    for (let elapsed = 0; elapsed < 2000 && getRevealPlanSpeed() !== 2; elapsed += 20)
+      await frame(20)
+    expect(getRevealPlanSpeed()).toBe(2)
+  })
+
+  test('at ×1 a build plays on the shipped tables, at both levels', () => {
+    expect(revealTimingAt(1)).toBe(REVEAL_TIMING)
+    expect(lazyTimingAt(1)).toBe(LAZY_REVEAL_TIMING)
   })
 })

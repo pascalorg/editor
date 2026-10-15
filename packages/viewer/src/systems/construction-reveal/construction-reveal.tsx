@@ -46,13 +46,16 @@ import {
 import {
   LAZY_REVEAL_TIMING,
   type LazyRevealTiming,
+  lazyTimingAt,
+  normalizeAnimationSpeed,
   type PlannedReveal,
   planLazyReveal,
   planRetract,
   planReveal,
-  REVEAL_TIMING,
   type RevealCandidate,
+  retractTimingAt,
   revealGroupKey,
+  revealTimingAt,
 } from '../../lib/reveal-schedule'
 import useViewer from '../../store/use-viewer'
 import { resolveLevelVisibility } from '../level/level-utils'
@@ -84,6 +87,8 @@ type ActiveReveal = {
   levelId: string | null
   startedAt: number
   durationMs: number
+  /** What an assembled node's own parts take to drop, at the speed its plan was made at. */
+  assembleMs: number
   clockStart: number | null
   pivot: Vector3 | null
   base: Box3 | null
@@ -287,6 +292,16 @@ let clockMs = 0
 let buildLandedMs = Number.NEGATIVE_INFINITY
 let tickedBusy = false
 let revealLevel: () => ConstructionRevealLevel = () => 'full'
+/** The person's animation speed, asked when a plan is made (never mid-animation). */
+let revealSpeed: () => number = () => 1
+/** The speed the plan in force was made at: what waits for its turn plays at it. */
+let planSpeed = 1
+const currentSpeed = () => normalizeAnimationSpeed(revealSpeed())
+
+/** The animation speed the plan in force was made at, for a plugin that stages its own pieces. */
+export function getRevealPlanSpeed(): number {
+  return planSpeed
+}
 let dust: DustPool | null = null
 
 type RevealGroup = {
@@ -533,7 +548,7 @@ export function getRevealPlanState(id: string): RevealPlanState | null {
   if (gone) return { style: gone.style, progress: 0 }
   const reveal = active.get(id)
   if (!reveal) return null
-  const durationMs = reveal.style === 'assemble' ? REVEAL_TIMING.durationMs.drop : reveal.durationMs
+  const durationMs = reveal.style === 'assemble' ? reveal.assembleMs : reveal.durationMs
   const progress = (clockMs - reveal.startedAt) / Math.max(1, durationMs)
   return { style: reveal.style, progress: Math.min(1, Math.max(0, progress)) }
 }
@@ -1077,7 +1092,7 @@ function startReveal(candidate: RevealCandidate, now: number, animate: boolean) 
   groupReleased(candidate)
   // The lazy schedule overdoes it a little: higher falls, an anticipation, an overshoot.
   const lazy = lazyOn()
-  const timing = lazy ? LAZY_REVEAL_TIMING : REVEAL_TIMING
+  const timing = lazy ? lazyTimingAt(planSpeed) : revealTimingAt(planSpeed)
   active.set(candidate.id, {
     id: candidate.id,
     candidate,
@@ -1088,6 +1103,7 @@ function startReveal(candidate: RevealCandidate, now: number, animate: boolean) 
     levelId: candidate.levelId,
     startedAt: now,
     durationMs: timing.durationMs[candidate.style],
+    assembleMs: revealTimingAt(planSpeed).durationMs.drop,
     clockStart: null,
     pivot: null,
     base: null,
@@ -1606,11 +1622,16 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
   const clearingIds = new Set(clearing.map((candidate) => candidate.id))
   const roofFirst = clearing.some((candidate) => !from.has(candidate.id))
   const lead = liftWanted.size > lifting || roofFirst ? RETRACT_LIFT_LEAD_MS : 0
+  const speed = currentSpeed()
+  const rewind = retractTimingAt(speed)
+  const forward = revealTimingAt(speed)
   const plan = [
-    ...planRetract(clearing, clockMs),
+    ...planRetract(clearing, clockMs, rewind, forward),
     ...planRetract(
       staged.filter((candidate) => !clearingIds.has(candidate.id)),
       clockMs + lead,
+      rewind,
+      forward,
     ),
   ].sort((left, right) => left.startMs - right.startMs)
   const end = Math.max(...plan.map((entry) => entry.startMs + entry.durationMs))
@@ -1828,8 +1849,12 @@ function stepWarm(now: number) {
  * turn (its plugin is playing it), and the rest are planned around it with their prerolls.
  */
 function planPending(now: number): PlannedReveal[] {
+  // The person's speed is read here, when the plan is made: what is already moving keeps its own
+  // durations, and what is planned now keeps this speed until it starts.
+  planSpeed = currentSpeed()
   if (!lazyOn()) {
-    return planReveal([...pending.values()], Math.max(now, lastStartMs + REVEAL_TIMING.nodeGapMs))
+    const timing = revealTimingAt(planSpeed)
+    return planReveal([...pending.values()], Math.max(now, lastStartMs + timing.nodeGapMs), timing)
   }
   const kept: PlannedReveal[] = []
   for (const entry of queue) {
@@ -1850,7 +1875,7 @@ function planPending(now: number): PlannedReveal[] {
   }
   // What comes next waits for the prerolls already playing: nothing of it can pull their node in early.
   const from = Math.max(now, ...kept.map((entry) => entry.startMs))
-  return [...kept, ...planLazyReveal(waiting, from)].sort(
+  return [...kept, ...planLazyReveal(waiting, from, lazyTimingAt(planSpeed))].sort(
     (left, right) => left.startMs - right.startMs || left.seq - right.seq,
   )
 }
@@ -2007,6 +2032,11 @@ export type ConstructionRevealOptions = {
   reveals: (commit: SceneCommit) => boolean
   /** How much animation plays; defaults to `full`. Reduced motion always means `off`. */
   level?: () => ConstructionRevealLevel
+  /**
+   * The person's animation speed, a multiple of the shipped pace (higher is faster); defaults to ×1.
+   * Read when a plan is made: a change applies to the next build and never moves one playing.
+   */
+  speed?: () => number
   /** Defaults to the `prefers-reduced-motion` media query. */
   prefersReducedMotion?: () => boolean
   /** Where rising walls and landings puff their dust; none without it. */
@@ -2037,6 +2067,8 @@ export function startConstructionReveal(
   const token = {}
   currentDriver = token
   revealLevel = options.level ?? (() => 'full')
+  revealSpeed = options.speed ?? (() => 1)
+  planSpeed = 1
   dust = options.dust ?? null
   const reducedMotion = options.prefersReducedMotion ?? mediaPrefersReducedMotion()
   const instant = () => {
@@ -2148,6 +2180,8 @@ export function startConstructionReveal(
       glideClockMs = Number.NEGATIVE_INFINITY
       frameQuiet = true
       revealLevel = () => 'full'
+      revealSpeed = () => 1
+      planSpeed = 1
       dust = null
       lastStartMs = Number.NEGATIVE_INFINITY
       buildLandedMs = Number.NEGATIVE_INFINITY
@@ -2165,12 +2199,16 @@ export function startConstructionReveal(
 export function ConstructionReveal({
   reveals,
   level = 'full',
+  speed = 1,
 }: {
   reveals: (commit: SceneCommit) => boolean
   level?: ConstructionRevealLevel
+  /** The person's animation speed (×0.5 to ×2); a change applies to the next build. */
+  speed?: number
 }) {
   const revealsRef = useRef(reveals)
   const levelRef = useRef(level)
+  const speedRef = useRef(speed)
   const driverRef = useRef<ConstructionRevealDriver | null>(null)
   const clockRef = useRef(0)
   const [pool] = useState(() => new DustPool())
@@ -2185,9 +2223,14 @@ export function ConstructionReveal({
   }, [level])
 
   useEffect(() => {
+    speedRef.current = speed
+  }, [speed])
+
+  useEffect(() => {
     const driver = startConstructionReveal({
       reveals: (commit) => revealsRef.current(commit),
       level: () => levelRef.current,
+      speed: () => speedRef.current,
       dust: pool,
     })
     driverRef.current = driver
