@@ -20,7 +20,7 @@ import {
 import { Group } from 'three'
 import addVolumeCommit from './__fixtures__/add-volume-commit.json'
 import { commitRevealCandidates } from './reveal-candidates'
-import { LAZY_REVEAL_TIMING, planLazyReveal } from './reveal-schedule'
+import { FRAMING_PACE, LAZY_REVEAL_TIMING, planLazyReveal } from './reveal-schedule'
 
 // The owner's case (14 Oct): an add_volume build "pulsed too fast, a bit of a mess". One commit
 // makes a whole volume, its storeys, rooms (zones), walls, slabs and roof: at the framing level
@@ -153,7 +153,8 @@ describe('add_volume at the framing level', () => {
     const end = Math.max(
       ...plan.map((entry) => entry.startMs + LAZY_REVEAL_TIMING.durationMs[entry.style]),
     )
-    expect(end).toBeGreaterThan(6000)
+    // Not a pulse: at least 6 s at the original pace, stretched with it.
+    expect(end).toBeGreaterThan(6000 * FRAMING_PACE)
     expect(end).toBeLessThan(LAZY_REVEAL_TIMING.capMs)
     console.log(
       `add_volume (2 storeys, 3 rooms below): ${plan.length} pieces, ${created.filter((n) => n.type === 'wall').length} walls, plays ${Math.round(end)} ms`,

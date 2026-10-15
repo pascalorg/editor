@@ -181,8 +181,18 @@ export type LazyRevealTiming = {
   minHeightM: Partial<Record<RevealStyle, number>>
 }
 
-/** The one place to tune the lazy schedule and the framing level's motion. */
-export const LAZY_REVEAL_TIMING: LazyRevealTiming = {
+/**
+ * The Framing level's pace: one factor on its whole timeline, the staging and the motions alike. 1 is
+ * the pace it was built at; 1.75 makes a build that took 20 s take 35 s, and anything smaller or
+ * larger takes proportionally longer. A pace of `p` multiplies every offset, gap, beat, duration and
+ * cap of this level (`LAZY_REVEAL_TIMING`) and of the frame each wall plays before it rises (Bones'
+ * `WALL_BUILD`), so pieces still snap and the build only plays out slower. The Full level reads
+ * `REVEAL_TIMING` and does not move with it.
+ */
+export const FRAMING_PACE = 1.75
+
+/** The lazy schedule at pace 1; `LAZY_REVEAL_TIMING` is this at `FRAMING_PACE`. */
+export const LAZY_REVEAL_BASE_TIMING: LazyRevealTiming = {
   floorOffsetMs: 1200,
   roomOffsetMs: 420,
   elementOffsetMs: {
@@ -200,6 +210,29 @@ export const LAZY_REVEAL_TIMING: LazyRevealTiming = {
   overshoot: { rise: 0.7, scale: 1.6, settle: 1.6 },
   minHeightM: { drop: 1.8, settle: 0.6 },
 }
+
+/** `timing` played at `pace` times its length: times scale, shares and heights do not. */
+export function pacedLazyTiming(timing: LazyRevealTiming, pace: number): LazyRevealTiming {
+  const scaled = <K extends string>(table: Record<K, number>) =>
+    Object.fromEntries(
+      (Object.entries(table) as [K, number][]).map(([key, ms]) => [key, ms * pace]),
+    ) as Record<K, number>
+  return {
+    ...timing,
+    floorOffsetMs: timing.floorOffsetMs * pace,
+    roomOffsetMs: timing.roomOffsetMs * pace,
+    elementOffsetMs: scaled(timing.elementOffsetMs),
+    phaseGapMs: timing.phaseGapMs * pace,
+    capMs: timing.capMs * pace,
+    durationMs: scaled(timing.durationMs),
+  }
+}
+
+/** The one place the lazy schedule and the framing level's motion are read from. */
+export const LAZY_REVEAL_TIMING: LazyRevealTiming = pacedLazyTiming(
+  LAZY_REVEAL_BASE_TIMING,
+  FRAMING_PACE,
+)
 
 /** A stable share in [0, 1) from an id: the same jitter every time. */
 function jitterKey(id: string): number {

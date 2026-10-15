@@ -189,9 +189,14 @@ export {
   type RendererInitializationResult,
   type RendererPowerPreference,
 } from './lib/renderer-capability'
+export { commitRevealCandidates } from './lib/reveal-candidates'
 export {
+  FRAMING_PACE,
+  LAZY_REVEAL_BASE_TIMING,
   LAZY_REVEAL_TIMING,
   type LazyRevealTiming,
+  type PlannedReveal,
+  pacedLazyTiming,
   planLazyReveal,
   type RevealCandidate,
 } from './lib/reveal-schedule'

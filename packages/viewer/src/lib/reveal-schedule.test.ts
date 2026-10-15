@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { RevealPhase } from '@pascal-app/core'
 import {
+  FRAMING_PACE,
+  LAZY_REVEAL_BASE_TIMING,
   LAZY_REVEAL_TIMING,
+  pacedLazyTiming,
   planLazyReveal,
   planRetract,
   planReveal,
@@ -265,5 +268,122 @@ describe('the lazy, nested schedule (framing)', () => {
     const gaps = [1, 2, 3].map((wall) => at(`wall_0_0_${wall}`) - at(`wall_0_0_${wall - 1}`))
     // Jittered: the walls of a room are not evenly spaced.
     expect(new Set(gaps.map((gap) => Math.round(gap))).size).toBeGreaterThan(1)
+  })
+})
+
+/** A floor of `rooms` rooms of four walls, a slab under them, a door and two items in each. */
+function houseFloor(level: number, rooms: number): RevealCandidate[] {
+  const nodes = [candidate(`slab_${level}`, 'foundation', level, { style: 'settle', height: 0.08 })]
+  for (let room = 0; room < rooms; room += 1) {
+    const place = { cluster: `zone_${level}_${room}`, sweep: room }
+    for (let wall = 0; wall < 4; wall += 1)
+      nodes.push(
+        candidate(`wall_${level}_${room}_${wall}`, 'structure', level, { ...place, order: wall }),
+      )
+    nodes.push(
+      candidate(`door_${level}_${room}`, 'openings', level, { ...place, style: 'cut', depth: 3 }),
+    )
+    for (let item = 0; item < 2; item += 1)
+      nodes.push(
+        candidate(`item_${level}_${room}_${item}`, 'furnishing', level, {
+          ...place,
+          style: 'drop',
+          height: 0.3,
+        }),
+      )
+  }
+  return nodes
+}
+
+describe('the framing pace', () => {
+  const small = [...houseFloor(0, 3), ...houseFloor(1, 3)]
+  const startsOf = (plan: ReturnType<typeof planLazyReveal>) =>
+    new Map(plan.map((entry) => [entry.id, entry.startMs]))
+
+  test('the framing table is the original one at one pace: FRAMING_PACE times its times', () => {
+    expect(LAZY_REVEAL_TIMING).toEqual(pacedLazyTiming(LAZY_REVEAL_BASE_TIMING, FRAMING_PACE))
+    expect(pacedLazyTiming(LAZY_REVEAL_BASE_TIMING, 1)).toEqual(LAZY_REVEAL_BASE_TIMING)
+    const { floorOffsetMs, roomOffsetMs, phaseGapMs, capMs } = LAZY_REVEAL_BASE_TIMING
+    expect(LAZY_REVEAL_TIMING.floorOffsetMs).toBeCloseTo(floorOffsetMs * FRAMING_PACE, 9)
+    expect(LAZY_REVEAL_TIMING.roomOffsetMs).toBeCloseTo(roomOffsetMs * FRAMING_PACE, 9)
+    expect(LAZY_REVEAL_TIMING.phaseGapMs).toBeCloseTo(phaseGapMs * FRAMING_PACE, 9)
+    expect(LAZY_REVEAL_TIMING.capMs).toBeCloseTo(capMs * FRAMING_PACE, 9)
+    for (const phase of Object.keys(LAZY_REVEAL_BASE_TIMING.elementOffsetMs) as RevealPhase[])
+      expect(LAZY_REVEAL_TIMING.elementOffsetMs[phase]).toBeCloseTo(
+        LAZY_REVEAL_BASE_TIMING.elementOffsetMs[phase] * FRAMING_PACE,
+        9,
+      )
+    for (const style of Object.keys(
+      LAZY_REVEAL_BASE_TIMING.durationMs,
+    ) as (keyof typeof LAZY_REVEAL_TIMING.durationMs)[])
+      expect(LAZY_REVEAL_TIMING.durationMs[style]).toBeCloseTo(
+        LAZY_REVEAL_BASE_TIMING.durationMs[style] * FRAMING_PACE,
+        9,
+      )
+  })
+
+  test('what is not a time does not move: the jitter, the overshoots and the heights', () => {
+    expect(LAZY_REVEAL_TIMING.jitter).toBe(LAZY_REVEAL_BASE_TIMING.jitter)
+    expect(LAZY_REVEAL_TIMING.overshoot).toEqual(LAZY_REVEAL_BASE_TIMING.overshoot)
+    expect(LAZY_REVEAL_TIMING.minHeightM).toEqual(LAZY_REVEAL_BASE_TIMING.minHeightM)
+  })
+
+  test('a build plays the original plan stretched: every start is FRAMING_PACE times its old one', () => {
+    const original = startsOf(planLazyReveal(small, 0, LAZY_REVEAL_BASE_TIMING))
+    const paced = startsOf(planLazyReveal(small, 0, LAZY_REVEAL_TIMING))
+    expect(paced.size).toBe(original.size)
+    for (const [id, startMs] of original)
+      expect(paced.get(id)!).toBeCloseTo(startMs * FRAMING_PACE, 6)
+  })
+
+  test('a build over the cap is pulled to the stretched cap, not to the old one', () => {
+    const huge = Array.from({ length: 4 }, (_, level) =>
+      Array.from({ length: 60 }, (_, room) =>
+        houseFloor(level, 1).map((node) => ({
+          ...node,
+          id: `${node.id}_${room}`,
+          cluster: `${node.cluster}_${room}`,
+          sweep: room,
+        })),
+      ).flat(),
+    ).flat()
+    const plan = planLazyReveal(huge, 0)
+    const end = Math.max(...plan.map((e) => e.startMs + LAZY_REVEAL_TIMING.durationMs[e.style]))
+    expect(end).toBeLessThanOrEqual(LAZY_REVEAL_TIMING.capMs + 1e-6)
+    expect(end).toBeGreaterThan(LAZY_REVEAL_BASE_TIMING.capMs)
+  })
+})
+
+describe('the full level keeps its own schedule', () => {
+  // Full reads REVEAL_TIMING and RETRACT_TIMING; these are the tables Full shipped with, pinned as
+  // literals on purpose: the framing pace must never reach them.
+  test('its tables are the ones it shipped with', () => {
+    expect(REVEAL_TIMING).toEqual({
+      nodeGapMs: 70,
+      groupGapMs: 280,
+      capMs: 6000,
+      durationMs: { rise: 650, scale: 400, settle: 380, drop: 620, cut: 260, assemble: 0 },
+    })
+    expect(RETRACT_TIMING).toEqual({
+      speed: 0.62,
+      nodeGapMs: 70 * 0.62,
+      capMs: 2400,
+      durationMs: { rise: 420, scale: 300, settle: 380, drop: 400, cut: 260, assemble: 520 },
+    })
+  })
+
+  test('its plan is the plan of those tables, at any framing pace', () => {
+    const nodes = [...houseFloor(0, 3), ...houseFloor(1, 3)]
+    const shipped = {
+      nodeGapMs: 70,
+      groupGapMs: 280,
+      capMs: 6000,
+      durationMs: { rise: 650, scale: 400, settle: 380, drop: 620, cut: 260, assemble: 0 },
+    } as const
+    const now = planReveal(nodes, 0)
+    const then = planReveal(nodes, 0, shipped)
+    expect(now.map((entry) => [entry.id, entry.startMs])).toEqual(
+      then.map((entry) => [entry.id, entry.startMs]),
+    )
   })
 })
