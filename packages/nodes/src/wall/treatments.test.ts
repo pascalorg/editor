@@ -89,69 +89,68 @@ describe('wall treatment miters', () => {
     }
   })
 
-  test.each([
-    'skirting',
-    'crown',
-    'chairRail',
-  ] as const)('preserves %s position bytes with cached per-wall endpoint data', (kind) => {
-    const cases = [
-      [wall('A', [0, 0], [3, 0])],
-      [wall('A', [0, 0], [3, 0]), wall('B', [3, 0], [3, 3])],
-      [wall('A', [0, 0], [3, 0]), wall('B', [0, 0], [1, 3])],
-      [wall('A', [0, 0], [0, 3]), wall('B', [-3, 0], [3, 0])],
-      [{ ...wall('A', [0, 0], [3, 0]), curveOffset: 0.4 }],
-    ]
-    for (const walls of cases) {
-      const node = { ...walls[0]!, [kind]: trim }
-      const proudOffsets = wallTreatmentProudOffsets(node)
-      const prouds = new Set([0, ...proudOffsets.map((proud) => Math.round(proud * 1e6) / 1e6)])
-      const reference: WallTreatmentLevelData = {
-        walls,
-        miterDataByProud: new Map(
-          [...prouds].map((proud) => [
-            proud,
-            calculateLevelMiters(
-              proud === 0
-                ? [...walls]
-                : walls.map((entry) => ({
-                    ...entry,
-                    thickness: getWallThickness(entry) + proud * 2,
-                  })),
-            ),
-          ]),
-        ),
+  test.each(['skirting', 'crown', 'chairRail'] as const)(
+    'preserves %s position bytes with cached per-wall endpoint data',
+    (kind) => {
+      const cases = [
+        [wall('A', [0, 0], [3, 0])],
+        [wall('A', [0, 0], [3, 0]), wall('B', [3, 0], [3, 3])],
+        [wall('A', [0, 0], [3, 0]), wall('B', [0, 0], [1, 3])],
+        [wall('A', [0, 0], [0, 3]), wall('B', [-3, 0], [3, 0])],
+        [{ ...wall('A', [0, 0], [3, 0]), curveOffset: 0.4 }],
+      ]
+      for (const walls of cases) {
+        const node = { ...walls[0]!, [kind]: trim }
+        const proudOffsets = wallTreatmentProudOffsets(node)
+        const prouds = new Set([0, ...proudOffsets.map((proud) => Math.round(proud * 1e6) / 1e6)])
+        const reference: WallTreatmentLevelData = {
+          walls,
+          miterDataByProud: new Map(
+            [...prouds].map((proud) => [
+              proud,
+              calculateLevelMiters(
+                proud === 0
+                  ? [...walls]
+                  : walls.map((entry) => ({
+                      ...entry,
+                      thickness: getWallThickness(entry) + proud * 2,
+                    })),
+              ),
+            ]),
+          ),
+        }
+        const data = buildWallTreatmentLevelData('level_test', walls, proudOffsets)
+        const select = createWallTreatmentSelector(node, proudOffsets)
+        const slice = select({
+          ...useWallTreatmentLevelData.getState(),
+          byLevelId: new Map([['level_test', data]]),
+        })!
+        for (const side of ['a', 'b'] as const) {
+          const openings = [
+            {
+              type: 'door',
+              width: 0.8,
+              height: 2,
+              position: [1.5, 1, 0] as [number, number, number],
+            },
+          ]
+          const before = buildTrimGeometry(node, side, trim, kind, openings, reference)!
+          const after = buildTrimGeometry(node, side, trim, kind, openings, slice)!
+          expect(before).not.toBeNull()
+          expect(after).not.toBeNull()
+          const beforeArray = before.getAttribute('position').array
+          const afterArray = after.getAttribute('position').array
+          expect(
+            new Uint8Array(afterArray.buffer, afterArray.byteOffset, afterArray.byteLength),
+          ).toEqual(
+            new Uint8Array(beforeArray.buffer, beforeArray.byteOffset, beforeArray.byteLength),
+          )
+          before.dispose()
+          after.dispose()
+        }
       }
-      const data = buildWallTreatmentLevelData('level_test', walls, proudOffsets)
-      const select = createWallTreatmentSelector(node, proudOffsets)
-      const slice = select({
-        ...useWallTreatmentLevelData.getState(),
-        byLevelId: new Map([['level_test', data]]),
-      })!
-      for (const side of ['a', 'b'] as const) {
-        const openings = [
-          {
-            type: 'door',
-            width: 0.8,
-            height: 2,
-            position: [1.5, 1, 0] as [number, number, number],
-          },
-        ]
-        const before = buildTrimGeometry(node, side, trim, kind, openings, reference)!
-        const after = buildTrimGeometry(node, side, trim, kind, openings, slice)!
-        expect(before).not.toBeNull()
-        expect(after).not.toBeNull()
-        const beforeArray = before.getAttribute('position').array
-        const afterArray = after.getAttribute('position').array
-        expect(
-          new Uint8Array(afterArray.buffer, afterArray.byteOffset, afterArray.byteLength),
-        ).toEqual(
-          new Uint8Array(beforeArray.buffer, beforeArray.byteOffset, beforeArray.byteLength),
-        )
-        before.dispose()
-        after.dispose()
-      }
-    }
-  })
+    },
+  )
 
   test.each([
     ['skirting', 0.0624],

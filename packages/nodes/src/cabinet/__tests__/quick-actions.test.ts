@@ -64,45 +64,45 @@ describe('cabinet quick actions', () => {
     ).toBe(false)
   })
 
-  test.each([
-    'left',
-    'right',
-  ] as const)('selects the outer base cabinet after an L %s action', (side) => {
-    const levelId = `level_quick-actions-select-outer-${side}` as AnyNodeId
-    const run = CabinetNode.parse({
-      id: `cabinet_run-quick-actions-select-outer-${side}`,
-      parentId: levelId,
-      position: [0, 0, 0],
-      rotation: 0,
-      children: [`cabinet-module_source-quick-actions-select-outer-${side}`],
-    })
-    const source = CabinetModuleNode.parse({
-      id: `cabinet-module_source-quick-actions-select-outer-${side}`,
-      parentId: run.id,
-      position: [0, 0.1, 0],
-      width: 0.9,
-      depth: 0.58,
-      carcassHeight: 0.72,
-    })
-    const sceneApi = sceneApiFixture([run as AnyNode, source as AnyNode])
-    const action = cabinetQuickActions({ node: source, nodes: sceneApi.nodes() }).find(
-      (candidate) => candidate.id === `cabinet:add-corner-${side}`,
-    )
+  test.each(['left', 'right'] as const)(
+    'selects the outer base cabinet after an L %s action',
+    (side) => {
+      const levelId = `level_quick-actions-select-outer-${side}` as AnyNodeId
+      const run = CabinetNode.parse({
+        id: `cabinet_run-quick-actions-select-outer-${side}`,
+        parentId: levelId,
+        position: [0, 0, 0],
+        rotation: 0,
+        children: [`cabinet-module_source-quick-actions-select-outer-${side}`],
+      })
+      const source = CabinetModuleNode.parse({
+        id: `cabinet-module_source-quick-actions-select-outer-${side}`,
+        parentId: run.id,
+        position: [0, 0.1, 0],
+        width: 0.9,
+        depth: 0.58,
+        carcassHeight: 0.72,
+      })
+      const sceneApi = sceneApiFixture([run as AnyNode, source as AnyNode])
+      const action = cabinetQuickActions({ node: source, nodes: sceneApi.nodes() }).find(
+        (candidate) => candidate.id === `cabinet:add-corner-${side}`,
+      )
 
-    expect(action?.disabled).toBeFalsy()
-    const selectedId = action?.run({ sceneApi })?.selectedIds?.[0]
-    const selected = selectedId ? sceneApi.get<CabinetModuleNode>(selectedId) : null
-    const derivedRun = selected?.parentId
-      ? sceneApi.get<CabinetNode>(selected.parentId as AnyNodeId)
-      : null
-    const sourceRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId)
+      expect(action?.disabled).toBeFalsy()
+      const selectedId = action?.run({ sceneApi })?.selectedIds?.[0]
+      const selected = selectedId ? sceneApi.get<CabinetModuleNode>(selectedId) : null
+      const derivedRun = selected?.parentId
+        ? sceneApi.get<CabinetNode>(selected.parentId as AnyNodeId)
+        : null
+      const sourceRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId)
 
-    expect(selected?.name).toBe('Base Cabinet')
-    expect(selected?.moduleKind).toBe('standard')
-    expect(derivedRun?.parentId).toBe(run.id)
-    expect(sourceRun?.children).toContain(derivedRun?.id as AnyNodeId)
-    expect(cabinetDefinition.relations?.hosts).toContain('cabinet')
-  })
+      expect(selected?.name).toBe('Base Cabinet')
+      expect(selected?.moduleKind).toBe('standard')
+      expect(derivedRun?.parentId).toBe(run.id)
+      expect(sourceRun?.children).toContain(derivedRun?.id as AnyNodeId)
+      expect(cabinetDefinition.relations?.hosts).toContain('cabinet')
+    },
+  )
 
   test('offers and runs an L-corner action from run selection using the end module', () => {
     const levelId = 'level_quick_actions_corner' as AnyNodeId

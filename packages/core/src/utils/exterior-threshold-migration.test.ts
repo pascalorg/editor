@@ -91,17 +91,17 @@ describe('exterior threshold ownership and load parity', () => {
     expect(cellAt(migrated, [2, -0.05]).finish).toBe(RED)
     expect(cellAt(migrated, [2, 1]).finish).toBe(TILE)
   })
-  test.each([
-    'door',
-    'opening',
-  ] as const)('%s belongs to the sole room across the full wall thickness', (kind) => {
-    const { nodes } = fixture(kind)
-    for (const z of [-0.09, 0, 0.09]) {
-      expect(cellAt(nodes, [2, z]).role).toBe('room:zone_a')
-      expect(cellAt(nodes, [2, z]).finish).toBe(TILE)
-    }
-    expect(cellAt(nodes, [3, 0]).role).toBe('surface')
-  })
+  test.each(['door', 'opening'] as const)(
+    '%s belongs to the sole room across the full wall thickness',
+    (kind) => {
+      const { nodes } = fixture(kind)
+      for (const z of [-0.09, 0, 0.09]) {
+        expect(cellAt(nodes, [2, z]).role).toBe('room:zone_a')
+        expect(cellAt(nodes, [2, z]).finish).toBe(TILE)
+      }
+      expect(cellAt(nodes, [3, 0]).role).toBe('surface')
+    },
+  )
   test('painted regions extend through the strip and later regions win', () => {
     const { nodes } = fixture()
     const zone = nodes.zone_a as ZoneNode

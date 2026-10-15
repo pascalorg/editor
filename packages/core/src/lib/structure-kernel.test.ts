@@ -725,26 +725,26 @@ function plates(nodes: SceneNodes) {
   )
 }
 
-test.each([
-  false,
-  true,
-])('one full-footprint plate survives partition add/remove (separator=%s)', (separator) => {
-  const initial = run(fixture()).nodes
-  const plate = plates(initial)[0]!
-  expect(plate.polygon).toContainEqual([-0.1, -0.1])
-  const divided = split(initial, 2, separator).nodes
-  expect(plates(divided)).toHaveLength(1)
-  expect(plates(divided)[0]).toMatchObject({
-    id: plate.id,
-    zoneIds: zones(divided)
-      .map((zone) => zone.id)
-      .sort(),
-  })
-  delete divided[separator ? 'separator_divider' : 'wall_divider']
-  const merged = run(divided).nodes
-  expect(plates(merged).map((node) => node.id)).toEqual([plate.id])
-  assertIdempotent(merged)
-})
+test.each([false, true])(
+  'one full-footprint plate survives partition add/remove (separator=%s)',
+  (separator) => {
+    const initial = run(fixture()).nodes
+    const plate = plates(initial)[0]!
+    expect(plate.polygon).toContainEqual([-0.1, -0.1])
+    const divided = split(initial, 2, separator).nodes
+    expect(plates(divided)).toHaveLength(1)
+    expect(plates(divided)[0]).toMatchObject({
+      id: plate.id,
+      zoneIds: zones(divided)
+        .map((zone) => zone.id)
+        .sort(),
+    })
+    delete divided[separator ? 'separator_divider' : 'wall_divider']
+    const merged = run(divided).nodes
+    expect(plates(merged).map((node) => node.id)).toEqual([plate.id])
+    assertIdempotent(merged)
+  },
+)
 
 describe('ceiling outline', () => {
   function divided(divider: Partial<WallNode>) {

@@ -154,18 +154,18 @@ describe('cabinet hosting surfaces', () => {
     dispose(checkMeshAgreement(f))
   })
 
-  test.each([
-    'wall',
-    'tall',
-  ] as const)('%s runs publish nothing even with countertop and bar flags', (runTier) => {
-    const f = fixture([moduleAt(0)], {
-      runTier,
-      withCountertop: true,
-      barLedge: { edge: 'back', height: 1.1, depth: 0.3 },
-    })
-    expect(f.surfaces).toEqual([])
-    dispose(checkMeshAgreement(f))
-  })
+  test.each(['wall', 'tall'] as const)(
+    '%s runs publish nothing even with countertop and bar flags',
+    (runTier) => {
+      const f = fixture([moduleAt(0)], {
+        runTier,
+        withCountertop: true,
+        barLedge: { edge: 'back', height: 1.1, depth: 0.3 },
+      })
+      expect(f.surfaces).toEqual([])
+      dispose(checkMeshAgreement(f))
+    },
+  )
 
   test('empty runs, all-tall modules, disabled and zero-thickness countertops publish nothing', () => {
     for (const f of [
@@ -179,72 +179,71 @@ describe('cabinet hosting surfaces', () => {
     }
   })
 
-  test.each([
-    'single',
-    'double',
-    'double-offset',
-  ] as const)('%s sink openings match the cut mesh, including the rim reveal', (sinkLayout) => {
-    const sink = moduleAt(0.8, {
-      width: 0.8,
-      position: [0.8, 0.1, 0.15],
-      depth: 0.7,
-      stack: [{ id: 'sink', type: 'sink', sinkLayout }],
-    })
-    const f = fixture([sink], { countertopBackOverhang: 0.3 })
-    const surface = f.surfaces[0]!
-    expect(surface.region!.holes).toHaveLength(sinkLayout === 'single' ? 2 : 3)
-    const geometry = checkMeshAgreement(f)
-    const mesh = geometry.getObjectByName('cabinet-run-countertop')!
-    const ray = new Raycaster()
-    const hits = (x: number, z: number) => {
-      ray.set(new Vector3(x, 3, z), new Vector3(0, -1, 0))
-      return ray.intersectObject(mesh, false)
-    }
-    for (const hole of surface.region!.holes!.slice(0, -1)) {
-      const minX = hole[0]![0]
-      const maxX = hole[1]![0]
-      const minZ = hole[0]![1]
-      const maxZ = hole[2]![1]
-      const x = (minX + maxX) / 2
-      const z = (minZ + maxZ) / 2
-      expect(contains(surface, x, z)).toBe(false)
-      expect(hits(x, z)).toHaveLength(0)
-      expect(hits(minX + 0.002, z)).toHaveLength(0)
-      expect(hits(minX - 0.002, z)[0]!.point.y).toBeCloseTo(surface.position[1], 6)
-      expect(hits(x, maxZ - 0.002)).toHaveLength(0)
-      expect(hits(x, maxZ + 0.002)[0]!.point.y).toBeCloseTo(surface.position[1], 6)
-    }
-    const faucet = surface.region!.holes!.at(-1)!
-    const faucetX = faucet.reduce((sum, point) => sum + point[0], 0) / faucet.length
-    const faucetZ = faucet.reduce((sum, point) => sum + point[1], 0) / faucet.length
-    expect(contains(surface, faucetX, faucetZ)).toBe(false)
-    expect(hits(faucetX, faucetZ)[0]!.point.y).toBeCloseTo(surface.position[1], 6)
-    dispose(geometry)
-  })
+  test.each(['single', 'double', 'double-offset'] as const)(
+    '%s sink openings match the cut mesh, including the rim reveal',
+    (sinkLayout) => {
+      const sink = moduleAt(0.8, {
+        width: 0.8,
+        position: [0.8, 0.1, 0.15],
+        depth: 0.7,
+        stack: [{ id: 'sink', type: 'sink', sinkLayout }],
+      })
+      const f = fixture([sink], { countertopBackOverhang: 0.3 })
+      const surface = f.surfaces[0]!
+      expect(surface.region!.holes).toHaveLength(sinkLayout === 'single' ? 2 : 3)
+      const geometry = checkMeshAgreement(f)
+      const mesh = geometry.getObjectByName('cabinet-run-countertop')!
+      const ray = new Raycaster()
+      const hits = (x: number, z: number) => {
+        ray.set(new Vector3(x, 3, z), new Vector3(0, -1, 0))
+        return ray.intersectObject(mesh, false)
+      }
+      for (const hole of surface.region!.holes!.slice(0, -1)) {
+        const minX = hole[0]![0]
+        const maxX = hole[1]![0]
+        const minZ = hole[0]![1]
+        const maxZ = hole[2]![1]
+        const x = (minX + maxX) / 2
+        const z = (minZ + maxZ) / 2
+        expect(contains(surface, x, z)).toBe(false)
+        expect(hits(x, z)).toHaveLength(0)
+        expect(hits(minX + 0.002, z)).toHaveLength(0)
+        expect(hits(minX - 0.002, z)[0]!.point.y).toBeCloseTo(surface.position[1], 6)
+        expect(hits(x, maxZ - 0.002)).toHaveLength(0)
+        expect(hits(x, maxZ + 0.002)[0]!.point.y).toBeCloseTo(surface.position[1], 6)
+      }
+      const faucet = surface.region!.holes!.at(-1)!
+      const faucetX = faucet.reduce((sum, point) => sum + point[0], 0) / faucet.length
+      const faucetZ = faucet.reduce((sum, point) => sum + point[1], 0) / faucet.length
+      expect(contains(surface, faucetX, faucetZ)).toBe(false)
+      expect(hits(faucetX, faucetZ)[0]!.point.y).toBeCloseTo(surface.position[1], 6)
+      dispose(geometry)
+    },
+  )
 
-  test.each([
-    'cooktop-gas',
-    'cooktop-induction',
-  ] as const)('%s footprint is a hole matching the rendered frame', (type) => {
-    const module = moduleAt(0.7, { width: 0.8, stack: [{ id: 'cooktop', type }] })
-    const f = fixture([module])
-    const surface = f.surfaces[0]!
-    expect(surface.region!.holes).toHaveLength(1)
-    expect(contains(surface, 0.7, 0)).toBe(false)
-    expect(contains(surface, 0.7, 0.31)).toBe(true)
-    const geometry = buildCabinetGeometry(module, { ...f.ctx, parent: f.run })
-    geometry.position.set(...module.position)
-    geometry.updateMatrixWorld(true)
-    const frames = geometry.children.filter((child) => child.name.includes('-frame-'))
-    const frame = new Box3()
-    for (const object of frames) frame.union(new Box3().setFromObject(object))
-    const hole = surface.region!.holes![0]!
-    expect(hole[0]![0]).toBeCloseTo(frame.min.x, 6)
-    expect(hole[0]![1]).toBeCloseTo(frame.min.z, 6)
-    expect(hole[2]![0]).toBeCloseTo(frame.max.x, 6)
-    expect(hole[2]![1]).toBeCloseTo(frame.max.z, 6)
-    dispose(geometry)
-  })
+  test.each(['cooktop-gas', 'cooktop-induction'] as const)(
+    '%s footprint is a hole matching the rendered frame',
+    (type) => {
+      const module = moduleAt(0.7, { width: 0.8, stack: [{ id: 'cooktop', type }] })
+      const f = fixture([module])
+      const surface = f.surfaces[0]!
+      expect(surface.region!.holes).toHaveLength(1)
+      expect(contains(surface, 0.7, 0)).toBe(false)
+      expect(contains(surface, 0.7, 0.31)).toBe(true)
+      const geometry = buildCabinetGeometry(module, { ...f.ctx, parent: f.run })
+      geometry.position.set(...module.position)
+      geometry.updateMatrixWorld(true)
+      const frames = geometry.children.filter((child) => child.name.includes('-frame-'))
+      const frame = new Box3()
+      for (const object of frames) frame.union(new Box3().setFromObject(object))
+      const hole = surface.region!.holes![0]!
+      expect(hole[0]![0]).toBeCloseTo(frame.min.x, 6)
+      expect(hole[0]![1]).toBeCloseTo(frame.min.z, 6)
+      expect(hole[2]![0]).toBeCloseTo(frame.max.x, 6)
+      expect(hole[2]![1]).toBeCloseTo(frame.max.z, 6)
+      dispose(geometry)
+    },
+  )
 
   test('under-counter appliances keep the usable countertop', () => {
     const f = fixture([
@@ -271,26 +270,25 @@ describe('cabinet hosting surfaces', () => {
     dispose(checkMeshAgreement(f))
   })
 
-  test.each([
-    'back',
-    'left',
-    'right',
-  ] as const)('%s bar ledge has a distinct id, footprint and height', (edge) => {
-    const f = fixture([moduleAt(0), moduleAt(0.9)], {
-      withFinishedBack: true,
-      countertopBackOverhang: 0.3,
-      barLedge: { edge, height: 1.1, depth: 0.35 },
-    })
-    const bars = f.surfaces.filter((surface) => surface.label === 'Bar ledge')
-    expect(bars).toHaveLength(edge === 'back' ? 2 : 1)
-    expect(new Set(f.surfaces.map((surface) => surface.id)).size).toBe(f.surfaces.length)
-    for (const bar of bars) expect(bar.position[1]).toBeCloseTo(1.1)
-    for (const top of f.surfaces.filter((surface) => surface.label === 'Countertop')) {
-      expect(top.position[1]).toBeCloseTo(0.85)
-      expect(extent(top).minZ).toBeCloseTo(edge === 'back' ? -0.3 : -0.6)
-    }
-    dispose(checkMeshAgreement(f))
-  })
+  test.each(['back', 'left', 'right'] as const)(
+    '%s bar ledge has a distinct id, footprint and height',
+    (edge) => {
+      const f = fixture([moduleAt(0), moduleAt(0.9)], {
+        withFinishedBack: true,
+        countertopBackOverhang: 0.3,
+        barLedge: { edge, height: 1.1, depth: 0.35 },
+      })
+      const bars = f.surfaces.filter((surface) => surface.label === 'Bar ledge')
+      expect(bars).toHaveLength(edge === 'back' ? 2 : 1)
+      expect(new Set(f.surfaces.map((surface) => surface.id)).size).toBe(f.surfaces.length)
+      for (const bar of bars) expect(bar.position[1]).toBeCloseTo(1.1)
+      for (const top of f.surfaces.filter((surface) => surface.label === 'Countertop')) {
+        expect(top.position[1]).toBeCloseTo(0.85)
+        expect(extent(top).minZ).toBeCloseTo(edge === 'back' ? -0.3 : -0.6)
+      }
+      dispose(checkMeshAgreement(f))
+    },
+  )
 
   test('a bar still publishes when the main countertop is disabled, as the mesh does', () => {
     const f = fixture([moduleAt(0)], {
@@ -427,48 +425,51 @@ describe('cabinet hosting surfaces', () => {
       ['Countertop', 'procedural-item', 0.85, 0.113],
       ['Bar ledge', 'item', 1.1, -0.437],
       ['Bar ledge', 'procedural-item', 1.1, -0.437],
-    ] as const)('%s grid-snaps a %s in the host frame without electing a centre', (label, childKind, y, z) => {
-      const f = fixture([moduleAt(2), moduleAt(2.6)], {
-        position: [4, 0.4, -3],
-        rotation: Math.PI / 3,
-        barLedge: { edge: 'back', height: 1.1, depth: 0.35 },
-      })
-      const args = {
-        host: f.run,
-        childKind,
-        childId: `${childKind}_existing`,
-        childFootprint: { size: [0.1, 0.2, 0.1] as const, rotationY: 0.3 },
-        hit: { point: [2.123, y, z] as const, normalWorldY: 1 },
-        scene: f.scene as SceneApi,
-      }
-      const surface = f.surfaces.find((candidate) => candidate.label === label)!
-      const unsnapped = resolveSurfacePlacement(args)
-      expect(unsnapped).toMatchObject({
-        position: [2.123, surface.position[1], z],
-        rotationY: 0.3,
-        childFrame: 'host-local',
-        surfaceId: surface.id,
-        surfaceLocal: { rotationY: 0.3, rotation: [0, 0.3, 0] },
-      })
-      expect(unsnapped!.position[1]).toBeCloseTo(y)
-      expect(unsnapped!.surfaceLocal!.position[0]).toBe(2.123)
-      expect(unsnapped!.surfaceLocal!.position[1]).toBeCloseTo(0)
-      expect(unsnapped!.surfaceLocal!.position[2]).toBe(z)
-      const snapScalar = mock(
-        (value: number, dimension: number) =>
-          Math.round((value - dimension / 2) / 0.05) * 0.05 + dimension / 2,
-      )
-      const placed = resolveSurfacePlacement({ ...args, snapScalar })
-      expect(snapScalar.mock.calls).toEqual([
-        [2.123, 0.1],
-        [z, 0.1],
-      ])
-      expect(placed?.position[0]).toBeCloseTo(2.1)
-      expect(placed?.position[1]).toBeCloseTo(y)
-      expect(placed?.position[2]).toBeCloseTo(label === 'Countertop' ? 0.1 : -0.45)
-      expect(placed?.childFrame).toBe('host-local')
-      expect(placed?.surfaceId).toBe(surface.id)
-    })
+    ] as const)(
+      '%s grid-snaps a %s in the host frame without electing a centre',
+      (label, childKind, y, z) => {
+        const f = fixture([moduleAt(2), moduleAt(2.6)], {
+          position: [4, 0.4, -3],
+          rotation: Math.PI / 3,
+          barLedge: { edge: 'back', height: 1.1, depth: 0.35 },
+        })
+        const args = {
+          host: f.run,
+          childKind,
+          childId: `${childKind}_existing`,
+          childFootprint: { size: [0.1, 0.2, 0.1] as const, rotationY: 0.3 },
+          hit: { point: [2.123, y, z] as const, normalWorldY: 1 },
+          scene: f.scene as SceneApi,
+        }
+        const surface = f.surfaces.find((candidate) => candidate.label === label)!
+        const unsnapped = resolveSurfacePlacement(args)
+        expect(unsnapped).toMatchObject({
+          position: [2.123, surface.position[1], z],
+          rotationY: 0.3,
+          childFrame: 'host-local',
+          surfaceId: surface.id,
+          surfaceLocal: { rotationY: 0.3, rotation: [0, 0.3, 0] },
+        })
+        expect(unsnapped!.position[1]).toBeCloseTo(y)
+        expect(unsnapped!.surfaceLocal!.position[0]).toBe(2.123)
+        expect(unsnapped!.surfaceLocal!.position[1]).toBeCloseTo(0)
+        expect(unsnapped!.surfaceLocal!.position[2]).toBe(z)
+        const snapScalar = mock(
+          (value: number, dimension: number) =>
+            Math.round((value - dimension / 2) / 0.05) * 0.05 + dimension / 2,
+        )
+        const placed = resolveSurfacePlacement({ ...args, snapScalar })
+        expect(snapScalar.mock.calls).toEqual([
+          [2.123, 0.1],
+          [z, 0.1],
+        ])
+        expect(placed?.position[0]).toBeCloseTo(2.1)
+        expect(placed?.position[1]).toBeCloseTo(y)
+        expect(placed?.position[2]).toBeCloseTo(label === 'Countertop' ? 0.1 : -0.45)
+        expect(placed?.childFrame).toBe('host-local')
+        expect(placed?.surfaceId).toBe(surface.id)
+      },
+    )
 
     test('preserves the full XYZ surface-local rotation', () => {
       const f = fixture([moduleAt(0)])

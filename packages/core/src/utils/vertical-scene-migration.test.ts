@@ -154,33 +154,38 @@ describe('legacy corpus loads as the editor drew it', () => {
     expect(legacyCorpus.length).toBeGreaterThan(0)
   })
 
-  test.each(legacyCorpus)('$scene: storeys keep their height and no wall rises above its storey', ({
-    nodes,
-  }) => {
-    const migrated = migrateVerticalSceneNodes(nodes).nodes as Record<string, LegacyNode>
-    for (const [levelId, level] of Object.entries(nodes as Record<string, LegacyNode>)) {
-      if (level?.type !== 'level' || 'height' in level) continue
-      const before = legacyStorey(levelId, nodes as Record<string, LegacyNode>)
-      const plane = migrated[levelId]!.height as number
-      const rounded = (value: number) => Math.round(value * 1e6) / 1e6
-      expect({ levelId, height: rounded(plane) }).toEqual({
-        levelId,
-        height: rounded(before.height),
-      })
-      const slabs = (migrated[levelId]!.children as string[])
-        .map((id) => migrated[id])
-        .filter((child): child is LegacyNode => child?.type === 'slab')
-      const walls = (migrated[levelId]!.children as string[])
-        .map((id) => migrated[id])
-        .filter((child): child is LegacyNode => child?.type === 'wall')
-      for (const wall of walls) {
-        const base = computeWallSlabSupport(wall as never, slabs as never, walls as never).elevation
-        const top = resolveWallTop(wall as never, plane, base)
-        // Never above the storey it belongs to (it would cut the floor or
-        // roof above), and moved only by the snap onto the storey plane.
-        expect(top).toBeLessThanOrEqual(plane + 1e-9)
-        expect(Math.abs(top - before.wallTops.get(wall.id)!)).toBeLessThan(0.2)
+  test.each(legacyCorpus)(
+    '$scene: storeys keep their height and no wall rises above its storey',
+    ({ nodes }) => {
+      const migrated = migrateVerticalSceneNodes(nodes).nodes as Record<string, LegacyNode>
+      for (const [levelId, level] of Object.entries(nodes as Record<string, LegacyNode>)) {
+        if (level?.type !== 'level' || 'height' in level) continue
+        const before = legacyStorey(levelId, nodes as Record<string, LegacyNode>)
+        const plane = migrated[levelId]!.height as number
+        const rounded = (value: number) => Math.round(value * 1e6) / 1e6
+        expect({ levelId, height: rounded(plane) }).toEqual({
+          levelId,
+          height: rounded(before.height),
+        })
+        const slabs = (migrated[levelId]!.children as string[])
+          .map((id) => migrated[id])
+          .filter((child): child is LegacyNode => child?.type === 'slab')
+        const walls = (migrated[levelId]!.children as string[])
+          .map((id) => migrated[id])
+          .filter((child): child is LegacyNode => child?.type === 'wall')
+        for (const wall of walls) {
+          const base = computeWallSlabSupport(
+            wall as never,
+            slabs as never,
+            walls as never,
+          ).elevation
+          const top = resolveWallTop(wall as never, plane, base)
+          // Never above the storey it belongs to (it would cut the floor or
+          // roof above), and moved only by the snap onto the storey plane.
+          expect(top).toBeLessThanOrEqual(plane + 1e-9)
+          expect(Math.abs(top - before.wallTops.get(wall.id)!)).toBeLessThan(0.2)
+        }
       }
-    }
-  })
+    },
+  )
 })
