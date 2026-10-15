@@ -152,11 +152,12 @@ function readPitch(said: string, unit: PitchUnit): Reading {
   }
   if (BARE_NUMBER.test(text)) return Number(text)
   // Anything else must name its angle unit ("26.6°", "0.46 rad"): without one, the unit parser
-  // reads text such as "6,0" or "6 / 12 / 1" as degrees.
-  const degrees = readQuantity(text, 'angle', 'deg', true)
+  // reads text such as "6,0" or "6 / 12 / 1" as degrees. It reads what was said, not its NFKC
+  // form, which turns "26¼°" into "261⁄4°".
+  const degrees = readQuantity(said, 'angle', 'deg', true)
   if (typeof degrees !== 'number')
     return {
-      error: `Could not read "${text}" as a roof pitch: give degrees ("26.6°") or the rise per 12 ("6:12").`,
+      error: `Could not read "${said}" as a roof pitch: give degrees ("26.6°") or the rise per 12 ("6:12").`,
     }
   if (unit === 'deg') return degrees
   // A plane at 90° rises forever per 12 of run: no roof.

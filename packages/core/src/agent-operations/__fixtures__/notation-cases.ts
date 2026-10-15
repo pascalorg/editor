@@ -27,6 +27,7 @@ export const NOTATION_CASES: NotationCase[] = [
     readings: [
       [40, 40],
       ['26.6°', 26.6],
+      ['22½°', 22.5],
       ['6:12', SIX_TWELVE],
       ['6/12', SIX_TWELVE],
       ['+6/12', SIX_TWELVE],

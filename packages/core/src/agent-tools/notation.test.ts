@@ -113,6 +113,10 @@ describe('roofPitch', () => {
     expect(twelfths.parse('45°')).toBeCloseTo(12, 9)
     expect(twelfths.parse('26.565051177078 deg')).toBeCloseTo(6, 9)
     expect(degrees.parse('4.5:12')).toBeCloseTo(20.556045219583, 9)
+    // A fraction of a degree is not undone by the full-width normalization.
+    expect(degrees.parse('26¼°')).toBe(26.25)
+    expect(degrees.parse('22½°')).toBe(22.5)
+    expect(twelfths.parse('26¼°')).toBeCloseTo(5.917745112376, 9)
   })
 
   test('what is not a pitch is refused with a message the model can act on', () => {
