@@ -546,12 +546,15 @@ turbo build --filter=@pascal-app/core
 
 Releases run from `.github/workflows/release.yml` (`workflow_dispatch`, with
 `bump` and `dry-run` inputs). Every package shares one version: the workflow
-bumps all seven, rewrites the internal `@pascal-app/*` ranges, builds, publishes
-in dependency order (`core` → `viewer` → `editor` → `nodes` → `mcp` →
-`ifc-converter` → `cli`), then commits the release and pushes one tag per
-package. A dry run validates the builds without touching the registry.
-[Releasing to npm](wiki/npm-release.md) covers authentication, recovering a
-partial run, publishing by hand and the follow-ups.
+bumps all eight, rewrites the internal `@pascal-app/*` ranges, checks that each
+one already exists on npm (a package never published fails the run before
+anything is built), builds, publishes in dependency order (`core` →
+`geometry-script` → `viewer` → `editor` → `nodes` → `mcp` → `ifc-converter` →
+`cli`), then commits the release and pushes one tag per package with the release
+deploy key, which the `main` ruleset lets through. A dry run validates the builds
+without touching the registry. [Releasing to npm](wiki/npm-release.md) covers
+authentication, adding a package, the deploy key, recovering a partial run,
+publishing by hand and the follow-ups.
 
 ---
 
