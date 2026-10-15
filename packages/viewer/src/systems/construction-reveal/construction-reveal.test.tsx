@@ -1794,7 +1794,11 @@ describe('a deletion plays the creation backwards', () => {
     await until(() => !isNodeRevealing(wall.id) && Boolean(root(wall.id)), 12000)
     // The wall as the wall system leaves it in cutaway: its mesh in the stipple, stamped hidden.
     const stipple = new MeshBasicMaterial({ transparent: true, opacity: 0.2 })
-    const mesh = new Mesh(new BoxGeometry(4, 2.5, 0.2), [stipple, stipple, stipple])
+    const geometry = new BoxGeometry(4, 2.5, 0.2)
+    // One group over the whole mesh, as a wall's own geometry draws it: the palette covers it.
+    geometry.clearGroups()
+    geometry.addGroup(0, 6, 0)
+    const mesh = new Mesh(geometry, [stipple, stipple, stipple])
     mesh.userData.wallHidden = true
     root(wall.id)!.parent!.add(mesh)
     sceneRegistry.nodes.set(wall.id, mesh)
