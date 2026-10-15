@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import {
-  getRoofSegmentRakeOverhang,
+  getRoofSegmentRakeReach,
   normalizeRoofSegmentTrim,
   type RoofSegmentNode,
 } from './roof-segment'
@@ -159,7 +159,7 @@ function getGutterEnvelope(segment: RoofSegmentNode) {
   // an eave gutter runs out to the rakes, as far as they reach
   const outerHalfW = Math.max(
     halfW,
-    halfW + getRoofSegmentRakeOverhang(segment) - GUTTER_EAVE_TUCK_INWARD,
+    halfW + getRoofSegmentRakeReach(segment) - GUTTER_EAVE_TUCK_INWARD,
   )
   const outerHalfD = Math.max(halfD, halfD + overhang - GUTTER_EAVE_TUCK_INWARD)
   const trim = normalizeRoofSegmentTrim(segment)

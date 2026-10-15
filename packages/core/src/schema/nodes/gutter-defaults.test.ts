@@ -46,12 +46,20 @@ describe('createDefaultGuttersForSegment', () => {
 
   test("a gable's eave gutters run out to its own gable overhang", () => {
     const segment = (gableOverhang?: number) =>
-      RoofSegmentNode.parse({ roofType: 'gable', width: 8, depth: 6, overhang: 0.3, gableOverhang })
+      RoofSegmentNode.parse({
+        roofType: 'gable',
+        width: 8,
+        depth: 6,
+        overhang: 0.3,
+        wallThickness: 0.2,
+        gableOverhang,
+      })
     const front = (gableOverhang?: number) =>
       getGutterRunsForSegment(segment(gableOverhang)).find((run) => run.side === '+Z')
     expect(front()?.length).toBeCloseTo(8.52)
-    expect(front(0.9)?.length).toBeCloseTo(9.72)
-    expect(front(0)?.length).toBeCloseTo(8)
+    // out to the deck's edge, the walls' half thickness and the gable overhang past their faces
+    expect(front(0.9)?.length).toBeCloseTo(2 * (4 + 0.1 + 0.9 - 0.04))
+    expect(front(0)?.length).toBeCloseTo(2 * (4 + 0.1 - 0.04))
   })
 
   test('omits fully trimmed sides and shortens their adjacent eaves', () => {

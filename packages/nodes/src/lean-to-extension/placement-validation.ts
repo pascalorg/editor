@@ -4,7 +4,7 @@ import {
   type BuildingNode,
   getActiveRoofHeight,
   getLevelElevations,
-  getRoofSegmentRakeOverhang,
+  getRoofSegmentRakeReach,
   getWallFaceOffsets,
   type LeanToExtensionNode,
   type RoofNode,
@@ -294,7 +294,7 @@ function roofSegmentWorldBounds(
 }
 
 function roofSegmentLevelPoints(roof: RoofNode, segment: RoofSegmentNode): [number, number][] {
-  const halfX = segment.width / 2 + getRoofSegmentRakeOverhang(segment)
+  const halfX = segment.width / 2 + getRoofSegmentRakeReach(segment)
   const halfZ = segment.depth / 2 + segment.overhang
   const segmentCos = Math.cos(segment.rotation)
   const segmentSin = Math.sin(segment.rotation)

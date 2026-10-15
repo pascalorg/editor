@@ -1276,8 +1276,13 @@ function buildSegmentTrimCutBrushes(segment: RoofSegmentNode): Brush[] {
   }
 
   const { activeRh } = getSegmentSlopeFrame(segment)
-  const reach = getRoofSegmentDeckReach(segment)
-  const extra = Math.max(reach.x, reach.z) + segment.deckThickness + segment.shingleThickness + 2
+  const extra =
+    segment.wallThickness +
+    segment.overhang +
+    (segment.gableOverhang ?? 0) +
+    segment.deckThickness +
+    segment.shingleThickness +
+    2
   const minX = -segment.width / 2 - extra
   const maxX = segment.width / 2 + extra
   const minZ = -segment.depth / 2 - extra

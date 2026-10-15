@@ -286,7 +286,7 @@ export {
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
   getRoofSegmentDeckReach,
-  getRoofSegmentRakeOverhang,
+  getRoofSegmentRakeReach,
   getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
   getSegmentFasciaMaterial,
