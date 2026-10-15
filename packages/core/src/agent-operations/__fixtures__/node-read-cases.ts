@@ -14,6 +14,7 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import { authoredItem } from './add-object-cases'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -271,6 +272,11 @@ function closedZoneScene(): SceneGraph {
   )
 }
 
+/** A plugin's kind in the singular alone. */
+function singularKindScene(): SceneGraph {
+  return scene(pluginNode('stud_plugin-1', 'bones:stud'))
+}
+
 /** A kind and its singular, both a plugin's, and one written with a capital. */
 function pluralKindsScene(): SceneGraph {
   return scene(
@@ -297,6 +303,30 @@ function malformedBlockScene(): SceneGraph {
   const { topology: _topology, ...broken } = nodes.block_broken as Record<string, unknown>
   nodes.block_broken = broken
   return { nodes, rootNodeIds }
+}
+
+/** An authored lantern with a glass pane, one whose manifest lists no parts, and a wall. */
+function authoredScene(): SceneGraph {
+  const lantern = authoredItem('item_lantern', 'level_0', {
+    name: 'Lantern',
+    category: 'lighting',
+    size: [0.3, 0.5, 0.3],
+  })
+  lantern.source!.manifest.parts = [
+    { id: 'pane', type: 'glass' },
+    { id: 'cage', type: 'frame' },
+  ] as never
+  const bare = authoredItem('item_bare', 'level_0', {
+    name: 'Plinth',
+    category: 'decor',
+    size: [1, 0.4, 1],
+  })
+  const { parts: _parts, ...manifest } = bare.source!.manifest as Record<string, unknown>
+  return scene(
+    lantern,
+    { ...bare, source: { ...bare.source!, manifest } } as never,
+    wall('wall_a', [0, 0], [4, 0]),
+  )
 }
 
 /** A wall an IFC import tagged with a large property set, and one with a small mark. */
@@ -543,6 +573,29 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
     { result: { type: 'bones:studs' } },
   ),
   find(
+    'find_nodes { type: bones:studs } with only a bones:stud in the scene: nothing, a plugin kind is never read as its singular',
+    singularKindScene,
+    { type: 'bones:studs' },
+    [],
+    { result: { type: 'bones:studs' } },
+  ),
+  find(
+    "find_nodes { type: glass } (no node kind; a part type ending in s): the lantern's glass pane, under type glass",
+    authoredScene,
+    { type: 'glass' },
+    [],
+    {
+      result: { type: 'glass', count: 1, parts: 1 },
+      contains: [{ id: 'item_lantern', part: 'pane', partType: 'glass' }],
+    },
+  ),
+  find(
+    'find_nodes { type: wall } beside an authored item whose manifest lists no parts: the wall',
+    authoredScene,
+    { type: 'wall' },
+    ['wall_a'],
+  ),
+  find(
     'find_nodes { type: fixture:Bench } (a kind written with a capital): that node, in any case',
     pluralKindsScene,
     { type: 'fixture:bench' },
@@ -675,19 +728,52 @@ function brokenWallScene(): SceneGraph {
   return { nodes, rootNodeIds }
 }
 
+/** A door stored without its position, which its schema defaults. */
+function bareDoorScene(): SceneGraph {
+  const { nodes, rootNodeIds } = describedScene()
+  const { position: _position, ...door } = DoorNode.parse({
+    id: 'door_bare',
+    parentId: 'wall_host',
+    wallId: 'wall_host',
+  })
+  nodes.door_bare = door
+  nodes.wall_host = {
+    ...(nodes.wall_host as { children: string[] }),
+    children: [...(nodes.wall_host as { children: string[] }).children, 'door_bare'],
+  }
+  return { nodes, rootNodeIds }
+}
+
+/** A slab stored without its polygon on the walls' level. */
+function brokenSlabScene(): SceneGraph {
+  const { nodes, rootNodeIds } = describedScene()
+  const { polygon: _polygon, ...slab } = SlabNode.parse({
+    id: 'slab_broken',
+    parentId: 'level_0',
+    polygon: rect(0, 0, 1, 1),
+  })
+  nodes.slab_broken = slab
+  nodes.level_0 = {
+    ...(nodes.level_0 as { children: string[] }),
+    children: [...(nodes.level_0 as { children: string[] }).children, 'slab_broken'],
+  }
+  return { nodes, rootNodeIds }
+}
+
 const get = (
   name: string,
   id: string,
   result: Record<string, unknown>,
   build: () => SceneGraph = describedScene,
   surfaces?: AgentToolCase['surfaces'],
+  mentions?: string[],
 ): AgentToolCase => ({
   name,
   tool: 'get_node',
   scene: build,
   input: { id },
   ...(surfaces && { surfaces }),
-  expect: { result },
+  expect: { result, ...(mentions && { mentions }) },
 })
 
 export const DESCRIBE_NODE_CASES: AgentToolCase[] = [
@@ -736,13 +822,29 @@ export const DESCRIBE_NODE_CASES: AgentToolCase[] = [
     ['mcp', 'chat'],
   ),
   get(
-    'describe_node on a wall stored without its start (its properties as stored): the node as stored, nothing derived',
+    'describe_node on a wall stored without its start (its properties as stored): the node as stored, unresolved says why',
     'wall_broken',
     {
       node: { id: 'wall_broken', type: 'wall', end: [4, 0] },
       ancestorIds: ['level_0', 'building_main', 'site_lot'],
     },
     brokenWallScene,
+    undefined,
+    ['schema rejects'],
+  ),
+  get(
+    'describe_node on a door stored without its position (its schema fills it): the node as stored, with resolvedOpening',
+    'door_bare',
+    { node: { id: 'door_bare', type: 'door', resolvedOpening: { anchor: 'floor' } } },
+    bareDoorScene,
+  ),
+  get(
+    'describe_node on a wall beside a slab stored without its polygon: the wall as stored, unresolved names what does not read',
+    'wall_tall',
+    { node: { id: 'wall_tall', height: 3.1 } },
+    brokenSlabScene,
+    undefined,
+    ['does not read'],
   ),
   get('describe_node childrenIds of a wall (its door and window): node.children', 'wall_host', {
     node: { children: ['door_host', 'window_host'] },

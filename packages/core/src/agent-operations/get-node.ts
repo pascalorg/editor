@@ -3,8 +3,8 @@ import { floorFootprintName } from '../lib/floor-footprint-name'
 import { isFloorAnchoredOpening } from '../lib/floor-opening-footprints'
 import { getLevelDisplayName } from '../lib/level-name'
 import { getOpeningFloorDatum } from '../lib/opening-floor-datum'
-import type { AnyNode, AnyNodeId } from '../schema'
-import { parseNode } from '../schema/compiled-node-parsers'
+import type { AnyNode, AnyNodeId, WallNode } from '../schema'
+import { nodeSchemaForKind } from '../schema/compiled-node-parsers'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import { wallResolvedHeight } from './level-reads'
@@ -27,21 +27,14 @@ function ancestorIdsOf(nodes: SceneNodes, id: string): string[] {
   return out
 }
 
-/**
- * What the scene decides for a node that the node does not store, read beside its own fields. A
- * node its schema rejects gets none: it is read as stored, and verify_scene says what is wrong.
- */
-function derivedFields(nodes: SceneNodes, node: AnyNode): Record<string, unknown> {
-  if (!parseNode(node).success) return {}
+/** What the scene decides for a node that the node does not store, from the node as parsed. */
+function resolvedFields(nodes: SceneNodes, node: AnyNode): Record<string, unknown> {
   const host = node.parentId ? nodes[node.parentId] : undefined
-  if (
-    (node.type === 'door' || node.type === 'window') &&
-    host?.type === 'wall' &&
-    parseNode(host).success
-  )
+  const wall = host?.type === 'wall' ? nodeSchemaForKind('wall')!.safeParse(host) : undefined
+  if ((node.type === 'door' || node.type === 'window') && wall?.success)
     return {
       resolvedOpening: {
-        floorDatum: getOpeningFloorDatum(host, node, nodes),
+        floorDatum: getOpeningFloorDatum(wall.data as WallNode, node, nodes),
         anchor: isFloorAnchoredOpening(node) ? 'floor' : 'wall',
       },
     }
@@ -60,6 +53,26 @@ function derivedFields(nodes: SceneNodes, node: AnyNode): Record<string, unknown
   if (node.type === 'slab' && node.plateRole === 'base')
     return { displayName: floorFootprintName(nodes, node) }
   return {}
+}
+
+/**
+ * The resolved fields of a core node, read from it as its schema parses it (with the defaults a
+ * stored node may omit). A read never fails on what is around the node: a node its schema rejects,
+ * or one whose neighbours do not read, comes back as stored with `unresolved` saying why.
+ */
+function derivedFields(nodes: SceneNodes, node: AnyNode): Record<string, unknown> {
+  const schema = nodeSchemaForKind(node.type)
+  if (!schema) return {}
+  const parsed = schema.safeParse(node)
+  if (!parsed.success)
+    return { unresolved: 'its schema rejects it: verify_scene lists what is wrong' }
+  try {
+    return resolvedFields(nodes, parsed.data as AnyNode)
+  } catch (error) {
+    return {
+      unresolved: `the scene around it does not read (${error instanceof Error ? error.message : String(error)}): verify_scene lists what is wrong`,
+    }
+  }
 }
 
 /**

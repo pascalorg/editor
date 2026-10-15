@@ -52,7 +52,7 @@ const kindOf = (node: AnyNode) => String(node.type).toLowerCase()
 
 const emitsLight = (node: AnyNode) =>
   node.type === 'item' &&
-  Boolean(node.asset.interactive?.effects.some((effect) => effect.kind === 'light'))
+  Boolean(node.asset?.interactive?.effects.some((effect) => effect.kind === 'light'))
 
 const matchesWord = (text: string | undefined, word: string) =>
   Boolean(text) &&
@@ -222,10 +222,13 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
     refuse('node_not_found', `Node not found: ${parentId}.`, { id: parentId })
   const inZone = zoneId ? zoneFilter(nodes, requireZone(nodes, zoneId)) : undefined
   const fromSource = sourceFilter(input)
-  // A kind in the scene as written (`fixture:bench`, `bones:studs`), else one word in the singular.
+  // What was asked, as written; a word also in the singular ("walls"), a plugin's kind
+  // (`bones:studs`) never.
   const kind = input.type?.trim().toLowerCase()
-  const asKind = kind !== undefined && Object.values(nodes).some((node) => kindOf(node) === kind)
-  const word = asKind ? kind : kind?.replace(/s$/, '')
+  const names =
+    kind === undefined
+      ? undefined
+      : new Set([kind, kind.includes(':') ? kind : kind.replace(/s$/, '')])
   const results: Record<string, unknown>[] = []
   for (const node of Object.values(nodes)) {
     if (parentId && node.parentId !== parentId) continue
@@ -235,29 +238,29 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
     const item = node.type === 'item' ? node : null
     const found = {
       id: node.id,
-      name: node.name ?? item?.asset.name,
+      name: node.name ?? item?.asset?.name,
       nodeType: node.type,
       levelId: level,
       parentId: node.parentId ?? null,
     }
     const whole = { ...found, ...recordsOf(node) }
     let matched: Record<string, unknown>[]
-    if (word === undefined) matched = [whole]
+    if (names === undefined) matched = [whole]
     else {
-      const typed = (isScriptedNode(node) ? node.source.manifest.parts : []).filter(
+      const typed = (isScriptedNode(node) ? (node.source?.manifest?.parts ?? []) : []).filter(
         (part) => part.type,
       )
-      const typedParts = typed.filter((part) => part.type === word)
+      const typedParts = typed.filter((part) => names.has(part.type!))
       // An authored item whose typed parts are all of this type is one (a lantern); a mixed one (a
       // porch), or a window, door or column, answers with its parts.
       const wholeAuthored =
         item !== null && typedParts.length > 0 && typedParts.length === typed.length
       const wholeMatch =
-        kindOf(node) === word ||
+        names.has(kindOf(node)) ||
         wholeAuthored ||
         (item &&
-          (matchesWord(item.asset.category, word) ||
-            (word === 'light' && emitsLight(node) && typedParts.length === 0)))
+          ([...names].some((name) => matchesWord(item.asset?.category, name)) ||
+            (names.has('light') && emitsLight(node) && typedParts.length === 0)))
       matched = wholeMatch
         ? [whole]
         : typedParts.map((part) => ({
@@ -275,7 +278,7 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
   }
   return {
     result: {
-      ...(word === undefined ? {} : { type: word }),
+      ...(kind === undefined ? {} : { type: kind }),
       count: results.length,
       nodes: results.filter((entry) => !entry.part).length,
       parts: results.filter((entry) => entry.part).length,
