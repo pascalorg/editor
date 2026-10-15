@@ -291,6 +291,7 @@ export {
   type RevealNodeStartEvent,
   type RevealPhaseEvent,
   type RevealPlanState,
+  type RevealPreroll,
   type RevealRetractEvent,
   retractNodes,
   revealClockMs,

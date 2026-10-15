@@ -306,7 +306,13 @@ let queue: PlannedReveal[] = []
 /** The plan's entries still to start, by id: when each moves in, and its preroll before. */
 const planned = new Map<string, PlannedReveal>()
 /** How long a plugin plays before a node of the lazy schedule moves in (its preroll), if it plays any. */
-let prerollOf: ((candidate: RevealCandidate) => number) | null = null
+let prerollOf: RevealPreroll | null = null
+
+/** A plugin's preroll for a candidate: `nodes` is the scene the candidate stood in (the one before a deletion). */
+export type RevealPreroll = (
+  candidate: RevealCandidate,
+  nodes?: Readonly<Record<string, AnyNode>>,
+) => number
 let unplanned = false
 /** The plan is to be made again, once what mounts up front has drawn. */
 let replanning = false
@@ -613,7 +619,7 @@ export function revealClockMs(): number {
  * the plan leaves `prerollOf(candidate)` ms before each, and the plugin plays its own pieces then.
  * Asked once per node when the plan is made; 0 for none. Null takes it back.
  */
-export function setRevealPreroll(next: ((candidate: RevealCandidate) => number) | null): void {
+export function setRevealPreroll(next: RevealPreroll | null): void {
   prerollOf = next
 }
 
@@ -1671,12 +1677,17 @@ function drawnInScenePass(root: Object3D) {
  * The reverse plan of `candidates` from `at`: at the Framing level the build's own plan read from its
  * end (the rooms come apart as they went up, a plugin's prerolls kept), else the Full rewind.
  */
-function planBack(candidates: readonly RevealCandidate[], at: number, speed: number) {
+function planBack(
+  candidates: readonly RevealCandidate[],
+  at: number,
+  speed: number,
+  nodes?: Readonly<Record<string, AnyNode>>,
+) {
   if (!lazyOn()) return planRetract(candidates, at, retractTimingAt(speed), revealTimingAt(speed))
   const asked = candidates.map((candidate) => {
     let prerollMs = 0
     try {
-      prerollMs = prerollOf?.(candidate) ?? 0
+      prerollMs = prerollOf?.(candidate, nodes) ?? 0
     } catch (error) {
       console.error('[viewer] reveal preroll failed', error)
     }
@@ -1700,7 +1711,12 @@ function playDeletions(commit: SceneCommit) {
       sceneRegistry.nodes.get(candidate.id)?.parent,
   )
   if (staged.length === 0) return
-  const plan = planBack(staged, clockMs, currentSpeed())
+  const plan = planBack(
+    staged,
+    clockMs,
+    currentSpeed(),
+    commit.before.nodes as Readonly<Record<string, AnyNode>>,
+  )
   const groupsByKey = new Map<string, RetractGroup>()
   for (const entry of plan) {
     const original = sceneRegistry.nodes.get(entry.id)
