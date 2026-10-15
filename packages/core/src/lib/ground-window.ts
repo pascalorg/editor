@@ -44,6 +44,27 @@ export function buildingGroundBox(
   return box
 }
 
+/**
+ * The world box of what the editor's level display shows of a building when `levelId` is the shown
+ * level: that level and the ones under it (the display hides the ones above), the levels the author
+ * hid left out. Where the fog of the underground keeps the world clear. `null` for an id that is no
+ * level, or when nothing shown has a footprint.
+ */
+export function levelStackGroundBox(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): GroundBox | null {
+  const shown = nodes[levelId as LevelNode['id']]
+  if (shown?.type !== 'level') return null
+  let box: GroundBox | null = null
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'level' || node.level > shown.level || node.visible === false) continue
+    const levelBox = levelGroundBox(nodes, node.id)
+    if (levelBox) box = box ? unionBox(box, levelBox) : levelBox
+  }
+  return box
+}
+
 /** How far past the sight line the ground must stand to count as in the way. */
 const SIGHT_CLEARANCE = 0.05
 /** Sight-line marches at most this long, however far the eye is. */

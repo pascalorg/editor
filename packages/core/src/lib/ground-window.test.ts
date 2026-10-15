@@ -3,7 +3,12 @@ import type { AnyNode, AnyNodeId } from '../schema'
 import { BuildingNode, LevelNode, SiteNode, SlabNode } from '../schema'
 import hillside from './__fixtures__/owner-hillside-grade.json'
 import { levelGradeStanding } from './grade-standing'
-import { buildingGroundBox, levelGroundBox, terrainBetweenEyeAndBox } from './ground-window'
+import {
+  buildingGroundBox,
+  levelGroundBox,
+  levelStackGroundBox,
+  terrainBetweenEyeAndBox,
+} from './ground-window'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
 
@@ -114,5 +119,72 @@ describe('a floor only partly buried, seen from above', () => {
     expect(box && terrainBetweenEyeAndBox(scene, [0, 15, 0], box)).toBe(true)
     // From the west too: the mound hides the eastern rooms from any outside eye.
     expect(box && terrainBetweenEyeAndBox(scene, [-15, 1.5, 0], box)).toBe(true)
+  })
+})
+
+describe('levelStackGroundBox', () => {
+  // A ground floor over four basements, 3 m a floor, the lowest carrying the offset: -1 under the
+  // house, -2 wider, -3 under part of it, -4 poking out east.
+  const rect = (x0: number, x1: number, z0: number, z1: number): Array<[number, number]> => [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+  const stack = () => {
+    const plans: Array<[number, Array<[number, number]>]> = [
+      [-4, rect(8, 16, 2, 6)],
+      [-3, rect(0, 4, 0, 3)],
+      [-2, rect(-3, 13, -3, 11)],
+      [-1, rect(0, 10, 0, 8)],
+      [0, rect(0, 10, 0, 8)],
+    ]
+    const nodes: AnyNode[] = [
+      BuildingNode.parse({ id: 'building_s', children: plans.map(([n]) => `level_s${n + 4}`) }),
+    ]
+    for (const [n, polygon] of plans)
+      nodes.push(
+        LevelNode.parse({
+          id: `level_s${n + 4}`,
+          parentId: 'building_s',
+          level: n,
+          height: 3,
+          baseElevation: n === -4 ? -12 : 0,
+          children: [`slab_s${n + 4}`],
+        }),
+        SlabNode.parse({
+          id: `slab_s${n + 4}`,
+          parentId: `level_s${n + 4}`,
+          elevation: 0,
+          polygon,
+        }),
+      )
+    return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+  }
+
+  test('the shown level and the ones under it, none of the ones above', () => {
+    const levels = stack()
+    // -2 shown: -2, -3, -4 (floors at -6, -9, -12), not -1 or the ground floor.
+    const box = levelStackGroundBox(levels, 'level_s2')
+    expect(box?.min).toEqual([-3, -12, -3])
+    expect(box?.max).toEqual([16, -3, 11])
+  })
+
+  test('the lowest level shown is its own box', () => {
+    const levels = stack()
+    expect(levelStackGroundBox(levels, 'level_s0')).toEqual(levelGroundBox(levels, 'level_s0'))
+  })
+
+  test('the ground floor shown wraps the whole stack', () => {
+    const levels = stack()
+    expect(levelStackGroundBox(levels, 'level_s4')?.min).toEqual([-3, -12, -3])
+    expect(levelStackGroundBox(levels, 'level_s4')?.max).toEqual([16, 3, 11])
+  })
+
+  test('a level the author hid is left out, an id that is no level has no box', () => {
+    const levels = stack()
+    levels.level_s0 = { ...levels.level_s0, visible: false } as AnyNode
+    expect(levelStackGroundBox(levels, 'level_s2')?.min[1]).toBe(-9)
+    expect(levelStackGroundBox(levels, 'level_missing')).toBeNull()
   })
 })
