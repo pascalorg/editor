@@ -132,6 +132,9 @@ export const RoofSegmentNode = BaseNode.extend({
   wallThickness: z.number().default(0.1),
   deckThickness: z.number().default(0.1),
   overhang: z.number().default(0.3),
+  // How far the roof reaches past the gable-end walls' outside faces, in plan (a gable's or
+  // gambrel's ends, a shed's sides). Absent, as far as the eaves reach (`overhang` is along the slope).
+  gableOverhang: z.number().min(0).optional(),
   shingleThickness: z.number().default(0.05),
   arc: z
     .object({
@@ -243,7 +246,8 @@ export const RoofSegmentNode = BaseNode.extend({
   - wallHeight: height of walls below the roof
   - pitch: roof slope in degrees (angle of the primary slope face)
   - wallThickness/deckThickness: structural thicknesses
-  - overhang: eave overhang distance
+  - overhang: eave overhang distance, along the slope
+  - gableOverhang: reach past the gable-end walls in plan (gable, gambrel, shed); absent = the eaves' reach
   - shingleThickness: outer shingle layer thickness
   - fascia: plumb fascia and rake boards on the eaves and rakes (gable, hip, shed, flat) (off when absent)
   - fasciaHighEdge: shed only — a board on the high edge (off when it meets a wall; on when absent)
@@ -613,20 +617,55 @@ export type RoofSegmentVisibleTopBounds = {
   depth: number
 }
 
+/** Whether a form's ends along the segment's width are rakes, not eaves: they take `gableOverhang`. */
+export function roofTypeHasRakes(roofType: RoofType): boolean {
+  return roofType === 'gable' || roofType === 'gambrel' || roofType === 'shed'
+}
+
+/**
+ * How far a segment's deck reaches past its wall centre lines in plan, along its own x (the ridge,
+ * where a gable, gambrel or shed has its rakes) and z (the eaves): half the wall's thickness, then
+ * the eaves' overhang, which the node stores along the slope, or at the rakes its `gableOverhang`.
+ */
+export function getRoofSegmentDeckReach(
+  segment: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'width' | 'depth'> &
+    Partial<Pick<RoofSegmentNode, 'wallThickness' | 'overhang' | 'gableOverhang'>>,
+): { x: number; z: number } {
+  const half = finiteNonNegative(segment.wallThickness) / 2
+  const z = half + finiteNonNegative(segment.overhang) * getSegmentSlopeFrame(segment).cosTheta
+  const gable = segment.gableOverhang
+  const raked = roofTypeHasRakes(segment.roofType) && Number.isFinite(gable)
+  return { x: raked ? half + finiteNonNegative(gable) : z, z }
+}
+
+/**
+ * How far a segment's ends along its width reach past its wall centre lines in plan, for the readers
+ * that measure its eaves by the stored `overhang` (gutters, lean-to attachments, the sheets): a
+ * gable's, gambrel's or shed's ends are rakes, at the deck's edge (`getRoofSegmentDeckReach`); the
+ * other forms' ends are eaves like their sides, at `overhang`.
+ */
+export function getRoofSegmentEndReach(
+  segment: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'width' | 'depth'> &
+    Partial<Pick<RoofSegmentNode, 'wallThickness' | 'overhang' | 'gableOverhang'>>,
+): number {
+  return roofTypeHasRakes(segment.roofType)
+    ? getRoofSegmentDeckReach(segment).x
+    : finiteNonNegative(segment.overhang)
+}
+
 export function getRoofSegmentVisibleTopBounds(
   segment: RoofSegmentNode,
 ): RoofSegmentVisibleTopBounds {
-  const { activeRh, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
+  const { activeRh, sinTheta } = getSegmentSlopeFrame(segment)
   const width = finitePositive(segment.width, DEFAULT_ROOF_SEGMENT_WIDTH)
   const depth = finitePositive(segment.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
   const trim = normalizeRoofSegmentTrim({ ...segment, width, depth })
-  const horizontalOverhang = finiteNonNegative(segment.overhang) * cosTheta
-  const deckExt = finiteNonNegative(segment.wallThickness) / 2 + horizontalOverhang
+  const reach = getRoofSegmentDeckReach(segment)
   const shingleOverhang = finiteNonNegative(segment.shingleThickness) * sinTheta
 
-  let xExt = deckExt
-  let frontExt = deckExt
-  let backExt = deckExt
+  let xExt = reach.x
+  let frontExt = reach.z
+  let backExt = reach.z
 
   if (
     segment.roofType === 'hip' ||

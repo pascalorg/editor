@@ -220,6 +220,31 @@ describe('roof segment default gutters', () => {
     })
   })
 
+  test("lengthens a gable's eave gutters when its walls thicken: they run out to the rakes", () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      roofType: 'gable',
+      width: 8,
+      wallThickness: 0.1,
+      gableOverhang: 0.6,
+      metadata: { autoGutter: true },
+    })
+    setRoofScene(segment)
+    useScene.getState().updateNode(segment.id as AnyNodeId, { depth: 6 } as Partial<AnyNode>)
+    const front = () =>
+      generatedGutters(useScene.getState().nodes[segment.id as AnyNodeId] as RoofSegmentNode).find(
+        (gutter) => getDefaultGutterSide(gutter) === '+Z',
+      )!
+    const before = front().length
+
+    useScene
+      .getState()
+      .updateNode(segment.id as AnyNodeId, { wallThickness: 0.3 } as Partial<AnyNode>)
+
+    // the rakes reach half a wall and the gable overhang past the centre lines: 0.1 m further at each end
+    expect(front().length).toBeCloseTo(before + 0.2, 6)
+  })
+
   test('refreshes sibling gutters when an intersecting segment moves', () => {
     const segment = RoofSegmentNode.parse({
       id: 'rseg_main' as never,
@@ -259,9 +284,11 @@ describe('roof segment default gutters', () => {
     const front = generatedGutters(current).filter(
       (gutter) => getDefaultGutterSide(gutter) === '+Z',
     )
+    // from the rake, the deck's edge past half the 0.1 m wall, to the cross gable's tucked eave
+    const rake = 4 + 0.05 + 0.3 * Math.cos((40 * Math.PI) / 180) - 0.04
     expect(front).toHaveLength(2)
-    expect(front[0]?.length).toBeCloseTo(2)
-    expect(front[1]?.length).toBeCloseTo(2)
+    expect(front[0]?.length).toBeCloseTo(rake - 2.26)
+    expect(front[1]?.length).toBeCloseTo(rake - 2.26)
   })
 
   test('refreshes existing gutters when a sibling segment is added and removed', () => {

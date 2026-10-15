@@ -53,7 +53,7 @@ function overStorey(
     yaw: 0,
     hw: drawn.width / 2,
     hd: drawn.depth / 2,
-    reach: 0,
+    reach: { x: 0, z: 0 },
     roofType: drawn.roofType,
     peak: 0,
   })

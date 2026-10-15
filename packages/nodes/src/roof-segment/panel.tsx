@@ -5,6 +5,8 @@ import {
   type AnyNodeId,
   createDefaultRidgeVentsForSegment,
   getConicalRoofCoverage,
+  getRoofSegmentDeckReach,
+  getSegmentSlopeFrame,
   isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
@@ -13,6 +15,7 @@ import {
   type RoofSegmentNode,
   type RoofSegmentTrim,
   type RoofType,
+  roofTypeHasRakes,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -300,6 +303,10 @@ export default function RoofSegmentPanel() {
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
   const managedLeanToRoofSegment = isManagedLeanToRoofSegment(node.metadata)
   const conicalCoverage = getConicalRoofCoverage(node)
+  // both overhangs in plan, past the walls' outside faces; the node keeps the eaves' along the slope
+  const reach = getRoofSegmentDeckReach(node)
+  const halfWall = node.wallThickness / 2
+  const { cosTheta } = getSegmentSlopeFrame(node)
 
   return (
     <PanelWrapper
@@ -617,15 +624,27 @@ export default function RoofSegmentPanel() {
           value={node.deckThickness}
         />
         <SliderControl
-          label="Overhang"
+          label="Eave overhang"
           max={1}
           min={0}
-          onChange={(v) => handleUpdate({ overhang: v })}
+          onChange={(v) => handleUpdate({ overhang: v / cosTheta })}
           precision={2}
           step={0.05}
           unit="m"
-          value={node.overhang}
+          value={reach.z - halfWall}
         />
+        {roofTypeHasRakes(node.roofType) && (
+          <SliderControl
+            label="Gable overhang"
+            max={3}
+            min={0}
+            onChange={(v) => handleUpdate({ gableOverhang: v })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={reach.x - halfWall}
+          />
+        )}
         <SliderControl
           label="Shingle Thick."
           max={0.3}
