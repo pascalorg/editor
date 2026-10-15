@@ -54,6 +54,7 @@ import {
 import {
   activeSceneCommitNodeIds,
   addActiveSceneCommitNodeIds,
+  noteDerivedNodeWrites,
   runWithSceneCommitNodeIds,
 } from '../history-control'
 import type { SceneState } from '../use-scene'
@@ -1165,6 +1166,8 @@ const createNodesActionImpl = (
   if (get().readOnly) return
   ops = filterDerivedNodeWrites(get().nodes, { create: ops }, options).create
   if (!ops.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(ops.map((op) => ({ id: op.node.id })))
   const extraNodesToMarkDirty = new Set<AnyNodeId>()
   const extraNodesToClearDirty = new Set<AnyNodeId>()
   set((state) => {
@@ -1307,6 +1310,14 @@ const applyNodeChangesActionImpl = (
   changes = convertDerivedPlateHoleWrites(get().nodes, changes, options)
   changes = filterDerivedNodeWrites(get().nodes, changes, options)
   if (!changes.create?.length && !changes.update?.length && !changes.delete?.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites([
+      ...(changes.create ?? []).map((op) => ({ id: op.node.id })),
+      ...(changes.update ?? []).map((update) => ({
+        id: update.id,
+        fields: Object.keys(update.data),
+      })),
+    ])
 
   const createOps = changes.create ?? []
   const deletionIntent =
@@ -1481,6 +1492,10 @@ const updateNodesActionImpl = (
   deferDirty = true,
 ) => {
   if (get().readOnly) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(
+      updates.map((update) => ({ id: update.id, fields: Object.keys(update.data) })),
+    )
   const converted = convertDerivedPlateHoleWrites(get().nodes, { update: updates }, options)
   if (converted.create?.length || converted.delete?.length) {
     applyNodeChangesActionImpl(set, get, converted, options)
@@ -1948,6 +1963,8 @@ const deleteNodesActionImpl = (
   wallDeletionPlan?: StructurePlan,
 ) => {
   if (get().readOnly) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(ids.map((id) => ({ id })))
   let deletedIds = new Set<AnyNodeId>()
   let parentsToMarkDirty = new Set<AnyNodeId>()
   let nodesToMarkDirty = new Set<AnyNodeId>()

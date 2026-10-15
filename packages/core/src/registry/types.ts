@@ -1726,6 +1726,13 @@ export type Capabilities = {
    */
   reveal?: RevealConfig
   /**
+   * The fields that make the node's picture: an edit that changes one (a wall bent to a curve, a slab
+   * resized) plays the node's reveal again, quickly, instead of jumping. A change to any other field
+   * (a name, a colour) stays instant, and so does a change the structure reconciler derives. See
+   * `RevealConfig`.
+   */
+  revealOnEdit?: readonly string[]
+  /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
    * directly (wall, slab). Lets a kind self-describe where it sits in plan
