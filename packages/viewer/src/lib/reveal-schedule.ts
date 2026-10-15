@@ -462,6 +462,60 @@ export type PlannedRetract = RevealCandidate & {
 }
 
 /**
+ * The reverse play at the Framing level: the rewind's durations at the Framing pace, so a deleted
+ * floor comes apart as slowly as it went up. `capMs` keeps a whole floor's deconstruction in a
+ * bounded time however many pieces it takes back.
+ */
+export const LAZY_RETRACT_TIMING: RetractTiming = {
+  speed: RETRACT_TIMING.speed,
+  nodeGapMs: RETRACT_TIMING.nodeGapMs * FRAMING_PACE,
+  capMs: 14_000,
+  durationMs: scaleTimes(RETRACT_TIMING.durationMs, FRAMING_PACE),
+}
+
+/** The Framing level's reverse play at `speed`; at ×1 it is `LAZY_RETRACT_TIMING` itself. */
+export const lazyRetractTimingAt = (speed: number): RetractTiming =>
+  speed === 1 ? LAZY_RETRACT_TIMING : pacedRetractTiming(LAZY_RETRACT_TIMING, speed)
+
+/**
+ * The Framing build played backwards, for a deletion or an undo: the plan of the build (floor by
+ * floor, room by room, piece by piece, `planLazyReveal`) read from its end, so the furniture lifts
+ * out first, then the roof, the openings, the walls and the slabs last, and the floors come apart
+ * from the top down, each room as it went up. Each piece takes its own style's rewind time; a piece
+ * that had a preroll keeps it, after its own going, for the plugin that took it apart (a wall's
+ * boards come off and its studs fly up then). The whole ends within the cap by pulling the starts
+ * closer, never by skipping a piece.
+ */
+export function planLazyRetract(
+  candidates: readonly RevealCandidate[],
+  startMs: number,
+  timing: RetractTiming = LAZY_RETRACT_TIMING,
+  build: LazyRevealTiming = LAZY_REVEAL_TIMING,
+): PlannedRetract[] {
+  const forward = planLazyReveal(candidates, 0, build)
+  const lastTurn = Math.max(0, ...forward.map((entry) => entry.startMs))
+  const placed = forward.map((entry) => ({
+    entry,
+    offset: (lastTurn - entry.startMs) * timing.speed,
+  }))
+  const longest = Math.max(0, ...placed.map(({ entry }) => styleMs(timing.durationMs, entry.style)))
+  const lastStart = Math.max(0, ...placed.map(({ offset }) => offset))
+  const room = Math.max(0, timing.capMs - longest)
+  const compression = lastStart > room ? room / lastStart : 1
+  return placed
+    .map(({ entry, offset }) => {
+      const { startMs: _start, finale: _finale, prerollMs, ...candidate } = entry
+      return {
+        ...candidate,
+        ...(prerollMs ? { prerollMs: prerollMs * timing.speed * compression } : {}),
+        startMs: startMs + offset * compression,
+        durationMs: styleMs(timing.durationMs, entry.style),
+      }
+    })
+    .sort((left, right) => left.startMs - right.startMs || right.seq - left.seq)
+}
+
+/**
  * The build played backwards, for an undo: the last phase goes first and each goes after the one
  * built on it (the furniture, the roof, the openings, the walls, the slab), and inside a phase the last
  * piece to arrive is the first to go, so the plan reads one phase at a time as the build did. It is

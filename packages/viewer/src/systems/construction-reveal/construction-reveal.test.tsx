@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   applySceneSnapshot,
   BaseNode,
+  BuildingNode,
   clearSceneHistory,
   emitter,
   ItemNode,
@@ -47,6 +48,7 @@ import {
   ConstructionReveal,
   type ConstructionRevealDriver,
   type ConstructionRevealLevel,
+  getRetractTurn,
   getRevealPlanSpeed,
   getRevealPlanState,
   getRevealTurn,
@@ -225,9 +227,12 @@ const Gable = revealKind(
 const make = (kind: { schema: typeof BaseNode }, data: Record<string, unknown> = {}) =>
   kind.schema.parse(data) as AnyNode
 
+const NO_CHILDREN: AnyNodeId[] = []
+
 function LevelChildren({ levelId }: { levelId: AnyNodeId }) {
   const children = useScene(
-    (state) => (state.nodes[levelId] as { children?: AnyNodeId[] } | undefined)?.children ?? [],
+    (state) =>
+      (state.nodes[levelId] as { children?: AnyNodeId[] } | undefined)?.children ?? NO_CHILDREN,
   )
   return (
     <>
@@ -1776,6 +1781,173 @@ describe('a deletion plays the creation backwards', () => {
     await until(() => pictures().length === 0, 6000)
     await frame()
     expect(useViewer.getState().levelsRevealing).toEqual([])
+  })
+})
+
+// Deleting a room or a whole floor takes it apart: every node it removes plays its build backwards,
+// room by room and floor by floor, the furniture first and the slab last.
+describe('deleting a floor or a room deconstructs it', () => {
+  const pictures = () =>
+    (renderer!.scene.instance as Object3D).children.filter(
+      (child) => ![...sceneRegistry.nodes.values()].includes(child) && child.children.length > 0,
+    )
+
+  /** A floor: its slab, walls with a pane in the first, and crates. */
+  const floor = (levelId: AnyNodeId) => {
+    const slab = make(Slab)
+    const walls = [make(Wall), make(Wall)]
+    const pane = make(Pane)
+    const crates = [make(Crate), make(Crate)]
+    return {
+      slab,
+      walls,
+      pane,
+      crates,
+      levelId,
+      all: [slab, ...walls, pane, ...crates],
+      create: () => {
+        const store = useScene.getState()
+        store.createNodes([
+          { node: slab, parentId: levelId },
+          ...walls.map((node) => ({ node, parentId: levelId })),
+          ...crates.map((node) => ({ node, parentId: levelId })),
+        ])
+        store.createNode(pane, walls[0]!.id as AnyNodeId)
+      },
+    }
+  }
+
+  async function builtFloors(count: number) {
+    const levelIds = loadLevels(count)
+    await mount(levelIds)
+    start({ deletes: () => true })
+    const floors = levelIds.map((levelId) => floor(levelId))
+    await agentWrites(() => {
+      for (const one of floors) one.create()
+    })
+    const everything = floors.flatMap((one) => one.all)
+    await until(() => everything.every((node) => !isNodeRevealing(node.id) && root(node.id)), 60000)
+    return { levelIds, floors, everything }
+  }
+
+  const removeLevels = (ids: string[]) =>
+    act(async () => {
+      runAsSceneCommitAuthor('agent', () => useScene.getState().deleteNodes(ids as AnyNodeId[]))
+    })
+
+  for (const at of ['full', 'framing'] as const) {
+    test(`${at}: a floor delete plays every node it removes, the furniture first and the slab last`, async () => {
+      level = at
+      const { floors, levelIds } = await builtFloors(1)
+      const [one] = floors
+      await removeLevels([levelIds[0]!])
+      for (const node of one!.all)
+        expect(useScene.getState().nodes[node.id as AnyNodeId]).toBeUndefined()
+      const turn = (id: string) => getRetractTurn(id)
+      for (const node of one!.all) expect(turn(node.id)).not.toBeNull()
+      const starts = (nodes: AnyNode[]) => nodes.map((node) => turn(node.id)!.startMs)
+      const furniture = Math.max(...starts(one!.crates))
+      const opening = turn(one!.pane.id)!.startMs
+      const walls = Math.min(...starts(one!.walls))
+      const slab = turn(one!.slab.id)!.startMs
+      expect(furniture).toBeLessThanOrEqual(opening)
+      expect(opening).toBeLessThanOrEqual(walls)
+      expect(walls).toBeLessThanOrEqual(slab)
+      // They play, and then every picture is gone.
+      await frame()
+      expect(pictures().length).toBeGreaterThan(0)
+      await until(() => pictures().length === 0, 60000)
+      for (const node of one!.all) expect(getRetractTurn(node.id)).toBeNull()
+    })
+  }
+
+  test('framing: two floors come apart from the top down, each floor in its own order', async () => {
+    level = 'framing'
+    const { floors, levelIds } = await builtFloors(2)
+    await removeLevels(levelIds as string[])
+    const [ground, top] = floors
+    const wallStart = (one: ReturnType<typeof floor>) =>
+      Math.min(...one.walls.map((wall) => getRetractTurn(wall.id)!.startMs))
+    expect(wallStart(top!)).toBeLessThan(wallStart(ground!))
+    for (const one of floors) {
+      const furniture = Math.max(...one.crates.map((crate) => getRetractTurn(crate.id)!.startMs))
+      expect(furniture).toBeLessThanOrEqual(wallStart(one))
+    }
+    await until(() => pictures().length === 0, 90000)
+  })
+
+  test('framing: the pictures of a deleted floor stand in their building, not in the floor that goes', async () => {
+    level = 'framing'
+    const building = BuildingNode.parse({ children: [] })
+    const [levelId] = loadLevels()
+    const levelNode = useScene.getState().nodes[levelId!] as AnyNode & { parentId: string | null }
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [building.id]: { ...building, children: [levelId] } as AnyNode,
+        [levelId!]: { ...levelNode, parentId: building.id } as AnyNode,
+      },
+    } as never)
+    await mount([levelId!])
+    start({ deletes: () => true })
+    const one = floor(levelId!)
+    await agentWrites(() => one.create())
+    await until(() => one.all.every((node) => !isNodeRevealing(node.id) && root(node.id)), 60000)
+    // The host's renderers register a group for the building and one for the floor that holds the roots.
+    const buildingGroup = new Group()
+    const levelGroup = new Group()
+    buildingGroup.add(levelGroup)
+    sceneRegistry.nodes.set(building.id, buildingGroup)
+    sceneRegistry.nodes.set(levelId!, levelGroup)
+    for (const node of one.all) levelGroup.add(root(node.id)!)
+    await removeLevels([levelId!])
+    await frame()
+    const standing = buildingGroup.children.filter((child) => child !== levelGroup)
+    expect(standing.length).toBeGreaterThan(0)
+    // The floor goes: its group is taken out of the building, and the pictures are still there.
+    buildingGroup.remove(levelGroup)
+    await frames(200)
+    expect(buildingGroup.children.length).toBeGreaterThan(0)
+    await until(() => buildingGroup.children.length === 0, 60000)
+  })
+
+  test('with the animation off a floor delete is instant: nothing plays', async () => {
+    level = 'off'
+    const { levelIds, floors } = await builtFloors(1)
+    await removeLevels([levelIds[0]!])
+    await frame()
+    expect(pictures()).toHaveLength(0)
+    for (const node of floors[0]!.all) expect(getRetractTurn(node.id)).toBeNull()
+  })
+
+  test('a big floor is planned in one frame’s budget', async () => {
+    level = 'framing'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start({ deletes: () => true })
+    const walls = Array.from({ length: 120 }, () => make(Wall))
+    const crates = Array.from({ length: 120 }, () => make(Crate))
+    await agentWrites(() =>
+      useScene
+        .getState()
+        .createNodes([...walls, ...crates].map((node) => ({ node, parentId: levelId }))),
+    )
+    await until(
+      () => [...walls, ...crates].every((node) => !isNodeRevealing(node.id) && root(node.id)),
+      120000,
+    )
+    const began = performance.now()
+    await removeLevels([levelId!])
+    const planned = performance.now() - began
+    expect(getRetractTurn(walls[0]!.id)).not.toBeNull()
+    // Planning 240 snapshots in the commit itself: well under what would hitch a frame twice over.
+    expect(planned).toBeLessThan(120)
+    const ends = [...walls, ...crates].map((node) => {
+      const turn = getRetractTurn(node.id)!
+      return turn.startMs + turn.durationMs
+    })
+    // However many pieces, the whole play ends within the cap of the reverse plan.
+    expect(Math.max(...ends) - now).toBeLessThanOrEqual(14_000 + 1000)
   })
 })
 

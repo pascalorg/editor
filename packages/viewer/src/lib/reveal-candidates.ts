@@ -482,8 +482,8 @@ export function nodeRevealCandidates(
     )
     const candidate = candidateOf(node, nodes, at, null, candidates.length, !goesWithHost)
     if (candidate) candidates.push(candidate)
-    // An assembled node's parts are not staged on their own.
-    if (candidate?.style === 'assemble') return
+    // An assembled or covered node's parts are not staged on their own.
+    if (candidate?.style === 'assemble' || candidate?.style === 'cover') return
     for (const childId of (node as AnyNode & { children?: unknown[] }).children ?? []) {
       if (typeof childId === 'string') visit(childId, guard + 1)
     }

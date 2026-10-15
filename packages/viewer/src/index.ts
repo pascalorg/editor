@@ -277,6 +277,7 @@ export {
   type ConstructionRevealLevel,
   type ConstructionRevealOptions,
   emitRevealPuff,
+  getRetractTurn,
   getRevealPlanSpeed,
   getRevealPlanState,
   getRevealTurn,

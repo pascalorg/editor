@@ -48,9 +48,11 @@ import {
 import {
   LAZY_REVEAL_TIMING,
   type LazyRevealTiming,
+  lazyRetractTimingAt,
   lazyTimingAt,
   normalizeAnimationSpeed,
   type PlannedReveal,
+  planLazyRetract,
   planLazyReveal,
   planRetract,
   planReveal,
@@ -1515,6 +1517,8 @@ type Retract = {
   pivot: Vector3 | null
   /** A `cover` node's rows, planned when it starts going: its covering lifts off in reverse. */
   cover?: Cover
+  /** What a plugin that takes the node apart plays after it has gone. */
+  prerollMs?: number
 }
 
 type Held = {
@@ -1617,15 +1621,68 @@ type Ghost = {
   group: RetractGroup
   pivot: Vector3 | null
   cover?: Cover
+  /** What a plugin that takes the piece apart plays after it has gone (a wall's boards and studs). */
+  prerollMs?: number
 }
 
 const ghosts = new Map<string, Ghost>()
+
+/**
+ * Where a deleted node's snapshot stands: its own parent's object while that node stays in the
+ * scene, else the nearest object above it that does (a deleted floor's pictures stand in their
+ * building), so they outlive the object that held them.
+ */
+function ghostStand(id: string, commit: SceneCommit, own: Object3D): Object3D {
+  let above = commit.before.nodes[id as AnyNodeId]?.parentId as AnyNodeId | null | undefined
+  for (let guard = 0; above && !commit.current.nodes[above] && guard < 32; guard += 1)
+    above = commit.before.nodes[above]?.parentId as AnyNodeId | null | undefined
+  return (above ? sceneRegistry.nodes.get(above) : undefined) ?? own
+}
+
+/**
+ * When a node that is going out (undone, or deleted) plays, on the reveal clock: its own going
+ * starts at `startMs` and takes `durationMs`; a plugin that takes it apart plays `prerollMs` after.
+ * Null when the node is not going.
+ */
+export function getRetractTurn(
+  id: string,
+): { startMs: number; durationMs: number; prerollMs: number } | null {
+  const ghost = ghosts.get(id)
+  if (ghost) {
+    return { startMs: ghost.startMs, durationMs: ghost.durationMs, prerollMs: ghost.prerollMs ?? 0 }
+  }
+  const retract = retracts.get(id)
+  if (!retract) return null
+  return {
+    startMs: retract.startMs,
+    durationMs: retract.durationMs,
+    prerollMs: retract.prerollMs ?? 0,
+  }
+}
 
 /** Draws the clone as the scene pass does: a batched source keeps no layer of its own. */
 function drawnInScenePass(root: Object3D) {
   root.traverse((object) => {
     object.layers.set(SCENE_LAYER)
   })
+}
+
+/**
+ * The reverse plan of `candidates` from `at`: at the Framing level the build's own plan read from its
+ * end (the rooms come apart as they went up, a plugin's prerolls kept), else the Full rewind.
+ */
+function planBack(candidates: readonly RevealCandidate[], at: number, speed: number) {
+  if (!lazyOn()) return planRetract(candidates, at, retractTimingAt(speed), revealTimingAt(speed))
+  const asked = candidates.map((candidate) => {
+    let prerollMs = 0
+    try {
+      prerollMs = prerollOf?.(candidate) ?? 0
+    } catch (error) {
+      console.error('[viewer] reveal preroll failed', error)
+    }
+    return prerollMs > 0 ? { ...candidate, prerollMs } : candidate
+  })
+  return planLazyRetract(asked, at, lazyRetractTimingAt(speed), lazyTimingAt(speed))
 }
 
 /**
@@ -1643,16 +1700,21 @@ function playDeletions(commit: SceneCommit) {
       sceneRegistry.nodes.get(candidate.id)?.parent,
   )
   if (staged.length === 0) return
-  const speed = currentSpeed()
-  const plan = planRetract(staged, clockMs, retractTimingAt(speed), revealTimingAt(speed))
+  const plan = planBack(staged, clockMs, currentSpeed())
   const groupsByKey = new Map<string, RetractGroup>()
   for (const entry of plan) {
     const original = sceneRegistry.nodes.get(entry.id)
-    const parent = original?.parent
-    if (!(original && parent)) continue
+    const own = original?.parent
+    if (!(original && own)) continue
     const root = original.clone(true)
     drawnInScenePass(root)
-    parent.add(root)
+    const parent = ghostStand(entry.id, commit, own)
+    own.add(root)
+    // A deleted floor's pieces would go with their floor's object: they stand in the building.
+    if (parent !== own) {
+      own.updateWorldMatrix(true, false)
+      parent.attach(root)
+    }
     const key = `${entry.phase}:${entry.levelId}`
     let group = groupsByKey.get(key)
     if (!group) {
@@ -1672,6 +1734,7 @@ function playDeletions(commit: SceneCommit) {
       durationMs: entry.durationMs,
       group,
       pivot: null,
+      ...(entry.prerollMs ? { prerollMs: entry.prerollMs } : {}),
     })
   }
 }
@@ -1860,15 +1923,12 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
   const roofFirst = clearing.some((candidate) => !from.has(candidate.id))
   const lead = liftWanted.size > lifting || roofFirst ? RETRACT_LIFT_LEAD_MS : 0
   const speed = currentSpeed()
-  const rewind = retractTimingAt(speed)
-  const forward = revealTimingAt(speed)
   const plan = [
-    ...planRetract(clearing, clockMs, rewind, forward),
-    ...planRetract(
+    ...planBack(clearing, clockMs, speed),
+    ...planBack(
       staged.filter((candidate) => !clearingIds.has(candidate.id)),
       clockMs + lead,
-      rewind,
-      forward,
+      speed,
     ),
   ].sort((left, right) => left.startMs - right.startMs)
   const end = Math.max(...plan.map((entry) => entry.startMs + entry.durationMs))
@@ -1912,6 +1972,7 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
         run,
         root: null,
         pivot: null,
+        ...(entry.prerollMs ? { prerollMs: entry.prerollMs } : {}),
       })
       // A plan entry that draws it hears that it is going.
       notifyPending(entry.id)
