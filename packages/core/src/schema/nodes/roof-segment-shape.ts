@@ -9,6 +9,14 @@ export type RoofShapeFaceVertex = {
 
 export type RoofShapeEaveSide = '+X' | '-X' | '+Z' | '-Z'
 
+/** How far the eaves reach past the walls, where gutters hang: a barrel's arch springs from its eaves. */
+export function getRoofShapeEaveOverhang(segment: {
+  roofType?: RoofType
+  overhang?: number
+}): number {
+  return segment.roofType === 'barrel' ? 0 : (segment.overhang ?? 0)
+}
+
 export function getRoofShapeEaveSides(type: RoofType): RoofShapeEaveSide[] {
   switch (type) {
     case 'conical':

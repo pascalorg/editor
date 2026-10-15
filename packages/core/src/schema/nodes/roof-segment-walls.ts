@@ -149,15 +149,14 @@ function buildFaceProfile(
         getSegmentSlopeFrame(node).activeRh,
         node.barrelSegments ?? 12,
       )
-      // The arch springs from the eaves' centre lines; the walls' outer halves stop at their top.
+      // The arch springs from the eaves' centre lines, inside the walls' outer faces; the placeable
+      // region stays convex by leaving out the walls' outer halves above their base corners.
       return [
         [0, 0],
         [length, 0],
-        [length, node.wallHeight],
         ...profile
           .reverse()
           .map(([z, y]): [number, number] => [z + length / 2, y + node.wallHeight]),
-        [0, node.wallHeight],
       ]
     }
     case 'gable': {

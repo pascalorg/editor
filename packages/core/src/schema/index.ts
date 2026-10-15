@@ -339,6 +339,7 @@ export {
   getDutchEndSlopeFaces,
   getDutchRoofShapeMetrics,
   getRoofModuleFaces,
+  getRoofShapeEaveOverhang,
   getRoofShapeEaveSides,
   getRoofShapeInsets,
   getRoofShapeRatios,

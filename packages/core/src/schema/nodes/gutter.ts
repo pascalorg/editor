@@ -7,7 +7,7 @@ import {
   normalizeRoofSegmentTrim,
   type RoofSegmentNode,
 } from './roof-segment'
-import { getRoofShapeEaveSides } from './roof-segment-shape'
+import { getRoofShapeEaveOverhang, getRoofShapeEaveSides } from './roof-segment-shape'
 
 const MIN_DEFAULT_GUTTER_LENGTH_M = 0.2
 const DEFAULT_GUTTER_GENERATOR = 'default-gutter'
@@ -145,7 +145,7 @@ export function computeGutterEaveY(
   const wallHeight = segment.wallHeight ?? 0
   if ((segment.roofType ?? 'gable') === 'flat') return wallHeight
   const pitchRad = ((segment.pitch ?? 0) * Math.PI) / 180
-  return wallHeight - (segment.overhang ?? 0) * Math.tan(pitchRad) + GUTTER_EAVE_TUCK_UP
+  return wallHeight - getRoofShapeEaveOverhang(segment) * Math.tan(pitchRad) + GUTTER_EAVE_TUCK_UP
 }
 
 function getDefaultGutterSides(segment: RoofSegmentNode): GutterEaveSide[] {
@@ -155,7 +155,7 @@ function getDefaultGutterSides(segment: RoofSegmentNode): GutterEaveSide[] {
 function getGutterEnvelope(segment: RoofSegmentNode) {
   const halfW = Math.max(0, segment.width) / 2
   const halfD = Math.max(0, segment.depth) / 2
-  const overhang = Math.max(0, segment.overhang ?? 0)
+  const overhang = Math.max(0, getRoofShapeEaveOverhang(segment))
   // an eave gutter runs out to the rakes, as far as they reach
   const outerHalfW = Math.max(
     halfW,

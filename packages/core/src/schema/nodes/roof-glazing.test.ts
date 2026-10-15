@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
 import {
+  clampRectToRoofWallFace,
   type GlazedRoofPiece,
   getBarrelRoofSolidPieces,
   getGlazedRoofFaces,
@@ -182,4 +183,9 @@ test('a barrel stands on walls centred on its footprint, as doors and windows pl
   expect(extent(walls, 'z')).toEqual([-2.1, 2.1].map((z) => expect.closeTo(z)))
   expect(getRoofSegmentWallFace(node, 'right').length).toBeCloseTo(4.2)
   expect(getRoofSegmentWallFace(node, 'front').length).toBeCloseTo(6.2)
+  // A window fits on the arched end above the wall top.
+  expect(clampRectToRoofWallFace(getRoofSegmentWallFace(node, 'right'), 2.1, 0.9, 1, 0.6)).toEqual({
+    u: 2.1,
+    v: 0.9,
+  })
 })
