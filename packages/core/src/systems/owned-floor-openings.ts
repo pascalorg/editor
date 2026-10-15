@@ -251,8 +251,10 @@ export function planOwnedFloorOpenings(
       .map((id) => nodes[id])
       .find((node) => node?.type === 'stair-segment')
     const runLength = segment?.type === 'stair-segment' ? segment.length : (oldPose?.runLength ?? 1)
+    // With its segments hidden or missing, the stair keeps the footprint it last had.
     const box = oldPose?.footprint
-      ? stairFootprintAABB({ ...owner, position: [0, 0, 0], rotation: 0 }, nodes)
+      ? (stairFootprintAABB({ ...owner, position: [0, 0, 0], rotation: 0 }, nodes) ??
+        oldPose.footprint)
       : null
     const pose: OwnerPose = {
       position: owner.position,

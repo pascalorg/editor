@@ -180,19 +180,25 @@ export function stairClimbsToNoStorey(stair: StairNode, nodes: Record<string, An
  * level above does. Otherwise, with a storey above, a stair that follows its storey (no
  * `totalRise`) reaches it, and one keeping a rise of its own (an Architect add_stair flight, an
  * editor stair given a custom rise) does when that rise is within a riser of the floor-to-floor
- * height.
+ * height. A declared roof level is no storey (`isRoofLevel`, read here without the registry
+ * roof-level.ts loads, which the hosts' checks must not).
  */
 export function stairReachesStoreyAbove(stair: StairNode, nodes: Record<string, AnyNode>): boolean {
   if (stairClimbsToNoStorey(stair, nodes)) return false
   const level = stairSourceLevel(stair, nodes)
   if (!level) return false
   const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+  const storey = (id: string | null | undefined) => {
+    const node = id ? nodes[id] : undefined
+    return node?.type === 'level' && node.metadata?.role !== 'roof'
+      ? elevations.get(node.id)
+      : undefined
+  }
   const source = elevations.get(level.id)
-  const named = stair.toLevelId ? elevations.get(stair.toLevelId) : undefined
+  const named = storey(stair.toLevelId)
   if (source && named && named.buildingId === source.buildingId && named.ordinal > source.ordinal)
     return true
-  const aboveId = findLevelAboveId(level.id, elevations)
-  const above = aboveId ? elevations.get(aboveId) : undefined
+  const above = storey(findLevelAboveId(level.id, elevations))
   if (!(source && above)) return false
   if (stair.totalRise === undefined) return true
   const riser = StairDesignTargets.parse(stair.designTargets ?? {}).maxRiserHeight

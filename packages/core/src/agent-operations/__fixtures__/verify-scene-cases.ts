@@ -251,6 +251,16 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { lacks: ['missing_stair'] },
   ),
   verify(
+    'an older stair on the top storey, at its rise, climbs to the roof level and no storey',
+    () =>
+      twoStoreys(
+        level('level_roof', 2, { name: 'Roof', metadata: { role: 'roof' } }),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+        ...stairOn('level_1', { totalRise: 2.8 }),
+      ),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
     'an older stair naming no level, twice as tall as its storey, does not',
     () => twoStoreys(...stairOn('level_0', { totalRise: 5.6 })),
     { contains: ['missing_stair'] },
