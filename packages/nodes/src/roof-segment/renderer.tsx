@@ -16,7 +16,6 @@ import {
 } from '@pascal-app/core'
 import {
   createMaterial,
-  createMaterialFromPresetRef,
   getRoofMaterialArray,
   levelWallCladdingRef,
   resolveMaterialRef,
@@ -114,11 +113,8 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
     // Slot 2 holds the fascia and rake boards: their own finish, else the wall role's.
     const fasciaSpec = getSegmentFasciaMaterial(node)
     const fascia = fasciaSpec
-      ? typeof fasciaSpec.materialPreset === 'string'
-        ? createMaterialFromPresetRef(fasciaSpec.materialPreset, shading)
-        : fasciaSpec.material !== undefined
-          ? createMaterial(fasciaSpec.material, shading)
-          : null
+      ? (resolveMaterialRef(fasciaSpec.materialPreset, sceneMaterials, shading) ??
+        (fasciaSpec.material !== undefined ? createMaterial(fasciaSpec.material, shading) : null))
       : null
 
     if (!(edge || wall || top || fascia)) {

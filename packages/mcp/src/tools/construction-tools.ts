@@ -1,10 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { createZone, generateId, isRoofLevel } from '@pascal-app/core'
-import { unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
+import { createZone, generateId } from '@pascal-app/core'
+import { roofLevelRefusal, unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
+import { refusalResult } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema } from './schemas'
@@ -131,12 +132,9 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         ceilingMaterialPreset,
       })
       if (preset) throw new Error(preset)
-      const level = assertNode(bridge, levelId, 'level')
-      if (isRoofLevel(level)) {
-        throw new Error(
-          `Cannot create a story shell on roof support level ${levelId}; create or choose an occupied story level instead`,
-        )
-      }
+      assertNode(bridge, levelId, 'level')
+      const onRoofLevel = roofLevelRefusal(bridge.getNodes(), levelId, 'a story shell')
+      if (onRoofLevel) return refusalResult(onRoofLevel)
       const points = footprint as [number, number][]
       const before = new Set(Object.keys(bridge.getNodes()))
       const plan = createZone(bridge.getNodes(), {

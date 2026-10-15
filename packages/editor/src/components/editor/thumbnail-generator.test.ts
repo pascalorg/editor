@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, sceneRegistry, useScene } from '@pascal-app/core'
+import { type AnyNode, emitter, sceneRegistry, useScene } from '@pascal-app/core'
 import { BuildingNode, CeilingNode, LevelNode, WallNode } from '@pascal-app/core/schema'
 import { hideFromScene, SCENE_LAYER, useViewer } from '@pascal-app/viewer'
 import { Group, Layers, Mesh, OrthographicCamera, PerspectiveCamera, Vector2 } from 'three'
@@ -9,6 +9,7 @@ import {
   capturesOrthographically,
   interiorCutaway,
   presentFinished,
+  presentWhileCapturing,
   pumpFrames,
   tileGrid,
 } from './thumbnail-generator'
@@ -176,6 +177,46 @@ describe('a sheet capture session', () => {
     presentFinished()()
     unsubscribe()
     expect(writes).toBe(0)
+  })
+
+  // A sheet's pictures and an agent's view can overlap: the user's view is the one before the
+  // first, never a run's finished presentation.
+  test('runs that overlap present once and put the view back after the last', () => {
+    const session = (owner: string, active: boolean) =>
+      emitter.emit('camera-controls:capture-session', { owner, active })
+    const steps: string[] = []
+    const stop = presentWhileCapturing(() => {
+      steps.push('present')
+      return () => steps.push('restore')
+    })
+    session('sheets-a', true)
+    session('view-b', true)
+    session('sheets-a', false)
+    expect(steps).toEqual(['present'])
+    session('nobody', false)
+    session('view-b', false)
+    expect(steps).toEqual(['present', 'restore'])
+    session('view-c', true)
+    stop()
+    expect(steps).toEqual(['present', 'restore', 'present', 'restore'])
+    session('view-c', false)
+    expect(steps).toHaveLength(4)
+  })
+
+  // The generator mounted while a sheet captures (a remount, the editor opened mid-run): the run's
+  // finished presentation from the first frame, the user's view back at its end.
+  test('a run already on when the generator mounts is presented at once', () => {
+    emitter.emit('camera-controls:capture-session', { owner: 'sheets-early', active: true })
+    const steps: string[] = []
+    const stop = presentWhileCapturing(() => {
+      steps.push('present')
+      return () => steps.push('restore')
+    })
+    expect(steps).toEqual(['present'])
+    emitter.emit('camera-controls:capture-session', { owner: 'sheets-early', active: false })
+    expect(steps).toEqual(['present', 'restore'])
+    stop()
+    expect(steps).toEqual(['present', 'restore'])
   })
 })
 

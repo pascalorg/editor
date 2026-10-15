@@ -62,6 +62,7 @@ export type {
   ZoneEvent,
 } from './events/bus'
 export { emitter, eventSuffixes } from './events/bus'
+export { isCaptureSessionOn, subscribeCaptureSessions } from './events/capture-sessions'
 export {
   hiddenWallPointerEventsHeld,
   holdHiddenWallPointerEvents,
@@ -201,6 +202,7 @@ export {
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
 export {
+  ceilingSeatY,
   isScriptedNode,
   matchScriptSlotsToLibrary,
   type ScriptedNode,
@@ -379,6 +381,7 @@ export {
   type BuildableArea,
   type BuildingPlacement,
   buildingFootprintRings,
+  buildingStreet,
   describeSiteBrief,
   lotOverhang,
   measureFootprint,
@@ -535,6 +538,7 @@ export {
   getMaterialPresetByRef,
   getMaterialsForCategory,
   getSceneMaterialIdFromRef,
+  isCommunityMaterialId,
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
   MATERIAL_CATEGORIES,
@@ -826,7 +830,11 @@ export {
 } from './systems/stair/stair-rail-path'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export { planStairFlightHeightEdit, planStairRiseEdit } from './systems/stair/stair-rise-edit'
-export { stairHasNoRise } from './systems/stair/stair-rise-query'
+export {
+  stairClimbsToNoStorey,
+  stairHasNoRise,
+  stairReachesStoreyAbove,
+} from './systems/stair/stair-rise-query'
 export {
   createSizedStairFlight,
   DEFAULT_STAIR_DESIGN_TARGETS,

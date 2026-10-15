@@ -115,8 +115,10 @@ function emptyBox(): StairFootprintAABB {
  *  stair-local point by the stair's rotation and offsetting by its position. */
 function extendByLocal(box: StairFootprintAABB, stair: StairNode, localX: number, localZ: number) {
   const [wx, wz] = rotateXZ(localX, localZ, stair.rotation ?? 0)
-  const x = stair.position[0] + wx
-  const z = stair.position[2] + wz
+  extend(box, stair.position[0] + wx, stair.position[2] + wz)
+}
+
+function extend(box: StairFootprintAABB, x: number, z: number) {
   if (x < box.minX) box.minX = x
   if (x > box.maxX) box.maxX = x
   if (z < box.minZ) box.minZ = z
@@ -127,21 +129,22 @@ function finiteBox(box: StairFootprintAABB): StairFootprintAABB | null {
   return Number.isFinite(box.minX) && Number.isFinite(box.minZ) ? box : null
 }
 
-/** Bounding box of a straight stair's segment chain, walking the children. */
-function straightStairAABB(
+/**
+ * The plan outline of each visible segment of a straight stair's chain (a flight with its nosing, a
+ * landing, a winder's own outline), in the stair's level frame: an L or U stair covers these, not
+ * its bounding box.
+ */
+export function stairSegmentFootprints(
   stair: StairNode,
   nodes: Readonly<Record<string, AnyNode>>,
-): StairFootprintAABB | null {
+): [number, number][][] {
   const segments = (stair.children ?? [])
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
     .filter((segment): segment is StairSegmentNode => segment?.type === 'stair-segment')
-  if (segments.length === 0) return null
-
   const transforms = computeSegmentTransforms(segments)
-  const box = emptyBox()
-  segments.forEach((segment, index) => {
+  return segments.flatMap((segment, index) => {
     const transform = transforms[index]
-    if (!transform || segment.visible === false) return
+    if (!transform || segment.visible === false) return []
     const halfWidth = segment.width / 2
     const nose =
       segment.segmentType === 'landing'
@@ -149,16 +152,34 @@ function straightStairAABB(
         : (resolveStairConstruction(segment, stair)?.nosing ?? 0)
     // Segment-local footprint: X across the flight, Z along the run from the
     // attachment edge (0) to the far edge (length).
-    for (const [cornerX, cornerZ] of resolveStairWinderFootprint(segment, stair) ?? [
+    const corners: [number, number][] = resolveStairWinderFootprint(segment, stair) ?? [
       [-halfWidth, -nose],
       [halfWidth, -nose],
       [halfWidth, segment.length],
       [-halfWidth, segment.length],
-    ]) {
-      const [offsetX, offsetZ] = rotateXZ(cornerX, cornerZ, transform.rotation)
-      extendByLocal(box, stair, transform.position[0] + offsetX, transform.position[2] + offsetZ)
-    }
+    ]
+    return [
+      corners.map(([cornerX, cornerZ]): [number, number] => {
+        const [offsetX, offsetZ] = rotateXZ(cornerX, cornerZ, transform.rotation)
+        const [x, z] = rotateXZ(
+          transform.position[0] + offsetX,
+          transform.position[2] + offsetZ,
+          stair.rotation ?? 0,
+        )
+        return [stair.position[0] + x, stair.position[2] + z]
+      }),
+    ]
   })
+}
+
+/** Bounding box of a straight stair's segment chain, walking the children. */
+function straightStairAABB(
+  stair: StairNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): StairFootprintAABB | null {
+  const box = emptyBox()
+  for (const outline of stairSegmentFootprints(stair, nodes))
+    for (const [x, z] of outline) extend(box, x, z)
   return finiteBox(box)
 }
 

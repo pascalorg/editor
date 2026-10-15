@@ -2,7 +2,11 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
-import { normalizeRoofSegmentTrim, type RoofSegmentNode } from './roof-segment'
+import {
+  getRoofSegmentEndReach,
+  normalizeRoofSegmentTrim,
+  type RoofSegmentNode,
+} from './roof-segment'
 import { getRoofShapeEaveSides } from './roof-segment-shape'
 
 const MIN_DEFAULT_GUTTER_LENGTH_M = 0.2
@@ -152,7 +156,11 @@ function getGutterEnvelope(segment: RoofSegmentNode) {
   const halfW = Math.max(0, segment.width) / 2
   const halfD = Math.max(0, segment.depth) / 2
   const overhang = Math.max(0, segment.overhang ?? 0)
-  const outerHalfW = Math.max(halfW, halfW + overhang - GUTTER_EAVE_TUCK_INWARD)
+  // an eave gutter runs out to the rakes, as far as they reach
+  const outerHalfW = Math.max(
+    halfW,
+    halfW + getRoofSegmentEndReach(segment) - GUTTER_EAVE_TUCK_INWARD,
+  )
   const outerHalfD = Math.max(halfD, halfD + overhang - GUTTER_EAVE_TUCK_INWARD)
   const trim = normalizeRoofSegmentTrim(segment)
   const minX = trim.left > 0 ? -halfW + trim.left : -outerHalfW

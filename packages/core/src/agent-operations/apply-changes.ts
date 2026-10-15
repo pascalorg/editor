@@ -1,5 +1,5 @@
 import type { AnyNode, Collection, SceneMaterial } from '../schema'
-import type { SceneChanges, SceneNodes } from './types'
+import type { NodeWrite, SceneChanges, SceneNodes } from './types'
 
 const childrenOf = (node: AnyNode | undefined): string[] | null =>
   node && 'children' in node && Array.isArray(node.children) ? (node.children as string[]) : null
@@ -15,13 +15,13 @@ function patched(node: AnyNode, data: Partial<AnyNode>): AnyNode {
 }
 
 /**
- * The scene after an operation's changes, without a store: for checks and previews. Same order as
- * the store's applyNodeChanges — updates, creates, then deletes — so an opening moved off a wall
- * being replaced is no longer among that wall's children when it goes.
+ * The scene after a write's operations in their order, without a store: each create attached to its
+ * parent, each reparent moved between both parents' `children`, each delete taking everything under
+ * it. A create is written as given; parse it first for its schema's defaults.
  */
-export function applySceneChanges(
+export function applySceneWrites(
   nodes: SceneNodes,
-  changes: SceneChanges | undefined,
+  writes: readonly NodeWrite[],
 ): Record<string, AnyNode> {
   const next: Record<string, AnyNode> = { ...nodes }
   const setChildren = (parentId: string | null | undefined, edit: (ids: string[]) => string[]) => {
@@ -33,29 +33,51 @@ export function applySceneChanges(
     setChildren(parentId, (ids) => ids.filter((child) => child !== id))
   const attach = (parentId: string | null | undefined, id: string) =>
     setChildren(parentId, (ids) => (ids.includes(id) ? ids : [...ids, id]))
-  for (const { id, data } of changes?.update ?? []) {
-    const current = next[id]
-    if (!current) continue
-    if (data.parentId !== undefined && data.parentId !== current.parentId) {
-      detach(current.parentId, id)
-      attach(data.parentId, id)
-    }
-    next[id] = patched(current, data)
-  }
-  for (const { node, parentId } of changes?.create ?? []) {
-    next[node.id] = parentId ? ({ ...node, parentId } as AnyNode) : node
-    attach(parentId ?? node.parentId, node.id)
-  }
   const remove = (id: string) => {
     const node = next[id]
     delete next[id]
     for (const child of childrenOf(node) ?? []) remove(child)
   }
-  for (const id of changes?.delete ?? []) {
-    detach(next[id]?.parentId, id)
-    remove(id)
+  for (const write of writes) {
+    if (write.op === 'create') {
+      const { node, parentId } = write
+      next[node.id] = parentId ? ({ ...node, parentId } as AnyNode) : node
+      attach(parentId ?? node.parentId, node.id)
+    } else if (write.op === 'update') {
+      const current = next[write.id]
+      if (!current) continue
+      const data = write.data as Partial<AnyNode>
+      if (data.parentId !== undefined && data.parentId !== current.parentId) {
+        detach(current.parentId, write.id)
+        attach(data.parentId, write.id)
+      }
+      next[write.id] = patched(current, data)
+    } else if (write.op === 'delete') {
+      detach(next[write.id]?.parentId, write.id)
+      remove(write.id)
+    }
   }
   return next
+}
+
+/**
+ * The scene after an operation's changes, without a store: for checks and previews. Same order as
+ * the store's applyNodeChanges — updates, creates, then deletes — so an opening moved off a wall
+ * being replaced is no longer among that wall's children when it goes.
+ */
+export function applySceneChanges(
+  nodes: SceneNodes,
+  changes: SceneChanges | undefined,
+): Record<string, AnyNode> {
+  return applySceneWrites(nodes, [
+    ...(changes?.update ?? []).map(({ id, data }) => ({ op: 'update' as const, id, data })),
+    ...(changes?.create ?? []).map(({ node, parentId }) => ({
+      op: 'create' as const,
+      node,
+      parentId,
+    })),
+    ...(changes?.delete ?? []).map((id) => ({ op: 'delete' as const, id })),
+  ])
 }
 
 /**

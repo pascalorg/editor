@@ -80,7 +80,11 @@ async function rebuildOpening(
         ...GeometryReuseFields.parse(input),
       },
     })
-    outcome = rescriptOpening(nodes, { ...input, compiled }, { activeLevelId: null })
+    outcome = rescriptOpening(
+      nodes,
+      { ...input, compiled },
+      { activeLevelId: bridge.activeLevelId?.() ?? null },
+    )
   } catch (error) {
     if (isAgentRefusal(error)) return refusalResult(error)
     return toolError(error instanceof Error ? error.message : String(error), {

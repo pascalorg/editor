@@ -16,6 +16,7 @@ import {
   type Vec2,
   wallLength,
 } from './plan-geometry'
+import { roofLevelRefusal } from './roof-writes'
 import type { AgentOperation, SceneChanges, SceneNodes } from './types'
 
 type Entry = {
@@ -294,6 +295,8 @@ export const placeItems: AgentOperation<PlaceItemsInput> = (nodes, input, contex
         'unsupported_host',
         `A ${host?.type} hosts no item: name a wall, a ceiling, an item standing on the floor, or a room, slab or level for its floor.`,
       )
+    const onRoofLevel = roofLevelRefusal(nodes, floorId, `"${asset.name}"`)
+    if (onRoofLevel) return refused(assetId, onRoofLevel.code, onRoofLevel.message)
     const rooms = roomsOn(nodes, floorId)
     const room = rooms.find((polygon) => pointInPolygon([x, z], polygon))
     if (rooms.length && !isOutdoor(asset) && !room)

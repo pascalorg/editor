@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
 const fraction = z.number().min(0).max(1)
@@ -34,14 +35,12 @@ export const straightenFacadePhotoTool = {
               z.object({
                 levelId: NodeId,
                 points: segment,
-                height: z
-                  .number()
-                  .min(0)
-                  .max(20)
-                  .optional()
-                  .describe(
+                height: measurement('length', 'm', {
+                  min: 0,
+                  max: 20,
+                  description:
                     "The feature's height above that storey's floor when you know it (window heads about 2.1 m): it sets the camera's height. With heights, two rows on one storey are enough (the floor line at 0 and the eaves at the wall's height), which a single-storey house needs. Without it the edges' foot is taken for the ground.",
-                  ),
+                }).optional(),
               }),
             )
             .min(2)
@@ -52,10 +51,13 @@ export const straightenFacadePhotoTool = {
           points: z
             .array(
               z.object({
-                along: z
-                  .number()
-                  .describe("Metres along the face from its left end as seen (the walls' extent)."),
-                height: z.number().describe('Metres up from the floor of levelId.'),
+                along: measurement('length', 'm', {
+                  description:
+                    "Metres along the face from its left end as seen (the walls' extent).",
+                }),
+                height: measurement('length', 'm', {
+                  description: 'Metres up from the floor of levelId.',
+                }),
                 levelId: NodeId.optional().describe(
                   "The floor it is measured from. Default: the face walls'.",
                 ),
@@ -78,14 +80,12 @@ export const straightenFacadePhotoTool = {
       )
       .min(1)
       .max(4),
-    focal35mm: z
-      .number()
-      .min(8)
-      .max(800)
-      .optional()
-      .describe(
+    focal35mm: measurement('length', 'mm', {
+      min: 8,
+      max: 800,
+      description:
         "The camera's focal length on a 36 × 24 mm frame, when you know it (the photo's metadata, or a render's camera): a face seen square on does not show it, and the pose then takes a phone's 26 mm and says so (focalAssumed).",
-      ),
+    }).optional(),
     verticals: z
       .array(segment)
       .max(12)

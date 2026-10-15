@@ -1,4 +1,4 @@
-import type { ParametricDescriptor, RoofSegmentNode } from '@pascal-app/core'
+import { type ParametricDescriptor, type RoofSegmentNode, roofTypeHasRakes } from '@pascal-app/core'
 
 export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
   groups: [
@@ -143,6 +143,16 @@ export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
           step: 0.01,
         },
         { key: 'overhang', kind: 'number', unit: 'm', min: 0, max: 1, step: 0.05 },
+        {
+          key: 'gableOverhang',
+          kind: 'number',
+          label: 'Gable overhang',
+          unit: 'm',
+          min: 0,
+          max: 3,
+          step: 0.05,
+          visibleIf: (node) => roofTypeHasRakes(node.roofType),
+        },
         {
           key: 'shingleThickness',
           kind: 'number',

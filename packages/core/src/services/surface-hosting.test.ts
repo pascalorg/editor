@@ -553,43 +553,42 @@ describe('surface frame contract', () => {
     [0.3, 0.6, 0.2],
     [-0.35, -0.7, 0.25],
     [0, Math.PI / 2, 0],
-  ] as [
-    number,
-    number,
-    number,
-  ][])('full surface rotation %j composes through query.ts', (rx, ry, rz) => {
-    const rotation: [number, number, number] = [rx, ry, rz]
-    const host = namedHost(rotation)
-    const surface = queryProceduralItem(host, {}).surfaces.find((s) => s.id === 'ledge')!
-    const local: [number, number, number] = [0.1, 0, 0.05]
-    const point = transformPoint(frame(surface.position, surface.rotation), local)
-    const result = resolveSurfacePlacement({
-      host: host as unknown as AnyNode,
-      childKind: 'item',
-      childFootprint: { size: [0.2, 0.1, 0.2], rotationY: rotation[1], rotation },
-      hit: { point, normalWorldY: surface.normal[1] },
-      scene,
-    })!
-    expect(result).not.toBeNull()
-    expectVec(result.surfaceLocal!.position, local)
-    const child = ItemNode.parse({
-      asset: { ...asset, dimensions: [0.2, 0.1, 0.2] },
-      parentId: host.id,
-      position: result.surfaceLocal!.position,
-      rotation: result.surfaceLocal!.rotation,
-    })
-    const { attached, nodes } = attachedScene(host, child)
-    expect(() => validateProceduralRelations(attached, nodes)).not.toThrow()
-    const actual = nodeLevelFrame(child.id, nodes)
-    const expected = composeFrames(
-      frame(host.position, host.rotation),
-      frame([...result.position], rotation),
-    )
-    expectVec(actual.position, expected.position)
-    actual.axes.forEach((axis, i) => {
-      expectVec(axis, expected.axes[i]!)
-    })
-  })
+  ] as [number, number, number][])(
+    'full surface rotation %j composes through query.ts',
+    (rx, ry, rz) => {
+      const rotation: [number, number, number] = [rx, ry, rz]
+      const host = namedHost(rotation)
+      const surface = queryProceduralItem(host, {}).surfaces.find((s) => s.id === 'ledge')!
+      const local: [number, number, number] = [0.1, 0, 0.05]
+      const point = transformPoint(frame(surface.position, surface.rotation), local)
+      const result = resolveSurfacePlacement({
+        host: host as unknown as AnyNode,
+        childKind: 'item',
+        childFootprint: { size: [0.2, 0.1, 0.2], rotationY: rotation[1], rotation },
+        hit: { point, normalWorldY: surface.normal[1] },
+        scene,
+      })!
+      expect(result).not.toBeNull()
+      expectVec(result.surfaceLocal!.position, local)
+      const child = ItemNode.parse({
+        asset: { ...asset, dimensions: [0.2, 0.1, 0.2] },
+        parentId: host.id,
+        position: result.surfaceLocal!.position,
+        rotation: result.surfaceLocal!.rotation,
+      })
+      const { attached, nodes } = attachedScene(host, child)
+      expect(() => validateProceduralRelations(attached, nodes)).not.toThrow()
+      const actual = nodeLevelFrame(child.id, nodes)
+      const expected = composeFrames(
+        frame(host.position, host.rotation),
+        frame([...result.position], rotation),
+      )
+      expectVec(actual.position, expected.position)
+      actual.axes.forEach((axis, i) => {
+        expectVec(axis, expected.axes[i]!)
+      })
+    },
+  )
 
   test('full child rotation and off-centre bounds agree with attachmentBounds and validation', () => {
     const host = namedHost([0, 0, 0])

@@ -81,6 +81,19 @@ describe('roof fascia', () => {
     }
   })
 
+  test('a gable overhang stands the rake boards out at it, the eave boards where they were', () => {
+    const node = segment({ gableOverhang: 1.2 })
+    const rake = node.width / 2 + node.wallThickness / 2 + 1.2
+    for (const side of [1, -1] as const) {
+      const xs = boardPoints(node, 'x', side).map((v) => v.x * side)
+      expect(xs.length).toBeGreaterThan(0)
+      expect(Math.min(...xs)).toBeGreaterThan(rake - 0.01)
+      expect(Math.max(...xs)).toBeLessThan(rake + 0.03)
+    }
+    const ys = boardPoints(node, 'z', 1).map((v) => v.y)
+    expect(Math.max(...ys)).toBeCloseTo(eaveTopY(node), 3)
+  })
+
   test('a hip has boards on all four sides, level', () => {
     const node = segment({ roofType: 'hip' })
     for (const [axis, side] of [

@@ -12,8 +12,9 @@ import { targetBuilding } from './add-level'
 import { pointInPolygon, type Vec2 } from './plan-geometry'
 import type { AgentOperation, SceneNodes } from './types'
 
-type SiteInput = { building?: string }
-type PlaceBuildingInput = SiteInput & {
+type SiteInput = { building?: string; site?: string }
+type PlaceBuildingInput = {
+  building?: string
   outline?: number[][]
   yards?: Partial<Record<YardKey, number>>
   rotationDeg?: number
@@ -21,11 +22,37 @@ type PlaceBuildingInput = SiteInput & {
 
 const r2 = (n: number) => Math.round(n * 100) / 100 || 0
 
-/** `get_site`: the site a building stands on, in its level coordinates. */
+/**
+ * `get_site`: the site a building stands on, in its level coordinates; a lot no building stands
+ * on yet, in site coordinates.
+ */
 export const getSite: AgentOperation<SiteInput> = (nodes, input, context) => {
-  const building = targetBuilding(nodes, input.building, context)
-  const brief = siteBrief(nodes, { buildingId: building.id })
+  if (input.site) {
+    const site = nodes[input.site]
+    if (!site) refuse('site_not_found', `Site not found: ${input.site}.`, { siteId: input.site })
+    if (site.type !== 'site')
+      refuse('not_a_site', `Node ${input.site} is a ${site.type}, not a site.`, {
+        siteId: input.site,
+        type: site.type,
+      })
+  }
+  const anyBuilding = Object.values(nodes).some((node) => node.type === 'building')
+  const building =
+    input.building || (anyBuilding && !input.site)
+      ? targetBuilding(nodes, input.building, context)
+      : null
+  // a site named alone is read for the building viewed when it stands there
+  const brief = siteBrief(
+    nodes,
+    building ? { buildingId: building.id } : { siteId: input.site, levelId: context.activeLevelId },
+  )
   if (!brief) refuse('no_site', 'The scene has no site with a lot: add_level starts one.')
+  if (input.site && brief.siteId !== input.site)
+    refuse(
+      'building_not_on_site',
+      `${building?.id} stands on ${brief.siteId}, not on ${input.site}: name one or the other.`,
+      { buildingId: building?.id, siteId: input.site },
+    )
   return { result: { ...roundedSiteBrief(brief), summary: describeSiteBrief(brief) } }
 }
 

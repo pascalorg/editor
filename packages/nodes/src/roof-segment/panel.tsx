@@ -5,6 +5,8 @@ import {
   type AnyNodeId,
   createDefaultRidgeVentsForSegment,
   getConicalRoofCoverage,
+  getRoofSegmentDeckReach,
+  getSegmentSlopeFrame,
   isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
@@ -14,6 +16,7 @@ import {
   type RoofSegmentNode,
   type RoofSegmentTrim,
   type RoofType,
+  roofTypeHasRakes,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -33,6 +36,7 @@ import { Check, Copy, Move, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { BarrelRoofPanel } from '../roof/barrel-panel'
 import { RoofGlazingPanel } from '../roof/glazing-panel'
+import { commitSeatedRoofEdit } from '../roof/roof-level-target'
 
 const ROOF_TYPE_OPTIONS: { label: string; value: RoofType }[] = [
   { label: 'Hip', value: 'hip' },
@@ -128,9 +132,13 @@ export default function RoofSegmentPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<RoofSegmentNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
+      // Reshaped or moved onto the walls that carry it, its roof goes to the level above them.
+      commitSeatedRoofEdit(
+        [{ id: selectedId as AnyNodeId, data: updates }],
+        selectedId as AnyNodeId,
+      )
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleRoofTypeChange = useCallback(
@@ -299,6 +307,10 @@ export default function RoofSegmentPanel() {
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
   const managedLeanToRoofSegment = isManagedLeanToRoofSegment(node.metadata)
   const conicalCoverage = getConicalRoofCoverage(node)
+  // both overhangs in plan, past the walls' outside faces; the node keeps the eaves' along the slope
+  const reach = getRoofSegmentDeckReach(node)
+  const halfWall = node.wallThickness / 2
+  const { cosTheta } = getSegmentSlopeFrame(node)
 
   return (
     <PanelWrapper
@@ -622,16 +634,41 @@ export default function RoofSegmentPanel() {
             value={node.deckThickness}
           />
         )}
-        <SliderControl
-          label="Overhang"
-          max={1}
-          min={0}
-          onChange={(v) => handleUpdate({ overhang: v })}
-          precision={2}
-          step={0.05}
-          unit="m"
-          value={node.overhang}
-        />
+        {node.roofType === 'barrel' ? (
+          <SliderControl
+            label="End overhang"
+            max={1}
+            min={0}
+            onChange={(v) => handleUpdate({ overhang: v })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={reach.x - halfWall}
+          />
+        ) : (
+          <SliderControl
+            label="Eave overhang"
+            max={1}
+            min={0}
+            onChange={(v) => handleUpdate({ overhang: v / cosTheta })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={reach.z - halfWall}
+          />
+        )}
+        {roofTypeHasRakes(node.roofType) && (
+          <SliderControl
+            label="Gable overhang"
+            max={3}
+            min={0}
+            onChange={(v) => handleUpdate({ gableOverhang: v })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={reach.x - halfWall}
+          />
+        )}
         {!isGlazedRoofSegment(node) && (
           <SliderControl
             label="Shingle Thick."

@@ -20,115 +20,41 @@ const rect = (x0: number, z0: number, x1: number, z1: number): [number, number][
   [x0, z1],
 ]
 
-test.each([
-  false,
-  true,
-])('a live opening cuts both surfaces and undoes (paused: %s)', async (paused) => {
-  const frames = {
-    requestAnimationFrame: globalThis.requestAnimationFrame,
-    cancelAnimationFrame: globalThis.cancelAnimationFrame,
-  }
-  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-    callback(0)
-    return 1
-  }) as typeof requestAnimationFrame
-  globalThis.cancelAnimationFrame = () => {}
-  const building = BuildingNode.parse({
-    id: 'building_live_opening',
-    children: ['level_live_0', 'level_live_1'],
-  })
-  const ground = LevelNode.parse({ id: 'level_live_0', parentId: building.id, level: 0 })
-  const upper = LevelNode.parse({ id: 'level_live_1', parentId: building.id, level: 1 })
-  useScene.setState({
-    nodes: { [building.id]: building, [ground.id]: ground, [upper.id]: upper },
-    rootNodeIds: [building.id],
-    dirtyNodes: new Set(),
-    materials: {},
-    collections: {},
-    readOnly: false,
-  })
-  clearSceneHistory()
-  const stop = initSpaceDetectionSync(useScene, {
-    getState: () => ({ spaces: {}, setSpaces: () => {} }),
-  })
-  const solid = (levelId: string, type: 'slab' | 'ceiling') =>
-    Object.values(useScene.getState().nodes)
-      .filter((node) => node.parentId === levelId && node.type === type && node.boundary === 'auto')
-      .reduce(
-        (sum, node) =>
-          sum +
-          area(
-            difference(node.polygon, union(node.holes.map((hole) => ({ outer: hole, holes: [] })))),
-          ),
-        0,
-      )
-  try {
-    let upperRoomId = ''
-    for (const levelId of [ground.id, upper.id]) {
-      const plan = createZone(useScene.getState().nodes, {
-        levelId,
-        polygon: rect(0, 0, 8, 5),
-        enclose: true,
-        mintId: generateId,
-        name: 'Room',
-      })
-      useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
-      if (levelId === upper.id) upperRoomId = plan.zoneId
+test.each([false, true])(
+  'a live opening cuts both surfaces and undoes (paused: %s)',
+  async (paused) => {
+    const frames = {
+      requestAnimationFrame: globalThis.requestAnimationFrame,
+      cancelAnimationFrame: globalThis.cancelAnimationFrame,
     }
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    }) as typeof requestAnimationFrame
+    globalThis.cancelAnimationFrame = () => {}
+    const building = BuildingNode.parse({
+      id: 'building_live_opening',
+      children: ['level_live_0', 'level_live_1'],
+    })
+    const ground = LevelNode.parse({ id: 'level_live_0', parentId: building.id, level: 0 })
+    const upper = LevelNode.parse({ id: 'level_live_1', parentId: building.id, level: 1 })
+    useScene.setState({
+      nodes: { [building.id]: building, [ground.id]: ground, [upper.id]: upper },
+      rootNodeIds: [building.id],
+      dirtyNodes: new Set(),
+      materials: {},
+      collections: {},
+      readOnly: false,
+    })
     clearSceneHistory()
-    const beforePlate = solid(upper.id, 'slab')
-    const beforeCeiling = solid(ground.id, 'ceiling')
-    const plan = cutFloorOpening(useScene.getState().nodes, {
-      zoneId: upperRoomId,
-      polygon: rect(2, 1, 4, 2),
-      mintId: () => 'floor-opening_live_cut',
+    const stop = initSpaceDetectionSync(useScene, {
+      getState: () => ({ spaces: {}, setSpaces: () => {} }),
     })
-    expect(
-      plan.changes.some(
-        (change) => change.op === 'update' && useScene.getState().nodes[change.id]?.type === 'slab',
-      ),
-    ).toBe(false)
-    if (paused) pauseSpaceDetection()
-    useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
-    if (paused) resumeSpaceDetection()
-    expect(beforePlate - solid(upper.id, 'slab')).toBeCloseTo(2)
-    expect(beforeCeiling - solid(ground.id, 'ceiling')).toBeCloseTo(2)
-
-    useScene.temporal.getState().undo()
-    await Promise.resolve()
-    expect(solid(upper.id, 'slab')).toBeCloseTo(beforePlate)
-    expect(solid(ground.id, 'ceiling')).toBeCloseTo(beforeCeiling)
-    useScene.temporal.getState().redo()
-    await Promise.resolve()
-    expect(beforePlate - solid(upper.id, 'slab')).toBeCloseTo(2)
-    expect(beforeCeiling - solid(ground.id, 'ceiling')).toBeCloseTo(2)
-
-    if (paused) pauseSpaceDetection()
-    useScene
-      .getState()
-      .updateNodes([{ id: 'floor-opening_live_cut', data: { polygon: rect(2, 1, 5, 2) } }])
-    if (paused) resumeSpaceDetection()
-    expect(beforePlate - solid(upper.id, 'slab')).toBeCloseTo(3)
-    expect(beforeCeiling - solid(ground.id, 'ceiling')).toBeCloseTo(3)
-
-    const removal = removeFloorOpening(useScene.getState().nodes, 'floor-opening_live_cut')
-    if (paused) pauseSpaceDetection()
-    useScene.getState().applyNodeChanges(structureChangeBatch(removal.changes))
-    if (paused) resumeSpaceDetection()
-    expect(solid(upper.id, 'slab')).toBeCloseTo(beforePlate)
-    expect(solid(ground.id, 'ceiling')).toBeCloseTo(beforeCeiling)
-
-    const mezzanine = createMezzanine(useScene.getState().nodes, {
-      hostZoneId: upperRoomId,
-      polygon: rect(1, 1, 7, 4),
-      elevation: 1.5,
-      mintId: generateId,
-    })
-    expect(mezzanine.conflicts).toBeUndefined()
-    useScene.getState().applyNodeChanges(structureChangeBatch(mezzanine.changes))
-    const mezzArea = () =>
+    const solid = (levelId: string, type: 'slab' | 'ceiling') =>
       Object.values(useScene.getState().nodes)
-        .filter((node) => node.type === 'slab' && node.zoneIds?.includes(mezzanine.zoneId))
+        .filter(
+          (node) => node.parentId === levelId && node.type === type && node.boundary === 'auto',
+        )
         .reduce(
           (sum, node) =>
             sum +
@@ -140,24 +66,104 @@ test.each([
             ),
           0,
         )
-    const beforeMezz = mezzArea()
-    const hatch = cutFloorOpening(useScene.getState().nodes, {
-      zoneId: mezzanine.zoneId,
-      polygon: rect(2, 1.5, 4, 2.5),
-      mintId: () => 'floor-opening_live_hatch',
-    })
-    if (paused) pauseSpaceDetection()
-    useScene.getState().applyNodeChanges(structureChangeBatch(hatch.changes))
-    if (paused) resumeSpaceDetection()
-    expect(beforeMezz - mezzArea()).toBeCloseTo(2)
-    expect(solid(upper.id, 'slab') - mezzArea()).toBeCloseTo(beforePlate)
-  } finally {
-    if (paused) resumeSpaceDetection()
-    stop()
-    clearSceneHistory()
-    Object.assign(globalThis, frames)
-  }
-})
+    try {
+      let upperRoomId = ''
+      for (const levelId of [ground.id, upper.id]) {
+        const plan = createZone(useScene.getState().nodes, {
+          levelId,
+          polygon: rect(0, 0, 8, 5),
+          enclose: true,
+          mintId: generateId,
+          name: 'Room',
+        })
+        useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
+        if (levelId === upper.id) upperRoomId = plan.zoneId
+      }
+      clearSceneHistory()
+      const beforePlate = solid(upper.id, 'slab')
+      const beforeCeiling = solid(ground.id, 'ceiling')
+      const plan = cutFloorOpening(useScene.getState().nodes, {
+        zoneId: upperRoomId,
+        polygon: rect(2, 1, 4, 2),
+        mintId: () => 'floor-opening_live_cut',
+      })
+      expect(
+        plan.changes.some(
+          (change) =>
+            change.op === 'update' && useScene.getState().nodes[change.id]?.type === 'slab',
+        ),
+      ).toBe(false)
+      if (paused) pauseSpaceDetection()
+      useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
+      if (paused) resumeSpaceDetection()
+      expect(beforePlate - solid(upper.id, 'slab')).toBeCloseTo(2)
+      expect(beforeCeiling - solid(ground.id, 'ceiling')).toBeCloseTo(2)
+
+      useScene.temporal.getState().undo()
+      await Promise.resolve()
+      expect(solid(upper.id, 'slab')).toBeCloseTo(beforePlate)
+      expect(solid(ground.id, 'ceiling')).toBeCloseTo(beforeCeiling)
+      useScene.temporal.getState().redo()
+      await Promise.resolve()
+      expect(beforePlate - solid(upper.id, 'slab')).toBeCloseTo(2)
+      expect(beforeCeiling - solid(ground.id, 'ceiling')).toBeCloseTo(2)
+
+      if (paused) pauseSpaceDetection()
+      useScene
+        .getState()
+        .updateNodes([{ id: 'floor-opening_live_cut', data: { polygon: rect(2, 1, 5, 2) } }])
+      if (paused) resumeSpaceDetection()
+      expect(beforePlate - solid(upper.id, 'slab')).toBeCloseTo(3)
+      expect(beforeCeiling - solid(ground.id, 'ceiling')).toBeCloseTo(3)
+
+      const removal = removeFloorOpening(useScene.getState().nodes, 'floor-opening_live_cut')
+      if (paused) pauseSpaceDetection()
+      useScene.getState().applyNodeChanges(structureChangeBatch(removal.changes))
+      if (paused) resumeSpaceDetection()
+      expect(solid(upper.id, 'slab')).toBeCloseTo(beforePlate)
+      expect(solid(ground.id, 'ceiling')).toBeCloseTo(beforeCeiling)
+
+      const mezzanine = createMezzanine(useScene.getState().nodes, {
+        hostZoneId: upperRoomId,
+        polygon: rect(1, 1, 7, 4),
+        elevation: 1.5,
+        mintId: generateId,
+      })
+      expect(mezzanine.conflicts).toBeUndefined()
+      useScene.getState().applyNodeChanges(structureChangeBatch(mezzanine.changes))
+      const mezzArea = () =>
+        Object.values(useScene.getState().nodes)
+          .filter((node) => node.type === 'slab' && node.zoneIds?.includes(mezzanine.zoneId))
+          .reduce(
+            (sum, node) =>
+              sum +
+              area(
+                difference(
+                  node.polygon,
+                  union(node.holes.map((hole) => ({ outer: hole, holes: [] }))),
+                ),
+              ),
+            0,
+          )
+      const beforeMezz = mezzArea()
+      const hatch = cutFloorOpening(useScene.getState().nodes, {
+        zoneId: mezzanine.zoneId,
+        polygon: rect(2, 1.5, 4, 2.5),
+        mintId: () => 'floor-opening_live_hatch',
+      })
+      if (paused) pauseSpaceDetection()
+      useScene.getState().applyNodeChanges(structureChangeBatch(hatch.changes))
+      if (paused) resumeSpaceDetection()
+      expect(beforeMezz - mezzArea()).toBeCloseTo(2)
+      expect(solid(upper.id, 'slab') - mezzArea()).toBeCloseTo(beforePlate)
+    } finally {
+      if (paused) resumeSpaceDetection()
+      stop()
+      clearSceneHistory()
+      Object.assign(globalThis, frames)
+    }
+  },
+)
 
 test('stair edits own the live floor and ceiling cuts in one undo step', async () => {
   const previousFrame = globalThis.requestAnimationFrame

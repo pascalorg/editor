@@ -1,8 +1,35 @@
 import { z } from 'zod'
+import { CurtainGrid } from '../schema/nodes/curtain-wall'
 import { RoofGlazing, RoofSystemType } from '../schema/nodes/roof-glazing-config'
 import { RoofType } from '../schema/nodes/roof-types'
-import { measurement } from './measurement'
+import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
+
+const glazingGrid = CurtainGrid.partial().extend({
+  spacing: measurement('length', 'm', {
+    min: 0.2,
+    max: 100,
+    description: 'Bar spacing, for the maximum-spacing and fixed-spacing layouts.',
+  }).optional(),
+})
+
+/** A roof's glazing as the node stores it, its lengths read in any unit. */
+const RoofGlazingInput = RoofGlazing.partial().extend({
+  across: glazingGrid.optional(),
+  along: glazingGrid.optional(),
+  frameWidth: measurement('length', 'm', {
+    positive: true,
+    description: 'Frame bar width.',
+  }).optional(),
+  frameDepth: measurement('length', 'm', {
+    positive: true,
+    description: 'Frame bar depth.',
+  }).optional(),
+  glassThickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Glass pane thickness.',
+  }).optional(),
+})
 
 export const createRoofTool = {
   name: 'create_roof',
@@ -11,7 +38,7 @@ export const createRoofTool = {
     "Cap a storey with a roof over its footprint (its walls' outline, else its floor plates, else its rooms), swept in the building's own axes into rectangles, one roof segment each. Without a roofType: a gable for one rectangle, hips for a few wings, flat for a large block. The roof goes on the building's roof level above the top storey (the empty level directly above when it is the only one; made, named Roof, when there is none), and stands on the storey's wall tops, so exploded and solo level views lift it off the plan. Glazed construction supports gable, straight shed and barrel. Barrel depth is the span; barrelRise is at most half the span. glazing controls frame, glass, grids and panels. Paint glazing-frame, glazing-glass or glazing-solid. Call it once the storeys and their exterior walls stand. Refused with a code: storey_above (another storey stands above: a roof caps the top one; a lower wing's roof is drawn with the Roof tool), building_required (no level named on a site of several buildings: pass a level of the one to roof), roof_exists (the storey already has a roof: edit it, or delete_node it first when the person asked for a new one), no_rooms (no rooms or closed walls on any level of the building: pass width and depth to roof a rectangle of your own).",
   input: {
     roofSystem: RoofSystemType.default('standard'),
-    glazing: RoofGlazing.optional(),
+    glazing: RoofGlazingInput.optional(),
     barrelRise: measurement('length', 'm', {
       positive: true,
       description: 'Barrel arch rise, at most half each segment span.',
@@ -28,7 +55,7 @@ export const createRoofTool = {
     roofType: RoofType.optional().describe(
       'The shape of every segment. Default: chosen from the footprint.',
     ),
-    pitch: measurement('angle', 'deg', {
+    pitch: roofPitch('deg', {
       min: 0,
       max: 85,
       description: 'Slope of the roof planes (default 40°).',
@@ -36,7 +63,7 @@ export const createRoofTool = {
     overhang: measurement('length', 'm', {
       min: 0,
       description:
-        'Eave overhang: how far the roof reaches past the walls. Read it from the photo: a deep modern overhang is 1–2 m. Default 0.3.',
+        'Eave overhang: how far the eaves reach past the walls in plan (a segment stores it along its slope). Read it from the photo: a deep modern overhang is 1–2 m. Default 0.3.',
     }).optional(),
     wallHeight: measurement('length', 'm', {
       min: 0,

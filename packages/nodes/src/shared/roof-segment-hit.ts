@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  getRoofSegmentDeckReach,
   getRoofSegmentSurfaceY,
   glazedRoofSupportsPoint,
   isGlazedRoofSegment,
@@ -66,9 +67,9 @@ export function resolveRoofSegmentHit(
 
     if (!firstSegment && !isGlazedRoofSegment(seg)) firstSegment = { seg, segObj }
 
-    const overhang = seg.overhang ?? 0
-    const halfW = seg.width / 2 + overhang
-    const halfD = seg.depth / 2 + overhang
+    const reach = getRoofSegmentDeckReach(seg)
+    const halfW = seg.width / 2 + reach.x
+    const halfD = seg.depth / 2 + reach.z
     if (isGlazedRoofSegment(seg) && !glazedRoofSupportsPoint(seg, local.x, local.z)) continue
     if (Math.abs(local.x) <= halfW && Math.abs(local.z) <= halfD) {
       const surfaceY = getRoofSegmentSurfaceY(seg, local.x, local.z)

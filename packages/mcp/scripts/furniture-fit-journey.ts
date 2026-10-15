@@ -436,13 +436,11 @@ async function main() {
     'packages/mcp/src/tools/annotations.ts',
     'packages/mcp/src/tools/check-collisions.ts',
     'packages/mcp/src/tools/export-json.ts',
-    'packages/mcp/src/tools/find-nodes.ts',
     'packages/mcp/src/tools/shared-tools.ts',
     'packages/mcp/src/tools/get-scene.ts',
     'packages/mcp/src/tools/measure.ts',
     'packages/mcp/src/tools/export-glb.ts',
     'packages/mcp/src/tools/scene-lifecycle/list-scenes.ts',
-    'packages/mcp/src/tools/validate-scene.ts',
     'packages/mcp/scripts/furniture-fit-journey.ts',
   ]
   const implementationHash = createHash('sha256')
@@ -456,17 +454,12 @@ async function main() {
     'packages/mcp/dist/bin/pascal-mcp.js',
     'packages/mcp/dist/tools/annotations.js',
     'packages/mcp/dist/tools/check-collisions.js',
-    'packages/mcp/dist/tools/door-clearance.js',
     'packages/mcp/dist/tools/export-json.js',
-    'packages/mcp/dist/tools/find-nodes.js',
-    'packages/mcp/dist/tools/get-node.js',
     'packages/mcp/dist/tools/get-scene.js',
-    'packages/mcp/dist/tools/layout-clearance.js',
     'packages/mcp/dist/tools/measure.js',
     'packages/mcp/dist/tools/export-glb.js',
     'packages/mcp/dist/tools/scene-lifecycle/list-scenes.js',
-    'packages/mcp/dist/tools/scene-query.js',
-    'packages/mcp/dist/tools/validate-scene.js',
+    'packages/mcp/dist/tools/shared-tools.js',
   ]
   const compiledHash = createHash('sha256')
   for (const path of compiledFiles) {

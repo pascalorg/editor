@@ -25,11 +25,17 @@ describe('shared tools over MCP', () => {
   let client: Client
   // The host's library for the case at hand: its own, else the server's built-in list.
   let catalog: AssetCatalog = builtInCatalog
+  // The floor the host's person views for the case at hand; none, as on the remote MCP.
+  let viewed: string | null = null
 
   beforeEach(async () => {
     bridge = new SceneBridge()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerSharedTools(server, bridge, () => catalog())
+    registerSharedTools(
+      server,
+      createSceneOperations({ bridge, activeLevelId: () => viewed }),
+      () => catalog(),
+    )
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -43,6 +49,7 @@ describe('shared tools over MCP', () => {
       bridge.setScene(nodes as never, rootNodeIds as never)
       const own = c.context?.catalog
       catalog = own ? async () => own : builtInCatalog
+      viewed = c.context?.activeLevelId ?? null
       const result = (await client.callTool({ name: c.tool, arguments: c.input })) as Result
       const payload = JSON.parse(result.content[0]!.text) as Record<string, unknown>
       if ('refusal' in c.expect) {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { PerspectiveCamera, Vector3 } from 'three'
-import { isAgentRefusal } from '../agent-tools'
+import { z } from 'zod'
+import { isAgentRefusal, viewSceneTool } from '../agent-tools'
 import {
   type AnyNode,
   BuildingNode,
@@ -19,6 +20,7 @@ import {
   WallNode,
   WindowNode,
 } from '../schema'
+import { VIEW_SCENE_CASES, viewSceneCaseProblems } from './__fixtures__/view-scene-cases'
 import {
   photoCropSize,
   type SceneViewBox,
@@ -783,9 +785,13 @@ describe('a close-up of a roof', () => {
     expect([r(box.max[0] - box.min[0]), r(box.max[2] - box.min[2])]).toEqual([8, 10])
   })
 
-  test('the building still frames its walls', () => {
-    const box = sceneViewBounds(hipHouse(), 'building_main')
-    expect([r(box.min[1]), r(box.max[1])]).toEqual([0, 2.45])
+  test('the building frames its walls and the roof on its roof level, up to the peak', () => {
+    for (const target of ['building_main', undefined]) {
+      const box = sceneViewBounds(hipHouse(), target)
+      // The 2.45 m storey, then the 22.5° hip rising 4 tan(22.5°) m over its 4 m half-span.
+      expect([r(box.min[1]), r(box.max[1])]).toEqual([0, r(2.45 + 4 * Math.tan(Math.PI / 8))])
+      expect([r(box.min[0]), r(box.max[0]), r(box.min[2]), r(box.max[2])]).toEqual([0, 10, 0, 8])
+    }
   })
 
   test('the picture is taken from outside the roof, centred on it', () => {
@@ -877,4 +883,24 @@ describe('which way an opening faces', () => {
     expect(sceneViewFacing(facadeScene('back'), 'item_lamp')).toBeNull()
     expect(sceneViewFacing(facadeScene('back'), 'nothing_here')).toBeNull()
   })
+})
+
+// The case table of view_scene (__fixtures__/view-scene-cases.ts), as core plans it: the MCP and the
+// chat run the same table through their own runners.
+describe('the case table', () => {
+  const contract = z.object(viewSceneTool.input)
+  for (const c of VIEW_SCENE_CASES) {
+    if (c.surfaces && !c.surfaces.includes('core')) continue
+    test(c.name, () => {
+      // What the contract's schema refuses never reaches the planner, on any surface.
+      const valid = contract.safeParse(c.input).success
+      const plan = () => sceneViewPlan(c.scene(), c.input, { currentCamera: c.currentCamera })
+      if ('refusal' in c.expect)
+        expect(valid ? refusalOf(plan) : 'invalid_input').toBe(c.expect.refusal)
+      else {
+        expect(valid).toBe(true)
+        expect(viewSceneCaseProblems(c, plan())).toEqual([])
+      }
+    })
+  }
 })

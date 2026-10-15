@@ -109,11 +109,10 @@ describe('standalone history source invalidation', () => {
     `)
   })
 
-  test.each([
-    true,
-    false,
-  ])('discarded preview neighbours rebuild after undo/redo (joined: %s)', (joined) => {
-    runSourceHistoryTest(`
+  test.each([true, false])(
+    'discarded preview neighbours rebuild after undo/redo (joined: %s)',
+    (joined) => {
+      runSourceHistoryTest(`
       const react = await importShared('react')
       mockShared('react', () => ({ ...react, useEffect: () => {} }))
       const frames = []
@@ -152,7 +151,8 @@ describe('standalone history source invalidation', () => {
         assert.deepEqual(Array.from(b.geometry.getAttribute('position').array), canonical)
       }
     `)
-  })
+    },
+  )
 
   test('opening reparent dirties old and new walls on undo and redo', () => {
     runSourceHistoryTest(`

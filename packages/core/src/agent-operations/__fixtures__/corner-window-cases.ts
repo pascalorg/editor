@@ -132,8 +132,7 @@ export const CORNER_WINDOW_CASES: AgentToolCase[] = [
     name: 'on a two-storey house, with no level named, the corner of the floor in view',
     tool: 'add_corner_window',
     scene: stackedScene,
-    // The MCP has no floor in view.
-    surfaces: ['core'],
+    surfaces: ['core', 'mcp'],
     context: { activeLevelId: 'level_u' },
     input: { corner: [0, 0], width: 1.2 },
     expect: { result: { ok: true, wallIds: ['wall_ca_up', 'wall_cb_up'] } },

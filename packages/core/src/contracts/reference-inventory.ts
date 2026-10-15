@@ -896,7 +896,7 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
   }),
   meta('sourceIds[]', {
     ...policy('source', 'content', 'freeze', 'strip'),
-    note: 'Import provenance: the source element ids an importer recorded (the /next converter writes them); find_nodes filters on them.',
+    note: 'Import provenance: the source element ids an importer recorded (the /next converter writes them); find_by_type filters on them.',
   }),
   meta('balcony.id', {
     ...policy('node', 'internal', 'drop', 'strip'),
@@ -960,6 +960,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ]),
   ...described('The owner pose an owned floor opening last followed: values, not ids.', [
     'ownerPose',
+    'ownerPose.footprint',
     'ownerPose.position',
     'ownerPose.rotation',
     'ownerPose.runLength',

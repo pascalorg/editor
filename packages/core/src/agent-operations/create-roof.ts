@@ -5,6 +5,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   getActiveRoofHeight,
+  getSegmentSlopeFrame,
   type RoofGlazing,
   RoofNode,
   RoofSegmentNode,
@@ -328,7 +329,7 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
       input.barrelRise > size.depth / 2
     )
       refuse('invalid_barrel_rise', 'Barrel rise must not exceed half the span.')
-    return RoofSegmentNode.parse({
+    const segment = RoofSegmentNode.parse({
       roofSystem: input.roofSystem,
       glazing: input.glazing,
       barrelRise: input.barrelRise,
@@ -342,6 +343,11 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
       ...(input.overhang !== undefined && { overhang: input.overhang }),
       ...fasciaFields({ ...input, fasciaMaterialPreset }),
     })
+    // The overhang is asked as the eaves' reach past the walls, in plan, as a builder says it and
+    // Architect's roofs take it; the segment stores it along the slope.
+    // A barrel's overhang is at its ends, already in plan.
+    if (roofType === 'barrel') return segment
+    return { ...segment, overhang: segment.overhang / getSegmentSlopeFrame(segment).cosTheta }
   })
 
   const peak = Math.max(...segments.map((segment) => getActiveRoofHeight(segment)))

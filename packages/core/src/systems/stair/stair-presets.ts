@@ -15,7 +15,15 @@ export type StairPresetOptions = {
   innerGap?: number
   walkingLineOffset?: number
   division?: 'equal-going' | 'equal-angle'
+  /** Risers in all; else from the rise and the stair's design targets. */
+  stepCount?: number
+  /** The flights' run, landings and winders aside; else the risers times the target going. */
+  runLength?: number
+  /** L and U: the first flight's risers; else half the flights' risers, rounded up. */
+  lowerStepCount?: number
 }
+
+const A_LAYOUT = { straight: 'A straight', l: 'An L', u: 'A U' } as const
 
 /** Proposes a replacement chain, retaining flight/landing identities and finishes by role. */
 export function planStairPreset(
@@ -34,10 +42,16 @@ export function planStairPreset(
   const flights = old.filter((node) => node.segmentType === 'stair' && !node.winder)
   const landings = old.filter((node) => node.segmentType === 'landing')
   const turn = options.turn ?? 'left'
+  const fewest = options.layout === 'straight' ? 2 : 4
+  if (options.stepCount !== undefined && options.stepCount < fewest)
+    throw new RangeError(`${A_LAYOUT[options.layout]} stair needs at least ${fewest} risers`)
   let rise = resolveStairTotalRise(original, nodes)
   for (let iteration = 0; iteration < 16; iteration++) {
-    const sizing = planStairSizing(rise, { targets: original.designTargets })
-    const count = Math.max(options.layout === 'straight' ? 2 : 4, sizing.stepCount)
+    const sizing = planStairSizing(rise, {
+      targets: original.designTargets,
+      stepCount: options.stepCount,
+    })
+    const count = Math.max(fewest, sizing.stepCount)
     const winding = options.turningStrategy === 'winder' && options.layout !== 'straight'
     const quarterCount = options.layout === 'u' ? 2 : 1
     const walkingLineOffset = options.walkingLineOffset ?? width / 2
@@ -49,13 +63,14 @@ export function planStairPreset(
     const winderCount = Math.max(1, Math.round((2 * (innerGap + walkingLineOffset)) / sizing.going))
     if (winding && quarterCount * winderCount > count - 2)
       throw new RangeError('The selected winder gap needs more risers than this stair permits')
-    const counts =
-      options.layout === 'straight'
-        ? [count]
-        : [
-            Math.ceil((count - (winding ? quarterCount * winderCount : 0)) / 2),
-            Math.floor((count - (winding ? quarterCount * winderCount : 0)) / 2),
-          ]
+    const flightRisers = count - (winding ? quarterCount * winderCount : 0)
+    const lower = options.lowerStepCount ?? Math.ceil(flightRisers / 2)
+    if (options.layout !== 'straight' && !(lower >= 1 && lower < flightRisers))
+      throw new RangeError(
+        `The first flight takes 1 to ${flightRisers - 1} of the ${flightRisers} flight risers`,
+      )
+    const counts = options.layout === 'straight' ? [count] : [lower, flightRisers - lower]
+    const going = options.runLength === undefined ? sizing.going : options.runLength / flightRisers
     let flightIndex = 0
     let landingIndex = 0
     const make = (segmentType: 'stair' | 'landing', attachmentSide: Segment['attachmentSide']) => {
@@ -72,7 +87,7 @@ export function planStairPreset(
         rotation: 0,
         attachmentSide,
         width,
-        length: segmentType === 'stair' ? stepCount * sizing.going : landingDepth,
+        length: segmentType === 'stair' ? stepCount * going : landingDepth,
         height: segmentType === 'stair' ? (rise * stepCount) / count : 0,
         stepCount,
         fillToFloor: prior?.fillToFloor ?? original.fillToFloor,

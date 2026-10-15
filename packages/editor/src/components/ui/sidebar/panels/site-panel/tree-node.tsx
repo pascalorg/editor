@@ -283,14 +283,15 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             />
           )}
 
-          <button
-            className="z-10 flex h-4 w-4 shrink-0 items-center justify-center bg-inherit"
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggle()
-            }}
-          >
-            {hasChildren ? (
+          {/* A row with nothing to fold keeps the space, and a click there selects the row. */}
+          {hasChildren ? (
+            <button
+              className="z-10 flex h-4 w-4 shrink-0 items-center justify-center bg-inherit"
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggle()
+              }}
+            >
               <motion.div
                 animate={{ rotate: expanded ? 90 : 0 }}
                 initial={false}
@@ -298,8 +299,10 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
               >
                 <ChevronRight className="h-3 w-3" />
               </motion.div>
-            ) : null}
-          </button>
+            </button>
+          ) : (
+            <span className="h-4 w-4 shrink-0" />
+          )}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span
               className={cn(
