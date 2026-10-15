@@ -193,14 +193,14 @@ more windows on the east façade.
 ### 6. Validate and report
 
 ```jsonc
-// tool: validate_scene
-{ "name": "validate_scene", "arguments": {} }
+// tool: verify_scene
+{ "name": "verify_scene", "arguments": {} }
 ```
 
 Response:
 
 ```jsonc
-{ "valid": true, "errors": [] }
+{ "valid": true, "issues": [], "hasIssues": false, … }
 ```
 
 The agent then reads the scene summary for its response to the user:
@@ -235,6 +235,6 @@ Zustand store, the user can `undo` the change if they dislike it:
 - Mutations batch inside a single `apply_patch` so that `undo` rolls back
   the whole logical change.
 - Zones are not walls — they're polygon annotations that make later queries
-  (`find_nodes({ zoneId })`) and planning steps much easier for the agent.
+  (`find_by_type({ zoneId })`) and planning steps much easier for the agent.
 - The agent never needs to speak to `@pascal-app/viewer`: everything the
   host sees flows through tools + resources + prompts.

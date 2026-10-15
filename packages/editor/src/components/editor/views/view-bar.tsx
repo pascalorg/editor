@@ -1,7 +1,7 @@
 'use client'
 
-import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff } from 'lucide-react'
-import { type ReactNode, useEffect } from 'react'
+import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff, X } from 'lucide-react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { type EditorViewDescriptor, isSceneView, isViewPinned } from '../../../lib/editor-views'
 import { cn } from '../../../lib/utils'
@@ -35,22 +35,92 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
   const pinnedViews = useEditor((s) => s.pinnedViews)
   const current = layout.panes[pane]
   const tabs = views.filter((view) => view.id === current || isViewPinned(view, pinnedViews))
+  const activeIndex = tabs.findIndex((view) => view.id === current)
+  const tabList = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const list = tabList.current
+    const tab = list?.children.item(activeIndex)
+    if (!list || !(tab instanceof HTMLElement)) return
+    const reveal = () => {
+      const bounds = list.getBoundingClientRect()
+      const target = tab.getBoundingClientRect()
+      if (target.right > bounds.right) list.scrollLeft += target.right - bounds.right
+      else if (target.left < bounds.left) list.scrollLeft -= bounds.left - target.left
+    }
+    reveal()
+    const observer = new ResizeObserver(reveal)
+    observer.observe(list)
+    observer.observe(tab)
+    return () => observer.disconnect()
+  }, [activeIndex])
 
   return (
-    <div className={cn(GROUP, className)} role="tablist">
-      {tabs.map((view) => (
-        <button
-          aria-selected={view.id === current}
-          className={cn(SEGMENT, view.id === current ? ACTIVE : IDLE)}
-          key={view.id}
-          onClick={() => useEditor.getState().setPaneView(pane, view.id)}
-          role="tab"
-          type="button"
-        >
-          <IconRefGlyph icon={view.icon} size={14} />
-          <span>{view.label}</span>
-        </button>
-      ))}
+    <div className={cn(GROUP, 'min-w-0 shrink', className)}>
+      <div
+        aria-label={`Pane ${pane + 1} views`}
+        className="flex min-w-0 overflow-x-auto [scrollbar-width:none]"
+        role="tablist"
+        ref={tabList}
+      >
+        {tabs.map((view) => (
+          <div
+            className={cn('group flex shrink-0 items-center', view.id === current ? ACTIVE : IDLE)}
+            key={view.id}
+          >
+            <button
+              aria-selected={view.id === current}
+              className={cn(
+                SEGMENT,
+                'outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                view.onClose && 'pr-1',
+              )}
+              onClick={() => useEditor.getState().setPaneView(pane, view.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Delete' && view.onClose) {
+                  event.preventDefault()
+                  view.onClose()
+                  return
+                }
+                const offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+                if (!offset && event.key !== 'Home' && event.key !== 'End') return
+                event.preventDefault()
+                const index = tabs.indexOf(view)
+                const target =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? tabs.length - 1
+                      : (index + offset + tabs.length) % tabs.length
+                const next = tabs[target]
+                if (next) {
+                  useEditor.getState().setPaneView(pane, next.id)
+                  const buttons = event.currentTarget
+                    .closest('[role="tablist"]')
+                    ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+                  buttons?.[target]?.focus()
+                }
+              }}
+              tabIndex={view.id === current ? 0 : -1}
+              title={view.label}
+              role="tab"
+              type="button"
+            >
+              <IconRefGlyph icon={view.icon} size={14} />
+              <span className="max-w-36 truncate">{view.label}</span>
+            </button>
+            {view.onClose && (
+              <button
+                aria-label={`Close ${view.label}`}
+                className="mr-1 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={view.onClose}
+                type="button"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
       <MoreViewsMenu current={current} pane={pane} views={views} />
     </div>
   )
@@ -163,7 +233,11 @@ function MoreViewsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button aria-label="More views" className={cn(SEGMENT, IDLE, 'px-2')} type="button">
+        <button
+          aria-label="More views"
+          className={cn(SEGMENT, IDLE, 'shrink-0 px-2')}
+          type="button"
+        >
           <MoreHorizontal className="h-3.5 w-3.5" />
         </button>
       </DropdownMenuTrigger>
@@ -180,7 +254,7 @@ function MoreViewsMenu({
               <IconRefGlyph icon={view.icon} size={16} />
               <span className="min-w-0 flex-1 truncate">{view.label}</span>
               {view.id === current && <Check className="h-3.5 w-3.5 text-muted-foreground" />}
-              {!isSceneView(view.id) && (
+              {!isSceneView(view.id) && !view.onClose && (
                 <button
                   aria-label={pinned ? `Unpin ${view.label}` : `Pin ${view.label}`}
                   aria-pressed={pinned}

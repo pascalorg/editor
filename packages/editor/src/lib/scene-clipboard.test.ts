@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  BuildingNode,
   CabinetModuleNode,
   type CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode,
@@ -11,8 +12,10 @@ import {
   configureArtifactStore,
   getArtifactStore,
   ItemNode,
-  type LevelNode,
+  LevelNode,
   MeasurementNode,
+  RoofNode,
+  RoofSegmentNode,
   SceneMaterial,
   type SceneMaterialId,
   SlabNode,
@@ -364,6 +367,107 @@ describe('scene clipboard', () => {
     )
     expect(fanlightY).toBeCloseTo(2.5 - 1.5 / 2)
     expect(scriptedY).toBeCloseTo(3 / 2)
+  })
+
+  // A roof lives on the level above the walls that carry it: a paste puts it there, and walls
+  // pasted on the roof level's row go to the storey it covers.
+  function roofedRoomOn(levelId: LevelNode['id']) {
+    const corners: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ]
+    const walls = corners.map((start, i) =>
+      WallNode.parse({ parentId: levelId, start, end: corners[(i + 1) % 4], height: 2.5 }),
+    )
+    const segment = RoofSegmentNode.parse({ width: 8, depth: 6, wallHeight: 0 })
+    const roof = RoofNode.parse({
+      parentId: levelId,
+      position: [4, 2.5, 3],
+      children: [segment.id],
+    })
+    return { walls, roof, segment: { ...segment, parentId: roof.id } }
+  }
+
+  function seedHouse(...levels: LevelNode[]) {
+    const building = BuildingNode.parse({ children: levels.map((level) => level.id) })
+    const { walls, roof, segment } = roofedRoomOn(sourceLevelId)
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [sourceLevelId]: makeLevel(sourceLevelId, [...walls.map((wall) => wall.id), roof.id]),
+        ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+        [roof.id]: roof,
+        [segment.id]: segment,
+        [building.id]: building,
+        ...Object.fromEntries(
+          levels.map((level) => [level.id, { ...level, parentId: building.id }]),
+        ),
+      },
+    }))
+    return { walls, roof }
+  }
+
+  test('walls pasted with the roof they carry: the roof lands on a new Roof level, in one undo step', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const { walls, roof } = seedHouse(storey)
+    const before = Object.keys(useScene.getState().nodes).length
+    expect(copySelectedNodesToEditorClipboard([...walls.map((wall) => wall.id), roof.id])).toBe(
+      true,
+    )
+    const { pastedIds } = pasteEditorClipboardToLevel(storey.id)!
+    const nodes = useScene.getState().nodes
+    const pastedRoof = pastedIds.map((id) => nodes[id]!).find((node) => node.type === 'roof')!
+    const roofLevel = nodes[pastedRoof.parentId as AnyNodeId] as LevelNode
+    expect(roofLevel).toMatchObject({ type: 'level', level: 1, metadata: { role: 'roof' } })
+    expect(roofLevel.children).toEqual([pastedRoof.id])
+    expect((nodes[storey.id] as LevelNode).children).toHaveLength(4)
+    useScene.temporal.getState().undo()
+    expect(Object.keys(useScene.getState().nodes)).toHaveLength(before)
+  })
+
+  test('walls pasted on the roof level go to the storey it covers, the selection with them', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const roofLevel = LevelNode.parse({ level: 1, metadata: { role: 'roof' } })
+    const { walls } = seedHouse(storey, roofLevel)
+    expect(copySelectedNodesToEditorClipboard([walls[0]!.id])).toBe(true)
+    const [pastedId] = pasteEditorClipboardToLevel(roofLevel.id)!.pastedIds
+    expect(useScene.getState().nodes[pastedId!]?.parentId).toBe(storey.id)
+    expect(useViewer.getState().selection.levelId).toBe(storey.id)
+  })
+
+  // Measurements, cabinets and the like stayed on the roof level at its floor while the walls
+  // copied with them went down: a paste lands on one level.
+  test('a paste carrying walls lands whole on the storey a roof level covers', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const roofLevel = LevelNode.parse({ level: 1, metadata: { role: 'roof' } })
+    const { walls } = seedHouse(storey, roofLevel)
+    const measurement = MeasurementNode.parse({
+      parentId: sourceLevelId,
+      measurement: {
+        kind: 'distance',
+        points: [
+          [0, 0, 0],
+          [8, 0, 0],
+        ],
+      },
+    })
+    useScene.setState((state) => {
+      const source = state.nodes[sourceLevelId] as LevelNode
+      return {
+        nodes: {
+          ...state.nodes,
+          [measurement.id]: measurement,
+          [sourceLevelId]: { ...source, children: [...source.children, measurement.id] },
+        },
+      }
+    })
+    expect(copySelectedNodesToEditorClipboard([walls[0]!.id, measurement.id])).toBe(true)
+    const { pastedIds } = pasteEditorClipboardToLevel(roofLevel.id)!
+    const nodes = useScene.getState().nodes
+    expect(pastedIds.map((id) => nodes[id]?.parentId)).toEqual([storey.id, storey.id])
+    expect((nodes[roofLevel.id] as LevelNode).children).toEqual([])
   })
 
   // Pasted corner windows kept naming the originals, so the copies drew as plain windows that

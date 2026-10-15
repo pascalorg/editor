@@ -1,8 +1,9 @@
 import { refuse } from '../agent-tools/refusal'
+import type { MaterialSurface } from '../material-kinds'
 import {
   getCatalogMaterialById,
+  isCommunityMaterialId,
   MATERIAL_CATALOG,
-  type MaterialSurface,
   parseMaterialRef,
 } from '../material-library'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
@@ -74,6 +75,15 @@ export function nearestLibraryMaterials(
 }
 
 /**
+ * Whether a library id renders: the catalog's, or a well-formed community material's (`mtl_…`),
+ * which the host checks (the hosted MCP against its database, before the call). The materials a
+ * host registered can be a part of its library (those its scene uses), so they never refuse one.
+ */
+export function isLibraryMaterialId(id: string): boolean {
+  return !!getCatalogMaterialById(id) || isCommunityMaterialId(id)
+}
+
+/**
  * A material ref that renders: a library id the catalog holds (`library:<id>`, or the bare id), or
  * a scene material (`scene:<id>`, checked against the scene's materials when the host lends them).
  * Anything else would fall back to a default with no word (an unknown preset came out grey), so it
@@ -104,9 +114,7 @@ export function requireMaterialRef(
       })
     return asked
   }
-  // A community material (`library:mtl_…`): the host checks it against its catalog.
-  if (parsed?.kind === 'library' && parsed.id.startsWith('mtl_')) return asked
-  if (parsed?.kind === 'library' && getCatalogMaterialById(parsed.id)) return `library:${parsed.id}`
+  if (parsed?.kind === 'library' && isLibraryMaterialId(parsed.id)) return `library:${parsed.id}`
   const words = wordsOf(asked)
   const shares = (text: string) => words.some((word) => text.toLowerCase().includes(word))
   const kind = surface ? MATERIAL_CATALOG.filter((entry) => suits(entry, surface)) : []

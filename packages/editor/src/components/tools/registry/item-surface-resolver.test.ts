@@ -219,32 +219,32 @@ test('the mover rejects an indirect descendant before asking the resolver', () =
   expect(useScene.getState().nodes).toBe(before)
 })
 
-test.each([
-  'host-local',
-  'surface-local',
-] as const)('writes the resolver pose in its %s child frame', (childFrame) => {
-  const placement: SurfacePlacement = {
-    position: [0.25, 1.5, -0.75],
-    rotationY: 0.4,
-    surfaceId: 'test-surface',
-    childFrame,
-    surfaceLocal: { position: [-0.5, 0, 0.25], rotationY: -0.2, rotation: [0.7, -0.2, 0.8] },
-  }
-  resolver.mockReturnValue(placement)
-  const session = createRegistryItemSurfaceMove(child)!
-  const pose = session.enter(hit(), dimensions, 0.3)!
-  const expected = childFrame === 'surface-local' ? placement.surfaceLocal! : placement
-  expect(pose.position).toEqual([...expected.position])
-  expect(pose.rotationY).toBe(expected.rotationY)
-  expect(useScene.getState().nodes[child.id]).toMatchObject({
-    parentId: host.id,
-    position: expected.position,
-    rotation:
-      childFrame === 'surface-local'
-        ? placement.surfaceLocal!.rotation
-        : [0.1, placement.rotationY, 0.2],
-  })
-})
+test.each(['host-local', 'surface-local'] as const)(
+  'writes the resolver pose in its %s child frame',
+  (childFrame) => {
+    const placement: SurfacePlacement = {
+      position: [0.25, 1.5, -0.75],
+      rotationY: 0.4,
+      surfaceId: 'test-surface',
+      childFrame,
+      surfaceLocal: { position: [-0.5, 0, 0.25], rotationY: -0.2, rotation: [0.7, -0.2, 0.8] },
+    }
+    resolver.mockReturnValue(placement)
+    const session = createRegistryItemSurfaceMove(child)!
+    const pose = session.enter(hit(), dimensions, 0.3)!
+    const expected = childFrame === 'surface-local' ? placement.surfaceLocal! : placement
+    expect(pose.position).toEqual([...expected.position])
+    expect(pose.rotationY).toBe(expected.rotationY)
+    expect(useScene.getState().nodes[child.id]).toMatchObject({
+      parentId: host.id,
+      position: expected.position,
+      rotation:
+        childFrame === 'surface-local'
+          ? placement.surfaceLocal!.rotation
+          : [0.1, placement.rotationY, 0.2],
+    })
+  },
+)
 
 test('non-item events never reach the resolver', () => {
   const session = createRegistryItemSurfaceMove(child)!

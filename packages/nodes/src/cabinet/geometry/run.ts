@@ -2,6 +2,7 @@ import type { CabinetModuleNode, CabinetNode, GeometryContext } from '@pascal-ap
 import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import { Group, Mesh } from 'three'
 import { getCabinetCountertopLayout } from '../countertop-layout'
+import { getRunSpans } from '../run-layout'
 import { buildFrontGeometry } from './fronts'
 import { addBox, getCabinetSlotMaterials } from './shared'
 import { cutSinkIntoCountertop } from './sink'
@@ -26,9 +27,16 @@ export function buildCabinetRunGeometry(
   const group = new Group()
   const materials = getCabinetSlotMaterials(node, ctx, shading, textures, colorPreset, sceneTheme)
   const plinth = node.showPlinth ? node.plinthHeight : 0
-  for (const layout of getCabinetCountertopLayout(node, ctx)) {
-    const { span, backOverhang, countertop: slab, bar, sinkCuts } = layout
-    const { leftOverhang, rightOverhang, exposedLeft, exposedRight } = layout.ends
+  // Toe-kicks follow the floor footprint, regardless of countertop or tall-unit height.
+  const floorSpans = getRunSpans(
+    modules.map((module) => ({
+      ...module,
+      cabinetType: 'base' as const,
+      carcassHeight: 1,
+      position: [module.position[0], 0, module.position[2]] as [number, number, number],
+    })),
+  )
+  for (const span of floorSpans) {
     const toeKickDepth = node.showPlinth
       ? Math.min(node.toeKickDepth, span.depth - node.boardThickness * 2)
       : 0
@@ -43,6 +51,10 @@ export function buildCabinetRunGeometry(
         'plinth',
       )
     }
+  }
+  for (const layout of getCabinetCountertopLayout(node, ctx)) {
+    const { span, backOverhang, countertop: slab, bar, sinkCuts } = layout
+    const { leftOverhang, rightOverhang, exposedLeft, exposedRight } = layout.ends
 
     // Finished decorative back panel (island backs are visible) — floor to
     // countertop plane, flush against the carcass back face.
@@ -62,7 +74,7 @@ export function buildCabinetRunGeometry(
         const exposed = side === 'left' ? exposedLeft : exposedRight
         if (!exposed) continue
         const endPanel = new Mesh(
-          buildFrontGeometry(node, span.depth, span.topY, false, null),
+          buildFrontGeometry({ ...node, handleStyle: 'none' }, span.depth, span.topY, false, null),
           materials.front,
         )
         endPanel.name = `cabinet-run-finished-end-${side}`

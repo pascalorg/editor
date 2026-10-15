@@ -68,7 +68,7 @@ describe('measurement()', () => {
     )
 
     expect(acceptedJsonTypes(schema)).toEqual(['number', 'string'])
-    expect((schema as { description?: string }).description).toContain('natural-language')
+    expect((schema as { description?: string }).description).toContain('or text with a unit')
   })
 })
 

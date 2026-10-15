@@ -1,7 +1,10 @@
 import type { AnyNode, AnyNodeId, HandleDescriptor, SceneApi } from '@pascal-app/core'
 import { hostedChildUpdates, planHostedEdit, withHostedChildren } from '../shared/hosted-resize'
 
+import { cabinetSurfaceProvider } from './surfaces'
+
 const policy = {
+  provider: cabinetSurfaceProvider,
   host: (node: AnyNode) => node.type === 'cabinet',
   child: (node: AnyNode) => node.type !== 'cabinet' && node.type !== 'cabinet-module',
 }

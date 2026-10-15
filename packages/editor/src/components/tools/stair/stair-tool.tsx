@@ -187,7 +187,7 @@ function commitStairPlacement(
   rotation: number,
   supportSurface: PointerSupportSurface | null,
 ): void {
-  const { createNodes, nodes } = useScene.getState()
+  const { applyNodeChanges, nodes } = useScene.getState()
   const placementLevelId = resolveStairPlacementLevelId(
     nodes,
     levelId,
@@ -270,11 +270,14 @@ function commitStairPlacement(
       ? [{ node: createdLevel, parentId: destinationPlan.buildingId }]
       : []
 
-  createNodes([
-    ...levelCreateOps,
-    { node: committedStair, parentId: placementLevelId },
-    { node: segment, parentId: committedStair.id },
-  ])
+  applyNodeChanges({
+    create: [
+      ...levelCreateOps,
+      { node: committedStair, parentId: placementLevelId },
+      { node: segment, parentId: committedStair.id },
+    ],
+    update: destinationPlan?.liftedLevels ?? [],
+  })
 
   sfxEmitter.emit('sfx:structure-build')
 }

@@ -29,9 +29,11 @@ describe('agent operations', () => {
         : undefined
       const operation = AGENT_OPERATIONS[c.tool as keyof typeof AGENT_OPERATIONS]
       expect(operation).toBeDefined()
+      // A scene's materials, as both hosts keep them: a native finish becomes one.
       const context = {
         activeLevelId: c.context?.activeLevelId ?? null,
         catalog: c.context?.catalog,
+        materials: {},
       }
       // As on both surfaces, the operation gets the input its contract parsed ("36 in" → metres).
       const contract = AGENT_TOOL_CONTRACTS.find((candidate) => candidate.name === c.tool)!
@@ -248,7 +250,7 @@ test('scene verification names wall and covering slab contacts but not underside
   expect(contacts({ ...nodes, [wall.id]: { ...wall, start: [6, 0], end: [6, 4] } })).toEqual([])
 })
 
-test('scene verification validates registered plugin kinds without accepting malformed or unknown nodes', () => {
+test('scene verification validates registered plugin kinds, rejects malformed nodes and names unknown kinds', () => {
   const restore = nodeRegistry._snapshot()
   const schema = BaseNode.extend({
     type: z.literal('diagnostic-pool').default('diagnostic-pool'),
@@ -273,13 +275,17 @@ test('scene verification validates registered plugin kinds without accepting mal
     expect(verify(pool)).toMatchObject({ valid: true, issues: [], hasIssues: false })
     for (const node of [
       { ...pool, depth: -1 },
-      { ...pool, type: 'unknown-pool' },
       { ...pool, type: 'wall' },
     ]) {
       const result = verify(node)
       expect(result.valid).toBe(false)
       expect(result.issues).toContainEqual(expect.objectContaining({ type: 'schema_invalid' }))
     }
+    expect(verify({ ...pool, type: 'unknown-pool' })).toMatchObject({
+      valid: true,
+      hasIssues: false,
+      issues: [{ type: 'schema_unknown_kind', kind: 'unknown-pool', nodeIds: [pool.id] }],
+    })
   } finally {
     restore()
   }

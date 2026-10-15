@@ -95,59 +95,59 @@ function freeze<T>(value: T): T {
 }
 
 describe('native ceiling paint writes the renderable surface, not metadata or custom geometry', () => {
-  test.each([
-    undefined,
-    'surface',
-  ])('default/explicit surface role %s preserves scene identity and other surfaces', (role) => {
-    const { nodes, ceiling, wall, slab } = fixture()
-    const before = structuredClone(nodes)
-    freeze(nodes)
-    const result = paint(
-      nodes,
-      {
-        targets: [ceiling.id],
-        material: requestedFinish,
-        ...(role ? { role } : {}),
-      },
-      context,
-    )
-    const after = applySceneChanges(nodes, result.changes)
-    const painted = CeilingNode.parse(after[ceiling.id])
-    expect(result.result).toMatchObject({
-      ok: true,
-      painted: [{ id: ceiling.id, roles: ['surface'] }],
-    })
-    expect(painted.slots).toEqual({ surface: requestedFinish, retained: requestedFinish })
-    expect(withoutFinish(painted)).toEqual(withoutFinish(ceiling))
-    expect(Object.keys(after)).toEqual(Object.keys(nodes))
-    expect(after[wall.id]).toEqual(before[wall.id])
-    expect(after[slab.id]).toEqual(before[slab.id])
-    expect(after[context.activeLevelId]).toEqual(before[context.activeLevelId])
-    expect(nodes).toEqual(before)
-  })
+  test.each([undefined, 'surface'])(
+    'default/explicit surface role %s preserves scene identity and other surfaces',
+    (role) => {
+      const { nodes, ceiling, wall, slab } = fixture()
+      const before = structuredClone(nodes)
+      freeze(nodes)
+      const result = paint(
+        nodes,
+        {
+          targets: [ceiling.id],
+          material: requestedFinish,
+          ...(role ? { role } : {}),
+        },
+        context,
+      )
+      const after = applySceneChanges(nodes, result.changes)
+      const painted = CeilingNode.parse(after[ceiling.id])
+      expect(result.result).toMatchObject({
+        ok: true,
+        painted: [{ id: ceiling.id, roles: ['surface'] }],
+      })
+      expect(painted.slots).toEqual({ surface: requestedFinish, retained: requestedFinish })
+      expect(withoutFinish(painted)).toEqual(withoutFinish(ceiling))
+      expect(Object.keys(after)).toEqual(Object.keys(nodes))
+      expect(after[wall.id]).toEqual(before[wall.id])
+      expect(after[slab.id]).toEqual(before[slab.id])
+      expect(after[context.activeLevelId]).toEqual(before[context.activeLevelId])
+      expect(nodes).toEqual(before)
+    },
+  )
 
-  test.each([
-    'slot-and-legacy',
-    'legacy-only',
-  ] as const)('erase %s matches UI slot removal while preserving legacy fields and regions', (mode) => {
-    const { nodes, ceiling } = fixture()
-    if (mode === 'legacy-only') ceiling.slots = { retained: requestedFinish }
-    const before = structuredClone(nodes)
-    freeze(nodes)
-    const result = paint(nodes, { targets: [ceiling.id], erase: true }, context)
-    const after = applySceneChanges(nodes, result.changes)
-    const erased = CeilingNode.parse(after[ceiling.id])
-    expect(erased.slots?.surface).toBeUndefined()
-    expect(erased.slots?.retained).toBe(requestedFinish)
-    expect(erased.material).toEqual(ceiling.material)
-    expect(erased.materialPreset).toBe(ceiling.materialPreset)
-    expect(withoutFinish(erased)).toEqual(withoutFinish(ceiling))
-    expect(Object.keys(after)).toEqual(Object.keys(nodes))
-    for (const [id, node] of Object.entries(before)) {
-      if (id !== ceiling.id) expect(after[id]).toEqual(node)
-    }
-    expect(nodes).toEqual(before)
-  })
+  test.each(['slot-and-legacy', 'legacy-only'] as const)(
+    'erase %s matches UI slot removal while preserving legacy fields and regions',
+    (mode) => {
+      const { nodes, ceiling } = fixture()
+      if (mode === 'legacy-only') ceiling.slots = { retained: requestedFinish }
+      const before = structuredClone(nodes)
+      freeze(nodes)
+      const result = paint(nodes, { targets: [ceiling.id], erase: true }, context)
+      const after = applySceneChanges(nodes, result.changes)
+      const erased = CeilingNode.parse(after[ceiling.id])
+      expect(erased.slots?.surface).toBeUndefined()
+      expect(erased.slots?.retained).toBe(requestedFinish)
+      expect(erased.material).toEqual(ceiling.material)
+      expect(erased.materialPreset).toBe(ceiling.materialPreset)
+      expect(withoutFinish(erased)).toEqual(withoutFinish(ceiling))
+      expect(Object.keys(after)).toEqual(Object.keys(nodes))
+      for (const [id, node] of Object.entries(before)) {
+        if (id !== ceiling.id) expect(after[id]).toEqual(node)
+      }
+      expect(nodes).toEqual(before)
+    },
+  )
 
   test.each([
     {
@@ -163,23 +163,21 @@ describe('native ceiling paint writes the renderable surface, not metadata or cu
       code: 'unknown_role',
       target: 'ceiling_finish',
     },
-  ])('$name refuses atomically, including earlier valid targets', ({
-    targets,
-    role,
-    code,
-    target,
-  }) => {
-    const { nodes } = fixture()
-    const before = structuredClone(nodes)
-    freeze(nodes)
-    let refusal: unknown
-    try {
-      paint(nodes, { targets, material: requestedFinish, ...(role ? { role } : {}) }, context)
-    } catch (error) {
-      refusal = error
-    }
-    expect(isAgentRefusal(refusal)).toBe(true)
-    expect(refusal).toMatchObject({ code, details: { target } })
-    expect(nodes).toEqual(before)
-  })
+  ])(
+    '$name refuses atomically, including earlier valid targets',
+    ({ targets, role, code, target }) => {
+      const { nodes } = fixture()
+      const before = structuredClone(nodes)
+      freeze(nodes)
+      let refusal: unknown
+      try {
+        paint(nodes, { targets, material: requestedFinish, ...(role ? { role } : {}) }, context)
+      } catch (error) {
+        refusal = error
+      }
+      expect(isAgentRefusal(refusal)).toBe(true)
+      expect(refusal).toMatchObject({ code, details: { target } })
+      expect(nodes).toEqual(before)
+    },
+  )
 })

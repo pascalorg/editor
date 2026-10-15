@@ -10,9 +10,8 @@ Inspect the server's advertised tools because hosted and local releases may diff
 2. `load_scene`
 3. `get_project_status`
 4. `list_levels`
-5. `get_level_summary`, `get_walls`, `get_zones`, `find_nodes`, or `get_node`
-6. `validate_scene`
-7. `verify_scene`
+5. `get_level_summary`, `get_walls`, `get_zones`, `find_by_type`, or `get_node`
+6. `verify_scene`
 
 `get_scene` returns the full graph and is useful when a compact summary omits a field needed for a calculation, such as an item's scale.
 
@@ -32,10 +31,9 @@ All three require edit access on the scan's own project; view access, including 
 1. `create_project`
 2. `create_house_from_brief` for a supported quick start, or semantic construction tools for precise control
 3. Add openings and furniture with semantic tools
-4. `validate_scene`
-5. `verify_scene`
-6. `save_scene` with `saveMode: "draft"`
-7. `get_project_status`
+4. `verify_scene`
+5. `save_scene` with `saveMode: "draft"`
+6. `get_project_status`
 
 Use `checkpoint` only at a meaningful milestone. A browser-visible draft and a durable checkpoint are distinct states.
 
@@ -101,3 +99,9 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 - No tool starts a room scan or clones a scan into a new project. Scans are created only by the Pascal iOS app, and `open_capture_as_project` opens the scan's existing owning project.
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.
+
+## Greenhouse and barrel roofs
+
+Use `create_roof` with `roofSystem: "glazed"` for a gable, straight shed or barrel greenhouse roof. For a barrel roof, `depth` is the span and `barrelRise` is the arch rise, no more than half the span. `barrelSegments` controls faceting. `glazing` sets frame dimensions, glass appearance, grid layouts, glazed ends and individual glass, solid or empty panels. Standard barrel construction uses a solid covering.
+
+Paint glazed segments with `glazing-frame`, `glazing-glass` or `glazing-solid`. Without a role, paint changes the frame and solid panels while preserving the glass finish. Painting a roof container with glazed segments applies the finish to its segments. Standard roofs use `top`, `edge` and `wall`.

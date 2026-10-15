@@ -1,4 +1,11 @@
 import { expect, test } from 'bun:test'
+import { z } from 'zod'
+import { storeysScene } from '../agent-operations/__fixtures__/structure-cases'
+import { applySceneChanges } from '../agent-operations/apply-changes'
+import { createStair } from '../agent-operations/create-stair'
+import { fitStair } from '../agent-operations/stairs'
+import { createStairTool, fitStairTool } from '../agent-tools/stairs'
+import { containsPoint } from '../lib/polygon-boolean'
 import {
   type AnyNode,
   BuildingNode,
@@ -13,6 +20,7 @@ import { migrateOwnedFloorOpenings } from '../utils/owned-floor-opening-migratio
 import { reconcileStructureOnLoad } from '../utils/reconcile-structure-on-load'
 import { reconcileStructureWithStableIds } from '../utils/structure-id'
 import { planOwnedFloorOpenings } from './owned-floor-openings'
+import { stairSegmentFootprints } from './stair/stair-footprint'
 
 const square: [number, number][] = [
   [0, 0],
@@ -233,6 +241,66 @@ test('an authored stair opening follows its owner pose and level, then retires w
   const deleted = { ...initial }
   delete deleted[stair.id]
   expect(planOwnedFloorOpenings(deleted)).toContainEqual({ op: 'delete', id: opening.id })
+})
+
+const context = { activeLevelId: null, materials: {} }
+
+/** An L stair at (1, 0.3), its run shortened to 2 m, its floor opening cut as given. */
+function shortL() {
+  const scene = storeysScene().nodes as Record<string, AnyNode>
+  const made = createStair(
+    scene,
+    z.object(createStairTool.input).parse({
+      levelId: 'level_ground',
+      x: 1,
+      z: 0.3,
+      layout: 'l',
+      length: 2,
+      createSourceCeilingOpening: false,
+    }),
+    context,
+  )
+  const built = applySceneChanges(scene, made.changes!)
+  return { built, stair: built[made.result.stairId as string] as StairNode }
+}
+
+/** fit_stair fitRun, then the live opening sync. */
+function refit(nodes: Record<string, AnyNode>, stairId: string) {
+  const input = z.object(fitStairTool.input).parse({ stairId, fitRun: true })
+  const next = applySceneChanges(nodes, fitStair(nodes, input, context).changes!)
+  return apply(next, planOwnedFloorOpenings(next))
+}
+
+/** The stair's segment corners its floor opening leaves out. */
+function uncovered(nodes: Record<string, AnyNode>, stairId: string) {
+  const opening = Object.values(nodes).find(
+    (node) => node.type === 'floor-opening',
+  ) as FloorOpeningNode
+  return stairSegmentFootprints(nodes[stairId] as StairNode, nodes)
+    .flat()
+    .filter((corner) => !containsPoint([{ outer: opening.polygon, holes: [] }], corner))
+}
+
+test("an L's opening cut as given still covers its landing and turned flight once refit", () => {
+  const { built, stair } = shortL()
+  // The refit lengthens both flights: the opening grows with the stair, not with its first flight.
+  const synced = refit(built, stair.id)
+  expect(stairSegmentFootprints(synced[stair.id] as StairNode, synced)).toHaveLength(3)
+  expect(uncovered(synced, stair.id)).toEqual([])
+  expect(planOwnedFloorOpenings(synced)).toEqual([])
+})
+
+test("an L's opening keeps the footprint it last had while its segments are hidden or missing", () => {
+  const { built, stair } = shortL()
+  const missing = { ...built }
+  for (const id of stair.children) delete missing[id]
+  expect(planOwnedFloorOpenings(missing)).toEqual([])
+  const hidden = { ...built }
+  for (const id of stair.children) hidden[id] = { ...hidden[id], visible: false } as AnyNode
+  const shown = { ...apply(hidden, planOwnedFloorOpenings(hidden)) }
+  for (const id of stair.children) shown[id] = { ...shown[id], visible: true } as AnyNode
+  const synced = refit(apply(shown, planOwnedFloorOpenings(shown)), stair.id)
+  expect(uncovered(synced, stair.id)).toEqual([])
 })
 
 test('an automatic stair opening keeps its node id when the stair moves to another storey', () => {

@@ -1,3 +1,4 @@
+import type { MaterialCategory, MaterialSurface } from './material-kinds'
 import {
   type MaterialPresetPayload,
   MaterialProperties,
@@ -5,6 +6,14 @@ import {
   type MaterialTarget,
   MaterialTarget as MaterialTargetSchema,
 } from './schema/material'
+
+// The library's kinds and surfaces, kept apart so a tool contract names them without the catalog.
+export {
+  MATERIAL_CATEGORIES,
+  MATERIAL_SURFACES,
+  type MaterialCategory,
+  type MaterialSurface,
+} from './material-kinds'
 
 export type MaterialSource = 'pascal' | 'community' | 'mine' | 'workspace'
 
@@ -61,36 +70,6 @@ const ROOF_TARGETS: MaterialTarget[] = [
 ]
 
 const CEILING_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.ceiling]
-
-export const MATERIAL_CATEGORIES = [
-  'colors',
-  'wood',
-  'stone',
-  'brick',
-  'tile',
-  'wallpaper',
-  'concrete',
-  'metal',
-  'plastic',
-  'fabric',
-  'carpet',
-  'leather',
-  'roofing',
-  'ground',
-  'glass',
-  'other',
-] as const
-export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number]
-
-export const MATERIAL_SURFACES = [
-  'floor',
-  'wall',
-  'ceiling',
-  'roof',
-  'furniture',
-  'outdoor',
-] as const
-export type MaterialSurface = (typeof MATERIAL_SURFACES)[number]
 
 export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
@@ -4750,6 +4729,11 @@ export function getMaterialsForCategory(category: MaterialCategory): MaterialCat
     if (item.category === category && !STATIC_CATALOG_IDS.has(item.id)) items.push(item)
   }
   return items
+}
+
+/** A community material's id (`mtl_…`, as the host's database mints them), well formed. */
+export function isCommunityMaterialId(id: string): boolean {
+  return /^mtl_[\w-]+$/.test(id)
 }
 
 export function getCatalogMaterialById(id?: string): MaterialCatalogItem | undefined {

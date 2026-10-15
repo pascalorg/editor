@@ -18,10 +18,8 @@ const TOOL_POLICIES = [
     },
     tools: [
       'check_collisions',
-      'describe_node',
       'export_glb',
       'export_json',
-      'find_nodes',
       'find_by_type',
       'get_level_summary',
       'get_node',
@@ -40,7 +38,6 @@ const TOOL_POLICIES = [
       'search_assets',
       'search_materials',
       'validate_design',
-      'validate_scene',
       'verify_scene',
       'view_scene',
     ],

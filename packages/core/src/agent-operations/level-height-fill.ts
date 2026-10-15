@@ -1,11 +1,6 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 import { deriveLegacyLevelHeight } from '../services/level-height'
-
-/** A write's operations, as apply_patch and update_node carry them. */
-export type LevelHeightWrite =
-  | { op: 'create'; node: AnyNode; parentId?: string }
-  | { op: 'update'; id: string; data: Record<string, unknown> }
-  | { op: 'delete'; id: string }
+import type { NodeWrite } from './types'
 
 const round = (value: number) => Math.round(value * 100) / 100
 
@@ -18,7 +13,7 @@ const round = (value: number) => Math.round(value * 100) / 100
  * per level filled, for the write's answer.
  */
 export function fillLevelHeights(
-  ops: LevelHeightWrite[],
+  ops: NodeWrite[],
   scene: Readonly<Record<string, AnyNode>>,
 ): string[] {
   const after: Record<string, AnyNode> = { ...scene }

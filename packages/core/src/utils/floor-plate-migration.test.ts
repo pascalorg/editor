@@ -256,30 +256,29 @@ test('M4/M5 are pure, deterministic and idempotent; finishes, holes and hosts su
   expect(migrateSlabSlots(slots.nodes).nodes).toBe(slots.nodes)
 })
 
-test.each([
-  'elevation',
-  'thickness',
-  'fillToTerrain',
-] as const)('legacy %s keeps its wall support or derives one base', (field) => {
-  const { nodes } = twoRooms()
-  const source = slabs(nodes)[0]!
-  nodes[source.id] = {
-    ...source,
-    [field]: field === 'elevation' || field === 'thickness' ? 0.4 : true,
-  }
-  const result = migrateFloorPlates(nodes)
-  expect(slabs(result.nodes)).toHaveLength(field === 'elevation' ? 2 : 1)
-  if (field === 'elevation') {
-    expect(result.nodes[source.id]).toMatchObject({
-      elevation: 0.4,
-      autoFromWalls: false,
-      polygon: source.polygon,
-    })
-    expect(slabs(result.nodes).some((slab) => slab.plateRole === 'base')).toBe(false)
-  } else
-    expect(slabs(result.nodes).find((slab) => slab.plateRole === 'base')?.zoneIds).toHaveLength(2)
-  expect(migrateFloorPlates(result.nodes).nodes).toBe(result.nodes)
-})
+test.each(['elevation', 'thickness', 'fillToTerrain'] as const)(
+  'legacy %s keeps its wall support or derives one base',
+  (field) => {
+    const { nodes } = twoRooms()
+    const source = slabs(nodes)[0]!
+    nodes[source.id] = {
+      ...source,
+      [field]: field === 'elevation' || field === 'thickness' ? 0.4 : true,
+    }
+    const result = migrateFloorPlates(nodes)
+    expect(slabs(result.nodes)).toHaveLength(field === 'elevation' ? 2 : 1)
+    if (field === 'elevation') {
+      expect(result.nodes[source.id]).toMatchObject({
+        elevation: 0.4,
+        autoFromWalls: false,
+        polygon: source.polygon,
+      })
+      expect(slabs(result.nodes).some((slab) => slab.plateRole === 'base')).toBe(false)
+    } else
+      expect(slabs(result.nodes).find((slab) => slab.plateRole === 'base')?.zoneIds).toHaveLength(2)
+    expect(migrateFloorPlates(result.nodes).nodes).toBe(result.nodes)
+  },
+)
 
 test('hand-split floor becomes a finish region; a raised platform stays manual', () => {
   const { nodes, zones } = twoRooms()

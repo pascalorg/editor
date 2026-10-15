@@ -11,6 +11,7 @@ export const RoofType = z.enum([
   'mansard',
   'flat',
   'conical',
+  'barrel',
 ])
 
 export type RoofType = z.infer<typeof RoofType>

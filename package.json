@@ -26,16 +26,17 @@
     "release:major": "gh workflow run release.yml -f bump=major"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.16",
+    "@biomejs/biome": "^2.5.15",
     "@typescript/native-preview": "7.0.0-dev.20260624.1",
+    "@typescript/typescript6": "6.0.2",
     "dotenv-cli": "^11.0.0",
     "fast-xml-parser": "^5.11.2",
-    "turbo": "^2.9.17",
-    "typescript": "6.0.3",
-    "ultracite": "^7.8.2"
+    "turbo": "^2.11.8",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "ultracite": "^8.0.1"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.18"
   },
   "packageManager": "bun@1.4.2",
   "overrides": {
@@ -43,7 +44,7 @@
     "@types/react-dom": "19.3.0",
     "@types/three": "0.186.0",
     "next": "16.4.0",
-    "react-grab": "0.1.50",
+    "react-grab": "0.2.0",
     "three": "0.186.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

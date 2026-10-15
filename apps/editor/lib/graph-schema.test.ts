@@ -68,7 +68,7 @@ test('keeps plugin child ids in the parsed graph', () => {
   const res = apiGraphSchema.safeParse(graph)
 
   expect(res.success).toBe(true)
-  expect((res.data?.nodes[LEVEL_ID] as { children: string[] }).children).toEqual([TREE_ID])
+  expect((res.data!.nodes[LEVEL_ID] as { children: string[] }).children).toEqual([TREE_ID])
 })
 
 test('preserves installedPlugins alongside a plugin node', () => {
@@ -178,7 +178,7 @@ test('migrates legacy wall assemblies before validation and persists canonical l
   const result = apiGraphSchema.safeParse(graph)
 
   expect(result.success).toBe(true)
-  expect((result.data?.nodes[wall.id] as WallNode).assembly).toEqual({
+  expect((result.data!.nodes[wall.id] as WallNode).assembly).toEqual({
     face: 'exterior',
     layers: [{ id: 'framing', role: 'structure', thickness: 0.14, core: true, material: 'wood' }],
   })
@@ -195,33 +195,36 @@ test('reports malformed legacy wall assemblies as validation issues', () => {
 test.each([
   ['long', 'a'.repeat(81), 'a'.repeat(121)],
   ['empty', '', ''],
-])('preserves %s legacy text and every layer above the former F2 caps', (_, preset, cavityInsulation) => {
-  const wall = WallNode.parse({ id: 'wall_unboundedgraph', start: [0, 0], end: [4, 0] })
-  const graph = buildGraph({
-    [wall.id]: {
-      ...wall,
-      assembly: {
-        preset,
-        cavityInsulation,
-        exterior: { finish: 'stone', thickness: 5.001 },
-        sheathing: { material: 'osb', thickness: 5.001 },
-        framing: { kind: 'wood', depth: 5.001 },
-        interior: { finish: 'drywall', thickness: 5.001 },
+])(
+  'preserves %s legacy text and every layer above the former F2 caps',
+  (_, preset, cavityInsulation) => {
+    const wall = WallNode.parse({ id: 'wall_unboundedgraph', start: [0, 0], end: [4, 0] })
+    const graph = buildGraph({
+      [wall.id]: {
+        ...wall,
+        assembly: {
+          preset,
+          cavityInsulation,
+          exterior: { finish: 'stone', thickness: 5.001 },
+          sheathing: { material: 'osb', thickness: 5.001 },
+          framing: { kind: 'wood', depth: 5.001 },
+          interior: { finish: 'drywall', thickness: 5.001 },
+        },
       },
-    },
-  })
+    })
 
-  const result = apiGraphSchema.parse(graph)
-  const assembly = WallNode.parse(result.nodes[wall.id]).assembly!
-  expect(assembly.presetId).toBe(preset)
-  expect(assembly.cavityInsulation).toBe(cavityInsulation)
-  expect(assembly.layers.map(({ id, thickness }) => [id, thickness])).toEqual([
-    ['exterior', 5.001],
-    ['sheathing', 5.001],
-    ['framing', 5.001],
-    ['interior', 5.001],
-  ])
-})
+    const result = apiGraphSchema.parse(graph)
+    const assembly = WallNode.parse(result.nodes[wall.id]).assembly!
+    expect(assembly.presetId).toBe(preset)
+    expect(assembly.cavityInsulation).toBe(cavityInsulation)
+    expect(assembly.layers.map(({ id, thickness }) => [id, thickness])).toEqual([
+      ['exterior', 5.001],
+      ['sheathing', 5.001],
+      ['framing', 5.001],
+      ['interior', 5.001],
+    ])
+  },
+)
 
 // Unnamespaced kinds are legitimate: `wiki/architecture/plugin-authoring.md`
 // requires plugin *ids* to look like `vendor:pack`, never kinds, and its worked

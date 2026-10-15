@@ -196,30 +196,29 @@ test('a save that came due mid-load is written once the load completes', async (
   expect(statuses.at(-1)).toBe('saved')
 })
 
-test.each([
-  'undo',
-  'redo',
-  'delete',
-] as const)('autosave permits a 5 to 4 single-node %s', async (action) => {
-  const { writes, statuses } = await mount(5)
-  if (action === 'undo') {
-    useScene.setState(graph(4))
-    clearSceneHistory()
-    useScene.setState(graph(5))
-    useScene.temporal.getState().undo()
-  } else if (action === 'redo') {
-    useScene.getState().deleteNode('column_autosave_1')
-    useScene.temporal.getState().undo()
-    useScene.temporal.getState().redo()
-  } else {
-    useScene.getState().deleteNode('column_autosave_1')
-  }
-  expect(Object.keys(useScene.getState().nodes)).toHaveLength(4)
-  await Bun.sleep(1100)
-  expect(statuses).not.toContain('error')
-  expect(writes).toEqual([4])
-  expect(statuses.at(-1)).toBe('saved')
-})
+test.each(['undo', 'redo', 'delete'] as const)(
+  'autosave permits a 5 to 4 single-node %s',
+  async (action) => {
+    const { writes, statuses } = await mount(5)
+    if (action === 'undo') {
+      useScene.setState(graph(4))
+      clearSceneHistory()
+      useScene.setState(graph(5))
+      useScene.temporal.getState().undo()
+    } else if (action === 'redo') {
+      useScene.getState().deleteNode('column_autosave_1')
+      useScene.temporal.getState().undo()
+      useScene.temporal.getState().redo()
+    } else {
+      useScene.getState().deleteNode('column_autosave_1')
+    }
+    expect(Object.keys(useScene.getState().nodes)).toHaveLength(4)
+    await Bun.sleep(1100)
+    expect(statuses).not.toContain('error')
+    expect(writes).toEqual([4])
+    expect(statuses.at(-1)).toBe('saved')
+  },
+)
 
 test('autosave permits a single-node deletion on exit', async () => {
   const { writes, statuses } = await mount(5)
@@ -256,20 +255,20 @@ test('collaboration scaffold deletion waits for persistence and reports saved', 
   expect(statuses).toEqual(['pending', 'saving', 'saved'])
 })
 
-test.each([
-  'pagehide',
-  'unmount',
-])('collaboration scaffold deletion still flushes on %s', async (event) => {
-  const { writes, statuses } = await mount(78, false)
-  useScene.setState(graph(4))
-  if (event === 'pagehide') window.dispatchEvent(new Event(event))
-  else {
-    await renderer!.unmount()
-    renderer = undefined
-  }
-  expect(statuses).not.toContain('error')
-  expect(writes).toEqual([4])
-})
+test.each(['pagehide', 'unmount'])(
+  'collaboration scaffold deletion still flushes on %s',
+  async (event) => {
+    const { writes, statuses } = await mount(78, false)
+    useScene.setState(graph(4))
+    if (event === 'pagehide') window.dispatchEvent(new Event(event))
+    else {
+      await renderer!.unmount()
+      renderer = undefined
+    }
+    expect(statuses).not.toContain('error')
+    expect(writes).toEqual([4])
+  },
+)
 
 test('collaboration guard exemption preserves preview pause and resume', async () => {
   const { writes, statuses, update } = await mount(78, false)

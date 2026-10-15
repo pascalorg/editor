@@ -8,7 +8,7 @@ import type {
 } from '@pascal-app/core'
 import { cabinetSlots } from '@pascal-app/core'
 import type { BufferAttribute, Mesh, Object3D } from 'three'
-import { Box3 } from 'three'
+import { Box3, Raycaster, Vector3 } from 'three'
 import { bakeCabinetAnimationClip } from '../animation'
 import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { buildCabinetGeometry } from '../geometry'
@@ -217,11 +217,10 @@ function boxTopUvSpan(mesh: Mesh) {
 
 function boxFrontUvSpan(mesh: Mesh) {
   const uv = mesh.geometry.getAttribute('uv') as BufferAttribute
-  const faceStart = 16
-  const values = Array.from({ length: 4 }, (_, index) => ({
-    u: uv.getX(faceStart + index),
-    v: uv.getY(faceStart + index),
-  }))
+  const normals = mesh.geometry.getAttribute('normal')
+  const values = Array.from({ length: uv.count }, (_, index) => index)
+    .filter((index) => normals.getZ(index) > 0.99)
+    .map((index) => ({ u: uv.getX(index), v: uv.getY(index) }))
   return {
     u: Math.max(...values.map((value) => value.u)) - Math.min(...values.map((value) => value.u)),
     v: Math.max(...values.map((value) => value.v)) - Math.min(...values.map((value) => value.v)),
@@ -430,6 +429,36 @@ describe('buildCabinetGeometry — raised arch fronts', () => {
 })
 
 describe('buildCabinetGeometry — inset internals', () => {
+  test('drawer runners separate fixed and moving parts and the bottom is recessed', () => {
+    const group = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        operationState: 1,
+        stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+      }),
+    )
+    const fixed = findMeshByNamePrefix(group, 'cabinet-drawer-fixed-runner-')
+    const moving = findMeshByNamePrefix(group, 'cabinet-drawer-moving-runner-')
+    const side = findMeshByNamePrefix(group, 'cabinet-drawer-side-left-')
+    const bottom = findMeshByNamePrefix(group, 'cabinet-drawer-bottom-')
+    expect(fixed.parent).toBe(group)
+    expect(moving.parent).toBe(side.parent)
+    expect(worldBounds(moving).max.z).toBeGreaterThan(worldBounds(fixed).max.z + 0.1)
+    expect(worldBounds(bottom).min.y).toBeGreaterThan(worldBounds(side).min.y + 0.004)
+  })
+
+  test('a narrow drawer keeps its bar pull within the front', () => {
+    const group = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        width: 0.15,
+        handleStyle: 'bar',
+        stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+      }),
+    )
+    const front = worldBounds(findMeshByNamePrefix(group, 'cabinet-drawer-front-'))
+    const handle = worldBounds(findMeshByNamePattern(group, /^cabinet-drawer-handle-[\d.]+-0$/))
+    expect(handle.min.x).toBeGreaterThan(front.min.x)
+    expect(handle.max.x).toBeLessThan(front.max.x)
+  })
   test('inset drawer boxes stay set back behind the front plane', () => {
     const node = CabinetModuleNode.parse({
       frontStyle: 'shaker',
@@ -717,9 +746,55 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     expect(findMeshByName(group, 'cabinet-microwave-0-start-button')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-microwave-0-cancel-button')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-microwave-0-top-vent-0')).toBeDefined()
-    expect(findMeshByName(group, 'cabinet-microwave-0-window-dot-0-0')).toBeDefined()
+    const screen = findMeshByName(group, 'cabinet-microwave-0-window-screen')
+    const glass = findMeshByName(group, 'cabinet-microwave-0-door-glass')
+    const screenBounds = worldBounds(screen)
+    const glassBounds = worldBounds(glass)
+    expect(screen.userData.slotId).toBe('glass')
+    expect(screen.parent).toBe(glass.parent)
+    expect(screenBounds.min.x).toBeGreaterThan(glassBounds.min.x)
+    expect(screenBounds.max.x).toBeLessThan(glassBounds.max.x)
+    expect(screenBounds.min.y).toBeGreaterThan(glassBounds.min.y)
+    expect(screenBounds.max.y).toBeLessThan(glassBounds.max.y)
     expect(findMeshByName(group, 'cabinet-microwave-0-turntable')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-microwave-0-roller-ring')).toBeDefined()
+  })
+
+  test.each(['none', 'knob'] as const)(
+    'pull-out pantry respects the %s handle style',
+    (handleStyle) => {
+      const group = buildCabinetGeometry(
+        CabinetModuleNode.parse({
+          cabinetType: 'tall',
+          carcassHeight: 1.8,
+          handleStyle,
+          stack: [{ id: 'pantry', type: 'pull-out-pantry', height: 1.8 }],
+        }),
+      )
+      const handles: Object3D[] = []
+      group.traverse((object) => {
+        if (object.name.startsWith('cabinet-pull-out-pantry-0-handle')) handles.push(object)
+      })
+      if (handleStyle === 'none') expect(handles).toHaveLength(0)
+      else {
+        const handle = worldBounds(findMeshByName(group, 'cabinet-pull-out-pantry-0-handle'))
+        expect(handle.max.y - handle.min.y).toBeLessThan(0.03)
+      }
+    },
+  )
+
+  test('microwave liner does not overlap the cabinet top exterior', () => {
+    const node = CabinetModuleNode.parse({
+      width: 0.76,
+      carcassHeight: 0.4,
+      showPlinth: false,
+      withCountertop: false,
+      stack: [{ id: 'micro', type: 'microwave', height: 0.4 }],
+    })
+    const group = buildCabinetGeometry(node)
+    const top = worldBounds(findMeshByName(group, 'cabinet-top'))
+    const liner = worldBounds(findMeshByName(group, 'cabinet-microwave-0-cavity-top'))
+    expect(top.max.y - liner.max.y).toBeGreaterThan(0.001)
   })
 
   test('microwave keypad stays compact inside the control panel', () => {
@@ -796,6 +871,9 @@ describe('buildCabinetGeometry — appliance compartments', () => {
 
     expect(findMeshByName(group, 'cabinet-dishwasher-0-tub-back')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-dishwasher-0-upper-rack-bar-1')).toBeDefined()
+    const rackFloor = worldBounds(findMeshByName(group, 'cabinet-dishwasher-0-upper-rack-bar-1'))
+    const rackSide = worldBounds(findMeshByName(group, 'cabinet-dishwasher-0-upper-rack-frame-0'))
+    expect(rackSide.max.y - rackFloor.max.y).toBeGreaterThan(0.04)
     expect(findMeshByName(group, 'cabinet-dishwasher-0-lower-rack-bar-1')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-dishwasher-0-spray-arm')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-dishwasher-0-control-panel')).toBeDefined()
@@ -845,6 +923,9 @@ describe('buildCabinetGeometry — appliance compartments', () => {
       'hardware',
     )
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-front')).toBeDefined()
+    const supports = worldBounds(findMeshByName(group, 'cabinet-cooktop-gas-1-pan-supports'))
+    const burner = worldBounds(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-cap'))
+    expect(supports.min.y).toBeGreaterThan(burner.max.y)
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-row-1')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-column-1')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-knob-4')).toBeDefined()
@@ -877,6 +958,7 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     const group = buildCabinetGeometry(node, undefined, 'rendered', false)
 
     expect(hasObjectByName(group, 'cabinet-cooktop-gas-1-continuous-grate-front')).toBe(false)
+    expect(hasObjectByName(group, 'cabinet-cooktop-gas-1-pan-supports')).toBe(false)
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-ring')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-core')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-0')).toBeDefined()
@@ -899,6 +981,9 @@ describe('buildCabinetGeometry — appliance compartments', () => {
       'appliance',
     )
     expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-ring-0')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-ring-0').material,
+    ).toHaveProperty('emissiveIntensity', 0)
     expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-fill')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-ring-2')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-3-ring-1')).toBeDefined()
@@ -1074,6 +1159,16 @@ describe('buildCabinetGeometry — appliance compartments', () => {
       findMeshByName(group, 'cabinet-fridge-single-0-single-rear-diffuser-channel-0'),
     ).toBeDefined()
     expect(findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0')).toBeDefined()
+    const crisper = findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0')
+    const crisperBounds = worldBounds(crisper)
+    const center = crisperBounds.getCenter(new Vector3())
+    const ray = new Raycaster(
+      new Vector3(center.x, crisperBounds.max.y + 0.01, center.z),
+      new Vector3(0, -1, 0),
+    )
+    const hit = ray.intersectObject(crisper, false)[0]
+    expect(hit).toBeDefined()
+    expect(hit!.point.y).toBeCloseTo(crisperBounds.min.y + 0.008, 4)
     expect(
       findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0-handle'),
     ).toBeDefined()
@@ -2467,129 +2562,130 @@ describe('cabinet handles', () => {
     expect(fixture.sceneApi.get<CabinetNode>(fixture.leg.id)!.position).toEqual(before)
   })
 
-  test.each([
-    'left',
-    'right',
-  ] as const)('resizing into a gap left by a deleted module keeps the neighbor fixed from the %s side', (side) => {
-    const run = CabinetNode.parse({
-      id: 'cabinet_handle-gap-run',
-      children: ['cabinet-module_handle-gap-left', 'cabinet-module_handle-gap-right'],
-    })
-    const left = CabinetModuleNode.parse({
-      id: 'cabinet-module_handle-gap-left',
-      parentId: run.id,
-      position: [-0.5, 0.1, 0],
-      width: 0.5,
-    })
-    const right = CabinetModuleNode.parse({
-      id: 'cabinet-module_handle-gap-right',
-      parentId: run.id,
-      position: [0.2, 0.1, 0],
-      width: 0.5,
-    })
-    const sceneApi = sceneApiFixture([run as AnyNode, left as AnyNode, right as AnyNode])
-    const selected = side === 'right' ? left : right
-    const neighbor = side === 'right' ? right : left
-    const handles =
-      typeof cabinetModuleDefinition.handles === 'function'
-        ? cabinetModuleDefinition.handles(selected, sceneApi as never)
-        : (cabinetModuleDefinition.handles ?? [])
-    const widthHandle = handles.find(
-      (handle): handle is LinearResizeHandle<typeof selected> =>
-        handle.kind === 'linear-resize' &&
-        handle.axis === 'x' &&
-        handle.anchor === (side === 'right' ? 'min' : 'max'),
-    )
+  test.each(['left', 'right'] as const)(
+    'resizing into a gap left by a deleted module keeps the neighbor fixed from the %s side',
+    (side) => {
+      const run = CabinetNode.parse({
+        id: 'cabinet_handle-gap-run',
+        children: ['cabinet-module_handle-gap-left', 'cabinet-module_handle-gap-right'],
+      })
+      const left = CabinetModuleNode.parse({
+        id: 'cabinet-module_handle-gap-left',
+        parentId: run.id,
+        position: [-0.5, 0.1, 0],
+        width: 0.5,
+      })
+      const right = CabinetModuleNode.parse({
+        id: 'cabinet-module_handle-gap-right',
+        parentId: run.id,
+        position: [0.2, 0.1, 0],
+        width: 0.5,
+      })
+      const sceneApi = sceneApiFixture([run as AnyNode, left as AnyNode, right as AnyNode])
+      const selected = side === 'right' ? left : right
+      const neighbor = side === 'right' ? right : left
+      const handles =
+        typeof cabinetModuleDefinition.handles === 'function'
+          ? cabinetModuleDefinition.handles(selected, sceneApi as never)
+          : (cabinetModuleDefinition.handles ?? [])
+      const widthHandle = handles.find(
+        (handle): handle is LinearResizeHandle<typeof selected> =>
+          handle.kind === 'linear-resize' &&
+          handle.axis === 'x' &&
+          handle.anchor === (side === 'right' ? 'min' : 'max'),
+      )
 
-    expect(widthHandle).toBeDefined()
-    expect(widthHandle!.magneticSnap).toBeDefined()
-    const snappedWidth = widthHandle!.magneticSnap!(selected, 0.65, sceneApi as never)
-    const unsnappedWidth = widthHandle!.magneticSnap!(selected, 0.6, sceneApi as never)
-    const patch = widthHandle!.apply(selected, snappedWidth, sceneApi as never)
-    const preview = widthHandle!.previewOverrides?.(selected, snappedWidth, sceneApi as never) ?? []
-    const previewNeighbor = preview.find(([id]) => id === neighbor.id)?.[1]
+      expect(widthHandle).toBeDefined()
+      expect(widthHandle!.magneticSnap).toBeDefined()
+      const snappedWidth = widthHandle!.magneticSnap!(selected, 0.65, sceneApi as never)
+      const unsnappedWidth = widthHandle!.magneticSnap!(selected, 0.6, sceneApi as never)
+      const patch = widthHandle!.apply(selected, snappedWidth, sceneApi as never)
+      const preview =
+        widthHandle!.previewOverrides?.(selected, snappedWidth, sceneApi as never) ?? []
+      const previewNeighbor = preview.find(([id]) => id === neighbor.id)?.[1]
 
-    expect(snappedWidth).toBeCloseTo(0.7)
-    expect(unsnappedWidth).toBeCloseTo(0.6)
-    expect(patch.position?.[0]).toBeCloseTo(side === 'right' ? -0.4 : 0.1)
-    expect(previewNeighbor?.position?.[0]).toBeCloseTo(neighbor.position[0])
+      expect(snappedWidth).toBeCloseTo(0.7)
+      expect(unsnappedWidth).toBeCloseTo(0.6)
+      expect(patch.position?.[0]).toBeCloseTo(side === 'right' ? -0.4 : 0.1)
+      expect(previewNeighbor?.position?.[0]).toBeCloseTo(neighbor.position[0])
 
-    widthHandle!.commit?.(selected, patch, sceneApi as never)
-    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.position[0]).toBeCloseTo(
-      neighbor.position[0],
-    )
-  })
+      widthHandle!.commit?.(selected, patch, sceneApi as never)
+      expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.position[0]).toBeCloseTo(
+        neighbor.position[0],
+      )
+    },
+  )
 
-  test.each([
-    'left',
-    'right',
-  ] as const)('Alt-resizing a run module leaves the neighbor independent from the %s side', (side) => {
-    const run = CabinetNode.parse({
-      id: `cabinet_handle-alt-run-${side}`,
-      children: [
-        `cabinet-module_handle-alt-left-${side}`,
-        `cabinet-module_handle-alt-right-${side}`,
-      ],
-    })
-    const left = CabinetModuleNode.parse({
-      id: `cabinet-module_handle-alt-left-${side}`,
-      parentId: run.id,
-      position: [-0.5, 0.1, 0],
-      width: 0.5,
-    })
-    const right = CabinetModuleNode.parse({
-      id: `cabinet-module_handle-alt-right-${side}`,
-      parentId: run.id,
-      position: [0.2, 0.1, 0],
-      width: 0.5,
-    })
-    const sceneApi = sceneApiFixture([run as AnyNode, left as AnyNode, right as AnyNode])
-    const selected = side === 'right' ? left : right
-    const neighbor = side === 'right' ? right : left
-    const handles =
-      typeof cabinetModuleDefinition.handles === 'function'
-        ? cabinetModuleDefinition.handles(selected, sceneApi as never)
-        : (cabinetModuleDefinition.handles ?? [])
-    const widthHandle = handles.find(
-      (handle): handle is LinearResizeHandle<typeof selected> =>
-        handle.kind === 'linear-resize' &&
-        handle.axis === 'x' &&
-        handle.anchor === (side === 'right' ? 'min' : 'max'),
-    )
+  test.each(['left', 'right'] as const)(
+    'Alt-resizing a run module leaves the neighbor independent from the %s side',
+    (side) => {
+      const run = CabinetNode.parse({
+        id: `cabinet_handle-alt-run-${side}`,
+        children: [
+          `cabinet-module_handle-alt-left-${side}`,
+          `cabinet-module_handle-alt-right-${side}`,
+        ],
+      })
+      const left = CabinetModuleNode.parse({
+        id: `cabinet-module_handle-alt-left-${side}`,
+        parentId: run.id,
+        position: [-0.5, 0.1, 0],
+        width: 0.5,
+      })
+      const right = CabinetModuleNode.parse({
+        id: `cabinet-module_handle-alt-right-${side}`,
+        parentId: run.id,
+        position: [0.2, 0.1, 0],
+        width: 0.5,
+      })
+      const sceneApi = sceneApiFixture([run as AnyNode, left as AnyNode, right as AnyNode])
+      const selected = side === 'right' ? left : right
+      const neighbor = side === 'right' ? right : left
+      const handles =
+        typeof cabinetModuleDefinition.handles === 'function'
+          ? cabinetModuleDefinition.handles(selected, sceneApi as never)
+          : (cabinetModuleDefinition.handles ?? [])
+      const widthHandle = handles.find(
+        (handle): handle is LinearResizeHandle<typeof selected> =>
+          handle.kind === 'linear-resize' &&
+          handle.axis === 'x' &&
+          handle.anchor === (side === 'right' ? 'min' : 'max'),
+      )
 
-    expect(widthHandle).toBeDefined()
-    const applyWithAlt = widthHandle!.apply as unknown as (
-      node: typeof selected,
-      width: number,
-      sceneApi: never,
-      modifiers: { altKey: boolean },
-    ) => Partial<typeof selected>
-    const previewWithAlt = widthHandle!.previewOverrides as unknown as (
-      node: typeof selected,
-      width: number,
-      sceneApi: never,
-      modifiers: { altKey: boolean },
-    ) => ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
-    const commitWithAlt = widthHandle!.commit as unknown as (
-      node: typeof selected,
-      patch: Partial<typeof selected>,
-      sceneApi: never,
-      modifiers: { altKey: boolean },
-    ) => void
-    const patch = applyWithAlt(selected, 0.8, sceneApi as never, { altKey: true })
-    const preview = new Map(previewWithAlt(selected, 0.8, sceneApi as never, { altKey: true }))
+      expect(widthHandle).toBeDefined()
+      const applyWithAlt = widthHandle!.apply as unknown as (
+        node: typeof selected,
+        width: number,
+        sceneApi: never,
+        modifiers: { altKey: boolean },
+      ) => Partial<typeof selected>
+      const previewWithAlt = widthHandle!.previewOverrides as unknown as (
+        node: typeof selected,
+        width: number,
+        sceneApi: never,
+        modifiers: { altKey: boolean },
+      ) => ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
+      const commitWithAlt = widthHandle!.commit as unknown as (
+        node: typeof selected,
+        patch: Partial<typeof selected>,
+        sceneApi: never,
+        modifiers: { altKey: boolean },
+      ) => void
+      const patch = applyWithAlt(selected, 0.8, sceneApi as never, { altKey: true })
+      const preview = new Map(previewWithAlt(selected, 0.8, sceneApi as never, { altKey: true }))
 
-    expect(patch.width).toBeCloseTo(0.8)
-    expect(preview.has(neighbor.id as AnyNodeId)).toBe(false)
+      expect(patch.width).toBeCloseTo(0.8)
+      expect(preview.has(neighbor.id as AnyNodeId)).toBe(false)
 
-    commitWithAlt(selected, patch, sceneApi as never, { altKey: true })
+      commitWithAlt(selected, patch, sceneApi as never, { altKey: true })
 
-    expect(sceneApi.get<CabinetModuleNode>(selected.id)?.width).toBeCloseTo(0.8)
-    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.width).toBeCloseTo(neighbor.width)
-    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.position[0]).toBeCloseTo(
-      neighbor.position[0],
-    )
-  })
+      expect(sceneApi.get<CabinetModuleNode>(selected.id)?.width).toBeCloseTo(0.8)
+      expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.width).toBeCloseTo(neighbor.width)
+      expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.position[0]).toBeCloseTo(
+        neighbor.position[0],
+      )
+    },
+  )
 
   test.each([
     ['left', -Math.PI / 2],
@@ -2707,134 +2803,134 @@ describe('cabinet handles', () => {
     expect(visibleHandles.some((handle) => handle.kind === 'arc-resize')).toBe(true)
   })
 
-  test.each([
-    'left',
-    'right',
-  ] as const)('source depth on an L %s changes only the source leg', (side) => {
-    const { depthHandles, leg, sceneApi, source, sourceModule } = generatedL(side)
-    const handle = depthHandles.find((candidate) => candidate.axis === 'z')!
-    const initialSourcePosition = [...source.position]
-    const initialLegPosition = [...leg.position]
-    const initialSourceBack = sourceModule.position[2] - sourceModule.depth / 2
-    const patch = handle.apply(source, 0.78, sceneApi as never)
+  test.each(['left', 'right'] as const)(
+    'source depth on an L %s changes only the source leg',
+    (side) => {
+      const { depthHandles, leg, sceneApi, source, sourceModule } = generatedL(side)
+      const handle = depthHandles.find((candidate) => candidate.axis === 'z')!
+      const initialSourcePosition = [...source.position]
+      const initialLegPosition = [...leg.position]
+      const initialSourceBack = sourceModule.position[2] - sourceModule.depth / 2
+      const patch = handle.apply(source, 0.78, sceneApi as never)
 
-    expect(patch.position).toBeUndefined()
-    handle.commit?.(source, patch, sceneApi as never)
+      expect(patch.position).toBeUndefined()
+      handle.commit?.(source, patch, sceneApi as never)
 
-    expect(sceneApi.get<CabinetNode>(source.id)?.depth).toBeCloseTo(0.78)
-    expect(sceneApi.get<CabinetNode>(source.id)?.position).toEqual(initialSourcePosition)
-    const resizedSourceModule = sceneApi.get<CabinetModuleNode>(sourceModule.id)!
-    expect(resizedSourceModule.position[2] - resizedSourceModule.depth / 2).toBeCloseTo(
-      initialSourceBack,
-    )
-    expect(sceneApi.get<CabinetNode>(leg.id)?.depth).toBeCloseTo(leg.depth)
-    expect(sceneApi.get<CabinetNode>(leg.id)?.position).toEqual(initialLegPosition)
-  })
+      expect(sceneApi.get<CabinetNode>(source.id)?.depth).toBeCloseTo(0.78)
+      expect(sceneApi.get<CabinetNode>(source.id)?.position).toEqual(initialSourcePosition)
+      const resizedSourceModule = sceneApi.get<CabinetModuleNode>(sourceModule.id)!
+      expect(resizedSourceModule.position[2] - resizedSourceModule.depth / 2).toBeCloseTo(
+        initialSourceBack,
+      )
+      expect(sceneApi.get<CabinetNode>(leg.id)?.depth).toBeCloseTo(leg.depth)
+      expect(sceneApi.get<CabinetNode>(leg.id)?.position).toEqual(initialLegPosition)
+    },
+  )
 
-  test.each([
-    'left',
-    'right',
-  ] as const)('perpendicular depth on an L %s changes only the derived leg', (side) => {
-    const { depthHandles, leg, legModule, sceneApi, source } = generatedL(side)
-    const handle = depthHandles.find((candidate) => candidate.axis === 'x')!
-    const initialSourcePosition = [...source.position]
-    const initialLegPosition = [...leg.position]
-    const initialLegBack = legModule.position[2] - legModule.depth / 2
-    const cornerWallFiller = Object.values(sceneApi.nodes()).find(
-      (node): node is CabinetModuleNode =>
-        node.type === 'cabinet-module' && node.name === 'Corner Wall Filler',
-    )!
-    const initialCornerWallWorld = resolveCabinetWorldTransform(
-      cornerWallFiller,
-      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
-    )
-    const patch = handle.apply(source, 0.48, sceneApi as never)
-
-    handle.commit?.(source, patch, sceneApi as never)
-
-    expect(sceneApi.get<CabinetNode>(leg.id)?.depth).toBeCloseTo(0.48)
-    expect(sceneApi.get<CabinetNode>(leg.id)?.position).toEqual(initialLegPosition)
-    const resizedLegModule = sceneApi.get<CabinetModuleNode>(legModule.id)!
-    expect(resizedLegModule.position[2] - resizedLegModule.depth / 2).toBeCloseTo(initialLegBack)
-    expect(sceneApi.get<CabinetNode>(source.id)?.depth).toBeCloseTo(source.depth)
-    expect(sceneApi.get<CabinetNode>(source.id)?.position).toEqual(initialSourcePosition)
-    const resizedCornerWallWorld = resolveCabinetWorldTransform(
-      sceneApi.get<CabinetModuleNode>(cornerWallFiller.id)!,
-      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
-    )
-    expect(resizedCornerWallWorld.position[0]).toBeCloseTo(initialCornerWallWorld.position[0])
-    expect(resizedCornerWallWorld.position[2]).toBeCloseTo(initialCornerWallWorld.position[2])
-  })
-
-  test.each([
-    'left',
-    'right',
-  ] as const)('chained L %s groups expose one centered depth arrow per run', (side) => {
-    const { depthHandles, leg, sceneApi, source, thirdRun } = generatedU(side)
-    const runs = [source, leg, thirdRun]
-    const sourceWorld = resolveCabinetWorldTransform(
-      source,
-      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
-    )
-    const sourceCos = Math.cos(sourceWorld.rotation)
-    const sourceSin = Math.sin(sourceWorld.rotation)
-    const targetIds = depthHandles.map(
-      (handle) => handle.overrideTarget?.(source, sceneApi as never) ?? source.id,
-    )
-
-    expect(new Set(targetIds)).toEqual(new Set(runs.map((run) => run.id)))
-    expect(depthHandles).toHaveLength(3)
-
-    for (const run of runs) {
-      const modules = run.children
-        .map((id) => sceneApi.get(id as AnyNodeId))
-        .filter((node): node is CabinetModuleNode => node?.type === 'cabinet-module')
-      const centerX =
-        (Math.min(...modules.map((module) => module.position[0] - module.width / 2)) +
-          Math.max(...modules.map((module) => module.position[0] + module.width / 2))) /
-        2
-      const frontZ = Math.max(...modules.map((module) => module.position[2] + module.depth / 2))
-      const runWorld = resolveCabinetWorldTransform(
-        run,
+  test.each(['left', 'right'] as const)(
+    'perpendicular depth on an L %s changes only the derived leg',
+    (side) => {
+      const { depthHandles, leg, legModule, sceneApi, source } = generatedL(side)
+      const handle = depthHandles.find((candidate) => candidate.axis === 'x')!
+      const initialSourcePosition = [...source.position]
+      const initialLegPosition = [...leg.position]
+      const initialLegBack = legModule.position[2] - legModule.depth / 2
+      const cornerWallFiller = Object.values(sceneApi.nodes()).find(
+        (node): node is CabinetModuleNode =>
+          node.type === 'cabinet-module' && node.name === 'Corner Wall Filler',
+      )!
+      const initialCornerWallWorld = resolveCabinetWorldTransform(
+        cornerWallFiller,
         sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
       )
-      const frontWorld = localPointToWorld(runWorld, [centerX, 0, frontZ + 0.18])
-      const dx = frontWorld[0] - sourceWorld.position[0]
-      const dz = frontWorld[2] - sourceWorld.position[2]
-      const expectedX = sourceCos * dx - sourceSin * dz
-      const expectedZ = sourceSin * dx + sourceCos * dz
+      const patch = handle.apply(source, 0.48, sceneApi as never)
+
+      handle.commit?.(source, patch, sceneApi as never)
+
+      expect(sceneApi.get<CabinetNode>(leg.id)?.depth).toBeCloseTo(0.48)
+      expect(sceneApi.get<CabinetNode>(leg.id)?.position).toEqual(initialLegPosition)
+      const resizedLegModule = sceneApi.get<CabinetModuleNode>(legModule.id)!
+      expect(resizedLegModule.position[2] - resizedLegModule.depth / 2).toBeCloseTo(initialLegBack)
+      expect(sceneApi.get<CabinetNode>(source.id)?.depth).toBeCloseTo(source.depth)
+      expect(sceneApi.get<CabinetNode>(source.id)?.position).toEqual(initialSourcePosition)
+      const resizedCornerWallWorld = resolveCabinetWorldTransform(
+        sceneApi.get<CabinetModuleNode>(cornerWallFiller.id)!,
+        sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+      )
+      expect(resizedCornerWallWorld.position[0]).toBeCloseTo(initialCornerWallWorld.position[0])
+      expect(resizedCornerWallWorld.position[2]).toBeCloseTo(initialCornerWallWorld.position[2])
+    },
+  )
+
+  test.each(['left', 'right'] as const)(
+    'chained L %s groups expose one centered depth arrow per run',
+    (side) => {
+      const { depthHandles, leg, sceneApi, source, thirdRun } = generatedU(side)
+      const runs = [source, leg, thirdRun]
+      const sourceWorld = resolveCabinetWorldTransform(
+        source,
+        sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+      )
+      const sourceCos = Math.cos(sourceWorld.rotation)
+      const sourceSin = Math.sin(sourceWorld.rotation)
+      const targetIds = depthHandles.map(
+        (handle) => handle.overrideTarget?.(source, sceneApi as never) ?? source.id,
+      )
+
+      expect(new Set(targetIds)).toEqual(new Set(runs.map((run) => run.id)))
+      expect(depthHandles).toHaveLength(3)
+
+      for (const run of runs) {
+        const modules = run.children
+          .map((id) => sceneApi.get(id as AnyNodeId))
+          .filter((node): node is CabinetModuleNode => node?.type === 'cabinet-module')
+        const centerX =
+          (Math.min(...modules.map((module) => module.position[0] - module.width / 2)) +
+            Math.max(...modules.map((module) => module.position[0] + module.width / 2))) /
+          2
+        const frontZ = Math.max(...modules.map((module) => module.position[2] + module.depth / 2))
+        const runWorld = resolveCabinetWorldTransform(
+          run,
+          sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+        )
+        const frontWorld = localPointToWorld(runWorld, [centerX, 0, frontZ + 0.18])
+        const dx = frontWorld[0] - sourceWorld.position[0]
+        const dz = frontWorld[2] - sourceWorld.position[2]
+        const expectedX = sourceCos * dx - sourceSin * dz
+        const expectedZ = sourceSin * dx + sourceCos * dz
+        const handle = depthHandles.find(
+          (candidate) =>
+            (candidate.overrideTarget?.(source, sceneApi as never) ?? source.id) === run.id,
+        )!
+        const position = handle.placement.position(source, sceneApi as never)
+
+        expect(position[0]).toBeCloseTo(expectedX)
+        expect(position[2]).toBeCloseTo(expectedZ)
+      }
+    },
+  )
+
+  test.each(['left', 'right'] as const)(
+    'depth resize on a chained L %s updates the connected corner width',
+    (side) => {
+      const { depthHandles, leg, sceneApi, source, thirdRun } = generatedU(side)
       const handle = depthHandles.find(
         (candidate) =>
-          (candidate.overrideTarget?.(source, sceneApi as never) ?? source.id) === run.id,
+          (candidate.overrideTarget?.(source, sceneApi as never) ?? source.id) === leg.id,
       )!
-      const position = handle.placement.position(source, sceneApi as never)
+      const patch = handle.apply(source, 0.78, sceneApi as never)
 
-      expect(position[0]).toBeCloseTo(expectedX)
-      expect(position[2]).toBeCloseTo(expectedZ)
-    }
-  })
+      handle.commit?.(source, patch, sceneApi as never)
 
-  test.each([
-    'left',
-    'right',
-  ] as const)('depth resize on a chained L %s updates the connected corner width', (side) => {
-    const { depthHandles, leg, sceneApi, source, thirdRun } = generatedU(side)
-    const handle = depthHandles.find(
-      (candidate) =>
-        (candidate.overrideTarget?.(source, sceneApi as never) ?? source.id) === leg.id,
-    )!
-    const patch = handle.apply(source, 0.78, sceneApi as never)
-
-    handle.commit?.(source, patch, sceneApi as never)
-
-    const connectedFiller = thirdRun.children
-      .map((id) => sceneApi.get(id as AnyNodeId))
-      .find(
-        (node): node is CabinetModuleNode =>
-          node?.type === 'cabinet-module' && node.name === 'Corner Filler',
-      )!
-    expect(connectedFiller.width).toBeCloseTo(0.78)
-  })
+      const connectedFiller = thirdRun.children
+        .map((id) => sceneApi.get(id as AnyNodeId))
+        .find(
+          (node): node is CabinetModuleNode =>
+            node?.type === 'cabinet-module' && node.name === 'Corner Filler',
+        )!
+      expect(connectedFiller.width).toBeCloseTo(0.78)
+    },
+  )
 
   test('run rotation keeps the cabinet bounding-box center fixed', () => {
     const run = CabinetNode.parse({
@@ -2886,6 +2982,18 @@ describe('cabinet handles', () => {
 })
 
 describe('buildCabinetGeometry — range hood compartments', () => {
+  test.each(['hood-pyramid', 'hood-curved-glass'] as const)(
+    '%s exposes its filter and lights below the canopy',
+    (type) => {
+      const group = buildCabinetGeometry(hoodModule(type, 0.4))
+      const filter = worldBounds(findMeshByName(group, `cabinet-${type}-0-filter`))
+      const light = worldBounds(findMeshByName(group, `cabinet-${type}-0-light-1`))
+      expect(filter.min.y).toBeLessThan(0)
+      expect(light.min.y).toBeLessThan(0)
+      expect(light.min.x).toBeGreaterThan(filter.max.x)
+      expect(filter.max.z).toBeLessThan(HOOD_CANOPY_DEPTH - 0.16)
+    },
+  )
   function hoodModule(type: 'hood-pyramid' | 'hood-curved-glass', hoodHeight: number) {
     return CabinetModuleNode.parse({
       id: 'cabinet-module_hood',
@@ -3032,6 +3140,25 @@ describe('buildCabinetGeometry — sink compartments', () => {
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-barrel')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-cap')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-pin')).toBeDefined()
+  })
+
+  test('sink bowl narrows toward the drain while keeping its opening', () => {
+    const group = buildCabinetGeometry(sinkModule())
+    const wall = findMeshByName(group, 'cabinet-sink-1-0-basin-front')
+    const positions = wall.geometry.getAttribute('position')
+    let topWidth = 0
+    let bottomWidth = 0
+    for (let i = 0; i < positions.count; i++) {
+      const width = Math.abs(positions.getX(i)) * 2
+      if (positions.getY(i) > 0) topWidth = Math.max(topWidth, width)
+      else bottomWidth = Math.max(bottomWidth, width)
+    }
+    expect(topWidth - bottomWidth).toBeGreaterThan(0.03)
+    const bottom = worldBounds(findMeshByName(group, 'cabinet-sink-1-0-basin-bottom'))
+    const drain = worldBounds(findMeshByName(group, 'cabinet-sink-1-0-drain'))
+    expect(drain.min.x).toBeGreaterThan(bottom.min.x)
+    expect(drain.max.x).toBeLessThan(bottom.max.x)
+    expect(drain.min.y).toBeCloseTo(bottom.max.y)
   })
 
   test('sink appliance paint persists onto faucet and basin after rebuild', () => {
@@ -3199,4 +3326,34 @@ describe('buildCabinetGeometry — sink compartments', () => {
     expect(bounds.min.x).toBeLessThan(-0.85)
     expect(bounds.max.x).toBeGreaterThan(0.45)
   })
+})
+
+test('toe-kick stays continuous below a base and tall unit', () => {
+  const run = CabinetNode.parse({ showPlinth: true, plinthHeight: 0.1 })
+  const modules = [
+    CabinetModuleNode.parse({ parentId: run.id, width: 0.6, position: [-0.3, 0.1, 0] }),
+    CabinetModuleNode.parse({
+      parentId: run.id,
+      width: 0.6,
+      position: [0.3, 0.1, 0],
+      cabinetType: 'tall',
+      carcassHeight: 2.1,
+    }),
+  ]
+  const group = buildCabinetGeometry(run, geometryContext({ children: modules }), 'rendered', false)
+  expect(group.children.filter((child) => child.name === 'cabinet-run-plinth')).toHaveLength(1)
+  const bounds = worldBounds(findMeshByName(group, 'cabinet-run-plinth'))
+  expect(bounds.max.x - bounds.min.x).toBeCloseTo(1.2)
+})
+
+test('wall fillers render a solid front without handles or opening animation', () => {
+  const node = CabinetModuleNode.parse({
+    moduleKind: 'wall-filler',
+    width: 0.08,
+    stack: [],
+    handleStyle: 'bar',
+  })
+  const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+  expect(group.children).toHaveLength(1)
+  expect(group.children[0]!.name).toBe('cabinet-wall-filler')
 })

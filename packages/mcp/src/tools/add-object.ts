@@ -185,7 +185,11 @@ export function registerAddObject(
       const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
       let outcome: ReturnType<typeof addObject>
       try {
-        outcome = addObject(before, { ...args, compiled }, { activeLevelId: null })
+        outcome = addObject(
+          before,
+          { ...args, compiled },
+          { activeLevelId: bridge.activeLevelId?.() ?? null },
+        )
       } catch (error) {
         return refusalResult(error)
       }

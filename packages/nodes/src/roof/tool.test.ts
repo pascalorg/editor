@@ -7,6 +7,7 @@ import {
   resolveRoomRoofFootprint,
   type SceneApi,
   WallNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { commitRoofFootprint, commitRoofPlacement } from './tool'
@@ -96,4 +97,27 @@ test('a rectangle drawn on a walled storey goes on its roof level, standing on i
   // 2.5 m walls under a 3 m storey: the eave 0.5 m below the roof level's floor.
   expect(roof.node).toMatchObject({ support: { kind: 'walls' }, position: [2, -0.5, 1.5] })
   expect(updated).toEqual([{ id: upper.id, data: { metadata: { role: 'roof' }, name: 'Roof' } }])
+})
+
+// The owner's porch clause: a porch or portico on posts stays on its storey. Drawn by hand, any
+// rectangle on a walled storey went to the roof level, a portico beside the house included.
+test('a porch drawn against the house over posts stays on its storey', () => {
+  const { level, nodes, created, updated, sceneApi } = setup()
+  const room = ZoneNode.parse({
+    parentId: level.id,
+    name: 'Room',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ],
+  })
+  nodes[room.id] = room
+  nodes[level.id] = { ...level, children: [...level.children, room.id] }
+  commitRoofPlacement(sceneApi, level.id, [4, 0, 0.5], [6, 0, 2.5], [], false, 'ground')
+  const roof = created.find(({ node }) => node.type === 'roof')!
+  expect(roof.parentId).toBe(level.id)
+  expect(roof.node).toMatchObject({ support: { kind: 'level' } })
+  expect(updated).toEqual([])
 })

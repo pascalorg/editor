@@ -15,6 +15,16 @@
       "types": "./dist/procedural-item/index.d.ts",
       "import": "./dist/procedural-item/index.js",
       "default": "./dist/procedural-item/index.js"
+    },
+    "./agent-tools": {
+      "types": "./dist/agent-tools/index.d.ts",
+      "import": "./dist/agent-tools/index.js",
+      "default": "./dist/agent-tools/index.js"
+    },
+    "./agent-operations": {
+      "types": "./dist/agent-operations/index.d.ts",
+      "import": "./dist/agent-operations/index.js",
+      "default": "./dist/agent-operations/index.js"
     }
   },
   "files": [
@@ -22,7 +32,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build",
+    "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "test": "bun test",
     "prepublishOnly": "bun run build && bun test"
@@ -40,17 +50,19 @@
     "zustand": "^5"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@pascal-app/core": "^1.0.4",
     "@pascal-app/editor": "^1.0.4",
+    "@pascal-app/mcp": "^1.0.4",
     "@pascal-app/viewer": "^1.0.4",
     "@pascal/typescript-config": "*",
-    "@react-three/test-renderer": "^9.1.0",
-    "@types/bun": "^1.4.2",
-    "@types/node": "^22.19.12",
+    "@react-three/test-renderer": "^9.1.1",
+    "@types/bun": "^1.4.3",
+    "@types/node": "^26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "^0.186.0",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "keywords": [
     "pascal",

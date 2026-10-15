@@ -17,14 +17,19 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import { ADD_STAIR_CASES } from './add-stair-cases'
 import { CREATE_ROOM_CASES, FURNISH_ROOM_CASES } from './build-room-cases'
 import { PLACE_ITEMS_CASES } from './place-items-cases'
 import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
+import { FINISH_CASES } from './finish-cases'
+import { LOT_INFO_CASES } from './lot-info-cases'
 import { CREATE_ROOF_CASES, MOVE_ROOFS_CASES } from './roof-cases'
 import { ROOM_CASES } from './room-cases'
+import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { CORNER_WINDOW_CASES } from './corner-window-cases'
 import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
+import { DESCRIBE_NODE_CASES, FIND_NODES_CASES } from './node-read-cases'
 import {
   GET_SITE_CASES,
   PLACE_BUILDING_CASES,
@@ -42,8 +47,9 @@ import { VERIFY_SCENE_CASES } from './verify-scene-cases'
 /**
  * Edge cases of the agent tools that run as core operations, written before the operations. One
  * declarative table per tool; the core, MCP and chat runners each run every table, so the three
- * layers cannot disagree. `surfaces` narrows a case whose setup only one surface has (the chat
- * knows the floor a person is viewing; the MCP has no such thing and falls back to the lowest).
+ * layers cannot disagree. `surfaces` narrows a case whose setup only one surface has (the live
+ * stores close level gaps when a scene loads). `context.activeLevelId` is the floor the host's
+ * person views: the chat's, or an in-page MCP host's; a remote MCP has none, so the lowest storey.
  * `after` lists fields some nodes must have once the operation's changes are applied.
  */
 
@@ -339,7 +345,6 @@ export const LIST_LEVELS_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: {
       result: {
         activeLevelId: 'level_upper',
@@ -418,7 +423,6 @@ export const LEVEL_TARGET_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { levelId: 'level_upper' } },
   },
   {
@@ -787,7 +791,6 @@ export const DUPLICATE_LEVEL_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { floorIndex: 2, copied: { level: 1, wall: 1 } } },
   },
   {
@@ -889,6 +892,46 @@ export const DELETE_NODE_CASES: AgentToolCase[] = [
   },
 ]
 
+/** The house's stair with design targets of its own, none of them the defaults. */
+const OWN_TARGETS = { maxRiserHeight: 0.19, minimumGoing: 0.26, targetGoing: 0.3, minimumHeadroom: 2.1 }
+function targetedStairScene(): SceneGraph {
+  const scene = houseScene()
+  scene.nodes.stair_main = { ...(scene.nodes.stair_main as StairNode), designTargets: OWN_TARGETS }
+  return scene
+}
+
+/** fit_stair's sizes and targets, said in inches (N1). */
+const FIT_STAIR_CASES: AgentToolCase[] = [
+  {
+    name: 'a straight flight 42 in wide',
+    tool: 'fit_stair',
+    scene: houseScene,
+    input: { stairId: 'stair_main', layout: 'straight', width: '42 in' },
+    expect: { result: { stairId: 'stair_main' }, after: { stair_main: { width: 1.0668 } } },
+  },
+  {
+    name: 'a target in inches changes that target, the stair keeps its others',
+    tool: 'fit_stair',
+    scene: targetedStairScene,
+    input: { stairId: 'stair_main', targets: { maxRiserHeight: '7 in' } },
+    expect: {
+      result: { stairId: 'stair_main' },
+      after: { stair_main: { designTargets: { ...OWN_TARGETS, maxRiserHeight: 0.1778 } } },
+    },
+  },
+  {
+    // The partial schema used to fill every target left out with its default.
+    name: 'a target given alone leaves the others as the stair has them, not the defaults',
+    tool: 'fit_stair',
+    scene: targetedStairScene,
+    input: { stairId: 'stair_main', targets: { targetGoing: 0.29 } },
+    expect: {
+      result: { stairId: 'stair_main' },
+      after: { stair_main: { designTargets: { ...OWN_TARGETS, targetGoing: 0.29 } } },
+    },
+  },
+]
+
 /** Every table the three runners run. */
 export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...LIST_LEVELS_CASES,
@@ -900,6 +943,8 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...FINISH_READBACK_CASES,
   ...DUPLICATE_LEVEL_CASES,
   ...VERIFY_SCENE_CASES,
+  ...VALIDATE_SCENE_CASES,
+  ...CHECK_ROOMS_CASES,
   ...DELETE_NODE_CASES,
   ...ROOM_CASES,
   ...CREATE_ROOM_CASES,
@@ -911,12 +956,18 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...MOVE_ROOFS_CASES,
   ...ADD_LEVEL_CASES,
   ...CREATE_STAIR_CASES,
+  ...ADD_STAIR_CASES,
+  ...FIT_STAIR_CASES,
   ...PLACE_ITEMS_CASES,
   ...FIND_BY_TYPE_CASES,
+  ...FIND_NODES_CASES,
+  ...DESCRIBE_NODE_CASES,
   ...CORNER_WINDOW_CASES,
   ...MERGE_WINDOWS_CASES,
   ...GET_SITE_CASES,
+  ...LOT_INFO_CASES,
   ...PLACE_BUILDING_CASES,
   ...SITE_LINE_CASES,
   ...SITE_VERIFY_CASES,
+  ...FINISH_CASES,
 ]

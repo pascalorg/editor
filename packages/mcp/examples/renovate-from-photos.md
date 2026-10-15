@@ -177,9 +177,9 @@ The user can walk back with `undo`; `redo` returns them to the proposal.
 ### 6. Sanity-check
 
 ```jsonc
-// tool: validate_scene
-{ "name": "validate_scene", "arguments": {} }
-// → { "valid": true, "errors": [] }
+// tool: verify_scene
+{ "name": "verify_scene", "arguments": {} }
+// → { "valid": true, "issues": [], "hasIssues": false, … }
 
 // tool: check_collisions
 { "name": "check_collisions", "arguments": { "levelId": "level-1" } }

@@ -6,7 +6,7 @@ Thanks for your interest in contributing! We welcome all kinds of contributions 
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) 1.3+ and Node.js 20.9+
+- [Bun](https://bun.sh/) 1.3+ and Node.js 22.18+
 
 ### Setup
 
@@ -85,6 +85,20 @@ New node kinds and sidebar panels can ship as a plugin instead of editing the bu
 - Keep PRs focused — one feature or fix per PR
 - Include screenshots or recordings for visual changes
 - If you're unsure about an approach, open an issue or discussion first
+
+## Releases
+
+Maintainers release every `@pascal-app/*` package together from the **Release** workflow; contributors never bump versions in a PR. Two things a PR can change need a maintainer before the next release:
+
+- **A new package.** Add it to `PACKAGES` in `.github/workflows/release.yml`, then a maintainer publishes it to npm once by hand and adds its trusted publisher. Until then the workflow fails at its first step, before anything is published:
+
+  ```bash
+  cd packages/<pkg> && bun run build && npm publish --access public --tag latest --ignore-scripts
+  ```
+
+- **The release push.** The release commit and tags go to `main` with the `RELEASE_DEPLOY_KEY` deploy key, the one identity besides admins that the `main` ruleset lets through. Keep it in the ruleset's bypass list when the ruleset changes.
+
+[Releasing to npm](wiki/npm-release.md) has the trusted-publisher settings, key rotation and recovery steps.
 
 ## Reporting bugs
 

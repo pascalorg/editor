@@ -86,6 +86,16 @@
       "import": "./dist/systems/stair/stair-opening-sync.js",
       "default": "./dist/systems/stair/stair-opening-sync.js"
     },
+    "./stair-footprint": {
+      "types": "./dist/systems/stair/stair-footprint.d.ts",
+      "import": "./dist/systems/stair/stair-footprint.js",
+      "default": "./dist/systems/stair/stair-footprint.js"
+    },
+    "./stair-rise-query": {
+      "types": "./dist/systems/stair/stair-rise-query.d.ts",
+      "import": "./dist/systems/stair/stair-rise-query.js",
+      "default": "./dist/systems/stair/stair-rise-query.js"
+    },
     "./procedural-items": {
       "types": "./dist/procedural-items/index.d.ts",
       "import": "./dist/procedural-items/index.js",
@@ -129,22 +139,23 @@
   },
   "dependencies": {
     "@pascal-app/lingo": "^0.2.0",
-    "dedent": "^1.7.1",
-    "idb-keyval": "^6.2.2",
+    "dedent": "^1.7.2",
+    "idb-keyval": "^6.3.0",
     "mitt": "^3.0.1",
-    "nanoid": "^5.1.6",
+    "nanoid": "^6.0.2",
     "polygon-clipping": "0.15.7",
-    "zod": ">=4.5.4 <4.6",
+    "zod": ">=4.6.7 <4.7",
     "zundo": "^2.3.0",
     "zustand": "^5"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.4.2",
+    "@types/bun": "^1.4.3",
     "@types/react": "19.3.0",
     "@types/three": "^0.186.0",
+    "@typescript/typescript6": "6.0.2",
     "fake-indexeddb": "^6.2.5",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "keywords": [
     "3d",

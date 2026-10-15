@@ -59,10 +59,10 @@ describe('registered tool output schemas', () => {
       { name: 'get_walls', arguments: { levelId } },
       { name: 'get_zones', arguments: { levelId } },
       { name: 'verify_scene', arguments: {} },
-      { name: 'validate_scene', arguments: {} },
       { name: 'validate_design', arguments: { design: DESIGN_EXAMPLE } },
       { name: 'check_collisions', arguments: {} },
-      { name: 'find_nodes', arguments: { type: 'wall' } },
+      { name: 'find_by_type', arguments: { type: 'wall' } },
+      { name: 'get_node', arguments: { id: levelId } },
       { name: 'export_json', arguments: {} },
       { name: 'list_templates', arguments: {} },
     ]
