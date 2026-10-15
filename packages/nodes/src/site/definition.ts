@@ -22,6 +22,7 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
   },
 
   capabilities: {
+    exterior: true,
     // Site is the root container — sidebar / property-line tool drive
     // selection, never 3D click (event bubbling from descendants would
     // override their selection). Same reasoning as `level`.

@@ -384,6 +384,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   }),
 
   capabilities: {
+    exterior: true,
     reveal: { phase: 'structure', style: 'rise' },
     revealOnEdit: [
       'start',

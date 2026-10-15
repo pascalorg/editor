@@ -284,6 +284,7 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   },
 
   capabilities: {
+    exterior: true,
     revealOnEdit: [
       'roofType',
       'width',

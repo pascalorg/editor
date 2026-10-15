@@ -45,7 +45,11 @@ const parametrics: ParametricDescriptor<FenceFeatureNode> = {
 const shared = {
   schemaVersion: 1,
   category: 'structure' as const,
-  capabilities: { selectable: { hitVolume: 'bbox' as const }, deletable: true },
+  capabilities: {
+    exterior: true,
+    selectable: { hitVolume: 'bbox' as const },
+    deletable: true,
+  },
   geometry: buildFenceFeatureGeometry,
   floorplan: buildFenceFeatureFloorplan,
   floorplanDependencies: (node: FenceFeatureNode) =>

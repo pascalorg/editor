@@ -135,6 +135,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   },
 
   capabilities: {
+    exterior: true,
     reveal: {
       phase: 'roof',
       style: 'assemble',
