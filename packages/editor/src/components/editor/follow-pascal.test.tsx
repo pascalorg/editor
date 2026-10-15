@@ -18,6 +18,7 @@ import {
 import { startConstructionReveal, useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
+import { openingExterior, wallExterior } from '../../lib/follow-pascal-exterior.test-fixture'
 import useEditor from '../../store/use-editor'
 import useFollowPascal from '../../store/use-follow-pascal'
 import { usePointAsk } from '../../store/use-point-ask'
@@ -66,6 +67,7 @@ beforeEach(async () => {
         capabilities: {
           reveal: { phase: 'openings', style: 'cut' },
           revealOnEdit: ['position'],
+          exterior: openingExterior,
         },
         geometry: () => null,
       } as unknown as AnyNodeDefinition,
@@ -75,7 +77,7 @@ beforeEach(async () => {
         schema: RoofNode,
         category: 'structure',
         defaults: () => ({}),
-        capabilities: { reveal: { phase: 'roof', style: 'assemble', height: 4 } },
+        capabilities: { reveal: { phase: 'roof', style: 'assemble', height: 4 }, exterior: true },
         geometry: () => null,
       } as unknown as AnyNodeDefinition,
       {
@@ -87,6 +89,7 @@ beforeEach(async () => {
         capabilities: {
           reveal: { phase: 'structure', style: 'rise' },
           revealOnEdit: ['start', 'end', 'curveOffset'],
+          exterior: wallExterior,
         },
         geometry: () => null,
       } as unknown as AnyNodeDefinition,

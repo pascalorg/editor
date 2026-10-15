@@ -13,6 +13,7 @@ import {
   WallNode,
 } from '@pascal-app/core'
 import type { RevealEvent } from '@pascal-app/viewer'
+import { openingExterior, wallExterior } from './follow-pascal-exterior.test-fixture'
 import { wantFromEvent } from './follow-pascal-targets'
 
 // What the camera looks at for each thing the reveal says: a floor when its walls rise, a window when
@@ -129,6 +130,33 @@ beforeAll(async () => {
             height: 4,
             clears: { for: 'furnishing', height: 2.4 },
           },
+          exterior: true,
+        },
+        geometry: () => null,
+      } as unknown as AnyNodeDefinition,
+      {
+        kind: 'wall',
+        schemaVersion: 1,
+        schema: WallNode,
+        category: 'structure',
+        defaults: () => ({}),
+        capabilities: {
+          reveal: { phase: 'structure', style: 'rise' },
+          revealOnEdit: ['start', 'end', 'curveOffset'],
+          exterior: wallExterior,
+        },
+        geometry: () => null,
+      } as unknown as AnyNodeDefinition,
+      {
+        kind: 'door',
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'structure',
+        defaults: () => ({}),
+        capabilities: {
+          reveal: { phase: 'openings', style: 'cut' },
+          revealOnEdit: ['position'],
+          exterior: openingExterior,
         },
         geometry: () => null,
       } as unknown as AnyNodeDefinition,
