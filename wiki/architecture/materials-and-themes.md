@@ -202,6 +202,8 @@ The ground is the medium, and the eye is above it or below it.
 | Eye light | `lights.tsx` `UndergroundFill` | its intensity is the ambiance's: the veil's 1 (or 0) at rest, up to `EYE_FILL_INTENSITY` under the ground |
 | Grade ring | `ground-veil.tsx` | `#1c1917` → the palette's light grey, a light rim |
 
+Changing floors changes uniforms only, never a material or the light count (adding a light or swapping a material is a runtime shader compile, ~430 ms on the villa). The ground's hole mask is on the ground materials from the moment the scene has a level below grade (`hasLevelBelowGrade`, set by `GroundHole`; scenes without one keep the plain window mask), and the eye's fill, once mounted, stays: only its intensity moves. Tests: `ground-veil.test.tsx` and `lights.test.tsx` ("switching floors…").
+
 The shown level's own materials are never touched. A capture (the agent's pictures, the hero shot) renders from its own camera with `gl.render`, so the composite pieces are not in it; `temporarilyWithoutAmbiance()` (held by the thumbnail generator's set-up and the hero bake) also closes the hole, lets the sky light and the fill go back to what they were, and restores them after.
 
 ## Adding a theme
