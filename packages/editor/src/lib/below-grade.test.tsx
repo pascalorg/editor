@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, type AnyNodeId, type LevelNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  BuildingNode,
+  type LevelNode,
+  LevelNode as LevelSchema,
+  SlabNode,
+  useScene,
+} from '@pascal-app/core'
+import { buildGroundLevelChanges } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import useEditor from '../store/use-editor'
@@ -118,4 +127,79 @@ test("the editor's level display marks it, except on the site, where the ground 
   }
   expect(useViewer.getState().belowGrade).toBe(false)
   expect(useViewer.getState().groundWindowBox).toBeNull()
+})
+
+// The owner's mansion (15 Oct): two basements, the stack standing Lower Ground at grade.
+describe('a mansion with two levels below grade', () => {
+  const plate = (id: string, size: number) =>
+    SlabNode.parse({
+      id: `slab_${id}`,
+      parentId: id,
+      elevation: 0.2,
+      polygon: [
+        [0, 0],
+        [size, 0],
+        [size, size],
+        [0, size],
+      ],
+    })
+  const level = (id: string, index: number, baseElevation: number, height: number) =>
+    LevelSchema.parse({
+      id,
+      parentId: 'building_mansion',
+      level: index,
+      baseElevation,
+      height,
+      children: [`slab_${id}`],
+    })
+  const levels = [
+    level('level_basement_2', -2, -3.4, 3.4),
+    level('level_lower_ground', -1, 0, 3.4),
+    level('level_reception', 0, 0, 4),
+  ]
+  const mansion = Object.fromEntries(
+    [
+      BuildingNode.parse({ id: 'building_mansion', children: levels.map((entry) => entry.id) }),
+      ...levels,
+      plate('level_basement_2', 14),
+      plate('level_lower_ground', 8),
+      plate('level_reception', 10),
+    ].map((node) => [node.id, node as AnyNode]),
+  ) as Record<AnyNodeId, AnyNode>
+  const lower = 'level_lower_ground' as LevelNode['id']
+  const deep = 'level_basement_2' as LevelNode['id']
+  const reception = 'level_reception' as LevelNode['id']
+
+  const seated = () => {
+    const built = buildGroundLevelChanges({ nodes: mansion, levelId: reception })
+    const next: Record<string, AnyNode> = { ...mansion }
+    for (const { id, data } of built?.update ?? []) next[id] = { ...next[id], ...data } as AnyNode
+    return next as Record<AnyNodeId, AnyNode>
+  }
+
+  test('unseated, the stack’s own elevations read the basement at grade, as it was drawn', () => {
+    expect(belowGradeShown(shown(lower), mansion)).toBe(false)
+    expect(belowGradeShown(shown(deep), mansion)).toBe(true)
+  })
+
+  test('with the ground line set, both basements are below grade and the ground floor is not', () => {
+    const nodes = seated()
+    expect(gradeStandingShown(shown(lower), nodes)).toBe('below-grade')
+    expect(gradeStandingShown(shown(deep), nodes)).toBe('below-grade')
+    expect(gradeStandingShown(shown(reception), nodes)).toBe('at-grade')
+  })
+
+  test('the viewer’s flag follows the level shown: -1, then -2, then the ground floor', () => {
+    useScene.setState({ nodes: seated() } as never)
+    useViewer.setState({ hideLevelsAboveSelection: true })
+    const stop = followBelowGrade()
+    const flag = () => useViewer.getState().gradeStanding
+    useViewer.getState().setSelection({ levelId: lower })
+    expect(flag()).toBe('below-grade')
+    useViewer.getState().setSelection({ levelId: deep })
+    expect(flag()).toBe('below-grade')
+    useViewer.getState().setSelection({ levelId: reception })
+    expect(flag()).toBe('at-grade')
+    stop()
+  })
 })
