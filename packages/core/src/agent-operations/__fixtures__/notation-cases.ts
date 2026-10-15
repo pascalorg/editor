@@ -29,6 +29,7 @@ export const NOTATION_CASES: NotationCase[] = [
       ['26.6°', 26.6],
       ['6:12', SIX_TWELVE],
       ['6/12', SIX_TWELVE],
+      ['+6/12', SIX_TWELVE],
       ['6 in 12', SIX_TWELVE],
       ['12:12', 45],
     ],

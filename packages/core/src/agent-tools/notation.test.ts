@@ -92,10 +92,23 @@ describe('roofPitch', () => {
     expect(degrees.parse('30')).toBe(30)
     expect(twelfths.parse(8)).toBe(8)
     expect(twelfths.parse('8')).toBe(8)
+    expect(twelfths.parse('8e0')).toBe(8)
+    expect(twelfths.parse('８')).toBe(8)
   })
 
   test('rise over run and degrees read in either unit', () => {
-    for (const said of ['6:12', '6/12', '6 in 12', '6-in-12', '6 on 12', '6:12 pitch', '3:6'])
+    for (const said of [
+      '6:12',
+      '6/12',
+      '+6/12',
+      '６／１２',
+      '6 in 12',
+      '6in12',
+      '6-in-12',
+      '6 on 12',
+      '6:12 pitch',
+      '3:6',
+    ])
       expect(twelfths.parse(said)).toBe(6)
     expect(twelfths.parse('45°')).toBeCloseTo(12, 9)
     expect(twelfths.parse('26.565051177078 deg')).toBeCloseTo(6, 9)
@@ -105,6 +118,9 @@ describe('roofPitch', () => {
   test('what is not a pitch is refused with a message the model can act on', () => {
     for (const [schema, said, words] of [
       [degrees, 'steep', 'rise per 12'],
+      // Without an angle unit the unit parser would read these as degrees: 6,0 as 6°, -6/12 as -0.5°.
+      [twelfths, '6,0', 'rise per 12'],
+      [degrees, '-6/12', 'rise per 12'],
       [twelfths, '6:0', 'no run'],
       [twelfths, '90°', 'under 90°'],
       [degrees, '90°', 'at most 85'],

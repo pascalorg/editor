@@ -60,16 +60,18 @@ function boundsNote(
 /** A number read from text, in the field's unit, or why it could not be read. */
 type Reading = number | { error: string }
 
-const BARE_NUMBER = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*$/
+const BARE_NUMBER = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?\s*$/i
 
 /** A conversion's float noise dropped: "6" read as inches is 6, not 5.999999999999999. */
 const clean = (value: number) => Number(value.toPrecision(12))
 
-function readQuantity(text: string, kind: Kind, unit: string): Reading {
+/** `unitRequired`: text without a unit is refused, not read in `unit`. */
+function readQuantity(text: string, kind: Kind, unit: string, unitRequired = false): Reading {
   const result = parseQuantity(text, {
     kind,
     unit,
     strictness: 'forgiving',
+    accept: { bareNumbers: !unitRequired },
     // A genuinely ambiguous separator ("1,234") must not silently become a 1000× value at a
     // tool boundary: fail so the model self-corrects.
     escalate: { AMBIGUOUS_NUMBER: 'error' },
@@ -128,7 +130,7 @@ export type PitchUnit = 'deg' | 'twelfths'
 
 /** Rise over run, as a pitch is said: "6:12", "6/12", "6 in 12", "6-in-12", "6 on 12", "6:12 pitch". */
 const RISE_OVER_RUN =
-  /^\s*(\d+\.?\d*|\.\d+)\s*(?::|\/|-?\s*\b(?:in|on)\b\s*-?)\s*(\d+\.?\d*|\.\d+)(?:\s*pitch)?\s*$/i
+  /^\s*\+?(\d+\.?\d*|\.\d+)\s*(?::|\/|-?\s*(?:in|on)\s*-?)\s*(\d+\.?\d*|\.\d+)(?:\s*pitch)?\s*$/i
 
 const twelfthsToDegrees = (twelfths: number) => (Math.atan(twelfths / 12) * 180) / Math.PI
 const degreesToTwelfths = (degrees: number) => 12 * Math.tan((degrees * Math.PI) / 180)
@@ -138,7 +140,9 @@ const PITCH_NOTES: Record<PitchUnit, string> = {
   twelfths: 'Rise per 12 of run (6 for 6:12), or "6:12" or "26.6°".',
 }
 
-function readPitch(text: string, unit: PitchUnit): Reading {
+function readPitch(said: string, unit: PitchUnit): Reading {
+  // Full-width forms ("６／１２") read as their ASCII twins.
+  const text = said.normalize('NFKC')
   const ratio = RISE_OVER_RUN.exec(text)
   if (ratio) {
     const run = Number(ratio[2])
@@ -147,7 +151,9 @@ function readPitch(text: string, unit: PitchUnit): Reading {
     return clean(unit === 'twelfths' ? twelfths : twelfthsToDegrees(twelfths))
   }
   if (BARE_NUMBER.test(text)) return Number(text)
-  const degrees = readQuantity(text, 'angle', 'deg')
+  // Anything else must name its angle unit ("26.6°", "0.46 rad"): without one, the unit parser
+  // reads text such as "6,0" or "6 / 12 / 1" as degrees.
+  const degrees = readQuantity(text, 'angle', 'deg', true)
   if (typeof degrees !== 'number')
     return {
       error: `Could not read "${text}" as a roof pitch: give degrees ("26.6°") or the rise per 12 ("6:12").`,
