@@ -43,6 +43,8 @@ Y lowers the object further. Floor and wall placement conventions are unchanged.
 
 ## Blender modules
 
+A worked example, from module to `add_object` call, is in [Blender geometry scripts](../blender-geometry-scripts.md).
+
 ```python
 import bpy, bmesh
 PARAMS = {"width": {"default": 1.8, "min": 1.2, "max": 2.6, "step": 0.05, "unit": "m"}}
