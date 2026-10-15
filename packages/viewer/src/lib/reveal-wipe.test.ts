@@ -1,12 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D } from 'three'
 import {
-  COVER_MAX_ROWS,
-  COVER_MIN_ROWS,
   clearRevealWipe,
+  coverDurationMs,
   coverShareAt,
   coverSweepOf,
-  planCoverRows,
   revealWipeLevelOf,
   setRevealWipe,
 } from './reveal-wipe'
@@ -35,43 +33,54 @@ describe('the sweep of a covering', () => {
   })
 })
 
-describe('the rows of a covering', () => {
-  const sweep = { axis: 'y', from: 3, to: 5.4 } as const
+describe('how long a covering takes', () => {
+  const range = { perMeterMs: 800, minMs: 2400, maxMs: 7000 }
+  const over = (length: number) => ({ axis: 'y', from: 3, to: 3 + length }) as const
 
-  test('start in order from the eave, the first at once and the last before the end', () => {
-    const rows = planCoverRows(sweep, 3000)
-    expect(rows.length).toBeGreaterThanOrEqual(COVER_MIN_ROWS)
-    expect(rows[0]?.atMs).toBe(0)
-    for (let i = 1; i < rows.length; i += 1) {
-      expect(rows[i]!.atMs).toBeGreaterThan(rows[i - 1]!.atMs)
-      expect(rows[i]!.upTo).toBeGreaterThan(rows[i - 1]!.upTo)
-    }
-    expect(rows.at(-1)?.upTo).toBe(1)
-    expect(rows.at(-1)!.atMs).toBeLessThan(3000)
+  test('follows the size of what it covers', () => {
+    expect(coverDurationMs(over(4), range)).toBe(3200)
+    expect(coverDurationMs(over(6), range)).toBe(4800)
+    expect(coverDurationMs(over(6), range)).toBeGreaterThan(coverDurationMs(over(4), range))
   })
 
-  test('their count follows the sweep, within bounds', () => {
-    expect(planCoverRows({ axis: 'y', from: 0, to: 0.7 }, 2000)).toHaveLength(COVER_MIN_ROWS)
-    expect(planCoverRows({ axis: 'x', from: 0, to: 40 }, 2000)).toHaveLength(COVER_MAX_ROWS)
+  test('never crawls on a small roof and never flashes or drags on the others', () => {
+    expect(coverDurationMs(over(0.7), range)).toBe(2400)
+    expect(coverDurationMs(over(0), range)).toBe(2400)
+    expect(coverDurationMs(over(40), range)).toBe(7000)
+  })
+})
+
+describe('the covering closes continuously', () => {
+  const duration = 3000
+
+  test('is exactly open at the start and closed at the end', () => {
+    expect(coverShareAt(0, duration)).toBe(0)
+    expect(coverShareAt(duration, duration)).toBe(1)
+    expect(coverShareAt(-50, duration)).toBe(0)
+    expect(coverShareAt(duration + 50, duration)).toBe(1)
   })
 
-  test('the covering closes row by row, never going back', () => {
-    const rows = planCoverRows(sweep, 3000)
-    let last = 0
-    for (let at = -1; at <= 3000; at += 50) {
-      const share = coverShareAt(rows, at)
-      expect(share).toBeGreaterThanOrEqual(last)
+  test('moves with every frame: strictly increasing at 60 Hz, with no plateau', () => {
+    let last = -1
+    for (let at = 0; at <= duration; at += 1000 / 60) {
+      const share = coverShareAt(at, duration)
+      expect(share).toBeGreaterThan(last)
       last = share
     }
-    expect(coverShareAt(rows, -1)).toBe(0)
-    expect(coverShareAt(rows, 3000)).toBe(1)
   })
 
-  test('a slower time stretches the rows, it does not change their order', () => {
-    const quick = planCoverRows(sweep, 1000)
-    const slow = planCoverRows(sweep, 4000)
-    expect(slow.map((row) => row.upTo)).toEqual(quick.map((row) => row.upTo))
-    expect(slow[3]!.atMs).toBeCloseTo(quick[3]!.atMs * 4, 6)
+  test('eases in and out: the first and last frames move less than the middle ones', () => {
+    const step = 1000 / 60
+    const first = coverShareAt(step, duration) - coverShareAt(0, duration)
+    const middle =
+      coverShareAt(duration / 2 + step, duration) - coverShareAt(duration / 2, duration)
+    const last = coverShareAt(duration, duration) - coverShareAt(duration - step, duration)
+    expect(first).toBeLessThan(middle / 3)
+    expect(last).toBeLessThan(middle / 3)
+  })
+
+  test('a covering with no time is closed', () => {
+    expect(coverShareAt(0, 0)).toBe(1)
   })
 })
 

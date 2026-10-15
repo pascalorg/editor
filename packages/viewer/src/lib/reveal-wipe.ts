@@ -5,8 +5,8 @@ import type { Node, NodeMaterial } from 'three/webgpu'
 
 /**
  * The covering of a node laid over what stands under it, in place: a roof at the Framing level
- * keeps its frame and its shell is revealed row by row from its lowest edge to its highest, the way
- * a wall's boards and finish go over its studs. Presentation only, like the pose: the scene is not
+ * keeps its frame and its shell is revealed continuously from its lowest edge to its highest, the
+ * way a wall's boards and finish go over its studs. Presentation only, like the pose: the scene is not
  * touched, and the meshes wear masked clones of their materials while it plays (the scene's
  * materials are shared and cached, so a wipe never writes to them).
  *
@@ -28,10 +28,6 @@ export type CoverSweep = { axis: CoverAxis; from: number; to: number }
 
 /** A node that rises less than this (m) is flat: it sweeps along its longer plan side. */
 export const COVER_MIN_RISE_M = 0.6
-/** One row of the covering takes about this much of the sweep (m): a course of tiles or a sheet. */
-export const COVER_ROW_M = 0.5
-export const COVER_MIN_ROWS = 4
-export const COVER_MAX_ROWS = 14
 
 type BoxLike = {
   min: { x: number; y: number; z: number }
@@ -51,42 +47,28 @@ export function coverSweepOf(box: BoxLike): CoverSweep {
     : { axis: 'z', from: box.min.z, to: box.max.z }
 }
 
-/** One row of the covering: the part of the sweep it closes, and when it is laid. */
-export type CoverRow = {
-  index: number
-  /** The row's far edge along the sweep, as a share of it; the rows go 0 → 1 in order. */
-  upTo: number
-  /** When the row is laid, from the start of the cover (ms). */
-  atMs: number
-}
-
 /**
- * The rows of a covering that takes `durationMs`: their count follows the length of the sweep, the
- * first is laid at once, and each next one a stride later, so the last lands with the end of the
- * time. In order from the lowest edge.
+ * How long a covering takes by the size of what it covers, at a level's pace and the person's speed:
+ * `perMeterMs` for each metre of the sweep, never under `minMs` (a small porch roof does not crawl,
+ * it does not flash either) and never over `maxMs` (a long flat roof does not take half a minute).
  */
-export function planCoverRows(sweep: CoverSweep, durationMs: number): CoverRow[] {
+export type CoverRange = { perMeterMs: number; minMs: number; maxMs: number }
+
+/** The time a covering of `sweep` takes in `range`. */
+export function coverDurationMs(sweep: CoverSweep, range: CoverRange): number {
   const length = Math.max(0, sweep.to - sweep.from)
-  const count = Math.min(COVER_MAX_ROWS, Math.max(COVER_MIN_ROWS, Math.round(length / COVER_ROW_M)))
-  const stride = count > 1 ? durationMs / count : 0
-  return Array.from({ length: count }, (_, index) => ({
-    index,
-    upTo: (index + 1) / count,
-    atMs: index * stride,
-  }))
+  return Math.min(range.maxMs, Math.max(range.minMs, length * range.perMeterMs))
 }
 
 /**
- * How much of the sweep the covering has closed `elapsedMs` into it, as a share in [0, 1]: the far
- * edge of the last row laid. 0 before the first row, 1 once the last is laid.
+ * How much of the sweep the covering has closed `elapsedMs` into `durationMs`, as a share in [0, 1].
+ * It moves continuously: an ease in and out (a sine), so it starts and stops without a jolt, and it
+ * is exactly 0 at the start and 1 at the end.
  */
-export function coverShareAt(rows: readonly CoverRow[], elapsedMs: number): number {
-  let share = 0
-  for (const row of rows) {
-    if (row.atMs > elapsedMs) break
-    share = row.upTo
-  }
-  return share
+export function coverShareAt(elapsedMs: number, durationMs: number): number {
+  if (!(durationMs > 0)) return elapsedMs >= 0 ? 1 : 0
+  const t = Math.min(1, Math.max(0, elapsedMs / durationMs))
+  return 0.5 - 0.5 * Math.cos(Math.PI * t)
 }
 
 type Worn = {

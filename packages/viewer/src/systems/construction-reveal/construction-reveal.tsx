@@ -46,6 +46,7 @@ import {
   setRevealPose,
 } from '../../lib/reveal-pose'
 import {
+  coverRangeAt,
   LAZY_REVEAL_TIMING,
   type LazyRevealTiming,
   lazyRetractTimingAt,
@@ -64,12 +65,12 @@ import {
 } from '../../lib/reveal-schedule'
 import { clearRiseTextureScale, setRiseTextureScale } from '../../lib/reveal-texture-scale'
 import {
-  type CoverRow,
+  type CoverRange,
   type CoverSweep,
+  coverDurationMs,
   coverShareAt,
   coverSweepOf,
   type PlayedStyle,
-  planCoverRows,
   setRevealWipe,
 } from '../../lib/reveal-wipe'
 import useViewer from '../../store/use-viewer'
@@ -119,29 +120,41 @@ type ActiveReveal = {
   finaleSaid: boolean
   /** An edit plays the node again (`commitEditCandidates`): it counts in the changes' groups, not the build's. */
   edit?: true
-  /** A `cover` node's rows, planned when it starts (see `layCover`). */
+  /** A `cover` node's covering, planned when it starts (see `layCover`). */
   cover?: Cover
+  /** How long a covering takes by its size, at the speed this plan was made at (`cover` nodes). */
+  coverRange?: CoverRange
 }
 
-/** How a covering is laid over a node held still: its sweep along the node and its rows in order. */
-type Cover = { sweep: CoverSweep; rows: readonly CoverRow[] }
+/** How a covering is laid over a node held still: its sweep along the node and how long it takes. */
+type Cover = { sweep: CoverSweep; durationMs: number }
 
 const coverBox = new Box3()
 
-/** The rows of a covering that takes `durationMs` over what is drawn under `root`. */
-function planCover(root: Object3D, durationMs: number): Cover {
+/** The sweep over what is drawn under `root`, and the time it takes in `range`. */
+function planCover(root: Object3D, range: CoverRange): Cover {
   root.updateWorldMatrix(true, true)
   const sweep = coverSweepOf(coverBox.setFromObject(root))
-  return { sweep, rows: planCoverRows(sweep, durationMs) }
+  return { sweep, durationMs: coverDurationMs(sweep, range) }
 }
 
-/** The world coordinate the covering has reached when `share` of its sweep is closed. */
+/**
+ * The world coordinate the covering has reached when `share` of its sweep is closed: a hair under
+ * the lowest edge at the start and over the highest at the end, so it is whole where it ends.
+ */
 const coverLevel = (sweep: CoverSweep, share: number) =>
-  share <= 0 ? sweep.from - 0.01 : sweep.from + (sweep.to - sweep.from) * share + 0.01
+  sweep.from - 0.01 + (sweep.to - sweep.from + 0.02) * share
 
-/** Lays the rows of `cover` that `elapsedMs` has reached; `-1` before the first row is laid. */
+/** Lays the covering `elapsedMs` into its time: it moves with every frame, easing in and out. */
 function layCover(root: Object3D, cover: Cover, elapsedMs: number) {
-  setRevealWipe(root, cover.sweep, coverLevel(cover.sweep, coverShareAt(cover.rows, elapsedMs)))
+  const share = coverShareAt(elapsedMs, cover.durationMs)
+  setRevealWipe(root, cover.sweep, coverLevel(cover.sweep, share))
+}
+
+/** Lifts the covering off: the same sweep played from the highest edge to the lowest. */
+function liftCover(root: Object3D, cover: Cover, progress: number) {
+  const left = (1 - Math.min(1, Math.max(0, progress))) * cover.durationMs
+  setRevealWipe(root, cover.sweep, coverLevel(cover.sweep, coverShareAt(left, cover.durationMs)))
 }
 
 export type RevealPhaseEvent = { phase: RevealPhase; levelId: string | null }
@@ -1216,6 +1229,7 @@ function startReveal(candidate: RevealCandidate, now: number, animate: boolean) 
     startedAt: now,
     durationMs: styleMs(timing.durationMs, candidate.style),
     assembleMs: revealTimingAt(planSpeed).durationMs.drop,
+    ...(candidate.style === 'cover' ? { coverRange: coverRangeAt(planSpeed) } : {}),
     clockStart: null,
     pivot: null,
     base: null,
@@ -1308,7 +1322,9 @@ function stepReveal(reveal: ActiveReveal, now: number) {
     revealPoseAt(reveal.style, 0, reveal.height, sample, reveal)
     setRevealPose(root, reveal.pivot, sample.scale, sample.lift)
     if (reveal.style === 'cover') {
-      reveal.cover = planCover(root, reveal.durationMs)
+      // The covering takes as long as what it covers is big, now that the roof is drawn.
+      reveal.cover = planCover(root, reveal.coverRange ?? coverRangeAt(planSpeed))
+      reveal.durationMs = reveal.cover.durationMs
       layCover(root, reveal.cover, 0)
     }
     if (!reveal.edit) groupStarted(reveal.candidate, now)
@@ -1739,6 +1755,8 @@ function playDeletions(commit: SceneCommit) {
     }
     group.ids.push(entry.id)
     group.remaining += 1
+    const cover =
+      entry.style === 'cover' ? planCover(root, coverRangeAt(currentSpeed(), true)) : undefined
     ghosts.set(entry.id, {
       id: entry.id,
       levelId: entry.levelId,
@@ -1747,7 +1765,8 @@ function playDeletions(commit: SceneCommit) {
       style: entry.style,
       height: entry.height,
       startMs: entry.startMs,
-      durationMs: entry.durationMs,
+      durationMs: cover?.durationMs ?? entry.durationMs,
+      ...(cover ? { cover } : {}),
       group,
       pivot: null,
       ...(entry.prerollMs ? { prerollMs: entry.prerollMs } : {}),
@@ -1784,10 +1803,7 @@ function stepGhosts(now: number) {
     const t = (now - ghost.startMs) / ghost.durationMs
     const pose = retractPoseAt(ghost.style, t, ghost.height, retractSample)
     setRevealPose(ghost.root, ghost.pivot, pose.scale, pose.lift)
-    if (ghost.style === 'cover') {
-      ghost.cover ??= planCover(ghost.root, ghost.durationMs)
-      layCover(ghost.root, ghost.cover, (1 - Math.min(1, t)) * ghost.durationMs - 1)
-    }
+    if (ghost.cover) liftCover(ghost.root, ghost.cover, t)
     if (fadesAway(ghost.style)) setGhost(ghost.root, pose.opacity)
     if (t >= 1) ghostGone(ghost, now)
   }
@@ -1824,7 +1840,6 @@ function stepRetracts(now: number) {
     }
     if (!retract.pivot) {
       retract.pivot = revealPivot(revealLocalBounds(root), retract.style)
-      if (retract.style === 'cover') retract.cover = planCover(root, retract.durationMs)
       if (!retract.group.started) {
         retract.group.started = true
         emitRetract('retract-start', retract.group, now)
@@ -1833,7 +1848,7 @@ function stepRetracts(now: number) {
     const t = (now - retract.startMs) / retract.durationMs
     const pose = retractPoseAt(retract.style, t, retract.height, retractSample)
     setRevealPose(root, retract.pivot, pose.scale, retract.from.lift + pose.lift)
-    if (retract.cover) layCover(root, retract.cover, (1 - Math.min(1, t)) * retract.durationMs - 1)
+    if (retract.cover) liftCover(root, retract.cover, t)
     if (fadesAway(retract.style)) setGhost(root, retract.from.opacity * pose.opacity)
     if (t >= 1) {
       holdGone(retract, root, now)
@@ -1977,12 +1992,16 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
       }
       group.ids.push(entry.id)
       group.remaining += 1
+      // A covering lifts off in a time that follows its size: known now, with the roof still drawn.
+      const mounted = entry.style === 'cover' ? sceneRegistry.nodes.get(entry.id) : undefined
+      const cover = mounted ? planCover(mounted, coverRangeAt(speed, true)) : undefined
       retracts.set(entry.id, {
         id: entry.id,
         style: entry.style,
         height: entry.height,
         startMs: entry.startMs,
-        durationMs: entry.durationMs,
+        durationMs: cover?.durationMs ?? entry.durationMs,
+        ...(cover ? { cover } : {}),
         from: from.get(entry.id) ?? { lift: 0, opacity: 1 },
         group,
         run,

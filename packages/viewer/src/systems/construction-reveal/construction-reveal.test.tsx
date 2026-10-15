@@ -29,6 +29,7 @@ import { OVERLAY_LAYER, scenePassLayers } from '../../lib/layers'
 import { commitEditCandidates } from '../../lib/reveal-candidates'
 import { hasRevealPose } from '../../lib/reveal-pose'
 import {
+  coverRangeAt,
   LAZY_REVEAL_TIMING,
   lazyTimingAt,
   RETRACT_TIMING,
@@ -216,6 +217,25 @@ const Lid = revealKind(
 const Part = revealKind('fixture:part', 'fxpart', null, () =>
   new BoxGeometry(3, 1, 4).translate(0, 3.5, 0),
 )
+// Roofs of three sizes: a small porch, a tall hip, a long flat one.
+const Porch = revealKind(
+  'fixture:porch',
+  'fxporch',
+  { phase: 'roof', style: 'assemble', height: 4 },
+  () => new BoxGeometry(3, 0.7, 2).translate(0, 3.1, 0),
+)
+const Hip = revealKind(
+  'fixture:hip',
+  'fxhip',
+  { phase: 'roof', style: 'assemble', height: 4 },
+  () => new BoxGeometry(9, 5, 9).translate(0, 5.5, 0),
+)
+const LongFlat = revealKind(
+  'fixture:longflat',
+  'fxlongflat',
+  { phase: 'roof', style: 'assemble', height: 4 },
+  () => new BoxGeometry(14, 0.3, 4).translate(0, 3, 0),
+)
 // A pitched roof: it rises 1.6 m from its eave to its ridge.
 const Gable = revealKind(
   'fixture:gable',
@@ -362,6 +382,9 @@ beforeEach(async () => {
       Model.definition,
       Part.definition,
       Gable.definition,
+      Porch.definition,
+      Hip.definition,
+      LongFlat.definition,
     ],
   })
   now = 0
@@ -1020,6 +1043,48 @@ describe('a roof at the framing level is covered in place, not dropped', () => {
     })
   })
 
+  test('the covering moves with every frame: strictly increasing, closed at the top at the end', async () => {
+    const { roof } = await buildGable()
+    const { levels } = await watch(roof.id)
+    expect(levels.length).toBeGreaterThan(30)
+    for (let i = 1; i < levels.length; i += 1) expect(levels[i]!).toBeGreaterThan(levels[i - 1]!)
+    // The ridge is at 4.4 m: the last frame it is drawn in has closed it.
+    expect(levels.at(-1)!).toBeGreaterThanOrEqual(4.4)
+  })
+
+  test('it takes as long as it is big, within a floor and a ceiling', async () => {
+    const range = coverRangeAt(1)
+    const took: Record<string, number> = {}
+    for (const [name, kind] of [
+      ['porch', Porch],
+      ['hip', Hip],
+      ['flat', LongFlat],
+    ] as const) {
+      await renderer?.unmount()
+      renderer = null
+      await act(async () => driver?.stop())
+      driver = null
+      sceneRegistry.clear()
+      now = 0
+      level = 'framing'
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start()
+      const roof = make(kind)
+      await agentWrites(() => useScene.getState().createNode(roof, levelId))
+      const { levels, took: ms } = await watch(roof.id, 60000)
+      expect(levels.length).toBeGreaterThan(0)
+      took[name] = ms
+    }
+    const near = (ms: number, want: number) => Math.abs(ms - want) <= 600
+    // A 0.7 m rise is under the floor; a 5 m rise follows its size; 14 m of flat roof is capped.
+    expect(near(took.porch!, range.minMs)).toBe(true)
+    expect(near(took.hip!, 5.02 * range.perMeterMs)).toBe(true)
+    expect(near(took.flat!, range.maxMs)).toBe(true)
+    expect(took.porch!).toBeLessThan(took.hip!)
+    expect(took.hip!).toBeLessThan(took.flat!)
+  })
+
   test('it plays at the person’s animation speed', async () => {
     const took: Record<number, number> = {}
     for (const speed of [0.5, 2]) {
@@ -1113,9 +1178,9 @@ describe('a roof at the framing level is covered in place, not dropped', () => {
     }
     expect(result).not.toBeNull()
     expect(yScale(roofRoot)).toBeLessThan(0.01)
-    expect(levels.length).toBeGreaterThan(3)
-    for (let i = 1; i < levels.length; i += 1)
-      expect(levels[i]!).toBeLessThanOrEqual(levels[i - 1]!)
+    expect(levels.length).toBeGreaterThan(10)
+    // It lifts continuously from the ridge: every frame is lower than the one before.
+    for (let i = 1; i < levels.length; i += 1) expect(levels[i]!).toBeLessThan(levels[i - 1]!)
     expect(levels[0]!).toBeGreaterThan(4)
     expect(levels.at(-1)!).toBeLessThan(3.4)
   })

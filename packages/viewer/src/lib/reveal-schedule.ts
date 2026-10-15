@@ -1,6 +1,6 @@
 import type { RevealPhase, RevealStyle } from '@pascal-app/core'
 import { REVEAL_ARRIVAL } from './reveal-pose'
-import type { PlayedStyle } from './reveal-wipe'
+import type { CoverRange, PlayedStyle } from './reveal-wipe'
 
 export const REVEAL_PHASE_ORDER: readonly RevealPhase[] = [
   'foundation',
@@ -186,8 +186,14 @@ export type LazyRevealTiming = {
   jitter: number
   /** A plan longer than this is pulled together to end by it: a huge build does not take forever. */
   capMs: number
-  /** How long each style moves its node at this level; `cover` is how long a roof's covering takes to lay. */
+  /** How long each style moves its node at this level; `cover` is the longest a roof's covering takes to lay. */
   durationMs: Record<PlayedStyle, number>
+  /**
+   * A covering takes this long for each metre of what it covers, never under `coverMinMs` nor over
+   * `durationMs.cover` (`coverRangeAt`).
+   */
+  coverMsPerM: number
+  coverMinMs: number
   /**
    * How far a rise, a scale or a settle goes past its rest before it settles (GSAP's `back.out`
    * strength; 0 is a plain ease out). A rise's is gentler: a wall 2 % past its top, not into the slab over it.
@@ -222,7 +228,9 @@ export const LAZY_REVEAL_BASE_TIMING: LazyRevealTiming = {
   phaseGapMs: 260,
   jitter: 0.3,
   capMs: 40_000,
-  durationMs: { rise: 760, scale: 520, settle: 640, drop: 820, cut: 320, assemble: 0, cover: 2600 },
+  durationMs: { rise: 760, scale: 520, settle: 640, drop: 820, cut: 320, assemble: 0, cover: 4200 },
+  coverMsPerM: 450,
+  coverMinMs: 1400,
   overshoot: { rise: 0.7, scale: 1.6, settle: 1.6 },
   minHeightM: { drop: 1.8, settle: 0.6 },
 }
@@ -241,6 +249,8 @@ export function pacedLazyTiming(timing: LazyRevealTiming, pace: number): LazyRev
     phaseGapMs: timing.phaseGapMs * pace,
     capMs: timing.capMs * pace,
     durationMs: scaled(timing.durationMs),
+    coverMsPerM: timing.coverMsPerM * pace,
+    coverMinMs: timing.coverMinMs * pace,
   }
 }
 
@@ -288,10 +298,10 @@ export function pacedRetractTiming(timing: RetractTiming, speed: number): Retrac
   }
 }
 
-function scaleTimes<K extends string>(table: Record<K, number>, factor: number): Record<K, number> {
+function scaleTimes<T extends Partial<Record<string, number>>>(table: T, factor: number): T {
   return Object.fromEntries(
-    (Object.entries(table) as [K, number][]).map(([key, ms]) => [key, ms * factor]),
-  ) as Record<K, number>
+    Object.entries(table).map(([key, ms]) => [key, ms === undefined ? ms : ms * factor]),
+  ) as T
 }
 
 /** The Full level's schedule at `speed`; at ×1 it is `REVEAL_TIMING` itself. */
@@ -444,7 +454,7 @@ export type RetractTiming = {
   /** A reverse play ends within this however many pieces it takes back. */
   capMs: number
   /** How long each style takes to go: a rewind is quicker than the build. */
-  durationMs: Record<RevealStyle, number>
+  durationMs: Record<RevealStyle, number> & { cover?: number }
 }
 
 /** The one place to tune the reverse play's pace. */
@@ -466,11 +476,31 @@ export type PlannedRetract = RevealCandidate & {
  * floor comes apart as slowly as it went up. `capMs` keeps a whole floor's deconstruction in a
  * bounded time however many pieces it takes back.
  */
+/** A covering lifts off in this share of the time it took to lay. */
+export const COVER_REVERSE_SHARE = 0.6
+
 export const LAZY_RETRACT_TIMING: RetractTiming = {
   speed: RETRACT_TIMING.speed,
   nodeGapMs: RETRACT_TIMING.nodeGapMs * FRAMING_PACE,
   capMs: 14_000,
-  durationMs: scaleTimes(RETRACT_TIMING.durationMs, FRAMING_PACE),
+  durationMs: {
+    ...scaleTimes(RETRACT_TIMING.durationMs, FRAMING_PACE),
+    cover: LAZY_REVEAL_TIMING.durationMs.cover * COVER_REVERSE_SHARE,
+  },
+}
+
+/**
+ * How long a roof's covering takes by the size it covers at the Framing level at `speed`: its range
+ * in metres of sweep (`coverDurationMs`); `reverse` for the lifting off of a deletion or an undo.
+ */
+export function coverRangeAt(speed: number, reverse = false): CoverRange {
+  const timing = lazyTimingAt(speed)
+  const share = reverse ? COVER_REVERSE_SHARE : 1
+  return {
+    perMeterMs: timing.coverMsPerM * share,
+    minMs: timing.coverMinMs * share,
+    maxMs: timing.durationMs.cover * share,
+  }
 }
 
 /** The Framing level's reverse play at `speed`; at ×1 it is `LAZY_RETRACT_TIMING` itself. */
