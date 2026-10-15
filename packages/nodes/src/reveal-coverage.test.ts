@@ -82,6 +82,13 @@ describe('the fields an edit replays a node for', () => {
       expect(kinds).toContain(kind)
   })
 
+  test('a roof segment replays for the barrel arch and the glazing it can be given', () => {
+    const roofSegment = withEdits.find((definition) => definition.kind === 'roof-segment')
+    expect(roofSegment?.capabilities?.revealOnEdit).toEqual(
+      expect.arrayContaining(['barrelRise', 'barrelSegments', 'roofSystem', 'glazing']),
+    )
+  })
+
   test.each(withEdits.map((definition) => [definition.kind, definition] as const))(
     '%s lists only fields its schema has',
     (_kind, definition) => {
