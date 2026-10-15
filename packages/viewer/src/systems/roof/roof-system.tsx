@@ -1,10 +1,16 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type GlazedRoofPiece,
+  getBarrelRoofFaces,
+  getBarrelRoofSolidPieces,
   getConicalRoofCoverage,
   getDutchEndSlopeFaces,
   getDutchRoofShapeMetrics,
   getEffectiveNode,
+  getGlazedRoofFaces,
+  getGlazedRoofPieceFaces,
+  getGlazedRoofPieces,
   getRoofModuleFaces,
   getRoofPlanBounds,
   getRoofSegmentDeckReach,
@@ -14,6 +20,8 @@ import {
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   isBandedShedSegment,
+  isGlazedRoofSegment,
+  isIndependentRoofSegment,
   nodeRegistry,
   normalizeRoofSegmentTrim,
   pointInPolygon2D,
@@ -161,6 +169,7 @@ function createDegenerateRoofPlaceholder(): THREE.BufferGeometry {
 
 // Pending merged-roof updates carried across frames (for throttling)
 const pendingRoofUpdates = new Set<AnyNodeId>()
+const pendingIndependentSegments = new Set<AnyNodeId>()
 const previousRoofPlanBounds = new Map<AnyNodeId, RoofPlanBounds>()
 const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
@@ -194,7 +203,7 @@ function mergedFromStillHolds(roofId: AnyNodeId, nodes: Record<string, AnyNode>)
  * capture.
  */
 export function getPendingRoofMergeCount(): number {
-  return countPendingRoofShells(pendingRoofUpdates, (id) =>
+  return countPendingRoofShells([...pendingRoofUpdates, ...pendingIndependentSegments], (id) =>
     sceneRegistry.nodes.get(id as AnyNodeId),
   )
 }
@@ -208,7 +217,24 @@ export function countPendingRoofShells(
   return count
 }
 
-function queueSiblingRoofUpdates(roofId: AnyNodeId, nodes: Record<string, AnyNode>) {
+function queueSiblingRoofUpdates(
+  roofId: AnyNodeId,
+  nodes: Record<string, AnyNode>,
+  changedSegmentId?: AnyNodeId,
+) {
+  const queueIndependent = (roof: RoofNode) => {
+    for (const id of roof.children) {
+      const segment = nodes[id]
+      if (
+        segment?.type === 'roof-segment' &&
+        segment.id !== changedSegmentId &&
+        isIndependentRoofSegment(getEffectiveNode(segment))
+      )
+        pendingIndependentSegments.add(segment.id)
+    }
+  }
+  const currentRoof = nodes[roofId]
+  if (currentRoof?.type === 'roof') queueIndependent(currentRoof)
   pendingRoofUpdates.add(roofId)
   const roof = nodes[roofId]?.type === 'roof' ? getEffectiveNode(nodes[roofId]) : undefined
   if (roof?.type !== 'roof' || !roof.parentId) return
@@ -261,6 +287,7 @@ function queueSiblingRoofUpdates(roofId: AnyNodeId, nodes: Record<string, AnyNod
       (oldBounds && roofPlanBoundsOverlap(oldBounds, siblingBounds))
     ) {
       pendingRoofUpdates.add(sibling.id)
+      queueIndependent(sibling)
     }
   }
 }
@@ -269,7 +296,12 @@ function queueSiblingRoofUpdates(roofId: AnyNodeId, nodes: Record<string, AnyNod
 // ROOF SYSTEM
 // ============================================================================
 
-export const RoofSystem = () => {
+/** What a plugin adds to a segment mesh after its geometry is rebuilt. */
+export type RoofGeometryAdapter = {
+  syncGeometry: (node: RoofSegmentNode, mesh: THREE.Mesh) => void
+}
+
+export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometryAdapter } = {}) => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
@@ -283,6 +315,7 @@ export const RoofSystem = () => {
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {
       pendingRoofUpdates.clear()
+      pendingIndependentSegments.clear()
       previousRoofPlanBounds.clear()
       warnedMergedRoofNaNIds.clear()
       mergedFrom.clear()
@@ -293,15 +326,24 @@ export const RoofSystem = () => {
       return
     }
 
-    if (dirtyNodes.size === 0 && pendingRoofUpdates.size === 0) return
+    if (
+      dirtyNodes.size === 0 &&
+      pendingRoofUpdates.size === 0 &&
+      pendingIndependentSegments.size === 0
+    )
+      return
 
     const nodes = useScene.getState().nodes
 
     // --- Pass 1: Process dirty roof-segments (throttled) ---
     let segmentsProcessed = 0
-    dirtyNodes.forEach((id) => {
+    new Set([...dirtyNodes, ...pendingIndependentSegments]).forEach((id) => {
+      const independentCascade = pendingIndependentSegments.has(id) && !dirtyNodes.has(id)
       const node = nodes[id]
-      if (!node) return
+      if (!node) {
+        pendingIndependentSegments.delete(id)
+        return
+      }
 
       // Cutting roof accessories cascade their dirty mark to the host
       // segment's parent roof so the merged shell re-CSGs with the new
@@ -317,6 +359,7 @@ export const RoofSystem = () => {
         const seg = segId ? (nodes[segId as AnyNodeId] as RoofSegmentNode | undefined) : undefined
         if (roofAccessory.buildCut && seg?.parentId) {
           pendingRoofUpdates.add(seg.parentId as AnyNodeId)
+          if (isIndependentRoofSegment(seg)) useScene.getState().markDirty(seg.id)
         }
         clearDirty(id as AnyNodeId)
         return
@@ -344,7 +387,7 @@ export const RoofSystem = () => {
             mesh.parent?.name === 'segments-wrapper' &&
             mesh.parent?.parent?.getObjectByName('merged-roof')?.visible === true
           if (isVisible && !revealOnly && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
-            updateRoofSegmentGeometry(effectiveSegment, mesh, nodes)
+            updateRoofSegmentGeometry(effectiveSegment, mesh, nodes, geometryAdapter)
             segmentsProcessed++
           } else if (isVisible && !revealOnly) {
             return // Over budget — keep dirty, process next frame
@@ -368,12 +411,14 @@ export const RoofSystem = () => {
         } else {
           clearDirty(id as AnyNodeId)
         }
-        // Queue the parent roof for a merged geometry update. A segment dropping in for the
-        // construction reveal changes nothing the shell is made of: the shell merged when the roof
-        // arrived already has it, and merging again for each segment (360 ms each) stalls the drop.
+        pendingIndependentSegments.delete(id)
         const parentId = effectiveSegment.parentId as AnyNodeId | null
-        if (parentId && !(isRevealAssembling(parentId) && mergedFromStillHolds(parentId, nodes))) {
-          queueSiblingRoofUpdates(parentId, nodes)
+        if (
+          parentId &&
+          !independentCascade &&
+          !(isRevealAssembling(parentId) && mergedFromStillHolds(parentId, nodes))
+        ) {
+          queueSiblingRoofUpdates(parentId, nodes, id)
         }
       } else if (node.type === 'roof') {
         queueSiblingRoofUpdates(id as AnyNodeId, nodes)
@@ -420,6 +465,7 @@ function updateRoofSegmentGeometry(
   node: RoofSegmentNode,
   mesh: THREE.Mesh,
   nodes?: Record<string, AnyNode>,
+  adapter?: RoofGeometryAdapter,
 ) {
   const newGeo = generateRoofSegmentGeometry(node, nodes)
 
@@ -429,6 +475,7 @@ function updateRoofSegmentGeometry(
 
   mesh.position.set(node.position[0], node.position[1], node.position[2])
   mesh.rotation.y = node.rotation
+  adapter?.syncGeometry(node, mesh)
 }
 
 /**
@@ -611,7 +658,10 @@ function updateMergedRoofGeometry(
       const scn = nodes[id] as RoofSegmentNode | undefined
       return scn ? getEffectiveNode(scn) : undefined
     })
-    .filter((n): n is RoofSegmentNode => n !== undefined && !hasSegmentMaterialOverride(n))
+    .filter(
+      (n): n is RoofSegmentNode =>
+        n !== undefined && !hasSegmentMaterialOverride(n) && !isIndependentRoofSegment(n),
+    )
 
   if (children.length === 0) {
     mergedMesh.geometry.dispose()
@@ -1396,6 +1446,13 @@ export function clipGeometryBySegmentTrim(
       prepareBrushForCSG(brush)
       const next = csgEvaluator.evaluate(brush, cut, SUBTRACTION) as Brush
       const trimmed = csgGeometry(next).clone()
+      const materialIndices = new Map(dummyMats.map((material, index) => [material, index]))
+      for (const group of trimmed.groups)
+        group.materialIndex = mapRoofGroupMaterialIndex(
+          group.materialIndex,
+          csgMaterials(next),
+          materialIndices,
+        )
       currentGeometry.dispose()
       next.geometry.dispose()
       ensureRenderableGeometryAttributes(trimmed)
@@ -1884,6 +1941,86 @@ export function getRoofSegmentBrushes(
   return null
 }
 
+function buildIndependentRoofSegmentGeometry(
+  node: RoofSegmentNode,
+  nodes?: Record<string, AnyNode>,
+): THREE.BufferGeometry | null {
+  if (!isIndependentRoofSegment(node)) return null
+  const pieces = isGlazedRoofSegment(node)
+    ? getGlazedRoofPieces(node)
+    : getBarrelRoofSolidPieces(node)
+  const build = (pieces: GlazedRoofPiece[]) => {
+    const parts = pieces.map((piece) =>
+      createGeometryFromFaces(
+        getGlazedRoofPieceFaces(piece).map((face) =>
+          face.map(({ x, y, z }) => new THREE.Vector3(x, y, z)),
+        ),
+        piece.slot,
+      ),
+    )
+    const geometry =
+      (parts.length ? mergeGeometries(parts, true) : null) ?? new THREE.BufferGeometry()
+    geometry.groups.forEach((group, index) => {
+      group.materialIndex = parts[index]?.groups[0]?.materialIndex ?? 0
+    })
+    for (const part of parts) part.dispose()
+    ensureRenderableGeometryAttributes(geometry)
+    return geometry
+  }
+  let covering = build(pieces.filter((piece) => piece.face.normal[1] > 0))
+  let walls = build(pieces.filter((piece) => piece.face.normal[1] <= 0))
+  const subtract = (geometry: THREE.BufferGeometry, cutter: Brush): THREE.BufferGeometry => {
+    if (!geometry.getAttribute('position')?.count) return geometry
+    const brush = new Brush(geometry, dummyMats)
+    prepareBrushForCSG(brush)
+    const result = csgEvaluator.evaluate(brush, cutter, SUBTRACTION) as Brush
+    const next = result.geometry.clone()
+    const indices = new Map(dummyMats.map((material, index) => [material, index]))
+    for (const group of next.groups)
+      group.materialIndex = mapRoofGroupMaterialIndex(
+        group.materialIndex,
+        csgMaterials(result),
+        indices,
+      )
+    result.geometry.dispose()
+    geometry.dispose()
+    return next
+  }
+  for (const id of node.children ?? []) {
+    const stored = nodes?.[id]
+    if (!stored) continue
+    const child = getEffectiveNode(stored)
+    if (child.metadata?.isTransient) continue
+    const capability = nodeRegistry.get(child.type)?.capabilities.roofAccessory
+    const cutGeometry = capability?.buildCut?.(child, node)
+    if (!cutGeometry) continue
+    const cutter = new Brush(cutGeometry, dummyMats[0])
+    try {
+      prepareBrushForCSG(cutter)
+      if (capability?.cutScope !== 'wall') covering = subtract(covering, cutter)
+      walls = subtract(walls, cutter)
+    } finally {
+      cutGeometry.dispose()
+    }
+  }
+  const parts = [covering, walls]
+    .filter((part) => part.getAttribute('position')?.count)
+    .map((part) => (part.index ? part.toNonIndexed() : part.clone()))
+  let geometry = (parts.length ? mergeGeometries(parts, false) : null) ?? new THREE.BufferGeometry()
+  let offset = 0
+  for (const part of parts) {
+    for (const group of part.groups)
+      geometry.addGroup(offset + group.start, group.count, group.materialIndex)
+    offset += part.getAttribute('position').count
+    part.dispose()
+  }
+  covering.dispose()
+  walls.dispose()
+  geometry = clipGeometryBySegmentTrim(geometry, node) ?? geometry
+  ensureRenderableGeometryAttributes(geometry)
+  return geometry
+}
+
 export function generateRoofSegmentGeometry(
   node: RoofSegmentNode,
   nodes?: Record<string, AnyNode>,
@@ -1898,10 +2035,11 @@ export function generateRoofSegmentGeometry(
     node.position,
     node.rotation ?? 0,
   )
-  const directSegmentGeometry = withSegmentUvMatrix(
-    segmentWorldMatrix,
-    () => buildCustomShedGeometry(node, nodes) ?? buildDirectConicalSectorGeometry(node),
-  )
+  const directSegmentGeometry = withSegmentUvMatrix(segmentWorldMatrix, () => {
+    const independent = buildIndependentRoofSegmentGeometry(node, nodes)
+    if (independent) return independent
+    return buildCustomShedGeometry(node, nodes) ?? buildDirectConicalSectorGeometry(node)
+  })
   if (directSegmentGeometry) {
     let result = addShedInsetEndPanels(directSegmentGeometry, [node], false)
     if (nodes) {
@@ -1998,7 +2136,7 @@ export function generateRoofSegmentGeometry(
   return resultGeo
 }
 
-function clipDirectRoofGeometryAgainstSiblings(
+export function clipDirectRoofGeometryAgainstSiblings(
   geometry: THREE.BufferGeometry,
   node: RoofSegmentNode,
   nodes: Record<string, AnyNode>,
@@ -4093,6 +4231,25 @@ export function getRoofOuterSurfaceFrameAtPoint(
   lx: number,
   lz: number,
 ): SurfaceFrame {
+  if (isGlazedRoofSegment(segment) || segment.roofType === 'barrel') {
+    const face = (
+      isGlazedRoofSegment(segment) ? getGlazedRoofFaces(segment) : getBarrelRoofFaces(segment)
+    ).find(
+      (face) =>
+        face.normal[1] > 0 &&
+        lx >= face.origin[0] &&
+        lx <= face.origin[0] + face.width &&
+        (lz - face.origin[2]) / face.v[2] >= -1e-6 &&
+        (lz - face.origin[2]) / face.v[2] <= face.length + 1e-6,
+    )
+    if (face) {
+      const v = (lz - face.origin[2]) / face.v[2]
+      return {
+        point: new THREE.Vector3(lx, face.origin[1] + face.v[1] * v, lz),
+        normal: new THREE.Vector3(...face.normal),
+      }
+    }
+  }
   const { roofType, width, depth, wallHeight, deckThickness, shingleThickness } = segment
 
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)

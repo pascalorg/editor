@@ -26,6 +26,22 @@ describe('createDefaultGuttersForSegment', () => {
     expect(gutters.every((gutter) => isDefaultGutterNode(gutter, segment.id))).toBe(true)
   })
 
+  test("a barrel's eave gutters hang where its arch springs; its overhang only lengthens them", () => {
+    const front = (overhang: number) =>
+      getGutterRunsForSegment(
+        RoofSegmentNode.parse({
+          roofType: 'barrel',
+          width: 8,
+          depth: 6,
+          overhang,
+          wallHeight: 0.5,
+        }),
+      ).find((run) => run.side === '+Z')!
+    expect(front(0.3).position[2]).toBe(3)
+    expect(front(1).position).toEqual(front(0.3).position)
+    expect(front(1).length - front(0.3).length).toBeCloseTo(1.4)
+  })
+
   test('spans the full tucked perimeter so four-sided gutters meet at corners', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'flat',

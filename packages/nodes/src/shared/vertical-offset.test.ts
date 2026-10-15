@@ -289,58 +289,59 @@ describe('planVerticalOffsets', () => {
   test.each([
     { label: 'up', dy: 1 },
     { label: 'down', dy: -0.5 },
-  ])('$label moves an elbow-connected top run by stretching the existing vertical riser', ({
-    dy,
-  }) => {
-    const elbow = DuctFittingNode.parse({
-      object: 'node',
-      parentId: null,
-      visible: true,
-      metadata: {},
-      name: 'Top corner elbow',
-      fittingType: 'elbow',
-      shape: 'rect',
-      width: RECT_PROFILE.width,
-      height: RECT_PROFILE.height,
-      diameter: profileDiameterIn(RECT_PROFILE),
-      diameter2: profileDiameterIn(RECT_PROFILE),
-      ductMaterial: 'sheet-metal',
-      system: 'supply',
-      position: [0, 2, 0],
-      rotation: [0, 0, 0],
-      angle: 90,
-    })
-    const inlet = getDuctFittingPorts(elbow).find((p) => p.id === 'inlet')!
-    const outlet = getDuctFittingPorts(elbow).find((p) => p.id === 'outlet')!
-    const moved = rectRun([
-      [...inlet.position],
-      [inlet.position[0] - 4, inlet.position[1], inlet.position[2]],
-    ])
-    const riser = rectRun([[outlet.position[0], 0, outlet.position[2]], [...outlet.position]])
+  ])(
+    '$label moves an elbow-connected top run by stretching the existing vertical riser',
+    ({ dy }) => {
+      const elbow = DuctFittingNode.parse({
+        object: 'node',
+        parentId: null,
+        visible: true,
+        metadata: {},
+        name: 'Top corner elbow',
+        fittingType: 'elbow',
+        shape: 'rect',
+        width: RECT_PROFILE.width,
+        height: RECT_PROFILE.height,
+        diameter: profileDiameterIn(RECT_PROFILE),
+        diameter2: profileDiameterIn(RECT_PROFILE),
+        ductMaterial: 'sheet-metal',
+        system: 'supply',
+        position: [0, 2, 0],
+        rotation: [0, 0, 0],
+        angle: 90,
+      })
+      const inlet = getDuctFittingPorts(elbow).find((p) => p.id === 'inlet')!
+      const outlet = getDuctFittingPorts(elbow).find((p) => p.id === 'outlet')!
+      const moved = rectRun([
+        [...inlet.position],
+        [inlet.position[0] - 4, inlet.position[1], inlet.position[2]],
+      ])
+      const riser = rectRun([[outlet.position[0], 0, outlet.position[2]], [...outlet.position]])
 
-    const result = planVerticalOffsets({
-      duct: moved,
-      dy,
-      profile: RECT_PROFILE,
-      connections: [fittingConnection(elbow), runConnection(riser)],
-      scenePorts: [
-        { ...inlet, nodeId: elbow.id },
-        { ...outlet, nodeId: elbow.id },
-        runPort(riser, [...outlet.position], [0, 1, 0]),
-      ],
-      nodesById: {
-        [moved.id]: moved as AnyNode,
-        [elbow.id]: elbow as AnyNode,
-        [riser.id]: riser as AnyNode,
-      },
-    })
+      const result = planVerticalOffsets({
+        duct: moved,
+        dy,
+        profile: RECT_PROFILE,
+        connections: [fittingConnection(elbow), runConnection(riser)],
+        scenePorts: [
+          { ...inlet, nodeId: elbow.id },
+          { ...outlet, nodeId: elbow.id },
+          runPort(riser, [...outlet.position], [0, 1, 0]),
+        ],
+        nodesById: {
+          [moved.id]: moved as AnyNode,
+          [elbow.id]: elbow as AnyNode,
+          [riser.id]: riser as AnyNode,
+        },
+      })
 
-    expect(result?.status).toBe('valid')
-    if (result?.status !== 'valid') return
-    expect(result.plan.fittings).toHaveLength(0)
-    expect(result.plan.risers).toHaveLength(0)
-    expect(result.plan.followPath[0]?.[1]).toBeCloseTo(inlet.position[1] + dy, 6)
-  })
+      expect(result?.status).toBe('valid')
+      if (result?.status !== 'valid') return
+      expect(result.plan.fittings).toHaveLength(0)
+      expect(result.plan.risers).toHaveLength(0)
+      expect(result.plan.followPath[0]?.[1]).toBeCloseTo(inlet.position[1] + dy, 6)
+    },
+  )
 
   test('collapses an elbow-riser-elbow side into one elbow when the top run aligns downward', () => {
     const moved = rectRun([

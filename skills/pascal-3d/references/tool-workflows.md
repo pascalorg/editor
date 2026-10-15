@@ -99,3 +99,9 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 - No tool starts a room scan or clones a scan into a new project. Scans are created only by the Pascal iOS app, and `open_capture_as_project` opens the scan's existing owning project.
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.
+
+## Greenhouse and barrel roofs
+
+Use `create_roof` with `roofSystem: "glazed"` for a gable, straight shed or barrel greenhouse roof. For a barrel roof, `depth` is the span and `barrelRise` is the arch rise, no more than half the span. `barrelSegments` controls faceting. `glazing` sets frame dimensions, glass appearance, grid layouts, glazed ends and individual glass, solid or empty panels. Standard barrel construction uses a solid covering.
+
+Paint glazed segments with `glazing-frame`, `glazing-glass` or `glazing-solid`. Without a role, paint changes the frame and solid panels while preserving the glass finish. Painting a roof container with glazed segments applies the finish to its segments. Standard roofs use `top`, `edge` and `wall`.

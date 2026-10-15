@@ -200,25 +200,25 @@ async function followItem(
 test.each([
   { fromUpper: false, mode: 'stacked' as const },
   { fromUpper: true, mode: 'solo' as const },
-])('following a build on another floor selects it from $mode (fromUpper: $fromUpper)', async ({
-  fromUpper,
-  mode,
-}) => {
-  const { building, target } = await followItem(fromUpper, mode)
-  expect(useViewer.getState().selection).toMatchObject({
-    buildingId: building.id,
-    levelId: target.id,
-  })
-  expect(useViewer.getState().levelMode).toBe('stacked')
-  // The finished house is looked at whole: the floors above are shown, until Follow ends.
-  expect(useViewer.getState().hideLevelsAboveSelection).toBe(false)
-  // The build is over and no turn is running: the person has the floor they had.
-  useFollowPascal.getState().endBuild()
-  expect(useViewer.getState().selection).toMatchObject({
-    buildingId: building.id,
-    levelId: fromUpper ? 'level_upper' : 'level_ground',
-  })
-})
+])(
+  'following a build on another floor selects it from $mode (fromUpper: $fromUpper)',
+  async ({ fromUpper, mode }) => {
+    const { building, target } = await followItem(fromUpper, mode)
+    expect(useViewer.getState().selection).toMatchObject({
+      buildingId: building.id,
+      levelId: target.id,
+    })
+    expect(useViewer.getState().levelMode).toBe('stacked')
+    // The finished house is looked at whole: the floors above are shown, until Follow ends.
+    expect(useViewer.getState().hideLevelsAboveSelection).toBe(false)
+    // The build is over and no turn is running: the person has the floor they had.
+    useFollowPascal.getState().endBuild()
+    expect(useViewer.getState().selection).toMatchObject({
+      buildingId: building.id,
+      levelId: fromUpper ? 'level_upper' : 'level_ground',
+    })
+  },
+)
 
 // The owner, 15 October: a person on the ground floor with the floors above hidden did not see the
 // animation of a build on the floor above. With Follow off the build still plays on show, and the
@@ -279,33 +279,33 @@ test('an obstacle appearing after arrival causes one calm flight to a clear view
   ;(obstacle.material as MeshBasicMaterial).dispose()
 })
 
-test.each([
-  'camera-controls:interaction-start',
-  'camera-controls:orbit-cw',
-] as const)('$0 yields the camera, puts the floor back and does not select it again', async (event) => {
-  await followItem()
-  expect(poses.length).toBeGreaterThan(0)
-  expect(useViewer.getState().selection.levelId).toBe('level_upper')
-  emitter.emit(event)
-  const count = poses.length
-  expect(useFollowPascal.getState().paused).toBe(true)
-  expect(useViewer.getState().selection.levelId).toBe('level_ground')
-  await act(async () => {
-    runAsSceneCommitAuthor('agent', () =>
-      useScene
-        .getState()
-        .createNode(
-          ItemNode.parse({ ...useScene.getState().nodes.item_follow, id: 'item_next' }),
-          'level_roof',
-        ),
-    )
-    driver!.tick(40)
-    await renderer!.advanceFrames(100, 0.05)
-  })
-  expect(useFollowPascal.getState().paused).toBe(true)
-  expect(poses.length).toBe(count)
-  expect(useViewer.getState().selection.levelId).toBe('level_ground')
-})
+test.each(['camera-controls:interaction-start', 'camera-controls:orbit-cw'] as const)(
+  '$0 yields the camera, puts the floor back and does not select it again',
+  async (event) => {
+    await followItem()
+    expect(poses.length).toBeGreaterThan(0)
+    expect(useViewer.getState().selection.levelId).toBe('level_upper')
+    emitter.emit(event)
+    const count = poses.length
+    expect(useFollowPascal.getState().paused).toBe(true)
+    expect(useViewer.getState().selection.levelId).toBe('level_ground')
+    await act(async () => {
+      runAsSceneCommitAuthor('agent', () =>
+        useScene
+          .getState()
+          .createNode(
+            ItemNode.parse({ ...useScene.getState().nodes.item_follow, id: 'item_next' }),
+            'level_roof',
+          ),
+      )
+      driver!.tick(40)
+      await renderer!.advanceFrames(100, 0.05)
+    })
+    expect(useFollowPascal.getState().paused).toBe(true)
+    expect(poses.length).toBe(count)
+    expect(useViewer.getState().selection.levelId).toBe('level_ground')
+  },
+)
 
 // The owner, 12 October, on 3114: after Follow Pascal stopped the walls looked invisible. It had
 // fallen back to cutaway when no eye saw its target, selected the floor being built and hidden the
@@ -325,30 +325,31 @@ const ENDS: { name: string; end: () => unknown }[] = [
 
 // The person is on the upper floor in the solo display, with the floors above not hidden; the build
 // is on the ground floor, which the solo display hides: it plays on show, and Follow takes the floor.
-test.each(ENDS)('when $name, the cutaway, the floor and the hidden floors are put back', async ({
-  end,
-}) => {
-  usePointAsk.getState().setBusy(true)
-  const { building } = await followItem(true, 'solo', {
-    enclosed: true,
-    hideAbove: false,
-    playMs: 1500,
-  })
-  expect(useViewer.getState().wallMode).toBe('cutaway')
-  expect(useViewer.getState().levelMode).toBe('stacked')
-  expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
-  expect(useViewer.getState().selection.levelId).toBe('level_ground')
+test.each(ENDS)(
+  'when $name, the cutaway, the floor and the hidden floors are put back',
+  async ({ end }) => {
+    usePointAsk.getState().setBusy(true)
+    const { building } = await followItem(true, 'solo', {
+      enclosed: true,
+      hideAbove: false,
+      playMs: 1500,
+    })
+    expect(useViewer.getState().wallMode).toBe('cutaway')
+    expect(useViewer.getState().levelMode).toBe('stacked')
+    expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
+    expect(useViewer.getState().selection.levelId).toBe('level_ground')
 
-  await act(async () => end())
+    await act(async () => end())
 
-  expect(useViewer.getState().wallMode).toBe('up')
-  expect(useViewer.getState().levelMode).toBe('solo')
-  expect(useViewer.getState().hideLevelsAboveSelection).toBe(false)
-  expect(useViewer.getState().selection).toMatchObject({
-    buildingId: building.id,
-    levelId: 'level_upper',
-  })
-})
+    expect(useViewer.getState().wallMode).toBe('up')
+    expect(useViewer.getState().levelMode).toBe('solo')
+    expect(useViewer.getState().hideLevelsAboveSelection).toBe(false)
+    expect(useViewer.getState().selection).toMatchObject({
+      buildingId: building.id,
+      levelId: 'level_upper',
+    })
+  },
+)
 
 test('leaving the editor puts them back', async () => {
   await followItem(false, 'stacked', { enclosed: true })

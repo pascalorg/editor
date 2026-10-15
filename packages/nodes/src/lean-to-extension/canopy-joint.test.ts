@@ -35,21 +35,21 @@ function jointCutPoint(
 }
 
 describe('freestanding canopy corner joints', () => {
-  test.each([
-    'gable',
-    'butterfly',
-  ] as const)('resolves reciprocal 90-degree %s cuts on the inside canopy halves', (canopyForm) => {
-    const { first, second, nodes } = joinedRuns(canopyForm)
-    const firstJoint = resolveFreestandingCanopyJoints(first, nodes).right
-    const secondJoint = resolveFreestandingCanopyJoints(second, nodes).left
+  test.each(['gable', 'butterfly'] as const)(
+    'resolves reciprocal 90-degree %s cuts on the inside canopy halves',
+    (canopyForm) => {
+      const { first, second, nodes } = joinedRuns(canopyForm)
+      const firstJoint = resolveFreestandingCanopyJoints(first, nodes).right
+      const secondJoint = resolveFreestandingCanopyJoints(second, nodes).left
 
-    expect(firstJoint).toMatchObject({ neighborId: second.id, innerCanopySide: 'positive' })
-    expect(secondJoint).toMatchObject({ neighborId: first.id, innerCanopySide: 'positive' })
-    expect(firstJoint?.trimX).toBeCloseTo(first.projection + first.lowOverhang, 8)
-    expect(firstJoint?.trimZ).toBeCloseTo(first.projection + first.lowOverhang, 8)
-    expect(firstJoint?.gutterMitre).toBeCloseTo(-Math.PI / 4, 8)
-    expect(firstJoint?.sharedPostOwner).not.toBe(secondJoint?.sharedPostOwner)
-  })
+      expect(firstJoint).toMatchObject({ neighborId: second.id, innerCanopySide: 'positive' })
+      expect(secondJoint).toMatchObject({ neighborId: first.id, innerCanopySide: 'positive' })
+      expect(firstJoint?.trimX).toBeCloseTo(first.projection + first.lowOverhang, 8)
+      expect(firstJoint?.trimZ).toBeCloseTo(first.projection + first.lowOverhang, 8)
+      expect(firstJoint?.gutterMitre).toBeCloseTo(-Math.PI / 4, 8)
+      expect(firstJoint?.sharedPostOwner).not.toBe(secondJoint?.sharedPostOwner)
+    },
+  )
 
   test('uses the angle bisector for non-square turns', () => {
     const { first, nodes } = joinedRuns('gable', [6, 2 * Math.sqrt(3)])
@@ -122,26 +122,26 @@ describe('freestanding canopy corner joints', () => {
     expect(resolveFreestandingCanopyJoints(first, nodes)).toEqual({})
   })
 
-  test.each([
-    'gable',
-    'butterfly',
-  ] as const)('retreats the inner %s plane and extends the outer plane to the hip', (canopyForm) => {
-    const { first, nodes } = joinedRuns(canopyForm)
-    const run = first.projection + first.lowOverhang
-    const inner = resolveCanopyRoofPlaneJointLayout(first, nodes, 'positive')
-    const outer = resolveCanopyRoofPlaneJointLayout(first, nodes, 'negative')
+  test.each(['gable', 'butterfly'] as const)(
+    'retreats the inner %s plane and extends the outer plane to the hip',
+    (canopyForm) => {
+      const { first, nodes } = joinedRuns(canopyForm)
+      const run = first.projection + first.lowOverhang
+      const inner = resolveCanopyRoofPlaneJointLayout(first, nodes, 'positive')
+      const outer = resolveCanopyRoofPlaneJointLayout(first, nodes, 'negative')
 
-    expect(inner.width).toBeCloseTo(first.span + first.leftOverhang + first.rightOverhang)
-    expect(outer.width).toBeCloseTo(inner.width + run - first.rightOverhang)
-    expect(outer.centerX).toBeCloseTo((run - first.rightOverhang) / 2)
-    if (canopyForm === 'gable') {
-      expect(inner.trim.frontRightX).toBeCloseTo(run)
-      expect(outer.trim.backLeftX).toBeCloseTo(run)
-    } else {
-      expect(inner.trim.backLeftX).toBeCloseTo(run)
-      expect(outer.trim.frontRightX).toBeCloseTo(run)
-    }
-  })
+      expect(inner.width).toBeCloseTo(first.span + first.leftOverhang + first.rightOverhang)
+      expect(outer.width).toBeCloseTo(inner.width + run - first.rightOverhang)
+      expect(outer.centerX).toBeCloseTo((run - first.rightOverhang) / 2)
+      if (canopyForm === 'gable') {
+        expect(inner.trim.frontRightX).toBeCloseTo(run)
+        expect(outer.trim.backLeftX).toBeCloseTo(run)
+      } else {
+        expect(inner.trim.backLeftX).toBeCloseTo(run)
+        expect(outer.trim.frontRightX).toBeCloseTo(run)
+      }
+    },
+  )
 
   test('extends the outside gable eave while retreating the inside eave', () => {
     const { first, nodes } = joinedRuns('gable')

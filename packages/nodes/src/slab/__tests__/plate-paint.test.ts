@@ -327,27 +327,27 @@ test('base surface paint routes to a covering room and never writes the protecte
   expect(slabNow(plate.id).slots).toBeUndefined()
 })
 
-test.each([
-  true,
-  false,
-])('foundation paint uses one undo step, including a new material: %s', (custom) => {
-  plate = { ...plate, plateRole: 'base', foundation: { type: 'solid', material: WOOD } }
-  useScene.setState({ nodes: { ...useScene.getState().nodes, [plate.id]: plate } })
-  useScene.temporal.getState().clear()
-  const before = useScene.getState().nodes
-  slabPaint.commit?.({
-    node: plate,
-    role: 'foundation',
-    material: custom ? MaterialSchema.parse({ properties: { color: '#123456' } }) : undefined,
-    materialPreset: custom ? undefined : TILE,
-  })
-  expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-  expect(slabNow(plate.id).foundation?.material).not.toBe(WOOD)
-  if (custom) expect(Object.keys(useScene.getState().materials)).toHaveLength(1)
-  useScene.temporal.getState().undo()
-  expect(useScene.getState().nodes).toEqual(before)
-  expect(useScene.getState().materials).toEqual({})
-})
+test.each([true, false])(
+  'foundation paint uses one undo step, including a new material: %s',
+  (custom) => {
+    plate = { ...plate, plateRole: 'base', foundation: { type: 'solid', material: WOOD } }
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [plate.id]: plate } })
+    useScene.temporal.getState().clear()
+    const before = useScene.getState().nodes
+    slabPaint.commit?.({
+      node: plate,
+      role: 'foundation',
+      material: custom ? MaterialSchema.parse({ properties: { color: '#123456' } }) : undefined,
+      materialPreset: custom ? undefined : TILE,
+    })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(slabNow(plate.id).foundation?.material).not.toBe(WOOD)
+    if (custom) expect(Object.keys(useScene.getState().materials)).toHaveLength(1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
+    expect(useScene.getState().materials).toEqual({})
+  },
+)
 
 test('a zoneless base surface returns a notice instead of throwing or recording history', () => {
   plate = { ...plate, plateRole: 'base', zoneIds: [] }

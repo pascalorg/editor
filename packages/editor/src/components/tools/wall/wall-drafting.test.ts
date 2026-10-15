@@ -726,63 +726,64 @@ describe('createWallOnCurrentLevel', () => {
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
   })
 
-  test.each([
-    0.05, 0.18,
-  ])('a room divider preserves the footprint floor at %s and splits ceilings', (elevation) => {
-    const walls = [
-      makeWall([0, 0], [8, 0], 'wall_bottom'),
-      makeWall([8, 0], [8, 6], 'wall_right'),
-      makeWall([8, 6], [0, 6], 'wall_top'),
-      makeWall([0, 6], [0, 0], 'wall_left'),
-    ]
-    const slab = SlabNode.parse({
-      id: 'slab_auto',
-      parentId: LEVEL_ID,
-      polygon: [
-        [0, 0],
-        [8, 0],
-        [8, 6],
-        [0, 6],
-      ],
-      elevation,
-      floorHeight: elevation,
-      thickness: 0.32,
-      autoFromWalls: true,
-    })
-    const ceiling = CeilingNode.parse({
-      id: 'ceiling_auto',
-      parentId: LEVEL_ID,
-      polygon: slab.polygon,
-      autoFromWalls: true,
-    })
-    seedLevel(walls, [slab, ceiling])
-    useScene.setState({
-      nodes: migrateFloorPlates(
-        migrateCeilingRoomLinks(migrateRoomZones(useScene.getState().nodes).nodes).nodes,
-      ).nodes as Record<AnyNodeId, AnyNode>,
-    })
-    const stopDetection = initSpaceDetectionSync(useScene, useEditor)
+  test.each([0.05, 0.18])(
+    'a room divider preserves the footprint floor at %s and splits ceilings',
+    (elevation) => {
+      const walls = [
+        makeWall([0, 0], [8, 0], 'wall_bottom'),
+        makeWall([8, 0], [8, 6], 'wall_right'),
+        makeWall([8, 6], [0, 6], 'wall_top'),
+        makeWall([0, 6], [0, 0], 'wall_left'),
+      ]
+      const slab = SlabNode.parse({
+        id: 'slab_auto',
+        parentId: LEVEL_ID,
+        polygon: [
+          [0, 0],
+          [8, 0],
+          [8, 6],
+          [0, 6],
+        ],
+        elevation,
+        floorHeight: elevation,
+        thickness: 0.32,
+        autoFromWalls: true,
+      })
+      const ceiling = CeilingNode.parse({
+        id: 'ceiling_auto',
+        parentId: LEVEL_ID,
+        polygon: slab.polygon,
+        autoFromWalls: true,
+      })
+      seedLevel(walls, [slab, ceiling])
+      useScene.setState({
+        nodes: migrateFloorPlates(
+          migrateCeilingRoomLinks(migrateRoomZones(useScene.getState().nodes).nodes).nodes,
+        ).nodes as Record<AnyNodeId, AnyNode>,
+      })
+      const stopDetection = initSpaceDetectionSync(useScene, useEditor)
 
-    try {
-      expect(createWallOnCurrentLevel([4, 0], [4, 6])).not.toBeNull()
+      try {
+        expect(createWallOnCurrentLevel([4, 0], [4, 6])).not.toBeNull()
 
-      const nodes = Object.values(useScene.getState().nodes)
-      const slabs = nodes.filter((node) => node.type === 'slab')
-      const ceilings = nodes.filter((node) => node.type === 'ceiling')
-      expect(slabs).toHaveLength(1)
-      expect(slabs[0]).toMatchObject({ plateRole: 'base', floorHeight: elevation })
-      expect(slabs[0]!.zoneIds).toHaveLength(2)
-      expect(ceilings).toHaveLength(2)
-      expect(
-        slabs.every(
-          (node) => node.autoFromWalls && node.elevation === elevation && node.thickness === 0.32,
-        ),
-      ).toBe(true)
-      expect(ceilings.every((node) => node.autoFromWalls)).toBe(true)
-    } finally {
-      stopDetection()
-    }
-  })
+        const nodes = Object.values(useScene.getState().nodes)
+        const slabs = nodes.filter((node) => node.type === 'slab')
+        const ceilings = nodes.filter((node) => node.type === 'ceiling')
+        expect(slabs).toHaveLength(1)
+        expect(slabs[0]).toMatchObject({ plateRole: 'base', floorHeight: elevation })
+        expect(slabs[0]!.zoneIds).toHaveLength(2)
+        expect(ceilings).toHaveLength(2)
+        expect(
+          slabs.every(
+            (node) => node.autoFromWalls && node.elevation === elevation && node.thickness === 0.32,
+          ),
+        ).toBe(true)
+        expect(ceilings.every((node) => node.autoFromWalls)).toBe(true)
+      } finally {
+        stopDetection()
+      }
+    },
+  )
 
   test('close crossings reject the whole insertion without mutating the scene', () => {
     seedLevel([

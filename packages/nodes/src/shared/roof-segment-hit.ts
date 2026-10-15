@@ -2,6 +2,8 @@ import {
   type AnyNodeId,
   getRoofSegmentDeckReach,
   getRoofSegmentSurfaceY,
+  glazedRoofSupportsPoint,
+  isGlazedRoofSegment,
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
@@ -63,11 +65,12 @@ export function resolveRoofSegmentHit(
     segObj.updateWorldMatrix(true, false)
     const local = segObj.worldToLocal(localPoint.copy(worldPoint))
 
-    if (!firstSegment) firstSegment = { seg, segObj }
+    if (!firstSegment && !isGlazedRoofSegment(seg)) firstSegment = { seg, segObj }
 
     const reach = getRoofSegmentDeckReach(seg)
     const halfW = seg.width / 2 + reach.x
     const halfD = seg.depth / 2 + reach.z
+    if (isGlazedRoofSegment(seg) && !glazedRoofSupportsPoint(seg, local.x, local.z)) continue
     if (Math.abs(local.x) <= halfW && Math.abs(local.z) <= halfD) {
       const surfaceY = getRoofSegmentSurfaceY(seg, local.x, local.z)
       const score = Math.abs(local.y - surfaceY)

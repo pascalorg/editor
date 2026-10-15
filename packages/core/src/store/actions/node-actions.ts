@@ -80,6 +80,7 @@ type WallMergePlan = {
 }
 
 const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
+  'roofSystem',
   'roofType',
   'width',
   'depth',

@@ -33,6 +33,7 @@ export function SegmentedControl<T extends string>({
     >
       {options.map((option) => {
         const isSelected = !mixed && value === option.value
+        const isDisabled = disabled || option.disabled === true
         return (
           <button
             aria-disabled={option.disabled || undefined}
@@ -42,9 +43,9 @@ export function SegmentedControl<T extends string>({
               isSelected
                 ? 'bg-white dark:bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
                 : 'text-muted-foreground hover:bg-black/4 dark:hover:bg-white/5 hover:text-foreground',
-              (disabled || option.disabled) &&
+              isDisabled &&
                 'cursor-not-allowed hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent',
-              option.disabled && 'opacity-50',
+              option.disabled && 'opacity-40',
             )}
             disabled={disabled}
             key={option.value}

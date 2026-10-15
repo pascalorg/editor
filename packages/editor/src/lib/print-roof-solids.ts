@@ -1,11 +1,15 @@
 import {
   type AnyNode,
+  getBarrelRoofSolidPieces,
   getConicalRoofCoverage,
+  getGlazedRoofPieceFaces,
+  getGlazedRoofPieces,
   getRoofModuleFaces,
   getRoofSegmentDeckReach,
   getRoofShapeInsets,
   getRoofShapeRatios,
   getSegmentSlopeFrame,
+  isGlazedRoofSegment,
   nodeRegistry,
   normalizeRoofSegmentTrim,
   type RoofSegmentNode,
@@ -536,8 +540,9 @@ function blockingDiagnostics(
     dimensions.some((value) => !Number.isFinite(value) || value < 0) ||
     node.width <= FACE_EPSILON ||
     node.depth <= FACE_EPSILON ||
-    node.wallThickness <= FACE_EPSILON ||
-    node.deckThickness + node.shingleThickness <= FACE_EPSILON
+    (!isGlazedRoofSegment(node) &&
+      (node.wallThickness <= FACE_EPSILON ||
+        node.deckThickness + node.shingleThickness <= FACE_EPSILON))
   ) {
     diagnostics.push({
       severity: 'error',
@@ -588,6 +593,27 @@ export function buildPrintableRoofSegmentSolids(
 ): PrintRoofSolidResult {
   const diagnostics = blockingDiagnostics(node, nodes)
   if (diagnostics.length > 0) return { status: 'blocked', object: null, diagnostics }
+  if (isGlazedRoofSegment(node) || node.roofType === 'barrel') {
+    const root = new THREE.Group()
+    root.name = isGlazedRoofSegment(node) ? 'print-glazed-roof-solids' : 'print-barrel-roof-solids'
+    root.userData = { pascalId: node.id }
+    root.position.set(...node.position)
+    root.rotation.y = node.rotation
+    for (const piece of isGlazedRoofSegment(node)
+      ? getGlazedRoofPieces(node)
+      : getBarrelRoofSolidPieces(node)) {
+      const geometry = geometryFromFaces(getGlazedRoofPieceFaces(piece))
+      if (!geometry) continue
+      const mesh = new THREE.Mesh(geometry)
+      mesh.name = isGlazedRoofSegment(node)
+        ? piece.slot === 0
+          ? 'print-glazing-frame'
+          : 'print-glazing-pane'
+        : 'print-roof-shell'
+      root.add(mesh)
+    }
+    return { status: 'ready', object: root, diagnostics: [] }
+  }
 
   const wallOuter = getVolumeFaces(node, {
     widthExtension: node.wallThickness / 2,

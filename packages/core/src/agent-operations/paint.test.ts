@@ -538,3 +538,54 @@ describe('a roof', () => {
     expect((after.rseg_paint as RoofSegmentNode).wallMaterialPreset).toBeUndefined()
   })
 })
+
+for (const role of [undefined, 'glazing-glass', 'glazing-solid'] as const)
+  test(`glazed roof paint ${role ?? 'defaults'} writes visible slots on its segments`, () => {
+    const segment = RoofSegmentNode.parse({ roofType: 'barrel', roofSystem: 'glazed' })
+    const roof = RoofNode.parse({ children: [segment.id] })
+    const nodes = { [roof.id]: roof, [segment.id]: { ...segment, parentId: roof.id } }
+    const outcome = paint(nodes, { targets: [roof.id], role, material: 'library:preset-softwhite' })
+    const result = applySceneChanges(nodes, outcome.changes)
+    expect((result[segment.id] as RoofSegmentNode).slots).toEqual(
+      role
+        ? { [role]: 'library:preset-softwhite' }
+        : {
+            'glazing-frame': 'library:preset-softwhite',
+            'glazing-solid': 'library:preset-softwhite',
+          },
+    )
+    expect(result[roof.id]).toEqual(roof)
+    expect(() => paint(nodes, { targets: [segment.id], role: 'top', color: '#ff0000' })).toThrow()
+  })
+
+test('a roof of glazed and standard segments paints each the roles it has', () => {
+  const glazed = RoofSegmentNode.parse({ roofType: 'gable', roofSystem: 'glazed' })
+  const standard = RoofSegmentNode.parse({ roofType: 'gable' })
+  const roof = RoofNode.parse({ children: [glazed.id, standard.id] })
+  const nodes = {
+    [roof.id]: roof,
+    [glazed.id]: { ...glazed, parentId: roof.id },
+    [standard.id]: { ...standard, parentId: roof.id },
+  }
+  const painted = (role?: string) =>
+    applySceneChanges(
+      nodes,
+      paint(nodes, { targets: [roof.id], role, material: 'library:preset-softwhite' }).changes,
+    )
+  const top = painted('top')
+  expect((top[roof.id] as RoofNode).topMaterialPreset).toBe('library:preset-softwhite')
+  expect((top[glazed.id] as RoofSegmentNode).slots).toBeUndefined()
+  const frame = painted('glazing-frame')
+  expect((frame[glazed.id] as RoofSegmentNode).slots).toEqual({
+    'glazing-frame': 'library:preset-softwhite',
+  })
+  expect(frame[roof.id]).toEqual(roof)
+  const both = painted()
+  expect((both[roof.id] as RoofNode).topMaterialPreset).toBe('library:preset-softwhite')
+  expect((both[standard.id] as RoofSegmentNode).topMaterialPreset).toBeUndefined()
+  expect(Object.keys((both[glazed.id] as RoofSegmentNode).slots ?? {})).toEqual([
+    'glazing-frame',
+    'glazing-solid',
+  ])
+  expect(() => painted('rafter')).toThrow()
+})

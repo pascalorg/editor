@@ -59,23 +59,26 @@ describe('validateDesign on trial elements', () => {
     ['E1 condenser', condenserJson, 'floor', 4032, 5, 119, 25, [1.219, 1.076, 1.524]],
     ['E2 air handler', airHandlerJson, 'ceiling', 7200, 4, 30, 23, [2.125, 1.146, 2.21]],
     ['E5 louver', louverJson, 'wall', 252, 1, 21, 23, [0.634, 0.94, 0.076]],
-  ] as const)('%s is valid and measured like the trial build', (_, json, datum, triangles, groups, shapes, cases, dimensions) => {
-    const result = validateDesign(json)
-    expect(DesignValidationSchema.parse(result)).toEqual(result)
-    expect(result.valid).toBe(true)
-    expect(result.diagnostics).toEqual([])
-    expect(result.sweep).toEqual({ cases, failed: 0, failures: [] })
-    const m = result.measurements!
-    expect(m.triangles.actual).toBe(triangles)
-    expect(m.drawGroups).toHaveLength(groups)
-    expect(m.shapes).toBe(shapes)
-    for (const [i, value] of m.bounds.dimensions.entries())
-      expect(value).toBeCloseTo(dimensions[i]!, 3)
-    expect(m.datum).toMatchObject({ kind: datum, gap: 0 })
-    expect(m.datum.contact!.shapes).toBeGreaterThan(0)
-    expect(m.components.count).toBe(1)
-    expect(m.parts.reduce((sum, part) => sum + part.shapes, 0)).toBe(shapes)
-  })
+  ] as const)(
+    '%s is valid and measured like the trial build',
+    (_, json, datum, triangles, groups, shapes, cases, dimensions) => {
+      const result = validateDesign(json)
+      expect(DesignValidationSchema.parse(result)).toEqual(result)
+      expect(result.valid).toBe(true)
+      expect(result.diagnostics).toEqual([])
+      expect(result.sweep).toEqual({ cases, failed: 0, failures: [] })
+      const m = result.measurements!
+      expect(m.triangles.actual).toBe(triangles)
+      expect(m.drawGroups).toHaveLength(groups)
+      expect(m.shapes).toBe(shapes)
+      for (const [i, value] of m.bounds.dimensions.entries())
+        expect(value).toBeCloseTo(dimensions[i]!, 3)
+      expect(m.datum).toMatchObject({ kind: datum, gap: 0 })
+      expect(m.datum.contact!.shapes).toBeGreaterThan(0)
+      expect(m.components.count).toBe(1)
+      expect(m.parts.reduce((sum, part) => sum + part.shapes, 0)).toBe(shapes)
+    },
+  )
 
   test('per-part bounds and instances follow the parameters', () => {
     const at = (slat_count: number) =>
