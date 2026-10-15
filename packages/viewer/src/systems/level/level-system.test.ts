@@ -5,6 +5,7 @@ import { create } from '@react-three/test-renderer'
 import { createElement } from 'react'
 import { Object3D } from 'three'
 import useViewer from '../../store/use-viewer'
+import { releaseLevel, setHeldLevelY } from './level-hold'
 import { LevelSystem } from './level-system'
 import { snapLevelsToTruePositions } from './level-utils'
 
@@ -239,5 +240,51 @@ describe('snapLevelsToTruePositions', () => {
     restore()
 
     expect(objects.map((object) => object.visible)).toEqual([true, true])
+  })
+})
+
+describe('a level held by a construction reveal', () => {
+  test('stays at the height the reveal gives it, and eases from there once released', async () => {
+    const { levels, objects } = setupLevels([0, 0])
+    setLevelMode('stacked')
+    await updateLevelPresentation(1 / 12)
+    expect(objects.map((object) => object.position.y)).toEqual([0, 2.5])
+
+    setHeldLevelY(levels[1]!.id, 4)
+    await updateLevelPresentation(1 / 12)
+    expect(objects.map((object) => object.position.y)).toEqual([0, 4])
+
+    releaseLevel(levels[1]!.id)
+    await updateLevelPresentation(1 / 60)
+    const [, eased] = objects.map((object) => object.position.y)
+    expect(eased!).toBeLessThan(4)
+    expect(eased!).toBeGreaterThan(2.5)
+  })
+
+  test('a level that has just mounted cuts every level to its height, none slides through another', async () => {
+    const { levels, objects } = setupLevels([0, 0])
+    setLevelMode('stacked')
+    await updateLevelPresentation(1 / 12)
+    // The ground floor and a roof level stand; a restored floor between them mounts at the origin.
+    useViewer.setState({ levelMode: 'stacked' })
+    const restored = new Object3D()
+    sceneRegistry.nodes.set('level_restored' as AnyNodeId, restored)
+    sceneRegistry.byType.level!.add('level_restored' as AnyNodeId)
+    const nodes = useScene.getState().nodes
+    const upper = nodes[levels[1]!.id as AnyNodeId] as unknown as { level: number }
+    useScene.setState({
+      nodes: {
+        ...nodes,
+        [levels[1]!.id]: { ...upper, level: 2 },
+        level_restored: {
+          ...(nodes[levels[1]!.id as AnyNodeId] as object),
+          id: 'level_restored',
+          level: 1,
+        },
+      } as unknown as Record<AnyNodeId, AnyNode>,
+    })
+    await updateLevelPresentation(1 / 60)
+    expect(restored.position.y).toBe(2.5)
+    expect(objects[1]!.position.y).toBe(5)
   })
 })

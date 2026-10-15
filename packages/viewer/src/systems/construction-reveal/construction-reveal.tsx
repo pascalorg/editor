@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   criticallyDamped,
   emitter,
+  getLevelElevations,
   isRestoringSceneHistory,
   nodeRegistry,
   type RevealPhase,
@@ -74,6 +75,8 @@ import {
   setRevealWipe,
 } from '../../lib/reveal-wipe'
 import useViewer from '../../store/use-viewer'
+import { releaseLevel, setHeldLevelY } from '../level/level-hold'
+import { getLevelPresentationY } from '../level/level-utils'
 import { ConstructionDust } from './construction-dust'
 import { dressDeletionGhost } from './ghost-dress'
 
@@ -1151,6 +1154,7 @@ function levelsAtWork(): string[] {
   for (const glide of glides.values()) add(glide.change.levelId)
   for (const change of changeQueue) add(change.levelId)
   for (const ghost of ghosts.values()) add(ghost.levelId)
+  for (const levelId of levelHolds.keys()) add(levelId)
   return [...levels]
 }
 
@@ -1809,6 +1813,7 @@ function playDeletions(commit: SceneCommit) {
       ...(entry.prerollMs ? { prerollMs: entry.prerollMs } : {}),
     })
   }
+  holdLevelsAbove(commit, new Set(plan.map((entry) => entry.id).filter((id) => ghosts.has(id))))
 }
 
 /** A ghost has gone (or was cut short): its picture is taken away, and its group ends with its last. */
@@ -1848,6 +1853,93 @@ function stepGhosts(now: number) {
 
 function finishGhosts() {
   for (const ghost of [...ghosts.values()]) ghostGone(ghost, clockMs)
+}
+
+/**
+ * A level that stands above a floor being taken apart. It keeps the height it stood at while the
+ * floor's pictures play (`ghostIds`), then comes down onto what is below in one eased move of the
+ * rewind's own length (`dropMs`). What it holds, a roof level and the roofs on it, goes with it.
+ */
+type LevelHold = {
+  ghostIds: Set<string>
+  dropMs: number
+  heldY: number
+  lowering: { startMs: number; fromY: number } | null
+}
+
+const levelHolds = new Map<string, LevelHold>()
+
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
+
+/**
+ * A commit deleted levels whose pictures now play: each level that stood above them, in the same
+ * building, and whose height changes, keeps its place until they have gone. The stack's elevations
+ * in the store are not written; only what is presented waits.
+ */
+function holdLevelsAbove(commit: SceneCommit, ghostIds: ReadonlySet<string>) {
+  const before = commit.before.nodes
+  const current = commit.current.nodes
+  const stack = getLevelElevations(before)
+  const going = [...stack].filter(([id]) => !current[id as AnyNodeId])
+  if (going.length === 0 || ghostIds.size === 0) return
+  const levelMode = useViewer.getState().levelMode
+  const dropMs = (lazyOn() ? lazyRetractTimingAt(currentSpeed()) : retractTimingAt(currentSpeed()))
+    .durationMs.drop
+  for (const [id, above] of stack) {
+    const node = current[id as AnyNodeId]
+    if (node?.type !== 'level' || node.visible === false) continue
+    if (
+      !going.some(
+        ([, gone]) => gone.buildingId === above.buildingId && gone.ordinal < above.ordinal,
+      )
+    )
+      continue
+    const object = sceneRegistry.nodes.get(id)
+    if (!object) continue
+    const standing = levelHolds.get(id)
+    const heldY = standing?.heldY ?? object.position.y
+    if (Math.abs(heldY - getLevelPresentationY(id, current, levelMode)) < 0.01) continue
+    if (standing) {
+      for (const ghostId of ghostIds) standing.ghostIds.add(ghostId)
+      standing.lowering = null
+      continue
+    }
+    levelHolds.set(id, { ghostIds: new Set(ghostIds), dropMs, heldY, lowering: null })
+    setHeldLevelY(id, heldY)
+  }
+}
+
+/** Holds each level at its place until its floor has gone, then eases it down to its elevation. */
+function stepLevelHolds(now: number) {
+  if (levelHolds.size === 0) return
+  const nodes = useScene.getState().nodes
+  const levelMode = useViewer.getState().levelMode
+  for (const [id, hold] of [...levelHolds]) {
+    if (!nodes[id as AnyNodeId]) {
+      levelHolds.delete(id)
+      releaseLevel(id)
+      continue
+    }
+    if (!hold.lowering) {
+      if ([...hold.ghostIds].some((ghostId) => ghosts.has(ghostId))) continue
+      hold.lowering = { startMs: now, fromY: hold.heldY }
+    }
+    const t = Math.min(1, (now - hold.lowering.startMs) / Math.max(1, hold.dropMs))
+    if (t >= 1) {
+      levelHolds.delete(id)
+      releaseLevel(id)
+      continue
+    }
+    const to = getLevelPresentationY(id, nodes, levelMode)
+    hold.heldY = hold.lowering.fromY + (to - hold.lowering.fromY) * easeInOut(t)
+    setHeldLevelY(id, hold.heldY)
+  }
+}
+
+/** Every level goes to its own height now (a load, an undo, a capture, the reveal stopping). */
+function releaseLevelHolds() {
+  for (const id of levelHolds.keys()) releaseLevel(id)
+  levelHolds.clear()
 }
 
 function stepRetracts(now: number) {
@@ -2282,6 +2374,7 @@ function tickReveals(now: number, frameMs?: number) {
   stepLifts(now)
   stepRetracts(now)
   stepGhosts(now)
+  stepLevelHolds(now)
   stepGlides(now)
   const building = pending.size > 0 || active.size > 0 || lifts.size > 0 || liftWanted.size > 0
   if (!building) {
@@ -2305,6 +2398,7 @@ function tickReveals(now: number, frameMs?: number) {
     held.size > 0 ||
     glides.size > 0 ||
     ghosts.size > 0 ||
+    levelHolds.size > 0 ||
     changeQueue.length > 0
   publishLevelsAtWork()
   if (busy || tickedBusy) notifyTicks()
@@ -2345,6 +2439,7 @@ function finishReveals(keepHeld = false) {
   seatAllLifts()
   finishRetracts(keepHeld)
   finishGhosts()
+  releaseLevelHolds()
   finishChanges()
   completeBuild(clockMs, true)
   publishLevelsAtWork()

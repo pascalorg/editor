@@ -8,6 +8,7 @@ import {
   BuildingNode,
   clearSceneHistory,
   emitter,
+  getLevelElevations,
   ItemNode,
   LevelNode,
   loadPlugin,
@@ -32,14 +33,18 @@ import { hasRevealPose } from '../../lib/reveal-pose'
 import {
   coverRangeAt,
   LAZY_REVEAL_TIMING,
+  lazyRetractTimingAt,
   lazyTimingAt,
   RETRACT_TIMING,
   REVEAL_TIMING,
+  retractTimingAt,
   revealTimingAt,
 } from '../../lib/reveal-schedule'
 import { revealWipeLevelOf } from '../../lib/reveal-wipe'
 import useViewer from '../../store/use-viewer'
 import { GeometrySystem } from '../geometry/geometry-system'
+import { heldLevelY } from '../level/level-hold'
+import { LevelSystem } from '../level/level-system'
 import { visibleMaterialsOf } from '../wall/wall-cutout-cache'
 import { ConstructionDust } from './construction-dust'
 
@@ -2133,6 +2138,241 @@ describe('deleting a floor or a room deconstructs it', () => {
     })
     // However many pieces, the whole play ends within the cap of the reverse plan.
     expect(Math.max(...ends) - now).toBeLessThanOrEqual(14_000 + 1000)
+  })
+})
+
+// Deleting a storey takes it apart where it stands. What stands above it (the roof level, the roofs
+// and everything on them) keeps its place meanwhile and comes down onto what is below in one eased
+// move once the floor has gone, so the roof is never drawn inside the storey that is coming apart.
+describe('what stands above a floor being deleted waits for it', () => {
+  const FLOOR_HEIGHT = 3
+
+  /** A two-storey house with a roof level on top: the stack create_roof leaves for a gable roof. */
+  async function houseWithRoof({ speed = 1, reducedMotion = false } = {}) {
+    const building = BuildingNode.parse({ children: [] })
+    const levels = [0, 1, 2].map((index) =>
+      LevelNode.parse({ level: index, height: FLOOR_HEIGHT, parentId: building.id, children: [] }),
+    )
+    const nodes: Record<string, AnyNode> = {
+      [building.id]: { ...building, children: levels.map((one) => one.id) } as AnyNode,
+    }
+    for (const one of levels) nodes[one.id] = one as AnyNode
+    useScene.getState().setScene(nodes, [building.id] as AnyNodeId[], {
+      installedPlugins: [PLUGIN_ID],
+      hasExplicitPluginInstallState: true,
+    })
+    clearSceneHistory()
+    const [ground, upper, roofLevel] = levels.map((one) => one.id as AnyNodeId) as [
+      AnyNodeId,
+      AnyNodeId,
+      AnyNodeId,
+    ]
+    const objects = new Map<string, Object3D>()
+    const register = (id: string) => {
+      const object = new Object3D()
+      objects.set(id, object)
+      sceneRegistry.nodes.set(id as AnyNodeId, object)
+      sceneRegistry.byType.level!.add(id as AnyNodeId)
+      return object
+    }
+    for (const id of [ground, upper, roofLevel]) register(id)
+    const roof = make(Gable)
+    useScene.getState().createNode(roof, roofLevel)
+    renderer = await create(
+      <>
+        {[ground, upper, roofLevel].map((levelId) => (
+          <LevelChildren key={levelId} levelId={levelId} />
+        ))}
+        <GeometrySystem />
+        <LevelSystem />
+      </>,
+    )
+    await frame(0)
+    // The roof's picture stands in its level's object, as the host's renderer mounts it.
+    objects.get(roofLevel)!.add(root(roof.id)!)
+    start({ deletes: () => true, speed: () => speed, prefersReducedMotion: () => reducedMotion })
+    const floors = [ground, upper].map((levelId) => {
+      const slab = make(Slab)
+      const walls = [make(Wall), make(Wall)]
+      const crates = [make(Crate), make(Crate)]
+      return { levelId, slab, walls, crates, all: [slab, ...walls, ...crates] }
+    })
+    await agentWrites(() => {
+      for (const one of floors)
+        useScene.getState().createNodes(
+          [one.slab, ...one.walls, ...one.crates].map((node) => ({
+            node,
+            parentId: one.levelId,
+          })),
+        )
+    })
+    const everything = floors.flatMap((one) => one.all)
+    await until(() => everything.every((node) => !isNodeRevealing(node.id) && root(node.id)), 60000)
+    await frames(100)
+    const y = (id: AnyNodeId) => objects.get(id)!.position.y
+    const dismantling = () => floors[1]!.all.some((node) => getRetractTurn(node.id) !== null)
+    /** The upper floor goes: its object leaves the registry as its renderer unmounts. */
+    const deleteUpper = async () => {
+      await removeLevel(upper)
+      sceneRegistry.nodes.delete(upper)
+      sceneRegistry.byType.level!.delete(upper)
+    }
+    return {
+      ground,
+      upper,
+      roofLevel,
+      roof,
+      floors,
+      objects,
+      register,
+      y,
+      dismantling,
+      deleteUpper,
+    }
+  }
+
+  const removeLevel = (id: AnyNodeId) =>
+    act(async () => {
+      runAsSceneCommitAuthor('agent', () => useScene.getState().deleteNodes([id]))
+    })
+
+  /** Frames until the dismantle has ended and the roof level is at rest; what each frame showed. */
+  async function playOut(house: Awaited<ReturnType<typeof houseWithRoof>>, targetY: number) {
+    const trace: { roofY: number; dismantling: boolean; held: boolean }[] = []
+    for (let elapsed = 0; elapsed < 60000; elapsed += 20) {
+      await frame()
+      trace.push({
+        roofY: house.y(house.roofLevel),
+        dismantling: house.dismantling(),
+        held: heldLevelY(house.roofLevel) !== undefined,
+      })
+      if (!house.dismantling() && Math.abs(house.y(house.roofLevel) - targetY) < 1e-4) break
+    }
+    await frames(400)
+    return trace
+  }
+
+  for (const at of ['full', 'framing'] as const) {
+    test(`${at}: the roof level keeps its place while the floor comes apart, then eases down onto what is below`, async () => {
+      level = at
+      const house = await houseWithRoof()
+      expect(house.y(house.roofLevel)).toBeCloseTo(2 * FLOOR_HEIGHT, 6)
+      await house.deleteUpper()
+      expect(house.dismantling()).toBe(true)
+      // The store already stacks the roof level on the ground floor; what is drawn waits.
+      expect(getLevelElevations(useScene.getState().nodes).get(house.roofLevel)?.baseY).toBeCloseTo(
+        FLOOR_HEIGHT,
+        6,
+      )
+      expect(heldLevelY(house.roofLevel)).toBeCloseTo(2 * FLOOR_HEIGHT, 6)
+      await frame()
+      expect(useViewer.getState().levelsRevealing).toContain(house.roofLevel)
+
+      const trace = await playOut(house, FLOOR_HEIGHT)
+      const lowering = trace.findIndex((sample) => sample.roofY < 2 * FLOOR_HEIGHT - 1e-9)
+      expect(lowering).toBeGreaterThan(0)
+      // Nothing overlaps: every frame the floor is in pieces, the roof is where it stood.
+      for (const sample of trace.slice(0, lowering)) expect(sample.roofY).toBeCloseTo(6, 9)
+      for (const sample of trace.filter((one) => one.dismantling))
+        expect(sample.roofY).toBeCloseTo(6, 9)
+      expect(trace.slice(lowering).every((sample) => !sample.dismantling)).toBe(true)
+      // One eased move: down only, ending exactly on the stack's elevation, slower at both ends.
+      const down = trace.slice(lowering - 1).map((sample) => sample.roofY)
+      for (let i = 1; i < down.length; i += 1)
+        expect(down[i]!).toBeLessThanOrEqual(down[i - 1]! + 1e-9)
+      expect(down.at(-1)!).toBeCloseTo(FLOOR_HEIGHT, 3)
+      const steps = down.slice(1).map((value, i) => down[i]! - value)
+      expect(steps[0]!).toBeLessThan(Math.max(...steps) / 2)
+      expect(steps.at(-2)!).toBeLessThan(Math.max(...steps) / 2)
+      // It takes the rewind's own drop time at this level.
+      const dropMs = (at === 'framing' ? lazyRetractTimingAt(1) : retractTimingAt(1)).durationMs
+        .drop
+      const lowered = trace.filter((sample) => sample.held && sample.roofY < 6 - 1e-9).length
+      expect(lowered * 20).toBeGreaterThanOrEqual(dropMs - 40)
+      expect(lowered * 20).toBeLessThanOrEqual(dropMs + 40)
+      // The hold is gone, and so is the level's reason to show.
+      expect(heldLevelY(house.roofLevel)).toBeUndefined()
+      await frame()
+      expect(useViewer.getState().levelsRevealing).toEqual([])
+      expect(house.y(house.roofLevel)).toBeCloseTo(FLOOR_HEIGHT, 6)
+      // What is below does not move, and the roof's picture is still in its level.
+      expect(house.y(house.ground)).toBe(0)
+      expect(root(house.roof.id)!.parent).toBe(house.objects.get(house.roofLevel)!)
+    })
+  }
+
+  test('the drop follows the animation speed', async () => {
+    level = 'framing'
+    const took: Record<number, number> = {}
+    for (const speed of [1, 2]) {
+      const house = await houseWithRoof({ speed })
+      await house.deleteUpper()
+      const trace = await playOut(house, FLOOR_HEIGHT)
+      took[speed] = trace.filter((sample) => sample.held && sample.roofY < 6 - 1e-9).length
+      await act(async () => driver?.stop())
+      await renderer?.unmount()
+      renderer = null
+      sceneRegistry.clear()
+    }
+    expect(took[2]!).toBeLessThan(took[1]! * 0.65)
+  })
+
+  test('with the animation off, or motion reduced, nothing is held: the stack settles as it always did', async () => {
+    for (const mode of ['off', 'reduced'] as const) {
+      level = mode === 'off' ? 'off' : 'framing'
+      const house = await houseWithRoof({ reducedMotion: mode === 'reduced' })
+      await house.deleteUpper()
+      expect(heldLevelY(house.roofLevel)).toBeUndefined()
+      await frame()
+      expect(house.dismantling()).toBe(false)
+      expect(useViewer.getState().levelsRevealing).toEqual([])
+      expect(house.y(house.roofLevel)).toBeLessThan(2 * FLOOR_HEIGHT)
+      await frames(1500)
+      expect(house.y(house.roofLevel)).toBeCloseTo(FLOOR_HEIGHT, 3)
+      await act(async () => driver?.stop())
+      await renderer?.unmount()
+      renderer = null
+      sceneRegistry.clear()
+    }
+  })
+
+  test('an undo mid-dismantle puts the floor back whole and the roof never moves', async () => {
+    level = 'framing'
+    const house = await houseWithRoof()
+    await house.deleteUpper()
+    await frames(400)
+    expect(house.dismantling()).toBe(true)
+    await act(async () => useScene.temporal.getState().undo())
+    const object = house.register(house.upper)
+    await frame()
+    expect(house.dismantling()).toBe(false)
+    expect(heldLevelY(house.roofLevel)).toBeUndefined()
+    expect(house.y(house.upper)).toBeCloseTo(FLOOR_HEIGHT, 6)
+    expect(object.position.y).toBeCloseTo(FLOOR_HEIGHT, 6)
+    for (let i = 0; i < 20; i += 1) {
+      await frame()
+      expect(house.y(house.roofLevel)).toBeCloseTo(2 * FLOOR_HEIGHT, 6)
+    }
+  })
+
+  test('the undo of a finished deletion brings the roof up and the floor back together, never through each other', async () => {
+    level = 'framing'
+    const house = await houseWithRoof()
+    await house.deleteUpper()
+    await playOut(house, FLOOR_HEIGHT)
+    expect(house.y(house.roofLevel)).toBeCloseTo(FLOOR_HEIGHT, 6)
+    await act(async () => useScene.temporal.getState().undo())
+    // The restored floor mounts at the origin, as every new level object does.
+    house.register(house.upper)
+    for (let i = 0; i < 30; i += 1) {
+      await frame()
+      // The floor's top never reaches the roof's base, and neither moves through the other.
+      expect(house.y(house.roofLevel) - house.y(house.upper)).toBeGreaterThanOrEqual(
+        FLOOR_HEIGHT - 1e-6,
+      )
+      expect(house.y(house.upper)).toBeCloseTo(FLOOR_HEIGHT, 6)
+      expect(house.y(house.roofLevel)).toBeCloseTo(2 * FLOOR_HEIGHT, 6)
+    }
   })
 })
 
