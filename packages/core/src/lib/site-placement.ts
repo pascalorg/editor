@@ -207,7 +207,7 @@ export function siteFrontEdge(site: SiteEdges): number {
  * (x east, z south). The street edge its site records (its frontEdge, else its first street edge);
  * with none recorded, the house's own front, its −z turned by its yaw, the way a generated house
  * faces. Every side named as seen from the street reads this one street: a view's street sides,
- * Architect's street order, plan labels and roof fronts.
+ * Architect's street order, plan labels and the gables its auto_roof names from the street.
  */
 export function buildingStreet(nodes: Nodes, buildingId?: string | null): P {
   const node = buildingId ? nodes[buildingId] : undefined
