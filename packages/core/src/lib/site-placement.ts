@@ -17,6 +17,7 @@ import {
   levelFrame,
   siteFrame,
   turnPlanPoint,
+  yawOf,
 } from './building-footprint'
 import { area, containsPoint, difference, distanceToBoundary } from './polygon-boolean'
 import { polygonInteriorPoint } from './polygon-label'
@@ -202,22 +203,21 @@ export function siteFrontEdge(site: SiteEdges): number {
 }
 
 /**
- * The street a building faces, as its site records it: the recorded street edge and the way from
- * the lot toward it, a unit vector in the site's plan (x, z). Null when the site records no street
- * edge: then front, back, left and right mean nothing yet, and no edge is guessed.
+ * Which way a building's street is, from the house toward it: a unit vector in the site's plan
+ * (x east, z south). The street edge its site records (its frontEdge, else its first street edge);
+ * with none recorded, the house's own front, its −z turned by its yaw, the way a generated house
+ * faces. Every side named as seen from the street reads this one street: a view's street sides,
+ * Architect's street order, plan labels and roof fronts.
  */
-export function siteStreet(
-  nodes: Nodes,
-  buildingId?: string | null,
-): { edge: number; toward: P } | null {
-  const building = buildingId ? nodes[buildingId] : undefined
-  const stored = siteOfBuilding(nodes, building?.type === 'building' ? building : null)
-  if (!stored) return null
-  const site = readSiteNode(stored)
-  const lot = (site.polygon?.points ?? []) as P[]
-  const edge = recordedStreetEdge(site)
-  if (edge === undefined || lot.length < 3) return null
-  return { edge, toward: outwardNormal(lot, edge) as P }
+export function buildingStreet(nodes: Nodes, buildingId?: string | null): P {
+  const node = buildingId ? nodes[buildingId] : undefined
+  const building = node?.type === 'building' ? node : null
+  const stored = siteOfBuilding(nodes, building)
+  const site = stored && readSiteNode(stored)
+  const lot = (site?.polygon?.points ?? []) as P[]
+  const edge = site ? recordedStreetEdge(site) : undefined
+  if (edge !== undefined && lot.length >= 3) return outwardNormal(lot, edge) as P
+  return turnPlanPoint(0, -1, yawOf(building?.rotation)) as P
 }
 
 /**

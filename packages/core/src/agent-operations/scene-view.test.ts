@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { PerspectiveCamera, Vector3 } from 'three'
-import { isAgentRefusal } from '../agent-tools'
+import { z } from 'zod'
+import { isAgentRefusal, viewSceneTool } from '../agent-tools'
 import {
   type AnyNode,
   BuildingNode,
@@ -887,12 +888,19 @@ describe('which way an opening faces', () => {
 // The case table of view_scene (__fixtures__/view-scene-cases.ts), as core plans it: the MCP and the
 // chat run the same table through their own runners.
 describe('the case table', () => {
+  const contract = z.object(viewSceneTool.input)
   for (const c of VIEW_SCENE_CASES) {
     if (c.surfaces && !c.surfaces.includes('core')) continue
     test(c.name, () => {
+      // What the contract's schema refuses never reaches the planner, on any surface.
+      const valid = contract.safeParse(c.input).success
       const plan = () => sceneViewPlan(c.scene(), c.input, { currentCamera: c.currentCamera })
-      if ('refusal' in c.expect) expect(refusalOf(plan)).toBe(c.expect.refusal)
-      else expect(viewSceneCaseProblems(c, plan())).toEqual([])
+      if ('refusal' in c.expect)
+        expect(valid ? refusalOf(plan) : 'invalid_input').toBe(c.expect.refusal)
+      else {
+        expect(valid).toBe(true)
+        expect(viewSceneCaseProblems(c, plan())).toEqual([])
+      }
     })
   }
 })

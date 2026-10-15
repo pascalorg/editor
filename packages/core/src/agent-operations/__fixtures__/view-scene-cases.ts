@@ -225,7 +225,7 @@ const PERSON: SceneViewCurrentCamera = {
 export const VIEW_SCENE_CASES: readonly ViewSceneCase[] = [
   {
     name: 'by default, every storey and the roof, whatever floor the person is on',
-    was: 'screenshot_3d {}: the finished house, every storey and the roof',
+    was: "every screenshot_3d picture: the finished house, every storey and the roof (from view_scene's own default, the south-west; screenshot_3d {} was street-left, the next row)",
     scene: eastFront,
     input: {},
     expect: { eyeToward: [-H, H], frames: WHOLE_HOUSE },
@@ -317,25 +317,40 @@ export const VIEW_SCENE_CASES: readonly ViewSceneCase[] = [
     expect: { eyeToward: [0, -1], frames: WHOLE_HOUSE },
   },
   {
-    name: 'a lot that records no street refuses street sides instead of guessing north',
-    was: "screenshot_3d { view: 'street' } on a lot with no street (it looked from the north)",
+    name: "a lot that records no street is seen from the house's own front (-z), as Architect's tools read it",
+    was: "screenshot_3d { view: 'street' } on a lot with no street (Pro's placeholder lot)",
     scene: () => house({ polygon: { type: 'polygon', points: LOT } }),
     input: { from: 'street' },
-    expect: { refusal: 'no_street' },
-  },
-  {
-    name: 'the picture that guess took, asked for as what it is: from the north',
-    was: "screenshot_3d { view: 'street' } on a lot with no street",
-    scene: () => house({ polygon: { type: 'polygon', points: LOT } }),
-    input: { from: 'north' },
     expect: { eyeToward: [0, -1], frames: WHOLE_HOUSE },
   },
   {
-    name: 'a scene with no site refuses street sides',
+    name: "on a lot with no street, street-left is the left front corner of the house's own front: the north-east",
+    was: 'screenshot_3d {} on a lot with no street',
+    scene: () => house({ polygon: { type: 'polygon', points: LOT } }),
+    input: { from: 'street-left' },
+    expect: { eyeToward: [H, -H], frames: WHOLE_HOUSE },
+  },
+  {
+    name: 'a house turned a quarter on a lot with no street is seen from its own front, the west',
+    was: "screenshot_3d { view: 'street' } on a lot with no street",
+    scene: () =>
+      house({ polygon: { type: 'polygon', points: LOT } }, { at: [15, 0, 15], yaw: Math.PI / 2 }),
+    input: { from: 'street' },
+    expect: { eyeToward: [-1, 0], frames: { min: [15, 0, 3], max: [23, PEAK, 15] } },
+  },
+  {
+    name: "a scene with no site is seen from the house's own front",
     was: 'screenshot_3d {} in a scene with no site',
     scene: () => house(null),
     input: { from: 'street-left' },
-    expect: { refusal: 'no_street' },
+    expect: { eyeToward: [H, -H], frames: WHOLE_HOUSE },
+  },
+  {
+    name: "inside a floor of the house on the east lot, the street is that house's own",
+    was: "screenshot_3d { view: 'street' }, looking into a floor",
+    scene: twoLots,
+    input: { interior: { levelId: 'level_0_east' }, from: 'street' },
+    expect: { eyeToward: [1, 0] },
   },
   {
     name: 'the back-left corner in daylight',
@@ -375,6 +390,29 @@ export const VIEW_SCENE_CASES: readonly ViewSceneCase[] = [
     expect: { size: { w: 1600, h: 1000 } },
   },
   {
+    name: 'the smallest picture, 64 px on its longest side',
+    was: 'screenshot_3d { maxPx: 64 }',
+    scene: eastFront,
+    input: { from: 'street-left', maxPx: 64 },
+    expect: { size: { w: 64, h: 40 } },
+  },
+  {
+    name: 'the largest picture, 1920 px on its longest side',
+    was: 'screenshot_3d { maxPx: 1920 }',
+    scene: eastFront,
+    input: { from: 'street-left', maxPx: 1920 },
+    expect: { size: { w: 1920, h: 1200 } },
+  },
+  {
+    name: 'a picture past 1920 px is refused: a vision model would scale it down',
+    was: 'screenshot_3d { maxPx: 2048 }',
+    scene: eastFront,
+    input: { from: 'street-left', maxPx: 2048 },
+    // The contract's schema refuses it before anything runs; the chat's model API does the same.
+    surfaces: ['core'],
+    expect: { refusal: 'invalid_input' },
+  },
+  {
     name: "the person's own view, at their canvas' aspect",
     was: "screenshot_3d { view: 'current' }",
     scene: eastFront,
@@ -402,6 +440,15 @@ export const VIEW_SCENE_CASES: readonly ViewSceneCase[] = [
       },
       size: { w: 960, h: 540 },
     },
+  },
+  {
+    name: "the person's view on a tall, narrow canvas is 1920 px on its longest side",
+    was: "screenshot_3d { view: 'current' } in a portrait window",
+    scene: eastFront,
+    input: { camera: 'current' },
+    currentCamera: { ...PERSON, aspect: 0.6 },
+    surfaces: ['core', 'chat'],
+    expect: { size: { w: 1152, h: 1920 } },
   },
   {
     name: "the MCP has no view of the person's to look through",

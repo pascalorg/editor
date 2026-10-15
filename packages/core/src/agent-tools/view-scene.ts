@@ -16,7 +16,8 @@ export const COMPASS_SIDES = [
 
 /**
  * Sides as a front photo names them, standing in the street facing the house: left and right are
- * that viewer's hands. They turn with the street the site records.
+ * that viewer's hands. They turn with the house's street: the one its site records, else its own
+ * front.
  */
 export const STREET_SIDES = [
   'street',
@@ -59,7 +60,7 @@ export const viewSceneTool = {
       .enum(VIEW_SIDES)
       .optional()
       .describe(
-        "The side the eye stands on: a compass side (north is the plan's top edge, z grows south, x east), above, or a side as a front photo names it, standing in the street facing the house ('street-left' is its left front corner, 'back' the far side), from the street the site records: refused (no_street) when it records none. Default south-west.",
+        "The side the eye stands on: a compass side (north is the plan's top edge, z grows south, x east), above, or a side as a front photo names it, standing in the street facing the house ('street-left' is its left front corner, 'back' the far side), from the street the site records, else the house's own front (its -z, the way a generated house faces). Default south-west.",
       ),
     elevation: z
       .number()
@@ -114,7 +115,9 @@ export const viewSceneTool = {
       .min(64)
       .max(VIEW_MAX_PX)
       .optional()
-      .describe("The picture's longest side in pixels, for a smaller one. Default 1920 by 1200."),
+      .describe(
+        "The picture's longest side in pixels, for a smaller one. Default 1920 by 1200, and never longer than 1920.",
+      ),
     photo: z
       .looseObject({
         source: z

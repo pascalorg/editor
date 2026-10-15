@@ -381,6 +381,7 @@ export {
   type BuildableArea,
   type BuildingPlacement,
   buildingFootprintRings,
+  buildingStreet,
   describeSiteBrief,
   lotOverhang,
   measureFootprint,

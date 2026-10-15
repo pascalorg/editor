@@ -1,11 +1,12 @@
 import { refuse } from '../agent-tools/refusal'
-import type {
-  COMPASS_SIDES,
-  STREET_SIDES,
-  VIEW_LIGHTING,
-  VIEW_SIDES,
+import {
+  type COMPASS_SIDES,
+  type STREET_SIDES,
+  type VIEW_LIGHTING,
+  VIEW_MAX_PX,
+  type VIEW_SIDES,
 } from '../agent-tools/view-scene'
-import { siteStreet } from '../lib/site-placement'
+import { buildingStreet } from '../lib/site-placement'
 import type {
   AnyNode,
   AnyNodeId,
@@ -220,23 +221,17 @@ const STREET_TURN: Record<StreetSide, number> = {
 const isStreetSide = (side: SceneViewSide): side is StreetSide => Object.hasOwn(STREET_TURN, side)
 
 /**
- * Where a street side stands in the plan, from the street the target's site records. Standing in
- * the street facing the house you look along -toward, and in this frame (x east, z south, y up)
- * your left hand points along (-toward.z, toward.x): on a lot whose street is north, that is east.
+ * Where a street side stands in the plan, from the street of the house it looks at (core's
+ * `buildingStreet`: the street its site records, else the house's own front). Standing in the
+ * street facing the house you look along -toward, and in this frame (x east, z south, y up) your
+ * left hand points along (-toward.z, toward.x): on a lot whose street is north, that is east.
  */
 function streetDirection(
   nodes: Readonly<Record<string, AnyNode>>,
   side: StreetSide,
-  target: AnyNode | undefined,
+  lookedAt: AnyNode | undefined,
 ): Pt {
-  const street = siteStreet(nodes, framedBuilding(nodes, target)?.id)
-  if (!street)
-    refuse(
-      'no_street',
-      `The site records no street edge, so ${side} means nothing yet: look from a compass side (north is the plan's top edge), or set the site's frontEdge first.`,
-      { from: side },
-    )
-  const [fx, fz] = street.toward
+  const [fx, fz] = buildingStreet(nodes, framedBuilding(nodes, lookedAt)?.id)
   const turn = (STREET_TURN[side] * Math.PI) / 180
   // `+ 0` so a vector along an axis reads 0, not -0.
   return [
@@ -246,11 +241,12 @@ function streetDirection(
 }
 
 /**
- * The building a view is of: the target's, else the scene's. Buildings on several sites each face
- * their own street, so a street side then needs the building as target.
+ * The building a view is of: the one holding what it looks at (a target, an interior's floor),
+ * else the scene's. Buildings on several sites each face their own street, so a street side then
+ * needs the building as target.
  */
-function framedBuilding(nodes: Readonly<Record<string, AnyNode>>, target: AnyNode | undefined) {
-  if (target) return ancestry(nodes, target).find((node) => node.type === 'building') ?? null
+function framedBuilding(nodes: Readonly<Record<string, AnyNode>>, lookedAt: AnyNode | undefined) {
+  if (lookedAt) return ancestry(nodes, lookedAt).find((node) => node.type === 'building') ?? null
   const buildings = Object.values(nodes).filter((node) => node.type === 'building')
   const sites = new Set(buildings.map((building) => building.parentId ?? null))
   if (sites.size > 1)
@@ -776,9 +772,9 @@ export function sceneViewNote() {
   return 'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
 }
 
-/** A picture of `w` × `h`, made smaller to `maxPx` on its longest side when asked. */
-function sized(w: number, h: number, maxPx?: number): { w: number; h: number } {
-  const scale = maxPx ? Math.min(1, maxPx / Math.max(w, h)) : 1
+/** A picture of `w` × `h`, made smaller to `maxPx` on its longest side, `VIEW_MAX_PX` at most. */
+function sized(w: number, h: number, maxPx = VIEW_MAX_PX): { w: number; h: number } {
+  const scale = Math.min(1, maxPx / Math.max(w, h))
   return { w: Math.round(w * scale), h: Math.round(h * scale) }
 }
 
@@ -871,7 +867,7 @@ export function sceneViewPlan(
   const side = input.from
   const from = side
     ? isStreetSide(side)
-      ? streetDirection(nodes, side, target)
+      ? streetDirection(nodes, side, target ?? (input.interior && nodes[input.interior.levelId]))
       : side
     : opening && !input.position
       ? outsideSide(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
