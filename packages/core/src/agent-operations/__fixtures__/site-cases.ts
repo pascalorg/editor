@@ -396,9 +396,7 @@ export const GET_SITE_CASES: AgentToolCase[] = [
         building({ position: [10, 0, 20] }, 'building_shed'),
         level('building_shed', 'level_shed'),
       ),
-    // MCP has no viewed level
     context: { activeLevelId: 'level_shed' },
-    surfaces: ['core', 'chat'],
     input: { site: 'site_lot' },
     expect: {
       result: {

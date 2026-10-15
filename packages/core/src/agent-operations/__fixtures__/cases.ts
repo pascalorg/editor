@@ -46,8 +46,9 @@ import { VERIFY_SCENE_CASES } from './verify-scene-cases'
 /**
  * Edge cases of the agent tools that run as core operations, written before the operations. One
  * declarative table per tool; the core, MCP and chat runners each run every table, so the three
- * layers cannot disagree. `surfaces` narrows a case whose setup only one surface has (the chat
- * knows the floor a person is viewing; the MCP has no such thing and falls back to the lowest).
+ * layers cannot disagree. `surfaces` narrows a case whose setup only one surface has (the live
+ * stores close level gaps when a scene loads). `context.activeLevelId` is the floor the host's
+ * person views: the chat's, or an in-page MCP host's; a remote MCP has none, so the lowest storey.
  * `after` lists fields some nodes must have once the operation's changes are applied.
  */
 
@@ -343,7 +344,6 @@ export const LIST_LEVELS_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: {
       result: {
         activeLevelId: 'level_upper',
@@ -422,7 +422,6 @@ export const LEVEL_TARGET_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { levelId: 'level_upper' } },
   },
   {
@@ -791,7 +790,6 @@ export const DUPLICATE_LEVEL_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { floorIndex: 2, copied: { level: 1, wall: 1 } } },
   },
   {

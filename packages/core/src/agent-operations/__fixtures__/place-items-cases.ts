@@ -368,7 +368,6 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { items: [{ assetId: 'sofa', x: 10, z: 10 }] },
     context: { ...library, activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { levelId: 'level_upper' } },
   },
   {

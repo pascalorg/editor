@@ -49,7 +49,11 @@ export function registerAddColumn(
             },
           })
         }
-        const outcome = addColumn(nodes, { ...input, compiled }, { activeLevelId: null })
+        const outcome = addColumn(
+          nodes,
+          { ...input, compiled },
+          { activeLevelId: bridge.activeLevelId?.() ?? null },
+        )
         if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))
         const payload = {
           ...outcome.result,

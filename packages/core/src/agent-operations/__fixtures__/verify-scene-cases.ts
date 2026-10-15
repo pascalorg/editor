@@ -185,7 +185,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     'the viewed floor is marked',
     oneStorey,
     { result: { activeLevelId: 'level_0', levels: [{ levelId: 'level_0', isActive: true }] } },
-    { context: { activeLevelId: 'level_0' }, surfaces: ['core', 'chat'] },
+    { context: { activeLevelId: 'level_0' } },
   ),
   verify(
     'walls with no room and no door are reported',

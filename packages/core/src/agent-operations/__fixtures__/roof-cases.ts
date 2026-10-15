@@ -191,7 +191,6 @@ export const CREATE_ROOF_CASES: AgentToolCase[] = [
     scene: house({ storeys: 2 }),
     input: {},
     context: { activeLevelId: 'level_g' },
-    surfaces: ['core', 'chat'],
     expect: { result: { coveredLevelId: 'level_1' }, check: onRoofLevel('level_1', 0) },
   },
   {
