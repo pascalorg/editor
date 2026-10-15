@@ -62,6 +62,7 @@ export type {
   ZoneEvent,
 } from './events/bus'
 export { emitter, eventSuffixes } from './events/bus'
+export { isCaptureSessionOn, subscribeCaptureSessions } from './events/capture-sessions'
 export {
   hiddenWallPointerEventsHeld,
   holdHiddenWallPointerEvents,

@@ -1,6 +1,13 @@
 'use client'
 
-import { emitter, sceneRegistry, type ThumbnailGenerateEvent, useScene } from '@pascal-app/core'
+import {
+  emitter,
+  isCaptureSessionOn,
+  sceneRegistry,
+  subscribeCaptureSessions,
+  type ThumbnailGenerateEvent,
+  useScene,
+} from '@pascal-app/core'
 import { sceneViewInterior } from '@pascal-app/core/agent-operations'
 import {
   computeHeroFraming,
@@ -444,26 +451,25 @@ export function presentFinished(): () => void {
 }
 
 /**
- * The runs of captures on now (`camera-controls:capture-session`): the first to start presents the
- * pictures' scene (`present` returns what puts the user's view back), the last to end puts it back.
+ * The pictures' scene while a capture session is on (core's `isCaptureSessionOn`, runs that overlap
+ * counted once): `present` when the first starts, and what it returns, which puts the user's view
+ * back, when the last ends. Returns the stop, which puts the view back if a session is still on.
  */
-export function captureSessions(present: () => () => void) {
-  const owners = new Set<string>()
+export function presentWhileCapturing(present: () => () => void): () => void {
   let restore: (() => void) | null = null
-  const end = () => {
-    owners.clear()
+  const follow = () => {
+    if (isCaptureSessionOn() && !restore) restore = present()
+    else if (!isCaptureSessionOn() && restore) {
+      restore()
+      restore = null
+    }
+  }
+  follow()
+  const unsubscribe = subscribeCaptureSessions(follow)
+  return () => {
+    unsubscribe()
     restore?.()
     restore = null
-  }
-  return {
-    on({ owner, active }: { owner: string; active: boolean }) {
-      if (!owner) return
-      if (active) {
-        if (owners.size === 0) restore = present()
-        owners.add(owner)
-      } else if (owners.delete(owner) && owners.size === 0) end()
-    },
-    end,
   }
 }
 
@@ -1186,25 +1192,21 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   // scene up for its pictures — the finished presentation, the ground hidden —
   // so while any run is on the viewport keeps its last frame and the viewer
   // shows the finished house whatever view the user was in; the last run's
-  // `active: false` puts the user's view back, then (a few commits later) the
-  // viewport resumes. Runs overlap (a sheet and an agent's view): the user's
-  // view is the one before the first, never a run's finished presentation.
-  // `camera-controls:capture-session` `{ owner, active }`.
-  useEffect(() => {
-    const sessions = captureSessions(() => {
-      const releaseLiveFrame = holdLiveFrame(HOLD_MAX_MS)
-      const restorePresentation = presentFinished()
-      return () => {
-        restorePresentation()
-        setTimeout(releaseLiveFrame, SESSION_RESUME_MS)
-      }
-    })
-    emitter.on('camera-controls:capture-session', sessions.on)
-    return () => {
-      emitter.off('camera-controls:capture-session', sessions.on)
-      sessions.end()
-    }
-  }, [])
+  // end puts the user's view back, then (a few commits later) the viewport
+  // resumes. Runs overlap (a sheet and an agent's view): the user's view is
+  // the one before the first, never a run's finished presentation.
+  useEffect(
+    () =>
+      presentWhileCapturing(() => {
+        const releaseLiveFrame = holdLiveFrame(HOLD_MAX_MS)
+        const restorePresentation = presentFinished()
+        return () => {
+          restorePresentation()
+          setTimeout(releaseLiveFrame, SESSION_RESUME_MS)
+        }
+      }),
+    [],
+  )
 
   // Thumbnail request via emitter. Two call shapes:
   //  - user-driven capture: `{ projectId, captureMode, cropRegion }` — captures
