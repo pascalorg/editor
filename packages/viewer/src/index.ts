@@ -189,7 +189,7 @@ export {
   type RendererInitializationResult,
   type RendererPowerPreference,
 } from './lib/renderer-capability'
-export { commitRevealCandidates } from './lib/reveal-candidates'
+export { commitEditCandidates, commitRevealCandidates } from './lib/reveal-candidates'
 export {
   ANIMATION_SPEEDS,
   type AnimationSpeed,

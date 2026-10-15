@@ -75,6 +75,7 @@ import {
 } from '../../lib/reveal-wipe'
 import useViewer from '../../store/use-viewer'
 import { ConstructionDust } from './construction-dust'
+import { dressDeletionGhost } from './ghost-dress'
 
 /**
  * Construction reveal: what an agent builds appears as a construction, not a
@@ -1775,6 +1776,7 @@ function playDeletions(commit: SceneCommit) {
     if (!(original && own)) continue
     const root = original.clone(true)
     drawnInScenePass(root)
+    dressDeletionGhost(original, root, commit.before.nodes[entry.id as AnyNodeId])
     const parent = ghostStand(entry.id, commit, own)
     own.add(root)
     // A deleted floor's pieces would go with their floor's object: they stand in the building.

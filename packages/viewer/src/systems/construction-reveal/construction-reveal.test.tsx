@@ -22,7 +22,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { act, create } from '@react-three/test-renderer'
-import { BoxGeometry, Group, Matrix4, Mesh, Object3D } from 'three'
+import { BoxGeometry, Group, Matrix4, Mesh, MeshBasicMaterial, Object3D } from 'three'
+import { z } from 'zod'
 import { NodeRenderer } from '../../components/renderers/node-renderer'
 import { DustPool } from '../../lib/construction-dust'
 import { OVERLAY_LAYER, scenePassLayers } from '../../lib/layers'
@@ -127,6 +128,21 @@ const QueuedWall = revealKind(
   'fxqwall',
   { phase: 'structure', style: 'rise' },
   (node) => (reached.has(node.id) ? new BoxGeometry(4, 2.5, 0.2).translate(2, 1.25, 0) : null),
+)
+/** A wall of the real kind's name: what a deletion dresses is a node of type `wall`. */
+const RealWall = revealKind(
+  'wall',
+  'wall',
+  { phase: 'structure', style: 'rise' },
+  () => new BoxGeometry(4, 2.5, 0.2).translate(2, 1.25, 0),
+  {
+    start: z.tuple([z.number(), z.number()]).default([0, 0]),
+    end: z.tuple([z.number(), z.number()]).default([4, 0]),
+    height: z.number().default(2.5),
+    thickness: z.number().default(0.2),
+    frontSide: z.string().default('interior'),
+    backSide: z.string().default('exterior'),
+  },
 )
 const Door = revealKind('fixture:door', 'fxdoor', { phase: 'openings', style: 'scale' }, () =>
   new BoxGeometry(0.9, 2.1, 0.1).translate(0, 1.05, 0),
@@ -366,6 +382,7 @@ beforeEach(async () => {
     nodes: [
       Slab.definition,
       Wall.definition,
+      RealWall.definition,
       QueuedWall.definition,
       Door.definition,
       Item.definition,
@@ -1766,6 +1783,74 @@ describe('a deletion plays the creation backwards', () => {
       await until(() => pictures().length === 0, 4000)
     })
   }
+
+  // The owner's rule (15 Oct): a node that plays is never hidden by the cutaway.
+  test('a wall the cutaway was hiding plays its deletion whole, not as its stipple, then goes', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const wall = make(RealWall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId))
+    await until(() => !isNodeRevealing(wall.id) && Boolean(root(wall.id)), 12000)
+    // The wall as the wall system leaves it in cutaway: its mesh in the stipple, stamped hidden.
+    const stipple = new MeshBasicMaterial({ transparent: true, opacity: 0.2 })
+    const mesh = new Mesh(new BoxGeometry(4, 2.5, 0.2), [stipple, stipple, stipple])
+    mesh.userData.wallHidden = true
+    root(wall.id)!.parent!.add(mesh)
+    sceneRegistry.nodes.set(wall.id, mesh)
+    useViewer.setState({ wallMode: 'cutaway' })
+    const copies = () => {
+      const found: Mesh[] = []
+      ;(renderer!.scene.instance as Object3D).traverse((object) => {
+        const candidate = object as Mesh
+        if (candidate.isMesh && candidate !== mesh && candidate.userData.wallHidden === true)
+          found.push(candidate)
+      })
+      return found
+    }
+    await remove([wall.id])
+    await frame()
+    const [copy] = copies()
+    expect(copy).toBeDefined()
+    const worn = copy!.material
+    expect(Array.isArray(worn) ? worn[0] : worn).not.toBe(stipple)
+    // It plays: the same visible variant on every frame of the reverse play, until it is taken away.
+    for (let step = 0; step < 6; step += 1) {
+      await frames(100)
+      if (!copies().includes(copy!)) break
+      expect(copy!.material).toBe(worn)
+    }
+    await until(() => !copies().includes(copy!), 6000)
+  })
+
+  test('a wall the cutaway showed plays its deletion in what it wore', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const wall = make(RealWall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId))
+    await until(() => !isNodeRevealing(wall.id) && Boolean(root(wall.id)), 12000)
+    const own = new MeshBasicMaterial()
+    const mesh = new Mesh(new BoxGeometry(4, 2.5, 0.2), own)
+    mesh.userData.wallHidden = false
+    root(wall.id)!.parent!.add(mesh)
+    sceneRegistry.nodes.set(wall.id, mesh)
+    useViewer.setState({ wallMode: 'cutaway' })
+    await remove([wall.id])
+    await frame()
+    const copy: Mesh | undefined = (renderer!.scene.instance as Object3D).getObjectByProperty(
+      'type',
+      'Mesh',
+    ) as Mesh | undefined
+    const ghosts: Mesh[] = []
+    ;(renderer!.scene.instance as Object3D).traverse((object) => {
+      const candidate = object as Mesh
+      if (candidate.isMesh && candidate !== mesh && candidate.material === own)
+        ghosts.push(candidate)
+    })
+    expect(copy).toBeDefined()
+    expect(ghosts.length).toBe(1)
+  })
 
   test('many deletions stagger, the last built going first', async () => {
     const { walls } = await builtWalls(4)
