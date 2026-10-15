@@ -374,26 +374,24 @@ export function insetPolygon(
 /**
  * Which envelope edge is the one behind the lot's front line: the longest
  * envelope edge facing the same way (within 25°) with its midpoint nearest
- * that line; failing that, the envelope edge whose midpoint is nearest the
- * lot front's midpoint (a pie lot's curved frontage has no single parallel —
- * its longest arc chord fronts the house). Facing, not only parallel: on a
- * lot that widens away from its street the rear edge is parallel too, and
- * longer.
+ * that line. Facing, not only parallel: on a lot that widens away from its
+ * street the rear edge is parallel too, and longer. Null when no edge faces
+ * the street: side setbacks wider than a narrow frontage take the whole
+ * front, and a side is no front.
  */
 export function envelopeFrontEdge(
   lot: readonly Pt[],
   frontIndex: number,
   envelope: readonly Pt[],
-): number {
+): number | null {
   const n = lot.length
   const m = envelope.length
-  if (n < 2 || m < 2) return 0
+  if (n < 2 || m < 2) return null
   const fi = ((frontIndex % n) + n) % n
   const a = lot[fi] as Pt
   const b = lot[(fi + 1) % n] as Pt
-  const fmid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
   const [fnx, fny] = outwardNormal(lot, fi)
-  let bestI = -1
+  let best: number | null = null
   let bestScore = Number.NEGATIVE_INFINITY
   for (let i = 0; i < m; i++) {
     const p = envelope[i] as Pt
@@ -402,28 +400,15 @@ export function envelopeFrontEdge(
     if (el < 1e-6) continue
     const [enx, eny] = outwardNormal(envelope, i)
     if (enx * fnx + eny * fny < Math.cos((25 * Math.PI) / 180)) continue
-    const mid: Pt = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]
-    const dist = segDist(mid[0], mid[1], a, b)
+    const dist = segDist((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, a, b)
     // long and close wins: the front's offset is one lot-front length away by the setback
     const score = el - 2 * dist
     if (score > bestScore) {
       bestScore = score
-      bestI = i
+      best = i
     }
   }
-  if (bestI >= 0) return bestI
-  let nearest = 0
-  let nd = Number.POSITIVE_INFINITY
-  for (let i = 0; i < m; i++) {
-    const p = envelope[i] as Pt
-    const q = envelope[(i + 1) % m] as Pt
-    const d = Math.hypot((p[0] + q[0]) / 2 - fmid[0], (p[1] + q[1]) / 2 - fmid[1])
-    if (d < nd) {
-      nd = d
-      nearest = i
-    }
-  }
-  return nearest
+  return best
 }
 
 /**

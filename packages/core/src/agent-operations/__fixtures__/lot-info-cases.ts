@@ -296,7 +296,14 @@ export const LOT_INFO_CASES: AgentToolCase[] = [
       street: null,
       ground: { state: 'unread', reliefM: null },
     },
-    { mentions: ['a house usually covers 30–45%: 270–405 m²', 'ground: not read'] },
+    {
+      mentions: ['ground: not read'],
+      // the range is in the answer, but the summary leaves it out: the placeholder is no real lot
+      check: (result) =>
+        (result.summary as string[]).some((line) => line.includes('usually covers'))
+          ? ['the summary gives the placeholder a footprint range']
+          : [],
+    },
   ),
   covers(
     'a parcel with setbacks and its street',

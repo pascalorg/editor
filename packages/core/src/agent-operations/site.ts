@@ -13,7 +13,8 @@ import { pointInPolygon, type Vec2 } from './plan-geometry'
 import type { AgentOperation, SceneNodes } from './types'
 
 type SiteInput = { building?: string; site?: string }
-type PlaceBuildingInput = SiteInput & {
+type PlaceBuildingInput = {
+  building?: string
   outline?: number[][]
   yards?: Partial<Record<YardKey, number>>
   rotationDeg?: number
@@ -40,9 +41,10 @@ export const getSite: AgentOperation<SiteInput> = (nodes, input, context) => {
     input.building || (anyBuilding && !input.site)
       ? targetBuilding(nodes, input.building, context)
       : null
+  // a site named alone is read for the building viewed when it stands there
   const brief = siteBrief(
     nodes,
-    building ? { buildingId: building.id } : input.site ? { siteId: input.site } : {},
+    building ? { buildingId: building.id } : { siteId: input.site, levelId: context.activeLevelId },
   )
   if (!brief) refuse('no_site', 'The scene has no site with a lot: add_level starts one.')
   if (input.site && brief.siteId !== input.site)

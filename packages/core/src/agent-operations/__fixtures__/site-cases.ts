@@ -290,6 +290,20 @@ export const GET_SITE_CASES: AgentToolCase[] = [
     expect: { result: { ground: { state: 'sloped', reliefM: 9 } } },
   },
   {
+    name: 'a terrain far off the lot, its samples 10 nm apart: read over the field’s own lines',
+    tool: 'get_site',
+    // past the field heightAt holds its edge, so the lot's lines cross only the field's few grid
+    // lines, not the 10^24 between the lot and the field; the field's west column rises 2 m
+    scene: () => {
+      const field = createTerrainField({ origin: [1e16, 0], spacing: 1e-8, cols: 2, rows: 2 })
+      field.heights[2] = quantize(field, 2)
+      const terrain = encodeTerrainField(field)
+      return scene(site({ polygon: STRAIGHT.polygon, terrain }), building(), level())
+    },
+    input: {},
+    expect: { result: { ground: { state: 'sloped', reliefM: 2 } } },
+  },
+  {
     name: 'a lot widening away from its street: the front is the edge facing it, not the longer rear',
     tool: 'get_site',
     // 10 m on the street (z = 0) and 100 m at the back (z = 20), 1 m setbacks
@@ -316,6 +330,75 @@ export const GET_SITE_CASES: AgentToolCase[] = [
       result: { street: { side: 'north', edge: 0 }, buildable: { frontEdge: 0 } },
       mentions: ['9.6 m along the street'],
     },
+  },
+  {
+    name: 'a narrow frontage the side setbacks take whole: no buildable edge faces the street',
+    tool: 'get_site',
+    // 2 m on the street (z = 0), 60 m at the back: 5 m side yards leave a triangle pointing at
+    // the street, its sides diagonal; neither is a front, though one is nearer the street
+    scene: () =>
+      scene(
+        site({
+          polygon: {
+            type: 'polygon',
+            points: [
+              [0, 0],
+              [2, 0],
+              [30, 40],
+              [-30, 40],
+            ],
+          },
+          frontEdge: 0,
+          setbacks: { front: 1, side: 5, rear: 1 },
+        }),
+        building(),
+        level(),
+      ),
+    input: {},
+    expect: {
+      result: {
+        street: { side: 'north', edge: 0, squareRotationDeg: 0 },
+        buildable: { state: 'setbacks', frontEdge: null },
+      },
+      mentions: ['no edge of it faces the street, so no frontage to build along'],
+    },
+  },
+  {
+    name: 'a site named, two buildings on it: read for the one viewed',
+    tool: 'get_site',
+    scene: () =>
+      scene(
+        site(STRAIGHT),
+        building(),
+        level(),
+        building({ position: [10, 0, 20] }, 'building_shed'),
+        level('building_shed', 'level_shed'),
+      ),
+    // MCP has no viewed level
+    context: { activeLevelId: 'level_shed' },
+    surfaces: ['core', 'chat'],
+    input: { site: 'site_lot' },
+    expect: {
+      result: {
+        siteId: 'site_lot',
+        buildingId: 'building_shed',
+        lot: {
+          ring: [
+            [-10, -20],
+            [10, -20],
+            [10, 20],
+            [-10, 20],
+          ],
+        },
+      },
+    },
+  },
+  {
+    name: 'a site named by an id no node has: refused',
+    tool: 'get_site',
+    scene: () => scene(site(STRAIGHT), building(), level()),
+    input: { site: 'site_missing' },
+    expect: { refusal: 'site_not_found' },
   },
   {
     name: 'a site named by a node that is not one: refused',
