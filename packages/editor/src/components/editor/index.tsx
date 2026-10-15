@@ -78,7 +78,6 @@ import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
 import { type ActionMenuPlacement, TOP_MENU_CLEARANCE } from '../ui/action-menu/placement'
-import { useActionMenuPlacementPreference } from '../ui/action-menu/placement-preference'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -129,7 +128,7 @@ import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { HostView } from './views/host-view'
-import { SceneRegion } from './views/scene-region'
+import { SceneRegion, useSceneSpan } from './views/scene-region'
 import { useActiveViewLayout, useEditorViews } from './views/use-editor-views'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
@@ -1448,7 +1447,7 @@ function EditorContent({
 }: EditorProps) {
   const isMobile = useIsMobile()
   // The user's own pick wins over the host's default placement.
-  const userMenuPlacement = useActionMenuPlacementPreference((state) => state.placement)
+  const userMenuPlacement = useEditor((state) => state.actionMenuPlacement)
   const menuPlacement = userMenuPlacement ?? actionMenuPlacement ?? 'bottom'
   // A top-docked menu sits at the top of the scene panes on desktop (layout v2).
   const dockMenuOnTop = menuPlacement === 'top' && !isMobile
@@ -1516,7 +1515,9 @@ function EditorContent({
   const menuShown = editingControlsShown && !(isVersionPreviewMode || isCaptureMode || isStudioMode)
   const topMenuShown = dockMenuOnTop && menuShown
   const leftMenuShown = dockMenuOnLeft && menuShown
-  const rightMenuShown = dockMenuOnRight && menuShown
+  const hasSceneView = useSceneSpan() !== null
+  // Every dock is scene chrome: it leaves with the last 3D or 2D pane.
+  const rightMenuShown = dockMenuOnRight && menuShown && hasSceneView
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)

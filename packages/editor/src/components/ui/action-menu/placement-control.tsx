@@ -3,10 +3,10 @@
 import { PanelBottom, PanelLeft, PanelRight, PanelTop } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '../../../lib/utils'
+import useEditor from '../../../store/use-editor'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
 import { type ActionMenuPlacement, useActionMenuPlacement, useActionMenuPopupSide } from './placement'
-import { useActionMenuPlacementPreference } from './placement-preference'
 
 const PLACEMENT_OPTIONS: { value: ActionMenuPlacement; label: string; icon: typeof PanelBottom }[] =
   [
@@ -20,7 +20,7 @@ const PLACEMENT_OPTIONS: { value: ActionMenuPlacement; label: string; icon: type
 export function PlacementControl() {
   const placement = useActionMenuPlacement()
   const popupSide = useActionMenuPopupSide()
-  const setPlacement = useActionMenuPlacementPreference((state) => state.setPlacement)
+  const setPlacement = useEditor((state) => state.setActionMenuPlacement)
   const [isOpen, setIsOpen] = useState(false)
   const CurrentIcon =
     PLACEMENT_OPTIONS.find((option) => option.value === placement)?.icon ?? PanelBottom

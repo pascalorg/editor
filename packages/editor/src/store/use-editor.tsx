@@ -230,6 +230,9 @@ export type CatalogCategory =
   | 'door'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
+/** Viewport edge the action menu docks to. */
+export type ActionMenuPlacement = 'bottom' | 'top' | 'left' | 'right'
+const ACTION_MENU_PLACEMENTS: readonly ActionMenuPlacement[] = ['bottom', 'top', 'left', 'right']
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
 
 export type NavigationSyncSource = '2d' | '3d'
@@ -497,6 +500,9 @@ type EditorState = {
   publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
+  /** The user's own dock for the action menu; null until they pick, so the host's default applies. */
+  actionMenuPlacement: ActionMenuPlacement | null
+  setActionMenuPlacement: (placement: ActionMenuPlacement) => void
   gridSnapStep: GridSnapStep
   setGridSnapStep: (step: GridSnapStep) => void
   // Cycles the grid step through GRID_SNAP_STEPS (0.5 → 0.25 → 0.1 → 0.05 →
@@ -597,6 +603,7 @@ type PersistedEditorLayoutState = Pick<
   | 'sidebarPanels'
   | 'pinnedViews'
   | 'floorplanSelectionTool'
+  | 'actionMenuPlacement'
   | 'gridSnapStep'
   | 'magneticSnap'
   | 'lastMeasurementKind'
@@ -621,6 +628,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   sidebarPanels: {},
   pinnedViews: {},
   floorplanSelectionTool: 'click',
+  actionMenuPlacement: null,
   gridSnapStep: 0.5,
   magneticSnap: true,
   lastMeasurementKind: DEFAULT_CREATABLE_MEASUREMENT_KIND,
@@ -876,6 +884,11 @@ export function normalizePersistedEditorLayoutState(
     sidebarPanels: normalizeSidebarPanels(state?.sidebarPanels),
     pinnedViews: normalizePinnedViews(state?.pinnedViews),
     floorplanSelectionTool: state?.floorplanSelectionTool === 'marquee' ? 'marquee' : 'click',
+    actionMenuPlacement: ACTION_MENU_PLACEMENTS.includes(
+      state?.actionMenuPlacement as ActionMenuPlacement,
+    )
+      ? (state?.actionMenuPlacement as ActionMenuPlacement)
+      : null,
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
@@ -1513,6 +1526,8 @@ const useEditor = create<EditorState>()(
         set({ navigationSyncPose })
       },
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
+      actionMenuPlacement: null,
+      setActionMenuPlacement: (placement) => set({ actionMenuPlacement: placement }),
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
       setGridSnapStep: (step) => set({ gridSnapStep: step }),
@@ -1664,6 +1679,7 @@ const useEditor = create<EditorState>()(
         sidebarPanels: state.sidebarPanels,
         pinnedViews: state.pinnedViews,
         floorplanSelectionTool: state.floorplanSelectionTool,
+        actionMenuPlacement: state.actionMenuPlacement,
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
         lastMeasurementKind: state.lastMeasurementKind,
