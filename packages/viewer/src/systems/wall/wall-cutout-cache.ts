@@ -150,6 +150,13 @@ export function wallsInPlay(
   return walls
 }
 
+/**
+ * The visible variant of a mesh's materials, kept on the object by the system that cuts it away, for
+ * whoever must draw a copy of the mesh while the cutaway hides it (a deleted wall's ghost). Not in
+ * `userData`: `Object3D.clone` copies that through JSON, which would serialize every material.
+ */
+export const visibleMaterialsOf = new WeakMap<Object3D, Material[]>()
+
 export type WallCutoutViewerStore = { getState: () => WallCutoutViewerState }
 
 export class WallCutoutCache {
@@ -418,6 +425,8 @@ export class WallCutoutCache {
     }
     wall.visibleVariant = variant(false)
     wall.hiddenVariant = variant(true)
+    // The plain visible palette (no selection or hover tint): what the wall wears when a capture sees it.
+    visibleMaterialsOf.set(wall.mesh, materials.visible)
   }
 
   private refreshNormal(wall: CachedWall, visited: Set<Object3D>): void {

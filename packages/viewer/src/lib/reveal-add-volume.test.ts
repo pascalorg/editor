@@ -8,6 +8,7 @@ import {
   LevelNode,
   loadPlugin,
   nodeRegistry,
+  type RevealLayout,
   RoofNode,
   RoofSegmentNode,
   type SceneCommit,
@@ -27,14 +28,20 @@ import { FRAMING_PACE, LAZY_REVEAL_TIMING, planLazyReveal } from './reveal-sched
 // it plays room by room, wall by wall, floors offset, never in one pulse.
 
 type Nodes = Record<string, AnyNode>
-const kind = (type: string, schema: unknown, category: string, reveal?: unknown) =>
+const kind = (
+  type: string,
+  schema: unknown,
+  category: string,
+  reveal?: unknown,
+  revealLayout?: RevealLayout,
+) =>
   ({
     kind: type,
     schemaVersion: 1,
     schema,
     category,
     defaults: () => ({}),
-    capabilities: reveal ? { reveal } : {},
+    capabilities: { ...(reveal ? { reveal } : {}), ...(revealLayout ? { revealLayout } : {}) },
     geometry: () => new Group(),
   }) as unknown as AnyNodeDefinition
 
@@ -49,8 +56,18 @@ beforeAll(async () => {
       kind('site', SiteNode, 'site'),
       kind('building', BuildingNode, 'site'),
       kind('level', LevelNode, 'site'),
-      kind('zone', ZoneNode, 'site'),
-      kind('wall', WallNode, 'structure', { phase: 'structure', style: 'rise' }),
+      kind('zone', ZoneNode, 'site', undefined, {
+        room: (node) => (node.type === 'zone' ? node.polygon : null),
+      }),
+      kind(
+        'wall',
+        WallNode,
+        'structure',
+        { phase: 'structure', style: 'rise' },
+        {
+          line: (node) => (node.type === 'wall' ? [node.start, node.end] : null),
+        },
+      ),
       kind('slab', SlabNode, 'structure', { phase: 'foundation', style: 'settle', height: 0.08 }),
       kind('ceiling', CeilingNode, 'structure', { phase: 'roof', style: 'settle', height: 0.08 }),
       kind('door', DoorNode, 'structure', { phase: 'openings', style: 'cut' }),

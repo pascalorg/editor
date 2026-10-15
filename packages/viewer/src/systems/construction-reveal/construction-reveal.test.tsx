@@ -40,6 +40,7 @@ import {
 import { revealWipeLevelOf } from '../../lib/reveal-wipe'
 import useViewer from '../../store/use-viewer'
 import { GeometrySystem } from '../geometry/geometry-system'
+import { visibleMaterialsOf } from '../wall/wall-cutout-cache'
 import { ConstructionDust } from './construction-dust'
 
 // Construction reveal, failure modes written before the code: a person's edit,
@@ -1800,6 +1801,8 @@ describe('a deletion plays the creation backwards', () => {
     geometry.addGroup(0, 6, 0)
     const mesh = new Mesh(geometry, [stipple, stipple, stipple])
     mesh.userData.wallHidden = true
+    // ...with the visible variant it keeps for whoever draws a copy of it.
+    visibleMaterialsOf.set(mesh, [new MeshBasicMaterial()])
     root(wall.id)!.parent!.add(mesh)
     sceneRegistry.nodes.set(wall.id, mesh)
     useViewer.setState({ wallMode: 'cutaway' })

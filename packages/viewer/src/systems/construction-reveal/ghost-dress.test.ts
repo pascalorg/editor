@@ -3,6 +3,7 @@ import { LevelNode, useScene, WallNode } from '@pascal-app/core'
 import { BoxGeometry, Mesh, MeshBasicMaterial } from 'three'
 import { hasMaterialsForGroups } from '../../lib/pointer-events'
 import useViewer from '../../store/use-viewer'
+import { visibleMaterialsOf } from '../wall/wall-cutout-cache'
 import { getMaterialsForWall } from '../wall/wall-materials'
 import { dressDeletionGhost } from './ghost-dress'
 
@@ -37,6 +38,8 @@ function cutAway(node: ReturnType<typeof wall>, hidden: boolean, groupIndex = 0)
     Array.from({ length: Math.max(3, groupIndex + 1) }, () => stipple),
   )
   source.userData.wallHidden = hidden
+  // What the wall cutout keeps on the mesh it cuts away (`WallCutoutCache`).
+  visibleMaterialsOf.set(source, visibleOf(node))
   const clone = source.clone()
   return { source, clone, stipple, node }
 }
@@ -60,7 +63,7 @@ describe('the picture of a deleted wall', () => {
     useViewer.setState({ wallMode: 'cutaway' })
     const { source, clone, stipple } = cutAway(node, true)
     expect((clone.material as unknown[])[0]).toBe(stipple)
-    dressDeletionGhost(source, clone, node)
+    dressDeletionGhost(source, clone)
     expect(clone.material).toBe(visibleOf(node))
     // The wall in the scene is not touched: only its copy.
     expect((source.material as unknown[])[0]).toBe(stipple)
@@ -72,7 +75,7 @@ describe('the picture of a deleted wall', () => {
     const node = wall()
     useViewer.setState({ wallMode: 'cutaway' })
     const { source, clone, stipple } = cutAway(node, true, 99)
-    dressDeletionGhost(source, clone, node)
+    dressDeletionGhost(source, clone)
     expect((clone.material as unknown[])[0]).toBe(stipple)
     expect(hasMaterialsForGroups(clone)).toBe(true)
   })
@@ -82,7 +85,7 @@ describe('the picture of a deleted wall', () => {
     useViewer.setState({ wallMode: 'cutaway' })
     const { source, clone } = cutAway(node, false)
     const worn = clone.material
-    dressDeletionGhost(source, clone, node)
+    dressDeletionGhost(source, clone)
     expect(clone.material).toBe(worn)
   })
 
@@ -92,17 +95,19 @@ describe('the picture of a deleted wall', () => {
       useViewer.setState({ wallMode })
       const { source, clone } = cutAway(node, true)
       const worn = clone.material
-      dressDeletionGhost(source, clone, node)
+      dressDeletionGhost(source, clone)
       expect(clone.material).toBe(worn)
     }
   })
 
-  test('is left alone for anything that is not a wall', () => {
+  // The reveal knows no kind: a source that keeps no visible variant is not a cutaway's.
+  test('is left alone when its source keeps no visible variant', () => {
     useViewer.setState({ wallMode: 'cutaway' })
     const node = wall()
     const { source, clone } = cutAway(node, true)
+    visibleMaterialsOf.delete(source)
     const worn = clone.material
-    dressDeletionGhost(source, clone, { ...node, type: 'fence' } as never)
+    dressDeletionGhost(source, clone)
     expect(clone.material).toBe(worn)
   })
 })

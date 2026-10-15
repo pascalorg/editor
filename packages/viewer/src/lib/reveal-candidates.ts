@@ -5,6 +5,7 @@ import {
   type LevelNode,
   nodeRegistry,
   type RevealConfig,
+  type RevealPlanPoint,
   type RevealStyle,
   type SceneCommit,
 } from '@pascal-app/core'
@@ -40,7 +41,7 @@ const CONTAINERS: ReadonlySet<string> = new Set(['site', 'building', 'level'])
 
 /**
  * The reveal a new node of a kind that declares none comes in with, so nothing a build adds pops in
- * at once: by where it stands (on a roof, it falls onto it) and what it is. Null for the containers,
+ * at once: by where it stands (on an assembled node such as a roof, it falls onto it) and what it is. Null for the containers,
  * the annotations and the kinds that draw nothing.
  */
 function defaultReveal(node: AnyNode, nodes: Record<AnyNodeId, AnyNode>): RevealConfig | null {
@@ -50,7 +51,8 @@ function defaultReveal(node: AnyNode, nodes: Record<AnyNodeId, AnyNode>): Reveal
     return null
   let parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
   for (let guard = 0; parent && guard < 32; guard += 1) {
-    if (parent.type === 'roof') return { phase: 'roof', style: 'drop', height: 2 }
+    if (nodeRegistry.get(parent.type)?.capabilities?.reveal?.style === 'assemble')
+      return { phase: 'roof', style: 'drop', height: 2 }
     if (parent.type === 'level') break
     parent = parent.parentId ? nodes[parent.parentId as AnyNodeId] : undefined
   }
@@ -172,7 +174,7 @@ export function commitRevealCandidates(
   return candidates
 }
 
-type Pt = readonly [number, number]
+type Pt = RevealPlanPoint
 
 const isPt = (value: unknown): value is Pt =>
   Array.isArray(value) &&
@@ -180,10 +182,27 @@ const isPt = (value: unknown): value is Pt =>
   typeof value[0] === 'number' &&
   typeof value[1] === 'number'
 
-function polygonOf(node: AnyNode): Pt[] | null {
+function polygonOf(node: AnyNode): readonly Pt[] | null {
   const polygon = (node as { polygon?: unknown }).polygon
   return Array.isArray(polygon) && polygon.length >= 3 && polygon.every(isPt) ? polygon : null
 }
+
+/** The room a node outlines, as its kind declares it (`capabilities.revealLayout.room`). */
+function roomOf(node: AnyNode): readonly Pt[] | null {
+  const polygon = nodeRegistry.get(node.type)?.capabilities?.revealLayout?.room?.(node)
+  return polygon && polygon.length >= 3 && polygon.every(isPt) ? polygon : null
+}
+
+/** The line a node bounds rooms along, as its kind declares it (`capabilities.revealLayout.line`). */
+function lineOf(node: AnyNode): readonly [Pt, Pt] | null {
+  const line = nodeRegistry.get(node.type)?.capabilities?.revealLayout?.line?.(node)
+  return line && isPt(line[0]) && isPt(line[1]) ? line : null
+}
+
+const middleOf = ([start, end]: readonly [Pt, Pt]): Pt => [
+  (start[0] + end[0]) / 2,
+  (start[1] + end[1]) / 2,
+]
 
 function centroidOf(polygon: readonly Pt[]): Pt {
   let x = 0
@@ -215,10 +234,12 @@ function inside([x, z]: Pt, polygon: readonly Pt[]): boolean {
   return within
 }
 
-/** Where a node stands in its level's plan: a wall's middle, a polygon's centre, a placed node's spot. */
+/** Where a node stands in its level's plan: a line's middle, a polygon's centre, a placed node's spot. */
 function planPointOf(node: AnyNode): Pt | null {
+  const line = lineOf(node)
+  if (line) return middleOf(line)
   const { start, end, position } = node as { start?: unknown; end?: unknown; position?: unknown }
-  if (isPt(start) && isPt(end)) return [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
+  if (isPt(start) && isPt(end)) return middleOf([start, end])
   const polygon = polygonOf(node)
   if (polygon) return centroidOf(polygon)
   if (Array.isArray(position) && typeof position[0] === 'number' && typeof position[2] === 'number')
@@ -243,8 +264,9 @@ const WALLS_PER_RUN = 6
 const MEETS_M = 0.05
 
 /**
- * Gives each candidate its room for the lazy schedule: the zone it stands in (a wall, the zone on
- * either side of its middle), else, for a wall, a run of the walls it meets end to end; its room's
+ * Gives each candidate its room for the lazy schedule: the room it stands in (a node on a line, the
+ * room on either side of its middle), else, for a node on a line, a run of the lines it meets end to
+ * end (`capabilities.revealLayout`); its room's
  * sweep across the floor; and its place in the room (around the room's centre, or along the run).
  * What stands in no room keeps none: it belongs to the floor.
  */
@@ -252,7 +274,7 @@ export function layoutRevealCandidates(
   candidates: StagedCandidate[],
   nodes: Record<AnyNodeId, AnyNode>,
 ): void {
-  const zonesByLevel = new Map<string, { id: string; polygon: Pt[]; centre: Pt }[]>()
+  const zonesByLevel = new Map<string, { id: string; polygon: readonly Pt[]; centre: Pt }[]>()
   const zonesOf = (levelId: string) => {
     let zones = zonesByLevel.get(levelId)
     if (zones) return zones
@@ -260,7 +282,7 @@ export function layoutRevealCandidates(
     const level = nodes[levelId as AnyNodeId] as (AnyNode & { children?: unknown[] }) | undefined
     for (const childId of level?.children ?? []) {
       const child = typeof childId === 'string' ? nodes[childId as AnyNodeId] : undefined
-      const polygon = child?.type === 'zone' ? polygonOf(child) : null
+      const polygon = child ? roomOf(child) : null
       if (child && polygon) zones.push({ id: child.id, polygon, centre: centroidOf(polygon) })
     }
     zones.sort((left, right) => areaOf(left.polygon) - areaOf(right.polygon))
@@ -271,8 +293,8 @@ export function layoutRevealCandidates(
     const angle = Math.atan2(point[1] - centre[1], point[0] - centre[0])
     return angle < 0 ? angle + 2 * Math.PI : angle
   }
-  // Walls in no zone, by level: they make runs; what they host follows them.
-  const loose = new Map<string, { candidate: StagedCandidate; wall: AnyNode }[]>()
+  // Lines in no room, by level: they make runs; what they host follows them.
+  const loose = new Map<string, { candidate: StagedCandidate; line: readonly [Pt, Pt] }[]>()
   const onLooseWalls: { candidate: StagedCandidate; wallId: string; point: Pt }[] = []
   for (const candidate of candidates) {
     if (!candidate.levelId) continue
@@ -280,9 +302,10 @@ export function layoutRevealCandidates(
     const point = standing && planPointOf(standing)
     if (!(standing && point)) continue
     const zones = zonesOf(candidate.levelId)
+    const line = lineOf(standing)
     let probes: Pt[] = [point]
-    if (standing.type === 'wall') {
-      const { start, end } = standing as unknown as { start: Pt; end: Pt }
+    if (line) {
+      const [start, end] = line
       const length = Math.hypot(end[0] - start[0], end[1] - start[1]) || 1
       const nx = -(end[1] - start[1]) / length
       const nz = (end[0] - start[0]) / length
@@ -300,13 +323,13 @@ export function layoutRevealCandidates(
       candidate.order = turnAround(zone.centre, point)
       continue
     }
-    if (standing.type === 'wall' && standing.id === candidate.id) {
+    if (line && standing.id === candidate.id) {
       const list = loose.get(candidate.levelId) ?? []
-      list.push({ candidate, wall: standing })
+      list.push({ candidate, line })
       loose.set(candidate.levelId, list)
       continue
     }
-    if (standing.type === 'wall') onLooseWalls.push({ candidate, wallId: standing.id, point })
+    if (line) onLooseWalls.push({ candidate, wallId: standing.id, point })
     candidate.order = point[0] + point[1]
   }
   for (const [levelId, walls] of loose) layoutRuns(levelId, walls)
@@ -321,20 +344,19 @@ export function layoutRevealCandidates(
   }
 }
 
-/** Walls in no room: the walls that meet end to end make an outline, cut in runs along it. */
-function layoutRuns(levelId: string, walls: { candidate: StagedCandidate; wall: AnyNode }[]) {
+/** Lines in no room: the lines that meet end to end make an outline, cut in runs along it. */
+function layoutRuns(
+  levelId: string,
+  walls: { candidate: StagedCandidate; line: readonly [Pt, Pt] }[],
+) {
   const key = ([x, z]: Pt) => `${Math.round(x / MEETS_M)}:${Math.round(z / MEETS_M)}`
   const byEnd = new Map<string, number[]>()
-  const ends = walls.map(({ wall }) => {
-    const { start, end } = wall as unknown as { start: Pt; end: Pt }
-    return [key(start), key(end)] as const
-  })
+  const ends = walls.map(({ line: [start, end] }) => [key(start), key(end)] as const)
   ends.forEach((pair, index) => {
     for (const end of pair) byEnd.set(end, [...(byEnd.get(end) ?? []), index])
   })
-  const midOf = (index: number) => planPointOf(walls[index]!.wall) ?? [0, 0]
   const sweepOf = (index: number) => {
-    const [x, z] = midOf(index)
+    const [x, z] = middleOf(walls[index]!.line)
     return x + z
   }
   const seen = new Set<number>()
@@ -564,7 +586,7 @@ export function commitDeleteCandidates(
   for (const id in before.nodes) {
     const node = before.nodes[id as AnyNodeId]
     if (current.nodes[id as AnyNodeId] || !node?.parentId) continue
-    if (node.type === 'wall' || node.type === 'zone') goingLevels.add(node.parentId)
+    if (nodeRegistry.get(node.type)?.capabilities?.revealLayout) goingLevels.add(node.parentId)
   }
   for (const id in before.nodes) {
     if (current.nodes[id as AnyNodeId]) continue

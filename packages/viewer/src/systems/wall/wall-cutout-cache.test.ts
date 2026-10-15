@@ -34,6 +34,7 @@ import {
 } from './wall-cutout'
 import {
   sameMaterialArray,
+  visibleMaterialsOf,
   WALL_FACING_HYSTERESIS,
   WallCutoutCache,
   type WallCutoutViewerState,
@@ -599,6 +600,30 @@ describe('WallCutoutCache', () => {
         mode === 'translucent' ? 'translucent' : hidden ? 'invisible' : 'visible',
       )
     }
+  })
+
+  // A deleted wall's ghost is drawn from this, so the reveal needs no wall palette of its own.
+  test('keeps the wall’s plain visible palette on the mesh, whether the cutaway hides it or not', () => {
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    expect(mesh.userData.wallHidden).toBe(true)
+    const v = viewerStore.getState()
+    const visible = getMaterialsForWall(
+      node,
+      v.shading,
+      v.textures,
+      v.colorPreset,
+      v.sceneTheme,
+      useScene.getState().materials,
+    ).visible
+    expect(visibleMaterialsOf.get(mesh)).toBe(visible)
+    expect(sameMaterialArray(mesh.material, visible)).toBe(false)
+    // A selection tints what the wall wears, not the palette a capture draws.
+    viewerStore.setState({
+      selection: { ...viewerStore.getState().selection, selectedIds: [node.id] },
+    })
+    cache.update(camera, 1.01)
+    expect(visibleMaterialsOf.get(mesh)).toBe(visible)
   })
 
   test('appearance and highlight refreshes do not reassign an already-current material array', () => {
