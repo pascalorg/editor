@@ -6,24 +6,26 @@ import { building, level, STRAIGHT, scene, site, TILTED, U_LOT } from './site-ca
 /**
  * get_site reads everything the hosted Architect plugin's lot_info did, so lot_info retires into
  * it. lot_info took no input: each case is a lot it read (the new-project placeholder its stored
- * calls read, a parcel with setbacks, turned, with no street recorded, on a corner with a sight
- * triangle, a U with more edges than it listed, setbacks that leave nothing, the ground sloped,
- * read flat or not read, no building yet, several buildings, no site), beside the get_site call
- * that covers it, run without a model through the core, MCP and chat runners.
+ * calls read, a parcel with setbacks, turned, with no street recorded and north turned, on a
+ * corner with a sight triangle, a U and a round lot with more edges than it listed, setbacks that
+ * leave nothing, the ground sloped, read flat or not read, no building yet, several buildings, no
+ * site), beside the get_site call that covers it, run without a model through the core, MCP and
+ * chat runners.
  *
  * `lotInfo` is what lot_info printed for that lot, in its own units (feet, square feet, its
- * words): worked by hand, and the same as lot_info answered on the hosted main of 2026-10-14. The
- * envelope of the corner lot and of the U is traced on a raster (core's inset of a concave corner
- * or a sight triangle), so those two hold lot_info's printed numbers, slivers of the trace
- * included. The check finds each of its facts in get_site's answer, in metres: the lot's area; the
- * setbacks; the buildable envelope's area, and its frontage and depth on the edge behind the street
- * (lot_info's `buildable`) and on each edge (its `otherEdges`, the first six); the footprint range
- * (30 to 45% of the lot); the ground; the address. The `result` states get_site's own numbers.
+ * words): worked by hand where the envelope is a plain inset, and in every case the same as
+ * lot_info answered on the hosted main of 2026-10-14. An envelope inset round a concave corner,
+ * a sight triangle or a curve is traced on a raster, so those cases hold lot_info's printed
+ * numbers, the trace's slivers included. The check finds each of its facts in get_site's answer,
+ * in metres: the lot's area; the setbacks; the buildable envelope's area, its front edge and that
+ * edge's frontage and depth (lot_info's `buildable`), and each edge as a front (its `otherEdges`,
+ * the first six); the footprint range (30 to 45% of the lot); the ground; the address. The
+ * `result` states get_site's own numbers.
  *
- * Where they differ, get_site is the honest one: with no street recorded, lot_info took the edge
- * facing most nearly north as the front, get_site leaves `frontEdge` null and gives that edge's
- * frontage and depth among the others; it lists every edge a house could face, not the first six
- * with the trace's slivers; it reads the slope from the terrain itself, across the lot.
+ * Where they differ: get_site lists every edge, not the first six; it says whether the street is
+ * recorded (`street` null while the front is the north-facing guess lot_info took silently); and
+ * on a sloped lot it gives the fall of the terrain across the lot, where lot_info printed the lot
+ * drop-in's figure over the grid it sampled, which reaches past the lot.
  */
 
 type LotInfoRead = {
@@ -62,12 +64,18 @@ function readsAsLotInfo(lotInfo: LotInfoRead) {
   return (result: Record<string, unknown>): string[] => {
     const brief = result as unknown as Brief
     const problems: string[] = []
-    const feet = (what: string, metres: number | undefined, ft: number, tolerance = 0.05) => {
-      if (metres === undefined || Math.abs(metres / FT - ft) > tolerance)
+    // written so a missing or NaN number fails
+    const feet = (
+      what: string,
+      metres: number | null | undefined,
+      ft: number,
+      tolerance = 0.05,
+    ) => {
+      if (!(typeof metres === 'number' && Math.abs(metres / FT - ft) <= tolerance))
         problems.push(`${what}: ${metres} m is not ${ft} ft`)
     }
     const squareFeet = (what: string, m2: number | undefined, sqFt: number, tolerance = 2) => {
-      if (m2 === undefined || Math.abs(m2 * SQ_FT - sqFt) > tolerance)
+      if (!(typeof m2 === 'number' && Math.abs(m2 * SQ_FT - sqFt) <= tolerance))
         problems.push(`${what}: ${m2} m² is not ${sqFt} sq ft`)
     }
     squareFeet('lotSqFt', brief.lot.areaM2, lotInfo.lotSqFt)
@@ -88,7 +96,9 @@ function readsAsLotInfo(lotInfo: LotInfoRead) {
     const sloped = /^sloped: ([\d.]+) ft of relief across the lot$/.exec(lotInfo.terrain)
     const ground = sloped ? 'sloped' : lotInfo.terrain === 'read flat' ? 'flat' : 'unread'
     if (brief.ground.state !== ground) problems.push(`ground ${brief.ground.state}, not ${ground}`)
-    if (sloped) feet('terrain relief', brief.ground.reliefM ?? undefined, Number(sloped[1]))
+    // the fall across the lot, within the drop-in's figure over the wider grid it sampled
+    if (sloped && !((brief.ground.reliefM ?? Number.NaN) / FT <= Number(sloped[1]) + 0.05))
+      problems.push(`terrain relief ${brief.ground.reliefM} m is more than ${sloped[1]} ft`)
 
     if (lotInfo.setbacksFt === 'defaults') {
       if (brief.buildable.setbacks) problems.push('setbacks given where lot_info had none')
@@ -106,18 +116,11 @@ function readsAsLotInfo(lotInfo: LotInfoRead) {
       const front = brief.buildable.edges.find((edge) => edge.edge === frontEdge)
       feet('buildable.frontageFt', front?.frontage, frontageFt)
       feet('buildable.depthFt', front?.depth, depthFt)
-      // lot_info's front was the recorded street, else its guess; get_site names only the street's
-      const named = brief.street ? frontEdge : null
-      if (brief.buildable.frontEdge !== named)
-        problems.push(`frontEdge ${brief.buildable.frontEdge}, not ${named}`)
+      if (brief.buildable.frontEdge !== frontEdge)
+        problems.push(`frontEdge ${brief.buildable.frontEdge}, not ${frontEdge}`)
     }
     for (const { index, frontageFt, depthFt } of lotInfo.otherEdges) {
       const edge = brief.buildable.edges.find((front) => front.edge === index)
-      // a sliver of the inset envelope is no front: get_site leaves it out
-      if (frontageFt * FT < 1) {
-        if (edge) problems.push(`otherEdges[${index}], a sliver, listed`)
-        continue
-      }
       feet(`otherEdges[${index}].frontageFt`, edge?.frontage, frontageFt)
       feet(`otherEdges[${index}].depthFt`, edge?.depth, depthFt)
     }
@@ -190,8 +193,8 @@ const STRAIGHT_BUILDABLE = {
 
 /**
  * A slope down the lot: 0.05 m a metre along +z, on a heightfield wider than the lot (from 5 m
- * outside it), so the fall across the lot (2 m over its 40 m) is less than the field's (2.5 m).
- * The lot drop-in recorded the same fall, 6.562 ft, which lot_info printed.
+ * outside it), as the lot drop-in samples it, so the fall across the lot (2 m over its 40 m) is
+ * less than the field's (2.5 m, 8.202 ft), the figure the drop-in recorded and lot_info printed.
  */
 function slopedTerrain() {
   const field = createTerrainField({ origin: [-5, -5], spacing: 1, cols: 31, rows: 51 })
@@ -199,6 +202,43 @@ function slopedTerrain() {
     for (let col = 0; col < field.cols; col++)
       field.heights[row * field.cols + col] = quantize(field, (field.origin[1] + row) * 0.05)
   return encodeTerrainField(field)
+}
+
+/** The answer lists `count` edges, indexed 0 to count - 1, each with a finite frontage and depth. */
+function everyEdge(count: number) {
+  return (result: Record<string, unknown>): string[] => {
+    const { edges } = (result as unknown as Brief).buildable
+    const listed =
+      edges.length === count &&
+      edges.every(
+        (edge, i) =>
+          edge.edge === i && Number.isFinite(edge.frontage) && Number.isFinite(edge.depth),
+      )
+    return listed ? [] : [`${edges.length} edges, not ${count}`]
+  }
+}
+
+// A round lot, radius 10 m round [0, 0], as 64 lines of 0.98 m each.
+const ROUND = Array.from({ length: 64 }, (_, i) => {
+  const angle = (i / 64) * 2 * Math.PI - Math.PI / 2
+  return [10 * Math.cos(angle), 10 * Math.sin(angle)]
+})
+
+// What lot_info answered on the round lot with 1 m setbacks: the front an arc chord a metre long.
+const ROUND_LOT_INFO: LotInfoRead = {
+  lotSqFt: 3376,
+  terrain: NOT_READ,
+  setbacksFt: { front: 3.281, side: 3.281, rear: 3.281 },
+  buildable: { frontageFt: 2.903, depthFt: 58.978, envelopeSqFt: 2733, frontEdge: 0 },
+  otherEdges: [
+    { index: 0, frontageFt: 2.903, depthFt: 58.978 },
+    { index: 1, frontageFt: 2.932, depthFt: 58.974 },
+    { index: 2, frontageFt: 2.991, depthFt: 58.973 },
+    { index: 3, frontageFt: 2.773, depthFt: 58.971 },
+    { index: 4, frontageFt: 2.886, depthFt: 58.973 },
+    { index: 5, frontageFt: 3.045, depthFt: 58.968 },
+  ],
+  suggestedFootprintSqFt: [1013, 1519],
 }
 
 // A corner lot, 30 m square: the street on its south edge (2, the front) and its east edge (1,
@@ -241,7 +281,7 @@ export const LOT_INFO_CASES: AgentToolCase[] = [
       buildable: {
         state: 'lot',
         areaM2: 900,
-        frontEdge: null,
+        frontEdge: 0,
         edges: [
           { frontage: 30, depth: 30 },
           { frontage: 30, depth: 30 },
@@ -304,10 +344,43 @@ export const LOT_INFO_CASES: AgentToolCase[] = [
     },
   ),
   covers(
-    'setbacks with no street recorded (lot_info took the north-facing edge as the front)',
+    'setbacks with no street recorded: the north-facing edge taken as the front',
     house({ polygon: STRAIGHT.polygon, setbacks: SETBACKS }),
     { ...STRAIGHT_FEET, terrain: NOT_READ },
-    { street: null, buildable: { ...STRAIGHT_BUILDABLE, frontEdge: null } },
+    { street: null, buildable: { ...STRAIGHT_BUILDABLE, frontEdge: 0 } },
+    { mentions: ['17 m along its edge facing north (the setbacks take it as the front'] },
+  ),
+  covers(
+    'setbacks with no street recorded and north turned: the east edge taken as the front',
+    // north a quarter turn clockwise of plan up, so the edge facing most nearly north is the
+    // east one (1): front 6 from x = 20, rear 7.5 from x = 0, sides 1.5: x 7.5..14, z 1.5..38.5
+    house({ polygon: STRAIGHT.polygon, setbacks: SETBACKS, northRotation: Math.PI / 2 }),
+    {
+      lotSqFt: 8611,
+      terrain: NOT_READ,
+      setbacksFt: { front: 19.685, side: 4.921, rear: 24.606 },
+      buildable: { frontageFt: 121.391, depthFt: 21.325, envelopeSqFt: 2589, frontEdge: 1 },
+      otherEdges: [
+        { index: 0, frontageFt: 21.325, depthFt: 121.391 },
+        { index: 1, frontageFt: 121.391, depthFt: 21.325 },
+        { index: 2, frontageFt: 21.325, depthFt: 121.391 },
+        { index: 3, frontageFt: 121.391, depthFt: 21.325 },
+      ],
+      suggestedFootprintSqFt: [2583, 3875],
+    },
+    {
+      street: null,
+      buildable: {
+        areaM2: 240.5,
+        frontEdge: 1,
+        ring: [
+          [7.5, 1.5],
+          [14, 1.5],
+          [14, 38.5],
+          [7.5, 38.5],
+        ],
+      },
+    },
   ),
   covers(
     'a corner lot whose sight triangle cuts a corner off the envelope',
@@ -331,18 +404,10 @@ export const LOT_INFO_CASES: AgentToolCase[] = [
       street: { side: 'south', edge: 2, frontage: 30, depth: 30 },
       buildable: { state: 'setbacks', frontEdge: 4 },
     },
-    {
-      // the rear, the street side, the cut corner, the front and the side; not the sliver
-      check: (result) => {
-        const { edges } = (result as unknown as Brief).buildable
-        return edges.map((edge) => edge.edge).join() === '0,2,3,4,5'
-          ? []
-          : [`edges ${edges.map((edge) => edge.edge)}`]
-      },
-    },
+    { check: everyEdge(6) },
   ),
   covers(
-    'a U-shaped lot: every edge a house could face (lot_info listed the first six, slivers too)',
+    'a U-shaped lot: every edge (lot_info listed the first six of eighteen)',
     house({ ...U_LOT, frontEdge: 0, setbacks: { front: 1, side: 1, rear: 1 } }),
     {
       lotSqFt: 7535,
@@ -361,19 +426,29 @@ export const LOT_INFO_CASES: AgentToolCase[] = [
     },
     { lot: { areaM2: 700 }, buildable: { state: 'setbacks', frontEdge: 0 } },
     {
-      // the front, the right arm's side, its end and inner side, the notch's end, the left arm's
-      // inner side, its end and its side: eight, each a metre or more, the arms 8 m deep
+      // the notch's two inner sides, 19 m along each arm, reach 8 m back across it
       check: (result) => {
         const { edges } = (result as unknown as Brief).buildable
-        const arms = edges.filter((edge) => edge.frontage > 15 && edge.frontage < 20)
-        return edges.length === 8 &&
-          edges.every((edge) => edge.frontage >= 1) &&
-          arms.length === 2 &&
-          arms.every((edge) => Math.abs(edge.depth - 8) < 0.05)
-          ? []
-          : [`edges ${JSON.stringify(edges)}`]
+        const arms = edges.filter((edge) => edge.frontage > 18 && edge.frontage < 20)
+        return [
+          ...everyEdge(18)(result),
+          ...(arms.length === 2 && arms.every((edge) => Math.abs(edge.depth - 8) < 0.05)
+            ? []
+            : [`arms ${JSON.stringify(arms)}`]),
+        ]
       },
     },
+  ),
+  covers(
+    'a round lot, its line a run of short edges: every edge, the front among them',
+    house({
+      polygon: { type: 'polygon', points: ROUND },
+      frontEdge: 0,
+      setbacks: { front: 1, side: 1, rear: 1 },
+    }),
+    ROUND_LOT_INFO,
+    { buildable: { state: 'setbacks', frontEdge: 0 } },
+    { check: everyEdge(64) },
   ),
   covers(
     'setbacks that leave nothing to build on',
@@ -404,13 +479,13 @@ export const LOT_INFO_CASES: AgentToolCase[] = [
     },
   ),
   covers(
-    'a sloped lot: the fall across the lot, not across its terrain',
+    'a sloped lot: the fall across the lot, not across the wider grid the drop-in read',
     house({
       ...STRAIGHT_PARCEL,
       terrain: slopedTerrain(),
-      metadata: { terrainSample: { reliefFt: 6.562, flat: false } },
+      metadata: { terrainSample: { reliefFt: 8.202, flat: false } },
     }),
-    { ...STRAIGHT_FEET, terrain: 'sloped: 6.562 ft of relief across the lot' },
+    { ...STRAIGHT_FEET, terrain: 'sloped: 8.202 ft of relief across the lot' },
     { ground: { state: 'sloped', reliefM: 2 } },
     { mentions: ['ground: sloped, 2 m of fall across the lot'] },
   ),

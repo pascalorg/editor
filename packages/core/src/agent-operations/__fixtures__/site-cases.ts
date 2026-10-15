@@ -1,4 +1,6 @@
 import { siteBrief } from '../../lib/site-placement'
+import { encodeTerrainField } from '../../lib/terrain-codec'
+import { createTerrainField, quantize } from '../../lib/terrain-field'
 import {
   type AnyNode,
   BuildingNode,
@@ -201,7 +203,8 @@ export const GET_SITE_CASES: AgentToolCase[] = [
   {
     name: 'the yards of a house, seen from the street',
     tool: 'get_site',
-    scene: () => scene(site(STRAIGHT), building(), level(), ...box('level_ground', 'h', [7, 7], 10, 12)),
+    scene: () =>
+      scene(site(STRAIGHT), building(), level(), ...box('level_ground', 'h', [7, 7], 10, 12)),
     input: {},
     expect: {
       result: {
@@ -249,7 +252,10 @@ export const GET_SITE_CASES: AgentToolCase[] = [
       ),
     input: {},
     expect: {
-      result: { street: { side: 'south', edge: 2 }, buildable: { state: 'setbacks', centre: [10, 18] } },
+      result: {
+        street: { side: 'south', edge: 2 },
+        buildable: { state: 'setbacks', centre: [10, 18] },
+      },
     },
   },
   {
@@ -260,6 +266,28 @@ export const GET_SITE_CASES: AgentToolCase[] = [
       scene(site(U_LOT), building(), level(), ...box('level_ground', 'h', [5, 15], 20, 10)),
     input: {},
     expect: { result: { footprint: { fit: 'outside', overhang: { lotM: 5 } } } },
+  },
+  {
+    name: "a terrain's fall over the lot counts a peak on a lot line, between the samples",
+    tool: 'get_site',
+    // a 3 × 3 field, 10 m apart, flat but for its middle sample at 10 m; no sample lies on the
+    // lot, whose east line passes 1 m short of that peak and rises to 9 m there
+    scene: () => {
+      const field = createTerrainField({ origin: [0, 0], spacing: 10, cols: 3, rows: 3 })
+      field.heights[4] = quantize(field, 10)
+      const lot = {
+        type: 'polygon',
+        points: [
+          [1, 1],
+          [9, 1],
+          [9, 19],
+          [1, 19],
+        ],
+      }
+      return scene(site({ polygon: lot, terrain: encodeTerrainField(field) }), building(), level())
+    },
+    input: {},
+    expect: { result: { ground: { state: 'sloped', reliefM: 9 } } },
   },
   {
     name: 'no site: refused',
@@ -291,8 +319,7 @@ export const PLACE_BUILDING_CASES: AgentToolCase[] = [
   {
     name: 'walls traced from a corner (the house off the bottom-left of the lot) stand centred',
     tool: 'place_building',
-    scene: () =>
-      scene(site(), building(), level(), ...box('level_ground', 'h', [-20, 1], 20, 26)),
+    scene: () => scene(site(), building(), level(), ...box('level_ground', 'h', [-20, 1], 20, 26)),
     input: {},
     expect: {
       result: { moved: true, position: [10, 0, -14], fit: 'buildable' },
@@ -489,7 +516,11 @@ export const PLACE_BUILDING_CASES: AgentToolCase[] = [
     name: 'replayed, yards with a new rotation move nothing',
     tool: 'place_building',
     scene: () =>
-      scene(site(STRAIGHT), building({ position: [10, 0, 5], rotation: [0, Math.PI / 2, 0] }), level()),
+      scene(
+        site(STRAIGHT),
+        building({ position: [10, 0, 5], rotation: [0, Math.PI / 2, 0] }),
+        level(),
+      ),
     input: {
       outline: [
         [-2, -2],

@@ -32,7 +32,7 @@ import {
   resolveFrontEdge,
   setbackEnvelope,
 } from './setback-envelope'
-import { heightAt, heightAtSample } from './terrain-field'
+import { heightAt, heightAtSample, type TerrainField } from './terrain-field'
 import { persistedTerrainFieldOf } from './terrain-source-persisted'
 
 type Nodes = Readonly<Record<string, AnyNode>>
@@ -60,14 +60,16 @@ export type BuildableArea = {
   centre: P | null
   areaM2: number
   /**
-   * Each edge of `ring` a house could face, as a front, in ring order: the edges of a metre or
-   * more (an envelope inset round a concave corner or a sight triangle has slivers of a few
-   * centimetres between its real edges).
+   * Each edge of `ring` as a front, in ring order (`edge` is its index). An envelope traced round
+   * a concave corner or a sight triangle has slivers of a few centimetres between its real edges,
+   * and a curved lot line is a run of short edges.
    */
   edges: EdgeFront[]
   /**
-   * The edge behind the street: its frontage and depth are the most a house facing the street
-   * can take. Null while the street is not set, and when nothing is buildable.
+   * The edge behind the lot's front line, which the front setback is measured from: its frontage
+   * and depth are the most a house facing the street can take. While `street` is null it is
+   * behind the lot edge facing most nearly north, a guess the setbacks use until the street is
+   * set. Null when nothing is buildable.
    */
   frontEdge: number | null
   setbacks?: SiteSetbacks
@@ -317,55 +319,83 @@ export function edgeFronts(ring: readonly Pt[]): EdgeFront[] {
   })
 }
 
-/** The shortest edge `BuildableArea.edges` lists: a house faces no sliver. */
-const MIN_FRONT_M = 1
+/**
+ * The fall of a terrain over a lot: its highest point on the lot less its lowest. The ground is
+ * a plane on each of the field's triangles (the cells split by the diagonal `heightAt` uses), so the
+ * extremes lie at the field's samples on the lot, at the lot's corners, or where a lot line
+ * crosses a triangle's edge: a grid line (u or v whole, in samples) or a diagonal (u + v whole).
+ */
+function terrainFall(field: TerrainField, lot: readonly Pt[]): number {
+  const [ox, oz] = field.origin
+  const s = field.spacing
+  let low = Number.POSITIVE_INFINITY
+  let high = Number.NEGATIVE_INFINITY
+  const take = (height: number) => {
+    low = Math.min(low, height)
+    high = Math.max(high, height)
+  }
+  lot.forEach((a, i) => {
+    const b = lot[(i + 1) % lot.length] as Pt
+    const [ua, va] = [(a[0] - ox) / s, (a[1] - oz) / s]
+    const [du, dv] = [(b[0] - a[0]) / s, (b[1] - a[1]) / s]
+    take(heightAt(field, a[0], a[1]))
+    // where this lot line crosses u = k, v = k and u + v = k
+    for (const [from, along] of [
+      [ua, du],
+      [va, dv],
+      [ua + va, du + dv],
+    ] as const) {
+      if (Math.abs(along) < 1e-12) continue
+      const to = from + along
+      for (let k = Math.ceil(Math.min(from, to)); k <= Math.floor(Math.max(from, to)); k++) {
+        const t = (k - from) / along
+        if (t > 0 && t < 1)
+          take(heightAt(field, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+      }
+    }
+  })
+  // the samples inside, row by row between the lot lines' crossings of that row
+  for (let row = 0; row < field.rows; row++) {
+    const z = oz + row * s
+    const crossings: number[] = []
+    lot.forEach((a, i) => {
+      const b = lot[(i + 1) % lot.length] as Pt
+      if (a[1] <= z !== b[1] <= z)
+        crossings.push(a[0] + ((z - a[1]) * (b[0] - a[0])) / (b[1] - a[1]))
+    })
+    crossings.sort((x0, x1) => x0 - x1)
+    for (let k = 0; k + 1 < crossings.length; k += 2) {
+      const first = Math.max(0, Math.ceil(((crossings[k] as number) - ox) / s))
+      const last = Math.min(field.cols - 1, Math.floor(((crossings[k + 1] as number) - ox) / s))
+      for (let col = first; col <= last; col++) take(heightAtSample(field, col, row))
+    }
+  }
+  return high - low
+}
 
 const METRES_PER_FOOT = 0.3048
 const grounds = new WeakMap<SiteNode, SiteGround>()
 
 /**
- * The ground under the lot: its terrain's fall across the lot (the lot's corners and the samples
- * on it, its edge included), else what the lot's terrain read found (`metadata.terrainSample`,
- * written by the lot drop-in when it reads the ground and finds it flat), else unread. Kept per
- * site node, which the store never edits in place.
+ * The ground under the lot: the fall of its terrain across the lot, as the scene holds it (the
+ * lot drop-in's read records its own figure over the grid it sampled, which reaches past the
+ * lot); with no terrain, what that read found (`metadata.terrainSample`: a lot it found flat
+ * gets none), else unread. Kept per site node, which the store never edits in place.
  */
 function groundOf(site: SiteNode, lot: readonly Pt[]): SiteGround {
   const known = grounds.get(site)
   if (known) return known
   const field = persistedTerrainFieldOf(site)
-  let ground: SiteGround
-  if (field) {
-    const shape = [{ outer: lot.map((p) => [p[0], p[1]] as P), holes: [] }]
-    const bounds = boundsOf(lot)
-    let low = Number.POSITIVE_INFINITY
-    let high = Number.NEGATIVE_INFINITY
-    const take = (height: number) => {
-      low = Math.min(low, height)
-      high = Math.max(high, height)
-    }
-    for (const [x, z] of lot) take(heightAt(field, x, z))
-    for (let row = 0; row < field.rows; row++) {
-      const z = field.origin[1] + row * field.spacing
-      if (z < bounds.minZ - 1e-6 || z > bounds.maxZ + 1e-6) continue
-      for (let col = 0; col < field.cols; col++) {
-        const x = field.origin[0] + col * field.spacing
-        if (x < bounds.minX - 1e-6 || x > bounds.maxX + 1e-6) continue
-        if (containsPoint(shape, [x, z]) || distanceToBoundary(shape, [x, z]) < 1e-6)
-          take(heightAtSample(field, col, row))
-      }
-    }
-    ground = { state: 'sloped', reliefM: high - low }
-  } else {
-    const sample = (site.metadata as { terrainSample?: { flat?: unknown; reliefFt?: unknown } })
-      ?.terrainSample
-    ground =
-      sample?.flat === true
-        ? {
-            state: 'flat',
-            reliefM: typeof sample.reliefFt === 'number' ? sample.reliefFt * METRES_PER_FOOT : 0,
-          }
-        : { state: 'unread', reliefM: null }
-  }
+  const sample = (site.metadata as { terrainSample?: { flat?: unknown; reliefFt?: unknown } })
+    ?.terrainSample
+  const ground: SiteGround = field
+    ? { state: 'sloped', reliefM: terrainFall(field, lot) }
+    : sample?.flat === true
+      ? {
+          state: 'flat',
+          reliefM: typeof sample.reliefFt === 'number' ? sample.reliefFt * METRES_PER_FOOT : 0,
+        }
+      : { state: 'unread', reliefM: null }
   grounds.set(site, ground)
   return ground
 }
@@ -678,13 +708,13 @@ export function siteBrief(
     ring: buildableRing,
     centre: inSite.state === 'none' ? null : ringCentre(buildableRing),
     areaM2: polygonAreaAbs(inSite.ring),
-    edges: edgeFronts(inSite.ring).filter((front) => front.frontage >= MIN_FRONT_M),
+    edges: edgeFronts(inSite.ring),
     frontEdge:
-      !street || inSite.state === 'none'
+      inSite.state === 'none'
         ? null
         : inSite.inset
-          ? envelopeFrontEdge(siteRing, street.edge, inSite.ring)
-          : street.edge,
+          ? envelopeFrontEdge(siteRing, siteFrontEdge(site), inSite.ring)
+          : siteFrontEdge(site),
     ...(site.setbacks ? { setbacks: site.setbacks } : {}),
     ...(site.setbacksSource ? { source: site.setbacksSource } : {}),
   }
@@ -1118,10 +1148,13 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
     )
   else {
     const front = buildable.edges.find((edge) => edge.edge === buildable.frontEdge)
+    const along = street
+      ? 'along the street'
+      : 'along its edge facing north (the setbacks take it as the front until the street is set)'
     lines.push(
       `buildable${buildable.state === 'advisory' ? ' (advisory: the inset of this concave lot crosses itself)' : ''}: setbacks ${describeSetbacks(buildable.setbacks as SiteSetbacks)}${buildable.source ? ` (${buildable.source})` : ''} · ${span(boundsOf(buildable.ring))} · centre ${centre ? fmtPt(centre) : 'none'} · ${Math.round(buildable.areaM2)} m²${
         front
-          ? ` · ${num(front.frontage)} m along the street, ${num(front.depth)} m deep (its edge ${buildable.frontEdge})`
+          ? ` · ${num(front.frontage)} m ${along}, ${num(front.depth)} m deep (its edge ${front.edge})`
           : ''
       }`,
     )
