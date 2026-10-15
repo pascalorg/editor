@@ -269,7 +269,10 @@ function emitSceneCommit(authored: SceneCommit): void {
 }
 
 export function notifySceneCommit(commit: SceneCommit): void {
-  if (areSceneSnapshotsEqual(commit.before, commit.current)) return
+  if (areSceneSnapshotsEqual(commit.before, commit.current)) {
+    if (sceneCommitTransactionDepth === 0) derivedWrites = new Map()
+    return
+  }
   const author = commit.author ?? activeSceneCommitAuthor()
   const contextualCommit: SceneCommit = {
     ...commit,
@@ -317,9 +320,9 @@ function endSceneCommitTransaction(): void {
 
   const commit = pendingSceneCommit
   pendingSceneCommit = null
-  if (commit && !areSceneSnapshotsEqual(commit.before, commit.current)) {
-    emitSceneCommit(commit)
-  }
+  if (!commit) return
+  if (areSceneSnapshotsEqual(commit.before, commit.current)) derivedWrites = new Map()
+  else emitSceneCommit(commit)
 }
 
 export function pauseSceneHistory(sceneStore: TemporalStoreLike): void {

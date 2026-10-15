@@ -1,6 +1,13 @@
 import { expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, LevelNode, WallNode } from '../schema'
-import { type SceneCommit, subscribeSceneCommits } from '../store/history-control'
+import { DERIVED_WRITER_TOKEN } from '../store/derived-node-guard'
+import {
+  noteDerivedNodeWrites,
+  notifySceneCommit,
+  runAsSingleSceneHistoryStep,
+  type SceneCommit,
+  subscribeSceneCommits,
+} from '../store/history-control'
 import useScene, { clearSceneHistory } from '../store/use-scene'
 import { initSpaceDetectionSync } from './space-detection'
 
@@ -73,4 +80,110 @@ test('a commit names what the reconciler wrote, and the fields of a node it only
     stop()
     useScene.setState(previous)
   }
+})
+
+// A write the reconciler made that changed nothing, or that a commit never carried, must not ride on the
+// next commit: that commit's own edit would be read as derived and presentation would skip it.
+const wallId = 'wall_derived_one' as AnyNodeId
+const derived = { derivedWriter: DERIVED_WRITER_TOKEN }
+
+function withOneWall(run: (authoredEdit: (name: string) => SceneCommit | undefined) => void) {
+  globalThis.requestAnimationFrame ??= (callback) => {
+    callback(0)
+    return 0
+  }
+  globalThis.cancelAnimationFrame ??= () => {}
+  const previous = useScene.getState()
+  useScene.setState({
+    nodes: {
+      [levelId]: LevelNode.parse({ id: levelId, children: [wallId] }),
+      [wallId]: WallNode.parse({
+        id: wallId,
+        parentId: levelId,
+        name: 'North',
+        start: [0, 0],
+        end: [4, 0],
+      }),
+    } as Record<AnyNodeId, AnyNode>,
+    rootNodeIds: [levelId] as AnyNodeId[],
+    collections: {},
+    materials: {},
+    readOnly: false,
+  })
+  clearSceneHistory()
+  const commits: SceneCommit[] = []
+  const unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+  try {
+    run((name) => {
+      commits.length = 0
+      useScene.getState().updateNodes([{ id: wallId, data: { name } as never }])
+      return commits.at(-1)
+    })
+  } finally {
+    unsubscribe()
+    useScene.setState(previous)
+  }
+}
+
+test('a derived update to the value a node already has leaves the next edit authored', () => {
+  withOneWall((authoredEdit) => {
+    useScene.getState().updateNodes([{ id: wallId, data: { name: 'North' } as never }], derived)
+    expect(authoredEdit('South')?.derivedWrites).toBeUndefined()
+  })
+})
+
+test('a derived delete of a node that is not there leaves the next edit authored', () => {
+  withOneWall((authoredEdit) => {
+    useScene.getState().deleteNodes(['wall_missing' as AnyNodeId], derived)
+    expect(authoredEdit('South')?.derivedWrites).toBeUndefined()
+  })
+})
+
+test('a history step whose derived writes cancel out leaves the next edit authored', () => {
+  withOneWall((authoredEdit) => {
+    runAsSingleSceneHistoryStep(useScene, () => {
+      useScene.getState().updateNodes([{ id: wallId, data: { name: 'Tmp' } as never }], derived)
+      useScene.getState().updateNodes([{ id: wallId, data: { name: 'North' } as never }], derived)
+    })
+    expect(authoredEdit('South')?.derivedWrites).toBeUndefined()
+  })
+})
+
+test('a commit that is a no-op takes the writes noted for it with it', () => {
+  withOneWall((authoredEdit) => {
+    noteDerivedNodeWrites([{ id: wallId, fields: ['name'] }])
+    const { nodes, rootNodeIds } = useScene.getState()
+    const snapshot = { nodes, rootNodeIds, collections: {}, materials: {}, installedPlugins: [] }
+    notifySceneCommit({ origin: 'local', before: snapshot, current: snapshot })
+    expect(authoredEdit('South')?.derivedWrites).toBeUndefined()
+  })
+})
+
+test('a derived write that changes a node is reported, by the fields that changed', () => {
+  withOneWall(() => {
+    const commits: SceneCommit[] = []
+    const unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+    try {
+      useScene
+        .getState()
+        .updateNodes([{ id: wallId, data: { name: 'North', thickness: 0.2 } as never }], derived)
+    } finally {
+      unsubscribe()
+    }
+    const fields = commits.at(-1)?.derivedWrites?.get(wallId) as ReadonlySet<string> | undefined
+    expect([...(fields ?? [])]).toEqual(['thickness'])
+  })
+})
+
+test('a derived delete is noted as the whole node, through applyNodeChanges too', () => {
+  withOneWall(() => {
+    const commits: SceneCommit[] = []
+    const unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+    try {
+      useScene.getState().applyNodeChanges({ delete: [wallId] }, derived)
+    } finally {
+      unsubscribe()
+    }
+    expect(commits.at(-1)?.derivedWrites?.get(wallId)).toBe('all')
+  })
 })
