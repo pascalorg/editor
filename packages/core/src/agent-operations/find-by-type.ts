@@ -4,8 +4,9 @@ import { measurementCentroid } from '../lib/measurement-geometry'
 import { nodeLevelFrame } from '../procedural-items/query'
 import { type Frame, transformPoint } from '../procedural-items/spatial'
 import type { AnyNode, ItemNode, ZoneNode } from '../schema'
+import { pointInPolygon } from '../systems/slab/slab-support'
 import { requireLevel } from './level-target'
-import { pointInPolygon, type Vec2 } from './plan-geometry'
+import type { Vec2 } from './plan-geometry'
 import { levelIdOf } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
@@ -45,6 +46,9 @@ function boundsInLevel(item: ItemNode, bounds: { min: Vec3; max: Vec3 }) {
     max: [0, 1, 2].map((k) => Math.max(...corners.map((c) => c[k]!))) as Vec3,
   }
 }
+
+/** A node's kind, lower case; a malformed node stored without one has none. */
+const kindOf = (node: AnyNode) => String(node.type).toLowerCase()
 
 const emitsLight = (node: AnyNode) =>
   node.type === 'item' &&
@@ -142,10 +146,10 @@ function planPointOf(node: AnyNode, nodes: SceneNodes, frames: Map<string, Frame
   }
   const local =
     node.type === 'block'
-      ? boundsCentre3(node.topology.vertices.map((vertex) => vertex.position as Vec3))
+      ? boundsCentre3((node.topology?.vertices ?? []).map((vertex) => vertex.position as Vec3))
       : node.type === 'imported-mesh'
         ? boundsCentre3(
-            node.primitives.flatMap(({ positions }) => {
+            (node.primitives ?? []).flatMap(({ positions }) => {
               const out: Vec3[] = []
               for (let i = 0; i + 2 < positions.length; i += 3)
                 out.push([positions[i]!, positions[i + 1]!, positions[i + 2]!])
@@ -171,7 +175,11 @@ function requireZone(nodes: SceneNodes, zoneId: string): ZoneNode {
   return zone
 }
 
-/** A test for "stands in this zone": on the zone's level, its plan point inside the polygon. */
+/**
+ * A test for "stands in this zone": on the zone's level, its plan point inside the polygon, by the
+ * ray cast the editor's spatial grid uses (a closing vertex repeated, or a zero-length edge, puts
+ * nothing inside).
+ */
 function zoneFilter(nodes: SceneNodes, zone: ZoneNode) {
   const zoneLevel = levelIdOf(nodes, zone.id)
   const polygon = zone.polygon as Vec2[]
@@ -179,11 +187,25 @@ function zoneFilter(nodes: SceneNodes, zone: ZoneNode) {
   return (node: AnyNode, level: string | null) => {
     if (level !== zoneLevel) return false
     const point = planPointOf(node, nodes, frames)
-    return point !== null && pointInPolygon(point, polygon)
+    return point !== null && pointInPolygon(point[0], point[1], polygon)
   }
 }
 
-const isEmpty = (record: object) => Object.keys(record).length === 0
+/** Past this much JSON, a result leaves a record out and names it in `omitted`: get_node reads it. */
+const RECORD_BYTES = 1024
+
+/** What a whole node records about itself (an importer's ids, Architect's marks), when it is small. */
+function recordsOf(node: AnyNode) {
+  const out: Record<string, unknown> = {}
+  const omitted: string[] = []
+  const records = { metadata: node.metadata, provenance: node.provenance }
+  for (const [field, value] of Object.entries(records)) {
+    if (!value || Object.keys(value).length === 0) continue
+    if (JSON.stringify(value).length > RECORD_BYTES) omitted.push(field)
+    else out[field] = value
+  }
+  return omitted.length ? { ...out, omitted } : out
+}
 
 /**
  * `find_by_type`: everything of one type, nodes and the typed parts of authored objects alike,
@@ -200,16 +222,16 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
     refuse('node_not_found', `Node not found: ${parentId}.`, { id: parentId })
   const inZone = zoneId ? zoneFilter(nodes, requireZone(nodes, zoneId)) : undefined
   const fromSource = sourceFilter(input)
-  // A kind as written (`fixture:bench`, `bones:studs`), or one word in the singular.
+  // A kind in the scene as written (`fixture:bench`, `bones:studs`), else one word in the singular.
   const kind = input.type?.trim().toLowerCase()
-  const word = kind?.replace(/s$/, '')
+  const asKind = kind !== undefined && Object.values(nodes).some((node) => kindOf(node) === kind)
+  const word = asKind ? kind : kind?.replace(/s$/, '')
   const results: Record<string, unknown>[] = []
   for (const node of Object.values(nodes)) {
-    const level = levelIdOf(nodes, node.id)
-    if (levelId && level !== levelId) continue
     if (parentId && node.parentId !== parentId) continue
     if (fromSource && !fromSource(node)) continue
-    if (inZone && !inZone(node, level)) continue
+    const level = levelIdOf(nodes, node.id)
+    if (levelId && level !== levelId) continue
     const item = node.type === 'item' ? node : null
     const found = {
       id: node.id,
@@ -218,45 +240,38 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
       levelId: level,
       parentId: node.parentId ?? null,
     }
-    // A whole node also says what it records about itself: an importer's ids, Architect's marks.
-    const whole = {
-      ...found,
-      ...(node.metadata && !isEmpty(node.metadata) ? { metadata: node.metadata } : {}),
-      ...(node.provenance ? { provenance: node.provenance } : {}),
+    const whole = { ...found, ...recordsOf(node) }
+    let matched: Record<string, unknown>[]
+    if (word === undefined) matched = [whole]
+    else {
+      const typed = (isScriptedNode(node) ? node.source.manifest.parts : []).filter(
+        (part) => part.type,
+      )
+      const typedParts = typed.filter((part) => part.type === word)
+      // An authored item whose typed parts are all of this type is one (a lantern); a mixed one (a
+      // porch), or a window, door or column, answers with its parts.
+      const wholeAuthored =
+        item !== null && typedParts.length > 0 && typedParts.length === typed.length
+      const wholeMatch =
+        kindOf(node) === word ||
+        wholeAuthored ||
+        (item &&
+          (matchesWord(item.asset.category, word) ||
+            (word === 'light' && emitsLight(node) && typedParts.length === 0)))
+      matched = wholeMatch
+        ? [whole]
+        : typedParts.map((part) => ({
+            ...found,
+            part: part.id,
+            partType: part.type,
+            ...(part.bounds && item && item.parentId === level
+              ? { bounds: boundsInLevel(item, part.bounds) }
+              : {}),
+          }))
     }
-    if (kind === undefined || word === undefined) {
-      results.push(whole)
-      continue
-    }
-    const typed = (isScriptedNode(node) ? node.source.manifest.parts : []).filter(
-      (part) => part.type,
-    )
-    const typedParts = typed.filter((part) => part.type === word || part.type === kind)
-    // An authored item whose typed parts are all of this type is one (a lantern); a mixed one (a
-    // porch), or a window, door or column, answers with its parts.
-    const wholeAuthored =
-      item !== null && typedParts.length > 0 && typedParts.length === typed.length
-    const wholeMatch =
-      node.type === kind ||
-      node.type === word ||
-      wholeAuthored ||
-      (item &&
-        (matchesWord(item.asset.category, word) ||
-          (word === 'light' && emitsLight(node) && typedParts.length === 0)))
-    if (wholeMatch) {
-      results.push(whole)
-      continue
-    }
-    for (const part of typedParts) {
-      results.push({
-        ...found,
-        part: part.id,
-        partType: part.type,
-        ...(part.bounds && item && item.parentId === level
-          ? { bounds: boundsInLevel(item, part.bounds) }
-          : {}),
-      })
-    }
+    // Where a node stands is read only for what matched: the zone test reads geometry.
+    if (matched.length === 0 || (inZone && !inZone(node, level))) continue
+    results.push(...matched)
   }
   return {
     result: {

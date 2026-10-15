@@ -4,45 +4,41 @@ import { isFloorAnchoredOpening } from '../lib/floor-opening-footprints'
 import { getLevelDisplayName } from '../lib/level-name'
 import { getOpeningFloorDatum } from '../lib/opening-floor-datum'
 import type { AnyNode, AnyNodeId } from '../schema'
+import { parseNode } from '../schema/compiled-node-parsers'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import { wallResolvedHeight } from './level-reads'
 import { referencedSceneMaterialIds } from './scene-materials'
 import type { AgentOperation, SceneNodes } from './types'
 
-const lists = (parent: AnyNode, id: string) =>
-  'children' in parent &&
-  Array.isArray(parent.children) &&
-  (parent.children as unknown[]).some(
-    (child) => child === id || (child as { id?: unknown } | null)?.id === id,
-  )
-
 /**
- * A node's ancestors, its parent first, up to the root. A node stored without a `parentId` (the
- * site, building and level of a scene assembled whole) is found in its parent's `children`.
+ * A node's ancestors, its parent first, up to the root. Both stores link every node's `parentId`
+ * from its parent's `children` when they load a scene, so the operation reads `parentId`.
  */
 function ancestorIdsOf(nodes: SceneNodes, id: string): string[] {
   const out: string[] = []
   const seen = new Set([id])
-  let current = nodes[id]
-  while (current) {
-    const childId = current.id
-    const parentId =
-      current.parentId && nodes[current.parentId]
-        ? current.parentId
-        : Object.values(nodes).find((node) => lists(node, childId))?.id
-    if (!parentId || seen.has(parentId)) break
+  let parentId = nodes[id]?.parentId
+  while (parentId && nodes[parentId] && !seen.has(parentId)) {
     seen.add(parentId)
     out.push(parentId)
-    current = nodes[parentId]
+    parentId = nodes[parentId]!.parentId
   }
   return out
 }
 
-/** What the scene decides for a node that the node does not store, read beside its own fields. */
+/**
+ * What the scene decides for a node that the node does not store, read beside its own fields. A
+ * node its schema rejects gets none: it is read as stored, and verify_scene says what is wrong.
+ */
 function derivedFields(nodes: SceneNodes, node: AnyNode): Record<string, unknown> {
+  if (!parseNode(node).success) return {}
   const host = node.parentId ? nodes[node.parentId] : undefined
-  if ((node.type === 'door' || node.type === 'window') && host?.type === 'wall')
+  if (
+    (node.type === 'door' || node.type === 'window') &&
+    host?.type === 'wall' &&
+    parseNode(host).success
+  )
     return {
       resolvedOpening: {
         floorDatum: getOpeningFloorDatum(host, node, nodes),

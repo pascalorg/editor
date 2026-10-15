@@ -5,7 +5,7 @@ export const findByTypeTool = {
   name: 'find_by_type',
   title: 'Find by type',
   description:
-    "Find everything of one type in the scene, wherever it lives: nodes of that kind (column, door, window, wall, stair, imported-mesh, a plugin's kind…), items of that category, lights (any item that emits light), and typed parts inside scripted objects, windows and doors (a porch's columns, a window's grille). Narrow it to a level, a parent, a zone or an importer's source ids; without a type, every node the other filters match. Each result gives the node's id, name, kind, level and parent, with its metadata and provenance when it has them; get_node reads one whole. Parts are read-only: they come back with their object's id, the part id and, for objects directly on a level, its bounds in level coordinates; edit them through their object.",
+    "Find everything of one type in the scene, wherever it lives: nodes of that kind (column, door, window, wall, stair, imported-mesh, a plugin's kind…), items of that category, lights (any item that emits light), and typed parts inside scripted objects, windows and doors (a porch's columns, a window's grille). Narrow it to a level, a parent, a zone or an importer's source ids; without a type, every node the other filters match. Each result gives the node's id, name, kind, level and parent, with its metadata and provenance when it has them (one over 1 KB is named in omitted instead); get_node reads a node whole. Parts are read-only: they come back with their object's id, the part id and, for objects directly on a level, its bounds in level coordinates; edit them through their object.",
   input: {
     type: z
       .string()

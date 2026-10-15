@@ -35,7 +35,7 @@ export const RETIRED_MCP_TOOLS: Readonly<Record<string, RetiredTool>> = {
   // The node finder and the node read, into the shared ones (slice Q).
   find_nodes: {
     replacement: 'find_by_type',
-    how: "it takes the same filters: type (any node kind, a plugin's too; it also finds item categories, lights and typed parts), levelId, parentId, zoneId, sourceId and sourceIdPrefix; without a type, every node they match. Each result gives the node's id, name, nodeType, levelId and parentId, with its metadata and provenance when it has them; get_node reads a node whole. A level, parent or zone that is not there is refused, where find_nodes found nothing.",
+    how: "it takes the same filters: type (any node kind, a plugin's too; it also finds item categories, lights and typed parts), levelId, parentId, zoneId, sourceId and sourceIdPrefix; without a type, every node they match. Each result gives the node's id, name, nodeType, levelId and parentId, with its metadata and provenance when it has them (one over 1 KB is named in omitted); get_node reads a node whole. A level, parent or zone that is not there is refused, where find_nodes found nothing.",
   },
   describe_node: {
     replacement: 'get_node',

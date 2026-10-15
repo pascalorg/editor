@@ -101,12 +101,17 @@ const find = (
   build: () => SceneGraph,
   input: Record<string, unknown>,
   expected: string[],
-  extra: { result?: Record<string, unknown>; contains?: Record<string, unknown>[] } = {},
+  extra: {
+    result?: Record<string, unknown>
+    contains?: Record<string, unknown>[]
+    surfaces?: AgentToolCase['surfaces']
+  } = {},
 ): AgentToolCase => ({
   name,
   tool: 'find_by_type',
   scene: build,
   input,
+  ...(extra.surfaces && { surfaces: extra.surfaces }),
   expect: {
     result: { count: expected.length, ...extra.result },
     ...(extra.contains && { contains: { results: extra.contains } }),
@@ -251,6 +256,59 @@ const KIND_IDS = [
   'bench_plugin-1',
   'studs_plugin-1',
 ]
+
+/** A zone drawn closed (its first corner repeated last), a column inside it and one far off. */
+function closedZoneScene(): SceneGraph {
+  return scene(
+    ZoneNode.parse({
+      id: 'zone_closed',
+      parentId: 'level_0',
+      name: 'Closed',
+      polygon: [...rect(-5, -5, 5, 5), [-5, -5]],
+    }),
+    ColumnNode.parse({ id: 'column_inside', parentId: 'level_0', position: [1, 0, 1] }),
+    ColumnNode.parse({ id: 'column_far', parentId: 'level_0', position: [100, 0, 100] }),
+  )
+}
+
+/** A kind and its singular, both a plugin's, and one written with a capital. */
+function pluralKindsScene(): SceneGraph {
+  return scene(
+    pluginNode('studs_plugin-1', 'bones:studs'),
+    pluginNode('stud_plugin-1', 'bones:stud'),
+    pluginNode('bench_plugin-2', 'fixture:Bench'),
+  )
+}
+
+/** A wall a level lists that does not name the level back, as a scene assembled whole stores it. */
+function unlinkedScene(): SceneGraph {
+  const { nodes, rootNodeIds } = kindsScene()
+  nodes.wall_side = { ...(nodes.wall_side as object), parentId: null }
+  return { nodes, rootNodeIds }
+}
+
+/** A block stored without its topology beside a wall in the kitchen. */
+function malformedBlockScene(): SceneGraph {
+  const { nodes, rootNodeIds } = scene(
+    kitchen(),
+    wall('wall_in', [-2, -2], [2, 2]),
+    BlockNode.parse({ id: 'block_broken', parentId: 'level_0', position: [1, 0, 1] }),
+  )
+  const { topology: _topology, ...broken } = nodes.block_broken as Record<string, unknown>
+  nodes.block_broken = broken
+  return { nodes, rootNodeIds }
+}
+
+/** A wall an IFC import tagged with a large property set, and one with a small mark. */
+function recordsScene(): SceneGraph {
+  const psets = Object.fromEntries(
+    Array.from({ length: 40 }, (_, i) => [`Pset_WallCommon.Prop${i}`, `value ${i} `.repeat(4)]),
+  )
+  return scene(
+    wall('wall_ifc', [0, 0], [4, 0], { metadata: { ifc: psets } }),
+    wall('wall_marked', [0, 1], [4, 1], { metadata: { flatwork: 'walk' } }),
+  )
+}
 
 export const FIND_NODES_CASES: AgentToolCase[] = [
   find(
@@ -464,6 +522,65 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
     { sourceIdPrefix: 'screen/', type: 'wall' },
     [],
   ),
+  find(
+    'find_nodes { type: not-a-type } (refused: no such kind): nothing found, count 0 (find_by_type also reads item categories and part types)',
+    kindsScene,
+    { type: 'not-a-type' },
+    [],
+    { result: { type: 'not-a-type', count: 0 } },
+  ),
+  find(
+    'find_nodes { type: column, zoneId } on a zone drawn closed (its first corner repeated): the column inside, not the one far off',
+    closedZoneScene,
+    { type: 'column', zoneId: 'zone_closed' },
+    ['column_inside'],
+  ),
+  find(
+    'find_nodes { type: bones:studs } beside a bones:stud: the studs alone, under their own kind',
+    pluralKindsScene,
+    { type: 'bones:studs' },
+    ['studs_plugin-1'],
+    { result: { type: 'bones:studs' } },
+  ),
+  find(
+    'find_nodes { type: fixture:Bench } (a kind written with a capital): that node, in any case',
+    pluralKindsScene,
+    { type: 'fixture:bench' },
+    ['bench_plugin-2'],
+  ),
+  // Both stores link a node's parentId from its parent's children when they load a scene; the
+  // core operation reads parentId, so this graph is the MCP's and the chat's.
+  find(
+    "find_nodes { type: wall, levelId } with a wall its level lists but that names no parent (the bridge's ancestry by children): the wall, on the stores' load",
+    unlinkedScene,
+    { type: 'wall', levelId: 'level_0' },
+    ['wall_host', 'wall_side'],
+    { surfaces: ['mcp', 'chat'] },
+  ),
+  find(
+    'find_nodes { type: wall, zoneId } beside a block stored without its topology (find_nodes read kinds first): the wall',
+    malformedBlockScene,
+    { type: 'wall', zoneId: 'zone_kitchen' },
+    ['wall_in'],
+  ),
+  find(
+    'find_nodes { zoneId } beside a block stored without its topology: the zone, the wall and the block by its origin',
+    malformedBlockScene,
+    { zoneId: 'zone_kitchen' },
+    ['zone_kitchen', 'wall_in', 'block_broken'],
+  ),
+  find(
+    'find_nodes { type: wall } (whole nodes, metadata and all): a small mark comes with its node, a large property set is named in omitted for get_node',
+    recordsScene,
+    { type: 'wall' },
+    ['wall_ifc', 'wall_marked'],
+    {
+      contains: [
+        { id: 'wall_marked', metadata: { flatwork: 'walk' } },
+        { id: 'wall_ifc', omitted: ['metadata'] },
+      ],
+    },
+  ),
 ]
 
 function expectRefs() {
@@ -534,6 +651,30 @@ function assembledScene(): SceneGraph {
   return { nodes, rootNodeIds }
 }
 
+/** A wall whose stored children list its window but not its door. */
+function unlistedChildScene(): SceneGraph {
+  const { nodes, rootNodeIds } = describedScene()
+  nodes.wall_host = { ...(nodes.wall_host as object), children: ['window_host'] }
+  return { nodes, rootNodeIds }
+}
+
+/** A wall stored without its start. */
+function brokenWallScene(): SceneGraph {
+  const { nodes, rootNodeIds } = describedScene()
+  const { start: _start, ...broken } = WallNode.parse({
+    id: 'wall_broken',
+    parentId: 'level_0',
+    start: [0, 0],
+    end: [4, 0],
+  })
+  nodes.wall_broken = broken
+  nodes.level_0 = {
+    ...(nodes.level_0 as { children: string[] }),
+    children: [...(nodes.level_0 as { children: string[] }).children, 'wall_broken'],
+  }
+  return { nodes, rootNodeIds }
+}
+
 const get = (
   name: string,
   id: string,
@@ -581,10 +722,27 @@ export const DESCRIBE_NODE_CASES: AgentToolCase[] = [
     { ancestorIds: ['wall_host', 'level_0', 'building_main', 'site_lot'] },
   ),
   get(
-    'describe_node ancestryIds in a tree assembled whole (no parentId above the walls, found by children): the same',
+    "describe_node ancestryIds in a tree assembled whole (no parentId above the walls, the bridge's ancestry by children): the same, on the stores' load",
     'wall_host',
     { ancestorIds: ['level_0', 'building_main', 'site_lot'] },
     assembledScene,
+    ['mcp', 'chat'],
+  ),
+  get(
+    "describe_node childrenIds of a wall whose stored children omit its door (the bridge's children by parentId): node.children with the door after the window, on the stores' load",
+    'wall_host',
+    { node: { children: ['window_host', 'door_host'] } },
+    unlistedChildScene,
+    ['mcp', 'chat'],
+  ),
+  get(
+    'describe_node on a wall stored without its start (its properties as stored): the node as stored, nothing derived',
+    'wall_broken',
+    {
+      node: { id: 'wall_broken', type: 'wall', end: [4, 0] },
+      ancestorIds: ['level_0', 'building_main', 'site_lot'],
+    },
+    brokenWallScene,
   ),
   get('describe_node childrenIds of a wall (its door and window): node.children', 'wall_host', {
     node: { children: ['door_host', 'window_host'] },
