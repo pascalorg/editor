@@ -173,7 +173,8 @@ test.each([
     levelId: target.id,
   })
   expect(useViewer.getState().levelMode).toBe('stacked')
-  expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
+  // The finished house is looked at whole: the floors above are shown, until Follow ends.
+  expect(useViewer.getState().hideLevelsAboveSelection).toBe(false)
   // The build is over and no turn is running: the person has the floor they had.
   useFollowPascal.getState().endBuild()
   expect(useViewer.getState().selection).toMatchObject({
@@ -197,6 +198,19 @@ test('with Follow off, a build on the floor above plays on show and the person k
   })
   expect(useViewer.getState().levelsRevealing).toEqual([])
   expect(useViewer.getState().selection.levelId).toBe('level_ground')
+})
+
+// The build is finished and the camera pulls back to the whole house: the floors above the one it
+// worked on are not hidden then, or the finished house would be shown without its upper floors.
+test('the pull-back to the finished house shows the floors above, and the person gets their display back', async () => {
+  usePointAsk.getState().setBusy(true)
+  await followItem(false, 'stacked')
+  expect(useViewer.getState().selection.levelId).toBe('level_upper')
+  expect(useViewer.getState().hideLevelsAboveSelection).toBe(false)
+
+  turnOver()
+  expect(useViewer.getState().selection.levelId).toBe('level_ground')
+  expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
 })
 
 test('an obstacle appearing after arrival causes one calm flight to a clear view', async () => {
@@ -273,12 +287,16 @@ const ENDS: { name: string; end: () => unknown }[] = [
 ]
 
 // The person is on the upper floor in the solo display, with the floors above not hidden; the build
-// is on the ground floor, which is not shown, so the reveal speaks at once.
+// is on the ground floor, which the solo display hides: it plays on show, and Follow takes the floor.
 test.each(ENDS)('when $name, the cutaway, the floor and the hidden floors are put back', async ({
   end,
 }) => {
   usePointAsk.getState().setBusy(true)
-  const { building } = await followItem(true, 'solo', { enclosed: true, hideAbove: false })
+  const { building } = await followItem(true, 'solo', {
+    enclosed: true,
+    hideAbove: false,
+    playMs: 1500,
+  })
   expect(useViewer.getState().wallMode).toBe('cutaway')
   expect(useViewer.getState().levelMode).toBe('stacked')
   expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)

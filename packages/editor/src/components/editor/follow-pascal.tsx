@@ -187,6 +187,10 @@ export function FollowPascal() {
       })
       presentation.levels('stacked')
       presentation.hideAbove(true)
+    } else if (want.kind === 'group' && !want.levelId) {
+      // The finished house is looked at whole: its upper floors are not hidden.
+      presentation.levels('stacked')
+      presentation.hideAbove(false)
     }
     if (!spring.current) {
       spring.current = new OrbitSpring({ x: 0, y: 1, z: 0, r: 20, az: 0.6, el: 0.5 })
