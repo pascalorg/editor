@@ -10,8 +10,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  getRoofSegmentDeckReach,
   type LevelNode,
   migrateSiteMetadata,
+  type RoofSegmentNode,
   type SceneSnapshot,
   type SiteNode,
   siteFrame,
@@ -69,9 +71,9 @@ export function findLowestLevel(
 }
 
 /**
- * The roof's outline on the lot — every roof segment's plan rectangle plus
- * its overhang, through the segment's, the roof's and the building's turns,
- * unioned into the outer ring(s). Dashed on the site plan: what the eye sees
+ * The roof's outline on the lot — every roof segment's plan rectangle out to
+ * its deck's reach at its eaves and rakes, through the segment's, the roof's
+ * and the building's turns, unioned into the outer ring(s). Dashed on the site plan: what the eye sees
  * from above is the roof, and the setback is measured to the wall under it.
  */
 export function roofOutlineRings(
@@ -93,15 +95,10 @@ export function roofOutlineRings(
     if (node.type !== 'roof-segment') continue
     const roof = roofs.get(String((node as { parentId?: unknown }).parentId))
     if (!roof) continue
-    const seg = node as unknown as {
-      position?: number[]
-      rotation?: unknown
-      width?: number
-      depth?: number
-      overhang?: number
-    }
-    const w = (seg.width ?? 0) / 2 + (seg.overhang ?? 0)
-    const d = (seg.depth ?? 0) / 2 + (seg.overhang ?? 0)
+    const seg = node as RoofSegmentNode
+    const reach = getRoofSegmentDeckReach(seg)
+    const w = (seg.width ?? 0) / 2 + reach.x
+    const d = (seg.depth ?? 0) / 2 + reach.z
     if (w <= 0 || d <= 0) continue
     const segYaw = yawOf(seg.rotation)
     const roofYaw = yawOf(roof.rotation)

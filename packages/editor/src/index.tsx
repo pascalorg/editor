@@ -418,12 +418,14 @@ export {
   getDisplayedDoorValue,
   openDoorOpenState,
 } from './lib/door-interaction'
+export { downloadProjectFile } from './lib/download-project-file'
 export { createEditorApi } from './lib/editor-api'
 export {
   type EditorHostView,
   editorHostViewRegistry,
   openEditorView,
   registerEditorHostView,
+  unregisterEditorHostView,
 } from './lib/editor-views'
 export {
   clearStructuralElevationGuide,
@@ -615,6 +617,7 @@ export {
   scopeNodeId,
 } from './lib/interaction/scope'
 export { isEditableKeyboardTarget } from './lib/keyboard-pan'
+export { selectPlacedNode } from './lib/level-selection'
 // Lot drop-in — address → parcel → streets → front edge → setbacks, on the
 // site node, through the parcel provider the host sets.
 export {
@@ -643,6 +646,7 @@ export { useMaterialCatalogModel } from './lib/material-catalog-model'
 export {
   type ActivePaintMaterial,
   buildResetSurfaceMaterialUpdates,
+  buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
@@ -711,7 +715,7 @@ export {
   type PanelRow,
 } from './lib/panel-rows'
 export { type PanelToolOption, usePanelToolHints } from './lib/panel-tool-options'
-export { commitParametricNodeFields } from './lib/parametric-node-update'
+export { commitParametricNodeFields, parametricNodeUpdates } from './lib/parametric-node-update'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,
@@ -748,6 +752,7 @@ export {
   setPointAskBusy,
   setPointAskPlayful,
 } from './lib/point-ask/host-api'
+export { buildPrintableRoofSegmentSolids } from './lib/print-roof-solids'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {

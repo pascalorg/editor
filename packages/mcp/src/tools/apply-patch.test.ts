@@ -3,7 +3,10 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  type AnyNode,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
   SlabNode,
   StairNode,
   StairSegmentNode,
@@ -125,6 +128,77 @@ describe('apply_patch', () => {
     })
     expect(result.isError).toBeFalsy()
     expect((bridge.getNode(level.id) as { height?: number }).height).toBe(2.5)
+  })
+
+  // The roof-level rule: a roof on the walls of the storey holding it goes to the level above
+  // them in the same write; storey content aimed at a roof level is refused at its index.
+  function roofedRoom(levelId: string) {
+    const corners: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ]
+    const walls = corners.map((start, i) =>
+      WallNode.parse({ parentId: levelId, start, end: corners[(i + 1) % 4], height: 2.5 }),
+    )
+    const roof = RoofNode.parse({ position: [4, 0, 3], support: { kind: 'walls' } })
+    const segment = RoofSegmentNode.parse({ width: 8, depth: 6 })
+    return {
+      roof,
+      patches: [
+        ...walls.map((wall) => ({ op: 'create', node: wall, parentId: levelId })),
+        { op: 'create', node: roof, parentId: levelId },
+        { op: 'create', node: segment, parentId: roof.id },
+      ],
+    }
+  }
+
+  test('a roof made on its walls’ storey lands on a new Roof level in the one undo step, said in notes', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const before = Object.keys(bridge.getNodes()).length
+    const roots = bridge.getRootNodeIds()
+    const { roof, patches } = roofedRoom(level.id)
+    const result = await client.callTool({ name: 'apply_patch', arguments: { patches } })
+    expect(result.isError).toBeFalsy()
+    const placed = bridge.getNode(roof.id)!
+    const roofLevel = bridge.getNode(placed.parentId as AnyNode['id']) as LevelNode
+    expect(roofLevel).toMatchObject({ type: 'level', metadata: { role: 'roof' } })
+    // in exactly one parent's children, no new root
+    const holders = Object.values(bridge.getNodes()).filter((node) =>
+      ((node as { children?: string[] }).children ?? []).includes(roof.id),
+    )
+    expect(holders.map((node) => node.id)).toEqual([roofLevel.id])
+    expect(bridge.getRootNodeIds()).toEqual(roots)
+    const notes = (result.structuredContent as { notes?: string[] }).notes ?? []
+    expect(
+      notes.some((note) => note.includes(`roof ${roof.id}`) && note.includes(roofLevel.id)),
+    ).toBe(true)
+    bridge.undo(1)
+    expect(Object.keys(bridge.getNodes())).toHaveLength(before)
+    expect(bridge.getNode(roofLevel.id)).toBeNull()
+  })
+
+  test('a wall written on the roof level is refused at its index, naming the storey it covers', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const { roof, patches } = roofedRoom(level.id)
+    await client.callTool({ name: 'apply_patch', arguments: { patches } })
+    const roofLevelId = bridge.getNode(roof.id)!.parentId!
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0] })
+    const refused = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'update', id: roof.id, data: { name: 'Main roof' } },
+          { op: 'create', node: wall, parentId: roofLevelId },
+        ],
+      },
+    })
+    expect(refused.isError).toBe(true)
+    const refusal = JSON.parse((refused.content as Array<{ text: string }>)[0]!.text)
+    expect(refusal).toMatchObject({ code: 'roof_level', patchIndex: 1, id: wall.id })
+    expect(refusal.message).toContain(level.id)
+    expect(bridge.getNode(wall.id)).toBeNull()
   })
 
   test('syncs derived stair openings after stair patches', async () => {

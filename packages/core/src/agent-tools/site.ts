@@ -12,12 +12,16 @@ const yard = (side: string) =>
     description: `The ${side} yard: from the lot line to the house, square to the house.`,
   }).optional()
 
+const site = NodeId.optional().describe(
+  "The site, by its id (get_site's siteId), when the scene has several: a lot no building stands on yet reads in site coordinates. Default: the building's site.",
+)
+
 export const getSiteTool = {
   name: 'get_site',
   title: 'Get site',
   description:
-    'Read the site a building stands on, in its level coordinates: the lot, the buildable area inside the setbacks and its centre, the street side, north, the address, parcel and zoning when known, whether the lot is only the new-project placeholder, and where the footprint sits now with its yards.',
-  input: { building },
+    "Read the site a building stands on, in its level coordinates: the lot and its area, with the footprint a house usually covers on it (30 to 45%); the buildable area inside the setbacks with its centre, its area, each edge's frontage and depth, and its front edge (behind the street; while no street is recorded, behind the edge facing north, which the setbacks take as the front); the street side with the lot's frontage and depth on it; north; the ground (sloped with its fall, read flat, or not read); the address, parcel and zoning when known; whether the lot is only the new-project placeholder; and where the footprint sits now with its yards.",
+  input: { building, site },
 }
 
 export const placeBuildingTool = {

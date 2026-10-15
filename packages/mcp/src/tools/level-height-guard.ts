@@ -1,4 +1,4 @@
-import { fillLevelHeights, type LevelHeightWrite } from '@pascal-app/core/agent-operations'
+import { fillLevelHeights, type NodeWrite } from '@pascal-app/core/agent-operations'
 import type { AnyNode } from '@pascal-app/core/schema'
 import type { Patch } from '../bridge/scene-bridge'
 import { registerPatchGuard } from './patch-guards'
@@ -9,7 +9,7 @@ import { registerPatchGuard } from './patch-guards'
  * turns a `null` into a cleared field.
  */
 function levelHeights(patches: Patch[], scene: Readonly<Record<string, AnyNode>>) {
-  return fillLevelHeights(patches as unknown as LevelHeightWrite[], scene)
+  return fillLevelHeights(patches as unknown as NodeWrite[], scene)
 }
 
 registerPatchGuard({ name: 'level-heights', order: 30, run: levelHeights })

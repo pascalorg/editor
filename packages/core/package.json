@@ -86,6 +86,16 @@
       "import": "./dist/systems/stair/stair-opening-sync.js",
       "default": "./dist/systems/stair/stair-opening-sync.js"
     },
+    "./stair-footprint": {
+      "types": "./dist/systems/stair/stair-footprint.d.ts",
+      "import": "./dist/systems/stair/stair-footprint.js",
+      "default": "./dist/systems/stair/stair-footprint.js"
+    },
+    "./stair-rise-query": {
+      "types": "./dist/systems/stair/stair-rise-query.d.ts",
+      "import": "./dist/systems/stair/stair-rise-query.js",
+      "default": "./dist/systems/stair/stair-rise-query.js"
+    },
     "./procedural-items": {
       "types": "./dist/procedural-items/index.d.ts",
       "import": "./dist/procedural-items/index.js",

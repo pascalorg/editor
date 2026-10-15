@@ -92,20 +92,40 @@ export {
   type RiserMarker,
 } from './riser-diagram'
 export {
+  type Bearing,
+  type RoofShape,
+  riseAt,
+  seatOn,
+  segmentBearing,
+  segmentShape,
+  shapeOfRect,
+  standsOverStorey,
+  type WallSpan,
+  wallSpans,
+  wallsUnder,
+} from './roof-bearing'
+export {
   coveredStoreyId,
   isRoofLevel,
+  isStoreyContent,
+  liftRoofLevels,
   planRoofLevel,
   type RoofLevelPlan,
   roofLevelAbove,
+  roofLevelOrderBreach,
   roofsOver,
   servesAsRoofLevel,
   storeyInsertIndex,
+  storeyOf,
 } from './roof-level'
 export {
   isRoofOnStoreyWalls,
+  planRoofSeats,
   planRoofsOffStorey,
   type RoofMove,
+  type RoofSeat,
   roofsKeptOverStorey,
+  seatRoofs,
 } from './roof-move'
 export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'
 export {

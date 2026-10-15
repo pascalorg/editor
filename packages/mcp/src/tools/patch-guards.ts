@@ -26,6 +26,10 @@ export type PatchRefusalCode =
   | 'unknown_material'
   | 'field_required'
   | 'shadowed_field'
+  // The roof-level rule (seatWrittenRoofs).
+  | 'roof_level'
+  | 'roof_level_holds_storey'
+  | 'roof_level_on_top'
 
 /**
  * A check apply_patch runs over the whole patch before applying it, registered by the module that

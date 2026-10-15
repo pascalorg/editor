@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, registerNode } from '@pascal-app/core'
-import { placementNoticeOf, transientDraftId } from './use-placement-notice'
+import {
+  placementNoticeOf,
+  previewPlacementNoticeOf,
+  transientDraftId,
+} from './use-placement-notice'
 
 // The editor asks a node's definition for its placement notice; it names no kind.
 function registerKind(placementNotice?: unknown): string {
@@ -45,4 +49,23 @@ describe('the placement notice of the node in hand', () => {
     expect(transientDraftId(nodes) as string | null).toBe('draft')
     expect(transientDraftId({ kept: nodes.kept })).toBeNull()
   })
+})
+
+test('ephemeral preview notices see their context without inserting a draft into the scene', () => {
+  const kind = registerKind((node: AnyNode, ctx: { nodes: Record<string, AnyNode> }) => ({
+    line: `${node.id}:${ctx.nodes.child?.name}`,
+  }))
+  const nodes = {}
+  const draft = nodeOf('preview', kind)
+  expect(
+    previewPlacementNoticeOf(nodes, {
+      node: draft,
+      parentNode: null,
+      contextNodes: [{ ...nodeOf('child', kind), name: 'draft child' }],
+    }),
+  ).toEqual({ line: 'preview:draft child' })
+  expect(nodes).toEqual({})
+  expect(
+    previewPlacementNoticeOf(nodes, { node: null, parentNode: null, contextNodes: [] }),
+  ).toBeNull()
 })

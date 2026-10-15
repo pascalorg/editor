@@ -13,25 +13,30 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  usePlacementNotice,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { AlertTriangle, Pause, Play, Plus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { CompartmentCard } from './compartment-card'
+import { CabinetEssentialControls } from './essential-controls'
 import {
   animateCabinetOperationState,
   isCabinetAnimationRunning,
   onCabinetAnimationChange,
   stopCabinetAnimation,
 } from './interaction'
+import { kitchenPresetForModule } from './kitchen-catalog'
+import { KitchenCollection } from './kitchen-collection'
+import { KitchenModuleActions } from './kitchen-module-actions'
 import { cabinetModulePanelContext } from './panel-context'
 import {
   cabinetModuleSupportsPresets,
   cabinetModuleSupportsTopFinish,
   cabinetModuleUsesFixedApplianceWidth,
 } from './panel-visibility'
-import { CABINET_PRESETS, type CabinetPresetId } from './presets'
+import { CABINET_PRESETS, type CabinetPresetId, cabinetPresetById } from './presets'
 import {
   CABINET_REVEAL_GAPS,
   type CabinetRevealGapId,
@@ -127,13 +132,12 @@ const TOP_FINISH_OPTIONS = [
 const EMPTY_MODULES: CabinetModuleNodeType[] = []
 const EMPTY_MODULE_IDS: AnyNodeId[] = []
 
-const PRESET_BUTTON_CLASS =
-  'flex h-9 items-center justify-center rounded-md border border-border/40 bg-black/3 dark:bg-[#252527] px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-black/6 dark:hover:bg-[#303033]'
 const REFLOW_REJECTED_MESSAGE =
   'No space in this run. No base cabinet can shrink enough to fit this item.'
 
 export default function CabinetPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const placementNotice = usePlacementNotice(selectedId)
   const setSelection = useViewer((s) => s.setSelection)
   const [isAnimating, setIsAnimating] = useState(false)
   const [reflowNotice, setReflowNotice] = useState<{ message: string } | null>(null)
@@ -351,10 +355,10 @@ export default function CabinetPanel() {
   // parent-frame routing keeps clicks on child modules targeting the run while
   // it stays the single selected node.
   const backToRun = useCallback(() => {
-    if (node?.type === 'cabinet-module' && node.parentId) {
-      setSelection({ selectedIds: [node.parentId] })
+    if (parentRun) {
+      setSelection({ selectedIds: [parentRun.id] })
     }
-  }, [node, setSelection])
+  }, [parentRun, setSelection])
 
   // Animation lives in ./interaction.ts, shared with the registry E-key
   // action; the panel only mirrors its running state for the Play button.
@@ -597,33 +601,65 @@ export default function CabinetPanel() {
     return <CabinetRunPanel modules={modules} node={node} onClose={close} />
   }
 
+  if (node.type === 'cabinet-module' && node.moduleKind === 'wall-filler') {
+    return (
+      <PanelWrapper
+        icon="/icons/item.webp"
+        title="Wall filler"
+        onBack={backToRun}
+        onClose={close}
+        width={320}
+      >
+        {placementNotice && (
+          <p role="status" className="px-3 py-2 text-xs text-amber-600">
+            {placementNotice.line}
+          </p>
+        )}
+        <PanelSection title="Dimensions">
+          <p className="px-2 pb-3 text-xs text-muted-foreground">
+            Solid matching front between the cabinet and wall. Countertop and toe-kick continue
+            across this filler.
+          </p>
+          <SliderControl
+            label="Width"
+            value={node.width}
+            min={0.05}
+            max={3}
+            step={0.001}
+            unit="m"
+            onChange={(width) => updateNode({ width })}
+          />
+          <SliderControl
+            label="Height"
+            value={node.carcassHeight}
+            min={0.4}
+            max={2.4}
+            step={0.01}
+            unit="m"
+            onChange={(carcassHeight) => updateNode({ carcassHeight })}
+          />
+        </PanelSection>
+      </PanelWrapper>
+    )
+  }
+
   return (
     <PanelWrapper
       icon="/icons/item.webp"
       onBack={node.type === 'cabinet-module' ? backToRun : undefined}
       onClose={close}
-      title={node.name || 'Modular Cabinet'}
+      title={
+        node.type === 'cabinet-module'
+          ? cabinetPresetById(kitchenPresetForModule(node, parentRun)).label
+          : node.name || 'Kitchen run'
+      }
       width={320}
     >
-      {node.type === 'cabinet-module' &&
-        parentRun?.type === 'cabinet' &&
-        cabinetModuleSupportsPresets(node) && (
-          <PanelSection title="Presets">
-            <div className="grid grid-cols-2 gap-2 px-1 pb-2">
-              {CABINET_PRESETS.map((preset) => (
-                <button
-                  className={PRESET_BUTTON_CLASS}
-                  key={preset.id}
-                  onClick={() => applyPreset(preset.id)}
-                  type="button"
-                >
-                  <span className="truncate">{preset.label}</span>
-                </button>
-              ))}
-            </div>
-          </PanelSection>
-        )}
-
+      {placementNotice && (
+        <p role="status" className="px-3 py-2 text-xs text-amber-600">
+          {placementNotice.line}
+        </p>
+      )}
       <PanelSection title="Dimensions">
         {node.type === 'cabinet-module' && !isHoodOnlyNode && (
           <div className="space-y-1 px-1 pb-2">
@@ -693,7 +729,7 @@ export default function CabinetPanel() {
               value={node.depth}
             />
             <SliderControl
-              label="Carcass height"
+              label="Height"
               max={
                 node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'tall'
                   ? 2.4
@@ -714,106 +750,7 @@ export default function CabinetPanel() {
         )}
       </PanelSection>
 
-      {node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && !isHoodOnlyNode && (
-        <PanelSection title="Cabinet Type">
-          <div className="space-y-2 px-1 pb-2">
-            <SegmentedControl
-              onChange={(value) => {
-                if (value === 'tall') {
-                  switchToTall()
-                  return
-                }
-                switchToBase()
-              }}
-              options={CABINET_TIER_OPTIONS.map((option) => ({
-                value: option.value,
-                label: option.label,
-              }))}
-              value={resolveCabinetType(node, parentRun)}
-            />
-            {resolveCabinetType(node, parentRun) === 'base' &&
-              (hasWallCabinet ? (
-                <ActionButton label="Remove wall cabinet" onClick={removeWallCabinet} />
-              ) : (
-                <>
-                  <ActionButton label="Add wall cabinet" onClick={addWallCabinetAbove} />
-                  <ActionButton label="Add chimney" onClick={addHoodAbove} />
-                </>
-              ))}
-          </div>
-        </PanelSection>
-      )}
-
-      {canAddTopFinish && (
-        <PanelSection title="Top / Ceiling">
-          <div className="space-y-2 px-1 pb-2">
-            <div>
-              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Finish
-              </div>
-              <SegmentedControl
-                onChange={(value) =>
-                  updateNode({
-                    topFinish: value as CabinetModuleNodeType['topFinish'],
-                    ...(value !== 'none' && node.topFinish === 'none'
-                      ? { topFinishDepth: node.depth }
-                      : {}),
-                  })
-                }
-                options={TOP_FINISH_OPTIONS.map((option) => ({
-                  label: option.label,
-                  value: option.value,
-                }))}
-                value={node.topFinish ?? 'none'}
-              />
-            </div>
-            {node.topFinish !== 'none' && (
-              <>
-                <ActionButton
-                  label="Fill to ceiling"
-                  onClick={() =>
-                    updateNode({
-                      topFinishHeight: cabinetCeilingGap(
-                        node,
-                        useScene.getState().nodes as Record<AnyNodeId, AnyNode>,
-                      ),
-                    })
-                  }
-                />
-                <SliderControl
-                  label="Top height"
-                  max={1.2}
-                  min={0}
-                  onChange={(value) => updateNode({ topFinishHeight: value })}
-                  precision={2}
-                  step={0.01}
-                  unit="m"
-                  value={node.topFinishHeight}
-                />
-                <SliderControl
-                  label="Top depth"
-                  max={1.2}
-                  min={0.15}
-                  onChange={(value) => updateNode({ topFinishDepth: value })}
-                  precision={2}
-                  step={0.01}
-                  unit="m"
-                  value={node.topFinishDepth}
-                />
-              </>
-            )}
-            {ceilingOverflow > 1e-4 && (
-              <div className="flex gap-1.5 px-1 text-xs leading-5 text-red-700 dark:text-red-300">
-                <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
-                <span>
-                  Finished height extends {(ceilingOverflow * 1000).toFixed(0)} mm above the
-                  ceiling.
-                </span>
-              </div>
-            )}
-          </div>
-        </PanelSection>
-      )}
+      <CabinetEssentialControls stack={stack} width={node.width} onReplace={replaceAt} />
 
       {planningReport &&
         (planningReport.errors.length > 0 || planningReport.warnings.length > 0) && (
@@ -842,98 +779,6 @@ export default function CabinetPanel() {
         )}
 
       {!isHoodOnlyNode && (
-        <PanelSection title="Open Animation">
-          <div className="flex items-center gap-2 px-1">
-            <div className="min-w-0 flex-1">
-              <SliderControl
-                label="Open"
-                max={100}
-                min={0}
-                onChange={(value) => {
-                  if (isAnimating) stopAnimation()
-                  updateNode({ operationState: value / 100 })
-                }}
-                step={1}
-                unit="%"
-                value={Math.round((node.operationState ?? 0) * 100)}
-              />
-            </div>
-            <button
-              aria-label={
-                isAnimating
-                  ? 'Stop animation'
-                  : (node.operationState ?? 0) >= 0.99
-                    ? 'Close cabinet'
-                    : 'Open cabinet'
-              }
-              className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-black/4 dark:bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
-              onClick={() => {
-                if (isAnimating) {
-                  stopAnimation()
-                  return
-                }
-                animateOperationState((node.operationState ?? 0) >= 0.99 ? 0 : 1)
-              }}
-              title={
-                isAnimating
-                  ? 'Stop animation'
-                  : (node.operationState ?? 0) >= 0.99
-                    ? 'Close cabinet'
-                    : 'Play animation'
-              }
-              type="button"
-            >
-              {isAnimating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              <span>
-                {isAnimating ? 'Stop' : (node.operationState ?? 0) >= 0.99 ? 'Close' : 'Play'}
-              </span>
-            </button>
-          </div>
-        </PanelSection>
-      )}
-
-      <PanelSection title="Compartments">
-        {reflowNotice ? (
-          <p
-            aria-live="polite"
-            className="px-1 pb-2 text-xs leading-5 text-amber-700 dark:text-amber-400"
-            role="status"
-          >
-            {reflowNotice.message}
-          </p>
-        ) : null}
-        <div className="flex flex-col gap-2 px-1 pb-2">
-          {rows.map(({ compartment, index }, displayIndex) => (
-            <CompartmentCard
-              allowHood={isWallChildModule}
-              wallCabinet={isWallChildModule}
-              compartment={compartment}
-              carcassHeight={node.carcassHeight}
-              displayIndex={displayIndex}
-              index={index}
-              key={compartment.id}
-              onMove={(delta) => moveCompartment(index, delta)}
-              onRemove={() => removeAt(index)}
-              onReplace={(next) => replaceAt(index, next)}
-              onResizeHeight={(height) => resizeAt(index, height)}
-              resolvedHeight={
-                rowHeights.get(index) ?? node.carcassHeight / Math.max(stack.length, 1)
-              }
-              total={rows.length}
-              width={node.width}
-            />
-          ))}
-        </div>
-        <div className="px-1 pb-1">
-          <ActionButton
-            icon={<Plus className="h-4 w-4" />}
-            label="Add compartment"
-            onClick={addCompartment}
-          />
-        </div>
-      </PanelSection>
-
-      {!isHoodOnlyNode && (
         <>
           {isFridgeModule && (
             <PanelSection title="Appliance front">
@@ -959,7 +804,7 @@ export default function CabinetPanel() {
               </div>
             </PanelSection>
           )}
-          <PanelSection title="Fronts">
+          <PanelSection title="Finish">
             <div className="space-y-2 px-1 pb-2">
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -974,43 +819,6 @@ export default function CabinetPanel() {
                     label: option.label,
                   }))}
                   value={node.frontStyle ?? 'slab'}
-                />
-              </div>
-              <div>
-                <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Mounting
-                </div>
-                <SegmentedControl
-                  onChange={(value) =>
-                    updateNode({ frontOverlay: value as CabinetNodeType['frontOverlay'] })
-                  }
-                  options={FRONT_OVERLAY_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                  }))}
-                  value={node.frontOverlay ?? 'full'}
-                />
-              </div>
-              <div>
-                <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Reveal gap
-                </div>
-                <SegmentedControl
-                  mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
-                  onChange={(value) =>
-                    updateNode({
-                      frontGap: cabinetRevealGapById(value as CabinetRevealGapId).value,
-                    })
-                  }
-                  options={CABINET_REVEAL_GAPS.map((gap) => ({
-                    value: gap.id,
-                    label: gap.label,
-                  }))}
-                  value={
-                    cabinetRevealGapId(node.frontGap) === 'custom'
-                      ? '3'
-                      : cabinetRevealGapId(node.frontGap)
-                  }
                 />
               </div>
             </div>
@@ -1054,6 +862,272 @@ export default function CabinetPanel() {
           </PanelSection>
         </>
       )}
+      {node.type === 'cabinet-module' &&
+        parentRun?.type === 'cabinet' &&
+        cabinetModuleSupportsPresets(node) && (
+          <PanelSection title="Kitchen">
+            <ActionButton label="Edit kitchen run" onClick={backToRun} />
+            <p className="px-1 py-2 text-xs text-muted-foreground">
+              Shared countertop, plinth, and finishes
+            </p>
+            {!parentIsModule && parentRun.runTier !== 'wall' && (
+              <KitchenModuleActions
+                key={node.id}
+                node={node}
+                run={parentRun}
+                onReplace={applyPreset}
+              />
+            )}
+            {(parentIsModule || parentRun.runTier === 'wall') && (
+              <details className="px-1 py-2 text-xs">
+                <summary className="cursor-pointer">Replace with…</summary>
+                <KitchenCollection includeWall={false} onSelect={applyPreset} />
+              </details>
+            )}
+          </PanelSection>
+        )}
+
+      <details className="group border-t border-border/50">
+        <summary className="cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Advanced
+        </summary>
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
+          Cabinet construction, compartments, and opening preview.
+        </p>
+        {!isHoodOnlyNode && (
+          <PanelSection title="Front construction" defaultExpanded={false}>
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Mounting
+              </div>
+              <SegmentedControl
+                onChange={(value) =>
+                  updateNode({ frontOverlay: value as CabinetNodeType['frontOverlay'] })
+                }
+                options={FRONT_OVERLAY_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                value={node.frontOverlay ?? 'full'}
+              />
+            </div>
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Reveal gap
+              </div>
+              <SegmentedControl
+                mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
+                onChange={(value) =>
+                  updateNode({
+                    frontGap: cabinetRevealGapById(value as CabinetRevealGapId).value,
+                  })
+                }
+                options={CABINET_REVEAL_GAPS.map((gap) => ({
+                  value: gap.id,
+                  label: gap.label,
+                }))}
+                value={
+                  cabinetRevealGapId(node.frontGap) === 'custom'
+                    ? '3'
+                    : cabinetRevealGapId(node.frontGap)
+                }
+              />
+            </div>
+          </PanelSection>
+        )}
+        {node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && !isHoodOnlyNode && (
+          <PanelSection title="Cabinet Type" defaultExpanded={false}>
+            <div className="space-y-2 px-1 pb-2">
+              <SegmentedControl
+                onChange={(value) => {
+                  if (value === 'tall') {
+                    switchToTall()
+                    return
+                  }
+                  switchToBase()
+                }}
+                options={CABINET_TIER_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                value={resolveCabinetType(node, parentRun)}
+              />
+              {resolveCabinetType(node, parentRun) === 'base' &&
+                (hasWallCabinet ? (
+                  <ActionButton label="Remove wall cabinet" onClick={removeWallCabinet} />
+                ) : (
+                  <>
+                    <ActionButton label="Add wall cabinet" onClick={addWallCabinetAbove} />
+                    <ActionButton label="Add chimney" onClick={addHoodAbove} />
+                  </>
+                ))}
+            </div>
+          </PanelSection>
+        )}
+
+        {canAddTopFinish && (
+          <PanelSection title="Top / Ceiling" defaultExpanded={false}>
+            <div className="space-y-2 px-1 pb-2">
+              <div>
+                <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Finish
+                </div>
+                <SegmentedControl
+                  onChange={(value) =>
+                    updateNode({
+                      topFinish: value as CabinetModuleNodeType['topFinish'],
+                      ...(value !== 'none' && node.topFinish === 'none'
+                        ? { topFinishDepth: node.depth }
+                        : {}),
+                    })
+                  }
+                  options={TOP_FINISH_OPTIONS.map((option) => ({
+                    label: option.label,
+                    value: option.value,
+                  }))}
+                  value={node.topFinish ?? 'none'}
+                />
+              </div>
+              {node.topFinish !== 'none' && (
+                <>
+                  <ActionButton
+                    label="Fill to ceiling"
+                    onClick={() =>
+                      updateNode({
+                        topFinishHeight: cabinetCeilingGap(
+                          node,
+                          useScene.getState().nodes as Record<AnyNodeId, AnyNode>,
+                        ),
+                      })
+                    }
+                  />
+                  <SliderControl
+                    label="Top height"
+                    max={1.2}
+                    min={0}
+                    onChange={(value) => updateNode({ topFinishHeight: value })}
+                    precision={2}
+                    step={0.01}
+                    unit="m"
+                    value={node.topFinishHeight}
+                  />
+                  <SliderControl
+                    label="Top depth"
+                    max={1.2}
+                    min={0.15}
+                    onChange={(value) => updateNode({ topFinishDepth: value })}
+                    precision={2}
+                    step={0.01}
+                    unit="m"
+                    value={node.topFinishDepth}
+                  />
+                </>
+              )}
+              {ceilingOverflow > 1e-4 && (
+                <div className="flex gap-1.5 px-1 text-xs leading-5 text-red-700 dark:text-red-300">
+                  <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Finished height extends {(ceilingOverflow * 1000).toFixed(0)} mm above the
+                    ceiling.
+                  </span>
+                </div>
+              )}
+            </div>
+          </PanelSection>
+        )}
+
+        {!isHoodOnlyNode && (
+          <PanelSection title="Open Animation">
+            <div className="flex items-center gap-2 px-1">
+              <div className="min-w-0 flex-1">
+                <SliderControl
+                  label="Open"
+                  max={100}
+                  min={0}
+                  onChange={(value) => {
+                    if (isAnimating) stopAnimation()
+                    updateNode({ operationState: value / 100 })
+                  }}
+                  step={1}
+                  unit="%"
+                  value={Math.round((node.operationState ?? 0) * 100)}
+                />
+              </div>
+              <button
+                aria-label={
+                  isAnimating
+                    ? 'Stop animation'
+                    : (node.operationState ?? 0) >= 0.99
+                      ? 'Close cabinet'
+                      : 'Open cabinet'
+                }
+                className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-black/4 dark:bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
+                onClick={() => {
+                  if (isAnimating) {
+                    stopAnimation()
+                    return
+                  }
+                  animateOperationState((node.operationState ?? 0) >= 0.99 ? 0 : 1)
+                }}
+                title={
+                  isAnimating
+                    ? 'Stop animation'
+                    : (node.operationState ?? 0) >= 0.99
+                      ? 'Close cabinet'
+                      : 'Play animation'
+                }
+                type="button"
+              >
+                {isAnimating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                <span>
+                  {isAnimating ? 'Stop' : (node.operationState ?? 0) >= 0.99 ? 'Close' : 'Play'}
+                </span>
+              </button>
+            </div>
+          </PanelSection>
+        )}
+
+        <PanelSection title="Compartments" defaultExpanded={false}>
+          {reflowNotice ? (
+            <p
+              aria-live="polite"
+              className="px-1 pb-2 text-xs leading-5 text-amber-700 dark:text-amber-400"
+              role="status"
+            >
+              {reflowNotice.message}
+            </p>
+          ) : null}
+          <div className="flex flex-col gap-2 px-1 pb-2">
+            {rows.map(({ compartment, index }, displayIndex) => (
+              <CompartmentCard
+                allowHood={isWallChildModule}
+                wallCabinet={isWallChildModule}
+                compartment={compartment}
+                carcassHeight={node.carcassHeight}
+                displayIndex={displayIndex}
+                index={index}
+                key={compartment.id}
+                onMove={(delta) => moveCompartment(index, delta)}
+                onRemove={() => removeAt(index)}
+                onReplace={(next) => replaceAt(index, next)}
+                onResizeHeight={(height) => resizeAt(index, height)}
+                resolvedHeight={
+                  rowHeights.get(index) ?? node.carcassHeight / Math.max(stack.length, 1)
+                }
+                total={rows.length}
+                width={node.width}
+              />
+            ))}
+          </div>
+          <div className="px-1 pb-1">
+            <ActionButton
+              icon={<Plus className="h-4 w-4" />}
+              label="Add compartment"
+              onClick={addCompartment}
+            />
+          </div>
+        </PanelSection>
+      </details>
     </PanelWrapper>
   )
 }

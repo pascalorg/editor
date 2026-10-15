@@ -40,6 +40,7 @@ function ridgeVentSegmentGeometryKey(segment: RoofSegmentNode | undefined): stri
     segment.wallThickness,
     segment.deckThickness,
     segment.overhang,
+    segment.gableOverhang,
     segment.shingleThickness,
     segment.gambrelLowerWidthRatio,
     segment.gambrelLowerHeightRatio,

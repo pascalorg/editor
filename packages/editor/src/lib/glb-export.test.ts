@@ -95,21 +95,21 @@ function sceneWithVisibleAndHiddenBoxes(): {
 }
 
 describe('prepareSceneForExport', () => {
-  test.each([
-    true,
-    false,
-  ])('omits registered draft geometry absent from the saved document (onlyVisible=%s)', (onlyVisible) => {
-    const { root, nodes } = sceneWithVisibleAndHiddenBoxes()
-    const draft = sceneRegistry.nodes.get('item_hidden')!
-    draft.name = 'Unplaced preview'
-    nodes.item_hidden!.visible = true
-    delete nodes.item_hidden
+  test.each([true, false])(
+    'omits registered draft geometry absent from the saved document (onlyVisible=%s)',
+    (onlyVisible) => {
+      const { root, nodes } = sceneWithVisibleAndHiddenBoxes()
+      const draft = sceneRegistry.nodes.get('item_hidden')!
+      draft.name = 'Unplaced preview'
+      nodes.item_hidden!.visible = true
+      delete nodes.item_hidden
 
-    const result = prepareSceneForExport(root, nodes, { onlyVisible })
-    expect(result.scene.getObjectByName('Unplaced preview')).toBeUndefined()
-    expect(result.scene.children).toHaveLength(1)
-    expect(root.getObjectByName('Unplaced preview')).toBe(draft)
-  })
+      const result = prepareSceneForExport(root, nodes, { onlyVisible })
+      expect(result.scene.getObjectByName('Unplaced preview')).toBeUndefined()
+      expect(result.scene.children).toHaveLength(1)
+      expect(root.getObjectByName('Unplaced preview')).toBe(draft)
+    },
+  )
 
   test('skips a refused subtree and reports its warning while exporting other objects', () => {
     const root = new THREE.Group()
@@ -457,134 +457,133 @@ describe('prepareSceneForExport', () => {
     }
   })
 
-  test.each([
-    'sync',
-    'portable-sync',
-    'portable-async',
-  ] as const)('bakes Site bounds and same-kind sibling reservations through %s hooks', async (mode) => {
-    const restoreRegistry = nodeRegistry._snapshot()
-    try {
-      const kind = 'test:site-context-bake'
-      const nodeId = 'site_context_bake'
-      const site = SiteNode.parse({
-        polygon: {
-          type: 'polygon',
-          points: [
-            [0, 0],
-            [12, 0],
-            [12, 8],
-            [0, 8],
-          ],
-        },
-        children: [nodeId, 'declared_sibling', 'linked_sibling', 'other_kind'],
-      })
-      const otherSite = SiteNode.parse({
-        polygon: {
-          type: 'polygon',
-          points: [
-            [0, 0],
-            [30, 0],
-            [30, 4],
-            [0, 4],
-          ],
-        },
-        children: ['other_site_sibling'],
-      })
-      const buildGeometry = (context: GeometryContext) => {
-        const points = (context.parent as SiteNode | null)?.polygon?.points ?? [[0, 0]]
-        const xs = points.map(([x]) => x)
-        const zs = points.map(([, z]) => z)
-        const reservedWidth = context.siblings.reduce(
-          (width, sibling) => width + Number(sibling.metadata?.reservedWidth ?? 0),
-          0,
-        )
-        return new THREE.Mesh(
-          new THREE.BoxGeometry(
-            Math.max(...xs) - Math.min(...xs) - reservedWidth,
-            1,
-            Math.max(...zs) - Math.min(...zs),
-          ),
-          new THREE.MeshStandardMaterial(),
-        )
-      }
-      registerNode({
-        kind,
-        schemaVersion: 1,
-        schema: DoorNode,
-        category: 'furnish',
-        defaults: () => ({}) as never,
-        capabilities: {},
-        bake: 'replace',
-        ...(mode === 'portable-async'
-          ? { bakeGeometryAsync: async (_node, context) => buildGeometry(context) }
-          : { bakeGeometry: (_node, context) => buildGeometry(context) }),
-      } as AnyNodeDefinition)
-      const nodes = {
-        [site.id]: site,
-        [otherSite.id]: otherSite,
-        [nodeId]: {
-          id: nodeId,
-          type: kind,
-          parentId: null,
-          visible: true,
-          metadata: { reservedWidth: 100 },
-        },
-        declared_sibling: {
-          id: 'declared_sibling',
-          type: kind,
-          parentId: null,
-          metadata: { reservedWidth: 2 },
-        },
-        pointer_sibling: {
-          id: 'pointer_sibling',
-          type: kind,
-          parentId: site.id,
-          metadata: { reservedWidth: 3 },
-        },
-        linked_sibling: {
-          id: 'linked_sibling',
-          type: kind,
-          parentId: site.id,
-          metadata: { reservedWidth: 1 },
-        },
-        other_kind: {
-          id: 'other_kind',
-          type: 'test:other-kind',
-          parentId: site.id,
-          metadata: { reservedWidth: 100 },
-        },
-        other_site_sibling: {
-          id: 'other_site_sibling',
-          type: kind,
-          parentId: otherSite.id,
-          metadata: { reservedWidth: 4 },
-        },
-      } as unknown as Record<string, AnyNode>
-      const root = new THREE.Group()
-      const source = new THREE.Group()
-      root.add(source)
-      sceneRegistry.nodes.set(nodeId, source)
-      const prepare = mode === 'sync' ? prepareSceneForExport : prepareSceneForExportAsync
-      const exportedSize = async () => {
-        const prepared = await prepare(root, nodes)
-        try {
-          const exported = prepared.scene.getObjectByName(nodeId)!
-          return new THREE.Box3().setFromObject(exported).getSize(new THREE.Vector3()).toArray()
-        } finally {
-          prepared.dispose()
+  test.each(['sync', 'portable-sync', 'portable-async'] as const)(
+    'bakes Site bounds and same-kind sibling reservations through %s hooks',
+    async (mode) => {
+      const restoreRegistry = nodeRegistry._snapshot()
+      try {
+        const kind = 'test:site-context-bake'
+        const nodeId = 'site_context_bake'
+        const site = SiteNode.parse({
+          polygon: {
+            type: 'polygon',
+            points: [
+              [0, 0],
+              [12, 0],
+              [12, 8],
+              [0, 8],
+            ],
+          },
+          children: [nodeId, 'declared_sibling', 'linked_sibling', 'other_kind'],
+        })
+        const otherSite = SiteNode.parse({
+          polygon: {
+            type: 'polygon',
+            points: [
+              [0, 0],
+              [30, 0],
+              [30, 4],
+              [0, 4],
+            ],
+          },
+          children: ['other_site_sibling'],
+        })
+        const buildGeometry = (context: GeometryContext) => {
+          const points = (context.parent as SiteNode | null)?.polygon?.points ?? [[0, 0]]
+          const xs = points.map(([x]) => x)
+          const zs = points.map(([, z]) => z)
+          const reservedWidth = context.siblings.reduce(
+            (width, sibling) => width + Number(sibling.metadata?.reservedWidth ?? 0),
+            0,
+          )
+          return new THREE.Mesh(
+            new THREE.BoxGeometry(
+              Math.max(...xs) - Math.min(...xs) - reservedWidth,
+              1,
+              Math.max(...zs) - Math.min(...zs),
+            ),
+            new THREE.MeshStandardMaterial(),
+          )
         }
-      }
+        registerNode({
+          kind,
+          schemaVersion: 1,
+          schema: DoorNode,
+          category: 'furnish',
+          defaults: () => ({}) as never,
+          capabilities: {},
+          bake: 'replace',
+          ...(mode === 'portable-async'
+            ? { bakeGeometryAsync: async (_node, context) => buildGeometry(context) }
+            : { bakeGeometry: (_node, context) => buildGeometry(context) }),
+        } as AnyNodeDefinition)
+        const nodes = {
+          [site.id]: site,
+          [otherSite.id]: otherSite,
+          [nodeId]: {
+            id: nodeId,
+            type: kind,
+            parentId: null,
+            visible: true,
+            metadata: { reservedWidth: 100 },
+          },
+          declared_sibling: {
+            id: 'declared_sibling',
+            type: kind,
+            parentId: null,
+            metadata: { reservedWidth: 2 },
+          },
+          pointer_sibling: {
+            id: 'pointer_sibling',
+            type: kind,
+            parentId: site.id,
+            metadata: { reservedWidth: 3 },
+          },
+          linked_sibling: {
+            id: 'linked_sibling',
+            type: kind,
+            parentId: site.id,
+            metadata: { reservedWidth: 1 },
+          },
+          other_kind: {
+            id: 'other_kind',
+            type: 'test:other-kind',
+            parentId: site.id,
+            metadata: { reservedWidth: 100 },
+          },
+          other_site_sibling: {
+            id: 'other_site_sibling',
+            type: kind,
+            parentId: otherSite.id,
+            metadata: { reservedWidth: 4 },
+          },
+        } as unknown as Record<string, AnyNode>
+        const root = new THREE.Group()
+        const source = new THREE.Group()
+        root.add(source)
+        sceneRegistry.nodes.set(nodeId, source)
+        const prepare = mode === 'sync' ? prepareSceneForExport : prepareSceneForExportAsync
+        const exportedSize = async () => {
+          const prepared = await prepare(root, nodes)
+          try {
+            const exported = prepared.scene.getObjectByName(nodeId)!
+            return new THREE.Box3().setFromObject(exported).getSize(new THREE.Vector3()).toArray()
+          } finally {
+            prepared.dispose()
+          }
+        }
 
-      expect(await exportedSize()).toEqual([6, 1, 8])
-      nodes[nodeId]!.parentId = otherSite.id
-      expect(await exportedSize()).toEqual([26, 1, 4])
-      nodes[nodeId]!.parentId = null
-      site.children = site.children.filter((id) => id !== nodeId)
-      expect(await exportedSize()).toEqual([0, 1, 0])
-    } finally {
-      restoreRegistry()
-    }
-  })
+        expect(await exportedSize()).toEqual([6, 1, 8])
+        nodes[nodeId]!.parentId = otherSite.id
+        expect(await exportedSize()).toEqual([26, 1, 4])
+        nodes[nodeId]!.parentId = null
+        site.children = site.children.filter((id) => id !== nodeId)
+        expect(await exportedSize()).toEqual([0, 1, 0])
+      } finally {
+        restoreRegistry()
+      }
+    },
+  )
 
   test('selective exports omit a procedural kind without changing the live scene or later exports', () => {
     const restoreRegistry = nodeRegistry._snapshot()
@@ -2373,29 +2372,32 @@ describe('plugin bake policies through export', () => {
   test.each([
     ['sync', 'meadow-bake', ['bakeGeometry']],
     ['async', 'meadow-bake-async', ['bakeGeometryAsync']],
-  ] as const)('%s export strips, replaces and keeps static plugin kinds without touching the live tree', async (mode, bakedName, expectedCalls) => {
-    await withBakePlugin([pluginId], async ({ root, live, nodes, calls }) => {
-      const prepared =
-        mode === 'sync'
-          ? prepareSceneForExport(root, nodes)
-          : await prepareSceneForExportAsync(root, nodes)
-      try {
-        const scene = prepared.scene
-        expect(scene.getObjectByName(overlayId)).toBeUndefined()
-        expect(scene.getObjectByName(`${overlayId}-live`)).toBeUndefined()
+  ] as const)(
+    '%s export strips, replaces and keeps static plugin kinds without touching the live tree',
+    async (mode, bakedName, expectedCalls) => {
+      await withBakePlugin([pluginId], async ({ root, live, nodes, calls }) => {
+        const prepared =
+          mode === 'sync'
+            ? prepareSceneForExport(root, nodes)
+            : await prepareSceneForExportAsync(root, nodes)
+        try {
+          const scene = prepared.scene
+          expect(scene.getObjectByName(overlayId)).toBeUndefined()
+          expect(scene.getObjectByName(`${overlayId}-live`)).toBeUndefined()
 
-        const meadow = scene.getObjectByName(meadowId)
-        expect(meadow?.getObjectByName(bakedName)).toBeDefined()
-        expect(meadow?.getObjectByName(`${meadowId}-live`)).toBeUndefined()
+          const meadow = scene.getObjectByName(meadowId)
+          expect(meadow?.getObjectByName(bakedName)).toBeDefined()
+          expect(meadow?.getObjectByName(`${meadowId}-live`)).toBeUndefined()
 
-        expect(scene.getObjectByName(rockId)?.getObjectByName(`${rockId}-live`)).toBeDefined()
-        expect(calls).toEqual([...expectedCalls])
-        expectLiveTreeUntouched(live)
-      } finally {
-        prepared.dispose()
-      }
-    })
-  })
+          expect(scene.getObjectByName(rockId)?.getObjectByName(`${rockId}-live`)).toBeDefined()
+          expect(calls).toEqual([...expectedCalls])
+          expectLiveTreeUntouched(live)
+        } finally {
+          prepared.dispose()
+        }
+      })
+    },
+  )
 
   test('an uninstalled plugin contributes nothing to the export', async () => {
     await withBakePlugin([], async ({ root, live, nodes, calls }) => {

@@ -32,6 +32,7 @@ import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
 import { cabinetModuleUsesFixedApplianceWidth } from './panel-visibility'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
+import { cabinetPlacementNotice } from './placement-notice'
 import { resolveCabinetGridPosition } from './placement-snap'
 import useCabinetPlacementType from './placement-type'
 import { metadataForSelectedWidth, metadataWithPresetWidthDebt } from './preset-width-debt'
@@ -755,7 +756,7 @@ function cabinetWallWidthGap(
 
 function isCabinetWidthFiller(module: CabinetModuleNodeType) {
   return (
-    module.moduleKind === 'corner-filler' ||
+    module.moduleKind !== 'standard' ||
     module.name === 'Corner Filler' ||
     module.name === 'Wall Bridge Filler' ||
     module.name === 'Corner Wall Filler'
@@ -2401,6 +2402,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
   parametrics: cabinetParametrics,
   handles: (node, sceneApi) => cabinetHandles(node, sceneApi).map(withCabinetHostedChildren),
+  placementNotice: cabinetPlacementNotice,
   geometry: buildCabinetGeometry,
   exportAnimation: ({ node, object }) => bakeCabinetAnimationClip(node, object),
   system: {
@@ -2592,6 +2594,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   relations: { hosts: ['cabinet', 'cabinet-module', 'item', 'procedural-item'] },
   parametrics: cabinetModuleParametrics,
   handles: () => cabinetModuleHandles().map(withCabinetHostedChildren),
+  placementNotice: cabinetPlacementNotice,
   geometry: buildCabinetGeometry,
   exportAnimation: ({ node, object }) => bakeCabinetAnimationClip(node, object),
   // `operationState` is deliberately absent — see cabinetDefinition.geometryKey.

@@ -239,9 +239,10 @@ export const scheduleView: EditorHostView = {
 }
 ```
 
-The host registers each with `registerEditorHostView`, in the same bootstrap pass as the panels. The view is offered only in its workspaces and only while its plugin is in the project's `installedPlugins`; registration is session-add-only, like panels.
+The host registers each with `registerEditorHostView`, in the same bootstrap pass as the panels. The view is offered only in its workspaces and only while its plugin is in the project's `installedPlugins`; registration lasts for the session unless the host calls `unregisterEditorHostView(id)`. Unregistering also removes the view from all stored workspace layouts and pin preferences.
 
 - **The view bar.** Each pane has a bar: its pinned views, the view it shows, and a "More views" menu with the rest. A registered view starts unpinned unless it sets `defaultPinned: true`; people pin and unpin per browser. The last pane's bar carries Split (`\`) and, split, the swap.
+- **Closable views.** A host can supply `onClose` for an open document. The tab gets a close button; the host disposes of its state and calls `unregisterEditorHostView`. `editorHostViewRegistry.updateView(id, { label })` keeps a renamed document’s tab current without replacing its component.
 - **Opening a view.** `openEditorView(id)` shows it — focusing it if it is on screen, else in the focused pane; `openEditorView(id, { beside: true })` splits and opens it next to what is there. A panel's "Open beside the scene" button is this call.
 - **One pane per view.** A view sits in at most one pane: picking the other pane's view swaps the two. The 3D canvas and the plan stay mounted across every layout change; a registered view mounts lazily while it is in a pane, inside an error boundary, and unmounts when it leaves.
 - **Scene chrome.** The level selector, the tool dock and the host's scene controls belong to the 3D and 2D views: side by side they span both panes, beside another view they sit over the scene pane, and with no scene view on screen they are hidden. A view draws its own chrome inside its pane, below the view bar.

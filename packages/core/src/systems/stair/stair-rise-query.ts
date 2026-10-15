@@ -1,5 +1,6 @@
 import { containsPoint } from '../../lib/polygon-boolean'
-import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
+import type { AnyNode, AnyNodeId, LevelNode, StairNode, StairSegmentNode } from '../../schema'
+import { StairDesignTargets } from '../../schema/nodes/stair-design-targets'
 import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
 import {
   findLevelAboveId,
@@ -9,6 +10,17 @@ import {
 import { stairBaseElevation } from './stair-base-elevation'
 import { stairArrivalOpening } from './stair-footprint'
 
+/** The level a stair rises from: the one it names, else the one holding it. */
+function stairSourceLevel(stair: StairNode, nodes: Record<string, AnyNode>): LevelNode | undefined {
+  const requested = stair.fromLevelId ? nodes[stair.fromLevelId] : undefined
+  if (requested?.type === 'level') return requested
+  const parent = stair.parentId ? nodes[stair.parentId] : undefined
+  if (parent?.type === 'level') return parent
+  return Object.values(nodes).find(
+    (node): node is LevelNode => node.type === 'level' && (node.children ?? []).includes(stair.id),
+  )
+}
+
 export function resolveStairTotalRise(
   stair: StairNode,
   nodes: Record<string, AnyNode>,
@@ -17,15 +29,7 @@ export function resolveStairTotalRise(
 ): number {
   if (stair.totalRise !== undefined) return stair.totalRise
 
-  const parent = stair.parentId ? nodes[stair.parentId] : undefined
-  const parentLevel =
-    parent?.type === 'level'
-      ? parent
-      : Object.values(nodes).find(
-          (node) => node.type === 'level' && (node.children ?? []).includes(stair.id),
-        )
-  const requestedSource = stair.fromLevelId ? nodes[stair.fromLevelId] : undefined
-  const level = requestedSource?.type === 'level' ? requestedSource : parentLevel
+  const level = stairSourceLevel(stair, nodes)
 
   // Both destinations are absolute level-local heights, while the stair's own
   // base may be lifted onto a floor slab by the floor-stack
@@ -43,7 +47,7 @@ export function resolveStairTotalRise(
     if (deck?.type === 'slab') return (deck.elevation ?? 0.05) - baseElevation
   }
 
-  if (level?.type !== 'level') return DEFAULT_LEVEL_HEIGHT
+  if (!level) return DEFAULT_LEVEL_HEIGHT
   if (legacyArrival)
     return getLevelFloorToFloorHeight(level.id, nodes as Record<AnyNodeId, AnyNode>) - baseElevation
   const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
@@ -158,4 +162,45 @@ export function syncStairRises(
 
 export function stairHasNoRise(stair: StairNode, nodes: Record<string, AnyNode>): boolean {
   return resolveStairTotalRise(stair, nodes) <= 0
+}
+
+/**
+ * Steps that stand on a storey without climbing to another: a flight onto a deck, or a flight to
+ * no level, one naming the level it rises from and none it arrives on (create_stair's
+ * `toLevelId: null`: porch, deck or garden steps), whatever its rise.
+ */
+export function stairClimbsToNoStorey(stair: StairNode, nodes: Record<string, AnyNode>): boolean {
+  if (stair.deckSlabId && nodes[stair.deckSlabId]?.type === 'slab') return true
+  return !!stair.fromLevelId && !stair.toLevelId
+}
+
+/**
+ * Whether a stair climbs to the storey above the one it rises from: what verify_scene and the
+ * hosts' checks count as a way upstairs. Steps that climb to no storey do not; a stair naming a
+ * level above does. Otherwise, with a storey above, a stair that follows its storey (no
+ * `totalRise`) reaches it, and one keeping a rise of its own (an Architect add_stair flight, an
+ * editor stair given a custom rise) does when that rise is within a riser of the floor-to-floor
+ * height. A declared roof level is no storey (`isRoofLevel`, read here without the registry
+ * roof-level.ts loads, which the hosts' checks must not).
+ */
+export function stairReachesStoreyAbove(stair: StairNode, nodes: Record<string, AnyNode>): boolean {
+  if (stairClimbsToNoStorey(stair, nodes)) return false
+  const level = stairSourceLevel(stair, nodes)
+  if (!level) return false
+  const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+  const storey = (id: string | null | undefined) => {
+    const node = id ? nodes[id] : undefined
+    return node?.type === 'level' && node.metadata?.role !== 'roof'
+      ? elevations.get(node.id)
+      : undefined
+  }
+  const source = elevations.get(level.id)
+  const named = storey(stair.toLevelId)
+  if (source && named && named.buildingId === source.buildingId && named.ordinal > source.ordinal)
+    return true
+  const above = storey(findLevelAboveId(level.id, elevations))
+  if (!(source && above)) return false
+  if (stair.totalRise === undefined) return true
+  const riser = StairDesignTargets.parse(stair.designTargets ?? {}).maxRiserHeight
+  return Math.abs(stair.totalRise - (above.baseY - source.baseY)) < riser
 }

@@ -44,7 +44,9 @@ export function applyCabinetModuleInsertion({
   for (const planned of plan.modules) {
     const current = sceneApi.get<CabinetModuleNode>(planned.id as AnyNodeId)
     if (!current || current.parentId !== liveRun.id) return null
-    sceneApi.update(current.id as AnyNodeId, {
+  }
+  for (const planned of plan.modules) {
+    sceneApi.update(planned.id as AnyNodeId, {
       position: planned.position,
       width: planned.width,
     })

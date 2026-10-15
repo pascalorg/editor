@@ -6,13 +6,14 @@ import {
   useScene,
 } from '@pascal-app/core'
 
-export function commitParametricNodeFields(
+/** A field edit with what its kind's parametrics derive and reconcile from it, as updates. */
+export function parametricNodeUpdates(
   nodeId: AnyNodeId,
   requestedPatch: Partial<AnyNode>,
-): void {
-  const scene = useScene.getState()
-  const node = scene.nodes[nodeId]
-  if (!node) return
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const nodes = useScene.getState().nodes
+  const node = nodes[nodeId]
+  if (!node) return []
 
   const parametrics = nodeRegistry.get(node.type)?.parametrics as
     | ParametricDescriptor<AnyNode>
@@ -31,7 +32,15 @@ export function commitParametricNodeFields(
   ]
   if (parametrics?.reconcile) {
     const next = { ...node, ...patch } as AnyNode
-    updates.push(...parametrics.reconcile(node, next, { ...scene.nodes, [nodeId]: next }))
+    updates.push(...parametrics.reconcile(node, next, { ...nodes, [nodeId]: next }))
   }
-  scene.updateNodes(updates)
+  return updates
+}
+
+export function commitParametricNodeFields(
+  nodeId: AnyNodeId,
+  requestedPatch: Partial<AnyNode>,
+): void {
+  const updates = parametricNodeUpdates(nodeId, requestedPatch)
+  if (updates.length) useScene.getState().updateNodes(updates)
 }

@@ -163,3 +163,7 @@ The response includes `userId`, `apiKey`, `starterProjectId`, `mcpEndpoint`, and
 - Missing sampling support: image-to-scene tools cannot use host vision. Use semantic construction from user-supplied measurements or report the missing capability.
 
 Current hosted instructions: `https://editor.pascal.app/docs/developers/mcp`.
+
+## Hosted project files
+
+When offered by the connected host, `get_project_assets` lists the project's uploads, plugin documents and completed Studio outputs; follow `nextCursor`. `get_project_file` returns metadata and a download URL. Store deliverables with `upload_project_file` (`text` for UTF-8 documents; `prepare`, HTTP PUT to the signed URL, then `complete` for binary files). Return the saved file URL. Use `rename_project_file` to rename, and `delete_project_file` only when deletion was requested. These calls use the credential's existing workspace scope. A local scene does not gain a hosted file catalog just by connecting an account.

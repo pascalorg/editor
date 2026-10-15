@@ -1,14 +1,29 @@
 import { describe, expect, test } from 'bun:test'
-import { getCatalogMaterialById } from '../material-library'
+import {
+  getCatalogMaterialById,
+  MATERIAL_CATALOG,
+  registerLibraryMaterials,
+  unregisterLibraryMaterials,
+} from '../material-library'
 import { AGENT_OPERATIONS } from './index'
 
 type Group = {
-  query: string
+  query?: string
+  kind?: string
   results: { ref: string; label: string; kind: string; surfaces: string[]; color?: string }[]
   missing?: string[]
+  more?: number
+  next?: number
 }
 
-function search(...queries: { query: string; surface?: 'roof' | 'wall' | 'floor' | 'ceiling' }[]) {
+function search(
+  ...queries: {
+    query?: string
+    kind?: string
+    surface?: 'roof' | 'wall' | 'floor' | 'ceiling'
+    offset?: number
+  }[]
+) {
   const { result } = AGENT_OPERATIONS.search_materials({}, { queries } as never, {
     activeLevelId: null,
   })
@@ -64,5 +79,61 @@ describe('search_materials', () => {
     const [group] = search({ query: 'white stucco' })
     expect(refs(group!)[0]).toBe('library:concrete-stucco')
     expect(refs(group!)).toContain('library:siding-lap-white')
+  })
+
+  test('without words, browses a kind by name: every one of it, none other', () => {
+    const [metal] = search({ kind: 'metal' })
+    const expected = MATERIAL_CATALOG.filter((material) => material.category === 'metal')
+    expect(metal!.results.map((result) => result.ref).sort()).toEqual(
+      expected.map((material) => `library:${material.id}`).sort(),
+    )
+    const labels = metal!.results.map((result) => result.label)
+    expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)))
+    expect(metal!.missing).toBeUndefined()
+  })
+
+  test("reads the materials the host registered beside Pascal's, never in their place", () => {
+    const community = {
+      id: 'mtl_terrazzo_green',
+      label: 'Green terrazzo',
+      category: 'stone' as const,
+      source: 'community' as const,
+      preset: MATERIAL_CATALOG[0]!.preset,
+    }
+    const shadow = { ...MATERIAL_CATALOG[0]!, label: "Not Pascal's" }
+    registerLibraryMaterials([community, shadow])
+    try {
+      const [terrazzo, stone] = search({ query: 'terrazzo green' }, { kind: 'stone' })
+      expect(refs(terrazzo!)[0]).toBe('library:mtl_terrazzo_green')
+      expect(refs(stone!)).toContain('library:mtl_terrazzo_green')
+      const [all] = search({})
+      expect(all!.results.filter((result) => result.ref === `library:${shadow.id}`)).toEqual([
+        expect.objectContaining({ label: MATERIAL_CATALOG[0]!.label }),
+      ])
+    } finally {
+      unregisterLibraryMaterials([community.id, shadow.id])
+    }
+  })
+
+  test('pages a long browse: more and next list the rest, each material once', () => {
+    const extra = Array.from({ length: 160 }, (_, index) => ({
+      id: `mtl_page_${String(index).padStart(3, '0')}`,
+      label: `Paged finish ${String(index).padStart(3, '0')}`,
+      category: 'other' as const,
+      preset: MATERIAL_CATALOG[0]!.preset,
+    }))
+    registerLibraryMaterials(extra)
+    try {
+      const [first] = search({ kind: 'other' })
+      expect(first!.results).toHaveLength(150)
+      expect(first).toMatchObject({ more: 10, next: 150 })
+      const [rest] = search({ kind: 'other', offset: first!.next })
+      expect(rest!.more).toBeUndefined()
+      expect([...refs(first!), ...refs(rest!)]).toEqual(
+        extra.map((material) => `library:${material.id}`),
+      )
+    } finally {
+      unregisterLibraryMaterials(extra.map((material) => material.id))
+    }
   })
 })

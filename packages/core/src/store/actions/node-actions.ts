@@ -79,11 +79,13 @@ type WallMergePlan = {
 }
 
 const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
+  'roofSystem',
   'roofType',
   'width',
   'depth',
   'pitch',
   'overhang',
+  'gableOverhang',
   'wallThickness',
   'shingleThickness',
   'gambrelLowerWidthRatio',
@@ -103,6 +105,8 @@ const DEFAULT_GUTTER_REFRESH_FIELDS = new Set<string>([
   'wallHeight',
   'pitch',
   'overhang',
+  'gableOverhang',
+  'wallThickness',
   'trim',
 ])
 
