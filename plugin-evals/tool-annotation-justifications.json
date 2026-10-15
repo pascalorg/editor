@@ -1073,19 +1073,6 @@
       }
     },
     {
-      "name": "validate_scene",
-      "annotations": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It checks the connected Pascal scene for schema and graph problems without repairing or changing it.",
-        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
-        "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
-      }
-    },
-    {
       "name": "verify_scene",
       "annotations": {
         "readOnlyHint": true,

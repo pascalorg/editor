@@ -11,8 +11,7 @@ Inspect the server's advertised tools because hosted and local releases may diff
 3. `get_project_status`
 4. `list_levels`
 5. `get_level_summary`, `get_walls`, `get_zones`, `find_nodes`, or `get_node`
-6. `validate_scene`
-7. `verify_scene`
+6. `verify_scene`
 
 `get_scene` returns the full graph and is useful when a compact summary omits a field needed for a calculation, such as an item's scale.
 
@@ -32,10 +31,9 @@ All three require edit access on the scan's own project; view access, including 
 1. `create_project`
 2. `create_house_from_brief` for a supported quick start, or semantic construction tools for precise control
 3. Add openings and furniture with semantic tools
-4. `validate_scene`
-5. `verify_scene`
-6. `save_scene` with `saveMode: "draft"`
-7. `get_project_status`
+4. `verify_scene`
+5. `save_scene` with `saveMode: "draft"`
+6. `get_project_status`
 
 Use `checkpoint` only at a meaningful milestone. A browser-visible draft and a durable checkpoint are distinct states.
 

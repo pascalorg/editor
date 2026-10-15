@@ -20,5 +20,5 @@ export const SCENE_DESIGN_GUIDANCE = [
   '  - Use search_assets before place_items when placing catalog items.',
   '  - Use apply_patch for precise bulk edits that the semantic tools cannot express.',
   '  - After each major phase, call get_level_summary or pascal://scene/current/summary so progress is visible and errors are easier to localize.',
-  '  - After multi-room or full-floor work, call validate_scene and verify_scene, then fix reported issues before finishing.',
+  '  - After multi-room or full-floor work, call verify_scene, then fix reported issues before finishing.',
 ].join('\n')

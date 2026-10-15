@@ -384,9 +384,8 @@ an optional `height` and uses the same default.
 | `redo` | Step forward through temporal history. | `{ steps? }` | `{ redone: number }` |
 | `export_json` | Serialize the scene graph as JSON. | `{ pretty? }` | `{ json: string }` |
 | `export_glb` | Stubbed: GLB export requires the browser renderer. | — | throws `not_implemented` |
-| `validate_scene` | Zod-validate every node and parent-child integrity. | — | `{ valid, errors: { nodeId, path, message }[] }` |
 | `validate_design` | Read-only: validate a design (procedural item recipe, object or JSON string) and measure it. The authority over `pascal://schema/design`. | `{ design, parameters? }` | `{ valid, diagnostics[], design, sweep, measurements }` |
-| `verify_scene` | High-level check with validation status, per-level counts and roles, empty levels, and typed practical issues (storeys with no stair, openings off their wall, stairs off their slab, blocked doors, a house past its lot line or in its required yards…). | — | `{ valid, levels[], issues: { type, message }[], hasIssues }` |
+| `verify_scene` | The one scene check: schema validity, per-level counts, roles and the spaces the walls enclose, empty levels, and typed practical issues (every node field its schema rejects as `schema_invalid` with its `nodeId` and `path`, a node kind no schema knows once per kind, a space with no room or with several, a room the walls do not close or with no name, storeys with no stair, openings off their wall, stairs off their slab, blocked doors, a house past its lot line or in its required yards…). | — | `{ valid, levels[], issues: { type, message, … }[], hasIssues }` |
 | `check_collisions` | Find overlapping items and out-of-bounds placements. | `{ levelId? }` | `{ collisions: { aId, bId, kind }[] }` |
 | `analyze_floorplan_image` | Vision tool: extract walls, rooms, and approximate dimensions from a floorplan image. | `{ image, scaleHint? }` | `{ walls, rooms, approximateDimensions, confidence }` |
 | `analyze_room_photo` | Vision tool: extract approximate dimensions and fixtures from a room photo. | `{ image }` | `{ approximateDimensions, identifiedFixtures, identifiedWindows }` |
@@ -394,6 +393,11 @@ an optional `height` and uses the same default.
 The vision tools require the MCP host to support the sampling capability
 (`createMessage`). Hosts that don't will see a structured
 `sampling_unavailable` error.
+
+A retired tool is listed no more and still answered: a call to its name
+returns an error with the code `tool_retired`, the tool that replaced it
+(`replacement`) and how to use that one. `validate_scene` retired into
+`verify_scene` (`RETIRED_MCP_TOOLS` in `@pascal-app/core/agent-tools`).
 
 ## Resources
 

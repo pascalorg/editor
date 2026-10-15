@@ -15,6 +15,7 @@ import type { GeometryScriptHost } from './tools/add-object'
 import { type AssetCatalog, cachedCatalog } from './tools/asset-catalog'
 import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
+import { answerRetiredTools } from './tools/retired-tools'
 import type { SceneViewHost } from './tools/view-scene'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
@@ -79,6 +80,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   registerResources(server, operations, catalog)
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)
+  answerRetiredTools(server)
   return server
 }
 

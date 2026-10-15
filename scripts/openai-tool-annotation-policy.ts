@@ -96,7 +96,6 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   set_zone_intent: policy(false, false, false),
   undo: policy(false, true, false),
   validate_design: policy(true, false, false),
-  validate_scene: policy(true, false, false),
   verify_scene: policy(true, false, false),
   view_scene: policy(true, false, false),
 } as const satisfies Record<string, ToolAnnotations>

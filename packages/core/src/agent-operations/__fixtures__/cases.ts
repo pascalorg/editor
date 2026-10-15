@@ -25,6 +25,7 @@ import { FINISH_CASES } from './finish-cases'
 import { LOT_INFO_CASES } from './lot-info-cases'
 import { CREATE_ROOF_CASES, MOVE_ROOFS_CASES } from './roof-cases'
 import { ROOM_CASES } from './room-cases'
+import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { CORNER_WINDOW_CASES } from './corner-window-cases'
 import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
@@ -943,6 +944,8 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...FINISH_READBACK_CASES,
   ...DUPLICATE_LEVEL_CASES,
   ...VERIFY_SCENE_CASES,
+  ...VALIDATE_SCENE_CASES,
+  ...CHECK_ROOMS_CASES,
   ...DELETE_NODE_CASES,
   ...ROOM_CASES,
   ...CREATE_ROOM_CASES,

@@ -193,14 +193,14 @@ more windows on the east façade.
 ### 6. Validate and report
 
 ```jsonc
-// tool: validate_scene
-{ "name": "validate_scene", "arguments": {} }
+// tool: verify_scene
+{ "name": "verify_scene", "arguments": {} }
 ```
 
 Response:
 
 ```jsonc
-{ "valid": true, "errors": [] }
+{ "valid": true, "issues": [], "hasIssues": false, … }
 ```
 
 The agent then reads the scene summary for its response to the user:

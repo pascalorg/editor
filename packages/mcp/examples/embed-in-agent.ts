@@ -63,8 +63,8 @@ async function main(): Promise<void> {
   }
 
   // 6. Validate and export.
-  const validation = await client.callTool({ name: 'validate_scene', arguments: {} })
-  console.log('validation:', validation.structuredContent)
+  const verification = await client.callTool({ name: 'verify_scene', arguments: {} })
+  console.log('verification:', verification.structuredContent)
 
   const exported = await client.callTool({
     name: 'export_json',

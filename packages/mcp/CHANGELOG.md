@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `verify_scene` is the one scene check: it lists every node field its schema
+  rejects (`schema_invalid`, with `nodeId` and `path`), a node kind no schema
+  knows once per kind (`schema_unknown_kind`, info), a hidden site
+  (`site_hidden`), and the spaces the walls enclose against the rooms
+  (`space_no_room`, `space_many_rooms`, `room_not_enclosed`, `room_unnamed`).
+
+### Removed
+
+- `validate_scene` retired into `verify_scene`. A call to it returns the error
+  `tool_retired` with its replacement and how to use it.
+
 ### Fixed
 
 - The published ESM output now resolves relative JavaScript imports under Node,

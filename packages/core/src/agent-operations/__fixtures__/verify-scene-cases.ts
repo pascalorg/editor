@@ -24,7 +24,7 @@ import type { AgentToolCase, SceneGraph } from './cases'
  */
 
 type Pt = [number, number]
-const ROOM: Pt[] = [
+export const ROOM: Pt[] = [
   [0, 0],
   [4, 0],
   [4, 3],
@@ -32,7 +32,7 @@ const ROOM: Pt[] = [
 ]
 
 /** Links parents' children and returns the graph, buildings as roots. */
-function scene(...nodes: AnyNode[]): SceneGraph {
+export function scene(...nodes: AnyNode[]): SceneGraph {
   const byId = Object.fromEntries(nodes.map((node) => [node.id, { ...node }])) as Record<
     string,
     AnyNode & { children?: string[] }
@@ -48,8 +48,8 @@ function scene(...nodes: AnyNode[]): SceneGraph {
   }
 }
 
-const building = (id = 'building_main') => BuildingNode.parse({ id })
-const level = (id: string, index: number, extra: Record<string, unknown> = {}) =>
+export const building = (id = 'building_main') => BuildingNode.parse({ id })
+export const level = (id: string, index: number, extra: Record<string, unknown> = {}) =>
   LevelNode.parse({
     id,
     parentId: 'building_main',
@@ -60,7 +60,7 @@ const level = (id: string, index: number, extra: Record<string, unknown> = {}) =
   })
 
 /** A finished room on a level: four closed walls, a centred door, its zone, slab and ceiling. */
-function room(levelId: string, tag: string): AnyNode[] {
+export function room(levelId: string, tag: string): AnyNode[] {
   const [wall, ...walls] = ROOM.map((start, i) =>
     WallNode.parse({
       id: i === 0 ? `wall_${tag}` : `wall_${tag}_${i}`,
@@ -80,7 +80,7 @@ function room(levelId: string, tag: string): AnyNode[] {
     wall!,
     ...walls,
     door,
-    ZoneNode.parse({ id: `zone_${tag}`, parentId: levelId, name: 'Room', polygon: ROOM }),
+    ZoneNode.parse({ id: `zone_${tag}`, parentId: levelId, name: 'Living', polygon: ROOM }),
     SlabNode.parse({ id: `slab_${tag}`, parentId: levelId, polygon: ROOM }),
     CeilingNode.parse({ id: `ceiling_${tag}`, parentId: levelId, polygon: ROOM }),
   ]
@@ -104,7 +104,7 @@ const STAIR_HOLE: [number, number][] = [
   [1.5, 2.2],
 ]
 
-const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
+export const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
   const flight = StairSegmentNode.parse({
     id: `sseg_${levelId}`,
     parentId: `stair_${levelId}`,
