@@ -86,10 +86,10 @@ export interface SceneOperations {
    */
   readonly planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan
   /**
-   * The schema the active bridge checks a stored node by, when it is not core's: a host that
-   * validates its plugins' nodes at its own write boundary lends it (verify_scene reads it).
+   * The schema the active bridge checks a stored node of a kind by, for each kind it checks: a host
+   * that validates its plugins' nodes at its own write boundary lends it (verify_scene reads it).
    */
-  readonly nodeSchema?: () => ZodType | undefined
+  readonly nodeSchema?: (kind: string) => ZodType | undefined
   deriveStructure(levelIds?: AnyNodeId[]): { createdIds: AnyNodeId[]; deletedIds: AnyNodeId[] }
   undo(steps?: number): number
   redo(steps?: number): number
@@ -119,7 +119,7 @@ class SceneOperationsFacade implements SceneOperations {
   readonly #store?: SceneStore
 
   readonly planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan
-  readonly nodeSchema?: () => ZodType | undefined
+  readonly nodeSchema?: (kind: string) => ZodType | undefined
 
   constructor(options: CreateSceneOperationsOptions) {
     this.#bridge = options.bridge
@@ -127,13 +127,14 @@ class SceneOperationsFacade implements SceneOperations {
     const bridge = options.bridge as
       | {
           planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan
-          nodeSchema?: () => ZodType | undefined
+          nodeSchema?: (kind: string) => ZodType | undefined
         }
       | undefined
     if (typeof bridge?.planDeletion === 'function') {
       this.planDeletion = (scene, ids) => bridge.planDeletion!(scene, ids)
     }
-    if (typeof bridge?.nodeSchema === 'function') this.nodeSchema = () => bridge.nodeSchema!()
+    if (typeof bridge?.nodeSchema === 'function')
+      this.nodeSchema = (kind) => bridge.nodeSchema!(kind)
   }
 
   get hasBridge(): boolean {

@@ -47,6 +47,8 @@ const HALF = 0.5
 const ALONG_WALL = 0.1
 /** The step a zone's outline is sampled at to see how much of it walls run along, m. */
 const OUTLINE_STEP = 0.25
+/** A wall that bounds a room stands at least this high, m; a garden wall is lower. */
+const ROOM_WALL_HEIGHT = 2
 
 const round = (value: number) => Math.round(value * 100) / 100
 
@@ -108,15 +110,16 @@ const label = (zone: Zone) =>
   PLACEHOLDER_NAME.test(zone.name) ? zone.id : `"${zone.name}" (${zone.id})`
 
 /**
- * Every space the walls enclose wants one zone over it (any zone: a drawn one is adopted as the
- * room on load): none, or several lying in it (the reconciler's "Room N" beside a zone drawn over
- * it, a plan's rooms split by lines no wall draws), is a finding. Every room wants walls or
- * separators closing around it, and a name: a zone with `spaceRole: 'room'`, or a generic one walls
- * bound along most of its outline, which may be a room drawn before its last wall (no reconcile
- * could adopt it) or a courtyard, so what is found on it is info; a generic zone with no floor or
- * no ceiling is open-air. A terrace closes with separators, so it is enclosed; a room a person
- * declared open (`enclosureStatus: 'open'` on a room the walls never derived) needs no walls; an
- * automatic room the reconciler opened when its walls stopped closing it does.
+ * A room is a zone with `spaceRole: 'room'`, or a generic one walls of a room's height bound along
+ * most of its outline, which may be a room drawn before its last wall (no reconcile could adopt
+ * it) or a courtyard, so what is found on it is info; a zone garden walls bound, or no walls (an
+ * analysis area), is no room. Every space the walls enclose wants one zone over it (any zone: a drawn one is
+ * adopted as the room on load): none, or several rooms lying in it (the reconciler's "Room N"
+ * beside a zone drawn over it, a plan's rooms split by lines no wall draws), is a finding. Every
+ * room wants walls or separators closing around it, and a name. A terrace closes with separators,
+ * so it is enclosed; a room a person declared open (`enclosureStatus: 'open'` on a room the walls
+ * never derived) needs no walls; an automatic room the reconciler opened when its walls stopped
+ * closing it does.
  */
 export function roomFindings(
   nodes: SceneNodes,
@@ -135,13 +138,18 @@ export function roomFindings(
   const { spaces } = detectSpacesForLevel(levelId, boundaries)
   const spaceShapes = spaces.map((space) => shapeOf(space.polygon, space.holes))
   const zoneShapes = zones.map((zone) => shapeOf(zone.polygon, zone.holes))
+  // A wall with no height of its own stands as high as its storey.
+  const roomWalls = walls.filter((wall) => (wall.height ?? ROOM_WALL_HEIGHT) >= ROOM_WALL_HEIGHT)
+  const rooms = zones.map((zone) => zone.spaceRole === 'room' || walled(zone, roomWalls) >= HALF)
   const issues: RoomFinding[] = []
 
   spaces.forEach((space, index) => {
     const shape = spaceShapes[index]!
-    // A mezzanine stands over its room, it does not split the space.
+    // A mezzanine stands over its room, and a zone no room (an analysis area) lies in it: neither
+    // splits the space.
     const inside = zones.filter(
-      (zone, z) => zone.floor?.support !== 'open' && covered(zoneShapes[z]!, [shape]) >= HALF,
+      (zone, z) =>
+        rooms[z] && zone.floor?.support !== 'open' && covered(zoneShapes[z]!, [shape]) >= HALF,
     )
     const noRoom = covered(shape, zoneShapes) < HALF
     if (!noRoom && inside.length < 2) return
@@ -167,9 +175,8 @@ export function roomFindings(
   })
 
   zones.forEach((zone, index) => {
+    if (!rooms[index]) return
     const room = zone.spaceRole === 'room'
-    const openAir = zone.hasFloor === false || zone.hasCeiling === false
-    if (!room && (openAir || walled(zone, walls) < HALF)) return
     const unnamed = PLACEHOLDER_NAME.test(zone.name)
     const declaredOpen = zone.enclosureStatus === 'open' && !zone.autoFromWalls
     const opened = zone.enclosureStatus === 'open' && zone.autoFromWalls

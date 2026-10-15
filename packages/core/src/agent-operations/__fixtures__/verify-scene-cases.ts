@@ -104,7 +104,7 @@ const STAIR_HOLE: [number, number][] = [
   [1.5, 2.2],
 ]
 
-const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
+export const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
   const flight = StairSegmentNode.parse({
     id: `sseg_${levelId}`,
     parentId: `stair_${levelId}`,

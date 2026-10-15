@@ -244,11 +244,24 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
 const UNKNOWN_KIND_IDS = 5
 
 /**
- * Every node checked by its schema: the host's where it lends one, else its registered kind's,
- * else core's. The checks that measure read each node as its schema reads it, defaults filled. A
- * node its schema rejects is listed field by field and left `unread`: they could not read it. A
- * node of a kind no schema here knows (a plugin's, where the plugin is not loaded) is counted by
- * kind and kept as stored: the checks never read it.
+ * A stored node with the fields its schema defaults filled where it lacks them (a level stored with
+ * no `children`), else the node itself: a host reads its own state by identity (the editor's
+ * rendered-mesh evidence checks the node is the store's current one).
+ */
+function withDefaults(node: AnyNode, parsed: unknown): AnyNode {
+  const stored = node as Record<string, unknown>
+  const filled = Object.entries(parsed as Record<string, unknown>).filter(
+    ([key, value]) => stored[key] === undefined && value !== undefined,
+  )
+  return filled.length === 0 ? node : ({ ...node, ...Object.fromEntries(filled) } as AnyNode)
+}
+
+/**
+ * Every node checked by its kind's schema: the host's where it lends one, else the registered
+ * kind's, else core's. The checks that measure read each node with its defaults filled. A node its schema
+ * rejects is listed field by field and left `unread`: they could not read it. A node of a kind no
+ * schema here knows (a plugin's, where the plugin is not loaded) is counted by kind and kept as
+ * stored: the checks never read it.
  */
 function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema']) {
   const errors: { nodeId: string; path: string; message: string }[] = []
@@ -258,10 +271,9 @@ function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema'])
   for (const [id, node] of Object.entries(scene)) {
     const type = (node as { type?: unknown } | null)?.type
     const schema =
-      hostSchema ??
-      (typeof type === 'string'
-        ? (nodeRegistry.get(type)?.schema ?? nodeSchemaForKind(type))
-        : AnyNodeSchema)
+      typeof type === 'string' && type !== ''
+        ? (hostSchema?.(type) ?? nodeRegistry.get(type)?.schema ?? nodeSchemaForKind(type))
+        : AnyNodeSchema
     if (!schema) {
       unknownKinds.set(String(type), [...(unknownKinds.get(String(type)) ?? []), id])
       measured[id] = node
@@ -269,7 +281,7 @@ function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema'])
     }
     const parsed = schema.safeParse(node)
     if (parsed.success) {
-      measured[id] = { ...node, ...(parsed.data as object) } as AnyNode
+      measured[id] = withDefaults(node, parsed.data)
       continue
     }
     for (const issue of parsed.error.issues)
@@ -296,12 +308,23 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   const ofType = <T extends AnyNode['type']>(content: readonly AnyNode[], type: T) =>
     content.filter((node): node is Extract<AnyNode, { type: T }> => node.type === type)
   // A level holding a node its schema rejects is measured once that node is fixed: around it, a
-  // room would read open for the wall left out, a door off its wall, the level with no door.
+  // room would read open for the wall left out, a door off its wall, a sofa far from any wall. So
+  // are its building's stairs, which a level, a slab or a stair left out would change.
   const unreadOn = new Map<string, string[]>()
+  const holdingUnread = new Set<string>()
   for (const id of unread) {
     const levelId = levelIdOf(scene, id)
     if (levelId) unreadOn.set(levelId, [...(unreadOn.get(levelId) ?? []), id])
+    for (let at = scene[id]?.parentId; at && !holdingUnread.has(at); at = scene[at]?.parentId)
+      holdingUnread.add(at)
   }
+  // What the checks across levels read: the scene without the levels that wait.
+  const settled =
+    unreadOn.size === 0
+      ? nodes
+      : Object.fromEntries(
+          Object.entries(nodes).filter(([id]) => !unreadOn.has(levelIdOf(scene, id) ?? '')),
+        )
 
   // A roof level holds the roof, no rooms.
   const rooms = new Map<string, RoomFinding[]>()
@@ -451,16 +474,17 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   // Porch or deck steps, a flight to no level, stand on a storey without connecting it to another.
   for (const [buildingId, storeys] of storeysByBuilding) {
     if (storeys.length < 2) continue
-    const own = levels.filter((level) => {
-      const node = nodes[level.levelId] as AnyNode & { type: 'level' }
-      return (levelBuildingId(nodes as Record<AnyNodeId, AnyNode>, node) ?? '') === buildingId
-    })
-    if (own.some((level) => level.unread)) continue
-    const connected = own.some((level) =>
-      ofType(onLevel(level.levelId), 'stair').some((stair) =>
-        stairReachesStoreyAbove(stair, nodes as Record<string, AnyNode>),
-      ),
-    )
+    if (holdingUnread.has(buildingId)) continue
+    const connected = levels
+      .filter((level) => {
+        const node = nodes[level.levelId] as AnyNode & { type: 'level' }
+        return (levelBuildingId(nodes as Record<AnyNodeId, AnyNode>, node) ?? '') === buildingId
+      })
+      .some((level) =>
+        ofType(onLevel(level.levelId), 'stair').some((stair) =>
+          stairReachesStoreyAbove(stair, nodes as Record<string, AnyNode>),
+        ),
+      )
     if (!connected)
       report(
         'missing_stair',
@@ -484,9 +508,8 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     }
   }
 
-  for (const node of Object.values(nodes)) {
+  for (const node of Object.values(settled)) {
     if (node.type !== 'door' && node.type !== 'window') continue
-    if (node.parentId && unread.has(node.parentId)) continue
     const parent = node.parentId ? nodes[node.parentId] : undefined
     if (parent?.type !== 'wall') {
       report('opening_not_on_wall', `${node.type} ${node.id} is not parented to a wall`)
@@ -509,12 +532,11 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       )
   }
 
-  const unreadLevel = (levelId: string | null) => levelId !== null && unreadOn.has(levelId)
-  for (const stair of Object.values(nodes).filter(
+  for (const stair of Object.values(settled).filter(
     (node): node is StairNode => node.type === 'stair',
   )) {
     const sourceLevelId = levelIdOf(nodes, stair.id)
-    if (unreadLevel(sourceLevelId)) continue
+    if (sourceLevelId && holdingUnread.has(buildingOf(sourceLevelId) ?? '')) continue
     const stairName = stair.name ?? stair.id
     for (const diagnostic of measureStair(stair, nodes as Record<string, AnyNode>).diagnostics)
       report(
@@ -559,7 +581,6 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
         `Stair ${stairName} requests a slab opening but has no target level`,
       )
     for (const targetLevelId of targetLevelIds) {
-      if (unreadLevel(targetLevelId)) continue
       const targetName = nodes[targetLevelId]?.name ?? targetLevelId
       const targetSlabs = ofType(onLevel(targetLevelId), 'slab')
       if (targetSlabs.length === 0) {
@@ -658,11 +679,11 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       })
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
-  issues.push(...layoutIssuesFromScene(Object.values(nodes)))
-  issues.push(...ceilingObjectObservations(nodes))
-  issues.push(...wallObjectObservations(nodes))
+  issues.push(...layoutIssuesFromScene(Object.values(settled)))
+  issues.push(...ceilingObjectObservations(settled))
+  issues.push(...wallObjectObservations(settled))
   for (const check of checks)
-    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
+    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}))
   // What the edits since the host's checkpoint lost, by place.
   const hosted = context.checkpoint
     ? changesSince(context.checkpoint as SceneCheckpoint, scene)
@@ -674,7 +695,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   const since = typeof input?.since === 'string' ? reviewSince(session, input.since, scene) : null
   if (since?.places) issues.push(...since.places.issues)
   for (const check of checks)
-    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
+    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
   return {

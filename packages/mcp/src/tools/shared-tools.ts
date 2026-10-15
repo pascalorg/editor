@@ -547,13 +547,12 @@ export function registerOperationTool(
             'tool' in call &&
             call.tool === placeInRoomTool.name,
         )
-      const nodeSchema = bridge.nodeSchema?.()
       const context: AgentContext = {
         activeLevelId: null,
         ...(bridge.supportsMaterialUpserts && bridge.getMaterials
           ? { materials: bridge.getMaterials() }
           : {}),
-        ...(nodeSchema && { nodeSchema }),
+        ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
         ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
       }

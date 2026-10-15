@@ -2,12 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import {
-  AnyNode,
-  BuildingNode,
-  LevelNode,
-  type AnyNode as SceneNode,
-} from '@pascal-app/core/schema'
+import { BuildingNode, LevelNode, type AnyNode as SceneNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations } from '../operations'
@@ -25,8 +20,8 @@ const Gadget = z.object({
 })
 
 class PluginHostBridge extends SceneBridge {
-  nodeSchema() {
-    return z.union([AnyNode, Gadget])
+  nodeSchema(kind: string) {
+    return kind === Gadget.shape.type.value ? Gadget : undefined
   }
 }
 

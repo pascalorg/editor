@@ -2,14 +2,17 @@ import {
   type AnyNode,
   CeilingNode,
   DoorNode,
+  ItemNode,
   SeparatorNode,
   SiteNode,
   SlabNode,
+  StairNode,
+  StairSegmentNode,
   WallNode,
   ZoneNode,
 } from '../../schema'
 import type { AgentToolCase, SceneGraph } from './cases'
-import { building, level, ROOM, room, scene } from './verify-scene-cases'
+import { building, level, ROOM, room, scene, stairOn } from './verify-scene-cases'
 
 /**
  * One scene check (slice K of the tool catalogue): `verify_scene` covers every case the MCP's
@@ -215,6 +218,15 @@ export const VALIDATE_SCENE_CASES: AgentToolCase[] = [
     },
   ),
   verify(
+    'validate_scene {} with a node whose type is empty (its type rejected): schema_invalid on it, no kind of that name',
+    () => withNodes(pluginNode('wall_garbage', '')),
+    {
+      result: { valid: false },
+      contains: [{ type: 'schema_invalid', nodeId: 'wall_garbage' }],
+      lacks: [{ type: 'schema_unknown_kind' }],
+    },
+  ),
+  verify(
     "validate_scene {} with malformed geometry (a zone's polygon, a wall's start null): every error, the other checks reading around those nodes",
     () => {
       const graph = withNodes(badZone('zone_bad', { polygon: null }))
@@ -273,6 +285,97 @@ export const VALIDATE_SCENE_CASES: AgentToolCase[] = [
         { type: 'walls_no_doors' },
         { type: 'wall_open_end' },
       ],
+    },
+  ),
+  verify(
+    "validate_scene {} with the wall a fridge stands against rejected by its schema (the error alone): no item_mid_room read around it",
+    () => {
+      const graph = withNodes(
+        ItemNode.parse({
+          id: 'item_fridge',
+          parentId: 'level_0',
+          position: [3.6, 0, 1.5],
+          asset: {
+            id: 'fridge',
+            name: 'fridge',
+            category: 'furniture',
+            thumbnail: '/items/fridge/thumbnail.webp',
+            src: '/items/fridge/model.glb',
+            dimensions: [0.7, 1.8, 0.72],
+          },
+        }),
+      )
+      graph.nodes.wall_ground_1 = { ...(graph.nodes.wall_ground_1 as object), thickness: 'thick' }
+      return graph
+    },
+    {
+      result: { valid: false, levels: [{ levelId: 'level_0', unread: ['wall_ground_1'] }] },
+      lacks: [{ type: 'item_mid_room' }],
+    },
+  ),
+  verify(
+    "validate_scene {} with the slab a stair arrives on rejected by its schema (the error alone): no stair finding read around it",
+    () => {
+      const graph = scene(
+        building(),
+        level('level_0', 0),
+        level('level_1', 1),
+        StairNode.parse({
+          id: 'stair_main',
+          parentId: 'level_0',
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          position: [2, 0, 0],
+          slabOpeningMode: 'destination',
+        }),
+        StairSegmentNode.parse({
+          id: 'sseg_main',
+          parentId: 'stair_main',
+          height: 3.8,
+          length: 5,
+          stepCount: 20,
+        }),
+        SlabNode.parse({
+          id: 'slab_upper',
+          parentId: 'level_1',
+          polygon: rect(-2, -2, 8, 8),
+          plateRole: 'base',
+          elevation: 1,
+        }),
+      )
+      graph.nodes.slab_upper = { ...(graph.nodes.slab_upper as object), thickness: 'thick' }
+      return graph
+    },
+    {
+      result: { valid: false },
+      check: (result) => {
+        const stairs = (result.issues as { type: string }[]).filter((issue) =>
+          issue.type.startsWith('stair_'),
+        )
+        return stairs.length === 0 ? [] : [`stair findings ${stairs.map((issue) => issue.type)}`]
+      },
+    },
+  ),
+  verify(
+    'validate_scene {} with a storey its schema rejects, the one stair on it (the error alone): schema_invalid on the level, no missing_stair read around it',
+    () => {
+      const graph = scene(
+        building(),
+        level('level_0', 0),
+        level('level_1', 1),
+        level('level_2', 2),
+        ...room('level_0', 'ground'),
+        ...room('level_1', 'first'),
+        ...room('level_2', 'second'),
+        ...stairOn('level_0'),
+      )
+      graph.nodes.level_0 = { ...(graph.nodes.level_0 as object), height: 'tall' }
+      return graph
+    },
+    {
+      result: { valid: false },
+      contains: [{ type: 'schema_invalid', nodeId: 'level_0', path: 'height' }],
+      lacks: [{ type: 'missing_stair' }],
     },
   ),
 ]
@@ -345,6 +448,28 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
           : [`space_many_rooms over ${ids.join(', ')}: the room and its twin`]
       },
     },
+  ),
+  verify(
+    'zones no room inside a room (areas no walls bound, an open-air study) do not split the space',
+    () =>
+      ground(
+        ...living(),
+        ZoneNode.parse({
+          id: 'zone_daylight',
+          parentId: 'level_0',
+          name: 'Daylight study',
+          polygon: rect(1, 1, 3, 2),
+          hasFloor: false,
+          hasCeiling: false,
+        }),
+        ZoneNode.parse({
+          id: 'zone_reading',
+          parentId: 'level_0',
+          name: 'Reading area',
+          polygon: rect(1, 1.2, 2, 2.2),
+        }),
+      ),
+    { lacks: [{ type: 'space_many_rooms' }] },
   ),
   verify(
     'a mezzanine over its room does not split the space',
@@ -548,7 +673,7 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
     },
   ),
   verify(
-    'an open-air courtyard behind garden walls, no floor and no ceiling, is no room',
+    'a courtyard behind 0.6 m garden walls is no room',
     () => {
       const court = rect(6, 0, 10, 3)
       return ground(
@@ -567,8 +692,6 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
           parentId: 'level_0',
           name: 'Courtyard',
           polygon: court,
-          hasFloor: false,
-          hasCeiling: false,
         }),
       )
     },
