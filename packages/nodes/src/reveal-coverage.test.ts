@@ -10,7 +10,6 @@ const DRAWS_NOTHING_OF_ITS_OWN = new Set([
   'site',
   'building',
   'level',
-  'facade',
   'unit',
   'floor-opening',
   'structural-grid',

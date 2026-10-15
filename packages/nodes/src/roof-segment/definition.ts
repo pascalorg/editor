@@ -343,7 +343,6 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
       'overhang',
       'wallThickness',
       'deckThickness',
-      'sweptProfile',
     ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
