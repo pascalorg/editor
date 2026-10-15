@@ -30,6 +30,7 @@ import {
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
   temporarilyVeilGround,
+  temporarilyWithoutAmbiance,
   useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
@@ -900,6 +901,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             // the scene as the picture wants it, for one render; `restore` puts
             // every change back right after it
             const setUp = (restore: (callback: () => void) => void) => {
+              // A picture is read for its rooms, taken in the world's own light: the earth the
+              // person's view turns to under the ground (sky, fog, vignette, the sky's lights)
+              // is not in it.
+              restore(temporarilyWithoutAmbiance())
               if (snapLevels) {
                 const prevMode = useViewer.getState().levelMode
                 if (prevMode !== 'stacked') {

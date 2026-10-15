@@ -267,6 +267,18 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
+export {
+  AMBIANCE_SECONDS,
+  ambianceNow,
+  ambianceTarget,
+  easeAmbiance,
+  eyeUnderTheGround,
+  SOIL_VEIL,
+  SOIL_VEIL_OPACITY,
+  stepAmbianceProgress,
+  temporarilyWithoutAmbiance,
+  undergroundAmbianceNode,
+} from './lib/underground-ambiance'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
@@ -315,6 +327,7 @@ export {
   retractNodes,
   revealChangedNodeIds,
   revealClockMs,
+  revealMotionOff,
   seatLiftedNow,
   setRevealPreroll,
   startConstructionReveal,

@@ -10,7 +10,14 @@ import {
   SlabNode,
   useScene,
 } from '@pascal-app/core'
-import { SCENE_LAYER, SITE_GROUND, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
+import {
+  SCENE_LAYER,
+  SITE_GROUND,
+  SOIL_VEIL_OPACITY,
+  setSurfaceRaycastLayers,
+  undergroundAmbianceNode,
+  useViewer,
+} from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { Box3, DoubleSide, type Line, type Mesh, type Object3D, Raycaster, Vector3 } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
@@ -107,6 +114,36 @@ test("the veil is faint, unlit, seen from both sides, and leaves the scene's dep
       expect(material.opacity).toBeLessThanOrEqual(0.1)
       expect(veil.castShadow || veil.receiveShadow).toBe(false)
     }
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('under the ground’s ambiance the veil takes the earth’s tone and thickens, with no rebuild', async () => {
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    const ambiance = undergroundAmbianceNode()
+    const dependsOnAmbiance = (node: unknown) => {
+      let found = false
+      ;(node as { traverse: (visit: (child: unknown) => void) => void }).traverse((child) => {
+        if (child === ambiance) found = true
+      })
+      return found
+    }
+    const veils = ground(renderer.scene.instance as Object3D, 'veil')
+    expect(veils.length).toBeGreaterThan(0)
+    for (const veil of veils) {
+      const material = veil.material as MeshBasicNodeMaterial
+      // Colour and opacity both follow the one shared factor, as a uniform: the veil is not
+      // rebuilt as the crossing eases.
+      expect(dependsOnAmbiance(material.colorNode)).toBe(true)
+      expect(dependsOnAmbiance(material.opacityNode)).toBe(true)
+      // Follow's sight reads the plain field, which stays at the plain faintness.
+      expect(material.opacity).toBeLessThanOrEqual(0.1)
+    }
+    // Thicker under the ground, but still a veil: the floor under it is read through it.
+    expect(SOIL_VEIL_OPACITY).toBeGreaterThan(0.1)
+    expect(SOIL_VEIL_OPACITY).toBeLessThanOrEqual(0.2)
   } finally {
     await renderer.unmount()
   }

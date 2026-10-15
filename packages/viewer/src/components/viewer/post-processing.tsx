@@ -19,6 +19,7 @@ import {
   screenUV,
   smoothstep,
   time,
+  color as tslColor,
   float as tslFloat,
   uniform,
   vec3,
@@ -39,6 +40,16 @@ import { PostProcessingResources } from '../../lib/post-processing-resources'
 import { scenePassMrt } from '../../lib/scene-pass-mrt'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
+import {
+  ambianceNow,
+  SOIL_DEEP,
+  SOIL_HORIZON,
+  undergroundAmbianceNode,
+  undergroundBackdrop,
+  undergroundFogAmount,
+  undergroundVignette,
+  worldPositionFromDepth,
+} from '../../lib/underground-ambiance'
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
@@ -206,8 +217,16 @@ const PostProcessingPasses = ({
   const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const resourcesRef = useRef<PostProcessingResources | null>(null)
   const atmosphere = useSceneAtmosphere()
+  // Under the ground the sky is the earth: the same mix the pipeline's backdrop makes.
   const directSkyNode = useMemo(
-    () => (atmosphere ? atmosphere.skyRadiance(normalWorldGeometry) : null),
+    () =>
+      atmosphere
+        ? mix(
+            atmosphere.skyRadiance(normalWorldGeometry),
+            undergroundBackdrop(normalWorldGeometry.y),
+            undergroundAmbianceNode(),
+          )
+        : null,
     [atmosphere],
   )
   const hasPipelineErrorRef = useRef(false)
@@ -241,6 +260,9 @@ const PostProcessingPasses = ({
   // view ray from these to find the true horizon (dir.y = 0).
   const camProjInvUniform = useRef(uniform(new Matrix4()))
   const camWorldUniform = useRef(uniform(new Matrix4()))
+  // The clear colour of the no-pipeline fallback under the ground (scratch, and the earth's tone).
+  const fallbackClear = useRef(new Color())
+  const fallbackEarth = useRef(new Color(SOIL_HORIZON))
 
   // Ink-line colour follows the scene-theme background luminance (dark lines on
   // light scenes, light on dark), refreshed each frame like the background.
@@ -641,8 +663,25 @@ const PostProcessingPasses = ({
       if (shading === 'rendered') {
         bgGradient = gradeRgb(bgGradient)
       }
-      const sceneComposite = compositeWithOutlines.rgb
-      const composited = mix(bgGradient, sceneComposite, contentAlpha)
+      let sceneComposite = compositeWithOutlines.rgb
+      if (!transparentBackground) {
+        // Underground: the sky is the earth, and what stands far from the shown level dissolves
+        // into it (distance from the level's box, from the scene pass's own depth), with the
+        // fog and the backdrop meeting in one colour per pixel. Both are zero above ground.
+        const earth = undergroundBackdrop(worldDir.y)
+        bgGradient = mix(bgGradient, earth, undergroundAmbianceNode())
+        const worldPosition = worldPositionFromDepth(
+          scenePassDepth.sample(screenUV).r,
+          camProjInvUniform.current,
+          camWorldUniform.current,
+        )
+        sceneComposite = mix(sceneComposite, earth, undergroundFogAmount(worldPosition))
+      }
+      let composited = mix(bgGradient, sceneComposite, contentAlpha)
+      // The screen's edges close in, under the ground only.
+      if (!transparentBackground) {
+        composited = mix(composited, tslColor(SOIL_DEEP), undergroundVignette())
+      }
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
@@ -771,8 +810,13 @@ const PostProcessingPasses = ({
       if (directSkyNode && !transparentBackground) scene.backgroundNode = directSkyNode
       try {
         const clearAlpha = transparentBackground ? 0 : 1
+        // Without the pipeline there is no fog and no vignette: the clear colour is the earth's.
+        const underground = transparentBackground ? 0 : ambianceNow()
+        const clearColor =
+          underground > 0 ? fallbackClear.current.copy(bgCurrent.current) : bgCurrent.current
+        if (underground > 0) clearColor.lerp(fallbackEarth.current, underground)
         if ((renderer as any).setClearColor) {
-          ;(renderer as any).setClearColor(bgCurrent.current, clearAlpha)
+          ;(renderer as any).setClearColor(clearColor, clearAlpha)
         } else if ((renderer as any).setClearAlpha) {
           ;(renderer as any).setClearAlpha(clearAlpha)
         }

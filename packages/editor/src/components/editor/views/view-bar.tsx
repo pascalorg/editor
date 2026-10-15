@@ -133,8 +133,9 @@ const GROUND_MODES = [
 ] as const satisfies ReadonlyArray<{ mode: GroundMode; label: string; title: string }>
 
 /**
- * Over a level below grade the ground is veiled so its rooms show, and the bar says so: the
- * person can keep the ground solid instead (Ground: Auto / Solid). The same word covers the
+ * Over a level below grade the ground is veiled so its rooms show: the scene says it (the world
+ * turns to earth around the level), so the bar only names where the person is, and says more
+ * when the ground is kept solid instead (Ground: Auto / Solid). The same word covers the
  * ground window — a hillside in the eye's way, veiled only where it hides the house — over
  * a level at grade or only partly below it.
  */
@@ -148,15 +149,20 @@ export function GroundModeToggle() {
     groundMode === 'auto' &&
     ((belowGrade && gradeStanding !== 'partly-below-grade') || groundWindowVeiled)
   const ground = veiled ? 'veiled' : 'solid'
-  const label =
+  const full =
     gradeStanding === 'partly-below-grade'
       ? `Partly below grade · ground ${ground}`
       : gradeStanding === 'below-grade'
         ? `Below grade · ground ${ground}`
         : `Ground ${ground}`
+  // Once the scene says it (the world turns to earth around a level below grade) the label
+  // keeps to where the person is; it says more when the ground is kept solid.
+  const label = gradeStanding === 'below-grade' && veiled ? 'Below grade' : full
   return (
     <div aria-label="Ground" className={GROUP} role="group">
-      <span className="flex items-center px-2.5 text-muted-foreground text-xs">{label}</span>
+      <span className="flex items-center px-2.5 text-muted-foreground text-xs" title={full}>
+        {label}
+      </span>
       {GROUND_MODES.map(({ mode, label, title }) => (
         <button
           aria-pressed={groundMode === mode}

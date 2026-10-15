@@ -1,6 +1,6 @@
 import { sceneRegistry } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type {
   AmbientLight,
   DirectionalLight,
@@ -11,8 +11,10 @@ import * as THREE from 'three/webgpu'
 import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { ambianceNow, registerSkyLights } from '../../lib/underground-ambiance'
 import useViewer, { groundVeiled } from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
+import { UndergroundAmbiance } from './underground-ambiance'
 
 // Diagnostic toggle: `?disable=shadows` skips the shadow-map render pass
 // (which doubles draw calls for every shadow-casting mesh) so you can
@@ -78,6 +80,7 @@ const SHADOW_FALLBACK_RADIUS = 30
 
 // Over a veiled ground the floor below grade still lies in the shadow of the storeys above and has
 // no sky: a fill from the eye keeps it from reading as a cave. Modest, so the sun still reads.
+// It comes up with the underground ambiance, which brings the sky's own light down.
 const UNDERGROUND_FILL_INTENSITY = 1
 
 /**
@@ -90,6 +93,7 @@ function UndergroundFill() {
   useFrame(({ camera }) => {
     const fill = light.current
     if (!fill) return
+    fill.intensity = UNDERGROUND_FILL_INTENSITY * ambianceNow()
     camera.getWorldPosition(fill.position)
     fill.target.position.copy(fill.position).add(camera.getWorldDirection(look))
     fill.target.updateMatrixWorld()
@@ -102,6 +106,8 @@ export function Lights() {
   const theme = getSceneTheme(sceneTheme)
   const shadows = useViewer((state) => state.shadows)
   const veiled = useViewer(groundVeiled)
+  // The fill stays while the ambiance eases out, so it fades with the rest rather than cutting.
+  const filled = useViewer((state) => groundVeiled(state) || state.ambianceActive)
   const atmosphere = useSceneAtmosphere()
   const lightSlots = useMemo(
     () => Array.from({ length: atmosphere ? 2 : theme.lights.length }, (_, index) => index),
@@ -124,6 +130,12 @@ export function Lights() {
 
   const hemiRef = useRef<HemisphereLight>(null)
   const ambientRef = useRef<AmbientLight>(null)
+
+  // The underground ambiance brings the sky's own light down for the frame it draws.
+  useEffect(
+    () => registerSkyLights(() => ({ ambient: ambientRef.current, hemisphere: hemiRef.current })),
+    [],
+  )
 
   const initialized = useRef(false)
   const lightTargets = useRef<THREE.Color[]>([])
@@ -361,7 +373,8 @@ export function Lights() {
 
       {atmosphere || theme.hemi ? <hemisphereLight ref={hemiRef} /> : null}
       <ambientLight ref={ambientRef} />
-      {veiled && <UndergroundFill />}
+      {filled && <UndergroundFill />}
+      <UndergroundAmbiance />
     </>
   )
 }

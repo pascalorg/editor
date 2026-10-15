@@ -157,6 +157,17 @@ type ViewerState = {
   /** The person's choice for the ground over a level below grade. Not persisted. */
   groundMode: GroundMode
   setGroundMode: (mode: GroundMode) => void
+  /**
+   * The eye lies under the ground at its own position (a free orbit under the lid). Set by the
+   * viewer's underground ambiance from the camera; never persisted.
+   */
+  eyeUnderGround: boolean
+  /**
+   * The world is turned, or turning, to earth (the underground ambiance's factor is above 0).
+   * Its factor itself eases every frame and lives with the shaders, not here; this flips only at
+   * the crossing's ends. Set by the viewer's underground ambiance; never persisted.
+   */
+  ambianceActive: boolean
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -494,6 +505,8 @@ const useViewer = create<ViewerState>()(
       groundWindowVeiled: false,
       groundMode: 'auto',
       setGroundMode: (mode) => set({ groundMode: mode }),
+      eyeUnderGround: false,
+      ambianceActive: false,
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),

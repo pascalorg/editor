@@ -385,6 +385,7 @@ export {
   type YardDimension,
   type YardSide,
 } from './lib/setback-envelope'
+export { FLAT_GROUND_Y, groundHeightAt } from './lib/site-ground-height'
 export {
   type BuildableArea,
   type BuildingPlacement,

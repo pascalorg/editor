@@ -6,12 +6,26 @@ import {
   hideFromScene,
   inGroundWindowNode,
   SITE_GROUND,
+  SOIL_VEIL,
+  SOIL_VEIL_OPACITY,
   showInScene,
+  undergroundAmbianceNode,
   useViewer,
 } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { type BufferGeometry, DoubleSide, type Material, type Object3D } from 'three'
-import { color, float, mrt, output, positionWorld, select, smoothstep, vec2, vec4 } from 'three/tsl'
+import {
+  color,
+  float,
+  mix,
+  mrt,
+  output,
+  positionWorld,
+  select,
+  smoothstep,
+  vec2,
+  vec4,
+} from 'three/tsl'
 import { MeshBasicNodeMaterial, type Node } from 'three/webgpu'
 import { buildPatternedRibbon } from './line-ribbon'
 import { insideLotNode } from './lot-mask'
@@ -48,22 +62,26 @@ export function useGroundAsideRef() {
 /**
  * Unlit and seen from both sides (an eye under grade sees it overhead), drawn over what lies under
  * it without hiding it: no depth, and nothing written to the scene pass's normals and diffuse
- * colour, or the screen-space ink would outline the whole sheet.
+ * colour, or the screen-space ink would outline the whole sheet. `coverage` (0 to 1) is how much
+ * of the ground this sheet draws; under the ground's ambiance the sheet turns to earth: its tone
+ * goes to the soil's and it thickens a little, so the lid reads as what the earth is.
  */
-function veilMaterial(groundColor: string, opacity: Node<'float'>) {
+function veilMaterial(groundColor: string, coverage: Node<'float'>) {
+  const ambiance = undergroundAmbianceNode()
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
     side: DoubleSide,
   })
-  material.colorNode = color(groundColor)
+  material.colorNode = mix(color(groundColor), color(SOIL_VEIL), ambiance)
+  const opacity = mix(float(VEIL_OPACITY), float(SOIL_VEIL_OPACITY), ambiance)
   // Wholesale, the veil is the whole ground at `opacity`. While the ground window is open
   // (the hillside in the way, not a floor under it), only the ground in the window veils —
   // at the same faintness — and the rest of this sheet draws nothing over the solid ground.
   material.opacityNode = select(
     groundWindowEnabledNode(),
-    select(inGroundWindowNode(), float(VEIL_OPACITY), float(0)),
-    opacity,
+    select(inGroundWindowNode(), opacity, float(0)),
+    coverage.mul(opacity),
   )
   // The plain field too: Follow's sight reads it, not the node, to tell what it sees through.
   material.opacity = VEIL_OPACITY
@@ -73,7 +91,7 @@ function veilMaterial(groundColor: string, opacity: Node<'float'>) {
 
 /** The veil of the lot's own ground: its fill, or its sculpted terrain. */
 export function groundVeilMaterial(groundColor: string) {
-  return veilMaterial(groundColor, float(VEIL_OPACITY))
+  return veilMaterial(groundColor, float(1))
 }
 
 /**
@@ -89,7 +107,7 @@ export function horizonVeilMaterial(
   const distance = positionWorld.xz.sub(vec2(bounds.cx, bounds.cz)).length()
   const fade = float(1).sub(smoothstep(float(bounds.radius), float(bounds.radius * 2), distance))
   const outsideLot = insideLotNode(lot, positionWorld.xz).not()
-  return veilMaterial(groundColor, select(outsideLot, fade.mul(VEIL_OPACITY), float(0)))
+  return veilMaterial(groundColor, select(outsideLot, fade, float(0)))
 }
 
 /** The grade ring: dark as the lot line, a little narrower, just over the ground. */
