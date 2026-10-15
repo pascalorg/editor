@@ -10,7 +10,7 @@ import { Badge } from '../../../primitives/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../primitives/tooltip'
 
 /** Why Framing is greyed out. */
-export const FRAMING_NEEDS_BONES = 'Framing needs the Bones plugin.'
+export const FRAMING_NEEDS_ARCHITECT = 'Framing needs the Architect plugin.'
 
 const OPTIONS: { label: string; value: ConstructionRevealLevel; title: string; badge?: string }[] = [
   { label: 'Off', value: 'off', title: 'What the AI builds appears at once.' },
@@ -40,14 +40,14 @@ const OPTIONS: { label: string; value: ConstructionRevealLevel; title: string; b
 export function constructionLevelOptions(framingAvailable: boolean) {
   return OPTIONS.map((option) =>
     option.value === 'framing' && !framingAvailable
-      ? { ...option, title: FRAMING_NEEDS_BONES, disabled: true }
+      ? { ...option, title: FRAMING_NEEDS_ARCHITECT, disabled: true }
       : { ...option, disabled: false },
   )
 }
 
 /** How much of an AI build plays as a construction. */
 export function ConstructionAnimationSetting() {
-  // What plays: the person's choice, or Framing where Bones is installed and Full where it is not.
+  // What plays: the person's choice, or Framing where the framing plugin is installed and Full where it is not.
   const level = useConstructionRevealLevel()
   const setLevel = useConstructionReveal((state) => state.setLevel)
   const framingAvailable = useFramingAvailable()
