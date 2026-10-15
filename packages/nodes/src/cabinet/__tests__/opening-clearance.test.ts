@@ -1,13 +1,17 @@
 import { expect, test } from 'bun:test'
 import {
   CabinetModuleNode,
+  CabinetNode,
   ItemNode,
   LevelNode,
   nodeRegistry,
   registerNode,
+  SlabNode,
   WallNode,
 } from '@pascal-app/core'
+import { checkKitchenClearance } from '../../agent-operations'
 import { itemDefinition } from '../../item/definition'
+import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import {
   cabinetOpeningConflicts,
   cabinetOpeningFootprints,
@@ -108,6 +112,126 @@ test('opening warnings include catalog furniture with node-local footprint posit
         [chair.id]: chair,
       }),
     ).toEqual([chair.id])
+  } finally {
+    restore()
+  }
+})
+
+for (const yaw of [0, Math.PI / 2]) {
+  test(`hosted furniture clearance composes translation, yaw ${yaw}, and height`, () => {
+    const restore = nodeRegistry._snapshot()
+    try {
+      registerNode(itemDefinition)
+      const level = LevelNode.parse({})
+      const asset = {
+        id: 'fixture',
+        name: 'Fixture',
+        category: 'furniture',
+        thumbnail: '',
+        src: '/fixture.glb',
+        dimensions: [0.3, 0.8, 0.3],
+      }
+      const host = ItemNode.parse({
+        parentId: level.id,
+        position: [10, 2, 4],
+        rotation: [0, yaw, 0],
+        asset,
+      })
+      const child = ItemNode.parse({ parentId: host.id, position: [0, 0, 0.6], asset })
+      const module = CabinetModuleNode.parse({ showPlinth: false, width: 0.6, depth: 0.6 })
+      const nodes = { [level.id]: level, [host.id]: host, [child.id]: child }
+      expect(cabinetOpeningConflicts(module, [10, 2, 4], yaw, level.id, nodes)).toContain(child.id)
+      expect(cabinetOpeningConflicts(module, [0, 0, 0], 0, level.id, nodes)).not.toContain(child.id)
+      expect(cabinetOpeningConflicts(module, [10, 0, 4], yaw, level.id, nodes)).not.toContain(
+        child.id,
+      )
+    } finally {
+      restore()
+    }
+  })
+}
+
+test('registry notices and agent checks share clearance at rest, during moves, and on raised slabs', () => {
+  const restore = nodeRegistry._snapshot()
+  try {
+    registerNode(itemDefinition)
+    registerNode(cabinetDefinition)
+    registerNode(cabinetModuleDefinition)
+    const level = LevelNode.parse({})
+    const slab = SlabNode.parse({
+      parentId: level.id,
+      polygon: [
+        [8, 2],
+        [12, 2],
+        [12, 6],
+        [8, 6],
+      ],
+      elevation: 2,
+    })
+    const run = CabinetNode.parse({ parentId: level.id, position: [10, 0, 4], showPlinth: false })
+    const module = CabinetModuleNode.parse({
+      parentId: run.id,
+      position: [0, 0, 0],
+      showPlinth: false,
+      width: 0.6,
+      depth: 0.6,
+    })
+    run.children = [module.id]
+    const chair = ItemNode.parse({
+      parentId: level.id,
+      position: [10, 0, 4.6],
+      asset: {
+        id: 'chair',
+        name: 'Chair',
+        category: 'furniture',
+        thumbnail: '',
+        src: '/chair.glb',
+        dimensions: [0.3, 0.8, 0.3],
+      },
+    })
+    const nodes = Object.fromEntries(
+      [level, slab, run, module, chair].map((node) => [node.id, node]),
+    )
+    const notice = cabinetDefinition.placementNotice!(run, { nodes })
+    expect(notice?.line).toContain('Opening clearance')
+    expect(
+      checkKitchenClearance(nodes, { nodeId: run.id }, { activeLevelId: null }).result.warning,
+    ).toBe(notice?.line)
+    expect(
+      cabinetDefinition.placementNotice!(run, {
+        nodes,
+        live: { position: [0, 0, 0], rotation: 0 },
+      }),
+    ).toBeNull()
+    expect(
+      cabinetModuleDefinition.placementNotice!(module, {
+        nodes,
+        live: { position: [3, 0, 0], rotation: 0 },
+      }),
+    ).toBeNull()
+    const high = {
+      ...nodes,
+      [chair.id]: { ...chair, position: [10, 2, 4.6] as [number, number, number] },
+    }
+    expect(cabinetDefinition.placementNotice!(run, { nodes: high })).toBeNull()
+  } finally {
+    restore()
+  }
+})
+
+test('headless clearance refuses missing capabilities instead of claiming the scene is clear', () => {
+  const restore = nodeRegistry._snapshot()
+  try {
+    nodeRegistry._reset()
+    const level = LevelNode.parse({})
+    const run = CabinetNode.parse({ parentId: level.id })
+    expect(() =>
+      checkKitchenClearance(
+        { [level.id]: level, [run.id]: run },
+        { nodeId: run.id },
+        { activeLevelId: null },
+      ),
+    ).toThrow('plugin definitions')
   } finally {
     restore()
   }

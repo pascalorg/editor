@@ -81,7 +81,6 @@ import {
 import { buildCabinetGeometry } from './geometry'
 import { applyCabinetModuleInsertion, cabinetModuleForRunInsertion } from './insertion'
 import { resolveCabinetNeighborPlacement } from './neighbor-placement'
-import { cabinetOpeningConflicts } from './opening-clearance'
 import {
   buildCabinetPlacementSizeDimensions,
   resolveCabinetPlacementDimensionPosition,
@@ -128,7 +127,6 @@ type CabinetPlacement = {
   snappedToWall: boolean
   valid: boolean
   conflictIds: string[]
-  openingWarning?: boolean
   wallId?: AnyNodeId
   wallLocalX?: number
   guide?: CabinetWallSnapPlacement['guide']
@@ -574,8 +572,23 @@ const CabinetPlacementTool = () => {
         previewModule: livePreviewNode,
         yaw: next.yaw,
       })
-      let floorplanNode: AnyNode = stretch ? { ...node, width: stretch.length } : node
-      let floorplanContextNodes: AnyNode[] = []
+      const previewModules = (stretch?.modules ?? [{ x: 0, width: livePreviewNode.width }]).map(
+        (module) =>
+          CabinetModuleNode.parse({
+            ...livePreviewNode,
+            id: undefined,
+            parentId: node.id,
+            position: [module.x - (stretch?.centerLocalX ?? 0), 0, 0],
+            width: module.width,
+          }),
+      )
+      let floorplanNode: AnyNode = {
+        ...node,
+        parentId: activeLevelId,
+        children: previewModules.map((module) => module.id),
+        ...(stretch ? { width: stretch.length } : {}),
+      }
+      let floorplanContextNodes: AnyNode[] = previewModules
       if (next.insertionPreview) {
         const liveRun = useScene.getState().nodes[next.insertionPreview.runId]
         if (liveRun?.type === 'cabinet') {
@@ -883,19 +896,10 @@ const CabinetPlacementTool = () => {
               width: livePreviewNode.width,
             })
           : []
-      const openingWarning =
-        cabinetOpeningConflicts(
-          livePreviewNode,
-          next.position,
-          next.yaw,
-          activeLevelId,
-          useScene.getState().nodes,
-        ).length > 0
       const conflictIds = [...new Set([...result.conflictIds, ...openingConflictIds])]
       return {
         ...next,
         conflictIds,
-        openingWarning,
         valid: !next.insertionFailure && result.valid && openingConflictIds.length === 0,
       }
     }
@@ -1183,13 +1187,11 @@ const CabinetPlacementTool = () => {
             ? next.insertionFailure
               ? 'No space in this kitchen run'
               : 'Placement blocked: overlaps an item or wall opening'
-            : next.openingWarning
-              ? 'Opening clearance: nearby objects may block a door or drawer'
-              : next.neighborJoin
-                ? `${next.valid ? 'Join' : 'Blocked beside'} ${next.neighborJoin.name} · ${next.neighborJoin.side} side · Depth matched`
-                : next.insertionFailure
-                  ? 'No space in this kitchen run'
-                  : null,
+            : next.neighborJoin
+              ? `${next.valid ? 'Join' : 'Blocked beside'} ${next.neighborJoin.name} · ${next.neighborJoin.side} side · Depth matched`
+              : next.insertionFailure
+                ? 'No space in this kitchen run'
+                : null,
         )
       publishFloorplanPreview(next)
       const nextSnapKey = movementSfxStepKey({

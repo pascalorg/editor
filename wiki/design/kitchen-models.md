@@ -71,9 +71,15 @@ outer overhangs/end panels where they meet the wall. Both ends undo together;
 repeating the action does not add duplicate fillers. Existing scenes retain the
 `standard` module-kind default.
 
-Placement reports blocking overlaps and advisory opening-clearance conflicts in
-both views. Clearance checks use oriented front envelopes and vertical overlap
+Placement reports blocking overlaps in both views. Advisory opening-clearance
+notices use the registry hook during placement, movement, and inspection. Clearance checks use oriented front envelopes and vertical overlap
 against visible floor-placed objects and straight walls on the same level. They
 estimate operating space rather than simulating an exact hinge sweep; curved walls
 and wall openings are not resolved by this advisory check. Alt retains force-place
 behavior. Opening warnings do not prevent placement.
+
+
+Finishing actions and clearance checks also ship as the built-in plugin's
+`kitchen_finish_run` and `kitchen_check_clearance` tools. The inspector and agents
+share the same planner and hosted-item checks. See the [nodes package](../../packages/nodes/README.md#kitchen-agent-tools)
+for host registration and limitations.

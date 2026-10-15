@@ -99,3 +99,16 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 - No tool starts a room scan or clones a scan into a new project. Scans are created only by the Pascal iOS app, and `open_capture_as_project` opens the scan's existing owning project.
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.
+
+## Kitchen finishing (when offered by the host)
+
+Use `kitchen_finish_run` with a cabinet run ID and `action: "align"` to match
+base heights, backs, reveals and handles, or `action: "fill"` to close 50–150 mm
+wall gaps at exposed ends. Both use the inspector’s planner and preserve hosted
+items or refuse with `hosted_items_unsupported`; move the affected countertop
+items before retrying. Each edit is one undo step.
+
+`kitchen_check_clearance` checks a run or module and returns advisory opening
+clearance warnings. It uses the same check as placement, movement and inspection.
+The envelopes are conservative; curved walls and wall openings are not resolved.
+These are plugin tools: use them only when the host lists them.

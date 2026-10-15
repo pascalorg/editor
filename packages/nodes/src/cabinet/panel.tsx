@@ -13,6 +13,7 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  usePlacementNotice,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { AlertTriangle, Pause, Play, Plus } from 'lucide-react'
@@ -136,6 +137,7 @@ const REFLOW_REJECTED_MESSAGE =
 
 export default function CabinetPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const placementNotice = usePlacementNotice(selectedId)
   const setSelection = useViewer((s) => s.setSelection)
   const [isAnimating, setIsAnimating] = useState(false)
   const [reflowNotice, setReflowNotice] = useState<{ message: string } | null>(null)
@@ -608,6 +610,11 @@ export default function CabinetPanel() {
         onClose={close}
         width={320}
       >
+        {placementNotice && (
+          <p role="status" className="px-3 py-2 text-xs text-amber-600">
+            {placementNotice.line}
+          </p>
+        )}
         <PanelSection title="Dimensions">
           <p className="px-2 pb-3 text-xs text-muted-foreground">
             Solid matching front between the cabinet and wall. Countertop and toe-kick continue
@@ -648,6 +655,11 @@ export default function CabinetPanel() {
       }
       width={320}
     >
+      {placementNotice && (
+        <p role="status" className="px-3 py-2 text-xs text-amber-600">
+          {placementNotice.line}
+        </p>
+      )}
       <PanelSection title="Dimensions">
         {node.type === 'cabinet-module' && !isHoodOnlyNode && (
           <div className="space-y-1 px-1 pb-2">

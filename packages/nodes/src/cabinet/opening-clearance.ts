@@ -8,6 +8,7 @@ import {
   nodeRegistry,
   resolveLevelId,
 } from '@pascal-app/core'
+import { type Frame, nodeLevelFrame, transformPoint } from '@pascal-app/core/procedural-items'
 import { compartmentDoorType, normalizeCabinetStack } from './stack'
 
 /** Conservative opening envelopes: warnings, not a collision veto. */
@@ -113,6 +114,7 @@ export function cabinetOpeningConflicts(
     }
     return false
   }
+  const cache = new Map<string, Frame>()
   return Object.values(nodes)
     .filter((candidate) => {
       if (ignoredNode(candidate) || resolveLevelId(candidate, nodes) !== levelId) return false
@@ -124,7 +126,7 @@ export function cabinetOpeningConflicts(
         const wall: OpeningFootprint = {
           position: [
             (body.start.x + body.end.x) / 2,
-            candidate.supportOffset ?? 0,
+            nodeLevelFrame(candidate.id, nodes, new Set(), { cache }).position[1],
             (body.start.y + body.end.y) / 2,
           ],
           dimensions: [
@@ -143,14 +145,23 @@ export function cabinetOpeningConflicts(
         (capability.applies && !capability.applies(candidate))
       )
         return false
-      return getFloorPlacedFootprints(capability, candidate, { nodes }).some((fp) => {
-        const position = fp.position ?? ('position' in candidate ? candidate.position : undefined)
-        if (position?.length !== 3) return false
+      const pose = nodeLevelFrame(candidate.id, nodes, new Set(), { cache })
+      // Composite footprints include the node's pose. Resolve them at its origin before
+      // composing the hosting frame, so neither translation nor yaw is applied twice.
+      const local = {
+        ...candidate,
+        position: [0, 0, 0],
+        rotation:
+          typeof ('rotation' in candidate && candidate.rotation) === 'number' ? 0 : [0, 0, 0],
+      } as AnyNode
+      return getFloorPlacedFootprints(capability, local, { nodes }).some((fp) => {
+        const position = transformPoint(pose, fp.position ?? [0, 0, 0])
+        const yaw = Math.atan2(pose.axes[2][0], pose.axes[2][2])
         return openings.some((opening) =>
           openingFootprintsOverlap(opening, {
-            position: [position[0], position[1], position[2]],
+            position,
             dimensions: fp.dimensions,
-            rotation: fp.rotation ?? [0, 0, 0],
+            rotation: [0, yaw + (fp.rotation?.[1] ?? 0), 0],
           }),
         )
       })

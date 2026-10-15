@@ -21,11 +21,13 @@ import {
   SegmentedControl,
   SliderControl,
   ToggleControl,
+  usePlacementNotice,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Equal as EqualIcon, Plus, Trash } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { finishKitchenRun } from './finish-operation'
 import { planCabinetHostedEdit } from './hosted-resize'
 import {
   metadataForSelectedWidth,
@@ -47,7 +49,7 @@ import {
   cabinetRevealGapById,
   cabinetRevealGapId,
 } from './reveals'
-import { alignCabinetRun, cabinetWallFillerPlan, fitCabinetWallFillers } from './run-finishing'
+import { cabinetWallFillerPlan } from './run-finishing'
 import { runWallConstraints } from './run-layout'
 import {
   addCabinetModuleSide,
@@ -539,26 +541,33 @@ export function CabinetRunPanel({
     [arrayCopyCount, arrayDirection, arraySource?.id, arraySpacing, planningNode, planningNodes],
   )
 
+  const placementNotice = usePlacementNotice(node.id)
   const [finishMessage, setFinishMessage] = useState<string | null>(null)
   const fillerPlan = cabinetWallFillerPlan(planningNode, sortedModules, planningNodes)
 
   const finishRun = (action: 'align' | 'fill') => {
     setFinishMessage(null)
-    runAsSingleSceneHistoryStep(useScene, () => {
-      const scene = createSceneApi(useScene)
-      if (action === 'fill') fitCabinetWallFillers(planningNode, scene)
-      else {
-        const updates = planCabinetHostedEdit(scene, (staged) =>
-          alignCabinetRun(planningNode, staged),
+    try {
+      const outcome = finishKitchenRun(
+        useScene.getState().nodes,
+        { runId: node.id, action },
+        { activeLevelId: null },
+      )
+      if (outcome.changes)
+        runAsSingleSceneHistoryStep(useScene, () =>
+          useScene
+            .getState()
+            .applyNodeChanges(
+              outcome.changes as Parameters<
+                ReturnType<typeof useScene.getState>['applyNodeChanges']
+              >[0],
+            ),
         )
-        if (!updates)
-          setFinishMessage(
-            'Unable to align while keeping hosted items supported. Move items on the countertop and try again.',
-          )
-        if (updates) useScene.getState().updateNodes(updates.map(([id, data]) => ({ id, data })))
-      }
-      for (const id of cascadeDirty(planningNode.id, { scene })) useScene.getState().markDirty(id)
-    })
+    } catch (error) {
+      setFinishMessage(
+        error instanceof Error ? error.message : 'Unable to finish this kitchen run.',
+      )
+    }
   }
 
   const updateRun = useCallback(
@@ -655,6 +664,11 @@ export function CabinetRunPanel({
       title={node.name || 'Kitchen run'}
       width={320}
     >
+      {placementNotice && (
+        <p role="status" className="px-3 py-2 text-xs text-amber-600">
+          {placementNotice.line}
+        </p>
+      )}
       <PanelSection title="Finish & align">
         <div className="flex flex-col gap-2 px-1 pb-2">
           <ActionButton label="Align cabinets & handles" onClick={() => finishRun('align')} />

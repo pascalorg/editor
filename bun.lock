@@ -280,6 +280,7 @@
       },
       "devDependencies": {
         "@pascal-app/core": "^1.0.4",
+        "@pascal-app/nodes": "^1.0.4",
         "@pascal/typescript-config": "*",
         "@types/node": "^26.6.5",
         "typescript": "7.0.2",

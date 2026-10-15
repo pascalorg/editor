@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/nodes",
   "version": "1.0.4",
-  "description": "Built-in node bundles for the Pascal 3D editor — one folder per kind, exported as `builtinPlugin`",
+  "description": "Built-in node bundles for the Pascal 3D editor \u2014 one folder per kind, exported as `builtinPlugin`",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,6 +15,16 @@
       "types": "./dist/procedural-item/index.d.ts",
       "import": "./dist/procedural-item/index.js",
       "default": "./dist/procedural-item/index.js"
+    },
+    "./agent-tools": {
+      "types": "./dist/agent-tools/index.d.ts",
+      "import": "./dist/agent-tools/index.js",
+      "default": "./dist/agent-tools/index.js"
+    },
+    "./agent-operations": {
+      "types": "./dist/agent-operations/index.d.ts",
+      "import": "./dist/agent-operations/index.js",
+      "default": "./dist/agent-operations/index.js"
     }
   },
   "files": [
@@ -22,7 +32,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build",
+    "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "test": "bun test",
     "prepublishOnly": "bun run build && bun test"

@@ -5,14 +5,19 @@ import {
   CabinetModuleNode,
   CabinetNode,
   createSceneApi,
+  getSurfaceProvider,
+  ItemNode,
   LevelNode,
+  nodeRegistry,
+  registerNode,
   runAsSingleSceneHistoryStep,
   useScene,
   WallNode,
 } from '@pascal-app/core'
+import { finishKitchenRun } from '../../agent-operations'
+import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { applyCabinetModuleInsertion } from '../insertion'
 import { resolveCabinetNeighborPlacement } from '../neighbor-placement'
-import { fitCabinetWallFillers } from '../run-finishing'
 import { runLocalToPlan } from '../run-layout'
 
 function fixture(rotation = 0) {
@@ -135,9 +140,22 @@ test('filling both run ends undoes together and preserves original modules', () 
   try {
     useScene.setState({ nodes, rootNodeIds: [level.id] })
     useScene.temporal.getState().clear()
-    runAsSingleSceneHistoryStep(useScene, () =>
-      fitCabinetWallFillers(run, createSceneApi(useScene)),
+    const outcome = finishKitchenRun(
+      nodes,
+      { runId: run.id, action: 'fill' },
+      { activeLevelId: null },
     )
+    expect(nodes[run.id]!.children).toEqual([module.id])
+    runAsSingleSceneHistoryStep(useScene, () =>
+      useScene.getState().applyNodeChanges(outcome.changes as never),
+    )
+    const again = finishKitchenRun(
+      useScene.getState().nodes,
+      { runId: run.id, action: 'fill' },
+      { activeLevelId: null },
+    )
+    expect(again.changes?.create).toEqual([])
+    expect(again.changes?.update).toEqual([])
     expect(useScene.getState().nodes[run.id]!.children).toHaveLength(3)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     useScene.temporal.getState().undo()
@@ -150,3 +168,76 @@ test('filling both run ends undoes together and preserves original modules', () 
     globalThis.cancelAnimationFrame = cancelRaf
   }
 })
+
+test('finishing refuses a missing run without changing the input', () => {
+  const nodes = {}
+  expect(() =>
+    finishKitchenRun(nodes, { runId: 'cabinet_missing', action: 'align' }, { activeLevelId: null }),
+  ).toThrow('Choose a kitchen run')
+  expect(nodes).toEqual({})
+})
+
+for (const topologyChange of [false, true]) {
+  test(`finishing ${topologyChange ? 'refuses a disappearing support' : 'carries a hosted item'} without mutating its input`, () => {
+    const restore = nodeRegistry._snapshot()
+    try {
+      registerNode(cabinetDefinition)
+      registerNode(cabinetModuleDefinition)
+      const level = LevelNode.parse({})
+      const run = CabinetNode.parse({
+        parentId: level.id,
+        carcassHeight: 0.72,
+        withCountertop: true,
+      })
+      const modules = [0, 1].map((i) =>
+        CabinetModuleNode.parse({
+          parentId: run.id,
+          width: 0.6,
+          depth: 0.6,
+          carcassHeight: topologyChange && i === 1 ? 0.9 : 0.8,
+          showPlinth: false,
+          position: [i * 0.6, 0.1, 0],
+        }),
+      )
+      run.children = modules.map((node) => node.id)
+      const nodes = Object.fromEntries([level, run, ...modules].map((node) => [node.id, node]))
+      const surfaces = getSurfaceProvider(run).surfaces!(run, {
+        scene: { nodes: () => nodes, get: (id) => nodes[id] as never },
+      })
+      const surface = surfaces.at(-1)!
+      const item = ItemNode.parse({
+        parentId: run.id,
+        position: [topologyChange ? 0.6 : 0, surface.position[1], 0],
+        asset: {
+          id: 'cup',
+          name: 'Cup',
+          category: 'fixture',
+          thumbnail: '',
+          src: '/cup.glb',
+          dimensions: [0.1, 0.1, 0.1],
+        },
+      })
+      nodes[item.id] = item
+      run.children.push(item.id)
+      const before = JSON.stringify(nodes)
+      // The operation must preserve support even before a browser loads definitions.
+      nodeRegistry._reset()
+      if (topologyChange)
+        expect(() =>
+          finishKitchenRun(nodes, { runId: run.id, action: 'align' }, { activeLevelId: null }),
+        ).toThrow('keeping hosted items supported')
+      else {
+        const result = finishKitchenRun(
+          nodes,
+          { runId: run.id, action: 'align' },
+          { activeLevelId: null },
+        )
+        const patch = result.changes?.update?.find((entry) => entry.id === item.id)?.data
+        expect((patch as typeof item).position[1]).toBeCloseTo(item.position[1] - 0.08)
+      }
+      expect(JSON.stringify(nodes)).toBe(before)
+    } finally {
+      restore()
+    }
+  })
+}
