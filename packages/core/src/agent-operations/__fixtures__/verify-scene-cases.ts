@@ -233,6 +233,38 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
   verify('a stair on a storey connects them', () => twoStoreys(...stairOn('level_0')), {
     lacks: ['missing_stair'],
   }),
+  // A flight to no level names the level it rises from and none it arrives on (create_stair's
+  // toLevelId null): porch or deck steps, whatever their rise.
+  verify(
+    'porch steps to no level connect no storeys',
+    () => twoStoreys(...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 0.54 })),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    'a flight to no level as tall as the storey connects no storeys',
+    () => twoStoreys(...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 2.8 })),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    "an older stair naming no level at its storey's rise connects them",
+    () => twoStoreys(...stairOn('level_0', { totalRise: 2.8 })),
+    { lacks: ['missing_stair'] },
+  ),
+  verify(
+    'an older stair on the top storey, at its rise, climbs to the roof level and no storey',
+    () =>
+      twoStoreys(
+        level('level_roof', 2, { name: 'Roof', metadata: { role: 'roof' } }),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+        ...stairOn('level_1', { totalRise: 2.8 }),
+      ),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    'an older stair naming no level, twice as tall as its storey, does not',
+    () => twoStoreys(...stairOn('level_0', { totalRise: 5.6 })),
+    { contains: ['missing_stair'] },
+  ),
   verify(
     'a roof-only level is neither a storey nor empty: one storey needs no stair',
     () =>
@@ -479,6 +511,17 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
       contains: ['stair_outside_slab'],
       mentions: ['Stair Main Stair footprint extends outside source floor slab'],
     },
+  ),
+  verify(
+    'porch steps off the floor slab are not reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 0.54, position: [2, 0, 4] }),
+      ),
+    { lacks: ['stair_outside_slab'] },
   ),
   verify(
     'a wall across a stair is reported',
