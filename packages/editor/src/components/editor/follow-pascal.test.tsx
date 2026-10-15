@@ -565,7 +565,7 @@ test('a commit with a window and a sofa in it takes the outside view', async () 
 // The owner, 15 October: the outside view is for edits and moves only. A build is followed as it
 // always was: the cutaway once, when no eye sees the target, and never the walls up in between.
 test.each([
-  { person: 'up' as const, written: ['cutaway'] },
+  { person: 'up' as const, written: ['cutaway'] as string[] },
   // The person already cuts the walls away: a build never puts them up in between.
   { person: 'cutaway' as const, written: [] as string[] },
 ])(
