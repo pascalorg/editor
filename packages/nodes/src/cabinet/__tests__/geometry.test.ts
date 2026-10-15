@@ -8,7 +8,7 @@ import type {
 } from '@pascal-app/core'
 import { cabinetSlots } from '@pascal-app/core'
 import type { BufferAttribute, Mesh, Object3D } from 'three'
-import { Box3 } from 'three'
+import { Box3, Raycaster, Vector3 } from 'three'
 import { bakeCabinetAnimationClip } from '../animation'
 import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { buildCabinetGeometry } from '../geometry'
@@ -217,11 +217,10 @@ function boxTopUvSpan(mesh: Mesh) {
 
 function boxFrontUvSpan(mesh: Mesh) {
   const uv = mesh.geometry.getAttribute('uv') as BufferAttribute
-  const faceStart = 16
-  const values = Array.from({ length: 4 }, (_, index) => ({
-    u: uv.getX(faceStart + index),
-    v: uv.getY(faceStart + index),
-  }))
+  const normals = mesh.geometry.getAttribute('normal')
+  const values = Array.from({ length: uv.count }, (_, index) => index)
+    .filter((index) => normals.getZ(index) > 0.99)
+    .map((index) => ({ u: uv.getX(index), v: uv.getY(index) }))
   return {
     u: Math.max(...values.map((value) => value.u)) - Math.min(...values.map((value) => value.u)),
     v: Math.max(...values.map((value) => value.v)) - Math.min(...values.map((value) => value.v)),
@@ -430,6 +429,36 @@ describe('buildCabinetGeometry — raised arch fronts', () => {
 })
 
 describe('buildCabinetGeometry — inset internals', () => {
+  test('drawer runners separate fixed and moving parts and the bottom is recessed', () => {
+    const group = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        operationState: 1,
+        stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+      }),
+    )
+    const fixed = findMeshByNamePrefix(group, 'cabinet-drawer-fixed-runner-')
+    const moving = findMeshByNamePrefix(group, 'cabinet-drawer-moving-runner-')
+    const side = findMeshByNamePrefix(group, 'cabinet-drawer-side-left-')
+    const bottom = findMeshByNamePrefix(group, 'cabinet-drawer-bottom-')
+    expect(fixed.parent).toBe(group)
+    expect(moving.parent).toBe(side.parent)
+    expect(worldBounds(moving).max.z).toBeGreaterThan(worldBounds(fixed).max.z + 0.1)
+    expect(worldBounds(bottom).min.y).toBeGreaterThan(worldBounds(side).min.y + 0.004)
+  })
+
+  test('a narrow drawer keeps its bar pull within the front', () => {
+    const group = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        width: 0.15,
+        handleStyle: 'bar',
+        stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+      }),
+    )
+    const front = worldBounds(findMeshByNamePrefix(group, 'cabinet-drawer-front-'))
+    const handle = worldBounds(findMeshByNamePattern(group, /^cabinet-drawer-handle-[\d.]+-0$/))
+    expect(handle.min.x).toBeGreaterThan(front.min.x)
+    expect(handle.max.x).toBeLessThan(front.max.x)
+  })
   test('inset drawer boxes stay set back behind the front plane', () => {
     const node = CabinetModuleNode.parse({
       frontStyle: 'shaker',
@@ -717,9 +746,55 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     expect(findMeshByName(group, 'cabinet-microwave-0-start-button')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-microwave-0-cancel-button')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-microwave-0-top-vent-0')).toBeDefined()
-    expect(findMeshByName(group, 'cabinet-microwave-0-window-dot-0-0')).toBeDefined()
+    const screen = findMeshByName(group, 'cabinet-microwave-0-window-screen')
+    const glass = findMeshByName(group, 'cabinet-microwave-0-door-glass')
+    const screenBounds = worldBounds(screen)
+    const glassBounds = worldBounds(glass)
+    expect(screen.userData.slotId).toBe('glass')
+    expect(screen.parent).toBe(glass.parent)
+    expect(screenBounds.min.x).toBeGreaterThan(glassBounds.min.x)
+    expect(screenBounds.max.x).toBeLessThan(glassBounds.max.x)
+    expect(screenBounds.min.y).toBeGreaterThan(glassBounds.min.y)
+    expect(screenBounds.max.y).toBeLessThan(glassBounds.max.y)
     expect(findMeshByName(group, 'cabinet-microwave-0-turntable')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-microwave-0-roller-ring')).toBeDefined()
+  })
+
+  test.each(['none', 'knob'] as const)(
+    'pull-out pantry respects the %s handle style',
+    (handleStyle) => {
+      const group = buildCabinetGeometry(
+        CabinetModuleNode.parse({
+          cabinetType: 'tall',
+          carcassHeight: 1.8,
+          handleStyle,
+          stack: [{ id: 'pantry', type: 'pull-out-pantry', height: 1.8 }],
+        }),
+      )
+      const handles: Object3D[] = []
+      group.traverse((object) => {
+        if (object.name.startsWith('cabinet-pull-out-pantry-0-handle')) handles.push(object)
+      })
+      if (handleStyle === 'none') expect(handles).toHaveLength(0)
+      else {
+        const handle = worldBounds(findMeshByName(group, 'cabinet-pull-out-pantry-0-handle'))
+        expect(handle.max.y - handle.min.y).toBeLessThan(0.03)
+      }
+    },
+  )
+
+  test('microwave liner does not overlap the cabinet top exterior', () => {
+    const node = CabinetModuleNode.parse({
+      width: 0.76,
+      carcassHeight: 0.4,
+      showPlinth: false,
+      withCountertop: false,
+      stack: [{ id: 'micro', type: 'microwave', height: 0.4 }],
+    })
+    const group = buildCabinetGeometry(node)
+    const top = worldBounds(findMeshByName(group, 'cabinet-top'))
+    const liner = worldBounds(findMeshByName(group, 'cabinet-microwave-0-cavity-top'))
+    expect(top.max.y - liner.max.y).toBeGreaterThan(0.001)
   })
 
   test('microwave keypad stays compact inside the control panel', () => {
@@ -796,6 +871,9 @@ describe('buildCabinetGeometry — appliance compartments', () => {
 
     expect(findMeshByName(group, 'cabinet-dishwasher-0-tub-back')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-dishwasher-0-upper-rack-bar-1')).toBeDefined()
+    const rackFloor = worldBounds(findMeshByName(group, 'cabinet-dishwasher-0-upper-rack-bar-1'))
+    const rackSide = worldBounds(findMeshByName(group, 'cabinet-dishwasher-0-upper-rack-frame-0'))
+    expect(rackSide.max.y - rackFloor.max.y).toBeGreaterThan(0.04)
     expect(findMeshByName(group, 'cabinet-dishwasher-0-lower-rack-bar-1')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-dishwasher-0-spray-arm')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-dishwasher-0-control-panel')).toBeDefined()
@@ -845,6 +923,9 @@ describe('buildCabinetGeometry — appliance compartments', () => {
       'hardware',
     )
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-front')).toBeDefined()
+    const supports = worldBounds(findMeshByName(group, 'cabinet-cooktop-gas-1-pan-supports'))
+    const burner = worldBounds(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-cap'))
+    expect(supports.min.y).toBeGreaterThan(burner.max.y)
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-row-1')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-column-1')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-knob-4')).toBeDefined()
@@ -877,6 +958,7 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     const group = buildCabinetGeometry(node, undefined, 'rendered', false)
 
     expect(hasObjectByName(group, 'cabinet-cooktop-gas-1-continuous-grate-front')).toBe(false)
+    expect(hasObjectByName(group, 'cabinet-cooktop-gas-1-pan-supports')).toBe(false)
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-ring')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-core')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-0')).toBeDefined()
@@ -899,6 +981,9 @@ describe('buildCabinetGeometry — appliance compartments', () => {
       'appliance',
     )
     expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-ring-0')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-ring-0').material,
+    ).toHaveProperty('emissiveIntensity', 0)
     expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-fill')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-ring-2')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-3-ring-1')).toBeDefined()
@@ -1074,6 +1159,16 @@ describe('buildCabinetGeometry — appliance compartments', () => {
       findMeshByName(group, 'cabinet-fridge-single-0-single-rear-diffuser-channel-0'),
     ).toBeDefined()
     expect(findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0')).toBeDefined()
+    const crisper = findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0')
+    const crisperBounds = worldBounds(crisper)
+    const center = crisperBounds.getCenter(new Vector3())
+    const ray = new Raycaster(
+      new Vector3(center.x, crisperBounds.max.y + 0.01, center.z),
+      new Vector3(0, -1, 0),
+    )
+    const hit = ray.intersectObject(crisper, false)[0]
+    expect(hit).toBeDefined()
+    expect(hit!.point.y).toBeCloseTo(crisperBounds.min.y + 0.008, 4)
     expect(
       findMeshByName(group, 'cabinet-fridge-single-0-single-crisper-drawer-0-handle'),
     ).toBeDefined()
@@ -2887,6 +2982,18 @@ describe('cabinet handles', () => {
 })
 
 describe('buildCabinetGeometry — range hood compartments', () => {
+  test.each(['hood-pyramid', 'hood-curved-glass'] as const)(
+    '%s exposes its filter and lights below the canopy',
+    (type) => {
+      const group = buildCabinetGeometry(hoodModule(type, 0.4))
+      const filter = worldBounds(findMeshByName(group, `cabinet-${type}-0-filter`))
+      const light = worldBounds(findMeshByName(group, `cabinet-${type}-0-light-1`))
+      expect(filter.min.y).toBeLessThan(0)
+      expect(light.min.y).toBeLessThan(0)
+      expect(light.min.x).toBeGreaterThan(filter.max.x)
+      expect(filter.max.z).toBeLessThan(HOOD_CANOPY_DEPTH - 0.16)
+    },
+  )
   function hoodModule(type: 'hood-pyramid' | 'hood-curved-glass', hoodHeight: number) {
     return CabinetModuleNode.parse({
       id: 'cabinet-module_hood',
@@ -3033,6 +3140,25 @@ describe('buildCabinetGeometry — sink compartments', () => {
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-barrel')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-cap')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-pin')).toBeDefined()
+  })
+
+  test('sink bowl narrows toward the drain while keeping its opening', () => {
+    const group = buildCabinetGeometry(sinkModule())
+    const wall = findMeshByName(group, 'cabinet-sink-1-0-basin-front')
+    const positions = wall.geometry.getAttribute('position')
+    let topWidth = 0
+    let bottomWidth = 0
+    for (let i = 0; i < positions.count; i++) {
+      const width = Math.abs(positions.getX(i)) * 2
+      if (positions.getY(i) > 0) topWidth = Math.max(topWidth, width)
+      else bottomWidth = Math.max(bottomWidth, width)
+    }
+    expect(topWidth - bottomWidth).toBeGreaterThan(0.03)
+    const bottom = worldBounds(findMeshByName(group, 'cabinet-sink-1-0-basin-bottom'))
+    const drain = worldBounds(findMeshByName(group, 'cabinet-sink-1-0-drain'))
+    expect(drain.min.x).toBeGreaterThan(bottom.min.x)
+    expect(drain.max.x).toBeLessThan(bottom.max.x)
+    expect(drain.min.y).toBeCloseTo(bottom.max.y)
   })
 
   test('sink appliance paint persists onto faucet and basin after rebuild', () => {
@@ -3200,4 +3326,34 @@ describe('buildCabinetGeometry — sink compartments', () => {
     expect(bounds.min.x).toBeLessThan(-0.85)
     expect(bounds.max.x).toBeGreaterThan(0.45)
   })
+})
+
+test('toe-kick stays continuous below a base and tall unit', () => {
+  const run = CabinetNode.parse({ showPlinth: true, plinthHeight: 0.1 })
+  const modules = [
+    CabinetModuleNode.parse({ parentId: run.id, width: 0.6, position: [-0.3, 0.1, 0] }),
+    CabinetModuleNode.parse({
+      parentId: run.id,
+      width: 0.6,
+      position: [0.3, 0.1, 0],
+      cabinetType: 'tall',
+      carcassHeight: 2.1,
+    }),
+  ]
+  const group = buildCabinetGeometry(run, geometryContext({ children: modules }), 'rendered', false)
+  expect(group.children.filter((child) => child.name === 'cabinet-run-plinth')).toHaveLength(1)
+  const bounds = worldBounds(findMeshByName(group, 'cabinet-run-plinth'))
+  expect(bounds.max.x - bounds.min.x).toBeCloseTo(1.2)
+})
+
+test('wall fillers render a solid front without handles or opening animation', () => {
+  const node = CabinetModuleNode.parse({
+    moduleKind: 'wall-filler',
+    width: 0.08,
+    stack: [],
+    handleStyle: 'bar',
+  })
+  const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+  expect(group.children).toHaveLength(1)
+  expect(group.children[0]!.name).toBe('cabinet-wall-filler')
 })

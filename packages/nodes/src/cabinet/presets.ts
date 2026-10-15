@@ -23,6 +23,10 @@ export type CabinetPresetId =
   | 'tall-pantry'
   | 'oven-tower'
   | 'fridge-single'
+  | 'wall-cabinet'
+
+/** Where a wall cabinet placed on its own hangs: its bottom, above the floor. */
+export const WALL_CABINET_ELEVATION = 1.5
 
 export type CabinetPreset = {
   id: CabinetPresetId
@@ -48,8 +52,24 @@ const runCarcassHeight = (run?: CabinetNode) =>
 
 export const CABINET_PRESETS: CabinetPreset[] = [
   {
+    id: 'wall-cabinet',
+    label: 'Wall cabinet',
+    createPatch: () => ({
+      cabinetType: 'base',
+      name: 'Wall Cabinet',
+      width: 0.6,
+      depth: 0.35,
+      carcassHeight: 0.762,
+      showPlinth: false,
+      plinthHeight: 0,
+      withCountertop: false,
+      countertopThickness: 0,
+      stack: [{ ...newCabinetCompartment('door'), doorType: 'double', shelfCount: 2 }],
+    }),
+  },
+  {
     id: 'base-door',
-    label: 'Base',
+    label: 'Base cabinet',
     createPatch: (run) => ({
       ...baseShared(run),
       name: 'Base Cabinet',
@@ -65,7 +85,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
   },
   {
     id: 'drawer-base',
-    label: 'Drawer Base',
+    label: 'Drawer cabinet',
     createPatch: (run) => ({
       ...baseShared(run),
       name: 'Drawer Base',
@@ -91,7 +111,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
   },
   {
     id: 'cooktop-gas',
-    label: 'Gas Hob',
+    label: 'Gas cooktop',
     createPatch: (run) => ({
       ...baseShared(run),
       name: 'Gas Hob Base',
@@ -104,7 +124,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
   },
   {
     id: 'cooktop-induction',
-    label: 'Induction',
+    label: 'Induction cooktop',
     createPatch: (run) => ({
       ...baseShared(run),
       name: 'Induction Base',
@@ -117,7 +137,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
   },
   {
     id: 'sink-base',
-    label: 'Sink',
+    label: 'Sink cabinet',
     createPatch: (run) => ({
       ...baseShared(run),
       name: 'Sink Base',
@@ -177,7 +197,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
   },
   {
     id: 'fridge-single',
-    label: 'Single Fridge',
+    label: 'Fridge',
     createPatch: (run) => ({
       cabinetType: 'tall',
       name: 'Single Door Refrigerator',
@@ -199,5 +219,8 @@ export const CABINET_PRESETS: CabinetPreset[] = [
 ]
 
 export function cabinetPresetById(id: CabinetPresetId): CabinetPreset {
-  return CABINET_PRESETS.find((preset) => preset.id === id) ?? CABINET_PRESETS[0]!
+  return (
+    CABINET_PRESETS.find((preset) => preset.id === id) ??
+    CABINET_PRESETS.find((preset) => preset.id === 'base-door')!
+  )
 }

@@ -372,6 +372,62 @@ describe('WallCutoutCache', () => {
     expect((mesh.material as Material[])[2]).toBeDefined()
   })
 
+  test('a room-wide preview keeps the groups it gave a wall that is not hovered', () => {
+    viewerStore.setState({ wallMode: 'up' })
+    const hovered = addWall()
+    const spread = addWall()
+    cache.update(camera, 1)
+    const palette = spread.mesh.material as Material[]
+    viewerStore.setState({ hoveredId: spread.node.id, hoverHighlightMode: 'paint-ready' })
+    cache.update(camera, 1.005)
+    // The hover moves on to another wall of the room; its preview spreads over
+    // this one: faces regrouped onto entries past the palette's end.
+    viewerStore.setState({ hoveredId: hovered.node.id })
+    const preview = [...palette, new MeshBasicMaterial(), new MeshBasicMaterial()]
+    spread.mesh.material = preview
+    spread.mesh.geometry.addGroup(0, 3, preview.length - 1)
+    cache.update(camera, 1.01)
+    expect(spread.mesh.material).toBe(preview)
+    camera.position.x++
+    cache.update(camera, 2)
+    expect(spread.mesh.material).toBe(preview)
+    // The preview's restore gives the groups back; the palette goes on next frame.
+    spread.mesh.geometry.clearGroups()
+    spread.mesh.material = new MeshBasicMaterial()
+    viewerStore.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    cache.update(camera, 2.01)
+    expect(spread.mesh.material).toBe(cache.walls.get(spread.node.id)!.visibleVariant.materials)
+  })
+
+  test('a wall in play while a room-wide preview holds its groups is stamped now and given its palette when the preview lets go', () => {
+    const hovered = addWall()
+    const spread = addWall()
+    cache.update(camera, 1)
+    expect(spread.mesh.userData.wallHidden).toBe(true)
+    const palette = spread.mesh.material as Material[]
+    viewerStore.setState({ hoveredId: hovered.node.id, hoverHighlightMode: 'paint-ready' })
+    const preview = [...palette, new MeshBasicMaterial(), new MeshBasicMaterial()]
+    spread.mesh.material = preview
+    spread.mesh.geometry.addGroup(0, 3, preview.length - 1)
+    // The play starts under the preview: the stamp follows at once, the palette waits for the groups.
+    viewerStore.setState({ nodesRevealing: [spread.node.id] })
+    cache.update(camera, 1.01)
+    expect(spread.mesh.userData.wallHidden).toBe(false)
+    expect(spread.mesh.material).toBe(preview)
+    // The preview gives the groups back while the wall still plays: it gets its visible palette.
+    spread.mesh.geometry.clearGroups()
+    spread.mesh.material = new MeshBasicMaterial()
+    viewerStore.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    cache.update(camera, 1.02)
+    expect(spread.mesh.userData.wallHidden).toBe(false)
+    expect(spread.mesh.material).toBe(cache.walls.get(spread.node.id)!.visibleVariant.materials)
+    // The play ends: the cutaway hides it again.
+    viewerStore.setState({ nodesRevealing: [] })
+    cache.update(camera, 1.03)
+    expect(spread.mesh.userData.wallHidden).toBe(true)
+    expect(spread.mesh.material).toBe(cache.walls.get(spread.node.id)!.hiddenVariant.materials)
+  })
+
   test('appearance changes during preview are applied when temporary ownership ends', () => {
     viewerStore.setState({ wallMode: 'up' })
     const { node, mesh } = addWall()

@@ -50,6 +50,43 @@ export function createWorldScaleBoxGeometry(
   return geometry
 }
 
+/** A single chamfer catches light without tessellating the broad panel faces. */
+export function createCabinetPanelGeometry(width: number, height: number, depth: number) {
+  const bevel = Math.min(0.0015, width / 8, height / 8, depth / 4)
+  const x = width / 2 - bevel
+  const y = height / 2 - bevel
+  const shape = new Shape()
+  shape.moveTo(-x, -y)
+  shape.lineTo(x, -y)
+  shape.lineTo(x, y)
+  shape.lineTo(-x, y)
+  shape.closePath()
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: depth - 2 * bevel,
+    bevelEnabled: true,
+    bevelSize: bevel,
+    bevelThickness: bevel,
+    bevelSegments: 1,
+    steps: 1,
+    curveSegments: 1,
+  })
+  geometry.translate(0, 0, -depth / 2 + bevel)
+  const position = geometry.getAttribute('position')
+  const normal = geometry.getAttribute('normal')
+  const uv = geometry.getAttribute('uv')
+  for (let i = 0; i < position.count; i++) {
+    const nx = Math.abs(normal.getX(i))
+    const ny = Math.abs(normal.getY(i))
+    const nz = Math.abs(normal.getZ(i))
+    uv.setXY(
+      i,
+      nx > ny && nx > nz ? position.getZ(i) : position.getX(i),
+      ny > nx && ny > nz ? position.getZ(i) : position.getY(i),
+    )
+  }
+  return geometry
+}
+
 function getLegacyCabinetMaterial(
   node: CabinetGeometryNode,
   shading: RenderShading,
@@ -199,12 +236,15 @@ export function addBox(
   materialOrColor: Material | string,
   name: string,
   slotId: CabinetSlotId = 'carcass',
+  beveled = false,
 ) {
   const material =
     typeof materialOrColor === 'string'
       ? new MeshStandardMaterial({ color: materialOrColor, metalness: 0.08, roughness: 0.72 })
       : materialOrColor
-  const geometry = createWorldScaleBoxGeometry(size[0], size[1], size[2])
+  const geometry = beveled
+    ? createCabinetPanelGeometry(size[0], size[1], size[2])
+    : createWorldScaleBoxGeometry(size[0], size[1], size[2])
   const mesh = stampSlot(new Mesh(geometry, material), slotId)
   mesh.name = name
   mesh.position.set(position[0], position[1], position[2])
@@ -281,9 +321,8 @@ export const cooktopGrateMaterial = new MeshStandardMaterial({
   roughness: 0.5,
 })
 export const cooktopInductionZoneMaterial = new MeshStandardMaterial({
-  color: '#07111f',
-  emissive: '#2563eb',
-  emissiveIntensity: 0.22,
+  color: '#9b9ea3',
+  emissiveIntensity: 0,
   metalness: 0.05,
   roughness: 0.2,
 })
@@ -440,7 +479,7 @@ export function addApplianceHandle(
   name: string,
 ) {
   const tube = stampSlot(
-    new Mesh(new CylinderGeometry(0.009, 0.009, length, 16), material),
+    new Mesh(new CylinderGeometry(0.009, 0.009, length, 10), material),
     'appliance',
   )
   tube.name = name
@@ -452,7 +491,7 @@ export function addApplianceHandle(
   const standoffDistance = length * 0.38
   for (const offset of [-standoffDistance, standoffDistance]) {
     const standoff = stampSlot(
-      new Mesh(new CylinderGeometry(0.006, 0.006, 0.04, 10), material),
+      new Mesh(new CylinderGeometry(0.006, 0.006, 0.04, 6), material),
       'appliance',
     )
     standoff.name = `${name}-standoff`
@@ -492,8 +531,8 @@ export function roundedButtonGeometry(
     bevelEnabled: true,
     bevelThickness: Math.min(0.0015, depth * 0.3),
     bevelSize: Math.min(0.0015, r * 0.35),
-    bevelSegments: 2,
-    curveSegments: 8,
+    bevelSegments: 1,
+    curveSegments: 3,
     steps: 1,
   })
   geometry.translate(0, 0, -depth / 2)
@@ -530,13 +569,26 @@ export function addWireRack(
   y: number,
   zCenter: number,
   name: string,
+  railHeight = 0.006,
 ) {
   const bar = 0.006
   const frame: Array<{ size: [number, number, number]; position: [number, number, number] }> = [
-    { size: [width, bar, bar], position: [0, y, zCenter + depth / 2 - bar / 2] },
-    { size: [width, bar, bar], position: [0, y, zCenter - depth / 2 + bar / 2] },
-    { size: [bar, bar, depth], position: [-width / 2 + bar / 2, y, zCenter] },
-    { size: [bar, bar, depth], position: [width / 2 - bar / 2, y, zCenter] },
+    {
+      size: [width, bar, bar],
+      position: [0, y + railHeight - bar, zCenter + depth / 2 - bar / 2],
+    },
+    {
+      size: [width, bar, bar],
+      position: [0, y + railHeight - bar, zCenter - depth / 2 + bar / 2],
+    },
+    {
+      size: [bar, bar, depth],
+      position: [-width / 2 + bar / 2, y, zCenter],
+    },
+    {
+      size: [bar, bar, depth],
+      position: [width / 2 - bar / 2, y, zCenter],
+    },
   ]
   frame.forEach((piece, i) => {
     addBox(
@@ -548,12 +600,34 @@ export function addWireRack(
       'applianceInterior',
     )
   })
-  for (let i = 1; i <= 7; i++) {
-    const x = -width / 2 + (width * i) / 8
+  const basket = railHeight > bar
+  if (basket) {
+    for (const side of [-1, 1]) {
+      for (const end of [-1, 1]) {
+        addBox(
+          group,
+          [bar, railHeight, bar],
+          [
+            side * (width / 2 - bar / 2),
+            y + (railHeight - bar) / 2,
+            zCenter + end * (depth / 2 - bar / 2),
+          ],
+          materials.applianceInterior,
+          `${name}-post-${side}-${end}`,
+          'applianceInterior',
+        )
+      }
+    }
+  }
+  const wireCount = basket ? 5 : 7
+  for (let i = 1; i <= wireCount; i++) {
+    const x = -width / 2 + (width * i) / (wireCount + 1)
     addBox(
       group,
-      [0.004, 0.004, Math.max(0.01, depth - bar * 2)],
-      [x, y, zCenter],
+      basket
+        ? [Math.max(0.01, width - bar * 2), 0.004, 0.004]
+        : [0.004, 0.004, Math.max(0.01, depth - bar * 2)],
+      basket ? [0, y, zCenter - depth / 2 + (depth * i) / (wireCount + 1)] : [x, y, zCenter],
       materials.applianceInterior,
       `${name}-bar-${i}`,
       'applianceInterior',

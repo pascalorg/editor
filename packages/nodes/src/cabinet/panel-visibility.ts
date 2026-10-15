@@ -17,7 +17,7 @@ const FIXED_WIDTH_APPLIANCE_TYPES: ReadonlySet<CabinetCompartment['type']> = new
 ])
 
 export function cabinetModuleSupportsPresets(module: CabinetModuleNode) {
-  return module.moduleKind !== 'corner-filler'
+  return module.moduleKind === 'standard'
 }
 
 export function cabinetModuleUsesFixedApplianceWidth(module: CabinetModuleNode) {

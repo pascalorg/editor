@@ -162,7 +162,7 @@ function CompartmentTypeControl({
         return (
           <button
             className={[
-              'flex h-8 items-center justify-center rounded-md text-xs font-medium transition-all duration-200',
+              'flex min-h-8 min-w-0 items-center justify-center rounded-md px-2 py-1.5 text-center text-xs leading-4 font-medium transition-colors duration-200',
               isSelected
                 ? 'bg-white dark:bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
                 : 'text-muted-foreground hover:bg-black/4 dark:hover:bg-white/5 hover:text-foreground',
@@ -326,7 +326,7 @@ export function CompartmentCard({
             />
           </div>
           <button
-            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border/40 bg-black/4 dark:bg-[#2C2C2E] text-xs font-medium text-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#343437] disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex min-h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border/40 bg-black/4 dark:bg-[#2C2C2E] px-3 py-1.5 text-xs leading-4 font-medium text-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#343437] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={
               compartmentDoorType(compartment, width) !== 'single-left' &&
               compartmentDoorType(compartment, width) !== 'single-right'

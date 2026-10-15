@@ -1,0 +1,26 @@
+diff --git a/src/shader/water-effect.ts b/src/shader/water-effect.ts
+index 49b8849e46bd71ab7b92dc511865844afb598747..e9e626669e00fb096d77cdcea8d1bd4f1ba1cb1f 100644
+--- a/src/shader/water-effect.ts
++++ b/src/shader/water-effect.ts
+@@ -5,6 +5,7 @@ import {
+   HalfFloatType,
+   LinearFilter,
+   MeshBasicNodeMaterial,
++  type Node,
+   NodeMaterial,
+   QuadMesh,
+   RenderTarget,
+@@ -173,7 +174,12 @@ export function createImmersiveXRPoolWaterMaterial(
+   return material
+ }
+ 
+-type TextureNodeLike = ReturnType<typeof texture> & { value: Texture }
++// @types/three 0.186 types `sample()` as returning the texture node itself, which hides
++// the vec4 swizzles (.r, .rgb, ...) the shader reads from every sample.
++type TextureNodeLike = Omit<ReturnType<typeof texture>, 'sample'> & {
++  value: Texture
++  sample(uvNode: Node): Node<'vec4'>
++}
+ 
+ function makeTarget(resolution: number) {
+   const target = new RenderTarget(resolution, resolution, {

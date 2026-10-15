@@ -1,11 +1,20 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, type AnyNodeId, type SceneApi, WallNode, ZoneNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  LevelNode,
+  type SceneApi,
+  WallNode,
+  ZoneNode,
+} from '@pascal-app/core'
+import { alignCabinetRun, cabinetWallFillerPlan, fitCabinetWallFillers } from '../run-finishing'
 import { runLocalToPlan } from '../run-layout'
 import {
   addCabinetModuleSide,
   addCornerRun,
   backAlignedRunDepthOverrides,
   backAlignZ,
+  cabinetModuleCanEqualizeWidth,
   cabinetModulesForRun,
   cornerSourceWidthOverridesForDerivedDepth,
   previewCornerAdditionLayout,
@@ -2748,4 +2757,63 @@ describe('addCornerRun', () => {
     const bridgeLeftEdge = bridgeWorld.position[0] - bridgeFiller!.width / 2
     expect(bridgeLeftEdge).toBeCloseTo(wallTopRightEdge)
   })
+})
+
+test('wall fillers close small gaps without shifting cabinets and remain idempotent', () => {
+  const run = CabinetNode.parse({ parentId: 'level_finish', depth: 0.6 })
+  const module = CabinetModuleNode.parse({
+    parentId: run.id,
+    width: 0.6,
+    depth: 0.6,
+    position: [0, 0.1, 0],
+  })
+  run.children = [module.id]
+  const wall = WallNode.parse({
+    parentId: 'level_finish',
+    start: [0.5, -1],
+    end: [0.5, 1],
+    thickness: 0.2,
+  })
+  const scene = sceneApiFixture([LevelNode.parse({ id: 'level_finish' }), run, module, wall])
+  expect(cabinetWallFillerPlan(run, [module], scene.nodes())).toHaveLength(1)
+  fitCabinetWallFillers(run, scene)
+  const live = scene.get<CabinetNode>(run.id)!
+  const modules = cabinetModulesForRun(live, scene.nodes())
+  const filler = modules.find((entry) => entry.moduleKind === 'wall-filler')!
+  expect(filler.width).toBeCloseTo(0.1)
+  expect(cabinetModuleCanEqualizeWidth(filler, live)).toBe(false)
+  expect(filler.position[0]).toBeCloseTo(0.35)
+  expect(scene.get<CabinetModuleNode>(module.id)!.position).toEqual(module.position)
+  fitCabinetWallFillers(live, scene)
+  expect(cabinetModulesForRun(scene.get<CabinetNode>(run.id)!, scene.nodes())).toHaveLength(2)
+})
+
+test('alignment matches base heights and preserves tall appliance stacks', () => {
+  const run = CabinetNode.parse({
+    carcassHeight: 0.72,
+    depth: 0.6,
+    frontGap: 0.003,
+    showPlinth: true,
+    plinthHeight: 0.1,
+  })
+  const base = CabinetModuleNode.parse({
+    parentId: run.id,
+    carcassHeight: 0.8,
+    depth: 0.5,
+    position: [-0.3, 0.2, 0.1],
+  })
+  const tall = CabinetModuleNode.parse({
+    parentId: run.id,
+    cabinetType: 'tall',
+    carcassHeight: 2.1,
+    position: [0.3, 0.2, 0],
+    stack: [{ id: 'fridge', type: 'fridge-single', height: 2.1 }],
+  })
+  run.children = [base.id, tall.id]
+  const scene = sceneApiFixture([run, base, tall])
+  alignCabinetRun(run, scene)
+  expect(scene.get<CabinetModuleNode>(base.id)!.carcassHeight).toBe(0.72)
+  expect(scene.get<CabinetModuleNode>(base.id)!.position).toEqual([-0.3, 0.1, -0.04999999999999999])
+  expect(scene.get<CabinetModuleNode>(tall.id)!.carcassHeight).toBe(2.1)
+  expect(scene.get<CabinetModuleNode>(tall.id)!.stack).toEqual(tall.stack)
 })
