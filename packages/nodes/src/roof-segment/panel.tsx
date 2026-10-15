@@ -6,6 +6,7 @@ import {
   createDefaultRidgeVentsForSegment,
   getConicalRoofCoverage,
   getRoofSegmentDeckReach,
+  getSegmentSlopeFrame,
   isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
@@ -302,6 +303,10 @@ export default function RoofSegmentPanel() {
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
   const managedLeanToRoofSegment = isManagedLeanToRoofSegment(node.metadata)
   const conicalCoverage = getConicalRoofCoverage(node)
+  // both overhangs in plan, past the walls' outside faces; the node keeps the eaves' along the slope
+  const reach = getRoofSegmentDeckReach(node)
+  const halfWall = node.wallThickness / 2
+  const { cosTheta } = getSegmentSlopeFrame(node)
 
   return (
     <PanelWrapper
@@ -619,14 +624,14 @@ export default function RoofSegmentPanel() {
           value={node.deckThickness}
         />
         <SliderControl
-          label="Overhang"
+          label="Eave overhang"
           max={1}
           min={0}
-          onChange={(v) => handleUpdate({ overhang: v })}
+          onChange={(v) => handleUpdate({ overhang: v / cosTheta })}
           precision={2}
           step={0.05}
           unit="m"
-          value={node.overhang}
+          value={reach.z - halfWall}
         />
         {roofTypeHasRakes(node.roofType) && (
           <SliderControl
@@ -637,7 +642,7 @@ export default function RoofSegmentPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={getRoofSegmentDeckReach(node).x - node.wallThickness / 2}
+            value={reach.x - halfWall}
           />
         )}
         <SliderControl

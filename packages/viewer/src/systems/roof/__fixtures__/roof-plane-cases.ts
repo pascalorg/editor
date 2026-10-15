@@ -11,7 +11,8 @@
  * default) and an eave height that was the roof's SURFACE at the outside wall face. The segment
  * takes the same rectangle (`rectAt: 'outside'`), the pitch, the overhangs and the thickness in
  * any unit, and an eave that is the plate it bears on, its default the walls' tops; the walls'
- * thickness (6.5 in, the segment's default) puts their centre lines inside the faces.
+ * thickness, which it reads from the walls along those faces (6.5 in where none stand, a porch on
+ * posts), puts their centre lines inside the faces.
  *
  * A plane call whose roof stood on its walls, or over them, is the same roof as a segment: same
  * outline, surface, ridge and thickness (`lift` 0).
@@ -24,6 +25,9 @@
  *   `lift` higher. Those rows say so.
  * - Planes over a storey with another over it stood inside that storey; a segment refuses that
  *   (`into_storey_above`). The hosted table checks the refusal.
+ * - The plane tools answered each plane's id, so one slope could be edited or painted on its own
+ *   (`update_roof_plane`). A segment is one mass whose slopes change together; one slope on its own
+ *   is `create_roof_plane`'s, which stays, and the retired tools' answer says so.
  *
  * The viewer runs the segments through the roof geometry against the planes' own geometry
  * (`roof-plane-cases.test.ts`); the hosted plugin runs each replacement call through
@@ -33,7 +37,7 @@
 type Rect = [number, number, number, number]
 
 const IN = 0.0254
-/** The walls' thickness: `roof_segment_add`'s default `wallThicknessIn`, a 2x6 wall finished. */
+/** The walls' thickness, a 2x6 wall finished: what `roof_segment_add` reads from them. */
 export const ROOF_PLANE_WALL_THICKNESS = 6.5 * IN
 /** The covering a segment lays over its deck, in the thickness the plane tools took whole. */
 export const ROOF_PLANE_COVERING = 0.02

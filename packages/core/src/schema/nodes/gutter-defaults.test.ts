@@ -44,7 +44,7 @@ describe('createDefaultGuttersForSegment', () => {
     expect(right?.length).toBeCloseTo(6.52)
   })
 
-  test("a gable's eave gutters run out to its own gable overhang", () => {
+  test("a gable's eave gutters run out to its rakes: the deck's edge, its own gable overhang", () => {
     const segment = (gableOverhang?: number) =>
       RoofSegmentNode.parse({
         roofType: 'gable',
@@ -56,8 +56,9 @@ describe('createDefaultGuttersForSegment', () => {
       })
     const front = (gableOverhang?: number) =>
       getGutterRunsForSegment(segment(gableOverhang)).find((run) => run.side === '+Z')
-    expect(front()?.length).toBeCloseTo(8.52)
-    // out to the deck's edge, the walls' half thickness and the gable overhang past their faces
+    // without one, as far as the eaves in plan: half the wall, then the overhang along the 40° slope
+    expect(front()?.length).toBeCloseTo(2 * (4 + 0.1 + 0.3 * Math.cos((40 * Math.PI) / 180) - 0.04))
+    // with one, the walls' half thickness and the gable overhang past their faces
     expect(front(0.9)?.length).toBeCloseTo(2 * (4 + 0.1 + 0.9 - 0.04))
     expect(front(0)?.length).toBeCloseTo(2 * (4 + 0.1 - 0.04))
   })
@@ -99,11 +100,13 @@ describe('createDefaultGuttersForSegment', () => {
       (run) => run.side === '+Z',
     )
 
+    // from the rake, the deck's edge past half the 0.1 m wall, to the cross gable's tucked eave
+    const rake = 4 + 0.05 + 0.3 * Math.cos((40 * Math.PI) / 180) - 0.04
     expect(frontRuns).toHaveLength(2)
-    expect(frontRuns[0]?.position[0]).toBeCloseTo(-3.26)
-    expect(frontRuns[1]?.position[0]).toBeCloseTo(3.26)
-    expect(frontRuns[0]?.length).toBeCloseTo(2)
-    expect(frontRuns[1]?.length).toBeCloseTo(2)
+    expect(frontRuns[0]?.position[0]).toBeCloseTo(-(rake + 2.26) / 2)
+    expect(frontRuns[1]?.position[0]).toBeCloseTo((rake + 2.26) / 2)
+    expect(frontRuns[0]?.length).toBeCloseTo(rake - 2.26)
+    expect(frontRuns[1]?.length).toBeCloseTo(rake - 2.26)
   })
 
   test('splits an eave around an attached roof-extension range', () => {

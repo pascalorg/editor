@@ -105,6 +105,7 @@ const DEFAULT_GUTTER_REFRESH_FIELDS = new Set<string>([
   'pitch',
   'overhang',
   'gableOverhang',
+  'wallThickness',
   'trim',
 ])
 
