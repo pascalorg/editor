@@ -501,18 +501,17 @@ return g;}`,
   expect(artifact.scene.children.length).toBeGreaterThan(0)
 })
 
-test.each([
-  'node:fs',
-  'https://example.com/module.js',
-  'three/addons/loaders/GLTFLoader.js',
-])('rejects a non-allowlisted import after a same-line import: %s', async (specifier) => {
-  await expect(
-    compileGeometryScript({
-      code: `import * as THREE from 'three'; import { unavailable } from '${specifier}';
+test.each(['node:fs', 'https://example.com/module.js', 'three/addons/loaders/GLTFLoader.js'])(
+  'rejects a non-allowlisted import after a same-line import: %s',
+  async (specifier) => {
+    await expect(
+      compileGeometryScript({
+        code: `import * as THREE from 'three'; import { unavailable } from '${specifier}';
 export default function build() { return new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)); }`,
-    }),
-  ).rejects.toThrow(`Unsupported import ${specifier}`)
-})
+      }),
+    ).rejects.toThrow(`Unsupported import ${specifier}`)
+  },
+)
 
 // `Box3.isEmpty()` is false for a box with a NaN corner, so a mesh at a position that is not a
 // number used to compile into NaN bounds, which reached the item schema as a raw validation dump.

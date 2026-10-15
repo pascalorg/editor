@@ -120,38 +120,39 @@ function expectPreservedSlab(
 }
 
 describe('M4/M5 trimmed production levels', () => {
-  test.each(
-    fixtures,
-  )('$sceneId $levelId is deterministic, pure and stable across the server reload', ({ nodes }) => {
-    const original = JSON.stringify(nodes)
-    const warning = spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const after = migrate(nodes)
-      expect(JSON.stringify(nodes)).toBe(original)
-      const reversed = migrate(Object.fromEntries(Object.entries(nodes).reverse()))
-      expect(plates(reversed)).toEqual(plates(after))
-      const reloaded = migrate(migrateVerticalSceneNodes(healSceneNodes(after).nodes).nodes)
-      expect(reloaded).toEqual(after)
-      expect(
-        warning.mock.calls.filter(
-          ([message, details]) =>
-            message === '[floor plates] Keeping existing level construction' &&
-            (details as { error: unknown }).error !== 'recessed-legacy: preserved verbatim',
-        ),
-      ).toEqual([])
-      for (const plate of plates(after)) {
-        if (!plate.zoneIds!.length) expect(plate.plateRole).toBe('base')
-        expect(plate.zoneIds).toEqual([...plate.zoneIds!].sort())
+  test.each(fixtures)(
+    '$sceneId $levelId is deterministic, pure and stable across the server reload',
+    ({ nodes }) => {
+      const original = JSON.stringify(nodes)
+      const warning = spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const after = migrate(nodes)
+        expect(JSON.stringify(nodes)).toBe(original)
+        const reversed = migrate(Object.fromEntries(Object.entries(nodes).reverse()))
+        expect(plates(reversed)).toEqual(plates(after))
+        const reloaded = migrate(migrateVerticalSceneNodes(healSceneNodes(after).nodes).nodes)
+        expect(reloaded).toEqual(after)
         expect(
-          (after[plate.parentId!] as { children: string[] }).children.filter(
-            (id) => id === plate.id,
+          warning.mock.calls.filter(
+            ([message, details]) =>
+              message === '[floor plates] Keeping existing level construction' &&
+              (details as { error: unknown }).error !== 'recessed-legacy: preserved verbatim',
           ),
-        ).toHaveLength(1)
+        ).toEqual([])
+        for (const plate of plates(after)) {
+          if (!plate.zoneIds!.length) expect(plate.plateRole).toBe('base')
+          expect(plate.zoneIds).toEqual([...plate.zoneIds!].sort())
+          expect(
+            (after[plate.parentId!] as { children: string[] }).children.filter(
+              (id) => id === plate.id,
+            ),
+          ).toHaveLength(1)
+        }
+      } finally {
+        warning.mockRestore()
       }
-    } finally {
-      warning.mockRestore()
-    }
-  })
+    },
+  )
 
   test.each(fixtures)('$sceneId $levelId preserves visible floor area within 1%', ({ nodes }) => {
     const before = visible(nodes),
@@ -159,15 +160,16 @@ describe('M4/M5 trimmed production levels', () => {
     expect(Math.abs(after - before)).toBeLessThanOrEqual(Math.max(1e-6, before * 0.01))
   })
 
-  test.each([
-    'scene-23',
-  ])('%s keeps stale small floors without filling larger moved rooms', (sceneId) => {
-    const fixture = fixtures.find((fixture) => fixture.sceneId === sceneId)!
-    const after = migrate(fixture.nodes)
-    expect(plates(after)).toEqual([])
-    for (const slab of Object.values(fixture.nodes).filter((node) => node.type === 'slab'))
-      expectPreservedSlab(fixture.nodes, after, slab, !!slab.autoFromWalls)
-  })
+  test.each(['scene-23'])(
+    '%s keeps stale small floors without filling larger moved rooms',
+    (sceneId) => {
+      const fixture = fixtures.find((fixture) => fixture.sceneId === sceneId)!
+      const after = migrate(fixture.nodes)
+      expect(plates(after)).toEqual([])
+      for (const slab of Object.values(fixture.nodes).filter((node) => node.type === 'slab'))
+        expectPreservedSlab(fixture.nodes, after, slab, !!slab.autoFromWalls)
+    },
+  )
 
   test('a room buried inside thick walls stays at zero visible floor area', () => {
     const fixture = fixtures.find(({ sceneId }) => sceneId === 'scene-11')!
@@ -197,41 +199,44 @@ describe('M4/M5 trimmed production levels', () => {
     expect(Math.abs(visible(after) - visible(fixture.nodes))).toBeLessThan(0.01)
   })
 
-  test.each(
-    fixtures.filter(({ sceneId }) => ['scene-05', 'scene-08'].includes(sceneId)),
-  )('$sceneId IDs do not depend on legacy material representation', ({ nodes }) => {
-    const materialized = Object.fromEntries(
-      Object.entries(nodes).map(([id, node]) => [
-        id,
-        node.type === 'slab' && node.material !== undefined
-          ? { ...node, material: undefined, slots: { surface: `scene:material_${id}` } }
-          : node,
-      ]),
-    )
-    const raw = migrate(nodes),
-      resolved = migrate(materialized)
-    expect(plates(raw).map((plate) => plate.id)).toEqual(plates(resolved).map((plate) => plate.id))
-    if (Object.values(nodes).some((node) => node.type === 'slab' && node.autoFromWalls))
-      expect(
-        plates(raw).length > 0 ||
-          Object.values(nodes)
-            .filter((node) => node.type === 'slab' && node.autoFromWalls)
-            .every((slab) => raw[slab.id]?.type === 'slab' && !raw[slab.id].autoFromWalls),
-      ).toBe(true)
-    for (const source of Object.values(nodes)) {
-      if (source.type !== 'slab' || source.material === undefined || raw[source.id]) continue
-      const retained = Object.values(raw).flatMap((node) =>
-        node.type === 'slab'
-          ? [node.material]
-          : node.type === 'zone'
-            ? [node.floor?.finish, ...(node.floor?.regions ?? []).map((region) => region.finish)]
-            : [],
+  test.each(fixtures.filter(({ sceneId }) => ['scene-05', 'scene-08'].includes(sceneId)))(
+    '$sceneId IDs do not depend on legacy material representation',
+    ({ nodes }) => {
+      const materialized = Object.fromEntries(
+        Object.entries(nodes).map(([id, node]) => [
+          id,
+          node.type === 'slab' && node.material !== undefined
+            ? { ...node, material: undefined, slots: { surface: `scene:material_${id}` } }
+            : node,
+        ]),
       )
-      expect(
-        retained.some((finish) => JSON.stringify(finish) === JSON.stringify(source.material)),
-      ).toBe(true)
-    }
-  })
+      const raw = migrate(nodes),
+        resolved = migrate(materialized)
+      expect(plates(raw).map((plate) => plate.id)).toEqual(
+        plates(resolved).map((plate) => plate.id),
+      )
+      if (Object.values(nodes).some((node) => node.type === 'slab' && node.autoFromWalls))
+        expect(
+          plates(raw).length > 0 ||
+            Object.values(nodes)
+              .filter((node) => node.type === 'slab' && node.autoFromWalls)
+              .every((slab) => raw[slab.id]?.type === 'slab' && !raw[slab.id].autoFromWalls),
+        ).toBe(true)
+      for (const source of Object.values(nodes)) {
+        if (source.type !== 'slab' || source.material === undefined || raw[source.id]) continue
+        const retained = Object.values(raw).flatMap((node) =>
+          node.type === 'slab'
+            ? [node.material]
+            : node.type === 'zone'
+              ? [node.floor?.finish, ...(node.floor?.regions ?? []).map((region) => region.finish)]
+              : [],
+        )
+        expect(
+          retained.some((finish) => JSON.stringify(finish) === JSON.stringify(source.material)),
+        ).toBe(true)
+      }
+    },
+  )
 
   test('recessed legacy construction is byte-identical and its room is excluded', () => {
     const fixture = fixtures.find(({ nodes }) =>
@@ -320,103 +325,106 @@ describe('M4/M5 trimmed production levels', () => {
     expect(result[0]!.zoneIds).toHaveLength(4)
   })
 
-  test.each([
-    'scene-20',
-  ])('%s does not plate a room entirely inside a legacy opening', (sceneId) => {
-    const fixture = fixtures.find((fixture) => fixture.sceneId === sceneId)!
-    const after = migrate(fixture.nodes)
-    for (const plate of plates(after)) {
-      expect(area(union([slabFootprint(plate)]))).toBeGreaterThan(1e-6)
-      for (const id of plate.zoneIds!) {
-        const zone = after[id] as ZoneNode
-        expect(
-          Object.values(fixture.nodes).some(
-            (node) =>
-              node.type === 'slab' &&
-              node.autoFromWalls &&
-              footprintIoU(slabFootprint(node), slabFootprint(zone)) > 0,
-          ),
-        ).toBe(true)
-      }
-    }
-  })
-
-  test.each([
-    'scene-01',
-  ])('%s demotes unmatched construction without changing its geometry or id', (sceneId) => {
-    const fixture = fixtures.find((fixture) => fixture.sceneId === sceneId)!
-    const after = migrate(fixture.nodes)
-    let demoted = 0
-    for (const source of Object.values(fixture.nodes)) {
-      if (
-        source.type !== 'slab' ||
-        !source.autoFromWalls ||
-        !after[source.id] ||
-        (after[source.id] as SlabNode).plateRole
-      )
-        continue
-      expectPreservedSlab(fixture.nodes, after, source, true)
-      demoted++
-    }
-    expect(demoted).toBeGreaterThan(0)
-  })
-
-  test.each(
-    fixtures.filter(({ sceneId }) => sceneId === 'scene-25'),
-  )('$sceneId $levelId stored plates cover mitered faces outside existing cutouts', ({ nodes }) => {
-    const before = rooms(nodes),
-      after = migrate(nodes)
-    const walls = Object.values(nodes).filter((node): node is WallNode => node.type === 'wall')
-    const miters = calculateLevelMiters(walls),
-      faces = extractRooms(walls)
-    const stored = plates(after)
-    if (!stored.length) {
-      for (const source of Object.values(nodes).filter(
-        (node) => node.type === 'slab' && node.autoFromWalls,
-      ))
-        expectPreservedSlab(nodes, after, source, true)
-      expect(Math.abs(visible(after) - visible(nodes))).toBeLessThanOrEqual(
-        Math.max(1e-6, visible(nodes) * 0.01),
-      )
-      return
-    }
-    const cutouts = Object.values(nodes)
-      .filter((node): node is SlabNode => node.type === 'slab')
-      .flatMap((slab) => (slab.holes ?? []).map((outer) => ({ outer, holes: [] })))
-    let checked = 0
-    for (const room of faces) {
-      const plate = stored.find((plate) =>
-        plate.zoneIds!.some(
-          (id) =>
-            footprintIoU(slabFootprint(before[id] as ZoneNode), {
-              outer: room.referencePolygon,
-              holes: room.holes,
-            }) >= 0.9,
-        ),
-      )
-      if (!plate) continue
-      for (const span of room.spans) {
-        const wall = walls.find((wall) => wall.id === span.boundaryId)!
-        const endpoints = getWallMiterBoundaryPoints(wall, miters)!
-        for (let i = 0; i <= 8; i++) {
-          const t = span.t0 + ((span.t1 - span.t0) * i) / 8
-          const start = span.face === 'a' ? endpoints.startLeft : endpoints.startRight
-          const end = span.face === 'a' ? endpoints.endLeft : endpoints.endRight
-          const frame = getWallCurveFrameAt(wall, t),
-            offset = getWallFaceOffsets(wall)[span.face]
-          const p: [number, number] = wall.curveOffset
-            ? [frame.point.x + frame.normal.x * offset, frame.point.y + frame.normal.y * offset]
-            : [start.x + (end.x - start.x) * t, start.y + (end.y - start.y) * t]
-          if (containsPoint(cutouts, p)) continue
-          const geometry = stored.map(slabFootprint)
+  test.each(['scene-20'])(
+    '%s does not plate a room entirely inside a legacy opening',
+    (sceneId) => {
+      const fixture = fixtures.find((fixture) => fixture.sceneId === sceneId)!
+      const after = migrate(fixture.nodes)
+      for (const plate of plates(after)) {
+        expect(area(union([slabFootprint(plate)]))).toBeGreaterThan(1e-6)
+        for (const id of plate.zoneIds!) {
+          const zone = after[id] as ZoneNode
           expect(
-            containsPoint(geometry, p) || distanceToBoundary(geometry, p) <= 0.005,
-            `${wall.id} ${span.face} ${t}`,
+            Object.values(fixture.nodes).some(
+              (node) =>
+                node.type === 'slab' &&
+                node.autoFromWalls &&
+                footprintIoU(slabFootprint(node), slabFootprint(zone)) > 0,
+            ),
           ).toBe(true)
-          checked++
         }
       }
-    }
-    expect(checked).toBeGreaterThan(0)
-  })
+    },
+  )
+
+  test.each(['scene-01'])(
+    '%s demotes unmatched construction without changing its geometry or id',
+    (sceneId) => {
+      const fixture = fixtures.find((fixture) => fixture.sceneId === sceneId)!
+      const after = migrate(fixture.nodes)
+      let demoted = 0
+      for (const source of Object.values(fixture.nodes)) {
+        if (
+          source.type !== 'slab' ||
+          !source.autoFromWalls ||
+          !after[source.id] ||
+          (after[source.id] as SlabNode).plateRole
+        )
+          continue
+        expectPreservedSlab(fixture.nodes, after, source, true)
+        demoted++
+      }
+      expect(demoted).toBeGreaterThan(0)
+    },
+  )
+
+  test.each(fixtures.filter(({ sceneId }) => sceneId === 'scene-25'))(
+    '$sceneId $levelId stored plates cover mitered faces outside existing cutouts',
+    ({ nodes }) => {
+      const before = rooms(nodes),
+        after = migrate(nodes)
+      const walls = Object.values(nodes).filter((node): node is WallNode => node.type === 'wall')
+      const miters = calculateLevelMiters(walls),
+        faces = extractRooms(walls)
+      const stored = plates(after)
+      if (!stored.length) {
+        for (const source of Object.values(nodes).filter(
+          (node) => node.type === 'slab' && node.autoFromWalls,
+        ))
+          expectPreservedSlab(nodes, after, source, true)
+        expect(Math.abs(visible(after) - visible(nodes))).toBeLessThanOrEqual(
+          Math.max(1e-6, visible(nodes) * 0.01),
+        )
+        return
+      }
+      const cutouts = Object.values(nodes)
+        .filter((node): node is SlabNode => node.type === 'slab')
+        .flatMap((slab) => (slab.holes ?? []).map((outer) => ({ outer, holes: [] })))
+      let checked = 0
+      for (const room of faces) {
+        const plate = stored.find((plate) =>
+          plate.zoneIds!.some(
+            (id) =>
+              footprintIoU(slabFootprint(before[id] as ZoneNode), {
+                outer: room.referencePolygon,
+                holes: room.holes,
+              }) >= 0.9,
+          ),
+        )
+        if (!plate) continue
+        for (const span of room.spans) {
+          const wall = walls.find((wall) => wall.id === span.boundaryId)!
+          const endpoints = getWallMiterBoundaryPoints(wall, miters)!
+          for (let i = 0; i <= 8; i++) {
+            const t = span.t0 + ((span.t1 - span.t0) * i) / 8
+            const start = span.face === 'a' ? endpoints.startLeft : endpoints.startRight
+            const end = span.face === 'a' ? endpoints.endLeft : endpoints.endRight
+            const frame = getWallCurveFrameAt(wall, t),
+              offset = getWallFaceOffsets(wall)[span.face]
+            const p: [number, number] = wall.curveOffset
+              ? [frame.point.x + frame.normal.x * offset, frame.point.y + frame.normal.y * offset]
+              : [start.x + (end.x - start.x) * t, start.y + (end.y - start.y) * t]
+            if (containsPoint(cutouts, p)) continue
+            const geometry = stored.map(slabFootprint)
+            expect(
+              containsPoint(geometry, p) || distanceToBoundary(geometry, p) <= 0.005,
+              `${wall.id} ${span.face} ${t}`,
+            ).toBe(true)
+            checked++
+          }
+        }
+      }
+      expect(checked).toBeGreaterThan(0)
+    },
+  )
 })

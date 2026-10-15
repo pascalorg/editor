@@ -23,6 +23,8 @@ import { area, containsPoint, difference, distanceToBoundary } from './polygon-b
 import { polygonInteriorPoint } from './polygon-label'
 import { segmentsIntersect } from './polygon-relations'
 import {
+  edgeLength,
+  envelopeFrontEdge,
   outwardNormal,
   type Pt,
   polygonAreaAbs,
@@ -30,6 +32,8 @@ import {
   resolveFrontEdge,
   setbackEnvelope,
 } from './setback-envelope'
+import { heightAt, type TerrainField } from './terrain-field'
+import { persistedTerrainFieldOf } from './terrain-source-persisted'
 
 type Nodes = Readonly<Record<string, AnyNode>>
 type P = [number, number]
@@ -37,6 +41,12 @@ type P = [number, number]
 export type PlanSide = 'north' | 'east' | 'south' | 'west'
 export type YardKey = 'front' | 'rear' | 'left' | 'right'
 export type PlanBounds = { minX: number; minZ: number; maxX: number; maxZ: number }
+
+/**
+ * An edge taken as the front of a ring: its index (it runs from ring[edge] to ring[edge + 1]),
+ * its length, and how far the ring reaches back from it, square to it.
+ */
+export type EdgeFront = { edge: number; frontage: number; depth: number }
 
 export type BuildableArea = {
   /**
@@ -48,8 +58,36 @@ export type BuildableArea = {
   ring: P[]
   /** Its centroid when that lies inside, else its most interior point; null when there is none. */
   centre: P | null
+  areaM2: number
+  /**
+   * Each edge of `ring` as a front, in ring order (`edge` is its index). An envelope traced round
+   * a concave corner or a sight triangle has slivers of a few centimetres between its real edges,
+   * and a curved lot line is a run of short edges.
+   */
+  edges: EdgeFront[]
+  /**
+   * The edge behind the lot's front line, which the front setback is measured from: its frontage
+   * and depth are the most a house facing the street can take. While `street` is null it is
+   * behind the lot edge facing most nearly north, a guess the setbacks use until the street is
+   * set. Null when nothing is buildable, or when no edge faces the street (side setbacks wider
+   * than a narrow frontage can leave a point there, not a front).
+   */
+  frontEdge: number | null
   setbacks?: SiteSetbacks
   source?: string
+}
+
+export type SiteGround = {
+  /**
+   * `sloped`: the site has terrain. `flat`: a terrain read found the lot flat, so it wrote none.
+   * `unread`: no terrain was read, and the ground is flat until one is.
+   */
+  state: 'sloped' | 'flat' | 'unread'
+  /**
+   * Sloped: the terrain's fall across the lot, top to bottom. Flat: the read's own figure, over
+   * the grid it sampled round the lot. Null while unread.
+   */
+  reliefM: number | null
 }
 
 export type SiteFootprint = {
@@ -83,6 +121,8 @@ export type SiteBrief = {
     areaM2: number
     /** The parcel service found no recorded lines and drew a rectangle round the address. */
     approximate: boolean
+    /** The footprint a house on this lot usually covers: 30 to 45% of its area. */
+    footprintRangeM2: [number, number]
   }
   /** The new-project square: no address, no parcel, no setbacks; the real lot is unknown. */
   placeholder: boolean
@@ -93,7 +133,12 @@ export type SiteBrief = {
     edge: number
     /** The building rotation, in degrees, that squares the house to the street edge. */
     squareRotationDeg: number
+    /** The lot's length along the street edge. */
+    frontage: number
+    /** How far the lot reaches back from the street edge, square to it. */
+    depth: number
   } | null
+  ground: SiteGround
   /** True north, degrees clockwise from plan up (−z) in this building's level frame. */
   northDeg: number
   address: string | null
@@ -241,16 +286,123 @@ export function siteSetbackEnvelope(
   }).map((p) => [p[0], p[1]])
 }
 
-/** The buildable area in SITE metres. */
-function buildableInSite(site: SiteNode): { state: BuildableArea['state']; ring: P[] } {
+/** The buildable area in SITE metres; `inset` when its ring is the setback envelope, not the lot. */
+function buildableInSite(site: SiteNode): {
+  state: BuildableArea['state']
+  ring: P[]
+  inset: boolean
+} {
   const lot = (site.polygon?.points ?? []) as P[]
-  if (!site.setbacks) return { state: 'lot', ring: lot }
+  if (!site.setbacks) return { state: 'lot', ring: lot, inset: false }
   const envelope = siteSetbackEnvelope(site)
   if (envelope.length >= 3)
-    return { state: selfIntersects(envelope) ? 'advisory' : 'setbacks', ring: envelope }
+    return {
+      state: selfIntersects(envelope) ? 'advisory' : 'setbacks',
+      ring: envelope,
+      inset: true,
+    }
   // setbacks of zero exclude nothing (the envelope is empty because there is nothing to draw)
   const excludes = Object.values(site.setbacks).some((m) => typeof m === 'number' && m > 0)
-  return excludes ? { state: 'none', ring: [] } : { state: 'setbacks', ring: lot }
+  return excludes
+    ? { state: 'none', ring: [], inset: false }
+    : { state: 'setbacks', ring: lot, inset: false }
+}
+
+/**
+ * Each edge of a ring taken as a front: its length, and how far the ring reaches back from it,
+ * square to it (inward by the ring's winding, so an L or a U measures right).
+ */
+export function edgeFronts(ring: readonly Pt[]): EdgeFront[] {
+  return ring.map((p, edge) => {
+    const frontage = edgeLength(ring, edge)
+    if (frontage < 1e-9) return { edge, frontage: 0, depth: 0 }
+    const [nx, nz] = outwardNormal(ring, edge)
+    let depth = 0
+    for (const v of ring) depth = Math.max(depth, -((v[0] - p[0]) * nx + (v[1] - p[1]) * nz))
+    return { edge, frontage, depth }
+  })
+}
+
+/**
+ * The fall of a terrain over a lot: its highest point on the lot less its lowest. The ground is
+ * a plane on each of the field's triangles (the cells split by the diagonal `heightAt` uses), so the
+ * extremes lie at the field's samples on the lot, at the lot's corners, or where a lot line
+ * crosses a triangle's edge: a grid line (u or v whole, in samples) or a diagonal (u + v whole).
+ * Past the field `heightAt` holds its edge, so only the lines of the field itself count.
+ */
+function terrainFall(field: TerrainField, lot: readonly Pt[]): number {
+  // a field a single sample wide is its first sample everywhere, as heightAt reads it
+  if (field.cols < 2 || field.rows < 2) return 0
+  const [ox, oz] = field.origin
+  const s = field.spacing
+  let low = Number.POSITIVE_INFINITY
+  let high = Number.NEGATIVE_INFINITY
+  const take = (height: number) => {
+    low = Math.min(low, height)
+    high = Math.max(high, height)
+  }
+  lot.forEach((a, i) => {
+    const b = lot[(i + 1) % lot.length] as Pt
+    const [ua, va] = [(a[0] - ox) / s, (a[1] - oz) / s]
+    const [du, dv] = [(b[0] - a[0]) / s, (b[1] - a[1]) / s]
+    take(heightAt(field, a[0], a[1]))
+    // where this lot line crosses u = k, v = k and u + v = k, k on the field
+    for (const [from, along, lines] of [
+      [ua, du, field.cols - 1],
+      [va, dv, field.rows - 1],
+      [ua + va, du + dv, field.cols + field.rows - 2],
+    ] as const) {
+      if (Math.abs(along) < 1e-12) continue
+      const to = from + along
+      const first = Math.max(0, Math.ceil(Math.min(from, to)))
+      const last = Math.min(lines, Math.floor(Math.max(from, to)))
+      for (let k = first; k <= last; k++) {
+        const t = (k - from) / along
+        if (t > 0 && t < 1)
+          take(heightAt(field, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+      }
+    }
+  })
+  // the samples inside, row by row between the lot lines' crossings of that row
+  for (let row = 0; row < field.rows; row++) {
+    const z = oz + row * s
+    const crossings: number[] = []
+    lot.forEach((a, i) => {
+      const b = lot[(i + 1) % lot.length] as Pt
+      if (a[1] <= z !== b[1] <= z)
+        crossings.push(a[0] + ((z - a[1]) * (b[0] - a[0])) / (b[1] - a[1]))
+    })
+    crossings.sort((x0, x1) => x0 - x1)
+    for (let k = 0; k + 1 < crossings.length; k += 2) {
+      const first = Math.max(0, Math.ceil(((crossings[k] as number) - ox) / s))
+      const last = Math.min(field.cols - 1, Math.floor(((crossings[k + 1] as number) - ox) / s))
+      // as heightAt shows it at the sample's place: a spacing finer than the coordinates can
+      // hold puts some samples where no point of the lot is
+      for (let col = first; col <= last; col++) take(heightAt(field, ox + col * s, z))
+    }
+  }
+  return high - low
+}
+
+const METRES_PER_FOOT = 0.3048
+
+/**
+ * The ground under the lot: the fall of its terrain across the lot, as the scene holds it (the
+ * lot drop-in's read records its own figure over the grid it sampled, which reaches past the
+ * lot); with no terrain, what that read found (`metadata.terrainSample`: a lot it found flat
+ * gets none), else unread.
+ */
+function groundOf(site: SiteNode, lot: readonly Pt[]): SiteGround {
+  const field = persistedTerrainFieldOf(site)
+  const sample = (site.metadata as { terrainSample?: { flat?: unknown; reliefFt?: unknown } })
+    ?.terrainSample
+  if (field) return { state: 'sloped', reliefM: terrainFall(field, lot) }
+  if (sample?.flat === true)
+    return {
+      state: 'flat',
+      reliefM: typeof sample.reliefFt === 'number' ? sample.reliefFt * METRES_PER_FOOT : 0,
+    }
+  return { state: 'unread', reliefM: null }
 }
 
 /* ------------------------------------------------- what stands where */
@@ -516,15 +668,11 @@ export function lotOverhang(
   return { fit: 'outside', overhangM: round(past.reachM), sides: past.sides }
 }
 
-/**
- * The site a building stands on, in that building's level coordinates. The building is the one
- * named, else the named level's, else the scene's only one, else the site's first; null when the
- * scene has no site with a lot.
- */
-export function siteBrief(
+/** The building a brief is read for, and the site it stands on (the scene's first site for none). */
+function forBuilding(
   nodes: Nodes,
-  target: { buildingId?: string | null; levelId?: string | null } = {},
-): SiteBrief | null {
+  target: { buildingId?: string | null; levelId?: string | null },
+): { building: BuildingNode | null; stored: SiteNode | null } {
   const resolved = resolveSiteBuilding(nodes, target)
   let building = resolved.building
   if (!building && resolved.ambiguous) {
@@ -532,7 +680,44 @@ export function siteBrief(
     const first = site?.children?.map((id) => nodes[id]).find((node) => node?.type === 'building')
     building = (first as BuildingNode | undefined) ?? buildingsOf(nodes)[0] ?? null
   }
-  const stored = siteOfBuilding(nodes, building)
+  return { building, stored: siteOfBuilding(nodes, building) }
+}
+
+/**
+ * A site named by its id, and the building read on it: the viewed level's when it stands there,
+ * else the first standing on it (none on a vacant lot).
+ */
+function onSite(
+  nodes: Nodes,
+  siteId: string,
+  levelId: string | null | undefined,
+): { building: BuildingNode | null; stored: SiteNode | null } {
+  const site = nodes[siteId]
+  if (site?.type !== 'site') return { building: null, stored: null }
+  const viewed = levelId ? levelBuilding(nodes, levelId) : null
+  return {
+    building:
+      viewed?.parentId === site.id
+        ? viewed
+        : (buildingsOf(nodes).find((building) => building.parentId === site.id) ?? null),
+    stored: site,
+  }
+}
+
+/**
+ * The site a building stands on, in that building's level coordinates. The building is the one
+ * named, else the named level's, else the scene's only one, else the site's first; or the site
+ * is named, and the building is the named level's when it stands there, else the first standing
+ * on it. In site coordinates when no building stands on it; null when the scene has no site with
+ * a lot.
+ */
+export function siteBrief(
+  nodes: Nodes,
+  target: { buildingId?: string | null; levelId?: string | null; siteId?: string | null } = {},
+): SiteBrief | null {
+  const { building, stored } = target.siteId
+    ? onSite(nodes, target.siteId, target.levelId)
+    : forBuilding(nodes, target)
   if (!stored) return null
   const site = readSiteNode(stored)
   const siteRing = ((site.polygon?.points ?? []) as P[]).map((p) => [p[0], p[1]] as P)
@@ -544,30 +729,44 @@ export function siteBrief(
   const ring = inLevel(siteRing)
   const inSite = buildableInSite(site)
   const buildableRing = inLevel(inSite.ring)
+  const facing = streetAt(site, yaw)
+  const lotFront = facing ? edgeFronts(siteRing)[facing.edge] : undefined
+  const street =
+    facing && lotFront
+      ? {
+          side: facing.side,
+          edge: facing.edge,
+          squareRotationDeg: round(facing.squareYaw * DEG, 10),
+          frontage: lotFront.frontage,
+          depth: lotFront.depth,
+        }
+      : null
   const buildable: BuildableArea = {
     state: inSite.state,
     ring: buildableRing,
     centre: inSite.state === 'none' ? null : ringCentre(buildableRing),
+    areaM2: polygonAreaAbs(inSite.ring),
+    edges: edgeFronts(inSite.ring),
+    frontEdge:
+      inSite.state === 'none'
+        ? null
+        : inSite.inset
+          ? envelopeFrontEdge(siteRing, siteFrontEdge(site), inSite.ring)
+          : siteFrontEdge(site),
     ...(site.setbacks ? { setbacks: site.setbacks } : {}),
     ...(site.setbacksSource ? { source: site.setbacksSource } : {}),
   }
-  const facing = streetAt(site, yaw)
-  const street = facing
-    ? {
-        side: facing.side,
-        edge: facing.edge,
-        squareRotationDeg: round(facing.squareYaw * DEG, 10),
-      }
-    : null
   const parcel = site.parcel
+  const lotArea = polygonAreaAbs(siteRing)
   const lot: SiteBrief['lot'] = {
     ring,
     siteRing,
     bounds: boundsOf(ring),
-    areaM2: polygonAreaAbs(siteRing),
+    areaM2: lotArea,
     approximate: Boolean(
       parcel && ((parcel.notes ?? []).some((note) => /approximate/i.test(note)) || !parcel.apn),
     ),
+    footprintRangeM2: [lotArea * 0.3, lotArea * 0.45],
   }
 
   const rings = building ? buildingFootprintRings(nodes, building) : []
@@ -597,6 +796,7 @@ export function siteBrief(
     placeholder: !formatAddress(site) && !parcel && !site.setbacks && isPlaceholderSquare(siteRing),
     buildable,
     street,
+    ground: groundOf(stored, siteRing),
     northDeg: (((((site.northRotation ?? 0) + yaw) * DEG) % 360) + 360) % 360,
     address: formatAddress(site),
     parcel: parcel
@@ -854,7 +1054,13 @@ export function roundedSiteBrief(brief: SiteBrief) {
     maxX: round(b.maxX),
     maxZ: round(b.maxZ),
   })
-  const footprint = brief.footprint
+  const front = <T extends { frontage: number; depth: number }>(edge: T): T => ({
+    ...edge,
+    frontage: round(edge.frontage),
+    depth: round(edge.depth),
+  })
+  const { footprint, street, ground } = brief
+  const [fewest, most] = brief.lot.footprintRangeM2
   return {
     ...brief,
     pose: {
@@ -867,12 +1073,17 @@ export function roundedSiteBrief(brief: SiteBrief) {
       siteRing: brief.lot.siteRing.map(roundPt),
       bounds: bounds(brief.lot.bounds),
       areaM2: round(brief.lot.areaM2, 10),
+      footprintRangeM2: [Math.round(fewest), Math.round(most)] as [number, number],
     },
     buildable: {
       ...brief.buildable,
       ring: brief.buildable.ring.map(roundPt),
       centre: brief.buildable.centre ? roundPt(brief.buildable.centre) : null,
+      areaM2: round(brief.buildable.areaM2, 10),
+      edges: brief.buildable.edges.map(front),
     },
+    street: street ? front(street) : null,
+    ground: { ...ground, reliefM: ground.reliefM === null ? null : round(ground.reliefM) },
     northDeg: round(brief.northDeg, 10),
     footprint: footprint
       ? {
@@ -944,7 +1155,7 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
   const [px, py, pz] = brief.pose.position
   const posed = Math.hypot(px, pz) > 1e-3 || Math.abs(brief.pose.rotationDeg) > 0.05
   const lines = [
-    `lot, in this building's level coordinates: [${lot.ring.map(fmtPt).join(', ')}]${
+    `lot, in ${brief.buildingId ? "this building's level" : 'site (no building stands on it yet)'} coordinates: [${lot.ring.map(fmtPt).join(', ')}]${
       posed
         ? ` (stored in site coordinates; building at [${num(px)}, ${num(py)}, ${num(pz)}], ${num(brief.pose.rotationDeg)}°)`
         : ''
@@ -952,7 +1163,11 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
   ]
 
   const dims = rectangleSize(lot.ring)
-  const facts = [`lot ${dims ? `${dims}, ` : ''}${Math.round(lot.areaM2)} m²`]
+  const [fewest, most] = lot.footprintRangeM2
+  // the placeholder is no real lot: a share of it says nothing of the house
+  const facts = [
+    `lot ${dims ? `${dims}, ` : ''}${Math.round(lot.areaM2)} m²${brief.placeholder ? '' : ` (a house usually covers 30–45%: ${Math.round(fewest)}–${Math.round(most)} m²)`}`,
+  ]
   if (brief.placeholder)
     facts.push('the new-project placeholder: no address or parcel, real property lines unknown')
   if (brief.address) facts.push(brief.address)
@@ -970,10 +1185,19 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
     lines.push(
       `buildable: the whole lot (no setbacks recorded) · centre ${centre ? fmtPt(centre) : 'none'}`,
     )
-  else
+  else {
+    const front = buildable.edges.find((edge) => edge.edge === buildable.frontEdge)
+    const along = street
+      ? 'along the street'
+      : 'along its edge facing north (the setbacks take it as the front until the street is set)'
     lines.push(
-      `buildable${buildable.state === 'advisory' ? ' (advisory: the inset of this concave lot crosses itself)' : ''}: setbacks ${describeSetbacks(buildable.setbacks as SiteSetbacks)}${buildable.source ? ` (${buildable.source})` : ''} · ${span(boundsOf(buildable.ring))} · centre ${centre ? fmtPt(centre) : 'none'}`,
+      `buildable${buildable.state === 'advisory' ? ' (advisory: the inset of this concave lot crosses itself)' : ''}: setbacks ${describeSetbacks(buildable.setbacks as SiteSetbacks)}${buildable.source ? ` (${buildable.source})` : ''} · ${span(boundsOf(buildable.ring))} · centre ${centre ? fmtPt(centre) : 'none'} · ${Math.round(buildable.areaM2)} m² · ${
+        front
+          ? `${num(front.frontage)} m ${along}, ${num(front.depth)} m deep (its edge ${front.edge})`
+          : `no edge of it faces ${street ? 'the street' : 'north'}, so no frontage to build along`
+      }`,
     )
+  }
 
   const north =
     Math.abs(((brief.northDeg + 180) % 360) - 180) < 0.5
@@ -989,7 +1213,15 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
       ? 'the house square to it'
       : `${squaring} squares the house to it`
   lines.push(
-    `${street ? `street: ${street.side} (lot edge ${street.edge}; ${facing})` : 'street: not set'} · north: ${north}`,
+    `${street ? `street: ${street.side} (lot edge ${street.edge}, ${num(street.frontage)} m of frontage, ${num(street.depth)} m deep; ${facing})` : 'street: not set'} · north: ${north}`,
+  )
+  const { ground } = brief
+  lines.push(
+    ground.state === 'sloped'
+      ? `ground: sloped, ${num(ground.reliefM ?? 0)} m of fall across the lot`
+      : ground.state === 'flat'
+        ? `ground: read flat (${num(ground.reliefM ?? 0)} m of fall over the grid read round the lot)`
+        : 'ground: not read, flat until it is',
   )
 
   if (!footprint) {

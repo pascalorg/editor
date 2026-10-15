@@ -154,7 +154,12 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: getNodeTool,
     operation: AGENT_OPERATIONS.get_node,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    outputSchema: { node: jsonObject, materials: z.record(z.string(), SceneMaterial).optional() },
+    outputSchema: {
+      node: jsonObject,
+      ancestorIds: z.array(z.string()),
+      missingChildIds: z.array(z.string()).optional(),
+      materials: z.record(z.string(), SceneMaterial).optional(),
+    },
   },
   {
     contract: getLevelSummaryTool,
@@ -219,11 +224,18 @@ const SHARED_TOOLS: SharedTool[] = [
       activeLevelId: z.string().nullable(),
       levels: z.array(jsonObject),
       emptyLevelIds: z.array(z.string()),
+      // Typed by `type`; a check registered with verify_scene may add fields of its own.
       issues: z.array(
-        z.object({
+        z.looseObject({
           type: z.string(),
           message: z.string(),
           severity: z.literal('info').optional(),
+          nodeId: z.string().optional(),
+          path: z.string().optional(),
+          zoneId: z.string().optional(),
+          wallIds: z.array(z.string()).optional(),
+          area: z.number().optional(),
+          at: z.tuple([z.number(), z.number()]).optional(),
           wallId: z.string().optional(),
           slabId: z.string().optional(),
           levelId: z.string().optional(),
@@ -541,10 +553,11 @@ export function registerOperationTool(
             call.tool === placeInRoomTool.name,
         )
       const context: AgentContext = {
-        activeLevelId: null,
+        activeLevelId: bridge.activeLevelId?.() ?? null,
         ...(bridge.supportsMaterialUpserts && bridge.getMaterials
           ? { materials: bridge.getMaterials() }
           : {}),
+        ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
         ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
       }

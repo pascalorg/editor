@@ -184,8 +184,8 @@ describe('scene commit boundary', () => {
     useScene.getState().updateNode(LEVEL_ID, { level: 1 } as Partial<AnyNode>)
     expect(commits).toHaveLength(1)
     expect(commits[0]?.origin).toBe('local')
-    expect((commits[0]?.before.nodes[LEVEL_ID] as { level: number }).level).toBe(0)
-    expect((commits[0]?.current.nodes[LEVEL_ID] as { level: number }).level).toBe(1)
+    expect((commits[0]!.before.nodes[LEVEL_ID] as { level: number }).level).toBe(0)
+    expect((commits[0]!.current.nodes[LEVEL_ID] as { level: number }).level).toBe(1)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
 
     useScene.getState().updateNode(LEVEL_ID, { level: 1 } as Partial<AnyNode>)
@@ -295,8 +295,8 @@ describe('scene commit boundary', () => {
     })
 
     expect(commits).toHaveLength(1)
-    expect((commits[0]?.before.nodes[LEVEL_ID] as { level: number }).level).toBe(0)
-    expect((commits[0]?.current.nodes[LEVEL_ID] as { level: number }).level).toBe(2)
+    expect((commits[0]!.before.nodes[LEVEL_ID] as { level: number }).level).toBe(0)
+    expect((commits[0]!.current.nodes[LEVEL_ID] as { level: number }).level).toBe(2)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
 
     useScene.temporal.getState().undo()

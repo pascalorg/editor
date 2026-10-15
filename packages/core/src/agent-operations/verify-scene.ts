@@ -1,10 +1,12 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
+import { HIDDEN_SITE_NOTE } from '../lib/node-visibility'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { siteBrief } from '../lib/site-placement'
 import { nodeRegistry } from '../registry'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, type LevelNode } from '../schema'
+import { nodeSchemaForKind } from '../schema/compiled-node-parsers'
 import { isRoofOnStoreyWalls } from '../services/roof-move'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
@@ -22,6 +24,7 @@ import {
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import { type RoomFinding, roomFindings } from './room-findings'
 import { EMPTY_SESSION } from './scene-checkpoint'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
@@ -33,14 +36,26 @@ import {
   nodesOnLevel,
 } from './scene-queries'
 import { reviewSince } from './scene-review'
-import type { AgentOperation, SceneNodes } from './types'
+import type { AgentContext, AgentOperation, SceneNodes } from './types'
 import { type WallObjectObservation, wallObjectObservations } from './wall-object-observations'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
 export type SceneIssue =
   | CeilingObjectObservation
   | WallObjectObservation
+  | RoomFinding
   | { type: string; message: string; severity?: 'info' }
+  | { type: 'schema_invalid'; message: string; nodeId: string; path: string }
+  | {
+      type: 'schema_unknown_kind'
+      message: string
+      severity: 'info'
+      kind: string
+      count: number
+      /** The first few of them. */
+      nodeIds: string[]
+    }
+  | { type: 'site_hidden'; message: string; severity: 'info'; nodeId: string }
   | {
       type: 'wall_covering_slab_contact'
       message: string
@@ -225,39 +240,105 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
   })
 }
 
-function schemaErrors(nodes: SceneNodes) {
-  const errors: { nodeId: string; path: string; message: string }[] = []
-  for (const [id, node] of Object.entries(nodes)) {
-    const schema = nodeRegistry.get(node.type)?.schema ?? AnyNodeSchema
-    const parsed = schema.safeParse(node)
-    if (parsed.success) continue
-    for (const issue of parsed.error.issues)
-      errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
-  }
-  return errors
+/** How many of a kind no schema knows an issue names. */
+const UNKNOWN_KIND_IDS = 5
+
+/**
+ * A stored node with the fields its schema defaults filled where it lacks them (a level stored with
+ * no `children`), else the node itself: a host reads its own state by identity (the editor's
+ * rendered-mesh evidence checks the node is the store's current one).
+ */
+function withDefaults(node: AnyNode, parsed: unknown): AnyNode {
+  const stored = node as Record<string, unknown>
+  const filled = Object.entries(parsed as Record<string, unknown>).filter(
+    ([key, value]) => stored[key] === undefined && value !== undefined,
+  )
+  return filled.length === 0 ? node : ({ ...node, ...Object.fromEntries(filled) } as AnyNode)
 }
 
 /**
- * `verify_scene`: a self-check after complex edits. Per-level content and roles, then every
- * practical problem found, typed: rooms missing floors or ceilings, roof levels misused, storeys
- * with no stair, openings off their wall, stairs off their slab, blocked doors, overlapping
- * furniture, nodes their schema rejects.
+ * Every node checked by its kind's schema: the host's where it lends one, else the registered
+ * kind's, else core's. The checks that measure read each node with its defaults filled. A node its schema
+ * rejects is listed field by field and left `unread`: they could not read it. A node of a kind no
+ * schema here knows (a plugin's, where the plugin is not loaded) is counted by kind and kept as
+ * stored: the checks never read it.
+ */
+function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema']) {
+  const errors: { nodeId: string; path: string; message: string }[] = []
+  const unknownKinds = new Map<string, string[]>()
+  const unread = new Set<string>()
+  const measured: Record<string, AnyNode> = {}
+  for (const [id, node] of Object.entries(scene)) {
+    const type = (node as { type?: unknown } | null)?.type
+    const schema =
+      typeof type === 'string' && type !== ''
+        ? (hostSchema?.(type) ?? nodeRegistry.get(type)?.schema ?? nodeSchemaForKind(type))
+        : AnyNodeSchema
+    if (!schema) {
+      unknownKinds.set(String(type), [...(unknownKinds.get(String(type)) ?? []), id])
+      measured[id] = node
+      continue
+    }
+    const parsed = schema.safeParse(node)
+    if (parsed.success) {
+      measured[id] = withDefaults(node, parsed.data)
+      continue
+    }
+    for (const issue of parsed.error.issues)
+      errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
+    unread.add(id)
+  }
+  return { errors, unknownKinds, unread, measured }
+}
+
+/**
+ * `verify_scene`: a self-check after complex edits. Per-level content, roles and enclosed spaces,
+ * then every practical problem found, typed: spaces with no room, rooms the walls do not close or
+ * with no name, rooms missing floors or ceilings, roof levels misused, storeys with no stair,
+ * openings off their wall, stairs off their slab, blocked doors, overlapping furniture, and every
+ * field a node's schema rejects, by node and path; a kind no schema here knows, once per kind.
  */
 export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
-  nodes,
+  scene,
   input,
   context,
 ) => {
+  const { errors, unknownKinds, unread, measured: nodes } = checkSchemas(scene, context.nodeSchema)
   const onLevel = (levelId: string) => nodesOnLevel(nodes, levelId)
   const ofType = <T extends AnyNode['type']>(content: readonly AnyNode[], type: T) =>
     content.filter((node): node is Extract<AnyNode, { type: T }> => node.type === type)
+  // A level holding a node its schema rejects is measured once that node is fixed: around it, a
+  // room would read open for the wall left out, a door off its wall, a sofa far from any wall. So
+  // are its building's stairs, which a level, a slab or a stair left out would change.
+  const unreadOn = new Map<string, string[]>()
+  const holdingUnread = new Set<string>()
+  for (const id of unread) {
+    const levelId = levelIdOf(scene, id)
+    if (levelId) unreadOn.set(levelId, [...(unreadOn.get(levelId) ?? []), id])
+    for (let at = scene[id]?.parentId; at && !holdingUnread.has(at); at = scene[at]?.parentId)
+      holdingUnread.add(at)
+  }
+  // What the checks across levels read: the scene without the levels that wait.
+  const settled =
+    unreadOn.size === 0
+      ? nodes
+      : Object.fromEntries(
+          Object.entries(nodes).filter(([id]) => !unreadOn.has(levelIdOf(scene, id) ?? '')),
+        )
 
+  // A roof level holds the roof, no rooms.
+  const rooms = new Map<string, RoomFinding[]>()
   const levels = levelsOf(nodes).map((level) => {
     const content = contentCounts(onLevel(level.id))
     const { role, metadataRole, referenceLevelId } = levelRole(nodes, level)
+    const levelName = getLevelDisplayName(level)
+    const found =
+      role === 'roof' ? { spaces: 0, issues: [] } : roomFindings(nodes, level.id, levelName)
+    rooms.set(level.id, found.issues)
+    const unreadIds = unreadOn.get(level.id)
     return {
       levelId: level.id,
-      levelName: getLevelDisplayName(level),
+      levelName,
       floorIndex: level.level,
       role,
       metadataRole,
@@ -267,6 +348,10 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       isActive: level.id === context.activeLevelId,
       isEmpty: Object.values(content).every((count) => count === 0),
       content,
+      /** The spaces its walls and separators enclose. */
+      spaces: found.spaces,
+      /** Nodes on it its schema rejects: its counts leave them out, its findings wait for them. */
+      ...(unreadIds && { unread: unreadIds }),
     }
   })
 
@@ -279,7 +364,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   const report = (type: string, message: string, informational = false) =>
     issues.push({ type, message, ...(informational ? { severity: 'info' as const } : {}) })
 
-  const empty = levels.filter((level) => level.isEmpty)
+  const empty = levels.filter((level) => level.isEmpty && !level.unread)
   if (empty.length > 0)
     report(
       'empty_levels',
@@ -288,6 +373,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
 
   for (const level of levels) {
     const { content, levelName } = level
+    if (level.unread) continue
     // A free-standing wall (garden wall, half wall) is legitimate, not something to repair.
     for (const end of detectOpenWallEnds(nodes, level.levelId)) {
       if (end.reason === 'isolated') continue
@@ -335,6 +421,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       report('zones_no_ceilings', `${levelName} has zones but no ceilings`)
     if (content.walls > 0 && content.doors === 0)
       report('walls_no_doors', `${levelName} has walls but no doors`)
+    issues.push(...rooms.get(level.levelId)!)
     // A roof standing on the walls of the storey holding it: the ones move_roofs_to_roof_level
     // takes off. A porch's on its posts, a lower wing's on the walls below, are where they belong.
     const onWalls = (nodes[level.levelId] as LevelNode).children.filter((id) =>
@@ -387,6 +474,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   // Porch or deck steps, a flight to no level, stand on a storey without connecting it to another.
   for (const [buildingId, storeys] of storeysByBuilding) {
     if (storeys.length < 2) continue
+    if (holdingUnread.has(buildingId)) continue
     const connected = levels
       .filter((level) => {
         const node = nodes[level.levelId] as AnyNode & { type: 'level' }
@@ -420,7 +508,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     }
   }
 
-  for (const node of Object.values(nodes)) {
+  for (const node of Object.values(settled)) {
     if (node.type !== 'door' && node.type !== 'window') continue
     const parent = node.parentId ? nodes[node.parentId] : undefined
     if (parent?.type !== 'wall') {
@@ -444,9 +532,11 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       )
   }
 
-  for (const stair of Object.values(nodes).filter(
+  for (const stair of Object.values(settled).filter(
     (node): node is StairNode => node.type === 'stair',
   )) {
+    const sourceLevelId = levelIdOf(nodes, stair.id)
+    if (sourceLevelId && holdingUnread.has(buildingOf(sourceLevelId) ?? '')) continue
     const stairName = stair.name ?? stair.id
     for (const diagnostic of measureStair(stair, nodes as Record<string, AnyNode>).diagnostics)
       report(
@@ -454,7 +544,6 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
         `Stair ${stairName}: ${diagnostic.message}`,
         diagnostic.code.endsWith('-target'),
       )
-    const sourceLevelId = levelIdOf(nodes, stair.id)
     if (sourceLevelId) {
       const sourceName = nodes[sourceLevelId]?.name ?? sourceLevelId
       const footprints = stairFootprintPolygons(nodes, stair)
@@ -563,30 +652,50 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       )
   }
 
-  const errors = schemaErrors(nodes)
-  for (const error of errors.slice(0, 5))
-    report('schema_invalid', `Schema: ${error.nodeId}.${error.path} ${error.message}`)
-  if (errors.length > 5)
-    report('schema_invalid', `Schema: ${errors.length - 5} additional validation errors`)
+  for (const { nodeId, path, message } of errors)
+    issues.push({
+      type: 'schema_invalid',
+      message: `Schema: ${path ? `${nodeId}.${path}` : nodeId} ${message}`,
+      nodeId,
+      path,
+    })
+  for (const [kind, nodeIds] of unknownKinds)
+    issues.push({
+      type: 'schema_unknown_kind',
+      message: `No schema here knows kind ${kind} (${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'}): a plugin's, not checked here.`,
+      severity: 'info',
+      kind,
+      count: nodeIds.length,
+      nodeIds: nodeIds.slice(0, UNKNOWN_KIND_IDS),
+    })
+  // A hidden site, read as stored: a malformed one is still hidden.
+  for (const [id, site] of Object.entries(scene))
+    if (site?.type === 'site' && site.visible === false)
+      issues.push({
+        type: 'site_hidden',
+        message: `Site ${id} is hidden. ${HIDDEN_SITE_NOTE}`,
+        severity: 'info',
+        nodeId: id,
+      })
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
-  issues.push(...layoutIssuesFromScene(Object.values(nodes)))
-  issues.push(...ceilingObjectObservations(nodes))
-  issues.push(...wallObjectObservations(nodes))
+  issues.push(...layoutIssuesFromScene(Object.values(settled)))
+  issues.push(...ceilingObjectObservations(settled))
+  issues.push(...wallObjectObservations(settled))
   for (const check of checks)
-    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
+    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}))
   // What the edits since the host's checkpoint lost, by place.
   const hosted = context.checkpoint
-    ? changesSince(context.checkpoint as SceneCheckpoint, nodes)
+    ? changesSince(context.checkpoint as SceneCheckpoint, scene)
     : null
   if (hosted) issues.push(...hosted.issues)
   // The look back: what the agent did since a moment it named. The places the registered families
   // lost count as issues, as a window gone from its place always did.
   const session = context.session ?? EMPTY_SESSION
-  const since = typeof input?.since === 'string' ? reviewSince(session, input.since, nodes) : null
+  const since = typeof input?.since === 'string' ? reviewSince(session, input.since, scene) : null
   if (since?.places) issues.push(...since.places.issues)
   for (const check of checks)
-    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
+    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
   return {
@@ -601,7 +710,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       levels,
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
-      hasIssues: issues.some((issue) => issue.severity !== 'info'),
+      hasIssues: issues.some((issue) => !('severity' in issue && issue.severity === 'info')),
       ...authoredObjects(nodes),
       ...Object.assign({}, ...reports.map((report) => report.run(nodes))),
       ...(Object.keys(session.checkpoints).length

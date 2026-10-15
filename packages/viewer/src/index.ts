@@ -313,12 +313,15 @@ export { getRoofMaterialArray, levelWallCladdingRef } from './systems/roof/roof-
 // read these through the public surface. No kind-specific helpers
 // belong here — those live in `@pascal-app/nodes/<kind>/`.
 export {
+  clipDirectRoofGeometryAgainstSiblings,
   clipGeometryBySegmentTrim,
   generateRoofSegmentGeometry,
+  getPendingRoofMergeCount,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
   mapRoofGroupMaterialIndex,
   ROOF_MATERIAL_SLOT_COUNT,
+  type RoofGeometryAdapter,
   RoofSystem,
   remapRoofShellFaces,
   roofCsgDummyMats,

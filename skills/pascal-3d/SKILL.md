@@ -77,17 +77,16 @@ To compare what you built with a reference, call `view_scene`: the building from
 
 Never empty a project by deleting everything. A write that would leave it empty (deleting its only room, a patch removing every node) is refused with `scene_wipe_blocked` and nothing changes, in the project or the session. When the person asks to start over, call `clear_scene` with their words in `reason`: it resets to a site, a building and one level, and keeps the project's installed plugins. To replace the only room, build what replaces it first, then remove it.
 
-Preserve unrelated nodes. Before a bounded edit, identify the target IDs with `find_nodes`, `get_node`, `get_level_summary`, `get_walls`, or `get_zones`. After the edit, identify the actual changed IDs from tool output or a before/after read.
+Preserve unrelated nodes. Before a bounded edit, identify the target IDs with `find_by_type`, `get_node`, `get_level_summary`, `get_walls`, or `get_zones`. After the edit, identify the actual changed IDs from tool output or a before/after read.
 
 ### Validate and persist
 
 After a meaningful edit:
 
-1. Call `validate_scene` for schema validity.
-2. Call `verify_scene` for practical scene issues.
-3. Resolve relevant reported issues or state them plainly.
-4. Call `save_scene` with `saveMode: "draft"` for working progress. Use `saveMode: "checkpoint"` only for a meaningful milestone or when the user requests a durable version.
-5. Call `get_project_status` after the save and use its returned `editorUrl`, version, node count, and graph hash as the handoff evidence.
+1. Call `verify_scene`: schema validity (`valid`, each `schema_invalid` with its node and path) and practical scene issues.
+2. Resolve relevant reported issues or state them plainly.
+3. Call `save_scene` with `saveMode: "draft"` for working progress. Use `saveMode: "checkpoint"` only for a meaningful milestone or when the user requests a durable version.
+4. Call `get_project_status` after the save and use its returned `editorUrl`, version, node count, and graph hash as the handoff evidence.
 
 An HTTP success, a tool response with `isError: false`, or a non-empty scene ID does not by itself prove the requested result. For example, `export_glb` currently returns a structured `not_implemented` status in the open-source headless MCP server. Report that as unsupported; do not claim a file exists.
 

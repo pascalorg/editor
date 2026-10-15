@@ -103,16 +103,6 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
   const cleanedNodes: Record<string, unknown> = {}
   for (const [id, node] of Object.entries(kept)) {
     const children = (node as { children?: unknown })?.children
-    if ((node as { type?: unknown })?.type === 'level' && !Array.isArray(children)) {
-      cleanedNodes[id] = {
-        ...(node as Record<string, unknown>),
-        children: Object.entries(kept)
-          .filter(([, child]) => (child as { parentId?: unknown })?.parentId === id)
-          .map(([childId]) => childId),
-      }
-      repairedChildLinkNodeIds.push(id)
-      continue
-    }
     if (Array.isArray(children)) {
       const seen = new Set<string>()
       const cleaned = children.filter((child) => {
@@ -155,11 +145,48 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
     cleanedNodes[id] = node
   }
 
-  // Pass 3: repair null parent links (`repairClaimedParentLinks`).
-  const { nodes, repairedParentLinkNodeIds } = repairClaimedParentLinks(cleanedNodes)
+  // Pass 3: repair null parent links (`repairClaimedParentLinks`), then the hosts' reverse links.
+  const { nodes: parented, repairedParentLinkNodeIds } = repairClaimedParentLinks(cleanedNodes)
+  const { nodes, repairedChildLinkNodeIds: relinked } = repairHostChildLinks(parented)
+  for (const id of relinked)
+    if (!repairedChildLinkNodeIds.includes(id)) repairedChildLinkNodeIds.push(id)
 
-  // Reachability follows children, so retaining a node via parentId also
-  // requires repairing its host's reverse link before authority validation.
+  return {
+    nodes,
+    repairedCoordinates,
+    droppedWallIds,
+    strippedChildRefs,
+    strippedStaleChildRefs,
+    repairedParentLinkNodeIds,
+    repairedChildLinkNodeIds,
+  }
+}
+
+/**
+ * The reverse of `repairClaimedParentLinks`: a level stored without `children` gets the nodes that
+ * name it, in the order the scene holds them; then a node whose `parentId` names a host that does
+ * not list it is added to that host's `children`, by id. Reachability follows children, so a node
+ * kept by its parentId needs its host's link before authority validation; and a reader of
+ * `children` (a wall's doors) sees every child. Pure: hosts that need no repair are passed through
+ * by reference.
+ */
+export function repairHostChildLinks(input: Record<string, unknown>): {
+  nodes: Record<string, unknown>
+  repairedChildLinkNodeIds: string[]
+} {
+  const nodes = { ...input }
+  const repairedChildLinkNodeIds: string[] = []
+  for (const [id, node] of Object.entries(nodes)) {
+    const level = node as { type?: unknown; children?: unknown } | null
+    if (level?.type !== 'level' || Array.isArray(level.children)) continue
+    nodes[id] = {
+      ...level,
+      children: Object.entries(nodes)
+        .filter(([, child]) => (child as { parentId?: unknown })?.parentId === id)
+        .map(([childId]) => childId),
+    }
+    repairedChildLinkNodeIds.push(id)
+  }
   for (const [id, node] of Object.entries(nodes).sort(([a], [b]) => a.localeCompare(b))) {
     const parentId = (node as { parentId?: unknown })?.parentId
     if (typeof parentId !== 'string' || parentId === id) continue
@@ -175,16 +202,7 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
     nodes[parentId] = { ...parent, children: [...children, id] }
     if (!repairedChildLinkNodeIds.includes(parentId)) repairedChildLinkNodeIds.push(parentId)
   }
-
-  return {
-    nodes,
-    repairedCoordinates,
-    droppedWallIds,
-    strippedChildRefs,
-    strippedStaleChildRefs,
-    repairedParentLinkNodeIds,
-    repairedChildLinkNodeIds,
-  }
+  return { nodes, repairedChildLinkNodeIds }
 }
 
 /**

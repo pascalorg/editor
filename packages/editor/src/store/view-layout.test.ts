@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { availableViews, editorHostViewRegistry, registerEditorHostView } from '../lib/editor-views'
+import {
+  availableViews,
+  editorHostViewRegistry,
+  registerEditorHostView,
+  unregisterEditorHostView,
+} from '../lib/editor-views'
 import useEditor, { normalizePersistedEditorUiState } from './use-editor'
 import {
   activeViewLayout,
@@ -129,6 +134,27 @@ describe('layouts saved before views', () => {
 })
 
 describe('registered views', () => {
+  test('dismissing a document removes it from both workspace layouts, including a hidden split pane', () => {
+    registerEditorHostView({
+      id: 'document:test',
+      label: 'Plan.pdf',
+      icon: { kind: 'iconify', name: 'lucide:file' },
+      component: async () => ({ default: () => null }),
+    })
+    useEditor.getState().showView('document:test', { beside: true })
+    useEditor.getState().setWorkspaceMode('studio')
+    useEditor
+      .getState()
+      .setViewLayout({ ...DEFAULT_VIEW_LAYOUT, panes: [VIEW_3D, 'document:test'] })
+    useEditor.getState().setViewPinned('document:test', true)
+    unregisterEditorHostView('document:test')
+    expect(editorHostViewRegistry.getSnapshot()).toEqual([])
+    expect(useEditor.getState().pinnedViews['document:test']).toBeUndefined()
+    expect(layout().panes).toEqual([VIEW_3D, VIEW_2D])
+    useEditor.getState().setWorkspaceMode('edit')
+    expect(layout()).toMatchObject({ split: false, panes: [VIEW_3D, VIEW_2D] })
+  })
+
   test('a plugin view is offered only where its plugin is installed and its workspace matches', () => {
     registerEditorHostView({
       id: 'acme:pets',

@@ -165,48 +165,48 @@ describe('planPipeVerticalOffsets', () => {
     { fittingType: 'wye' as const, portId: 'branch' },
     { fittingType: 'sanitary-tee' as const, portId: 'branch' },
     { fittingType: 'cross' as const, portId: 'branch' },
-  ])('routes a vertical offset from a stationary $fittingType collar', ({
-    fittingType,
-    portId,
-  }) => {
-    const fitting = branchFitting(fittingType)
-    const ports = getPipeFittingPorts(fitting)
-    const branch = ports.find((p) => p.id === portId)!
-    const moved = drain([
-      [...branch.position],
-      [
-        branch.position[0] + branch.direction[0] * 4,
-        branch.position[1] + branch.direction[1] * 4,
-        branch.position[2] + branch.direction[2] * 4,
-      ],
-    ])
+  ])(
+    'routes a vertical offset from a stationary $fittingType collar',
+    ({ fittingType, portId }) => {
+      const fitting = branchFitting(fittingType)
+      const ports = getPipeFittingPorts(fitting)
+      const branch = ports.find((p) => p.id === portId)!
+      const moved = drain([
+        [...branch.position],
+        [
+          branch.position[0] + branch.direction[0] * 4,
+          branch.position[1] + branch.direction[1] * 4,
+          branch.position[2] + branch.direction[2] * 4,
+        ],
+      ])
 
-    const result = planVerticalOffsets({
-      pipe: moved,
-      dy: 1.2,
-      profile: { diameter: moved.diameter, pipeMaterial: moved.pipeMaterial },
-      connections: [fittingConnection(fitting)],
-      scenePorts: ports.map((p) => ({ ...p, nodeId: fitting.id })),
-      nodesById: {
-        [moved.id]: moved as AnyNode,
-        [fitting.id]: fitting as AnyNode,
-      },
-    })
+      const result = planVerticalOffsets({
+        pipe: moved,
+        dy: 1.2,
+        profile: { diameter: moved.diameter, pipeMaterial: moved.pipeMaterial },
+        connections: [fittingConnection(fitting)],
+        scenePorts: ports.map((p) => ({ ...p, nodeId: fitting.id })),
+        nodesById: {
+          [moved.id]: moved as AnyNode,
+          [fitting.id]: fitting as AnyNode,
+        },
+      })
 
-    expect(result?.status).toBe('valid')
-    if (result?.status !== 'valid') return
-    expect(result.plan.fittings).toHaveLength(2)
-    expect(result.plan.risers).toHaveLength(1)
-    expect(result.plan.updates.some((u) => u.id === fitting.id)).toBe(false)
+      expect(result?.status).toBe('valid')
+      if (result?.status !== 'valid') return
+      expect(result.plan.fittings).toHaveLength(2)
+      expect(result.plan.risers).toHaveLength(1)
+      expect(result.plan.updates.some((u) => u.id === fitting.id)).toBe(false)
 
-    const bottomPorts = getPipeFittingPorts(result.plan.fittings[0]!)
-    const topPorts = getPipeFittingPorts(result.plan.fittings[1]!)
-    const riser = result.plan.risers[0]!
-    expect(bottomPorts.some((p) => distSq(p.position, branch.position) < 1e-9)).toBe(true)
-    expect(bottomPorts.some((p) => distSq(p.position, riser.path[0]!) < 1e-9)).toBe(true)
-    expect(topPorts.some((p) => distSq(p.position, riser.path[1]!) < 1e-9)).toBe(true)
-    expect(topPorts.some((p) => distSq(p.position, result.plan.pipePath[0]!) < 1e-9)).toBe(true)
-  })
+      const bottomPorts = getPipeFittingPorts(result.plan.fittings[0]!)
+      const topPorts = getPipeFittingPorts(result.plan.fittings[1]!)
+      const riser = result.plan.risers[0]!
+      expect(bottomPorts.some((p) => distSq(p.position, branch.position) < 1e-9)).toBe(true)
+      expect(bottomPorts.some((p) => distSq(p.position, riser.path[0]!) < 1e-9)).toBe(true)
+      expect(topPorts.some((p) => distSq(p.position, riser.path[1]!) < 1e-9)).toBe(true)
+      expect(topPorts.some((p) => distSq(p.position, result.plan.pipePath[0]!) < 1e-9)).toBe(true)
+    },
+  )
 
   test('continues routing after a pipe riser collapse without needing a new drag', () => {
     const bottom = planPipeElbowAtPort(portLike([0, 0, 0], [1, 0, 0]), [0, 1, 0], 3, 'pvc')

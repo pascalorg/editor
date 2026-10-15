@@ -1,10 +1,11 @@
 import { refuse } from '../agent-tools/refusal'
 import type { MaterialSurface } from '../material-kinds'
-import { nodeSlotDeclarations } from '../node-slots'
+import { GLAZED_ROOF_SLOTS, nodeSlotDeclarations } from '../node-slots'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
   type AnyNode,
   getEffectiveSegmentSurfaceMaterial,
+  isGlazedRoofSegment,
   type MaterialSchema,
   type RoofNode,
   type RoofSegmentNode,
@@ -53,6 +54,7 @@ const DEFAULT_ROLES: Record<string, readonly string[]> = {
   fence: ['posts', 'infill', 'base', 'rail'],
   door: ['panel', 'frame'],
   window: ['frame'],
+  'roof-segment': ['glazing-frame', 'glazing-solid'],
   block: ['body'],
 }
 
@@ -212,7 +214,31 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
   const throughRoof: string[] = []
   const modelRoles: string[] = []
 
-  for (const id of input.targets) {
+  // A roof with glazed segments: its roles go on the roof for its standard segments, its glazing's
+  // on each glazed segment; a role only one kind has paints that kind.
+  const targets = [
+    ...new Set(
+      input.targets.flatMap((id) => {
+        const node = nodes[id]
+        if (node?.type !== 'roof') return [id]
+        const segments = node.children
+          .map((childId) => nodes[childId])
+          .filter((child): child is RoofSegmentNode => child?.type === 'roof-segment')
+        const glazed = segments.filter(isGlazedRoofSegment).map((segment) => segment.id)
+        if (!glazed.length) return [id]
+        const standard = glazed.length < segments.length
+        const roles = [...(standard ? ROOF_ROLES : []), ...GLAZED_ROOF_SLOTS]
+        if (input.role !== undefined && !roles.includes(input.role as never))
+          refuse('unknown_role', `Roof ${id}'s roles are ${roles.join(', ')}.`, {
+            target: id,
+            roles,
+          })
+        const roofRole = input.role === undefined || ROOF_ROLES.includes(input.role as RoofRole)
+        return [...(standard && roofRole ? [id] : []), ...(roofRole && input.role ? [] : glazed)]
+      }),
+    ),
+  ]
+  for (const id of targets) {
     const node = current(id)
     if (!node)
       refuse(
@@ -221,7 +247,7 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
         { target: id },
       )
 
-    if (node.type === 'roof' || node.type === 'roof-segment') {
+    if (node.type === 'roof' || (node.type === 'roof-segment' && !isGlazedRoofSegment(node))) {
       const role = (input.role ?? 'top') as RoofRole
       if (!ROOF_ROLES.includes(role))
         refuse('unknown_role', `A roof's roles are ${ROOF_ROLES.join(', ')}.`, {

@@ -1,14 +1,53 @@
 import { z } from 'zod'
+import { CurtainGrid } from '../schema/nodes/curtain-wall'
+import { RoofGlazing, RoofSystemType } from '../schema/nodes/roof-glazing-config'
 import { RoofType } from '../schema/nodes/roof-types'
 import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
+
+const glazingGrid = CurtainGrid.partial().extend({
+  spacing: measurement('length', 'm', {
+    min: 0.2,
+    max: 100,
+    description: 'Bar spacing, for the maximum-spacing and fixed-spacing layouts.',
+  }).optional(),
+})
+
+/** A roof's glazing as the node stores it, its lengths read in any unit. */
+const RoofGlazingInput = RoofGlazing.partial().extend({
+  across: glazingGrid.optional(),
+  along: glazingGrid.optional(),
+  frameWidth: measurement('length', 'm', {
+    positive: true,
+    description: 'Frame bar width.',
+  }).optional(),
+  frameDepth: measurement('length', 'm', {
+    positive: true,
+    description: 'Frame bar depth.',
+  }).optional(),
+  glassThickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Glass pane thickness.',
+  }).optional(),
+})
 
 export const createRoofTool = {
   name: 'create_roof',
   title: 'Create roof',
   description:
-    "Cap a storey with a roof over its footprint (its walls' outline, else its floor plates, else its rooms), swept in the building's own axes into rectangles, one roof segment each. Without a roofType: a gable for one rectangle, hips for a few wings, flat for a large block. The roof goes on the building's roof level above the top storey (the empty level directly above when it is the only one; made, named Roof, when there is none), and stands on the storey's wall tops, so exploded and solo level views lift it off the plan. Call it once the storeys and their exterior walls stand. Refused with a code: storey_above (another storey stands above: a roof caps the top one; a lower wing's roof is drawn with the Roof tool), building_required (no level named on a site of several buildings: pass a level of the one to roof), roof_exists (the storey already has a roof: edit it, or delete_node it first when the person asked for a new one), no_rooms (no rooms or closed walls on any level of the building: pass width and depth to roof a rectangle of your own).",
+    "Cap a storey with a roof over its footprint (its walls' outline, else its floor plates, else its rooms), swept in the building's own axes into rectangles, one roof segment each. Without a roofType: a gable for one rectangle, hips for a few wings, flat for a large block. The roof goes on the building's roof level above the top storey (the empty level directly above when it is the only one; made, named Roof, when there is none), and stands on the storey's wall tops, so exploded and solo level views lift it off the plan. Glazed construction supports gable, straight shed and barrel. Barrel depth is the span; barrelRise is at most half the span. glazing controls frame, glass, grids and panels. Paint glazing-frame, glazing-glass or glazing-solid. Call it once the storeys and their exterior walls stand. Refused with a code: storey_above (another storey stands above: a roof caps the top one; a lower wing's roof is drawn with the Roof tool), building_required (no level named on a site of several buildings: pass a level of the one to roof), roof_exists (the storey already has a roof: edit it, or delete_node it first when the person asked for a new one), no_rooms (no rooms or closed walls on any level of the building: pass width and depth to roof a rectangle of your own).",
   input: {
+    roofSystem: RoofSystemType.default('standard'),
+    glazing: RoofGlazingInput.optional(),
+    barrelRise: measurement('length', 'm', {
+      positive: true,
+      description: 'Barrel arch rise, at most half each segment span.',
+    }).optional(),
+    barrelSegments: z.number().int().min(4).max(32).optional(),
+    wallThickness: measurement('length', 'm', {
+      positive: true,
+      description: 'Roof wall thickness.',
+    }).optional(),
     levelId: NodeId.optional().describe(
       'The storey to cover, by an id list_levels returned. Default: the top storey with rooms. A level without rooms stands for the highest storey of its building that has some.',
     ),
