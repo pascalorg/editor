@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { measurementHint, parseMeasurement } from '../index'
 import {
   buildMeasurementAngleArcPoints,
   cubicMetersToVolumeUnit,
@@ -188,5 +189,27 @@ describe('volume measurements', () => {
     expect(formatVolumeLabel(NaN, 'metric')).toBe('--')
     expect(formatVolumeLabel(Infinity, 'imperial')).toBe('--')
     expect(formatVolumeLabel(Number.NEGATIVE_INFINITY, 'metric')).toBe('--')
+  })
+})
+
+describe('typed measurement fields', () => {
+  test('canonicalizes explicit, compound, and scientific dimensions', () => {
+    const length = { kind: 'length', unitId: 'm' } as const
+    expect(parseMeasurement('180cm', length)).toBeCloseTo(1.8)
+    expect(parseMeasurement('1m80', length)).toBeCloseTo(1.8)
+    expect(parseMeasurement(`5'11"`, length)).toBeCloseTo(1.8034)
+    expect(parseMeasurement('1.234e-4 m', length)).toBeCloseTo(0.0001234, 10)
+    expect(parseMeasurement('6', length, { bareUnit: 'ft' })).toBeCloseTo(1.8288)
+    expect(parseMeasurement('180deg', { kind: 'angle', unitId: 'rad' })).toBeCloseTo(Math.PI)
+  })
+
+  test('rejects ranges, incomplete arithmetic, and nonfinite input', () => {
+    const length = { kind: 'length', unitId: 'm' } as const
+    for (const input of ['2+3 m', '2-3 m', 'between 2 and 3 m', '1e999 m']) {
+      expect(parseMeasurement(input, length)).toBeNull()
+      expect(measurementHint(input, length)).toBeNull()
+    }
+    expect(measurementHint('180cm', length)).toBe('= 1.80 m')
+    expect(measurementHint('6', length)).toBeNull()
   })
 })
