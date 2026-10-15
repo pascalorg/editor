@@ -1,5 +1,6 @@
 import type { RevealPhase, RevealStyle } from '@pascal-app/core'
 import { REVEAL_ARRIVAL } from './reveal-pose'
+import type { PlayedStyle } from './reveal-wipe'
 
 export const REVEAL_PHASE_ORDER: readonly RevealPhase[] = [
   'foundation',
@@ -18,8 +19,9 @@ export type RevealTiming = {
   /** A reveal ends within this however many nodes it has: the gaps shrink, no node is skipped. */
   capMs: number
   /**
-   * How long each style moves its node. `assemble` holds its node still (its parts drop), and the
-   * heights of the travelling styles are declared by each kind (`capabilities.reveal.height`).
+   * How long each style moves its node. `assemble` holds its node still (its parts drop), `cover`
+   * holds it still while its covering is laid, and the heights of the travelling styles are
+   * declared by each kind (`capabilities.reveal.height`).
    */
   durationMs: Record<RevealStyle, number>
 }
@@ -32,10 +34,23 @@ export const REVEAL_TIMING: RevealTiming = {
   durationMs: { rise: 650, scale: 400, settle: 380, drop: 620, cut: 260, assemble: 0 },
 }
 
+/**
+ * How long `style` moves its node in `table`. Only the Framing level's table has a `cover` time (it
+ * lays a roof's covering where Full drops the roof whole); a plan made on a Full table or the reverse
+ * play of a framing build gives a covering twice what the whole roof takes to come or go.
+ */
+export function styleMs(
+  table: Readonly<Record<RevealStyle, number>> & { cover?: number },
+  style: PlayedStyle,
+): number {
+  if (style !== 'cover') return table[style]
+  return table.cover ?? 2 * (table.assemble > 0 ? table.assemble : table.drop)
+}
+
 export type RevealCandidate = {
   id: string
   phase: RevealPhase
-  style: RevealStyle
+  style: PlayedStyle
   /** Metres above the rest pose for the travelling styles, 0 for the others. */
   height: number
   levelId: string | null
@@ -126,7 +141,7 @@ export function planReveal(
         const offset = phaseStart + (index + lane / lanes.length) * timing.nodeGapMs
         planned.push({ candidate, offset })
         phaseEnd = Math.max(phaseEnd, offset)
-        longest = Math.max(longest, timing.durationMs[candidate.style])
+        longest = Math.max(longest, styleMs(timing.durationMs, candidate.style))
       })
     })
     end = phaseEnd
@@ -135,7 +150,8 @@ export function planReveal(
   const room = Math.max(0, timing.capMs - longest)
   const compression = end > room ? room / end : 1
   const arrival = ({ candidate, offset }: (typeof planned)[number]) =>
-    offset * compression + timing.durationMs[candidate.style] * REVEAL_ARRIVAL[candidate.style]
+    offset * compression +
+    styleMs(timing.durationMs, candidate.style) * REVEAL_ARRIVAL[candidate.style]
   let finale: (typeof planned)[number] | null = null
   for (const entry of planned) {
     // Held still, an assembled node never arrives; its parts do.
@@ -170,15 +186,15 @@ export type LazyRevealTiming = {
   jitter: number
   /** A plan longer than this is pulled together to end by it: a huge build does not take forever. */
   capMs: number
-  /** How long each style moves its node at this level. */
-  durationMs: Record<RevealStyle, number>
+  /** How long each style moves its node at this level; `cover` is how long a roof's covering takes to lay. */
+  durationMs: Record<PlayedStyle, number>
   /**
    * How far a rise, a scale or a settle goes past its rest before it settles (GSAP's `back.out`
    * strength; 0 is a plain ease out). A rise's is gentler: a wall 2 % past its top, not into the slab over it.
    */
   overshoot: Record<'rise' | 'scale' | 'settle', number>
   /** Drops and settles fall from at least this high (m), whatever their kind declares. */
-  minHeightM: Partial<Record<RevealStyle, number>>
+  minHeightM: Partial<Record<PlayedStyle, number>>
 }
 
 /**
@@ -206,7 +222,7 @@ export const LAZY_REVEAL_BASE_TIMING: LazyRevealTiming = {
   phaseGapMs: 260,
   jitter: 0.3,
   capMs: 40_000,
-  durationMs: { rise: 760, scale: 520, settle: 640, drop: 820, cut: 320, assemble: 0 },
+  durationMs: { rise: 760, scale: 520, settle: 640, drop: 820, cut: 320, assemble: 0, cover: 2600 },
   overshoot: { rise: 0.7, scale: 1.6, settle: 1.6 },
   minHeightM: { drop: 1.8, settle: 0.6 },
 }
@@ -473,7 +489,7 @@ export function planRetract(
       placed.push({ entry, offset: cursor + (last - entry.startMs) * timing.speed })
     cursor += (last - first + build.groupGapMs) * timing.speed
   }
-  const longest = Math.max(0, ...placed.map(({ entry }) => timing.durationMs[entry.style]))
+  const longest = Math.max(0, ...placed.map(({ entry }) => styleMs(timing.durationMs, entry.style)))
   const lastStart = Math.max(0, ...placed.map(({ offset }) => offset))
   const room = Math.max(0, timing.capMs - longest)
   const compression = lastStart > room ? room / lastStart : 1
@@ -483,7 +499,7 @@ export function planRetract(
       return {
         ...candidate,
         startMs: startMs + offset * compression,
-        durationMs: timing.durationMs[entry.style],
+        durationMs: styleMs(timing.durationMs, entry.style),
       }
     })
     .sort((left, right) => left.startMs - right.startMs || right.seq - left.seq)

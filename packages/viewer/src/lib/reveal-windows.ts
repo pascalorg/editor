@@ -1,6 +1,12 @@
 import type { RevealPhase, SceneCommit } from '@pascal-app/core'
 import { type ConstructionRevealLevel, commitRevealCandidates } from './reveal-candidates'
-import { planReveal, REVEAL_TIMING, type RevealTiming, revealGroupKey } from './reveal-schedule'
+import {
+  planReveal,
+  REVEAL_TIMING,
+  type RevealTiming,
+  revealGroupKey,
+  styleMs,
+} from './reveal-schedule'
 
 /** When one (phase, level) group of a reveal plays. */
 export type RevealWindow = {
@@ -28,7 +34,7 @@ export function planRevealWindows(
 ): RevealWindow[] {
   const windows = new Map<string, RevealWindow>()
   for (const entry of planReveal(commitRevealCandidates(commit, level), 0, timing)) {
-    const endMs = entry.startMs + timing.durationMs[entry.style]
+    const endMs = entry.startMs + styleMs(timing.durationMs, entry.style)
     const key = revealGroupKey(entry)
     const window = windows.get(key)
     if (!window) {

@@ -95,13 +95,13 @@ describe('add_volume at the framing level', () => {
     const { created, byId } = staged()
     const kinds = new Set(created.map((node) => node.type))
     for (const type of ['wall', 'slab', 'zone', 'roof']) expect(kinds.has(type)).toBe(true)
+    // A roof's segments are not staged on their own at this level: its covering is laid over
+    // its frame in place, the whole shell at once (`cover`), so they ride with the roof.
     for (const node of created) {
-      if (
-        ['wall', 'slab', 'zone', 'roof', 'door', 'window', 'roof-segment', 'ceiling'].includes(
-          node.type,
-        )
-      )
+      if (['wall', 'slab', 'zone', 'roof', 'door', 'window', 'ceiling'].includes(node.type))
         expect(byId.has(node.id)).toBe(true)
+      if (node.type === 'roof-segment') expect(byId.has(node.id)).toBe(false)
+      if (node.type === 'roof') expect(byId.get(node.id)?.style).toBe('cover')
     }
   })
 

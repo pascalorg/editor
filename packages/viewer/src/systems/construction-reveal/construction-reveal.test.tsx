@@ -21,7 +21,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { act, create } from '@react-three/test-renderer'
-import { BoxGeometry, Group, Matrix4, Mesh, type Object3D } from 'three'
+import { BoxGeometry, Group, Matrix4, Mesh, Object3D } from 'three'
 import { NodeRenderer } from '../../components/renderers/node-renderer'
 import { DustPool } from '../../lib/construction-dust'
 import { OVERLAY_LAYER, scenePassLayers } from '../../lib/layers'
@@ -34,6 +34,7 @@ import {
   REVEAL_TIMING,
   revealTimingAt,
 } from '../../lib/reveal-schedule'
+import { revealWipeLevelOf } from '../../lib/reveal-wipe'
 import useViewer from '../../store/use-viewer'
 import { GeometrySystem } from '../geometry/geometry-system'
 import { ConstructionDust } from './construction-dust'
@@ -213,6 +214,13 @@ const Lid = revealKind(
 const Part = revealKind('fixture:part', 'fxpart', null, () =>
   new BoxGeometry(3, 1, 4).translate(0, 3.5, 0),
 )
+// A pitched roof: it rises 1.6 m from its eave to its ridge.
+const Gable = revealKind(
+  'fixture:gable',
+  'fxgable',
+  { phase: 'roof', style: 'assemble', height: 4 },
+  () => new BoxGeometry(6, 1.6, 4).translate(0, 3.6, 0),
+)
 
 const make = (kind: { schema: typeof BaseNode }, data: Record<string, unknown> = {}) =>
   kind.schema.parse(data) as AnyNode
@@ -348,6 +356,7 @@ beforeEach(async () => {
       Movable.definition,
       Model.definition,
       Part.definition,
+      Gable.definition,
     ],
   })
   now = 0
@@ -934,6 +943,176 @@ describe('a roof assembles from its parts', () => {
     await act(async () => useViewer.getState().setSelection({ selectedIds: [shown.id] } as never))
     expect(isRevealAssembling(roof.id)).toBe(false)
     for (const node of [roof, ...parts]) expect(isNodeRevealing(node.id)).toBe(false)
+  })
+})
+
+describe('a roof at the framing level is covered in place, not dropped', () => {
+  async function buildGable(partCount = 2) {
+    level = 'framing'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const roof = make(Gable)
+    const parts = Array.from({ length: partCount }, () => make(Part))
+    await agentWrites(() => {
+      useScene.getState().createNode(roof, levelId)
+      useScene
+        .getState()
+        .createNodes(parts.map((node) => ({ node, parentId: roof.id as AnyNodeId })))
+    })
+    return { roof, parts, levelId: levelId! }
+  }
+
+  /** Runs the build a frame at a time, noting what the roof's root shows. */
+  async function watch(roofId: string, until_ = 20000) {
+    const lifts: number[] = []
+    const levels: number[] = []
+    const begun = now
+    while ((isNodeRevealing(roofId) || !root(roofId)) && now - begun < until_) {
+      await frame()
+      const roofRoot = root(roofId)
+      if (!roofRoot?.children.length) continue
+      lifts.push(lift(roofRoot))
+      const at = revealWipeLevelOf(roofRoot)
+      if (at !== null) levels.push(at)
+    }
+    return { lifts, levels, took: now - begun }
+  }
+
+  test('it is staged as a covering: nothing drops, and no part is staged on its own', async () => {
+    const { roof, parts } = await buildGable()
+    expect(isRevealAssembling(roof.id)).toBe(false)
+    const styles = new Map<string, string>()
+    const stop = subscribeRevealEvents((event) => {
+      if (event.type === 'node-start') styles.set(event.id, event.style)
+    })
+    try {
+      const { lifts } = await watch(roof.id)
+      expect(styles.get(roof.id)).toBe('cover')
+      for (const part of parts) expect(styles.has(part.id)).toBe(false)
+      expect(Math.max(...lifts)).toBe(0)
+      expect(isNodeRevealing(roof.id)).toBe(false)
+    } finally {
+      stop()
+    }
+  })
+
+  test('the covering is laid from the eave to the ridge, row after row, until the last has landed', async () => {
+    const { roof } = await buildGable()
+    const { levels } = await watch(roof.id)
+    expect(levels.length).toBeGreaterThan(4)
+    for (let i = 1; i < levels.length; i += 1)
+      expect(levels[i]!).toBeGreaterThanOrEqual(levels[i - 1]!)
+    // The eave is at 2.8 m and the ridge at 4.4 m: it starts low and is closed at the top.
+    expect(levels[0]!).toBeLessThan(3.4)
+    expect(levels.at(-1)!).toBeGreaterThanOrEqual(4.4)
+    // Nothing is left dressed once it is whole.
+    const roofRoot = root(roof.id)!
+    expect(revealWipeLevelOf(roofRoot)).toBeNull()
+    roofRoot.traverse((child) => {
+      const mesh = child as Mesh
+      if (mesh.isMesh) expect((mesh.material as { maskNode?: unknown }).maskNode).toBeUndefined()
+    })
+  })
+
+  test('it plays at the person’s animation speed', async () => {
+    const took: Record<number, number> = {}
+    for (const speed of [0.5, 2]) {
+      await renderer?.unmount()
+      renderer = null
+      await act(async () => driver?.stop())
+      driver = null
+      sceneRegistry.clear()
+      now = 0
+      level = 'framing'
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start({ speed: () => speed })
+      const roof = make(Gable)
+      await agentWrites(() => useScene.getState().createNode(roof, levelId))
+      const { levels, took: ms } = await watch(roof.id, 60000)
+      expect(levels.length).toBeGreaterThan(0)
+      took[speed] = ms
+    }
+    expect(took[2]!).toBeLessThan(took[0.5]! / 2.5)
+  })
+
+  test('the full level still drops the roof whole, part by part', async () => {
+    level = 'full'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const roof = make(Gable)
+    const parts = [make(Part), make(Part)]
+    await agentWrites(() => {
+      useScene.getState().createNode(roof, levelId)
+      useScene
+        .getState()
+        .createNodes(parts.map((node) => ({ node, parentId: roof.id as AnyNodeId })))
+    })
+    expect(isRevealAssembling(roof.id)).toBe(true)
+    const highest = new Map<string, number>()
+    while (isRevealAssembling(roof.id)) {
+      await frame()
+      expect(now).toBeLessThan(REVEAL_TIMING.capMs + 1000)
+      for (const part of parts) {
+        const partRoot = root(part.id)
+        if (partRoot?.children.length)
+          highest.set(part.id, Math.max(highest.get(part.id) ?? 0, lift(partRoot)))
+      }
+      expect(revealWipeLevelOf(root(roof.id) ?? new Object3D())).toBeNull()
+    }
+    for (const part of parts) expect(highest.get(part.id)!).toBeGreaterThan(3)
+  })
+
+  test('simple scales it in and off shows it at once: neither lays a covering', async () => {
+    for (const at of ['simple', 'off'] as const) {
+      await renderer?.unmount()
+      renderer = null
+      await act(async () => driver?.stop())
+      driver = null
+      sceneRegistry.clear()
+      now = 0
+      level = at
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start()
+      const roof = make(Gable)
+      await agentWrites(() => useScene.getState().createNode(roof, levelId))
+      for (let i = 0; i < 80; i += 1) {
+        await frame()
+        const roofRoot = root(roof.id)
+        if (roofRoot) expect(revealWipeLevelOf(roofRoot)).toBeNull()
+      }
+    }
+  })
+
+  test('an undo lifts the covering off from the ridge, then the bare node is gone', async () => {
+    const { roof } = await buildGable()
+    await watch(roof.id)
+    const roofRoot = root(roof.id)!
+    let result: RetractResult | null = null
+    await act(async () => {
+      retractNodes([roof.id]).then((value) => {
+        result = value
+      })
+    })
+    const levels: number[] = []
+    const begun = now
+    while (!result && now < begun + 8000) {
+      await frame(20)
+      const at = revealWipeLevelOf(roofRoot)
+      if (at !== null) levels.push(at)
+      // It never lifts off whole: only its covering goes, then the bare node.
+      if (yScale(roofRoot) > 0.5) expect(lift(roofRoot)).toBe(0)
+    }
+    expect(result).not.toBeNull()
+    expect(yScale(roofRoot)).toBeLessThan(0.01)
+    expect(levels.length).toBeGreaterThan(3)
+    for (let i = 1; i < levels.length; i += 1)
+      expect(levels[i]!).toBeLessThanOrEqual(levels[i - 1]!)
+    expect(levels[0]!).toBeGreaterThan(4)
+    expect(levels.at(-1)!).toBeLessThan(3.4)
   })
 })
 

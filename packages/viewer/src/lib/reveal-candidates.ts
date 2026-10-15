@@ -9,6 +9,7 @@ import {
   type SceneCommit,
 } from '@pascal-app/core'
 import type { RevealCandidate } from './reveal-schedule'
+import type { PlayedStyle } from './reveal-wipe'
 
 /**
  * How much of the construction plays. `off` shows a build at once; `simple`
@@ -27,7 +28,9 @@ export type StagedCandidate = RevealCandidate & { host?: string }
 export const PART_LEAD = 0.05
 
 /** `simple` keeps the stagger with only the two slice-one motions. */
-export function styleAt(style: RevealStyle, at: ConstructionRevealLevel): RevealStyle {
+export function styleAt(style: RevealStyle, at: ConstructionRevealLevel): PlayedStyle {
+  // Framing lays a roof's covering over its frame in place; Full drops the whole roof.
+  if (at === 'framing') return style === 'assemble' ? 'cover' : style
   if (at !== 'simple' || style === 'rise') return style
   return 'scale'
 }
@@ -490,13 +493,14 @@ export function nodeRevealCandidates(
 }
 
 /** How an edited node plays again: a quick re-rise or re-scale, never a fall from a height. */
-const EDIT_STYLE: Record<RevealStyle, RevealStyle> = {
+const EDIT_STYLE: Record<PlayedStyle, RevealStyle> = {
   rise: 'rise',
   scale: 'scale',
   settle: 'settle',
   drop: 'scale',
   cut: 'scale',
   assemble: 'scale',
+  cover: 'scale',
 }
 
 const sameValue = (was: unknown, now: unknown) =>
