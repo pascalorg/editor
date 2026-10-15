@@ -68,7 +68,7 @@ test('keeps plugin child ids in the parsed graph', () => {
   const res = apiGraphSchema.safeParse(graph)
 
   expect(res.success).toBe(true)
-  expect((res.data?.nodes[LEVEL_ID] as { children: string[] }).children).toEqual([TREE_ID])
+  expect((res.data!.nodes[LEVEL_ID] as { children: string[] }).children).toEqual([TREE_ID])
 })
 
 test('preserves installedPlugins alongside a plugin node', () => {
@@ -178,7 +178,7 @@ test('migrates legacy wall assemblies before validation and persists canonical l
   const result = apiGraphSchema.safeParse(graph)
 
   expect(result.success).toBe(true)
-  expect((result.data?.nodes[wall.id] as WallNode).assembly).toEqual({
+  expect((result.data!.nodes[wall.id] as WallNode).assembly).toEqual({
     face: 'exterior',
     layers: [{ id: 'framing', role: 'structure', thickness: 0.14, core: true, material: 'wood' }],
   })

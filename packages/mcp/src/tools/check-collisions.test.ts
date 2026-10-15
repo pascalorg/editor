@@ -125,7 +125,7 @@ describe('check_collisions', () => {
       idempotentHint: true,
       openWorldHint: false,
     })
-    const candidate = (tool?.inputSchema.properties as Record<string, unknown>).candidate as {
+    const candidate = (tool!.inputSchema.properties as Record<string, unknown>).candidate as {
       properties: Record<string, { items?: unknown; minItems?: number; maxItems?: number }>
     }
     for (const field of ['position', 'dimensions']) {

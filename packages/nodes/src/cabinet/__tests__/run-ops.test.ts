@@ -1325,7 +1325,7 @@ describe('addCornerRun', () => {
     }
 
     const sourceLink = (
-      sceneApi.get<CabinetModuleNode>(module.id)?.metadata as Record<string, unknown>
+      sceneApi.get<CabinetModuleNode>(module.id)!.metadata as Record<string, unknown>
     ).cabinetCornerSourceLink as { linkedRunIds: AnyNodeId[] }
     expect(sourceLink.linkedRunIds).toHaveLength(6)
 

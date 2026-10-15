@@ -521,7 +521,7 @@ test('resize handle previews carry child heights and can be cancelled without a 
   const before = useScene.getState().nodes
   binding.apply(0.92, { altKey: false })
   expect(
-    (useLiveNodeOverrides.getState().overrides.get(catalog.id)?.position as number[])[1],
+    (useLiveNodeOverrides.getState().overrides.get(catalog.id)!.position as number[])[1],
   ).toBeCloseTo(1.05)
   expect(useLiveNodeOverrides.getState().overrides.has(design.id)).toBe(true)
   binding.clearPreview()

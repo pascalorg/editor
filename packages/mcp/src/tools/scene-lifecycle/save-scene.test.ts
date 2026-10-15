@@ -255,7 +255,7 @@ describe('save_scene', () => {
     expect(result.isError).toBeFalsy()
     const payload = parseToolText(result.content as StoredTextContent[])
     const saved = await store.load(payload.id as string)
-    expect((saved?.graph.nodes[wall.id] as WallNode).assembly).toEqual({
+    expect((saved!.graph.nodes[wall.id] as WallNode).assembly).toEqual({
       face: 'exterior',
       layers: [{ id: 'framing', role: 'structure', thickness: 0.14, core: true, material: 'wood' }],
     })
