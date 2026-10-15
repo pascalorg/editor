@@ -373,6 +373,7 @@
     },
   },
   "patchedDependencies": {
+    "@pascal-app/plugin-pool@github:sudhir9297/pool-pascal-plugin#483a080": "patches/plugin-pool@483a080.patch",
     "three@0.186.0": "patches/three@0.186.0.patch",
     "iwer@2.3.0": "patches/iwer@2.3.0.patch",
   },
