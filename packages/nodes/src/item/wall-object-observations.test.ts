@@ -175,22 +175,22 @@ describe('rendered wall object observations', () => {
     expect(observations.filter((issue) => issue.type === 'item_wall_coplanar_face')).toEqual([])
   })
 
-  test.each([
-    'picture',
-    'mirror',
-  ])('correct catalog %s uses actual corrective model bounds', (name) => {
-    const scene = mountedScene(Math.PI)
-    scene.root.clear()
-    scene.item.asset.attachTo = 'wall'
-    scene.item.asset.dimensions = [0.8, 0.6, 0.04]
-    scene.item.asset.offset = [0.013, 0, 0.151]
-    scene.root.position.z = 0
-    const correction = new Group()
-    correction.position.set(...scene.item.asset.offset)
-    box(correction, 0.8, 0.6, 0.04, -0.013, 0.3, -0.02)
-    scene.root.add(correction)
-    expect(wallObjectRenderedObservations(currentGraph(scene.nodes))).toEqual([])
-  })
+  test.each(['picture', 'mirror'])(
+    'correct catalog %s uses actual corrective model bounds',
+    (name) => {
+      const scene = mountedScene(Math.PI)
+      scene.root.clear()
+      scene.item.asset.attachTo = 'wall'
+      scene.item.asset.dimensions = [0.8, 0.6, 0.04]
+      scene.item.asset.offset = [0.013, 0, 0.151]
+      scene.root.position.z = 0
+      const correction = new Group()
+      correction.position.set(...scene.item.asset.offset)
+      box(correction, 0.8, 0.6, 0.04, -0.013, 0.3, -0.02)
+      scene.root.add(correction)
+      expect(wallObjectRenderedObservations(currentGraph(scene.nodes))).toEqual([])
+    },
+  )
 
   test('windows and geometry entirely in their cutout remain silent', () => {
     const scene = mountedScene()

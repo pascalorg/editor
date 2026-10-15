@@ -86,24 +86,22 @@ test('the creator leaving falls back; creating another floor never rejoins the o
   }
 })
 
-test.each([
-  'deleted',
-  'other level',
-  'no floor',
-  'unnamed',
-])('an unavailable creator (%s) uses the largest named room', (state) => {
-  const { nodes, creatorId, largerId } = fixture()
-  const creator = room(nodes, creatorId)
-  if (state === 'deleted') delete nodes[creatorId]
-  else
-    nodes[creatorId] = {
-      ...creator,
-      ...(state === 'other level' ? { parentId: 'level_elsewhere' } : {}),
-      ...(state === 'no floor' ? { hasFloor: false as const } : {}),
-      ...(state === 'unnamed' ? { name: '' } : {}),
-    }
-  expect(floorFootprintName(nodes, base(nodes, largerId))).toBe('Living room floor')
-})
+test.each(['deleted', 'other level', 'no floor', 'unnamed'])(
+  'an unavailable creator (%s) uses the largest named room',
+  (state) => {
+    const { nodes, creatorId, largerId } = fixture()
+    const creator = room(nodes, creatorId)
+    if (state === 'deleted') delete nodes[creatorId]
+    else
+      nodes[creatorId] = {
+        ...creator,
+        ...(state === 'other level' ? { parentId: 'level_elsewhere' } : {}),
+        ...(state === 'no floor' ? { hasFloor: false as const } : {}),
+        ...(state === 'unnamed' ? { name: '' } : {}),
+      }
+    expect(floorFootprintName(nodes, base(nodes, largerId))).toBe('Living room floor')
+  },
+)
 
 test('literal own has no creator and retains the largest-room fallback', () => {
   const { nodes, creatorId, largerId } = fixture()
@@ -132,55 +130,54 @@ test('a disconnected room duplicate keeps the original creator rather than its o
   expect(roomFloorChoices(copied, plan.zoneId)[0]!.name).toBe('Lanai floor')
 })
 
-test.each([
-  'level',
-  'scene',
-])('%s clone remints keys with the cloned creator and stable plate IDs', (kind) => {
-  const { nodes, creatorId, largerId, key, levelId } = fixture()
-  const clonedNodes =
-    kind === 'level'
-      ? cloneLevelSubtree(nodes, levelId).clonedNodes
-      : Object.values(cloneSceneGraph({ nodes, rootNodeIds: [levelId] }).nodes)
-  let cloned = Object.fromEntries(clonedNodes.map((node) => [node.id, node]))
-  const creator = clonedNodes.find(
-    (node) => node.type === 'zone' && node.name === 'Lanai',
-  ) as ZoneNode
-  const larger = clonedNodes.find(
-    (node) => node.type === 'zone' && node.name === 'Living room',
-  ) as ZoneNode
-  expect(creator.id).not.toBe(creatorId)
-  expect(larger.id).not.toBe(largerId)
-  expect(creator.floor!.footprint).not.toBe(key)
-  expect(larger.floor!.footprint).toBe(creator.floor!.footprint)
-  expect(floorFootprintCreatorId(creator.floor!.footprint!)).toBe(creator.id)
-  const plateId = keyedFloorPlateId(creator.parentId!, creator.floor!.footprint!)
-  expect(cloned[plateId]?.type).toBe('slab')
-  cloned = reconcile(cloned)
-  expect(base(cloned, creator.id).id).toBe(plateId)
-  expect(floorFootprintName(cloned, base(cloned, larger.id))).toBe('Lanai floor')
-  cloned = intent(cloned, creator.id, { name: 'Cloned porch' })
-  expect(floorFootprintName(cloned, base(cloned, larger.id))).toBe('Cloned porch floor')
-  expect(floorFootprintName(nodes, base(nodes, largerId))).toBe('Lanai floor')
-})
+test.each(['level', 'scene'])(
+  '%s clone remints keys with the cloned creator and stable plate IDs',
+  (kind) => {
+    const { nodes, creatorId, largerId, key, levelId } = fixture()
+    const clonedNodes =
+      kind === 'level'
+        ? cloneLevelSubtree(nodes, levelId).clonedNodes
+        : Object.values(cloneSceneGraph({ nodes, rootNodeIds: [levelId] }).nodes)
+    let cloned = Object.fromEntries(clonedNodes.map((node) => [node.id, node]))
+    const creator = clonedNodes.find(
+      (node) => node.type === 'zone' && node.name === 'Lanai',
+    ) as ZoneNode
+    const larger = clonedNodes.find(
+      (node) => node.type === 'zone' && node.name === 'Living room',
+    ) as ZoneNode
+    expect(creator.id).not.toBe(creatorId)
+    expect(larger.id).not.toBe(largerId)
+    expect(creator.floor!.footprint).not.toBe(key)
+    expect(larger.floor!.footprint).toBe(creator.floor!.footprint)
+    expect(floorFootprintCreatorId(creator.floor!.footprint!)).toBe(creator.id)
+    const plateId = keyedFloorPlateId(creator.parentId!, creator.floor!.footprint!)
+    expect(cloned[plateId]?.type).toBe('slab')
+    cloned = reconcile(cloned)
+    expect(base(cloned, creator.id).id).toBe(plateId)
+    expect(floorFootprintName(cloned, base(cloned, larger.id))).toBe('Lanai floor')
+    cloned = intent(cloned, creator.id, { name: 'Cloned porch' })
+    expect(floorFootprintName(cloned, base(cloned, larger.id))).toBe('Cloned porch floor')
+    expect(floorFootprintName(nodes, base(nodes, largerId))).toBe('Lanai floor')
+  },
+)
 
-test.each([
-  'own',
-  'departed',
-  'deleted',
-])('cloning %s creator history preserves fallback naming', (state) => {
-  const { nodes, creatorId, largerId, levelId } = fixture()
-  if (state === 'own') {
-    for (const id of [creatorId, largerId])
-      nodes[id] = { ...room(nodes, id), floor: { footprint: 'own' } }
-  } else if (state === 'departed')
-    nodes[creatorId] = { ...room(nodes, creatorId), floor: undefined }
-  else delete nodes[creatorId]
-  const clonedNodes = Object.values(cloneSceneGraph({ nodes, rootNodeIds: [levelId] }).nodes)
-  const cloned = Object.fromEntries(clonedNodes.map((node) => [node.id, node]))
-  const larger = clonedNodes.find(
-    (node) => node.type === 'zone' && node.name === 'Living room',
-  ) as ZoneNode
-  expect(floorFootprintName(cloned, base(cloned, larger.id))).toBe('Living room floor')
-  if (state !== 'departed')
-    expect(floorFootprintCreatorId(larger.floor!.footprint!)).toBeUndefined()
-})
+test.each(['own', 'departed', 'deleted'])(
+  'cloning %s creator history preserves fallback naming',
+  (state) => {
+    const { nodes, creatorId, largerId, levelId } = fixture()
+    if (state === 'own') {
+      for (const id of [creatorId, largerId])
+        nodes[id] = { ...room(nodes, id), floor: { footprint: 'own' } }
+    } else if (state === 'departed')
+      nodes[creatorId] = { ...room(nodes, creatorId), floor: undefined }
+    else delete nodes[creatorId]
+    const clonedNodes = Object.values(cloneSceneGraph({ nodes, rootNodeIds: [levelId] }).nodes)
+    const cloned = Object.fromEntries(clonedNodes.map((node) => [node.id, node]))
+    const larger = clonedNodes.find(
+      (node) => node.type === 'zone' && node.name === 'Living room',
+    ) as ZoneNode
+    expect(floorFootprintName(cloned, base(cloned, larger.id))).toBe('Living room floor')
+    if (state !== 'departed')
+      expect(floorFootprintCreatorId(larger.floor!.footprint!)).toBeUndefined()
+  },
+)

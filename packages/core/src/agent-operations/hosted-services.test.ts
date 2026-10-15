@@ -55,15 +55,18 @@ describe('hosted service operations', () => {
       address: 'An address',
       walletId: 'somebody_else',
     },
-  ])('refuses invalid location, budget or undeclared input before host admission (%#)', async (input) => {
-    let called = false
-    await expect(
-      executeHostedServiceTool('pull_site_data', input, async () => {
-        called = true
-      }),
-    ).rejects.toBeInstanceOf(Error)
-    expect(called).toBe(false)
-  })
+  ])(
+    'refuses invalid location, budget or undeclared input before host admission (%#)',
+    async (input) => {
+      let called = false
+      await expect(
+        executeHostedServiceTool('pull_site_data', input, async () => {
+          called = true
+        }),
+      ).rejects.toBeInstanceOf(Error)
+      expect(called).toBe(false)
+    },
+  )
 
   test('reopening dispatches only the retained operation reference', async () => {
     let call: HostedServiceRequest | undefined

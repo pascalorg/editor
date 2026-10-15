@@ -158,24 +158,23 @@ function CatalogMover() {
   return withoutLabels(MoveItemTool({ node }))
 }
 
-test.each([
-  'item',
-  'procedural-item',
-  'cabinet',
-])('slabs defer %s to floor support without a surface refusal', (childKind) => {
-  const refusals: string[] = []
-  expect(
-    resolveSurfacePlacement({
-      host: slab,
-      childKind,
-      childFootprint: { size: [0.4, 0.6, 0.4], rotationY: 0 },
-      hit: { point: [0, slab.elevation, 0], normalWorldY: 1 },
-      scene: createSceneApi(useScene),
-      onReject: (reason) => refusals.push(reason),
-    }),
-  ).toBeNull()
-  expect(refusals).toEqual([])
-})
+test.each(['item', 'procedural-item', 'cabinet'])(
+  'slabs defer %s to floor support without a surface refusal',
+  (childKind) => {
+    const refusals: string[] = []
+    expect(
+      resolveSurfacePlacement({
+        host: slab,
+        childKind,
+        childFootprint: { size: [0.4, 0.6, 0.4], rotationY: 0 },
+        hit: { point: [0, slab.elevation, 0], normalWorldY: 1 },
+        scene: createSceneApi(useScene),
+        onReject: (reason) => refusals.push(reason),
+      }),
+    ).toBeNull()
+    expect(refusals).toEqual([])
+  },
+)
 
 for (const mover of [
   'catalog',
