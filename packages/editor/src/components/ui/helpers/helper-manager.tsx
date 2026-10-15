@@ -314,7 +314,7 @@ export function HelperManager() {
   // A tool whose kind gives placement notices: its transient draft is the node in hand.
   const toolNotices = !!(tool && nodeRegistry.get(tool)?.placementNotice)
   const toolDraftId = useScene((s) => (toolNotices ? transientDraftId(s.nodes) : null))
-  const placementNotice = usePlacementNotice(movingNode?.id ?? toolDraftId)
+  const placementNotice = usePlacementNotice(movingNode?.id ?? toolDraftId, toolNotices)
   const reshapingNode = useReshapingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const mezzanineHandle = useScene((s) => mezzanineGesture(activeHandleDrag, s.nodes))

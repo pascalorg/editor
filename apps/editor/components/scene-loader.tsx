@@ -21,6 +21,7 @@ import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signa
 import { useThumbnailAutosave } from '@/lib/use-thumbnail-autosave'
 import { BuildTab } from './build-tab'
 import { EditorNavbar } from './editor-navbar'
+import { KitchenCommands } from './kitchen-browser'
 import { PaintPanel } from './paint-panel'
 import { EditorViewerToolbarLeft, EditorViewerToolbarRight } from './viewer-toolbar'
 import { useWebXRFeature, useWebXRInstalled, WebXRFeatureRuntime } from './webxr-feature-gate'
@@ -368,6 +369,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
+      <KitchenCommands />
       <Editor
         disablePostFx={lightPreview}
         immersive={vr?.session ? vr.immersive : undefined}

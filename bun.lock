@@ -292,8 +292,10 @@
       "name": "@pascal-app/nodes",
       "version": "1.0.4",
       "devDependencies": {
+        "@modelcontextprotocol/sdk": "^1.30.0",
         "@pascal-app/core": "^1.0.4",
         "@pascal-app/editor": "^1.0.4",
+        "@pascal-app/mcp": "^1.0.4",
         "@pascal-app/viewer": "^1.0.4",
         "@pascal/typescript-config": "*",
         "@react-three/test-renderer": "^9.1.1",
