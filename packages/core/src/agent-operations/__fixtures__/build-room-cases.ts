@@ -11,8 +11,9 @@ import {
 } from '../../schema'
 import { doorFacing } from '../../building/wall-openings'
 import { reconcileSceneStructure } from '../../lib/structure-reconcile'
-import { findBlockedDoors } from '../door-clearance'
+import { findBlockedDoors, itemNodePlanCorners } from '../door-clearance'
 import { findItemItemCollisions, findItemsMidRoom } from '../layout-clearance'
+import { pointInPolygon, type Vec2 } from '../plan-geometry'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -710,8 +711,7 @@ const CATALOG: AssetInput[] = [
   item('shower-square', [1, 2, 1]),
 ]
 
-type RoomWall = 'wall_s' | 'wall_e' | 'wall_n' | 'wall_w'
-const ROOM_WALLS: RoomWall[] = ['wall_s', 'wall_e', 'wall_n', 'wall_w']
+const ROOM_WALLS = ['wall_s', 'wall_e', 'wall_n', 'wall_w']
 
 /** A `width` × `depth` m room: walls south (edge 0), east, north (edge 2), west. */
 const roomOutline = (width: number, depth: number): Pt[] => [
@@ -724,16 +724,58 @@ const roomOutline = (width: number, depth: number): Pt[] => [
 /** A 5 × 4 m bedroom. */
 const BEDROOM = roomOutline(5, 4)
 
-/** A room of `outline` with a door in the middle of each wall in `doorsOn`, and a desk if asked. */
+/** An L: 10 m along the south, 5 m deep, and a 4 × 5 m wing to the north-west. */
+const L_ROOM: Pt[] = [
+  [0, 0],
+  [10, 0],
+  [10, 5],
+  [4, 5],
+  [4, 10],
+  [0, 10],
+]
+
+/** A U: two 4 m arms, 6 m deep, round a 2 × 4 m notch to the north. */
+const U_ROOM: Pt[] = [
+  [0, 0],
+  [10, 0],
+  [10, 10],
+  [6, 10],
+  [6, 6],
+  [4, 6],
+  [4, 10],
+  [0, 10],
+]
+
+/** A 6√2 × 4√2 m room turned 45°. */
+const DIAMOND_ROOM: Pt[] = [
+  [0, 0],
+  [6, 6],
+  [2, 10],
+  [-4, 4],
+]
+
+/**
+ * A room of `outline`, a wall on each edge (`wall_s`, `wall_e`, `wall_n`, `wall_w` round a
+ * rectangle, `wall_<edge>` round any other outline) but the `open` ones, a door in the middle of
+ * each wall in `doorsOn`, and a desk if asked.
+ */
 function roomScene({
   outline = BEDROOM,
   name = 'Bedroom',
   doorsOn = [],
+  open = [],
   desk,
-}: { outline?: Pt[]; name?: string; doorsOn?: RoomWall[]; desk?: boolean } = {}) {
+}: {
+  outline?: Pt[]
+  name?: string
+  doorsOn?: string[]
+  open?: string[]
+  desk?: boolean
+} = {}) {
+  const wallIds = outline.map((_, i) => (outline.length === 4 ? ROOM_WALLS[i]! : `wall_${i}`))
   return (): SceneGraph => {
     const doors = doorsOn.map((wallId) => {
-      const i = ROOM_WALLS.indexOf(wallId)
+      const i = wallIds.indexOf(wallId)
       const [a, b] = [outline[i]!, outline[(i + 1) % outline.length]!]
       const middle = Math.hypot(b[0] - a[0], b[1] - a[1]) / 2
       return DoorNode.parse({
@@ -743,14 +785,16 @@ function roomScene({
         position: [middle, 1.05, 0],
       })
     })
-    const walls = outline.map((start, i) =>
-      WallNode.parse({
-        id: ROOM_WALLS[i],
-        parentId: 'level_f',
-        start,
-        end: outline[(i + 1) % outline.length]!,
-        children: doors.filter((door) => door.parentId === ROOM_WALLS[i]).map((door) => door.id),
-      }),
+    const walls = outline.flatMap((start, i) =>
+      open.includes(wallIds[i]!)
+        ? []
+        : WallNode.parse({
+            id: wallIds[i],
+            parentId: 'level_f',
+            start,
+            end: outline[(i + 1) % outline.length]!,
+            children: doors.filter((door) => door.parentId === wallIds[i]).map((door) => door.id),
+          }),
     )
     const zone = ZoneNode.parse({
       id: 'zone_bed',
@@ -780,6 +824,24 @@ function roomScene({
   }
 }
 
+/** Every point of the piece's footprint in the room, on a 9 × 9 grid over it, edges included. */
+const standsIn = (item: Extract<AnyNode, { type: 'item' }>, outline: Vec2[]) => {
+  const [origin, alongDepth, alongWidth] = itemNodePlanCorners(item) as [Vec2, Vec2, Vec2, Vec2]
+  const steps = Array.from({ length: 9 }, (_, i) => i / 8)
+  return steps.every((u) =>
+    steps.every((v) =>
+      pointInPolygon(
+        [
+          origin[0] + u * (alongWidth[0] - origin[0]) + v * (alongDepth[0] - origin[0]),
+          origin[1] + u * (alongWidth[1] - origin[1]) + v * (alongDepth[1] - origin[1]),
+        ],
+        outline,
+        true,
+      ),
+    ),
+  )
+}
+
 const furnished = (result: Record<string, unknown>, nodes: Nodes) => {
   const items = Object.values(nodes)
   const itemIds = result.itemIds as string[]
@@ -794,6 +856,15 @@ const furnished = (result: Record<string, unknown>, nodes: Nodes) => {
     [
       findItemsMidRoom({ nodes: items, levelId: 'level_f' }).length === 0,
       'a wall-bound piece stands in the middle of the room',
+    ],
+    [
+      itemIds.every((id) => {
+        const [item, zone] = [nodes[id], nodes.zone_bed]
+        return (
+          item?.type === 'item' && zone?.type === 'zone' && standsIn(item, zone.polygon as Vec2[])
+        )
+      }),
+      'an item stands outside the room',
     ],
   )
 }
@@ -891,6 +962,67 @@ export const FURNISH_ROOM_CASES: AgentToolCase[] = [
     expect: {
       result: { ok: true, doorWallIndex: 0, doorsDetected: 2 },
       check: (result, nodes) => [...furnished(result, nodes), ...livingGroupKept(nodes)],
+    },
+  },
+  {
+    name: 'a wall-bound piece where no wall stands is skipped, and says so: the TV of a living room open to the south',
+    tool: 'furnish_room',
+    scene: roomScene({
+      outline: roomOutline(7, 4.5),
+      name: 'Living room',
+      open: ['wall_s', 'wall_e', 'wall_w'],
+    }),
+    input: { zoneId: 'zone_bed', roomType: 'living', doorWallIndex: 0 },
+    context: { catalog: CATALOG },
+    expect: {
+      result: { ok: true },
+      mentions: ['tv-stand (2 × 0.5 m): no wall to stand against there'],
+      check: (result, nodes) => [
+        ...furnished(result, nodes),
+        ...problems([positionOf(nodes, 'sofa') !== null, 'the sofa was skipped']),
+      ],
+    },
+  },
+  {
+    name: 'an L-shaped bedroom: the bed stands against the inner wall of the wing, facing in, and nothing lands outside the room',
+    tool: 'furnish_room',
+    scene: roomScene({ outline: L_ROOM, doorsOn: ['wall_0'] }),
+    input: { zoneId: 'zone_bed', roomType: 'bedroom' },
+    context: { catalog: CATALOG },
+    expect: {
+      result: { ok: true, doorWallIndex: 0, skipped: [] },
+      check: (result, nodes) => [
+        ...furnished(result, nodes),
+        ...problems([(bedPosition(nodes)?.[0] ?? 4) < 4, 'the bed is not inside the wing']),
+      ],
+    },
+  },
+  {
+    name: 'a U-shaped room: nothing stands in the notch between its arms, though its corners touch the outline',
+    tool: 'furnish_room',
+    scene: roomScene({ outline: U_ROOM, name: 'Dining room' }),
+    input: { zoneId: 'zone_bed', roomType: 'dining', doorWallIndex: 0 },
+    context: {
+      catalog: [...CATALOG, item('dining-table', [2, 0.75, 4]), item('dining-chair', [0.5, 0.9, 0.5])],
+    },
+    expect: {
+      result: { ok: true },
+      mentions: ['dining-table (2 × 4 m): outside the room'],
+      check: furnished,
+    },
+  },
+  {
+    name: 'a room turned 45°: the closet stands turned against its diagonal wall',
+    tool: 'furnish_room',
+    scene: roomScene({ outline: DIAMOND_ROOM, name: 'Storage', doorsOn: [] }),
+    input: { zoneId: 'zone_bed', roomType: 'storage', doorWallIndex: 0 },
+    context: { catalog: CATALOG },
+    expect: {
+      result: { ok: true, placed: 1 },
+      check: (result, nodes) => [
+        ...furnished(result, nodes),
+        ...problems([positionOf(nodes, 'closet') !== null, 'the closet was skipped']),
+      ],
     },
   },
   {

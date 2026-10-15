@@ -107,7 +107,7 @@ const chosenYaw = (input: PlaceInRoomInput, preferred: number) =>
 
 /** Project the rotated footprint onto the wall tangent and normal, not its authored axes. */
 function wallGeometry(room: Room, edge: number, dims: Dims) {
-  const frame = edgeFrame(room.polygon, edge, room.center)
+  const frame = edgeFrame(room.polygon, edge)
   const rotationDeg = chosenYaw(room.options, frame.facing)
   const relative = rad(rotationDeg - frame.facing)
   const half = (Math.abs(Math.cos(relative)) * dims[0] + Math.abs(Math.sin(relative)) * dims[2]) / 2

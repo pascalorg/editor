@@ -17,9 +17,10 @@ import {
   lateralSteps,
   MID_ROOM_DISTANCE_M,
   PLACEMENT_INSETS_M,
+  wallFacesOn,
 } from './layout-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
-import { polygonArea, polygonBounds, type Vec2 } from './plan-geometry'
+import { pointInPolygon, polygonArea, polygonBounds, type Vec2 } from './plan-geometry'
 import { levelIdOf, levelRole } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
@@ -36,9 +37,11 @@ type FurnishRoomInput = LevelTargetInput & {
 const DOOR_EDGE_TOLERANCE = 0.25
 // Clearance between a piece's back and the wall's centreline: half a wall and a hand's width.
 export const WALL_GAP = 0.1
-// A wall-bound piece (a sofa, a bed, a TV stand) slides along its wall, as far as the wall goes, to
+// How far off an edge's middle edgeFrame looks for the room's side.
+const EDGE_PROBE_M = 1e-3
+// A wall-bound piece (a sofa, a bed, a TV stand) slides along its wall, within the wall's ends, to
 // clear a door or another piece, and steps off it only as far as verify_scene still reads it
-// against the wall (item_mid_room).
+// against the wall (item_mid_room); where no wall stands, it is skipped.
 const AGAINST_WALL_INSETS_M = PLACEMENT_INSETS_M.filter(
   (inset) => WALL_GAP + inset <= MID_ROOM_DISTANCE_M,
 )
@@ -97,15 +100,23 @@ function doorsOfRoom(nodes: SceneNodes, levelId: string, polygon: Vec2[]) {
   return found
 }
 
-/** A polygon edge seen from inside the room: its middle, its direction, and the way into the room. */
-export function edgeFrame(polygon: Vec2[], index: number, center: Vec2) {
+/**
+ * A polygon edge seen from inside the room: its middle, its direction, and the way into the room,
+ * the side of the edge the room is on just past its middle, so an L's inner edges face in too.
+ */
+export function edgeFrame(polygon: Vec2[], index: number) {
   const a = polygon[index % polygon.length]!
   const b = polygon[(index + 1) % polygon.length]!
   const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
   const along = { x: (b[0] - a[0]) / length, z: (b[1] - a[1]) / length }
   const mid: Vec2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
-  const towardCenter = (center[0] - mid[0]) * -along.z + (center[1] - mid[1]) * along.x
-  const inward = towardCenter >= 0 ? { x: -along.z, z: along.x } : { x: along.z, z: -along.x }
+  const left = { x: -along.z, z: along.x }
+  const roomOnLeft = pointInPolygon(
+    [mid[0] + left.x * EDGE_PROBE_M, mid[1] + left.z * EDGE_PROBE_M],
+    polygon,
+    false,
+  )
+  const inward = roomOnLeft ? left : { x: -left.x, z: -left.z }
   // An item's front is its +Z: turned to face into the room.
   const facing = (Math.atan2(inward.x, inward.z) * 180) / Math.PI
   return { mid, along, inward, length, facing }
@@ -119,8 +130,8 @@ type Pose = {
   rotationDeg: number
   along?: { x: number; z: number }
   inward?: { x: number; z: number }
-  /** The length of the wall it stands against. */
-  wallLength?: number
+  /** The wall it stands against: its length, and the piece's offset along it from its middle. */
+  wall?: { length: number; lateral: number }
   /** A piece placed before it that it keeps with (a bedside table its bed, the TV its sofa). */
   follows?: string
 }
@@ -133,11 +144,10 @@ function layout(
   catalog: readonly AssetInput[],
 ): Pose[] {
   const bounds = polygonBounds(polygon)
-  const center: Vec2 = [bounds.centerX, bounds.centerZ]
   const n = polygon.length
-  const door = edgeFrame(polygon, doorWall, center)
-  const back = edgeFrame(polygon, doorWall + Math.floor(n / 2), center)
-  const side = edgeFrame(polygon, doorWall + 1, center)
+  const door = edgeFrame(polygon, doorWall)
+  const back = edgeFrame(polygon, doorWall + Math.floor(n / 2))
+  const side = edgeFrame(polygon, doorWall + 1)
   const area = polygonArea(polygon)
   const size = (assetId: string) => catalog.find((asset) => asset.id === assetId)?.dimensions
   const width = (assetId: string) => size(assetId)?.[0] ?? 1
@@ -157,7 +167,7 @@ function layout(
       rotationDeg: edge.facing,
       along: edge.along,
       inward: edge.inward,
-      wallLength: edge.length,
+      wall: { length: edge.length, lateral },
     })
   }
   const free = (assetId: string, x: number, z: number, rotationDeg = 0) =>
@@ -224,6 +234,7 @@ function layout(
 const SKIP_REASONS = {
   outside_bounds: 'outside the room',
   overlaps_item: 'overlaps another item',
+  off_wall: 'no wall to stand against there',
 } as const
 
 const round = (value: number) => Math.round(value * 100) / 100
@@ -259,6 +270,25 @@ function skipReason(
 }
 
 /**
+ * How a wall-bound piece looks for a spot: along its wall, its whole width within the wall's ends
+ * (`at` is where it starts, off the wall's middle), barely off it, against a wall that stands.
+ */
+function againstItsWall(
+  wall: { length: number },
+  at: number,
+  width: number,
+  walls: ReturnType<typeof wallFacesOn>,
+) {
+  const reach = (wall.length - width) / 2
+  return {
+    lateralsM: lateralSteps(-reach - at, reach - at),
+    insetsM: AGAINST_WALL_INSETS_M,
+    // A level with no walls yet is furnished by its outline alone; verify_scene judges no piece there.
+    ...(walls.length > 0 ? { againstWalls: walls } : {}),
+  }
+}
+
+/**
  * `furnish_room`: a room type's pieces from the host's catalog, against the walls the door decides,
  * each moved off door clear zones and other items or skipped with the reason. The door wall is the
  * edge a door of the room stands on (found by position), else doorWallIndex, else edge 0.
@@ -291,6 +321,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
     (footprint) => footprint.aabb,
   )
   const { minX, maxX, minZ, maxZ } = polygonBounds(polygon)
+  const walls = wallFacesOn(all, levelId)
 
   const items: AnyNode[] = []
   const skipped: string[] = []
@@ -316,10 +347,11 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
       doorKeepouts: keepouts,
       occupied,
       roomBounds: { minX, maxX, minZ, maxZ },
+      roomOutline: polygon,
       along: pose.along,
       inward: pose.inward,
-      ...(pose.wallLength !== undefined && furnitureKind(asset) === 'wall'
-        ? { lateralsM: lateralSteps(pose.wallLength), insetsM: AGAINST_WALL_INSETS_M }
+      ...(pose.wall && furnitureKind(asset) === 'wall'
+        ? againstItsWall(pose.wall, pose.wall.lateral + slide, asset.dimensions?.[0] ?? 1, walls)
         : {}),
     })
     if (!candidate) {
