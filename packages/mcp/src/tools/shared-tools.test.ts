@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentOperations } from '@pascal-app/core/agent-operations'
 import { type PluginAgentTools, refuse } from '@pascal-app/core/agent-tools'
 import { type AnyNodeId, BuildingNode, type Collection, LevelNode } from '@pascal-app/core/schema'
+import { createPascalMcpServer } from '@pascal-app/mcp/server'
 import { z } from 'zod'
 import { AGENT_TOOL_CASES } from '../../../core/src/agent-operations/__fixtures__/cases'
 import { SceneBridge } from '../bridge/scene-bridge'
@@ -19,6 +20,57 @@ type Result = {
   content: Array<{ type: string; text: string }>
   structuredContent?: Record<string, unknown>
 }
+
+test('hosted file tools work through MCP without loading a scene and preserve access refusals', async () => {
+  const calls: unknown[] = []
+  const server = createPascalMcpServer({
+    bridge: new SceneBridge(),
+    files: async (request) => {
+      calls.push(request)
+      if (request.projectId === 'project_denied') refuse('file_access_denied', 'Project not found')
+      return { file: { id: 'asset_report', name: request.input.name } }
+    },
+  })
+  const client = new Client({ name: 'file-client', version: '0.0.0' })
+  const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const saved = (await client.callTool({
+      name: 'upload_project_file',
+      arguments: {
+        projectId: 'project_report',
+        phase: 'text',
+        name: 'Budget.csv',
+        mimeType: 'text/csv',
+        content: 'area,cost\n',
+      },
+    })) as Result
+    expect(saved.isError).toBeFalsy()
+    expect(JSON.parse(saved.content[0]!.text)).toMatchObject({
+      file: { id: 'asset_report', name: 'Budget.csv' },
+    })
+    expect(calls[0]).toMatchObject({
+      projectId: 'project_report',
+      name: 'upload_project_file',
+      input: { content: 'area,cost\n' },
+    })
+    const invalid = (await client.callTool({
+      name: 'upload_project_file',
+      arguments: { phase: 'complete', name: 'Budget.csv', mimeType: 'text/csv' },
+    })) as Result
+    expect(invalid.isError).toBe(true)
+    expect(calls).toHaveLength(1)
+    const denied = (await client.callTool({
+      name: 'get_project_file',
+      arguments: { projectId: 'project_denied', fileId: 'asset_report' },
+    })) as Result
+    expect(denied.isError).toBe(true)
+    expect(JSON.parse(denied.content[0]!.text)).toMatchObject({ code: 'file_access_denied' })
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
 
 describe('shared tools over MCP', () => {
   let bridge: SceneBridge

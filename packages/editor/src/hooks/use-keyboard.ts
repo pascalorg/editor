@@ -26,6 +26,7 @@ import {
 import { steppedRotation } from '../components/tools/item/placement-math'
 import { keyCyclableContinuationContext } from '../lib/continuation'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
+import { isSceneView } from '../lib/editor-views'
 import { cancelGestures } from '../lib/gesture-lifecycle'
 import { guideEmitter } from '../lib/guide-events'
 import { isHistoryShortcut, runRedo, runUndo, shouldCancelDraftOnHistoryJump } from '../lib/history'
@@ -46,6 +47,12 @@ import useInteractionScope, {
   isInteractionSubtreeDraft,
 } from '../store/use-interaction-scope'
 import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
+import { activeViewLayout } from '../store/view-layout'
+
+export function hasSceneKeyboardFocus(): boolean {
+  const layout = activeViewLayout(useEditor.getState())
+  return isSceneView(layout.panes[layout.focus])
+}
 
 // References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
 // the viewer selection, so selection-based key arms (R/T rotate) need this
@@ -324,6 +331,11 @@ export const useKeyboard = ({
     let shiftTapClean = false
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !hasSceneKeyboardFocus()) {
+        ctrlTapClean = false
+        shiftTapClean = false
+        return
+      }
       if (e.key === 'Shift') {
         shiftTapClean = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey
       } else {
@@ -773,6 +785,11 @@ export const useKeyboard = ({
       }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !hasSceneKeyboardFocus()) {
+        ctrlTapClean = false
+        shiftTapClean = false
+        return
+      }
       if (e.key === 'Shift') {
         const wasClean = shiftTapClean
         shiftTapClean = false
@@ -807,6 +824,7 @@ export const useKeyboard = ({
     // registry move overlay) — safe only because none of them claim Ctrl/Cmd+G.
     // `e.code` keeps it on the physical G key across keyboard layouts.
     const handleSessionGroupKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !hasSceneKeyboardFocus()) return
       if (e.key !== 'Shift') shiftTapClean = false
       if (e.key !== 'Control' && e.key !== 'Meta') ctrlTapClean = false
       if (isTypingTarget(e.target)) {

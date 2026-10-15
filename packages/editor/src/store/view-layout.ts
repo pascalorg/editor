@@ -113,7 +113,10 @@ export function withSplitToggled(layout: ViewLayout): ViewLayout {
  */
 export function withoutView(layout: ViewLayout, viewId: string): ViewLayout {
   const pane = paneOfView(layout, viewId)
-  if (pane === null) return layout
+  if (pane === null) {
+    if (layout.panes[1] !== viewId) return layout
+    return { ...layout, panes: [layout.panes[0], layout.panes[0] === VIEW_3D ? VIEW_2D : VIEW_3D] }
+  }
   const kept = layout.split ? layout.panes[pane === 0 ? 1 : 0] : VIEW_3D
   return { ...layout, split: false, panes: [kept, kept === VIEW_3D ? VIEW_2D : VIEW_3D], focus: 0 }
 }

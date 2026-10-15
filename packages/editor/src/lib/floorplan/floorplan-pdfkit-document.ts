@@ -1,5 +1,7 @@
 /// <reference path="./pdfkit-standard-fonts.d.ts" />
+import { getProjectFileSink } from '@pascal-app/core'
 import type PdfKitDocument from 'pdfkit'
+import { downloadProjectFile } from '../download-project-file'
 
 type PdfKitDocumentInstance = InstanceType<typeof PdfKitDocument>
 
@@ -465,6 +467,7 @@ export async function createFloorplanPdfDocument(
   defaultPageSize: readonly [number, number],
   options: { title?: string } = {},
 ) {
+  const fileSink = getProjectFileSink()
   const [pdfkit, helvetica, helveticaBold, courier, courierBold, { default: blobStream }, fonts] =
     await Promise.all([
       import('pdfkit'),
@@ -504,12 +507,7 @@ export async function createFloorplanPdfDocument(
         raw.on('error', reject)
         raw.end()
       })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = filename
-      anchor.click()
-      setTimeout(() => URL.revokeObjectURL(url), 0)
+      await downloadProjectFile(blob, filename, fileSink)
     },
   }
 }

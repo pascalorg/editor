@@ -1320,6 +1320,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 className="relative min-w-0 overflow-hidden"
                 data-view-pane={pane}
                 key={viewId}
+                onFocusCapture={focusPane(pane)}
                 onPointerDownCapture={focusPane(pane)}
                 style={paneStyle(pane)}
               >

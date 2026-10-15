@@ -1,4 +1,6 @@
+import { downloadProjectFile } from '../../../../../lib/download-project-file'
 import {
+  getProjectFileSink,
   clearSceneHistory,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
@@ -628,21 +630,20 @@ export function SettingsPanel({
     }
     const json = JSON.stringify(sceneData, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
     const date = new Date().toISOString().split('T')[0]
-    link.download = `layout_${date}.json`
-    link.click()
-    URL.revokeObjectURL(url)
+    setModelExportError(null)
+    void downloadProjectFile(blob, `layout_${date}.json`).catch((error: unknown) => {
+      setModelExportError(error instanceof Error ? error.message : 'Could not save the file')
+    })
   }
 
   const handleFileLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    const fileSink = getProjectFileSink()
     const reader = new FileReader()
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const text = event.target?.result as string
       let parsed: unknown
       try {
@@ -669,10 +670,20 @@ export function SettingsPanel({
         })
         return
       }
+      const result = validateBuildJson(parsed)
+      if (result.ok) {
+        try {
+          await fileSink?.({ blob: file, name: file.name })
+        } catch (error) {
+          setModelExportError(error instanceof Error ? error.message : 'Could not save the source file')
+          return
+        }
+        if (fileSink !== getProjectFileSink()) return
+      }
       setPendingImport({
         fileName: file.name,
         fileSizeBytes: file.size,
-        result: validateBuildJson(parsed),
+        result,
       })
     }
     reader.readAsText(file)
