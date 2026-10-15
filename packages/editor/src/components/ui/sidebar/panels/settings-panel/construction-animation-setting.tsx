@@ -6,12 +6,13 @@ import useConstructionReveal, {
   useFramingAvailable,
 } from '../../../../../store/use-construction-reveal'
 import { SegmentedControl } from '../../../controls/segmented-control'
+import { Badge } from '../../../primitives/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../primitives/tooltip'
 
 /** Why Framing is greyed out. */
 export const FRAMING_NEEDS_BONES = 'Framing needs the Bones plugin.'
 
-const OPTIONS: { label: string; value: ConstructionRevealLevel; title: string }[] = [
+const OPTIONS: { label: string; value: ConstructionRevealLevel; title: string; badge?: string }[] = [
   { label: 'Off', value: 'off', title: 'What the AI builds appears at once.' },
   {
     label: 'Simple',
@@ -27,6 +28,8 @@ const OPTIONS: { label: string; value: ConstructionRevealLevel; title: string }[
     label: 'Framing',
     value: 'framing',
     title: 'Full, plus the framing members dropping in first, where the framing plugin draws them.',
+    // The plugin that draws the framing is a Pro one.
+    badge: 'Pro',
   },
 ]
 
@@ -49,22 +52,29 @@ export function ConstructionAnimationSetting() {
   const setLevel = useConstructionReveal((state) => state.setLevel)
   const framingAvailable = useFramingAvailable()
   const current = OPTIONS.find((option) => option.value === level)
-  const options = constructionLevelOptions(framingAvailable).map((option) =>
-    option.disabled
-      ? {
-          ...option,
-          title: undefined,
-          label: (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>{option.label}</span>
-              </TooltipTrigger>
-              <TooltipContent>{option.title}</TooltipContent>
-            </Tooltip>
-          ),
-        }
-      : option,
-  )
+  const options = constructionLevelOptions(framingAvailable).map((option) => {
+    const label = option.badge ? (
+      <span className="inline-flex items-center gap-1.5">
+        {option.label}
+        <Badge label={option.badge} />
+      </span>
+    ) : (
+      option.label
+    )
+    if (!option.disabled) return { ...option, label }
+    return {
+      ...option,
+      title: undefined,
+      label: (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>{label}</span>
+          </TooltipTrigger>
+          <TooltipContent>{option.title}</TooltipContent>
+        </Tooltip>
+      ),
+    }
+  })
   return (
     <div className="space-y-2 py-1">
       <div className="space-y-0.5">

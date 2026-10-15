@@ -116,6 +116,19 @@ describe('the construction animation control, drawn', () => {
   })
 })
 
+describe('the Pro badge', () => {
+  // The plugin that draws the framing is a Pro one: the option carries the plugin manager's mark,
+  // greyed out or not, and no other level does.
+  test('Framing carries it, greyed out or on offer; the other levels do not', () => {
+    for (const installed of [false, true]) {
+      project({ installed })
+      const markup = renderToStaticMarkup(<ConstructionAnimationSetting />)
+      expect(optionOf(markup, 'Framing')).toMatch(/>Pro</)
+      for (const label of ['Off', 'Simple', 'Full']) expect(optionOf(markup, label)).not.toMatch(/>Pro</)
+    }
+  })
+})
+
 describe('the animation speed control, drawn', () => {
   test('offers the five steps and shows the saved one', () => {
     project({ installed: true, speed: 1.5 })
