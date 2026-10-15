@@ -10,7 +10,7 @@ Inspect the server's advertised tools because hosted and local releases may diff
 2. `load_scene`
 3. `get_project_status`
 4. `list_levels`
-5. `get_level_summary`, `get_walls`, `get_zones`, `find_nodes`, or `get_node`
+5. `get_level_summary`, `get_walls`, `get_zones`, `find_by_type`, or `get_node`
 6. `verify_scene`
 
 `get_scene` returns the full graph and is useful when a compact summary omits a field needed for a calculation, such as an item's scale.
@@ -112,3 +112,9 @@ items before retrying. Each edit is one undo step.
 clearance warnings. It uses the same check as placement, movement and inspection.
 The envelopes are conservative; curved walls and wall openings are not resolved.
 These are plugin tools: use them only when the host lists them.
+
+## Greenhouse and barrel roofs
+
+Use `create_roof` with `roofSystem: "glazed"` for a gable, straight shed or barrel greenhouse roof. For a barrel roof, `depth` is the span and `barrelRise` is the arch rise, no more than half the span. `barrelSegments` controls faceting. `glazing` sets frame dimensions, glass appearance, grid layouts, glazed ends and individual glass, solid or empty panels. Standard barrel construction uses a solid covering.
+
+Paint glazed segments with `glazing-frame`, `glazing-glass` or `glazing-solid`. Without a role, paint changes the frame and solid panels while preserving the glass finish. Painting a roof container with glazed segments applies the finish to its segments. Standard roofs use `top`, `edge` and `wall`.

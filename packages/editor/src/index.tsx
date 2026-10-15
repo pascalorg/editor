@@ -418,12 +418,14 @@ export {
   getDisplayedDoorValue,
   openDoorOpenState,
 } from './lib/door-interaction'
+export { downloadProjectFile } from './lib/download-project-file'
 export { createEditorApi } from './lib/editor-api'
 export {
   type EditorHostView,
   editorHostViewRegistry,
   openEditorView,
   registerEditorHostView,
+  unregisterEditorHostView,
 } from './lib/editor-views'
 export {
   clearStructuralElevationGuide,
@@ -644,6 +646,7 @@ export { useMaterialCatalogModel } from './lib/material-catalog-model'
 export {
   type ActivePaintMaterial,
   buildResetSurfaceMaterialUpdates,
+  buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
@@ -749,6 +752,7 @@ export {
   setPointAskBusy,
   setPointAskPlayful,
 } from './lib/point-ask/host-api'
+export { buildPrintableRoofSegmentSolids } from './lib/print-roof-solids'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {

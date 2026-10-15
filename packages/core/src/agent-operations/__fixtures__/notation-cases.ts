@@ -356,6 +356,8 @@ export const NOT_LENGTHS = new Set([
   'paint.material.properties.roughness',
   'paint.material.properties.metalness',
   'paint.material.properties.opacity',
+  'create_roof.glazing.glassOpacity',
+  'create_roof.glazing.glassRoughness',
   'paint.material.texture.scale',
   'generate_studio_media.settings.durationSeconds',
 ])

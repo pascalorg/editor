@@ -97,6 +97,8 @@ export function pointInBoundsWithPadding(
 }
 
 export function pointOnSegment(point: Vec2, a: Vec2, b: Vec2, tolerance = 1e-6): boolean {
+  // A segment of no length (an outline's repeated corner) is its one point, not every point.
+  if (a[0] === b[0] && a[1] === b[1]) return distance2D(point, a) <= tolerance
   const cross = (point[1] - a[1]) * (b[0] - a[0]) - (point[0] - a[0]) * (b[1] - a[1])
   if (Math.abs(cross) > tolerance) return false
   const dot = (point[0] - a[0]) * (b[0] - a[0]) + (point[1] - a[1]) * (b[1] - a[1])

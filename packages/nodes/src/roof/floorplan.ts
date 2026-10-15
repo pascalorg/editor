@@ -2,6 +2,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getGlazedRoofPlanLines,
   getRoofSegmentVisibleTopBounds,
   type RoofNode,
   type RoofSegmentNode,
@@ -25,6 +26,7 @@ type SegPlan = {
   ridges: Seg[]
   hips: Seg[]
   breaks: Seg[]
+  glazing: Seg[]
   slopes: SlopeArrow[]
 }
 
@@ -73,6 +75,7 @@ function slopeArrows(node: RoofSegmentNode): { tail: [number, number]; head: [nu
     case 'shed':
       // Unchanged from the linework builder: the 3D shed falls −lz → +lz.
       return [{ tail: [0, -hd * 0.55], head: [0, hd * 0.55] }]
+    case 'barrel':
     case 'gable':
     case 'gambrel': {
       const z = along(hd)
@@ -141,6 +144,7 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): 
   const ridges = lw.ridges.map(mapSeg)
   const hips = lw.hips.map(mapSeg)
   const breaks = lw.breaks.map(mapSeg)
+  const glazing = getGlazedRoofPlanLines(seg).map(mapSeg)
   if (!drafting) {
     const slopes = lw.slope
       ? [
@@ -151,13 +155,13 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): 
           },
         ]
       : []
-    return { footprint, eave: footprint, ridges, hips, breaks, slopes }
+    return { footprint, eave: footprint, ridges, hips, breaks, glazing, slopes }
   }
   // The drip edge: core's own visible-top bounds, which add the horizontal
   // component of `overhang` (plus half the wall thickness and, on the sloped
   // faces, the shingle projection) to the footprint on each side.
   const edge = getRoofSegmentVisibleTopBounds(seg)
-  const pitch = roofPitchLabel(seg.pitch)
+  const pitch = seg.roofType === 'barrel' ? '' : roofPitchLabel(seg.pitch)
   return {
     footprint,
     eave: [
@@ -169,6 +173,7 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): 
     ridges,
     hips,
     breaks,
+    glazing,
     slopes: slopeArrows(seg).map((arrow) => ({
       tail: tp(arrow.tail[0], arrow.tail[1]),
       head: tp(arrow.head[0], arrow.head[1]),
@@ -354,6 +359,10 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
   }
 
   for (const { plan, cutters } of visiblePlans) {
+    for (const line of plan.glazing) {
+      for (const visible of clipLineByCutters(line, cutters))
+        pushLine(visible[0], visible[1], hipWidth)
+    }
     for (const line of plan.breaks) {
       for (const visible of clipLineByCutters(line, cutters)) {
         pushLine(visible[0], visible[1], hipWidth)

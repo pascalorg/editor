@@ -316,6 +316,7 @@ export type PlacementRejectReason =
   | 'outside_bounds'
   | 'blocks_door_clearance'
   | 'overlaps_item'
+  | 'off_wall'
   | 'ok'
 
 export function classifyPlacement(args: {
@@ -350,6 +351,70 @@ export function classifyPlacement(args: {
   return 'ok'
 }
 
+/** How far a placement may step a piece off its spot, into the room, to clear doors and other pieces. */
+export const PLACEMENT_INSETS_M = [0, 0.25, 0.5, 0.75]
+
+/**
+ * Slides along a wall between `min` and `max`, nearest first: the nearest to none at all, then
+ * every 0.4 m (0, -0.4, 0.4, … when the range holds 0).
+ */
+export function lateralSteps(min: number, max: number): number[] {
+  const nearest = Math.min(Math.max(0, min), max)
+  const steps = [nearest]
+  for (let k = Math.ceil(min / 0.4 - 1e-9); k * 0.4 <= max + 1e-9; k++)
+    if (Math.abs(k * 0.4 - nearest) > 1e-9) steps.push(k * 0.4)
+  return steps.sort((a, b) => Math.abs(a) - Math.abs(b) || a - b)
+}
+
+/** Whether segment a–b passes through the open box |u| < halfU, |v| < halfV (Liang–Barsky). */
+function segmentEntersBox(a: Vec2, b: Vec2, halfU: number, halfV: number): boolean {
+  const [du, dv] = [b[0] - a[0], b[1] - a[1]]
+  let [enter, exit] = [0, 1]
+  for (const [p, q] of [
+    [-du, a[0] + halfU],
+    [du, halfU - a[0]],
+    [-dv, a[1] + halfV],
+    [dv, halfV - a[1]],
+  ] as const) {
+    if (p === 0) {
+      if (q <= 0) return false
+      continue
+    }
+    const t = q / p
+    if (p < 0) enter = Math.max(enter, t)
+    else exit = Math.min(exit, t)
+    if (enter >= exit) return false
+  }
+  return true
+}
+
+/**
+ * Whether a piece's turned footprint stands inside a room's outline, a notch or an L's missing
+ * corner included: its middle is inside and no edge of the outline passes through it. A piece may
+ * touch the outline, and overlap it by up to {@link OUTLINE_CONTACT_M}.
+ */
+function insideOutline(
+  { x, z, rotationDeg }: PlacementCandidate,
+  dimensions: [number, number, number] | number[] | undefined,
+  outline: readonly Vec2[],
+): boolean {
+  if (!pointInPolygon([x, z], outline as Vec2[], false)) return false
+  const [width = 1, , depth = 1] = dimensions ?? [1, 1, 1]
+  const yaw = (rotationDeg * Math.PI) / 180
+  const [cos, sin] = [Math.cos(yaw), Math.sin(yaw)]
+  // In the piece's own frame (the inverse of itemNodePlanCorners' turn): u across, v deep.
+  const local = ([px, pz]: Vec2): Vec2 => [
+    (px - x) * cos - (pz - z) * sin,
+    (px - x) * sin + (pz - z) * cos,
+  ]
+  // A piece a few millimetres thin keeps half its own thickness, so its box is never empty.
+  const inset = (half: number) => Math.max(half - OUTLINE_CONTACT_M, half / 2)
+  const [halfU, halfV] = [inset(width / 2), inset(depth / 2)]
+  return !outline.some((point, i) =>
+    segmentEntersBox(local(point), local(outline[(i + 1) % outline.length]!), halfU, halfV),
+  )
+}
+
 export function generatePlacementCandidates(
   primary: PlacementCandidate,
   options?: {
@@ -359,8 +424,8 @@ export function generatePlacementCandidates(
     along?: { x: number; z: number }
   },
 ): PlacementCandidate[] {
-  const laterals = options?.lateralsM ?? [0, -0.4, 0.4, -0.8, 0.8, -1.2, 1.2]
-  const insets = options?.insetsM ?? [0, 0.25, 0.5, 0.75]
+  const laterals = options?.lateralsM ?? lateralSteps(-1.2, 1.2)
+  const insets = options?.insetsM ?? PLACEMENT_INSETS_M
   const along = options?.along ?? { x: 1, z: 0 }
   const inward = options?.inward ?? { x: 0, z: 1 }
   const out: PlacementCandidate[] = []
@@ -384,49 +449,52 @@ export function findValidPlacement(args: {
   doorKeepouts: PlanAabb[]
   occupied: PlanAabb[]
   roomBounds?: { minX: number; maxX: number; minZ: number; maxZ: number }
+  roomOutline?: readonly Vec2[]
   along?: { x: number; z: number }
   inward?: { x: number; z: number }
+  lateralsM?: number[]
+  insetsM?: number[]
+  /** For a wall-bound piece: a spot is taken only against one of these walls, as verify_scene reads it. */
+  againstWalls?: readonly WallFace[]
 }):
   | { candidate: PlacementCandidate; reason: PlacementRejectReason }
-  | { candidate: null; reason: PlacementRejectReason } {
+  | {
+      candidate: null
+      reason: PlacementRejectReason
+      /** The spot the reason is about, when one had a wall. */
+      refused: PlacementCandidate | null
+    } {
   const candidates = generatePlacementCandidates(args.primary, {
     along: args.along,
     inward: args.inward,
+    lateralsM: args.lateralsM,
+    insetsM: args.insetsM,
   })
 
-  // Prefer reporting why the **primary** pose failed (door/overlap), not the
-  // last lateral/inset candidate (often outside_bounds after large nudges).
-  let primaryReason: PlacementRejectReason | null = null
-  const reasonPriority: PlacementRejectReason[] = [
-    'blocks_door_clearance',
-    'overlaps_item',
-    'outside_bounds',
-  ]
-  let bestFailReason: PlacementRejectReason = 'overlaps_item'
-
-  for (let i = 0; i < candidates.length; i++) {
-    const c = candidates[i]!
-    const rot = (c.rotationDeg * Math.PI) / 180
-    const aabb = itemPlanAabb([c.x, 0, c.z], args.dimensions, rot)
-    const reason = classifyPlacement({
+  // Why the first spot that stands against a wall failed (a door, a piece), not the last nudge
+  // tried (often outside the room after large ones); off_wall when no spot had a wall.
+  let refused: { at: PlacementCandidate; reason: PlacementRejectReason } | null = null
+  for (const c of candidates) {
+    const aabb = itemPlanAabb([c.x, 0, c.z], args.dimensions, (c.rotationDeg * Math.PI) / 180)
+    if (args.againstWalls && gapToWalls(aabb, args.againstWalls) > MID_ROOM_DISTANCE_M) continue
+    let reason = classifyPlacement({
       aabb,
       doorKeepouts: args.doorKeepouts,
       occupied: args.occupied,
       roomBounds: args.roomBounds,
     })
+    if (reason === 'ok' && args.roomOutline && !insideOutline(c, args.dimensions, args.roomOutline))
+      reason = 'outside_bounds'
     if (reason === 'ok') return { candidate: c, reason }
-    if (i === 0) primaryReason = reason
-    const prevRank = reasonPriority.indexOf(bestFailReason)
-    const nextRank = reasonPriority.indexOf(reason)
-    if (nextRank >= 0 && (prevRank < 0 || nextRank < prevRank)) {
-      bestFailReason = reason
-    }
+    refused ??= { at: c, reason }
   }
-  return { candidate: null, reason: primaryReason ?? bestFailReason }
+  return { candidate: null, reason: refused?.reason ?? 'off_wall', refused: refused?.at ?? null }
 }
 
 /** A wall-bound piece whose nearest edge is further than this from every wall face is not against a wall. */
 export const MID_ROOM_DISTANCE_M = 0.4
+/** How far a piece may overlap a room's outline (m): touching it, give or take a millimetre. */
+const OUTLINE_CONTACT_M = 1e-3
 const DEFAULT_WALL_THICKNESS_M = 0.1
 
 const cross = (o: Vec2, p: Vec2, q: Vec2) =>
@@ -467,6 +535,35 @@ function boxToSegment(box: PlanAabb, a: Vec2, b: Vec2) {
   return nearest
 }
 
+/** A wall as the mid-room check reads it: its centre line and half its thickness. */
+export type WallFace = { a: Vec2; b: Vec2; halfThickness: number }
+
+/** The walls of a level (resolved through `byId`), as the mid-room check reads them. */
+export function wallFacesOn(
+  nodes: Iterable<AnyNode>,
+  levelId: string | undefined,
+  byId: Map<string, AnyNode> = new Map([...nodes].map((node) => [node.id, node])),
+): WallFace[] {
+  const walls: WallFace[] = []
+  for (const node of nodes) {
+    if (node.type !== 'wall' || resolveNodeLevelId(node.id, byId) !== levelId) continue
+    walls.push({
+      a: [node.start[0], node.start[1]],
+      b: [node.end[0], node.end[1]],
+      halfThickness: (node.thickness ?? DEFAULT_WALL_THICKNESS_M) / 2,
+    })
+  }
+  return walls
+}
+
+/** How far a footprint stands from the nearest wall's face (m); Infinity with no wall. */
+export function gapToWalls(box: PlanAabb, walls: readonly WallFace[]): number {
+  return Math.min(
+    Number.POSITIVE_INFINITY,
+    ...walls.map((wall) => Math.max(0, boxToSegment(box, wall.a, wall.b) - wall.halfThickness)),
+  )
+}
+
 /**
  * Wall-bound pieces (a fridge, a counter, a bed, a sofa) that stand in a room but away from every
  * wall: further than {@link MID_ROOM_DISTANCE_M} from the face of each wall of their level. Pieces
@@ -478,18 +575,11 @@ export function findItemsMidRoom(args: { nodes: Iterable<AnyNode>; levelId?: str
 }[] {
   const list = [...args.nodes]
   const byId = new Map<string, AnyNode>(list.map((node) => [node.id, node]))
-  const walls: { a: Vec2; b: Vec2; halfThickness: number }[] = []
-  const zones: Extract<AnyNode, { type: 'zone' }>[] = []
-  for (const node of list) {
-    if (resolveNodeLevelId(node.id, byId) !== args.levelId) continue
-    if (node.type === 'wall')
-      walls.push({
-        a: [node.start[0], node.start[1]],
-        b: [node.end[0], node.end[1]],
-        halfThickness: (node.thickness ?? DEFAULT_WALL_THICKNESS_M) / 2,
-      })
-    else if (node.type === 'zone') zones.push(node)
-  }
+  const walls = wallFacesOn(list, args.levelId, byId)
+  const zones = list.filter(
+    (node): node is Extract<AnyNode, { type: 'zone' }> =>
+      node.type === 'zone' && resolveNodeLevelId(node.id, byId) === args.levelId,
+  )
   if (walls.length === 0 || zones.length === 0) return []
 
   const found: { id: string; message: string }[] = []
@@ -503,11 +593,7 @@ export function findItemsMidRoom(args: { nodes: Iterable<AnyNode>; levelId?: str
       pointInPolygon([node.position[0], node.position[2]], zone.polygon as Vec2[], true),
     )
     if (!room) continue
-    const gap = Math.min(
-      ...walls.map((wall) =>
-        Math.max(0, boxToSegment(footprint.aabb, wall.a, wall.b) - wall.halfThickness),
-      ),
-    )
+    const gap = gapToWalls(footprint.aabb, walls)
     if (gap <= MID_ROOM_DISTANCE_M) continue
     found.push({
       id: node.id,

@@ -2,6 +2,7 @@ import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import {
   type HostedServiceExecutor,
+  type ProjectFileToolExecutor,
   recordMade,
   type SceneNodes,
 } from '@pascal-app/core/agent-operations'
@@ -15,6 +16,7 @@ import type { GeometryScriptHost } from './tools/add-object'
 import { type AssetCatalog, cachedCatalog } from './tools/asset-catalog'
 import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
+import { registerProjectFileTools } from './tools/project-files'
 import { answerRetiredTools } from './tools/retired-tools'
 import { type OperationTool, registerOperationTool } from './tools/shared-tools'
 import type { SceneViewHost } from './tools/view-scene'
@@ -53,6 +55,8 @@ export type CreatePascalMcpServerOptions = {
   geometryScripts?: GeometryScriptHost
   /** Optional authenticated hosted services; local scene tools remain usable without them. */
   services?: HostedServiceExecutor
+  /** Authenticated project file catalog; absent for a local scene without hosted files. */
+  files?: ProjectFileToolExecutor
   /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
   sceneViews?: SceneViewHost
   /** Lines the host adds to what a client reads at connect (the person's own settings). */
@@ -81,6 +85,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   for (const tool of opts.operationTools ?? []) registerOperationTool(server, operations, tool)
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)
+  if (opts.files) registerProjectFileTools(server, opts.files)
   registerResources(server, operations, catalog)
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)

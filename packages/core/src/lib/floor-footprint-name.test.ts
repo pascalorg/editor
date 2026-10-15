@@ -17,22 +17,19 @@ const room = (id: string, polygon: [number, number][], name: string) =>
 
 const scene = (...nodes: AnyNode[]) => Object.fromEntries(nodes.map((node) => [node.id, node]))
 
-test.each([
-  'Room 3 Slab',
-  'Kitchen slab',
-  'Floor plate 12',
-  'Slab 4',
-  'Floor',
-])('generated legacy name %s uses the shared footprint name', (name) => {
-  const base = plate('slab_base', square(0, 4), [], name)
-  expect(floorFootprintName(scene(base), base)).toBe('Floor area')
-  const shed = room('zone_shed', base.polygon, 'Shed')
-  const withShed = { ...base, zoneIds: [shed.id] }
-  expect(floorFootprintName(scene(withShed, shed), withShed)).toBe('Shed floor')
-  expect(floorFootprintName(scene(base), { ...base, name: 'Garden foundation' })).toBe(
-    'Garden foundation',
-  )
-})
+test.each(['Room 3 Slab', 'Kitchen slab', 'Floor plate 12', 'Slab 4', 'Floor'])(
+  'generated legacy name %s uses the shared footprint name',
+  (name) => {
+    const base = plate('slab_base', square(0, 4), [], name)
+    expect(floorFootprintName(scene(base), base)).toBe('Floor area')
+    const shed = room('zone_shed', base.polygon, 'Shed')
+    const withShed = { ...base, zoneIds: [shed.id] }
+    expect(floorFootprintName(scene(withShed, shed), withShed)).toBe('Shed floor')
+    expect(floorFootprintName(scene(base), { ...base, name: 'Garden foundation' })).toBe(
+      'Garden foundation',
+    )
+  },
+)
 
 test('footprints never read as levels: Shared floor, then the largest room, then Floor area', () => {
   const kitchen = room('zone_kitchen', square(0, 6), 'Kitchen')

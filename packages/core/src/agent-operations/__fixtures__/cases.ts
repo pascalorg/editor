@@ -29,6 +29,7 @@ import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { CORNER_WINDOW_CASES } from './corner-window-cases'
 import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
+import { DESCRIBE_NODE_CASES, FIND_NODES_CASES } from './node-read-cases'
 import {
   GET_SITE_CASES,
   PLACE_BUILDING_CASES,
@@ -959,6 +960,8 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...FIT_STAIR_CASES,
   ...PLACE_ITEMS_CASES,
   ...FIND_BY_TYPE_CASES,
+  ...FIND_NODES_CASES,
+  ...DESCRIBE_NODE_CASES,
   ...CORNER_WINDOW_CASES,
   ...MERGE_WINDOWS_CASES,
   ...GET_SITE_CASES,

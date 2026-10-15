@@ -22,6 +22,7 @@ export {
   type HealSceneResult,
   healSceneNodes,
   repairClaimedParentLinks,
+  repairHostChildLinks,
 } from './heal-scene-graph'
 export { migrateStructuralMaterialSlots } from './legacy-material-slots'
 export { materializeNodeDefaults, STRUCTURE_NODE_KINDS } from './node-defaults'
