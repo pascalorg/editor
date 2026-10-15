@@ -21,10 +21,15 @@ type PlaceBuildingInput = SiteInput & {
 
 const r2 = (n: number) => Math.round(n * 100) / 100 || 0
 
-/** `get_site`: the site a building stands on, in its level coordinates. */
+/**
+ * `get_site`: the site a building stands on, in its level coordinates; a lot no building stands
+ * on yet, in site coordinates.
+ */
 export const getSite: AgentOperation<SiteInput> = (nodes, input, context) => {
-  const building = targetBuilding(nodes, input.building, context)
-  const brief = siteBrief(nodes, { buildingId: building.id })
+  const anyBuilding = Object.values(nodes).some((node) => node.type === 'building')
+  const building =
+    input.building || anyBuilding ? targetBuilding(nodes, input.building, context) : null
+  const brief = siteBrief(nodes, building ? { buildingId: building.id } : {})
   if (!brief) refuse('no_site', 'The scene has no site with a lot: add_level starts one.')
   return { result: { ...roundedSiteBrief(brief), summary: describeSiteBrief(brief) } }
 }

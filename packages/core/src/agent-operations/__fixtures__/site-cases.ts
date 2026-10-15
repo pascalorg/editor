@@ -19,7 +19,7 @@ import type { AgentToolCase, SceneGraph } from './cases'
 type Pt = [number, number]
 
 /** Links parents' children and returns the graph, sites as roots. */
-function scene(...nodes: AnyNode[]): SceneGraph {
+export function scene(...nodes: AnyNode[]): SceneGraph {
   const byId = Object.fromEntries(nodes.map((node) => [node.id, { ...node }])) as Record<
     string,
     AnyNode & { children?: string[] }
@@ -35,11 +35,11 @@ function scene(...nodes: AnyNode[]): SceneGraph {
   }
 }
 
-const site = (extra: Record<string, unknown> = {}) =>
+export const site = (extra: Record<string, unknown> = {}) =>
   SiteNode.parse({ id: 'site_lot', children: [], ...extra })
-const building = (extra: Record<string, unknown> = {}, id = 'building_main') =>
+export const building = (extra: Record<string, unknown> = {}, id = 'building_main') =>
   BuildingNode.parse({ id, parentId: 'site_lot', ...extra })
-const level = (buildingId = 'building_main', id = 'level_ground') =>
+export const level = (buildingId = 'building_main', id = 'level_ground') =>
   LevelNode.parse({ id, parentId: buildingId, level: 0, name: 'Ground', height: 2.8 })
 
 /** Four walls round a box from `[x0, z0]`, `w` along x and `d` along z. */
@@ -81,7 +81,7 @@ function turnedLot(centre: Pt, w: number, d: number, deg: number): Pt[] {
 // An 18 × 32 m parcel turned 20°, its centre at site [8, −6], front (edge 0) to the north, yards
 // 6 / 1.5 / 6 m; the building stands at [3, 0, 2]. The envelope is the parcel inset 6 m front and
 // rear, 1.5 m each side: 15 × 20 m round the same centre, which is [5, −8] in the level frame.
-const TILTED = {
+export const TILTED = {
   polygon: { type: 'polygon', points: turnedLot([8, -6], 18, 32, 20) },
   setbacks: { front: 6, side: 1.5, rear: 6 },
   setbacksSource: 'zoning-code',
@@ -91,7 +91,7 @@ const TILTED = {
 }
 
 // A 20 × 40 m lot along +z, its street on the north edge (edge 0, z = 0).
-const STRAIGHT = {
+export const STRAIGHT = {
   polygon: {
     type: 'polygon',
     points: [
@@ -105,7 +105,7 @@ const STRAIGHT = {
 }
 
 // A U-shaped lot: two arms 10 m wide, the notch x 10..20 above z = 10 not part of it.
-const U_LOT = {
+export const U_LOT = {
   polygon: {
     type: 'polygon',
     points: [
