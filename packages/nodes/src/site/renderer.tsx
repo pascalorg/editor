@@ -24,7 +24,7 @@ import {
   horizonHazeColor,
   NodeRenderer,
   SITE_GROUND,
-  UNDERGROUND_VEIL,
+  UNDERGROUND_RIM,
   useImmersiveXRPresentation,
   useNodeEvents,
   useSceneAtmosphere,
@@ -256,7 +256,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     // lib/ground-window), and the hole opens over a level below grade (ground-hole.tsx), its
     // edge a noise threshold with a thin slate rim; with both closed the mask passes everywhere.
     ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
-    material.colorNode = groundHoleColorNode(UNDERGROUND_VEIL)
+    material.colorNode = groundHoleColorNode(UNDERGROUND_RIM)
     material.receivedShadowNode = groundHoleShadowNode()
     return material
   }, [bgColor])

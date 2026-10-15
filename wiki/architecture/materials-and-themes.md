@@ -190,17 +190,17 @@ The ground is the medium, and the eye is above it or below it.
 
 **Above the ground, a level below grade shown** (`groundVeiled`): the ground stays solid and a hole opens in it over the below-grade footprint (`nodes/src/site/ground-hole.tsx`). The footprint is baked on the CPU into a signed-distance texture (the polygons the grade ring runs along); the ground's `maskNode` compares that distance to a radius that wanders with one perlin lookup (`HOLE_MARGIN` ± `HOLE_ERODE`), so the cut is a scalloped, noise-thresholded edge with a thin slate rim, and the solid ground's shadow reception is off while it is open. How far it is open is the viewer's `groundHoleOpenNode` (eased with the same 0.7 s, instant with Animation Off). Picks and Follow's sight drop hits inside the hole's guaranteed core (`groundHoleContains`, same bake, the noise not replayed). The faint veil sheets (`ground-veil.tsx`) are now only the ground window's (a hillside in the eye's way) and a capture's (`temporarilyVeilGround`, which sets the solid ground aside); the grade ring draws in all of them. No dark mode in this state.
 
-**Below the ground** (`eyeUnderGround`, a free orbit under the lid; the ground height at the eye is `groundHeightAt`, the terrain field or the flat plane, with a 0.10 m band each side): the scene goes to its dark mode, the viewer's own dark scene theme (`UNDERGROUND_THEME_ID`, its backdrop, ground, sky and ambient tokens, no new constants). One factor (`lib/underground-ambiance.ts`, eased over 0.7 s, instant with Animation Off, reduced motion or exporting; Solid turns it off) drives:
+**Below the ground** (`eyeUnderGround`, a free orbit under the lid; the ground height at the eye is `groundHeightAt`, the terrain field or the flat plane, with a 0.10 m band each side): the scene goes to its dark mode, a neutral anthracite / slate grey with no hue (`UNDERGROUND_PALETTE`, beside the scene theme tokens in `lib/scene-themes.ts`: neither dark scene theme is neutral, `night` is navy). One factor (`lib/underground-ambiance.ts`, eased over 0.7 s, instant with Animation Off, reduced motion or exporting; Solid turns it off) drives:
 
 | Piece | Where | What |
 |---|---|---|
-| Backdrop | `post-processing.tsx` | the theme backdrop's own gradient in the dark theme's colours, after the colour grade; theme or atmosphere sky |
+| Backdrop | `post-processing.tsx` | the theme backdrop's own gradient in the palette's greys, after the colour grade; theme or atmosphere sky; the day's backdrop greys and dims over the first half of the crossing |
 | Fog | `post-processing.tsx` | from the scene pass's depth: distance outside the shown level's box (the host's `groundWindowBox`, else the level or building worked out from the selection) dissolves into the backdrop's colour, per pixel; the no-post-FX fallback has the clear colour only |
 | Vignette | `post-processing.tsx` | the corners close in, before the overlays are composited |
 | Crossing | `post-processing.tsx` (`undergroundDissolve`) | a screen-space perlin mask: soft blobs of the dark world spread over the screen, 0 everywhere above and 1 everywhere below; weighs the three above |
-| Sky light | `lib/underground-ambiance.ts` | ambient and hemisphere come down and tint toward the dark theme's ambient for the frame about to be drawn and are given back before `Lights` lerps them; the sun and the IBL are untouched |
+| Sky light | `lib/underground-ambiance.ts` | ambient and hemisphere come down and tint toward the palette's neutral light grey for the frame about to be drawn and are given back before `Lights` lerps them; the sun and the IBL are untouched |
 | Eye light | `lights.tsx` `UndergroundFill` | its intensity is the ambiance's: the veil's 1 (or 0) at rest, up to `EYE_FILL_INTENSITY` under the ground |
-| Grade ring | `ground-veil.tsx` | `#1c1917` → the dark theme's wall tint, a light rim |
+| Grade ring | `ground-veil.tsx` | `#1c1917` → the palette's light grey, a light rim |
 
 The shown level's own materials are never touched. A capture (the agent's pictures, the hero shot) renders from its own camera with `gl.render`, so the composite pieces are not in it; `temporarilyWithoutAmbiance()` (held by the thumbnail generator's set-up and the hero bake) also closes the hole, lets the sky light and the fill go back to what they were, and restores them after.
 

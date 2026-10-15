@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { AmbientLight, Color, DirectionalLight, HemisphereLight } from 'three'
 import { vec3 } from 'three/tsl'
-import { getSceneTheme } from './scene-themes'
+import { UNDERGROUND_PALETTE } from './scene-themes'
 import {
   AMBIANCE_SECONDS,
   ambianceNow,
@@ -20,9 +20,8 @@ import {
   setGroundHoleOpen,
   stepAmbianceProgress,
   temporarilyWithoutAmbiance,
+  UNDERGROUND_RIM,
   UNDERGROUND_RING,
-  UNDERGROUND_THEME_ID,
-  UNDERGROUND_VEIL,
   UNDERGROUND_VIGNETTE,
   undergroundAmbianceNode,
   undergroundBackdrop,
@@ -48,14 +47,6 @@ test('the hysteresis band is 0.10 m each side of the ground, 0.20 m in all', () 
   expect(EYE_BAND).toBe(0.1)
 })
 
-test('the dark mode is the viewer’s own dark scene theme, not new constants', () => {
-  const dark = getSceneTheme(UNDERGROUND_THEME_ID)
-  expect(dark.appearance).toBe('dark')
-  expect(UNDERGROUND_VEIL).toBe(dark.ground)
-  expect(UNDERGROUND_RING).toBe(dark.clayTints?.wall)
-  expect(UNDERGROUND_VIGNETTE).toBe(dark.backgroundSky ?? dark.background)
-})
-
 test('the eye goes under the ground past a small band and comes back past it, no chatter', () => {
   const ground = -0.05
   expect(eyeUnderTheGround(false, ground - EYE_BAND / 2, ground)).toBe(false)
@@ -63,6 +54,25 @@ test('the eye goes under the ground past a small band and comes back past it, no
   // Under, it stays under until it is clear above.
   expect(eyeUnderTheGround(true, ground + EYE_BAND / 2, ground)).toBe(true)
   expect(eyeUnderTheGround(true, ground + EYE_BAND * 2, ground)).toBe(false)
+})
+
+test('the dark mode’s palette is one place, and every stop of it is a neutral grey', () => {
+  // Beside the scene theme tokens, because neither dark theme is neutral (navy, purple).
+  expect(UNDERGROUND_RIM).toBe(UNDERGROUND_PALETTE.rim)
+  expect(UNDERGROUND_RING).toBe(UNDERGROUND_PALETTE.ring)
+  expect(UNDERGROUND_VIGNETTE).toBe(UNDERGROUND_PALETTE.vignette)
+  for (const [name, hex] of Object.entries(UNDERGROUND_PALETTE)) {
+    const channels = new Color(hex).getRGB({ r: 0, g: 0, b: 0 } as never, 'srgb')
+    const spread =
+      Math.max(channels.r, channels.g, channels.b) - Math.min(channels.r, channels.g, channels.b)
+    // No hue: red, green and blue within a third of a level of 255 of each other.
+    expect({ name, spread: Math.round(spread * 255) }).toEqual({ name, spread: 0 })
+  }
+  // Darker toward the sky and the corners, lighter on the ring: it reads as anthracite and a rim.
+  const luma = (hex: string) => new Color(hex).r
+  expect(luma(UNDERGROUND_PALETTE.vignette)).toBeLessThan(luma(UNDERGROUND_PALETTE.sky))
+  expect(luma(UNDERGROUND_PALETTE.sky)).toBeLessThan(luma(UNDERGROUND_PALETTE.background))
+  expect(luma(UNDERGROUND_PALETTE.background)).toBeLessThan(luma(UNDERGROUND_PALETTE.ring))
 })
 
 test('the crossing takes its seconds, in a straight line, and ends exactly at the target', () => {
@@ -151,7 +161,7 @@ function skyLights() {
   return { ambient, hemisphere, sun, fill, fillRest: 0 }
 }
 
-test('the sky’s light comes down and cools toward the dark theme for the frame, and is given back as the theme set it', () => {
+test('the sky’s light comes down and goes toward neutral grey for the frame, and is given back as the theme set it', () => {
   const { ambient, hemisphere, sun, fill, fillRest } = skyLights()
   const unregister = registerSkyLights(() => ({ ambient, hemisphere, fill, fillRest }))
   const sky = hemisphere.color.clone()
@@ -161,8 +171,8 @@ test('the sky’s light comes down and cools toward the dark theme for the frame
   applyAmbianceToSkyLights(1)
   expect(ambient.intensity).toBeCloseTo(0.8 * SKY_LIGHT_SCALE, 10)
   expect(hemisphere.intensity).toBeCloseTo(1.2 * SKY_LIGHT_SCALE, 10)
-  // Toward the dark theme's ambient (a cool blue): the blue share grows against the red.
-  expect(hemisphere.color.b / hemisphere.color.r).toBeGreaterThan(sky.b / sky.r)
+  // Toward the palette's neutral light grey: the colour cast shrinks (blue against red).
+  expect(hemisphere.color.b / hemisphere.color.r).toBeLessThan(sky.b / sky.r)
   expect(hemisphere.groundColor.equals(ground)).toBe(false)
   expect(ambient.color.equals(tint)).toBe(false)
   // The eye's fill is the ambiance's own: from its rest to full at full.

@@ -673,7 +673,13 @@ const PostProcessingPasses = ({
       if (!transparentBackground) {
         dive = undergroundDissolve()
         const dark = undergroundBackdrop(worldDir.y)
-        bgGradient = mix(bgGradient, dark, dive)
+        // The day's backdrop leaves ahead of the blobs: it greys and dims over the first half of
+        // the crossing, so the anthracite spreads over a neutral grey picture, not a blue sky.
+        const leaving = smoothstep(tslFloat(0), tslFloat(0.5), undergroundAmbianceNode())
+        const day = saturation(bgGradient, tslFloat(1).sub(leaving)).mul(
+          tslFloat(1).sub(leaving.mul(0.35)),
+        )
+        bgGradient = mix(day, dark, dive)
         const worldPosition = worldPositionFromDepth(
           scenePassDepth.sample(screenUV).r,
           camProjInvUniform.current,

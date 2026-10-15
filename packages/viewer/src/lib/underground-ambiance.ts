@@ -16,8 +16,8 @@ import {
   vec4,
 } from 'three/tsl'
 import type { GroundMode } from '../store/use-viewer'
-import { backdropGradient, deepSkyColor, horizonHazeColor } from './backdrop'
-import { getSceneTheme } from './scene-themes'
+import { backdropGradient } from './backdrop'
+import { UNDERGROUND_PALETTE } from './scene-themes'
 
 /**
  * Diving under the ground is the scene's own dark mode, as going under water is in a game: the
@@ -37,33 +37,22 @@ import { getSceneTheme } from './scene-themes'
 export const AMBIANCE_SECONDS = 0.7
 
 /**
- * The dark mode is the viewer's own dark scene theme, not new constants: its backdrop, sky,
- * ground, ambient light and wall tint. Another dark theme would be one id here.
- */
-export const UNDERGROUND_THEME_ID = 'night'
-const DARK = getSceneTheme(UNDERGROUND_THEME_ID)
-const DARK_SKY = DARK.backgroundSky ?? DARK.background
-
-/**
- * The backdrop's own stops: the formula of the theme backdrop (`lib/backdrop.ts`), in the dark
- * theme's colours. Looking down (most views from the eye under the ground) it is the theme's
- * lit slate ground tone, so the dark mode reads as slate rather than black; the sky above is the
- * theme's own.
+ * The dark mode's palette is one place, beside the scene theme tokens
+ * (`UNDERGROUND_PALETTE` in `lib/scene-themes.ts`): neutral anthracite, no blue cast. The backdrop
+ * is the theme backdrop's own gradient (`lib/backdrop.ts`) in its stops.
  */
 const BACKDROP = {
-  background: DARK.ground,
-  haze: horizonHazeColor(DARK_SKY, 'dark'),
-  sky: DARK_SKY,
-  skyDeep: deepSkyColor(DARK_SKY),
+  background: UNDERGROUND_PALETTE.background,
+  haze: UNDERGROUND_PALETTE.haze,
+  sky: UNDERGROUND_PALETTE.sky,
+  skyDeep: UNDERGROUND_PALETTE.skyDeep,
 } as const
-/** The tone the ground veil takes: the dark theme's ground. */
-export const UNDERGROUND_VEIL = DARK.ground
-/** The veil's opacity under the ground: a little thicker than its plain faintness. */
-export const UNDERGROUND_VEIL_OPACITY = 0.12
-/** The grade ring, where the ground meets the level below grade: the dark theme's wall tint, a light rim. */
-export const UNDERGROUND_RING = DARK.clayTints?.wall ?? '#aab3c6'
-/** The corners the vignette closes in to: the dark theme's deepest tone. */
-export const UNDERGROUND_VIGNETTE = DARK_SKY
+/** The thin rim along the cut of the hole in the ground, from above. */
+export const UNDERGROUND_RIM = UNDERGROUND_PALETTE.rim
+/** The grade ring, where the ground meets the level below grade: a light rim in the dark mode. */
+export const UNDERGROUND_RING = UNDERGROUND_PALETTE.ring
+/** The corners the vignette closes in to. */
+export const UNDERGROUND_VIGNETTE = UNDERGROUND_PALETTE.vignette
 
 /** The sky's ambient and hemisphere light, as a share of what the theme gives. */
 export const SKY_LIGHT_SCALE = 0.65
@@ -73,9 +62,9 @@ export const SKY_LIGHT_SCALE = 0.65
  * from nothing where no veil stands), so it neither steps on nor off.
  */
 export const EYE_FILL_INTENSITY = 2.4
-/** The sky light's tint pulls this much toward the dark theme's ambient colour. */
+/** The sky light's tint pulls this much toward the palette's neutral light grey. */
 export const SKY_LIGHT_TINT = 0.15
-const TINT = DARK.ambient.color
+const TINT = UNDERGROUND_PALETTE.tint
 
 /** Fog begins this far past the shown level's box and has taken the site by the second. */
 export const FOG_START = 3

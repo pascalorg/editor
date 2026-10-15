@@ -277,9 +277,8 @@ export {
   groundHoleOpenNow,
   stepAmbianceProgress,
   temporarilyWithoutAmbiance,
+  UNDERGROUND_RIM,
   UNDERGROUND_RING,
-  UNDERGROUND_THEME_ID,
-  UNDERGROUND_VEIL,
   undergroundAmbianceNode,
 } from './lib/underground-ambiance'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
