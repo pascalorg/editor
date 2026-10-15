@@ -20,7 +20,7 @@ import {
   wallFacesOn,
 } from './layout-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
-import { pointInPolygon, polygonArea, polygonBounds, type Vec2 } from './plan-geometry'
+import { polygonArea, polygonBounds, type Vec2 } from './plan-geometry'
 import { levelIdOf, levelRole } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
@@ -37,8 +37,6 @@ type FurnishRoomInput = LevelTargetInput & {
 const DOOR_EDGE_TOLERANCE = 0.25
 // Clearance between a piece's back and the wall's centreline: half a wall and a hand's width.
 export const WALL_GAP = 0.1
-// How far off an edge's middle edgeFrame looks for the room's side.
-const EDGE_PROBE_M = 1e-3
 // A wall-bound piece (a sofa, a bed, a TV stand) slides along its wall, within the wall's ends, to
 // clear a door or another piece, and steps off it only as far as verify_scene still reads it
 // against the wall (item_mid_room); where no wall stands, it is skipped.
@@ -100,23 +98,15 @@ function doorsOfRoom(nodes: SceneNodes, levelId: string, polygon: Vec2[]) {
   return found
 }
 
-/**
- * A polygon edge seen from inside the room: its middle, its direction, and the way into the room,
- * the side of the edge the room is on just past its middle, so an L's inner edges face in too.
- */
-export function edgeFrame(polygon: Vec2[], index: number) {
+/** A polygon edge seen from inside the room: its middle, its direction, and the way into the room. */
+export function edgeFrame(polygon: Vec2[], index: number, center: Vec2) {
   const a = polygon[index % polygon.length]!
   const b = polygon[(index + 1) % polygon.length]!
   const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
   const along = { x: (b[0] - a[0]) / length, z: (b[1] - a[1]) / length }
   const mid: Vec2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
-  const left = { x: -along.z, z: along.x }
-  const roomOnLeft = pointInPolygon(
-    [mid[0] + left.x * EDGE_PROBE_M, mid[1] + left.z * EDGE_PROBE_M],
-    polygon,
-    false,
-  )
-  const inward = roomOnLeft ? left : { x: -left.x, z: -left.z }
+  const towardCenter = (center[0] - mid[0]) * -along.z + (center[1] - mid[1]) * along.x
+  const inward = towardCenter >= 0 ? { x: -along.z, z: along.x } : { x: along.z, z: -along.x }
   // An item's front is its +Z: turned to face into the room.
   const facing = (Math.atan2(inward.x, inward.z) * 180) / Math.PI
   return { mid, along, inward, length, facing }
@@ -144,10 +134,11 @@ function layout(
   catalog: readonly AssetInput[],
 ): Pose[] {
   const bounds = polygonBounds(polygon)
+  const center: Vec2 = [bounds.centerX, bounds.centerZ]
   const n = polygon.length
-  const door = edgeFrame(polygon, doorWall)
-  const back = edgeFrame(polygon, doorWall + Math.floor(n / 2))
-  const side = edgeFrame(polygon, doorWall + 1)
+  const door = edgeFrame(polygon, doorWall, center)
+  const back = edgeFrame(polygon, doorWall + Math.floor(n / 2), center)
+  const side = edgeFrame(polygon, doorWall + 1, center)
   const area = polygonArea(polygon)
   const size = (assetId: string) => catalog.find((asset) => asset.id === assetId)?.dimensions
   const width = (assetId: string) => size(assetId)?.[0] ?? 1
@@ -279,9 +270,10 @@ function againstItsWall(
   width: number,
   walls: ReturnType<typeof wallFacesOn>,
 ) {
+  // A piece wider than its wall stands at the wall's middle.
   const reach = (wall.length - width) / 2
   return {
-    lateralsM: lateralSteps(-reach - at, reach - at),
+    lateralsM: reach >= 0 ? lateralSteps(-reach - at, reach - at) : [-at],
     insetsM: AGAINST_WALL_INSETS_M,
     // A level with no walls yet is furnished by its outline alone; verify_scene judges no piece there.
     ...(walls.length > 0 ? { againstWalls: walls } : {}),
@@ -341,7 +333,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
       z: pose.z + (pose.along?.z ?? 0) * slide,
       rotationDeg: pose.rotationDeg,
     }
-    const { candidate, reason } = findValidPlacement({
+    const found = findValidPlacement({
       primary: spot,
       dimensions: asset.dimensions,
       doorKeepouts: keepouts,
@@ -354,10 +346,12 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
         ? againstItsWall(pose.wall, pose.wall.lateral + slide, asset.dimensions?.[0] ?? 1, walls)
         : {}),
     })
-    if (!candidate) {
-      skipped.push(skipReason(asset, spot, reason, { minX, maxX, minZ, maxZ }, doorKeepouts))
+    if (!found.candidate) {
+      const at = found.refused ?? spot
+      skipped.push(skipReason(asset, at, found.reason, { minX, maxX, minZ, maxZ }, doorKeepouts))
       continue
     }
+    const { candidate } = found
     moved.set(pose.assetId, [candidate.x - pose.x, candidate.z - pose.z])
     const rotation = (candidate.rotationDeg * Math.PI) / 180
     occupied.push(itemPlanAabb([candidate.x, 0, candidate.z], asset.dimensions, rotation))

@@ -10,7 +10,6 @@
 
 import { floorConstructionLift, liftedManualSlab } from '../lib/floor-construction-lift'
 import { selectSlabSupportForItem } from '../lib/item-slab-support'
-import { area, intersection, type Ring } from '../lib/polygon-boolean'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support-query'
 import {
@@ -355,43 +354,58 @@ export function classifyPlacement(args: {
 /** How far a placement may step a piece off its spot, into the room, to clear doors and other pieces. */
 export const PLACEMENT_INSETS_M = [0, 0.25, 0.5, 0.75]
 
-/** Slides along a wall every 0.4 m, nearest first, from `min` to `max`: 0, -0.4, 0.4, … */
+/** Slides along a wall every 0.4 m between `min` and `max`, nearest first: 0, -0.4, 0.4, … */
 export function lateralSteps(min: number, max: number): number[] {
-  const steps = [0]
-  for (let k = 1; -k * 0.4 >= min - 1e-9 || k * 0.4 <= max + 1e-9; k++) {
-    if (-k * 0.4 >= min - 1e-9) steps.push(-k * 0.4)
-    if (k * 0.4 <= max + 1e-9) steps.push(k * 0.4)
-  }
-  return steps
+  const steps: number[] = []
+  for (let k = Math.ceil(min / 0.4 - 1e-9); k * 0.4 <= max + 1e-9; k++) steps.push(k * 0.4)
+  return steps.sort((a, b) => Math.abs(a) - Math.abs(b) || a - b)
 }
 
-/** A piece's footprint in plan, turned: its four corners. */
-function footprintCorners(
-  { x, z, rotationDeg }: PlacementCandidate,
-  dimensions: [number, number, number] | number[] | undefined,
-): Ring {
-  const [width = 1, , depth = 1] = dimensions ?? [1, 1, 1]
-  const yaw = (rotationDeg * Math.PI) / 180
-  const [cos, sin] = [Math.cos(yaw), Math.sin(yaw)]
-  return [
-    [-1, -1],
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-  ].map(([u, v]) => {
-    const [lx, lz] = [(u! * width) / 2, (v! * depth) / 2]
-    return [x + lx * cos + lz * sin, z - lx * sin + lz * cos]
-  })
+/** Whether segment a–b passes through the open box |u| < halfU, |v| < halfV (Liang–Barsky). */
+function segmentEntersBox(a: Vec2, b: Vec2, halfU: number, halfV: number): boolean {
+  const [du, dv] = [b[0] - a[0], b[1] - a[1]]
+  let [enter, exit] = [0, 1]
+  for (const [p, q] of [
+    [-du, a[0] + halfU],
+    [du, halfU - a[0]],
+    [-dv, a[1] + halfV],
+    [dv, halfV - a[1]],
+  ] as const) {
+    if (p === 0) {
+      if (q <= 0) return false
+      continue
+    }
+    const t = q / p
+    if (p < 0) enter = Math.max(enter, t)
+    else exit = Math.min(exit, t)
+    if (enter >= exit) return false
+  }
+  return true
 }
 
 /**
- * Whether a footprint stands wholly inside a room's outline, a notch or an L's missing corner
- * included; a footprint touching the outline is in. A clip that fails reads as outside, so a piece
- * is skipped rather than placed outside the room.
+ * Whether a piece's turned footprint stands inside a room's outline, a notch or an L's missing
+ * corner included: its middle is inside and no edge of the outline passes through it. A piece may
+ * touch the outline, and overlap it by up to {@link OUTLINE_CONTACT_M}.
  */
-function insideOutline(footprint: Ring, outline: readonly Vec2[]): boolean {
-  const inside = area(intersection(footprint, outline as Ring))
-  return area([{ outer: footprint, holes: [] }]) - inside <= OUTLINE_SLACK_M2
+function insideOutline(
+  { x, z, rotationDeg }: PlacementCandidate,
+  dimensions: [number, number, number] | number[] | undefined,
+  outline: readonly Vec2[],
+): boolean {
+  if (!pointInPolygon([x, z], outline as Vec2[], false)) return false
+  const [width = 1, , depth = 1] = dimensions ?? [1, 1, 1]
+  const yaw = (rotationDeg * Math.PI) / 180
+  const [cos, sin] = [Math.cos(yaw), Math.sin(yaw)]
+  // In the piece's own frame (the inverse of itemNodePlanCorners' turn): u across, v deep.
+  const local = ([px, pz]: Vec2): Vec2 => [
+    (px - x) * cos - (pz - z) * sin,
+    (px - x) * sin + (pz - z) * cos,
+  ]
+  const [halfU, halfV] = [width / 2 - OUTLINE_CONTACT_M, depth / 2 - OUTLINE_CONTACT_M]
+  return !outline.some((point, i) =>
+    segmentEntersBox(local(point), local(outline[(i + 1) % outline.length]!), halfU, halfV),
+  )
 }
 
 export function generatePlacementCandidates(
@@ -437,7 +451,12 @@ export function findValidPlacement(args: {
   againstWalls?: readonly WallFace[]
 }):
   | { candidate: PlacementCandidate; reason: PlacementRejectReason }
-  | { candidate: null; reason: PlacementRejectReason } {
+  | {
+      candidate: null
+      reason: PlacementRejectReason
+      /** The spot the reason is about, when one had a wall. */
+      refused: PlacementCandidate | null
+    } {
   const candidates = generatePlacementCandidates(args.primary, {
     along: args.along,
     inward: args.inward,
@@ -447,7 +466,7 @@ export function findValidPlacement(args: {
 
   // Why the first spot that stands against a wall failed (a door, a piece), not the last nudge
   // tried (often outside the room after large ones); off_wall when no spot had a wall.
-  let firstReason: PlacementRejectReason | null = null
+  let refused: { at: PlacementCandidate; reason: PlacementRejectReason } | null = null
   for (const c of candidates) {
     const aabb = itemPlanAabb([c.x, 0, c.z], args.dimensions, (c.rotationDeg * Math.PI) / 180)
     if (args.againstWalls && gapToWalls(aabb, args.againstWalls) > MID_ROOM_DISTANCE_M) continue
@@ -457,22 +476,18 @@ export function findValidPlacement(args: {
       occupied: args.occupied,
       roomBounds: args.roomBounds,
     })
-    if (
-      reason === 'ok' &&
-      args.roomOutline &&
-      !insideOutline(footprintCorners(c, args.dimensions), args.roomOutline)
-    )
+    if (reason === 'ok' && args.roomOutline && !insideOutline(c, args.dimensions, args.roomOutline))
       reason = 'outside_bounds'
     if (reason === 'ok') return { candidate: c, reason }
-    firstReason ??= reason
+    refused ??= { at: c, reason }
   }
-  return { candidate: null, reason: firstReason ?? 'off_wall' }
+  return { candidate: null, reason: refused?.reason ?? 'off_wall', refused: refused?.at ?? null }
 }
 
 /** A wall-bound piece whose nearest edge is further than this from every wall face is not against a wall. */
 export const MID_ROOM_DISTANCE_M = 0.4
-/** How much of a footprint may stand past a room's outline (m²): the clip's rounding, not a piece. */
-const OUTLINE_SLACK_M2 = 1e-3
+/** How far a piece may overlap a room's outline (m): touching it, give or take a millimetre. */
+const OUTLINE_CONTACT_M = 1e-3
 const DEFAULT_WALL_THICKNESS_M = 0.1
 
 const cross = (o: Vec2, p: Vec2, q: Vec2) =>

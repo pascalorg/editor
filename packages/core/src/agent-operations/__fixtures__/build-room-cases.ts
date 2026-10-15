@@ -10,10 +10,11 @@ import {
   ZoneNode,
 } from '../../schema'
 import { doorFacing } from '../../building/wall-openings'
+import { area as clippedArea, difference } from '../../lib/polygon-boolean'
 import { reconcileSceneStructure } from '../../lib/structure-reconcile'
 import { findBlockedDoors, itemNodePlanCorners } from '../door-clearance'
 import { findItemItemCollisions, findItemsMidRoom } from '../layout-clearance'
-import { pointInPolygon, type Vec2 } from '../plan-geometry'
+import type { Vec2 } from '../plan-geometry'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -756,8 +757,8 @@ const DIAMOND_ROOM: Pt[] = [
 
 /**
  * A room of `outline`, a wall on each edge (`wall_s`, `wall_e`, `wall_n`, `wall_w` round a
- * rectangle, `wall_<edge>` round any other outline) but the `open` ones, a door in the middle of
- * each wall in `doorsOn`, and a desk if asked.
+ * rectangle, `wall_<edge>` round any other outline) but the `open` ones and a repeated corner's,
+ * a door in the middle of each wall in `doorsOn`, and a desk if asked.
  */
 function roomScene({
   outline = BEDROOM,
@@ -786,7 +787,7 @@ function roomScene({
       })
     })
     const walls = outline.flatMap((start, i) =>
-      open.includes(wallIds[i]!)
+      open.includes(wallIds[i]!) || `${start}` === `${outline[(i + 1) % outline.length]}`
         ? []
         : WallNode.parse({
             id: wallIds[i],
@@ -824,23 +825,12 @@ function roomScene({
   }
 }
 
-/** Every point of the piece's footprint in the room, on a 9 × 9 grid over it, edges included. */
-const standsIn = (item: Extract<AnyNode, { type: 'item' }>, outline: Vec2[]) => {
-  const [origin, alongDepth, alongWidth] = itemNodePlanCorners(item) as [Vec2, Vec2, Vec2, Vec2]
-  const steps = Array.from({ length: 9 }, (_, i) => i / 8)
-  return steps.every((u) =>
-    steps.every((v) =>
-      pointInPolygon(
-        [
-          origin[0] + u * (alongWidth[0] - origin[0]) + v * (alongDepth[0] - origin[0]),
-          origin[1] + u * (alongWidth[1] - origin[1]) + v * (alongDepth[1] - origin[1]),
-        ],
-        outline,
-        true,
-      ),
-    ),
-  )
-}
+/**
+ * The piece's turned footprint inside the room, read by clipping it against the outline (not the
+ * operation's own test): what stands outside, under a square centimetre of rounding.
+ */
+const standsIn = (item: Extract<AnyNode, { type: 'item' }>, outline: Vec2[]) =>
+  clippedArea(difference(itemNodePlanCorners(item), outline)) < 1e-4
 
 const furnished = (result: Record<string, unknown>, nodes: Nodes) => {
   const items = Object.values(nodes)
@@ -984,16 +974,27 @@ export const FURNISH_ROOM_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'an L-shaped bedroom: the bed stands against the inner wall of the wing, facing in, and nothing lands outside the room',
+    name: 'an L-shaped bedroom: nothing lands in the corner the L leaves out',
     tool: 'furnish_room',
     scene: roomScene({ outline: L_ROOM, doorsOn: ['wall_0'] }),
     input: { zoneId: 'zone_bed', roomType: 'bedroom' },
     context: { catalog: CATALOG },
+    expect: { result: { ok: true, doorWallIndex: 0 }, check: furnished },
+  },
+  {
+    name: 'an outline drawn closed (its first corner repeated) is the same room: the closet stands against its far wall',
+    tool: 'furnish_room',
+    scene: roomScene({ outline: [...roomOutline(6, 4), [0, 0]], name: 'Storage' }),
+    input: { zoneId: 'zone_bed', roomType: 'storage', doorWallIndex: 0 },
+    context: { catalog: CATALOG },
     expect: {
-      result: { ok: true, doorWallIndex: 0, skipped: [] },
+      result: { ok: true, placed: 1 },
       check: (result, nodes) => [
         ...furnished(result, nodes),
-        ...problems([(bedPosition(nodes)?.[0] ?? 4) < 4, 'the bed is not inside the wing']),
+        ...problems([
+          (positionOf(nodes, 'closet')?.[2] ?? 0) > 3,
+          'the closet is not against the far wall',
+        ]),
       ],
     },
   },
@@ -1012,7 +1013,7 @@ export const FURNISH_ROOM_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'a room turned 45°: the closet stands turned against its diagonal wall',
+    name: 'a room turned 45°: the closet stands inside it, against a wall',
     tool: 'furnish_room',
     scene: roomScene({ outline: DIAMOND_ROOM, name: 'Storage', doorsOn: [] }),
     input: { zoneId: 'zone_bed', roomType: 'storage', doorWallIndex: 0 },
@@ -1026,7 +1027,7 @@ export const FURNISH_ROOM_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'a bathroom too small for a tub: the shower stands against a wall, not in the middle',
+    name: 'a bathroom under 6.5 m², which takes a shower and no tub: the shower stands against a wall, not in the middle',
     tool: 'furnish_room',
     scene: roomScene({ outline: roomOutline(2.4, 2.6), name: 'Bathroom', doorsOn: ['wall_s'] }),
     input: { zoneId: 'zone_bed', roomType: 'bathroom' },
