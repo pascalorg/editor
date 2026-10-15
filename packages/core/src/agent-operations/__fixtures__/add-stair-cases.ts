@@ -12,13 +12,15 @@ import { storeysScene } from './structure-cases'
  *   flight, cable, post-and-rail or board railings in black, steel or wood, a flight to no level
  *   for porch or deck steps, a rise given;
  * - add_stair's own sizing (risers of at most 7-3/4 in on 10-1/2 in treads), given as steps and
- *   length. Left to itself create_stair sizes from the stair's design targets (risers of at most
- *   18 cm, 28 cm goings), which keep within those limits.
+ *   length, as the retired answer tells a model to.
  *
- * Each check holds what add_stair built: the middle of the bottom riser at (x, z) with the first
- * flight running from it along the climb (the one origin both tools wrote, checked against the
- * stair's geometry), the flights and landings in order with each landing as deep as the stair is
- * wide, the railings, the levels joined and the opening cut. add_stair's compass climb is
+ * Each check holds what add_stair built but its sizing: the middle of the bottom riser at (x, z)
+ * with the first flight running from it along the climb (the one origin both tools wrote, checked
+ * against the stair's geometry), the flights and landings in order with each landing as deep as the
+ * stair is wide, the railings, the levels joined and the opening cut. The risers and the run are
+ * create_stair's own (risers of at most 18 cm on 28 cm goings, within add_stair's limits: 16 risers
+ * for this 2.8 m storey, where add_stair built 15), except in the cases that pass add_stair's sizing
+ * as steps and length, which build its risers and run. add_stair's compass climb is
  * create_stair's rotation (south 0, east 90, north 180, west 270), its shape a layout and a turn
  * ('L-left' is l, left), its lowerRisers create_stair's lowerSteps (add_stair rounded half down,
  * create_stair rounds it up: an odd count passes it), and its railing names library ids ('black'
@@ -124,8 +126,9 @@ function covers(
   input: Record<string, unknown>,
   built: Built,
 ): AgentToolCase {
+  const sizing = input.steps === undefined ? ", at create_stair's sizing" : ''
   return {
-    name: `covers add_stair ${JSON.stringify(addStair)}: ${name}`,
+    name: `covers add_stair ${JSON.stringify(addStair)}: ${name}${sizing}`,
     tool: 'create_stair',
     scene: storeysScene,
     input: { levelId: 'level_ground', ...input },
@@ -141,7 +144,7 @@ function covers(
 }
 
 const TO_UPPER = { toLevelId: 'level_upper' }
-// A 2.8 m storey in risers of at most 18 cm.
+// A 2.8 m storey in create_stair's risers of at most 18 cm.
 const FLIGHT = 'flight 16'
 
 export const ADD_STAIR_CASES: AgentToolCase[] = [
@@ -283,9 +286,11 @@ export const ADD_STAIR_CASES: AgentToolCase[] = [
     { x: 3, z: 0.3, toLevelId: null, height: 1.2, width: 1.83, railingMode: 'none' },
     { chain: ['flight 7'], railing: { mode: 'none' }, toLevelId: null, rise: 1.2 },
   ),
-  // Two risers at least, as the editor's stair tool draws a flight: add_stair's one-riser flight
-  // (a rise under 7-3/4 in) is a single step, not a stair, and is the one call it served that this
-  // one does not.
+  // create_stair's fewest risers are the editor's own: two for a straight flight, four for an L or
+  // U. The two calls add_stair served that this one does not are under them: a rise of one riser
+  // (7-3/4 in or less), which it built as a single step, and an L or U of three (23-1/4 in or
+  // less), flight 1, landing, flight 2, which create_stair builds with four. No stored call made
+  // either.
   covers(
     { climb: 'south', totalRise: 0.38, width: 1.2 },
     'two steps up to a porch, 0.38 m',
