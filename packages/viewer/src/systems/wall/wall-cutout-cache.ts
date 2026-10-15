@@ -112,7 +112,43 @@ export type WallCutoutViewerState = Pick<
   | 'previewSelectedIds'
   | 'hoveredId'
   | 'hoverHighlightMode'
->
+> & { nodesRevealing?: readonly string[] }
+
+const NOT_REVEALING: readonly string[] = []
+
+/**
+ * The walls the cutaway must leave in view because something on them is playing: a wall that is
+ * moving in, going out or being edited, a wall that hosts an opening that is, and the walls under a
+ * node that is (a facade part). The person's wall mode is not touched: these are stamped visible
+ * for as long as they play, and the next frame after hides them again as the view wants.
+ */
+export function wallsInPlay(
+  nodes: ReturnType<typeof useScene.getState>['nodes'],
+  revealing: readonly string[],
+): Set<string> {
+  const walls = new Set<string>()
+  if (revealing.length === 0) return walls
+  const down = (id: string, depth: number) => {
+    const node = nodes[id as AnyNodeId]
+    if (!node) return
+    if (node.type === 'wall') walls.add(id)
+    if (depth >= 4) return
+    for (const child of (node as { children?: readonly string[] }).children ?? [])
+      down(child, depth + 1)
+  }
+  for (const id of revealing) {
+    // The wall itself, or an opening in it: the host stands visible while the opening plays.
+    for (
+      let node = nodes[id as AnyNodeId], guard = 0;
+      node && guard < 16;
+      node = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined, guard += 1
+    )
+      if (node.type === 'wall') walls.add(node.id)
+    // What stands under a node that plays rides with it.
+    down(id, 0)
+  }
+  return walls
+}
 
 export type WallCutoutViewerStore = { getState: () => WallCutoutViewerState }
 
@@ -135,6 +171,9 @@ export class WallCutoutCache {
   private highlightKey = ''
   private transformed = new Set<string>()
   private overrides = useLiveNodeOverrides.getState().overrides
+  /** The reveal's list the walls in play were read from, and the walls it named. */
+  private revealing: readonly string[] = NOT_REVEALING
+  private inPlay = new Set<string>()
 
   constructor(
     private readonly viewerStore: WallCutoutViewerStore = useViewer,
@@ -201,6 +240,16 @@ export class WallCutoutCache {
         : null
     const releasedPreview = previewId(previous) === previewId(viewer) ? null : previewId(previous)
     this.viewer = viewer
+    // A wall whose play starts or ends, or a node that moves under one, changes only its own stamp.
+    const revealing = viewer.nodesRevealing ?? NOT_REVEALING
+    const playChanged = new Set<string>()
+    if (this.revealing !== revealing || (nodesChanged && revealing.length > 0)) {
+      const next = wallsInPlay(scene.nodes, revealing)
+      for (const id of next) if (!this.inPlay.has(id)) playChanged.add(id)
+      for (const id of this.inPlay) if (!next.has(id)) playChanged.add(id)
+      this.inPlay = next
+      this.revealing = revealing
+    }
     const invalidated =
       overridesChanged ||
       appearanceChanged ||
@@ -208,7 +257,8 @@ export class WallCutoutCache {
       registryChanged ||
       this.rebuilt.size > 0 ||
       this.transformed.size > 0 ||
-      releasedPreview !== null
+      releasedPreview !== null ||
+      playChanged.size > 0
 
     const cutaway = viewer.wallMode === 'cutaway'
     if (!invalidated && !cutaway) return
@@ -287,6 +337,7 @@ export class WallCutoutCache {
           changed ||
           rebuilt ||
           releasedPreview === id ||
+          playChanged.has(id) ||
           cameraChanged
         ) {
           this.apply(wall, viewer.wallMode, refresh)
@@ -382,7 +433,11 @@ export class WallCutoutCache {
         wall.negativeFacing,
       )
     }
-    const hidden = wallHiddenFromFacing(wall.node, mode, wall.negativeFacing ?? false)
+    // A wall in play is seen whatever the cutaway says (walls down is the person's own choice, and
+    // stays); `mode` itself is the person's, untouched.
+    const hidden =
+      wallHiddenFromFacing(wall.node, mode, wall.negativeFacing ?? false) &&
+      !(mode === 'cutaway' && this.inPlay.has(wall.node.id))
     wall.hidden = hidden
     // The wall batch and pointer handlers consume this boolean, including
     // false on stamp lift; translucent walls must continue receiving events.

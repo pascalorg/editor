@@ -1352,6 +1352,34 @@ describe('the plan view reads the same reveal', () => {
   })
 })
 
+describe('the nodes playing are named for the cutaway', () => {
+  test('a wall is listed while it moves in, and not before or after', async () => {
+    const levelIds = loadLevels(1)
+    await mount(levelIds)
+    start()
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelIds[0]!))
+    await frame()
+    await until(() => useViewer.getState().nodesRevealing.includes(wall.id), 6000)
+    expect(useViewer.getState().wallMode).not.toBe('down')
+    await until(() => !isNodeRevealing(wall.id), 9000)
+    expect(useViewer.getState().nodesRevealing).toEqual([])
+  })
+
+  test('the person’s wall mode is not written by a build', async () => {
+    const levelIds = loadLevels(1)
+    await mount(levelIds)
+    useViewer.getState().setWallMode('cutaway')
+    start()
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelIds[0]!))
+    await until(() => useViewer.getState().nodesRevealing.includes(wall.id), 6000)
+    expect(useViewer.getState().wallMode).toBe('cutaway')
+    await until(() => !isNodeRevealing(wall.id), 9000)
+    expect(useViewer.getState().wallMode).toBe('cutaway')
+  })
+})
+
 describe('the level the work is on shows while it plays', () => {
   const GROUND_ONLY = (levelIds: AnyNodeId[]) =>
     useViewer.setState({

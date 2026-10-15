@@ -11,6 +11,7 @@ import {
   useLiveTransforms,
   useScene,
   WallNode,
+  WindowNode,
 } from '@pascal-app/core'
 import {
   BoxGeometry,
@@ -115,6 +116,48 @@ afterEach(() => {
 })
 
 describe('WallCutoutCache', () => {
+  // The owner, 15 Oct: the agent bent an exterior wall in cutaway and the cutaway hid exactly the
+  // wall that was animating.
+  test('a wall in play stays in view in cutaway while it plays, then follows the cutaway again', () => {
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    expect(mesh.userData.wallHidden).toBe(true)
+    viewerStore.setState({ nodesRevealing: [node.id] })
+    cache.update(camera, 1.01)
+    expect(mesh.userData.wallHidden).toBe(false)
+    expect(viewerStore.getState().wallMode).toBe('cutaway')
+    viewerStore.setState({ nodesRevealing: [] })
+    cache.update(camera, 1.02)
+    expect(mesh.userData.wallHidden).toBe(true)
+    expect(viewerStore.getState().wallMode).toBe('cutaway')
+  })
+
+  test('the wall that hosts an opening in play stays in view with it, and no other wall does', () => {
+    const host = addWall()
+    const other = addWall()
+    const window = WindowNode.parse({ parentId: host.node.id, wallId: host.node.id })
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [host.node.id]: { ...host.node, children: [window.id] },
+        [window.id]: window,
+      },
+    })
+    cache.update(camera, 1)
+    expect(host.mesh.userData.wallHidden).toBe(true)
+    viewerStore.setState({ nodesRevealing: [window.id] })
+    cache.update(camera, 1.01)
+    expect(host.mesh.userData.wallHidden).toBe(false)
+    expect(other.mesh.userData.wallHidden).toBe(true)
+  })
+
+  test('a wall in play stays down when the person has put the walls down', () => {
+    const { node, mesh } = addWall()
+    viewerStore.setState({ wallMode: 'down', nodesRevealing: [node.id] })
+    cache.update(camera, 1)
+    expect(mesh.userData.wallHidden).toBe(true)
+  })
+
   test('camera orbit in full height never iterates cached walls or reads camera direction', () => {
     viewerStore.setState({ wallMode: 'up' })
     const { mesh } = addWall()

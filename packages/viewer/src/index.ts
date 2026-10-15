@@ -294,6 +294,7 @@ export {
   type RevealPreroll,
   type RevealRetractEvent,
   retractNodes,
+  revealChangedNodeIds,
   revealClockMs,
   seatLiftedNow,
   setRevealPreroll,

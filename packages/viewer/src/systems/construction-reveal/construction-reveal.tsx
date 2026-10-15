@@ -1154,16 +1154,51 @@ function levelsAtWork(): string[] {
 }
 
 /**
+ * The nodes the agent changed that the reveal has not finished with: pieces moved or edited (not
+ * built, not going out), waiting for their turn, carried or replaying. What a commit that edits and
+ * moves is made of, read before its first piece plays.
+ */
+export function revealChangedNodeIds(): string[] {
+  const ids = new Set<string>(queuedChanges)
+  for (const change of changeQueue) ids.add(change.id)
+  for (const id of glides.keys()) ids.add(id)
+  for (const reveal of active.values()) if (reveal.edit) ids.add(reveal.id)
+  return [...ids]
+}
+
+/**
  * Tells the viewer which levels the reveal is working on, so each shows while its work plays: a build
  * on the storey above the one the person has selected, or in the solo view of another, is seen, not
  * played to nobody. The person's own choice of level is left as it is; the level steps aside again
  * when its work is done.
  */
 function publishLevelsAtWork() {
+  publishNodesAtPlay()
   const next = levelsAtWork()
   const current = useViewer.getState().levelsRevealing
   if (next.length === current.length && next.every((levelId) => current.includes(levelId))) return
   useViewer.setState({ levelsRevealing: next })
+}
+
+/**
+ * The nodes playing now: moving in, going out, carried to a new place, or an edit waiting its turn
+ * with its new picture held. The cutaway leaves these, and what they host, in view
+ * (`nodesRevealing`); a node waiting for its turn is not drawn yet, so it is not among them.
+ */
+function nodesAtPlay(): string[] {
+  const ids = new Set<string>()
+  for (const id of active.keys()) ids.add(id)
+  for (const id of glides.keys()) ids.add(id)
+  for (const id of retracts.keys()) ids.add(id)
+  for (const id of queuedChanges) ids.add(id)
+  return [...ids]
+}
+
+function publishNodesAtPlay() {
+  const next = nodesAtPlay()
+  const current = useViewer.getState().nodesRevealing
+  if (next.length === current.length && next.every((id) => current.includes(id))) return
+  useViewer.setState({ nodesRevealing: next })
 }
 
 function endReveal(reveal: ActiveReveal, forced = false) {

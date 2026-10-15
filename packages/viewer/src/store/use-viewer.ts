@@ -125,6 +125,13 @@ type ViewerState = {
    * persisted; the author's own hiding of a level still wins.
    */
   levelsRevealing: readonly string[]
+  /**
+   * The nodes a construction reveal is playing now (moving in, going out, carried, or an edit
+   * replaying): the cutaway leaves each of them, and the openings it hosts, in view while it
+   * plays, whatever the wall mode. Set by the reveal, never persisted; the person's own wall mode
+   * is not written.
+   */
+  nodesRevealing: readonly string[]
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -455,6 +462,7 @@ const useViewer = create<ViewerState>()(
       setLevelMode: (mode) => set({ levelMode: mode }),
       hideLevelsAboveSelection: false,
       levelsRevealing: [],
+      nodesRevealing: [],
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),
