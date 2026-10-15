@@ -40,6 +40,8 @@ type BoxLike = {
 
 /** The sweep of a node drawn inside `box` (world space). */
 export function coverSweepOf(box: BoxLike): CoverSweep {
+  // Nothing drawn yet: an empty sweep, so the covering has nothing to close.
+  if (!(box.max.y >= box.min.y)) return { axis: 'y', from: 0, to: 0 }
   if (box.max.y - box.min.y >= COVER_MIN_RISE_M) {
     return { axis: 'y', from: box.min.y, to: box.max.y }
   }

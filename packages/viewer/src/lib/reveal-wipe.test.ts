@@ -21,6 +21,14 @@ describe('the sweep of a covering', () => {
     expect(coverSweepOf(box([0, 3, 0], [8, 5.4, 6]))).toEqual({ axis: 'y', from: 3, to: 5.4 })
   })
 
+  test('a node with nothing drawn has an empty sweep, not a broken one', () => {
+    const empty = box(
+      [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY],
+      [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY],
+    )
+    expect(coverSweepOf(empty)).toEqual({ axis: 'y', from: 0, to: 0 })
+  })
+
   test('a flat roof sweeps along its longer plan side', () => {
     expect(coverSweepOf(box([0, 3, 0], [8, 3.2, 5]))).toEqual({ axis: 'x', from: 0, to: 8 })
     expect(coverSweepOf(box([0, 3, 0], [4, 3.2, 9]))).toEqual({ axis: 'z', from: 0, to: 9 })
