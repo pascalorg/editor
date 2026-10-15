@@ -52,7 +52,7 @@ const kindOf = (node: AnyNode) => String(node.type).toLowerCase()
 
 const emitsLight = (node: AnyNode) =>
   node.type === 'item' &&
-  Boolean(node.asset?.interactive?.effects.some((effect) => effect.kind === 'light'))
+  Boolean(node.asset?.interactive?.effects?.some((effect) => effect.kind === 'light'))
 
 const matchesWord = (text: string | undefined, word: string) =>
   Boolean(text) &&

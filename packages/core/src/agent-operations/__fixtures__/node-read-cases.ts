@@ -272,6 +272,32 @@ function closedZoneScene(): SceneGraph {
   )
 }
 
+/** A lamp that emits light, and a fan whose stored interactive part lists no effects. */
+function lightsScene(): SceneGraph {
+  const item = (id: string, name: string, interactive: Record<string, unknown>) =>
+    ItemNode.parse({
+      id,
+      parentId: 'level_0',
+      position: [1, 0, 1],
+      asset: {
+        id,
+        name,
+        category: 'furniture',
+        thumbnail: '',
+        src: `/items/${id}/model.glb`,
+        dimensions: [0.5, 0.5, 0.5],
+        interactive,
+      },
+    })
+  const lamp = item('item_lamp', 'Lamp', {
+    effects: [{ kind: 'light', intensityRange: [0, 2] }],
+  })
+  const fan = item('item_fan', 'Fan', { controls: [] })
+  const asset = fan.asset as { interactive: Record<string, unknown> }
+  const { effects: _effects, ...interactive } = asset.interactive
+  return scene(lamp, { ...fan, asset: { ...fan.asset, interactive } } as never)
+}
+
 /** A plugin's kind in the singular alone. */
 function singularKindScene(): SceneGraph {
   return scene(pluginNode('stud_plugin-1', 'bones:stud'))
@@ -588,6 +614,12 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
       result: { type: 'glass', count: 1, parts: 1 },
       contains: [{ id: 'item_lantern', part: 'pane', partType: 'glass' }],
     },
+  ),
+  find(
+    'find_nodes { type: lights } beside an item whose stored interactive part lists no effects: the lamp',
+    lightsScene,
+    { type: 'lights' },
+    ['item_lamp'],
   ),
   find(
     'find_nodes { type: wall } beside an authored item whose manifest lists no parts: the wall',
