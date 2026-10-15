@@ -1,6 +1,13 @@
 'use client'
 
-import { emitter, sceneRegistry, type ThumbnailGenerateEvent, useScene } from '@pascal-app/core'
+import {
+  emitter,
+  isCaptureSessionOn,
+  sceneRegistry,
+  subscribeCaptureSessions,
+  type ThumbnailGenerateEvent,
+  useScene,
+} from '@pascal-app/core'
 import { sceneViewInterior } from '@pascal-app/core/agent-operations'
 import {
   computeHeroFraming,
@@ -440,6 +447,29 @@ export function presentFinished(): () => void {
   }
   return () => {
     for (const restore of restores.reverse()) restore()
+  }
+}
+
+/**
+ * The pictures' scene while a capture session is on (core's `isCaptureSessionOn`, runs that overlap
+ * counted once): `present` when the first starts, and what it returns, which puts the user's view
+ * back, when the last ends. Returns the stop, which puts the view back if a session is still on.
+ */
+export function presentWhileCapturing(present: () => () => void): () => void {
+  let restore: (() => void) | null = null
+  const follow = () => {
+    if (isCaptureSessionOn() && !restore) restore = present()
+    else if (!isCaptureSessionOn() && restore) {
+      restore()
+      restore = null
+    }
+  }
+  follow()
+  const unsubscribe = subscribeCaptureSessions(follow)
+  return () => {
+    unsubscribe()
+    restore?.()
+    restore = null
   }
 }
 
@@ -1158,39 +1188,25 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     [gl, scene, getThree, orthoPipeline, advance, clock],
   )
 
-  // A sheet's run of captures sets the shared scene
-  // up for its pictures — the finished presentation, the ground hidden — so
-  // for the run the viewport keeps its last frame and the viewer shows the
-  // finished house whatever view the user was in; `active: false` puts the
-  // user's view back, then (a few commits later) the viewport resumes.
-  // `camera-controls:capture-session` `{ owner, active }`.
-  useEffect(() => {
-    const sessions = new Map<string, () => void>()
-    const end = (owner: string) => {
-      sessions.get(owner)?.()
-      sessions.delete(owner)
-    }
-    const onSession = (event: { owner?: string; active?: boolean }) => {
-      if (!event?.owner) return
-      end(event.owner)
-      if (!event.active) return
-      const releaseLiveFrame = holdLiveFrame(HOLD_MAX_MS)
-      const restorePresentation = presentFinished()
-      sessions.set(event.owner, () => {
-        restorePresentation()
-        setTimeout(releaseLiveFrame, SESSION_RESUME_MS)
-      })
-    }
-    const bus = emitter as unknown as {
-      on: (name: string, handler: typeof onSession) => void
-      off: (name: string, handler: typeof onSession) => void
-    }
-    bus.on('camera-controls:capture-session', onSession)
-    return () => {
-      bus.off('camera-controls:capture-session', onSession)
-      for (const owner of [...sessions.keys()]) end(owner)
-    }
-  }, [])
+  // A run of captures (a sheet's pictures, an agent's view) sets the shared
+  // scene up for its pictures — the finished presentation, the ground hidden —
+  // so while any run is on the viewport keeps its last frame and the viewer
+  // shows the finished house whatever view the user was in; the last run's
+  // end puts the user's view back, then (a few commits later) the viewport
+  // resumes. Runs overlap (a sheet and an agent's view): the user's view is
+  // the one before the first, never a run's finished presentation.
+  useEffect(
+    () =>
+      presentWhileCapturing(() => {
+        const releaseLiveFrame = holdLiveFrame(HOLD_MAX_MS)
+        const restorePresentation = presentFinished()
+        return () => {
+          restorePresentation()
+          setTimeout(releaseLiveFrame, SESSION_RESUME_MS)
+        }
+      }),
+    [],
+  )
 
   // Thumbnail request via emitter. Two call shapes:
   //  - user-driven capture: `{ projectId, captureMode, cropRegion }` — captures
