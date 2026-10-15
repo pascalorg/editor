@@ -1511,10 +1511,12 @@ function EditorContent({
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const readOnly = useScene((s) => s.readOnly)
   // Chrome only steps down for the top menu while the menu is actually there.
-  const topMenuShown =
-    dockMenuOnTop &&
-    !(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
-    shouldShowEditingControls(readOnly)
+  const editingControlsShown = shouldShowEditingControls(readOnly)
+  // Layout v2 also hides the menu in version preview, capture and studio.
+  const menuShown = editingControlsShown && !(isVersionPreviewMode || isCaptureMode || isStudioMode)
+  const topMenuShown = dockMenuOnTop && menuShown
+  const leftMenuShown = dockMenuOnLeft && menuShown
+  const rightMenuShown = dockMenuOnRight && menuShown
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
@@ -1838,7 +1840,7 @@ function EditorContent({
                 <>
                   <SceneRegion>
                     {!(isCaptureMode || stageOverlay) && (
-                      <FloatingLevelSelector besideLeftMenu={dockMenuOnLeft} />
+                      <FloatingLevelSelector besideLeftMenu={leftMenuShown} />
                     )}
                     {!(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
                       (dockMenuOnTop ? (
@@ -1859,7 +1861,7 @@ function EditorContent({
                   {/* The inspector and the shortcuts card share one right column. */}
                   <RightStack
                     belowTopMenu={topMenuShown}
-                    besideRightMenu={dockMenuOnRight}
+                    besideRightMenu={rightMenuShown}
                     reserveBottomMenu={reserveBottomMenu}
                     helper={isCaptureMode ? null : <HelperManager />}
                     inspector={
@@ -1944,7 +1946,7 @@ function EditorContent({
             <RightStack
               helper={<HelperManager />}
               inspector={<PanelManager />}
-              besideRightMenu={dockMenuOnRight}
+              besideRightMenu={dockMenuOnRight && editingControlsShown}
               reserveBottomMenu={reserveBottomMenu}
             />
             <RiserDiagramPanel />
