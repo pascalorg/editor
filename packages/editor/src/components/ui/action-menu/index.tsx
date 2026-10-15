@@ -74,10 +74,11 @@ export function ActionMenu({
               ? 'absolute left-1/2 origin-bottom -translate-x-1/2 scale-90'
               : inline
                 ? 'relative'
-                : effectivePlacement === 'left'
-                  ? 'fixed top-1/2 left-4 -translate-y-1/2'
+                : // Rails centre in a band that keeps the corner chrome clear, scrolling when it is short.
+                  effectivePlacement === 'left'
+                  ? 'no-scrollbar fixed top-24 bottom-16 left-4 my-auto h-fit max-h-[calc(100%-10rem)] overflow-y-auto'
                   : effectivePlacement === 'right'
-                    ? 'fixed top-1/2 right-4 -translate-y-1/2'
+                    ? 'no-scrollbar fixed top-24 bottom-16 right-4 my-auto h-fit max-h-[calc(100%-10rem)] overflow-y-auto'
                   : effectivePlacement === 'top'
                     ? 'fixed top-3 left-1/2 -translate-x-1/2'
                     : 'fixed bottom-6 left-1/2 -translate-x-1/2',

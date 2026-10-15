@@ -1843,6 +1843,7 @@ function EditorContent({
                       <FloatingLevelSelector besideLeftMenu={leftMenuShown} />
                     )}
                     {!(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
+                      !dockMenuOnRight &&
                       (dockMenuOnTop ? (
                         // Own row under the toolbar, below the level selector's opening list (z-20).
                         // No transform: the menu's fixed pill must anchor to the scene region.
@@ -1858,6 +1859,12 @@ function EditorContent({
                       ))}
                     {sceneOverlay}
                   </SceneRegion>
+                  {/* A right rail sits on the stage edge with the column it pushes aside. */}
+                  {rightMenuShown && (
+                    <div className="pointer-events-auto">
+                      <ActionMenu placement="right" />
+                    </div>
+                  )}
                   {/* The inspector and the shortcuts card share one right column. */}
                   <RightStack
                     belowTopMenu={topMenuShown}
