@@ -960,6 +960,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ]),
   ...described('The owner pose an owned floor opening last followed: values, not ids.', [
     'ownerPose',
+    'ownerPose.footprint',
     'ownerPose.position',
     'ownerPose.rotation',
     'ownerPose.runLength',

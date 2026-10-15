@@ -23,6 +23,8 @@ export type StairPresetOptions = {
   lowerStepCount?: number
 }
 
+const A_LAYOUT = { straight: 'A straight', l: 'An L', u: 'A U' } as const
+
 /** Proposes a replacement chain, retaining flight/landing identities and finishes by role. */
 export function planStairPreset(
   original: Stair,
@@ -42,7 +44,7 @@ export function planStairPreset(
   const turn = options.turn ?? 'left'
   const fewest = options.layout === 'straight' ? 2 : 4
   if (options.stepCount !== undefined && options.stepCount < fewest)
-    throw new RangeError(`A ${options.layout} stair needs at least ${fewest} risers`)
+    throw new RangeError(`${A_LAYOUT[options.layout]} stair needs at least ${fewest} risers`)
   let rise = resolveStairTotalRise(original, nodes)
   for (let iteration = 0; iteration < 16; iteration++) {
     const sizing = planStairSizing(rise, {

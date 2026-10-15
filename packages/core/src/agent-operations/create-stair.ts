@@ -3,6 +3,7 @@ import type { CreateStairInput } from '../agent-tools/stairs'
 import { levelBuildingId } from '../building/level-duplication'
 import { cutFloorOpening } from '../commands/structure/floor-opening'
 import { adjacentLevelId } from '../lib/floor-opening-intent'
+import { area, intersection } from '../lib/polygon-boolean'
 import { type AnyNode, type AnyNodeId, generateId, LevelNode, StairNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { getLevelFloorToFloorHeight } from '../services/storey'
@@ -12,12 +13,12 @@ import {
   type StairFootprintAABB,
   stairArrivalOpening,
   stairFootprintAABB,
+  stairSegmentFootprints,
 } from '../systems/stair/stair-footprint'
 import { planStairPreset, type StairPresetOptions } from '../systems/stair/stair-presets'
 import { applySceneChanges } from './apply-changes'
 import { requireLevel, targetLevel } from './level-target'
 import { finishSurface, requireMaterialRef } from './material-refs'
-import { pointInPolygon, type Vec2 } from './plan-geometry'
 import { refuseRoofLevel } from './roof-writes'
 import { levelsOf } from './scene-queries'
 import type { AgentOperation, SceneChanges, SceneNodes } from './types'
@@ -220,26 +221,26 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
   let slabHoleCut = false
   const built = applySceneChanges(nodes, changes)
   const footprint = stairFootprintAABB(stair, built)!
-  const polygon = asGiven
-    ? openingRing(
-        stair,
-        stairFootprintAABB({ ...stair, position: [0, 0, 0], rotation: 0 }, built)!,
-        input,
+  // The footprint in the stair's own frame: the opening as given by default, and the box its owner
+  // pose keeps so the opening follows the stair's shape.
+  const local = stairFootprintAABB({ ...stair, position: [0, 0, 0], rotation: 0 }, built)!
+  const polygon = asGiven ? openingRing(stair, local, input) : []
+  // The surface over the flights and landings, not the storey's first: a floor of several rooms
+  // has a slab (and a ceiling below) per room, and an L's inside corner may lie in another.
+  const outlines = stairSegmentFootprints(stair, built)
+  const over = (type: 'slab' | 'ceiling', levelId: string) => {
+    let most = 1e-6
+    let surface: AnyNode | undefined
+    for (const node of Object.values(built)) {
+      if (node.type !== type || node.parentId !== levelId) continue
+      const covered = outlines.reduce(
+        (sum, outline) => sum + area(intersection(node.polygon, outline)),
+        0,
       )
-    : []
-  // The surface the opening falls in, not the storey's first: a floor of several rooms has a
-  // slab (and a ceiling below) per room.
-  const centre: Vec2 = [
-    polygon.reduce((sum, [x]) => sum + x, 0) / (polygon.length || 1),
-    polygon.reduce((sum, [, z]) => sum + z, 0) / (polygon.length || 1),
-  ]
-  const over = (type: 'slab' | 'ceiling', levelId: string) =>
-    Object.values(built).find(
-      (node) =>
-        node.type === type &&
-        node.parentId === levelId &&
-        pointInPolygon(centre, node.polygon as Vec2[]),
-    )
+      if (covered > most) [most, surface] = [covered, node]
+    }
+    return surface
+  }
   const destinationSlab = !upper
     ? undefined
     : input.destinationSlabId
@@ -280,6 +281,7 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
                   rotation: stair.rotation,
                   width,
                   runLength: segments[0]!.length,
+                  footprint: local,
                 },
                 ownerOpeningTarget: patch.node.drawnOn === 'ceiling' ? 'source' : 'destination',
               },

@@ -416,6 +416,41 @@ function splitScene(eastSlab = true): SceneGraph {
   return scene
 }
 
+/**
+ * The house with its upper floor in two rooms: a hall wrapping an L stair at (1, 0.3), its flights
+ * and landing, and a bedroom over the corner the L leaves inside, where its footprint's middle lies.
+ */
+function wrappedScene(): SceneGraph {
+  const scene = storeysScene()
+  const hall = SlabNode.parse({
+    id: 'slab_upper',
+    parentId: 'level_upper',
+    polygon: [
+      [0, 0],
+      [1.7, 0],
+      [1.7, 2.4],
+      [5.5, 2.4],
+      [5.5, 4],
+      [0, 4],
+    ],
+  })
+  const bedroom = SlabNode.parse({
+    id: 'slab_bedroom',
+    parentId: 'level_upper',
+    polygon: [
+      [1.7, 0],
+      [5.5, 0],
+      [5.5, 2.4],
+      [1.7, 2.4],
+    ],
+  })
+  scene.nodes.slab_upper = hall
+  scene.nodes.slab_bedroom = bedroom
+  const upper = scene.nodes.level_upper as LevelNode
+  scene.nodes.level_upper = { ...upper, children: [hall.id, bedroom.id] }
+  return scene
+}
+
 type Stair = AnyNode & {
   name?: string
   railingMode?: string
@@ -759,6 +794,13 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: "an L's opening as given goes through the slab over its flights, not the one under its middle",
+    tool: 'create_stair',
+    scene: wrappedScene,
+    input: { levelId: 'level_ground', x: 1, z: 0.3, layout: 'l', createSourceCeilingOpening: false },
+    expect: { result: { ok: true, slabHoleCut: true, destinationSlabId: 'slab_upper' } },
+  },
+  {
     name: 'a turn or lower flight with no L or U is refused',
     tool: 'create_stair',
     scene: storeysScene,
@@ -777,7 +819,7 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     tool: 'create_stair',
     scene: storeysScene,
     input: { levelId: 'level_ground', x: 3, z: 1, layout: 'l', steps: 3 },
-    expect: { refusal: 'stair_layout', mentions: ['4 risers'] },
+    expect: { refusal: 'stair_layout', mentions: ['An L stair needs at least 4 risers'] },
   },
   {
     name: 'a flight to no level with an opening asked is refused',

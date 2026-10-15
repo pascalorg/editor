@@ -1,4 +1,11 @@
 import { expect, test } from 'bun:test'
+import { z } from 'zod'
+import { storeysScene } from '../agent-operations/__fixtures__/structure-cases'
+import { applySceneChanges } from '../agent-operations/apply-changes'
+import { createStair } from '../agent-operations/create-stair'
+import { fitStair } from '../agent-operations/stairs'
+import { createStairTool, fitStairTool } from '../agent-tools/stairs'
+import { containsPoint } from '../lib/polygon-boolean'
 import {
   type AnyNode,
   BuildingNode,
@@ -13,6 +20,7 @@ import { migrateOwnedFloorOpenings } from '../utils/owned-floor-opening-migratio
 import { reconcileStructureOnLoad } from '../utils/reconcile-structure-on-load'
 import { reconcileStructureWithStableIds } from '../utils/structure-id'
 import { planOwnedFloorOpenings } from './owned-floor-openings'
+import { stairSegmentFootprints } from './stair/stair-footprint'
 
 const square: [number, number][] = [
   [0, 0],
@@ -233,6 +241,40 @@ test('an authored stair opening follows its owner pose and level, then retires w
   const deleted = { ...initial }
   delete deleted[stair.id]
   expect(planOwnedFloorOpenings(deleted)).toContainEqual({ op: 'delete', id: opening.id })
+})
+
+test("an L's opening cut as given still covers its landing and turned flight once refit", () => {
+  const context = { activeLevelId: null, materials: {} }
+  const scene = storeysScene().nodes as Record<string, AnyNode>
+  const made = createStair(
+    scene,
+    z.object(createStairTool.input).parse({
+      levelId: 'level_ground',
+      x: 1,
+      z: 0.3,
+      layout: 'l',
+      length: 2,
+      createSourceCeilingOpening: false,
+    }),
+    context,
+  )
+  const built = applySceneChanges(scene, made.changes!)
+  const stairId = made.result.stairId as string
+  const refit = applySceneChanges(
+    built,
+    fitStair(built, z.object(fitStairTool.input).parse({ stairId, fitRun: true }), context)
+      .changes!,
+  )
+  const synced = apply(refit, planOwnedFloorOpenings(refit))
+  const opening = Object.values(synced).find(
+    (node) => node.type === 'floor-opening',
+  ) as FloorOpeningNode
+  const outlines = stairSegmentFootprints(synced[stairId] as StairNode, synced)
+  // The refit lengthens both flights: the opening grows with the stair, not with its first flight.
+  expect(outlines).toHaveLength(3)
+  for (const corner of outlines.flat())
+    expect(containsPoint([{ outer: opening.polygon, holes: [] }], corner)).toBe(true)
+  expect(planOwnedFloorOpenings(synced)).toEqual([])
 })
 
 test('an automatic stair opening keeps its node id when the stair moves to another storey', () => {
