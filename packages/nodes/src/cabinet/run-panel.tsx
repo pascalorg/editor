@@ -184,7 +184,7 @@ function hasLinkedCornerRun(module: CabinetModuleNodeType): boolean {
   )
 }
 
-export function reflowRunModules({
+export function planCabinetPresetReflow({
   modules,
   parentRun,
   patch,
@@ -196,7 +196,7 @@ export function reflowRunModules({
   patch: Partial<CabinetModuleNodeType>
   scene: ReturnType<typeof useScene.getState>
   selected: CabinetModuleNodeType
-}): boolean {
+}) {
   const wallConstraints = runWallConstraints(
     parentRun,
     modules,
@@ -279,6 +279,23 @@ export function reflowRunModules({
       modules.map((module) => [module.id, presetWidthDebt(module, selected.id)]),
     ),
   })
+  return reflowed
+}
+
+export function reflowRunModules({
+  modules,
+  parentRun,
+  patch,
+  scene,
+  selected,
+}: {
+  modules: CabinetModuleNodeType[]
+  parentRun: CabinetNodeType
+  patch: Partial<CabinetModuleNodeType>
+  scene: ReturnType<typeof useScene.getState>
+  selected: CabinetModuleNodeType
+}): boolean {
+  const reflowed = planCabinetPresetReflow({ modules, parentRun, patch, scene, selected })
   if (reflowed.length === 0) return false
 
   const reflowById = new Map(reflowed.map((entry) => [entry.id, entry]))
@@ -606,18 +623,18 @@ export function CabinetRunPanel({
     <PanelWrapper
       icon="/icons/item.webp"
       onClose={onClose}
-      title={node.name || 'Modular Cabinet'}
+      title={node.name || 'Kitchen run'}
       width={320}
     >
       <PanelSection title="Modules">
         <div className="flex flex-col gap-2 px-1 pb-2">
           {sortedModules.map((module, index) => (
             <div
-              className="flex items-center justify-between rounded-lg border border-border/40 bg-black/3 dark:bg-[#252527] px-2 py-2"
+              className="flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-black/3 dark:bg-[#252527] px-2 py-2"
               key={module.id}
             >
               <button
-                className="min-w-0 flex-1 text-left"
+                className="min-h-8 min-w-0 flex-1 py-1 text-left"
                 onClick={() => setSelection({ selectedIds: [module.id] })}
                 type="button"
               >
@@ -630,7 +647,7 @@ export function CabinetRunPanel({
               </button>
               <button
                 aria-label={`Use ${module.name || `Module ${index + 1}`} as array source`}
-                className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/50 text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/50 text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                 disabled={module.moduleKind === 'corner-filler'}
                 onClick={() => setArraySourceId(module.id as AnyNodeId)}
                 title={

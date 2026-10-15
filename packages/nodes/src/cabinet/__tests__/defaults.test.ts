@@ -7,6 +7,7 @@ import {
   CabinetNode,
   type SceneApi,
 } from '@pascal-app/core'
+import { kitchenItemMatches, kitchenPresetForModule } from '@pascal-app/nodes'
 import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { CABINET_PRESETS, cabinetPresetById } from '../presets'
 import { addWallChildAbove } from '../run-ops'
@@ -77,8 +78,28 @@ test('cabinet creation defaults use the metric 600 mm family', () => {
     carcassHeight: CABINET_METRIC_DEFAULTS.carcassHeight,
   })
   for (const preset of CABINET_PRESETS) {
-    expect(preset.createPatch().depth).toBeCloseTo(CABINET_METRIC_DEFAULTS.depth)
+    expect(preset.createPatch().depth).toBeCloseTo(
+      preset.id === 'wall-cabinet' ? 0.35 : CABINET_METRIC_DEFAULTS.depth,
+    )
   }
+})
+
+test('kitchen search discovers appliances by familiar names and finds renamed modules by their contents', () => {
+  expect(kitchenItemMatches('fridge-single', 'refrigerator')).toBe(true)
+  expect(kitchenItemMatches('drawer-base', 'drawers')).toBe(true)
+  expect(kitchenItemMatches('cooktop-gas', 'gas stove')).toBe(true)
+  expect(kitchenItemMatches('dishwasher', 'refrigerator')).toBe(false)
+  const fridge = CabinetModuleNode.parse({
+    ...cabinetPresetById('fridge-single').createPatch(),
+    name: 'My cold storage',
+  })
+  expect(kitchenPresetForModule(fridge)).toBe('fridge-single')
+  expect(fridge.carcassHeight).toBeGreaterThan(1.5)
+  expect(fridge.withCountertop).toBe(false)
+  const wall = CabinetModuleNode.parse(cabinetPresetById('wall-cabinet').createPatch())
+  expect(wall.showPlinth).toBe(false)
+  expect(wall.withCountertop).toBe(false)
+  expect(kitchenPresetForModule(wall, CabinetNode.parse({ runTier: 'wall' }))).toBe('wall-cabinet')
 })
 
 test('placed cabinet runs and modules opt into ordinary body dragging', () => {
