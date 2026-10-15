@@ -366,6 +366,64 @@ function recordsScene(): SceneGraph {
   )
 }
 
+/** 250 columns on the ground storey: more than find_by_type lists unless asked. */
+function crowdedScene(): SceneGraph {
+  return scene(
+    ...Array.from({ length: 250 }, (_, i) =>
+      ColumnNode.parse({
+        id: `column_${String(i).padStart(3, '0')}`,
+        parentId: 'level_0',
+        position: [i, 0, 0],
+      }),
+    ),
+  )
+}
+
+/** A porch across the kitchen's edge: one column in it, one 20 m off, and a beam between. */
+function porchScene(): SceneGraph {
+  const porch = authoredItem('item_porch', 'level_0', {
+    name: 'Porch',
+    category: 'porch',
+    size: [21, 3, 1],
+  })
+  porch.source!.manifest.parts = [
+    { id: 'near', type: 'column', bounds: { min: [-0.2, 0, -0.2], max: [0.2, 3, 0.2] } },
+    { id: 'far', type: 'column', bounds: { min: [19.8, 0, -0.2], max: [20.2, 3, 0.2] } },
+    { id: 'beam', type: 'beam', bounds: { min: [0, 2.8, 0], max: [20, 3, 0.2] } },
+  ] as never
+  return scene(kitchen(), porch)
+}
+
+/** A room zone with a courtyard cut out of it, a wall in the courtyard and one in the room. */
+function courtyardScene(): SceneGraph {
+  return scene(
+    ZoneNode.parse({
+      id: 'zone_ring',
+      parentId: 'level_0',
+      name: 'Cloister',
+      polygon: rect(-5, -5, 5, 5),
+      holes: [rect(-1, -1, 1, 1)],
+    }),
+    wall('wall_courtyard', [-0.5, 0], [0.5, 0]),
+    wall('wall_cloister', [-4, 3], [-2, 3]),
+  )
+}
+
+/** A wall whose stored children name a door that is not in the scene. */
+function danglingChildScene(): SceneGraph {
+  const { nodes, rootNodeIds } = describedScene()
+  nodes.wall_tall = { ...(nodes.wall_tall as object), children: ['door_gone'] }
+  return { nodes, rootNodeIds }
+}
+
+/** How many results are listed, against the count. */
+const lists =
+  (listed: number) =>
+  (result: Record<string, unknown>) =>
+    (result.results as unknown[]).length === listed
+      ? []
+      : [`listed ${(result.results as unknown[]).length}, expected ${listed}`]
+
 export const FIND_NODES_CASES: AgentToolCase[] = [
   find(
     'find_nodes { type: level } (every level, whole): every level, its id, kind and parent',
@@ -578,12 +636,77 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
     { sourceIdPrefix: 'screen/', type: 'wall' },
     [],
   ),
+  {
+    name: 'find_nodes { type: not-a-type } (refused: no such kind): refused unknown_type, with the kinds the scene holds',
+    tool: 'find_by_type',
+    scene: kindsScene,
+    input: { type: 'not-a-type' },
+    expect: { refusal: 'unknown_type', mentions: ['not-a-type', 'wall', 'fixture:bench'] },
+  },
+  {
+    name: 'find_nodes { type: windw } (a typo, refused): refused unknown_type',
+    tool: 'find_by_type',
+    scene: kindsScene,
+    input: { type: 'windw', levelId: 'level_0' },
+    expect: { refusal: 'unknown_type', mentions: ['windw'] },
+  },
   find(
-    'find_nodes { type: not-a-type } (refused: no such kind): nothing found, count 0 (find_by_type also reads item categories and part types)',
+    'find_nodes { type: window } on a storey with none (a real kind, filtered out): nothing found, count 0',
     kindsScene,
-    { type: 'not-a-type' },
+    { type: 'window', levelId: 'level_1' },
     [],
-    { result: { type: 'not-a-type', count: 0 } },
+    { result: { type: 'window', count: 0 } },
+  ),
+  find(
+    'find_nodes { type: glass } on a level with no lantern (a part type the scene holds elsewhere): nothing found, count 0',
+    authoredScene,
+    { type: 'glass', levelId: 'level_1' },
+    [],
+    { result: { type: 'glass', count: 0 } },
+  ),
+  {
+    name: 'find_nodes {} on a scene of 254 nodes (every node, unbounded): count says all, the first 200 listed, truncated with a hint',
+    tool: 'find_by_type',
+    scene: crowdedScene,
+    input: {},
+    expect: {
+      result: { count: 254, nodes: 254, truncated: true },
+      mentions: ['200 of 254 listed', 'limit'],
+      check: lists(200),
+    },
+  },
+  {
+    name: 'find_nodes { type: column } on a scene of 250 columns: all of them, with a limit that covers them',
+    tool: 'find_by_type',
+    scene: crowdedScene,
+    input: { type: 'column', limit: 1000 },
+    expect: {
+      result: { count: 250 },
+      check: (result) => [...lists(250)(result), ...(result.truncated ? ['truncated'] : [])],
+    },
+  },
+  {
+    name: 'find_by_type { type: column, limit: 3 }: three listed, the count of all',
+    tool: 'find_by_type',
+    scene: crowdedScene,
+    input: { type: 'column', limit: 3 },
+    expect: { result: { count: 250, truncated: true }, check: lists(3) },
+  },
+  find(
+    "find_by_type { type: column, zoneId } on a porch across the zone's edge: its column in the zone, by the part's own bounds, not the one 20 m off",
+    porchScene,
+    { type: 'column', zoneId: 'zone_kitchen' },
+    [],
+    {
+      result: { count: 1, parts: 1 },
+      contains: [{ id: 'item_porch', part: 'near', partType: 'column' }],
+    },
+  ),
+  find(
+    'find_nodes { type: wall, zoneId } of a zone with a hole (a wall in the courtyard): the wall in the room alone',
+    courtyardScene,
+    { type: 'wall', zoneId: 'zone_ring' },
+    ['wall_cloister'],
   ),
   find(
     'find_nodes { type: column, zoneId } on a zone drawn closed (its first corner repeated): the column inside, not the one far off',
@@ -598,13 +721,13 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
     ['studs_plugin-1'],
     { result: { type: 'bones:studs' } },
   ),
-  find(
-    'find_nodes { type: bones:studs } with only a bones:stud in the scene: nothing, a plugin kind is never read as its singular',
-    singularKindScene,
-    { type: 'bones:studs' },
-    [],
-    { result: { type: 'bones:studs' } },
-  ),
+  {
+    name: 'find_nodes { type: bones:studs } with only a bones:stud in the scene (refused: no such kind): refused unknown_type, a plugin kind is never read as its singular',
+    tool: 'find_by_type',
+    scene: singularKindScene,
+    input: { type: 'bones:studs' },
+    expect: { refusal: 'unknown_type', mentions: ['bones:studs', 'bones:stud'] },
+  },
   find(
     "find_nodes { type: glass } (no node kind; a part type ending in s): the lantern's glass pane, under type glass",
     authoredScene,
@@ -881,6 +1004,12 @@ export const DESCRIBE_NODE_CASES: AgentToolCase[] = [
   get('describe_node childrenIds of a wall (its door and window): node.children', 'wall_host', {
     node: { children: ['door_host', 'window_host'] },
   }),
+  get(
+    'describe_node on a wall whose stored children name a door not in the scene (childrenIds [], properties.children as stored): node.children as stored, missingChildIds names it',
+    'wall_tall',
+    { node: { children: ['door_gone'] }, missingChildIds: ['door_gone'] },
+    danglingChildScene,
+  ),
   get('describe_node on an unnamed ground storey ("Ground floor"): node.displayName', 'level_0', {
     node: { id: 'level_0', displayName: 'Ground floor' },
     ancestorIds: ['building_main', 'site_lot'],

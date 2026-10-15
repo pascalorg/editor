@@ -1,9 +1,17 @@
+import { FIND_BY_TYPE_LIMIT } from '../agent-tools/find-by-type'
 import { refuse } from '../agent-tools/refusal'
 import { isScriptedNode } from '../lib/geometry-script-node'
 import { measurementCentroid } from '../lib/measurement-geometry'
 import { nodeLevelFrame } from '../procedural-items/query'
 import { type Frame, transformPoint } from '../procedural-items/spatial'
-import type { AnyNode, ItemNode, ZoneNode } from '../schema'
+import { nodeRegistry } from '../registry'
+import {
+  type AnyNode,
+  AnyNode as AnyNodeSchema,
+  type ItemNode,
+  nodeKindOf,
+  type ZoneNode,
+} from '../schema'
 import { pointInPolygon } from '../systems/slab/slab-support'
 import { requireLevel } from './level-target'
 import type { Vec2 } from './plan-geometry'
@@ -19,7 +27,13 @@ export type FindByTypeInput = {
   zoneId?: string
   sourceId?: string
   sourceIdPrefix?: string
+  limit?: number
 }
+
+type Bounds = { min: Vec3; max: Vec3 }
+
+/** One result: a node, or a typed part of one, with its bounds in level coordinates when known. */
+type Found = Record<string, unknown> & { part?: string; bounds?: Bounds }
 
 const round = (v: number) => Math.round(v * 1000) / 1000
 
@@ -36,7 +50,7 @@ function toLevel(item: ItemNode, [x, y, z]: Vec3): Vec3 {
   ]
 }
 
-function boundsInLevel(item: ItemNode, bounds: { min: Vec3; max: Vec3 }) {
+function boundsInLevel(item: ItemNode, bounds: Bounds): Bounds {
   const corners: Vec3[] = []
   for (const x of [bounds.min[0], bounds.max[0]])
     for (const y of [bounds.min[1], bounds.max[1]])
@@ -46,6 +60,8 @@ function boundsInLevel(item: ItemNode, bounds: { min: Vec3; max: Vec3 }) {
     max: [0, 1, 2].map((k) => Math.max(...corners.map((c) => c[k]!))) as Vec3,
   }
 }
+
+const CORE_KINDS = new Set<string>(AnyNodeSchema.options.map(nodeKindOf))
 
 /** A node's kind, lower case; a malformed node stored without one has none. */
 const kindOf = (node: AnyNode) => String(node.type).toLowerCase()
@@ -176,18 +192,34 @@ function requireZone(nodes: SceneNodes, zoneId: string): ZoneNode {
 }
 
 /**
- * A test for "stands in this zone": on the zone's level, its plan point inside the polygon, by the
- * ray cast the editor's spatial grid uses (a closing vertex repeated, or a zero-length edge, puts
- * nothing inside).
+ * What of a node's results stands in this zone: on the zone's level, a plan point inside its outline
+ * and outside its holes, by the ray cast the editor's spatial grid uses (a closing vertex repeated,
+ * or a zero-length edge, puts nothing inside). A part with bounds in its level stands at their
+ * middle; anything else at its node's plan point, read only once the node is on the zone's level.
  */
 function zoneFilter(nodes: SceneNodes, zone: ZoneNode) {
   const zoneLevel = levelIdOf(nodes, zone.id)
-  const polygon = zone.polygon as Vec2[]
+  const outline = zone.polygon as Vec2[]
+  const holes = (zone.holes ?? []) as Vec2[][]
   const frames = new Map<string, Frame>()
-  return (node: AnyNode, level: string | null) => {
-    if (level !== zoneLevel) return false
-    const point = planPointOf(node, nodes, frames)
-    return point !== null && pointInPolygon(point[0], point[1], polygon)
+  const inside = (point: Vec2 | null) =>
+    point !== null &&
+    pointInPolygon(point[0], point[1], outline) &&
+    !holes.some((hole) => pointInPolygon(point[0], point[1], hole))
+  return (node: AnyNode, level: string | null, found: Found[]) => {
+    if (level !== zoneLevel) return []
+    let planPoint: Vec2 | null | undefined
+    const nodePoint = () => {
+      if (planPoint === undefined) planPoint = planPointOf(node, nodes, frames)
+      return planPoint
+    }
+    return found.filter(({ bounds }) =>
+      inside(
+        bounds
+          ? [(bounds.min[0] + bounds.max[0]) / 2, (bounds.min[2] + bounds.max[2]) / 2]
+          : nodePoint(),
+      ),
+    )
   }
 }
 
@@ -208,10 +240,28 @@ function recordsOf(node: AnyNode) {
 }
 
 /**
+ * Whether a type word, or its singular, names anything find_by_type reads: a core kind or a
+ * registered plugin kind anywhere, light, or a kind, an item category or a typed part in this scene.
+ */
+function namesAnything(nodes: SceneNodes, names: Set<string>): boolean {
+  if (names.has('light')) return true
+  const registered = [...nodeRegistry.entries()].map(([kind]) => kind.toLowerCase())
+  if ([...names].some((name) => CORE_KINDS.has(name) || registered.includes(name))) return true
+  return Object.values(nodes).some(
+    (node) =>
+      names.has(kindOf(node)) ||
+      (node.type === 'item' &&
+        [...names].some((name) => matchesWord(node.asset?.category, name))) ||
+      (isScriptedNode(node) &&
+        (node.source?.manifest?.parts ?? []).some((part) => part.type && names.has(part.type))),
+  )
+}
+
+/**
  * `find_by_type`: everything of one type, nodes and the typed parts of authored objects alike,
  * narrowed by level, parent, zone or source id. Parts are read from each object's manifest; the
  * object stays the thing that is selected, moved and edited. Each result is the node's summary;
- * `get_node` reads it whole.
+ * `get_node` reads it whole. Past `limit` results are counted, not listed.
  */
 export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
   const { levelId, parentId, zoneId } = input
@@ -229,7 +279,7 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
     kind === undefined
       ? undefined
       : new Set([kind, kind.includes(':') ? kind : kind.replace(/s$/, '')])
-  const results: Record<string, unknown>[] = []
+  const results: Found[] = []
   for (const node of Object.values(nodes)) {
     if (parentId && node.parentId !== parentId) continue
     if (fromSource && !fromSource(node)) continue
@@ -244,7 +294,7 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
       parentId: node.parentId ?? null,
     }
     const whole = { ...found, ...recordsOf(node) }
-    let matched: Record<string, unknown>[]
+    let matched: Found[]
     if (names === undefined) matched = [whole]
     else {
       const typed = (isScriptedNode(node) ? (node.source?.manifest?.parts ?? []) : []).filter(
@@ -273,16 +323,31 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
           }))
     }
     // Where a node stands is read only for what matched: the zone test reads geometry.
-    if (matched.length === 0 || (inZone && !inZone(node, level))) continue
-    results.push(...matched)
+    if (matched.length > 0) results.push(...(inZone ? inZone(node, level, matched) : matched))
   }
+  if (names && results.length === 0 && !namesAnything(nodes, names)) {
+    const kinds = [...new Set(Object.values(nodes).map(kindOf))].sort()
+    refuse(
+      'unknown_type',
+      `"${kind}" names nothing find_by_type reads: no node kind (core's or a registered plugin's), and no item category or part type in this scene. Kinds in this scene: ${kinds.join(', ')}.`,
+      { type: kind, kinds },
+    )
+  }
+  const limit = input.limit ?? FIND_BY_TYPE_LIMIT
+  const parts = results.filter((entry) => entry.part).length
   return {
     result: {
       ...(kind === undefined ? {} : { type: kind }),
       count: results.length,
-      nodes: results.filter((entry) => !entry.part).length,
-      parts: results.filter((entry) => entry.part).length,
-      results,
+      nodes: results.length - parts,
+      parts,
+      results: results.slice(0, limit),
+      ...(results.length > limit
+        ? {
+            truncated: true,
+            hint: `${limit} of ${results.length} listed. Narrow by type, levelId, zoneId or parentId, or ask for more with limit.`,
+          }
+        : {}),
     },
   }
 }

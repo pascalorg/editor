@@ -18,10 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   item category, lights, typed parts), it filters by `levelId`, `parentId`,
   `zoneId`, `sourceId` and `sourceIdPrefix`, finds every node they match
   without a type, and gives each node's `parentId`, `metadata` and
-  `provenance`. A level, parent or zone that is not there is refused.
+  `provenance`. A level, parent or zone that is not there is refused, and so
+  is a type that names nothing (`unknown_type`). It lists 200 results unless
+  `limit` asks for more; `count` says how many match and `truncated` that some
+  are left out.
 - `get_node` is the one node read: beside the node it gives its `ancestorIds`,
   a wall's or ceiling's `resolvedHeight` and `heightIsExplicit`, a wall's
-  `resolvedThickness`, and a level's or floor plate's `displayName`.
+  `resolvedThickness`, a level's or floor plate's `displayName`, and in
+  `missingChildIds` the stored children that name no node.
 
 ### Removed
 

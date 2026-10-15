@@ -157,6 +157,7 @@ const SHARED_TOOLS: SharedTool[] = [
     outputSchema: {
       node: jsonObject,
       ancestorIds: z.array(z.string()),
+      missingChildIds: z.array(z.string()).optional(),
       materials: z.record(z.string(), SceneMaterial).optional(),
     },
   },

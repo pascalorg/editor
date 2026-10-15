@@ -79,16 +79,22 @@ function derivedFields(nodes: SceneNodes, node: AnyNode): Record<string, unknown
  * `get_node`: a node, whole, with what the scene decides for it (a wall's or a ceiling's height
  * when it has none of its own, a wall's thickness, a door's or window's floor and what it hangs
  * from, the name a level or a floor plate is shown by) and its ancestors; with the scene's
- * materials lent, the ones its finishes use.
+ * materials lent, the ones its finishes use. Its children are as stored; the ids among them that
+ * name no node are listed again in `missingChildIds`.
  */
 export const getNode: AgentOperation<{ id: string }> = (nodes, { id }, { materials }) => {
   const node = nodes[id]
   if (!node) refuse('node_not_found', `Node not found: ${id}.`, { id })
   const used = referencedSceneMaterialIds(node)
+  const children = (node as { children?: unknown }).children
+  const missingChildIds = Array.isArray(children)
+    ? children.filter((child) => typeof child === 'string' && !nodes[child])
+    : []
   return {
     result: {
       node: { ...node, ...derivedFields(nodes, node) },
       ancestorIds: ancestorIdsOf(nodes, id),
+      ...(missingChildIds.length ? { missingChildIds } : {}),
       ...(materials
         ? {
             materials: Object.fromEntries(
