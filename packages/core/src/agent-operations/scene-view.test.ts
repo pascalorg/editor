@@ -878,10 +878,18 @@ describe('which way an opening faces', () => {
     expect(facing[1]).toBeCloseTo(0, 9)
   })
 
-  test('nothing for what is not an opening', () => {
-    expect(sceneViewFacing(facadeScene('back'), 'wall_face')).toBeNull()
-    expect(sceneViewFacing(facadeScene('back'), 'item_lamp')).toBeNull()
-    expect(sceneViewFacing(facadeScene('back'), 'nothing_here')).toBeNull()
+  test('a wall with an exterior face faces the way that face does, whichever way it was drawn', () => {
+    for (const outside of ['back', 'front'] as const)
+      expect(sceneViewFacing(facadeScene(outside), 'wall_face')).toEqual([0, -1])
+  })
+
+  test('nothing for a wall with no exterior face, or for what is not an opening or a wall', () => {
+    const scene = facadeScene('back')
+    const wall = scene.wall_face as WallNode
+    const interior = { ...scene, wall_face: { ...wall, backSide: 'interior' } } as typeof scene
+    expect(sceneViewFacing(interior, 'wall_face')).toBeNull()
+    expect(sceneViewFacing(scene, 'item_lamp')).toBeNull()
+    expect(sceneViewFacing(scene, 'nothing_here')).toBeNull()
   })
 })
 
