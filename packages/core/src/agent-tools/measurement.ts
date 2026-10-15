@@ -29,28 +29,15 @@ export interface MeasurementOptions {
   positive?: boolean
 }
 
-const UNIT_NOUNS: Record<string, string> = {
-  m: 'meters',
-  in: 'inches',
-  ft: 'feet',
-  mm: 'millimetres',
-  deg: 'degrees',
-  rad: 'radians',
-}
-
-// Each leads with a bare number in the field's own unit, so a bare number is read the way the
-// model intends (a bare "45" in a radians field is 45 rad).
-const EXAMPLES: Record<string, string> = {
-  m: '0.9, "6 ft", "180cm", "2 ft 3 in"',
-  in: '18, "1.5 ft", "45cm", "1 ft 6 in"',
-  ft: '6, "72 in", "1.8m", "5 ft 6 in"',
-  mm: '26, "2.6cm", "1 in"',
-  deg: '45, "45°", "1.57rad", "0.25 turn"',
-  rad: '1.5708, "90°", "1.57rad", "0.25 turn"',
-}
-
-function naturalLanguageNote(unit: string): string {
-  return `Accepts a number (${UNIT_NOUNS[unit] ?? unit}) or a natural-language string; other units are converted. e.g. ${EXAMPLES[unit]}.`
+// What a field says once per field, read on every call: its unit, named first so a bare number
+// is read in it (a bare "45" in a radians field is 45 rad), and text in other units.
+const UNIT_NOTES: Record<string, string> = {
+  m: 'In metres, or text with a unit ("6 ft").',
+  in: 'In inches, or text with a unit ("1.5 ft").',
+  ft: 'In feet, or text with a unit ("72 in").',
+  mm: 'In millimetres, or text with a unit ("2.6cm").',
+  deg: 'In degrees, or text with a unit ("1.57rad").',
+  rad: 'In radians, or text with a unit ("90°").',
 }
 
 function boundsNote(
@@ -131,7 +118,7 @@ export function measurement(kind: Kind, unit: string, opts: MeasurementOptions =
     (text) => readQuantity(text, kind, unit),
     kind,
     unit,
-    naturalLanguageNote(unit),
+    UNIT_NOTES[unit] ?? `In ${unit}, or text with a unit.`,
     opts,
   )
 }
@@ -147,9 +134,8 @@ const twelfthsToDegrees = (twelfths: number) => (Math.atan(twelfths / 12) * 180)
 const degreesToTwelfths = (degrees: number) => 12 * Math.tan((degrees * Math.PI) / 180)
 
 const PITCH_NOTES: Record<PitchUnit, string> = {
-  deg: 'Accepts degrees or a pitch as rise over run: 26.6, "26.6°", "6:12", "6/12", "6 in 12".',
-  twelfths:
-    'Accepts the rise per 12 of run (6 for 6:12) or any pitch: 6, "6:12", "6/12", "6 in 12", "26.6°".',
+  deg: 'In degrees, or rise over run ("6:12").',
+  twelfths: 'Rise per 12 of run (6 for 6:12), or "6:12" or "26.6°".',
 }
 
 function readPitch(text: string, unit: PitchUnit): Reading {

@@ -133,6 +133,6 @@ test('measurement in inches and feet reads other units without float noise', () 
   expect(measurement('length', 'ft').parse('72 in')).toBe(6)
   expect(measurement('length', 'm').parse('6 in')).toBe(0.1524)
   expect(z.toJSONSchema(measurement('length', 'in'), { io: 'input' }).description).toContain(
-    '(inches)',
+    'In inches, or text with a unit',
   )
 })
