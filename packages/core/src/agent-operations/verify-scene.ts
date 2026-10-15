@@ -8,7 +8,11 @@ import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, type LevelNode 
 import { isRoofOnStoreyWalls } from '../services/roof-move'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
-import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
+import {
+  resolveStairTotalRise,
+  stairClimbsToNoStorey,
+  stairReachesStoreyAbove,
+} from '../systems/stair/stair-rise-query'
 import { measureStair } from '../systems/stair/stair-sizing'
 import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/opening-bounds'
 import {
@@ -380,18 +384,23 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     const buildingId = levelBuildingId(nodes as Record<AnyNodeId, AnyNode>, node) ?? ''
     storeysByBuilding.set(buildingId, [...(storeysByBuilding.get(buildingId) ?? []), level])
   }
+  // Porch or deck steps, a flight to no level, stand on a storey without connecting it to another.
   for (const [buildingId, storeys] of storeysByBuilding) {
     if (storeys.length < 2) continue
-    const stairs = levels
+    const connected = levels
       .filter((level) => {
         const node = nodes[level.levelId] as AnyNode & { type: 'level' }
         return (levelBuildingId(nodes as Record<AnyNodeId, AnyNode>, node) ?? '') === buildingId
       })
-      .reduce((sum, level) => sum + level.content.stairs, 0)
-    if (stairs === 0)
+      .some((level) =>
+        ofType(onLevel(level.levelId), 'stair').some((stair) =>
+          stairReachesStoreyAbove(stair, nodes as Record<string, AnyNode>),
+        ),
+      )
+    if (!connected)
       report(
         'missing_stair',
-        `${nodes[buildingId]?.name ?? 'The building'} has ${storeys.length} storeys and no stair: add one on the ground floor, in the hall or entry, to connect them.`,
+        `${nodes[buildingId]?.name ?? 'The building'} has ${storeys.length} storeys and no stair between them: add one on the ground floor, in the hall or entry, to connect them.`,
       )
   }
 
@@ -450,8 +459,10 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       const sourceName = nodes[sourceLevelId]?.name ?? sourceLevelId
       const footprints = stairFootprintPolygons(nodes, stair)
       const sourceSlabs = ofType(onLevel(sourceLevelId), 'slab')
+      // Porch, deck or garden steps start on the ground, off the floor slab.
       if (
         sourceSlabs.length > 0 &&
+        !stairClimbsToNoStorey(stair, nodes as Record<string, AnyNode>) &&
         footprints.some(
           (footprint) =>
             !sourceSlabs.some((slab) => polygonContainsPolygon(slab.polygon as Vec2[], footprint)),
