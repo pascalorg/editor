@@ -558,10 +558,21 @@ export function commitDeleteCandidates(
 ): StagedCandidate[] {
   const candidates: StagedCandidate[] = []
   let seq = firstSeq
+  // A plate or a ceiling the reconciler owns goes with its room: it plays when the commit takes a
+  // wall or a room off its level, and not when the reconciler merely derives it anew.
+  const goingLevels = new Set<string>()
   for (const id in before.nodes) {
-    if (current.nodes[id as AnyNodeId] || derivedWrites?.get(id as AnyNodeId) === 'all') continue
     const node = before.nodes[id as AnyNodeId]
-    if (!node || isDerivedNode(node)) continue
+    if (current.nodes[id as AnyNodeId] || !node?.parentId) continue
+    if (node.type === 'wall' || node.type === 'zone') goingLevels.add(node.parentId)
+  }
+  for (const id in before.nodes) {
+    if (current.nodes[id as AnyNodeId]) continue
+    const node = before.nodes[id as AnyNodeId]
+    if (!node) continue
+    if (isDerivedNode(node)) {
+      if (!(node.parentId && goingLevels.has(node.parentId))) continue
+    } else if (derivedWrites?.get(id as AnyNodeId) === 'all') continue
     const host = node.parentId ? before.nodes[node.parentId as AnyNodeId] : undefined
     const goesWithHost = Boolean(
       host && !CONTAINERS.has(host.type) && !current.nodes[host.id as AnyNodeId],

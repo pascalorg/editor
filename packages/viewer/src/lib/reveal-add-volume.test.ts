@@ -19,7 +19,7 @@ import {
 } from '@pascal-app/core'
 import { Group } from 'three'
 import addVolumeCommit from './__fixtures__/add-volume-commit.json'
-import { commitRevealCandidates } from './reveal-candidates'
+import { commitDeleteCandidates, commitRevealCandidates } from './reveal-candidates'
 import { FRAMING_PACE, LAZY_REVEAL_TIMING, planLazyReveal } from './reveal-schedule'
 
 // The owner's case (14 Oct): an add_volume build "pulsed too fast, a bit of a mess". One commit
@@ -159,5 +159,43 @@ describe('add_volume at the framing level', () => {
     console.log(
       `add_volume (2 storeys, 3 rooms below): ${plan.length} pieces, ${created.filter((n) => n.type === 'wall').length} walls, plays ${Math.round(end)} ms`,
     )
+  })
+})
+
+describe('deleting what add_volume made', () => {
+  const derived = (node: AnyNode) =>
+    (node.type === 'slab' || node.type === 'ceiling') &&
+    ((node as { boundary?: string }).boundary === 'auto' ||
+      (node as { autoFromWalls?: boolean }).autoFromWalls === true)
+
+  test('a floor or a room that goes takes its derived plates and ceilings, in the plan, with it', () => {
+    const made = volume()
+    const gone: SceneCommit = {
+      origin: 'local',
+      before: made.current,
+      current: made.before,
+    } as unknown as SceneCommit
+    const candidates = commitDeleteCandidates(gone, 'framing')
+    const ids = new Set(candidates.map((candidate) => candidate.id))
+    const plates = Object.values(made.current.nodes).filter(derived)
+    expect(plates.length).toBeGreaterThan(0)
+    for (const plate of plates) expect(ids.has(plate.id)).toBe(true)
+    // And every wall of it, in the same plan, each at its room.
+    for (const node of Object.values(made.current.nodes))
+      if (node.type === 'wall') expect(ids.has(node.id)).toBe(true)
+  })
+
+  test('a plate the reconciler derives anew, with no wall or room going, is not a deletion', () => {
+    const made = volume()
+    const plates = Object.values(made.current.nodes).filter(derived)
+    const nodes = { ...made.current.nodes } as Record<string, AnyNode>
+    for (const plate of plates) delete nodes[plate.id]
+    const restructured: SceneCommit = {
+      origin: 'local',
+      before: made.current,
+      current: { ...made.current, nodes },
+      derivedWrites: new Map(plates.map((plate) => [plate.id, 'all' as const])),
+    } as unknown as SceneCommit
+    expect(commitDeleteCandidates(restructured, 'framing')).toEqual([])
   })
 })
