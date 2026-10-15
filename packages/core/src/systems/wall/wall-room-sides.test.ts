@@ -37,5 +37,12 @@ describe('roomFaceCover', () => {
     )
     const cover = roomFaceCover(nodes, 'wall_arc')
     expect(Object.values(cover).sort()).toEqual(['none', 'part'])
+    // 15 cm of a wider half circle's end, under 0.2 mm of its chord.
+    const wide = scene(
+      ['wall_arc', [0, 0], [20, 0], 10],
+      ['wall_base', [20, 0], [10, 0]],
+      ['wall_spoke', [10, 0], [0.0011249789, -0.1499943751]],
+    )
+    expect(Object.values(roomFaceCover(wide, 'wall_arc')).sort()).toEqual(['none', 'part'])
   })
 })

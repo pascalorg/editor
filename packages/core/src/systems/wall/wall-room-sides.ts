@@ -2,29 +2,33 @@ import { extractRooms, WALL_JUNCTION_TOLERANCE } from '../../lib/room-graph'
 import type { BoundaryNode } from '../../lib/room-topology-index'
 import type { SceneNodes } from '../../lib/structure-kernel'
 import type { WallNode } from '../../schema'
-import { sampleWallCenterline } from './wall-curve'
+import { getWallArcData, getWallCurveFrameAt } from './wall-curve'
 
 /**
  * Metres along a wall's reference line at a station of its chord, as room spans give them: on a
  * curve the chord's stations crowd toward the ends, where a short stretch of chord is a long one
- * of wall.
+ * of wall. An arc's point at a station is found by bisection (its stations rise along it, an arc
+ * being no wider than a half circle), its length in proportion to its angle.
  */
 function metresAlong(wall: WallNode): (t: number) => number {
   const [x0, z0] = wall.start
   const [dx, dz] = [wall.end[0] - x0, wall.end[1] - z0]
   const chord2 = dx * dx + dz * dz
-  const points = sampleWallCenterline(wall, 96)
-  let run = 0
-  const stations = points.map((point, index) => {
-    const before = points[index - 1]
-    if (before) run += Math.hypot(point.x - before.x, point.y - before.y)
-    return { t: ((point.x - x0) * dx + (point.y - z0) * dz) / chord2, metres: run }
-  })
+  const arc = getWallArcData(wall)
+  if (!arc) return (t) => t * Math.sqrt(chord2)
+  const station = (s: number) => {
+    const { point } = getWallCurveFrameAt(wall, s)
+    return ((point.x - x0) * dx + (point.y - z0) * dz) / chord2
+  }
+  const length = Math.abs(arc.delta) * arc.radius
   return (t) => {
-    const next = stations.findIndex((station) => station.t >= t)
-    if (next <= 0) return next === 0 ? 0 : run
-    const [a, b] = [stations[next - 1]!, stations[next]!]
-    return a.metres + ((b.metres - a.metres) * (t - a.t)) / (b.t - a.t || 1)
+    let [low, high] = [0, 1]
+    for (let step = 0; step < 40; step += 1) {
+      const middle = (low + high) / 2
+      if (station(middle) < t) low = middle
+      else high = middle
+    }
+    return high * length
   }
 }
 
