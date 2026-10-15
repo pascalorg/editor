@@ -536,6 +536,7 @@ export {
   getMaterialPresetByRef,
   getMaterialsForCategory,
   getSceneMaterialIdFromRef,
+  isCommunityMaterialId,
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
   MATERIAL_CATEGORIES,

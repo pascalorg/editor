@@ -369,6 +369,14 @@ describe('paint refuses the whole call', () => {
     })
   }
 
+  test('a community id, which the host checks, is written; a malformed one never could be', () => {
+    const nodes = room()
+    const terrazzo = { targets: ['wall_south'], role: 'a', material: 'mtl_terrazzo_green' }
+    expect(paint(nodes, terrazzo).result.finish).toBe('library:mtl_terrazzo_green')
+    for (const material of ['library:mtl_missing.', 'mtl_', 'mtl_terrazzo green'])
+      expect(refusal(() => paint(nodes, { ...terrazzo, material }))).toBe('unknown_material')
+  })
+
   test("a curtain wall's exterior: it has frame, glass and panels, no faces", () => {
     const nodes = room()
     nodes.wall_east = { ...(nodes.wall_east as WallNode), wallType: 'curtain' }
@@ -494,19 +502,39 @@ describe('a roof', () => {
     expect(roof.topMaterial).toBeUndefined()
   })
 
-  test("is refused when a segment's own finish would hide it", () => {
+  test("shows on every segment: a segment's own finish for the role goes, its others stay", () => {
     for (const own of [
       { topMaterialPreset: 'library:roof-claytiles' },
       { materialPreset: 'library:roof-claytiles' },
-    ])
-      expect(refusal(() => paint(roofed(own), { targets: ['roof_paint'], color: '#336699' }))).toBe(
-        'shadowed_field',
+    ]) {
+      const nodes = roofed(own)
+      const after = applied(
+        nodes,
+        {},
+        paint(nodes, { targets: ['roof_paint'], color: '#336699' }).changes,
       )
-    const edge = paint(roofed({ topMaterialPreset: 'library:roof-claytiles' }), {
-      targets: ['roof_paint'],
-      role: 'edge',
-      color: '#336699',
+      const segment = after.nodes.rseg_paint as RoofSegmentNode
+      expect(segment.topMaterialPreset).toBeUndefined()
+      expect(segment.materialPreset).toBeUndefined()
+      expect((after.nodes.roof_paint as RoofNode).topMaterialPreset).toMatch(/^library:preset-/)
+      if ('materialPreset' in own) expect(segment.edgeMaterialPreset).toBe('library:roof-claytiles')
+    }
+    const edge = roofed({ topMaterialPreset: 'library:roof-claytiles' })
+    const painted = paint(edge, { targets: ['roof_paint'], role: 'edge', color: '#336699' })
+    expect(painted.result).toMatchObject({ painted: [{ id: 'roof_paint', roles: ['edge'] }] })
+    expect(applied(edge, {}, painted.changes).nodes.rseg_paint).toEqual(edge.rseg_paint!)
+  })
+
+  test('takes a segment target on its roof, once for segments of one roof', () => {
+    const nodes = roofed()
+    const outcome = paint(nodes, {
+      targets: ['rseg_paint', 'rseg_paint'],
+      role: 'wall',
+      material: 'library:siding-lap-cedar',
     })
-    expect(edge.result).toMatchObject({ painted: [{ id: 'roof_paint', roles: ['edge'] }] })
+    expect(outcome.result).toMatchObject({ painted: [{ id: 'roof_paint', roles: ['wall'] }] })
+    const after = applied(nodes, {}, outcome.changes).nodes
+    expect((after.roof_paint as RoofNode).wallMaterialPreset).toBe('library:siding-lap-cedar')
+    expect((after.rseg_paint as RoofSegmentNode).wallMaterialPreset).toBeUndefined()
   })
 })
