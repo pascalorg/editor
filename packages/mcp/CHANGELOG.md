@@ -14,11 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   knows once per kind (`schema_unknown_kind`, info), a hidden site
   (`site_hidden`), and the spaces the walls enclose against the rooms
   (`space_no_room`, `space_many_rooms`, `room_not_enclosed`, `room_unnamed`).
+- `find_by_type` is the one finder: beside a type (any core or plugin kind, an
+  item category, lights, typed parts), it filters by `levelId`, `parentId`,
+  `zoneId`, `sourceId` and `sourceIdPrefix`, finds every node they match
+  without a type, and gives each node's `parentId`, `metadata` and
+  `provenance`. A level, parent or zone that is not there is refused, and so
+  is a type that names nothing (`unknown_type`). It lists 200 results unless
+  `limit` asks for more; `count` says how many match and `truncated` that some
+  are left out.
+- `get_node` is the one node read: beside the node it gives its `ancestorIds`,
+  a wall's or ceiling's `resolvedHeight` and `heightIsExplicit`, a wall's
+  `resolvedThickness`, a level's or floor plate's `displayName`, and in
+  `missingChildIds` the stored children that name no node.
 
 ### Removed
 
-- `validate_scene` retired into `verify_scene`. A call to it returns the error
-  `tool_retired` with its replacement and how to use it.
+- `validate_scene` retired into `verify_scene`, `find_nodes` into
+  `find_by_type` and `describe_node` into `get_node`. A call to one returns the
+  error `tool_retired` with its replacement and how to use it.
 
 ### Fixed
 

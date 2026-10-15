@@ -10,7 +10,7 @@ Inspect the server's advertised tools because hosted and local releases may diff
 2. `load_scene`
 3. `get_project_status`
 4. `list_levels`
-5. `get_level_summary`, `get_walls`, `get_zones`, `find_nodes`, or `get_node`
+5. `get_level_summary`, `get_walls`, `get_zones`, `find_by_type`, or `get_node`
 6. `verify_scene`
 
 `get_scene` returns the full graph and is useful when a compact summary omits a field needed for a calculation, such as an item's scale.

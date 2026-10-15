@@ -41,6 +41,16 @@ describe('retired tools', () => {
     expect(answer.error).toContain('schema_invalid')
   })
 
+  test('answer every retired name, whatever its arguments', async () => {
+    const client = await connect()
+    for (const [name, { replacement }] of Object.entries(RETIRED_MCP_TOOLS)) {
+      const result = await client.callTool({ name, arguments: { id: 'wall_x', type: 'wall' } })
+      expect(result.isError).toBe(true)
+      const answer = JSON.parse((result.content as Array<{ text: string }>)[0]!.text)
+      expect(answer).toMatchObject({ code: 'tool_retired', replacement })
+    }
+  })
+
   test('leave an unknown name to the SDK', async () => {
     const client = await connect()
     const result = await client.callTool({ name: 'no_such_tool', arguments: {} })

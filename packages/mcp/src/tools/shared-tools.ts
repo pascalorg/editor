@@ -154,7 +154,12 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: getNodeTool,
     operation: AGENT_OPERATIONS.get_node,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    outputSchema: { node: jsonObject, materials: z.record(z.string(), SceneMaterial).optional() },
+    outputSchema: {
+      node: jsonObject,
+      ancestorIds: z.array(z.string()),
+      missingChildIds: z.array(z.string()).optional(),
+      materials: z.record(z.string(), SceneMaterial).optional(),
+    },
   },
   {
     contract: getLevelSummaryTool,

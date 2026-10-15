@@ -8,10 +8,8 @@ import { registerCheckCollisions } from './check-collisions'
 import { registerClearScene } from './clear-scene'
 import { registerConstructionTools } from './construction-tools'
 import { registerCreateUnit } from './create-unit'
-import { registerDescribeNode } from './describe-node'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
-import { registerFindNodes } from './find-nodes'
 import { registerGetScene } from './get-scene'
 import { registerListUnits } from './list-units'
 import { registerMeasure } from './measure'
@@ -50,8 +48,6 @@ export function registerTools(
   { catalog, geometryScripts, sceneViews }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
-  registerDescribeNode(server, operations)
-  registerFindNodes(server, operations)
   registerSharedTools(server, operations, catalog)
   registerAddColumn(server, operations, geometryScripts)
   registerAddObject(server, operations, geometryScripts)

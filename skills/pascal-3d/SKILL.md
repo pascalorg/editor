@@ -77,7 +77,7 @@ To compare what you built with a reference, call `view_scene`: the building from
 
 Never empty a project by deleting everything. A write that would leave it empty (deleting its only room, a patch removing every node) is refused with `scene_wipe_blocked` and nothing changes, in the project or the session. When the person asks to start over, call `clear_scene` with their words in `reason`: it resets to a site, a building and one level, and keeps the project's installed plugins. To replace the only room, build what replaces it first, then remove it.
 
-Preserve unrelated nodes. Before a bounded edit, identify the target IDs with `find_nodes`, `get_node`, `get_level_summary`, `get_walls`, or `get_zones`. After the edit, identify the actual changed IDs from tool output or a before/after read.
+Preserve unrelated nodes. Before a bounded edit, identify the target IDs with `find_by_type`, `get_node`, `get_level_summary`, `get_walls`, or `get_zones`. After the edit, identify the actual changed IDs from tool output or a before/after read.
 
 ### Validate and persist
 

@@ -344,9 +344,8 @@ an optional `height` and uses the same default.
 | Name | Purpose | Key input | Output |
 | --- | --- | --- | --- |
 | `get_scene` | Return the full scene graph. | — | `{ nodes, rootNodeIds, collections }` |
-| `get_node` | Fetch a node by id, whole, with the scene materials its finishes use. | `{ id }` | `{ node, materials? }`, or refusal `node_not_found` |
-| `describe_node` | Node summary with ancestry, children count and properties. | `{ id }` | `{ id, type, parentId, ancestry[], childrenCount, properties, description }` |
-| `find_nodes` | Filter nodes by type (any node kind) / parent / zone / level, or by import source id (`provenance.refs[].id` or legacy `metadata.sourceIds`, exact or prefix). | `{ type?, parentId?, zoneId?, levelId?, sourceId?, sourceIdPrefix? }` | `{ nodes: AnyNode[] }` |
+| `get_node` | Fetch a node by id, whole, with what the scene decides for it beside its stored fields (a wall's or ceiling's `resolvedHeight` and `heightIsExplicit`, a wall's `resolvedThickness`, a door's or window's `resolvedOpening`, a level's or floor plate's `displayName`), its ancestors parent first, and the scene materials its finishes use; a node its schema rejects comes back as stored, nothing derived. | `{ id }` | `{ node, ancestorIds, missingChildIds?, materials? }`, or refusal `node_not_found` |
+| `find_by_type` | Find everything of one type: nodes of a kind (any core or plugin kind), items of a category, lights, and typed parts inside authored objects, windows and doors; narrowed by level, parent, zone (on its level, by plan point, holes left out) or import source id (`provenance.refs[].id` or legacy `metadata.sourceIds`, exact or prefix); without a type, every node the filters match. Each result is the node's id, name, kind, level and parent, with its metadata and provenance (one over 1 KB named in `omitted`). | `{ type?, levelId?, parentId?, zoneId?, sourceId?, sourceIdPrefix?, limit? }` | `{ type?, count, nodes, parts, results[], truncated?, hint? }`, at most `limit` (200) results listed; refusals `unknown_type`, `level_not_found`, `node_not_found`, `zone_not_found`, `not_a_zone` |
 | `list_levels` | List every building's levels in floor order with their role (storey, roof-only, support). | — | `{ activeSceneId, activeLevelId, levelCount, occupiedStoryCount, supportLevelCount, roofLevelIds, levels[] }` |
 | `get_level_summary` | Compact summary of one level: role, counts, walls with openings, zones with areas, slabs, ceilings, items, stairs, roofs, and everything else by type. Omit `levelId` for the lowest storey. | `{ levelId?, level? }` | `{ levelId, role, counts, walls, zones, slabs, ceilings, items, stairs, roofs, other }` |
 | `get_walls` | Walls on a level with length, stored and resolved height, and child doors/windows. | `{ levelId?, level? }` | `{ levelId, walls[] }` |
@@ -397,7 +396,8 @@ The vision tools require the MCP host to support the sampling capability
 A retired tool is listed no more and still answered: a call to its name
 returns an error with the code `tool_retired`, the tool that replaced it
 (`replacement`) and how to use that one. `validate_scene` retired into
-`verify_scene` (`RETIRED_MCP_TOOLS` in `@pascal-app/core/agent-tools`).
+`verify_scene`, `find_nodes` into `find_by_type` and `describe_node` into
+`get_node` (`RETIRED_MCP_TOOLS` in `@pascal-app/core/agent-tools`).
 
 ## Resources
 
