@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { RoofType } from '../schema/nodes/roof-types'
-import { measurement } from './measurement'
+import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
 
 export const createRoofTool = {
@@ -16,7 +16,7 @@ export const createRoofTool = {
     roofType: RoofType.optional().describe(
       'The shape of every segment. Default: chosen from the footprint.',
     ),
-    pitch: measurement('angle', 'deg', {
+    pitch: roofPitch('deg', {
       min: 0,
       max: 85,
       description: 'Slope of the roof planes (default 40°).',

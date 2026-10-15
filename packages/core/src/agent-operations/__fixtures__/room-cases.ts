@@ -319,6 +319,22 @@ export const ROOM_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'a turn in degrees: half a turn about its centre, then moved',
+    tool: 'move_zone',
+    scene: kitchenScene,
+    input: { zoneId: 'zone_kitchen', rotate: { angle: '180°' }, translate: [10, 0] },
+    expect: {
+      result: { zoneId: 'zone_kitchen' },
+      check: (_result, nodes) => {
+        const wall = nodes.wall_south as WallNode
+        const off = [...wall.start, ...wall.end].some(
+          (value, i) => Math.abs(value - [18, 4, 10, 4][i]!) > 1e-9,
+        )
+        return off ? [`wall_south runs ${wall.start} → ${wall.end}, not 18,4 → 10,4`] : []
+      },
+    },
+  },
+  {
     name: 'duplicates a room, its ceiling lamp hung on the copy’s ceiling',
     tool: 'duplicate_zone',
     scene: () => kitchenScene({ lamp: true }),
@@ -419,11 +435,25 @@ export const ROOM_CASES: AgentToolCase[] = [
     expect: { result: {}, after: { [plateId]: { thickness: 0.3 } } },
   },
   {
+    name: 'a slab thickness in feet, as the person said it',
+    tool: 'set_room_floor_construction',
+    scene: kitchenScene,
+    input: { zoneId: 'zone_kitchen', patch: { thickness: '1 ft' } },
+    expect: { result: {}, after: { [plateId]: { thickness: 0.3048 } } },
+  },
+  {
     name: 'sets a footprint reference datum',
     tool: 'rebase_floor_reference',
     scene: kitchenScene,
     input: { slabId: plateId, referenceFloorElevation: 0.2 },
     expect: { result: {}, after: { [plateId]: { referenceFloorElevation: 0.2 } } },
+  },
+  {
+    name: 'a reference datum in inches',
+    tool: 'rebase_floor_reference',
+    scene: kitchenScene,
+    input: { slabId: plateId, referenceFloorElevation: '8 in' },
+    expect: { result: {}, after: { [plateId]: { referenceFloorElevation: 0.2032 } } },
   },
   {
     name: 'adds a mezzanine over part of a room',

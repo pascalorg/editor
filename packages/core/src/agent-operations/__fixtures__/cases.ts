@@ -891,6 +891,43 @@ export const DELETE_NODE_CASES: AgentToolCase[] = [
   },
 ]
 
+/** fit_stair's sizes and targets, said in inches (N1). */
+const FIT_STAIR_CASES: AgentToolCase[] = [
+  {
+    name: 'a straight flight 42 in wide',
+    tool: 'fit_stair',
+    scene: houseScene,
+    input: { stairId: 'stair_main', layout: 'straight', width: '42 in' },
+    expect: { result: { stairId: 'stair_main' }, after: { stair_main: { width: 1.0668 } } },
+  },
+  {
+    name: 'a target given alone changes that target, the stair keeps its others',
+    tool: 'fit_stair',
+    scene: () => {
+      const scene = houseScene()
+      scene.nodes.stair_main = {
+        ...(scene.nodes.stair_main as StairNode),
+        designTargets: { maxRiserHeight: 0.19, minimumGoing: 0.26, targetGoing: 0.3, minimumHeadroom: 2.1 },
+      }
+      return scene
+    },
+    input: { stairId: 'stair_main', targets: { maxRiserHeight: '7 in' } },
+    expect: {
+      result: { stairId: 'stair_main' },
+      after: {
+        stair_main: {
+          designTargets: {
+            maxRiserHeight: 0.1778,
+            minimumGoing: 0.26,
+            targetGoing: 0.3,
+            minimumHeadroom: 2.1,
+          },
+        },
+      },
+    },
+  },
+]
+
 /** Every table the three runners run. */
 export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...LIST_LEVELS_CASES,
@@ -914,6 +951,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...ADD_LEVEL_CASES,
   ...CREATE_STAIR_CASES,
   ...ADD_STAIR_CASES,
+  ...FIT_STAIR_CASES,
   ...PLACE_ITEMS_CASES,
   ...FIND_BY_TYPE_CASES,
   ...CORNER_WINDOW_CASES,

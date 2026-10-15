@@ -2,27 +2,20 @@ import { type Kind, parseQuantity } from '@pascal-app/lingo'
 import { z } from 'zod'
 
 /**
- * A zod field for a measurement tool argument that a model may emit as a bare
- * number OR as natural language. `measurement('length', 'm')` accepts `0.15`,
- * `"6 in"`, `"180cm"`, `"2 ft 3 in"`; `measurement('angle', 'deg')` accepts
- * `45`, `"45°"`, `"1.57rad"`, `"0.25 turn"`. The value is canonicalized (via
- * `@pascal-app/lingo`) to a number in `unit` — the exact unit the tool handler
- * already expects — so no handler change is needed. `min`/`max` (in `unit`)
- * reject out-of-range values with a model-readable message.
+ * Lengths, angles and roof pitches as every agent tool takes them (the tool catalogue's "one
+ * convention per quantity"). A field states its unit, and a model may answer with a bare number
+ * in that unit or with text in any unit: `measurement('length', 'm')` accepts `0.15`, `"6 in"`,
+ * `"180cm"`, `"2 ft 3 in"`; `measurement('angle', 'deg')` accepts `45`, `"45°"`, `"1.57rad"`;
+ * `roofPitch('twelfths')` accepts `6`, `"6:12"`, `"26.6°"`. The value reaches the handler as a
+ * number in the field's unit, so a bare number keeps its meaning and no handler converts.
+ * `min`/`max` (in the unit) refuse out-of-range values with a model-readable message.
  *
- * The emitted JSON Schema is `number | string`, so the model is free to answer
- * in whatever unit it is thinking in; AI SDK v6 applies the transform and
- * forwards the canonical number to the tool executor.
+ * The emitted JSON Schema is `number | string`. The AI SDK and the MCP SDK apply the transform
+ * when they validate a call, and every tab that runs a call parses it again with its contract.
  *
- * Tool-boundary safety: genuinely ambiguous separators (`"1,234"`, which could
- * mean 1234 or 1.234) are rejected rather than silently absorbed, so a European
- * decimal never becomes a 1000× value.
- *
- * NOTE: intentionally duplicated as `editor/packages/mcp/src/tools/measurement.ts`
- * (MCP tools) and `packages/ai/src/tools/scene/measurement.ts` (AI-chat tools).
- * The two tool stacks live in different packages — one inside the `editor`
- * submodule — so they can't share a module. Keep the two copies identical; the
- * clean long-term dedup is a zod-field adapter exported from `@pascal-app/lingo`.
+ * Tool-boundary safety: genuinely ambiguous separators (`"1,234"`, which could mean 1234 or
+ * 1.234) are refused rather than absorbed, so a European decimal never becomes a 1000× value.
+ * The MCP and the hosted chat import this module (`@pascal-app/core/agent-tools`).
  */
 
 export interface MeasurementOptions {
@@ -36,30 +29,28 @@ export interface MeasurementOptions {
   positive?: boolean
 }
 
-function unitNoun(unit: string): string {
-  switch (unit) {
-    case 'm':
-      return 'meters'
-    case 'deg':
-      return 'degrees'
-    case 'rad':
-      return 'radians'
-    default:
-      return unit
-  }
+const UNIT_NOUNS: Record<string, string> = {
+  m: 'meters',
+  in: 'inches',
+  ft: 'feet',
+  mm: 'millimetres',
+  deg: 'degrees',
+  rad: 'radians',
 }
 
-function naturalLanguageNote(kind: Kind, unit: string): string {
-  let examples: string
-  if (kind === 'angle') {
-    // Lead with an example in the field's own unit so a bare number is read
-    // the way the model intends (a bare "45" in a radians field is 45 rad).
-    examples =
-      unit === 'rad' ? '1.5708, "90°", "1.57rad", "0.25 turn"' : '45, "45°", "1.57rad", "0.25 turn"'
-  } else {
-    examples = '0.9, "6 ft", "180cm", "2 ft 3 in"'
-  }
-  return `Accepts a number (${unitNoun(unit)}) or a natural-language string; other units are converted. e.g. ${examples}.`
+// Each leads with a bare number in the field's own unit, so a bare number is read the way the
+// model intends (a bare "45" in a radians field is 45 rad).
+const EXAMPLES: Record<string, string> = {
+  m: '0.9, "6 ft", "180cm", "2 ft 3 in"',
+  in: '18, "1.5 ft", "45cm", "1 ft 6 in"',
+  ft: '6, "72 in", "1.8m", "5 ft 6 in"',
+  mm: '26, "2.6cm", "1 in"',
+  deg: '45, "45°", "1.57rad", "0.25 turn"',
+  rad: '1.5708, "90°", "1.57rad", "0.25 turn"',
+}
+
+function naturalLanguageNote(unit: string): string {
+  return `Accepts a number (${UNIT_NOUNS[unit] ?? unit}) or a natural-language string; other units are converted. e.g. ${EXAMPLES[unit]}.`
 }
 
 function boundsNote(
@@ -79,56 +70,112 @@ function boundsNote(
   return ''
 }
 
-export function measurement(kind: Kind, unit: string, opts: MeasurementOptions = {}) {
+/** A number read from text, in the field's unit, or why it could not be read. */
+type Reading = number | { error: string }
+
+const BARE_NUMBER = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*$/
+
+/** A conversion's float noise dropped: "6" read as inches is 6, not 5.999999999999999. */
+const clean = (value: number) => Number(value.toPrecision(12))
+
+function readQuantity(text: string, kind: Kind, unit: string): Reading {
+  const result = parseQuantity(text, {
+    kind,
+    unit,
+    strictness: 'forgiving',
+    // A genuinely ambiguous separator ("1,234") must not silently become a 1000× value at a
+    // tool boundary: fail so the model self-corrects.
+    escalate: { AMBIGUOUS_NUMBER: 'error' },
+  })
+  if (!result.ok)
+    return { error: result.issues[0]?.message ?? `Could not read "${text}" as a ${kind}.` }
+  return clean(result.quantity.to(unit).value)
+}
+
+/** A number or text field, read to a number in `unit` and held to the bounds. */
+function quantityField(
+  read: (text: string) => Reading,
+  what: string,
+  unit: string,
+  note: string,
+  opts: MeasurementOptions,
+) {
   const { min, max, positive = false } = opts
-  const description = [
-    opts.description,
-    naturalLanguageNote(kind, unit) + boundsNote(unit, min, max, positive),
-  ]
+  const outOfBounds = (value: number): string | undefined => {
+    if (!Number.isFinite(value)) return `Value must be a finite ${what} in ${unit}.`
+    if (positive && value <= 0) return `Must be greater than 0 ${unit} (got ${value}).`
+    if (min !== undefined && value < min) return `Must be at least ${min} ${unit} (got ${value}).`
+    if (max !== undefined && value > max) return `Must be at most ${max} ${unit} (got ${value}).`
+  }
+  const description = [opts.description, note + boundsNote(unit, min, max, positive)]
     .filter(Boolean)
     .join(' ')
-
   return z
     .union([z.number(), z.string()])
     .transform((val, ctx) => {
-      let value: number
-      if (typeof val === 'number') {
-        value = val
-      } else {
-        const result = parseQuantity(val, {
-          kind,
-          unit,
-          strictness: 'forgiving',
-          // A genuinely ambiguous separator ("1,234") must not silently become
-          // a 1000× value at a tool boundary — fail so the model self-corrects.
-          escalate: { AMBIGUOUS_NUMBER: 'error' },
-        })
-        if (!result.ok) {
-          ctx.addIssue({
-            code: 'custom',
-            message: result.issues[0]?.message ?? `Could not read "${val}" as a ${kind}.`,
-          })
-          return z.NEVER
-        }
-        value = result.quantity.to(unit).value
-      }
-      if (!Number.isFinite(value)) {
-        ctx.addIssue({ code: 'custom', message: `Value must be a finite ${kind} in ${unit}.` })
+      const refuse = (message: string) => {
+        ctx.addIssue({ code: 'custom', message })
         return z.NEVER
       }
-      if (positive && value <= 0) {
-        ctx.addIssue({ code: 'custom', message: `Must be greater than 0 ${unit} (got ${value}).` })
-        return z.NEVER
-      }
-      if (min !== undefined && value < min) {
-        ctx.addIssue({ code: 'custom', message: `Must be at least ${min} ${unit} (got ${value}).` })
-        return z.NEVER
-      }
-      if (max !== undefined && value > max) {
-        ctx.addIssue({ code: 'custom', message: `Must be at most ${max} ${unit} (got ${value}).` })
-        return z.NEVER
-      }
-      return value
+      const value = typeof val === 'number' ? val : read(val)
+      if (typeof value !== 'number') return refuse(value.error)
+      const problem = outOfBounds(value)
+      return problem === undefined ? value : refuse(problem)
     })
     .describe(description)
+}
+
+/** A length or an angle in `unit` (`m`, `in`, `ft`, `mm`; `deg`, `rad`). */
+export function measurement(kind: Kind, unit: string, opts: MeasurementOptions = {}) {
+  return quantityField(
+    (text) => readQuantity(text, kind, unit),
+    kind,
+    unit,
+    naturalLanguageNote(unit),
+    opts,
+  )
+}
+
+/** A roof's pitch: its angle in degrees, or its rise per 12 of run (`6` for a 6:12 roof). */
+export type PitchUnit = 'deg' | 'twelfths'
+
+/** Rise over run, as a pitch is said: "6:12", "6/12", "6 in 12", "6-in-12", "6 on 12", "6:12 pitch". */
+const RISE_OVER_RUN =
+  /^\s*(\d+\.?\d*|\.\d+)\s*(?::|\/|-?\s*\b(?:in|on)\b\s*-?)\s*(\d+\.?\d*|\.\d+)(?:\s*pitch)?\s*$/i
+
+const twelfthsToDegrees = (twelfths: number) => (Math.atan(twelfths / 12) * 180) / Math.PI
+const degreesToTwelfths = (degrees: number) => 12 * Math.tan((degrees * Math.PI) / 180)
+
+const PITCH_NOTES: Record<PitchUnit, string> = {
+  deg: 'Accepts degrees or a pitch as rise over run: 26.6, "26.6°", "6:12", "6/12", "6 in 12".',
+  twelfths:
+    'Accepts the rise per 12 of run (6 for 6:12) or any pitch: 6, "6:12", "6/12", "6 in 12", "26.6°".',
+}
+
+function readPitch(text: string, unit: PitchUnit): Reading {
+  const ratio = RISE_OVER_RUN.exec(text)
+  if (ratio) {
+    const run = Number(ratio[2])
+    if (run === 0) return { error: `"${text}" has no run: give the rise per 12, as "6:12".` }
+    const twelfths = (12 * Number(ratio[1])) / run
+    return clean(unit === 'twelfths' ? twelfths : twelfthsToDegrees(twelfths))
+  }
+  if (BARE_NUMBER.test(text)) return Number(text)
+  const degrees = readQuantity(text, 'angle', 'deg')
+  if (typeof degrees !== 'number')
+    return {
+      error: `Could not read "${text}" as a roof pitch: give degrees ("26.6°") or the rise per 12 ("6:12").`,
+    }
+  if (unit === 'deg') return degrees
+  // A plane at 90° rises forever per 12 of run: no roof.
+  if (Math.abs(degrees) >= 90) return { error: `A roof pitch is under 90° (got ${degrees}°).` }
+  return clean(degreesToTwelfths(degrees))
+}
+
+/**
+ * A roof pitch in `unit`, read from either way of saying it: degrees (`26.6`, `"26.6°"`,
+ * `"0.46 rad"`) or rise over run (`"6:12"`, `"6/12"`, `"6 in 12"`). A bare number is in `unit`.
+ */
+export function roofPitch(unit: PitchUnit, opts: MeasurementOptions = {}) {
+  return quantityField((text) => readPitch(text, unit), 'roof pitch', unit, PITCH_NOTES[unit], opts)
 }

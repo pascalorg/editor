@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { StairDesignTargets } from '../schema/nodes/stair-design-targets'
 import { StairRailingMode, StairRailingStyle } from '../schema/nodes/stair-types'
 import { levelTarget } from './levels'
 import { measurement } from './measurement'
@@ -12,9 +11,35 @@ export const measureStairTool = {
     'Inspect actual flight risers, walking-line going, slope, arrival, uniformity, headroom against floors, ceilings and stair bodies, and design-target diagnostics without changing measured geometry.',
   input: {
     stairId: NodeId,
-    available: z.object({ width: z.number().positive(), length: z.number().positive() }).optional(),
+    available: z
+      .object({
+        width: measurement('length', 'm', { positive: true }),
+        length: measurement('length', 'm', { positive: true }),
+      })
+      .optional()
+      .describe('The space a new layout may take, to propose layouts that fit it.'),
   },
 }
+
+/** A stair's design targets, each in metres; only the ones given change. */
+const designTargets = z.object({
+  maxRiserHeight: measurement('length', 'm', {
+    positive: true,
+    description: 'The tallest riser (default 0.18 m).',
+  }).optional(),
+  minimumGoing: measurement('length', 'm', {
+    positive: true,
+    description: 'The shortest going (default 0.25 m).',
+  }).optional(),
+  targetGoing: measurement('length', 'm', {
+    positive: true,
+    description: 'The going a fit aims for (default 0.28 m).',
+  }).optional(),
+  minimumHeadroom: measurement('length', 'm', {
+    positive: true,
+    description: 'The least headroom over the flight (default 2 m).',
+  }).optional(),
+})
 
 export const fitStairTool = {
   name: 'fit_stair',
@@ -26,13 +51,13 @@ export const fitStairTool = {
     fitRun: z.boolean().default(false),
     layout: z.enum(['straight', 'l', 'u']).optional(),
     turn: z.enum(['left', 'right']).optional(),
-    width: z.number().positive().optional(),
-    landingDepth: z.number().positive().optional(),
+    width: measurement('length', 'm', { positive: true }).optional(),
+    landingDepth: measurement('length', 'm', { positive: true }).optional(),
     turningStrategy: z.enum(['landing', 'winder']).optional(),
-    innerGap: z.number().nonnegative().optional(),
-    walkingLineOffset: z.number().positive().optional(),
+    innerGap: measurement('length', 'm', { min: 0 }).optional(),
+    walkingLineOffset: measurement('length', 'm', { positive: true }).optional(),
     division: z.enum(['equal-going', 'equal-angle']).optional(),
-    targets: StairDesignTargets.partial().optional(),
+    targets: designTargets.optional(),
   },
 }
 

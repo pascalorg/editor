@@ -131,6 +131,20 @@ export const CREATE_ROOF_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'a pitch said as rise over run: a 6:12 roof is pitched atan(6/12)',
+    tool: 'create_roof',
+    scene: house(),
+    input: { pitch: '6:12' },
+    expect: {
+      result: { coveredLevelId: 'level_g' },
+      check: (result, nodes) =>
+        (result.segmentIds as string[]).flatMap((id) => {
+          const pitch = (nodes[id] as RoofSegmentNode).pitch
+          return Math.abs(pitch - 26.565051177078) < 1e-9 ? [] : [`${id} is pitched ${pitch}°`]
+        }),
+    },
+  },
+  {
     name: 'walls taller than their storey lift the eave to their tops',
     tool: 'create_roof',
     scene: house({ topWalls: 3 }),
