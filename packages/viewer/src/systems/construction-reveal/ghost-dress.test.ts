@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { LevelNode, useScene, WallNode } from '@pascal-app/core'
 import { BoxGeometry, Mesh, MeshBasicMaterial } from 'three'
+import { hasMaterialsForGroups } from '../../lib/pointer-events'
 import useViewer from '../../store/use-viewer'
 import { getMaterialsForWall } from '../wall/wall-materials'
 import { dressDeletionGhost } from './ghost-dress'
@@ -26,9 +27,15 @@ function wall() {
   })
 }
 
-function cutAway(node: ReturnType<typeof wall>, hidden: boolean) {
+function cutAway(node: ReturnType<typeof wall>, hidden: boolean, groupIndex = 0) {
   const stipple = new MeshBasicMaterial({ transparent: true, opacity: 0.2 })
-  const source = new Mesh(new BoxGeometry(4, 2.5, 0.2), [stipple, stipple, stipple])
+  const geometry = new BoxGeometry(4, 2.5, 0.2)
+  geometry.clearGroups()
+  geometry.addGroup(0, 6, groupIndex)
+  const source = new Mesh(
+    geometry,
+    Array.from({ length: Math.max(3, groupIndex + 1) }, () => stipple),
+  )
   source.userData.wallHidden = hidden
   const clone = source.clone()
   return { source, clone, stipple, node }
@@ -57,6 +64,17 @@ describe('the picture of a deleted wall', () => {
     expect(clone.material).toBe(visibleOf(node))
     // The wall in the scene is not touched: only its copy.
     expect((source.material as unknown[])[0]).toBe(stipple)
+  })
+
+  // A room-wide paint preview regroups a wall's faces onto entries past its palette's end; a copy
+  // that wore the shorter palette over those groups would throw on every raycast (`material.side`).
+  test('keeps what it wears when the groups it carries outrun the palette', () => {
+    const node = wall()
+    useViewer.setState({ wallMode: 'cutaway' })
+    const { source, clone, stipple } = cutAway(node, true, 99)
+    dressDeletionGhost(source, clone, node)
+    expect((clone.material as unknown[])[0]).toBe(stipple)
+    expect(hasMaterialsForGroups(clone)).toBe(true)
   })
 
   test('keeps what it wears when the cutaway showed the wall', () => {

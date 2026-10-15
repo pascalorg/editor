@@ -1,5 +1,6 @@
 import { type AnyNode, useScene, type WallNode } from '@pascal-app/core'
 import type { Mesh, Object3D } from 'three'
+import { hasMaterialsForGroups } from '../../lib/pointer-events'
 import useViewer from '../../store/use-viewer'
 import { getWallFinishRefs } from '../wall/wall-finish-data'
 import { getMaterialsForWall } from '../wall/wall-materials'
@@ -21,7 +22,7 @@ export function dressDeletionGhost(source: Object3D, clone: Object3D, node: AnyN
     mesh.isMesh &&
     mesh.geometry
   ) {
-    mesh.material = getMaterialsForWall(
+    const visible = getMaterialsForWall(
       node as WallNode,
       viewer.shading,
       viewer.textures,
@@ -30,5 +31,9 @@ export function dressDeletionGhost(source: Object3D, clone: Object3D, node: AnyN
       useScene.getState().materials,
       getWallFinishRefs(mesh.geometry),
     ).visible
+    // A room-wide paint preview can leave the source with more groups than the palette has
+    // entries; a copy with a group and no material throws on every raycast over it (see
+    // `WallCutoutCache.mayAssign`), so it keeps what it wears then.
+    if (hasMaterialsForGroups(mesh, visible)) mesh.material = visible
   }
 }
