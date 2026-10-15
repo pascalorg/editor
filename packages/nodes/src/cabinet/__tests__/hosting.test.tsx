@@ -387,45 +387,45 @@ test('detaching restores floor support and cancel restores the original parent a
     supportSlabId: slab.id,
   })
 })
-test.each([
-  'cabinet',
-  'shelf',
-] as const)('2D retains contained catalog and procedural children on their current %s surface', (kind) => {
-  const run = fixture()
-  const shelf = ShelfNode.parse({ parentId: level.id, width: 2, depth: 1, height: 2 })
-  if (kind === 'shelf') useScene.getState().createNode(shelf, level.id)
-  const host = kind === 'cabinet' ? run : shelf
-  const y = getSurfaceProvider(host).surfaces!(host, { scene: createSceneApi(useScene) })[0]!
-    .position[1]
-  for (const child of [catalog, design]) {
-    const position: [number, number, number] =
-      child.type === 'item' ? [0, y, 0] : [-0.1, y - 0.2, -0.1]
-    useScene
-      .getState()
-      .updateNode(child.id, { parentId: host.id, position, supportSlabId: undefined })
-    const node = useScene.getState().nodes[child.id]!
-    const session =
-      child.type === 'item'
-        ? itemFloorplanMoveTarget({
-            node: node as ItemNode,
-            nodes: useScene.getState().nodes,
-            sceneApi: createSceneApi(useScene),
-          })!
-        : proceduralFloorplanMoveTarget({
-            node: node as ProceduralItemNode,
-            nodes: useScene.getState().nodes,
-            sceneApi: createSceneApi(useScene),
-          })!
-    session.apply({ planPoint: [2, 3], modifiers } as never)
-    session.apply({ planPoint: [2.1, 3], modifiers } as never)
-    expect(useLiveNodeOverrides.getState().overrides.get(child.id)).toMatchObject({
-      parentId: host.id,
-      supportSlabId: undefined,
-    })
-    session.commit!()
-    expect(useScene.getState().nodes[child.id]!.parentId).toBe(host.id)
-  }
-})
+test.each(['cabinet', 'shelf'] as const)(
+  '2D retains contained catalog and procedural children on their current %s surface',
+  (kind) => {
+    const run = fixture()
+    const shelf = ShelfNode.parse({ parentId: level.id, width: 2, depth: 1, height: 2 })
+    if (kind === 'shelf') useScene.getState().createNode(shelf, level.id)
+    const host = kind === 'cabinet' ? run : shelf
+    const y = getSurfaceProvider(host).surfaces!(host, { scene: createSceneApi(useScene) })[0]!
+      .position[1]
+    for (const child of [catalog, design]) {
+      const position: [number, number, number] =
+        child.type === 'item' ? [0, y, 0] : [-0.1, y - 0.2, -0.1]
+      useScene
+        .getState()
+        .updateNode(child.id, { parentId: host.id, position, supportSlabId: undefined })
+      const node = useScene.getState().nodes[child.id]!
+      const session =
+        child.type === 'item'
+          ? itemFloorplanMoveTarget({
+              node: node as ItemNode,
+              nodes: useScene.getState().nodes,
+              sceneApi: createSceneApi(useScene),
+            })!
+          : proceduralFloorplanMoveTarget({
+              node: node as ProceduralItemNode,
+              nodes: useScene.getState().nodes,
+              sceneApi: createSceneApi(useScene),
+            })!
+      session.apply({ planPoint: [2, 3], modifiers } as never)
+      session.apply({ planPoint: [2.1, 3], modifiers } as never)
+      expect(useLiveNodeOverrides.getState().overrides.get(child.id)).toMatchObject({
+        parentId: host.id,
+        supportSlabId: undefined,
+      })
+      session.commit!()
+      expect(useScene.getState().nodes[child.id]!.parentId).toBe(host.id)
+    }
+  },
+)
 test('attaching and live-moving hosted assets leaves the actual countertop geometry object intact', async () => {
   const run = fixture()
   const object = sceneRegistry.nodes.get(run.id)!
@@ -521,7 +521,7 @@ test('resize handle previews carry child heights and can be cancelled without a 
   const before = useScene.getState().nodes
   binding.apply(0.92, { altKey: false })
   expect(
-    (useLiveNodeOverrides.getState().overrides.get(catalog.id)?.position as number[])[1],
+    (useLiveNodeOverrides.getState().overrides.get(catalog.id)!.position as number[])[1],
   ).toBeCloseTo(1.05)
   expect(useLiveNodeOverrides.getState().overrides.has(design.id)).toBe(true)
   binding.clearPreview()

@@ -240,62 +240,61 @@ describe('snapshot request correlation', () => {
     ])
   })
 
-  test.each([
-    'standard',
-    'viewport',
-    'area',
-  ] as const)('a manual %s shutter waits for a background upload; redundant autosaves are dropped', async (captureMode) => {
-    const enqueue = createSnapshotQueue()
-    const busy = { current: false }
-    const failures: SnapshotCaptureFailedEvent[] = []
-    const events: string[] = []
-    let finishUpload!: () => void
-    const uploading = new Promise<void>((resolve) => {
-      finishUpload = resolve
-    })
-    const background = enqueue({ requestId: 'background' }, () =>
-      runSnapshotCapture(
-        'background',
-        busy,
-        async () => {
-          events.push('background rendered')
-          await uploading
-          events.push('background saved')
-        },
-        (failure) => failures.push(failure),
-      ),
-    )
-    await Promise.resolve()
-    expect(busy.current).toBe(true)
-    const autosave = enqueue({}, async () => {
-      events.push('autosave')
-    })
-    let overlayState = 'capturing'
-    const manual = enqueue({ captureMode }, () =>
-      runSnapshotCapture(
-        undefined,
-        busy,
-        async () => {
-          events.push('manual saved')
-          overlayState = 'saved'
-        },
-        (failure) => failures.push(failure),
-      ),
-    )
-    await autosave
-    expect(overlayState).toBe('capturing')
-    expect(events).toEqual(['background rendered'])
-    finishUpload()
-    await Promise.all([background, manual])
-    expect(events).toEqual(['background rendered', 'background saved', 'manual saved'])
-    expect(overlayState).toBe('saved')
-    expect(failures).toEqual([])
-    expect(busy.current).toBe(false)
-    await enqueue({}, async () => {
-      events.push('idle autosave')
-    })
-    expect(events.at(-1)).toBe('idle autosave')
-  })
+  test.each(['standard', 'viewport', 'area'] as const)(
+    'a manual %s shutter waits for a background upload; redundant autosaves are dropped',
+    async (captureMode) => {
+      const enqueue = createSnapshotQueue()
+      const busy = { current: false }
+      const failures: SnapshotCaptureFailedEvent[] = []
+      const events: string[] = []
+      let finishUpload!: () => void
+      const uploading = new Promise<void>((resolve) => {
+        finishUpload = resolve
+      })
+      const background = enqueue({ requestId: 'background' }, () =>
+        runSnapshotCapture(
+          'background',
+          busy,
+          async () => {
+            events.push('background rendered')
+            await uploading
+            events.push('background saved')
+          },
+          (failure) => failures.push(failure),
+        ),
+      )
+      await Promise.resolve()
+      expect(busy.current).toBe(true)
+      const autosave = enqueue({}, async () => {
+        events.push('autosave')
+      })
+      let overlayState = 'capturing'
+      const manual = enqueue({ captureMode }, () =>
+        runSnapshotCapture(
+          undefined,
+          busy,
+          async () => {
+            events.push('manual saved')
+            overlayState = 'saved'
+          },
+          (failure) => failures.push(failure),
+        ),
+      )
+      await autosave
+      expect(overlayState).toBe('capturing')
+      expect(events).toEqual(['background rendered'])
+      finishUpload()
+      await Promise.all([background, manual])
+      expect(events).toEqual(['background rendered', 'background saved', 'manual saved'])
+      expect(overlayState).toBe('saved')
+      expect(failures).toEqual([])
+      expect(busy.current).toBe(false)
+      await enqueue({}, async () => {
+        events.push('idle autosave')
+      })
+      expect(events.at(-1)).toBe('idle autosave')
+    },
+  )
 
   test('queues a frame dispatched by a save callback until the previous capture releases its lock', async () => {
     const enqueue = createSnapshotQueue()

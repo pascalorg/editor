@@ -347,6 +347,65 @@ describe('construction tools', () => {
     expect(bridge.validateScene().valid).toBe(true)
   })
 
+  for (const roofType of ['gable', 'shed', 'barrel'] as const) {
+    test(`create_roof persists ${roofType} glazing configuration`, async () => {
+      const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+      const result = await client.callTool({
+        name: 'create_roof',
+        arguments: {
+          levelId: level.id,
+          width: 8,
+          depth: 6,
+          roofType,
+          roofSystem: 'glazed',
+          glazing: { glassColor: '#abcdef', across: { layout: 'count', count: 4 } },
+        },
+      })
+      expect(result.isError).toBeFalsy()
+      const payload = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+      expect(bridge.getNode(payload.segmentIds[0])).toMatchObject({
+        roofType,
+        roofSystem: 'glazed',
+        glazing: { glassColor: '#abcdef', across: { layout: 'count', count: 4 } },
+      })
+      expect(bridge.validateScene().valid).toBe(true)
+    })
+  }
+
+  test('a barrel rise beyond a semicircle is refused without graph mutations', async () => {
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const before = Object.keys(bridge.getNodes()).length
+    const result = await client.callTool({
+      name: 'create_roof',
+      arguments: {
+        levelId: level.id,
+        width: 6,
+        depth: 4,
+        roofType: 'barrel',
+        barrelRise: 3,
+      },
+    })
+    expect(result.isError).toBe(true)
+    expect(Object.keys(bridge.getNodes())).toHaveLength(before)
+  })
+
+  test('unsupported glazed shapes are refused before creating scene nodes', async () => {
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const before = Object.keys(bridge.getNodes())
+    const result = await client.callTool({
+      name: 'create_roof',
+      arguments: {
+        levelId: level.id,
+        width: 8,
+        depth: 6,
+        roofType: 'conical',
+        roofSystem: 'glazed',
+      },
+    })
+    expect(result.isError).toBe(true)
+    expect(Object.keys(bridge.getNodes())).toEqual(before)
+  })
+
   // Hawkesbury's flat roofs wear a black edge band, which only apply_patch could draw (2026-10-03).
   test('create_roof gives a flat roof a fascia band of a height and a finish', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!

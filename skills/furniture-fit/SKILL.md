@@ -137,7 +137,7 @@ Read [references/evidence-boundaries.md](references/evidence-boundaries.md) befo
 
 ## Validate, save, and report
 
-For a read-only assessment, do not save or create a checkpoint. For an authorized placement, run `validate_scene`, `verify_scene`, save the intended final state, then call `get_project_status`.
+For a read-only assessment, do not save or create a checkpoint. For an authorized placement, run `verify_scene`, save the intended final state, then call `get_project_status`.
 
 Use the exact report shape in [references/report-template.md](references/report-template.md). Include:
 

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { levelTarget } from './levels'
+import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
 export const placeInRoomTool = {
@@ -24,13 +25,10 @@ export const placeInRoomTool = {
       .min(0)
       .optional()
       .describe('Stand it against this polygon edge (i → i + 1) instead of the best one.'),
-    rotationDeg: z
-      .number()
-      .finite()
-      .optional()
-      .describe(
+    rotationDeg: measurement('angle', 'deg', {
+      description:
         'World yaw in degrees, overriding the automatic inward, group or table-facing yaw.',
-      ),
+    }).optional(),
     facing: z
       .enum(['in', 'out'])
       .optional()
@@ -41,18 +39,13 @@ export const placeInRoomTool = {
       .describe(
         'Desired wall alignment, clamped into a valid free run. Defaults to the widest run’s center.',
       ),
-    offset: z
-      .number()
-      .finite()
-      .optional()
-      .describe('Signed metres along the wall from the desired alignment; defaults to zero.'),
-    inset: z
-      .number()
-      .finite()
-      .optional()
-      .describe(
+    offset: measurement('length', 'm', {
+      description: 'Signed metres along the wall from the desired alignment; defaults to zero.',
+    }).optional(),
+    inset: measurement('length', 'm', {
+      description:
         'Normal gap in metres between the rotated footprint and the wall centerline; defaults to 0.1 m.',
-      ),
+    }).optional(),
     clearanceAreas: z
       .array(
         z

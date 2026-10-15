@@ -17,6 +17,7 @@ import {
 } from '../schema/nodes/dormer'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
 import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
+import { RoofGlazing } from '../schema/nodes/roof-glazing'
 import {
   getPitchFromActiveRoofHeight,
   type RoofSegmentNode,
@@ -699,10 +700,16 @@ function migrateNodes(nodes: Record<string, any>): {
     // The migration result is cast, not zod-parsed, so the schema default never
     // applies on its own — this branch is the only place it lands.
     if (node.type === 'roof-segment') {
+      if (node.glazing !== undefined) {
+        const glazing = RoofGlazing.safeParse(node.glazing)
+        if (glazing.success) patchedNodes[id] = { ...patchedNodes[id], glazing: glazing.data }
+      }
       const currentPitch = (node as { pitch?: unknown }).pitch
       const hasValidPitch = typeof currentPitch === 'number' && currentPitch > 0
       if (!hasValidPitch) {
-        const { roofHeight, ...rest } = node as RoofSegmentNode & { roofHeight?: unknown }
+        const { roofHeight, ...rest } = patchedNodes[id] as RoofSegmentNode & {
+          roofHeight?: unknown
+        }
         const width = typeof node.width === 'number' ? node.width : 8
         const depth = typeof node.depth === 'number' ? node.depth : 6
         const roofType = (typeof node.roofType === 'string' ? node.roofType : 'gable') as RoofType

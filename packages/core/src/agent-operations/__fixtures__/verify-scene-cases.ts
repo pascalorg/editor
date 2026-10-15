@@ -24,7 +24,7 @@ import type { AgentToolCase, SceneGraph } from './cases'
  */
 
 type Pt = [number, number]
-const ROOM: Pt[] = [
+export const ROOM: Pt[] = [
   [0, 0],
   [4, 0],
   [4, 3],
@@ -32,7 +32,7 @@ const ROOM: Pt[] = [
 ]
 
 /** Links parents' children and returns the graph, buildings as roots. */
-function scene(...nodes: AnyNode[]): SceneGraph {
+export function scene(...nodes: AnyNode[]): SceneGraph {
   const byId = Object.fromEntries(nodes.map((node) => [node.id, { ...node }])) as Record<
     string,
     AnyNode & { children?: string[] }
@@ -48,8 +48,8 @@ function scene(...nodes: AnyNode[]): SceneGraph {
   }
 }
 
-const building = (id = 'building_main') => BuildingNode.parse({ id })
-const level = (id: string, index: number, extra: Record<string, unknown> = {}) =>
+export const building = (id = 'building_main') => BuildingNode.parse({ id })
+export const level = (id: string, index: number, extra: Record<string, unknown> = {}) =>
   LevelNode.parse({
     id,
     parentId: 'building_main',
@@ -60,7 +60,7 @@ const level = (id: string, index: number, extra: Record<string, unknown> = {}) =
   })
 
 /** A finished room on a level: four closed walls, a centred door, its zone, slab and ceiling. */
-function room(levelId: string, tag: string): AnyNode[] {
+export function room(levelId: string, tag: string): AnyNode[] {
   const [wall, ...walls] = ROOM.map((start, i) =>
     WallNode.parse({
       id: i === 0 ? `wall_${tag}` : `wall_${tag}_${i}`,
@@ -80,7 +80,7 @@ function room(levelId: string, tag: string): AnyNode[] {
     wall!,
     ...walls,
     door,
-    ZoneNode.parse({ id: `zone_${tag}`, parentId: levelId, name: 'Room', polygon: ROOM }),
+    ZoneNode.parse({ id: `zone_${tag}`, parentId: levelId, name: 'Living', polygon: ROOM }),
     SlabNode.parse({ id: `slab_${tag}`, parentId: levelId, polygon: ROOM }),
     CeilingNode.parse({ id: `ceiling_${tag}`, parentId: levelId, polygon: ROOM }),
   ]
@@ -104,7 +104,7 @@ const STAIR_HOLE: [number, number][] = [
   [1.5, 2.2],
 ]
 
-const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
+export const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
   const flight = StairSegmentNode.parse({
     id: `sseg_${levelId}`,
     parentId: `stair_${levelId}`,
@@ -185,7 +185,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     'the viewed floor is marked',
     oneStorey,
     { result: { activeLevelId: 'level_0', levels: [{ levelId: 'level_0', isActive: true }] } },
-    { context: { activeLevelId: 'level_0' }, surfaces: ['core', 'chat'] },
+    { context: { activeLevelId: 'level_0' } },
   ),
   verify(
     'walls with no room and no door are reported',
@@ -233,6 +233,38 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
   verify('a stair on a storey connects them', () => twoStoreys(...stairOn('level_0')), {
     lacks: ['missing_stair'],
   }),
+  // A flight to no level names the level it rises from and none it arrives on (create_stair's
+  // toLevelId null): porch or deck steps, whatever their rise.
+  verify(
+    'porch steps to no level connect no storeys',
+    () => twoStoreys(...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 0.54 })),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    'a flight to no level as tall as the storey connects no storeys',
+    () => twoStoreys(...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 2.8 })),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    "an older stair naming no level at its storey's rise connects them",
+    () => twoStoreys(...stairOn('level_0', { totalRise: 2.8 })),
+    { lacks: ['missing_stair'] },
+  ),
+  verify(
+    'an older stair on the top storey, at its rise, climbs to the roof level and no storey',
+    () =>
+      twoStoreys(
+        level('level_roof', 2, { name: 'Roof', metadata: { role: 'roof' } }),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+        ...stairOn('level_1', { totalRise: 2.8 }),
+      ),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    'an older stair naming no level, twice as tall as its storey, does not',
+    () => twoStoreys(...stairOn('level_0', { totalRise: 5.6 })),
+    { contains: ['missing_stair'] },
+  ),
   verify(
     'a roof-only level is neither a storey nor empty: one storey needs no stair',
     () =>
@@ -479,6 +511,17 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
       contains: ['stair_outside_slab'],
       mentions: ['Stair Main Stair footprint extends outside source floor slab'],
     },
+  ),
+  verify(
+    'porch steps off the floor slab are not reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 0.54, position: [2, 0, 4] }),
+      ),
+    { lacks: ['stair_outside_slab'] },
   ),
   verify(
     'a wall across a stair is reported',

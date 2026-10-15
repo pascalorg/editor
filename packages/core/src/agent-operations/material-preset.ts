@@ -1,5 +1,4 @@
 import {
-  getCatalogMaterialById,
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
   parseMaterialColor,
@@ -7,18 +6,13 @@ import {
 } from '../material-library'
 import { nodeSlotDeclarations } from '../node-slots'
 import { AnyNode } from '../schema'
+import { isLibraryMaterialId } from './material-refs'
 
 const isPresetField = (key: string) => key === 'materialPreset' || key.endsWith('MaterialPreset')
 
-// Community-library ids (`library:mtl_…`): the host checks them against its
-// material catalog; without one they pass.
-const COMMUNITY_MATERIAL_ID_PREFIX = 'mtl_'
-
 function isKnownMaterialRef(value: string): boolean {
   const ref = parseMaterialRef(value)
-  if (!ref) return false
-  if (ref.kind === 'scene' || ref.id.startsWith(COMMUNITY_MATERIAL_ID_PREFIX)) return true
-  return !!getCatalogMaterialById(ref.id)
+  return !!ref && (ref.kind === 'scene' || isLibraryMaterialId(ref.id))
 }
 
 function presetCatalogLine(): string {

@@ -408,3 +408,10 @@ per-verdict counts. Shelf acceptance sweeps every fixture board through interior
 near-edge, centred equality and rotated placements, including grid-on cases. Captured
 expected poses stay static during tests; changing fit policy requires reviewing the
 verdict changes and retaining coverage of both outcomes.
+
+
+Registry placement notices also read the editor's transient `usePlacementPreview`
+node, parent and context nodes. This supports tools whose ghosts never enter the
+committed scene. The helper merges that preview only for the notice query; moving
+nodes still use their kind's live-transform frame, and selected inspectors call
+`usePlacementNotice(id)` without adopting a tool's preview.

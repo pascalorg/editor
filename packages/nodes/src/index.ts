@@ -150,14 +150,22 @@ export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export {
   bakeCabinetAnimationClip,
+  beginKitchenPlacement,
   CABINET_PLANNING_TOLERANCE,
   type CabinetPlacementType,
   type CabinetPlanningIssue,
   type CabinetPlanningIssueCode,
   type CabinetPlanningOptions,
   type CabinetPlanningReport,
+  type CabinetPresetId,
   cabinetDefinition,
   cabinetModuleDefinition,
+  cabinetPresetById,
+  findKitchenItems,
+  KITCHEN_ITEMS,
+  KitchenCollection,
+  kitchenItemMatches,
+  kitchenPresetForModule,
   MIN_PRACTICAL_TOP_CABINET_HEIGHT,
   poseCabinetMovingParts,
   useCabinetPlacementStatus,
@@ -199,6 +207,9 @@ export { pipeSegmentDefinition } from './pipe-segment'
 export { pipeTrapDefinition } from './pipe-trap'
 export { ridgeVentDefinition } from './ridge-vent'
 export { type RoofFootprintSourceChoice, roofDefinition, useRoofFootprintSource } from './roof'
+export { glazedRoofGeometryAdapter } from './roof/glazed-geometry'
+export { createGlazedRoofMaterials } from './roof/glazed-materials'
+export { createRoofGlazingPreview } from './roof/glazing-preview'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
 export { separatorDefinition } from './separator/definition'

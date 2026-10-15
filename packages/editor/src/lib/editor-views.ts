@@ -1,6 +1,6 @@
 import type { IconRef, LazyComponent } from '@pascal-app/core'
 import useEditor from '../store/use-editor'
-import { VIEW_2D, VIEW_3D } from '../store/view-layout'
+import { VIEW_2D, VIEW_3D, withoutView } from '../store/view-layout'
 
 /**
  * A view fills a pane of the stage, beside or instead of the 3D scene and the
@@ -19,6 +19,8 @@ export type EditorHostView = {
   description?: string
   /** Shown in the view bar until the user unpins it. Default false: the "More views" menu only. */
   defaultPinned?: boolean
+  /** Session views such as open documents can be dismissed from the tab bar. */
+  onClose?: () => void
 }
 
 /** A view as the stage needs it. The scene views have no component: the stage owns their canvases. */
@@ -93,6 +95,31 @@ class EditorHostViewRegistryImpl {
     this.emit()
   }
 
+  updateView(id: string, patch: Pick<EditorHostView, 'label'>): void {
+    const view = this.views.get(id)
+    if (!view) return
+    this.views.set(id, { ...view, ...patch })
+    this.emit()
+  }
+
+  unregisterView(id: string): void {
+    if (!this.views.delete(id)) return
+    useEditor.getState().closeView(id)
+    useEditor.setState((state) => {
+      const { [id]: _, ...pinnedViews } = state.pinnedViews
+      return {
+        pinnedViews,
+        viewLayouts: Object.fromEntries(
+          Object.entries(state.viewLayouts).map(([workspace, layout]) => [
+            workspace,
+            withoutView(layout, id),
+          ]),
+        ),
+      }
+    })
+    this.emit()
+  }
+
   private emit(): void {
     this.cached = Array.from(this.views.values())
     for (const listener of this.listeners) listener()
@@ -103,6 +130,10 @@ export const editorHostViewRegistry = new EditorHostViewRegistryImpl()
 
 export function registerEditorHostView(view: EditorHostView): void {
   editorHostViewRegistry.registerView(view)
+}
+
+export function unregisterEditorHostView(id: string): void {
+  editorHostViewRegistry.unregisterView(id)
 }
 
 /**

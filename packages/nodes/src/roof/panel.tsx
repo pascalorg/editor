@@ -37,6 +37,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { RoofGlazingPanel } from '../roof/glazing-panel'
 import { commitSeatedRoofEdit } from './roof-level-target'
 
 export default function RoofPanel() {
@@ -287,6 +288,7 @@ export default function RoofPanel() {
       title={node.name || 'Roof'}
       width={300}
     >
+      <RoofGlazingPanel segments={segments} />
       {levelMove && (
         <PanelSection title="Level">
           <div className="flex flex-col gap-2 px-1 pb-1">

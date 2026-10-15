@@ -279,34 +279,34 @@ describe('layout-clearance', () => {
     }
   })
 
-  test.each([
-    null,
-    'level_missing',
-  ])('an underlay with unresolved parent %s remains an occupied footprint', (parentId) => {
-    const rug = ItemNode.parse({
-      id: 'item_rug',
-      parentId,
-      position: [3, 0, 3],
-      asset: {
-        id: 'large-rug',
-        name: 'Large rug',
-        category: 'furniture',
-        thumbnail: '',
-        src: 'asset://large-rug',
-        dimensions: [4, 0.02, 4],
-      },
-    })
-    expect(collectOccupiedFootprints([rug])).toMatchObject([
-      {
+  test.each([null, 'level_missing'])(
+    'an underlay with unresolved parent %s remains an occupied footprint',
+    (parentId) => {
+      const rug = ItemNode.parse({
         id: 'item_rug',
-        levelId: null,
-        aabb: { minX: 1, maxX: 5, minZ: 1, maxZ: 5 },
-      },
-    ])
-    const level = LevelNode.parse({ id: 'level_floor' })
-    const floorRug = ItemNode.parse({ ...rug, parentId: level.id })
-    expect(collectOccupiedFootprints([level, floorRug])).toEqual([])
-  })
+        parentId,
+        position: [3, 0, 3],
+        asset: {
+          id: 'large-rug',
+          name: 'Large rug',
+          category: 'furniture',
+          thumbnail: '',
+          src: 'asset://large-rug',
+          dimensions: [4, 0.02, 4],
+        },
+      })
+      expect(collectOccupiedFootprints([rug])).toMatchObject([
+        {
+          id: 'item_rug',
+          levelId: null,
+          aabb: { minX: 1, maxX: 5, minZ: 1, maxZ: 5 },
+        },
+      ])
+      const level = LevelNode.parse({ id: 'level_floor' })
+      const floorRug = ItemNode.parse({ ...rug, parentId: level.id })
+      expect(collectOccupiedFootprints([level, floorRug])).toEqual([])
+    },
+  )
 
   function bedRoom(blocker?: 'large-rug' | 'solid-cabinet' | 'thick-rug' | 'raised-rug') {
     const level = LevelNode.parse({ id: 'level_r' })
@@ -350,51 +350,50 @@ describe('layout-clearance', () => {
     return { nodes, catalog }
   }
 
-  test.each([
-    undefined,
-    'large-rug',
-  ] as const)('automatic bed fits against a wall with floor covering %s', (blocker) => {
-    const { nodes, catalog } = bedRoom(blocker)
-    const before = structuredClone(nodes)
-    const outcome = AGENT_OPERATIONS.place_in_room(
-      nodes,
-      { assetId: 'double-bed', zoneId: 'zone_r' },
-      { catalog },
-    )
-    const after = applySceneChanges(nodes, outcome.changes!)
-    const bed = after[outcome.result.itemId as string]
-    expect(nodes).toEqual(before)
-    expect(outcome.result).toMatchObject({ ok: true })
-    expect(bed).toMatchObject({ type: 'item', parentId: 'level_r' })
-    if (bed?.type !== 'item') throw new Error('bed missing')
-    const footprint = itemNodePlanAabb(bed)!
-    expect([footprint.minX, footprint.minZ].every((value) => value >= 0)).toBe(true)
-    expect([footprint.maxX, footprint.maxZ].every((value) => value <= 6)).toBe(true)
-    expect(
-      Math.min(footprint.minX, footprint.minZ, 6 - footprint.maxX, 6 - footprint.maxZ),
-    ).toBeLessThanOrEqual(0.2)
-    expect(bed.position[1]).toBe(0)
-    if (blocker) {
-      expect(after.item_underlay).toEqual(before.item_underlay)
-      expect(aabbsOverlap(footprint, itemNodePlanAabb(after.item_underlay!)!)).toBe(true)
-      expect(findItemItemCollisions({ nodes: Object.values(after) })).toEqual([])
-    }
-  })
-
-  test.each([
-    'solid-cabinet',
-    'thick-rug',
-    'raised-rug',
-  ] as const)('automatic bed remains blocked by %s', (blocker) => {
-    const { nodes, catalog } = bedRoom(blocker)
-    expect(() =>
-      AGENT_OPERATIONS.place_in_room(
+  test.each([undefined, 'large-rug'] as const)(
+    'automatic bed fits against a wall with floor covering %s',
+    (blocker) => {
+      const { nodes, catalog } = bedRoom(blocker)
+      const before = structuredClone(nodes)
+      const outcome = AGENT_OPERATIONS.place_in_room(
         nodes,
         { assetId: 'double-bed', zoneId: 'zone_r' },
         { catalog },
-      ),
-    ).toThrow(expect.objectContaining({ code: 'no_free_spot' }))
-  })
+      )
+      const after = applySceneChanges(nodes, outcome.changes!)
+      const bed = after[outcome.result.itemId as string]
+      expect(nodes).toEqual(before)
+      expect(outcome.result).toMatchObject({ ok: true })
+      expect(bed).toMatchObject({ type: 'item', parentId: 'level_r' })
+      if (bed?.type !== 'item') throw new Error('bed missing')
+      const footprint = itemNodePlanAabb(bed)!
+      expect([footprint.minX, footprint.minZ].every((value) => value >= 0)).toBe(true)
+      expect([footprint.maxX, footprint.maxZ].every((value) => value <= 6)).toBe(true)
+      expect(
+        Math.min(footprint.minX, footprint.minZ, 6 - footprint.maxX, 6 - footprint.maxZ),
+      ).toBeLessThanOrEqual(0.2)
+      expect(bed.position[1]).toBe(0)
+      if (blocker) {
+        expect(after.item_underlay).toEqual(before.item_underlay)
+        expect(aabbsOverlap(footprint, itemNodePlanAabb(after.item_underlay!)!)).toBe(true)
+        expect(findItemItemCollisions({ nodes: Object.values(after) })).toEqual([])
+      }
+    },
+  )
+
+  test.each(['solid-cabinet', 'thick-rug', 'raised-rug'] as const)(
+    'automatic bed remains blocked by %s',
+    (blocker) => {
+      const { nodes, catalog } = bedRoom(blocker)
+      expect(() =>
+        AGENT_OPERATIONS.place_in_room(
+          nodes,
+          { assetId: 'double-bed', zoneId: 'zone_r' },
+          { catalog },
+        ),
+      ).toThrow(expect.objectContaining({ code: 'no_free_spot' }))
+    },
+  )
 
   test('automatic bed over a rug still respects reserved clearance', () => {
     const { nodes, catalog } = bedRoom('large-rug')

@@ -55,6 +55,7 @@ Two schema rules protect these semantics:
 | `getCeilingClampBound`, `getCoveringSlabUndersideAt` | `services/storey.ts` | Ceiling bound; the cross-level covering query (level above, non-recessed slabs) |
 | `resolveCeilingHeight` | `services/level-height.ts` | A ceiling's effective height (explicit or follows) |
 | `resolveStairTotalRise`, `syncStairRises` | `systems/stair/stair-rise.ts` | Stair rise precedence + straight-flight convergence |
+| `stairReachesStoreyAbove`, `stairClimbsToNoStorey` | `systems/stair/stair-rise-query.ts` | Whether a stair is a way to the storey above, as `verify_scene` and the hosts' checks count one: a flight onto a deck or to no level (a `fromLevelId` and no `toLevelId`: porch steps) is not; one naming a level above is; one following its storey is when a storey stands above; one with its own `totalRise` and no level named is within a riser of the floor-to-floor height |
 | `resolveRoofElevation`, `resolveRoofWallTopElevation` | `systems/roof/roof-elevation.ts` | Highest spatially matched wall top for `walls` support, including explicit heights and elected bases, converted to the roof's level frame |
 | `computeWallSlabSupport`, `getSlabSupportForItem`, `getSupportCandidatesForFootprint` | `systems/slab/slab-support.ts` + spatial-grid manager | Support election (rendered polygons, host-preferring, optional `maxElevation` cap) |
 | `resolveSlabPlacementElevation` | `systems/slab/slab-placement.ts` | Translates a solid slab's authored top/thickness interval onto a captured base plane; recessed slabs stay level-relative |

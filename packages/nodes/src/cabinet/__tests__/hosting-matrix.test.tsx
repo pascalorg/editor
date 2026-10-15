@@ -384,137 +384,140 @@ for (const kind of [
   }
 }
 
-test.each([
-  'catalog',
-  'procedural',
-] as const)('registry %s defers an unrenderable, uncomposable provider host to the floor', async (assetType) => {
-  const schema = BaseNode.extend({
-    id: objectId('test-surface'),
-    type: nodeType('test-surface'),
-    children: z.array(z.string()).default([]),
-  })
-  let accepts = false
-  registerNode({
-    kind: 'test-surface',
-    schemaVersion: 1,
-    schema,
-    category: 'furnish',
-    defaults: () => ({}),
-    capabilities: {
-      surfaces: {
-        hosting: {
-          childFrame: 'host-local',
-          resolveHit: () => ({
-            id: 'top',
-            position: [0, 0.84, 0],
-            normal: [0, 1, 0],
-            region: { kind: 'rect', size: [1, 1] },
-          }),
-          accepts: () => accepts,
+test.each(['catalog', 'procedural'] as const)(
+  'registry %s defers an unrenderable, uncomposable provider host to the floor',
+  async (assetType) => {
+    const schema = BaseNode.extend({
+      id: objectId('test-surface'),
+      type: nodeType('test-surface'),
+      children: z.array(z.string()).default([]),
+    })
+    let accepts = false
+    registerNode({
+      kind: 'test-surface',
+      schemaVersion: 1,
+      schema,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: {
+        surfaces: {
+          hosting: {
+            childFrame: 'host-local',
+            resolveHit: () => ({
+              id: 'top',
+              position: [0, 0.84, 0],
+              normal: [0, 1, 0],
+              region: { kind: 'rect', size: [1, 1] },
+            }),
+            accepts: () => accepts,
+          },
         },
       },
-    },
-  } as never)
-  const host = schema.parse({ parentId: level.id }) as unknown as AnyNode
-  useScene.getState().createNode(host, level.id)
-  sceneRegistry.nodes.set(host.id, new Group())
-  const child = assetType === 'catalog' ? catalog : design
-  const renderer = await create(<RegistryMover node={child} />)
-  const event = hit(host as Cabinet, [0, 0.84, 0])
-  try {
-    await act(async () => emitter.emit('test-surface:move' as never, event as never))
-    expect(useScene.getState().nodes[child.id]!.parentId).toBe(level.id)
-    accepts = true
-    await act(async () => emitter.emit('test-surface:move' as never, event as never))
-    expect(useScene.getState().nodes[child.id]!.parentId).toBe(level.id)
-    expect((useScene.getState().nodes[child.id] as typeof child).position[1]).toBe(0)
-  } finally {
-    await renderer.unmount()
-  }
-})
+    } as never)
+    const host = schema.parse({ parentId: level.id }) as unknown as AnyNode
+    useScene.getState().createNode(host, level.id)
+    sceneRegistry.nodes.set(host.id, new Group())
+    const child = assetType === 'catalog' ? catalog : design
+    const renderer = await create(<RegistryMover node={child} />)
+    const event = hit(host as Cabinet, [0, 0.84, 0])
+    try {
+      await act(async () => emitter.emit('test-surface:move' as never, event as never))
+      expect(useScene.getState().nodes[child.id]!.parentId).toBe(level.id)
+      accepts = true
+      await act(async () => emitter.emit('test-surface:move' as never, event as never))
+      expect(useScene.getState().nodes[child.id]!.parentId).toBe(level.id)
+      expect((useScene.getState().nodes[child.id] as typeof child).position[1]).toBe(0)
+    } finally {
+      await renderer.unmount()
+    }
+  },
+)
 
 for (const mover of ['catalog', 'registry procedural'] as const) {
   for (const order of ['grid first', 'host first'] as const) {
-    test.each([
-      'fit',
-      'cutout',
-      'kind',
-    ] as const)(`${mover}, ${order}: %s accepts overhang or refuses without text and never silently commits to the floor`, async (reason) => {
-      const run = fixture({}, [
-        CabinetModuleNode.parse({
-          width: 0.8,
-          position: [0, 0.1, 0],
-          stack: [{ id: 'sink', type: 'sink' }],
-        }),
-        CabinetModuleNode.parse({ width: 0.8, position: [2, 0.1, 0] }),
-      ])
-      let accepts = reason !== 'kind'
-      const capabilities = nodeRegistry.get('cabinet')!.capabilities
-      capabilities.surfaces = {
-        ...capabilities.surfaces,
-        hosting: { ...getSurfaceProvider(run), accepts: () => accepts },
-      }
-      const child = mover === 'catalog' ? catalog : design
-      useEditor.getState().setMovingNode(child)
-      const renderer = await create(
-        mover === 'catalog' ? <CatalogMover /> : <RegistryMover node={child} />,
-      )
-      try {
-        const event = hit(run, [reason === 'fit' ? 2.39 : reason === 'cutout' ? 0 : 2, 0.85, 0.01])
-        const nativeEvent = {}
-        event.nativeEvent = { nativeEvent } as CabinetEvent['nativeEvent']
-        const grid = {
-          position: event.position,
-          localPosition: event.position,
-          nativeEvent,
-        } as never
-        await act(async () => {
-          if (order === 'grid first') emitter.emit('grid:move', grid)
-          emitter.emit('cabinet:move', event)
-          if (order === 'host first') emitter.emit('grid:move', grid)
-        })
-        await act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 5))
-        })
-        const root = renderer.scene.children[0]!.instance as Group
-        let invalidColor = false
-        root.traverse((object) => {
-          const material = (object as { material?: { color?: { getHex(): number } } }).material
-          if (material?.color?.getHex() === 0xef4444) invalidColor = true
-        })
-        if (reason === 'fit') {
-          expect(invalidColor).toBe(false)
-          await act(async () => emitter.emit('cabinet:click', event))
-          const placed = useScene.getState().nodes[child.id] as typeof child
-          expect(placed.parentId).toBe(run.id)
-          expect(placed.position[0]).toBeCloseTo(2.39)
-          expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-          return
+    test.each(['fit', 'cutout', 'kind'] as const)(
+      `${mover}, ${order}: %s accepts overhang or refuses without text and never silently commits to the floor`,
+      async (reason) => {
+        const run = fixture({}, [
+          CabinetModuleNode.parse({
+            width: 0.8,
+            position: [0, 0.1, 0],
+            stack: [{ id: 'sink', type: 'sink' }],
+          }),
+          CabinetModuleNode.parse({ width: 0.8, position: [2, 0.1, 0] }),
+        ])
+        let accepts = reason !== 'kind'
+        const capabilities = nodeRegistry.get('cabinet')!.capabilities
+        capabilities.surfaces = {
+          ...capabilities.surfaces,
+          hosting: { ...getSurfaceProvider(run), accepts: () => accepts },
         }
-        expect(invalidColor).toBe(true)
-        await act(async () =>
-          window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Alt' })),
+        const child = mover === 'catalog' ? catalog : design
+        useEditor.getState().setMovingNode(child)
+        const renderer = await create(
+          mover === 'catalog' ? <CatalogMover /> : <RegistryMover node={child} />,
         )
-        await act(async () => {
-          emitter.emit('cabinet:click', event)
-          emitter.emit('grid:click', grid)
-          emitter.emit('node:click', event as never)
-        })
-        expect(useScene.temporal.getState().pastStates).toHaveLength(0)
-        expect(getMovingNode()).not.toBeNull()
-        await act(async () =>
-          window.dispatchEvent(Object.assign(new Event('keyup'), { key: 'Alt' })),
-        )
-        accepts = true
-        await act(async () => emitter.emit('cabinet:move', hit(run, [2, 0.85, 0.01])))
-        expect(getMovingNode()).not.toBeNull()
-        expect(useScene.getState().nodes[child.id]!.parentId).toBe(run.id)
-        await act(async () => emitter.emit('cabinet:click', hit(run, [2, 0.85, 0.01])))
-        expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-      } finally {
-        await renderer.unmount()
-      }
-    })
+        try {
+          const event = hit(run, [
+            reason === 'fit' ? 2.39 : reason === 'cutout' ? 0 : 2,
+            0.85,
+            0.01,
+          ])
+          const nativeEvent = {}
+          event.nativeEvent = { nativeEvent } as CabinetEvent['nativeEvent']
+          const grid = {
+            position: event.position,
+            localPosition: event.position,
+            nativeEvent,
+          } as never
+          await act(async () => {
+            if (order === 'grid first') emitter.emit('grid:move', grid)
+            emitter.emit('cabinet:move', event)
+            if (order === 'host first') emitter.emit('grid:move', grid)
+          })
+          await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5))
+          })
+          const root = renderer.scene.children[0]!.instance as Group
+          let invalidColor = false
+          root.traverse((object) => {
+            const material = (object as { material?: { color?: { getHex(): number } } }).material
+            if (material?.color?.getHex() === 0xef4444) invalidColor = true
+          })
+          if (reason === 'fit') {
+            expect(invalidColor).toBe(false)
+            await act(async () => emitter.emit('cabinet:click', event))
+            const placed = useScene.getState().nodes[child.id] as typeof child
+            expect(placed.parentId).toBe(run.id)
+            expect(placed.position[0]).toBeCloseTo(2.39)
+            expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+            return
+          }
+          expect(invalidColor).toBe(true)
+          await act(async () =>
+            window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Alt' })),
+          )
+          await act(async () => {
+            emitter.emit('cabinet:click', event)
+            emitter.emit('grid:click', grid)
+            emitter.emit('node:click', event as never)
+          })
+          expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+          expect(getMovingNode()).not.toBeNull()
+          await act(async () =>
+            window.dispatchEvent(Object.assign(new Event('keyup'), { key: 'Alt' })),
+          )
+          accepts = true
+          await act(async () => emitter.emit('cabinet:move', hit(run, [2, 0.85, 0.01])))
+          expect(getMovingNode()).not.toBeNull()
+          expect(useScene.getState().nodes[child.id]!.parentId).toBe(run.id)
+          await act(async () => emitter.emit('cabinet:click', hit(run, [2, 0.85, 0.01])))
+          expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+        } finally {
+          await renderer.unmount()
+        }
+      },
+    )
   }
 }
 

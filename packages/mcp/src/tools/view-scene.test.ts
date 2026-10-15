@@ -3,7 +3,11 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { refuse } from '@pascal-app/core/agent-tools'
-import { WallNode } from '@pascal-app/core/schema'
+import { type AnyNode, type AnyNodeId, WallNode } from '@pascal-app/core/schema'
+import {
+  VIEW_SCENE_CASES,
+  viewSceneCaseProblems,
+} from '../../../core/src/agent-operations/__fixtures__/view-scene-cases'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createTestSceneOperations } from './scene-lifecycle/test-utils'
 import { registerViewScene, type SceneViewHost } from './view-scene'
@@ -267,4 +271,64 @@ describe('view_scene over the MCP', () => {
       await unbound.close()
     }
   })
+})
+
+// The case table of view_scene (core's __fixtures__/view-scene-cases.ts), over the MCP: what the
+// editor tab is asked to render, or the refusal.
+describe('the case table, over the MCP', () => {
+  for (const c of VIEW_SCENE_CASES) {
+    if (c.surfaces && !c.surfaces.includes('mcp')) continue
+    test(c.name, async () => {
+      const nodes = c.scene()
+      const bridge = new SceneBridge()
+      bridge.setScene(
+        nodes as Record<AnyNodeId, AnyNode>,
+        Object.values(nodes)
+          .filter((node) => !node.parentId)
+          .map((node) => node.id as AnyNodeId),
+      )
+      const { operations } = createTestSceneOperations({ bridge })
+      operations.setActiveScene({
+        id: 'scene_a',
+        name: 'Cases',
+        projectId: 'project_a',
+        ownerId: null,
+        thumbnailUrl: null,
+        version: 1,
+      })
+      const asked: Parameters<SceneViewHost['capture']>[0][] = []
+      const server = new McpServer({ name: 'view', version: '1' })
+      registerViewScene(server, operations, {
+        capture: async (request) => {
+          asked.push(request)
+          return {
+            image: new Uint8Array([1]),
+            mimeType: 'image/webp',
+            width: request.size.w,
+            height: request.size.h,
+            tab: 'tab_1',
+            capturedAt: '2026-10-14T00:00:00.000Z',
+          }
+        },
+      })
+      const [a, b] = InMemoryTransport.createLinkedPair()
+      const client = new Client({ name: 'view', version: '1' })
+      await Promise.all([server.connect(a), client.connect(b)])
+      try {
+        const result = await client.callTool({ name: 'view_scene', arguments: c.input })
+        const content = result.content as Content[]
+        if ('refusal' in c.expect) {
+          expect(json(content)).toMatchObject({ code: c.expect.refusal })
+          expect(asked).toEqual([])
+        } else {
+          expect(result.isError ?? false).toBe(false)
+          expect(asked).toHaveLength(1)
+          expect(viewSceneCaseProblems(c, asked[0]!)).toEqual([])
+        }
+      } finally {
+        await client.close()
+        await server.close()
+      }
+    })
+  }
 })
