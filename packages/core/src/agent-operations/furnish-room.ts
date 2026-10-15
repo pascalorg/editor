@@ -10,7 +10,14 @@ import {
   keepoutForPolygonEdge,
   type PlanAabb,
 } from './door-clearance'
-import { collectOccupiedFootprints, findValidPlacement } from './layout-clearance'
+import { furnitureKind } from './furniture-kind'
+import {
+  collectOccupiedFootprints,
+  findValidPlacement,
+  lateralSteps,
+  MID_ROOM_DISTANCE_M,
+  PLACEMENT_INSETS_M,
+} from './layout-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, polygonBounds, type Vec2 } from './plan-geometry'
 import { levelIdOf, levelRole } from './scene-queries'
@@ -29,6 +36,12 @@ type FurnishRoomInput = LevelTargetInput & {
 const DOOR_EDGE_TOLERANCE = 0.25
 // Clearance between a piece's back and the wall's centreline: half a wall and a hand's width.
 export const WALL_GAP = 0.1
+// A wall-bound piece (a sofa, a bed, a TV stand) slides along its wall, as far as the wall goes, to
+// clear a door or another piece, and steps off it only as far as verify_scene still reads it
+// against the wall (item_mid_room).
+const AGAINST_WALL_INSETS_M = PLACEMENT_INSETS_M.filter(
+  (inset) => WALL_GAP + inset <= MID_ROOM_DISTANCE_M,
+)
 
 /** The room asked for: a zone's level and outline, or a polygon on the level named. */
 export function roomToFurnish(
@@ -106,6 +119,10 @@ type Pose = {
   rotationDeg: number
   along?: { x: number; z: number }
   inward?: { x: number; z: number }
+  /** The length of the wall it stands against. */
+  wallLength?: number
+  /** A piece placed before it that it keeps with (a bedside table its bed, the TV its sofa). */
+  follows?: string
 }
 
 /** Where each piece of a room type goes, sized from the catalog's own dimensions. */
@@ -126,16 +143,21 @@ function layout(
   const width = (assetId: string) => size(assetId)?.[0] ?? 1
   const depth = (assetId: string) => size(assetId)?.[2] ?? 1
   const poses: Pose[] = []
-  /** Back against `edge`, `lateral` along it from its middle, `out` further into the room. */
-  const against = (edge: Edge, assetId: string, lateral = 0, out = 0) => {
+  /**
+   * Back against `edge`, `lateral` along it from its middle, `out` further into the room; moved
+   * along `edge` as far as the piece it `follows` was moved.
+   */
+  const against = (edge: Edge, assetId: string, lateral = 0, out = 0, follows?: string) => {
     const inset = depth(assetId) / 2 + WALL_GAP + out
     poses.push({
+      follows,
       assetId,
       x: edge.mid[0] + edge.inward.x * inset + edge.along.x * lateral,
       z: edge.mid[1] + edge.inward.z * inset + edge.along.z * lateral,
       rotationDeg: edge.facing,
       along: edge.along,
       inward: edge.inward,
+      wallLength: edge.length,
     })
   }
   const free = (assetId: string, x: number, z: number, rotationDeg = 0) =>
@@ -148,8 +170,8 @@ function layout(
       const table = width('bedside-table')
       if (back.length >= width(bed) + 2 * table + 0.2) {
         const lateral = width(bed) / 2 + table / 2 + 0.05
-        against(back, 'bedside-table', -lateral)
-        against(back, 'bedside-table', lateral)
+        against(back, 'bedside-table', -lateral, 0, bed)
+        against(back, 'bedside-table', lateral, 0, bed)
       }
       if (area >= 10) against(side, 'dresser', side.length * 0.22)
       if (area >= 13) against(side, 'closet', -side.length * 0.22)
@@ -163,15 +185,14 @@ function layout(
     case 'bathroom':
       against(back, 'toilet', back.length * 0.25)
       against(back, 'bathroom-sink', -back.length * 0.2)
-      if (area >= 6.5) against(side, 'bathtub')
-      else free('shower-square', bounds.centerX, bounds.centerZ)
+      against(side, area >= 6.5 ? 'bathtub' : 'shower-square')
       break
     case 'living':
       against(back, 'sofa')
-      against(back, 'coffee-table', 0, depth('sofa') + 0.4)
+      against(back, 'coffee-table', 0, depth('sofa') + 0.4, 'sofa')
       against(side, 'livingroom-chair', -side.length * 0.18)
       // The TV faces the sofa from the door wall; the placement slides it off the door's clear zone.
-      against(door, 'tv-stand')
+      against(door, 'tv-stand', 0, 0, 'sofa')
       break
     case 'dining': {
       free('dining-table', bounds.centerX, bounds.centerZ)
@@ -273,25 +294,39 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
 
   const items: AnyNode[] = []
   const skipped: string[] = []
+  // How far each piece was moved off the spot the layout gave it, for the pieces that follow it.
+  const moved = new Map<string, Vec2>()
   for (const pose of layout(input.roomType, polygon, doorWall, catalog)) {
     const asset = catalog.find((entry) => entry.id === pose.assetId)
     if (!asset) {
       skipped.push(`${pose.assetId}: not in the catalog`)
       continue
     }
+    // Along its own wall only: a TV across the room slides as its sofa did and stays on its wall.
+    const lead = pose.follows ? moved.get(pose.follows) : undefined
+    const slide = lead && pose.along ? lead[0] * pose.along.x + lead[1] * pose.along.z : 0
+    const spot = {
+      x: pose.x + (pose.along?.x ?? 0) * slide,
+      z: pose.z + (pose.along?.z ?? 0) * slide,
+      rotationDeg: pose.rotationDeg,
+    }
     const { candidate, reason } = findValidPlacement({
-      primary: { x: pose.x, z: pose.z, rotationDeg: pose.rotationDeg },
+      primary: spot,
       dimensions: asset.dimensions,
       doorKeepouts: keepouts,
       occupied,
       roomBounds: { minX, maxX, minZ, maxZ },
       along: pose.along,
       inward: pose.inward,
+      ...(pose.wallLength !== undefined && furnitureKind(asset) === 'wall'
+        ? { lateralsM: lateralSteps(pose.wallLength), insetsM: AGAINST_WALL_INSETS_M }
+        : {}),
     })
     if (!candidate) {
-      skipped.push(skipReason(asset, pose, reason, { minX, maxX, minZ, maxZ }, doorKeepouts))
+      skipped.push(skipReason(asset, spot, reason, { minX, maxX, minZ, maxZ }, doorKeepouts))
       continue
     }
+    moved.set(pose.assetId, [candidate.x - pose.x, candidate.z - pose.z])
     const rotation = (candidate.rotationDeg * Math.PI) / 180
     occupied.push(itemPlanAabb([candidate.x, 0, candidate.z], asset.dimensions, rotation))
     items.push(

@@ -350,6 +350,16 @@ export function classifyPlacement(args: {
   return 'ok'
 }
 
+/** How far a placement may step a piece off its spot, into the room, to clear doors and other pieces. */
+export const PLACEMENT_INSETS_M = [0, 0.25, 0.5, 0.75]
+
+/** Slides along a wall, nearest first, either way, every 0.4 m up to `reachM`: 0, -0.4, 0.4, … */
+export function lateralSteps(reachM: number): number[] {
+  const steps = [0]
+  for (let k = 1; k * 0.4 <= reachM + 1e-9; k++) steps.push(-k * 0.4, k * 0.4)
+  return steps
+}
+
 export function generatePlacementCandidates(
   primary: PlacementCandidate,
   options?: {
@@ -359,8 +369,8 @@ export function generatePlacementCandidates(
     along?: { x: number; z: number }
   },
 ): PlacementCandidate[] {
-  const laterals = options?.lateralsM ?? [0, -0.4, 0.4, -0.8, 0.8, -1.2, 1.2]
-  const insets = options?.insetsM ?? [0, 0.25, 0.5, 0.75]
+  const laterals = options?.lateralsM ?? lateralSteps(1.2)
+  const insets = options?.insetsM ?? PLACEMENT_INSETS_M
   const along = options?.along ?? { x: 1, z: 0 }
   const inward = options?.inward ?? { x: 0, z: 1 }
   const out: PlacementCandidate[] = []
@@ -386,12 +396,16 @@ export function findValidPlacement(args: {
   roomBounds?: { minX: number; maxX: number; minZ: number; maxZ: number }
   along?: { x: number; z: number }
   inward?: { x: number; z: number }
+  lateralsM?: number[]
+  insetsM?: number[]
 }):
   | { candidate: PlacementCandidate; reason: PlacementRejectReason }
   | { candidate: null; reason: PlacementRejectReason } {
   const candidates = generatePlacementCandidates(args.primary, {
     along: args.along,
     inward: args.inward,
+    lateralsM: args.lateralsM,
+    insetsM: args.insetsM,
   })
 
   // Prefer reporting why the **primary** pose failed (door/overlap), not the
