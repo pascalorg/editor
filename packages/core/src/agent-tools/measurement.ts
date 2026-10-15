@@ -146,6 +146,11 @@ type Undefaulted = MeasurementOptions & { default?: undefined }
 /** A length or an angle in `unit` (`m`, `in`, `ft`, `mm`; `deg`, `rad`). */
 export function measurement(kind: Kind, unit: string, opts: Defaulted): z.ZodDefault<QuantityField>
 export function measurement(kind: Kind, unit: string, opts?: Undefaulted): QuantityField
+export function measurement(
+  kind: Kind,
+  unit: string,
+  opts?: MeasurementOptions,
+): QuantityField | z.ZodDefault<QuantityField>
 export function measurement(kind: Kind, unit: string, opts: MeasurementOptions = {}) {
   return quantityField(
     (text) => readQuantity(text, kind, unit),
@@ -217,6 +222,10 @@ function readPitch(text: string, unit: PitchUnit): Reading {
  */
 export function roofPitch(unit: PitchUnit, opts: Defaulted): z.ZodDefault<QuantityField>
 export function roofPitch(unit: PitchUnit, opts?: Undefaulted): QuantityField
+export function roofPitch(
+  unit: PitchUnit,
+  opts?: MeasurementOptions,
+): QuantityField | z.ZodDefault<QuantityField>
 export function roofPitch(unit: PitchUnit, opts: MeasurementOptions = {}) {
   return quantityField((text) => readPitch(text, unit), 'roof pitch', unit, PITCH_NOTES[unit], opts)
 }

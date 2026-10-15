@@ -7,6 +7,7 @@ import {
   type AgentToolContract,
   bareNumberPaths,
   fieldSchema,
+  type MeasurementOptions,
   measurement,
   roofPitch,
   straightenFacadePhotoTool,
@@ -150,4 +151,47 @@ test('measurement in inches and feet reads other units without float noise', () 
   const overhang = measurement('length', 'in', { default: 18 })
   expect(overhang.parse(undefined)).toBe(18)
   expect(z.toJSONSchema(overhang, { io: 'input' }).description).toEndWith('Default 18 in.')
+  const asked: MeasurementOptions = { default: 18 }
+  expect(measurement('length', 'in', asked).parse(undefined)).toBe(18)
+})
+
+test('the inventory finds a bare number, or a default the model is not shown, wherever it is', () => {
+  const metres = measurement('length', 'm')
+  const probe: AgentToolContract = {
+    name: 'probe',
+    title: 'Probe',
+    description: '',
+    input: {
+      shown: measurement('length', 'm', { default: 0.3 }),
+      plain: z.number().default(3),
+      hidden: measurement('length', 'm').default(1),
+      wrapped: measurement('length', 'in').default(18).optional(),
+      nested: z.object({ depth: measurement('length', 'in').default(2) }).optional(),
+      misstated: measurement('length', 'in').default(8).describe('Default 18 in.'),
+      none: z.array(metres).default([]).describe('Lengths; by default none.'),
+      rows: z.array(z.union([z.object({ height: z.number() }), z.object({ x: metres })])),
+      kinds: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('step'), rise: z.number() }),
+        z.object({ kind: z.literal('flat') }),
+      ]),
+      points: z.array(z.array(z.number())),
+      choice: z.union([
+        z.object({ data: z.object({ width: metres }) }),
+        z.object({ data: z.object({ height: metres }) }),
+      ]),
+    },
+  }
+  expect(unshownDefaultPaths([probe]).sort()).toEqual([
+    'probe.hidden',
+    'probe.misstated',
+    'probe.nested.depth',
+    'probe.none',
+    'probe.wrapped',
+  ])
+  expect(bareNumberPaths([probe]).sort()).toEqual([
+    'probe.kinds.rise',
+    'probe.plain',
+    'probe.rows[].height',
+  ])
+  expect(fieldSchema(probe, 'choice.data.height').parse('1 ft')).toBe(0.3048)
 })
