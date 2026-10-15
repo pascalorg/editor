@@ -8,6 +8,7 @@ import {
   type GridEvent,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
+  getRoofSegmentDeckReach,
   getRoofSegmentSurfaceY,
   getSelectableKinds,
   type ItemNode,
@@ -420,9 +421,9 @@ export function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegment
 
     object.updateWorldMatrix(true, false)
     const local = object.worldToLocal(roofSelectionWorldPoint.clone())
-    const overhang = segment.overhang ?? 0
-    const halfWidth = segment.width / 2 + overhang
-    const halfDepth = segment.depth / 2 + overhang
+    const reach = getRoofSegmentDeckReach(segment)
+    const halfWidth = segment.width / 2 + reach.x
+    const halfDepth = segment.depth / 2 + reach.z
 
     if (Math.abs(local.x) > halfWidth || Math.abs(local.z) > halfDepth) {
       continue

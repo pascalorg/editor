@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   createDefaultRidgeVentsForSegment,
   getConicalRoofCoverage,
+  getRoofSegmentDeckReach,
   isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
@@ -13,6 +14,7 @@ import {
   type RoofSegmentNode,
   type RoofSegmentTrim,
   type RoofType,
+  roofTypeHasRakes,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -626,6 +628,18 @@ export default function RoofSegmentPanel() {
           unit="m"
           value={node.overhang}
         />
+        {roofTypeHasRakes(node.roofType) && (
+          <SliderControl
+            label="Gable overhang"
+            max={3}
+            min={0}
+            onChange={(v) => handleUpdate({ gableOverhang: v })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={getRoofSegmentDeckReach(node).x - node.wallThickness / 2}
+          />
+        )}
         <SliderControl
           label="Shingle Thick."
           max={0.3}

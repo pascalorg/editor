@@ -1,6 +1,7 @@
 import {
   getConicalRoofCoverage,
   getRoofModuleFaces,
+  getRoofSegmentDeckReach,
   getRoofSegmentSurfaceY,
   getRoofShapeInsets,
   getRoofShapeRatios,
@@ -100,6 +101,7 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
     segment.wallThickness,
     segment.deckThickness,
     segment.overhang,
+    segment.gableOverhang,
     segment.shingleThickness,
     segment.pitch,
     conicalCoverage.startAngle,
@@ -116,17 +118,17 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
 
 function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
   const conicalCoverage = getConicalRoofCoverage(segment)
-  const { roofType, width, depth, wallHeight, wallThickness, deckThickness, overhang } = segment
+  const { roofType, width, depth, wallHeight, deckThickness } = segment
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
 
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
-  const horizontalOverhang = (overhang ?? 0) * cosTheta
-  const deckExt = wallThickness / 2 + horizontalOverhang
+  const reach = getRoofSegmentDeckReach(segment)
+  const deckExt = reach.z
   const shingleThickness = segment.shingleThickness ?? 0
   const stSin = shingleThickness * sinTheta
   const stCos = shingleThickness * cosTheta
 
-  const shinBotW = Math.max(0.01, width + 2 * deckExt)
+  const shinBotW = Math.max(0.01, width + 2 * reach.x)
   const shinBotD = Math.max(0.01, depth + 2 * deckExt)
   const deckDrop = deckExt * tanTheta
   const shinBotWh = wallHeight - deckDrop + verticalRt

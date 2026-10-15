@@ -68,6 +68,21 @@ describe('buildPrintableRoofSegmentSolids', () => {
     }
   })
 
+  test("a gable's print shell reaches its gable overhang at the ends, the eaves along the sides", () => {
+    const extent = (node: RoofSegmentNode) => {
+      const mesh = onlyMesh(buildPrintableRoofSegmentSolids(node).object!)
+      mesh.geometry.computeBoundingBox()
+      const box = mesh.geometry.boundingBox!.clone()
+      mesh.geometry.dispose()
+      return box
+    }
+    const plain = extent(fixture('gable'))
+    const raked = extent(fixture('gable', { gableOverhang: 0.6 }))
+    expect(raked.max.x).toBeCloseTo(4 / 2 + 0.15 / 2 + 0.6, 6)
+    expect(raked.min.x).toBeCloseTo(-(4 / 2 + 0.15 / 2 + 0.6), 6)
+    expect(raked.max.z).toBeCloseTo(plain.max.z, 6)
+  })
+
   test('preserves segment provenance and local transform', () => {
     const node = fixture('gable', { position: [1, 2, 3], rotation: Math.PI / 3 })
     const result = buildPrintableRoofSegmentSolids(node)
