@@ -13,7 +13,7 @@ import {
   float,
   materialColor,
   mix,
-  mx_noise_float,
+  mx_fractal_noise_float,
   positionWorld,
   smoothstep,
   texture,
@@ -26,8 +26,9 @@ import { Vector2 } from 'three/webgpu'
  * The ground as the medium, seen from above: over a level below grade the ground stays solid and
  * a hole opens in it over the below-grade footprint, through which the level is seen clearly. The
  * hole's edge is a noise threshold, an eroded border: the distance from the footprint is compared
- * to a radius that wanders with a perlin noise, so the cut is a scalloped, living line rather
- * than an offset outline, with a thin slate rim along it.
+ * to a radius that wanders with a fractal perlin noise (broad waves with finer ones riding them),
+ * so the cut is a living, eroded line rather than an offset outline. Along it the ground darkens
+ * in a soft feather and a thin light line marks the cut itself.
  *
  * The footprint is a signed-distance field baked on the CPU into a small texture when the
  * footprints change (the polygons the grade ring is drawn from), so the ground's mask costs one
@@ -39,10 +40,23 @@ import { Vector2 } from 'three/webgpu'
 export const HOLE_MARGIN = 1.6
 /** How far the noise moves the edge in or out of the margin, in metres. */
 export const HOLE_ERODE = 0.9
-/** Noise cells per metre on the ground. */
+/** Noise cells per metre on the ground, of the broadest octave (~1.7 m waves). */
 const NOISE_SCALE = 0.6
-/** The slate rim on the ground side of the cut, in metres. */
-const RIM_WIDTH = 0.22
+/**
+ * Three octaves, each finer and weaker than the last (cell size 1.7 m, 0.8 m, 0.4 m). The sum is
+ * divided by its largest value, so the noise stays within ±1 and the hole's guaranteed core
+ * (margin less the full erosion) still holds; the fine octaves are weak enough that the edge
+ * never folds over into islets.
+ */
+const NOISE_LACUNARITY = 2.1
+const NOISE_DIMINISH = 0.4
+const NOISE_NORMALISE = 1 / (1 + NOISE_DIMINISH + NOISE_DIMINISH ** 2)
+/** The soft shade on the ground side of the cut, in metres, and how dark it gets at the cut. */
+const FEATHER_WIDTH = 0.55
+const FEATHER_STRENGTH = 0.6
+/** The thin light line along the cut itself, in metres, and its colour. */
+const LINE_WIDTH = 0.09
+const LINE_COLOR = '#f4f4f4'
 
 const GRID = 192
 /** The signed distance the texture stores: metres, negative inside, clamped to this range. */
@@ -181,7 +195,7 @@ export function groundHoleContains(x: number, z: number): boolean {
 
 // ── The shader pieces ────────────────────────────────────────────────────────────────────────
 
-let pieces: { inHole: any; rim: any } | null = null
+let pieces: { inHole: any; feather: any; line: any } | null = null
 
 function holePieces() {
   if (pieces) return pieces
@@ -190,14 +204,22 @@ function holePieces() {
   const distance = texture(fieldTexture, uv)
     .r.mul(RANGE_MAX - RANGE_MIN)
     .add(RANGE_MIN)
-  // One noise lookup: the radius of the hole wanders around its margin.
-  const noise = mx_noise_float(vec3(positionWorld.xz.mul(NOISE_SCALE), 0.31))
+  // One fractal lookup: the radius of the hole wanders around its margin.
+  const noise = mx_fractal_noise_float(
+    vec3(positionWorld.xz.mul(NOISE_SCALE), 0.31),
+    3,
+    NOISE_LACUNARITY,
+    NOISE_DIMINISH,
+    NOISE_NORMALISE,
+  )
   const radius = noise.mul(HOLE_ERODE).add(HOLE_MARGIN).mul(open)
   const inHole = distance.lessThan(radius).and(open.greaterThan(0.001))
-  const rim = float(1)
-    .sub(smoothstep(radius, radius.add(RIM_WIDTH), distance))
-    .mul(smoothstep(float(0), float(0.1), open))
-  pieces = { inHole, rim }
+  const opening = smoothstep(float(0), float(0.1), open)
+  const beyond = (width: number) =>
+    float(1)
+      .sub(smoothstep(radius, radius.add(width), distance))
+      .mul(opening)
+  pieces = { inHole, feather: beyond(FEATHER_WIDTH), line: beyond(LINE_WIDTH) }
   return pieces
 }
 
@@ -220,9 +242,14 @@ export function groundHoleShadowNode(): () => any {
   return ((shadow: any) => mix(shadow, float(1), open)) as unknown as () => any
 }
 
-/** The ground's colour with a thin slate rim along the hole's cut; the plain colour with it closed. */
-export function groundHoleColorNode(rimColor: string) {
-  return mix(materialColor as any, color(rimColor), holePieces().rim)
+/**
+ * The ground's colour with a soft shade (`shadeColor`) feathered along the hole's cut and a thin
+ * light line on the cut itself; the plain colour with the hole closed.
+ */
+export function groundHoleColorNode(shadeColor: string) {
+  const { feather, line } = holePieces()
+  const shaded = mix(materialColor as any, color(shadeColor), feather.mul(FEATHER_STRENGTH))
+  return mix(shaded, color(LINE_COLOR), line)
 }
 
 /**
