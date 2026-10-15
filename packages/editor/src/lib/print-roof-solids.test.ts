@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { DoorNode, RoofSegmentNode, type RoofType } from '@pascal-app/core'
+import { buildPrintableRoofSegmentSolids } from '@pascal-app/editor'
 import * as THREE from 'three'
-import { buildPrintableRoofSegmentSolids } from './print-roof-solids'
 
 const ROOF_TYPES: RoofType[] = [
   'gable',
@@ -146,3 +146,26 @@ describe('buildPrintableRoofSegmentSolids', () => {
     )
   })
 })
+
+for (const roofType of ['gable', 'shed', 'barrel'] as const)
+  test(`glazed ${roofType} prints pane and frame solids without an opaque roof shell`, () => {
+    const result = buildPrintableRoofSegmentSolids(
+      fixture(roofType, { roofSystem: 'glazed', wallThickness: 0 }),
+    )
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') return
+    try {
+      expect(result.object.children.some((child) => child.name === 'print-glazing-frame')).toBe(
+        true,
+      )
+      expect(result.object.children.some((child) => child.name === 'print-glazing-pane')).toBe(true)
+      expect(result.object.children.some((child) => child.name === 'print-roof-shell')).toBe(false)
+      for (const child of result.object.children) {
+        const geometry = (child as THREE.Mesh).geometry
+        expect(geometry.getIndex()!.count).toBeGreaterThan(0)
+        expect([...geometry.getAttribute('position').array].every(Number.isFinite)).toBe(true)
+      }
+    } finally {
+      for (const child of result.object.children) (child as THREE.Mesh).geometry.dispose()
+    }
+  })

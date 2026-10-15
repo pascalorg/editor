@@ -1,6 +1,7 @@
 import {
   getActiveRoofHeight,
   getPitchFromActiveRoofHeight,
+  getRoofSegmentResizePatch,
   type HandleDescriptor,
   type NodeDefinition,
   RoofSegmentNode as RoofSegmentNodeSchema,
@@ -13,6 +14,7 @@ import {
   roofSegmentRotateAffordance,
 } from './floorplan-affordances'
 import { matchRoofSegmentMeasurementFeature, roofSegmentMeasurementFeatures } from './measurement'
+import { roofSegmentPaint, roofSegmentSlots } from './paint'
 import { roofSegmentParametrics } from './parametrics'
 import { RoofSegmentNode } from './schema'
 
@@ -70,20 +72,7 @@ function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSe
     min: MIN_ROOF_DIM,
     gridSnap: true,
     currentValue: (n) => n.width,
-    apply: (initial, newWidth) => {
-      const rotY = initial.rotation ?? 0
-      const armX = Math.cos(rotY)
-      const armZ = -Math.sin(rotY)
-      const anchorX = initial.position[0] - sign * (initial.width / 2) * armX
-      const anchorZ = initial.position[2] - sign * (initial.width / 2) * armZ
-      const newCenterX = anchorX + sign * (newWidth / 2) * armX
-      const newCenterZ = anchorZ + sign * (newWidth / 2) * armZ
-      return {
-        width: newWidth,
-        ...(initial.roofType === 'conical' ? { depth: newWidth } : {}),
-        position: [newCenterX, initial.position[1], newCenterZ],
-      }
-    },
+    apply: (initial, newWidth) => getRoofSegmentResizePatch(initial, 'x', sign, newWidth),
     placement: {
       position: (n) => [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), getSideResizeHandleY(n, 0), 0],
       // Flip the left chevron so it points outward toward -X. The
@@ -112,48 +101,7 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
     min: MIN_ROOF_DIM,
     gridSnap: true,
     currentValue: (n) => n.depth,
-    apply: (initial, newDepth) => {
-      // Recenter so the anchored Z edge stays at the same world point.
-      // Same math as the width handle but along the Z arm: yaw maps
-      // segment-local +Z to (sin r, cos r) in world.
-      const rotY = initial.rotation ?? 0
-      const armX = Math.sin(rotY)
-      const armZ = Math.cos(rotY)
-      const anchorX = initial.position[0] - sign * (initial.depth / 2) * armX
-      const anchorZ = initial.position[2] - sign * (initial.depth / 2) * armZ
-      const newCenterX = anchorX + sign * (newDepth / 2) * armX
-      const newCenterZ = anchorZ + sign * (newDepth / 2) * armZ
-
-      if (initial.roofType === 'conical') {
-        return {
-          width: newDepth,
-          depth: newDepth,
-          position: [newCenterX, initial.position[1], newCenterZ],
-        }
-      }
-
-      // Preserve peak height — back-solve pitch for the new depth so
-      // the assembled roof height matches what it was before the drag.
-      const originalRoofHeight = getActiveRoofHeight(initial)
-      const newPitch = getPitchFromActiveRoofHeight({
-        roofType: initial.roofType,
-        width: initial.width,
-        depth: newDepth,
-        roofHeight: originalRoofHeight,
-        gambrelLowerWidthRatio: initial.gambrelLowerWidthRatio,
-        gambrelLowerHeightRatio: initial.gambrelLowerHeightRatio,
-        mansardSteepWidthRatio: initial.mansardSteepWidthRatio,
-        mansardSteepHeightRatio: initial.mansardSteepHeightRatio,
-        dutchHipWidthRatio: initial.dutchHipWidthRatio,
-        dutchHipHeightRatio: initial.dutchHipHeightRatio,
-      })
-
-      return {
-        depth: newDepth,
-        position: [newCenterX, initial.position[1], newCenterZ],
-        pitch: Math.max(MIN_PITCH, Math.min(MAX_PITCH, newPitch)),
-      }
-    },
+    apply: (initial, newDepth) => getRoofSegmentResizePatch(initial, 'z', sign, newDepth),
     placement: {
       position: (n) => [
         0,
@@ -233,6 +181,8 @@ function roofSegmentPitchHandle(): HandleDescriptor<RoofSegmentNodeType> {
     visible: (n) => !n.managedByParent,
     apply: (initial, newPeakHeight) => {
       const roofHeight = Math.max(0, newPeakHeight - initial.wallHeight)
+      if (initial.roofType === 'barrel')
+        return { barrelRise: Math.max(0.01, Math.min(initial.depth / 2, roofHeight)) }
       const pitch = getPitchFromActiveRoofHeight({
         roofType: initial.roofType,
         width: initial.width,
@@ -314,7 +264,7 @@ function resolveRoofSegmentHandles(
  */
 export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   kind: 'roof-segment',
-  schemaVersion: 5,
+  schemaVersion: 7,
   schema: RoofSegmentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -334,6 +284,8 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   },
 
   capabilities: {
+    paint: roofSegmentPaint,
+    slots: (node) => roofSegmentSlots(node as RoofSegmentNodeType),
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

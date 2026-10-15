@@ -304,7 +304,14 @@ export const commitRoofPlacement = (
       roofType,
     )
 
+    const sibling = targetRoof.children
+      .map((id) => nodes[id])
+      .find((node) => node?.type === 'roof-segment')
     const segment = RoofSegmentNode.parse({
+      roofSystem: sibling?.type === 'roof-segment' ? sibling.roofSystem : undefined,
+      glazing: sibling?.type === 'roof-segment' ? sibling.glazing : undefined,
+      barrelRise: sibling?.type === 'roof-segment' ? sibling.barrelRise : undefined,
+      barrelSegments: sibling?.type === 'roof-segment' ? sibling.barrelSegments : undefined,
       wallHeight: DEFAULT_WALL_HEIGHT,
       pitch: DEFAULT_PITCH_DEG,
       roofType: 'gable',
