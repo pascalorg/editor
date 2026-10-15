@@ -169,12 +169,15 @@ type CachedQuery = {
  * a material array by each geometry group, and one with no entry throws on
  * `material.side`. A mesh caught mid-swap (a preview restored an older array
  * over a rebuilt geometry) is skipped for this move instead of taking the whole
- * pointer event down; its children are still tested.
+ * pointer event down; its children are still tested. `material` asks the same of
+ * an array the mesh would wear.
  */
-export function hasMaterialsForGroups(object: THREE.Object3D): boolean {
+export function hasMaterialsForGroups(
+  object: THREE.Object3D,
+  material: THREE.Material | THREE.Material[] | undefined = (object as THREE.Mesh).material,
+): boolean {
   const mesh = object as THREE.Mesh
   if (!mesh.isMesh) return true
-  const material = mesh.material
   if (!material) return false
   if (!Array.isArray(material)) return true
   for (const group of mesh.geometry?.groups ?? []) {

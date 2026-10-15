@@ -329,6 +329,33 @@ describe('WallCutoutCache', () => {
     expect((mesh.material as Material[])[2]).toBeDefined()
   })
 
+  test('a room-wide preview keeps the groups it gave a wall that is not hovered', () => {
+    viewerStore.setState({ wallMode: 'up' })
+    const hovered = addWall()
+    const spread = addWall()
+    cache.update(camera, 1)
+    const palette = spread.mesh.material as Material[]
+    viewerStore.setState({ hoveredId: spread.node.id, hoverHighlightMode: 'paint-ready' })
+    cache.update(camera, 1.005)
+    // The hover moves on to another wall of the room; its preview spreads over
+    // this one: faces regrouped onto entries past the palette's end.
+    viewerStore.setState({ hoveredId: hovered.node.id })
+    const preview = [...palette, new MeshBasicMaterial(), new MeshBasicMaterial()]
+    spread.mesh.material = preview
+    spread.mesh.geometry.addGroup(0, 3, preview.length - 1)
+    cache.update(camera, 1.01)
+    expect(spread.mesh.material).toBe(preview)
+    camera.position.x++
+    cache.update(camera, 2)
+    expect(spread.mesh.material).toBe(preview)
+    // The preview's restore gives the groups back; the palette goes on next frame.
+    spread.mesh.geometry.clearGroups()
+    spread.mesh.material = new MeshBasicMaterial()
+    viewerStore.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    cache.update(camera, 2.01)
+    expect(spread.mesh.material).toBe(cache.walls.get(spread.node.id)!.visibleVariant.materials)
+  })
+
   test('appearance changes during preview are applied when temporary ownership ends', () => {
     viewerStore.setState({ wallMode: 'up' })
     const { node, mesh } = addWall()
