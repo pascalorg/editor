@@ -83,9 +83,8 @@ Preserve unrelated nodes. Before a bounded edit, identify the target IDs with `f
 
 After a meaningful edit:
 
-1. Call `validate_scene` for schema validity.
-2. Call `verify_scene` for practical scene issues.
-3. Resolve relevant reported issues or state them plainly.
+1. Call `verify_scene`: schema validity (`valid`, each `schema_invalid` with its node and path) and practical scene issues.
+2. Resolve relevant reported issues or state them plainly.
 4. Call `save_scene` with `saveMode: "draft"` for working progress. Use `saveMode: "checkpoint"` only for a meaningful milestone or when the user requests a durable version.
 5. Call `get_project_status` after the save and use its returned `editorUrl`, version, node count, and graph hash as the handoff evidence.
 

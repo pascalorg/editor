@@ -26,7 +26,6 @@ import { registerSharedTools } from './shared-tools'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
 import { registerValidateDesign } from './validate-design'
-import { registerValidateScene } from './validate-scene'
 import { registerVariantTools } from './variants'
 import { registerViewScene, type SceneViewHost } from './view-scene'
 
@@ -72,7 +71,6 @@ export function registerTools(
   registerRedo(server, operations)
   registerExportJson(server, operations)
   registerExportGlb(server, operations)
-  registerValidateScene(server, operations)
   registerValidateDesign(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)

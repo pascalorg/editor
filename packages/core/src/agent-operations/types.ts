@@ -1,3 +1,4 @@
+import type { ZodType } from 'zod'
 import type { AnyNode, AssetInput, Collection, SceneMaterial, SceneMaterialId } from '../schema'
 import type { SessionKeep, SessionRecord } from './scene-checkpoint'
 
@@ -14,6 +15,12 @@ export type SceneNodes = Readonly<Record<string, AnyNode>>
  */
 export type AgentContext = {
   activeLevelId: string | null
+  /**
+   * The schema the host checks a stored node by, when it is not core's: a host that validates its
+   * plugins' nodes at its own write boundary lends it, so verify_scene reports what the host
+   * refuses. Without it, a registered kind's own schema, else core's.
+   */
+  nodeSchema?: ZodType
   /** Opaque here: its measure is the measure module's (scene-measure), which reads it. */
   checkpoint?: { name: string; measure: unknown }
   /** The agent's session so far. The host keeps it where its sessions live; it is never scene data. */

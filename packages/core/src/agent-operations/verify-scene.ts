@@ -1,5 +1,6 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
+import { HIDDEN_SITE_NOTE } from '../lib/node-visibility'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { siteBrief } from '../lib/site-placement'
@@ -22,6 +23,7 @@ import {
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import { type RoomFinding, roomFindings } from './room-findings'
 import { EMPTY_SESSION } from './scene-checkpoint'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
@@ -33,14 +35,17 @@ import {
   nodesOnLevel,
 } from './scene-queries'
 import { reviewSince } from './scene-review'
-import type { AgentOperation, SceneNodes } from './types'
+import type { AgentContext, AgentOperation, SceneNodes } from './types'
 import { type WallObjectObservation, wallObjectObservations } from './wall-object-observations'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
 export type SceneIssue =
   | CeilingObjectObservation
   | WallObjectObservation
+  | RoomFinding
   | { type: string; message: string; severity?: 'info' }
+  | { type: 'schema_invalid'; message: string; nodeId: string; path: string }
+  | { type: 'site_hidden'; message: string; severity: 'info'; nodeId: string }
   | {
       type: 'wall_covering_slab_contact'
       message: string
@@ -225,10 +230,10 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
   })
 }
 
-function schemaErrors(nodes: SceneNodes) {
+function schemaErrors(nodes: SceneNodes, hostSchema: AgentContext['nodeSchema']) {
   const errors: { nodeId: string; path: string; message: string }[] = []
   for (const [id, node] of Object.entries(nodes)) {
-    const schema = nodeRegistry.get(node.type)?.schema ?? AnyNodeSchema
+    const schema = hostSchema ?? nodeRegistry.get(node.type)?.schema ?? AnyNodeSchema
     const parsed = schema.safeParse(node)
     if (parsed.success) continue
     for (const issue of parsed.error.issues)
@@ -238,10 +243,11 @@ function schemaErrors(nodes: SceneNodes) {
 }
 
 /**
- * `verify_scene`: a self-check after complex edits. Per-level content and roles, then every
- * practical problem found, typed: rooms missing floors or ceilings, roof levels misused, storeys
- * with no stair, openings off their wall, stairs off their slab, blocked doors, overlapping
- * furniture, nodes their schema rejects.
+ * `verify_scene`: a self-check after complex edits. Per-level content, roles and enclosed spaces,
+ * then every practical problem found, typed: spaces with no room, rooms the walls do not close or
+ * with no name, rooms missing floors or ceilings, roof levels misused, storeys with no stair,
+ * openings off their wall, stairs off their slab, blocked doors, overlapping furniture, and every
+ * field a node's schema rejects, by node and path.
  */
 export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   nodes,
@@ -252,12 +258,18 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   const ofType = <T extends AnyNode['type']>(content: readonly AnyNode[], type: T) =>
     content.filter((node): node is Extract<AnyNode, { type: T }> => node.type === type)
 
+  // A roof level holds the roof, no rooms.
+  const rooms = new Map<string, RoomFinding[]>()
   const levels = levelsOf(nodes).map((level) => {
     const content = contentCounts(onLevel(level.id))
     const { role, metadataRole, referenceLevelId } = levelRole(nodes, level)
+    const levelName = getLevelDisplayName(level)
+    const found =
+      role === 'roof' ? { spaces: 0, issues: [] } : roomFindings(nodes, level.id, levelName)
+    rooms.set(level.id, found.issues)
     return {
       levelId: level.id,
-      levelName: getLevelDisplayName(level),
+      levelName,
       floorIndex: level.level,
       role,
       metadataRole,
@@ -267,6 +279,8 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       isActive: level.id === context.activeLevelId,
       isEmpty: Object.values(content).every((count) => count === 0),
       content,
+      /** The spaces its walls and separators enclose. */
+      spaces: found.spaces,
     }
   })
 
@@ -335,6 +349,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       report('zones_no_ceilings', `${levelName} has zones but no ceilings`)
     if (content.walls > 0 && content.doors === 0)
       report('walls_no_doors', `${levelName} has walls but no doors`)
+    issues.push(...rooms.get(level.levelId)!)
     // A roof standing on the walls of the storey holding it: the ones move_roofs_to_roof_level
     // takes off. A porch's on its posts, a lower wing's on the walls below, are where they belong.
     const onWalls = (nodes[level.levelId] as LevelNode).children.filter((id) =>
@@ -563,11 +578,22 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       )
   }
 
-  const errors = schemaErrors(nodes)
-  for (const error of errors.slice(0, 5))
-    report('schema_invalid', `Schema: ${error.nodeId}.${error.path} ${error.message}`)
-  if (errors.length > 5)
-    report('schema_invalid', `Schema: ${errors.length - 5} additional validation errors`)
+  const errors = schemaErrors(nodes, context.nodeSchema)
+  for (const { nodeId, path, message } of errors)
+    issues.push({
+      type: 'schema_invalid',
+      message: `Schema: ${path ? `${nodeId}.${path}` : nodeId} ${message}`,
+      nodeId,
+      path,
+    })
+  for (const site of Object.values(nodes))
+    if (site.type === 'site' && site.visible === false)
+      issues.push({
+        type: 'site_hidden',
+        message: `Site ${site.id} is hidden. ${HIDDEN_SITE_NOTE}`,
+        severity: 'info',
+        nodeId: site.id,
+      })
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
   issues.push(...layoutIssuesFromScene(Object.values(nodes)))
@@ -601,7 +627,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       levels,
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
-      hasIssues: issues.some((issue) => issue.severity !== 'info'),
+      hasIssues: issues.some((issue) => !('severity' in issue && issue.severity === 'info')),
       ...authoredObjects(nodes),
       ...Object.assign({}, ...reports.map((report) => report.run(nodes))),
       ...(Object.keys(session.checkpoints).length

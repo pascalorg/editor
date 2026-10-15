@@ -219,11 +219,18 @@ const SHARED_TOOLS: SharedTool[] = [
       activeLevelId: z.string().nullable(),
       levels: z.array(jsonObject),
       emptyLevelIds: z.array(z.string()),
+      // Typed by `type`; a check registered with verify_scene may add fields of its own.
       issues: z.array(
-        z.object({
+        z.looseObject({
           type: z.string(),
           message: z.string(),
           severity: z.literal('info').optional(),
+          nodeId: z.string().optional(),
+          path: z.string().optional(),
+          zoneId: z.string().optional(),
+          wallIds: z.array(z.string()).optional(),
+          area: z.number().optional(),
+          at: z.tuple([z.number(), z.number()]).optional(),
           wallId: z.string().optional(),
           slabId: z.string().optional(),
           levelId: z.string().optional(),
@@ -540,11 +547,13 @@ export function registerOperationTool(
             'tool' in call &&
             call.tool === placeInRoomTool.name,
         )
+      const nodeSchema = bridge.nodeSchema?.()
       const context: AgentContext = {
         activeLevelId: null,
         ...(bridge.supportsMaterialUpserts && bridge.getMaterials
           ? { materials: bridge.getMaterials() }
           : {}),
+        ...(nodeSchema && { nodeSchema }),
         session: bridge.agentSession?.read(),
         ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
       }
