@@ -1,5 +1,6 @@
-import { area, intersection, type Polygon, union } from '../lib/polygon-boolean'
+import { area, intersection, type Polygon, type Ring, union } from '../lib/polygon-boolean'
 import { polygonInteriorPoint } from '../lib/polygon-label'
+import { distanceToSegment } from '../lib/room-topology-index'
 import { detectSpacesForLevel } from '../lib/space-detection'
 import type { AnyNode } from '../schema'
 import { nodesOnLevel } from './scene-queries'
@@ -24,28 +25,82 @@ export type RoomFinding =
   | { type: 'room_unnamed'; message: string; severity: 'info'; levelId: string; zoneId: string }
 
 type Zone = AnyNode & { type: 'zone' }
+type Wall = AnyNode & { type: 'wall' }
+type Shape = { polygon: Polygon; box: [number, number, number, number]; area: number }
 
 /** No name, or the bare word an older scene or a blank name leaves: "Room", "Zone". */
 const PLACEHOLDER_NAME = /^\s*(room|zone)?\s*$/i
 
-/** A space is covered, and a room enclosed, past half its area. */
-const COVERED = 0.5
+/** A space is covered, a room enclosed, and a zone walled like a room, past half. */
+const HALF = 0.5
+/** How far past a wall's face its outline may run and still be walled, m. */
+const ALONG_WALL = 0.1
+/** The step a zone's outline is sampled at to see how much of it walls run along, m. */
+const OUTLINE_STEP = 0.25
 
 const round = (value: number) => Math.round(value * 100) / 100
-const footprint = (polygon: [number, number][], holes: [number, number][][] = []): Polygon => ({
-  outer: polygon,
-  holes,
-})
-const share = (part: Polygon, cover: Polygon[]) => {
-  const whole = area([part])
-  return whole > 0 && cover.length > 0 ? area(intersection(part, union(cover))) / whole : 0
+
+function shapeOf(outer: Ring, holes: Ring[] = []): Shape {
+  const polygon = { outer, holes }
+  const xs = outer.map(([x]) => x)
+  const zs = outer.map(([, z]) => z)
+  return {
+    polygon,
+    box: [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)],
+    area: area([polygon]),
+  }
+}
+
+const overlap = (a: Shape, b: Shape) =>
+  a.box[0] < b.box[2] && b.box[0] < a.box[2] && a.box[1] < b.box[3] && b.box[1] < a.box[3]
+
+/** How much of `part` the shapes cover, 0 to 1; only the shapes whose boxes meet it are joined. */
+function covered(part: Shape, cover: readonly Shape[]): number {
+  if (part.area <= 0) return 0
+  const near = cover.filter((shape) => overlap(part, shape))
+  if (near.length === 0) return 0
+  const joined = near.length === 1 ? near[0]!.polygon : union(near.map((shape) => shape.polygon))
+  return area(intersection(part.polygon, joined)) / part.area
+}
+
+/** How much of a zone's outline runs along a wall, 0 to 1: a zone mostly walled is meant as a room. */
+function walled(zone: Zone, walls: readonly Wall[]): number {
+  const ring = zone.polygon
+  let along = 0
+  let samples = 0
+  ring.forEach((start, i) => {
+    const end = ring[(i + 1) % ring.length]!
+    const steps = Math.max(
+      1,
+      Math.ceil(Math.hypot(end[0] - start[0], end[1] - start[1]) / OUTLINE_STEP),
+    )
+    for (let k = 0; k < steps; k++) {
+      const t = (k + 0.5) / steps
+      const point: [number, number] = [
+        start[0] + (end[0] - start[0]) * t,
+        start[1] + (end[1] - start[1]) * t,
+      ]
+      samples++
+      if (
+        walls.some(
+          (wall) =>
+            distanceToSegment(point, wall.start, wall.end) <=
+            (wall.thickness ?? 0.2) / 2 + ALONG_WALL,
+        )
+      )
+        along++
+    }
+  })
+  return samples > 0 ? along / samples : 0
 }
 
 /**
  * Every space the walls enclose wants a zone over it (any zone: a drawn one is adopted as the room
- * on load); every room (`spaceRole: 'room'`, not declared open) wants walls or separators closing
- * around it, and a name. A terrace closes with separators, so it counts as enclosed; a generic zone
- * (a site or analysis area) needs neither walls nor a name.
+ * on load). Every room wants walls or separators closing around it, and a name: a zone with
+ * `spaceRole: 'room'`, or one walls bound along most of its outline (a room drawn before its last
+ * wall, which no reconcile could adopt). A terrace closes with separators, so it is enclosed; a
+ * room a person declared open (`enclosureStatus: 'open'` on a room the walls never derived) needs
+ * no walls; an automatic room the reconciler opened when its walls stopped closing it does.
  */
 export function roomFindings(
   nodes: SceneNodes,
@@ -53,22 +108,23 @@ export function roomFindings(
   levelName: string,
 ): { spaces: number; issues: RoomFinding[] } {
   const onLevel = nodesOnLevel(nodes, levelId)
+  const walls = onLevel.filter((node): node is Wall => node.type === 'wall')
   const boundaries = onLevel.filter(
     (node): node is AnyNode & { type: 'wall' | 'separator' } =>
       node.type === 'wall' || node.type === 'separator',
   )
-  const zones = onLevel.filter((node): node is Zone => node.type === 'zone')
+  const zones = onLevel.filter(
+    (node): node is Zone => node.type === 'zone' && node.polygon.length >= 3,
+  )
   const { spaces } = detectSpacesForLevel(levelId, boundaries)
-  const spaceFootprints = spaces.map((space) => footprint(space.polygon, space.holes))
-  const zoneFootprints = zones
-    .filter((zone) => zone.polygon.length >= 3)
-    .map((zone) => footprint(zone.polygon, zone.holes))
+  const spaceShapes = spaces.map((space) => shapeOf(space.polygon, space.holes))
+  const zoneShapes = zones.map((zone) => shapeOf(zone.polygon, zone.holes))
   const issues: RoomFinding[] = []
 
   spaces.forEach((space, index) => {
-    const outline = spaceFootprints[index]!
-    if (share(outline, zoneFootprints) >= COVERED) return
-    const spaceArea = round(area([outline]))
+    const shape = spaceShapes[index]!
+    if (covered(shape, zoneShapes) >= HALF) return
+    const spaceArea = round(shape.area)
     const [x, z] = polygonInteriorPoint(space, true).map(round) as [number, number]
     issues.push({
       type: 'space_no_room',
@@ -80,21 +136,20 @@ export function roomFindings(
     })
   })
 
-  for (const zone of zones) {
-    if (zone.spaceRole !== 'room') continue
-    const label = PLACEHOLDER_NAME.test(zone.name) ? zone.id : `"${zone.name}" (${zone.id})`
-    if (
-      zone.enclosureStatus !== 'open' &&
-      zone.polygon.length >= 3 &&
-      share(footprint(zone.polygon, zone.holes), spaceFootprints) < COVERED
-    )
+  zones.forEach((zone, index) => {
+    if (zone.spaceRole !== 'room' && walled(zone, walls) < HALF) return
+    const unnamed = PLACEHOLDER_NAME.test(zone.name)
+    const label = unnamed ? zone.id : `"${zone.name}" (${zone.id})`
+    const declaredOpen = zone.enclosureStatus === 'open' && !zone.autoFromWalls
+    const opened = zone.enclosureStatus === 'open' && zone.autoFromWalls
+    if (!declaredOpen && (opened || covered(zoneShapes[index]!, spaceShapes) < HALF))
       issues.push({
         type: 'room_not_enclosed',
         message: `Room ${label} on ${levelName}: its walls do not close around it.`,
         levelId,
         zoneId: zone.id,
       })
-    if (PLACEHOLDER_NAME.test(zone.name))
+    if (unnamed)
       issues.push({
         type: 'room_unnamed',
         message: `Room ${zone.id} on ${levelName} has no name${zone.name.trim() ? ` but "${zone.name.trim()}"` : ''}.`,
@@ -102,7 +157,7 @@ export function roomFindings(
         levelId,
         zoneId: zone.id,
       })
-  }
+  })
 
   return { spaces: spaces.length, issues }
 }

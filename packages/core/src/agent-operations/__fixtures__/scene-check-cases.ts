@@ -182,6 +182,22 @@ export const VALIDATE_SCENE_CASES: AgentToolCase[] = [
       contains: [{ type: 'schema_invalid', nodeId: 'gadget_odd' }],
     },
   ),
+  verify(
+    "validate_scene {} with malformed geometry (a zone's polygon, a wall's start null): every error, the other checks reading around those nodes",
+    () => {
+      const graph = withNodes(badZone('zone_bad', { polygon: null }))
+      const wall = graph.nodes.wall_ground as Record<string, unknown>
+      graph.nodes.wall_ground = { ...wall, start: null }
+      return graph
+    },
+    {
+      result: { valid: false, hasIssues: true },
+      contains: [
+        { type: 'schema_invalid', nodeId: 'zone_bad', path: 'polygon' },
+        { type: 'schema_invalid', nodeId: 'wall_ground', path: 'start' },
+      ],
+    },
+  ),
 ]
 
 export const CHECK_ROOMS_CASES: AgentToolCase[] = [
@@ -286,8 +302,44 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
       lacks: [{ type: 'room_not_enclosed', levelId: 'level_0' }],
     },
   ),
-  // What check_rooms called open or unnamed and Pascal does not: a room is a zone with
-  // spaceRole 'room'; a terrace closes with separators; a room can be declared open.
+  verify(
+    'check_rooms { levelId } on a room the reconciler opened when a wall went ("… walls do not close around it"): room_not_enclosed',
+    () =>
+      ground(
+        ...wallRing('level_0', 'gone', ROOM, true),
+        roomZone('zone_gone', 'level_0', 'Kitchen', ROOM, {
+          autoFromWalls: true,
+          enclosureStatus: 'open',
+        }),
+      ),
+    { contains: [{ type: 'room_not_enclosed', zoneId: 'zone_gone' }] },
+  ),
+  verify(
+    'check_rooms { levelId } on a zone three walls bound, left generic as set_zone draws one no room adopts ("… walls do not close around it"): room_not_enclosed',
+    () =>
+      ground(
+        ...wallRing('level_0', 'drawn', ROOM, true),
+        ZoneNode.parse({ id: 'zone_drawn', parentId: 'level_0', name: 'Kitchen', polygon: ROOM }),
+      ),
+    { contains: [{ type: 'room_not_enclosed', zoneId: 'zone_drawn' }] },
+  ),
+  verify(
+    'check_rooms { levelId } on such a zone named Zone ("… walls do not close around it unnamed"): room_not_enclosed and room_unnamed',
+    () =>
+      ground(
+        ...wallRing('level_0', 'drawn', ROOM, true),
+        ZoneNode.parse({ id: 'zone_drawn', parentId: 'level_0', name: 'Zone', polygon: ROOM }),
+      ),
+    {
+      contains: [
+        { type: 'room_not_enclosed', zoneId: 'zone_drawn' },
+        { type: 'room_unnamed', zoneId: 'zone_drawn' },
+      ],
+    },
+  ),
+  // What check_rooms called open or unnamed and Pascal does not: a terrace closes with
+  // separators; a person can declare a room open; a zone no walls bound (a garden, a site or
+  // analysis area, one along a single house wall) is no room.
   verify(
     'a terrace closed by separators, no walls of its own, is enclosed',
     () =>
@@ -306,7 +358,7 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
     { lacks: [{ type: 'room_not_enclosed' }, { type: 'space_no_room' }] },
   ),
   verify(
-    'a room declared open, and a generic zone, need no walls',
+    'a room declared open, and zones no walls bound, need no walls',
     () =>
       ground(
         ...living(),
@@ -318,6 +370,12 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
           parentId: 'level_0',
           name: 'Zone',
           polygon: rect(6, 0, 10, 4),
+        }),
+        ZoneNode.parse({
+          id: 'zone_yard',
+          parentId: 'level_0',
+          name: 'Yard',
+          polygon: rect(0, 3, 4, 7),
         }),
       ),
     { lacks: [{ type: 'room_not_enclosed' }, { type: 'room_unnamed' }] },

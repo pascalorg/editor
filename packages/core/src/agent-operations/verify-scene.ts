@@ -5,7 +5,13 @@ import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { siteBrief } from '../lib/site-placement'
 import { nodeRegistry } from '../registry'
-import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, type LevelNode } from '../schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  AnyNode as AnyNodeSchema,
+  type LevelNode,
+  nodeKindOf,
+} from '../schema'
 import { isRoofOnStoreyWalls } from '../services/roof-move'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
@@ -230,16 +236,31 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
   })
 }
 
-function schemaErrors(nodes: SceneNodes, hostSchema: AgentContext['nodeSchema']) {
+const CORE_KINDS: ReadonlySet<string> = new Set(AnyNodeSchema.options.map(nodeKindOf))
+
+/**
+ * Every field a node's schema rejects (the host's, else its registered kind's, else core's), and
+ * the scene the other checks measure: without a malformed node of a kind they know, which they
+ * could not read. A node of a kind no schema here knows (a plugin's) stays: they never read it.
+ */
+function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema']) {
   const errors: { nodeId: string; path: string; message: string }[] = []
-  for (const [id, node] of Object.entries(nodes)) {
-    const schema = hostSchema ?? nodeRegistry.get(node.type)?.schema ?? AnyNodeSchema
+  const measured: Record<string, AnyNode> = {}
+  for (const [id, node] of Object.entries(scene)) {
+    const type = (node as { type?: unknown } | null)?.type
+    const schema =
+      hostSchema ??
+      (typeof type === 'string' ? nodeRegistry.get(type)?.schema : undefined) ??
+      AnyNodeSchema
     const parsed = schema.safeParse(node)
-    if (parsed.success) continue
-    for (const issue of parsed.error.issues)
-      errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues)
+        errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
+      if (typeof type !== 'string' || CORE_KINDS.has(type) || nodeRegistry.has(type)) continue
+    }
+    measured[id] = node
   }
-  return errors
+  return { errors, measured }
 }
 
 /**
@@ -250,10 +271,11 @@ function schemaErrors(nodes: SceneNodes, hostSchema: AgentContext['nodeSchema'])
  * field a node's schema rejects, by node and path.
  */
 export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
-  nodes,
+  scene,
   input,
   context,
 ) => {
+  const { errors, measured: nodes } = checkSchemas(scene, context.nodeSchema)
   const onLevel = (levelId: string) => nodesOnLevel(nodes, levelId)
   const ofType = <T extends AnyNode['type']>(content: readonly AnyNode[], type: T) =>
     content.filter((node): node is Extract<AnyNode, { type: T }> => node.type === type)
@@ -578,7 +600,6 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       )
   }
 
-  const errors = schemaErrors(nodes, context.nodeSchema)
   for (const { nodeId, path, message } of errors)
     issues.push({
       type: 'schema_invalid',
@@ -603,13 +624,13 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
   // What the edits since the host's checkpoint lost, by place.
   const hosted = context.checkpoint
-    ? changesSince(context.checkpoint as SceneCheckpoint, nodes)
+    ? changesSince(context.checkpoint as SceneCheckpoint, scene)
     : null
   if (hosted) issues.push(...hosted.issues)
   // The look back: what the agent did since a moment it named. The places the registered families
   // lost count as issues, as a window gone from its place always did.
   const session = context.session ?? EMPTY_SESSION
-  const since = typeof input?.since === 'string' ? reviewSince(session, input.since, nodes) : null
+  const since = typeof input?.since === 'string' ? reviewSince(session, input.since, scene) : null
   if (since?.places) issues.push(...since.places.issues)
   for (const check of checks)
     if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
