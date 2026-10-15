@@ -127,7 +127,7 @@ export function resolveWallRole(args: {
   const { node, hitObject, localPosition, ray } = args
   if (node.wallType === 'curtain') {
     const root = sceneRegistry.nodes.get(node.id)
-    if (!(root && ray)) return null
+    if (!(root && ray && hasMaterialsForGroups(root))) return null
     wallSlotRaycaster.ray.copy(ray)
     const hit = wallSlotRaycaster.intersectObject(root, false)[0]
     return CURTAIN_WALL_ROLES[hit?.face?.materialIndex ?? -1] ?? null
