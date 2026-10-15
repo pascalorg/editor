@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  isDerivedNode,
   type LevelNode,
   nodeRegistry,
   type RevealConfig,
@@ -383,8 +384,12 @@ function placedDifferently(was: unknown, now: unknown): boolean {
 /** Where a piece stood in its level: its position, and its turn about the vertical. */
 export type Placement = { position: [number, number, number]; yaw: number }
 
-/** A piece moved by a commit; `from` is where it stood when it can glide from there, else null. */
-export type ChangeCandidate = StagedCandidate & { from: Placement | null }
+/**
+ * A piece changed by a commit. `from` is where a moved piece stood when it can glide from there, else
+ * null; `edited` marks a piece whose picture was edited (a wall bent, a slab resized), which plays its
+ * reveal again, quickly (`commitEditCandidates`).
+ */
+export type ChangeCandidate = StagedCandidate & { from: Placement | null; edited?: true }
 
 /** Moved less than this (metres, radians) and a piece does not glide: it is where it was. */
 const GLIDES_FROM = 0.02
@@ -481,5 +486,86 @@ export function nodeRevealCandidates(
     }
   }
   for (const id of asked) visit(id)
+  return candidates
+}
+
+/** How an edited node plays again: a quick re-rise or re-scale, never a fall from a height. */
+const EDIT_STYLE: Record<RevealStyle, RevealStyle> = {
+  rise: 'rise',
+  scale: 'scale',
+  settle: 'settle',
+  drop: 'scale',
+  cut: 'scale',
+  assemble: 'scale',
+}
+
+const sameValue = (was: unknown, now: unknown) =>
+  Object.is(was, now) || JSON.stringify(was) === JSON.stringify(now)
+
+/**
+ * What `commit` edits: each node already there whose kind lists `capabilities.revealOnEdit` and one of
+ * those fields (the ones that make its picture) changed. A change to any other field stays instant, and
+ * so does what the structure reconciler derived from an edit (`derivedWrites`: the plates and ceilings it
+ * owns, the fields it wrote on a node): a wall moved does not make its room's floor rise again.
+ */
+export function commitEditCandidates(
+  { before, current, author, derivedWrites }: SceneCommit,
+  at: ConstructionRevealLevel,
+  firstSeq = 0,
+): ChangeCandidate[] {
+  const candidates: ChangeCandidate[] = []
+  let seq = firstSeq
+  for (const id in current.nodes) {
+    const was = before.nodes[id as AnyNodeId]
+    const node = current.nodes[id as AnyNodeId]
+    const derived = derivedWrites?.get(id as AnyNodeId)
+    if (!(was && node) || was === node || derived === 'all' || isDerivedNode(node)) continue
+    const fields = nodeRegistry.get(node.type)?.capabilities?.revealOnEdit
+    const edited = fields?.some(
+      (field) =>
+        !derived?.has(field) &&
+        !sameValue(was[field as keyof AnyNode], node[field as keyof AnyNode]),
+    )
+    if (!edited) continue
+    const candidate = candidateOf(node, current.nodes, at, author ?? null, seq, true)
+    if (!candidate) continue
+    seq += 1
+    const style = EDIT_STYLE[candidate.style]
+    candidates.push({
+      ...candidate,
+      style,
+      height: style === candidate.style ? candidate.height : 0,
+      from: null,
+      edited: true,
+    })
+  }
+  return candidates
+}
+
+/**
+ * What `commit` deletes that the picture can play out: each node that was there and is gone whose kind
+ * stages a reveal, as it was staged when built (a node standing in a host that goes with it goes with
+ * its host). Derived construction the reconciler retires is not a deletion the person or the agent made.
+ */
+export function commitDeleteCandidates(
+  { before, current, author, derivedWrites }: SceneCommit,
+  at: ConstructionRevealLevel,
+  firstSeq = 0,
+): StagedCandidate[] {
+  const candidates: StagedCandidate[] = []
+  let seq = firstSeq
+  for (const id in before.nodes) {
+    if (current.nodes[id as AnyNodeId] || derivedWrites?.get(id as AnyNodeId) === 'all') continue
+    const node = before.nodes[id as AnyNodeId]
+    if (!node || isDerivedNode(node)) continue
+    const host = node.parentId ? before.nodes[node.parentId as AnyNodeId] : undefined
+    const goesWithHost = Boolean(
+      host && !CONTAINERS.has(host.type) && !current.nodes[host.id as AnyNodeId],
+    )
+    const candidate = candidateOf(node, before.nodes, at, author ?? null, seq, !goesWithHost)
+    if (!candidate) continue
+    seq += 1
+    candidates.push(candidate)
+  }
   return candidates
 }

@@ -215,6 +215,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
 
   capabilities: {
     reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
+    revealOnEdit: ['scale'],
     batchable: itemBatchable,
     selectable: { hitVolume: 'bbox' },
     // Authored objects host ceiling items on their undersides; catalog items do not.

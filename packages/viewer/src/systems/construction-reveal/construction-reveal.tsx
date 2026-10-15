@@ -18,10 +18,13 @@ import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { type Box3, type Object3D, Vector3 } from 'three'
 import { DustPool, emitAlongBase, emitAroundFoot } from '../../lib/construction-dust'
+import { SCENE_LAYER } from '../../lib/layers'
 import {
   type ChangeCandidate,
   type ConstructionRevealLevel,
   commitChangeCandidates,
+  commitDeleteCandidates,
+  commitEditCandidates,
   commitRevealCandidates,
   nodeRevealCandidates,
   PART_LEAD,
@@ -103,6 +106,8 @@ type ActiveReveal = {
   /** The last piece of the plan to arrive; the reveal says when it has. */
   finale: boolean
   finaleSaid: boolean
+  /** An edit plays the node again (`commitEditCandidates`): it counts in the changes' groups, not the build's. */
+  edit?: true
 }
 
 export type RevealPhaseEvent = { phase: RevealPhase; levelId: string | null }
@@ -808,7 +813,7 @@ function beginChange(change: ChangeCandidate, atMs: number) {
     id: change.id,
     phase: change.phase,
     levelId: change.levelId,
-    style: 'glide',
+    style: change.edited ? change.style : 'glide',
     source: change.source ?? null,
     atMs,
     changed: true,
@@ -865,7 +870,11 @@ function poseGlide(change: ChangeCandidate, root: Object3D, left: number) {
 
 /** Whether a move glides now: it has somewhere to glide from, and the animation plays. */
 function glidePlays(change: ChangeCandidate): boolean {
-  return change.from !== null && !showsAtOnce() && !useViewer.getState().renderPaused
+  return (
+    (change.from !== null || change.edited === true) &&
+    !showsAtOnce() &&
+    !useViewer.getState().renderPaused
+  )
 }
 
 /** The agent's moves wait for the reveal to be quiet; until then each piece holds at its old place. */
@@ -919,6 +928,41 @@ function flushChanges(now: number) {
   for (const change of atOnce) endChange(change.id, now, false)
 }
 
+/** An edited node plays again in this share of the time its first appearance took. */
+const EDIT_SHARE = 0.55
+
+/** An edited node begins its quick re-rise, at the person's animation speed. */
+function startEdit(change: ChangeCandidate, now: number) {
+  beginChange(change, now)
+  const speed = currentSpeed()
+  const lazy = lazyOn()
+  const timing = lazy ? lazyTimingAt(speed) : revealTimingAt(speed)
+  active.set(change.id, {
+    id: change.id,
+    candidate: change,
+    style: change.style,
+    height: change.height,
+    levelId: change.levelId,
+    startedAt: now,
+    durationMs: timing.durationMs[change.style] * EDIT_SHARE,
+    assembleMs: 0,
+    clockStart: null,
+    pivot: null,
+    base: null,
+    landed: false,
+    root: null,
+    lead: 0,
+    weight: 1,
+    overshoot:
+      lazy && change.style in LAZY_REVEAL_TIMING.overshoot
+        ? LAZY_REVEAL_TIMING.overshoot[change.style as keyof LazyRevealTiming['overshoot']]
+        : 0,
+    finale: false,
+    finaleSaid: false,
+    edit: true,
+  })
+}
+
 function stepGlides(now: number) {
   const dt = Math.min(0.05, Math.max(0, (now - glideClockMs) / 1000))
   glideClockMs = now
@@ -929,6 +973,12 @@ function stepGlides(now: number) {
     if (!nodes[change.id as AnyNodeId]) {
       glides.delete(change.id)
       endChange(change.id, now, true)
+      continue
+    }
+    if (change.edited) {
+      if (now < glide.startAt) continue
+      glides.delete(change.id)
+      startEdit(change, now)
       continue
     }
     if (!glide.began) {
@@ -1044,6 +1094,7 @@ function levelsAtWork(): string[] {
   for (const retract of retracts.values()) add(retract.group.levelId)
   for (const glide of glides.values()) add(glide.change.levelId)
   for (const change of changeQueue) add(change.levelId)
+  for (const ghost of ghosts.values()) add(ghost.levelId)
   return [...levels]
 }
 
@@ -1066,6 +1117,7 @@ function endReveal(reveal: ActiveReveal, forced = false) {
     clearRiseTextureScale(reveal.root)
   }
   active.delete(reveal.id)
+  if (reveal.edit) return endChange(reveal.id, clockMs, forced)
   settle(reveal.id)
   closeNode(reveal.id, clockMs, forced)
 }
@@ -1213,7 +1265,7 @@ function stepReveal(reveal: ActiveReveal, now: number) {
     reveal.pivot = revealPivot(reveal.base, reveal.style)
     revealPoseAt(reveal.style, 0, reveal.height, sample, reveal)
     setRevealPose(root, reveal.pivot, sample.scale, sample.lift)
-    groupStarted(reveal.candidate, now)
+    if (!reveal.edit) groupStarted(reveal.candidate, now)
     if (reveal.style === 'rise') puffAlongBase(reveal, root, now)
   }
   const t = (now - reveal.clockStart) / reveal.durationMs
@@ -1224,7 +1276,7 @@ function stepReveal(reveal: ActiveReveal, now: number) {
   }
   if (!reveal.landed && revealHasLanded(reveal.style, t)) {
     reveal.landed = true
-    groupLanded(reveal.id, now)
+    if (!reveal.edit) groupLanded(reveal.id, now)
     if (reveal.finale && !reveal.finaleSaid && t >= REVEAL_ARRIVAL[reveal.style])
       sayFinale(reveal, now)
     if (reveal.style === 'drop') puffAroundFoot(reveal, root, now)
@@ -1504,6 +1556,120 @@ function holdGone(retract: Retract, root: Object3D, atMs: number) {
   held.set(retract.id, hold)
   dressHeld(hold, root)
   notifyPending(retract.id)
+}
+
+// ---------------------------------------------------------------------------------------------
+// Deletions. The nodes are out of the scene at once (selection, queries, saves); a snapshot of each
+// one's picture, taken as its commit lands, plays its construction backwards and is then taken away.
+// ---------------------------------------------------------------------------------------------
+
+type Ghost = {
+  id: string
+  levelId: string | null
+  /** The picture: a clone of the deleted node's root, standing where it stood. */
+  root: Object3D
+  parent: Object3D
+  style: RevealStyle
+  height: number
+  startMs: number
+  durationMs: number
+  group: RetractGroup
+  pivot: Vector3 | null
+}
+
+const ghosts = new Map<string, Ghost>()
+
+/** Draws the clone as the scene pass does: a batched source keeps no layer of its own. */
+function drawnInScenePass(root: Object3D) {
+  root.traverse((object) => {
+    object.layers.set(SCENE_LAYER)
+  })
+}
+
+/**
+ * A commit deleted nodes: each one that stages a reveal and is on screen leaves a ghost that plays the
+ * reveal backwards, staggered like a build in reverse. Nothing plays for an undo (it plays its own
+ * reverse), a load, the animation off, or a level the author hid.
+ */
+function playDeletions(commit: SceneCommit) {
+  if (commit.origin !== 'local' || isRestoringSceneHistory() || showsAtOnce()) return
+  if (useViewer.getState().renderPaused) return
+  const staged = commitDeleteCandidates(commit, revealLevel()).filter(
+    (candidate) =>
+      !(retracts.has(candidate.id) || held.has(candidate.id)) &&
+      !levelHiddenByAuthor(candidate.levelId) &&
+      sceneRegistry.nodes.get(candidate.id)?.parent,
+  )
+  if (staged.length === 0) return
+  const speed = currentSpeed()
+  const plan = planRetract(staged, clockMs, retractTimingAt(speed), revealTimingAt(speed))
+  const groupsByKey = new Map<string, RetractGroup>()
+  for (const entry of plan) {
+    const original = sceneRegistry.nodes.get(entry.id)
+    const parent = original?.parent
+    if (!(original && parent)) continue
+    const root = original.clone(true)
+    drawnInScenePass(root)
+    parent.add(root)
+    const key = `${entry.phase}:${entry.levelId}`
+    let group = groupsByKey.get(key)
+    if (!group) {
+      group = { phase: entry.phase, levelId: entry.levelId, ids: [], remaining: 0, started: false }
+      groupsByKey.set(key, group)
+    }
+    group.ids.push(entry.id)
+    group.remaining += 1
+    ghosts.set(entry.id, {
+      id: entry.id,
+      levelId: entry.levelId,
+      root,
+      parent,
+      style: entry.style,
+      height: entry.height,
+      startMs: entry.startMs,
+      durationMs: entry.durationMs,
+      group,
+      pivot: null,
+    })
+  }
+}
+
+/** A ghost has gone (or was cut short): its picture is taken away, and its group ends with its last. */
+function ghostGone(ghost: Ghost, atMs: number) {
+  if (!ghosts.delete(ghost.id)) return
+  clearRevealPose(ghost.root)
+  clearGhost(ghost.root)
+  ghost.parent.remove(ghost.root)
+  const { group } = ghost
+  group.remaining -= 1
+  if (group.remaining > 0) return
+  if (!group.started) {
+    group.started = true
+    emitRetract('retract-start', group, atMs)
+  }
+  emitRetract('retract-end', group, atMs)
+}
+
+function stepGhosts(now: number) {
+  for (const ghost of [...ghosts.values()]) {
+    if (now < ghost.startMs) continue
+    if (!ghost.pivot) {
+      ghost.pivot = revealPivot(revealLocalBounds(ghost.root), ghost.style)
+      if (!ghost.group.started) {
+        ghost.group.started = true
+        emitRetract('retract-start', ghost.group, now)
+      }
+    }
+    const t = (now - ghost.startMs) / ghost.durationMs
+    const pose = retractPoseAt(ghost.style, t, ghost.height, retractSample)
+    setRevealPose(ghost.root, ghost.pivot, pose.scale, pose.lift)
+    if (fadesAway(ghost.style)) setGhost(ghost.root, pose.opacity)
+    if (t >= 1) ghostGone(ghost, now)
+  }
+}
+
+function finishGhosts() {
+  for (const ghost of [...ghosts.values()]) ghostGone(ghost, clockMs)
 }
 
 function stepRetracts(now: number) {
@@ -1934,6 +2100,7 @@ function tickReveals(now: number, frameMs?: number) {
   for (const reveal of active.values()) stepReveal(reveal, now)
   stepLifts(now)
   stepRetracts(now)
+  stepGhosts(now)
   stepGlides(now)
   const building = pending.size > 0 || active.size > 0 || lifts.size > 0 || liftWanted.size > 0
   if (!building) {
@@ -1952,7 +2119,12 @@ function tickReveals(now: number, frameMs?: number) {
     flushChanges(now)
   }
   const busy =
-    building || retracts.size > 0 || held.size > 0 || glides.size > 0 || changeQueue.length > 0
+    building ||
+    retracts.size > 0 ||
+    held.size > 0 ||
+    glides.size > 0 ||
+    ghosts.size > 0 ||
+    changeQueue.length > 0
   publishLevelsAtWork()
   if (busy || tickedBusy) notifyTicks()
   tickedBusy = busy
@@ -1964,7 +2136,7 @@ function tickReveals(now: number, frameMs?: number) {
  */
 function finishReveals(keepHeld = false) {
   const waiting = [...pending.values()]
-  const busy = waiting.length > 0 || active.size > 0 || retracts.size > 0
+  const busy = waiting.length > 0 || active.size > 0 || retracts.size > 0 || ghosts.size > 0
   pending.clear()
   queue = []
   planned.clear()
@@ -1991,6 +2163,7 @@ function finishReveals(keepHeld = false) {
   dust?.clear()
   seatAllLifts()
   finishRetracts(keepHeld)
+  finishGhosts()
   finishChanges()
   completeBuild(clockMs, true)
   publishLevelsAtWork()
@@ -2063,6 +2236,11 @@ export type ConstructionRevealOptions = {
    * Read when a plan is made: a change applies to the next build and never moves one playing.
    */
   speed?: () => number
+  /**
+   * Which commits play the nodes they delete backwards, as a snapshot of their picture (the nodes are out
+   * of the scene at once); defaults to `reveals`.
+   */
+  deletes?: (commit: SceneCommit) => boolean
   /** Defaults to the `prefers-reduced-motion` media query. */
   prefersReducedMotion?: () => boolean
   /** Where rising walls and landings puff their dust; none without it. */
@@ -2107,14 +2285,21 @@ export function startConstructionReveal(
     )
   }
   showsAtOnce = instant
+  const deletes = options.deletes ?? options.reveals
   const stops = [
     subscribeSceneCommits((commit) => {
       if (currentDriver !== token) return
       if (commit.origin === 'load') return finishReveals()
-      if (!options.reveals(commit)) return
+      if (deletes(commit)) playDeletions(commit)
+      if (!options.reveals(commit)) return publishLevelsAtWork()
       const candidates = revealCandidates(commit, revealLevel())
       // Furniture the agent moved, that is shown and not still on its way in.
-      const changes = commitChangeCandidates(commit, revealLevel()).filter(
+      const moved = commitChangeCandidates(commit, revealLevel())
+      const movedIds = new Set(moved.map((change) => change.id))
+      const changes = [
+        ...moved,
+        ...commitEditCandidates(commit, revealLevel()).filter((edit) => !movedIds.has(edit.id)),
+      ].filter(
         (change) =>
           !(pending.has(change.id) || active.has(change.id) || isNodeRevealing(change.id)) &&
           !levelHiddenByAuthor(change.levelId),
@@ -2218,15 +2403,19 @@ export function startConstructionReveal(
  */
 export function ConstructionReveal({
   reveals,
+  deletes,
   level = 'full',
   speed = 1,
 }: {
   reveals: (commit: SceneCommit) => boolean
+  /** Which commits play what they delete backwards; defaults to `reveals`. */
+  deletes?: (commit: SceneCommit) => boolean
   level?: ConstructionRevealLevel
   /** The person's animation speed (×0.5 to ×2); a change applies to the next build. */
   speed?: number
 }) {
   const revealsRef = useRef(reveals)
+  const deletesRef = useRef(deletes)
   const levelRef = useRef(level)
   const speedRef = useRef(speed)
   const driverRef = useRef<ConstructionRevealDriver | null>(null)
@@ -2239,6 +2428,10 @@ export function ConstructionReveal({
   }, [reveals])
 
   useEffect(() => {
+    deletesRef.current = deletes
+  }, [deletes])
+
+  useEffect(() => {
     levelRef.current = level
   }, [level])
 
@@ -2249,6 +2442,7 @@ export function ConstructionReveal({
   useEffect(() => {
     const driver = startConstructionReveal({
       reveals: (commit) => revealsRef.current(commit),
+      deletes: (commit) => (deletesRef.current ?? revealsRef.current)(commit),
       level: () => levelRef.current,
       speed: () => speedRef.current,
       dust: pool,

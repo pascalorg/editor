@@ -149,6 +149,14 @@ describe('what the camera looks at', () => {
     }
   })
 
+  test('a wall the agent edited is looked at, close up: it is not a floor being built', () => {
+    const nodes = house()
+    const edited = { ...started('wall_0', 'structure', 'rise'), changed: true } as RevealEvent
+    const want = wantFromEvent(edited, nodes, 0)
+    expect(want?.kind).toBe('detail')
+    expect(want?.levelId).toBe('level_h')
+  })
+
   test('the walls themselves are not targets: the floor already is', () => {
     expect(wantFromEvent(started('wall_1', 'structure', 'rise'), house(), 0)).toBeNull()
   })

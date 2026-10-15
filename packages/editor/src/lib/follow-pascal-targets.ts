@@ -137,6 +137,11 @@ function targetFromEvent(event: RevealEvent, nodes: Nodes, at: number): FollowWa
         const eyeAbove = clearanceAbove(nodes, event.id)
         return { kind: 'furnish', box, ...(eyeAbove === undefined ? {} : { eyeAbove }), at }
       }
+      // A piece the agent edited (a wall bent, a slab resized) plays again: the camera goes to it.
+      if (event.changed) {
+        const box = boxOf(nodes, event.id)
+        return box ? { kind: 'detail', box, at } : null
+      }
       return null
     }
     case 'settle': {

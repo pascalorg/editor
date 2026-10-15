@@ -69,3 +69,23 @@ describe('every built-in kind an agent can create', () => {
     for (const kind of DRAWS_NOTHING_OF_ITS_OWN) expect(kinds).toContain(kind)
   })
 })
+
+describe('the fields an edit replays a node for', () => {
+  const withEdits = (builtinPlugin.nodes ?? []).filter(
+    (definition) => definition.capabilities?.revealOnEdit,
+  )
+
+  test('the kinds an agent edits most are listed', () => {
+    const kinds = withEdits.map((definition) => definition.kind)
+    for (const kind of ['wall', 'slab', 'ceiling', 'roof-segment', 'stair', 'door', 'window'])
+      expect(kinds).toContain(kind)
+  })
+
+  test.each(
+    withEdits.map((definition) => [definition.kind, definition] as const),
+  )('%s lists only fields its schema has', (_kind, definition) => {
+    const shape = (definition.schema as unknown as { shape: Record<string, unknown> }).shape
+    for (const field of definition.capabilities?.revealOnEdit ?? [])
+      expect(shape).toHaveProperty(field)
+  })
+})

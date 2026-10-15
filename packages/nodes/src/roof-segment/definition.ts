@@ -334,6 +334,17 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   },
 
   capabilities: {
+    revealOnEdit: [
+      'roofType',
+      'width',
+      'depth',
+      'wallHeight',
+      'pitch',
+      'overhang',
+      'wallThickness',
+      'deckThickness',
+      'sweptProfile',
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

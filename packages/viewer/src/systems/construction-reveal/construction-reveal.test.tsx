@@ -16,6 +16,7 @@ import {
   objectId,
   type RevealConfig,
   runAsSceneCommitAuthor,
+  type SceneCommit,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -24,6 +25,7 @@ import { BoxGeometry, Group, Matrix4, Mesh, type Object3D } from 'three'
 import { NodeRenderer } from '../../components/renderers/node-renderer'
 import { DustPool } from '../../lib/construction-dust'
 import { OVERLAY_LAYER, scenePassLayers } from '../../lib/layers'
+import { commitEditCandidates } from '../../lib/reveal-candidates'
 import { hasRevealPose } from '../../lib/reveal-pose'
 import {
   LAZY_REVEAL_TIMING,
@@ -82,6 +84,7 @@ function revealKind(
   reveal: RevealConfig | null,
   geometry: (node: AnyNode) => BoxGeometry | null,
   extra: Record<string, unknown> = {},
+  revealOnEdit: readonly string[] = [],
 ): { schema: typeof BaseNode; definition: AnyNodeDefinition } {
   const schema = BaseNode.extend({
     id: objectId(prefix),
@@ -95,7 +98,10 @@ function revealKind(
     schema,
     category: 'structure',
     defaults: () => base,
-    capabilities: reveal ? { reveal } : {},
+    capabilities: {
+      ...(reveal ? { reveal } : {}),
+      ...(revealOnEdit.length ? { revealOnEdit } : {}),
+    },
     geometry: (node) => {
       const built = geometry(node as AnyNode)
       return built ? new Group().add(new Mesh(built)) : new Group()
@@ -136,6 +142,24 @@ const Plate = revealKind(
   'fxplate',
   { phase: 'foundation', style: 'settle', height: 0.08 },
   () => new BoxGeometry(4, 0.2, 4).translate(2, -0.1, 2),
+)
+// A wall that is bent or resized: its `scale` makes its picture, its `name` does not.
+const Beam = revealKind(
+  'fixture:beam',
+  'fxbeam',
+  { phase: 'structure', style: 'rise' },
+  () => new BoxGeometry(4, 2.5, 0.2).translate(2, 1.25, 0),
+  { scale: ItemNode.shape.scale },
+  ['scale'],
+)
+// A slab edited the same way: the edit plays as a settle, as it came in.
+const Floorplate = revealKind(
+  'fixture:floorplate',
+  'fxfloorplate',
+  { phase: 'foundation', style: 'settle', height: 0.08 },
+  () => new BoxGeometry(4, 0.2, 4).translate(2, -0.1, 2),
+  { scale: ItemNode.shape.scale },
+  ['scale'],
 )
 const Flight = revealKind(
   'fixture:flight',
@@ -265,10 +289,17 @@ async function agentWrites(write: () => void) {
   })
 }
 
-function start(options: { prefersReducedMotion?: () => boolean; speed?: () => number } = {}) {
+function start(
+  options: {
+    prefersReducedMotion?: () => boolean
+    speed?: () => number
+    deletes?: (commit: SceneCommit) => boolean
+  } = {},
+) {
   dust = new DustPool()
   driver = startConstructionReveal({
     reveals: (commit) => commit.author === 'agent',
+    ...(options.deletes ? { deletes: options.deletes } : {}),
     prefersReducedMotion: options.prefersReducedMotion ?? (() => false),
     level: () => level,
     ...(options.speed ? { speed: options.speed } : {}),
@@ -308,6 +339,8 @@ beforeEach(async () => {
       Post.definition,
       Plate.definition,
       Flight.definition,
+      Beam.definition,
+      Floorplate.definition,
       Pane.definition,
       Roof.definition,
       Lid.definition,
@@ -1246,6 +1279,293 @@ describe('the level the work is on shows while it plays', () => {
     await until(() => result !== null, 6000)
     expect((result as RetractResult | null)?.retracted).toEqual([above.id])
     expect((result as RetractResult | null)?.instant).toBe(false)
+  })
+})
+
+// The owner, 15 October: a wall bent to a curve, or turned curtain, jumped to its new shape. An edit
+// that changes what a node looks like plays its reveal again, quickly; any other edit stays instant.
+describe('an edit that changes a picture plays again', () => {
+  async function builtBeam() {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const beam = make(Beam)
+    await agentWrites(() => useScene.getState().createNode(beam, levelId))
+    await until(() => !isNodeRevealing(beam.id) && root(beam.id) !== undefined, 9000)
+    return { levelId: levelId!, beam }
+  }
+  const edit = (id: string, data: Record<string, unknown>) =>
+    agentWrites(() =>
+      useScene.getState().updateNodes([{ id: id as AnyNodeId, data: data as never }]),
+    )
+
+  for (const at of ['simple', 'full', 'framing'] as const) {
+    test(`${at}: a changed geometry field re-rises the node and it ends at rest`, async () => {
+      level = at
+      const { beam } = await builtBeam()
+      const events: RevealEvent[] = []
+      const stop = subscribeRevealEvents((event) => events.push(event))
+      await edit(beam.id, { scale: [1, 1, 1.5] })
+      await frame()
+      await frame()
+      expect(isNodeRevealing(beam.id)).toBe(true)
+      while (!(root(beam.id) && hasRevealPose(root(beam.id)!))) await frame()
+      expect(yScale(root(beam.id)!)).toBeLessThan(1)
+      await until(() => !isNodeRevealing(beam.id), 4000)
+      stop()
+      expect(composed(root(beam.id)!).equals(own(root(beam.id)!))).toBe(true)
+      expect(events.some((e) => e.type === 'node-start' && e.changed === true)).toBe(true)
+      expect(events.at(-1)).toMatchObject({ type: 'complete', changed: true })
+    })
+  }
+
+  test('an edit of a field that is not geometry stays instant', async () => {
+    const { beam } = await builtBeam()
+    await edit(beam.id, { name: 'North wall' })
+    await frames(100)
+    expect(isNodeRevealing(beam.id)).toBe(false)
+    expect(hasRevealPose(root(beam.id)!)).toBe(false)
+  })
+
+  test("a person's own edit stays instant", async () => {
+    const { beam } = await builtBeam()
+    await act(async () =>
+      useScene
+        .getState()
+        .updateNodes([{ id: beam.id as AnyNodeId, data: { scale: [2, 1, 1] } as never }]),
+    )
+    await frames(100)
+    expect(isNodeRevealing(beam.id)).toBe(false)
+  })
+
+  test('what the structure reconciler derived is not an edit, but its field-by-field writes leave the edit alone', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const plate = make(Floorplate)
+    await agentWrites(() => useScene.getState().createNode(plate, levelId))
+    await until(() => !isNodeRevealing(plate.id) && root(plate.id) !== undefined, 9000)
+    const before = useScene.getState().nodes
+    const after = { ...before, [plate.id]: { ...before[plate.id as AnyNodeId]!, scale: [3, 1, 3] } }
+    const commit = {
+      origin: 'local',
+      author: 'agent',
+      before: { nodes: before },
+      current: { nodes: after },
+    } as unknown as SceneCommit
+    expect(commitEditCandidates(commit, 'full').map((c) => c.id)).toEqual([plate.id])
+    const derived = {
+      ...commit,
+      derivedWrites: new Map([[plate.id as AnyNodeId, new Set(['scale'])]]),
+    } as SceneCommit
+    expect(commitEditCandidates(derived, 'full')).toEqual([])
+    const authored = {
+      ...commit,
+      derivedWrites: new Map([[plate.id as AnyNodeId, new Set(['name'])]]),
+    } as SceneCommit
+    expect(commitEditCandidates(authored, 'full').map((c) => c.id)).toEqual([plate.id])
+  })
+
+  test('a slab edit settles, as a slab came in', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const plate = make(Floorplate)
+    await agentWrites(() => useScene.getState().createNode(plate, levelId))
+    await until(() => !isNodeRevealing(plate.id) && root(plate.id) !== undefined, 9000)
+    const events: RevealEvent[] = []
+    const stop = subscribeRevealEvents((event) => events.push(event))
+    await edit(plate.id, { scale: [2, 1, 2] })
+    await frames(300)
+    stop()
+    expect(events.find((e) => e.type === 'node-start')).toMatchObject({
+      style: 'settle',
+      changed: true,
+    })
+  })
+
+  test('it plays at the person’s animation speed', async () => {
+    const took: Record<string, number> = {}
+    for (const speed of [0.5, 2]) {
+      await act(async () => driver?.stop())
+      await renderer?.unmount()
+      renderer = null
+      sceneRegistry.clear()
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start({ speed: () => speed })
+      const beam = make(Beam)
+      await agentWrites(() => useScene.getState().createNode(beam, levelId))
+      await until(() => !isNodeRevealing(beam.id) && root(beam.id) !== undefined, 20000)
+      await edit(beam.id, { scale: [1, 1, 1.5] })
+      const began = now
+      await frame()
+      await until(() => !isNodeRevealing(beam.id) && !hasRevealPose(root(beam.id)!), 8000)
+      took[speed] = now - began
+    }
+    expect(took[2]!).toBeLessThan(took[0.5]! / 1.5)
+  })
+
+  test('with the animation off, an edit is instant', async () => {
+    level = 'off'
+    const { beam } = await builtBeam()
+    await edit(beam.id, { scale: [1, 1, 1.5] })
+    await frames(100)
+    expect(isNodeRevealing(beam.id)).toBe(false)
+    expect(hasRevealPose(root(beam.id)!)).toBe(false)
+  })
+})
+
+// A deletion plays the creation backwards. The node is out of the scene at once; a snapshot of its
+// picture plays out, and is taken away.
+describe('a deletion plays the creation backwards', () => {
+  /** What stands in the scene that is not a mounted node: the snapshots. */
+  const pictures = () =>
+    (renderer!.scene.instance as Object3D).children.filter(
+      (child) => ![...sceneRegistry.nodes.values()].includes(child) && child.children.length > 0,
+    )
+  const remove = (ids: string[], author: 'agent' | null = 'agent') =>
+    act(async () => {
+      const run = () => useScene.getState().deleteNodes(ids as AnyNodeId[])
+      if (author) runAsSceneCommitAuthor(author, run)
+      else run()
+    })
+
+  async function builtWalls(count: number) {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const walls = Array.from({ length: count }, () => make(Wall))
+    await agentWrites(() =>
+      useScene.getState().createNodes(walls.map((node) => ({ node, parentId: levelId }))),
+    )
+    await until(() => walls.every((w) => !isNodeRevealing(w.id) && root(w.id)), 12000)
+    return { levelId: levelId!, walls }
+  }
+
+  for (const at of ['simple', 'full', 'framing'] as const) {
+    test(`${at}: the node is gone from the store at once and its picture plays out, then goes`, async () => {
+      level = at
+      const { walls } = await builtWalls(1)
+      const [wall] = walls
+      await remove([wall!.id])
+      expect(useScene.getState().nodes[wall!.id as AnyNodeId]).toBeUndefined()
+      await frame()
+      expect(pictures()).toHaveLength(1)
+      await frames(120)
+      const picture = pictures()[0]!
+      expect(hasRevealPose(picture)).toBe(true)
+      await until(() => pictures().length === 0, 4000)
+    })
+  }
+
+  test('many deletions stagger, the last built going first', async () => {
+    const { walls } = await builtWalls(4)
+    const events: RevealEvent[] = []
+    const stop = subscribeRevealEvents((event) => events.push(event))
+    await remove(walls.map((w) => w.id))
+    const poses: number[] = []
+    for (let step = 0; step < 100; step += 1) {
+      await frame()
+      poses.push(pictures().filter((p) => hasRevealPose(p)).length)
+    }
+    stop()
+    expect(Math.max(...poses)).toBeGreaterThan(0)
+    // Not all at once: some are still waiting for their turn while others are moving.
+    expect(poses.some((count) => count > 0 && count < walls.length)).toBe(true)
+    await until(() => pictures().length === 0, 6000)
+    const retract = events.filter((e) => e.type === 'retract-start' || e.type === 'retract-end')
+    expect(retract.map((e) => e.type)).toEqual(['retract-start', 'retract-end'])
+  })
+
+  test('it plays at the person’s animation speed', async () => {
+    const took: Record<string, number> = {}
+    for (const speed of [0.5, 2]) {
+      await act(async () => driver?.stop())
+      await renderer?.unmount()
+      renderer = null
+      sceneRegistry.clear()
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start({ speed: () => speed })
+      const wall = make(Wall)
+      await agentWrites(() => useScene.getState().createNode(wall, levelId))
+      await until(() => !isNodeRevealing(wall.id) && root(wall.id) !== undefined, 20000)
+      await remove([wall.id])
+      const began = now
+      await frame()
+      await until(() => pictures().length === 0, 8000)
+      took[speed] = now - began
+    }
+    expect(took[2]!).toBeLessThan(took[0.5]! / 1.5)
+  })
+
+  test("a person's delete plays when the host says so, and not otherwise", async () => {
+    const { walls } = await builtWalls(2)
+    await remove([walls[0]!.id], null)
+    await frame()
+    expect(pictures()).toHaveLength(0)
+
+    await act(async () => driver?.stop())
+    start({ deletes: () => true })
+    await remove([walls[1]!.id], null)
+    await frame()
+    expect(pictures()).toHaveLength(1)
+  })
+
+  test('an undo plays its own reverse and leaves no second picture', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId))
+    await until(() => !isNodeRevealing(wall.id) && root(wall.id) !== undefined, 9000)
+    await act(async () => useScene.temporal.getState().undo())
+    await frame()
+    expect(useScene.getState().nodes[wall.id as AnyNodeId]).toBeUndefined()
+    expect(pictures()).toHaveLength(0)
+  })
+
+  test('nothing plays with the animation off', async () => {
+    level = 'off'
+    const { walls } = await builtWalls(1)
+    await remove([walls[0]!.id])
+    await frame()
+    expect(pictures()).toHaveLength(0)
+  })
+
+  test('a load clears what is playing', async () => {
+    const { walls } = await builtWalls(1)
+    await remove([walls[0]!.id])
+    await frame()
+    expect(pictures()).toHaveLength(1)
+    await act(async () => {
+      const { nodes, rootNodeIds } = useScene.getState()
+      applySceneSnapshot(
+        { nodes, rootNodeIds, collections: {}, materials: {}, installedPlugins: [PLUGIN_ID] },
+        { origin: 'load' },
+      )
+    })
+    expect(pictures()).toHaveLength(0)
+  })
+
+  test('the level it was on shows while its picture plays', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    start()
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelIds[1]!))
+    await until(() => !isNodeRevealing(wall.id) && root(wall.id) !== undefined, 9000)
+    useViewer.setState({
+      hideLevelsAboveSelection: true,
+      selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
+    } as never)
+    await remove([wall.id])
+    await frame()
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+    await until(() => pictures().length === 0, 6000)
+    await frame()
+    expect(useViewer.getState().levelsRevealing).toEqual([])
   })
 })
 

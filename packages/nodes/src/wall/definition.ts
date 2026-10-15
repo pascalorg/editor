@@ -138,6 +138,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   capabilities: {
     reveal: { phase: 'structure', style: 'rise' },
+    revealOnEdit: ['start', 'end', 'curveOffset', 'height', 'thickness', 'wallType', 'curtainWall'],
     // Wall move is bespoke (endpoint drag, linked-wall corner cascade,
     // ALT-detach). Omitting `movable` keeps the legacy MoveWallTool via
     // capability-driven dispatch.

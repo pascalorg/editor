@@ -385,6 +385,18 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   capabilities: {
     reveal: { phase: 'structure', style: 'rise' },
+    revealOnEdit: [
+      'start',
+      'end',
+      'path',
+      'curveOffset',
+      'height',
+      'thickness',
+      'baseHeight',
+      'postSpacing',
+      'picketSpacing',
+      'style',
+    ],
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     surfaces: { sides: { faces: 'all' }, hosting: false },
