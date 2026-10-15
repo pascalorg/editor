@@ -150,7 +150,9 @@ import { builtinPlugin } from '@pascal-app/nodes'
 await loadPlugin(builtinPlugin)
 ```
 
-See the [`@pascal-app/viewer` quick start](packages/viewer/README.md#usage) for a React example.
+See the [`@pascal-app/viewer` quick start](packages/viewer/README.md#usage) for a React example,
+and [`@pascal-app/editor`](packages/editor/README.md) to embed the full editor: its loading
+surface, tool-menu placement, light or dark chrome, views and selection helpers.
 
 
 ## Repository Architecture
