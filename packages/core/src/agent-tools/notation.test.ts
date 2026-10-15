@@ -5,9 +5,12 @@ import { HOSTED_SERVICE_TOOL_CONTRACTS } from './hosted-services'
 import {
   AGENT_TOOL_CONTRACTS,
   type AgentToolContract,
+  bareNumberPaths,
+  fieldSchema,
   measurement,
   roofPitch,
   straightenFacadePhotoTool,
+  unshownDefaultPaths,
 } from './index'
 
 const CONTRACTS: readonly AgentToolContract[] = [
@@ -18,69 +21,25 @@ const CONTRACTS: readonly AgentToolContract[] = [
 
 const contract = (name: string) => CONTRACTS.find((candidate) => candidate.name === name)!
 
-function unwrap(schema: z.ZodType): z.ZodType {
-  if (
-    schema instanceof z.ZodOptional ||
-    schema instanceof z.ZodNullable ||
-    schema instanceof z.ZodDefault
-  )
-    return unwrap(schema.unwrap() as z.ZodType)
-  return schema
-}
-
-/** The schema of one field, by its path: `patch.thickness`, `faces[].rows[].height`. */
-function fieldOf(tool: string, path: string): z.ZodType {
-  let schema: z.ZodType = z.object(contract(tool).input)
-  for (const step of path.split('.')) {
-    const [name, ...arrays] = step.split('[]')
-    schema = (unwrap(schema) as z.ZodObject).shape[name!] as z.ZodType
-    for (const _ of arrays) schema = (unwrap(schema) as z.ZodArray<z.ZodType>).element
-  }
-  return schema
-}
-
-type JsonSchema = {
-  type?: string | string[]
-  const?: unknown
-  anyOf?: JsonSchema[]
-  properties?: Record<string, JsonSchema>
-  items?: JsonSchema
-  additionalProperties?: JsonSchema | boolean
-}
-
-/** The paths of the plain numbers a schema takes by name (not in a list, not whole numbers). */
-function namedNumbers(schema: JsonSchema, path: string): string[] {
-  if (schema.anyOf) return schema.anyOf.flatMap((branch) => namedNumbers(branch, path))
-  const types = [schema.type ?? []].flat()
-  if (types.includes('number'))
-    return types.includes('string') || schema.const !== undefined ? [] : [path]
-  const fields = Object.entries(schema.properties ?? {}).flatMap(([key, field]) =>
-    namedNumbers(field, path ? `${path}.${key}` : key),
-  )
-  const items = schema.items?.properties ? namedNumbers(schema.items, `${path}[]`) : []
-  const values =
-    typeof schema.additionalProperties === 'object'
-      ? namedNumbers(schema.additionalProperties, `${path}{}`)
-      : []
-  return [...fields, ...items, ...values]
-}
-
 describe('one notation (N1): each length, angle and pitch reads in its own unit or any other', () => {
   for (const row of NOTATION_CASES)
     for (const [sent, received] of row.readings)
       test(`${row.tool}.${row.field}: ${JSON.stringify(sent)} → ${received}`, () => {
-        expect(fieldOf(row.tool, row.field).parse(sent) as number).toBeCloseTo(received, 9)
+        expect(fieldSchema(contract(row.tool), row.field).parse(sent) as number).toBeCloseTo(
+          received,
+          9,
+        )
       })
 })
 
 test('every other number a shared tool takes by name is a coordinate, a fraction or a ratio', () => {
-  const plain = CONTRACTS.flatMap((tool) =>
-    namedNumbers(z.toJSONSchema(z.object(tool.input), { io: 'input' }) as JsonSchema, '').map(
-      (path) => `${tool.name}.${path}`,
-    ),
-  )
+  const plain = bareNumberPaths(CONTRACTS)
   expect(plain.filter((path) => !NOT_LENGTHS.has(path))).toEqual([])
   expect([...NOT_LENGTHS].filter((path) => !plain.includes(path))).toEqual([])
+})
+
+test('every default a shared tool fills in is shown to the model', () => {
+  expect(unshownDefaultPaths(CONTRACTS)).toEqual([])
 })
 
 describe('roofPitch', () => {
@@ -121,6 +80,8 @@ describe('roofPitch', () => {
     const huge = `1${'0'.repeat(308)}`
     expect(degrees.parse(`${huge}:${huge}`)).toBe(45)
     expect(twelfths.parse(`${huge}:${huge}`)).toBe(12)
+    // Degrees and minutes are an angle; minutes alone are not a pitch (below).
+    expect(degrees.parse("26° 30'")).toBeCloseTo(26.5, 9)
   })
 
   test('what is not a pitch is refused with a message the model can act on', () => {
@@ -133,6 +94,19 @@ describe('roofPitch', () => {
       [twelfths, '6²:12', 'superscript'],
       [degrees, '6²°', 'superscript'],
       [twelfths, '6:0', 'no run'],
+      // Inch and foot marks are a builder's rise per foot, never arcseconds and arcminutes.
+      [twelfths, '6"', 'rise per 12'],
+      [degrees, '6"', 'rise per 12'],
+      [twelfths, '6/12"', 'rise per 12'],
+      [twelfths, "4'", 'rise per 12'],
+      [twelfths, '6″', 'rise per 12'],
+      [degrees, '6 arcmin', 'rise per 12'],
+      // A carpenter's quarter pitch is rise over span (6:12), not 1:4.
+      [twelfths, '1/4 pitch', 'rise per 12'],
+      [degrees, '1/2 pitch', 'rise per 12'],
+      // Past the largest number, unequal operands would divide as 45°.
+      [degrees, `1${'0'.repeat(309)}:2${'0'.repeat(309)}`, 'rise per 12'],
+      [twelfths, `1${'0'.repeat(309)}:2${'0'.repeat(309)}`, 'rise per 12'],
       [twelfths, '90°', 'under 90°'],
       [degrees, '90°', 'at most 85'],
       [degrees, '-1', 'at least 0'],
@@ -144,12 +118,23 @@ describe('roofPitch', () => {
   })
 
   test('its JSON schema is a number or a string, with both ways to say it', () => {
-    const schema = z.toJSONSchema(twelfths, { io: 'input' }) as JsonSchema & {
+    const schema = z.toJSONSchema(twelfths, { io: 'input' }) as {
+      type: string[]
       description: string
     }
-    expect([schema.type ?? []].flat().sort()).toEqual(['number', 'string'])
+    expect([schema.type].flat().sort()).toEqual(['number', 'string'])
     expect(schema.description).toContain('"6:12"')
     expect(schema.description).toContain('"26.6°"')
+  })
+
+  test('a default fills a call that leaves it out and is stated in the description', () => {
+    const pitch = roofPitch('twelfths', { default: 6 })
+    expect(pitch.parse(undefined)).toBe(6)
+    expect(pitch.parse('8:12')).toBe(8)
+    expect(z.toJSONSchema(pitch, { io: 'input' }).description).toEndWith('Default 6:12.')
+    expect(
+      z.toJSONSchema(roofPitch('deg', { default: 40 }), { io: 'input' }).description,
+    ).toEndWith('Default 40°.')
   })
 })
 
@@ -162,4 +147,7 @@ test('measurement in inches and feet reads other units without float noise', () 
   expect(z.toJSONSchema(measurement('length', 'in'), { io: 'input' }).description).toContain(
     'In inches, or text with a unit',
   )
+  const overhang = measurement('length', 'in', { default: 18 })
+  expect(overhang.parse(undefined)).toBe(18)
+  expect(z.toJSONSchema(overhang, { io: 'input' }).description).toEndWith('Default 18 in.')
 })
