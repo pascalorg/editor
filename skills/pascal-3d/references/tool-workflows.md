@@ -37,6 +37,10 @@ All three require edit access on the scan's own project; view access, including 
 
 Use `checkpoint` only at a meaningful milestone. A browser-visible draft and a durable checkpoint are distinct states.
 
+### The ground line
+
+A building's levels stand on a ground line: the level at grade (`set_ground_level` names it and seats the building; until then it is the lowest level whose floor is not under the ground), the levels with a lower floor index below grade. `list_levels` reads `groundLevels` and each level's `gradeStanding`. A basement added with `add_level` goes under the lowest floor and every existing floor keeps its place.
+
 ## Make a bounded edit
 
 1. Read the target and its surrounding level.

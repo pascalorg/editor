@@ -9,7 +9,7 @@ import {
   RoofNode,
   useScene,
 } from '@pascal-app/core'
-import { addStoreyBelow, addStoreyOnTop } from './add-storey'
+import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from './add-storey'
 
 // The editor's "add a floor" on a roofed house: the new storey goes under the roof, not over it.
 const BUILDING = 'building_add-storey' as BuildingNode['id']
@@ -119,5 +119,59 @@ describe('addStoreyBelow', () => {
     useScene.temporal.getState().undo()
     expect(useScene.getState().nodes[basement.id as AnyNodeId]).toBeUndefined()
     expect(floorOf('level_ground')).toBe(0)
+  })
+})
+
+// The editor's "Set as ground floor": the owner's mansion, whose stack stood Lower Ground at grade.
+describe('setGroundFloor', () => {
+  beforeEach(() => {
+    useScene.temporal.getState().clear()
+    useScene.temporal.getState().resume()
+    const level = (id: string, index: number, baseElevation: number, height: number) =>
+      LevelNode.parse({ id, parentId: BUILDING, level: index, baseElevation, height })
+    const levels = [
+      level('level_b2', -2, -3.4, 3.4),
+      level('level_lower', -1, 0, 3.4),
+      level('level_reception', 0, 0, 4),
+    ]
+    const building = BuildingNode.parse({ id: BUILDING, children: levels.map((entry) => entry.id) })
+    useScene.setState({
+      nodes: Object.fromEntries([building, ...levels].map((node) => [node.id, node as AnyNode])),
+      rootNodeIds: [BUILDING],
+      collections: {},
+      dirtyNodes: new Set(),
+    } as never)
+  })
+
+  const standing = (id: string) => levelGradeStanding(useScene.getState().nodes, id)
+
+  test('seats the building so the level stands at grade, the ones under it below it, in one undo step', () => {
+    expect(standing('level_lower')).toBe('at-grade')
+    expect(setGroundFloor('level_reception' as LevelNode['id'])).toBe(true)
+    const nodes = useScene.getState().nodes
+    expect((nodes[BUILDING as AnyNodeId] as BuildingNode).position).toEqual([0, -3.4, 0])
+    expect((nodes[BUILDING as AnyNodeId] as BuildingNode).groundLevelId).toBe('level_reception')
+    expect(standing('level_reception')).toBe('at-grade')
+    expect(standing('level_lower')).toBe('below-grade')
+    expect(standing('level_b2')).toBe('below-grade')
+
+    useScene.temporal.getState().undo()
+    const undone = useScene.getState().nodes[BUILDING as AnyNodeId] as BuildingNode
+    expect(undone.position).toEqual([0, 0, 0])
+    expect(undone.groundLevelId).toBeUndefined()
+    expect(standing('level_lower')).toBe('at-grade')
+  })
+
+  test('says nothing changed when the floor is already the ground floor, seated', () => {
+    setGroundFloor('level_reception' as LevelNode['id'])
+    expect(setGroundFloor('level_reception' as LevelNode['id'])).toBe(false)
+  })
+
+  test('a basement added after stacks under the last and the ground floor stays seated', () => {
+    setGroundFloor('level_reception' as LevelNode['id'])
+    const basement = addStoreyBelow(BUILDING)
+    expect(basement.level).toBe(-3)
+    expect(standing(basement.id)).toBe('below-grade')
+    expect(levelFloorWorldY(useScene.getState().nodes, 'level_reception')).toBeCloseTo(0, 9)
   })
 })

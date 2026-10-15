@@ -7,7 +7,7 @@ import {
   storeyInsertIndex,
   useScene,
 } from '@pascal-app/core'
-import { buildLevelBelowChanges } from '@pascal-app/core/building'
+import { buildGroundLevelChanges, buildLevelBelowChanges } from '@pascal-app/core/building'
 
 /**
  * The editor's "add a floor": an empty storey on top of the building's storeys, under its roof
@@ -43,4 +43,17 @@ export function addStoreyBelow(buildingId: BuildingNode['id']): LevelNode {
   })
   scene.applyNodeChanges({ create, update })
   return newLevel
+}
+
+/**
+ * The editor's "Set as ground floor": the level stands at grade, the building seated to it and the
+ * floors renumbered so it is 0 (`buildGroundLevelChanges`), in one undo step. `false` when it
+ * already is the ground floor, seated.
+ */
+export function setGroundFloor(levelId: LevelNode['id']): boolean {
+  const scene = useScene.getState()
+  const built = buildGroundLevelChanges({ nodes: scene.nodes, levelId })
+  if (!built || built.unchanged) return false
+  scene.applyNodeChanges({ update: built.update })
+  return true
 }
