@@ -1453,6 +1453,7 @@ function EditorContent({
   // A top-docked menu sits at the top of the scene panes on desktop (layout v2).
   const dockMenuOnTop = menuPlacement === 'top' && !isMobile
   const dockMenuOnRight = menuPlacement === 'right' && !isMobile
+  const dockMenuOnLeft = menuPlacement === 'left' && !isMobile
   const reserveBottomMenu = menuPlacement === 'bottom' || isMobile
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
@@ -1836,7 +1837,9 @@ function EditorContent({
               overlays={
                 <>
                   <SceneRegion>
-                    {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
+                    {!(isCaptureMode || stageOverlay) && (
+                      <FloatingLevelSelector besideLeftMenu={dockMenuOnLeft} />
+                    )}
                     {!(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
                       (dockMenuOnTop ? (
                         // Own row under the toolbar, below the level selector's opening list (z-20).
