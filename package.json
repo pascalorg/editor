@@ -33,10 +33,10 @@
     "fast-xml-parser": "^5.11.2",
     "turbo": "^2.11.8",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "ultracite": "^7.8.2"
+    "ultracite": "^8.0.1"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "packageManager": "bun@1.4.2",
   "overrides": {
