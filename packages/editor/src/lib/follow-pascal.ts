@@ -25,6 +25,11 @@ export type FollowWant = {
   normal?: [number, number]
   /** The eye must stand above this height (metres): a roof lifted out of the way is looked down through, not from within. */
   eyeAbove?: number
+  /**
+   * What it works on is seen from outside (an exterior wall bent, a window moved on one, a roof, the
+   * ground): the view is from outdoors with no cutaway, whatever hides the target.
+   */
+  exterior?: boolean
   /** When it was asked for, in seconds on the follower's clock. */
   at: number
 }
@@ -84,6 +89,8 @@ export function mergeWants(wants: readonly FollowWant[]): FollowWant {
     ...(nodeIds.length ? { nodeIds } : {}),
     ...(normal ? { normal } : {}),
     ...(eyes.length ? { eyeAbove: Math.max(...eyes) } : {}),
+    // Seen from outside when any of what lands together is: a mixed step takes the outside view.
+    ...(wants.some((want) => want.exterior) ? { exterior: true } : {}),
     at: Math.max(...wants.map((want) => want.at)),
   }
 }

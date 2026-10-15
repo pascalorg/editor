@@ -2,6 +2,7 @@ import { type AnyNode, type AnyNodeId, findLevelAncestorId, nodeRegistry } from 
 import { sceneViewBounds, sceneViewFacing } from '@pascal-app/core/agent-operations'
 import type { RevealEvent } from '@pascal-app/viewer'
 import type { Box, FollowWant } from './follow-pascal'
+import { anyExterior } from './follow-pascal-exterior'
 
 type Nodes = Readonly<Record<string, AnyNode>>
 
@@ -90,6 +91,7 @@ export function wantFromEvent(event: RevealEvent, nodes: Nodes, at: number): Fol
     const nodeIds = 'id' in event ? [event.id] : 'nodeIds' in event ? event.nodeIds : []
     want = { ...want, nodeIds }
   }
+  if (want && exteriorStep(event, nodes)) want = { ...want, exterior: true }
   if (!want || event.type === 'complete' || event.type === 'finale' || event.type === 'settle')
     return want
   let level = event.levelId ? nodes[event.levelId] : undefined
@@ -99,6 +101,18 @@ export function wantFromEvent(event: RevealEvent, nodes: Nodes, at: number): Fol
     level = levelId ? nodes[levelId] : undefined
   }
   return level?.type === 'level' ? { ...want, levelId: level.id } : want
+}
+
+/**
+ * Whether the step is a change seen from outside, not through a cutaway into a room: a piece the
+ * agent edited or moved that stands outdoors (a wall with an exterior face, an opening in one, a
+ * roof, the ground). Only edits and moves: a build is followed as it always was, whatever it builds
+ * (the owner's call, 15 Oct), and furnishing and interior walls are not outside either.
+ */
+function exteriorStep(event: RevealEvent, nodes: Nodes): boolean {
+  if (!('changed' in event) || event.changed !== true) return false
+  const ids = 'id' in event ? [event.id] : 'nodeIds' in event ? [...event.nodeIds] : []
+  return anyExterior(nodes, ids)
 }
 
 function targetFromEvent(event: RevealEvent, nodes: Nodes, at: number): FollowWant | null {
@@ -137,10 +151,13 @@ function targetFromEvent(event: RevealEvent, nodes: Nodes, at: number): FollowWa
         const eyeAbove = clearanceAbove(nodes, event.id)
         return { kind: 'furnish', box, ...(eyeAbove === undefined ? {} : { eyeAbove }), at }
       }
-      // A piece the agent edited (a wall bent, a slab resized) plays again: the camera goes to it.
+      // A piece the agent edited (a wall bent, a slab resized) plays again: the camera goes to it,
+      // from the side that faces outdoors when it has one.
       if (event.changed) {
         const box = boxOf(nodes, event.id)
-        return box ? { kind: 'detail', box, at } : null
+        if (!box) return null
+        const normal = sceneViewFacing(nodes, event.id)
+        return { kind: 'detail', box, ...(normal ? { normal } : {}), at }
       }
       return null
     }

@@ -11,7 +11,12 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { type RevealEvent, subscribeRevealEvents, useViewer } from '@pascal-app/viewer'
+import {
+  type RevealEvent,
+  revealChangedNodeIds,
+  subscribeRevealEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Vector3 } from 'three'
@@ -23,6 +28,7 @@ import {
   OrbitSpring,
   type OrbitValue,
 } from '../../lib/follow-pascal'
+import { anyExterior } from '../../lib/follow-pascal-exterior'
 import { FollowPresentation, type PresentationPort } from '../../lib/follow-pascal-presentation'
 import { FollowSight } from '../../lib/follow-pascal-sight'
 import { wantFromEvent } from '../../lib/follow-pascal-targets'
@@ -38,9 +44,12 @@ import { usePointAsk } from '../../store/use-point-ask'
  * person resumes it from the pill, or the next build takes it again. Under reduced motion it cuts.
  *
  * To see a build it changes the presentation: it cuts the walls away when no eye sees the target,
- * selects the floor being built and hides the floors above it. When Follow ends (switched off, the
- * person takes the camera, the build is over and no turn is running) it puts back what it changed,
- * and leaves what the person changed since (`FollowPresentation`).
+ * selects the floor being built and hides the floors above it. An edit or a move seen from outside
+ * (an exterior wall bent, a window moved on one, a roof, the ground) is looked at from outdoors with
+ * the walls up instead: a cutaway would hide the very wall that moves. A commit with one such change
+ * in it takes the outside view for all of it. A build is followed as it always was. When Follow ends (switched off, the person takes the
+ * camera, the build is over and no turn is running) it puts back what it changed, and leaves what
+ * the person changed since (`FollowPresentation`).
  */
 
 /** A build is over this long after its last word; the pill goes with it. */
@@ -153,10 +162,18 @@ export function FollowPascal() {
     }
   }
 
+  /** The build in hand has a change seen from outside in it: all of it is looked at from outdoors. */
+  const outsideBuild = useRef(false)
+
   const unobstructed = (want: FollowWant, goal: OrbitValue): OrbitValue => {
     sight.refresh(want)
     const clear = clearFrame(goal, (pose) => sight.clear(pose))
     if (clear) return clear
+    // Seen from outside the walls stay up: a cutaway would take the wall that changes away.
+    if (want.exterior || outsideBuild.current) {
+      presentation.wall('up')
+      return goal
+    }
     presentation.wall('cutaway')
     return goal
   }
@@ -192,6 +209,8 @@ export function FollowPascal() {
       presentation.levels('stacked')
       presentation.hideAbove(false)
     }
+    // A change seen from outside: the walls up for it, even if an earlier step cut them away.
+    if (want.exterior || outsideBuild.current) presentation.wall('up')
     if (!spring.current) {
       spring.current = new OrbitSpring({ x: 0, y: 1, z: 0, r: 20, az: 0.6, el: 0.5 })
       synced.current = false
@@ -219,6 +238,14 @@ export function FollowPascal() {
         store.beginBuild()
         follower.current.reset()
         synced.current = false
+        outsideBuild.current = false
+      }
+      // What the commit changes, read before its first piece plays: one change seen from outside
+      // takes the whole commit outdoors.
+      if (!outsideBuild.current) {
+        const changed = revealChangedNodeIds()
+        if (changed.length && anyExterior(useScene.getState().nodes, changed))
+          outsideBuild.current = true
       }
       over.current = setTimeout(() => useFollowPascal.getState().endBuild(), BUILD_OVER_MS)
       if (event.type === 'complete') return

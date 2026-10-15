@@ -237,7 +237,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   capabilities: {
     reveal: { phase: 'openings', style: 'cut' },
-    revealOnEdit: ['width', 'height', 'openingShape', 'openingKind', 'doorType'],
+    revealOnEdit: ['position', 'width', 'height', 'openingShape', 'openingKind', 'doorType'],
     batchable: doorBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

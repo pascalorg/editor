@@ -296,7 +296,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
 
   capabilities: {
     reveal: { phase: 'openings', style: 'cut' },
-    revealOnEdit: ['width', 'height', 'openingShape', 'windowType'],
+    revealOnEdit: ['position', 'width', 'height', 'openingShape', 'windowType'],
     batchable: windowBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
