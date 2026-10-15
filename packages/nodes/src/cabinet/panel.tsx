@@ -599,6 +599,43 @@ export default function CabinetPanel() {
     return <CabinetRunPanel modules={modules} node={node} onClose={close} />
   }
 
+  if (node.type === 'cabinet-module' && node.moduleKind === 'wall-filler') {
+    return (
+      <PanelWrapper
+        icon="/icons/item.webp"
+        title="Wall filler"
+        onBack={backToRun}
+        onClose={close}
+        width={320}
+      >
+        <PanelSection title="Dimensions">
+          <p className="px-2 pb-3 text-xs text-muted-foreground">
+            Solid matching front between the cabinet and wall. Countertop and toe-kick continue
+            across this filler.
+          </p>
+          <SliderControl
+            label="Width"
+            value={node.width}
+            min={0.05}
+            max={3}
+            step={0.001}
+            unit="m"
+            onChange={(width) => updateNode({ width })}
+          />
+          <SliderControl
+            label="Height"
+            value={node.carcassHeight}
+            min={0.4}
+            max={2.4}
+            step={0.01}
+            unit="m"
+            onChange={(carcassHeight) => updateNode({ carcassHeight })}
+          />
+        </PanelSection>
+      </PanelWrapper>
+    )
+  }
+
   return (
     <PanelWrapper
       icon="/icons/item.webp"

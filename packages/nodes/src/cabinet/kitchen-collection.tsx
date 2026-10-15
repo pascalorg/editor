@@ -1,5 +1,6 @@
 'use client'
 
+import { BuildPanelSection, BuildToolGrid, BuildToolTile } from '@pascal-app/editor'
 import { useId, useState } from 'react'
 import { KITCHEN_ITEMS, kitchenItemMatches } from './kitchen-catalog'
 import useCabinetPlacementStatus from './placement-status'
@@ -42,10 +43,7 @@ export function KitchenCollection({
   return (
     <div className="space-y-3">
       {placementTarget && (
-        <p
-          role="status"
-          className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs"
-        >
+        <p role="status" className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">
           {placementTarget}
         </p>
       )}
@@ -68,31 +66,25 @@ export function KitchenCollection({
         const entries = items.filter((item) => item.group === group)
         return (
           entries.length > 0 && (
-            <div key={group} className="space-y-2">
-              <div className="text-xs font-medium text-muted-foreground">{group}</div>
-              <div className="grid grid-cols-2 gap-2">
+            <BuildPanelSection
+              key={group}
+              id={`kitchen-${group === 'Cabinets' ? 'cabinets' : 'appliances'}`}
+              title={group}
+            >
+              <BuildToolGrid columns={3}>
                 {entries.map((item) => (
-                  <button
+                  <BuildToolTile
                     key={item.id}
-                    type="button"
                     aria-label={`Choose ${item.label}`}
-                    aria-pressed={activeId === item.id}
+                    active={activeId === item.id}
+                    tone="neutral"
+                    iconSrc={`/icons/kitchen/${item.id}.webp`}
+                    label={item.label}
                     onClick={() => onSelect(item.id)}
-                    className={`rounded-xl border p-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${activeId === item.id ? 'border-primary bg-primary/10' : 'border-border/60 bg-muted/20'}`}
-                  >
-                    <KitchenThumbnail id={item.id} />
-                    <span className="block text-xs font-medium">{item.label}</span>
-                    <span className="block pt-0.5 text-[10px] text-muted-foreground">
-                      {item.group === 'Appliances & fixtures'
-                        ? 'With cabinetry'
-                        : item.id === 'wall-cabinet'
-                          ? 'Wall mounted'
-                          : 'Kitchen storage'}
-                    </span>
-                  </button>
+                  />
                 ))}
-              </div>
-            </div>
+              </BuildToolGrid>
+            </BuildPanelSection>
           )
         )
       })}

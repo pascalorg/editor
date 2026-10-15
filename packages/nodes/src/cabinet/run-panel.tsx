@@ -7,7 +7,13 @@ import type {
   CabinetNode as CabinetNodeType,
   SceneApi,
 } from '@pascal-app/core'
-import { cascadeDirty, createSceneApi, resolveLevelId, useScene } from '@pascal-app/core'
+import {
+  cascadeDirty,
+  createSceneApi,
+  resolveLevelId,
+  runAsSingleSceneHistoryStep,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -41,6 +47,7 @@ import {
   cabinetRevealGapById,
   cabinetRevealGapId,
 } from './reveals'
+import { alignCabinetRun, cabinetWallFillerPlan, fitCabinetWallFillers } from './run-finishing'
 import { runWallConstraints } from './run-layout'
 import {
   addCabinetModuleSide,
@@ -517,8 +524,8 @@ export function CabinetRunPanel({
   const arraySource = useMemo(
     () =>
       sortedModules.find(
-        (module) => module.id === arraySourceId && module.moduleKind !== 'corner-filler',
-      ) ?? sortedModules.find((module) => module.moduleKind !== 'corner-filler'),
+        (module) => module.id === arraySourceId && module.moduleKind === 'standard',
+      ) ?? sortedModules.find((module) => module.moduleKind === 'standard'),
     [arraySourceId, sortedModules],
   )
   const arrayPlan = useMemo(
@@ -531,6 +538,28 @@ export function CabinetRunPanel({
       }),
     [arrayCopyCount, arrayDirection, arraySource?.id, arraySpacing, planningNode, planningNodes],
   )
+
+  const [finishMessage, setFinishMessage] = useState<string | null>(null)
+  const fillerPlan = cabinetWallFillerPlan(planningNode, sortedModules, planningNodes)
+
+  const finishRun = (action: 'align' | 'fill') => {
+    setFinishMessage(null)
+    runAsSingleSceneHistoryStep(useScene, () => {
+      const scene = createSceneApi(useScene)
+      if (action === 'fill') fitCabinetWallFillers(planningNode, scene)
+      else {
+        const updates = planCabinetHostedEdit(scene, (staged) =>
+          alignCabinetRun(planningNode, staged),
+        )
+        if (!updates)
+          setFinishMessage(
+            'Unable to align while keeping hosted items supported. Move items on the countertop and try again.',
+          )
+        if (updates) useScene.getState().updateNodes(updates.map(([id, data]) => ({ id, data })))
+      }
+      for (const id of cascadeDirty(planningNode.id, { scene })) useScene.getState().markDirty(id)
+    })
+  }
 
   const updateRun = useCallback(
     (patch: Partial<CabinetNodeType>) => updateCabinetRun({ modules, node, patch }),
@@ -626,6 +655,37 @@ export function CabinetRunPanel({
       title={node.name || 'Kitchen run'}
       width={320}
     >
+      <PanelSection title="Finish & align">
+        <div className="flex flex-col gap-2 px-1 pb-2">
+          <ActionButton label="Align cabinets & handles" onClick={() => finishRun('align')} />
+          {finishMessage && (
+            <p role="status" className="text-xs text-amber-600">
+              {finishMessage}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Match base heights, backs, reveals and handles. Align upper cabinets; preserve tall
+            appliances and custom compartments.
+          </p>
+          <ToggleControl
+            label="Finished exposed ends"
+            checked={node.withFinishedEnds}
+            onChange={(checked) => updateRun({ withFinishedEnds: checked })}
+          />
+          <ActionButton
+            label="Fit wall fillers"
+            disabled={fillerPlan.length === 0}
+            onClick={() => finishRun('fill')}
+          />
+          <p className="text-xs text-muted-foreground">
+            {fillerPlan.length
+              ? fillerPlan
+                  .map(({ side, width }) => `${side}: ${Math.round(width * 1000)} mm`)
+                  .join(' · ')
+              : 'Fits 50–150 mm gaps at run ends beside perpendicular walls.'}
+          </p>
+        </div>
+      </PanelSection>
       <PanelSection title="Modules">
         <div className="flex flex-col gap-2 px-1 pb-2">
           {sortedModules.map((module, index) => (
@@ -888,11 +948,7 @@ export function CabinetRunPanel({
             label="Finished back"
             onChange={(checked) => updateRun({ withFinishedBack: checked })}
           />
-          <ToggleControl
-            checked={node.withFinishedEnds}
-            label="Finished end panels"
-            onChange={(checked) => updateRun({ withFinishedEnds: checked })}
-          />
+
           {node.withCountertop && (
             <ToggleControl
               checked={node.withWaterfall}

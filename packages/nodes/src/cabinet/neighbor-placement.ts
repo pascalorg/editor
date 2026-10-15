@@ -47,7 +47,7 @@ export function resolveCabinetNeighborPlacement({
     for (const side of ['left', 'right'] as const) {
       if (pinned[side]) continue
       const neighbor = side === 'left' ? modules[0]! : modules[modules.length - 1]!
-      if (neighbor.moduleKind === 'corner-filler') continue
+      if (neighbor.moduleKind !== 'standard') continue
       const x =
         side === 'left'
           ? moduleMinX(neighbor) - module.width / 2

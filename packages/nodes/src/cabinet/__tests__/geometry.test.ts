@@ -3326,3 +3326,33 @@ describe('buildCabinetGeometry — sink compartments', () => {
     expect(bounds.max.x).toBeGreaterThan(0.45)
   })
 })
+
+test('toe-kick stays continuous below a base and tall unit', () => {
+  const run = CabinetNode.parse({ showPlinth: true, plinthHeight: 0.1 })
+  const modules = [
+    CabinetModuleNode.parse({ parentId: run.id, width: 0.6, position: [-0.3, 0.1, 0] }),
+    CabinetModuleNode.parse({
+      parentId: run.id,
+      width: 0.6,
+      position: [0.3, 0.1, 0],
+      cabinetType: 'tall',
+      carcassHeight: 2.1,
+    }),
+  ]
+  const group = buildCabinetGeometry(run, geometryContext({ children: modules }), 'rendered', false)
+  expect(group.children.filter((child) => child.name === 'cabinet-run-plinth')).toHaveLength(1)
+  const bounds = worldBounds(findMeshByName(group, 'cabinet-run-plinth'))
+  expect(bounds.max.x - bounds.min.x).toBeCloseTo(1.2)
+})
+
+test('wall fillers render a solid front without handles or opening animation', () => {
+  const node = CabinetModuleNode.parse({
+    moduleKind: 'wall-filler',
+    width: 0.08,
+    stack: [],
+    handleStyle: 'bar',
+  })
+  const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+  expect(group.children).toHaveLength(1)
+  expect(group.children[0]!.name).toBe('cabinet-wall-filler')
+})

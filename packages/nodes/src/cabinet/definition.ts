@@ -755,7 +755,7 @@ function cabinetWallWidthGap(
 
 function isCabinetWidthFiller(module: CabinetModuleNodeType) {
   return (
-    module.moduleKind === 'corner-filler' ||
+    module.moduleKind !== 'standard' ||
     module.name === 'Corner Filler' ||
     module.name === 'Wall Bridge Filler' ||
     module.name === 'Corner Wall Filler'

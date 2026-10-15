@@ -5,11 +5,14 @@ import {
   CabinetModuleNode,
   CabinetNode,
   createSceneApi,
+  LevelNode,
   runAsSingleSceneHistoryStep,
   useScene,
+  WallNode,
 } from '@pascal-app/core'
 import { applyCabinetModuleInsertion } from '../insertion'
 import { resolveCabinetNeighborPlacement } from '../neighbor-placement'
+import { fitCabinetWallFillers } from '../run-finishing'
 import { runLocalToPlan } from '../run-layout'
 
 function fixture(rotation = 0) {
@@ -106,6 +109,40 @@ test('joining preserves the run and existing module and undoes as one step', () 
     useScene.temporal.getState().undo()
     expect(useScene.getState().nodes[module.id]).toBeUndefined()
     expect(useScene.getState().nodes[run.id]?.children).toEqual([neighbor.id])
+  } finally {
+    useScene.setState(previous)
+    useScene.temporal.setState(history)
+    globalThis.requestAnimationFrame = raf
+    globalThis.cancelAnimationFrame = cancelRaf
+  }
+})
+
+test('filling both run ends undoes together and preserves original modules', () => {
+  const previous = useScene.getState(),
+    history = useScene.temporal.getState()
+  const raf = globalThis.requestAnimationFrame,
+    cancelRaf = globalThis.cancelAnimationFrame
+  globalThis.requestAnimationFrame = () => 0
+  globalThis.cancelAnimationFrame = () => {}
+  const level = LevelNode.parse({})
+  const run = CabinetNode.parse({ parentId: level.id, depth: 0.6 })
+  const module = CabinetModuleNode.parse({ parentId: run.id, width: 0.6, depth: 0.6 })
+  run.children = [module.id]
+  const walls = [-0.5, 0.5].map((x) =>
+    WallNode.parse({ parentId: level.id, start: [x, -1], end: [x, 1], thickness: 0.2 }),
+  )
+  const nodes = Object.fromEntries([level, run, module, ...walls].map((node) => [node.id, node]))
+  try {
+    useScene.setState({ nodes, rootNodeIds: [level.id] })
+    useScene.temporal.getState().clear()
+    runAsSingleSceneHistoryStep(useScene, () =>
+      fitCabinetWallFillers(run, createSceneApi(useScene)),
+    )
+    expect(useScene.getState().nodes[run.id]!.children).toHaveLength(3)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[run.id]!.children).toEqual([module.id])
+    expect(useScene.getState().nodes[module.id]).toEqual(module)
   } finally {
     useScene.setState(previous)
     useScene.temporal.setState(history)

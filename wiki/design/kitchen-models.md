@@ -54,3 +54,26 @@ Added runners and basket supports increase mesh counts for some items even where
 triangle counts decrease. Further performance work should measure runtime batching
 and interaction costs rather than assuming triangle savings translate directly to
 frame-rate gains.
+
+## Run finishing and placement feedback
+
+The run inspector's **Finish & align** section matches base heights, rear faces,
+reveals and handle settings in one undo step. Attached upper cabinets share the
+first upper cabinet's bottom elevation. Tall appliance heights and compartment
+contents are preserved. Countertops remain grouped by height and depth; toe-kicks
+merge across adjacent base and tall units with matching footprints. Inside corner
+joins suppress overhangs and finished panels on their shared edges.
+
+**Fit wall fillers** closes 50–150 mm gaps beside perpendicular walls with editable
+`wall-filler` modules. The 50 mm lower bound is the module schema minimum. Fillers
+have solid fronts without handles, share the run countertop and plinth, and suppress
+outer overhangs/end panels where they meet the wall. Both ends undo together;
+repeating the action does not add duplicate fillers. Existing scenes retain the
+`standard` module-kind default.
+
+Placement reports blocking overlaps and advisory opening-clearance conflicts in
+both views. Clearance checks use oriented front envelopes and vertical overlap
+against visible floor-placed objects and straight walls on the same level. They
+estimate operating space rather than simulating an exact hinge sweep; curved walls
+and wall openings are not resolved by this advisory check. Alt retains force-place
+behavior. Opening warnings do not prevent placement.

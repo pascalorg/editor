@@ -481,7 +481,7 @@ export function cabinetModuleCanEqualizeWidth(
   run: CabinetNode,
 ): boolean {
   return (
-    module.moduleKind !== 'corner-filler' &&
+    module.moduleKind === 'standard' &&
     resolveCabinetType(module, run) === 'base' &&
     stackForCabinet(module).every((compartment) =>
       EQUALIZABLE_CABINET_COMPARTMENTS.has(compartment.type),
@@ -615,7 +615,7 @@ export function cabinetRunArrayPlan(
 
   const modules = cabinetModulesForRun(run, nodes)
   const source = modules.find((module) => module.id === options.sourceModuleId)
-  if (!source || source.moduleKind === 'corner-filler') {
+  if (source?.moduleKind !== 'standard') {
     return { ok: false, reason: 'no-source' }
   }
 
