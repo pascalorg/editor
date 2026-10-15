@@ -26,6 +26,7 @@ import {
   blocksSnappingShortcut,
   canCycleSnappingModeShortcut,
   canRunGlobalRotationShortcut,
+  hasSceneKeyboardFocus,
   isToolOwnedCanopyForm,
   isToolOwnedRotation,
   markToolCancelConsumed,
@@ -48,6 +49,19 @@ type RafFn = (callback: (time: number) => void) => number
 const NODE_ID = 'block_history' as AnyNodeId
 
 describe('snapping shortcuts while entering a run length', () => {
+  test('document panes keep copy, delete and editing shortcuts away from the scene until it is focused', () => {
+    useEditor.setState({ viewLayouts: {} })
+    expect(hasSceneKeyboardFocus()).toBe(true)
+    useEditor.getState().showView('document:plan', { beside: true })
+    expect(hasSceneKeyboardFocus()).toBe(false)
+    useEditor.getState().focusViewPane(0)
+    expect(hasSceneKeyboardFocus()).toBe(true)
+    useEditor
+      .getState()
+      .setViewLayout({ split: false, panes: ['document:plan', '3d'], ratio: 0.5, focus: 0 })
+    expect(hasSceneKeyboardFocus()).toBe(false)
+    useEditor.getState().closeView('document:plan')
+  })
   test('allows snap mode and spacing shortcuts in the duct and pipe length field', () => {
     const field = {
       tagName: 'INPUT',
@@ -124,7 +138,7 @@ beforeEach(() => {
 afterEach(() => {
   useInteractionScope.getState().end()
   useEditor.getState().armToolMode({ mode: 'select' })
-  useEditor.setState({ selectedItem: null })
+  useEditor.setState({ selectedItem: null, viewLayouts: {} })
   clearSceneHistory()
 })
 

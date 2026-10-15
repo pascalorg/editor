@@ -418,12 +418,14 @@ export {
   getDisplayedDoorValue,
   openDoorOpenState,
 } from './lib/door-interaction'
+export { downloadProjectFile } from './lib/download-project-file'
 export { createEditorApi } from './lib/editor-api'
 export {
   type EditorHostView,
   editorHostViewRegistry,
   openEditorView,
   registerEditorHostView,
+  unregisterEditorHostView,
 } from './lib/editor-views'
 export {
   clearStructuralElevationGuide,

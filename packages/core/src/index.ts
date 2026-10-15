@@ -575,6 +575,7 @@ export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
 export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
+export * from './services/project-file-sink'
 export {
   collectionIdsOf,
   getPendingNodeUpdateCount,
