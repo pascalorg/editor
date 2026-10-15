@@ -92,6 +92,10 @@ const mansion = () =>
   ])
 
 describe('the ground line', () => {
+  test('a parsed building names no ground level until one is set', () => {
+    expect(BuildingNode.parse({ id: 'building_x' }).groundLevelId).toBeUndefined()
+  })
+
   test('a house with one basement reads as it always did: no name, nothing moves', () => {
     const nodes = scene([
       ['level_base', -1, -2.5, 2.5, rect(0, 0, 6, 6)],
