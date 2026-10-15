@@ -7,8 +7,10 @@ import {
   MAX_ORBIT_POLAR_ANGLE,
   ORBIT_FLOOR_CLEARANCE,
   ORBIT_TARGET_HEIGHT,
+  OVERVIEW_GROUND_CLEARANCE,
   orbitAngleBelowFloor,
   orbitCameraAboveFloor,
+  overviewEyeY,
 } from './orbit-floor-clearance'
 
 type Vec3 = { x: number; y: number; z: number }
@@ -162,4 +164,13 @@ test('a change in floor height is glided over, never popped', () => {
     previous = limit
   }
   expect(limit).toBeCloseTo(0.75, 6)
+})
+
+test('a pivot sent four storeys down keeps the eye over the ground, a diver stays under', () => {
+  // Eye 12 m up over a pivot at 1.1; the pivot goes to -12: the move alone would put it at -0.1.
+  expect(overviewEyeY(12 + (-12 - 1.1), -0.05, false)).toBe(-0.05 + OVERVIEW_GROUND_CLEARANCE)
+  // Already high enough: untouched.
+  expect(overviewEyeY(20, -0.05, false)).toBe(20)
+  // The person is under the ground: the move is theirs.
+  expect(overviewEyeY(-8, -0.05, true)).toBe(-8)
 })

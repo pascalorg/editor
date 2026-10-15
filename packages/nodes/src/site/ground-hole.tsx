@@ -253,18 +253,25 @@ export function groundHoleColorNode(shadeColor: string) {
 }
 
 /**
- * Feeds the hole the footprints it is cut over (the polygons the grade ring runs along), and says
- * to the rest of the viewer whether the scene has a level below grade at all: the ground materials
- * carry the hole's mask, and the eye's fill light is mounted, from then on, once, so that changing
- * floors only changes uniforms.
+ * Feeds the hole the footprints it is cut over (the polygons the grade ring runs along: the level
+ * shown and the ones between it and grade), and says to the rest of the viewer whether the scene
+ * has a level below grade at all (`present`): the ground materials carry the hole's mask, and the
+ * eye's fill light is mounted, from then on, once, so that changing floors only changes uniforms.
  */
-export function GroundHole({ footprints }: { footprints: ReadonlyArray<ReadonlyArray<Point>> }) {
+export function GroundHole({
+  footprints,
+  present,
+}: {
+  footprints: ReadonlyArray<ReadonlyArray<Point>>
+  present: boolean
+}) {
   useEffect(() => {
     setGroundHoleFootprints(footprints)
-    const has = footprints.length > 0
-    if (useViewer.getState().hasLevelBelowGrade !== has)
-      useViewer.setState({ hasLevelBelowGrade: has })
   }, [footprints])
+  useEffect(() => {
+    if (useViewer.getState().hasLevelBelowGrade !== present)
+      useViewer.setState({ hasLevelBelowGrade: present })
+  }, [present])
   useEffect(
     () => () => {
       setGroundHoleFootprints([])

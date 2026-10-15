@@ -9,6 +9,7 @@ import {
   applyAmbianceToSkyLights,
   EYE_BAND,
   EYE_FILL_INTENSITY,
+  earthTarget,
   easeAmbiance,
   eyeUnderTheGround,
   groundHoleOpenNode,
@@ -17,6 +18,7 @@ import {
   restoreSkyLights,
   SKY_LIGHT_SCALE,
   setAmbianceFactor,
+  setEarthFactor,
   setGroundHoleOpen,
   stepAmbianceProgress,
   temporarilyWithoutAmbiance,
@@ -26,6 +28,7 @@ import {
   undergroundAmbianceNode,
   undergroundBackdrop,
   undergroundDissolve,
+  undergroundEarthNode,
   undergroundFogAmount,
   undergroundVignette,
 } from './underground-ambiance'
@@ -33,6 +36,7 @@ import {
 afterEach(() => {
   restoreSkyLights()
   setAmbianceFactor(0)
+  setEarthFactor(0)
   setGroundHoleOpen(0)
 })
 
@@ -241,4 +245,26 @@ test('applying twice in a row never compounds', () => {
   applyAmbianceToSkyLights(1)
   expect(ambient.intensity).toBeCloseTo(0.8 * SKY_LIGHT_SCALE, 10)
   unregister()
+})
+
+test('in the walkthrough the dark mode is never wanted, the earth outside follows the eye', () => {
+  const under = { eyeUnderGround: true, groundMode: 'auto', walkthroughMode: true } as const
+  expect(ambianceTarget(under)).toBe(0)
+  expect(earthTarget(under)).toBe(1)
+  expect(earthTarget({ ...under, eyeUnderGround: false })).toBe(0)
+  // Solid is the person's override there too.
+  expect(earthTarget({ ...under, groundMode: 'solid' })).toBe(0)
+  // Outside the walkthrough the two are the same edge.
+  expect(ambianceTarget({ ...under, walkthroughMode: false })).toBe(1)
+})
+
+test('the earth factor is its own uniform, held off by a capture and given back', () => {
+  setEarthFactor(0.4)
+  expect(undergroundEarthNode().value).toBe(0.4)
+  const release = temporarilyWithoutAmbiance()
+  expect(undergroundEarthNode().value).toBe(0)
+  setEarthFactor(1)
+  expect(undergroundEarthNode().value).toBe(0)
+  release()
+  expect(undergroundEarthNode().value).toBe(1)
 })

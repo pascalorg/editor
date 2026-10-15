@@ -245,21 +245,38 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return { cx, cz, radius }
   }, [polygonPoints])
 
-  // Where the ground meets the levels below grade: the grade ring runs there under the veil.
-  const buriedFootprintsCache = useRef<[number, number][][]>([])
-  const buriedFootprints = useScene((state: S) => {
-    const next = belowGradeFootprints(state.nodes)
-    const prev = buriedFootprintsCache.current
-    if (polygonsMatch(next, prev)) return prev
-    buriedFootprintsCache.current = next
-    return next
+  // Where the ground meets the levels below grade. `all` says whether the scene has any (the
+  // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over and
+  // the grade ring runs along under the veil: the level shown and the ones between it and grade, as
+  // the level display hides them. While the level shown is not below grade the last such set is
+  // kept, so a hole easing shut keeps its shape.
+  const shownLevelId = useViewer((state) =>
+    state.hideLevelsAboveSelection ? state.selection.levelId : null,
+  )
+  const buriedCache = useRef<{ all: [number, number][][]; shown: [number, number][][] }>({
+    all: [],
+    shown: [],
+  })
+  const buried = useScene((state: S) => {
+    const prev = buriedCache.current
+    const found = belowGradeFootprints(state.nodes)
+    const all = polygonsMatch(found, prev.all) ? prev.all : found
+    let shown: [number, number][][] = []
+    if (all.length > 0) {
+      shown = shownLevelId ? belowGradeFootprints(state.nodes, shownLevelId) : []
+      if (shown.length === 0) shown = prev.shown.length > 0 ? prev.shown : all
+    }
+    if (polygonsMatch(shown, prev.shown)) shown = prev.shown
+    if (all === prev.all && shown === prev.shown) return prev
+    buriedCache.current = { all, shown }
+    return buriedCache.current
   })
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
   // keeps it tucked behind the grid/slab as before.
   // The hole's nodes are in the material from the moment the scene has a level below grade (once,
   // not when a floor is picked), the opening a uniform; without one the materials stay plain.
-  const hasBasement = buriedFootprints.length > 0
+  const hasBasement = buried.all.length > 0
   const groundMaterial = useMemo(() => {
     const material = new MeshLambertNodeMaterial({ color: bgColor })
     material.polygonOffset = true
@@ -371,8 +388,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   })
 
   const gradeRings = useMemo(
-    () => buriedFootprints.map((outline) => gradeRingGeometry(outline, persistedField)),
-    [buriedFootprints, persistedField],
+    () => buried.shown.map((outline) => gradeRingGeometry(outline, persistedField)),
+    [buried.shown, persistedField],
   )
   useEffect(
     () => () => {
@@ -632,7 +649,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       <GroundWindowSystem />
-      <GroundHole footprints={buriedFootprints} />
+      <GroundHole footprints={buried.shown} present={hasBasement} />
       {/* Render children (buildings and items) */}
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />

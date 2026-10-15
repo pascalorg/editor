@@ -82,12 +82,26 @@ export const VIGNETTE_STRENGTH = 0.42
 export const EYE_BAND = 0.1
 
 /**
- * The edge the ambiance is wanted by: only the eye under the ground, and never on Solid (the
- * person's own override). What level is shown, or whether the ground is veiled, is not in it.
+ * Whether the world beyond the walls is the earth's: only the eye under the ground, and never on
+ * Solid (the person's own override). What level is shown, or whether the ground is veiled, is not
+ * in it. The backdrop and, outside the walkthrough, the whole dark mode follow this edge.
  */
-export function ambianceTarget(state: { eyeUnderGround: boolean; groundMode: GroundMode }): 0 | 1 {
+export function earthTarget(state: { eyeUnderGround: boolean; groundMode: GroundMode }): 0 | 1 {
   if (state.groundMode !== 'auto') return 0
   return state.eyeUnderGround ? 1 : 0
+}
+
+/**
+ * The edge the dark mode (fog, vignette, the sky's light and the eye's own) is wanted by: the
+ * earth's edge, except in the walkthrough, where the rooms keep their normal light as the person
+ * walks down a stair, and only what is seen outside (the backdrop) turns to earth.
+ */
+export function ambianceTarget(state: {
+  eyeUnderGround: boolean
+  groundMode: GroundMode
+  walkthroughMode?: boolean
+}): 0 | 1 {
+  return state.walkthroughMode === true ? 0 : earthTarget(state)
 }
 
 /**
@@ -124,6 +138,12 @@ export function easeAmbiance(progress: number): number {
 
 const factorNode = uniform(0)
 /**
+ * How far what is seen beyond the walls (the sky) has turned to earth, 0 to 1. The same as the
+ * factor in the overview; in the walkthrough the factor stays 0 (no fog, no vignette, the rooms'
+ * own light) and this one alone follows the eye under the ground.
+ */
+const earthNode = uniform(0)
+/**
  * How far the hole in the ground is open (0 closed, 1 open): over a level below grade seen from
  * above, the ground stays solid and a hole with a noise-eroded edge opens over the below-grade
  * footprint. Eased like the factor; 0 in a capture, whose own ground it keeps (see
@@ -132,11 +152,17 @@ const factorNode = uniform(0)
 const holeNode = uniform(0)
 let hole = 0
 let factor = 0
+let earth = 0
 let held = false
 
 /** The factor as shaders read it: zero while a capture holds the ambiance off. */
 export function undergroundAmbianceNode() {
   return factorNode
+}
+
+/** How far the backdrop is the earth's, as shaders read it: zero while a capture holds the ambiance off. */
+export function undergroundEarthNode() {
+  return earthNode
 }
 
 /** How far the ground's hole is open, as shaders read it: 0 while a capture holds the world plain. */
@@ -160,10 +186,21 @@ export function ambianceNow(): number {
   return held ? 0 : factor
 }
 
+/** How far the backdrop is the earth's now: the eased value, or `0` while a capture holds it off. */
+export function earthNow(): number {
+  return held ? 0 : earth
+}
+
 /** Sets the live factor (the system's word); shaders and lights follow the held value. */
 export function setAmbianceFactor(next: number): void {
   factor = next
   factorNode.value = held ? 0 : next
+}
+
+/** Sets the live earth factor of the backdrop (the system's word). */
+export function setEarthFactor(next: number): void {
+  earth = next
+  earthNode.value = held ? 0 : next
 }
 
 /**
@@ -176,11 +213,13 @@ export function temporarilyWithoutAmbiance(): () => void {
   const wasHeld = held
   held = true
   factorNode.value = 0
+  earthNode.value = 0
   holeNode.value = 0
   restoreSkyLights()
   return () => {
     held = wasHeld
     factorNode.value = held ? 0 : factor
+    earthNode.value = held ? 0 : earth
     holeNode.value = held ? 0 : hole
   }
 }
@@ -239,20 +278,31 @@ export function undergroundFogAmount(worldPosition: any): any {
 }
 
 /**
- * The crossing as a noise mask closing over the screen: a per-pixel weight, 0 to 1, that goes
- * from 0 everywhere at factor 0 to 1 everywhere at factor 1, through soft blobs of the dark
- * world spreading (a fine perlin mask in screen space, not a cross-fade). Weighs the backdrop,
- * the fog and the vignette; above and below the crossing it is exactly 0 and 1.
+ * The noise the crossing's mask is cut from: two screen-space perlin octaves, 0 to 1. Computed once
+ * a pixel and handed to every {@link undergroundDissolve} that needs it.
  */
-export function undergroundDissolve(uv: any = screenUV): any {
-  const softness = 0.32
+export function undergroundDissolveGrain(uv: any = screenUV): any {
   // Perlin is centred on 0 with a short spread: stretch it so the mask covers 0..1.
   const grain = mx_noise_float(vec3(uv.mul(vec2(9, 5.8)), 0.37))
     .mul(0.62)
     .add(mx_noise_float(vec3(uv.mul(vec2(21, 13.5)), 1.91)).mul(0.22))
-  const n = clamp(grain.add(0.5), 0, 1)
-  const t = factorNode.mul(1 + 2 * softness).sub(softness)
-  return smoothstep(n.sub(softness), n.add(softness), t)
+  return clamp(grain.add(0.5), 0, 1)
+}
+
+/**
+ * The crossing as a noise mask closing over the screen: a per-pixel weight, 0 to 1, that goes
+ * from 0 everywhere at `amount` 0 (the factor, by default) to 1 everywhere at 1, through soft
+ * blobs of the dark world spreading (a fine perlin mask in screen space, not a cross-fade). Weighs
+ * the backdrop, the fog and the vignette; above and below the crossing it is exactly 0 and 1.
+ */
+export function undergroundDissolve(
+  uv: any = screenUV,
+  amount: any = factorNode,
+  grain: any = undergroundDissolveGrain(uv),
+): any {
+  const softness = 0.32
+  const t = amount.mul(1 + 2 * softness).sub(softness)
+  return smoothstep(grain.sub(softness), grain.add(softness), t)
 }
 
 /** The world position of the pixel at `uv` from the scene pass's raw depth. */

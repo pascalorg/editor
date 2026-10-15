@@ -228,6 +228,7 @@ export {
   buildingGroundBox,
   type GroundBox,
   levelGroundBox,
+  levelStackGroundBox,
   terrainBetweenEyeAndBox,
 } from './lib/ground-window'
 export {

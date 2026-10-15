@@ -32,6 +32,7 @@ export function GroundWindowSystem() {
     eye: new Vector3(Number.POSITIVE_INFINITY, 0, 0),
     box: null as GroundBox | null,
     mode: '',
+    walking: false,
     veiled: false,
     nodes: null as unknown,
   })
@@ -47,16 +48,20 @@ export function GroundWindowSystem() {
       box !== check.box ||
       nodes !== check.nodes ||
       viewer.groundMode !== check.mode ||
+      viewer.walkthroughMode !== check.walking ||
       groundVeiled(viewer) !== check.veiled
     if (!due) return
     check.at = clock.elapsedTime
     check.eye.copy(camera.position)
     check.box = box
     check.mode = viewer.groundMode
+    check.walking = viewer.walkthroughMode
     check.veiled = groundVeiled(viewer)
     check.nodes = nodes
     const eye: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z]
-    const inTheWay = box !== null && terrainBetweenEyeAndBox(nodes, eye, box)
+    // The walkthrough walks on solid ground: no window, whatever the hillside.
+    const inTheWay =
+      box !== null && !viewer.walkthroughMode && terrainBetweenEyeAndBox(nodes, eye, box)
     if (viewer.groundWindowVeiled !== inTheWay) useViewer.setState({ groundWindowVeiled: inTheWay })
     const open = inTheWay && viewer.groundMode === 'auto' ? box : null
     if (groundWindowBoxNow() !== open) setGroundWindow(open)

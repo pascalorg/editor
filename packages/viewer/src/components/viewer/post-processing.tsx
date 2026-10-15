@@ -41,11 +41,13 @@ import { scenePassMrt } from '../../lib/scene-pass-mrt'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import {
-  ambianceNow,
+  earthNow,
   UNDERGROUND_VIGNETTE,
   undergroundAmbianceNode,
   undergroundBackdrop,
   undergroundDissolve,
+  undergroundDissolveGrain,
+  undergroundEarthNode,
   undergroundFogAmount,
   undergroundVignette,
   worldPositionFromDepth,
@@ -224,7 +226,7 @@ const PostProcessingPasses = ({
         ? mix(
             atmosphere.skyRadiance(normalWorldGeometry),
             undergroundBackdrop(normalWorldGeometry.y),
-            undergroundAmbianceNode(),
+            undergroundEarthNode(),
           )
         : null,
     [atmosphere],
@@ -671,15 +673,20 @@ const PostProcessingPasses = ({
       // 0 everywhere above the ground, 1 everywhere below.
       let dive: ReturnType<typeof undergroundDissolve> | null = null
       if (!transparentBackground) {
-        dive = undergroundDissolve()
+        const grain = undergroundDissolveGrain()
+        dive = undergroundDissolve(screenUV, undergroundAmbianceNode(), grain)
+        // The backdrop follows the earth factor, which is the dark mode's own in the overview and
+        // alone in the walkthrough (looking out of a basement window shows earth, the rooms keep
+        // their light: no fog, no vignette).
+        const earthDive = undergroundDissolve(screenUV, undergroundEarthNode(), grain)
         const dark = undergroundBackdrop(worldDir.y)
         // The day's backdrop leaves ahead of the blobs: it greys and dims over the first half of
         // the crossing, so the anthracite spreads over a neutral grey picture, not a blue sky.
-        const leaving = smoothstep(tslFloat(0), tslFloat(0.5), undergroundAmbianceNode())
+        const leaving = smoothstep(tslFloat(0), tslFloat(0.5), undergroundEarthNode())
         const day = saturation(bgGradient, tslFloat(1).sub(leaving)).mul(
           tslFloat(1).sub(leaving.mul(0.35)),
         )
-        bgGradient = mix(day, dark, dive)
+        bgGradient = mix(day, dark, earthDive)
         const worldPosition = worldPositionFromDepth(
           scenePassDepth.sample(screenUV).r,
           camProjInvUniform.current,
@@ -825,7 +832,7 @@ const PostProcessingPasses = ({
       try {
         const clearAlpha = transparentBackground ? 0 : 1
         // Without the pipeline there is no fog and no vignette: the clear colour is the dark mode's.
-        const underground = transparentBackground ? 0 : ambianceNow()
+        const underground = transparentBackground ? 0 : earthNow()
         const clearColor =
           underground > 0 ? fallbackClear.current.copy(bgCurrent.current) : bgCurrent.current
         if (underground > 0) clearColor.lerp(fallbackEarth.current, underground)

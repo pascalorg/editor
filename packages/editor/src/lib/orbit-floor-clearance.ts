@@ -104,3 +104,21 @@ export function glideFloorLimit(current: number | null, target: number, delta: n
   if (current === null || !(delta > 0)) return current ?? target
   return target + (current - target) * Math.exp(-delta / FLOOR_GLIDE_SECONDS)
 }
+
+/**
+ * How far over the ground the overview's eye stays when the pivot goes down to a deep level: the
+ * ground is a medium, the eye above it sees the level through the hole and the dive is the
+ * person's own act, so picking a level four storeys under grade does not sink the eye with it.
+ */
+export const OVERVIEW_GROUND_CLEARANCE = 2
+
+/**
+ * The height an overview eye is kept at when its pivot moves to another level: `eyeY` as the move
+ * leaves it, lifted to {@link OVERVIEW_GROUND_CLEARANCE} over the ground at the eye when the eye
+ * was above the ground (`wasUnder` false) and the move would sink it under. An eye already under
+ * the ground (the person dived) goes where the move puts it.
+ */
+export function overviewEyeY(eyeY: number, groundY: number, wasUnder: boolean): number {
+  if (wasUnder) return eyeY
+  return Math.max(eyeY, groundY + OVERVIEW_GROUND_CLEARANCE)
+}

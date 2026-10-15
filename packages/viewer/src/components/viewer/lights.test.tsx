@@ -7,6 +7,7 @@ import {
   BuildingNode,
   LevelNode,
   levelGroundBox,
+  levelStackGroundBox,
   SiteNode,
   SlabNode,
   useScene,
@@ -27,12 +28,15 @@ import {
   ambianceFocus,
   ambianceNow,
   EYE_FILL_INTENSITY,
+  earthNow,
   groundHoleOpenNow,
   SKY_LIGHT_SCALE,
   setAmbianceFactor,
+  setEarthFactor,
   setGroundHoleOpen,
   temporarilyWithoutAmbiance,
   undergroundAmbianceNode,
+  undergroundEarthNode,
 } from '../../lib/underground-ambiance'
 import useViewer from '../../store/use-viewer'
 import { startConstructionReveal } from '../../systems/construction-reveal/construction-reveal'
@@ -51,6 +55,7 @@ beforeEach(() => {
 afterEach(() => {
   useViewer.setState(previous, true)
   setAmbianceFactor(0)
+  setEarthFactor(0)
   setGroundHoleOpen(0)
 })
 
@@ -387,7 +392,7 @@ test('a capture is taken in the world’s own light, with no hole in its ground,
   }
 })
 
-test('the fog keeps the shown level clear from the selection alone, and the host’s ground window box wins', async () => {
+test('the fog keeps the shown level clear from the selection alone, and the host’s ground window box serves when no level is shown', async () => {
   const list: AnyNode[] = [
     SiteNode.parse({ id: 'site_a', children: ['building_a'] }),
     BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_b'] }),
@@ -441,11 +446,222 @@ test('the fog keeps the shown level clear from the selection alone, and the host
       min: [-3, -1, -2] as [number, number, number],
       max: [3, 2, 2] as [number, number, number],
     }
-    await act(async () => useViewer.setState({ groundWindowBox: host }))
+    await act(async () =>
+      useViewer.setState({
+        groundWindowBox: host,
+        hideLevelsAboveSelection: false,
+        belowGrade: false,
+      }),
+    )
     await renderer.advanceFrames(2, 0.05)
     expect(ambianceFocus()).toEqual(host)
   } finally {
     useScene.setState(previousScene, true)
+    await renderer.unmount()
+  }
+})
+
+// Several levels below grade (15 Oct): a house over four basements, 3 m a floor, 0 / -1 .. -4.
+function withDeepStack() {
+  const rect = (x0: number, x1: number, z0: number, z1: number): Array<[number, number]> => [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+  const plans: Array<[number, Array<[number, number]>]> = [
+    [-4, rect(8, 16, 2, 6)],
+    [-3, rect(0, 4, 0, 3)],
+    [-2, rect(-3, 13, -3, 11)],
+    [-1, rect(0, 10, 0, 8)],
+    [0, rect(0, 10, 0, 8)],
+  ]
+  const list: AnyNode[] = [
+    SiteNode.parse({ id: 'site_d', children: ['building_d'] }),
+    BuildingNode.parse({
+      id: 'building_d',
+      parentId: 'site_d',
+      children: plans.map(([n]) => `level_d${n + 4}`),
+    }),
+  ]
+  for (const [n, polygon] of plans)
+    list.push(
+      LevelNode.parse({
+        id: `level_d${n + 4}`,
+        level: n,
+        height: 3,
+        baseElevation: n === -4 ? -12 : 0,
+        parentId: 'building_d',
+        children: [`slab_d${n + 4}`],
+      }),
+      SlabNode.parse({ id: `slab_d${n + 4}`, parentId: `level_d${n + 4}`, elevation: 0, polygon }),
+    )
+  const nodes = Object.fromEntries(list.map((node) => [node.id, node])) as Record<
+    AnyNodeId,
+    AnyNode
+  >
+  useScene.setState({ nodes, rootNodeIds: ['site_d'] } as never)
+}
+
+const showDeep = (index: number) =>
+  useViewer.setState({
+    selection: {
+      ...useViewer.getState().selection,
+      buildingId: 'building_d',
+      levelId: `level_d${index + 4}`,
+    },
+    hideLevelsAboveSelection: true,
+    ...BELOW_GRADE,
+    groundWindowBox: null,
+  } as never)
+
+test('with a deep level shown the eye above the ground stays in the day, and the dive is the eye’s own', async () => {
+  const previousScene = useScene.getState()
+  withDeepStack()
+  const { renderer, camera } = await mountLights()
+  try {
+    // The overview: the target is four storeys down, the eye is over the ground.
+    camera.position.set(22, 12, 22)
+    await act(async () => showDeep(-4))
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(useViewer.getState().eyeUnderGround).toBe(false)
+    expect(ambianceNow()).toBe(0)
+    expect(groundHoleOpenNow()).toBe(1)
+    // Picking a shallower level and a deeper one again changes nothing about the eye's medium.
+    for (const index of [-1, -3, -2, -4]) {
+      await act(async () => showDeep(index))
+      await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+      expect(ambianceNow()).toBe(0)
+      expect(groundHoleOpenNow()).toBe(1)
+    }
+    // The person dives: only then the dark mode.
+    camera.position.set(22, -10, 22)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(useViewer.getState().eyeUnderGround).toBe(true)
+    expect(ambianceNow()).toBe(1)
+  } finally {
+    useScene.setState(previousScene, true)
+    await renderer.unmount()
+  }
+})
+
+test('the fog keeps the shown deep level and the ones under it clear, not the ones over it', async () => {
+  const previousScene = useScene.getState()
+  withDeepStack()
+  const { renderer, camera } = await mountLights()
+  try {
+    camera.position.set(30, -3, 30)
+    await act(async () => showDeep(-2))
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    const nodes = useScene.getState().nodes
+    const stack = levelStackGroundBox(nodes, 'level_d2')
+    expect(stack).not.toBeNull()
+    expect(ambianceFocus()).toEqual({ min: stack?.min, max: stack?.max })
+    // -2, -3 and -4 floors are at -6 .. -12: the box does not reach up to the ground floor.
+    expect(stack?.min[1]).toBe(-12)
+    expect(stack?.max[1]).toBe(-3)
+  } finally {
+    useScene.setState(previousScene, true)
+    await renderer.unmount()
+  }
+})
+
+// The walkthrough: the ground is solid, the rooms keep their light going down a stair, and only
+// what is seen outside turns to earth.
+test('in the walkthrough going down into a basement does not dive: no hole, no dark mode, the earth outside', async () => {
+  const { renderer, scene, camera } = await mountLights()
+  try {
+    const ambient = ambientOf(scene)
+    if (!ambient) throw new Error('the lights include an ambient light')
+    const atGrade = ambient.intensity
+    await act(async () => useViewer.setState({ ...BELOW_GRADE, walkthroughMode: true }))
+    camera.position.set(0, 1.7, 0)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(groundHoleOpenNow()).toBe(0)
+    expect(earthNow()).toBe(0)
+
+    // Down the stair, under the ground.
+    camera.position.set(0, -1.75, 0)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(useViewer.getState().eyeUnderGround).toBe(true)
+    expect(earthNow()).toBe(1)
+    expect(undergroundEarthNode().value).toBe(1)
+    // The rooms keep their normal light: no factor for the fog and the vignette, the sky's light as it was.
+    expect(ambianceNow()).toBe(0)
+    expect(undergroundAmbianceNode().value).toBe(0)
+    expect(useViewer.getState().ambianceActive).toBe(false)
+    expect(ambient.intensity).toBe(atGrade)
+    expect(groundHoleOpenNow()).toBe(0)
+
+    // Back up: the sky is back.
+    camera.position.set(0, 1.7, 0)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(earthNow()).toBe(0)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('leaving the walkthrough returns to the overview rule: the hole above, the dark mode below', async () => {
+  const { renderer, camera } = await mountLights()
+  try {
+    await act(async () => useViewer.setState({ ...BELOW_GRADE, walkthroughMode: true }))
+    camera.position.set(0, -1.75, 0)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(ambianceNow()).toBe(0)
+    expect(earthNow()).toBe(1)
+
+    await act(async () => useViewer.setState({ walkthroughMode: false }))
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(ambianceNow()).toBe(1)
+    expect(earthNow()).toBe(1)
+
+    camera.position.set(22, 12, 22)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(ambianceNow()).toBe(0)
+    expect(earthNow()).toBe(0)
+    expect(groundHoleOpenNow()).toBe(1)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('the earth outside also eases in over the crossing and is instant with Animation off', async () => {
+  const { renderer, camera } = await mountLights()
+  try {
+    await act(async () => useViewer.setState({ walkthroughMode: true }))
+    camera.position.set(0, -1.75, 0)
+    await renderer.advanceFrames(4, 0.05)
+    expect(earthNow()).toBeGreaterThan(0)
+    expect(earthNow()).toBeLessThan(1)
+  } finally {
+    await renderer.unmount()
+  }
+  const driver = startConstructionReveal({ reveals: () => false, level: () => 'off' })
+  const again = await mountLights()
+  try {
+    await act(async () => useViewer.setState({ walkthroughMode: true }))
+    again.camera.position.set(0, -1.75, 0)
+    await again.renderer.advanceFrames(1, 0.016)
+    expect(earthNow()).toBe(1)
+  } finally {
+    driver.stop()
+    await again.renderer.unmount()
+  }
+})
+
+test('a capture holds the earth off too', async () => {
+  const { renderer, camera } = await mountLights()
+  try {
+    await act(async () => useViewer.setState({ walkthroughMode: true }))
+    camera.position.set(0, -1.75, 0)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    const release = temporarilyWithoutAmbiance()
+    expect(undergroundEarthNode().value).toBe(0)
+    expect(earthNow()).toBe(0)
+    release()
+    expect(undergroundEarthNode().value).toBe(1)
+  } finally {
     await renderer.unmount()
   }
 })

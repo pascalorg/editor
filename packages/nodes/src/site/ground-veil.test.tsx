@@ -20,6 +20,7 @@ import {
 import { act, create } from '@react-three/test-renderer'
 import { Box3, DoubleSide, type Line, type Mesh, type Object3D, Raycaster, Vector3 } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
+import { groundHoleDistanceAt } from './ground-hole'
 import { SiteRenderer } from './renderer'
 
 // Over a level below grade the site's ground is veiled: the lot's fill, its sculpted terrain and
@@ -284,6 +285,28 @@ test('the person can keep the ground solid over a level below grade', async () =
   }
 })
 
+test('the walkthrough walks on solid ground: no ring, no hole over the level the overview had shown', async () => {
+  withBasement()
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    await act(async () =>
+      useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade', walkthroughMode: true }),
+    )
+    await renderer.advanceFrames(2, 0.05)
+    expect(ground(scene, 'solid').every(drawn)).toBe(true)
+    expect(ground(scene, 'veil').some(drawn)).toBe(false)
+    expect(groundPickedAt(scene, 3, 2).length).toBeGreaterThan(0)
+    // Leaving the walkthrough: the overview rule is back (the ring under the veil).
+    await act(async () => useViewer.setState({ walkthroughMode: false }))
+    await renderer.advanceFrames(2, 0.05)
+    expect(veilsOf(scene).rings.filter(drawn)).toHaveLength(1)
+  } finally {
+    useViewer.setState({ walkthroughMode: false })
+    await renderer.unmount()
+  }
+})
+
 test('a sculpted lot keeps its terrain, cut edges and skirt solid, and opens the hole over them too', async () => {
   withBasement()
   const renderer = await create(<SiteRenderer node={lot(true)} />)
@@ -421,6 +444,166 @@ test('a click on ground the window veils falls through to what it reveals', asyn
     })
     expect(groundPickedFromAbove(scene).length).toBeGreaterThan(0)
   } finally {
+    await renderer.unmount()
+  }
+})
+
+// Several levels below grade: the owner's house over four basements (15 Oct). -1 under the house,
+// -2 wider than it, -3 under part of it only, -4 offset and poking out past the house's east side.
+function withFourBasements() {
+  const rect = (x0: number, x1: number, z0: number, z1: number): Array<[number, number]> => [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+  const footprints: Array<[number, Array<[number, number]>]> = [
+    [-4, rect(4, 9, -1, 3)],
+    [-3, rect(-6, -2, -6, -2)],
+    [-2, rect(-8, 8, -8, 7)],
+    [-1, rect(-3, 3, -3, 3)],
+  ]
+  const list: AnyNode[] = [
+    BuildingNode.parse({
+      id: 'building_a',
+      children: footprints.map(([index]) => `level_m${-index}`),
+    }),
+  ]
+  for (const [index, polygon] of footprints)
+    list.push(
+      LevelNode.parse({
+        id: `level_m${-index}`,
+        parentId: 'building_a',
+        level: index,
+        height: 3,
+        baseElevation: index === -4 ? -12 : 0,
+        children: [`slab_m${-index}`],
+      }),
+      SlabNode.parse({
+        id: `slab_m${-index}`,
+        parentId: `level_m${-index}`,
+        elevation: 0.2,
+        polygon,
+      }),
+    )
+  useScene.setState({
+    nodes: Object.fromEntries(list.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>,
+  })
+}
+
+/** Shows `levelId` the way the level display does: the levels above it hidden, its ground veiled. */
+function showLevel(levelId: string) {
+  return useViewer.setState({
+    selection: { ...useViewer.getState().selection, levelId } as never,
+    hideLevelsAboveSelection: true,
+    belowGrade: true,
+    gradeStanding: 'below-grade',
+  })
+}
+
+test('the hole and the grade ring follow the level shown: it and the levels between it and grade, never the deeper ones', async () => {
+  withFourBasements()
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const ringExtents = () =>
+      veilsOf(scene)
+        .rings.concat(veilsOf(scene).sheets.filter((veil) => veil.geometry.boundingBox))
+        .map((ring) => {
+          ring.geometry.computeBoundingBox()
+          const box = ring.geometry.boundingBox ?? new Box3()
+          return [box.min.x, box.max.x, box.min.z, box.max.z].map((v) => Math.round(v))
+        })
+        .filter(([x0, x1]) => (x1 ?? 0) - (x0 ?? 0) < 19)
+    // The scene has levels below grade from the start: the hole's mask is in the ground already.
+    expect(useViewer.getState().hasLevelBelowGrade).toBe(true)
+
+    await act(async () => showLevel('level_m1'))
+    await renderer.advanceFrames(2, 0.05)
+    // -4 pokes out east of the house: -1 shown does not open the ground over it.
+    expect(groundHoleDistanceAt(0, 0)).toBeLessThan(0)
+    expect(groundHoleDistanceAt(8, 1)).toBeGreaterThan(3)
+    expect(groundHoleDistanceAt(-7, 6)).toBeGreaterThan(3)
+    expect(ringExtents()).toEqual([[-3, 3, -3, 3]])
+
+    await act(async () => showLevel('level_m2'))
+    await renderer.advanceFrames(2, 0.05)
+    // -2 is the wider level: its footprint is the hole, -3 and -1 are inside it, and -4, which pokes
+    // half a metre out of it on the east, is not opened (it is deeper than the level shown).
+    expect(groundHoleDistanceAt(-7, 6)).toBeLessThan(0)
+    expect(groundHoleDistanceAt(8.5, 1)).toBeGreaterThan(0.3)
+    expect(ringExtents()).toEqual([[-8, 8, -8, 7]])
+
+    await act(async () => showLevel('level_m4'))
+    await renderer.advanceFrames(2, 0.05)
+    // -4 shown: every level above it is open too, one outline round the whole stack.
+    expect(groundHoleDistanceAt(7, 1)).toBeLessThan(0)
+    expect(groundHoleDistanceAt(-7, 6)).toBeLessThan(0)
+    expect(ringExtents()).toEqual([[-8, 9, -8, 7]])
+
+    // Back to the ground floor: the hole closes over the shape it had, not over another one.
+    await act(async () => useViewer.setState({ belowGrade: false, gradeStanding: 'at-grade' }))
+    await renderer.advanceFrames(2, 0.05)
+    expect(groundHoleDistanceAt(7, 1)).toBeLessThan(0)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('over several levels below grade the stack is one hole: no island of ground where two levels overlap', async () => {
+  withFourBasements()
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    await act(async () => showLevel('level_m4'))
+    await renderer.advanceFrames(2, 0.05)
+    // The middle of the house lies over -1 and -2 (and under -3's corner): overlapping outlines
+    // must not cancel out (even-odd) into ground.
+    for (const [x, z] of [
+      [0, 0],
+      [-5, -5],
+      [6, 1],
+      [-6, 5],
+    ] as const)
+      expect(groundHoleDistanceAt(x, z)).toBeLessThan(0)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('switching between a shallow and the deepest level swaps and rebuilds no ground material', async () => {
+  withFourBasements()
+  const renderer = await create(<SiteRenderer node={lot(true)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const snapshot = () =>
+      ground(scene, 'solid').map((surface) => {
+        const material = surface.material as MeshBasicNodeMaterial
+        return { surface, material, version: material.version, mask: material.maskNode }
+      })
+    const before = snapshot()
+    expect(before.length).toBeGreaterThanOrEqual(3)
+    for (const levelId of [
+      'level_m1',
+      'level_m4',
+      'level_m2',
+      'level_m1',
+      'level_m3',
+      'level_m4',
+    ]) {
+      await act(async () => showLevel(levelId))
+      groundHoleOpenNode().value = 1
+      await renderer.advanceFrames(3, 0.05)
+      const after = snapshot()
+      expect(after).toHaveLength(before.length)
+      after.forEach((entry, index) => {
+        expect(entry.surface).toBe(before[index]?.surface)
+        expect(entry.material).toBe(before[index]?.material)
+        expect(entry.mask).toBe(before[index]?.mask)
+        expect(entry.version).toBe(before[index]?.version ?? -1)
+      })
+    }
+  } finally {
+    groundHoleOpenNode().value = 0
     await renderer.unmount()
   }
 })

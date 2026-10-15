@@ -6,7 +6,7 @@ import {
   buildingGroundBox,
   type GroundBox,
   groundHeightAt,
-  levelGroundBox,
+  levelStackGroundBox,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -18,11 +18,14 @@ import {
   ambianceNow,
   ambianceTarget,
   applyAmbianceToSkyLights,
+  earthNow,
+  earthTarget,
   easeAmbiance,
   eyeUnderTheGround,
   restoreSkyLights,
   setAmbianceFactor,
   setAmbianceFocus,
+  setEarthFactor,
   setGroundHoleOpen,
   stepAmbianceProgress,
 } from '../../lib/underground-ambiance'
@@ -39,6 +42,7 @@ import { revealMotionOff } from '../../systems/construction-reveal/construction-
 export function UndergroundAmbiance() {
   const progress = useRef<number | null>(null)
   const holeProgress = useRef<number | null>(null)
+  const earthProgress = useRef<number | null>(null)
   const eye = useRef(new Vector3())
   const lastEye = useRef(new Vector3(Number.NaN, Number.NaN, Number.NaN))
   const lastNodes = useRef<Record<AnyNodeId, AnyNode> | null>(null)
@@ -71,13 +75,29 @@ export function UndergroundAmbiance() {
     const seconds = instant ? 0 : AMBIANCE_SECONDS
     const dt = Math.min(delta, 0.1)
 
-    const target = ambianceTarget({ eyeUnderGround: under, groundMode: viewer.groundMode })
+    const target = ambianceTarget({
+      eyeUnderGround: under,
+      groundMode: viewer.groundMode,
+      walkthroughMode: viewer.walkthroughMode,
+    })
     const next = stepAmbianceProgress(progress.current ?? target, target, dt, seconds)
     progress.current = next
     const eased = easeAmbiance(next)
     setAmbianceFactor(eased)
     const active = eased > 0
     if (viewer.ambianceActive !== active) useViewer.setState({ ambianceActive: active })
+
+    // What is seen beyond the walls turns to earth with the eye, in the walkthrough too: there it
+    // is the only part of the dark mode that does (the rooms keep their light, no fog, no vignette).
+    const earthWanted = earthTarget({ eyeUnderGround: under, groundMode: viewer.groundMode })
+    const earthNext = stepAmbianceProgress(
+      earthProgress.current ?? earthWanted,
+      earthWanted,
+      dt,
+      seconds,
+    )
+    earthProgress.current = earthNext
+    setEarthFactor(easeAmbiance(earthNext))
 
     const holeTarget = groundVeiled(viewer) ? 1 : 0
     const holeNext = stepAmbianceProgress(
@@ -89,9 +109,9 @@ export function UndergroundAmbiance() {
     holeProgress.current = holeNext
     setGroundHoleOpen(easeAmbiance(holeNext))
 
-    if (next !== target || holeNext !== holeTarget) state.invalidate()
+    if (next !== target || holeNext !== holeTarget || earthNext !== earthWanted) state.invalidate()
 
-    if (eased > 0) {
+    if (eased > 0 || earthNext > 0) {
       const { selection, hideLevelsAboveSelection, belowGrade, groundWindowBox } = viewer
       const from = [
         nodes,
@@ -103,18 +123,21 @@ export function UndergroundAmbiance() {
       ]
       if (from.some((value, index) => value !== focusFrom.current[index])) {
         focusFrom.current = from
+        // Where the world stays clear: the shown level and the ones under it (a deep level is
+        // seen with the stack over it opened), else the host's window box, else the building.
         focus.current =
-          groundWindowBox ??
           (selection.levelId && (hideLevelsAboveSelection || belowGrade)
-            ? levelGroundBox(nodes, selection.levelId)
-            : buildingGroundBox(nodes, selection.buildingId ?? null))
+            ? levelStackGroundBox(nodes, selection.levelId)
+            : null) ??
+          groundWindowBox ??
+          buildingGroundBox(nodes, selection.buildingId ?? null)
       }
     }
   }, -2)
 
   useFrame(() => {
     const amount = ambianceNow()
-    if (amount > 0) setAmbianceFocus(focus.current, eye.current)
+    if (amount > 0 || earthNow() > 0) setAmbianceFocus(focus.current, eye.current)
     applyAmbianceToSkyLights(amount)
   }, 0)
 

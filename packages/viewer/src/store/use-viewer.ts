@@ -686,15 +686,20 @@ export type GroundMode = 'auto' | 'solid'
 /**
  * Whether the site's ground is drawn as a veil wholesale: a level below grade is shown, the
  * ground on auto. A level only partly below grade is the exception — there the ground window
- * veils just the ground in the way, and the rest stays solid.
+ * veils just the ground in the way, and the rest stays solid. The walkthrough walks on its
+ * floors: its ground is always solid, whatever level the overview had shown.
  */
 export function groundVeiled(state: {
   belowGrade: boolean
   groundMode: GroundMode
   gradeStanding?: LevelGradeStanding
+  walkthroughMode?: boolean
 }): boolean {
   return (
-    state.belowGrade && state.groundMode === 'auto' && state.gradeStanding !== 'partly-below-grade'
+    state.belowGrade &&
+    state.groundMode === 'auto' &&
+    state.gradeStanding !== 'partly-below-grade' &&
+    state.walkthroughMode !== true
   )
 }
 
@@ -704,8 +709,12 @@ export function anyGroundVeiled(state: {
   groundMode: GroundMode
   gradeStanding?: LevelGradeStanding
   groundWindowVeiled: boolean
+  walkthroughMode?: boolean
 }): boolean {
-  return groundVeiled(state) || (state.groundMode === 'auto' && state.groundWindowVeiled)
+  return (
+    groundVeiled(state) ||
+    (state.groundMode === 'auto' && state.groundWindowVeiled && state.walkthroughMode !== true)
+  )
 }
 
 /** Apply an authoritative country code (e.g. IP-derived by the host app) as
