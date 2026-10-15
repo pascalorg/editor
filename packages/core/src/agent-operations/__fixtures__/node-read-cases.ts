@@ -676,7 +676,7 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'find_nodes { type: column } on a scene of 250 columns: all of them, with a limit that covers them',
+    name: 'find_nodes { type: column } on a scene of 250 columns (all 250): all of them, with a limit that covers them',
     tool: 'find_by_type',
     scene: crowdedScene,
     input: { type: 'column', limit: 1000 },
@@ -686,14 +686,14 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'find_by_type { type: column, limit: 3 }: three listed, the count of all',
+    name: 'find_by_type { type: column, limit: 3 } (new, no find_nodes case): three listed, the count of all, truncated',
     tool: 'find_by_type',
     scene: crowdedScene,
     input: { type: 'column', limit: 3 },
     expect: { result: { count: 250, truncated: true }, check: lists(3) },
   },
   find(
-    "find_by_type { type: column, zoneId } on a porch across the zone's edge: its column in the zone, by the part's own bounds, not the one 20 m off",
+    "find_by_type { type: column, zoneId } on a porch across the zone's edge (new, find_nodes found no parts): its column in the zone, by the part's own bounds, not the one 20 m off",
     porchScene,
     { type: 'column', zoneId: 'zone_kitchen' },
     [],
