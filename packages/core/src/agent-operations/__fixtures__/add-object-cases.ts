@@ -186,7 +186,6 @@ export const ADD_OBJECT_CASES: AddObjectCase[] = [
     input: { code: CODE, name: 'Side table', reason: 'Pascal has no side table.' },
     compiled: compiledSolid([0.5, 0.6, 0.5]),
     context: { activeLevelId: 'level_roof' },
-    surfaces: ['core', 'chat'],
     expect: { refusal: 'roof_level', mentions: ['"Side table"', 'level_0'] },
   },
   // Named onto the roof level, it goes up with the roof.

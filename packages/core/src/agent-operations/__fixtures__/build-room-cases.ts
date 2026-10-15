@@ -479,7 +479,6 @@ export const CREATE_ROOM_CASES: AgentToolCase[] = [
     scene: roomsScene,
     input: room({}),
     context: { activeLevelId: 'level_u' },
-    surfaces: ['core', 'chat'],
     expect: { result: { ok: true }, check: roomOn('level_u') },
   },
   {

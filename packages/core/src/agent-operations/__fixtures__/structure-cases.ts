@@ -124,7 +124,6 @@ export const ADD_WALL_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { start: [0, 0], end: [4, 0] },
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { levelId: 'level_upper' } },
   },
   {
@@ -266,7 +265,6 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { name: 'Attic' },
     context: { activeLevelId: 'level_ground' },
-    surfaces: ['core', 'chat'],
     expect: {
       result: { ok: true, buildingId: 'building_house', floorIndex: 2, name: 'Attic', height: 2.5 },
     },
@@ -504,7 +502,6 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { x: 3, z: 4, rotation: '180°', height: 2.8, steps: 14, width: '90 cm' },
     context: { activeLevelId: 'level_ground' },
-    surfaces: ['core', 'chat'],
     expect: {
       result: {
         fromLevelId: 'level_ground',

@@ -9,6 +9,7 @@ import { PASCAL_TYPES } from '@pascal-app/core/agent-operations'
 import type { AnyNodeId, CompiledGeometryScript } from '@pascal-app/core/schema'
 import { ADD_OBJECT_CASES } from '../../../core/src/agent-operations/__fixtures__/add-object-cases'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
 import { type GeometryScriptHost, registerAddObject } from './add-object'
@@ -21,6 +22,8 @@ describe('add_object over MCP', () => {
   let client: Client
   let compiled: CompiledGeometryScript
   let compiles = 0
+  // The floor the host's person views for the case at hand; none, as on the remote MCP.
+  let viewed: string | null = null
 
   const host: GeometryScriptHost = {
     compile: async () => {
@@ -34,7 +37,7 @@ describe('add_object over MCP', () => {
   beforeEach(async () => {
     bridge = new SceneBridge()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerAddObject(server, bridge, host)
+    registerAddObject(server, createSceneOperations({ bridge, activeLevelId: () => viewed }), host)
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -48,6 +51,7 @@ describe('add_object over MCP', () => {
       bridge.setActiveScene({ id: 'scene_cases', name: 'Cases' } as never)
       compiled = c.compiled
       compiles = 0
+      viewed = c.context?.activeLevelId ?? null
       const result = (await client.callTool({ name: 'add_object', arguments: c.input })) as Result
       const payload = JSON.parse(result.content[0]!.text) as Record<string, unknown>
       if ('refusal' in c.expect) {

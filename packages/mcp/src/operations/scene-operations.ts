@@ -30,6 +30,11 @@ import type {
 export type CreateSceneOperationsOptions = {
   bridge?: SceneBridge
   store?: SceneStore
+  /**
+   * The floor the host's person is viewing, which an operation that names no level defaults to,
+   * as the chat's does. A host with no view (the remote MCP) leaves it out: the lowest storey.
+   */
+  activeLevelId?: () => string | null
 }
 
 export interface SceneOperations {
@@ -48,6 +53,8 @@ export interface SceneOperations {
    * history step. A host that does lends `getMaterials`, and paint keeps native materials there.
    */
   readonly supportsMaterialUpserts?: boolean
+  /** The floor the host's person is viewing, when the host has a view. */
+  readonly activeLevelId?: () => string | null
 
   setActiveScene(meta: ActiveSceneMeta): void
   getActiveScene(): ActiveSceneMeta | null
@@ -120,10 +127,12 @@ class SceneOperationsFacade implements SceneOperations {
 
   readonly planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan
   readonly nodeSchema?: (kind: string) => ZodType | undefined
+  readonly activeLevelId?: () => string | null
 
   constructor(options: CreateSceneOperationsOptions) {
     this.#bridge = options.bridge
     this.#store = options.store
+    if (options.activeLevelId) this.activeLevelId = options.activeLevelId
     const bridge = options.bridge as
       | {
           planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan

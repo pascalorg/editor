@@ -548,7 +548,7 @@ export function registerOperationTool(
             call.tool === placeInRoomTool.name,
         )
       const context: AgentContext = {
-        activeLevelId: null,
+        activeLevelId: bridge.activeLevelId?.() ?? null,
         ...(bridge.supportsMaterialUpserts && bridge.getMaterials
           ? { materials: bridge.getMaterials() }
           : {}),
