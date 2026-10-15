@@ -6,6 +6,7 @@ import {
   hideFromScene,
   inGroundWindowNode,
   SITE_GROUND,
+  SOIL_RING,
   SOIL_VEIL,
   SOIL_VEIL_OPACITY,
   showInScene,
@@ -127,7 +128,10 @@ export function gradeRingGeometry(
 }
 
 export function gradeRingMaterial() {
-  return new MeshBasicNodeMaterial({ color: GRADE_RING_COLOR, side: DoubleSide })
+  const material = new MeshBasicNodeMaterial({ color: GRADE_RING_COLOR, side: DoubleSide })
+  // Under the ground's ambiance the ring is the lid's rim: a dark ring would vanish in the earth.
+  material.colorNode = mix(color(GRADE_RING_COLOR), color(SOIL_RING), undergroundAmbianceNode())
+  return material
 }
 
 /**

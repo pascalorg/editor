@@ -33,18 +33,24 @@ import type { GroundMode } from '../store/use-viewer'
 export const AMBIANCE_SECONDS = 0.7
 
 /** The earth around the horizon, where the fog and the backdrop meet. */
-export const SOIL_HORIZON = '#2b1e14'
+export const SOIL_HORIZON = '#6a4b32'
 /** The earth overhead and underfoot: deeper than the horizon, never black. */
-export const SOIL_DEEP = '#120d09'
-/** The tone the ground veil takes: a little warmer than the backdrop so the lid reads as earth. */
-export const SOIL_VEIL = '#3a2616'
-/** The veil's opacity under the ambiance, over its plain faintness. */
-export const SOIL_VEIL_OPACITY = 0.16
+export const SOIL_DEEP = '#33241a'
+/** The tone the ground veil takes: the lid of the earth, a little warmer than the backdrop. */
+export const SOIL_VEIL = '#8a6240'
+/** The veil's opacity under the ground: a little thicker than its plain faintness. */
+export const SOIL_VEIL_OPACITY = 0.12
+/** The grade ring, where the lid meets the level below grade: it reads as the lid's rim. */
+export const SOIL_RING = '#d9a66b'
+/** The corners the vignette closes in to. */
+export const SOIL_VIGNETTE = '#0f0905'
 
 /** The sky's ambient and hemisphere light, as a share of what the theme gives. */
-export const SKY_LIGHT_SCALE = 0.55
+export const SKY_LIGHT_SCALE = 0.65
+/** The eye's own light comes up this much as the sky's comes down, so the rooms keep their light. */
+export const FILL_BOOST = 1.4
 /** Their tint pulls this much toward a warm lamp colour. */
-export const SKY_LIGHT_WARMTH = 0.2
+export const SKY_LIGHT_WARMTH = 0.15
 const WARM = '#ffcf9a'
 
 /** Fog begins this far past the shown level's box and has taken the site by the second. */

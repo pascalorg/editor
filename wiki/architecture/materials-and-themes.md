@@ -184,6 +184,20 @@ A `SceneTheme` (`lib/scene-themes.ts`) bundles everything that defines a "look":
 
 The editor UI chrome follows the host's theme and is independent of `appearance`. The editor sets no `dark` class itself: its chrome and every portal resolve against the host's `.dark` ancestor (the open-source app adds `dark` to `<body>` while its editor page is mounted; Pascal's hosted app lets next-themes set it on `<html>`). Chrome colour literals have a light base with the dark value under `dark:` (`bg-black/4 dark:bg-[#2C2C2E]`), so a new control needs both. `dark:hover:*` ties with `disabled:hover:*` and is emitted later, so a control that resets its hover when disabled resets it under `dark:disabled:hover:` too. Presentation HUDs (Preview, walkthrough, the viewer's controls with their menus and tooltips) and self-contained overlays (cursor badges, room labels, the snapshot viewfinder, the Point and ask layer) stay dark in either theme. A host that owns the theme setting passes `InterfaceThemeRow` (System / Light / Dark) to `SettingsPanel` through `preferences`.
 
+## Underground ambiance
+
+Below grade the world is not the theme's: while the shown level lies below grade with the ground on Auto (`groundVeiled`), or the eye lies under the ground at its own position (`eyeUnderGround`, a free orbit under the lid), the viewer turns to earth. One factor drives all of it (`lib/underground-ambiance.ts`): `0` is the theme's world, `1` is the earth. `components/viewer/underground-ambiance.tsx` (mounted by `Lights`) eases it in and out over 0.7 s, instantly when the Animation setting is Off or motion is reduced, and Solid turns it off with the veil.
+
+| Piece | Where | What |
+|---|---|---|
+| Backdrop | `post-processing.tsx` | The sky (theme or atmosphere) mixes to the soil gradient, after the colour grade. |
+| Fog | `post-processing.tsx` | From the scene pass's depth: distance outside the shown level's box (`groundWindowBox`, or a cube about the eye) dissolves into the backdrop's colour, per pixel. A screen-space pass, so it works with or without an atmosphere; the no-post-FX fallback has the clear colour only. |
+| Vignette | `post-processing.tsx` | The corners close in, before the overlays are composited. |
+| Sky light | `lib/underground-ambiance.ts` | The ambient and hemisphere lights come down and warm for the frame about to be drawn and are given back before `Lights` lerps them. The sun is untouched; the eye's own fill comes up (`FILL_BOOST`). |
+| Veil, grade ring | `nodes/src/site/ground-veil.tsx` | Read the same factor as a uniform: earth tone, a little thicker; the ring turns to a light rim. |
+
+The shown level's own materials are never touched. A capture (the agent's pictures, the hero shot) renders from its own camera with `gl.render`, so the composite pieces are not in it; `temporarilyWithoutAmbiance()` (held by the thumbnail generator's set-up) also lets the sky light and the veil go back to the world's own for the frame.
+
 ## Adding a theme
 
 Append a `SceneTheme` to `SCENE_THEMES` with all required fields. `clayTints` is a `Partial` — any role you omit falls back to the active `colorPreset`. The theme pickers (toolbar + community overlay) render a 2×2 swatch from `clayTints` over `background`, so populate at least `wall`/`roof`/`floor`/`glazing` for a good swatch.

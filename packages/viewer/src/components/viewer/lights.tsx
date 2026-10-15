@@ -11,7 +11,7 @@ import * as THREE from 'three/webgpu'
 import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
-import { ambianceNow, registerSkyLights } from '../../lib/underground-ambiance'
+import { ambianceNow, FILL_BOOST, registerSkyLights } from '../../lib/underground-ambiance'
 import useViewer, { groundVeiled } from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 import { UndergroundAmbiance } from './underground-ambiance'
@@ -80,7 +80,7 @@ const SHADOW_FALLBACK_RADIUS = 30
 
 // Over a veiled ground the floor below grade still lies in the shadow of the storeys above and has
 // no sky: a fill from the eye keeps it from reading as a cave. Modest, so the sun still reads.
-// It comes up with the underground ambiance, which brings the sky's own light down.
+// It comes up further with the underground ambiance, which brings the sky's own light down.
 const UNDERGROUND_FILL_INTENSITY = 1
 
 /**
@@ -93,7 +93,7 @@ function UndergroundFill() {
   useFrame(({ camera }) => {
     const fill = light.current
     if (!fill) return
-    fill.intensity = UNDERGROUND_FILL_INTENSITY * ambianceNow()
+    fill.intensity = UNDERGROUND_FILL_INTENSITY * (1 + FILL_BOOST * ambianceNow())
     camera.getWorldPosition(fill.position)
     fill.target.position.copy(fill.position).add(camera.getWorldDirection(look))
     fill.target.updateMatrixWorld()

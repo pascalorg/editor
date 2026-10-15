@@ -273,6 +273,7 @@ export {
   ambianceTarget,
   easeAmbiance,
   eyeUnderTheGround,
+  SOIL_RING,
   SOIL_VEIL,
   SOIL_VEIL_OPACITY,
   stepAmbianceProgress,

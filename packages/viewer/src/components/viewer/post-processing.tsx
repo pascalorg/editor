@@ -42,8 +42,8 @@ import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import {
   ambianceNow,
-  SOIL_DEEP,
   SOIL_HORIZON,
+  SOIL_VIGNETTE,
   undergroundAmbianceNode,
   undergroundBackdrop,
   undergroundFogAmount,
@@ -680,7 +680,7 @@ const PostProcessingPasses = ({
       let composited = mix(bgGradient, sceneComposite, contentAlpha)
       // The screen's edges close in, under the ground only.
       if (!transparentBackground) {
-        composited = mix(composited, tslColor(SOIL_DEEP), undergroundVignette())
+        composited = mix(composited, tslColor(SOIL_VIGNETTE), undergroundVignette())
       }
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
