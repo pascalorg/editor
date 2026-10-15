@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { RoofType } from '../schema/nodes/roof-types'
-import { measurement } from './measurement'
+import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
 
 export const createRoofTool = {
@@ -16,7 +16,7 @@ export const createRoofTool = {
     roofType: RoofType.optional().describe(
       'The shape of every segment. Default: chosen from the footprint.',
     ),
-    pitch: measurement('angle', 'deg', {
+    pitch: roofPitch('deg', {
       min: 0,
       max: 85,
       description: 'Slope of the roof planes (default 40°).',
@@ -24,7 +24,7 @@ export const createRoofTool = {
     overhang: measurement('length', 'm', {
       min: 0,
       description:
-        'Eave overhang: how far the roof reaches past the walls. Read it from the photo: a deep modern overhang is 1–2 m. Default 0.3.',
+        'Eave overhang: how far the eaves reach past the walls in plan (a segment stores it along its slope). Read it from the photo: a deep modern overhang is 1–2 m. Default 0.3.',
     }).optional(),
     wallHeight: measurement('length', 'm', {
       min: 0,

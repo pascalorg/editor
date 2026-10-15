@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { measurement } from './measurement'
 
 const point = z.array(z.number()).length(3)
 
@@ -62,29 +63,25 @@ export const viewSceneTool = {
       .describe(
         "The side the eye stands on: a compass side (north is the plan's top edge, z grows south, x east), above, or a side as a front photo names it, standing in the street facing the house ('street-left' is its left front corner, 'back' the far side), from the street the site records, else the house's own front (its -z, the way a generated house faces). Default south-west.",
       ),
-    elevation: z
-      .number()
-      .min(-10)
-      .max(89)
-      .optional()
-      .describe(
+    elevation: measurement('angle', 'deg', {
+      min: -10,
+      max: 89,
+      description:
         'Degrees above the horizon the eye looks down from: 35 to 60 for an aerial view. Default 12.',
-      ),
-    eyeHeight: z
-      .number()
-      .min(0)
-      .optional()
-      .describe('Metres above the ground for a street view (1.7), instead of elevation.'),
+    }).optional(),
+    eyeHeight: measurement('length', 'm', {
+      min: 0,
+      description: 'Metres above the ground for a street view (1.7), instead of elevation.',
+    }).optional(),
     // Arrays of three, not tuples: a tuple's list-form schema is refused by some clients.
     position: point
       .optional()
       .describe('The eye exactly, [x, height, z] in metres; it looks at the target.'),
-    fov: z
-      .number()
-      .min(10)
-      .max(100)
-      .optional()
-      .describe('Vertical field of view in degrees for a perspective view. Default 45.'),
+    fov: measurement('angle', 'deg', {
+      min: 10,
+      max: 100,
+      description: 'Vertical field of view in degrees for a perspective view. Default 45.',
+    }).optional(),
     projection: z
       .enum(['perspective', 'orthographic'])
       .optional()
@@ -95,7 +92,7 @@ export const viewSceneTool = {
         z.looseObject({
           position: point,
           target: point,
-          fov: z.number().min(5).max(120),
+          fov: measurement('angle', 'deg', { min: 5, max: 120 }),
           aspect: z.number().min(0.2).max(5),
         }),
       ])

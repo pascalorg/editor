@@ -891,6 +891,46 @@ export const DELETE_NODE_CASES: AgentToolCase[] = [
   },
 ]
 
+/** The house's stair with design targets of its own, none of them the defaults. */
+const OWN_TARGETS = { maxRiserHeight: 0.19, minimumGoing: 0.26, targetGoing: 0.3, minimumHeadroom: 2.1 }
+function targetedStairScene(): SceneGraph {
+  const scene = houseScene()
+  scene.nodes.stair_main = { ...(scene.nodes.stair_main as StairNode), designTargets: OWN_TARGETS }
+  return scene
+}
+
+/** fit_stair's sizes and targets, said in inches (N1). */
+const FIT_STAIR_CASES: AgentToolCase[] = [
+  {
+    name: 'a straight flight 42 in wide',
+    tool: 'fit_stair',
+    scene: houseScene,
+    input: { stairId: 'stair_main', layout: 'straight', width: '42 in' },
+    expect: { result: { stairId: 'stair_main' }, after: { stair_main: { width: 1.0668 } } },
+  },
+  {
+    name: 'a target in inches changes that target, the stair keeps its others',
+    tool: 'fit_stair',
+    scene: targetedStairScene,
+    input: { stairId: 'stair_main', targets: { maxRiserHeight: '7 in' } },
+    expect: {
+      result: { stairId: 'stair_main' },
+      after: { stair_main: { designTargets: { ...OWN_TARGETS, maxRiserHeight: 0.1778 } } },
+    },
+  },
+  {
+    // The partial schema used to fill every target left out with its default.
+    name: 'a target given alone leaves the others as the stair has them, not the defaults',
+    tool: 'fit_stair',
+    scene: targetedStairScene,
+    input: { stairId: 'stair_main', targets: { targetGoing: 0.29 } },
+    expect: {
+      result: { stairId: 'stair_main' },
+      after: { stair_main: { designTargets: { ...OWN_TARGETS, targetGoing: 0.29 } } },
+    },
+  },
+]
+
 /** Every table the three runners run. */
 export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...LIST_LEVELS_CASES,
@@ -914,6 +954,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...ADD_LEVEL_CASES,
   ...CREATE_STAIR_CASES,
   ...ADD_STAIR_CASES,
+  ...FIT_STAIR_CASES,
   ...PLACE_ITEMS_CASES,
   ...FIND_BY_TYPE_CASES,
   ...CORNER_WINDOW_CASES,

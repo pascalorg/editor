@@ -131,6 +131,39 @@ export const CREATE_ROOF_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'a roof as a builder says it: 6:12 is pitched atan(6/12), 18-inch eaves reach 18 in past the walls in plan',
+    tool: 'create_roof',
+    scene: house(),
+    input: { pitch: '6:12', overhang: '18 in' },
+    expect: {
+      result: { coveredLevelId: 'level_g' },
+      check: (result, nodes) =>
+        (result.segmentIds as string[]).flatMap((id) => {
+          const { pitch, overhang } = nodes[id] as RoofSegmentNode
+          // The segment stores the overhang along its slope.
+          const reach = overhang * Math.cos(Math.atan(6 / 12))
+          return [
+            ...(Math.abs(pitch - 26.565051177078) < 1e-9 ? [] : [`${id} is pitched ${pitch}°`]),
+            ...(Math.abs(reach - 0.4572) < 1e-9 ? [] : [`${id}'s eaves reach ${reach} m`]),
+          ]
+        }),
+    },
+  },
+  {
+    name: 'eaves left out reach the default 0.3 m past the walls in plan',
+    tool: 'create_roof',
+    scene: house(),
+    input: { pitch: 40 },
+    expect: {
+      result: { coveredLevelId: 'level_g' },
+      check: (result, nodes) =>
+        (result.segmentIds as string[]).flatMap((id) => {
+          const reach = (nodes[id] as RoofSegmentNode).overhang * Math.cos((40 * Math.PI) / 180)
+          return Math.abs(reach - 0.3) < 1e-9 ? [] : [`${id}'s eaves reach ${reach} m`]
+        }),
+    },
+  },
+  {
     name: 'walls taller than their storey lift the eave to their tops',
     tool: 'create_roof',
     scene: house({ topWalls: 3 }),

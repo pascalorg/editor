@@ -5,6 +5,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   getActiveRoofHeight,
+  getSegmentSlopeFrame,
   RoofNode,
   RoofSegmentNode,
   type RoofType,
@@ -313,7 +314,7 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
       roofType === 'conical'
         ? { width: Math.max(span.width, span.depth), depth: Math.max(span.width, span.depth) }
         : span
-    return RoofSegmentNode.parse({
+    const segment = RoofSegmentNode.parse({
       ...size,
       roofType,
       wallHeight,
@@ -322,6 +323,9 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
       ...(input.overhang !== undefined && { overhang: input.overhang }),
       ...fasciaFields({ ...input, fasciaMaterialPreset }),
     })
+    // The overhang is asked as the eaves' reach past the walls, in plan, as a builder says it and
+    // Architect's roofs take it; the segment stores it along the slope.
+    return { ...segment, overhang: segment.overhang / getSegmentSlopeFrame(segment).cosTheta }
   })
 
   const peak = Math.max(...segments.map((segment) => getActiveRoofHeight(segment)))
