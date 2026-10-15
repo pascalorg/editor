@@ -81,9 +81,10 @@ const SHADOW_FALLBACK_RADIUS = 30
 /**
  * The live counterpart of the interior capture's lighting: a light that shines from the eye along
  * the view, casting no shadow. Over a veiled ground the floor below grade still lies in the
- * shadow of the storeys above and has no sky: this keeps it from reading as a cave. Its intensity
- * is the underground ambiance's (it rides the crossing from 0 and is 0 in a capture); the
- * hemisphere's ground side is lifted in `Lights`.
+ * shadow of the storeys above and has no sky: this keeps it from reading as a cave. The
+ * underground ambiance owns its intensity (the veil's 1 at rest, brought up as the sky's light
+ * comes down when the eye dives, back to rest in a capture); the hemisphere's ground side is
+ * lifted in `Lights`.
  */
 function UndergroundFill({ lightRef }: { lightRef: RefObject<DirectionalLight | null> }) {
   const look = useMemo(() => new THREE.Vector3(), [])
@@ -127,6 +128,9 @@ export function Lights() {
   const hemiRef = useRef<HemisphereLight>(null)
   const ambientRef = useRef<AmbientLight>(null)
   const fillRef = useRef<DirectionalLight>(null)
+  // What the eye's fill shines at with no ambiance: the veil's own 1 over a veiled ground.
+  const fillRest = useRef(0)
+  fillRest.current = veiled ? 1 : 0
 
   // The underground ambiance moves the sky's own light and the eye's fill for the frame it draws.
   useEffect(
@@ -135,6 +139,7 @@ export function Lights() {
         ambient: ambientRef.current,
         hemisphere: hemiRef.current,
         fill: fillRef.current,
+        fillRest: fillRest.current,
       })),
     [],
   )

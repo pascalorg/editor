@@ -14,13 +14,10 @@ test('over a level at grade the bar says nothing about the ground', () => {
   expect(renderCurrentMarkup(<GroundModeToggle />)).toBe('')
 })
 
-test('over a level below grade the bar names it quietly: the scene says the ground is veiled', () => {
+test('over a level below grade the bar says the ground is veiled, the ground on Auto', () => {
   useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade', groundMode: 'auto' })
   const bar = renderCurrentMarkup(<GroundModeToggle />)
-  expect(bar).toMatch(/>Below grade</)
-  expect(bar).not.toMatch(/>Below grade · ground/)
-  // The whole sentence stays one hover away.
-  expect(bar).toContain('title="Below grade · ground veiled"')
+  expect(bar).toContain('Below grade · ground veiled')
   expect(bar).toMatch(/aria-pressed="true"[^>]*>Auto</)
 })
 

@@ -4,7 +4,7 @@ import { type Ring, type SiteNode, terrainFieldOf, useLiveTerrain } from '@pasca
 import { SITE_GROUND } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Material } from 'three'
-import { GroundVeil, useGroundAsideRef } from './ground-veil'
+import { GroundVeil } from './ground-veil'
 import { lotMaskedMaterial } from './lot-mask'
 import { skirtRing } from './terrain-geometry'
 import {
@@ -124,8 +124,6 @@ export const TerrainRenderer = ({
     })
   }, [site.id])
 
-  const groundAsideRef = useGroundAsideRef()
-
   if (!target) return null
 
   return (
@@ -135,7 +133,6 @@ export const TerrainRenderer = ({
         geometry={target.geometry}
         material={surfaceMaterial}
         receiveShadow
-        ref={groundAsideRef}
         userData={{ [SITE_GROUND]: 'solid' }}
       />
       <GroundVeil geometry={target.geometry} material={surfaceVeil} />
@@ -146,7 +143,6 @@ export const TerrainRenderer = ({
             geometry={target.holeBoundary.geometry}
             material={surfaceMaterial}
             receiveShadow
-            ref={groundAsideRef}
             userData={{ [SITE_GROUND]: 'solid' }}
           />
           <GroundVeil geometry={target.holeBoundary.geometry} material={surfaceVeil} />
@@ -163,7 +159,6 @@ export const TerrainRenderer = ({
         geometry={target.skirt.geometry}
         material={material}
         receiveShadow
-        ref={groundAsideRef}
         userData={{ [SITE_GROUND]: 'solid' }}
       />
       <GroundVeil geometry={target.skirt.geometry} material={veil} />

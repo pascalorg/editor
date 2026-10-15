@@ -42,10 +42,10 @@ import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import {
   ambianceNow,
-  SOIL_HORIZON,
-  SOIL_VIGNETTE,
+  UNDERGROUND_VIGNETTE,
   undergroundAmbianceNode,
   undergroundBackdrop,
+  undergroundDissolve,
   undergroundFogAmount,
   undergroundVignette,
   worldPositionFromDepth,
@@ -217,7 +217,7 @@ const PostProcessingPasses = ({
   const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const resourcesRef = useRef<PostProcessingResources | null>(null)
   const atmosphere = useSceneAtmosphere()
-  // Under the ground the sky is the earth: the same mix the pipeline's backdrop makes.
+  // Under the ground the sky is the dark mode's: the same mix the pipeline's backdrop makes.
   const directSkyNode = useMemo(
     () =>
       atmosphere
@@ -260,9 +260,9 @@ const PostProcessingPasses = ({
   // view ray from these to find the true horizon (dir.y = 0).
   const camProjInvUniform = useRef(uniform(new Matrix4()))
   const camWorldUniform = useRef(uniform(new Matrix4()))
-  // The clear colour of the no-pipeline fallback under the ground (scratch, and the earth's tone).
+  // The clear colour of the no-pipeline fallback under the ground (scratch, and the dark mode's tone).
   const fallbackClear = useRef(new Color())
-  const fallbackEarth = useRef(new Color(SOIL_HORIZON))
+  const fallbackEarth = useRef(new Color(UNDERGROUND_VIGNETTE))
 
   // Ink-line colour follows the scene-theme background luminance (dark lines on
   // light scenes, light on dark), refreshed each frame like the background.
@@ -664,23 +664,31 @@ const PostProcessingPasses = ({
         bgGradient = gradeRgb(bgGradient)
       }
       let sceneComposite = compositeWithOutlines.rgb
+      // Under the ground (the eye below the ground surface) the scene goes to its dark mode: the
+      // sky is the dark theme's backdrop, and what stands far from the shown level dissolves into
+      // it (distance outside the level's box, from the scene pass's own depth; backdrop and fog
+      // meet in one colour per pixel). A noise mask closes over the screen as the eye crosses,
+      // 0 everywhere above the ground, 1 everywhere below.
+      let dive: ReturnType<typeof undergroundDissolve> | null = null
       if (!transparentBackground) {
-        // Underground: the sky is the earth, and what stands far from the shown level dissolves
-        // into it (distance from the level's box, from the scene pass's own depth), with the
-        // fog and the backdrop meeting in one colour per pixel. Both are zero above ground.
-        const earth = undergroundBackdrop(worldDir.y)
-        bgGradient = mix(bgGradient, earth, undergroundAmbianceNode())
+        dive = undergroundDissolve()
+        const dark = undergroundBackdrop(worldDir.y)
+        bgGradient = mix(bgGradient, dark, dive)
         const worldPosition = worldPositionFromDepth(
           scenePassDepth.sample(screenUV).r,
           camProjInvUniform.current,
           camWorldUniform.current,
         )
-        sceneComposite = mix(sceneComposite, earth, undergroundFogAmount(worldPosition))
+        sceneComposite = mix(sceneComposite, dark, undergroundFogAmount(worldPosition).mul(dive))
       }
       let composited = mix(bgGradient, sceneComposite, contentAlpha)
-      // The screen's edges close in, under the ground only.
-      if (!transparentBackground) {
-        composited = mix(composited, tslColor(SOIL_VIGNETTE), undergroundVignette())
+      // The screen's edges close in with it.
+      if (dive) {
+        composited = mix(
+          composited,
+          tslColor(UNDERGROUND_VIGNETTE),
+          undergroundVignette().mul(dive),
+        )
       }
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
@@ -810,7 +818,7 @@ const PostProcessingPasses = ({
       if (directSkyNode && !transparentBackground) scene.backgroundNode = directSkyNode
       try {
         const clearAlpha = transparentBackground ? 0 : 1
-        // Without the pipeline there is no fog and no vignette: the clear colour is the earth's.
+        // Without the pipeline there is no fog and no vignette: the clear colour is the dark mode's.
         const underground = transparentBackground ? 0 : ambianceNow()
         const clearColor =
           underground > 0 ? fallbackClear.current.copy(bgCurrent.current) : bgCurrent.current

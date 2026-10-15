@@ -21,10 +21,10 @@ import {
   backdropGradient,
   deepSkyColor,
   getSceneTheme,
-  groundWindowMaskNode,
   horizonHazeColor,
   NodeRenderer,
   SITE_GROUND,
+  UNDERGROUND_VEIL,
   useImmersiveXRPresentation,
   useNodeEvents,
   useSceneAtmosphere,
@@ -52,13 +52,18 @@ import {
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 import {
+  GroundHole,
+  groundHoleColorNode,
+  groundHoleShadowNode,
+  solidGroundMaskNode,
+} from './ground-hole'
+import {
   GroundVeil,
   gradeRingGeometry,
   gradeRingMaterial,
   groundVeilMaterial,
   horizonVeilMaterial,
   noopRaycast,
-  useGroundAsideRef,
 } from './ground-veil'
 import { GroundWindowSystem } from './ground-window-system'
 import {
@@ -247,9 +252,12 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     material.polygonOffset = true
     material.polygonOffsetFactor = 1
     material.polygonOffsetUnits = 1
-    // The ground window cuts the solid ground where it stands in the eye's way
-    // (viewer lib/ground-window); with the window closed the mask passes everywhere.
-    ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+    // The ground window cuts the solid ground where it stands in the eye's way (viewer
+    // lib/ground-window), and the hole opens over a level below grade (ground-hole.tsx), its
+    // edge a noise threshold with a thin slate rim; with both closed the mask passes everywhere.
+    ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+    material.colorNode = groundHoleColorNode(UNDERGROUND_VEIL)
+    material.receivedShadowNode = groundHoleShadowNode()
     return material
   }, [bgColor])
 
@@ -303,7 +311,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     material.polygonOffset = true
     material.polygonOffsetFactor = 2
     material.polygonOffsetUnits = 2
-    ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+    ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+    material.receivedShadowNode = groundHoleShadowNode()
     return material
   }, [
     atmosphere,
@@ -588,7 +597,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useEffect(() => () => groundGeometry?.dispose(), [groundGeometry])
 
   const handlers = useNodeEvents(node, 'site')
-  const groundAsideRef = useGroundAsideRef()
 
   // Terrain replaces the flat ground fill rather than sitting on top of it: two
   // coplanar ground surfaces z-fight, and the flat one would poke through any
@@ -611,6 +619,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       <GroundWindowSystem />
+      <GroundHole footprints={buriedFootprints} />
       {/* Render children (buildings and items) */}
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
@@ -635,7 +644,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
             material={groundMaterial}
             position={GROUND_FILL_POSITION}
             receiveShadow
-            ref={groundAsideRef}
             rotation={FLAT_ON_THE_GROUND}
             userData={{ [SITE_GROUND]: 'solid' }}
           />
@@ -656,7 +664,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
           raycast={noopRaycast}
           receiveShadow
-          ref={groundAsideRef}
           rotation={FLAT_ON_THE_GROUND}
           userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
         />
@@ -672,7 +679,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
       {showSiteSurfaces &&
         gradeRings.map((geometry, index) => (
-          <GroundVeil geometry={geometry} key={index} material={gradeRing} />
+          <GroundVeil geometry={geometry} key={index} material={gradeRing} shows="veiled" />
         ))}
 
       {showSiteSurfaces && ribbons && (

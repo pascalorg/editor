@@ -27,8 +27,10 @@ import {
   ambianceFocus,
   ambianceNow,
   EYE_FILL_INTENSITY,
+  groundHoleOpenNow,
   SKY_LIGHT_SCALE,
   setAmbianceFactor,
+  setGroundHoleOpen,
   temporarilyWithoutAmbiance,
   undergroundAmbianceNode,
 } from '../../lib/underground-ambiance'
@@ -49,6 +51,7 @@ beforeEach(() => {
 afterEach(() => {
   useViewer.setState(previous, true)
   setAmbianceFactor(0)
+  setGroundHoleOpen(0)
 })
 
 function lightsOf(root: Object3D) {
@@ -101,9 +104,10 @@ test('over a veiled ground a fill shines from the eye, and the hemisphere lights
   }
 })
 
-// The world turns to earth under the ground: the sky's light comes down, the factor the pipeline,
-// the veil and the fill read eases over a short crossing, and the shown level's own materials are
-// never touched.
+// The ground is the medium. Eye above it, a level below grade shown: a hole opens in the ground
+// (a factor the ground's mask reads) and nothing else of the world changes. Eye below it: the dark
+// mode, a factor eased over a short crossing that the backdrop, the fog, the sky's light and the
+// eye's fill follow, and the shown level's own materials are never touched.
 
 function ambientOf(root: Object3D) {
   let ambient: AmbientLight | null = null
@@ -145,149 +149,195 @@ async function mountLights() {
   return { renderer, scene, camera: camera as Camera }
 }
 
-test('going below grade eases the world to earth over the crossing and back out again', async () => {
+const CROSSING_FRAMES = Math.ceil(AMBIANCE_SECONDS / 0.05) + 2
+const BELOW_GRADE = { belowGrade: true, gradeStanding: 'below-grade' } as const
+
+test('a veiled basement seen from above opens a hole and leaves the world as it is', async () => {
   const { renderer, scene } = await mountLights()
   try {
     const ambient = ambientOf(scene)
     if (!ambient) throw new Error('the lights include an ambient light')
     const atGrade = ambient.intensity
+    expect(groundHoleOpenNow()).toBe(0)
+
+    await act(async () => useViewer.setState(BELOW_GRADE))
+    await renderer.advanceFrames(4, 0.05)
+    // The hole eases open over the same crossing...
+    const mid = groundHoleOpenNow()
+    expect(mid).toBeGreaterThan(0)
+    expect(mid).toBeLessThan(1)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(groundHoleOpenNow()).toBe(1)
+    // ...and nothing of the dark mode: no factor, no active flag, the sky's light as it was,
+    // the eye's fill at the veil's own 1.
     expect(ambianceNow()).toBe(0)
     expect(useViewer.getState().ambianceActive).toBe(false)
     expect(undergroundAmbianceNode().value).toBe(0)
-
-    await act(async () => useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade' }))
-    await renderer.advanceFrames(4, 0.05)
-    const mid = ambianceNow()
-    expect(mid).toBeGreaterThan(0)
-    expect(mid).toBeLessThan(1)
-    expect(useViewer.getState().ambianceActive).toBe(true)
-    expect(undergroundAmbianceNode().value).toBe(mid)
-    // The eye's light rides the same factor from nothing: no step when it comes on.
-    const fillMid = fillOf(scene)
-    expect(fillMid?.intensity).toBeGreaterThan(0)
-    expect(fillMid?.intensity).toBeCloseTo(EYE_FILL_INTENSITY * mid, 6)
-
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
-    expect(ambianceNow()).toBe(1)
-    expect(undergroundAmbianceNode().value).toBe(1)
-    // The sky's light is down; the same lights go back as they were on the way out.
-    expect(ambient.intensity).toBeCloseTo(atGrade * SKY_LIGHT_SCALE, 6)
-    expect(fillOf(scene)?.intensity).toBeCloseTo(EYE_FILL_INTENSITY, 6)
+    expect(ambient.intensity).toBe(atGrade)
+    expect(fillOf(scene)?.intensity).toBe(1)
 
     await act(async () => useViewer.setState({ belowGrade: false, gradeStanding: 'at-grade' }))
-    // Out again: the fill fades with the rest and is out before it is taken away.
-    await renderer.advanceFrames(12, 0.05)
-    const fading = fillOf(scene)
-    if (fading) expect(fading.intensity).toBeLessThan(EYE_FILL_INTENSITY)
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
-    expect(ambianceNow()).toBe(0)
-    expect(ambient.intensity).toBeCloseTo(atGrade, 6)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(groundHoleOpenNow()).toBe(0)
   } finally {
     await renderer.unmount()
   }
 })
 
-test('with Animation off the world turns at once, in both directions', async () => {
-  const driver = startConstructionReveal({ reveals: () => false, level: () => 'off' })
-  const { renderer } = await mountLights()
+test('the eye going under the ground eases the dark mode in over the crossing, and out again', async () => {
+  const { renderer, scene, camera } = await mountLights()
   try {
-    await act(async () => useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade' }))
+    const ambient = ambientOf(scene)
+    if (!ambient) throw new Error('the lights include an ambient light')
+    const above = ambient.intensity
+    camera.position.set(0, 6, 8)
+    await renderer.advanceFrames(2, 0.05)
+    expect(useViewer.getState().eyeUnderGround).toBe(false)
+    expect(ambianceNow()).toBe(0)
+
+    camera.position.set(0, -3, 8)
+    await renderer.advanceFrames(2, 0.05)
+    // The fill mounts when the dive begins (a state change from inside a frame).
+    await act(async () => {})
+    await renderer.advanceFrames(2, 0.05)
+    const mid = ambianceNow()
+    expect(useViewer.getState().eyeUnderGround).toBe(true)
+    expect(mid).toBeGreaterThan(0)
+    expect(mid).toBeLessThan(1)
+    expect(useViewer.getState().ambianceActive).toBe(true)
+    expect(undergroundAmbianceNode().value).toBe(mid)
+    // The eye's light rides the same factor from its rest (0 here: no veil): no step.
+    expect(fillOf(scene)?.intensity).toBeGreaterThan(0)
+    expect(fillOf(scene)?.intensity).toBeCloseTo(EYE_FILL_INTENSITY * mid, 6)
+
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(ambianceNow()).toBe(1)
+    expect(undergroundAmbianceNode().value).toBe(1)
+    // The sky's light is down; given back as it was on the way out.
+    expect(ambient.intensity).toBeCloseTo(above * SKY_LIGHT_SCALE, 6)
+    expect(fillOf(scene)?.intensity).toBeCloseTo(EYE_FILL_INTENSITY, 6)
+    // The hole is not what the dive is about: a level at grade, no hole.
+    expect(groundHoleOpenNow()).toBe(0)
+
+    camera.position.set(0, 6, 8)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(ambianceNow()).toBe(0)
+    expect(useViewer.getState().ambianceActive).toBe(false)
+    expect(ambient.intensity).toBeCloseTo(above, 6)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a veiled basement is the same under the ground: the fill comes up from the veil’s own 1', async () => {
+  const { renderer, scene, camera } = await mountLights()
+  try {
+    await act(async () => useViewer.setState(BELOW_GRADE))
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(fillOf(scene)?.intensity).toBe(1)
+    camera.position.set(0, -3, 8)
+    await renderer.advanceFrames(4, 0.05)
+    const mid = fillOf(scene)?.intensity ?? 0
+    expect(mid).toBeGreaterThan(1)
+    expect(mid).toBeLessThan(EYE_FILL_INTENSITY)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(fillOf(scene)?.intensity).toBeCloseTo(EYE_FILL_INTENSITY, 6)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('with Animation off the dive and the hole are instant, in both directions', async () => {
+  const driver = startConstructionReveal({ reveals: () => false, level: () => 'off' })
+  const { renderer, camera } = await mountLights()
+  try {
+    camera.position.set(0, -3, 8)
+    await act(async () => useViewer.setState(BELOW_GRADE))
     await renderer.advanceFrames(1, 0.016)
     expect(ambianceNow()).toBe(1)
+    expect(groundHoleOpenNow()).toBe(1)
+    camera.position.set(0, 6, 8)
     await act(async () => useViewer.setState({ belowGrade: false, gradeStanding: 'at-grade' }))
     await renderer.advanceFrames(1, 0.016)
     expect(ambianceNow()).toBe(0)
+    expect(groundHoleOpenNow()).toBe(0)
   } finally {
     driver.stop()
     await renderer.unmount()
   }
 })
 
-test('an eye under the ground at its own position turns the world, over a level at grade too', async () => {
+test('Solid turns the dark mode and the hole off, whatever the eye does', async () => {
   const { renderer, camera } = await mountLights()
   try {
+    await act(async () => useViewer.setState({ ...BELOW_GRADE, groundMode: 'solid' }))
     camera.position.set(0, -3, 8)
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
-    expect(useViewer.getState().eyeUnderGround).toBe(true)
-    expect(ambianceNow()).toBe(1)
-
-    camera.position.set(0, 6, 8)
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
-    expect(useViewer.getState().eyeUnderGround).toBe(false)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
     expect(ambianceNow()).toBe(0)
-  } finally {
-    await renderer.unmount()
-  }
-})
-
-test('Solid turns the ambiance off with the veil, whatever the eye does', async () => {
-  const { renderer, camera } = await mountLights()
-  try {
-    await act(async () =>
-      useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade', groundMode: 'solid' }),
-    )
-    camera.position.set(0, -3, 8)
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
-    expect(ambianceNow()).toBe(0)
+    expect(groundHoleOpenNow()).toBe(0)
     await act(async () => useViewer.setState({ groundMode: 'auto' }))
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
     expect(ambianceNow()).toBe(1)
+    expect(groundHoleOpenNow()).toBe(1)
   } finally {
     await renderer.unmount()
   }
 })
 
-test('the level that is shown keeps its materials: only the sky, the fog, the lights and the veil move', async () => {
-  const { renderer, scene } = await mountLights()
+test('the level that is shown keeps its materials: only the sky, the fog, the lights and the ground move', async () => {
+  const { renderer, scene, camera } = await mountLights()
   try {
     const floor = scene.getObjectByName('floor-under-test') as Mesh
     const material = floor.material as MeshStandardMaterial
-    const before = {
+    const read = () => ({
       color: material.color.getHexString(),
       emissive: material.emissive.getHexString(),
       roughness: material.roughness,
       opacity: material.opacity,
       transparent: material.transparent,
-    }
-    await act(async () => useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade' }))
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
+    })
+    const before = read()
+    await act(async () => useViewer.setState(BELOW_GRADE))
+    camera.position.set(0, -3, 8)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
     expect(ambianceNow()).toBe(1)
-    expect({
-      color: material.color.getHexString(),
-      emissive: material.emissive.getHexString(),
-      roughness: material.roughness,
-      opacity: material.opacity,
-      transparent: material.transparent,
-    }).toEqual(before)
+    expect(groundHoleOpenNow()).toBe(1)
+    expect(read()).toEqual(before)
   } finally {
     await renderer.unmount()
   }
 })
 
-test('a capture is taken in the world’s own light, and the earth comes back after it', async () => {
-  const { renderer, scene } = await mountLights()
+test('a capture is taken in the world’s own light, with no hole in its ground, and the dive comes back after it', async () => {
+  const { renderer, scene, camera } = await mountLights()
   try {
     const ambient = ambientOf(scene)
     if (!ambient) throw new Error('the lights include an ambient light')
     const atGrade = ambient.intensity
-    await act(async () => useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade' }))
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
+    await act(async () => useViewer.setState(BELOW_GRADE))
+    camera.position.set(0, -3, 8)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
     expect(ambient.intensity).toBeLessThan(atGrade)
+    expect(groundHoleOpenNow()).toBe(1)
 
     const release = temporarilyWithoutAmbiance()
     expect(ambient.intensity).toBeCloseTo(atGrade, 6)
     expect(undergroundAmbianceNode().value).toBe(0)
-    // The person's eye is not in a picture taken from elsewhere: no live fill from it.
-    expect(fillOf(scene)?.intensity).toBe(0)
+    expect(groundHoleOpenNow()).toBe(0)
+    // What a capture had before the dive existed: the veil's own fill over a veiled ground.
+    expect(fillOf(scene)?.intensity).toBe(1)
     // A frame that runs during the capture keeps to it.
     await renderer.advanceFrames(2, 0.05)
     expect(ambient.intensity).toBeCloseTo(atGrade, 6)
     expect(undergroundAmbianceNode().value).toBe(0)
+    expect(groundHoleOpenNow()).toBe(0)
+    expect(fillOf(scene)?.intensity).toBe(1)
 
     release()
     await renderer.advanceFrames(2, 0.05)
     expect(ambient.intensity).toBeLessThan(atGrade)
     expect(undergroundAmbianceNode().value).toBe(1)
+    expect(groundHoleOpenNow()).toBe(1)
   } finally {
     await renderer.unmount()
   }
@@ -322,11 +372,12 @@ test('the fog keeps the shown level clear from the selection alone, and the host
   >
   const previousScene = useScene.getState()
   useScene.setState({ nodes, rootNodeIds: ['site_a'] } as never)
-  const { renderer } = await mountLights()
+  const { renderer, camera } = await mountLights()
   try {
     const level = levelGroundBox(nodes, 'level_b')
     if (!level) throw new Error('the basement has a box')
     expect(level.max[0] - level.min[0]).toBeCloseTo(18, 6)
+    camera.position.set(30, -3, 30)
     await act(async () =>
       useViewer.setState({
         selection: {
@@ -335,12 +386,11 @@ test('the fog keeps the shown level clear from the selection alone, and the host
           levelId: 'level_b',
         },
         hideLevelsAboveSelection: true,
-        belowGrade: true,
-        gradeStanding: 'below-grade',
+        ...BELOW_GRADE,
         groundWindowBox: null,
       } as never),
     )
-    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
     expect(ambianceFocus()).toEqual({ min: level.min, max: level.max })
 
     const host = {

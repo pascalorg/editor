@@ -273,11 +273,13 @@ export {
   ambianceTarget,
   easeAmbiance,
   eyeUnderTheGround,
-  SOIL_RING,
-  SOIL_VEIL,
-  SOIL_VEIL_OPACITY,
+  groundHoleOpenNode,
+  groundHoleOpenNow,
   stepAmbianceProgress,
   temporarilyWithoutAmbiance,
+  UNDERGROUND_RING,
+  UNDERGROUND_THEME_ID,
+  UNDERGROUND_VEIL,
   undergroundAmbianceNode,
 } from './lib/underground-ambiance'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'

@@ -1,4 +1,4 @@
-import type { AnyNode, AnyNodeId } from '../schema'
+import type { AnyNode } from '../schema'
 import { heightAt } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
 
@@ -13,12 +13,7 @@ export const FLAT_GROUND_Y = -0.05
  * where the site has one, the flat plane everywhere else. `site` is the site node (the caller
  * knows it; looking it up here would walk every node for every call).
  */
-export function groundHeightAt(
-  site: AnyNode | null | undefined,
-  nodes: Record<AnyNodeId, AnyNode>,
-  x: number,
-  z: number,
-): number {
-  const field = site?.type === 'site' ? terrainFieldOf(site, nodes) : null
+export function groundHeightAt(site: AnyNode | null | undefined, x: number, z: number): number {
+  const field = site?.type === 'site' ? terrainFieldOf(site) : null
   return field ? heightAt(field, x, z) : FLAT_GROUND_Y
 }

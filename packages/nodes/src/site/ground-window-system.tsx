@@ -2,6 +2,7 @@
 
 import { type GroundBox, terrainBetweenEyeAndBox, useScene } from '@pascal-app/core'
 import {
+  groundVeiled,
   groundWindowBoxNow,
   groundWindowContains,
   setGroundWindow,
@@ -12,6 +13,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Intersection, Mesh, Raycaster } from 'three'
 import { Vector3 } from 'three'
+import { groundHoleContains } from './ground-hole'
 
 /** How often the CPU word is re-asked, and how far the eye must move to ask it sooner. */
 const CHECK_INTERVAL_S = 0.2
@@ -30,6 +32,7 @@ export function GroundWindowSystem() {
     eye: new Vector3(Number.POSITIVE_INFINITY, 0, 0),
     box: null as GroundBox | null,
     mode: '',
+    veiled: false,
     nodes: null as unknown,
   })
   const picks = useRef(new Map<Mesh, Mesh['raycast']>())
@@ -43,19 +46,22 @@ export function GroundWindowSystem() {
       camera.position.distanceTo(check.eye) > EYE_MOVE_M ||
       box !== check.box ||
       nodes !== check.nodes ||
-      viewer.groundMode !== check.mode
+      viewer.groundMode !== check.mode ||
+      groundVeiled(viewer) !== check.veiled
     if (!due) return
     check.at = clock.elapsedTime
     check.eye.copy(camera.position)
     check.box = box
     check.mode = viewer.groundMode
+    check.veiled = groundVeiled(viewer)
     check.nodes = nodes
     const eye: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z]
     const inTheWay = box !== null && terrainBetweenEyeAndBox(nodes, eye, box)
     if (viewer.groundWindowVeiled !== inTheWay) useViewer.setState({ groundWindowVeiled: inTheWay })
     const open = inTheWay && viewer.groundMode === 'auto' ? box : null
     if (groundWindowBoxNow() !== open) setGroundWindow(open)
-    keepPicksHonest(picks.current, open !== null)
+    // Picks follow the window, and the hole over a level below grade seen as a whole.
+    keepPicksHonest(picks.current, open !== null || check.veiled)
   })
   useEffect(
     () => () => {
@@ -69,10 +75,11 @@ export function GroundWindowSystem() {
 }
 
 /**
- * Picks agree with the window: while it is open, a hit on solid ground the window veils is
- * dropped, so the click reaches what the window reveals. The wrap reads the window's own
- * CPU word (`groundWindowContains`) against the picking ray, and every original raycast is
- * given back when the window closes.
+ * Picks agree with the window and the hole: while either is open, a hit on solid ground that
+ * is cut away is dropped, so the click (or Follow's sight) reaches what lies under it. The wrap
+ * reads the window's own CPU word (`groundWindowContains`) against the picking ray, and the
+ * hole's (`groundHoleContains`, its guaranteed core) at the hit, and every original raycast is
+ * given back when both close.
  */
 function keepPicksHonest(wrapped: Map<Mesh, Mesh['raycast']>, open: boolean): void {
   if (!open) {
@@ -90,7 +97,11 @@ function keepPicksHonest(wrapped: Map<Mesh, Mesh['raycast']>, open: boolean): vo
       original.call(mesh, raycaster, intersects)
       for (let index = intersects.length - 1; index >= before; index -= 1) {
         const hit = intersects[index]
-        if (hit && groundWindowContains(raycaster.ray.origin, hit.point))
+        if (
+          hit &&
+          (groundWindowContains(raycaster.ray.origin, hit.point) ||
+            groundHoleContains(hit.point.x, hit.point.z))
+        )
           intersects.splice(index, 1)
       }
     }

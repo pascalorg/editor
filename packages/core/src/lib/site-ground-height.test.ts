@@ -12,28 +12,24 @@ const site = Object.values(nodes).find((node) => node.type === 'site') as AnyNod
 describe('the height of the site’s ground at a point', () => {
   test('a flat site answers the plane its fill is drawn on, anywhere', () => {
     const flat = SiteNode.parse({ id: 'site_flat', children: [] })
-    const scene = { [flat.id]: flat } as Record<AnyNodeId, AnyNode>
-    expect(groundHeightAt(flat, scene, 0, 0)).toBe(FLAT_GROUND_Y)
-    expect(groundHeightAt(flat, scene, -400, 900)).toBe(FLAT_GROUND_Y)
+    expect(groundHeightAt(flat, 0, 0)).toBe(FLAT_GROUND_Y)
+    expect(groundHeightAt(flat, -400, 900)).toBe(FLAT_GROUND_Y)
   })
 
   test('no site is a flat site too', () => {
-    expect(groundHeightAt(null, {} as Record<AnyNodeId, AnyNode>, 3, 4)).toBe(FLAT_GROUND_Y)
+    expect(groundHeightAt(null, 3, 4)).toBe(FLAT_GROUND_Y)
   })
 
   test('a sculpted site answers the terrain as it reads there', () => {
-    const field = terrainFieldOf(site as never, nodes)
+    const field = terrainFieldOf(site as never)
     if (!field) throw new Error('the owner hillside has terrain')
     const probes: Array<[number, number]> = [
       [0, 0],
       [0, -14],
       [3, 9],
     ]
-    for (const [x, z] of probes)
-      expect(groundHeightAt(site, nodes, x, z)).toBe(heightAt(field, x, z))
+    for (const [x, z] of probes) expect(groundHeightAt(site, x, z)).toBe(heightAt(field, x, z))
     // The street side stands well over the pad the house sits on.
-    expect(groundHeightAt(site, nodes, 0, -14)).toBeGreaterThan(
-      groundHeightAt(site, nodes, 0, 0) + 2,
-    )
+    expect(groundHeightAt(site, 0, -14)).toBeGreaterThan(groundHeightAt(site, 0, 0) + 2)
   })
 })

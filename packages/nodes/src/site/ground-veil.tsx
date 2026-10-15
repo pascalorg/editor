@@ -1,20 +1,14 @@
 import type { TerrainField } from '@pascal-app/core'
 import {
   anyGroundVeiled,
-  groundVeiled,
   groundWindowEnabledNode,
-  hideFromScene,
   inGroundWindowNode,
   SITE_GROUND,
-  SOIL_RING,
-  SOIL_VEIL,
-  SOIL_VEIL_OPACITY,
-  showInScene,
+  UNDERGROUND_RING,
   undergroundAmbianceNode,
   useViewer,
 } from '@pascal-app/viewer'
-import { useCallback } from 'react'
-import { type BufferGeometry, DoubleSide, type Material, type Object3D } from 'three'
+import { type BufferGeometry, DoubleSide, type Material } from 'three'
 import {
   color,
   float,
@@ -32,8 +26,11 @@ import { buildPatternedRibbon } from './line-ribbon'
 import { insideLotNode } from './lot-mask'
 import { buildDrapedPolyline } from './terrain-drape'
 
-// The ground over a level below grade: the solid surfaces step aside and a veil is drawn in their
-// place, so the floor under them is seen and clicked while grade still reads.
+// The ground over a level below grade. Wholesale (a level fully below grade, the ground on Auto)
+// the solid ground stays and a hole opens in it (`ground-hole.ts`); the veil sheets here are the
+// faint see-through ground of the ground window (a hillside in the eye's way) and of a capture
+// (which sets the solid ground aside and shows them), and the grade ring is drawn where the ground
+// meets the level below grade, in either.
 
 /** Presentation-only meshes are never picked: clicks fall through to what lies under them. */
 export const noopRaycast = () => {}
@@ -44,45 +41,25 @@ const VEIL_OPACITY = 0.1
 type Point = readonly [number, number]
 
 /**
- * A ref for one of the solid ground surfaces that holds it off the scene while the ground is
- * veiled: out of the colour passes, the shadow map and every pick. A ref rather than a prop: the
- * surfaces mount and unmount with the terrain, and each must be held while it is there.
- */
-export function useGroundAsideRef() {
-  const veiled = useViewer(groundVeiled)
-  return useCallback(
-    (surface: Object3D | null) => {
-      if (!(surface && veiled)) return
-      hideFromScene(surface, 'ground-aside')
-      return () => showInScene(surface, 'ground-aside')
-    },
-    [veiled],
-  )
-}
-
-/**
  * Unlit and seen from both sides (an eye under grade sees it overhead), drawn over what lies under
  * it without hiding it: no depth, and nothing written to the scene pass's normals and diffuse
  * colour, or the screen-space ink would outline the whole sheet. `coverage` (0 to 1) is how much
- * of the ground this sheet draws; under the ground's ambiance the sheet turns to earth: its tone
- * goes to the soil's and it thickens a little, so the lid reads as what the earth is.
+ * of the ground this sheet draws.
  */
 function veilMaterial(groundColor: string, coverage: Node<'float'>) {
-  const ambiance = undergroundAmbianceNode()
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
     side: DoubleSide,
   })
-  material.colorNode = mix(color(groundColor), color(SOIL_VEIL), ambiance)
-  const opacity = mix(float(VEIL_OPACITY), float(SOIL_VEIL_OPACITY), ambiance)
-  // Wholesale, the veil is the whole ground at `opacity`. While the ground window is open
+  material.colorNode = color(groundColor)
+  // Wholesale, the veil is the whole ground at `VEIL_OPACITY`. While the ground window is open
   // (the hillside in the way, not a floor under it), only the ground in the window veils —
   // at the same faintness — and the rest of this sheet draws nothing over the solid ground.
   material.opacityNode = select(
     groundWindowEnabledNode(),
-    select(inGroundWindowNode(), opacity, float(0)),
-    coverage.mul(opacity),
+    select(inGroundWindowNode(), float(VEIL_OPACITY), float(0)),
+    coverage.mul(VEIL_OPACITY),
   )
   // The plain field too: Follow's sight reads it, not the node, to tell what it sees through.
   material.opacity = VEIL_OPACITY
@@ -129,8 +106,12 @@ export function gradeRingGeometry(
 
 export function gradeRingMaterial() {
   const material = new MeshBasicNodeMaterial({ color: GRADE_RING_COLOR, side: DoubleSide })
-  // Under the ground's ambiance the ring is the lid's rim: a dark ring would vanish in the earth.
-  material.colorNode = mix(color(GRADE_RING_COLOR), color(SOIL_RING), undergroundAmbianceNode())
+  // Under the ground's ambiance the ring is a light rim: a dark ring would vanish in the dark mode.
+  material.colorNode = mix(
+    color(GRADE_RING_COLOR),
+    color(UNDERGROUND_RING),
+    undergroundAmbianceNode(),
+  )
   return material
 }
 
@@ -138,19 +119,29 @@ export function gradeRingMaterial() {
  * Drawn only while the ground is veiled: the veil of one solid ground surface (the same geometry
  * in the same place), or the grade ring. A direct child of the site, as the surfaces are, so the
  * captures find it (`siteGround`) and hide it with the site's other surfaces.
+ *
+ * `shows` says when a live view draws it: `'window'` (a sheet: only where the ground window veils
+ * a hillside in the eye's way; wholesale the ground is a hole, not a sheet) or `'veiled'` (the
+ * ring: wherever any ground is veiled). A capture shows both by setting `visible` itself.
  */
 export function GroundVeil({
   geometry,
   material,
   position,
   rotation,
+  shows = 'window',
 }: {
   geometry: BufferGeometry
   material: Material
   position?: [number, number, number]
   rotation?: [number, number, number]
+  shows?: 'window' | 'veiled'
 }) {
-  const veiled = useViewer(anyGroundVeiled)
+  const veiled = useViewer((state) =>
+    shows === 'veiled'
+      ? anyGroundVeiled(state)
+      : state.groundMode === 'auto' && state.groundWindowVeiled,
+  )
   return (
     <mesh
       geometry={geometry}

@@ -11,11 +11,10 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  groundHoleOpenNode,
   SCENE_LAYER,
   SITE_GROUND,
-  SOIL_VEIL_OPACITY,
   setSurfaceRaycastLayers,
-  undergroundAmbianceNode,
   useViewer,
 } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
@@ -75,31 +74,96 @@ afterEach(() => {
   useScene.setState(previous.scene, true)
 })
 
-test('the flat lot veils its fill and the horizon disc, and keeps the lot line', async () => {
+/** The veil surfaces told apart: the grade ring is the narrow one, the sheets cover the lot. */
+function veilsOf(root: Object3D) {
+  const veils = ground(root, 'veil')
+  const isRing = (veil: Mesh) => {
+    veil.geometry.computeBoundingBox()
+    const box = veil.geometry.boundingBox ?? new Box3()
+    return box.max.x - box.min.x < 7
+  }
+  return { sheets: veils.filter((veil) => !isRing(veil)), rings: veils.filter(isRing) }
+}
+
+/** What a click straight down at (x, z) reaches of the solid ground. */
+function groundPickedAt(root: Object3D, x: number, z: number) {
+  const ray = new Raycaster(new Vector3(x, 20, z), new Vector3(0, -1, 0))
+  setSurfaceRaycastLayers(ray.layers)
+  root.updateWorldMatrix(true, true)
+  return ray.intersectObject(root, true).filter((hit) => hit.object.userData[SITE_GROUND])
+}
+
+/** A basement with the villa's numbers (13 Oct): -3.63 m, on a 0.28 m plate 6 × 4 m. */
+function withBasement() {
+  const basement: AnyNode[] = [
+    BuildingNode.parse({ id: 'building_a', children: ['level_b'] }),
+    LevelNode.parse({
+      id: 'level_b',
+      parentId: 'building_a',
+      level: -1,
+      baseElevation: -3.63,
+      height: 3.4,
+      children: ['slab_b'],
+    }),
+    SlabNode.parse({
+      id: 'slab_b',
+      parentId: 'level_b',
+      elevation: 0.28,
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 4],
+        [0, 4],
+      ],
+    }),
+  ]
+  useScene.setState({
+    nodes: Object.fromEntries(basement.map((node) => [node.id, node])) as Record<
+      AnyNodeId,
+      AnyNode
+    >,
+  })
+}
+
+test('over a level below grade the flat lot keeps its ground and opens a hole in it, and keeps the lot line', async () => {
+  withBasement()
   const renderer = await create(<SiteRenderer node={lot(false)} />)
   try {
     const scene = renderer.scene.instance as Object3D
-    const [solid, veil] = [ground(scene, 'solid'), ground(scene, 'veil')]
-    expect([solid.length, veil.length]).toEqual([2, 2])
-    expect(solid.every(drawn) && !veil.some(drawn)).toBe(true)
-    expect(groundPickedFromAbove(scene).length).toBeGreaterThan(0)
+    const solid = ground(scene, 'solid')
+    const { sheets, rings } = veilsOf(scene)
+    expect(solid).toHaveLength(2)
+    expect(solid.every(drawn)).toBe(true)
+    // At grade: no hole, so a click straight down over the plate lands on the ground.
+    expect(groundPickedAt(scene, 3, 2).length).toBeGreaterThan(0)
 
-    await act(async () => useViewer.setState({ belowGrade: true }))
-    expect(!solid.some(drawn) && veil.every(drawn)).toBe(true)
-    expect(groundPickedFromAbove(scene)).toHaveLength(0)
+    await act(async () => useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade' }))
+    groundHoleOpenNode().value = 1
+    await renderer.advanceFrames(2, 0.05)
+    // The ground stays solid, drawn: the hole is in its mask, not in the scene.
+    expect(solid.every(drawn)).toBe(true)
+    // No veil sheet over it: the see-through ground is the hole (the ring still draws).
+    expect(sheets.filter(drawn)).toHaveLength(0)
+    expect(rings.filter(drawn)).toHaveLength(1)
+    // Over the plate the click falls through to the floor; past the hole's reach it lands.
+    expect(groundPickedAt(scene, 3, 2)).toHaveLength(0)
+    expect(groundPickedAt(scene, 9, 9).length).toBeGreaterThan(0)
     const lotLine = scene.getObjectsByProperty('type', 'Line') as Line[]
     expect(lotLine.length).toBeGreaterThan(0)
     expect(lotLine.every(drawn)).toBe(true)
 
-    await act(async () => useViewer.setState({ belowGrade: false }))
-    expect(solid.every(drawn) && !veil.some(drawn)).toBe(true)
-    expect(groundPickedFromAbove(scene).length).toBeGreaterThan(0)
+    await act(async () => useViewer.setState({ belowGrade: false, gradeStanding: 'at-grade' }))
+    groundHoleOpenNode().value = 0
+    await renderer.advanceFrames(2, 0.05)
+    expect(solid.every(drawn)).toBe(true)
+    expect(groundPickedAt(scene, 3, 2).length).toBeGreaterThan(0)
   } finally {
+    groundHoleOpenNode().value = 0
     await renderer.unmount()
   }
 })
 
-test("the veil is faint, unlit, seen from both sides, and leaves the scene's depth, ink and Follow's sight alone", async () => {
+test("the veil sheets are faint, unlit, seen from both sides, and leave the scene's depth, ink and Follow's sight alone", async () => {
   const renderer = await create(<SiteRenderer node={lot(false)} />)
   try {
     for (const veil of ground(renderer.scene.instance as Object3D, 'veil')) {
@@ -119,62 +183,62 @@ test("the veil is faint, unlit, seen from both sides, and leaves the scene's dep
   }
 })
 
-test('under the ground’s ambiance the veil takes the earth’s tone and thickens, with no rebuild', async () => {
+test('the ground’s mask is the ground window and the hole, and its colour carries the rim', async () => {
   const renderer = await create(<SiteRenderer node={lot(false)} />)
   try {
-    const ambiance = undergroundAmbianceNode()
-    const dependsOnAmbiance = (node: unknown) => {
-      let found = false
-      ;(node as { traverse: (visit: (child: unknown) => void) => void }).traverse((child) => {
-        if (child === ambiance) found = true
+    for (const surface of ground(renderer.scene.instance as Object3D, 'solid')) {
+      const material = surface.material as MeshBasicNodeMaterial
+      expect(material.maskNode).not.toBeNull()
+      // The hole's own factor is in the mask: one uniform, no rebuild as it opens.
+      let reads = false
+      ;(
+        material.maskNode as unknown as { traverse: (visit: (child: unknown) => void) => void }
+      ).traverse((child) => {
+        if (child === groundHoleOpenNode()) reads = true
       })
-      return found
+      expect(reads).toBe(true)
     }
-    const veils = ground(renderer.scene.instance as Object3D, 'veil')
-    expect(veils.length).toBeGreaterThan(0)
-    for (const veil of veils) {
-      const material = veil.material as MeshBasicNodeMaterial
-      // Colour and opacity both follow the one shared factor, as a uniform: the veil is not
-      // rebuilt as the crossing eases.
-      expect(dependsOnAmbiance(material.colorNode)).toBe(true)
-      expect(dependsOnAmbiance(material.opacityNode)).toBe(true)
-      // Follow's sight reads the plain field, which stays at the plain faintness.
-      expect(material.opacity).toBeLessThanOrEqual(0.1)
-    }
-    // Thicker under the ground, but still a veil: the floor under it is read through it.
-    expect(SOIL_VEIL_OPACITY).toBeGreaterThan(0.1)
-    expect(SOIL_VEIL_OPACITY).toBeLessThanOrEqual(0.2)
   } finally {
     await renderer.unmount()
   }
 })
 
 test('the person can keep the ground solid over a level below grade', async () => {
+  withBasement()
   const renderer = await create(<SiteRenderer node={lot(false)} />)
   try {
     const scene = renderer.scene.instance as Object3D
-    await act(async () => useViewer.setState({ belowGrade: true, groundMode: 'solid' }))
+    await act(async () =>
+      useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade', groundMode: 'solid' }),
+    )
+    await renderer.advanceFrames(2, 0.05)
     expect(ground(scene, 'solid').every(drawn)).toBe(true)
     expect(ground(scene, 'veil').some(drawn)).toBe(false)
+    // Solid: no hole, a click over the plate lands on the ground.
+    expect(groundPickedAt(scene, 3, 2).length).toBeGreaterThan(0)
   } finally {
     await renderer.unmount()
   }
 })
 
-test('a sculpted lot veils its terrain, cut edges and skirt too', async () => {
+test('a sculpted lot keeps its terrain, cut edges and skirt solid, and opens the hole over them too', async () => {
+  withBasement()
   const renderer = await create(<SiteRenderer node={lot(true)} />)
   try {
     const scene = renderer.scene.instance as Object3D
     expect(groundPickedFromAbove(scene).length).toBeGreaterThan(0)
 
-    await act(async () => useViewer.setState({ belowGrade: true }))
+    await act(async () => useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade' }))
+    groundHoleOpenNode().value = 1
+    await renderer.advanceFrames(2, 0.05)
     // The terrain's surface and skirt, and the horizon disc: no flat fill under terrain.
     const solid = ground(scene, 'solid')
     expect(solid.length).toBeGreaterThanOrEqual(3)
-    expect(solid.some(drawn)).toBe(false)
-    expect(ground(scene, 'veil').length).toBe(solid.length)
-    expect(groundPickedFromAbove(scene)).toHaveLength(0)
+    expect(solid.every(drawn)).toBe(true)
+    expect(veilsOf(scene).sheets.filter(drawn)).toHaveLength(0)
+    expect(groundPickedAt(scene, 3, 2)).toHaveLength(0)
   } finally {
+    groundHoleOpenNode().value = 0
     await renderer.unmount()
   }
 })
