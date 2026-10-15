@@ -1,12 +1,13 @@
 'use client'
 
-import { emitter } from '@pascal-app/core'
+import { emitter, getProjectFileSink, type ProjectFileSink } from '@pascal-app/core'
 import { disposeObject3DResources, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import { downloadProjectFile } from '../../lib/download-project-file'
 import {
   exportSceneToGlb,
   prepareSceneForExport,
@@ -58,6 +59,7 @@ export function ExportManager() {
 
   useEffect(() => {
     const exportFn: ModelExport = async (format = 'glb', requested = {}) => {
+      const finishArtifact = artifactFinisher(getProjectFileSink())
       // Resolve once: scene preparation prunes hidden nodes by default, and the
       // IFC writer must drop the same nodes it rebuilds parametrically.
       const options = { ...requested, onlyVisible: requested.onlyVisible ?? true }
@@ -262,22 +264,15 @@ export function ExportManager() {
   return null
 }
 
-function finishArtifact(
-  blob: Blob,
-  filename: string,
-  download: boolean | undefined,
-  metadata?: unknown,
-  warnings?: readonly string[],
-): ModelExportArtifact {
-  if (download !== false) downloadBlob(blob, filename)
-  return { blob, filename, metadata, warnings: warnings?.length ? warnings : undefined }
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+function artifactFinisher(sink: ProjectFileSink | null) {
+  return async (
+    blob: Blob,
+    filename: string,
+    download: boolean | undefined,
+    metadata?: unknown,
+    warnings?: readonly string[],
+  ): Promise<ModelExportArtifact> => {
+    if (download !== false) await downloadProjectFile(blob, filename, sink)
+    return { blob, filename, metadata, warnings: warnings?.length ? warnings : undefined }
+  }
 }
