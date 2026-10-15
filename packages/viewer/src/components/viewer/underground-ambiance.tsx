@@ -3,7 +3,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  buildingGroundBox,
+  type GroundBox,
   groundHeightAt,
+  levelGroundBox,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -37,6 +40,10 @@ export function UndergroundAmbiance() {
   const lastEye = useRef(new Vector3(Number.NaN, Number.NaN, Number.NaN))
   const lastNodes = useRef<Record<AnyNodeId, AnyNode> | null>(null)
   const groundY = useRef(0)
+  // The box the fog keeps clear: the host's ground window box when it keeps one, else the level
+  // shown (or the building) worked out here, so a host without the window still gets it.
+  const focus = useRef<GroundBox | null>(null)
+  const focusFrom = useRef<unknown[]>([])
 
   // Before `Lights` lerps the sky's lights (-1) they are given back as the theme set them, and
   // after it they are brought down for the frame the pipeline (1) draws.
@@ -76,12 +83,32 @@ export function UndergroundAmbiance() {
     const active = eased > 0
     if (viewer.ambianceActive !== active) useViewer.setState({ ambianceActive: active })
     if (next !== target) state.invalidate()
+
+    if (eased > 0) {
+      const { selection, hideLevelsAboveSelection, belowGrade, groundWindowBox } = viewer
+      const from = [
+        nodes,
+        selection.levelId,
+        selection.buildingId,
+        hideLevelsAboveSelection,
+        belowGrade,
+        groundWindowBox,
+      ]
+      if (from.some((value, index) => value !== focusFrom.current[index])) {
+        focusFrom.current = from
+        focus.current =
+          groundWindowBox ??
+          (selection.levelId && (hideLevelsAboveSelection || belowGrade)
+            ? levelGroundBox(nodes, selection.levelId)
+            : buildingGroundBox(nodes, selection.buildingId ?? null))
+      }
+    }
   }, -2)
 
   useFrame(() => {
     const amount = ambianceNow()
     if (amount <= 0) return
-    setAmbianceFocus(useViewer.getState().groundWindowBox, eye.current)
+    setAmbianceFocus(focus.current, eye.current)
     applyAmbianceToSkyLights(amount)
   }, 0)
 

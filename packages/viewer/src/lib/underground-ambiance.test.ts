@@ -7,6 +7,7 @@ import {
   ambianceTarget,
   applyAmbianceToSkyLights,
   EYE_BAND,
+  EYE_FILL_INTENSITY,
   easeAmbiance,
   eyeUnderTheGround,
   registerSkyLights,
@@ -111,12 +112,13 @@ function skyLights() {
   const ambient = new AmbientLight('#ffffff', 0.8)
   const hemisphere = new HemisphereLight('#bcd4ff', '#554433', 1.2)
   const sun = new DirectionalLight('#fff4e0', 3)
-  return { ambient, hemisphere, sun }
+  const fill = new DirectionalLight('#ffffff', 0)
+  return { ambient, hemisphere, sun, fill }
 }
 
 test('the sky’s light comes down and warms for the frame, and is given back as the theme set it', () => {
-  const { ambient, hemisphere, sun } = skyLights()
-  const unregister = registerSkyLights(() => ({ ambient, hemisphere }))
+  const { ambient, hemisphere, sun, fill } = skyLights()
+  const unregister = registerSkyLights(() => ({ ambient, hemisphere, fill }))
   const sky = hemisphere.color.clone()
   const ground = hemisphere.groundColor.clone()
   const tint = ambient.color.clone()
@@ -128,11 +130,14 @@ test('the sky’s light comes down and warms for the frame, and is given back as
   expect(hemisphere.color.r / hemisphere.color.b).toBeGreaterThan(sky.r / sky.b)
   expect(hemisphere.groundColor.equals(ground)).toBe(false)
   expect(ambient.color.equals(tint)).toBe(false)
+  // The eye's fill is the ambiance's own: full at full.
+  expect(fill.intensity).toBe(EYE_FILL_INTENSITY)
   // The sun is not the sky's: it is untouched.
   expect(sun.intensity).toBe(3)
   expect(sun.color.getHexString()).toBe(new Color('#fff4e0').getHexString())
 
   restoreSkyLights()
+  expect(fill.intensity).toBe(0)
   expect(ambient.intensity).toBe(0.8)
   expect(hemisphere.intensity).toBe(1.2)
   expect(hemisphere.color.equals(sky)).toBe(true)
@@ -142,31 +147,37 @@ test('the sky’s light comes down and warms for the frame, and is given back as
 })
 
 test('half the ambiance brings the light half-way, and none leaves it alone', () => {
-  const { ambient, hemisphere } = skyLights()
-  const unregister = registerSkyLights(() => ({ ambient, hemisphere }))
+  const { ambient, hemisphere, fill } = skyLights()
+  const unregister = registerSkyLights(() => ({ ambient, hemisphere, fill }))
   applyAmbianceToSkyLights(0.5)
   expect(ambient.intensity).toBeCloseTo(0.8 * (1 + (SKY_LIGHT_SCALE - 1) * 0.5), 10)
+  // The fill rides the factor from nothing, so it never steps on or off.
+  expect(fill.intensity).toBeCloseTo(EYE_FILL_INTENSITY * 0.5, 10)
   applyAmbianceToSkyLights(0)
   expect(ambient.intensity).toBe(0.8)
+  expect(fill.intensity).toBe(0)
   unregister()
 })
 
 test('a capture takes the lights back at once, even while they are brought down', () => {
-  const { ambient, hemisphere } = skyLights()
-  const unregister = registerSkyLights(() => ({ ambient, hemisphere }))
+  const { ambient, hemisphere, fill } = skyLights()
+  const unregister = registerSkyLights(() => ({ ambient, hemisphere, fill }))
   setAmbianceFactor(1)
   applyAmbianceToSkyLights(1)
   expect(ambient.intensity).toBeLessThan(0.8)
+  expect(fill.intensity).toBe(EYE_FILL_INTENSITY)
   const release = temporarilyWithoutAmbiance()
   expect(ambient.intensity).toBe(0.8)
   expect(hemisphere.intensity).toBe(1.2)
+  // No live light from the person's eye in a picture taken from elsewhere.
+  expect(fill.intensity).toBe(0)
   release()
   unregister()
 })
 
 test('applying twice in a row never compounds', () => {
-  const { ambient, hemisphere } = skyLights()
-  const unregister = registerSkyLights(() => ({ ambient, hemisphere }))
+  const { ambient, hemisphere, fill } = skyLights()
+  const unregister = registerSkyLights(() => ({ ambient, hemisphere, fill }))
   applyAmbianceToSkyLights(1)
   applyAmbianceToSkyLights(1)
   expect(ambient.intensity).toBeCloseTo(0.8 * SKY_LIGHT_SCALE, 10)

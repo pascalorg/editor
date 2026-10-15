@@ -191,9 +191,9 @@ Below grade the world is not the theme's: while the shown level lies below grade
 | Piece | Where | What |
 |---|---|---|
 | Backdrop | `post-processing.tsx` | The sky (theme or atmosphere) mixes to the soil gradient, after the colour grade. |
-| Fog | `post-processing.tsx` | From the scene pass's depth: distance outside the shown level's box (`groundWindowBox`, or a cube about the eye) dissolves into the backdrop's colour, per pixel. A screen-space pass, so it works with or without an atmosphere; the no-post-FX fallback has the clear colour only. |
+| Fog | `post-processing.tsx` | From the scene pass's depth: distance outside the shown level's box (the host's `groundWindowBox`, else the level or building worked out from the selection) dissolves into the backdrop's colour, per pixel. A screen-space pass, so it works with or without an atmosphere; the no-post-FX fallback has the clear colour only. |
 | Vignette | `post-processing.tsx` | The corners close in, before the overlays are composited. |
-| Sky light | `lib/underground-ambiance.ts` | The ambient and hemisphere lights come down and warm for the frame about to be drawn and are given back before `Lights` lerps them. The sun is untouched; the eye's own fill comes up (`FILL_BOOST`). |
+| Sky light | `lib/underground-ambiance.ts` | The ambient and hemisphere lights come down and warm for the frame about to be drawn and are given back before `Lights` lerps them. The sun is untouched; the eye's own fill (`UndergroundFill`) rides the factor from 0 to `EYE_FILL_INTENSITY`, so it never steps on or off and is 0 in a capture. |
 | Veil, grade ring | `nodes/src/site/ground-veil.tsx` | Read the same factor as a uniform: earth tone, a little thicker; the ring turns to a light rim. |
 
 The shown level's own materials are never touched. A capture (the agent's pictures, the hero shot) renders from its own camera with `gl.render`, so the composite pieces are not in it; `temporarilyWithoutAmbiance()` (held by the thumbnail generator's set-up) also lets the sky light and the veil go back to the world's own for the frame.

@@ -1,6 +1,6 @@
 import { sceneRegistry } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { type RefObject, useEffect, useMemo, useRef } from 'react'
 import type {
   AmbientLight,
   DirectionalLight,
@@ -11,7 +11,7 @@ import * as THREE from 'three/webgpu'
 import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
-import { ambianceNow, FILL_BOOST, registerSkyLights } from '../../lib/underground-ambiance'
+import { registerSkyLights } from '../../lib/underground-ambiance'
 import useViewer, { groundVeiled } from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 import { UndergroundAmbiance } from './underground-ambiance'
@@ -78,27 +78,23 @@ const SHADOW_BACKOFF = 10
 // Fallback radius when the scene has no building geometry yet (empty scene).
 const SHADOW_FALLBACK_RADIUS = 30
 
-// Over a veiled ground the floor below grade still lies in the shadow of the storeys above and has
-// no sky: a fill from the eye keeps it from reading as a cave. Modest, so the sun still reads.
-// It comes up further with the underground ambiance, which brings the sky's own light down.
-const UNDERGROUND_FILL_INTENSITY = 1
-
 /**
  * The live counterpart of the interior capture's lighting: a light that shines from the eye along
- * the view, casting no shadow. The hemisphere's ground side is lifted in `Lights`.
+ * the view, casting no shadow. Over a veiled ground the floor below grade still lies in the
+ * shadow of the storeys above and has no sky: this keeps it from reading as a cave. Its intensity
+ * is the underground ambiance's (it rides the crossing from 0 and is 0 in a capture); the
+ * hemisphere's ground side is lifted in `Lights`.
  */
-function UndergroundFill() {
-  const light = useRef<DirectionalLight>(null)
+function UndergroundFill({ lightRef }: { lightRef: RefObject<DirectionalLight | null> }) {
   const look = useMemo(() => new THREE.Vector3(), [])
   useFrame(({ camera }) => {
-    const fill = light.current
+    const fill = lightRef.current
     if (!fill) return
-    fill.intensity = UNDERGROUND_FILL_INTENSITY * (1 + FILL_BOOST * ambianceNow())
     camera.getWorldPosition(fill.position)
     fill.target.position.copy(fill.position).add(camera.getWorldDirection(look))
     fill.target.updateMatrixWorld()
   })
-  return <directionalLight intensity={UNDERGROUND_FILL_INTENSITY} ref={light} />
+  return <directionalLight intensity={0} ref={lightRef} />
 }
 
 export function Lights() {
@@ -130,10 +126,16 @@ export function Lights() {
 
   const hemiRef = useRef<HemisphereLight>(null)
   const ambientRef = useRef<AmbientLight>(null)
+  const fillRef = useRef<DirectionalLight>(null)
 
-  // The underground ambiance brings the sky's own light down for the frame it draws.
+  // The underground ambiance moves the sky's own light and the eye's fill for the frame it draws.
   useEffect(
-    () => registerSkyLights(() => ({ ambient: ambientRef.current, hemisphere: hemiRef.current })),
+    () =>
+      registerSkyLights(() => ({
+        ambient: ambientRef.current,
+        hemisphere: hemiRef.current,
+        fill: fillRef.current,
+      })),
     [],
   )
 
@@ -373,7 +375,7 @@ export function Lights() {
 
       {atmosphere || theme.hemi ? <hemisphereLight ref={hemiRef} /> : null}
       <ambientLight ref={ambientRef} />
-      {filled && <UndergroundFill />}
+      {filled && <UndergroundFill lightRef={fillRef} />}
       <UndergroundAmbiance />
     </>
   )

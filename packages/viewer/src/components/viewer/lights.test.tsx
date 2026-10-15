@@ -1,6 +1,16 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { afterEach, beforeEach, expect, test } from 'bun:test'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  BuildingNode,
+  LevelNode,
+  levelGroundBox,
+  SiteNode,
+  SlabNode,
+  useScene,
+} from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
 import type {
@@ -14,7 +24,9 @@ import type {
 } from 'three/webgpu'
 import {
   AMBIANCE_SECONDS,
+  ambianceFocus,
   ambianceNow,
+  EYE_FILL_INTENSITY,
   SKY_LIGHT_SCALE,
   setAmbianceFactor,
   temporarilyWithoutAmbiance,
@@ -101,6 +113,16 @@ function ambientOf(root: Object3D) {
   return ambient as AmbientLight | null
 }
 
+/** The eye's fill: the one directional light that casts no shadow and is not a theme light. */
+function fillOf(root: Object3D) {
+  let fill: DirectionalLight | null = null
+  root.traverse((object) => {
+    const light = object as DirectionalLight
+    if (light.isDirectionalLight && !light.castShadow && light.intensity !== undefined) fill = light
+  })
+  return fill as DirectionalLight | null
+}
+
 async function mountLights() {
   let camera: Camera | null = null
   function Eye() {
@@ -140,14 +162,23 @@ test('going below grade eases the world to earth over the crossing and back out 
     expect(mid).toBeLessThan(1)
     expect(useViewer.getState().ambianceActive).toBe(true)
     expect(undergroundAmbianceNode().value).toBe(mid)
+    // The eye's light rides the same factor from nothing: no step when it comes on.
+    const fillMid = fillOf(scene)
+    expect(fillMid?.intensity).toBeGreaterThan(0)
+    expect(fillMid?.intensity).toBeCloseTo(EYE_FILL_INTENSITY * mid, 6)
 
     await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
     expect(ambianceNow()).toBe(1)
     expect(undergroundAmbianceNode().value).toBe(1)
     // The sky's light is down; the same lights go back as they were on the way out.
     expect(ambient.intensity).toBeCloseTo(atGrade * SKY_LIGHT_SCALE, 6)
+    expect(fillOf(scene)?.intensity).toBeCloseTo(EYE_FILL_INTENSITY, 6)
 
     await act(async () => useViewer.setState({ belowGrade: false, gradeStanding: 'at-grade' }))
+    // Out again: the fill fades with the rest and is out before it is taken away.
+    await renderer.advanceFrames(12, 0.05)
+    const fading = fillOf(scene)
+    if (fading) expect(fading.intensity).toBeLessThan(EYE_FILL_INTENSITY)
     await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
     expect(ambianceNow()).toBe(0)
     expect(ambient.intensity).toBeCloseTo(atGrade, 6)
@@ -246,6 +277,8 @@ test('a capture is taken in the world’s own light, and the earth comes back af
     const release = temporarilyWithoutAmbiance()
     expect(ambient.intensity).toBeCloseTo(atGrade, 6)
     expect(undergroundAmbianceNode().value).toBe(0)
+    // The person's eye is not in a picture taken from elsewhere: no live fill from it.
+    expect(fillOf(scene)?.intensity).toBe(0)
     // A frame that runs during the capture keeps to it.
     await renderer.advanceFrames(2, 0.05)
     expect(ambient.intensity).toBeCloseTo(atGrade, 6)
@@ -256,6 +289,69 @@ test('a capture is taken in the world’s own light, and the earth comes back af
     expect(ambient.intensity).toBeLessThan(atGrade)
     expect(undergroundAmbianceNode().value).toBe(1)
   } finally {
+    await renderer.unmount()
+  }
+})
+
+test('the fog keeps the shown level clear from the selection alone, and the host’s ground window box wins', async () => {
+  const list: AnyNode[] = [
+    SiteNode.parse({ id: 'site_a', children: ['building_a'] }),
+    BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_b'] }),
+    LevelNode.parse({
+      id: 'level_b',
+      level: -1,
+      height: 2.6,
+      parentId: 'building_a',
+      children: ['slab_b'],
+    }),
+    SlabNode.parse({
+      id: 'slab_b',
+      parentId: 'level_b',
+      elevation: 0.2,
+      polygon: [
+        [-9, -6],
+        [9, -6],
+        [9, 6],
+        [-9, 6],
+      ],
+    }),
+  ]
+  const nodes = Object.fromEntries(list.map((node) => [node.id, node])) as Record<
+    AnyNodeId,
+    AnyNode
+  >
+  const previousScene = useScene.getState()
+  useScene.setState({ nodes, rootNodeIds: ['site_a'] } as never)
+  const { renderer } = await mountLights()
+  try {
+    const level = levelGroundBox(nodes, 'level_b')
+    if (!level) throw new Error('the basement has a box')
+    expect(level.max[0] - level.min[0]).toBeCloseTo(18, 6)
+    await act(async () =>
+      useViewer.setState({
+        selection: {
+          ...useViewer.getState().selection,
+          buildingId: 'building_a',
+          levelId: 'level_b',
+        },
+        hideLevelsAboveSelection: true,
+        belowGrade: true,
+        gradeStanding: 'below-grade',
+        groundWindowBox: null,
+      } as never),
+    )
+    await renderer.advanceFrames(Math.ceil(AMBIANCE_SECONDS / 0.05) + 2, 0.05)
+    expect(ambianceFocus()).toEqual({ min: level.min, max: level.max })
+
+    const host = {
+      min: [-3, -1, -2] as [number, number, number],
+      max: [3, 2, 2] as [number, number, number],
+    }
+    await act(async () => useViewer.setState({ groundWindowBox: host }))
+    await renderer.advanceFrames(2, 0.05)
+    expect(ambianceFocus()).toEqual(host)
+  } finally {
+    useScene.setState(previousScene, true)
     await renderer.unmount()
   }
 })

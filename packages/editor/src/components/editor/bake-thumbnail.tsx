@@ -14,6 +14,7 @@ import {
   setSlotDefaultOverrides,
   siteSurfaces,
   temporarilyHideNodeTypes,
+  temporarilyWithoutAmbiance,
   useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
@@ -208,6 +209,8 @@ export function BakeThumbnail({
 
     const run = async () => {
       const restoreNodeVisibility = temporarilyHideNodeTypes(['scan', 'guide', 'spawn'])
+      // The hero is the building in the world's own light, wherever the person's eye is.
+      const restoreAmbiance = temporarilyWithoutAmbiance()
       const priorLights = new Map<string, boolean>()
       const restGroups = new Map<string, [number, number, number]>()
       for (const node of Object.values(useScene.getState().nodes)) {
@@ -386,6 +389,7 @@ export function BakeThumbnail({
             .getState()
             .setProceduralLights(id as import('@pascal-app/core').AnyNodeId, on)
         restoreNodeVisibility()
+        restoreAmbiance()
       }
     }
 

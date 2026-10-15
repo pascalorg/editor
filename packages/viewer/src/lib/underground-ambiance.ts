@@ -1,4 +1,4 @@
-import type { AmbientLight, HemisphereLight } from 'three'
+import type { AmbientLight, DirectionalLight, HemisphereLight } from 'three'
 import { Color, Vector3 } from 'three'
 import {
   abs,
@@ -47,8 +47,12 @@ export const SOIL_VIGNETTE = '#0f0905'
 
 /** The sky's ambient and hemisphere light, as a share of what the theme gives. */
 export const SKY_LIGHT_SCALE = 0.65
-/** The eye's own light comes up this much as the sky's comes down, so the rooms keep their light. */
-export const FILL_BOOST = 1.4
+/**
+ * The eye's own light at full ambiance: the veil's own fill (1) and as much again as the sky's
+ * comes down, so the rooms keep their light. It rides the factor, from 0, so it neither steps on
+ * nor off, and it is 0 in a capture.
+ */
+export const EYE_FILL_INTENSITY = 2.4
 /** Their tint pulls this much toward a warm lamp colour. */
 export const SKY_LIGHT_WARMTH = 0.15
 const WARM = '#ffcf9a'
@@ -162,6 +166,11 @@ export function setAmbianceFocus(
   focusMax.value.set(eye.x + half, eye.y + half, eye.z + half)
 }
 
+/** The box the fog keeps clear now (what {@link setAmbianceFocus} last set). */
+export function ambianceFocus(): { min: number[]; max: number[] } {
+  return { min: focusMin.value.toArray(), max: focusMax.value.toArray() }
+}
+
 // ── The pipeline's pieces (TSL) ──────────────────────────────────────────────────────────────
 
 /**
@@ -202,7 +211,12 @@ export function undergroundVignette(uv: any = screenUV): any {
 
 // ── The sky's light, brought down for the frame ──────────────────────────────────────────────
 
-type SkyLights = { ambient: AmbientLight | null; hemisphere: HemisphereLight | null }
+type SkyLights = {
+  ambient: AmbientLight | null
+  hemisphere: HemisphereLight | null
+  /** The light from the eye (`UndergroundFill`): its intensity is the ambiance's, set here. */
+  fill: DirectionalLight | null
+}
 let skyLightSource: (() => SkyLights) | null = null
 
 type Saved = {
@@ -215,9 +229,10 @@ type Saved = {
   } | null
 }
 let saved: Saved | null = null
+let litFill: DirectionalLight | null = null
 const warm = new Color(WARM)
 
-/** The lights that stand for the sky: `Lights` offers its ambient and hemisphere lights here. */
+/** The lights the ambiance moves: `Lights` offers the sky's ambient and hemisphere and the eye's fill. */
 export function registerSkyLights(source: () => SkyLights): () => void {
   skyLightSource = source
   return () => {
@@ -236,7 +251,7 @@ export function registerSkyLights(source: () => SkyLights): () => void {
 export function applyAmbianceToSkyLights(amount: number): void {
   restoreSkyLights()
   if (amount <= 0 || !skyLightSource) return
-  const { ambient, hemisphere } = skyLightSource()
+  const { ambient, hemisphere, fill } = skyLightSource()
   const scale = 1 + (SKY_LIGHT_SCALE - 1) * amount
   const warmth = SKY_LIGHT_WARMTH * amount
   saved = { ambient: null, hemisphere: null }
@@ -256,10 +271,18 @@ export function applyAmbianceToSkyLights(amount: number): void {
     hemisphere.color.lerp(warm, warmth)
     hemisphere.groundColor.lerp(warm, warmth)
   }
+  if (fill) {
+    fill.intensity = EYE_FILL_INTENSITY * amount
+    litFill = fill
+  }
 }
 
-/** Gives the sky's lights back as the theme set them. */
+/** Gives the sky's lights back as the theme set them, and puts the eye's fill out. */
 export function restoreSkyLights(): void {
+  if (litFill) {
+    litFill.intensity = 0
+    litFill = null
+  }
   if (!saved) return
   const { ambient, hemisphere } = saved
   saved = null
