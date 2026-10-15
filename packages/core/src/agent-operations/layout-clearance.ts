@@ -354,10 +354,15 @@ export function classifyPlacement(args: {
 /** How far a placement may step a piece off its spot, into the room, to clear doors and other pieces. */
 export const PLACEMENT_INSETS_M = [0, 0.25, 0.5, 0.75]
 
-/** Slides along a wall every 0.4 m between `min` and `max`, nearest first: 0, -0.4, 0.4, … */
+/**
+ * Slides along a wall between `min` and `max`, nearest first: the nearest to none at all, then
+ * every 0.4 m (0, -0.4, 0.4, … when the range holds 0).
+ */
 export function lateralSteps(min: number, max: number): number[] {
-  const steps: number[] = []
-  for (let k = Math.ceil(min / 0.4 - 1e-9); k * 0.4 <= max + 1e-9; k++) steps.push(k * 0.4)
+  const nearest = Math.min(Math.max(0, min), max)
+  const steps = [nearest]
+  for (let k = Math.ceil(min / 0.4 - 1e-9); k * 0.4 <= max + 1e-9; k++)
+    if (Math.abs(k * 0.4 - nearest) > 1e-9) steps.push(k * 0.4)
   return steps.sort((a, b) => Math.abs(a) - Math.abs(b) || a - b)
 }
 
@@ -402,7 +407,9 @@ function insideOutline(
     (px - x) * cos - (pz - z) * sin,
     (px - x) * sin + (pz - z) * cos,
   ]
-  const [halfU, halfV] = [width / 2 - OUTLINE_CONTACT_M, depth / 2 - OUTLINE_CONTACT_M]
+  // A piece a few millimetres thin keeps half its own thickness, so its box is never empty.
+  const inset = (half: number) => Math.max(half - OUTLINE_CONTACT_M, half / 2)
+  const [halfU, halfV] = [inset(width / 2), inset(depth / 2)]
   return !outline.some((point, i) =>
     segmentEntersBox(local(point), local(outline[(i + 1) % outline.length]!), halfU, halfV),
   )

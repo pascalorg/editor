@@ -710,6 +710,7 @@ const CATALOG: AssetInput[] = [
   item('toilet', [1, 0.9, 1]),
   item('bathroom-sink', [2, 1, 1.5]),
   item('shower-square', [1, 2, 1]),
+  item('bathtub', [1.7, 0.6, 0.8]),
 ]
 
 const ROOM_WALLS = ['wall_s', 'wall_e', 'wall_n', 'wall_w']
@@ -829,8 +830,15 @@ function roomScene({
  * The piece's turned footprint inside the room, read by clipping it against the outline (not the
  * operation's own test): what stands outside, under a square centimetre of rounding.
  */
-const standsIn = (item: Extract<AnyNode, { type: 'item' }>, outline: Vec2[]) =>
-  clippedArea(difference(itemNodePlanCorners(item), outline)) < 1e-4
+const standsIn = (item: Extract<AnyNode, { type: 'item' }>, outline: Vec2[]) => {
+  const corners = itemNodePlanCorners(item)
+  const [cx, cz] = [0, 1].map((axis) => corners.reduce((sum, c) => sum + c[axis]!, 0) / 4)
+  // Round the footprint, not across it: itemNodePlanCorners lists its corners by side.
+  const ring = corners.sort(
+    (a, b) => Math.atan2(a[1] - cz!, a[0] - cx!) - Math.atan2(b[1] - cz!, b[0] - cx!),
+  )
+  return clippedArea(difference(ring, outline)) < 1e-4
+}
 
 const furnished = (result: Record<string, unknown>, nodes: Nodes) => {
   const items = Object.values(nodes)
@@ -1004,7 +1012,11 @@ export const FURNISH_ROOM_CASES: AgentToolCase[] = [
     scene: roomScene({ outline: U_ROOM, name: 'Dining room' }),
     input: { zoneId: 'zone_bed', roomType: 'dining', doorWallIndex: 0 },
     context: {
-      catalog: [...CATALOG, item('dining-table', [2, 0.75, 4]), item('dining-chair', [0.5, 0.9, 0.5])],
+      catalog: [
+        ...CATALOG,
+        item('dining-table', [2, 0.75, 4]),
+        item('dining-chair', [0.5, 0.9, 0.5]),
+      ],
     },
     expect: {
       result: { ok: true },
@@ -1036,7 +1048,10 @@ export const FURNISH_ROOM_CASES: AgentToolCase[] = [
       result: { ok: true },
       check: (result, nodes) => [
         ...furnished(result, nodes),
-        ...problems([positionOf(nodes, 'shower-square') !== null, 'the shower was skipped']),
+        ...problems(
+          [positionOf(nodes, 'shower-square') !== null, 'the shower was skipped'],
+          [positionOf(nodes, 'bathtub') === null, 'a tub was placed'],
+        ),
       ],
     },
   },
