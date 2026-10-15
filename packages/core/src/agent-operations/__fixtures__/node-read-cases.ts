@@ -1,0 +1,644 @@
+import {
+  type AnyNode,
+  BlockNode,
+  BuildingNode,
+  CeilingNode,
+  ColumnNode,
+  DoorNode,
+  ImportedMeshNode,
+  ItemNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  WallNode,
+  WindowNode,
+  ZoneNode,
+} from '../../schema'
+import type { AgentToolCase, SceneGraph } from './cases'
+
+/**
+ * One finder and one node read (slice Q of the tool catalogue): `find_by_type` covers every case
+ * the MCP's `find_nodes` served and `get_node` every one `describe_node` served, so both retire.
+ * Each case names the retiring tool's call and what it answered, then runs the call that covers it
+ * on the core, MCP and chat runners. `find_nodes` answered whole nodes, `find_by_type` answers each
+ * node's id, name, kind, level and parent with its metadata and provenance, and `get_node` reads one
+ * whole: the cases compare which nodes are found.
+ */
+
+type Pt = [number, number]
+
+const rect = (x0: number, z0: number, x1: number, z1: number): Pt[] => [
+  [x0, z0],
+  [x1, z0],
+  [x1, z1],
+  [x0, z1],
+]
+
+/** A site, its building and two storeys, the ground one unnamed, with what each case adds. */
+function scene(...nodes: (AnyNode | PluginNode)[]): SceneGraph {
+  const site = SiteNode.parse({ id: 'site_lot' })
+  const building = BuildingNode.parse({ id: 'building_main', parentId: site.id })
+  const ground = LevelNode.parse({ id: 'level_0', parentId: building.id, level: 0, height: 2.8 })
+  const upper = LevelNode.parse({
+    id: 'level_1',
+    parentId: building.id,
+    level: 1,
+    name: 'Upper',
+    height: 2.8,
+  })
+  const all = [site, building, ground, upper, ...nodes] as (AnyNode & { children?: unknown[] })[]
+  const byId = Object.fromEntries(all.map((node) => [node.id, { ...node }]))
+  for (const node of Object.values(byId)) {
+    const parent = node.parentId ? byId[node.parentId] : undefined
+    if (parent && Array.isArray(parent.children) && !parent.children.includes(node.id))
+      parent.children = [...parent.children, node.id]
+  }
+  return { nodes: byId, rootNodeIds: [site.id] }
+}
+
+/** A node of a plugin's kind, as a scene holds one where the plugin is installed. */
+type PluginNode = { object: 'node'; id: string; type: string; parentId: string } & Record<
+  string,
+  unknown
+>
+const pluginNode = (id: string, type: string): PluginNode => ({
+  object: 'node',
+  id,
+  type,
+  parentId: 'level_0',
+  visible: true,
+  metadata: {},
+  position: [0, 0, 0],
+})
+
+const wall = (id: string, start: Pt, end: Pt, extra: Record<string, unknown> = {}) =>
+  WallNode.parse({ id, parentId: 'level_0', start, end, ...extra })
+
+const kitchen = (levelId = 'level_0') =>
+  ZoneNode.parse({
+    id: 'zone_kitchen',
+    parentId: levelId,
+    name: 'Kitchen',
+    polygon: rect(-5, -5, 5, 5),
+  })
+
+/** The ids of the whole nodes found, sorted, against the ones expected. */
+const finds =
+  (...expected: string[]) =>
+  (result: Record<string, unknown>) => {
+    const found = (result.results as { id: string; part?: string }[])
+      .filter((entry) => !entry.part)
+      .map((entry) => entry.id)
+      .sort()
+    const want = [...expected].sort()
+    return JSON.stringify(found) === JSON.stringify(want)
+      ? []
+      : [`found ${found.join(', ') || 'nothing'}, expected ${want.join(', ') || 'nothing'}`]
+  }
+
+const find = (
+  name: string,
+  build: () => SceneGraph,
+  input: Record<string, unknown>,
+  expected: string[],
+  extra: { result?: Record<string, unknown>; contains?: Record<string, unknown>[] } = {},
+): AgentToolCase => ({
+  name,
+  tool: 'find_by_type',
+  scene: build,
+  input,
+  expect: {
+    result: { count: expected.length, ...extra.result },
+    ...(extra.contains && { contains: { results: extra.contains } }),
+    check: finds(...expected),
+  },
+})
+
+// ─── Source ids: a slice of the converted /next house, as find_nodes' own tests seeded it ─────────
+
+function sourceScene(): SceneGraph {
+  const tagged = wall('wall_ground-exterior-01', [0, 0], [6, 0], {
+    metadata: { sourceIds: ['ground/exterior-01'] },
+  })
+  const window = WindowNode.parse({
+    id: 'window_primary-rear-window-1',
+    parentId: tagged.id,
+    wallId: tagged.id,
+    position: [1, 1.2, 0],
+    metadata: { sourceIds: ['ground/exterior-01/window-1', 'sketchup:641553'] },
+  })
+  const block = BlockNode.parse({
+    id: 'block_screen-roof-gutter',
+    parentId: 'level_0',
+    metadata: { sourceIds: ['screen/roof-gutter'] },
+  })
+  const column = ColumnNode.parse({
+    id: 'column_screen-native-640313-1259',
+    parentId: 'level_0',
+    metadata: { sourceIds: ['screen/post-640313'] },
+  })
+  // A legacy converter id kept raw, one written as typed provenance requires (printable ASCII,
+  // the rest percent-encoded), and typed provenance refs with an alias.
+  const legacy = wall('wall_legacy', [0, 2], [1, 2], {
+    metadata: { sourceIds: ['Küche/Fenster-1'] },
+  })
+  const encoded = wall('wall_encoded', [0, 3], [1, 3], {
+    metadata: { sourceIds: ['K%C3%BCche/Fenster-2'] },
+  })
+  const typed = wall('wall_typed', [0, 4], [1, 4], {
+    provenance: {
+      refs: [
+        { ns: 'sketchup', id: 'K%C3%BCche/Fenster-3', role: 'primary' },
+        { id: 'kitchen/alias-3', role: 'alias' },
+      ],
+    },
+  })
+  const untagged = wall('wall_untagged', [0, 5], [6, 5])
+  return scene(tagged, window, block, column, legacy, encoded, typed, untagged)
+}
+
+// ─── Zones: what stands in one, by its plan point on the zone's level ──────────────────────────────
+
+function zoneScene(): SceneGraph {
+  const near = wall('wall_near', [-2, 0], [2, 0])
+  // Wall-local x = 1 on a wall starting at x = 20: the window stands at x = 21, outside.
+  const far = wall('wall_far', [20, 0], [26, 0])
+  return scene(
+    kitchen(),
+    wall('wall_in', [-2, -2], [2, 2]),
+    wall('wall_out', [50, 50], [60, 60]),
+    near,
+    far,
+    WindowNode.parse({
+      id: 'window_near',
+      parentId: near.id,
+      wallId: near.id,
+      position: [1, 1.2, 0],
+    }),
+    WindowNode.parse({ id: 'window_far', parentId: far.id, wallId: far.id, position: [1, 1.2, 0] }),
+    WallNode.parse({ id: 'wall_upper', parentId: 'level_1', start: [-2, 0], end: [2, 0] }),
+    ColumnNode.parse({ id: 'column_in', parentId: 'level_0', position: [1, 0, 1] }),
+    ColumnNode.parse({ id: 'column_out', parentId: 'level_0', position: [20, 0, 20] }),
+    // A block's topology is centred on its origin.
+    BlockNode.parse({ id: 'block_in', parentId: 'level_0', position: [2, 0, 2] }),
+    // Converter meshes keep their origin at zero and their geometry in the vertices.
+    ImportedMeshNode.parse({
+      id: 'imesh_in',
+      parentId: 'level_0',
+      primitives: [{ positions: [2, 0, 2, 4, 0, 2, 4, 0, 4] }],
+    }),
+    ImportedMeshNode.parse({
+      id: 'imesh_far',
+      parentId: 'level_0',
+      primitives: [{ positions: [30, 0, 30, 32, 0, 30, 32, 0, 32] }],
+    }),
+    // Geometry around local y = 10: a quarter turn about X swings it to plan z = 10, outside.
+    ImportedMeshNode.parse({
+      id: 'imesh_tilted',
+      parentId: 'level_0',
+      rotation: [Math.PI / 2, 0, 0],
+      primitives: [{ positions: [-1, 9, -1, 1, 11, -1, 1, 11, 1] }],
+    }),
+    ImportedMeshNode.parse({
+      id: 'imesh_upright',
+      parentId: 'level_0',
+      primitives: [{ positions: [-1, 9, -1, 1, 11, -1, 1, 11, 1] }],
+    }),
+  )
+}
+
+// ─── Kinds, parents and the driveway Architect's method looks for ──────────────────────────────────
+
+function kindsScene(): SceneGraph {
+  const host = wall('wall_host', [0, 0], [4, 0], { height: 2.5 })
+  return scene(
+    host,
+    DoorNode.parse({ id: 'door_host', parentId: host.id, wallId: host.id, position: [1, 1.05, 0] }),
+    WindowNode.parse({
+      id: 'window_host',
+      parentId: host.id,
+      wallId: host.id,
+      position: [3, 1.5, 0],
+    }),
+    wall('wall_side', [0, 0], [0, 3]),
+    WallNode.parse({ id: 'wall_upper', parentId: 'level_1', start: [0, 0], end: [4, 0] }),
+    SlabNode.parse({ id: 'slab_floor', parentId: 'level_0', polygon: rect(0, 0, 4, 3) }),
+    SlabNode.parse({
+      id: 'slab_drive',
+      parentId: 'level_0',
+      polygon: rect(4, -6, 7, 0),
+      metadata: { flatwork: 'driveway' },
+    }),
+    BlockNode.parse({ id: 'block_bench', parentId: 'level_0' }),
+    pluginNode('bench_plugin-1', 'fixture:bench'),
+    pluginNode('studs_plugin-1', 'bones:studs'),
+  )
+}
+
+const KIND_IDS = [
+  'site_lot',
+  'building_main',
+  'level_0',
+  'level_1',
+  'wall_host',
+  'door_host',
+  'window_host',
+  'wall_side',
+  'wall_upper',
+  'slab_floor',
+  'slab_drive',
+  'block_bench',
+  'bench_plugin-1',
+  'studs_plugin-1',
+]
+
+export const FIND_NODES_CASES: AgentToolCase[] = [
+  find(
+    'find_nodes { type: level } (every level, whole): every level, its id, kind and parent',
+    kindsScene,
+    { type: 'level' },
+    ['level_0', 'level_1'],
+    {
+      contains: [
+        { id: 'level_0', nodeType: 'level', levelId: 'level_0', parentId: 'building_main' },
+      ],
+    },
+  ),
+  find(
+    'find_nodes { type: roof } on a scene with no roof ([]): nothing found',
+    kindsScene,
+    { type: 'roof' },
+    [],
+    {
+      result: { type: 'roof', count: 0 },
+    },
+  ),
+  find(
+    'find_nodes { type: wall, levelId } (the walls of one storey): the same, the upper storey left out',
+    kindsScene,
+    { type: 'wall', levelId: 'level_0' },
+    ['wall_host', 'wall_side'],
+  ),
+  find(
+    "find_nodes { parentId } (a wall's doors and windows): the same",
+    kindsScene,
+    { parentId: 'wall_host' },
+    ['door_host', 'window_host'],
+  ),
+  find('find_nodes {} (every node): every node', kindsScene, {}, KIND_IDS),
+  find(
+    'find_nodes { type: block } (a kind the first enum lacked): the block',
+    kindsScene,
+    { type: 'block' },
+    ['block_bench'],
+  ),
+  find(
+    'find_nodes { type: fixture:bench } (a plugin kind in the scene): the plugin node',
+    kindsScene,
+    { type: 'fixture:bench' },
+    ['bench_plugin-1'],
+  ),
+  find(
+    'find_nodes { type: bones:studs } (a plugin kind ending in s): the kind as written, not a singular of it',
+    kindsScene,
+    { type: 'bones:studs' },
+    ['studs_plugin-1'],
+  ),
+  find(
+    "find_nodes { type: slab }, then metadata.flatwork read off each (Architect's driveway check): each slab with its metadata",
+    kindsScene,
+    { type: 'slab' },
+    ['slab_floor', 'slab_drive'],
+    { contains: [{ id: 'slab_drive', metadata: { flatwork: 'driveway' } }] },
+  ),
+  find(
+    'find_nodes { type: wall, zoneId } (walls whose midpoint is in the zone): the same',
+    zoneScene,
+    { type: 'wall', zoneId: 'zone_kitchen' },
+    ['wall_in', 'wall_near'],
+  ),
+  find(
+    "find_nodes { type: wall, zoneId } with a wall on the storey above (only the zone's level): the same",
+    zoneScene,
+    { zoneId: 'zone_kitchen', type: 'wall', levelId: 'level_0' },
+    ['wall_in', 'wall_near'],
+  ),
+  find(
+    'find_nodes { type: window, zoneId } (a window where its wall puts it): the near one',
+    zoneScene,
+    { type: 'window', zoneId: 'zone_kitchen' },
+    ['window_near'],
+  ),
+  find(
+    'find_nodes { type: column, zoneId } (a positioned node by its origin): the one inside',
+    zoneScene,
+    { type: 'column', zoneId: 'zone_kitchen' },
+    ['column_in'],
+  ),
+  find(
+    'find_nodes { type: block, zoneId } (a block by the middle of its topology): the block',
+    zoneScene,
+    { type: 'block', zoneId: 'zone_kitchen' },
+    ['block_in'],
+  ),
+  find(
+    'find_nodes { type: imported-mesh, zoneId } (a mesh by its vertex bounds, turned in 3D first): the near and the upright one',
+    zoneScene,
+    { type: 'imported-mesh', zoneId: 'zone_kitchen' },
+    ['imesh_in', 'imesh_upright'],
+  ),
+  find(
+    'find_nodes { zoneId } (everything in the zone): the zone, its walls, window, column, block and meshes',
+    zoneScene,
+    { zoneId: 'zone_kitchen' },
+    [
+      'zone_kitchen',
+      'wall_in',
+      'wall_near',
+      'window_near',
+      'column_in',
+      'block_in',
+      'imesh_in',
+      'imesh_upright',
+    ],
+  ),
+  {
+    name: 'find_nodes { zoneId } of no zone ([]): refused zone_not_found, with the id',
+    tool: 'find_by_type',
+    scene: zoneScene,
+    input: { type: 'wall', zoneId: 'zone_missing' },
+    expect: { refusal: 'zone_not_found', mentions: ['zone_missing'] },
+  },
+  {
+    name: 'find_nodes { zoneId } naming a wall ([]): refused not_a_zone',
+    tool: 'find_by_type',
+    scene: zoneScene,
+    input: { zoneId: 'wall_in' },
+    expect: { refusal: 'not_a_zone', mentions: ['wall_in'] },
+  },
+  {
+    name: 'find_nodes { parentId } of no node ([]): refused node_not_found, with the id',
+    tool: 'find_by_type',
+    scene: kindsScene,
+    input: { parentId: 'wall_missing' },
+    expect: { refusal: 'node_not_found', mentions: ['wall_missing'] },
+  },
+  find(
+    'find_nodes { sourceId } (any entry of metadata.sourceIds, exactly): the window, by either of its ids',
+    sourceScene,
+    { sourceId: 'sketchup:641553' },
+    ['window_primary-rear-window-1'],
+    {
+      contains: [
+        {
+          id: 'window_primary-rear-window-1',
+          metadata: { sourceIds: ['ground/exterior-01/window-1', 'sketchup:641553'] },
+        },
+      ],
+    },
+  ),
+  find(
+    'find_nodes { sourceId } with the second id: the window',
+    sourceScene,
+    { sourceId: 'ground/exterior-01/window-1' },
+    ['window_primary-rear-window-1'],
+  ),
+  find(
+    'find_nodes { sourceId } of a prefix only ([]): nothing found',
+    sourceScene,
+    { sourceId: 'ground/exterior' },
+    [],
+  ),
+  find(
+    'find_nodes { sourceIdPrefix } (every node with an id starting with it, any kind): the wall and its window',
+    sourceScene,
+    { sourceIdPrefix: 'ground/exterior-01' },
+    ['wall_ground-exterior-01', 'window_primary-rear-window-1'],
+  ),
+  find(
+    'find_nodes { sourceIdPrefix: screen/ }: the block and the column',
+    sourceScene,
+    { sourceIdPrefix: 'screen/' },
+    ['block_screen-roof-gutter', 'column_screen-native-640313-1259'],
+  ),
+  find(
+    'find_nodes { sourceIdPrefix } outside printable ASCII (raw and percent-encoded entries): the legacy, the encoded and the typed walls',
+    sourceScene,
+    { sourceIdPrefix: 'Küche/' },
+    ['wall_legacy', 'wall_encoded', 'wall_typed'],
+  ),
+  find(
+    'find_nodes { sourceId } outside printable ASCII, stored percent-encoded: that wall',
+    sourceScene,
+    { sourceId: 'Küche/Fenster-2' },
+    ['wall_encoded'],
+  ),
+  find(
+    'find_nodes { sourceId } of a typed provenance ref: that wall, with its provenance',
+    sourceScene,
+    { sourceId: 'Küche/Fenster-3' },
+    ['wall_typed'],
+    { contains: [{ id: 'wall_typed', provenance: { refs: expectRefs() } }] },
+  ),
+  find(
+    "find_nodes { sourceId } of a typed provenance ref's alias: that wall",
+    sourceScene,
+    { sourceId: 'kitchen/alias-3' },
+    ['wall_typed'],
+  ),
+  find(
+    'find_nodes { sourceIdPrefix, type } (the filters combine): the window alone',
+    sourceScene,
+    { sourceIdPrefix: 'ground/', type: 'window' },
+    ['window_primary-rear-window-1'],
+  ),
+  find(
+    'find_nodes { sourceIdPrefix, parentId }: the window alone',
+    sourceScene,
+    { sourceIdPrefix: 'ground/', parentId: 'wall_ground-exterior-01' },
+    ['window_primary-rear-window-1'],
+  ),
+  find(
+    'find_nodes { sourceIdPrefix: screen/, type: wall } ([]): nothing found',
+    sourceScene,
+    { sourceIdPrefix: 'screen/', type: 'wall' },
+    [],
+  ),
+]
+
+function expectRefs() {
+  return [
+    { ns: 'sketchup', id: 'K%C3%BCche/Fenster-3', role: 'primary' },
+    { id: 'kitchen/alias-3', role: 'alias' },
+  ]
+}
+
+// ─── describe_node: its ancestry, children, properties and sentence, from get_node ────────────────
+
+function describedScene(): SceneGraph {
+  const host = wall('wall_host', [0, 0], [5, 0])
+  const kitchenZone = ZoneNode.parse({
+    id: 'zone_kitchen',
+    parentId: 'level_0',
+    name: 'Kitchen',
+    spaceRole: 'room',
+    polygon: rect(0, 0, 5, 4),
+  })
+  return scene(
+    host,
+    DoorNode.parse({ id: 'door_host', parentId: host.id, wallId: host.id, position: [1, 1.05, 0] }),
+    WindowNode.parse({
+      id: 'window_host',
+      parentId: host.id,
+      wallId: host.id,
+      position: [3.5, 1.5, 0],
+    }),
+    wall('wall_tall', [0, 4], [5, 4], { height: 3.1 }),
+    kitchenZone,
+    SlabNode.parse({
+      id: 'slab_plate',
+      parentId: 'level_0',
+      plateRole: 'base',
+      polygon: rect(0, 0, 5, 4),
+      zoneIds: [kitchenZone.id],
+    }),
+    CeilingNode.parse({ id: 'ceiling_auto', parentId: 'level_0', polygon: rect(0, 0, 5, 4) }),
+    CeilingNode.parse({
+      id: 'ceiling_low',
+      parentId: 'level_0',
+      polygon: rect(0, 0, 2, 2),
+      height: 2.4,
+    }),
+    ItemNode.parse({
+      id: 'item_sofa',
+      parentId: 'level_0',
+      position: [2, 0, 2],
+      asset: {
+        id: 'sofa',
+        name: 'Sofa',
+        category: 'furniture',
+        thumbnail: '/items/sofa/thumbnail.webp',
+        src: '/items/sofa/model.glb',
+        dimensions: [2, 0.8, 0.9],
+      },
+    }),
+    pluginNode('bench_plugin-1', 'fixture:bench'),
+  )
+}
+
+/** The default tree assembled whole, as `loadScene()` writes it: no `parentId` above the walls. */
+function assembledScene(): SceneGraph {
+  const { nodes, rootNodeIds } = describedScene()
+  for (const id of ['site_lot', 'building_main', 'level_0', 'level_1'])
+    nodes[id] = { ...(nodes[id] as object), parentId: null }
+  return { nodes, rootNodeIds }
+}
+
+const get = (
+  name: string,
+  id: string,
+  result: Record<string, unknown>,
+  build: () => SceneGraph = describedScene,
+  surfaces?: AgentToolCase['surfaces'],
+): AgentToolCase => ({
+  name,
+  tool: 'get_node',
+  scene: build,
+  input: { id },
+  ...(surfaces && { surfaces }),
+  expect: { result },
+})
+
+export const DESCRIBE_NODE_CASES: AgentToolCase[] = [
+  get(
+    'describe_node on a wall (type, parentId, properties): node.type, node.parentId and its fields',
+    'wall_host',
+    { node: { id: 'wall_host', type: 'wall', parentId: 'level_0', start: [0, 0], end: [5, 0] } },
+  ),
+  get(
+    'describe_node on a wall stored with no thickness ("thickness 0.10m"): node.resolvedThickness',
+    'wall_host',
+    { node: { resolvedThickness: 0.1 } },
+  ),
+  get(
+    "describe_node on a wall with no height of its own (properties' resolvedHeight 2.75, under the storey's 2.8, heightIsExplicit false): the same on node",
+    'wall_host',
+    { node: { resolvedHeight: 2.75, heightIsExplicit: false } },
+  ),
+  get(
+    'describe_node on a wall with its own height (resolvedHeight 3.1, heightIsExplicit true): the same',
+    'wall_tall',
+    { node: { height: 3.1, resolvedHeight: 3.1, heightIsExplicit: true } },
+  ),
+  get(
+    'describe_node ancestryIds (the level and the building above a wall): ancestorIds, parent first, to the site',
+    'wall_host',
+    { ancestorIds: ['level_0', 'building_main', 'site_lot'] },
+  ),
+  get(
+    'describe_node ancestryIds of a window (its wall, the level, …): ancestorIds from its wall',
+    'window_host',
+    { ancestorIds: ['wall_host', 'level_0', 'building_main', 'site_lot'] },
+  ),
+  get(
+    'describe_node ancestryIds in a tree assembled whole (no parentId above the walls, found by children): the same',
+    'wall_host',
+    { ancestorIds: ['level_0', 'building_main', 'site_lot'] },
+    assembledScene,
+  ),
+  get('describe_node childrenIds of a wall (its door and window): node.children', 'wall_host', {
+    node: { children: ['door_host', 'window_host'] },
+  }),
+  get('describe_node on an unnamed ground storey ("Ground floor"): node.displayName', 'level_0', {
+    node: { id: 'level_0', displayName: 'Ground floor' },
+    ancestorIds: ['building_main', 'site_lot'],
+  }),
+  get('describe_node on a named storey ("Upper"): node.displayName', 'level_1', {
+    node: { name: 'Upper', displayName: 'Upper' },
+  }),
+  get(
+    'describe_node on a floor plate (its footprint name, "Kitchen floor"): node.displayName',
+    'slab_plate',
+    { node: { plateRole: 'base', displayName: 'Kitchen floor' } },
+  ),
+  get(
+    'describe_node on a ceiling that follows its storey ("height 2.79m", under the 2.8 m storey): node.resolvedHeight, heightIsExplicit false',
+    'ceiling_auto',
+    { node: { resolvedHeight: 2.79, heightIsExplicit: false } },
+  ),
+  get(
+    'describe_node on a ceiling with its own height (2.4 m): node.resolvedHeight 2.4, heightIsExplicit true',
+    'ceiling_low',
+    { node: { height: 2.4, resolvedHeight: 2.4, heightIsExplicit: true } },
+  ),
+  get(
+    'describe_node on a door ("Door (0.90m x 2.10m)"): node.width and node.height, with resolvedOpening',
+    'door_host',
+    { node: { type: 'door', width: 0.9, height: 2.1, resolvedOpening: { anchor: 'floor' } } },
+  ),
+  get(
+    'describe_node on a zone ("Zone "Kitchen" with 4 vertices"): node.name and node.polygon',
+    'zone_kitchen',
+    { node: { name: 'Kitchen', polygon: rect(0, 0, 5, 4) } },
+  ),
+  get(
+    'describe_node on an item ("Item "Sofa" at (2,0,2)"): node.asset.name and node.position',
+    'item_sofa',
+    { node: { asset: { name: 'Sofa' }, position: [2, 0, 2] } },
+  ),
+  get(
+    'describe_node on a plugin node ("fixture:bench node", its properties): the node as stored',
+    'bench_plugin-1',
+    {
+      node: { type: 'fixture:bench', position: [0, 0, 0] },
+      ancestorIds: ['level_0', 'building_main', 'site_lot'],
+    },
+  ),
+  {
+    name: 'describe_node on an unknown id (an error): refused node_not_found, with the id',
+    tool: 'get_node',
+    scene: describedScene,
+    input: { id: 'wall_nope' },
+    expect: { refusal: 'node_not_found', mentions: ['wall_nope'] },
+  },
+]

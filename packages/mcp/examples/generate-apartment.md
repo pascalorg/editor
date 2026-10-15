@@ -235,6 +235,6 @@ Zustand store, the user can `undo` the change if they dislike it:
 - Mutations batch inside a single `apply_patch` so that `undo` rolls back
   the whole logical change.
 - Zones are not walls — they're polygon annotations that make later queries
-  (`find_nodes({ zoneId })`) and planning steps much easier for the agent.
+  (`find_by_type({ zoneId })`) and planning steps much easier for the agent.
 - The agent never needs to speak to `@pascal-app/viewer`: everything the
   host sees flows through tools + resources + prompts.

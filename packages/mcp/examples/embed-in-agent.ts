@@ -40,10 +40,10 @@ async function main(): Promise<void> {
 
   // 5. Find the default level, create a 5 m wall, and undo it.
   const levels = await client.callTool({
-    name: 'find_nodes',
+    name: 'find_by_type',
     arguments: { type: 'level' },
   })
-  const levelId = (levels.structuredContent as { nodes: Array<{ id: string }> }).nodes[0]?.id
+  const levelId = (levels.structuredContent as { results: Array<{ id: string }> }).results[0]?.id
 
   if (levelId) {
     const created = await client.callTool({
