@@ -81,6 +81,9 @@ function readQuantity(text: string, kind: Kind, unit: string, unitRequired = fal
   return clean(result.quantity.to(unit).value)
 }
 
+// Superscript and subscript digits, which Unicode folding would turn into plain ones ("6²" → "62").
+const SCRIPT_DIGITS = /[\u00B2\u00B3\u00B9\u2070-\u209F]/
+
 /** A number or text field, read to a number in `unit` and held to the bounds. */
 function quantityField(
   read: (text: string) => Reading,
@@ -106,6 +109,8 @@ function quantityField(
         ctx.addIssue({ code: 'custom', message })
         return z.NEVER
       }
+      if (typeof val === 'string' && SCRIPT_DIGITS.test(val))
+        return refuse(`"${val}" has a superscript or subscript: write the number plainly.`)
       const value = typeof val === 'number' ? val : read(val)
       if (typeof value !== 'number') return refuse(value.error)
       const problem = outOfBounds(value)
@@ -132,7 +137,6 @@ export type PitchUnit = 'deg' | 'twelfths'
 const RISE_OVER_RUN =
   /^\s*\+?(\d+\.?\d*|\.\d+)\s*(?::|\/|-?\s*(?:in|on)\s*-?)\s*(\d+\.?\d*|\.\d+)(?:\s*pitch)?\s*$/i
 
-const twelfthsToDegrees = (twelfths: number) => (Math.atan(twelfths / 12) * 180) / Math.PI
 const degreesToTwelfths = (degrees: number) => 12 * Math.tan((degrees * Math.PI) / 180)
 
 const PITCH_NOTES: Record<PitchUnit, string> = {
@@ -140,21 +144,26 @@ const PITCH_NOTES: Record<PitchUnit, string> = {
   twelfths: 'Rise per 12 of run (6 for 6:12), or "6:12" or "26.6°".',
 }
 
+/** Full-width forms ("６／１２") as their ASCII twins; nothing else is folded. */
+const ascii = (text: string) =>
+  text
+    .replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/\u3000/g, ' ')
+
 function readPitch(said: string, unit: PitchUnit): Reading {
-  // Full-width forms ("６／１２") read as their ASCII twins.
-  const text = said.normalize('NFKC')
+  const text = ascii(said)
   const ratio = RISE_OVER_RUN.exec(text)
   if (ratio) {
+    const rise = Number(ratio[1])
     const run = Number(ratio[2])
-    if (run === 0) return { error: `"${text}" has no run: give the rise per 12, as "6:12".` }
-    const twelfths = (12 * Number(ratio[1])) / run
-    return clean(unit === 'twelfths' ? twelfths : twelfthsToDegrees(twelfths))
+    if (run === 0) return { error: `"${said}" has no run: give the rise per 12, as "6:12".` }
+    // Divided first, so a huge rise and run still give their slope.
+    return clean(unit === 'twelfths' ? 12 * (rise / run) : (Math.atan2(rise, run) * 180) / Math.PI)
   }
   if (BARE_NUMBER.test(text)) return Number(text)
   // Anything else must name its angle unit ("26.6°", "0.46 rad"): without one, the unit parser
-  // reads text such as "6,0" or "6 / 12 / 1" as degrees. It reads what was said, not its NFKC
-  // form, which turns "26¼°" into "261⁄4°".
-  const degrees = readQuantity(said, 'angle', 'deg', true)
+  // reads text such as "6,0" or "6 / 12 / 1" as degrees.
+  const degrees = readQuantity(text, 'angle', 'deg', true)
   if (typeof degrees !== 'number')
     return {
       error: `Could not read "${said}" as a roof pitch: give degrees ("26.6°") or the rise per 12 ("6:12").`,

@@ -117,6 +117,10 @@ describe('roofPitch', () => {
     expect(degrees.parse('26¼°')).toBe(26.25)
     expect(degrees.parse('22½°')).toBe(22.5)
     expect(twelfths.parse('26¼°')).toBeCloseTo(5.917745112376, 9)
+    // A huge rise and run still give their slope.
+    const huge = `1${'0'.repeat(308)}`
+    expect(degrees.parse(`${huge}:${huge}`)).toBe(45)
+    expect(twelfths.parse(`${huge}:${huge}`)).toBe(12)
   })
 
   test('what is not a pitch is refused with a message the model can act on', () => {
@@ -125,6 +129,9 @@ describe('roofPitch', () => {
       // Without an angle unit the unit parser would read these as degrees: 6,0 as 6°, -6/12 as -0.5°.
       [twelfths, '6,0', 'rise per 12'],
       [degrees, '-6/12', 'rise per 12'],
+      // Unicode folding would read 6² as 62.
+      [twelfths, '6²:12', 'superscript'],
+      [degrees, '6²°', 'superscript'],
       [twelfths, '6:0', 'no run'],
       [twelfths, '90°', 'under 90°'],
       [degrees, '90°', 'at most 85'],
