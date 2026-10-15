@@ -72,8 +72,11 @@ export interface SitePlanDrawing {
     frontEdge: number
     lot: Pt[]
     envelope: Pt[]
-    /** The envelope edge behind the lot's front line (the envelope has its own vertex count now). */
-    envelopeFrontEdge: number
+    /**
+     * The envelope edge behind the lot's front line (the envelope has its own vertex count now);
+     * null with no envelope, or when no envelope edge faces the street.
+     */
+    envelopeFrontEdge: number | null
     /** The corner sight triangles (corner, leg end A, leg end B), site metres. */
     sightTriangles: Pt[][]
     /** Per-wall footprint bands of the lowest level, in SITE metres. */
@@ -331,7 +334,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       frontEdge,
       lot,
       envelope: [],
-      envelopeFrontEdge: 0,
+      envelopeFrontEdge: null,
       sightTriangles: [],
       footprintLoops,
       footprintBounds,
@@ -753,7 +756,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       frontEdge,
       lot,
       envelope,
-      envelopeFrontEdge: envelope.length >= 3 ? envelopeFrontEdge(lot, frontEdge, envelope) : 0,
+      envelopeFrontEdge: envelope.length >= 3 ? envelopeFrontEdge(lot, frontEdge, envelope) : null,
       sightTriangles,
       footprintLoops,
       footprintBounds,

@@ -22,6 +22,7 @@ import { CREATE_ROOM_CASES, FURNISH_ROOM_CASES } from './build-room-cases'
 import { PLACE_ITEMS_CASES } from './place-items-cases'
 import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
 import { FINISH_CASES } from './finish-cases'
+import { LOT_INFO_CASES } from './lot-info-cases'
 import { CREATE_ROOF_CASES, MOVE_ROOFS_CASES } from './roof-cases'
 import { ROOM_CASES } from './room-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
@@ -960,6 +961,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...CORNER_WINDOW_CASES,
   ...MERGE_WINDOWS_CASES,
   ...GET_SITE_CASES,
+  ...LOT_INFO_CASES,
   ...PLACE_BUILDING_CASES,
   ...SITE_LINE_CASES,
   ...SITE_VERIFY_CASES,

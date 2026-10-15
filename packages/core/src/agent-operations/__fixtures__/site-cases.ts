@@ -1,4 +1,6 @@
 import { siteBrief } from '../../lib/site-placement'
+import { encodeTerrainField } from '../../lib/terrain-codec'
+import { createTerrainField, quantize } from '../../lib/terrain-field'
 import {
   type AnyNode,
   BuildingNode,
@@ -19,7 +21,7 @@ import type { AgentToolCase, SceneGraph } from './cases'
 type Pt = [number, number]
 
 /** Links parents' children and returns the graph, sites as roots. */
-function scene(...nodes: AnyNode[]): SceneGraph {
+export function scene(...nodes: AnyNode[]): SceneGraph {
   const byId = Object.fromEntries(nodes.map((node) => [node.id, { ...node }])) as Record<
     string,
     AnyNode & { children?: string[] }
@@ -35,11 +37,11 @@ function scene(...nodes: AnyNode[]): SceneGraph {
   }
 }
 
-const site = (extra: Record<string, unknown> = {}) =>
+export const site = (extra: Record<string, unknown> = {}) =>
   SiteNode.parse({ id: 'site_lot', children: [], ...extra })
-const building = (extra: Record<string, unknown> = {}, id = 'building_main') =>
+export const building = (extra: Record<string, unknown> = {}, id = 'building_main') =>
   BuildingNode.parse({ id, parentId: 'site_lot', ...extra })
-const level = (buildingId = 'building_main', id = 'level_ground') =>
+export const level = (buildingId = 'building_main', id = 'level_ground') =>
   LevelNode.parse({ id, parentId: buildingId, level: 0, name: 'Ground', height: 2.8 })
 
 /** Four walls round a box from `[x0, z0]`, `w` along x and `d` along z. */
@@ -81,7 +83,7 @@ function turnedLot(centre: Pt, w: number, d: number, deg: number): Pt[] {
 // An 18 × 32 m parcel turned 20°, its centre at site [8, −6], front (edge 0) to the north, yards
 // 6 / 1.5 / 6 m; the building stands at [3, 0, 2]. The envelope is the parcel inset 6 m front and
 // rear, 1.5 m each side: 15 × 20 m round the same centre, which is [5, −8] in the level frame.
-const TILTED = {
+export const TILTED = {
   polygon: { type: 'polygon', points: turnedLot([8, -6], 18, 32, 20) },
   setbacks: { front: 6, side: 1.5, rear: 6 },
   setbacksSource: 'zoning-code',
@@ -91,7 +93,7 @@ const TILTED = {
 }
 
 // A 20 × 40 m lot along +z, its street on the north edge (edge 0, z = 0).
-const STRAIGHT = {
+export const STRAIGHT = {
   polygon: {
     type: 'polygon',
     points: [
@@ -105,7 +107,7 @@ const STRAIGHT = {
 }
 
 // A U-shaped lot: two arms 10 m wide, the notch x 10..20 above z = 10 not part of it.
-const U_LOT = {
+export const U_LOT = {
   polygon: {
     type: 'polygon',
     points: [
@@ -201,7 +203,8 @@ export const GET_SITE_CASES: AgentToolCase[] = [
   {
     name: 'the yards of a house, seen from the street',
     tool: 'get_site',
-    scene: () => scene(site(STRAIGHT), building(), level(), ...box('level_ground', 'h', [7, 7], 10, 12)),
+    scene: () =>
+      scene(site(STRAIGHT), building(), level(), ...box('level_ground', 'h', [7, 7], 10, 12)),
     input: {},
     expect: {
       result: {
@@ -249,7 +252,10 @@ export const GET_SITE_CASES: AgentToolCase[] = [
       ),
     input: {},
     expect: {
-      result: { street: { side: 'south', edge: 2 }, buildable: { state: 'setbacks', centre: [10, 18] } },
+      result: {
+        street: { side: 'south', edge: 2 },
+        buildable: { state: 'setbacks', centre: [10, 18] },
+      },
     },
   },
   {
@@ -260,6 +266,181 @@ export const GET_SITE_CASES: AgentToolCase[] = [
       scene(site(U_LOT), building(), level(), ...box('level_ground', 'h', [5, 15], 20, 10)),
     input: {},
     expect: { result: { footprint: { fit: 'outside', overhang: { lotM: 5 } } } },
+  },
+  {
+    name: "a terrain's fall over the lot counts a peak on a lot line, between the samples",
+    tool: 'get_site',
+    // a 3 × 3 field, 10 m apart, flat but for its middle sample at 10 m; no sample lies on the
+    // lot, whose east line passes 1 m short of that peak and rises to 9 m there
+    scene: () => {
+      const field = createTerrainField({ origin: [0, 0], spacing: 10, cols: 3, rows: 3 })
+      field.heights[4] = quantize(field, 10)
+      const lot = {
+        type: 'polygon',
+        points: [
+          [1, 1],
+          [9, 1],
+          [9, 19],
+          [1, 19],
+        ],
+      }
+      return scene(site({ polygon: lot, terrain: encodeTerrainField(field) }), building(), level())
+    },
+    input: {},
+    expect: { result: { ground: { state: 'sloped', reliefM: 9 } } },
+  },
+  {
+    name: 'a terrain far off the lot, its samples 10 nm apart: read over the field’s own lines',
+    tool: 'get_site',
+    // past the field heightAt holds its edge, so the lot's lines cross only the field's few grid
+    // lines, not the 10^24 between the lot and the field; the field's west column rises 2 m
+    scene: () => {
+      const field = createTerrainField({ origin: [1e16, 0], spacing: 1e-8, cols: 2, rows: 2 })
+      field.heights[2] = quantize(field, 2)
+      const terrain = encodeTerrainField(field)
+      return scene(site({ polygon: STRAIGHT.polygon, terrain }), building(), level())
+    },
+    input: {},
+    expect: { result: { ground: { state: 'sloped', reliefM: 2 } } },
+  },
+  {
+    name: 'a terrain finer than the coordinates can hold: the fall heightAt shows, not its samples',
+    tool: 'get_site',
+    // at 1e16 the coordinates step 2 m, so the middle sample (5 m), 10 nm from the field's west
+    // column, is at no point of the lot: the ground shows the flat columns either side of it
+    scene: () => {
+      const field = createTerrainField({ origin: [1e16, 0], spacing: 1e-8, cols: 3, rows: 3 })
+      field.heights[4] = quantize(field, 5)
+      const lot = {
+        type: 'polygon',
+        points: [
+          [1e16 - 4, -4],
+          [1e16 + 4, -4],
+          [1e16 + 4, 4],
+          [1e16 - 4, 4],
+        ],
+      }
+      return scene(site({ polygon: lot, terrain: encodeTerrainField(field) }), building(), level())
+    },
+    input: {},
+    expect: { result: { ground: { state: 'sloped', reliefM: 0 } } },
+  },
+  {
+    name: 'a lot widening away from its street: the front is the edge facing it, not the longer rear',
+    tool: 'get_site',
+    // 10 m on the street (z = 0) and 100 m at the back (z = 20), 1 m setbacks
+    scene: () =>
+      scene(
+        site({
+          polygon: {
+            type: 'polygon',
+            points: [
+              [0, 0],
+              [10, 0],
+              [55, 20],
+              [-45, 20],
+            ],
+          },
+          frontEdge: 0,
+          setbacks: { front: 1, side: 1, rear: 1 },
+        }),
+        building(),
+        level(),
+      ),
+    input: {},
+    expect: {
+      result: { street: { side: 'north', edge: 0 }, buildable: { frontEdge: 0 } },
+      mentions: ['9.6 m along the street'],
+    },
+  },
+  {
+    name: 'a narrow frontage the side setbacks take whole: no buildable edge faces the street',
+    tool: 'get_site',
+    // 2 m on the street (z = 0), 60 m at the back: 5 m side yards leave a triangle pointing at
+    // the street, its sides diagonal; neither is a front, though one is nearer the street
+    scene: () =>
+      scene(
+        site({
+          polygon: {
+            type: 'polygon',
+            points: [
+              [0, 0],
+              [2, 0],
+              [30, 40],
+              [-30, 40],
+            ],
+          },
+          frontEdge: 0,
+          setbacks: { front: 1, side: 5, rear: 1 },
+        }),
+        building(),
+        level(),
+      ),
+    input: {},
+    expect: {
+      result: {
+        street: { side: 'north', edge: 0, squareRotationDeg: 0 },
+        buildable: { state: 'setbacks', frontEdge: null },
+      },
+      mentions: ['no edge of it faces the street, so no frontage to build along'],
+    },
+  },
+  {
+    name: 'a site named, two buildings on it: read for the one viewed',
+    tool: 'get_site',
+    scene: () =>
+      scene(
+        site(STRAIGHT),
+        building(),
+        level(),
+        building({ position: [10, 0, 20] }, 'building_shed'),
+        level('building_shed', 'level_shed'),
+      ),
+    // MCP has no viewed level
+    context: { activeLevelId: 'level_shed' },
+    surfaces: ['core', 'chat'],
+    input: { site: 'site_lot' },
+    expect: {
+      result: {
+        siteId: 'site_lot',
+        buildingId: 'building_shed',
+        lot: {
+          ring: [
+            [-10, -20],
+            [10, -20],
+            [10, 20],
+            [-10, 20],
+          ],
+        },
+      },
+    },
+  },
+  {
+    name: 'a site named by an id no node has: refused',
+    tool: 'get_site',
+    scene: () => scene(site(STRAIGHT), building(), level()),
+    input: { site: 'site_missing' },
+    expect: { refusal: 'site_not_found' },
+  },
+  {
+    name: 'a site named by a node that is not one: refused',
+    tool: 'get_site',
+    scene: () => scene(site(STRAIGHT), building(), level()),
+    input: { site: 'building_main' },
+    expect: { refusal: 'not_a_site' },
+  },
+  {
+    name: 'a building and a site it does not stand on: refused',
+    tool: 'get_site',
+    scene: () =>
+      scene(
+        site(STRAIGHT),
+        SiteNode.parse({ id: 'site_b', children: [] }),
+        building({ parentId: 'site_b' }),
+        level(),
+      ),
+    input: { building: 'building_main', site: 'site_lot' },
+    expect: { refusal: 'building_not_on_site', mentions: ['stands on site_b'] },
   },
   {
     name: 'no site: refused',
@@ -291,8 +472,7 @@ export const PLACE_BUILDING_CASES: AgentToolCase[] = [
   {
     name: 'walls traced from a corner (the house off the bottom-left of the lot) stand centred',
     tool: 'place_building',
-    scene: () =>
-      scene(site(), building(), level(), ...box('level_ground', 'h', [-20, 1], 20, 26)),
+    scene: () => scene(site(), building(), level(), ...box('level_ground', 'h', [-20, 1], 20, 26)),
     input: {},
     expect: {
       result: { moved: true, position: [10, 0, -14], fit: 'buildable' },
@@ -489,7 +669,11 @@ export const PLACE_BUILDING_CASES: AgentToolCase[] = [
     name: 'replayed, yards with a new rotation move nothing',
     tool: 'place_building',
     scene: () =>
-      scene(site(STRAIGHT), building({ position: [10, 0, 5], rotation: [0, Math.PI / 2, 0] }), level()),
+      scene(
+        site(STRAIGHT),
+        building({ position: [10, 0, 5], rotation: [0, Math.PI / 2, 0] }),
+        level(),
+      ),
     input: {
       outline: [
         [-2, -2],
