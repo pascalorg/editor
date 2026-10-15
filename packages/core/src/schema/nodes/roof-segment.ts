@@ -638,6 +638,21 @@ export function getRoofSegmentDeckReach(
   return { x: raked ? half + finiteNonNegative(gable) : z, z }
 }
 
+/**
+ * The overhang at a segment's rakes, for the readers that size its ends by its overhang (gutters,
+ * lean-to attachments): its own `gableOverhang` on a gable, gambrel or shed that sets one, else its
+ * `overhang`, as every rake reached before.
+ */
+export function getRoofSegmentRakeOverhang(
+  segment: Pick<RoofSegmentNode, 'roofType'> &
+    Partial<Pick<RoofSegmentNode, 'overhang' | 'gableOverhang'>>,
+): number {
+  const gable = segment.gableOverhang
+  return roofTypeHasRakes(segment.roofType) && Number.isFinite(gable)
+    ? finiteNonNegative(gable)
+    : finiteNonNegative(segment.overhang)
+}
+
 export function getRoofSegmentVisibleTopBounds(
   segment: RoofSegmentNode,
 ): RoofSegmentVisibleTopBounds {

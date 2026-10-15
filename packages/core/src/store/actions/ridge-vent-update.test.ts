@@ -91,6 +91,44 @@ describe('roof segment default ridge vents', () => {
     ).toBe(true)
   })
 
+  test('regenerates default ridge vents when the gable overhang changes', () => {
+    const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_test' as never,
+      parentId: roof.id,
+      roofType: 'gable',
+      width: 12,
+      depth: 8,
+      gableOverhang: 0,
+    })
+    const defaults = createDefaultRidgeVentsForSegment(segment)
+    useScene.getState().setScene(
+      {
+        [roof.id]: { ...roof, children: [segment.id] } as AnyNode,
+        [segment.id]: { ...segment, children: defaults.map((vent) => vent.id) } as AnyNode,
+        ...Object.fromEntries(
+          defaults.map((vent) => [
+            vent.id,
+            { ...vent, parentId: segment.id, roofSegmentId: segment.id } as AnyNode,
+          ]),
+        ),
+      } as Record<AnyNodeId, AnyNode>,
+      [roof.id as AnyNodeId],
+    )
+
+    useScene
+      .getState()
+      .updateNode(segment.id as AnyNodeId, { gableOverhang: 0.9 } as Partial<AnyNode>)
+
+    const next = useScene.getState().nodes[segment.id as AnyNodeId] as RoofSegmentNode
+    const lengths = next.children
+      .map((id) => useScene.getState().nodes[id as AnyNodeId])
+      .flatMap((node) => (node?.type === 'ridge-vent' ? [node.length] : []))
+    const expected = createDefaultRidgeVentsForSegment(next).map((vent) => vent.length)
+    expect(lengths).toEqual(expected)
+    expect(lengths[0]).toBeGreaterThan(defaults[0]?.length ?? 0)
+  })
+
   test('does not regenerate default ridge vents when only trim changes', () => {
     const roof = RoofNode.parse({ id: 'roof_test' as never, children: [] })
     const segment = RoofSegmentNode.parse({

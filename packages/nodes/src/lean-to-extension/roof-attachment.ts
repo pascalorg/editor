@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   getLevelElevations,
+  getRoofSegmentRakeOverhang,
   getWallBaseElevationForNodes,
   getWallCurveFrameAt,
   getWallCurveLength,
@@ -80,7 +81,7 @@ function edgeEndpoints(
   segment: RoofSegmentNode,
   edge: LeanToRoofEdge,
 ): readonly [[number, number], [number, number]] {
-  const halfWidth = segment.width / 2 + Math.max(0, segment.overhang ?? 0)
+  const halfWidth = segment.width / 2 + getRoofSegmentRakeOverhang(segment)
   const halfDepth = segment.depth / 2 + Math.max(0, segment.overhang ?? 0)
   switch (edge) {
     case '+X':

@@ -14,11 +14,16 @@
  * thickness (6.5 in, the segment's default) puts their centre lines inside the faces.
  *
  * A plane call whose roof stood on its walls, or over them, is the same roof as a segment: same
- * outline, surface, ridge and thickness (`lift` 0). A plane call with its eave at the walls' tops,
- * the plugin's own and the likeliest, sank its roof into them: its slab's underside stood
- * `thickness / cos(pitch)` under the plate at the wall face. A segment is never sunk under the
- * walls it sits on (`eave_under_walls`): the replacement leaves the eave out and the roof sits on
- * them, the same outline, pitch and thickness, its surface `lift` higher.
+ * outline, surface, ridge and thickness (`lift` 0).
+ *
+ * Not reproduced, on purpose (no stored call made either, so each is a call a model could make):
+ * - A plane call with its eave at the walls' tops, the plugin's own and the likeliest, sank its roof
+ *   into them: its slab's underside stood `thickness / cos(pitch)` under the plate at the wall face.
+ *   A segment is never sunk under the walls it sits on (`eave_under_walls`); the replacement leaves
+ *   the eave out and the roof sits on them, the same outline, pitch and thickness, its surface
+ *   `lift` higher. Those rows say so.
+ * - Planes over a storey with another over it stood inside that storey; a segment refuses that
+ *   (`into_storey_above`). The hosted table checks the refusal.
  *
  * The viewer runs the segments through the roof geometry against the planes' own geometry
  * (`roof-plane-cases.test.ts`); the hosted plugin runs each replacement call through
