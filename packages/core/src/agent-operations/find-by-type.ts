@@ -16,7 +16,7 @@ import { pointInPolygon } from '../systems/slab/slab-support'
 import { requireLevel } from './level-target'
 import type { Vec2 } from './plan-geometry'
 import { levelIdOf } from './scene-queries'
-import type { AgentOperation, SceneNodes } from './types'
+import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
 type Vec3 = [number, number, number]
 
@@ -32,8 +32,11 @@ export type FindByTypeInput = {
 
 type Bounds = { min: Vec3; max: Vec3 }
 
-/** One result: a node, or a typed part of one, with its bounds in level coordinates when known. */
-type Found = Record<string, unknown> & { part?: string; bounds?: Bounds }
+/** One result: a node, or a typed part of one. */
+type Found = Record<string, unknown> & { part?: string }
+
+/** A result, with the middle of a part's bounds in its node's own frame when it has bounds. */
+type Match = { found: Found; at?: Vec3 }
 
 const round = (v: number) => Math.round(v * 1000) / 1000
 
@@ -154,12 +157,6 @@ function planPointOf(node: AnyNode, nodes: SceneNodes, frames: Map<string, Frame
     return centre ? [centre[0], centre[2]] : null
   }
   if (!Array.isArray(n.position)) return null
-  let frame: Frame
-  try {
-    frame = nodeLevelFrame(node.id, nodes, undefined, { cache: frames, planOnly: true })
-  } catch {
-    return null
-  }
   const local =
     node.type === 'block'
       ? boundsCentre3((node.topology?.vertices ?? []).map((vertex) => vertex.position as Vec3))
@@ -173,7 +170,23 @@ function planPointOf(node: AnyNode, nodes: SceneNodes, frames: Map<string, Frame
             }),
           )
         : null
-  const [x, , z] = transformPoint(frame, local ?? [0, 0, 0])
+  return framePoint(node, nodes, frames, local ?? [0, 0, 0])
+}
+
+/** A point of a node's own frame in its level's plan, through its hosts, turned in 3D first. */
+function framePoint(
+  node: AnyNode,
+  nodes: SceneNodes,
+  frames: Map<string, Frame>,
+  local: Vec3,
+): Vec2 | null {
+  let frame: Frame
+  try {
+    frame = nodeLevelFrame(node.id, nodes, undefined, { cache: frames, planOnly: true })
+  } catch {
+    return null
+  }
+  const [x, , z] = transformPoint(frame, local)
   return [x, z]
 }
 
@@ -194,8 +207,9 @@ function requireZone(nodes: SceneNodes, zoneId: string): ZoneNode {
 /**
  * What of a node's results stands in this zone: on the zone's level, a plan point inside its outline
  * and outside its holes, by the ray cast the editor's spatial grid uses (a closing vertex repeated,
- * or a zero-length edge, puts nothing inside). A part with bounds in its level stands at their
- * middle; anything else at its node's plan point, read only once the node is on the zone's level.
+ * or a zero-length edge, puts nothing inside). A part with bounds stands at their middle, through
+ * its node's frame and hosts; anything else at its node's plan point. Geometry is read only once the
+ * node is on the zone's level.
  */
 function zoneFilter(nodes: SceneNodes, zone: ZoneNode) {
   const zoneLevel = levelIdOf(nodes, zone.id)
@@ -206,19 +220,15 @@ function zoneFilter(nodes: SceneNodes, zone: ZoneNode) {
     point !== null &&
     pointInPolygon(point[0], point[1], outline) &&
     !holes.some((hole) => pointInPolygon(point[0], point[1], hole))
-  return (node: AnyNode, level: string | null, found: Found[]) => {
+  return (node: AnyNode, level: string | null, matches: Match[]) => {
     if (level !== zoneLevel) return []
     let planPoint: Vec2 | null | undefined
     const nodePoint = () => {
       if (planPoint === undefined) planPoint = planPointOf(node, nodes, frames)
       return planPoint
     }
-    return found.filter(({ bounds }) =>
-      inside(
-        bounds
-          ? [(bounds.min[0] + bounds.max[0]) / 2, (bounds.min[2] + bounds.max[2]) / 2]
-          : nodePoint(),
-      ),
+    return matches.filter(({ at }) =>
+      inside(at ? framePoint(node, nodes, frames, at) : nodePoint()),
     )
   }
 }
@@ -240,13 +250,20 @@ function recordsOf(node: AnyNode) {
 }
 
 /**
- * Whether a type word, or its singular, names anything find_by_type reads: a core kind or a
- * registered plugin kind anywhere, light, or a kind, an item category or a typed part in this scene.
+ * Whether a type word, or its singular, names anything find_by_type reads: a core kind, a plugin
+ * kind this runtime registered or the host checks (the hosted MCP knows its plugins' kinds without
+ * registering them), light, or a kind, an item category or a typed part in this scene.
  */
-function namesAnything(nodes: SceneNodes, names: Set<string>): boolean {
+function namesAnything(
+  nodes: SceneNodes,
+  names: Set<string>,
+  { nodeSchema }: AgentContext,
+): boolean {
   if (names.has('light')) return true
   const registered = [...nodeRegistry.entries()].map(([kind]) => kind.toLowerCase())
-  if ([...names].some((name) => CORE_KINDS.has(name) || registered.includes(name))) return true
+  const known = (name: string) =>
+    CORE_KINDS.has(name) || registered.includes(name) || Boolean(nodeSchema?.(name))
+  if ([...names].some(known)) return true
   return Object.values(nodes).some(
     (node) =>
       names.has(kindOf(node)) ||
@@ -263,7 +280,7 @@ function namesAnything(nodes: SceneNodes, names: Set<string>): boolean {
  * object stays the thing that is selected, moved and edited. Each result is the node's summary;
  * `get_node` reads it whole. Past `limit` results are counted, not listed.
  */
-export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
+export const findByType: AgentOperation<FindByTypeInput> = (nodes, input, context) => {
   const { levelId, parentId, zoneId } = input
   // A level, parent or zone that is not there is said, as get_zones says it, not answered with
   // nothing found: the agent could not tell a typo from an empty floor.
@@ -293,8 +310,8 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
       levelId: level,
       parentId: node.parentId ?? null,
     }
-    const whole = { ...found, ...recordsOf(node) }
-    let matched: Found[]
+    const whole = { found: { ...found, ...recordsOf(node) } }
+    let matched: Match[]
     if (names === undefined) matched = [whole]
     else {
       const typed = (isScriptedNode(node) ? (node.source?.manifest?.parts ?? []) : []).filter(
@@ -311,25 +328,35 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input) => {
         (item &&
           ([...names].some((name) => matchesWord(item.asset?.category, name)) ||
             (names.has('light') && emitsLight(node) && typedParts.length === 0)))
+      // A part's bounds are in its node's model frame, which the node's scale stretches.
+      const scale = (node as { scale?: Vec3 }).scale ?? [1, 1, 1]
       matched = wholeMatch
         ? [whole]
         : typedParts.map((part) => ({
-            ...found,
-            part: part.id,
-            partType: part.type,
-            ...(part.bounds && item && item.parentId === level
-              ? { bounds: boundsInLevel(item, part.bounds) }
-              : {}),
+            found: {
+              ...found,
+              part: part.id,
+              partType: part.type,
+              ...(part.bounds && item && item.parentId === level
+                ? { bounds: boundsInLevel(item, part.bounds) }
+                : {}),
+            },
+            ...(part.bounds && {
+              at: [0, 1, 2].map(
+                (axis) => ((part.bounds!.min[axis]! + part.bounds!.max[axis]!) / 2) * scale[axis]!,
+              ) as Vec3,
+            }),
           }))
     }
     // Where a node stands is read only for what matched: the zone test reads geometry.
-    if (matched.length > 0) results.push(...(inZone ? inZone(node, level, matched) : matched))
+    if (matched.length > 0)
+      results.push(...(inZone ? inZone(node, level, matched) : matched).map(({ found }) => found))
   }
-  if (names && results.length === 0 && !namesAnything(nodes, names)) {
+  if (names && results.length === 0 && !namesAnything(nodes, names, context)) {
     const kinds = [...new Set(Object.values(nodes).map(kindOf))].sort()
     refuse(
       'unknown_type',
-      `"${kind}" names nothing find_by_type reads: no node kind (core's or a registered plugin's), and no item category or part type in this scene. Kinds in this scene: ${kinds.join(', ')}.`,
+      `"${kind}" names nothing find_by_type reads: no node kind (core's or a plugin's this host knows), and no item category or part type in this scene. Kinds in this scene: ${kinds.join(', ')}.`,
       { type: kind, kinds },
     )
   }

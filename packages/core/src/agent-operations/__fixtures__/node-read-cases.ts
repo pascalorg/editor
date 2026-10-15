@@ -379,7 +379,10 @@ function crowdedScene(): SceneGraph {
   )
 }
 
-/** A porch across the kitchen's edge: one column in it, one 20 m off, and a beam between. */
+/**
+ * A porch across the kitchen's edge, its column in the zone, one 20 m off and a beam between, and a
+ * column post in the kitchen.
+ */
 function porchScene(): SceneGraph {
   const porch = authoredItem('item_porch', 'level_0', {
     name: 'Porch',
@@ -391,7 +394,29 @@ function porchScene(): SceneGraph {
     { id: 'far', type: 'column', bounds: { min: [19.8, 0, -0.2], max: [20.2, 3, 0.2] } },
     { id: 'beam', type: 'beam', bounds: { min: [0, 2.8, 0], max: [20, 3, 0.2] } },
   ] as never
-  return scene(kitchen(), porch)
+  return scene(
+    kitchen(),
+    porch,
+    ColumnNode.parse({ id: 'column_post', parentId: 'level_0', position: [1, 0, 1] }),
+  )
+}
+
+/**
+ * A porch tipped a quarter turn about X, 3 m up: a column whose model middle is 8 m along its z
+ * stands half a metre from the kitchen's middle, one 20 m along x stays off.
+ */
+function pitchedPorchScene(): SceneGraph {
+  const porch = authoredItem('item_pitched', 'level_0', {
+    name: 'Pitched porch',
+    category: 'porch',
+    size: [21, 3, 9],
+  })
+  porch.source!.manifest.parts = [
+    { id: 'near', type: 'column', bounds: { min: [-0.2, 0, 7.8], max: [0.2, 1, 8.2] } },
+    { id: 'far', type: 'column', bounds: { min: [19.8, 0, -0.2], max: [20.2, 1, 0.2] } },
+    { id: 'beam', type: 'beam', bounds: { min: [0, 0, 0], max: [20, 0.2, 0.2] } },
+  ] as never
+  return scene(kitchen(), { ...porch, position: [0, 3, 0], rotation: [Math.PI / 2, 0, 0] } as never)
 }
 
 /** A room zone with a courtyard cut out of it, a wall in the courtyard and one in the room. */
@@ -676,10 +701,10 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'find_nodes { type: column } on a scene of 250 columns (all 250): all of them, with a limit that covers them',
+    name: 'find_nodes { type: column } on a scene of 250 columns (all 250): all of them with limit 250, not truncated',
     tool: 'find_by_type',
     scene: crowdedScene,
-    input: { type: 'column', limit: 1000 },
+    input: { type: 'column', limit: 250 },
     expect: {
       result: { count: 250 },
       check: (result) => [...lists(250)(result), ...(result.truncated ? ['truncated'] : [])],
@@ -693,15 +718,32 @@ export const FIND_NODES_CASES: AgentToolCase[] = [
     expect: { result: { count: 250, truncated: true }, check: lists(3) },
   },
   find(
-    "find_by_type { type: column, zoneId } on a porch across the zone's edge (new, find_nodes found no parts): its column in the zone, by the part's own bounds, not the one 20 m off",
+    "find_by_type { type: column, zoneId } on a porch across the zone's edge (new, find_nodes found no parts): the post and the porch's column in the zone, by the part's own bounds, not the one 20 m off",
     porchScene,
+    { type: 'column', zoneId: 'zone_kitchen' },
+    ['column_post'],
+    {
+      result: { count: 2, nodes: 1, parts: 1 },
+      contains: [{ id: 'item_porch', part: 'near', partType: 'column' }],
+    },
+  ),
+  find(
+    'find_by_type { type: column, zoneId } on a porch tipped about X (new): its column where the tilt puts it, not the one 20 m off',
+    pitchedPorchScene,
     { type: 'column', zoneId: 'zone_kitchen' },
     [],
     {
       result: { count: 1, parts: 1 },
-      contains: [{ id: 'item_porch', part: 'near', partType: 'column' }],
+      contains: [{ id: 'item_pitched', part: 'near', partType: 'column' }],
     },
   ),
+  {
+    name: 'find_by_type { type: column, limit: 2 } on the porch and the post (new): two listed, the count of the node and both parts, truncated',
+    tool: 'find_by_type',
+    scene: porchScene,
+    input: { type: 'column', limit: 2 },
+    expect: { result: { count: 3, nodes: 1, parts: 2, truncated: true }, check: lists(2) },
+  },
   find(
     'find_nodes { type: wall, zoneId } of a zone with a hole (a wall in the courtyard): the wall in the room alone',
     courtyardScene,
@@ -1001,9 +1043,16 @@ export const DESCRIBE_NODE_CASES: AgentToolCase[] = [
     undefined,
     ['does not read'],
   ),
-  get('describe_node childrenIds of a wall (its door and window): node.children', 'wall_host', {
-    node: { children: ['door_host', 'window_host'] },
-  }),
+  {
+    name: 'describe_node childrenIds of a wall (its door and window): node.children, and no missingChildIds',
+    tool: 'get_node',
+    scene: describedScene,
+    input: { id: 'wall_host' },
+    expect: {
+      result: { node: { children: ['door_host', 'window_host'] } },
+      check: (result) => ('missingChildIds' in result ? ['missingChildIds on a whole wall'] : []),
+    },
+  },
   get(
     'describe_node on a wall whose stored children name a door not in the scene (childrenIds [], properties.children as stored): node.children as stored, missingChildIds names it',
     'wall_tall',
