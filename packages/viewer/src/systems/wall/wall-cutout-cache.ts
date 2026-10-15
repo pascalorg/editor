@@ -119,6 +119,8 @@ export type WallCutoutViewerStore = { getState: () => WallCutoutViewerState }
 export class WallCutoutCache {
   readonly walls = new Map<string, CachedWall>()
   readonly rebuilt = new Set<string>()
+  /** Walls whose palette waits for a preview to give back their groups (see `mayAssign`). */
+  private readonly deferred = new Set<string>()
   private viewer: WallCutoutViewerState | undefined
   private nodes: ReturnType<typeof useScene.getState>['nodes'] | undefined
   private materials: ReturnType<typeof useScene.getState>['materials'] | undefined
@@ -201,6 +203,11 @@ export class WallCutoutCache {
         : null
     const releasedPreview = previewId(previous) === previewId(viewer) ? null : previewId(previous)
     this.viewer = viewer
+    for (const id of this.deferred.size > 0 ? Array.from(this.deferred) : []) {
+      this.deferred.delete(id)
+      const wall = this.walls.get(id)
+      if (wall) this.apply(wall, viewer.wallMode, false)
+    }
     const invalidated =
       overridesChanged ||
       appearanceChanged ||
@@ -408,12 +415,34 @@ export class WallCutoutCache {
         wall.mesh.material !== variant.materials &&
         !sameMaterialArray(wall.mesh.material, variant.materials)
       ) {
+        if (!this.mayAssign(wall, variant.materials)) {
+          wall.variantKey = undefined
+          return
+        }
         wall.mesh.material = variant.materials
       }
       wall.variantKey = variant.key
       wall.assignedMaterials = wall.mesh.material
     } else if (wall.mesh.material !== wall.assignedMaterials) {
+      if (!this.mayAssign(wall, wall.assignedMaterials!)) return
       wall.mesh.material = wall.assignedMaterials!
     }
+  }
+
+  /**
+   * A paint preview spread over several walls (a room, all matching) regroups
+   * each wall's faces onto its own longer array, but only the hovered wall is
+   * known here as a preview's owner. A palette that cannot draw the groups the
+   * mesh wears now waits for the preview's restore to put them back: the mesh
+   * would otherwise keep groups with no material, and every raycast over it
+   * throws on `material.side`.
+   */
+  private mayAssign(wall: CachedWall, materials: Material | Material[]): boolean {
+    if (hasMaterialsForGroups(wall.mesh, materials) || !hasMaterialsForGroups(wall.mesh)) {
+      this.deferred.delete(wall.node.id)
+      return true
+    }
+    this.deferred.add(wall.node.id)
+    return false
   }
 }
