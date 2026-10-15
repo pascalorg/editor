@@ -119,9 +119,7 @@ extendPluginDiscovery(async () => {
   return [bathSpacePlugin]
 })
 extendPluginDiscovery(async () => {
-  const { streetscapeHostPanel, streetscapePlugin } = await import(
-    '@pascal-app/plugin-streetscape-lab'
-  )
+  const { streetscapeHostPanel, streetscapePlugin } = await import('@pascal-app/plugin-streetscape')
   registerEditorHostPanel({
     ...streetscapeHostPanel,
     creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },

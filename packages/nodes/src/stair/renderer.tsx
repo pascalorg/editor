@@ -165,6 +165,10 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
     [baseRailingMaterial, node, sceneMaterials, shading, textures],
   )
 
+  const onLevel = useScene((state) =>
+    node.parentId ? state.nodes[node.parentId as AnyNodeId]?.type === 'level' : true,
+  )
+
   // Each flight contributes tread and body material groups to the merged mesh.
   const straightPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(2), [])
 
@@ -176,7 +180,11 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
 
   return (
     <group
-      position={node.position}
+      position-x={node.position[0]}
+      // On a level the stair system lifts the stair onto its slabs (#216); under any other
+      // parent (a deck) its stored Y is its height, and binding it here keeps a remount right.
+      {...(onLevel ? {} : { 'position-y': node.position[1] })}
+      position-z={node.position[2]}
       ref={ref}
       rotation-y={node.rotation}
       visible={node.visible}

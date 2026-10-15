@@ -556,6 +556,14 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
   }
 }
 
+function dropFenceSurfaceHost() {
+  const editor = useEditor.getState()
+  const defaults = editor.toolDefaults.fence
+  if (typeof defaults?.supportSurfaceNodeId !== 'string') return
+  const { supportSurfaceNodeId: _host, ...unhosted } = defaults
+  editor.setToolDefaults('fence', unhosted)
+}
+
 export const FenceTool: React.FC = () => {
   const levelId = useViewer((state) => state.selection.levelId)
   const levelMode = useViewer((state) => state.levelMode)
@@ -567,11 +575,12 @@ export const FenceTool: React.FC = () => {
     levelId ? getLevelPresentationY(levelId, state.nodes, levelMode) : 0,
   )
   const draftKey = `${levelId}:${floorY}`
+  // A surface host (a deck's railing) holds for one drawing session on its floor: leaving the
+  // floor or the tool drops it, and the fence tool draws plain fences again.
   useEffect(() => {
-    if (typeof hostId === 'string' && hostParentId !== levelId) {
-      useEditor.getState().setTool(null)
-    }
+    if (typeof hostId === 'string' && hostParentId !== levelId) dropFenceSurfaceHost()
   }, [hostId, levelId, hostParentId])
+  useEffect(() => dropFenceSurfaceHost, [])
   const fenceMode = useEditor((s) => s.continuationByContext.fence)
   const feature = useEditor((s) => s.toolDefaults.fence?.featurePlacement)
   if (feature === 'gate' || feature === 'opening') return <FenceFeatureTool kind={feature} />

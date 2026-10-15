@@ -41,7 +41,7 @@
         "@pascal-app/plugin-environment": "github:AxiomeCG/environment#1aa0bc3cbed273dbf751e9af79e446f6de105c90",
         "@pascal-app/plugin-landscape": "github:sudhir9297/pascal-cluster#c7f555a89863fae67400a915d25c74e132f17472",
         "@pascal-app/plugin-pool": "github:sudhir9297/pool-pascal-plugin#b8e408121feae51d91c89f7efe16f9d8f795cb49",
-        "@pascal-app/plugin-streetscape-lab": "github:sudhir9297/pascal-cluster#54095f28938a23f57c538c72eb8f94808fb2569c",
+        "@pascal-app/plugin-streetscape": "github:wass08/streetscape-pascal-plugin#c4c012ead949f64aca7ffc3d2a310896f8a231ad",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
         "@radix-ui/react-tooltip": "^1.4.1",
@@ -842,7 +842,7 @@
 
     "@pascal-app/plugin-pool": ["@pascal-app/plugin-pool@github:sudhir9297/pool-pascal-plugin#b8e4081", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/editor": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/viewer": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.186.0", "zod": "^4", "zustand": "^5" } }, "sudhir9297-pool-pascal-plugin-b8e4081", "sha512-tlsIyYUCLFqxBUr2WOBAp6vOLrgkHF+PuBlWTPTgoAMZNN435cwKzPfmzul5xl4FMQC3TZnC7G0oFpK0HXoiwQ=="],
 
-    "@pascal-app/plugin-streetscape-lab": ["@pascal-app/plugin-streetscape-lab@github:sudhir9297/pascal-cluster#54095f2", { "dependencies": { "lucide-react": "^1.41.0", "maplibre-gl": "^6.7.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-pascal-cluster-54095f2", "sha512-qil4Uw8f7CACZRlzlkiG0G2NEySThyZ4VdD9GcPGJVaTtvi0nnEoeoGi1ndxtTuGBDQGa3NXzVhKtj+4BIEWiA=="],
+    "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:wass08/streetscape-pascal-plugin#c4c012e", { "dependencies": { "lucide-react": "^1.41.0", "maplibre-gl": "^6.7.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "wass08-streetscape-pascal-plugin-c4c012e", "sha512-jMkNWIlhlUSQCFcjjqWWpkTnxWyF8HoFQqIQ6FozhdDiRkCgvdtgCWDGMD8w4DMEgSEBwEiMhCuEGm3kjMtWXA=="],
 
     "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c", "sha512-16VzWot1oadvxCPqsRwMJbaP0a3u5FESFy7F7++pY5wAAFq9JTFwzHvKAsllrY5TZ5TJ7Y5vSqvbmQk8sy8HaA=="],
 

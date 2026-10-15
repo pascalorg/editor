@@ -33,10 +33,13 @@ import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
  * scene once via `commit()`.
  */
 export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
-  node,
+  node: picked,
   nodes,
   sceneApi,
 }) => {
+  // The stair as the scene holds it now: a surface it sits on may have re-hosted it since
+  // it was picked up.
+  const node = (nodes[picked.id] as StairNode | undefined) ?? picked
   const startY = node.position[1]
   const resolveCursor = createFloorplanCursorResolver({
     original: [node.position[0], node.position[2]],

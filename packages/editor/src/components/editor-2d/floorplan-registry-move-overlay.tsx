@@ -82,15 +82,12 @@ const ALIGNMENT_THRESHOLD_M = 0.08
  */
 export function FloorplanRegistryMoveOverlay() {
   const source = useMovingNode()
-  const currentStair = useScene((state) =>
-    source?.type === 'stair' ? state.nodes[source.id] : undefined,
-  )
   const movingNode = useMemo(
     () =>
-      source && (source.type === 'stair' || isInteractionSubtreeDraft(source.id))
-        ? (currentStair ?? useScene.getState().nodes[source.id] ?? source)
+      source && isInteractionSubtreeDraft(source.id)
+        ? (useScene.getState().nodes[source.id] ?? source)
         : source,
-    [source, currentStair],
+    [source],
   )
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
@@ -952,9 +949,6 @@ export function FloorplanRegistryMoveOverlay() {
           {
             position: [sx, oldY, sz],
             ...rotationPatch,
-            ...(movingNode.type === 'stair' && movingNode.landscapeSurfaceId
-              ? { landscapeSurfaceId: undefined }
-              : {}),
           } as Partial<AnyNode>,
         )
       }
