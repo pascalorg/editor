@@ -285,6 +285,8 @@ export {
   getDutchRoofMetrics,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
+  getRoofSegmentDeckReach,
+  getRoofSegmentEndReach,
   getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
   getSegmentFasciaMaterial,
@@ -297,6 +299,7 @@ export {
   RoofSegmentNode,
   RoofSegmentTrim,
   RoofType,
+  roofTypeHasRakes,
 } from './nodes/roof-segment'
 export type {
   DutchRoofShapeMetrics,

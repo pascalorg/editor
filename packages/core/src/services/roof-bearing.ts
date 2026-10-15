@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   getConicalRoofCoverage,
+  getRoofSegmentDeckReach,
   getSegmentSlopeFrame,
   type LevelNode,
   type SlabNode,
@@ -61,14 +62,14 @@ export function wallSpans(nodes: Nodes, levelId: string): Map<string, WallSpan> 
   )
 }
 
-/** A roof mass in plan: its centre, turn and half sizes at the wall centre lines, how far its eaves reach past them, its form and how high it peaks over its eave. */
+/** A roof mass in plan: its centre, turn and half sizes at the wall centre lines, how far its deck reaches past them along its ridge and across it, its form and how high it peaks over its eave. */
 export type RoofShape = {
   cx: number
   cz: number
   yaw: number
   hw: number
   hd: number
-  reach: number
+  reach: { x: number; z: number }
   roofType: string
   peak: number
   /** A cone clipped to a sector, in its own frame (radians); none for a full cone. */
@@ -93,7 +94,7 @@ export function shapeOfRect(
     yaw: ridgeAxis === 'x' ? 0 : -Math.PI / 2,
     hw: width / 2,
     hd: depth / 2,
-    reach: 0,
+    reach: { x: 0, z: 0 },
     roofType,
     peak: getSegmentSlopeFrame({ roofType, pitch: pitchDeg, width, depth } as never).activeRh,
   }
@@ -113,7 +114,7 @@ export function segmentShape(nodes: Nodes, segmentId: string): RoofShape | null 
     yaw: roof.rotation + segment.rotation,
     hw: segment.width / 2,
     hd: segment.depth / 2,
-    reach: segment.wallThickness / 2 + segment.overhang * frame.cosTheta,
+    reach: getRoofSegmentDeckReach(segment),
     roofType: segment.roofType,
     peak: frame.activeRh,
     ...(coverage && !coverage.fullCircle

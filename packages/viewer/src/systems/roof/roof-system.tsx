@@ -7,6 +7,7 @@ import {
   getEffectiveNode,
   getRoofModuleFaces,
   getRoofPlanBounds,
+  getRoofSegmentDeckReach,
   getRoofSegmentSurfaceY,
   getRoofShapeInsets,
   getRoofShapeRatios,
@@ -1276,7 +1277,12 @@ function buildSegmentTrimCutBrushes(segment: RoofSegmentNode): Brush[] {
 
   const { activeRh } = getSegmentSlopeFrame(segment)
   const extra =
-    segment.wallThickness + segment.overhang + segment.deckThickness + segment.shingleThickness + 2
+    segment.wallThickness +
+    segment.overhang +
+    (segment.gableOverhang ?? 0) +
+    segment.deckThickness +
+    segment.shingleThickness +
+    2
   const minX = -segment.width / 2 - extra
   const maxX = segment.width / 2 + extra
   const minZ = -segment.depth / 2 - extra
@@ -1429,7 +1435,7 @@ const FASCIA_MATERIAL_INDEX = 2
  */
 function buildFasciaBoards(
   node: RoofSegmentNode,
-  deckExt: number,
+  reach: { x: number; z: number },
   eaveTopY: number,
   tanTheta: number,
 ): THREE.BufferGeometry | null {
@@ -1439,9 +1445,9 @@ function buildFasciaBoards(
   // A flat roof's boards sized on purpose reach its top, over the membrane's edge: a coping band.
   const flatTopY = node.fasciaHeight !== undefined ? eaveTopY + node.shingleThickness : eaveTopY
   const out = bt / 2 - FASCIA_EMBED
-  const halfD = depth / 2 + deckExt
+  const halfD = depth / 2 + reach.z
   const zE = halfD + out
-  const xE = width / 2 + deckExt + out
+  const xE = width / 2 + reach.x + out
   // the eave boards run through the corners to the rake / side boards'
   // outer faces (a lapped return, no notch at the corner)
   const xL = xE + bt / 2
@@ -1529,16 +1535,8 @@ export function getRoofSegmentBrushes(
   node: RoofSegmentNode,
   options: { fascia?: boolean } = {},
 ): RoofSegmentBrushSet | null {
-  const {
-    roofType,
-    width,
-    depth,
-    wallHeight,
-    wallThickness,
-    deckThickness,
-    overhang,
-    shingleThickness,
-  } = node
+  const { roofType, width, depth, wallHeight, wallThickness, deckThickness, shingleThickness } =
+    node
   const conicalCoverage = getConicalRoofCoverage(node)
 
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(node)
@@ -1558,6 +1556,7 @@ export function getRoofSegmentBrushes(
   const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
 
   const plateSeated = wallHeight <= 0
+  // `xExt`: how far the volume reaches along x, where a gable's rakes are; the eaves' `wExt` else.
   const getVol = (
     wExt: number,
     vOffset: number,
@@ -1566,8 +1565,9 @@ export function getRoofSegmentBrushes(
     isVoid: boolean,
     materialRule?: (normal: THREE.Vector3) => number,
     onPlate = false,
+    xExt = wExt,
   ) => {
-    const wV = Math.max(0.01, width + 2 * wExt)
+    const wV = Math.max(0.01, width + 2 * xExt)
     const dV = Math.max(0.01, depth + 2 * wExt)
 
     const autoDrop = wExt * tanTheta
@@ -1616,8 +1616,8 @@ export function getRoofSegmentBrushes(
   const wallGeo = getVol(wallThickness / 2, 0, 0, 0, false, undefined, true)
   const innerGeo = getVol(-wallThickness / 2, 0, -5, 2, false, undefined, true)
 
-  const horizontalOverhang = overhang * cosTheta
-  const deckExt = wallThickness / 2 + horizontalOverhang
+  const reach = getRoofSegmentDeckReach(node)
+  const deckExt = reach.z
 
   // A shed's deck and shingle edges take the wall/trim slot, unless it wears
   // fascia boards: then they are fascia like a gable's, in the deck slot.
@@ -1625,20 +1625,29 @@ export function getRoofSegmentBrushes(
   const shedRoofSideMaterialRule = shedEdgesInTrimSlot
     ? (normal: THREE.Vector3) => (normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX)
     : undefined
-  const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false, shedRoofSideMaterialRule)
-  const deckBotGeo = getVol(deckExt, 0, -5, 0, true)
+  const deckTopGeo = getVol(
+    deckExt,
+    verticalRt,
+    0,
+    1,
+    false,
+    shedRoofSideMaterialRule,
+    false,
+    reach.x,
+  )
+  const deckBotGeo = getVol(deckExt, 0, -5, 0, true, undefined, false, reach.x)
   // the deck's top edge at its outer plane, as `getVol` puts it
   const deckEaveDrop = deckExt * tanTheta
   const deckEaveTopY =
     plateSeated && deckEaveDrop > 0
       ? wallHeight - deckEaveDrop + verticalRt
       : Math.max(0.05, wallHeight - deckEaveDrop + verticalRt)
-  const fasciaGeo = options.fascia ? buildFasciaBoards(node, deckExt, deckEaveTopY, tanTheta) : null
+  const fasciaGeo = options.fascia ? buildFasciaBoards(node, reach, deckEaveTopY, tanTheta) : null
 
   const stSin = shingleThickness * sinTheta
   const stCos = shingleThickness * cosTheta
 
-  const shinBotW = Math.max(0.01, width + 2 * deckExt)
+  const shinBotW = Math.max(0.01, width + 2 * reach.x)
   const shinBotD = Math.max(0.01, depth + 2 * deckExt)
 
   const deckDrop = deckExt * tanTheta
@@ -1795,7 +1804,7 @@ export function getRoofSegmentBrushes(
   const deckTopBrush = toBrush(deckTopGeo)
   const deckBotBrush = toBrush(deckBotGeo)
   if (deckBotBrush) {
-    const wV = Math.max(0.01, width + 2 * deckExt)
+    const wV = Math.max(0.01, width + 2 * reach.x)
     const dV = Math.max(0.01, depth + 2 * deckExt)
     deckBotBrush.scale.set(1 + eps / wV, 1, 1 + eps / dV)
     deckBotBrush.updateMatrixWorld()
@@ -4084,16 +4093,7 @@ export function getRoofOuterSurfaceFrameAtPoint(
   lx: number,
   lz: number,
 ): SurfaceFrame {
-  const {
-    roofType,
-    width,
-    depth,
-    wallHeight,
-    wallThickness,
-    deckThickness,
-    overhang,
-    shingleThickness,
-  } = segment
+  const { roofType, width, depth, wallHeight, deckThickness, shingleThickness } = segment
 
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
 
@@ -4105,13 +4105,13 @@ export function getRoofOuterSurfaceFrameAtPoint(
   }
 
   const verticalRt = deckThickness / cosTheta
-  const horizontalOverhang = overhang * cosTheta
-  const deckExt = wallThickness / 2 + horizontalOverhang
+  const reach = getRoofSegmentDeckReach(segment)
+  const deckExt = reach.z
 
   const stSin = shingleThickness * sinTheta
   const stCos = shingleThickness * cosTheta
 
-  const shinBotW = Math.max(0.01, width + 2 * deckExt)
+  const shinBotW = Math.max(0.01, width + 2 * reach.x)
   const shinBotD = Math.max(0.01, depth + 2 * deckExt)
   const deckDrop = deckExt * tanTheta
   const shinBotWh = wallHeight - deckDrop + verticalRt
