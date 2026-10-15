@@ -290,6 +290,54 @@ export const GET_SITE_CASES: AgentToolCase[] = [
     expect: { result: { ground: { state: 'sloped', reliefM: 9 } } },
   },
   {
+    name: 'a lot widening away from its street: the front is the edge facing it, not the longer rear',
+    tool: 'get_site',
+    // 10 m on the street (z = 0) and 100 m at the back (z = 20), 1 m setbacks
+    scene: () =>
+      scene(
+        site({
+          polygon: {
+            type: 'polygon',
+            points: [
+              [0, 0],
+              [10, 0],
+              [55, 20],
+              [-45, 20],
+            ],
+          },
+          frontEdge: 0,
+          setbacks: { front: 1, side: 1, rear: 1 },
+        }),
+        building(),
+        level(),
+      ),
+    input: {},
+    expect: {
+      result: { street: { side: 'north', edge: 0 }, buildable: { frontEdge: 0 } },
+      mentions: ['9.6 m along the street'],
+    },
+  },
+  {
+    name: 'a site named by a node that is not one: refused',
+    tool: 'get_site',
+    scene: () => scene(site(STRAIGHT), building(), level()),
+    input: { site: 'building_main' },
+    expect: { refusal: 'not_a_site' },
+  },
+  {
+    name: 'a building and a site it does not stand on: refused',
+    tool: 'get_site',
+    scene: () =>
+      scene(
+        site(STRAIGHT),
+        SiteNode.parse({ id: 'site_b', children: [] }),
+        building({ parentId: 'site_b' }),
+        level(),
+      ),
+    input: { building: 'building_main', site: 'site_lot' },
+    expect: { refusal: 'building_not_on_site', mentions: ['stands on site_b'] },
+  },
+  {
     name: 'no site: refused',
     tool: 'get_site',
     scene: () => scene(BuildingNode.parse({ id: 'building_main' }), level()),

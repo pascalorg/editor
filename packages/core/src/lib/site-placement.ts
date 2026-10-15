@@ -82,7 +82,10 @@ export type SiteGround = {
    * `unread`: no terrain was read, and the ground is flat until one is.
    */
   state: 'sloped' | 'flat' | 'unread'
-  /** The fall across the lot, top to bottom; null while unread. */
+  /**
+   * Sloped: the terrain's fall across the lot, top to bottom. Flat: the read's own figure, over
+   * the grid it sampled round the lot. Null while unread.
+   */
   reliefM: number | null
 }
 
@@ -326,6 +329,8 @@ export function edgeFronts(ring: readonly Pt[]): EdgeFront[] {
  * crosses a triangle's edge: a grid line (u or v whole, in samples) or a diagonal (u + v whole).
  */
 function terrainFall(field: TerrainField, lot: readonly Pt[]): number {
+  // a field a single sample wide is its first sample everywhere, as heightAt reads it
+  if (field.cols < 2 || field.rows < 2) return 0
   const [ox, oz] = field.origin
   const s = field.spacing
   let low = Number.POSITIVE_INFINITY
@@ -663,15 +668,11 @@ export function lotOverhang(
   return { fit: 'outside', overhangM: round(past.reachM), sides: past.sides }
 }
 
-/**
- * The site a building stands on, in that building's level coordinates. The building is the one
- * named, else the named level's, else the scene's only one, else the site's first; null when the
- * scene has no site with a lot.
- */
-export function siteBrief(
+/** The building a brief is read for, and the site it stands on (the scene's first site for none). */
+function forBuilding(
   nodes: Nodes,
-  target: { buildingId?: string | null; levelId?: string | null } = {},
-): SiteBrief | null {
+  target: { buildingId?: string | null; levelId?: string | null },
+): { building: BuildingNode | null; stored: SiteNode | null } {
   const resolved = resolveSiteBuilding(nodes, target)
   let building = resolved.building
   if (!building && resolved.ambiguous) {
@@ -679,7 +680,35 @@ export function siteBrief(
     const first = site?.children?.map((id) => nodes[id]).find((node) => node?.type === 'building')
     building = (first as BuildingNode | undefined) ?? buildingsOf(nodes)[0] ?? null
   }
-  const stored = siteOfBuilding(nodes, building)
+  return { building, stored: siteOfBuilding(nodes, building) }
+}
+
+/** A site named by its id, and the first building standing on it (none on a vacant lot). */
+function onSite(
+  nodes: Nodes,
+  siteId: string,
+): { building: BuildingNode | null; stored: SiteNode | null } {
+  const site = nodes[siteId]
+  if (site?.type !== 'site') return { building: null, stored: null }
+  return {
+    building: buildingsOf(nodes).find((building) => building.parentId === site.id) ?? null,
+    stored: site,
+  }
+}
+
+/**
+ * The site a building stands on, in that building's level coordinates. The building is the one
+ * named, else the named level's, else the scene's only one, else the site's first; or the site
+ * is named, and the building is the first standing on it. In site coordinates when no building
+ * stands on it; null when the scene has no site with a lot.
+ */
+export function siteBrief(
+  nodes: Nodes,
+  target: { buildingId?: string | null; levelId?: string | null; siteId?: string | null } = {},
+): SiteBrief | null {
+  const { building, stored } = target.siteId
+    ? onSite(nodes, target.siteId)
+    : forBuilding(nodes, target)
   if (!stored) return null
   const site = readSiteNode(stored)
   const siteRing = ((site.polygon?.points ?? []) as P[]).map((p) => [p[0], p[1]] as P)
@@ -1181,7 +1210,7 @@ export function describeSiteBrief(brief: SiteBrief): string[] {
     ground.state === 'sloped'
       ? `ground: sloped, ${num(ground.reliefM ?? 0)} m of fall across the lot`
       : ground.state === 'flat'
-        ? `ground: flat (read: ${num(ground.reliefM ?? 0)} m of fall across the lot)`
+        ? `ground: read flat (${num(ground.reliefM ?? 0)} m of fall over the grid read round the lot)`
         : 'ground: not read, flat until it is',
   )
 

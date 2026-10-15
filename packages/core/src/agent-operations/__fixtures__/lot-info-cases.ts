@@ -1,5 +1,6 @@
 import { encodeTerrainField } from '../../lib/terrain-codec'
 import { createTerrainField, quantize } from '../../lib/terrain-field'
+import { SiteNode } from '../../schema'
 import type { AgentToolCase, SceneGraph } from './cases'
 import { building, level, STRAIGHT, scene, site, TILTED, U_LOT } from './site-cases'
 
@@ -23,9 +24,12 @@ import { building, level, STRAIGHT, scene, site, TILTED, U_LOT } from './site-ca
  * `result` states get_site's own numbers.
  *
  * Where they differ: get_site lists every edge, not the first six; it says whether the street is
- * recorded (`street` null while the front is the north-facing guess lot_info took silently); and
- * on a sloped lot it gives the fall of the terrain across the lot, where lot_info printed the lot
- * drop-in's figure over the grid it sampled, which reaches past the lot.
+ * recorded (`street` null while the front is the north-facing guess lot_info took silently); on a
+ * sloped lot it gives the fall of the terrain across the lot, where lot_info printed the lot
+ * drop-in's figure over the grid it sampled, which reaches past the lot; it reads the site the
+ * house stands on, or the one named, where lot_info read the scene's first; and on a lot that
+ * widens away from its street its front is the edge facing the street, where lot_info named the
+ * longer rear (get_site's own cases, in site-cases.ts).
  */
 
 type LotInfoRead = {
@@ -494,7 +498,7 @@ export const LOT_INFO_CASES: AgentToolCase[] = [
     house({ ...STRAIGHT_PARCEL, metadata: { terrainSample: { reliefFt: 0.2, flat: true } } }),
     { ...STRAIGHT_FEET, terrain: 'read flat' },
     { ground: { state: 'flat', reliefM: 0.06 } },
-    { mentions: ['ground: flat (read: 0.1 m of fall across the lot)'] },
+    { mentions: ['ground: read flat (0.1 m of fall over the grid read round the lot)'] },
   ),
   covers(
     'a lot with no building on it yet, in site coordinates',
@@ -520,6 +524,20 @@ export const LOT_INFO_CASES: AgentToolCase[] = [
     { ...STRAIGHT_FEET, terrain: NOT_READ },
     { buildingId: 'building_shed', buildable: { ...STRAIGHT_BUILDABLE, frontEdge: 0 } },
     { input: { building: 'building_shed' } },
+  ),
+  covers(
+    'two sites, the house on the second: the first, vacant, read by its id',
+    // lot_info read the scene's first site whichever the house stood on
+    () =>
+      scene(
+        site(STRAIGHT_PARCEL),
+        SiteNode.parse({ id: 'site_b', children: [] }),
+        building({ parentId: 'site_b' }),
+        level(),
+      ),
+    { ...STRAIGHT_FEET, terrain: NOT_READ, address: '12 Elm St, Davis, CA, 95616' },
+    { siteId: 'site_lot', buildingId: null, buildable: { ...STRAIGHT_BUILDABLE, frontEdge: 0 } },
+    { input: { site: 'site_lot' } },
   ),
   {
     // lot_info: "no lot in the scene: lot_from_address, or the Lot tab"

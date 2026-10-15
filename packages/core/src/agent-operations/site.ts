@@ -12,7 +12,7 @@ import { targetBuilding } from './add-level'
 import { pointInPolygon, type Vec2 } from './plan-geometry'
 import type { AgentOperation, SceneNodes } from './types'
 
-type SiteInput = { building?: string }
+type SiteInput = { building?: string; site?: string }
 type PlaceBuildingInput = SiteInput & {
   outline?: number[][]
   yards?: Partial<Record<YardKey, number>>
@@ -26,11 +26,31 @@ const r2 = (n: number) => Math.round(n * 100) / 100 || 0
  * on yet, in site coordinates.
  */
 export const getSite: AgentOperation<SiteInput> = (nodes, input, context) => {
+  if (input.site) {
+    const site = nodes[input.site]
+    if (!site) refuse('site_not_found', `Site not found: ${input.site}.`, { siteId: input.site })
+    if (site.type !== 'site')
+      refuse('not_a_site', `Node ${input.site} is a ${site.type}, not a site.`, {
+        siteId: input.site,
+        type: site.type,
+      })
+  }
   const anyBuilding = Object.values(nodes).some((node) => node.type === 'building')
   const building =
-    input.building || anyBuilding ? targetBuilding(nodes, input.building, context) : null
-  const brief = siteBrief(nodes, building ? { buildingId: building.id } : {})
+    input.building || (anyBuilding && !input.site)
+      ? targetBuilding(nodes, input.building, context)
+      : null
+  const brief = siteBrief(
+    nodes,
+    building ? { buildingId: building.id } : input.site ? { siteId: input.site } : {},
+  )
   if (!brief) refuse('no_site', 'The scene has no site with a lot: add_level starts one.')
+  if (input.site && brief.siteId !== input.site)
+    refuse(
+      'building_not_on_site',
+      `${building?.id} stands on ${brief.siteId}, not on ${input.site}: name one or the other.`,
+      { buildingId: building?.id, siteId: input.site },
+    )
   return { result: { ...roundedSiteBrief(brief), summary: describeSiteBrief(brief) } }
 }
 

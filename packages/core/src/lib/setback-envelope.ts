@@ -373,10 +373,12 @@ export function insetPolygon(
 
 /**
  * Which envelope edge is the one behind the lot's front line: the longest
- * envelope edge running parallel to it (within 25°) with its midpoint
- * nearest that line; failing that, the envelope edge whose midpoint is
- * nearest the lot front's midpoint (a pie lot's curved frontage has no
- * single parallel — its longest arc chord fronts the house).
+ * envelope edge facing the same way (within 25°) with its midpoint nearest
+ * that line; failing that, the envelope edge whose midpoint is nearest the
+ * lot front's midpoint (a pie lot's curved frontage has no single parallel —
+ * its longest arc chord fronts the house). Facing, not only parallel: on a
+ * lot that widens away from its street the rear edge is parallel too, and
+ * longer.
  */
 export function envelopeFrontEdge(
   lot: readonly Pt[],
@@ -389,23 +391,17 @@ export function envelopeFrontEdge(
   const fi = ((frontIndex % n) + n) % n
   const a = lot[fi] as Pt
   const b = lot[(fi + 1) % n] as Pt
-  const fx = b[0] - a[0]
-  const fy = b[1] - a[1]
-  const fl = Math.hypot(fx, fy) || 1
-  const ux = fx / fl
-  const uy = fy / fl
   const fmid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+  const [fnx, fny] = outwardNormal(lot, fi)
   let bestI = -1
   let bestScore = Number.NEGATIVE_INFINITY
   for (let i = 0; i < m; i++) {
     const p = envelope[i] as Pt
     const q = envelope[(i + 1) % m] as Pt
-    const ex = q[0] - p[0]
-    const ey = q[1] - p[1]
-    const el = Math.hypot(ex, ey)
+    const el = Math.hypot(q[0] - p[0], q[1] - p[1])
     if (el < 1e-6) continue
-    const par = Math.abs((ex * ux + ey * uy) / el)
-    if (par < Math.cos((25 * Math.PI) / 180)) continue
+    const [enx, eny] = outwardNormal(envelope, i)
+    if (enx * fnx + eny * fny < Math.cos((25 * Math.PI) / 180)) continue
     const mid: Pt = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]
     const dist = segDist(mid[0], mid[1], a, b)
     // long and close wins: the front's offset is one lot-front length away by the setback
