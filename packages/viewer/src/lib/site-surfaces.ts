@@ -9,6 +9,12 @@ import { temporarilySetGroundAside } from './scene-visibility'
 export const SITE_GROUND = 'siteGround'
 
 /**
+ * `userData` key marking the generic foundation under the buildings (footing and stem, drawn under
+ * the ground): a capture that sees through the veil leaves it out, as it left it out before it was drawn.
+ */
+export const SITE_FOUNDATION = 'siteFoundation'
+
+/**
  * `solid`: the lot's fill, its sculpted terrain, the horizon disc. `veil`: what is drawn in their
  * place over a level below grade, the grade ring with it.
  */
@@ -28,6 +34,17 @@ export function siteSurfaces(): Object3D[] {
     }
   }
   return surfaces
+}
+
+/** The site's generic foundation meshes, shown or not. */
+export function siteFoundation(): Object3D[] {
+  const foundation: Object3D[] = []
+  for (const siteId of sceneRegistry.byType.site ?? []) {
+    for (const child of sceneRegistry.nodes.get(siteId)?.children ?? []) {
+      if (child.userData[SITE_FOUNDATION] === true) foundation.push(child)
+    }
+  }
+  return foundation
 }
 
 /** The site's ground by role, shown or not: the veil is hidden until a level below grade is shown. */
@@ -50,10 +67,13 @@ export function siteGround(): Record<SiteGroundRole, Object3D[]> {
 export function temporarilyVeilGround(veiled: boolean): () => void {
   const { solid, veil } = siteGround()
   const restoreSolid = temporarilySetGroundAside(solid, veiled)
+  // Seen through a veil the footing under a floor below grade would show: the picture has none.
+  const restoreFoundation = veiled ? temporarilySetGroundAside(siteFoundation(), true) : () => {}
   const flipped = veil.filter((surface) => surface.visible !== veiled)
   for (const surface of flipped) surface.visible = veiled
   return () => {
     for (const surface of flipped) surface.visible = !veiled
+    restoreFoundation()
     restoreSolid()
   }
 }

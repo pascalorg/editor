@@ -55,7 +55,8 @@ export function genericFoundation(nodes: Nodes): FoundationMember[] {
   if (hit) return hit
   const members: FoundationMember[] = []
   for (const node of Object.values(nodes)) {
-    if (node.type === 'building') members.push(...buildingFoundation(nodes, node))
+    if (node.type === 'building' && node.visible !== false)
+      members.push(...buildingFoundation(nodes, node))
   }
   memo.set(nodes, members)
   return members

@@ -5,7 +5,14 @@ import { sceneRegistry } from '@pascal-app/core'
 import { Group, Mesh } from 'three'
 import { SCENE_LAYER } from './layers'
 import { hideFromScene } from './scene-visibility'
-import { SITE_GROUND, siteGround, siteSurfaces, temporarilyVeilGround } from './site-surfaces'
+import {
+  SITE_FOUNDATION,
+  SITE_GROUND,
+  siteFoundation,
+  siteGround,
+  siteSurfaces,
+  temporarilyVeilGround,
+} from './site-surfaces'
 
 afterEach(() => sceneRegistry.clear())
 
@@ -22,15 +29,17 @@ function site() {
   veil.userData[SITE_GROUND] = 'veil'
   veil.visible = false
   const lotLine = new Mesh()
-  group.add(building, ground, veil, lotLine)
+  const foundation = new Mesh()
+  foundation.userData[SITE_FOUNDATION] = true
+  group.add(building, ground, veil, lotLine, foundation)
   sceneRegistry.nodes.set('site_a', group)
   sceneRegistry.byType.site?.add('site_a')
-  return { ground, veil, lotLine }
+  return { ground, veil, lotLine, foundation }
 }
 
 test("the site's surfaces are its own shown meshes, not the buildings it holds", () => {
-  const { ground, lotLine } = site()
-  expect(siteSurfaces()).toEqual([ground, lotLine])
+  const { ground, lotLine, foundation } = site()
+  expect(siteSurfaces()).toEqual([ground, lotLine, foundation])
 })
 
 test('the ground is the solid surfaces and their veils, shown or not; the lines on it are not', () => {
@@ -59,4 +68,25 @@ test('a capture stands the whole building on solid ground, then gives the veil b
   restore()
   expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(false)
   expect(veil.visible).toBe(true)
+})
+
+test('the generic foundation is found by its mark, shown or not', () => {
+  const { foundation } = site()
+  expect(siteFoundation()).toEqual([foundation])
+})
+
+test('a capture through the veil leaves the foundation out, then gives it back', () => {
+  const { foundation } = site()
+  const restore = temporarilyVeilGround(true)
+  expect(foundation.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  restore()
+  expect(foundation.layers.isEnabled(SCENE_LAYER)).toBe(true)
+})
+
+test('a capture of the whole building on solid ground keeps the foundation as it is', () => {
+  const { foundation } = site()
+  const restore = temporarilyVeilGround(false)
+  expect(foundation.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  restore()
+  expect(foundation.layers.isEnabled(SCENE_LAYER)).toBe(true)
 })

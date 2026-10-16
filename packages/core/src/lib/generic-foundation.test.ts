@@ -272,6 +272,15 @@ test('a level with no walls draws nothing, and a hidden wall is not carried', ()
   expect(genericFoundation(hidden)).toEqual([])
 })
 
+test('a hidden building carries no foundation', () => {
+  const house = flatHouse()
+  const building = house['building_a' as AnyNodeId]
+  if (building?.type !== 'building') throw new Error('fixture')
+  expect(
+    genericFoundation({ ...house, building_a: { ...building, visible: false } } as Nodes),
+  ).toEqual([])
+})
+
 test('the answer is worked out once per scene state', () => {
   const nodes = flatHouse()
   expect(genericFoundation(nodes)).toBe(genericFoundation(nodes))
