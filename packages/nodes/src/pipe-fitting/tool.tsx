@@ -23,7 +23,6 @@ import {
   alignDrawPoint,
   clearDrawAlignment,
   collectScenePorts,
-  DWV_PORT_SYSTEMS,
   findNearestRunBody3D,
   findNearestRunBodyXZ,
   type ScenePort,
@@ -47,6 +46,7 @@ import {
 } from '../shared/fitting-rotation'
 import { createFittingSurfaceSupport } from '../shared/fitting-surface-support'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
+import { DWV_PORT_SYSTEMS } from '../shared/port-systems'
 import { pipeFittingDefinition } from './definition'
 import { buildPipeFittingGeometry } from './geometry'
 import {

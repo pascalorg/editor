@@ -15,7 +15,6 @@ import {
   alignDrawPoint,
   clearDrawAlignment,
   collectScenePorts,
-  DUCT_PORT_SYSTEMS,
   type ScenePort,
 } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
@@ -42,6 +41,7 @@ import {
 } from '../shared/fitting-rotation'
 import { createFittingSurfaceSupport } from '../shared/fitting-surface-support'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
+import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { ductFittingDefinition } from './definition'
 import { buildDuctFittingGeometry } from './geometry'
 import { localFittingPorts } from './ports'

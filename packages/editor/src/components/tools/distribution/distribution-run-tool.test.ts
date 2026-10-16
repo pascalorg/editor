@@ -10,7 +10,6 @@ import {
   type RunCursorRay,
   type RunPoint,
   runDistanceSquared,
-  runSectionHalfSizeM,
   snapRunLength,
   snapRunPointToSurface,
   snapRunValue,
@@ -215,11 +214,6 @@ describe('distribution run drafting helpers', () => {
 
   test('computes squared 3D distance for fitting degeneracy checks', () => {
     expect(runDistanceSquared([1, 2, 3], [4, 6, 3])).toBe(25)
-  })
-
-  test('places a run centerline half its section above the support plane', () => {
-    expect(runSectionHalfSizeM(2)).toBeCloseTo(0.0254)
-    expect(runSectionHalfSizeM(8)).toBeCloseTo(0.1016)
   })
 
   test('projects and snaps a run in a vertical wall plane', () => {

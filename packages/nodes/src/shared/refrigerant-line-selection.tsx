@@ -15,16 +15,13 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { DimensionPill, swallowNextClick, triggerSFX, useEditor } from '@pascal-app/editor'
-import {
-  collectScenePorts,
-  findNearestPortXZ,
-  REFRIGERANT_PORT_SYSTEMS,
-} from '@pascal-app/editor/distribution'
+import { collectScenePorts, findNearestPortXZ } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { REFRIGERANT_PORT_SYSTEMS } from './port-systems'
 import { HandleCube, MoveChevron } from './selection-handles'
 
 type RefrigerantLineKind = 'lineset' | 'liquid-line'

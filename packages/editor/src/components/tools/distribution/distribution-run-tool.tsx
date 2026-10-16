@@ -242,10 +242,6 @@ const ALT_PIXELS_PER_METER = 100
 export const RUN_PREVIEW_OPACITY = 0.55
 export const RUN_SNAP_CURSOR_COLOR = '#22c55e'
 
-export function runSectionHalfSizeM(nominalInches: number): number {
-  return (nominalInches * 0.0254) / 2
-}
-
 export function snapRunValue(value: number, step: number): number {
   if (step <= 0) return value
   return Math.round(value / step) * step

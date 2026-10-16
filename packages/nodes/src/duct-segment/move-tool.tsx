@@ -25,7 +25,7 @@ import {
   useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
-import { collectScenePorts, DUCT_PORT_SYSTEMS } from '@pascal-app/editor/distribution'
+import { collectScenePorts } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef, useState } from 'react'
 import { Matrix4, Vector3 } from 'three'
@@ -35,6 +35,7 @@ import {
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
+import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
 import {
   planRunTranslationOffsets,
