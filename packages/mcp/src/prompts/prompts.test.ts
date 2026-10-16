@@ -237,10 +237,29 @@ describe('renovation_from_photos', () => {
 })
 
 describe('shared scene guidance delivery', () => {
-  test('all scene prompts carry the shared guidance', () => {
-    expect(buildFromBriefPrompt({ brief: 'A family house' })).toContain(SCENE_DESIGN_GUIDANCE)
-    expect(buildIterateOnFeedbackPrompt({ feedback: 'Move the fridge' })).toContain(SCENE_DESIGN_GUIDANCE)
-    const messages = buildRenovationMessages({ currentPhotos: '', referencePhotos: '', goals: 'A calm room' })
-    expect(messages.some((message) => message.content.type === 'text' && message.content.text.includes(SCENE_DESIGN_GUIDANCE))).toBe(true)
+  test('brief and feedback prompts deliver their shared guidance through MCP', async () => {
+    // Photo renovation has its own evidence-grounded minimal-patch contract.
+    for (const { register, name, args } of [
+      { register: registerFromBrief, name: 'from_brief', args: { brief: 'A family house' } },
+      {
+        register: registerIterateOnFeedback,
+        name: 'iterate_on_feedback',
+        args: { feedback: 'Move the fridge' },
+      },
+    ]) {
+      const pair = await spinUp(register)
+      try {
+        const result = await pair.client.getPrompt({ name, arguments: args })
+        expect(
+          result.messages.some(
+            (message) =>
+              message.content.type === 'text' &&
+              message.content.text.includes(SCENE_DESIGN_GUIDANCE),
+          ),
+        ).toBe(true)
+      } finally {
+        await pair.close()
+      }
+    }
   })
 })
