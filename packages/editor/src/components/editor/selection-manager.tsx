@@ -1793,6 +1793,9 @@ export const SelectionManager = () => {
           !getMovingNode() &&
           canDirectMoveNode(nodeToSelect)
         ) {
+          // The move tool mounts before the browser's click that ends this
+          // gesture, which would otherwise commit the node where it stands.
+          swallowNextClick()
           sfxEmitter.emit('sfx:item-pick')
           const moveTarget = resolveDirectManipulationNode(nodeToSelect, useScene.getState().nodes)
           useEditor.getState().setMovingNode(moveTarget as never)

@@ -372,6 +372,7 @@ export {
   type PlacementSurface,
   publishPlacementSurface,
 } from './lib/active-placement-surface'
+export { cameraFacingYaw } from './lib/camera-facing'
 export {
   activateCatalogItem,
   filterCatalogItems,
