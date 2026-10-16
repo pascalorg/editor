@@ -279,7 +279,9 @@ describe('pascal://agent-guide', () => {
     try {
       const res = await pair.client.readResource({ uri: 'pascal://agent/guide' })
       const text = (res.contents[0] as { text?: string }).text ?? ''
-      expect(text).toContain('Pascal MCP Agent Guide')
+      const canonical = await pair.client.readResource({ uri: 'pascal://agent-guide' })
+      expect(res.contents[0]?.mimeType).toBe('text/markdown')
+      expect(text).toBe((canonical.contents[0] as { text?: string }).text)
     } finally {
       await pair.close()
     }

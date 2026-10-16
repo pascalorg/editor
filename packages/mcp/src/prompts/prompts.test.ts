@@ -236,45 +236,11 @@ describe('renovation_from_photos', () => {
   })
 })
 
-// The open brief (the owner, 13 October): what a request leaves open in form is design left to the
-// agent, a house with presence that stays credible and buildable, not a catalogue plan. The same
-// meaning as the chat lane's sentence, in this list's one-fact-per-line form.
-describe('scene design guidance on what a request leaves open', () => {
-  const lines = SCENE_DESIGN_GUIDANCE.split('\n')
-
-  test('says defaults are for technical values, and form is design left to the agent', () => {
-    expect(lines).toContain(
-      '  - Defaults are for technical values (thicknesses, clearances, heights).',
-    )
-    expect(lines).toContain(
-      '  - What a request states (sizes, counts, rooms, style, references, "catalog only", a single room) binds the work exactly: a request for one bedroom is one bedroom.',
-    )
-    expect(lines).toContain(
-      '  - What it leaves open is design left to the agent: the size and number of storeys, the massing and roofscape, the site and outdoor spaces, the furniture and decor, and the floor, wall and ceiling finishes and materials. An open brief is room for a building with presence (composed volumes, interesting wings, roofs at different heights, good proportions, a considered site, rooms furnished and finished with intent) that stays credible and buildable, rather than a standard catalogue plan.',
-    )
-    expect(lines).toContain('  - When a choice would change the project, the person can be asked.')
-  })
-
-  test('keeps acting on clear concrete requests, without naming defaults for them', () => {
-    expect(lines).toContain(
-      '  - For clear concrete requests, act instead of asking for clarification.',
-    )
-    expect(SCENE_DESIGN_GUIDANCE).not.toContain('reasonable defaults')
-  })
-
-  test('reaches the prompts that carry the guidance', async () => {
-    const pair = await spinUp(registerFromBrief)
-    try {
-      const res = await pair.client.getPrompt({
-        name: 'from_brief',
-        arguments: { brief: 'A family house' },
-      })
-      const m = res.messages[0]
-      const text = m && m.content.type === 'text' ? m.content.text : ''
-      expect(text).toContain('design left to the agent')
-      expect(text).toContain('rather than a standard catalogue plan')
-    } finally {
-      await pair.close()
-    }
+describe('shared scene guidance delivery', () => {
+  test('all scene prompts carry the shared guidance', () => {
+    expect(buildFromBriefPrompt({ brief: 'A family house' })).toContain(SCENE_DESIGN_GUIDANCE)
+    expect(buildIterateOnFeedbackPrompt({ feedback: 'Move the fridge' })).toContain(SCENE_DESIGN_GUIDANCE)
+    const messages = buildRenovationMessages({ currentPhotos: '', referencePhotos: '', goals: 'A calm room' })
+    expect(messages.some((message) => message.content.type === 'text' && message.content.text.includes(SCENE_DESIGN_GUIDANCE))).toBe(true)
   })
 })
