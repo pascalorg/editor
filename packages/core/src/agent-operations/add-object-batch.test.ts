@@ -38,7 +38,7 @@ function fakeBuild(log: string[] = []) {
     if (!(input.code || input.nodeId)) refuse('code_required', 'Pass code to build a new object.')
     inFlight++
     peak = Math.max(peak, inFlight)
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await Promise.resolve()
     inFlight--
     log.push(input.name ?? '?')
     if (input.name?.includes('broken')) throw new Error('ReferenceError: Foo is not defined')
@@ -161,6 +161,25 @@ describe('add_object in run_batch', () => {
       context,
     )
     expect(outcome.result.calls).toMatchObject([{ status: 'refused', code: 'object_not_built' }])
+  })
+
+  test('a repeated edit is refused before compiling stale stored parameters, without stopping other objects', async () => {
+    const compiled: string[] = []
+    const built = await buildBatchObjects(
+      [
+        object('Wider', { nodeId: 'item_existing', params: { width: 2 } }),
+        object('Taller', { nodeId: 'item_existing', params: { height: 3 } }),
+        object('Other object'),
+      ],
+      async (input) => {
+        compiled.push(input.name!)
+        return compiledSolid([0.8, 0.7, 0.8])
+      },
+    )
+    expect(compiled).toEqual(['Wider', 'Other object'])
+    expect(built[0]).toHaveProperty('compiled')
+    expect(built[1]).toMatchObject({ failure: { code: 'object_edit_conflict' } })
+    expect(built[2]).toHaveProperty('compiled')
   })
 
   test('modules compile three at a time, each once', async () => {

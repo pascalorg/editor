@@ -369,12 +369,27 @@ export async function buildBatchObjects(
   build: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>,
 ): Promise<Record<number, BatchedObject>> {
   const parse = z.object(addObjectTool.input)
+  const built: Record<number, BatchedObject> = {}
+  const edited = new Set<string>()
   const jobs = calls.flatMap((call, index) => {
     if (call?.tool !== addObjectTool.name) return []
     const parsed = parse.safeParse(call.input ?? {})
-    return parsed.success ? [{ index, input: parsed.data as Omit<AddObjectInput, 'compiled'> }] : []
+    if (!parsed.success) return []
+    const input = parsed.data as Omit<AddObjectInput, 'compiled'>
+    if (input.nodeId) {
+      if (edited.has(input.nodeId)) {
+        built[index] = {
+          failure: {
+            code: 'object_edit_conflict',
+            message: `${input.nodeId} is edited more than once in this batch: combine its changes in one add_object call, or edit it in separate calls. Modules are compiled before the batch runs.`,
+          },
+        }
+        return []
+      }
+      edited.add(input.nodeId)
+    }
+    return [{ index, input }]
   })
-  const built: Record<number, BatchedObject> = {}
   let next = 0
   const worker = async () => {
     for (let job = jobs[next++]; job; job = jobs[next++]) {
