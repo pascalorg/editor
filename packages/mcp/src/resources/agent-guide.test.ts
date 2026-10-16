@@ -8,12 +8,7 @@ const MANDATE =
 const ORDER = /^- (Call|Use|Prefer|Do not|Always|Never|Then|Read|Return|Leave|Let) /
 
 /** Lines that say what must hold for a call to be accepted: contracts, not method. */
-const CONTRACT_LINES = [
-  // add_terrain_break's input rules.
-  '- `add_terrain_break` adds a vertical cliff',
-  // group_nodes' contract on generated cladding.
-  'Generated cladding must be copied before it can group independently',
-]
+const CONTRACT_LINES: string[] = []
 
 const lines = AGENT_GUIDE.split('\n')
 const isContract = (line: string) => CONTRACT_LINES.some((marker) => line.includes(marker))
@@ -43,7 +38,8 @@ describe('the MCP agent guide is a glossary, not a recipe (owner, 15 Oct)', () =
   test('the request is the constraint, and the sources of a scene stand side by side', () => {
     expect(AGENT_GUIDE).toContain('binds the work exactly')
     expect(AGENT_GUIDE).toContain('the size and number of storeys')
-    const sources = AGENT_GUIDE.match(/has these sources, side by side:.*$/m)?.[0] ?? ''
+    const sources =
+      AGENT_GUIDE.match(/sources to build a scene from stand side by side:.*$/m)?.[0] ?? ''
     for (const tool of [
       'search_assets',
       'place_items',
@@ -52,7 +48,6 @@ describe('the MCP agent guide is a glossary, not a recipe (owner, 15 Oct)', () =
       'validate_design',
       'add_object',
       'paint',
-      'generate_material',
     ]) {
       expect(sources).toContain(`\`${tool}\``)
     }

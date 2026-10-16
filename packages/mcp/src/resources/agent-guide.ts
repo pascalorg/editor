@@ -81,7 +81,7 @@ export const AGENT_GUIDE = [
   '## Briefs',
   '',
   '- What a request states (sizes, counts, rooms, style, references, "catalog only", a single room) binds the work exactly: a request for one bedroom is one bedroom. What it leaves open is design left to the agent: the size and number of storeys, the massing and roofscape, the site and outdoor spaces, the furniture and decor, and the floor, wall and ceiling finishes and materials. Defaults are for technical values (thicknesses, clearances, heights). An open brief is room for a building with presence (composed volumes, interesting wings, roofs at different heights, good proportions, a considered site, rooms furnished and finished with intent) that stays credible and buildable, rather than a standard catalogue plan. When a choice would change the project, the person can be asked.',
-  '- What goes into a scene has these sources, side by side: the catalog (`search_assets`, `place_items`, `furnish_room`), procedural designs (`place_design`, `validate_design`), objects of the agent’s own (`add_object`), native materials (`paint`). The catalog holds a limited set that varies by server: what a search returns is what exists.',
+  '- The sources to build a scene from stand side by side: the catalog (`search_assets`, `place_items`, `furnish_room`), procedural designs (`place_design`, `validate_design`), authored objects of the agent’s own (`add_object`), native materials (`paint`). The catalog holds a limited set that varies by server: what a search returns is what exists.',
   '',
   '## Output Contract',
   '',
