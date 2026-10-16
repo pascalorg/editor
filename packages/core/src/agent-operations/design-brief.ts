@@ -64,36 +64,40 @@ const fold = (text: string) =>
     .replace(/\s+/g, ' ')
     .trim()
 
-/** The words that name the catalog as a source, English and French, folded; a word matches from its start. */
+/**
+ * The words that name the catalog as a source, English and French, folded; a word matches from its
+ * start. Phrases, not single words, where a single word also names a room or a building ("a house
+ * with a library", "the existing house").
+ */
 const CATALOG_WORDS = [
   'catalog',
-  'catalogue',
-  'library',
-  'bibliotheque',
+  'pascal library',
+  "pascal's library",
+  'bibliotheque pascal',
   "pascal's items",
   "pascal's objects",
   'pascal items',
   'pascal objects',
-  'from the store',
   'from the stock',
+  'in stock',
   'du stock',
-  'du magasin',
+  'en stock',
 ]
 
 /** The words that name what is already there as a source, English and French, folded. */
 const EXISTING_WORDS = [
-  'existing',
-  'existant',
-  'already',
-  'deja',
-  'current',
-  'actuel',
-  'my own',
+  'existing furniture',
+  'existing pieces',
+  'existing items',
+  'my furniture',
+  'my own furniture',
+  'current furniture',
+  'what is already there',
+  "what's already there",
   'mes meubles',
-  'what is there',
+  'meubles existants',
+  'meubles actuels',
   "ce qu'il y a",
-  'keep',
-  'garde',
 ]
 
 const wordsRegex = (words: string[]) =>

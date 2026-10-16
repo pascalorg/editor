@@ -568,12 +568,27 @@ describe('a source other than open quotes the request', () => {
     expect(
       named('catalog', 'depuis la bibliothèque Pascal', 'Depuis la Bibliothèque Pascal, meuble'),
     ).toBeNull()
+    expect(named('catalog', 'with a library', 'Build a house with a library')).toBe(
+      'source_not_named',
+    )
+    expect(named('catalog', 'from the store', 'a kitchen like the one from the store')).toBe(
+      'source_not_named',
+    )
     expect(named('catalog', 'Pascal’s items please', "use Pascal's items please")).toBeNull()
     expect(named('catalog', 'catalog', 'a catalog')).toBe('source_not_named')
     expect(named('existing', 'garde mes meubles actuels', 'garde mes meubles actuels')).toBeNull()
     expect(named('existing', 'ce qu’il y a déjà', 'Ce qu’il y a déjà')).toBeNull()
     expect(named('existing', 'use my existing furniture', 'use my existing furniture')).toBeNull()
     expect(named('existing', 'IKEA furniture only', 'IKEA furniture only')).toBe('source_not_named')
+    expect(named('existing', 'the existing house', 'add a room to the existing house')).toBe(
+      'source_not_named',
+    )
+    expect(named('existing', 'keep it simple', 'Build a house, keep it simple')).toBe(
+      'source_not_named',
+    )
+    expect(named('existing', 'already have a plan', 'I already have a plan')).toBe(
+      'source_not_named',
+    )
   })
 
   test('an older stored brief (no beyond) still reads, with the session’s checkpoints, and still gates', () => {
