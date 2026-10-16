@@ -243,6 +243,39 @@ describe('createWallOnCurrentLevel', () => {
       expect(stored.assembly).toEqual(created?.assembly)
     })
 
+    test('only the walls against the ground are foundation walls: the perimeter is, a partition and a wall inside are not', () => {
+      seedBasement()
+      select('level_cellar')
+      const sides: Array<[[number, number], [number, number]]> = [
+        [
+          [0, 0],
+          [8, 0],
+        ],
+        [
+          [8, 0],
+          [8, 6],
+        ],
+        [
+          [8, 6],
+          [0, 6],
+        ],
+        [
+          [0, 6],
+          [0, 0],
+        ],
+      ]
+      for (const [start, end] of sides) {
+        expect(createWallOnCurrentLevel(start, end)?.thickness).toBe(0.241)
+      }
+      const partition = createWallOnCurrentLevel([4, 0], [4, 6])
+      expect(partition?.assembly).toBeUndefined()
+      const dangling = createWallOnCurrentLevel([0, 3], [3, 3])
+      expect(dangling?.assembly).toBeUndefined()
+      // a bay on the outside of the east wall is on the outline again
+      const bay = createWallOnCurrentLevel([8, 1], [11, 1])
+      expect(bay?.thickness).toBe(0.241)
+    })
+
     test('the ground floor over it keeps the plain wall', () => {
       seedBasement()
       select('level_main')

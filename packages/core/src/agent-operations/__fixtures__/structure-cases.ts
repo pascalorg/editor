@@ -10,6 +10,7 @@ import {
   WallNode,
   ZoneNode,
 } from '../../schema'
+import { foundationWallConstruction } from '../../lib/foundation-wall'
 import { getLevelElevations } from '../../services/storey'
 import type { AgentToolCase, SceneGraph } from './cases'
 
@@ -143,6 +144,35 @@ function basementHouseScene(): SceneGraph {
   )
 }
 
+/** The basement with its 10 × 8 m perimeter already built of foundation walls. */
+function basementRoomScene(): SceneGraph {
+  const scene = basementHouseScene()
+  const corners: Pt[] = [
+    [0, 0],
+    [10, 0],
+    [10, 8],
+    [0, 8],
+  ]
+  const walls = corners.map((start, index) =>
+    WallNode.parse({
+      id: `wall_base_${index}`,
+      parentId: 'level_base',
+      start,
+      end: corners[(index + 1) % 4],
+      ...foundationWallConstruction(),
+    }),
+  )
+  const base = scene.nodes.level_base as LevelNode
+  return {
+    ...scene,
+    nodes: {
+      ...scene.nodes,
+      level_base: { ...base, children: walls.map((wall) => wall.id) } as LevelNode,
+      ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+    },
+  }
+}
+
 const SHELL: Pt[] = [
   [0, 0],
   [6, 0],
@@ -166,9 +196,15 @@ function foundationWallProblems(wall: AnyNode | undefined): string[] {
   return ok ? [] : [`${wall.id} is not a foundation wall: ${JSON.stringify([wall.thickness, wall.assembly])}`]
 }
 
+function plainWallProblems(wall: AnyNode | undefined): string[] {
+  return wall?.type === 'wall' && wall.assembly === undefined && (wall.thickness ?? 0.1) === 0.1
+    ? []
+    : [`expected a plain 0.1 m wall, got ${JSON.stringify(wall)}`]
+}
+
 export const ADD_WALL_CASES: AgentToolCase[] = [
   {
-    name: 'a wall on a level below grade is an 8 in CMU wall with 2x4 furring laid flat inside, and says so',
+    name: 'the first wall of a basement is an 8 in CMU foundation wall with 2x4 furring laid flat inside, and says so',
     tool: 'add_wall',
     scene: basementHouseScene,
     input: { levelId: 'level_base', start: [0, 0], end: [6, 0] },
@@ -195,6 +231,51 @@ export const ADD_WALL_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'a wall against the ground on a basement outline is a foundation wall',
+    tool: 'add_wall',
+    scene: basementRoomScene,
+    input: { levelId: 'level_base', start: [10, 2], end: [13, 2] },
+    expect: {
+      result: { ok: true, construction: { thickness: 0.241 } },
+      mentions: ['foundation wall', 'against the ground'],
+      check: (result, nodes) => foundationWallProblems(nodes[result.wallId as string]),
+    },
+  },
+  {
+    name: 'a partition inside the basement is an ordinary wall, and says so',
+    tool: 'add_wall',
+    scene: basementRoomScene,
+    input: { levelId: 'level_base', start: [5, 0], end: [5, 8] },
+    expect: {
+      result: { ok: true },
+      absent: ['construction'],
+      mentions: ['ordinary wall', 'partition', 'foundation wall'],
+      check: (result, nodes) => plainWallProblems(nodes[result.wallId as string]),
+    },
+  },
+  {
+    name: 'a room built inside the basement outline has ordinary walls, and says so',
+    tool: 'create_room',
+    scene: basementRoomScene,
+    input: {
+      levelId: 'level_base',
+      name: 'Storage',
+      polygon: [
+        [1, 1],
+        [4, 1],
+        [4, 4],
+        [1, 4],
+      ],
+    },
+    expect: {
+      result: { ok: true },
+      absent: ['construction'],
+      mentions: ['ordinary walls', 'partition'],
+      check: (result, nodes) =>
+        (result.wallIds as string[]).flatMap((id) => plainWallProblems(nodes[id])),
+    },
+  },
+  {
     name: 'a wall on the ground floor over a basement keeps the schema wall',
     tool: 'add_wall',
     scene: basementHouseScene,
@@ -211,7 +292,7 @@ export const ADD_WALL_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'the walls of a room below grade are foundation walls, the result says so',
+    name: 'the walls of a room below grade, against the ground, are foundation walls: the result says so',
     tool: 'create_room',
     scene: basementHouseScene,
     input: { levelId: 'level_base', name: 'Cellar', polygon: SHELL },

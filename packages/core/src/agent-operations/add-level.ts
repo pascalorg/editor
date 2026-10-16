@@ -1,6 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
 import { buildLevelBelowChanges } from '../building/level-insertion'
-import { FOUNDATION_WALL_DESCRIPTION, levelHoldsFoundationWalls } from '../lib/foundation-wall'
+import { FOUNDATION_WALL_RULE, levelHoldsFoundationWalls } from '../lib/foundation-wall'
 import { BuildingNode, LevelNode, SiteNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { storeyInsertIndex } from '../services/roof-level'
@@ -135,9 +135,9 @@ export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) =
       floorIndex,
       ...(level.name ? { name: level.name } : {}),
       height: level.height,
-      ...(foundation ? { wallConstruction: FOUNDATION_WALL_DESCRIPTION } : {}),
+      ...(foundation ? { wallConstruction: FOUNDATION_WALL_RULE } : {}),
       ...(shift.length ? { shiftedLevelIds: shift.map(({ id }) => id) } : {}),
-      message: `Added ${level.name ?? `level ${floorIndex}`} ${below ? (stacked ? 'below the existing levels, every floor keeping its place' : 'below the existing levels') : shift.length ? 'on top of the storeys, under the roof level' : 'above the existing levels'} of ${building.name ?? building.id}.${foundation ? ` It is below grade: a new wall on it is a foundation wall (${FOUNDATION_WALL_DESCRIPTION}) unless given a thickness.` : ''}`,
+      message: `Added ${level.name ?? `level ${floorIndex}`} ${below ? (stacked ? 'below the existing levels, every floor keeping its place' : 'below the existing levels') : shift.length ? 'on top of the storeys, under the roof level' : 'above the existing levels'} of ${building.name ?? building.id}.${foundation ? ` It is below grade: ${FOUNDATION_WALL_RULE}; a wall given a thickness keeps it.` : ''}`,
     },
     changes,
   }

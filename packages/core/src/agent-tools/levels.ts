@@ -46,7 +46,7 @@ export const addLevelTool = {
   name: 'add_level',
   title: 'Add level',
   description:
-    "Add an empty level to a building, as the editor does: above its top storey, under the building's roof level, which moves up one so the roof stays on top; or below its lowest level for a basement, which goes one storey under the lowest level and every existing level keeps its place, the ground floor included. On a scene with no building (a new or cleared scene), it starts the scene as the editor does: a site, a building and its ground level. A level that ends up below grade says in its result what a new wall on it is built of (wallConstruction). To copy a floor with its content, use duplicate_level.",
+    "Add an empty level to a building, as the editor does: above its top storey, under the building's roof level, which moves up one so the roof stays on top; or below its lowest level for a basement, which goes one storey under the lowest level and every existing level keeps its place, the ground floor included. On a scene with no building (a new or cleared scene), it starts the scene as the editor does: a site, a building and its ground level. A level that ends up below grade says in its result how a new wall on it is built (wallConstruction): a wall against the ground is a foundation wall (8 in CMU with 2x4 pressure-treated furring laid flat inside), a partition is an ordinary wall. To copy a floor with its content, use duplicate_level.",
   input: {
     buildingId: NodeId.optional().describe(
       "The building. Default: the building of the floor the person is viewing, else the scene's only building.",

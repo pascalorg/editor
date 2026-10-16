@@ -1,6 +1,11 @@
 import { refuse } from '../agent-tools/refusal'
 import { levelFootprintLoops } from '../lib/building-footprint'
-import { defaultWallConstruction, FOUNDATION_WALL_DESCRIPTION } from '../lib/foundation-wall'
+import {
+  FOUNDATION_WALL_DESCRIPTION,
+  FOUNDATION_WALL_RULE,
+  levelHoldsFoundationWalls,
+  withFoundationConstruction,
+} from '../lib/foundation-wall'
 import { lotOverhang } from '../lib/site-placement'
 import { type LevelNode, WallNode } from '../schema'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
@@ -36,18 +41,30 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ? normalizeWallCurveOffset({ start, end }, input.curveOffset)
     : 0
   const walls = Object.values(nodes).filter((node) => node.type === 'wall').length
-  const construction =
-    input.thickness === undefined ? defaultWallConstruction(nodes, level.id) : null
-  const wall = WallNode.parse({
+  const drawn = WallNode.parse({
     name: `Wall ${walls + 1}`,
     parentId: level.id,
     start,
     end,
     ...(input.thickness === undefined ? {} : { thickness: input.thickness }),
-    ...(construction ?? {}),
     ...(input.height === undefined ? {} : { height: input.height }),
     ...(curveOffset ? { curveOffset } : {}),
   })
+  const [wall] = withFoundationConstruction(
+    nodes,
+    level.id,
+    [
+      ...Object.values(nodes).filter(
+        (node): node is WallNode => node.type === 'wall' && node.parentId === level.id,
+      ),
+      drawn,
+    ],
+    [drawn],
+    { thickness: input.thickness },
+  ) as [WallNode]
+  const foundation = wall.assembly !== undefined
+  const partition =
+    !foundation && input.thickness === undefined && levelHoldsFoundationWalls(nodes, level.id)
   // the wall's mitred band, curve and all: what crosses the lot line, not only its centreline
   const after = applySceneChanges(nodes, { create: [{ node: wall, parentId: level.id }] })
   const site = lotOverhang(
@@ -64,18 +81,15 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
       length: Math.round(length * 1000) / 1000,
       ...(curveOffset ? { curveOffset } : {}),
       ...(site ? { site } : {}),
-      ...(construction
-        ? {
-            construction: {
-              assembly: FOUNDATION_WALL_DESCRIPTION,
-              thickness: construction.thickness,
-            },
-          }
+      ...(foundation
+        ? { construction: { assembly: FOUNDATION_WALL_DESCRIPTION, thickness: wall.thickness } }
         : {}),
       message: `Added wall "${wall.name}" on ${level.name ?? level.id}${
-        construction
-          ? `, a foundation wall (${FOUNDATION_WALL_DESCRIPTION}), ${construction.thickness.toFixed(3)} m thick; a wall given a thickness keeps it`
-          : ''
+        foundation
+          ? `, a foundation wall against the ground (${FOUNDATION_WALL_DESCRIPTION}), ${(wall.thickness ?? 0).toFixed(3)} m thick; a wall given a thickness keeps it`
+          : partition
+            ? `, an ordinary wall: a partition inside the outline of this level's walls; ${FOUNDATION_WALL_RULE}`
+            : ''
       }${
         site
           ? `; it reaches ${site.overhangM} m past the lot line (${site.sides.join(', ')}): the house belongs inside the buildable area (get_site, place_building)`
