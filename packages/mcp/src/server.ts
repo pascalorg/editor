@@ -1,4 +1,3 @@
-import type { PlanReadingHosts } from './tools/shared-tools'
 import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import {
@@ -19,6 +18,7 @@ import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerProjectFileTools } from './tools/project-files'
 import { answerRetiredTools } from './tools/retired-tools'
+import type { PlanReadingHosts } from './tools/shared-tools'
 import type { SceneViewHost } from './tools/view-scene'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'

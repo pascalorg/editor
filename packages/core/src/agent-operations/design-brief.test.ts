@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { AGENT_TOOL_CONTRACTS, type DesignBrief, designBriefTool } from '../agent-tools'
+import { AGENT_TOOL_CONTRACTS, type DesignBrief, type DesignBriefInput, designBriefTool } from '../agent-tools'
 import { isAgentRefusal } from '../agent-tools/refusal'
 import { type AssetInput, BuildingNode, LevelNode, ZoneNode } from '../schema'
 import { CATALOG_BRIEF } from './__fixtures__/design-brief-cases'
@@ -13,7 +13,8 @@ import {
   requireFurnishing,
 } from './design-brief'
 import { AGENT_OPERATIONS } from './index'
-import { EMPTY_SESSION, keepInSession, parseSessionRecord } from './scene-checkpoint'
+import { applyAgentOutcome } from './apply-outcome'
+import { EMPTY_SESSION, keepInSession, MAX_VIEWED, parseSessionRecord } from './scene-checkpoint'
 import type { AgentContext, SceneNodes } from './types'
 
 const dressed = {
@@ -33,7 +34,7 @@ const nothing = (why: string) =>
     ),
   ) as never
 
-const open = (asIs?: DesignBrief['asIs']): DesignBrief => ({
+const open = (asIs?: DesignBrief['asIs']): DesignBriefInput => ({
   fixed: ['a 4 by 5 m bedroom with a double bed'],
   open: ['form and finish'],
   source: 'open',
@@ -278,6 +279,28 @@ describe('design_brief', () => {
 })
 
 describe('the brief in a session', () => {
+  test('an outcome can clear the brief without a scene write', () => {
+    let session = keepInSession(EMPTY_SESSION, { designBrief: open() })
+    applyAgentOutcome({ result: {}, keep: { designBrief: null } }, {
+      getNodes: () => ({}),
+      applyChanges: () => { throw new Error('unexpected scene write') },
+      reconcile: () => { throw new Error('unexpected reconciliation') },
+      keep: (kept) => { session = keepInSession(session, kept) },
+    })
+    expect(session.designBrief).toBeUndefined()
+  })
+
+  test('viewing an older item again refreshes its bounded retention', () => {
+    const ids = Array.from({ length: MAX_VIEWED }, (_, index) => `asset_${index}`)
+    const full = keepInSession(EMPTY_SESSION, { viewed: ids })
+    const refreshed = keepInSession(full, { viewed: [ids[0]!, ids[0]!] })
+    const next = keepInSession(refreshed, { viewed: ['asset_new'] })
+    expect(next.viewed).toHaveLength(MAX_VIEWED)
+    expect(next.viewed).toContain(ids[0]!)
+    expect(next.viewed).not.toContain(ids[1]!)
+    expect(next.viewed?.slice(-2)).toEqual([ids[0]!, 'asset_new'])
+  })
+
   test('the next brief replaces it, null takes it away, a keep that names none leaves it', () => {
     const first = keepInSession(EMPTY_SESSION, { designBrief: open() })
     expect(first.designBrief?.source).toBe('open')
@@ -614,7 +637,7 @@ describe('a source other than open quotes the request', () => {
   }
   const refusalOf = (input: Record<string, unknown>, requestText?: string) => {
     try {
-      designBrief({}, { ...brief, ...input } as DesignBrief, {
+      designBrief({}, { ...brief, ...input } as DesignBriefInput, {
         activeLevelId: null,
         ...(requestText === undefined ? {} : { requestText }),
       })
@@ -651,7 +674,7 @@ describe('a source other than open quotes the request', () => {
     ).toBeNull()
     const outcome = designBrief(
       {},
-      { ...brief, source: 'catalog', sourceQuote: ' que du catalogue ' } as DesignBrief,
+      { ...brief, source: 'catalog', sourceQuote: ' que du catalogue ' } as DesignBriefInput,
       { activeLevelId: null, requestText: 'Une chambre, que du catalogue' },
     )
     expect(outcome.result.brief).toMatchObject({
@@ -733,7 +756,7 @@ describe('a source other than open quotes the request', () => {
   test('an open brief needs no quote and keeps none', () => {
     const outcome = designBrief(
       {},
-      { ...brief, source: 'open', sourceQuote: 'ignored', beyond: dressed } as DesignBrief,
+      { ...brief, source: 'open', sourceQuote: 'ignored', beyond: dressed } as DesignBriefInput,
       { activeLevelId: null, requestText: 'Build a house' },
     )
     expect(outcome.result.brief).not.toHaveProperty('sourceQuote')

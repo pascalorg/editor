@@ -21,7 +21,8 @@ import type {
 import { getActiveRoofHeight } from '../schema'
 import { getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
-import { distanceToSegment, pointInPolygon } from './plan-geometry'
+import { distanceToSegment } from '../lib/room-topology-index'
+import { pointInPolygon } from './plan-geometry'
 
 /**
  * Where `view_scene` looks from, the same on every surface; the picture is the host's: the chat's

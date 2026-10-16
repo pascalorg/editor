@@ -75,10 +75,14 @@ export function keepInSession(session: SessionRecord, keep: SessionKeep): Sessio
     return true
   })
   const designBrief = 'designBrief' in keep ? keep.designBrief : session.designBrief
+  const incomingViewed = new Set(keep.viewed ?? [])
   const viewed =
     keep.viewed === null
       ? []
-      : [...new Set([...(session.viewed ?? []), ...(keep.viewed ?? [])])].slice(-MAX_VIEWED)
+      : [
+          ...(session.viewed ?? []).filter((id) => !incomingViewed.has(id)),
+          ...incomingViewed,
+        ].slice(-MAX_VIEWED)
   return {
     checkpoints: keep.checkpoint
       ? { ...session.checkpoints, [keep.checkpoint.name]: keep.checkpoint }

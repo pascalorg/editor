@@ -11,9 +11,9 @@ import {
   assetViewNeeds,
   assetViewsReadCatalog,
   briefReadsCatalog,
+  buildBatchObjects,
   createAssetViewLoader,
   createFetchAssetViewIO,
-  buildBatchObjects,
   furnishingRefusal,
   type SceneChanges,
   startOfSession,
@@ -31,10 +31,8 @@ import {
   createRoomTool,
   createStairTool,
   type DesignBrief,
-  designBriefTool,
-  placeDesignTool,
-  validateDesignTool,
   deleteNodeTool,
+  designBriefTool,
   duplicateLevelTool,
   findByTypeTool,
   fitStairTool,
@@ -50,6 +48,7 @@ import {
   moveRoofsToRoofLevelTool,
   paintTool,
   placeBuildingTool,
+  placeDesignTool,
   placeInRoomTool,
   placeItemsTool,
   ROOM_TOOL_CONTRACTS,
@@ -58,9 +57,11 @@ import {
   searchAssetsTool,
   searchMaterialsTool,
   setCheckpointTool,
+  validateDesignTool,
   verifySceneTool,
   viewAssetsTool,
 } from '@pascal-app/core/agent-tools'
+import { DesignValidationSchema } from '@pascal-app/core/procedural-items'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -68,7 +69,6 @@ import {
   MaterialSchema,
   SceneMaterial,
 } from '@pascal-app/core/schema'
-import { DesignValidationSchema } from '@pascal-app/core/procedural-items'
 import { z } from 'zod'
 import type { Patch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
@@ -158,7 +158,12 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: placeDesignTool,
     operation: AGENT_OPERATIONS.place_design,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    outputSchema: { designId: z.string(), parentId: z.string(), surfaceId: z.string().nullable(), ...liveSyncOutput },
+    outputSchema: {
+      designId: z.string(),
+      parentId: z.string(),
+      surfaceId: z.string().nullable(),
+      ...liveSyncOutput,
+    },
   },
   {
     contract: measureStairTool,
@@ -636,10 +641,10 @@ export function registerOperationTool(
         ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
         ...(designBrief !== undefined && { designBrief }),
-        ...((tool.catalog || batchPlacesInRoom || assetViewsReadCatalog(tool.contract.name, input) ||
-          (tool.contract.name === designBriefTool.name && briefReadsCatalog(input))) && {
-          catalog: await catalog(),
-        }),
+        ...((tool.catalog ||
+          batchPlacesInRoom ||
+          assetViewsReadCatalog(tool.contract.name, input) ||
+          briefReadsCatalog(tool.contract.name, input)) && { catalog: await catalog() }),
         ...(batchesObjects && {
           batchObjects: await buildBatchObjects(
             input.calls as { tool?: unknown; input?: unknown }[],
@@ -684,7 +689,10 @@ export function registerOperationTool(
       const pictures = (Array.isArray(previews) ? previews : []).flatMap(({ label, image }) => {
         const [, mimeType, data] = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(image) ?? []
         return mimeType && data
-          ? [{ type: 'text' as const, text: label }, { type: 'image' as const, data, mimeType }]
+          ? [
+              { type: 'text' as const, text: label },
+              { type: 'image' as const, data, mimeType },
+            ]
           : []
       })
       if (pictures.length)

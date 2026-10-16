@@ -43,7 +43,7 @@ export function applyAgentOutcome(
     const made = madeEntries(runtime.getNodes(), written)
     if (
       outcome.keep?.checkpoint ||
-      outcome.keep?.designBrief ||
+      outcome.keep?.designBrief !== undefined ||
       outcome.keep?.viewed !== undefined ||
       made.length
     )
