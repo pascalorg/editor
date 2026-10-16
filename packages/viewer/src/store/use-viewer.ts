@@ -165,6 +165,13 @@ type ViewerState = {
    */
   hasLevelBelowGrade: boolean
   /**
+   * The host lets the eye dive under the ground (the editor's orbit may, with the ground on Auto).
+   * The eye's fill light is mounted, from the moment this is true, so that the first crossing of the
+   * ground compiles nothing: a scene with no level below grade is dived under as well. Set by the
+   * host's camera; never persisted.
+   */
+  diveAvailable: boolean
+  /**
    * The eye lies under the ground at its own position (a free orbit under the lid). Set by the
    * viewer's underground ambiance from the camera; never persisted.
    */
@@ -526,6 +533,7 @@ const useViewer = create<ViewerState>()(
       groundMode: 'auto',
       setGroundMode: (mode) => set({ groundMode: mode }),
       hasLevelBelowGrade: false,
+      diveAvailable: false,
       eyeUnderGround: false,
       ambianceActive: false,
       undergroundLook: DEFAULT_UNDERGROUND_LOOK,

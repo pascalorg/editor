@@ -105,10 +105,14 @@ export function Lights() {
   const veiled = useViewer(groundVeiled)
   // The eye's fill is mounted once, and stays: adding or taking away a light changes every lit
   // material's shader (a runtime compile that lagged the switch to a basement), so it is there
-  // from the moment the scene has a level below grade (or a view first needs it) and only its
-  // intensity, the ambiance's, moves.
+  // from the moment the scene has a level below grade or the eye may dive (or a view first needs
+  // it) and only its intensity, the ambiance's, moves.
   const wantsFill = useViewer(
-    (state) => state.hasLevelBelowGrade || groundVeiled(state) || state.ambianceActive,
+    (state) =>
+      state.hasLevelBelowGrade ||
+      state.diveAvailable ||
+      groundVeiled(state) ||
+      state.ambianceActive,
   )
   const fillMounted = useRef(false)
   if (wantsFill) fillMounted.current = true

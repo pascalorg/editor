@@ -419,6 +419,14 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       : null,
   )
   const floorMinY = allowUnderground ? null : orbitFloorMinY(floorY, diveFloor)
+  // The viewer mounts the eye's fill light before the first dive, so crossing the ground compiles nothing.
+  const mayDive = allowUnderground || diveFloor !== null
+  useEffect(() => {
+    useViewer.setState({ diveAvailable: mayDive })
+    return () => {
+      useViewer.setState({ diveAvailable: false })
+    }
+  }, [mayDive])
   const maxPolarAngle =
     allowUnderground || cameraMode === 'perspective'
       ? MAX_ORBIT_POLAR_ANGLE

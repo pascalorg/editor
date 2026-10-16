@@ -334,6 +334,27 @@ test('switching floors and diving add and take away no light', async () => {
   }
 })
 
+// A house with no basement is dived under as well: the host says the eye may dive, and the fill is
+// there before the first crossing.
+test('a scene with no level below grade has the eye fill once the eye may dive, and the dive adds no light', async () => {
+  const { renderer, scene, camera } = await mountLights()
+  try {
+    const without = lightsOf(scene).directional.length
+    await act(async () => void useViewer.setState({ diveAvailable: true }))
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    const lights = lightsOf(scene).directional
+    expect(lights).toHaveLength(without + 1)
+    const fill = fillOf(scene)
+    expect(fill?.intensity).toBe(0)
+    camera.position.set(0, -3, 8)
+    await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    expect(lightsOf(scene).directional).toHaveLength(without + 1)
+    expect(fillOf(scene)).toBe(fill)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
 test('with Animation off the dive and the hole are instant, in both directions', async () => {
   const driver = startConstructionReveal({ reveals: () => false, level: () => 'off' })
   const { renderer, camera } = await mountLights()
