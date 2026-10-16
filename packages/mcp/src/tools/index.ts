@@ -19,7 +19,6 @@ import { registerGetScene } from './get-scene'
 import { registerListUnits } from './list-units'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
-import { registerPlaceDesign } from './place-design'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
@@ -28,7 +27,6 @@ import { registerSetZone } from './set-zone'
 import { type PlanReadingHosts, registerSharedTools } from './shared-tools'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
-import { registerValidateDesign } from './validate-design'
 import { registerVariantTools } from './variants'
 import { registerViewScene, type SceneViewHost } from './view-scene'
 
@@ -69,13 +67,11 @@ export function registerTools(
   registerCreateUnit(server, operations)
   registerSetUnitMembers(server, operations)
   registerListUnits(server, operations)
-  registerPlaceDesign(server, operations)
   registerSetZone(server, operations)
   registerUndo(server, operations)
   registerRedo(server, operations)
   registerExportJson(server, operations)
   registerExportGlb(server, operations)
-  registerValidateDesign(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)
   if (operations.hasStore) {

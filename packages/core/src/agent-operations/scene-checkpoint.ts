@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { type DesignBrief, DesignBriefRecord } from '../agent-tools/design-brief'
 import { type AnyNode, isDefaultGutterNode } from '../schema'
 import { isDerivedNode } from '../store/derived-node-guard'
 import { measureScene, type SceneMeasure } from './scene-measure'
@@ -31,10 +32,16 @@ export type SessionCheckpoint = {
 export type SessionRecord = {
   checkpoints: Record<string, SessionCheckpoint>
   made: MadeEntry[]
+  /** The design brief in force: the last one written, which furnishing follows (design_brief). */
+  designBrief?: DesignBrief
 }
 
-/** What an operation or a write asks its host to keep. */
-export type SessionKeep = { checkpoint?: SessionCheckpoint; made?: readonly MadeEntry[] }
+/** What an operation or a write asks its host to keep; a `designBrief` of null takes the brief away. */
+export type SessionKeep = {
+  checkpoint?: SessionCheckpoint
+  made?: readonly MadeEntry[]
+  designBrief?: DesignBrief | null
+}
 
 export const EMPTY_SESSION: SessionRecord = { checkpoints: {}, made: [] }
 
@@ -59,11 +66,13 @@ export function keepInSession(session: SessionRecord, keep: SessionKeep): Sessio
     known.add(entry.id)
     return true
   })
+  const designBrief = 'designBrief' in keep ? keep.designBrief : session.designBrief
   return {
     checkpoints: keep.checkpoint
       ? { ...session.checkpoints, [keep.checkpoint.name]: keep.checkpoint }
       : session.checkpoints,
     made: fresh.length ? [...session.made, ...fresh].slice(0, MAX_MADE) : session.made,
+    ...(designBrief ? { designBrief } : {}),
   }
 }
 
@@ -203,6 +212,7 @@ const Record_ = z.object({
     .record(z.string(), Checkpoint)
     .refine((checkpoints) => Object.keys(checkpoints).length <= MAX_CHECKPOINTS),
   made: z.array(Made).max(MAX_MADE),
+  designBrief: DesignBriefRecord.optional(),
 })
 
 /**

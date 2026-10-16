@@ -7,6 +7,7 @@ import {
   authoredObject,
   editedScriptLanguage,
   editedScriptParams,
+  furnishingRefusal,
   readSourceResult,
   requireAddObjectReason,
   type SceneNodes,
@@ -32,7 +33,7 @@ import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
 import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
-import { toPatches } from './shared-tools'
+import { briefInForce, toPatches } from './shared-tools'
 
 /**
  * How a host runs `add_object`'s module and keeps the result. Running
@@ -192,6 +193,11 @@ export function registerAddObject(
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async (input: Record<string, unknown>) => {
+      const brief = briefInForce(bridge)
+      if (brief !== undefined) {
+        const refusal = furnishingRefusal(addObjectTool.name, input, brief)
+        if (refusal) return refusalResult(refusal)
+      }
       if (!host) {
         return toolError('This Pascal server cannot run geometry scripts.', {
           code: 'scripts_unavailable',

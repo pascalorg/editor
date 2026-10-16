@@ -8,6 +8,7 @@ import { type AnyNodeId, BuildingNode, type Collection, LevelNode } from '@pasca
 import { createPascalMcpServer } from '@pascal-app/mcp/server'
 import { z } from 'zod'
 import { AGENT_TOOL_CASES } from '../../../core/src/agent-operations/__fixtures__/cases'
+import { CATALOG_BRIEF } from '../../../core/src/agent-operations/__fixtures__/design-brief-cases'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -101,13 +102,18 @@ describe('shared tools over MCP', () => {
     test(`${c.tool}: ${c.name}`, async () => {
       const { nodes, rootNodeIds } = c.scene()
       bridge.setScene(nodes as never, rootNodeIds as never)
+      const designBrief = c.context?.designBrief === undefined ? CATALOG_BRIEF : (c.context.designBrief ?? undefined)
+      bridge.agentSession.replace({
+        ...(c.context?.session?.() ?? { checkpoints: {}, made: [] }),
+        ...(designBrief ? { designBrief } : {}),
+      })
       const own = c.context?.catalog
       catalog = own ? async () => own : builtInCatalog
       // Catalog facts supplied by each shared case; nothing is fetched.
       hosts.assetViews = async () => c.context?.assetViews ?? {}
       viewed = c.context?.activeLevelId ?? null
       const result = (await client.callTool({ name: c.tool, arguments: c.input })) as Result
-      const payload = JSON.parse(result.content[0]!.text) as Record<string, unknown>
+      const payload = result.structuredContent ?? JSON.parse(result.content[0]!.text) as Record<string, unknown>
       if ('refusal' in c.expect) {
         expect(result.isError).toBe(true)
         expect(payload.code).toBe(c.expect.refusal)
@@ -115,6 +121,7 @@ describe('shared tools over MCP', () => {
         return
       }
       expect(result.isError).toBeFalsy()
+      expect(c.expect.session?.(bridge.agentSession.read()) ?? []).toEqual([])
       expect(payload).toMatchObject(c.expect.result)
       for (const id of c.expect.present ?? []) expect(bridge.getNode(id as AnyNodeId)).toBeTruthy()
       for (const id of c.expect.absent ?? []) expect(bridge.getNode(id as AnyNodeId)).toBeFalsy()

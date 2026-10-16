@@ -70,6 +70,7 @@ const TOOL_POLICIES = [
       'create_roof',
       'create_room',
       'create_stair',
+      'design_brief',
       'set_checkpoint',
       'create_story_shell',
       'create_unit',

@@ -3,6 +3,7 @@ import { INDEPENDENT_BATCH_TOOLS } from '../agent-tools/batch'
 import { isAgentRefusal, refuse } from '../agent-tools/refusal'
 import type { SceneMaterialId } from '../schema/scene-material'
 import { applySceneChanges, mergeSceneChanges } from './apply-changes'
+import { requireFurnishing } from './design-brief'
 import { referencedSceneMaterialIds } from './scene-materials'
 import type { AgentOperation, SceneChanges } from './types'
 
@@ -59,6 +60,10 @@ export function createBatchOperation(
       }
       return { index, tool: call.tool, operation, input: parsed.data }
     })
+
+    // The gate is a fact of the tool, not of the scene: a call it refuses cannot succeed under
+    // either onRefusal, so the batch is refused whole before anything runs.
+    requireFurnishing('run_batch', { calls }, context.designBrief)
 
     let working = nodes
     let workingContext = context

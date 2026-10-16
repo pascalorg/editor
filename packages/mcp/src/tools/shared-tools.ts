@@ -13,6 +13,7 @@ import {
   createAssetViewLoader,
   createFetchAssetViewIO,
   buildBatchObjects,
+  furnishingRefusal,
   type SceneChanges,
   startOfSession,
   writeCollections,
@@ -28,6 +29,10 @@ import {
   createRoofTool,
   createRoomTool,
   createStairTool,
+  type DesignBrief,
+  designBriefTool,
+  placeDesignTool,
+  validateDesignTool,
   deleteNodeTool,
   duplicateLevelTool,
   findByTypeTool,
@@ -62,6 +67,7 @@ import {
   MaterialSchema,
   SceneMaterial,
 } from '@pascal-app/core/schema'
+import { DesignValidationSchema } from '@pascal-app/core/procedural-items'
 import { z } from 'zod'
 import type { Patch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
@@ -141,6 +147,18 @@ const levelRoleOutput = {
 }
 
 const SHARED_TOOLS: SharedTool[] = [
+  {
+    contract: validateDesignTool,
+    operation: AGENT_OPERATIONS.validate_design,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    outputSchema: DesignValidationSchema.shape,
+  },
+  {
+    contract: placeDesignTool,
+    operation: AGENT_OPERATIONS.place_design,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: { designId: z.string(), parentId: z.string(), surfaceId: z.string().nullable(), ...liveSyncOutput },
+  },
   {
     contract: measureStairTool,
     operation: AGENT_OPERATIONS.measure_stair,
@@ -292,6 +310,11 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: setCheckpointTool,
     operation: AGENT_OPERATIONS.set_checkpoint,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: designBriefTool,
+    operation: AGENT_OPERATIONS.design_brief,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
@@ -525,6 +548,11 @@ export function agentRuntime(bridge: SceneOperations): AgentHostRuntime {
   }
 }
 
+export function briefInForce(bridge: SceneOperations): DesignBrief | null | undefined {
+  const session = bridge.agentSession
+  return session ? (session.read().designBrief ?? null) : undefined
+}
+
 function writesScene(changes: SceneChanges | undefined): boolean {
   return Boolean(
     changes &&
@@ -573,6 +601,12 @@ export function registerOperationTool(
       // The agent's session begins with its first call, before anything is written.
       const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
       if (first) bridge.agentSession?.keep(first)
+      // Gate before catalog I/O or module compilation.
+      const designBrief = briefInForce(bridge)
+      if (designBrief !== undefined) {
+        const refusal = furnishingRefusal(tool.contract.name, input, designBrief)
+        if (refusal) return refusalResult(refusal)
+      }
       const batchPlacesInRoom =
         tool.contract.name === runBatchTool.name &&
         Array.isArray(input.calls) &&
@@ -600,6 +634,7 @@ export function registerOperationTool(
           : {}),
         ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
+        ...(designBrief !== undefined && { designBrief }),
         ...((tool.catalog || batchPlacesInRoom || assetViewsReadCatalog(tool.contract.name, input)) && {
           catalog: await catalog(),
         }),

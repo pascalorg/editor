@@ -104,6 +104,14 @@ describe('add_object in run_batch over MCP', () => {
     const { nodes, rootNodeIds } = floorWithScreen()
     bridge.setScene(nodes as never, rootNodeIds as never)
     bridge.setActiveScene({ id: 'scene_batch', name: 'Batch' } as never)
+    bridge.agentSession.keep({
+      designBrief: {
+        fixed: ['the test’s pieces'],
+        open: [],
+        source: 'catalog',
+        vision: 'The catalog as it is.',
+      },
+    })
   })
 
   afterEach(async () => {

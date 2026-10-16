@@ -17,6 +17,8 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import type { AgentContext } from '../types'
+import type { SessionRecord } from '../scene-checkpoint'
 import type { AssetViewFacts } from '../asset-views'
 import { ADD_STAIR_CASES } from './add-stair-cases'
 import { CREATE_ROOM_CASES, FURNISH_ROOM_CASES } from './build-room-cases'
@@ -29,6 +31,7 @@ import { ROOM_CASES } from './room-cases'
 import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { VIEW_ASSETS_CASES } from './view-assets-cases'
+import { DESIGN_BRIEF_CASES } from './design-brief-cases'
 import { CORNER_WINDOW_CASES } from './corner-window-cases'
 import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
 import { DESCRIBE_NODE_CASES, FIND_NODES_CASES } from './node-read-cases'
@@ -67,8 +70,11 @@ export type AgentToolCase = {
     activeLevelId?: string | null
     catalog?: AssetInput[]
     assetViews?: Record<string, AssetViewFacts>
+    session?: () => SessionRecord
+    designBrief?: AgentContext['designBrief']
   }
   surfaces?: AgentSurface[]
+  readOnly?: boolean
   expect:
     | { refusal: string; mentions?: string[] }
     | {
@@ -82,6 +88,7 @@ export type AgentToolCase = {
         /** Text the result must include. */
         mentions?: string[]
         /** What the table cannot state (minted ids, derived construction): the problems, if any. */
+        session?: (session: SessionRecord) => string[]
         check?: (result: Record<string, unknown>, nodes: Readonly<Record<string, AnyNode>>) => string[]
       }
 }
@@ -956,6 +963,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...FURNISH_ROOM_CASES,
   ...SEARCH_ASSETS_CASES,
   ...VIEW_ASSETS_CASES,
+  ...DESIGN_BRIEF_CASES,
   ...ADD_WALL_CASES,
   ...ADD_FENCE_CASES,
   ...CREATE_ROOF_CASES,

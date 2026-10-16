@@ -25,6 +25,7 @@ export const BATCHABLE_TOOLS = [
   'add_column',
   // The host compiles each module before the batch runs.
   'add_object',
+  'place_design',
   'place_in_room',
   // Not search_assets: it reads the host's item library, which a host hands that one tool, and
   // already runs several queries per call. Not view_assets, whose pictures a batch's result cannot

@@ -8,6 +8,8 @@ import { addColumnTool } from './columns'
 import type { AgentToolContract } from './contract'
 import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
+import { designBriefTool } from './design-brief'
+import { placeDesignTool, validateDesignTool } from './designs'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
@@ -90,6 +92,9 @@ export const AGENT_TOOL_CONTRACTS = [
   duplicateLevelTool,
   verifySceneTool,
   setCheckpointTool,
+  designBriefTool,
+  placeDesignTool,
+  validateDesignTool,
   addWallTool,
   addFenceTool,
   addCornerWindowTool,
@@ -121,6 +126,8 @@ export const AGENT_TOOL_CONTRACTS = [
 
 export { BATCHABLE_TOOLS, INDEPENDENT_BATCH_TOOLS, runBatchTool } from './batch'
 export { setCheckpointTool } from './checkpoints'
+export * from './design-brief'
+export { placeDesignTool, validateDesignTool } from './designs'
 export { straightenFacadePhotoTool } from './photo-elevation'
 export { placeInRoomTool } from './place-in-room'
 export { createRoofTool } from './roofs'

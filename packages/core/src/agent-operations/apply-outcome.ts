@@ -41,7 +41,7 @@ export function applyAgentOutcome(
   }
   if (runtime.keep) {
     const made = madeEntries(runtime.getNodes(), written)
-    if (outcome.keep?.checkpoint || made.length)
+    if (outcome.keep?.checkpoint || outcome.keep?.designBrief || made.length)
       runtime.keep({ ...outcome.keep, ...(made.length ? { made } : {}) })
   }
   return result

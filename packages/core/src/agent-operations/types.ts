@@ -1,5 +1,13 @@
 import type { ZodType } from 'zod'
-import type { AnyNode, AssetInput, Collection, CompiledGeometryScript, SceneMaterial, SceneMaterialId } from '../schema'
+import type { DesignBrief } from '../agent-tools/design-brief'
+import type {
+  AnyNode,
+  AssetInput,
+  Collection,
+  CompiledGeometryScript,
+  SceneMaterial,
+  SceneMaterialId,
+} from '../schema'
 import type { AssetViewFacts } from './asset-views'
 import type { SessionKeep, SessionRecord } from './scene-checkpoint'
 
@@ -38,6 +46,12 @@ export type AgentContext = {
   /** Modules built by the host before run_batch, indexed by call position. */
   batchObjects?: Readonly<Record<number, BatchedObject>>
   batchCall?: number
+  /**
+   * The design brief in force on a host that gates furnishing on one: `null` while there is none
+   * (placing or making furnishings is refused, `furnishingRefusal`), the brief once written. A
+   * host that does not gate leaves it out.
+   */
+  designBrief?: DesignBrief | null
 }
 
 /** One add_object call of a batch, built by its host: the compiled module, or why it failed. */
