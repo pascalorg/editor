@@ -636,3 +636,171 @@ test('an unrelated slab edit preserves a loaded stair opening with historical ge
     }).has(stair.id),
   ).toBe(true)
 })
+
+describe('mezzanine deck openings', () => {
+  const box = (x0: number, z0: number, x1: number, z1: number): [number, number][] => [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+
+  function insideDeckStair(levelHeight: number) {
+    const building = BuildingNode.parse({ name: 'Building' })
+    const ground = LevelNode.parse({
+      name: 'Ground',
+      level: 0,
+      parentId: building.id,
+      height: levelHeight,
+    })
+    const upper = LevelNode.parse({ name: 'Upper', level: 1, parentId: building.id })
+    const deck = SlabNode.parse({
+      name: 'Deck',
+      parentId: ground.id,
+      support: 'open',
+      elevation: 2.5,
+      polygon: box(1.5, 0.1, 7.9, 3),
+    })
+    const hostCeiling = CeilingNode.parse({
+      name: 'Host ceiling',
+      parentId: ground.id,
+      height: levelHeight - 0.1,
+      polygon: box(0, 0, 8, 6),
+    })
+    const upperFloor = SlabNode.parse({
+      name: 'Upper floor',
+      parentId: upper.id,
+      polygon: box(0, 0, 8, 6),
+    })
+    const segment = StairSegmentNode.parse({
+      parentId: 'stair_inside',
+      width: 1,
+      length: 3.92,
+      height: 2.5,
+      stepCount: 14,
+    })
+    const stair = StairNode.parse({
+      id: 'stair_inside',
+      parentId: ground.id,
+      position: [1.5, 0, 1.55],
+      rotation: Math.PI / 2,
+      fromLevelId: ground.id,
+      toLevelId: null,
+      deckSlabId: deck.id,
+      slabOpeningMode: 'destination',
+      children: [segment.id],
+    })
+    const nodes = Object.fromEntries(
+      [building, ground, upper, deck, hostCeiling, upperFloor, stair, segment].map((node) => [
+        node.id,
+        node,
+      ]),
+    ) as Record<string, AnyNode>
+    return { nodes, deck, hostCeiling, upperFloor, stair }
+  }
+
+  test('a deck stair with the cutout on cuts only its own deck, under the flight', () => {
+    const { nodes, deck, stair } = insideDeckStair(5)
+    const updates = syncAutoStairOpenings(nodes)
+    expect(updates.map((update) => update.id)).toEqual([deck.id])
+    const hole = updates[0]!.data.holes![0]!
+    expect(updates[0]!.data.holeMetadata).toEqual([{ source: 'stair', stairId: stair.id }])
+    const xs = hole.map(([x]) => x)
+    // The cut ends at the top step, leaving the rest of the deck as a landing.
+    expect(Math.max(...xs)).toBeCloseTo(1.5 + 3.92)
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(1.5)
+  })
+
+  test('a deck stair never cuts the host ceiling or the floor above, even within headroom', () => {
+    // 2.5 m deck + 2 m headroom reaches past a 4 m storey's ceiling and floor above.
+    const { nodes, deck, hostCeiling, upperFloor, stair } = insideDeckStair(4)
+    const ids = syncAutoStairOpenings(nodes).map((update) => update.id)
+    expect(ids).toContain(deck.id)
+    expect(ids).not.toContain(hostCeiling.id)
+    expect(ids).not.toContain(upperFloor.id)
+    // Without the deck link the same flight would cut both.
+    const ordinary = { ...stair, deckSlabId: undefined, toLevelId: null }
+    const unlinked = syncAutoStairOpenings({ ...nodes, [stair.id]: ordinary }).map((u) => u.id)
+    expect(unlinked).toContain(hostCeiling.id)
+    expect(unlinked).toContain(upperFloor.id)
+  })
+
+  test('a deck stair with the cutout off cuts nothing', () => {
+    const { nodes, stair } = insideDeckStair(5)
+    const outside = { ...stair, slabOpeningMode: 'none' as const }
+    expect(syncAutoStairOpenings({ ...nodes, [stair.id]: outside })).toEqual([])
+  })
+
+  test('an L stair keeps its intermediate landing on a deck it meets, and cuts only its stairwell above', () => {
+    const building = BuildingNode.parse({ name: 'Building' })
+    const ground = LevelNode.parse({ name: 'Ground', level: 0, parentId: building.id, height: 3 })
+    const upper = LevelNode.parse({ name: 'Upper', level: 1, parentId: building.id })
+    const upperFloor = SlabNode.parse({
+      name: 'Upper floor',
+      parentId: upper.id,
+      polygon: box(-2, -2, 8, 8),
+    })
+    // A split-level deck flush with the landing (1.5 m) that the landing runs onto.
+    const deck = SlabNode.parse({
+      name: 'Split-level deck',
+      parentId: ground.id,
+      support: 'open',
+      elevation: 1.5,
+      polygon: box(-1, 2.7, 4, 6),
+    })
+    const first = StairSegmentNode.parse({
+      parentId: 'stair_l',
+      width: 1,
+      length: 2.5,
+      height: 1.5,
+      stepCount: 9,
+    })
+    const landing = StairSegmentNode.parse({
+      parentId: 'stair_l',
+      segmentType: 'landing',
+      width: 2,
+      length: 1,
+      height: 0,
+      stepCount: 0,
+    })
+    const second = StairSegmentNode.parse({
+      parentId: 'stair_l',
+      width: 1,
+      length: 2.5,
+      height: 1.5,
+      stepCount: 9,
+      attachmentSide: 'left',
+    })
+    const stair = StairNode.parse({
+      id: 'stair_l',
+      parentId: ground.id,
+      position: [2, 0, 0.2],
+      fromLevelId: ground.id,
+      toLevelId: upper.id,
+      slabOpeningMode: 'destination',
+      children: [first.id, landing.id, second.id],
+    })
+    const nodes = Object.fromEntries(
+      [building, ground, upper, upperFloor, deck, stair, first, landing, second].map((node) => [
+        node.id,
+        node,
+      ]),
+    ) as Record<string, AnyNode>
+    const updates = syncAutoStairOpenings(nodes)
+    const landingCentre: [number, number] = [2, 3.2]
+    const contains = (ring: [number, number][], [x, z]: [number, number]) => {
+      let inside = false
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, zi] = ring[i]!
+        const [xj, zj] = ring[j]!
+        if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside
+      }
+      return inside
+    }
+    const deckHoles = updates.find((update) => update.id === deck.id)?.data.holes ?? []
+    expect(deckHoles.some((hole) => contains(hole, landingCentre))).toBe(false)
+    // The storey above still opens over the whole flight, landing included (headroom).
+    const floorHoles = updates.find((update) => update.id === upperFloor.id)?.data.holes ?? []
+    expect(floorHoles.some((hole) => contains(hole, landingCentre))).toBe(true)
+  })
+})

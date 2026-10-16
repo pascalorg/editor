@@ -11,7 +11,7 @@ import type {
 } from '../../schema'
 import { resolveCeilingHeight } from '../../services/level-height'
 import { getLevelElevations } from '../../services/storey'
-import { stairClearanceOpening } from './stair-clearance'
+import { openingRings, resolveStairWalkingSurfaces, stairClearanceOpening } from './stair-clearance'
 import { resolveStairTotalRise } from './stair-rise-query'
 
 const buildingLevelsMemo = new WeakMap<object, Map<string, Extract<AnyNode, { type: 'level' }>[]>>()
@@ -242,6 +242,19 @@ function isCoveredByExistingHole(existingHoles: Point2D[][], autoHole: Point2D[]
   return area(difference(autoHole, union(existingHoles))) <= 1e-6
 }
 
+/** The surface's top in the building frame that stair walking surfaces use. */
+function stairSurfaceTop(
+  stair: StairNode,
+  nodes: Record<string, AnyNode>,
+  targetElevation: number,
+) {
+  const { fromLevelId } = getResolvedStairLevelIds(stair, nodes)
+  const source = fromLevelId
+    ? getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(fromLevelId)
+    : undefined
+  return (source?.baseY ?? 0) + stair.position[1] + targetElevation
+}
+
 function getStairOpeningPolygons(
   stair: StairNode,
   nodes: Record<string, AnyNode>,
@@ -250,15 +263,34 @@ function getStairOpeningPolygons(
   thickness: number,
 ) {
   if ((stair.slabOpeningMode ?? 'none') !== 'destination') return []
-  const { fromLevelId } = getResolvedStairLevelIds(stair, nodes)
-  const source = fromLevelId
-    ? getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(fromLevelId)
-    : undefined
-  const underside = (source?.baseY ?? 0) + stair.position[1] + targetElevation - thickness
-  return stairClearanceOpening(stair, nodes, underside, openingOffset, underside + thickness)
+  const top = stairSurfaceTop(stair, nodes, targetElevation)
+  return stairClearanceOpening(stair, nodes, top - thickness, openingOffset, top)
 }
 
 type OpeningResolver = typeof getStairOpeningPolygons
+
+/**
+ * A deck on the stair's own level that an intermediate landing meets (a
+ * split-level landing) is walked on, not climbed through: keep it under the
+ * landing even though the landing's headroom reaches it.
+ */
+function keepingIntermediateLandings(resolveOpening: OpeningResolver): OpeningResolver {
+  return (stair, nodes, targetElevation, openingOffset, thickness) => {
+    const rings = resolveOpening(stair, nodes, targetElevation, openingOffset, thickness)
+    if (!rings?.length || stair.stairType !== 'straight') return rings
+    const top = stairSurfaceTop(stair, nodes, targetElevation)
+    const lastSegmentId = stair.children.at(-1)
+    const landings = resolveStairWalkingSurfaces(stair, nodes)
+      .filter(
+        (surface) =>
+          surface.kind === 'landing' &&
+          surface.nodeId !== lastSegmentId &&
+          surface.top >= top - 1e-6,
+      )
+      .map((surface) => surface.region)
+    return landings.length ? openingRings(difference(union(rings), union(landings))) : rings
+  }
+}
 
 function getApplicableStairOpeningPolygons(
   stair: StairNode,
@@ -331,17 +363,38 @@ function getTargetCeilingElevationForStair(
   return ceilingElevation.baseY - fromElevation.baseY + ceilingHeight - (stair.position[1] ?? 0)
 }
 
-function shouldApplyStairToSlab(
+function isSourceLevelDeck(
   stair: StairNode,
+  slab: SlabNode,
   slabLevelId: string,
   nodes: Record<string, AnyNode>,
 ) {
+  return (
+    !stair.deckSlabId &&
+    slab.support === 'open' &&
+    slabLevelId === getResolvedStairLevelIds(stair, nodes).fromLevelId
+  )
+}
+
+/**
+ * A deck stair only ever cuts its own deck. Any other stair cuts the floors of
+ * the levels it climbs into, plus open-supported decks (mezzanines) on its
+ * source level; clearance geometry decides whether and where those are cut.
+ */
+function shouldApplyStairToSlab(
+  stair: StairNode,
+  slab: SlabNode,
+  slabLevelId: string,
+  nodes: Record<string, AnyNode>,
+) {
+  if (stair.deckSlabId) return stair.deckSlabId === slab.id
+  if (!isInStairBuildingScope(stair, slabLevelId, nodes)) return false
+
+  if (isSourceLevelDeck(stair, slab, slabLevelId, nodes)) return true
   const { fromLevelId, toLevelId } = getResolvedStairLevelIds(stair, nodes)
   const fromLevel = getLevelNumber(fromLevelId, nodes)
   const toLevel = getLevelNumber(toLevelId, nodes)
   const slabLevel = getLevelNumber(slabLevelId, nodes)
-
-  if (!isInStairBuildingScope(stair, slabLevelId, nodes)) return false
 
   if (slabLevel === undefined) {
     return toLevelId === slabLevelId
@@ -361,12 +414,13 @@ function shouldApplyStairToCeiling(
   ceilingLevelId: string,
   nodes: Record<string, AnyNode>,
 ) {
+  // A deck stair arrives on its deck inside the room, below the room's ceiling.
+  if (stair.deckSlabId || !isInStairBuildingScope(stair, ceilingLevelId, nodes)) return false
+
   const { fromLevelId, toLevelId } = getResolvedStairLevelIds(stair, nodes)
   const fromLevel = getLevelNumber(fromLevelId, nodes)
   const toLevel = getLevelNumber(toLevelId, nodes)
   const ceilingLevel = getLevelNumber(ceilingLevelId, nodes)
-
-  if (!isInStairBuildingScope(stair, ceilingLevelId, nodes)) return false
 
   if (ceilingLevel === undefined) {
     return fromLevelId === ceilingLevelId
@@ -394,18 +448,12 @@ export function syncAutoStairOpenings(
     (node): node is CeilingNode => node.type === 'ceiling',
   )
   const updates: Array<{ id: AnyNodeId; data: Partial<SlabNode | CeilingNode> }> = []
-  const slabStairsByLevel = new Map<string, StairNode[]>()
   const ceilingStairsByLevel = new Map<string, StairNode[]>()
-  const stairsFor = (levelId: string, ceiling: boolean) => {
-    const cache = ceiling ? ceilingStairsByLevel : slabStairsByLevel
-    let selected = cache.get(levelId)
+  const ceilingStairsFor = (levelId: string) => {
+    let selected = ceilingStairsByLevel.get(levelId)
     if (!selected) {
-      selected = stairs.filter((stair) =>
-        ceiling
-          ? shouldApplyStairToCeiling(stair, levelId, nodes)
-          : shouldApplyStairToSlab(stair, levelId, nodes),
-      )
-      cache.set(levelId, selected)
+      selected = stairs.filter((stair) => shouldApplyStairToCeiling(stair, levelId, nodes))
+      ceilingStairsByLevel.set(levelId, selected)
     }
     return selected
   }
@@ -420,7 +468,8 @@ export function syncAutoStairOpenings(
     const preservedHolePolygons = preservedHoles.map((entry) => entry.polygon)
 
     const unresolved = new Set<string>()
-    const stairHoles = stairsFor(slabLevelId, false)
+    const stairHoles = stairs
+      .filter((stair) => shouldApplyStairToSlab(stair, slab, slabLevelId, nodes))
       .flatMap((stair) => {
         const polygons = getApplicableStairOpeningPolygons(
           stair,
@@ -428,7 +477,9 @@ export function syncAutoStairOpenings(
           getTargetSlabElevationForStair(stair, slab, slabLevelId, nodes),
           slab.polygon,
           slab.thickness,
-          resolveOpening,
+          isSourceLevelDeck(stair, slab, slabLevelId, nodes)
+            ? keepingIntermediateLandings(resolveOpening)
+            : resolveOpening,
         )
         if (polygons === null) {
           unresolved.add(stair.id)
@@ -481,7 +532,7 @@ export function syncAutoStairOpenings(
     const preservedHolePolygons = preservedHoles.map((entry) => entry.polygon)
 
     const unresolved = new Set<string>()
-    const stairHoles = stairsFor(ceilingLevelId, true)
+    const stairHoles = ceilingStairsFor(ceilingLevelId)
       .flatMap((stair) => {
         const polygons = getApplicableStairOpeningPolygons(
           stair,
