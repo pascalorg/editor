@@ -4,9 +4,11 @@ import { groundHoleOpenNode, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import { BufferAttribute, BufferGeometry, FrontSide } from 'three'
 import {
+  abs,
   attribute,
   color,
   float,
+  fract,
   mix,
   mx_noise_float,
   normalize,
@@ -21,6 +23,7 @@ import {
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 import type { PitWalls } from './ground-pit-geometry'
 import { noopRaycast } from './ground-veil'
+import type { EdgeLook } from './underground-edge'
 
 /**
  * The pit under the hole, seen from above: over a level that lies deep, the hole in the ground
@@ -66,8 +69,28 @@ const FLOOR_DROP = 0.05
 /** The walls' foot goes this far under the floor's plate, so no gap shows between them. */
 const FOOT_TUCK = FLOOR_DROP + 0.03
 
+/**
+ * The section cut's face (`EdgeLook.section`): one flat tone, a darker line at grade, and when
+ * hatched, diagonal lines every `SECTION_HATCH_STEP` metres along the face.
+ */
+const SECTION_TONE = '#747474'
+const SECTION_LINE = '#1e1e1e'
+const SECTION_HATCH_TONE = '#505050'
+const SECTION_LINE_DEPTH = 0.07
+const SECTION_HATCH_STEP = 0.8
+
 const pitTopY = uniform(0)
 const pitFloorY = uniform(0)
+const pitCrumble = uniform(CRUMBLE)
+const pitSection = uniform(0)
+const pitHatch = uniform(0)
+
+/** Sets the walls' look for an edge look (uniforms: nothing recompiles). */
+export function setGroundPitEdge(look: EdgeLook): void {
+  pitCrumble.value = look.crumble
+  pitSection.value = look.section
+  pitHatch.value = look.hatch
+}
 
 /** The floor the pit goes down to now, world Y (the last level shown below grade). */
 export function groundPitFloorNow(): number {
@@ -101,7 +124,7 @@ function wallMaterial(topsoil: string, foot: string) {
       ),
     )
   // A broad lump and a finer one over it.
-  const bulge = crumble(1).add(crumble(2.7).mul(0.4)).mul(CRUMBLE).mul(rough)
+  const bulge = crumble(1).add(crumble(2.7).mul(0.4)).mul(pitCrumble).mul(rough)
   material.positionNode = vec3(
     positionLocal.x.sub(normalLocal.x.mul(bulge)),
     drawnY,
@@ -123,14 +146,27 @@ function wallMaterial(topsoil: string, foot: string) {
   )
   const strata = smoothstep(float(-0.06), float(0.06), mx_noise_float(sample))
   const layers = mix(color(STRATA.dark), color(STRATA.light), strata)
-  const toFoot = mix(layers, color(foot), drop.mul(0.6))
+  const toFoot = mix(layers, color(foot), drop.mul(0.6).mul(float(1).sub(pitSection)))
   // The ground's own layer along the cut, its lower edge a noise threshold like the rim.
   const depthBelowTop = drop.mul(pitTopY.sub(pitFloorY)).mul(pitEase())
   const edge = float(TOPSOIL_DEPTH).add(
     mx_noise_float(positionWorld.mul(vec3(1.3, 0, 1.3))).mul(0.12),
   )
-  const soil = float(1).sub(smoothstep(edge.sub(0.04), edge, depthBelowTop))
-  material.colorNode = mix(toFoot, color(topsoil), soil)
+  const soil = float(1)
+    .sub(smoothstep(edge.sub(0.04), edge, depthBelowTop))
+    .mul(float(1).sub(pitSection))
+  const earth = mix(toFoot, color(topsoil), soil)
+  // The section cut: a flat face, hatched on request, and a thin dark line where it meets grade.
+  // The hatch runs along the wall (its tangent, from the normal) and up, at 45 degrees.
+  const along = positionLocal.x.mul(normalLocal.z.negate()).add(positionLocal.z.mul(normalLocal.x))
+  const diagonal = fract(along.add(positionWorld.y).div(SECTION_HATCH_STEP))
+  const hatchLine = float(1).sub(smoothstep(float(0.02), float(0.05), abs(diagonal.sub(0.5))))
+  const face = mix(color(SECTION_TONE), color(SECTION_HATCH_TONE), hatchLine.mul(pitHatch))
+  const gradeLine = float(1).sub(
+    smoothstep(float(SECTION_LINE_DEPTH), float(SECTION_LINE_DEPTH * 1.6), depthBelowTop),
+  )
+  const section = mix(face, color(SECTION_LINE), gradeLine)
+  material.colorNode = mix(earth, section, pitSection)
   return material
 }
 

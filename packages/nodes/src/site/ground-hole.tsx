@@ -4,10 +4,18 @@ import {
   groundHoleOpenNode,
   groundHoleOpenNow,
   groundWindowMaskNode,
+  type UndergroundEdge,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
-import { ClampToEdgeWrapping, DataTexture, LinearFilter, RedFormat, UnsignedByteType } from 'three'
+import {
+  ClampToEdgeWrapping,
+  Color,
+  DataTexture,
+  LinearFilter,
+  RedFormat,
+  UnsignedByteType,
+} from 'three'
 import {
   color,
   float,
@@ -21,9 +29,10 @@ import {
   vec3,
 } from 'three/tsl'
 import { Vector2 } from 'three/webgpu'
-import { GroundPit } from './ground-pit'
+import { GroundPit, setGroundPitEdge } from './ground-pit'
 import { buildPitWalls, type PitWalls } from './ground-pit-geometry'
 import { fractalNoise3 } from './hole-noise'
+import { EDGE_LOOKS, type EdgeLook } from './underground-edge'
 
 /**
  * The ground as the medium, seen from above: over a level below grade the ground stays solid and
@@ -39,12 +48,13 @@ import { fractalNoise3 } from './hole-noise'
  * hole is open (0 to 1, eased, 0 in a capture) is the viewer's `groundHoleOpenNode`.
  */
 
-/** The hole's base margin around the footprint, in metres. */
-export const HOLE_MARGIN = 1.6
-/** How far the noise moves the edge in or out of the margin, in metres. */
-export const HOLE_ERODE = 0.9
-/** Noise cells per metre on the ground, of the broadest octave (~1.7 m waves). */
-const NOISE_SCALE = 0.6
+/**
+ * The shipped edge's base margin around the footprint (metres) and how far the noise moves the
+ * edge in or out of it. The edge looks (`underground-edge.ts`) vary both, and the noise's scale
+ * (cells per metre of its broadest octave, ~1.7 m waves at today's), through uniforms.
+ */
+export const HOLE_MARGIN = EDGE_LOOKS.noise.margin
+export const HOLE_ERODE = EDGE_LOOKS.noise.erode
 /**
  * Three octaves, each finer and weaker than the last (cell size 1.7 m, 0.8 m, 0.4 m). The sum is
  * divided by its largest value, so the noise stays within ±1 and the hole's guaranteed core
@@ -54,12 +64,6 @@ const NOISE_SCALE = 0.6
 const NOISE_LACUNARITY = 2.1
 const NOISE_DIMINISH = 0.4
 const NOISE_NORMALISE = 1 / (1 + NOISE_DIMINISH + NOISE_DIMINISH ** 2)
-/** The soft shade on the ground side of the cut, in metres, and how dark it gets at the cut. */
-const FEATHER_WIDTH = 0.55
-const FEATHER_STRENGTH = 0.6
-/** The thin light line along the cut itself, in metres, and its colour. */
-const LINE_WIDTH = 0.09
-const LINE_COLOR = '#f4f4f4'
 
 /** How far the pit's floor reaches past the hole's cut, in metres (under the walls). */
 const FLOOR_OVERLAP = 0.08
@@ -70,6 +74,32 @@ const RANGE_MIN = -6
 const RANGE_MAX = 10
 /** Texture margin past the footprint's box: where the hole can reach, and some. */
 const PAD = HOLE_MARGIN + HOLE_ERODE + 3
+
+let look: EdgeLook = EDGE_LOOKS.noise
+const holeMargin = uniform(look.margin)
+const holeErode = uniform(look.erode)
+const holeScale = uniform(look.scale)
+const featherWidth = uniform(look.featherWidth)
+const featherStrength = uniform(look.featherStrength)
+const lineWidth = uniform(look.lineWidth)
+const lineColor = uniform(new Color(look.lineColor))
+
+/**
+ * Sets the hole's edge look: the shader's margin, erosion, noise scale, feather and line (all
+ * uniforms, nothing recompiles), and the CPU's twin of them. The pit's walls are cut again by
+ * `GroundHole` after this.
+ */
+export function setGroundHoleEdge(edge: UndergroundEdge): void {
+  look = EDGE_LOOKS[edge]
+  holeMargin.value = look.margin
+  holeErode.value = look.erode
+  holeScale.value = look.scale
+  featherWidth.value = look.featherWidth
+  featherStrength.value = look.featherStrength
+  lineWidth.value = look.lineWidth
+  lineColor.value.set(look.lineColor)
+  setGroundPitEdge(look)
+}
 
 type Point = readonly [number, number]
 
@@ -197,10 +227,11 @@ export function groundHoleBox(): { originX: number; originZ: number; span: numbe
  * walls are laid along (`hole-noise.ts` is that noise on the CPU).
  */
 export function holeRadiusAt(x: number, z: number): number {
+  if (look.erode === 0) return look.margin
   return (
-    HOLE_MARGIN +
-    HOLE_ERODE *
-      fractalNoise3(x * NOISE_SCALE, z * NOISE_SCALE, 0.31, 3, NOISE_LACUNARITY, NOISE_DIMINISH)
+    look.margin +
+    look.erode *
+      fractalNoise3(x * look.scale, z * look.scale, 0.31, 3, NOISE_LACUNARITY, NOISE_DIMINISH)
   )
 }
 
@@ -216,7 +247,7 @@ const NOISE_BOUND = 1 + NOISE_DIMINISH + NOISE_DIMINISH ** 2
 export function groundHoleContains(x: number, z: number): boolean {
   const open = groundHoleOpenNow()
   if (open <= 0.001) return false
-  return groundHoleDistanceAt(x, z) < (HOLE_MARGIN - HOLE_ERODE) * open - 0.05
+  return groundHoleDistanceAt(x, z) < (look.margin - look.erode) * open - 0.05
 }
 
 // ── The shader pieces ────────────────────────────────────────────────────────────────────────
@@ -232,22 +263,22 @@ function holePieces() {
     .add(RANGE_MIN)
   // One fractal lookup: the radius of the hole wanders around its margin.
   const noise = mx_fractal_noise_float(
-    vec3(positionWorld.xz.mul(NOISE_SCALE), 0.31),
+    vec3(positionWorld.xz.mul(holeScale), 0.31),
     3,
     NOISE_LACUNARITY,
     NOISE_DIMINISH,
     NOISE_NORMALISE,
   )
-  const radius = noise.mul(HOLE_ERODE).add(HOLE_MARGIN).mul(open)
+  const radius = noise.mul(holeErode).add(holeMargin).mul(open)
   const inHole = distance.lessThan(radius).and(open.greaterThan(0.001))
   const opening = smoothstep(float(0), float(0.1), open)
-  const beyond = (width: number) =>
+  const beyond = (width: unknown) =>
     float(1)
-      .sub(smoothstep(radius, radius.add(width), distance))
+      .sub(smoothstep(radius, radius.add(width as never), distance))
       .mul(opening)
   // The pit's floor reaches a little past the cut, under the walls, so no hairline shows between.
   const floorInHole = distance.lessThan(radius.add(FLOOR_OVERLAP)).and(open.greaterThan(0.001))
-  pieces = { inHole, floorInHole, feather: beyond(FEATHER_WIDTH), line: beyond(LINE_WIDTH) }
+  pieces = { inHole, floorInHole, feather: beyond(featherWidth), line: beyond(lineWidth) }
   return pieces
 }
 
@@ -281,8 +312,8 @@ export function groundHoleShadowNode(): () => any {
  */
 export function groundHoleColorNode(shadeColor: string) {
   const { feather, line } = holePieces()
-  const shaded = mix(materialColor as any, color(shadeColor), feather.mul(FEATHER_STRENGTH))
-  return mix(shaded, color(LINE_COLOR), line)
+  const shaded = mix(materialColor as any, color(shadeColor), feather.mul(featherStrength))
+  return mix(shaded, lineColor, line)
 }
 
 /**
@@ -310,11 +341,13 @@ export function GroundHole({
   topAt: (x: number, z: number) => number
   topsoil: string
 }) {
+  const edge = useViewer((state) => state.undergroundLook.edge)
   const [pit, setPit] = useState<{
     walls: PitWalls | null
     box: { originX: number; originZ: number; span: number } | null
   } | null>(null)
   useEffect(() => {
+    setGroundHoleEdge(edge)
     setGroundHoleFootprints(footprints)
     const box = groundHoleBox()
     setPit(
@@ -325,14 +358,14 @@ export function GroundHole({
               distanceAt: groundHoleDistanceAt,
               radiusAt: holeRadiusAt,
               topAt,
-              radiusMin: HOLE_MARGIN - HOLE_ERODE * NOISE_BOUND,
-              radiusMax: HOLE_MARGIN + HOLE_ERODE * NOISE_BOUND,
+              radiusMin: look.margin - look.erode * NOISE_BOUND,
+              radiusMax: look.margin + look.erode * NOISE_BOUND,
             }),
             box,
           }
         : null,
     )
-  }, [footprints, topAt])
+  }, [footprints, topAt, edge])
   useEffect(() => {
     if (useViewer.getState().hasLevelBelowGrade !== present)
       useViewer.setState({ hasLevelBelowGrade: present })

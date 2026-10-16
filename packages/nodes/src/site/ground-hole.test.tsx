@@ -7,9 +7,12 @@ import {
   groundHoleShadowNode,
   HOLE_ERODE,
   HOLE_MARGIN,
+  holeRadiusAt,
+  setGroundHoleEdge,
   setGroundHoleFootprints,
   solidGroundMaskNode,
 } from './ground-hole'
+import { EDGE_LOOKS } from './underground-edge'
 
 // Over a level below grade the ground stays solid and a hole opens over the below-grade footprint,
 // its edge a noise threshold. The footprint is baked into a signed-distance texture; the CPU twin
@@ -24,6 +27,7 @@ const PLATE: Array<[number, number]> = [
 ]
 
 afterEach(() => {
+  setGroundHoleEdge('noise')
   groundHoleOpenNode().value = 0
   setGroundHoleFootprints([])
 })
@@ -84,4 +88,43 @@ test('the mask, the rim and the shadow word build as TSL nodes', () => {
   expect(solidGroundMaskNode()).toBeTruthy()
   expect(groundHoleColorNode('#4a5470')).toBeTruthy()
   expect(typeof groundHoleShadowNode()).toBe('function')
+})
+
+test('the section cut is a constant offset, the quiet edge a faint fine noise, today’s the eroded one', () => {
+  const spread = (edge: 'noise' | 'quiet' | 'section' | 'section-hatch') => {
+    setGroundHoleEdge(edge)
+    let low = Number.POSITIVE_INFINITY
+    let high = Number.NEGATIVE_INFINITY
+    for (let x = -20; x < 20; x += 0.37)
+      for (let z = -20; z < 20; z += 0.41) {
+        const radius = holeRadiusAt(x, z)
+        low = Math.min(low, radius)
+        high = Math.max(high, radius)
+      }
+    return { low, high }
+  }
+  const section = spread('section')
+  expect(section.low).toBe(0.6)
+  expect(section.high).toBe(0.6)
+  expect(spread('section-hatch')).toEqual(section)
+  const quiet = spread('quiet')
+  const noise = spread('noise')
+  expect(quiet.high - quiet.low).toBeGreaterThan(0.05)
+  expect(quiet.high - quiet.low).toBeLessThanOrEqual(2 * EDGE_LOOKS.quiet.erode * 1.5 + 1e-6)
+  expect(noise.high - noise.low).toBeGreaterThan(5 * (quiet.high - quiet.low))
+  // Today's numbers are the shipped ones.
+  expect(EDGE_LOOKS.noise.margin).toBe(HOLE_MARGIN)
+  expect(EDGE_LOOKS.noise.erode).toBe(HOLE_ERODE)
+})
+
+test('a pick falls through the hole’s guaranteed core of the look in force', () => {
+  setGroundHoleFootprints([PLATE])
+  groundHoleOpenNode().value = 1
+  setGroundHoleEdge('section')
+  // 0.6 m margin, no erosion (less a hand's width): 0.5 m out is in the hole, 0.6 m out is not.
+  expect(groundHoleContains(-0.5, 2)).toBe(true)
+  expect(groundHoleContains(-0.6, 2)).toBe(false)
+  // Today's edge keeps a wider sure core (1.6 m less 0.9 m of erosion).
+  setGroundHoleEdge('noise')
+  expect(groundHoleContains(-0.6, 2)).toBe(true)
 })

@@ -685,6 +685,52 @@ test('switching floors changes the pit’s uniforms and geometry, never its mesh
   }
 })
 
+test('every edge look puts the walls on its own contour and changes uniforms, never a mesh or a material', async () => {
+  withFourBasements()
+  const renderer = await create(<SiteRenderer node={lot(true)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    await act(async () => showLevel('level_m2'))
+    groundHoleOpenNode().value = 1
+    await renderer.advanceFrames(3, 0.05)
+    const snapshot = () =>
+      [...pitParts(scene), ...ground(scene, 'solid')].map((part) => {
+        const material = part.material as MeshBasicNodeMaterial
+        return { part, material, version: material.version, mask: material.maskNode }
+      })
+    const before = snapshot()
+    const geometries = new Set<unknown>()
+    for (const edge of ['section', 'quiet', 'section-hatch', 'noise', 'section'] as const) {
+      await act(async () => useViewer.getState().setUndergroundLook({ edge }))
+      await renderer.advanceFrames(3, 0.05)
+      const after = snapshot()
+      expect(after).toHaveLength(before.length)
+      after.forEach((entry, index) => {
+        expect(entry.part).toBe(before[index]?.part)
+        expect(entry.material).toBe(before[index]?.material)
+        expect(entry.mask).toBe(before[index]?.mask)
+        expect(entry.version).toBe(before[index]?.version ?? -1)
+      })
+      const position = pitWalls(scene)[0]!.geometry.getAttribute('position')
+      geometries.add(pitWalls(scene)[0]!.geometry)
+      expect(position.count).toBeGreaterThan(400)
+      // The section cut is a constant offset of the footprint (0.6 m): straight, no noise.
+      const offset = edge.startsWith('section') ? 0.6 : null
+      for (let i = 0; i < position.count; i += 97) {
+        const [x, z] = [position.getX(i), position.getZ(i)]
+        expect(Math.abs(groundHoleDistanceAt(x, z) - holeRadiusAt(x, z))).toBeLessThan(0.08)
+        if (offset !== null) expect(holeRadiusAt(x, z)).toBe(offset)
+      }
+    }
+    // The walls are cut again for each look, on the same meshes.
+    expect(geometries.size).toBeGreaterThan(1)
+  } finally {
+    useViewer.getState().setUndergroundLook({ edge: 'noise' })
+    groundHoleOpenNode().value = 0
+    await renderer.unmount()
+  }
+})
+
 test('the eye under the ground sees no pit, and the pit is back when it surfaces', async () => {
   withFourBasements()
   const renderer = await create(<SiteRenderer node={lot(false)} />)
