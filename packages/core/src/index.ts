@@ -224,6 +224,13 @@ export {
   resettledPosition,
 } from './lib/geometry-surfaces'
 export { type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
+export { type GroundLevel, groundLevelOf, levelUnderNamedGround } from './lib/ground-level'
+export {
+  GROUND_SEAT_TOLERANCE,
+  type GroundSeat,
+  gradeUnderLevel,
+  groundSeat,
+} from './lib/ground-seat'
 export {
   buildingGroundBox,
   type GroundBox,

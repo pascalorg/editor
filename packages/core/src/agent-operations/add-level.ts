@@ -1,9 +1,10 @@
 import { refuse } from '../agent-tools/refusal'
+import { buildLevelBelowChanges } from '../building/level-insertion'
 import { BuildingNode, LevelNode, SiteNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { storeyInsertIndex } from '../services/roof-level'
 import { levelsOf } from './scene-queries'
-import type { AgentContext, AgentOperation, SceneNodes } from './types'
+import type { AgentContext, AgentOperation, SceneChanges, SceneNodes } from './types'
 
 type AddLevelInput = {
   buildingId?: string
@@ -93,15 +94,36 @@ export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) =
     .map((level) => level.level)
   const below = input.position === 'below'
   const above = storeyInsertIndex(nodes, building.id)
-  const floorIndex = below && floors.length ? Math.min(...floors) - 1 : above.floorIndex
+  // A basement goes under the lowest floor and leaves every floor where
+  // it stands, as the editor's "+" below does: the ground floor keeps its grade.
+  const stacked =
+    below && floors.length
+      ? buildLevelBelowChanges({
+          nodes,
+          buildingId: building.id,
+          height: input.height ?? DEFAULT_LEVEL_HEIGHT,
+        })
+      : null
+  const floorIndex = stacked
+    ? stacked.newLevel.level
+    : below && floors.length
+      ? Math.min(...floors) - 1
+      : above.floorIndex
   const shift = below ? [] : above.shift
-  const level = LevelNode.parse({
-    parentId: building.id,
-    level: floorIndex,
-    height: input.height ?? DEFAULT_LEVEL_HEIGHT,
-    children: [],
-    ...(input.name ? { name: input.name } : {}),
-  })
+  const level =
+    stacked?.newLevel ??
+    LevelNode.parse({
+      parentId: building.id,
+      level: floorIndex,
+      height: input.height ?? DEFAULT_LEVEL_HEIGHT,
+      children: [],
+      ...(input.name ? { name: input.name } : {}),
+    })
+  if (stacked && input.name) level.name = input.name
+  const changes: SceneChanges = {
+    create: [{ node: level, parentId: building.id }],
+    update: stacked ? stacked.update : shift,
+  }
   return {
     result: {
       ok: true,
@@ -111,8 +133,8 @@ export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) =
       ...(level.name ? { name: level.name } : {}),
       height: level.height,
       ...(shift.length ? { shiftedLevelIds: shift.map(({ id }) => id) } : {}),
-      message: `Added ${level.name ?? `level ${floorIndex}`} ${below ? 'below the existing levels' : shift.length ? 'on top of the storeys, under the roof level' : 'above the existing levels'} of ${building.name ?? building.id}.`,
+      message: `Added ${level.name ?? `level ${floorIndex}`} ${below ? (stacked ? 'below the existing levels, every floor keeping its place' : 'below the existing levels') : shift.length ? 'on top of the storeys, under the roof level' : 'above the existing levels'} of ${building.name ?? building.id}.`,
     },
-    changes: { create: [{ node: level, parentId: building.id }], update: shift },
+    changes,
   }
 }

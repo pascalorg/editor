@@ -1,6 +1,7 @@
 export * from './corner-window'
 export * from './door-types'
 export * from './floor-item-fit'
+export { buildGroundLevelChanges } from './ground-level'
 export * from './level-duplication'
 export { buildLevelBelowChanges } from './level-insertion'
 export * from './merge-windows'

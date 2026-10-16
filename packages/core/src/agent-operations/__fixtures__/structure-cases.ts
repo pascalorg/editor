@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  type AnyNodeId,
   BuildingNode,
   CeilingNode,
   type FenceNode,
@@ -9,6 +10,7 @@ import {
   WallNode,
   ZoneNode,
 } from '../../schema'
+import { getLevelElevations } from '../../services/storey'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -35,6 +37,20 @@ const graph = (...nodes: { id: string }[]): SceneGraph => ({
     .filter((node) => (node as { type?: string }).type === 'building')
     .map((node) => node.id),
 })
+
+/** The world floors (the stack's offsets added up) levels must stand at, as a list of what differs. */
+const levelFloorProblems = (
+  nodes: Readonly<Record<string, AnyNode>>,
+  expected: Record<string, number>,
+): string[] => {
+  const floors = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+  return Object.entries(expected).flatMap(([id, floor]) => {
+    const actual = floors.get(id)?.baseY
+    return actual !== undefined && Math.abs(actual - floor) < 1e-9
+      ? []
+      : [`${id} stands at ${actual}, expected ${floor}`]
+  })
+}
 
 export function storeysScene(): SceneGraph {
   const wall = WallNode.parse({
@@ -285,6 +301,96 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { buildingId: 'building_house', position: 'below', height: '3 m' },
     expect: { result: { buildingId: 'building_house', floorIndex: -1, height: 3 } },
+  },
+  {
+    name: 'a basement goes under the lowest floor and every floor keeps its place',
+    tool: 'add_level',
+    scene: storeysScene,
+    input: { buildingId: 'building_house', position: 'below', height: 3 },
+    expect: {
+      result: { ok: true, floorIndex: -1, height: 3 },
+      check: (result, nodes) => levelFloorProblems(nodes, { [result.levelId as string]: -3, level_ground: 0 }),
+    },
+  },
+  {
+    name: 'a second basement goes under the first, the floors above where they were',
+    tool: 'run_batch',
+    scene: storeysScene,
+    input: {
+      calls: [
+        {
+          tool: 'add_level',
+          input: { buildingId: 'building_house', position: 'below', height: 3, name: 'Basement' },
+        },
+        {
+          tool: 'add_level',
+          input: { buildingId: 'building_house', position: 'below', height: 2.5, name: 'Basement 2' },
+        },
+      ],
+    },
+    expect: {
+      result: { status: 'applied', applied: 2, refused: 0 },
+      check: (_result, nodes) => {
+        const named = (name: string) =>
+          Object.values(nodes).find((node) => node.type === 'level' && node.name === name)?.id ?? ''
+        return levelFloorProblems(nodes, {
+          [named('Basement')]: -3,
+          [named('Basement 2')]: -5.5,
+          level_ground: 0,
+        })
+      },
+    },
+  },
+  {
+    name: 'set_ground_level on the upper floor renumbers: it is 0, the floor under it is -1',
+    tool: 'set_ground_level',
+    scene: storeysScene,
+    input: { levelId: 'level_upper' },
+    expect: {
+      result: { ok: true, renumbered: true, floorElevation: 0 },
+      after: {
+        level_upper: { level: 0 },
+        level_ground: { level: -1 },
+        building_house: { groundLevelId: 'level_upper' },
+      },
+    },
+  },
+  {
+    name: 'set_ground_level on a roof level is refused',
+    tool: 'set_ground_level',
+    scene: storeysScene,
+    input: { levelId: 'level_roof' },
+    expect: { refusal: 'not_a_storey', mentions: ['level_roof'] },
+  },
+  {
+    name: 'set_ground_level on an unknown level is refused with the id',
+    tool: 'set_ground_level',
+    scene: storeysScene,
+    input: { levelId: 'level_missing' },
+    expect: { refusal: 'level_not_found', mentions: ['level_missing'] },
+  },
+  {
+    name: 'set_ground_level on a node that is not a level is refused',
+    tool: 'set_ground_level',
+    scene: storeysScene,
+    input: { levelId: 'building_house' },
+    expect: { refusal: 'not_a_level' },
+  },
+  {
+    name: 'list_levels names the level at grade, its standing, and whether the building names it',
+    tool: 'list_levels',
+    scene: storeysScene,
+    input: {},
+    expect: {
+      result: {},
+      contains: {
+        groundLevels: [{ buildingId: 'building_house', levelId: 'level_ground', named: false }],
+        levels: [
+          { id: 'level_ground', isGroundLevel: true, gradeStanding: 'at-grade' },
+          { id: 'level_upper', isGroundLevel: false, gradeStanding: 'at-grade' },
+        ],
+      },
+    },
   },
   {
     name: 'the scene’s only building needs no id',

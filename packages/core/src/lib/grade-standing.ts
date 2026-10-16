@@ -6,6 +6,7 @@ import {
   levelFloorWorldY,
 } from '../services/storey'
 import { pointInPolygon } from '../systems/slab/slab-support'
+import { levelUnderNamedGround } from './ground-level'
 import { heightAt, type TerrainField } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
 import { levelLocalToWorldXZ } from './terrain-support-query'
@@ -22,11 +23,14 @@ export type LevelGradeStanding = 'at-grade' | 'partly-below-grade' | 'below-grad
 const MAX_SAMPLE_LINES = 17
 
 /**
- * `levelId`'s standing against the sculpted terrain over its own footprint (its floor slabs,
- * sampled against the terrain field): the ground counts as over the floor where it stands more
- * than {@link BELOW_GRADE_TOLERANCE} above it. A flat site (no terrain field), or a level with
- * no floor slab to sample, answers from the flat datum exactly as before. `'at-grade'` for an
- * id that is no level.
+ * `levelId`'s standing against the ground. When its building names a ground level, the line is the
+ * word: a level under it is below grade, and one at or over it is not buried by the stack's own
+ * elevations (a basement added under a house, a floor the stack lifted). Where the sculpted terrain
+ * stands over a floor's slabs (sampled against the field, the ground over the floor where it stands
+ * more than {@link BELOW_GRADE_TOLERANCE} above it) it still decides how much of that floor is
+ * buried: a hillside buries half a floor whose other half walks out, and a floor under the line the
+ * terrain leaves out of the ground reads as partly below. Without a named ground level, or a field,
+ * the flat datum answers exactly as before. `'at-grade'` for an id that is no level.
  */
 export function levelGradeStanding(
   nodes: Record<AnyNodeId, AnyNode>,
@@ -34,7 +38,15 @@ export function levelGradeStanding(
 ): LevelGradeStanding {
   const level = nodes[levelId as LevelNode['id']]
   if (level?.type !== 'level') return 'at-grade'
-  const flat: LevelGradeStanding = isLevelBelowGrade(nodes, levelId) ? 'below-grade' : 'at-grade'
+  const under = levelUnderNamedGround(nodes, level)
+  const flat: LevelGradeStanding =
+    under === null
+      ? isLevelBelowGrade(nodes, levelId)
+        ? 'below-grade'
+        : 'at-grade'
+      : under
+        ? 'below-grade'
+        : 'at-grade'
   const floorY = levelFloorWorldY(nodes, levelId)
   const field = terrainFieldOverLevel(nodes, level)
   if (floorY === null || !field) return flat
@@ -45,12 +57,12 @@ export function levelGradeStanding(
   for (const [worldX, worldZ] of samples) {
     if (heightAt(field, worldX, worldZ) - floorY > BELOW_GRADE_TOLERANCE) buried += 1
   }
-  if (buried === 0) return 'at-grade'
+  if (buried === 0) return under ? 'partly-below-grade' : 'at-grade'
   return buried === samples.length ? 'below-grade' : 'partly-below-grade'
 }
 
 /** The site's terrain field for the site this level stands on, or null on a flat site. */
-function terrainFieldOverLevel(
+export function terrainFieldOverLevel(
   nodes: Record<AnyNodeId, AnyNode>,
   level: LevelNode,
 ): TerrainField | null {
@@ -67,7 +79,7 @@ function terrainFieldOverLevel(
  * coarser than the terrain's own spacing, capped so a big plate stays cheap. Slabs are the
  * footprint the grade ring already trusts (`belowGradeFootprints`).
  */
-function footprintSamples(
+export function footprintSamples(
   nodes: Record<AnyNodeId, AnyNode>,
   level: LevelNode,
   field: TerrainField,
