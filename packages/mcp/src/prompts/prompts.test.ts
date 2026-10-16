@@ -10,6 +10,7 @@ import { SceneBridge } from '../bridge/scene-bridge'
 import { buildFromBriefPrompt, registerFromBrief } from './from-brief'
 import { buildIterateOnFeedbackPrompt, registerIterateOnFeedback } from './iterate-on-feedback'
 import { buildRenovationMessages, registerRenovationFromPhotos } from './renovation-from-photos'
+import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
 
 type ClientServerPair = {
   client: Client
@@ -231,6 +232,46 @@ describe('renovation_from_photos', () => {
     expect(last).toBeDefined()
     if (last && last.content.type === 'text') {
       expect(last.content.text).toContain('## Task')
+    }
+  })
+})
+
+// The open brief (the owner, 13 October): what a request leaves open in form is design left to the
+// agent, a house with presence that stays credible and buildable, not a catalogue plan. The same
+// meaning as the chat lane's sentence, in this list's one-fact-per-line form.
+describe('scene design guidance on what a request leaves open', () => {
+  const lines = SCENE_DESIGN_GUIDANCE.split('\n')
+
+  test('says defaults are for technical values, and form is design left to the agent', () => {
+    expect(lines).toContain(
+      '  - Defaults are for technical values (thicknesses, clearances, heights).',
+    )
+    expect(lines).toContain(
+      '  - What a request leaves open in form (proportions, massing, silhouette, roofscape) is design left to the agent: an open brief is room for a house with presence (composed volumes, interesting wings, roofs at different heights, good proportions) that stays credible and buildable, rather than a standard catalogue plan.',
+    )
+    expect(lines).toContain('  - When a choice would change the project, the person can be asked.')
+  })
+
+  test('keeps acting on clear concrete requests, without naming defaults for them', () => {
+    expect(lines).toContain(
+      '  - For clear concrete requests, act instead of asking for clarification.',
+    )
+    expect(SCENE_DESIGN_GUIDANCE).not.toContain('reasonable defaults')
+  })
+
+  test('reaches the prompts that carry the guidance', async () => {
+    const pair = await spinUp(registerFromBrief)
+    try {
+      const res = await pair.client.getPrompt({
+        name: 'from_brief',
+        arguments: { brief: 'A family house' },
+      })
+      const m = res.messages[0]
+      const text = m && m.content.type === 'text' ? m.content.text : ''
+      expect(text).toContain('design left to the agent')
+      expect(text).toContain('rather than a standard catalogue plan')
+    } finally {
+      await pair.close()
     }
   })
 })
