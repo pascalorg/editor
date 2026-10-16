@@ -2,6 +2,7 @@ import { afterEach, describe, expect, jest, spyOn, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   BuildingNode,
   CeilingNode,
   createRoomTopologyIndex,
@@ -10,7 +11,9 @@ import {
   ItemNode,
   LevelNode,
   type NodeEvent,
+  nodeRegistry,
   reconcileLevelStructure,
+  registerNode,
   SlabNode,
   SpawnNode,
   StairNode,
@@ -24,11 +27,12 @@ import { useViewer } from '@pascal-app/viewer'
 import { _roots, act } from '@react-three/fiber'
 import { createElement } from 'react'
 import { Group, type LineSegments } from 'three'
+import { z } from 'zod'
 import { SelectionManager } from '../components/editor/selection-manager'
 import { cancelActiveTool, runHistoryShortcut } from '../hooks/use-keyboard'
 import { resolvePlanRoomHit, roomPickingEnabled, useSelectedRoom } from '../hooks/use-selected-room'
 import useEditor from '../store/use-editor'
-import useInteractionScope from '../store/use-interaction-scope'
+import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
 import useSessionGroups from '../store/use-session-groups'
 import { withSelectionHarness } from '../test-utils/selection-harness'
 import { startRoomDivide } from './room-divide-session'
@@ -646,6 +650,46 @@ describe('room drill-down state through the mounted selection manager', () => {
       expect(useEditor.getState().room).toBeNull()
     })
   })
+  test('a second click on the selected crate picks it up, and that click cannot drop it', async () => {
+    jest.useFakeTimers()
+    if (!nodeRegistry.has('test-crate')) {
+      registerNode({
+        kind: 'test-crate',
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal('test-crate') }) as never,
+        category: 'furnish',
+        defaults: () => ({}),
+        capabilities: { selectable: {}, movable: { axes: ['x', 'z'] } },
+        renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+      } as AnyNodeDefinition)
+    }
+    const crate = {
+      id: 'test-crate_a',
+      type: 'test-crate',
+      parentId: levelId,
+      position: [2, 0, 2],
+      rotation: [0, 0, 0],
+    } as unknown as AnyNode
+    await withRooms(async ({ click }) => {
+      await act(async () => {
+        useScene.setState({ nodes: { ...useScene.getState().nodes, [crate.id]: crate } })
+      })
+      await click(crate.id, [2, 2])
+      jest.advanceTimersByTime(50)
+      await click(crate.id, [2, 2])
+      expect(getMovingNode()?.id).toBe(crate.id)
+
+      // The browser's click that ends this press would otherwise commit the move in place.
+      const endingClick = new Event('click', { cancelable: true })
+      window.dispatchEvent(endingClick)
+      expect(endingClick.defaultPrevented).toBe(true)
+      const dropClick = new Event('click', { cancelable: true })
+      window.dispatchEvent(dropClick)
+      expect(dropClick.defaultPrevented).toBe(false)
+      await act(async () => useEditor.getState().setMovingNode(null))
+    })
+  })
+
   test('plan and box furniture selections end the selected room', async () => {
     await withRooms(async ({ click, left }) => {
       const chair = ItemNode.parse({
