@@ -970,6 +970,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'storyShell',
     'suppressedDimensionSegmentIndexes',
   ]),
+  ...described(
+    "The site's hand-set code facts (Bones' `codeOverrides`: state, county, wind, snow…): numbers, flags and place names. Core reads only its `state`, to tell a US site from another, and names no node.",
+    ['codeOverrides'],
+  ),
   ...described('Read as a truthy flag only; no editor writer.', [
     'arrayModifier',
     'curvedWindowMaster',

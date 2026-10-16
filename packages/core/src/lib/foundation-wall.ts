@@ -2,38 +2,13 @@ import { type AnyNode, type AnyNodeId, type LevelNode, WallNode } from '../schem
 import type { Assembly } from '../schema/assembly'
 import { assemblyThickness } from '../systems/wall/wall-assembly'
 import { enclosedWallIds } from './exterior-wall-loops'
+import {
+  type FoundationConstruction,
+  type FoundationReading,
+  foundationReadingOfLevel,
+} from './foundation-construction'
 import { levelGradeStanding } from './grade-standing'
 import { levelUnderNamedGround } from './ground-level'
-
-/** An 8 in CMU foundation wall (0.203 m): the block stands the 8 in over finished grade. */
-export const FOUNDATION_BLOCK_THICKNESS = 0.203
-/** A 2x4 pressure-treated furring strip laid flat, 1.5 in (0.038 m), on the inside of the block. */
-export const FOUNDATION_FURRING_THICKNESS = 0.038
-
-/** The wall a person gets for a new wall below grade, as the stack the wall stores. */
-export const FOUNDATION_WALL_ASSEMBLY: Assembly = {
-  layers: [
-    {
-      id: 'block',
-      role: 'structure',
-      core: true,
-      material: 'cmu',
-      thickness: FOUNDATION_BLOCK_THICKNESS,
-    },
-    // IRC R317.1: furring on the inside of below-grade masonry is pressure treated, 16 in on centre.
-    {
-      id: 'furring',
-      role: 'furring',
-      material: 'pressure-treated wood',
-      thickness: FOUNDATION_FURRING_THICKNESS,
-    },
-  ],
-  face: 'exterior',
-}
-
-/** What the below-grade default says about itself, for the tool results that build a basement. */
-export const FOUNDATION_WALL_DESCRIPTION =
-  '8 in (0.203 m) CMU with 2x4 pressure-treated furring laid flat on the inside, 16 in on centre, interior finish as the level has it'
 
 /**
  * Whether a wall against the ground on `levelId` is a foundation wall: the level is below grade everywhere, or the
@@ -53,15 +28,20 @@ export function levelHoldsFoundationWalls(
   )
 }
 
-/** What the agent is told of the rule: the foundation wall, and what is not one. */
-export const FOUNDATION_WALL_RULE = `a wall against the ground on a level below grade is a foundation wall (${FOUNDATION_WALL_DESCRIPTION}); a partition is an ordinary wall`
+/** What the agent is told of the rule: the foundation wall of this building's construction, and what is not one. */
+export function foundationWallRule(reading: FoundationReading): string {
+  return `a wall against the ground on a level below grade is a foundation wall (${reading.construction.description}); a partition is an ordinary wall; the construction follows the region and style (${reading.basis})`
+}
 
 /** The construction a foundation wall is born with. */
-export function foundationWallConstruction(): { assembly: Assembly; thickness: number } {
+export function foundationWallConstruction(construction: FoundationConstruction): {
+  assembly: Assembly
+  thickness: number
+} {
   return {
-    assembly: structuredClone(FOUNDATION_WALL_ASSEMBLY),
+    assembly: structuredClone(construction.assembly),
     // Micrometres: the stored thickness is a clean 0.241, not the float noise of 0.203 + 0.038.
-    thickness: Math.round(assemblyThickness(FOUNDATION_WALL_ASSEMBLY) * 1e6) / 1e6,
+    thickness: Math.round(assemblyThickness(construction.assembly) * 1e6) / 1e6,
   }
 }
 
@@ -85,7 +65,8 @@ export function wallsAgainstGround(
 
 /**
  * The walls just drawn on `levelId` (`inserted`, among `levelWalls` with them in) as the level's
- * default builds them: the walls against the ground take the CMU foundation construction, a
+ * default builds them: the walls against the ground take the foundation construction of the
+ * building's region (CMU or cast concrete), a
  * partition keeps the ordinary wall. A caller who gave a thickness or an assembly (`given`) keeps
  * it; existing walls are never rewritten.
  */
@@ -100,7 +81,11 @@ export function withFoundationConstruction(
   const against = new Set(
     wallsAgainstGround(nodes, levelId, levelWalls, inserted).map((wall) => wall.id),
   )
+  if (against.size === 0) return inserted
+  const { construction } = foundationReadingOfLevel(nodes, levelId)
   return inserted.map((wall) =>
-    against.has(wall.id) ? WallNode.parse({ ...wall, ...foundationWallConstruction() }) : wall,
+    against.has(wall.id)
+      ? WallNode.parse({ ...wall, ...foundationWallConstruction(construction) })
+      : wall,
   )
 }

@@ -15,8 +15,8 @@ import {
 } from '../systems/wall/wall-assembly'
 import { planWallRectangle } from '../systems/wall/wall-operations'
 import { planWallInsertion } from '../systems/wall/wall-topology'
+import { FOUNDATION_CONSTRUCTIONS } from './foundation-construction'
 import {
-  FOUNDATION_WALL_ASSEMBLY,
   foundationWallConstruction,
   levelHoldsFoundationWalls,
   wallsAgainstGround,
@@ -99,7 +99,7 @@ const draw = (nodes: Nodes, levelId: string, wallDefaults?: Partial<WallNode>) =
 
 describe('the default construction of a wall below grade', () => {
   test('the stack is 8 in of CMU and a 2x4 laid flat, and the thickness is their sum', () => {
-    const [block, furring] = FOUNDATION_WALL_ASSEMBLY.layers
+    const [block, furring] = FOUNDATION_CONSTRUCTIONS.cmu.assembly.layers
     expect(block).toMatchObject({
       role: 'structure',
       core: true,
@@ -107,8 +107,8 @@ describe('the default construction of a wall below grade', () => {
       thickness: 0.203,
     })
     expect(furring).toMatchObject({ role: 'furring', thickness: 0.038 })
-    expect(foundationWallConstruction().thickness).toBe(0.241)
-    expect(assemblyThickness(FOUNDATION_WALL_ASSEMBLY)).toBeCloseTo(0.241, 12)
+    expect(foundationWallConstruction(FOUNDATION_CONSTRUCTIONS.cmu).thickness).toBe(0.241)
+    expect(assemblyThickness(FOUNDATION_CONSTRUCTIONS.cmu.assembly)).toBeCloseTo(0.241, 12)
   })
 
   test('the wall the editor tool plans on a basement carries it; the ground floor does not', () => {

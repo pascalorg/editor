@@ -203,6 +203,15 @@ export {
   withFloorStepOverride,
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
+export {
+  FOUNDATION_CONSTRUCTIONS,
+  type FoundationConstruction,
+  type FoundationConstructionId,
+  type FoundationReading,
+  type FoundationRegionId,
+  foundationReadingOf,
+  foundationRegionOf,
+} from './lib/foundation-construction'
 export { FOUNDATION_STANDARD } from './lib/foundation-standard'
 export { type FoundationMember, genericFoundation } from './lib/generic-foundation'
 export {

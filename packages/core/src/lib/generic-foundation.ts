@@ -5,6 +5,7 @@ import { getWallCenterlineSegments } from '../systems/wall/wall-curve'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import { getWallBodyCenterOffset } from '../systems/wall/wall-frame'
 import { exteriorWallLoops } from './exterior-wall-loops'
+import { type FoundationConstructionId, foundationReadingOf } from './foundation-construction'
 import { FOUNDATION_STANDARD } from './foundation-standard'
 import { levelGradeStanding } from './grade-standing'
 import { groundHeightAt } from './site-ground-height'
@@ -15,16 +16,24 @@ type Nodes = Record<AnyNodeId, AnyNode>
 /**
  * One run of the foundation under the exterior walls: a prism along `from` to `to` (world plan,
  * already carried past the wall's ends so the corners close), `width` wide, from `bottomY` up to
- * `topY`. A `footing` is the concrete pour under the wall, a `stem` the foundation wall on it.
+ * `topY`. A `footing` is the concrete pour under the wall, a `stem` the foundation wall on it,
+ * built of `material`: the footing is always concrete, the stem is what the building's
+ * foundation construction is (block or cast concrete, by region).
  */
 export type FoundationMember = {
   kind: 'footing' | 'stem'
+  material: 'concrete' | 'cmu'
   levelId: string
   from: [number, number]
   to: [number, number]
   width: number
   bottomY: number
   topY: number
+}
+
+const STEM_MATERIAL: Record<FoundationConstructionId, FoundationMember['material']> = {
+  cmu: 'cmu',
+  'cast-concrete': 'concrete',
 }
 
 /** The lowest grade is sampled at this many points along each wall, the generator's own count. */
@@ -39,8 +48,9 @@ const memo = new WeakMap<object, FoundationMember[]>()
  * foundation wall under the exterior walls of each building's lowest level, derived from those
  * walls, never stored, so nothing in a saved scene changes. The numbers are
  * {@link FOUNDATION_STANDARD}: a 16 × 8 in footing whose bottom sits 12 in under the lowest grade
- * (a generic depth: core has no frost data), and an 8 in wall from the footing up to the underside
- * of the lowest floor.
+ * (a generic depth: core has no frost data), and a wall from the footing up to the underside of the
+ * lowest floor, of the building's foundation construction (`foundationReadingOf`): 8 in block by
+ * default, cast concrete in Europe.
  *
  * - A level below grade (all of it) has no second wall: its exterior walls are the foundation
  *   walls, so only the footing is drawn, under the underside of its floor.
@@ -78,6 +88,9 @@ function buildingFoundation(nodes: Nodes, building: BuildingNode): FoundationMem
     wallBaseY,
     ...floors.map((floor) => wallBaseY + floor.elevation - floor.thickness),
   )
+  const { construction } = foundationReadingOf(nodes, building.id)
+  const stemMaterial = STEM_MATERIAL[construction.id]
+  const stemThickness = construction.stemThickness
   const buried = levelGradeStanding(nodes, level.id) === 'below-grade'
   const solidSkirt = floors.some((floor) => floor.foundation?.type === 'solid')
 
@@ -85,8 +98,8 @@ function buildingFoundation(nodes: Nodes, building: BuildingNode): FoundationMem
   for (const wall of walls) {
     const stored = wall.underpinning
     if (!stored && solidSkirt) continue
-    const run = runOf(building, wall)
-    const wallWidth = Math.max(FOUNDATION_STANDARD.stemThickness, getWallThickness(wall))
+    const run = runOf(building, wall, stemThickness)
+    const wallWidth = Math.max(stemThickness, getWallThickness(wall))
     const footingWidth =
       wallWidth + FOUNDATION_STANDARD.footingWidth - FOUNDATION_STANDARD.stemThickness
     const footingTop = stored
@@ -96,6 +109,7 @@ function buildingFoundation(nodes: Nodes, building: BuildingNode): FoundationMem
     for (const segment of run) {
       members.push({
         kind: 'footing',
+        material: 'concrete',
         levelId: level.id,
         ...segment,
         width: footingWidth,
@@ -105,6 +119,7 @@ function buildingFoundation(nodes: Nodes, building: BuildingNode): FoundationMem
       if (stored || buried || floorUnderside - footingTop < MIN_STEM_HEIGHT) continue
       members.push({
         kind: 'stem',
+        material: stemMaterial,
         levelId: level.id,
         ...segment,
         width: wallWidth,
@@ -192,9 +207,10 @@ function lowestGradeAlong(
 function runOf(
   building: BuildingNode,
   wall: WallNode,
+  stemThickness: number,
 ): Array<Pick<FoundationMember, 'from' | 'to'>> {
   const offset = getWallBodyCenterOffset(wall)
-  const reach = Math.max(FOUNDATION_STANDARD.stemThickness, getWallThickness(wall)) / 2
+  const reach = Math.max(stemThickness, getWallThickness(wall)) / 2
   return getWallCenterlineSegments(wall).flatMap(([a, b]) => {
     const dx = b.x - a.x
     const dz = b.y - a.y

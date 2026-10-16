@@ -25,15 +25,17 @@ import { noopRaycast } from './ground-veil'
 
 /**
  * The generic foundation under the buildings (`genericFoundation` in core): a concrete footing and
- * a foundation wall of block, drawn from the walls and never stored. It is always drawn: the
- * ground hides the part below it from above (the eye under the ground, or looking through the hole
- * over a level below grade, is what sees it), and the course the building's seat leaves above
- * grade reads as block in the normal view. The walkthrough draws none of it.
+ * a foundation wall, drawn from the walls and never stored, of the building's foundation
+ * construction: block by default, cast concrete in Europe (each stem run carries its `material`). It is always drawn: the ground hides the part below it from above
+ * (the eye under the ground, or looking through the hole over a level below grade, is what sees
+ * it), and the course the building's seat leaves above grade reads as what it is built of in the
+ * normal view. The walkthrough draws none of it.
  *
- * Two meshes and two materials, made once; nothing about them depends on the level shown or on
- * where the eye is, so a floor switch or a dive compiles nothing. Geometry is rebuilt only when
- * the foundation itself changes, or when a plugin takes a level's foundation over under the ground
- * (`pluginFoundationLevelIds`): that level's members leave the geometry while it draws them.
+ * One mesh per material in use, the materials made once; nothing about them depends on the level
+ * shown or on where the eye is, so a floor switch or a dive compiles nothing. Geometry is rebuilt
+ * only when the foundation itself changes, or when a plugin takes a level's foundation over under
+ * the ground (`pluginFoundationLevelIds`): that level's members leave the geometry while it draws
+ * them.
  */
 
 const INCH = 0.0254
@@ -54,22 +56,35 @@ function jointMask(inside: any, joint: number) {
   )
 }
 
-/** Courses of running bond: each course half a block over the one under it, mortar between. */
-function blockMaterial() {
+type Masonry = {
+  course: number
+  length: number
+  joint: number
+  colors: { light: string; dark: string }
+  mortar: string
+}
+
+const BLOCK: Masonry = {
+  course: COURSE,
+  length: BLOCK_LENGTH,
+  joint: JOINT,
+  colors: BLOCK_COLORS,
+  mortar: MORTAR_COLOR,
+}
+/** Courses of running bond: each course half a unit over the one under it, mortar between. */
+function masonryMaterial({ course: courseHeight, length, joint, colors, mortar }: Masonry) {
   const material = new MeshLambertNodeMaterial({ side: FrontSide })
-  const rows = positionWorld.y.div(COURSE)
+  const rows = positionWorld.y.div(courseHeight)
   const course = floor(rows)
-  const columns = attribute<'float'>('along', 'float')
-    .div(BLOCK_LENGTH)
-    .add(mod(course, 2).mul(0.5))
-  const face: any = jointMask(fract(rows), JOINT / COURSE).mul(
-    jointMask(fract(columns), JOINT / BLOCK_LENGTH),
+  const columns = attribute<'float'>('along', 'float').div(length).add(mod(course, 2).mul(0.5))
+  const face: any = jointMask(fract(rows), joint / courseHeight).mul(
+    jointMask(fract(columns), joint / length),
   )
   const shade: any = mx_noise_float(vec3(floor(columns), course, 0.5))
     .mul(0.5)
     .add(0.5)
-  const block = mix(color(BLOCK_COLORS.dark), color(BLOCK_COLORS.light), shade)
-  const patterned = mix(color(MORTAR_COLOR), block, face)
+  const block = mix(color(colors.dark), color(colors.light), shade)
+  const patterned = mix(color(mortar), block, face)
   // The top of a run is the plain block, whatever course the shader finds there.
   const flat = step(float(0.5), normalLocal.y.abs())
   material.colorNode = mix(patterned, block, flat)
@@ -103,6 +118,7 @@ export function sameFoundation(a: readonly FoundationMember[], b: readonly Found
       return (
         other !== undefined &&
         member.kind === other.kind &&
+        member.material === other.material &&
         member.levelId === other.levelId &&
         member.width === other.width &&
         member.bottomY === other.bottomY &&
@@ -163,7 +179,7 @@ export function GenericFoundation() {
   )
   const shown = useViewer((state) => !state.walkthroughMode)
   const concrete = useMemo(concreteMaterial, [])
-  const block = useMemo(blockMaterial, [])
+  const block = useMemo(() => masonryMaterial(BLOCK), [])
   useEffect(
     () => () => {
       concrete.dispose()
@@ -172,11 +188,20 @@ export function GenericFoundation() {
     [concrete, block],
   )
   const footing = useMemo(() => geometryOf(buildFoundationMesh(members, 'footing')), [members])
-  const stem = useMemo(() => geometryOf(buildFoundationMesh(members, 'stem')), [members])
+  const stemOf = (material: FoundationMember['material']) =>
+    geometryOf(
+      buildFoundationMesh(
+        members.filter((member) => member.material === material),
+        'stem',
+      ),
+    )
+  const blockStem = useMemo(() => stemOf('cmu'), [members])
+  const concreteStem = useMemo(() => stemOf('concrete'), [members])
   return (
     <>
       <FoundationPart geometry={footing} material={concrete} part="footing" visible={shown} />
-      <FoundationPart geometry={stem} material={block} part="stem" visible={shown} />
+      <FoundationPart geometry={blockStem} material={block} part="stem" visible={shown} />
+      <FoundationPart geometry={concreteStem} material={concrete} part="stem" visible={shown} />
     </>
   )
 }

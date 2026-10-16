@@ -65,7 +65,7 @@ function ringOf(levelId: string) {
 }
 
 /** A house on the flat site, over a basement when `basement` is set (the villa's numbers). */
-function setHouse(basement: boolean) {
+function setHouse(basement: boolean, extra: AnyNode[] = []) {
   const levels = basement ? ['level_b', 'level_g'] : ['level_g']
   const nodes: AnyNode[] = [
     BuildingNode.parse({ id: 'building_a', children: levels }),
@@ -90,6 +90,7 @@ function setHouse(basement: boolean) {
         ...walls,
       ]
     }),
+    ...extra,
   ]
   useScene.setState({
     nodes: Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>,
@@ -118,6 +119,34 @@ test('a house at grade stands on a footing and a block wall, both marked, found 
   } finally {
     await renderer.unmount()
   }
+})
+
+const paris = () =>
+  SiteNode.parse({
+    id: 'site_paris',
+    dossier: {
+      provider: 'pascal-map',
+      asOf: '2026-10-16',
+      address: { formatted: '12 Rue de Rivoli, 75004 Paris, France' },
+      sections: {},
+    },
+  })
+
+test('the stem is drawn in what the building is built of: block, concrete in Europe', async () => {
+  const materialOf = async (extra: AnyNode[]) => {
+    setHouse(false, extra)
+    const renderer = await create(<SiteRenderer node={lot()} />)
+    try {
+      const found = parts(renderer.scene.instance as Object3D)
+      expect(found.map((part) => part.userData.genericFoundation)).toEqual(['footing', 'stem'])
+      const [footing, stem] = found as [Mesh, Mesh]
+      return stem.material === footing.material ? 'concrete' : 'masonry'
+    } finally {
+      await renderer.unmount()
+    }
+  }
+  expect(await materialOf([])).toBe('masonry')
+  expect(await materialOf([paris()])).toBe('concrete')
 })
 
 test('a house over a basement has only the footing under the basement walls', async () => {
@@ -229,6 +258,7 @@ test('an edit that leaves the foundation as it was rebuilds none of it', async (
 test('foundations are the same when every run is', () => {
   const run = {
     kind: 'stem' as const,
+    material: 'cmu' as const,
     levelId: 'level_g',
     from: [0, 0] as [number, number],
     to: [4, 0] as [number, number],
@@ -238,5 +268,6 @@ test('foundations are the same when every run is', () => {
   }
   expect(sameFoundation([run], [{ ...run }])).toBe(true)
   expect(sameFoundation([run], [{ ...run, topY: 0.1 }])).toBe(false)
+  expect(sameFoundation([run], [{ ...run, material: 'concrete' }])).toBe(false)
   expect(sameFoundation([run], [])).toBe(false)
 })

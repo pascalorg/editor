@@ -1,8 +1,8 @@
 import { refuse } from '../agent-tools/refusal'
 import { levelFootprintLoops } from '../lib/building-footprint'
+import { foundationReadingOfLevel } from '../lib/foundation-construction'
 import {
-  FOUNDATION_WALL_DESCRIPTION,
-  FOUNDATION_WALL_RULE,
+  foundationWallRule,
   levelHoldsFoundationWalls,
   withFoundationConstruction,
 } from '../lib/foundation-wall'
@@ -62,6 +62,7 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     [drawn],
     { thickness: input.thickness },
   ) as [WallNode]
+  const reading = foundationReadingOfLevel(nodes, level.id)
   const foundation = wall.assembly !== undefined
   const partition =
     !foundation && input.thickness === undefined && levelHoldsFoundationWalls(nodes, level.id)
@@ -82,13 +83,20 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
       ...(curveOffset ? { curveOffset } : {}),
       ...(site ? { site } : {}),
       ...(foundation
-        ? { construction: { assembly: FOUNDATION_WALL_DESCRIPTION, thickness: wall.thickness } }
+        ? {
+            construction: {
+              assembly: reading.construction.description,
+              thickness: wall.thickness,
+              region: reading.region,
+              basis: reading.basis,
+            },
+          }
         : {}),
       message: `Added wall "${wall.name}" on ${level.name ?? level.id}${
         foundation
-          ? `, a foundation wall against the ground (${FOUNDATION_WALL_DESCRIPTION}), ${(wall.thickness ?? 0).toFixed(3)} m thick; a wall given a thickness keeps it`
+          ? `, a foundation wall against the ground (${reading.construction.description}), ${(wall.thickness ?? 0).toFixed(3)} m thick, built as ${reading.basis} says; a wall given a thickness keeps it`
           : partition
-            ? `, an ordinary wall: a partition inside the outline of this level's walls; ${FOUNDATION_WALL_RULE}`
+            ? `, an ordinary wall: a partition inside the outline of this level's walls; ${foundationWallRule(reading)}`
             : ''
       }${
         site

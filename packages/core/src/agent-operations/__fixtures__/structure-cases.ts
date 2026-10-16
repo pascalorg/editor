@@ -10,6 +10,7 @@ import {
   WallNode,
   ZoneNode,
 } from '../../schema'
+import { FOUNDATION_CONSTRUCTIONS } from '../../lib/foundation-construction'
 import { foundationWallConstruction } from '../../lib/foundation-wall'
 import { getLevelElevations } from '../../services/storey'
 import type { AgentToolCase, SceneGraph } from './cases'
@@ -159,7 +160,7 @@ function basementRoomScene(): SceneGraph {
       parentId: 'level_base',
       start,
       end: corners[(index + 1) % 4],
-      ...foundationWallConstruction(),
+      ...foundationWallConstruction(FOUNDATION_CONSTRUCTIONS.cmu),
     }),
   )
   const base = scene.nodes.level_base as LevelNode
@@ -200,6 +201,58 @@ function plainWallProblems(wall: AnyNode | undefined): string[] {
   return wall?.type === 'wall' && wall.assembly === undefined && (wall.thickness ?? 0.1) === 0.1
     ? []
     : [`expected a plain 0.1 m wall, got ${JSON.stringify(wall)}`]
+}
+
+const withNodes = (scene: SceneGraph, ...added: { id: string }[]): SceneGraph => ({
+  ...scene,
+  nodes: { ...scene.nodes, ...Object.fromEntries(added.map((node) => [node.id, node])) },
+})
+
+const dossierAt = (formatted: string) => ({
+  provider: 'pascal-map',
+  asOf: '2026-10-16',
+  address: { formatted },
+  sections: {},
+})
+
+/** The basement house on a site in Paris, in Austin, or with no site at all (`basementHouseScene`). */
+const parisBasementScene = (): SceneGraph =>
+  withNodes(
+    basementHouseScene(),
+    SiteNode.parse({ id: 'site_paris', dossier: dossierAt('12 Rue de Rivoli, 75004 Paris, France') }),
+  )
+const austinBasementScene = (): SceneGraph =>
+  withNodes(
+    basementHouseScene(),
+    SiteNode.parse({ id: 'site_austin', address: { city: 'Austin', state: 'Texas' } }),
+  )
+
+/** The cast-concrete default: membrane and insulation outside, 25 cm concrete core, thickness the sum. */
+function castConcreteWallProblems(wall: AnyNode | undefined): string[] {
+  if (wall?.type !== 'wall') return [`not a wall: ${JSON.stringify(wall)}`]
+  const [membrane, insulation, concrete, ...rest] = wall.assembly?.layers ?? []
+  const ok =
+    membrane?.role === 'membrane' &&
+    insulation?.role === 'insulation' &&
+    Math.abs(insulation.thickness - 0.1) < 1e-9 &&
+    concrete?.core === true &&
+    concrete.material === 'concrete' &&
+    Math.abs(concrete.thickness - 0.25) < 1e-9 &&
+    rest.length === 0 &&
+    wall.assembly?.face === 'exterior' &&
+    Math.abs((wall.thickness ?? 0) - 0.354) < 1e-9
+  return ok ? [] : [`${wall.id} is not a cast concrete foundation wall: ${JSON.stringify([wall.thickness, wall.assembly])}`]
+}
+
+function stoneWallProblems(wall: AnyNode | undefined): string[] {
+  if (wall?.type !== 'wall') return [`not a wall: ${JSON.stringify(wall)}`]
+  const [stone, ...rest] = wall.assembly?.layers ?? []
+  return stone?.core === true &&
+    stone.material === 'stone' &&
+    rest.length === 0 &&
+    Math.abs((wall.thickness ?? 0) - 0.5) < 1e-9
+    ? []
+    : [`${wall.id} is not a stone foundation wall: ${JSON.stringify([wall.thickness, wall.assembly])}`]
 }
 
 export const ADD_WALL_CASES: AgentToolCase[] = [
@@ -251,6 +304,50 @@ export const ADD_WALL_CASES: AgentToolCase[] = [
       absent: ['construction'],
       mentions: ['ordinary wall', 'partition', 'foundation wall'],
       check: (result, nodes) => plainWallProblems(nodes[result.wallId as string]),
+    },
+  },
+  {
+    name: 'a basement wall on a site in Paris is cast concrete insulated and waterproofed outside, and names the region it read',
+    tool: 'add_wall',
+    scene: parisBasementScene,
+    input: { levelId: 'level_base', start: [0, 0], end: [6, 0] },
+    expect: {
+      result: { ok: true, construction: { thickness: 0.354, region: 'europe' } },
+      mentions: ['foundation wall', 'cast concrete', 'Europe', 'France'],
+      absent: ['CMU'],
+      check: (result, nodes) => castConcreteWallProblems(nodes[result.wallId as string]),
+    },
+  },
+  {
+    name: 'a basement wall on a site in Texas is the 8 in CMU block, and names the region it read',
+    tool: 'add_wall',
+    scene: austinBasementScene,
+    input: { levelId: 'level_base', start: [0, 0], end: [6, 0] },
+    expect: {
+      result: { ok: true, construction: { thickness: 0.241, region: 'us' } },
+      mentions: ['foundation wall', 'CMU', 'United States', 'TX'],
+      check: (result, nodes) => foundationWallProblems(nodes[result.wallId as string]),
+    },
+  },
+  {
+    name: 'a basement room on a site in Paris is built of cast concrete foundation walls',
+    tool: 'create_room',
+    scene: parisBasementScene,
+    input: {
+      levelId: 'level_base',
+      name: 'Cellar',
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 4],
+        [0, 4],
+      ],
+    },
+    expect: {
+      result: { ok: true, construction: { region: 'europe' } },
+      mentions: ['foundation walls', 'cast concrete', 'Europe'],
+      check: (result, nodes) =>
+        (result.wallIds as string[]).flatMap((id) => castConcreteWallProblems(nodes[id])),
     },
   },
   {
@@ -495,6 +592,33 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { buildingId: 'building_house', height: 2.8 },
     expect: { result: { ok: true }, absent: ['wallConstruction'] },
+  },
+  {
+    name: 'add_level below on a site in Paris says its walls are cast concrete, and the region',
+    tool: 'add_level',
+    scene: () => withNodes(storeysScene(), SiteNode.parse({ id: 'site_paris', dossier: dossierAt('Paris, France') })),
+    input: { buildingId: 'building_house', position: 'below' },
+    expect: {
+      result: { ok: true },
+      mentions: ['below grade', 'cast concrete', 'Europe'],
+    },
+  },
+  {
+    name: 'set_ground_level on a site in Paris seats the building 0.15 m over grade, as cast concrete foundations do',
+    tool: 'set_ground_level',
+    scene: () =>
+      withNodes(storeysScene(), SiteNode.parse({ id: 'site_paris', dossier: dossierAt('Paris, France') })),
+    input: { levelId: 'level_ground' },
+    expect: {
+      result: {
+        ok: true,
+        floorElevation: 0.15,
+        aboveGrade: 0.15,
+        foundation: { region: 'europe', construction: 'cast-concrete' },
+      },
+      mentions: ['cast concrete', 'Europe'],
+      after: { building_house: { position: [0, 0.15, 0], groundLevelId: 'level_ground' } },
+    },
   },
   {
     name: 'above the highest level of the viewed building, at the default storey height',
