@@ -102,7 +102,8 @@ describe('shared tools over MCP', () => {
     test(`${c.tool}: ${c.name}`, async () => {
       const { nodes, rootNodeIds } = c.scene()
       bridge.setScene(nodes as never, rootNodeIds as never)
-      const designBrief = c.context?.designBrief === undefined ? CATALOG_BRIEF : (c.context.designBrief ?? undefined)
+      const designBrief =
+        c.context?.designBrief === undefined ? CATALOG_BRIEF : (c.context.designBrief ?? undefined)
       bridge.agentSession.replace({
         ...(c.context?.session?.() ?? { checkpoints: {}, made: [] }),
         ...(designBrief ? { designBrief } : {}),
@@ -113,7 +114,8 @@ describe('shared tools over MCP', () => {
       hosts.assetViews = async () => c.context?.assetViews ?? {}
       viewed = c.context?.activeLevelId ?? null
       const result = (await client.callTool({ name: c.tool, arguments: c.input })) as Result
-      const payload = result.structuredContent ?? JSON.parse(result.content[0]!.text) as Record<string, unknown>
+      const payload =
+        result.structuredContent ?? (JSON.parse(result.content[0]!.text) as Record<string, unknown>)
       if ('refusal' in c.expect) {
         expect(result.isError).toBe(true)
         expect(payload.code).toBe(c.expect.refusal)

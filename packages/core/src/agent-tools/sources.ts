@@ -15,4 +15,3 @@ export const OUTSIDE_SOURCES =
 /** Where a creation fails or is refused: the ready items. */
 export const CATALOG_SOURCE =
   'The catalog has ready items: search_assets finds them, place_items and furnish_room place them.'
-

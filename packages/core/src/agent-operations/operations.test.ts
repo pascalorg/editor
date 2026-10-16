@@ -25,9 +25,10 @@ describe('agent operations', () => {
     if (c.surfaces && !c.surfaces.includes('core')) continue
     test(`${c.tool}: ${c.name}`, () => {
       const nodes = c.scene().nodes as Record<string, AnyNode>
-      const readBefore = c.readOnly || ['get_walls', 'get_zones', 'get_level_summary'].includes(c.tool)
-        ? structuredClone(nodes)
-        : undefined
+      const readBefore =
+        c.readOnly || ['get_walls', 'get_zones', 'get_level_summary'].includes(c.tool)
+          ? structuredClone(nodes)
+          : undefined
       let session = c.context?.session?.() ?? EMPTY_SESSION
       const operation = AGENT_OPERATIONS[c.tool as keyof typeof AGENT_OPERATIONS]
       expect(operation).toBeDefined()
@@ -65,7 +66,9 @@ describe('agent operations', () => {
         expect(nodes).toEqual(readBefore)
       }
       const result = applyAgentOutcome(outcome, {
-        keep: (kept) => { session = keepInSession(session, kept) },
+        keep: (kept) => {
+          session = keepInSession(session, kept)
+        },
         getNodes: () => after,
         applyChanges: (changes) => {
           after = applySceneChanges(after, changes)

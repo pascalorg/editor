@@ -6,6 +6,7 @@ import {
   VIEW_MAX_PX,
   type VIEW_SIDES,
 } from '../agent-tools/view-scene'
+import { distanceToSegment } from '../lib/room-topology-index'
 import { buildingStreet } from '../lib/site-placement'
 import type {
   AnyNode,
@@ -21,7 +22,6 @@ import type {
 import { getActiveRoofHeight } from '../schema'
 import { getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
-import { distanceToSegment } from '../lib/room-topology-index'
 import { pointInPolygon } from './plan-geometry'
 
 /**
@@ -786,7 +786,9 @@ export function sceneViewNote(
   interior?: SceneViewInterior,
   pose?: SceneViewPose,
 ) {
-  const notes = ['A picture to compare with the reference, not a measure: take sizes and counts from the tools.']
+  const notes = [
+    'A picture to compare with the reference, not a measure: take sizes and counts from the tools.',
+  ]
   const room = interior?.roomId ? nodes?.[interior.roomId] : undefined
   if (nodes && pose && room?.type === 'zone') {
     const { bounds } = sceneViewInterior(nodes, interior!.levelId)
@@ -797,7 +799,8 @@ export function sceneViewNote(
       !holes.some((hole) => pointInPolygon(eye, hole)) &&
       pose.position[1] >= bounds.min[1] &&
       pose.position[1] <= bounds.max[1]
-    ) notes.push(ROOM_EYE_NOTE(room.name || room.id))
+    )
+      notes.push(ROOM_EYE_NOTE(room.name || room.id))
   }
   return notes.join(' ')
 }

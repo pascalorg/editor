@@ -4,13 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { DESIGN_EXAMPLE } from '@pascal-app/core/procedural-items'
 import {
   type AnyNode,
   type AssetInput,
   type CompiledGeometryScript,
   GeometryArtifactManifest,
 } from '@pascal-app/core/schema'
-import { DESIGN_EXAMPLE } from '@pascal-app/core/procedural-items'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
@@ -165,7 +165,9 @@ describe('the design brief over MCP', () => {
     }
     expect(compiles).toBe(0)
     expect(
-      Object.values(bridge.getNodes()).filter((node) => ['item', 'procedural-item'].includes(node.type)),
+      Object.values(bridge.getNodes()).filter((node) =>
+        ['item', 'procedural-item'].includes(node.type),
+      ),
     ).toEqual([])
     for (const [name, args] of [
       ['search_assets', { queries: [{ query: 'bed' }] }],

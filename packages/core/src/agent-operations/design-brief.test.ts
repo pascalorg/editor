@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { AGENT_TOOL_CONTRACTS, type DesignBrief, type DesignBriefInput, designBriefTool } from '../agent-tools'
+import {
+  AGENT_TOOL_CONTRACTS,
+  type DesignBrief,
+  type DesignBriefInput,
+  designBriefTool,
+} from '../agent-tools'
 import { isAgentRefusal } from '../agent-tools/refusal'
 import { type AssetInput, BuildingNode, LevelNode, ZoneNode } from '../schema'
 import { CATALOG_BRIEF } from './__fixtures__/design-brief-cases'
+import { applyAgentOutcome } from './apply-outcome'
 import {
   briefUnlocks,
   designBrief,
@@ -13,7 +19,6 @@ import {
   requireFurnishing,
 } from './design-brief'
 import { AGENT_OPERATIONS } from './index'
-import { applyAgentOutcome } from './apply-outcome'
 import { EMPTY_SESSION, keepInSession, MAX_VIEWED, parseSessionRecord } from './scene-checkpoint'
 import type { AgentContext, SceneNodes } from './types'
 
@@ -102,7 +107,7 @@ describe('the gate before a brief', () => {
 
 describe('an open brief', () => {
   test.each([
-      ['add_object', { code: 'export default 1' }],
+    ['add_object', { code: 'export default 1' }],
     ['place_design', { design: {} }],
   ])('%s creates', (tool, input) => {
     expect(code(tool, input, open())).toBeNull()
@@ -153,18 +158,17 @@ describe('an open brief', () => {
 })
 
 describe('a brief that names the catalog, a brand or existing pieces', () => {
-  test.each([
-    'catalog',
-    'brand',
-    'existing',
-  ] as const)('%s opens the catalog and creation', (source) => {
-    const brief: DesignBrief = {
-      ...CATALOG_BRIEF,
-      source,
-      ...(source === 'brand' ? { brand: 'IKEA' } : {}),
-    }
-    for (const [tool, input] of FURNISHING) expect(code(tool, input, brief)).toBeNull()
-  })
+  test.each(['catalog', 'brand', 'existing'] as const)(
+    '%s opens the catalog and creation',
+    (source) => {
+      const brief: DesignBrief = {
+        ...CATALOG_BRIEF,
+        source,
+        ...(source === 'brand' ? { brand: 'IKEA' } : {}),
+      }
+      for (const [tool, input] of FURNISHING) expect(code(tool, input, brief)).toBeNull()
+    },
+  )
 })
 
 describe('run_batch', () => {
@@ -281,12 +285,21 @@ describe('design_brief', () => {
 describe('the brief in a session', () => {
   test('an outcome can clear the brief without a scene write', () => {
     let session = keepInSession(EMPTY_SESSION, { designBrief: open() })
-    applyAgentOutcome({ result: {}, keep: { designBrief: null } }, {
-      getNodes: () => ({}),
-      applyChanges: () => { throw new Error('unexpected scene write') },
-      reconcile: () => { throw new Error('unexpected reconciliation') },
-      keep: (kept) => { session = keepInSession(session, kept) },
-    })
+    applyAgentOutcome(
+      { result: {}, keep: { designBrief: null } },
+      {
+        getNodes: () => ({}),
+        applyChanges: () => {
+          throw new Error('unexpected scene write')
+        },
+        reconcile: () => {
+          throw new Error('unexpected reconciliation')
+        },
+        keep: (kept) => {
+          session = keepInSession(session, kept)
+        },
+      },
+    )
     expect(session.designBrief).toBeUndefined()
   })
 

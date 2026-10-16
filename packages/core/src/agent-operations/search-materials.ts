@@ -133,18 +133,14 @@ const byName = (a: MaterialCatalogItem, b: MaterialCatalogItem) =>
   a.label.localeCompare(b.label) || a.id.localeCompare(b.id)
 
 /** Colour options for a finish the library lacks: nearest library colour, or exact native. */
-const missingMaterialFacts =
-  `paint with color gives the nearest library colour and says how far it moved (ΔE); a native material, paint with material: { properties: { color } }, keeps the exact colour.`
+const missingMaterialFacts = `paint with color gives the nearest library colour and says how far it moved (ΔE); a native material, paint with material: { properties: { color } }, keeps the exact colour.`
 
 /**
  * `search_materials`: the library's materials by words, best first, and the words none answers;
  * without a query, a browse of a kind, a surface or the whole library. Either lists a page at a
  * time, saying how many more there are and the offset that lists them.
  */
-export const searchMaterials: AgentOperation<SearchMaterialsInput> = (
-  _nodes,
-  { queries },
-) => {
+export const searchMaterials: AgentOperation<SearchMaterialsInput> = (_nodes, { queries }) => {
   const library = libraryMaterials()
   const groups = queries.map(({ query = '', kind, surface, offset = 0 }) => {
     const pool = library.filter(
