@@ -412,8 +412,11 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
   }
 }
 
-/** What ships until the owner picks an edge: the eroded edge and the simple fade. */
-export const DEFAULT_UNDERGROUND_LOOK: UndergroundLook = { edge: 'noise', transition: 'fade' }
+/** The owner's pick (16 Oct): the section cut's clean edge over earth walls, and the simple fade. */
+export const DEFAULT_UNDERGROUND_LOOK: UndergroundLook = {
+  edge: 'section-earth',
+  transition: 'fade',
+}
 
 const useViewer = create<ViewerState>()(
   persist(
