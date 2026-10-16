@@ -12,9 +12,9 @@ import {
 } from '@pascal-app/core'
 import { timeSpan, WallCutout, WallSystem } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { curtainWallGeometryAdapter } from './curtain-wall-adapter'
-import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
+import { getWallMaterialsResolver, subscribeWallMaterialsResolver } from './materials-resolver'
 import {
   buildWallTreatmentLevelData,
   clearWallTreatmentMiterCache,
@@ -176,11 +176,16 @@ const WallTreatmentMiterSystem = () => {
  *    draw calls instead of one per wall face run.
  */
 const WallSystems = () => {
+  const materialResolver = useSyncExternalStore(
+    subscribeWallMaterialsResolver,
+    getWallMaterialsResolver,
+    getWallMaterialsResolver,
+  )
   return (
     <>
       <WallTreatmentMiterSystem />
       <WallSystem geometryAdapter={curtainWallGeometryAdapter} />
-      <WallCutout materialResolver={getCurtainAwareWallMaterials} />
+      <WallCutout materialResolver={materialResolver} />
       <WallBatchSystem />
     </>
   )
