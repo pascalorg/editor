@@ -159,6 +159,7 @@ export {
 } from './lib/corner-snap'
 export { criticallyDamped } from './lib/critically-damped'
 export { isCutterName, resolveCutterHost } from './lib/cutter-host'
+export { deepestDrawnY, lowestGroundY } from './lib/deepest-drawn'
 export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
@@ -202,6 +203,8 @@ export {
   withFloorStepOverride,
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
+export { FOUNDATION_STANDARD } from './lib/foundation-standard'
+export { type FoundationMember, genericFoundation } from './lib/generic-foundation'
 export {
   ceilingSeatY,
   isScriptedNode,
