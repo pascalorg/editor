@@ -9,7 +9,7 @@ export const placeInRoomTool = {
   description:
     'Put one floor-standing catalog item in a room where it fits, without working out a position. Wall/ceiling-attached assets need a host: place_items accepts targetNodeId and, for a wall, y for the bottom height. A wall-bound floor piece (fridge, counter, stove, sink, TV stand, dresser, wardrobe, sofa, bed, bedside table, toilet, bath, shower, bookcase, cabinet) stands against a wall, centred in the widest free stretch of that wall (clear of every door and every other item), its front toward the room; it is never put in the middle, and when no wall has room the answer says how wide the widest free stretch is. A free-standing piece (dining table, rug, coffee table, plant, armchair) takes the middle of the room, or goes with what it belongs with: a coffee table and an armchair face the sofa. A chair goes around its table, one call per chair, facing the table, and is refused when the room has no table. Explicit edge, align, offset or inset instead requests a wall free run for any floor piece. Name the room by its zoneId (create_room, get_zones), or by its polygon and level. The item is a catalog id from search_assets. To furnish a whole room by its type in one call, use furnish_room.',
   input: {
-    assetId: z.string().min(1).describe('A catalog id from search_assets.'),
+    assetId: z.string().min(1).describe('A known catalog id; search_assets can find it.'),
     zoneId: NodeId.optional().describe(
       'The room: zoneId from create_room, or an id from get_zones.',
     ),
