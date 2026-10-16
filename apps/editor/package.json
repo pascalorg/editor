@@ -21,7 +21,7 @@
     "@pascal-app/nodes": "*",
     "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
     "@pascal-app/plugin-environment": "github:AxiomeCG/environment#1aa0bc3cbed273dbf751e9af79e446f6de105c90",
-    "@pascal-app/plugin-bath-space": "github:sudhir9297/pascal-cluster#70cffa9a6878122acf6e3fdbde5725db4908f737",
+    "@pascal-app/plugin-bath-space": "github:sudhir9297/pascal-cluster#357338ddb7e042498fca7b6e6ee2054edbeb70b7",
     "@pascal-app/plugin-landscape": "github:sudhir9297/pascal-cluster#7425539db7e63d4d42f65bef938420b4145479c3",
     "@pascal-app/plugin-pool": "github:sudhir9297/pool-pascal-plugin#b8e408121feae51d91c89f7efe16f9d8f795cb49",
     "@pascal-app/plugin-streetscape": "github:pascalorg/plugin-streetscape#bb563f3739a0dbaf7a3d0cc40f7ef9486951b0a1",
