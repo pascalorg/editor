@@ -220,7 +220,7 @@ describe('pascal://agent-guide', () => {
       expect(text).toContain('0 to 1 along the wall')
       expect(text).toMatch(/glass meets at a corner.*add_corner_window/)
       expect(text).toContain('room_named_by_person')
-      expect(text).toContain('rename: true` only when the person asked')
+      expect(text).toContain('`rename: true` is for when the person asked')
       expect(text).toContain('editor_tab_busy')
       expect(text).toContain('invalid_input')
     } finally {
