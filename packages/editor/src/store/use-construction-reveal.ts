@@ -102,6 +102,20 @@ export function resolveConstructionLevel(
   return saved.level === 'framing' && !framingInstalled ? 'full' : saved.level
 }
 
+/**
+ * A click on a level in the control. The level that plays is not always the saved one (a saved Framing
+ * plays as Full while the plugin is gone), and a click on that pressed level is not a choice: it keeps
+ * the saved one, so it plays again with the plugin.
+ */
+export function chooseConstructionLevel(
+  level: ConstructionRevealLevel,
+  framingInstalled: boolean,
+): void {
+  const state = useConstructionReveal.getState()
+  if (state.chosen && resolveConstructionLevel(state, framingInstalled) === level) return
+  state.setLevel(level)
+}
+
 /** Whether the project has what draws the framing: the kind is registered and its plugin installed. */
 export function isFramingAvailable(installedPlugins: readonly string[]): boolean {
   return nodeRegistry.has(FRAMING_KIND) && isNodeKindEnabled(FRAMING_KIND, installedPlugins)

@@ -1,7 +1,8 @@
 'use client'
 
 import type { ConstructionRevealLevel } from '@pascal-app/viewer'
-import useConstructionReveal, {
+import {
+  chooseConstructionLevel,
   useConstructionRevealLevel,
   useFramingAvailable,
 } from '../../../../../store/use-construction-reveal'
@@ -49,7 +50,6 @@ export function constructionLevelOptions(framingAvailable: boolean) {
 export function ConstructionAnimationSetting() {
   // What plays: the person's choice, or Framing where the framing plugin is installed and Full where it is not.
   const level = useConstructionRevealLevel()
-  const setLevel = useConstructionReveal((state) => state.setLevel)
   const framingAvailable = useFramingAvailable()
   const current = OPTIONS.find((option) => option.value === level)
   const options = constructionLevelOptions(framingAvailable).map((option) => {
@@ -83,7 +83,7 @@ export function ConstructionAnimationSetting() {
       </div>
       <SegmentedControl
         aria-label="Construction animation"
-        onChange={setLevel}
+        onChange={(next) => chooseConstructionLevel(next, framingAvailable)}
         options={options}
         value={level}
       />

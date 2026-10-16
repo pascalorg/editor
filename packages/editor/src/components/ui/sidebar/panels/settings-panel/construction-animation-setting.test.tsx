@@ -8,9 +8,12 @@ import {
   objectId,
   useScene,
 } from '@pascal-app/core'
+import type { ConstructionRevealLevel } from '@pascal-app/viewer'
 import { renderToStaticMarkup } from 'react-dom/server'
 import useConstructionReveal, {
+  chooseConstructionLevel,
   FRAMING_KIND,
+  resolveConstructionLevel,
 } from '../../../../../store/use-construction-reveal'
 import { AnimationSpeedSetting } from './animation-speed-setting'
 import {
@@ -113,6 +116,33 @@ describe('the construction animation control, drawn', () => {
     expect(optionOf(markup, 'Full')).toContain('aria-pressed="true"')
     expect(optionOf(markup, 'Framing')).toContain('aria-disabled="true"')
     expect(optionOf(markup, 'Framing')).toContain('aria-pressed="false"')
+  })
+})
+
+describe('clicking the level that plays', () => {
+  // A saved Framing plays as Full while the plugin is gone; the control shows Full pressed, and a click on
+  // the pressed option is still a click. It must not turn the kept Framing into a chosen Full.
+  const click = (level: ConstructionRevealLevel, installed: boolean) =>
+    chooseConstructionLevel(level, installed)
+
+  beforeEach(() => useConstructionReveal.setState({ level: 'framing', chosen: true }))
+  afterEach(() => useConstructionReveal.setState({ level: 'full', chosen: false }))
+
+  test('the Full shown for a saved Framing keeps the Framing when it is clicked, and it plays again with the plugin', () => {
+    click('full', false)
+    expect(useConstructionReveal.getState()).toMatchObject({ level: 'framing', chosen: true })
+    expect(resolveConstructionLevel(useConstructionReveal.getState(), true)).toBe('framing')
+  })
+
+  test('another level is a choice and replaces it', () => {
+    click('simple', false)
+    expect(useConstructionReveal.getState()).toMatchObject({ level: 'simple', chosen: true })
+  })
+
+  test('with no choice of the person’s own, a click on the level that plays is a choice of it', () => {
+    useConstructionReveal.setState({ level: 'full', chosen: false })
+    click('full', false)
+    expect(useConstructionReveal.getState()).toMatchObject({ level: 'full', chosen: true })
   })
 })
 
