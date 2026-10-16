@@ -560,6 +560,25 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
     expect: { refusal: 'unknown_role', mentions: ['item_vase', 'glaze'] },
   },
   {
+    name: "paint with no role on a catalog item lists the surfaces its model has, when the host read them",
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['item_vase'], material: SOFT_WHITE },
+    context: { assetViews: { vase: { surfaces: ['body', 'glaze', 'rim'] } } },
+    expect: {
+      refusal: 'unknown_role',
+      mentions: ['its surfaces: body, glaze, rim', 'painted so far: glaze'],
+    },
+  },
+  {
+    name: 'paint with no role on a catalog item whose model has no named surface asks for a role, as before',
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['item_vase'], material: SOFT_WHITE },
+    context: { assetViews: { vase: { surfaces: [] } } },
+    expect: { refusal: 'unknown_role', mentions: ['(painted so far: glaze)'] },
+  },
+  {
     name: "set_material took a bare community id ('mtl_…'): paint writes it as library:<id>",
     tool: 'paint',
     scene: finishScene,

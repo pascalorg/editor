@@ -12,7 +12,7 @@ import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { type AssetCatalog, builtInCatalog } from './asset-catalog'
-import { registerOperationTool, registerSharedTools } from './shared-tools'
+import { type PlanReadingHosts, registerOperationTool, registerSharedTools } from './shared-tools'
 
 // Layer 2 of 3: the MCP tools, through a real client, on every shared tool's edge cases.
 type Result = {
@@ -79,6 +79,7 @@ describe('shared tools over MCP', () => {
   let catalog: AssetCatalog = builtInCatalog
   // The floor the host's person views for the case at hand; none, as on the remote MCP.
   let viewed: string | null = null
+  const hosts: PlanReadingHosts = {}
 
   beforeEach(async () => {
     bridge = new SceneBridge()
@@ -87,6 +88,7 @@ describe('shared tools over MCP', () => {
       server,
       createSceneOperations({ bridge, activeLevelId: () => viewed }),
       () => catalog(),
+      hosts,
     )
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
@@ -101,6 +103,8 @@ describe('shared tools over MCP', () => {
       bridge.setScene(nodes as never, rootNodeIds as never)
       const own = c.context?.catalog
       catalog = own ? async () => own : builtInCatalog
+      // Catalog facts supplied by each shared case; nothing is fetched.
+      hosts.assetViews = async () => c.context?.assetViews ?? {}
       viewed = c.context?.activeLevelId ?? null
       const result = (await client.callTool({ name: c.tool, arguments: c.input })) as Result
       const payload = JSON.parse(result.content[0]!.text) as Record<string, unknown>

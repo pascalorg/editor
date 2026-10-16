@@ -39,6 +39,7 @@ const TOOL_POLICIES = [
       'search_materials',
       'validate_design',
       'verify_scene',
+      'view_assets',
       'view_scene',
     ],
   },

@@ -1060,6 +1060,19 @@
       }
     },
     {
+      "name": "view_assets",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It returns pictures and surface names of Pascal catalog items without placing an item or changing a scene.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It reads only the thumbnails and models of the connected Pascal service's own item library and does not access the public internet."
+      }
+    },
+    {
       "name": "view_scene",
       "annotations": {
         "readOnlyHint": true,

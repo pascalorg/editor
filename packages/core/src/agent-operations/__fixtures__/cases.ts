@@ -17,6 +17,7 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import type { AssetViewFacts } from '../asset-views'
 import { ADD_STAIR_CASES } from './add-stair-cases'
 import { CREATE_ROOM_CASES, FURNISH_ROOM_CASES } from './build-room-cases'
 import { PLACE_ITEMS_CASES } from './place-items-cases'
@@ -27,6 +28,7 @@ import { CREATE_ROOF_CASES, MOVE_ROOFS_CASES } from './roof-cases'
 import { ROOM_CASES } from './room-cases'
 import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
+import { VIEW_ASSETS_CASES } from './view-assets-cases'
 import { CORNER_WINDOW_CASES } from './corner-window-cases'
 import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
 import { DESCRIBE_NODE_CASES, FIND_NODES_CASES } from './node-read-cases'
@@ -61,8 +63,11 @@ export type AgentToolCase = {
   tool: string
   scene: () => SceneGraph
   input: Record<string, unknown>
-  /** `catalog`: the item library the host hands search_assets. */
-  context?: { activeLevelId?: string | null; catalog?: AssetInput[] }
+  context?: {
+    activeLevelId?: string | null
+    catalog?: AssetInput[]
+    assetViews?: Record<string, AssetViewFacts>
+  }
   surfaces?: AgentSurface[]
   expect:
     | { refusal: string; mentions?: string[] }
@@ -950,6 +955,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...CREATE_ROOM_CASES,
   ...FURNISH_ROOM_CASES,
   ...SEARCH_ASSETS_CASES,
+  ...VIEW_ASSETS_CASES,
   ...ADD_WALL_CASES,
   ...ADD_FENCE_CASES,
   ...CREATE_ROOF_CASES,

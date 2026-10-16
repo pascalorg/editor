@@ -4,8 +4,13 @@ import {
   type AgentContext,
   type AgentHostRuntime,
   type AgentOperation,
+  type AssetViewLoader,
   achievedChanges,
   applyAgentOutcome,
+  assetViewNeeds,
+  assetViewsReadCatalog,
+  createAssetViewLoader,
+  createFetchAssetViewIO,
   type SceneChanges,
   startOfSession,
   writeCollections,
@@ -45,6 +50,7 @@ import {
   searchMaterialsTool,
   setCheckpointTool,
   verifySceneTool,
+  viewAssetsTool,
 } from '@pascal-app/core/agent-tools'
 import {
   type AnyNode,
@@ -84,6 +90,13 @@ export type OperationTool = {
   /** Reads the host's item library: only these calls wait for it (the hosted one is a query). */
   catalog?: true
 }
+
+export type PlanReadingHosts = {
+  /** Reads catalog pictures and surfaces before view_assets and paint. */
+  assetViews?: AssetViewLoader
+}
+
+const defaultAssetViews = createAssetViewLoader(createFetchAssetViewIO())
 
 type SharedTool = OperationTool & {
   annotations:
@@ -430,6 +443,12 @@ const SHARED_TOOLS: SharedTool[] = [
     catalog: true,
   },
   {
+    contract: viewAssetsTool,
+    operation: AGENT_OPERATIONS.view_assets,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    catalog: true,
+  },
+  {
     contract: searchMaterialsTool,
     operation: AGENT_OPERATIONS.search_materials,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -508,8 +527,9 @@ export function registerSharedTools(
   server: McpServer,
   bridge: SceneOperations,
   catalog: AssetCatalog = builtInCatalog,
+  hosts: PlanReadingHosts = {},
 ): void {
-  for (const tool of SHARED_TOOLS) registerOperationTool(server, bridge, tool, catalog)
+  for (const tool of SHARED_TOOLS) registerOperationTool(server, bridge, tool, catalog, hosts)
   registerCollectionTools(server, bridge)
 }
 
@@ -522,6 +542,7 @@ export function registerOperationTool(
   bridge: SceneOperations,
   tool: OperationTool,
   catalog: AssetCatalog = builtInCatalog,
+  hosts: PlanReadingHosts = {},
 ): void {
   server.registerTool(
     tool.contract.name,
@@ -559,8 +580,15 @@ export function registerOperationTool(
           : {}),
         ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
-        ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
+        ...((tool.catalog || batchPlacesInRoom || assetViewsReadCatalog(tool.contract.name, input)) && {
+          catalog: await catalog(),
+        }),
       }
+      const needs = assetViewNeeds(before, tool.contract.name, input, context)
+      if (needs.subjects.length)
+        context.assetViews = await (hosts.assetViews ?? defaultAssetViews)(needs.subjects, {
+          pictures: needs.pictures,
+        })
       try {
         outcome = tool.operation(before, input as never, context)
       } catch (error) {
@@ -587,6 +615,20 @@ export function registerOperationTool(
         ...(tool.envelope?.(bridge) ?? {}),
         ...persistence,
       }
+      const { previews, ...shown } = payload as typeof payload & {
+        previews?: { label: string; image: string }[]
+      }
+      const pictures = (Array.isArray(previews) ? previews : []).flatMap(({ label, image }) => {
+        const [, mimeType, data] = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(image) ?? []
+        return mimeType && data
+          ? [{ type: 'text' as const, text: label }, { type: 'image' as const, data, mimeType }]
+          : []
+      })
+      if (pictures.length)
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(shown) }, ...pictures],
+          structuredContent: shown,
+        }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
         structuredContent: payload,

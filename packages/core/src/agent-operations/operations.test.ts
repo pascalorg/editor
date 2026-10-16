@@ -33,6 +33,7 @@ describe('agent operations', () => {
       const context = {
         activeLevelId: c.context?.activeLevelId ?? null,
         catalog: c.context?.catalog,
+        assetViews: c.context?.assetViews,
         materials: {},
       }
       // As on both surfaces, the operation gets the input its contract parsed ("36 in" → metres).

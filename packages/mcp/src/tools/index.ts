@@ -20,7 +20,7 @@ import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
 import { registerSetUnitMembers } from './set-unit-members'
 import { registerSetZone } from './set-zone'
-import { registerSharedTools } from './shared-tools'
+import { type PlanReadingHosts, registerSharedTools } from './shared-tools'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
 import { registerValidateDesign } from './validate-design'
@@ -36,7 +36,7 @@ import { registerViewScene, type SceneViewHost } from './view-scene'
  * when persistence operations are available.
  */
 /** What the host lends the tools: its item library, script compiles, a view. */
-export type ToolHosts = {
+export type ToolHosts = PlanReadingHosts & {
   catalog?: AssetCatalog
   geometryScripts?: GeometryScriptHost
   sceneViews?: SceneViewHost
@@ -45,10 +45,10 @@ export type ToolHosts = {
 export function registerTools(
   server: McpServer,
   operations: SceneOperations,
-  { catalog, geometryScripts, sceneViews }: ToolHosts = {},
+  { catalog, geometryScripts, sceneViews, assetViews }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
-  registerSharedTools(server, operations, catalog)
+  registerSharedTools(server, operations, catalog, { assetViews })
   registerAddColumn(server, operations, geometryScripts)
   registerAddObject(server, operations, geometryScripts)
   registerGetSource(server, operations, geometryScripts)

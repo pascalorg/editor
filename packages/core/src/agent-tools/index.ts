@@ -1,5 +1,5 @@
 import { addObjectTool, getSourceTool } from './add-object'
-import { searchAssetsTool } from './assets'
+import { searchAssetsTool, viewAssetsTool } from './assets'
 import { runBatchTool } from './batch'
 import { setCheckpointTool } from './checkpoints'
 import { clearSceneTool } from './clear-scene'
@@ -111,6 +111,7 @@ export const AGENT_TOOL_CONTRACTS = [
   paintTool,
   placeInRoomTool,
   searchAssetsTool,
+  viewAssetsTool,
   searchMaterialsTool,
   getSiteTool,
   placeBuildingTool,

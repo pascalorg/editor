@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod'
 import type { AnyNode, AssetInput, Collection, SceneMaterial, SceneMaterialId } from '../schema'
+import type { AssetViewFacts } from './asset-views'
 import type { SessionKeep, SessionRecord } from './scene-checkpoint'
 
 export type SceneNodes = Readonly<Record<string, AnyNode>>
@@ -27,6 +28,12 @@ export type AgentContext = {
   /** The agent's session so far. The host keeps it where its sessions live; it is never scene data. */
   session?: SessionRecord
   catalog?: readonly AssetInput[]
+  /**
+   * What a host read about catalog items before the call, by item id (`assetViewNeeds` says
+   * which): their pictures for view_assets, the names of their paintable surfaces for it and for
+   * paint. A host that cannot read them leaves them out.
+   */
+  assetViews?: Readonly<Record<string, AssetViewFacts>>
   materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
 }
 

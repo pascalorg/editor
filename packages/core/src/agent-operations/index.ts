@@ -3,6 +3,7 @@ import { addColumn } from './add-column'
 import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addWall } from './add-wall'
+import { viewAssets } from './asset-views'
 import { createBatchOperation } from './batch'
 import { addCornerWindow } from './corner-window'
 import { createRoof } from './create-roof'
@@ -107,6 +108,7 @@ const SINGLE_OPERATIONS = {
   paint,
   place_in_room: placeInRoom,
   search_assets: searchAssets,
+  view_assets: viewAssets,
   search_materials: searchMaterials,
   get_site: getSite,
   place_building: placeBuilding,
@@ -123,6 +125,17 @@ export const AGENT_OPERATIONS = {
   run_batch: createBatchOperation(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS),
 } as const satisfies AgentOperations
 
+export {
+  type AssetViewFacts,
+  type AssetViewIO,
+  type AssetViewLoader,
+  type AssetViewSubject,
+  assetViewNeeds,
+  assetViewsReadCatalog,
+  createAssetViewLoader,
+  createFetchAssetViewIO,
+  readGlbSurfaces,
+} from './asset-views'
 export { type PhotoFacePlan, planPhotoElevation } from './photo-elevation'
 export { recordMade } from './record-made'
 export {

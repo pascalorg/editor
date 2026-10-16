@@ -25,7 +25,9 @@ export const BATCHABLE_TOOLS = [
   'add_column',
   'place_in_room',
   // Not search_assets: it reads the host's item library, which a host hands that one tool, and
-  // already runs several queries per call. Not furnish_room or place_items, for the same library;
+  // already runs several queries per call. Not view_assets, whose pictures a batch's result cannot
+  // carry (it returns each call's result as data; a picture rides beside the result of a call
+  // made on its own). Not furnish_room or place_items, for the same library;
   // not create_room, whose answer names the floor plate and ceiling the host derives after it.
 ] as const
 

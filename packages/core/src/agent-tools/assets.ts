@@ -20,3 +20,17 @@ export const searchAssetsTool = {
       .describe('One or more searches to run in a single call.'),
   },
 }
+
+export const viewAssetsTool = {
+  name: 'view_assets',
+  title: 'View catalog items',
+  description:
+    'Pictures of catalog items by id, each with its size and the names of its paintable surfaces (paint takes one as role).',
+  input: {
+    ids: z
+      .array(z.string().min(1))
+      .min(1)
+      .max(6)
+      .describe('One to six catalog item ids, as search_assets or furnish_room returned them.'),
+  },
+}

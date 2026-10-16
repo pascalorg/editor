@@ -1,3 +1,4 @@
+import type { PlanReadingHosts } from './tools/shared-tools'
 import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import {
@@ -56,6 +57,8 @@ export type CreatePascalMcpServerOptions = {
   files?: ProjectFileToolExecutor
   /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
   sceneViews?: SceneViewHost
+  /** Reads catalog items' pictures and surfaces before view_assets and paint. */
+  assetViews?: PlanReadingHosts['assetViews']
   /** Lines the host adds to what a client reads at connect (the person's own settings). */
   instructions?: string
 }
@@ -78,6 +81,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     catalog,
     geometryScripts: opts.geometryScripts,
     sceneViews: opts.sceneViews,
+    assetViews: opts.assetViews,
   })
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)
