@@ -402,3 +402,57 @@ The boundary stays narrow on purpose so the contract is shippable. Each "not yet
 3. The dev-mode `[pascal:registry]` console log shows the loaded plugin id + node count — that's the verification anchor.
 
 The host's own parity test (`packages/nodes/src/index.test.ts`) asserts every `AnyNode` discriminator has a registered kind. Plugin-contributed kinds don't participate in that test (they're not in `AnyNode`); add an equivalent test on your own side if you maintain a hand-typed union elsewhere.
+
+## Surface connections and editing contributions
+
+These optional fields extend node definitions, not the `Plugin` v1 manifest. See
+DECISIONS.md E-017. Framework packages never import a node pack to implement them.
+
+- `capabilities.surfaces.top.boundary(node, inset)` returns an ordered polygon in
+  the node's parent XZ frame, in metres. The polygon can be clockwise or
+  counterclockwise. A positive inset moves the boundary inward. Return at least
+  three finite points; an unavailable boundary returns an empty array. `top.height`
+  is relative to `node.position[1]`, before floor construction lift, and its point
+  context is in the same parent frame. Snapping and railings consult the registry.
+- `connectedMove(node, preview, nodes)` returns data patches for connected nodes.
+  It is pure: it must not mutate `nodes` or write the store. The editor applies its
+  patches to live overrides during a drag and includes them in the one commit on
+  release. It may return an empty list when there is no connection to move.
+- `InspectorExtension.primaryWhen(node)` selects an extension as the card's main
+  content. Registered order breaks ties. It must be pure and cheap. The wrapper
+  subscribes to the resulting extension ID, so changes unrelated to that choice
+  do not rerender the whole card. The extension's own controls subscribe to the
+  fields they display.
+- `capabilities.movable.preserveLevelAndElevation` keeps an existing floor-placed
+  object on its original level and visual elevation during a move. Fresh placement
+  still follows the chosen support. Stored Y remains an offset from the support,
+  not an absolute world height.
+- `capabilities.movable.parentFrame.independent` keeps selection/manipulation on
+  the child instead of promoting its parent. The frame's conversion hooks still
+  own cursor and rotation conversion in 2D and 3D.
+- `node.metadata.roomBoundary === false` excludes a wall-like node from room
+  topology. Omitted or true retains ordinary room-boundary behavior. This flag
+  does not change the node's visible geometry or paint surfaces.
+
+### Shared run tools
+
+Use `@pascal-app/editor/distribution` for `useDistributionRunTool`,
+`DistributionRunCursor`, port queries, connection compatibility and screen/angle
+snapping. It depends on the framework packages and never on `@pascal-app/nodes`.
+External plugins must not depend on the built-in node pack.
+
+### Stair destination surfaces
+
+Stairs use `destinationSurfaceId` and `autoSurfaceSnap`. Their source support is
+still `supportSlabId` and the stored Y is the offset above that support. Both edge
+snapping and transition geometry read `surfaces.top.boundary`; they do not inspect
+another plugin's width, shape, or private polygon fields. The scene loader migrates
+old `landscapeSurfaceId` / `autoLandscapeSnap` values to these generic fields.
+
+### Stable package revisions
+
+Pin immutable commits reachable from a maintained publishing branch or release tag.
+Bath Space uses `pascal-cluster`'s `packages/bath-space` branch; Landscape uses
+`packages/landscape`. Do not use a temporary PR branch as the only reference to a
+published revision. Streetscape is maintained in `pascalorg/plugin-streetscape`
+with the existing package name and `pascal:streetscape` plugin ID.

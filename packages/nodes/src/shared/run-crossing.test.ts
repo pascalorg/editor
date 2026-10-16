@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { DuctSegmentNode, useScene } from '@pascal-app/core'
-import type { RunSurfaceTarget } from './distribution-run-contract'
-import { findRunBodyCrossingSurface } from './ports'
+import type { RunSurfaceTarget } from '@pascal-app/editor/distribution'
+import { findRunBodyCrossingSurface } from '@pascal-app/editor/distribution'
 
 test('ceiling crossings ignore floor runs and connect only at matching 3D height', () => {
   const previous = useScene.getState().nodes

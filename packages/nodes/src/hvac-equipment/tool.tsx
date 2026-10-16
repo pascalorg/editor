@@ -14,11 +14,11 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import { alignDrawPoint, clearDrawAlignment } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { hvacEquipmentDefinition } from './definition'
 import { buildHvacEquipmentGeometry } from './geometry'

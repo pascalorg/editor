@@ -25,6 +25,13 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import {
+  alignDrawPoint,
+  clearDrawAlignment,
+  collectScenePorts,
+  DUCT_PORT_SYSTEMS,
+  findNearestPort3D,
+} from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -32,9 +39,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, Matrix3, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
 import { ConnectionFeedback } from '../shared/connection-feedback'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPort3D } from '../shared/ports'
 import { ductTerminalDefinition } from './definition'
 import { buildDuctTerminalGeometry } from './geometry'
 import { COLLAR_LENGTH, getDuctTerminalPorts, mountQuaternion } from './ports'

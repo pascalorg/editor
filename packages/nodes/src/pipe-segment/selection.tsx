@@ -23,6 +23,11 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import {
+  collectScenePorts,
+  DWV_PORT_SYSTEMS,
+  findNearestPortXZ,
+} from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
@@ -37,7 +42,6 @@ import {
 import { PipeFittingGhost, PipeSegmentGhost } from '../shared/mep-ghost'
 import { planPipeRunTranslationOffsets } from '../shared/pipe-run-translation-offset'
 import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/pipe-vertical-offset'
-import { collectScenePorts, DWV_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 import { ContinuePlusHandle, HandleCube, MoveChevron } from '../shared/selection-handles'
 import { refreshWallRunAttachment } from '../shared/wall-run-move'
 import {

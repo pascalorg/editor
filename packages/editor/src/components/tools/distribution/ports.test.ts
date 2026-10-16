@@ -3,8 +3,20 @@ import type { RunSurfaceTarget } from './distribution-run-contract'
 import { findNearestPort3D, findNearestPortXZ, type ScenePort } from './ports'
 
 const ports: ScenePort[] = [
-  { nodeId: 'duct-segment_a', id: 'floor', position: [0, 0, 0], direction: [1, 0, 0] },
-  { nodeId: 'duct-segment_b', id: 'wall', position: [0.4, 2, 0], direction: [1, 0, 0] },
+  {
+    nodeId: 'duct-segment_a',
+    id: 'floor',
+    position: [0, 0, 0],
+    diameter: 0.1,
+    direction: [1, 0, 0],
+  },
+  {
+    nodeId: 'duct-segment_b',
+    id: 'wall',
+    position: [0.4, 2, 0],
+    diameter: 0.1,
+    direction: [1, 0, 0],
+  },
 ]
 
 describe('distribution port distance metrics', () => {
@@ -35,6 +47,7 @@ describe('distribution port distance metrics', () => {
       nodeId: 'duct-segment_c',
       id: 'off-plane',
       position: [0, 1.8, 0.25],
+      diameter: 0.1,
       direction: [1, 0, 0],
     }
     expect(findNearestPort3D([0, 1.8, 0], [offPlane], 0.1, wall)).toBeNull()

@@ -11,6 +11,13 @@ import {
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
+import {
+  alignDrawPoint,
+  clearDrawAlignment,
+  collectScenePorts,
+  DUCT_PORT_SYSTEMS,
+  type ScenePort,
+} from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -27,7 +34,6 @@ import {
   subscribeAccessorySnapping,
 } from '../shared/accessory-snapping'
 import { ConnectionFeedback } from '../shared/connection-feedback'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import {
   AXIS_VECTORS,
   cycleRotationAxis,
@@ -36,7 +42,6 @@ import {
 } from '../shared/fitting-rotation'
 import { createFittingSurfaceSupport } from '../shared/fitting-surface-support'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { collectScenePorts, DUCT_PORT_SYSTEMS, type ScenePort } from '../shared/ports'
 import { ductFittingDefinition } from './definition'
 import { buildDuctFittingGeometry } from './geometry'
 import { localFittingPorts } from './ports'

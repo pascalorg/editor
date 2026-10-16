@@ -4,6 +4,7 @@ import {
   PipeFittingNode,
   PipeSegmentNode,
 } from '@pascal-app/core'
+import type { RunBodyHit, ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { fittingLegLength } from '../duct-fitting/ports'
 import {
@@ -12,7 +13,6 @@ import {
   ovalEquivalentDiameterIn,
 } from '../duct-segment/geometry'
 import { pipeFittingLegLength } from '../pipe-fitting/ports'
-import type { RunBodyHit, ScenePort } from './ports'
 
 /** Turns shallower than this read as a straight continuation — butt-join
  *  the runs instead of minting a fitting. Matches the elbow schema's

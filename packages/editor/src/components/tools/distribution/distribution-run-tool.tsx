@@ -35,14 +35,9 @@ import {
 import { findScreenPort, type PortScreenPoint } from './run-port-snap'
 import { chooseScreenDirection, screenDirectionScore } from './run-screen-direction'
 
-export type RunPoint = [number, number, number]
+export type { RunPoint, RunSurfaceFrame } from './distribution-run-contract'
 
-export type RunSurfaceFrame = {
-  origin: RunPoint
-  normal: RunPoint
-  tangent: RunPoint
-  bitangent: RunPoint
-}
+import type { RunPoint, RunSurfaceFrame } from './distribution-run-contract'
 
 type RunPointerEvent = GridEvent
 
@@ -219,10 +214,10 @@ export function projectRunToSurfaceAngleLock(
   ]
 }
 
-type DistributionRunToolConfig = {
+export type DistributionRunToolConfig = {
   active: boolean
   levelId: AnyNodeId | null
-  toolName: 'duct-segment' | 'pipe-segment'
+  toolName: string
   initialStart?: RunPoint | null
   initialConnection?: RunConnection | null
   getPorts: () => ScenePort[]

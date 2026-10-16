@@ -48,7 +48,7 @@ type SidebarStore = {
 export const useSidebarStore = create<SidebarStore>()(
   persist(
     (set) => ({
-      width: 288, // 18rem = 288px
+      width: 360,
       setWidth: (width) => {
         if (width < SIDEBAR_COLLAPSE_THRESHOLD) {
           set({ isCollapsed: true })

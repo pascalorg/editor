@@ -573,6 +573,7 @@ export * from './registry'
 // and must stay free of React imports.
 export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
+export * from './schema/nodes/stair-defaults'
 export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export * from './services/project-file-sink'

@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.tsx",
     "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
-    "./procedural-items": "./src/components/procedural-items/inspector.tsx"
+    "./procedural-items": "./src/components/procedural-items/inspector.tsx",
+    "./distribution": "./src/components/tools/distribution/distribution-public.ts"
   },
   "scripts": {
     "bench:room-labels": "bun run src/components/editor/__bench__/room-label-placement.bench.ts",

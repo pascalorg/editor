@@ -255,7 +255,7 @@ export class RoomTopologyIndex<TRoom extends IndexedRoom> {
 
   private isBoundary(node: any): node is BoundaryNode {
     return (
-      node?.type === 'wall' ||
+      (node?.type === 'wall' && node.metadata?.roomBoundary !== false) ||
       (this.options.includeSeparators !== false && node?.type === 'separator')
     )
   }
