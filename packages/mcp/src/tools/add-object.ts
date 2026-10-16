@@ -11,7 +11,13 @@ import {
   requireAddObjectReason,
   type SceneNodes,
 } from '@pascal-app/core/agent-operations'
-import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
+import {
+  addObjectTool,
+  CATALOG_SOURCE,
+  getSourceTool,
+  isAgentRefusal,
+  refuse,
+} from '@pascal-app/core/agent-tools'
 import {
   type AnyNode,
   type CompiledGeometryScript,
@@ -176,9 +182,10 @@ export function registerAddObject(
         })
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
-        return toolError(error instanceof Error ? error.message : String(error), {
-          code: 'script_failed',
-        })
+        return toolError(
+          `${error instanceof Error ? error.message : String(error)} ${CATALOG_SOURCE}`,
+          { code: 'script_failed' },
+        )
       }
       // A copy: the hosted bridge writes its map in place, and a "before" that grows with the call
       // reads every creation as unchanged.

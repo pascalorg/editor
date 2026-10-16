@@ -963,6 +963,53 @@ export const FURNISH_ROOM_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'a skip names the other sources, and a set with no skip does not',
+    tool: 'furnish_room',
+    scene: roomScene({
+      outline: roomOutline(7, 4.5),
+      name: 'Living room',
+      open: ['wall_s', 'wall_e', 'wall_w'],
+    }),
+    input: { zoneId: 'zone_bed', roomType: 'living', doorWallIndex: 0 },
+    context: { catalog: CATALOG },
+    expect: {
+      result: { ok: true },
+      check: (result) =>
+        problems(
+          [(result.skipped as string[]).length > 0, 'nothing was skipped: no case here'],
+          [
+            String(result.message).includes(
+              'For what was skipped: add_object builds an object of any shape and size',
+            ),
+            'a skip does not name the sources',
+          ],
+        ),
+    },
+  },
+  {
+    name: 'every piece placed comes with its name, size and id',
+    tool: 'furnish_room',
+    scene: roomScene({ outline: roomOutline(7, 4.5), name: 'Living room', doorsOn: ['wall_s'] }),
+    input: { zoneId: 'zone_bed', roomType: 'living' },
+    context: { catalog: CATALOG },
+    expect: {
+      result: { ok: true, skipped: [] },
+      mentions: ['sofa (2.5 × 1.5 m): item_'],
+      check: (result) => {
+        const pieces = result.pieces as string[]
+        const ids = result.itemIds as string[]
+        return problems(
+          [pieces.length === ids.length && ids.length > 0, 'pieces and ids differ'],
+          [
+            pieces.every((piece, i) => piece.endsWith(`: ${ids[i]}`) && / \(\d[\d.]* × \d[\d.]* m\): /.test(piece)),
+            `a piece lacks its size or its id: ${pieces}`,
+          ],
+          [!String(result.message).includes('add_object'), 'a set with no skip names the sources'],
+        )
+      },
+    },
+  },
+  {
     name: 'a wall-bound piece where no wall stands is skipped, and says so: the TV of a living room open to the south',
     tool: 'furnish_room',
     scene: roomScene({

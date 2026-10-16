@@ -1,6 +1,7 @@
 import type { FURNISHED_ROOM_TYPES } from '../agent-tools/furnish-room'
 import { refuse } from '../agent-tools/refusal'
-import { type AnyNode, type AssetInput, ItemNode } from '../schema'
+import { OTHER_SOURCES } from '../agent-tools/sources'
+import { type AssetInput, ItemNode } from '../schema'
 import { edgeProjection } from './create-room'
 import {
   collectDoorKeepouts,
@@ -315,7 +316,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
   const { minX, maxX, minZ, maxZ } = polygonBounds(polygon)
   const walls = wallFacesOn(all, levelId)
 
-  const items: AnyNode[] = []
+  const items: ItemNode[] = []
   const skipped: string[] = []
   // How far each piece was moved off the spot the layout gave it, for the pieces that follow it.
   const moved = new Map<string, Vec2>()
@@ -367,15 +368,21 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
   }
 
   const itemIds = items.map((item) => item.id)
+  // Each piece with its size and id, as the skips are told: the set is not read back from the scene.
+  const pieces = items.map((item) => {
+    const [width = 1, , depth = 1] = item.asset.dimensions ?? [1, 1, 1]
+    return `${item.name ?? item.asset.name} (${round(width)} × ${round(depth)} m): ${item.id}`
+  })
   return {
     result: {
       ok: true,
       placed: items.length,
       itemIds,
+      pieces,
       skipped,
       doorWallIndex: doorWall,
       doorsDetected: doors.length,
-      message: `Furnished the ${input.roomType} with ${items.length} item${items.length === 1 ? '' : 's'}${skipped.length ? `, skipped ${skipped.length}` : ''}.`,
+      message: `Furnished the ${input.roomType} with ${items.length} item${items.length === 1 ? '' : 's'}${skipped.length ? `, skipped ${skipped.length}` : ''}.${skipped.length ? ` For what was skipped: ${OTHER_SOURCES}` : ''}`,
     },
     ...(items.length
       ? { changes: { create: items.map((node) => ({ node, parentId: levelId })) } }
