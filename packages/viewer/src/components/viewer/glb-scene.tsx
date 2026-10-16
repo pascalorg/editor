@@ -575,6 +575,7 @@ export function GlbScene({
             index,
             selectedIndex: selectedIdx >= 0 ? selectedIdx : undefined,
             nodeVisible: true,
+            revealing: false,
           })
       if (shadowOnly) applyShadowOnly(node)
       else clearShadowOnly(node)

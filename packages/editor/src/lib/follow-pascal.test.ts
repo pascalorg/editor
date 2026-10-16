@@ -225,7 +225,10 @@ describe('keeping the followed target in sight', () => {
       expect(clear()).toBe(false)
       useViewer.setState({ hideLevelsAboveSelection: true })
       expect(clear()).toBe(true)
-      useViewer.setState({ hideLevelsAboveSelection: false })
+      // The storey a reveal is playing on shows, so what is batched on it stands in the way again.
+      useViewer.setState({ levelsRevealing: [upper.id] })
+      expect(clear()).toBe(false)
+      useViewer.setState({ levelsRevealing: [], hideLevelsAboveSelection: false })
       ;(obstacle.material as MeshBasicMaterial).opacity = 0
       expect(clear()).toBe(true)
     } finally {

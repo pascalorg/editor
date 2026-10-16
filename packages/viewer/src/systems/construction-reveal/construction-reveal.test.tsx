@@ -5,8 +5,10 @@ import {
   type AnyNodeId,
   applySceneSnapshot,
   BaseNode,
+  BuildingNode,
   clearSceneHistory,
   emitter,
+  getLevelElevations,
   ItemNode,
   LevelNode,
   loadPlugin,
@@ -16,18 +18,34 @@ import {
   objectId,
   type RevealConfig,
   runAsSceneCommitAuthor,
+  type SceneCommit,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { act, create } from '@react-three/test-renderer'
-import { BoxGeometry, Group, Matrix4, Mesh, type Object3D } from 'three'
+import { BoxGeometry, Group, Matrix4, Mesh, MeshBasicMaterial, Object3D } from 'three'
+import { z } from 'zod'
 import { NodeRenderer } from '../../components/renderers/node-renderer'
 import { DustPool } from '../../lib/construction-dust'
 import { OVERLAY_LAYER, scenePassLayers } from '../../lib/layers'
+import { commitEditCandidates } from '../../lib/reveal-candidates'
 import { hasRevealPose } from '../../lib/reveal-pose'
-import { RETRACT_TIMING, REVEAL_TIMING } from '../../lib/reveal-schedule'
+import {
+  coverRangeAt,
+  LAZY_REVEAL_TIMING,
+  lazyRetractTimingAt,
+  lazyTimingAt,
+  RETRACT_TIMING,
+  REVEAL_TIMING,
+  retractTimingAt,
+  revealTimingAt,
+} from '../../lib/reveal-schedule'
+import { revealWipeLevelOf } from '../../lib/reveal-wipe'
 import useViewer from '../../store/use-viewer'
 import { GeometrySystem } from '../geometry/geometry-system'
+import { heldLevelY } from '../level/level-hold'
+import { LevelSystem } from '../level/level-system'
+import { visibleMaterialsOf, wallsInPlay } from '../wall/wall-cutout-cache'
 import { ConstructionDust } from './construction-dust'
 
 // Construction reveal, failure modes written before the code: a person's edit,
@@ -38,7 +56,10 @@ import {
   ConstructionReveal,
   type ConstructionRevealDriver,
   type ConstructionRevealLevel,
+  getRetractTurn,
+  getRevealPlanSpeed,
   getRevealPlanState,
+  getRevealTurn,
   isNodeRevealing,
   isRevealAssembling,
   isRevealWaiting,
@@ -46,7 +67,9 @@ import {
   type RevealEvent,
   type RevealPhaseEvent,
   retractNodes,
+  revealClockMs,
   seatLiftedNow,
+  setRevealPreroll,
   startConstructionReveal,
   subscribeRevealAssembling,
   subscribeRevealEvents,
@@ -72,6 +95,7 @@ function revealKind(
   reveal: RevealConfig | null,
   geometry: (node: AnyNode) => BoxGeometry | null,
   extra: Record<string, unknown> = {},
+  revealOnEdit: readonly string[] = [],
 ): { schema: typeof BaseNode; definition: AnyNodeDefinition } {
   const schema = BaseNode.extend({
     id: objectId(prefix),
@@ -85,7 +109,10 @@ function revealKind(
     schema,
     category: 'structure',
     defaults: () => base,
-    capabilities: reveal ? { reveal } : {},
+    capabilities: {
+      ...(reveal ? { reveal } : {}),
+      ...(revealOnEdit.length ? { revealOnEdit } : {}),
+    },
     geometry: (node) => {
       const built = geometry(node as AnyNode)
       return built ? new Group().add(new Mesh(built)) : new Group()
@@ -108,6 +135,21 @@ const QueuedWall = revealKind(
   { phase: 'structure', style: 'rise' },
   (node) => (reached.has(node.id) ? new BoxGeometry(4, 2.5, 0.2).translate(2, 1.25, 0) : null),
 )
+/** A wall of the real kind's name: what a deletion dresses is a node of type `wall`. */
+const RealWall = revealKind(
+  'wall',
+  'wall',
+  { phase: 'structure', style: 'rise' },
+  () => new BoxGeometry(4, 2.5, 0.2).translate(2, 1.25, 0),
+  {
+    start: z.tuple([z.number(), z.number()]).default([0, 0]),
+    end: z.tuple([z.number(), z.number()]).default([4, 0]),
+    height: z.number().default(2.5),
+    thickness: z.number().default(0.2),
+    frontSide: z.string().default('interior'),
+    backSide: z.string().default('exterior'),
+  },
+)
 const Door = revealKind('fixture:door', 'fxdoor', { phase: 'openings', style: 'scale' }, () =>
   new BoxGeometry(0.9, 2.1, 0.1).translate(0, 1.05, 0),
 )
@@ -126,6 +168,30 @@ const Plate = revealKind(
   'fxplate',
   { phase: 'foundation', style: 'settle', height: 0.08 },
   () => new BoxGeometry(4, 0.2, 4).translate(2, -0.1, 2),
+)
+// A wall that is bent or resized: its `scale` makes its picture, its `name` does not.
+const Beam = revealKind(
+  'fixture:beam',
+  'fxbeam',
+  { phase: 'structure', style: 'rise' },
+  () => new BoxGeometry(4, 2.5, 0.2).translate(2, 1.25, 0),
+  { scale: ItemNode.shape.scale },
+  ['scale'],
+)
+// A slab edited the same way: the edit plays as a settle, as it came in.
+const Floorplate = revealKind(
+  'fixture:floorplate',
+  'fxfloorplate',
+  { phase: 'foundation', style: 'settle', height: 0.08 },
+  () => new BoxGeometry(4, 0.2, 4).translate(2, -0.1, 2),
+  { scale: ItemNode.shape.scale },
+  ['scale'],
+)
+const Flight = revealKind(
+  'fixture:flight',
+  'fxflight',
+  { phase: 'circulation', style: 'drop', height: 2.5 },
+  () => new BoxGeometry(1, 2.5, 3).translate(0, 1.25, 1.5),
 )
 const Pane = revealKind('fixture:pane', 'fxpane', { phase: 'openings', style: 'cut' }, () =>
   new BoxGeometry(1, 1.2, 0.1).translate(0, 1.5, 0),
@@ -173,13 +239,42 @@ const Lid = revealKind(
 const Part = revealKind('fixture:part', 'fxpart', null, () =>
   new BoxGeometry(3, 1, 4).translate(0, 3.5, 0),
 )
+// Roofs of three sizes: a small porch, a tall hip, a long flat one.
+const Porch = revealKind(
+  'fixture:porch',
+  'fxporch',
+  { phase: 'roof', style: 'assemble', height: 4 },
+  () => new BoxGeometry(3, 0.7, 2).translate(0, 3.1, 0),
+)
+const Hip = revealKind(
+  'fixture:hip',
+  'fxhip',
+  { phase: 'roof', style: 'assemble', height: 4 },
+  () => new BoxGeometry(9, 5, 9).translate(0, 5.5, 0),
+)
+const LongFlat = revealKind(
+  'fixture:longflat',
+  'fxlongflat',
+  { phase: 'roof', style: 'assemble', height: 4 },
+  () => new BoxGeometry(14, 0.3, 4).translate(0, 3, 0),
+)
+// A pitched roof: it rises 1.6 m from its eave to its ridge.
+const Gable = revealKind(
+  'fixture:gable',
+  'fxgable',
+  { phase: 'roof', style: 'assemble', height: 4 },
+  () => new BoxGeometry(6, 1.6, 4).translate(0, 3.6, 0),
+)
 
 const make = (kind: { schema: typeof BaseNode }, data: Record<string, unknown> = {}) =>
   kind.schema.parse(data) as AnyNode
 
+const NO_CHILDREN: AnyNodeId[] = []
+
 function LevelChildren({ levelId }: { levelId: AnyNodeId }) {
   const children = useScene(
-    (state) => (state.nodes[levelId] as { children?: AnyNodeId[] } | undefined)?.children ?? [],
+    (state) =>
+      (state.nodes[levelId] as { children?: AnyNodeId[] } | undefined)?.children ?? NO_CHILDREN,
   )
   return (
     <>
@@ -249,12 +344,20 @@ async function agentWrites(write: () => void) {
   })
 }
 
-function start(options: { prefersReducedMotion?: () => boolean } = {}) {
+function start(
+  options: {
+    prefersReducedMotion?: () => boolean
+    speed?: () => number
+    deletes?: (commit: SceneCommit) => boolean
+  } = {},
+) {
   dust = new DustPool()
   driver = startConstructionReveal({
     reveals: (commit) => commit.author === 'agent',
+    ...(options.deletes ? { deletes: options.deletes } : {}),
     prefersReducedMotion: options.prefersReducedMotion ?? (() => false),
     level: () => level,
+    ...(options.speed ? { speed: options.speed } : {}),
     dust,
   })
 }
@@ -285,11 +388,15 @@ beforeEach(async () => {
     nodes: [
       Slab.definition,
       Wall.definition,
+      RealWall.definition,
       QueuedWall.definition,
       Door.definition,
       Item.definition,
       Post.definition,
       Plate.definition,
+      Flight.definition,
+      Beam.definition,
+      Floorplate.definition,
       Pane.definition,
       Roof.definition,
       Lid.definition,
@@ -297,6 +404,10 @@ beforeEach(async () => {
       Movable.definition,
       Model.definition,
       Part.definition,
+      Gable.definition,
+      Porch.definition,
+      Hip.definition,
+      LongFlat.definition,
     ],
   })
   now = 0
@@ -305,6 +416,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  setRevealPreroll(null)
   await act(async () => driver?.stop())
   driver = null
   await renderer?.unmount()
@@ -690,30 +802,6 @@ describe('always instant', () => {
     await agentWrites(() => useScene.getState().createNode(wall, levelId))
     expect(root(wall.id)).toBeDefined()
   })
-
-  test('a level nobody sees shows at once and holds no slot', async () => {
-    const levelIds = loadLevels(2)
-    await mount(levelIds)
-    useViewer.setState({
-      hideLevelsAboveSelection: true,
-      selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
-    } as never)
-    start()
-    const below = make(Wall)
-    const above = make(Wall)
-    await agentWrites(() =>
-      useScene.getState().createNodes([
-        { node: above, parentId: levelIds[1]! },
-        { node: below, parentId: levelIds[0]! },
-      ]),
-    )
-    await frame()
-
-    expect(root(above.id)).toBeDefined()
-    expect(isNodeRevealing(above.id)).toBe(false)
-    expect(root(below.id)).toBeDefined()
-    expect(isNodeRevealing(below.id)).toBe(true)
-  })
 })
 
 describe('the root stays its own', () => {
@@ -909,6 +997,218 @@ describe('a roof assembles from its parts', () => {
   })
 })
 
+describe('a roof at the framing level is covered in place, not dropped', () => {
+  async function buildGable(partCount = 2) {
+    level = 'framing'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const roof = make(Gable)
+    const parts = Array.from({ length: partCount }, () => make(Part))
+    await agentWrites(() => {
+      useScene.getState().createNode(roof, levelId)
+      useScene
+        .getState()
+        .createNodes(parts.map((node) => ({ node, parentId: roof.id as AnyNodeId })))
+    })
+    return { roof, parts, levelId: levelId! }
+  }
+
+  /** Runs the build a frame at a time, noting what the roof's root shows. */
+  async function watch(roofId: string, until_ = 20000) {
+    const lifts: number[] = []
+    const levels: number[] = []
+    const begun = now
+    while ((isNodeRevealing(roofId) || !root(roofId)) && now - begun < until_) {
+      await frame()
+      const roofRoot = root(roofId)
+      if (!roofRoot?.children.length) continue
+      lifts.push(lift(roofRoot))
+      const at = revealWipeLevelOf(roofRoot)
+      if (at !== null) levels.push(at)
+    }
+    return { lifts, levels, took: now - begun }
+  }
+
+  test('it is staged as a covering: nothing drops, and no part is staged on its own', async () => {
+    const { roof, parts } = await buildGable()
+    expect(isRevealAssembling(roof.id)).toBe(false)
+    const styles = new Map<string, string>()
+    const stop = subscribeRevealEvents((event) => {
+      if (event.type === 'node-start') styles.set(event.id, event.style)
+    })
+    try {
+      const { lifts } = await watch(roof.id)
+      expect(styles.get(roof.id)).toBe('cover')
+      for (const part of parts) expect(styles.has(part.id)).toBe(false)
+      expect(Math.max(...lifts)).toBe(0)
+      expect(isNodeRevealing(roof.id)).toBe(false)
+    } finally {
+      stop()
+    }
+  })
+
+  test('the covering is laid from the eave to the ridge, row after row, until the last has landed', async () => {
+    const { roof } = await buildGable()
+    const { levels } = await watch(roof.id)
+    expect(levels.length).toBeGreaterThan(4)
+    for (let i = 1; i < levels.length; i += 1)
+      expect(levels[i]!).toBeGreaterThanOrEqual(levels[i - 1]!)
+    // The eave is at 2.8 m and the ridge at 4.4 m: it starts low and is closed at the top.
+    expect(levels[0]!).toBeLessThan(3.4)
+    expect(levels.at(-1)!).toBeGreaterThanOrEqual(4.4)
+    // Nothing is left dressed once it is whole.
+    const roofRoot = root(roof.id)!
+    expect(revealWipeLevelOf(roofRoot)).toBeNull()
+    roofRoot.traverse((child) => {
+      const mesh = child as Mesh
+      if (mesh.isMesh) expect((mesh.material as { maskNode?: unknown }).maskNode).toBeUndefined()
+    })
+  })
+
+  test('the covering moves with every frame: strictly increasing, closed at the top at the end', async () => {
+    const { roof } = await buildGable()
+    const { levels } = await watch(roof.id)
+    expect(levels.length).toBeGreaterThan(30)
+    for (let i = 1; i < levels.length; i += 1) expect(levels[i]!).toBeGreaterThan(levels[i - 1]!)
+    // The ridge is at 4.4 m: the last frame it is drawn in has closed it.
+    expect(levels.at(-1)!).toBeGreaterThanOrEqual(4.4)
+  })
+
+  test('it takes as long as it is big, within a floor and a ceiling', async () => {
+    const range = coverRangeAt(1)
+    const took: Record<string, number> = {}
+    for (const [name, kind] of [
+      ['porch', Porch],
+      ['hip', Hip],
+      ['flat', LongFlat],
+    ] as const) {
+      await renderer?.unmount()
+      renderer = null
+      await act(async () => driver?.stop())
+      driver = null
+      sceneRegistry.clear()
+      now = 0
+      level = 'framing'
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start()
+      const roof = make(kind)
+      await agentWrites(() => useScene.getState().createNode(roof, levelId))
+      const { levels, took: ms } = await watch(roof.id, 60000)
+      expect(levels.length).toBeGreaterThan(0)
+      took[name] = ms
+    }
+    const near = (ms: number, want: number) => Math.abs(ms - want) <= 600
+    // A 0.7 m rise is under the floor; a 5 m rise follows its size; 14 m of flat roof is capped.
+    expect(near(took.porch!, range.minMs)).toBe(true)
+    expect(near(took.hip!, 5.02 * range.perMeterMs)).toBe(true)
+    expect(near(took.flat!, range.maxMs)).toBe(true)
+    expect(took.porch!).toBeLessThan(took.hip!)
+    expect(took.hip!).toBeLessThan(took.flat!)
+  })
+
+  test('it plays at the person’s animation speed', async () => {
+    const took: Record<number, number> = {}
+    for (const speed of [0.5, 2]) {
+      await renderer?.unmount()
+      renderer = null
+      await act(async () => driver?.stop())
+      driver = null
+      sceneRegistry.clear()
+      now = 0
+      level = 'framing'
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start({ speed: () => speed })
+      const roof = make(Gable)
+      await agentWrites(() => useScene.getState().createNode(roof, levelId))
+      const { levels, took: ms } = await watch(roof.id, 60000)
+      expect(levels.length).toBeGreaterThan(0)
+      took[speed] = ms
+    }
+    expect(took[2]!).toBeLessThan(took[0.5]! / 2.5)
+  })
+
+  test('the full level still drops the roof whole, part by part', async () => {
+    level = 'full'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const roof = make(Gable)
+    const parts = [make(Part), make(Part)]
+    await agentWrites(() => {
+      useScene.getState().createNode(roof, levelId)
+      useScene
+        .getState()
+        .createNodes(parts.map((node) => ({ node, parentId: roof.id as AnyNodeId })))
+    })
+    expect(isRevealAssembling(roof.id)).toBe(true)
+    const highest = new Map<string, number>()
+    while (isRevealAssembling(roof.id)) {
+      await frame()
+      expect(now).toBeLessThan(REVEAL_TIMING.capMs + 1000)
+      for (const part of parts) {
+        const partRoot = root(part.id)
+        if (partRoot?.children.length)
+          highest.set(part.id, Math.max(highest.get(part.id) ?? 0, lift(partRoot)))
+      }
+      expect(revealWipeLevelOf(root(roof.id) ?? new Object3D())).toBeNull()
+    }
+    for (const part of parts) expect(highest.get(part.id)!).toBeGreaterThan(3)
+  })
+
+  test('simple scales it in and off shows it at once: neither lays a covering', async () => {
+    for (const at of ['simple', 'off'] as const) {
+      await renderer?.unmount()
+      renderer = null
+      await act(async () => driver?.stop())
+      driver = null
+      sceneRegistry.clear()
+      now = 0
+      level = at
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start()
+      const roof = make(Gable)
+      await agentWrites(() => useScene.getState().createNode(roof, levelId))
+      for (let i = 0; i < 80; i += 1) {
+        await frame()
+        const roofRoot = root(roof.id)
+        if (roofRoot) expect(revealWipeLevelOf(roofRoot)).toBeNull()
+      }
+    }
+  })
+
+  test('an undo lifts the covering off from the ridge, then the bare node is gone', async () => {
+    const { roof } = await buildGable()
+    await watch(roof.id)
+    const roofRoot = root(roof.id)!
+    let result: RetractResult | null = null
+    await act(async () => {
+      retractNodes([roof.id]).then((value) => {
+        result = value
+      })
+    })
+    const levels: number[] = []
+    const begun = now
+    while (!result && now < begun + 8000) {
+      await frame(20)
+      const at = revealWipeLevelOf(roofRoot)
+      if (at !== null) levels.push(at)
+      // It never lifts off whole: only its covering goes, then the bare node.
+      if (yScale(roofRoot) > 0.5) expect(lift(roofRoot)).toBe(0)
+    }
+    expect(result).not.toBeNull()
+    expect(yScale(roofRoot)).toBeLessThan(0.01)
+    expect(levels.length).toBeGreaterThan(10)
+    // It lifts continuously from the ridge: every frame is lower than the one before.
+    for (let i = 1; i < levels.length; i += 1) expect(levels[i]!).toBeLessThan(levels[i - 1]!)
+    expect(levels[0]!).toBeGreaterThan(4)
+    expect(levels.at(-1)!).toBeLessThan(3.4)
+  })
+})
+
 describe('the animation level', () => {
   test('off shows the build at once, with no dust', async () => {
     level = 'off'
@@ -1075,37 +1375,1030 @@ describe('the plan view reads the same reveal', () => {
   })
 })
 
-describe('failure mode 10: a level nobody sees', () => {
-  test('hidden after planning, it stops holding the visible level back', async () => {
-    const levelIds = loadLevels(2)
+describe('the nodes playing are named for the cutaway', () => {
+  test('a wall is listed while it moves in, and not before or after', async () => {
+    const levelIds = loadLevels(1)
     await mount(levelIds)
     start()
-    const below = [make(Wall), make(Wall)]
-    const above = Array.from({ length: 24 }, () => make(Wall))
-    const item = make(Item)
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelIds[0]!))
+    await frame()
+    await until(() => useViewer.getState().nodesRevealing.includes(wall.id), 6000)
+    expect(useViewer.getState().wallMode).not.toBe('down')
+    await until(() => !isNodeRevealing(wall.id), 9000)
+    expect(useViewer.getState().nodesRevealing).toEqual([])
+  })
+
+  test('the person’s wall mode is not written by a build', async () => {
+    const levelIds = loadLevels(1)
+    await mount(levelIds)
+    useViewer.getState().setWallMode('cutaway')
+    start()
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelIds[0]!))
+    await until(() => useViewer.getState().nodesRevealing.includes(wall.id), 6000)
+    expect(useViewer.getState().wallMode).toBe('cutaway')
+    await until(() => !isNodeRevealing(wall.id), 9000)
+    expect(useViewer.getState().wallMode).toBe('cutaway')
+  })
+})
+
+describe('the level the work is on shows while it plays', () => {
+  const GROUND_ONLY = (levelIds: AnyNodeId[]) =>
+    useViewer.setState({
+      hideLevelsAboveSelection: true,
+      selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
+    } as never)
+
+  test('a wall built above the selected level is revealed, and its level is on show meanwhile', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    GROUND_ONLY(levelIds)
+    start()
+    const below = make(Wall)
+    const above = make(Wall)
+    await agentWrites(() =>
+      useScene.getState().createNodes([
+        { node: above, parentId: levelIds[1]! },
+        { node: below, parentId: levelIds[0]! },
+      ]),
+    )
+    await frame()
+    expect(isNodeRevealing(above.id)).toBe(true)
+    expect(isNodeRevealing(below.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toContain(levelIds[1]!)
+
+    await until(() => Boolean(root(above.id)) && hasRevealPose(root(above.id)!))
+    await until(() => !isNodeRevealing(above.id) && !isNodeRevealing(below.id), 9000)
+    expect(composed(root(above.id)!).equals(own(root(above.id)!))).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual([])
+  })
+
+  test('the solo view of the ground floor does not hide a storey being built', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    useViewer.setState({
+      levelMode: 'solo',
+      selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
+    } as never)
+    start()
+    const above = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(above, levelIds[1]!))
+    await frame()
+    expect(isNodeRevealing(above.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+  })
+
+  test('a level the author hid still shows its build at once and holds no slot', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    useScene.getState().updateNode(levelIds[1]!, { visible: false } as never)
+    start()
+    const hidden = make(Wall)
+    const seen = make(Wall)
+    await agentWrites(() =>
+      useScene.getState().createNodes([
+        { node: hidden, parentId: levelIds[1]! },
+        { node: seen, parentId: levelIds[0]! },
+      ]),
+    )
+    await frame()
+    expect(root(hidden.id)).toBeDefined()
+    expect(isNodeRevealing(hidden.id)).toBe(false)
+    expect(isNodeRevealing(seen.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).not.toContain(levelIds[1]!)
+  })
+
+  test('a volume over two storeys plays on both while the person watches the ground floor', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    GROUND_ONLY(levelIds)
+    start()
+    const walls = [make(Wall), make(Wall)]
+    const upperWalls = [make(Wall), make(Wall)]
+    const upperRoof = make(Roof)
     await agentWrites(() =>
       useScene
         .getState()
         .createNodes([
-          ...below.map((node) => ({ node, parentId: levelIds[0]! })),
-          ...above.map((node) => ({ node, parentId: levelIds[1]! })),
-          { node: item, parentId: levelIds[0]! },
+          ...walls.map((node) => ({ node, parentId: levelIds[0]! })),
+          ...upperWalls.map((node) => ({ node, parentId: levelIds[1]! })),
+          { node: upperRoof, parentId: levelIds[1]! },
         ]),
     )
-    await frames(60)
+    await frame()
+    for (const node of [...walls, ...upperWalls, upperRoof]) {
+      expect(isNodeRevealing(node.id)).toBe(true)
+    }
+    await until(
+      () => [...walls, ...upperWalls, upperRoof].every((node) => !isNodeRevealing(node.id)),
+      12000,
+    )
+    expect(useViewer.getState().levelsRevealing).toEqual([])
+  })
+
+  test('a stair across two storeys plays on the upper one too', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    GROUND_ONLY(levelIds)
+    start()
+    const flight = make(Flight)
+    const landing = make(Plate)
+    await agentWrites(() =>
+      useScene.getState().createNodes([
+        { node: flight, parentId: levelIds[0]! },
+        { node: landing, parentId: levelIds[1]! },
+      ]),
+    )
+    await frame()
+    expect(isNodeRevealing(flight.id)).toBe(true)
+    expect(isNodeRevealing(landing.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual(
+      expect.arrayContaining([levelIds[0]!, levelIds[1]!]),
+    )
+  })
+
+  test("the person's later choice of level does not cut the animation short", async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    GROUND_ONLY(levelIds)
+    start()
+    const upperWalls = Array.from({ length: 4 }, () => make(Wall))
+    await agentWrites(() =>
+      useScene.getState().createNodes(upperWalls.map((node) => ({ node, parentId: levelIds[1]! }))),
+    )
+    await frames(200)
+    // They look at the ground floor again, then at the upper one: the build is on show either way.
     await act(async () =>
       useViewer.setState({
-        hideLevelsAboveSelection: true,
         selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
       } as never),
     )
     await frame()
-    for (const wall of above) expect(isNodeRevealing(wall.id)).toBe(false)
+    expect(upperWalls.some((node) => isNodeRevealing(node.id))).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+    await until(() => upperWalls.every((node) => !isNodeRevealing(node.id)), 9000)
+    for (const node of upperWalls) {
+      expect(composed(root(node.id)!).equals(own(root(node.id)!))).toBe(true)
+    }
+  })
 
-    // Planned with the upper floor, the item would wait for its 24 walls (about 1.9 s).
-    const hiddenAt = now
-    await until(() => Boolean(root(item.id)))
-    expect(now - hiddenAt).toBeLessThan(900)
+  test('a piece the agent moves on an upper level glides while the person watches the ground floor', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    start()
+    const piece = make(Movable, { position: [0, 0, 0] })
+    await agentWrites(() => useScene.getState().createNode(piece, levelIds[1]!))
+    await until(() => !isNodeRevealing(piece.id) && root(piece.id) !== undefined, 9000)
+    GROUND_ONLY(levelIds)
+    await agentWrites(() =>
+      useScene
+        .getState()
+        .updateNodes([{ id: piece.id as AnyNodeId, data: { position: [3, 0, 2] } as never }]),
+    )
+    await frame()
+    expect(isNodeRevealing(piece.id)).toBe(true)
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+  })
+
+  test('an undo plays back a build on an upper level the display hides', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    start()
+    const above = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(above, levelIds[1]!))
+    await until(() => !isNodeRevealing(above.id) && root(above.id) !== undefined, 9000)
+    GROUND_ONLY(levelIds)
+    let result: RetractResult | null = null
+    await act(async () => {
+      retractNodes([above.id]).then((value) => {
+        result = value
+      })
+    })
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+    await until(() => result !== null, 6000)
+    expect((result as RetractResult | null)?.retracted).toEqual([above.id])
+    expect((result as RetractResult | null)?.instant).toBe(false)
+  })
+})
+
+// The owner, 15 October: a wall bent to a curve, or turned curtain, jumped to its new shape. An edit
+// that changes what a node looks like plays its reveal again, quickly; any other edit stays instant.
+describe('an edit that changes a picture plays again', () => {
+  async function builtBeam() {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const beam = make(Beam)
+    await agentWrites(() => useScene.getState().createNode(beam, levelId))
+    await until(() => !isNodeRevealing(beam.id) && root(beam.id) !== undefined, 9000)
+    return { levelId: levelId!, beam }
+  }
+  const edit = (id: string, data: Record<string, unknown>) =>
+    agentWrites(() =>
+      useScene.getState().updateNodes([{ id: id as AnyNodeId, data: data as never }]),
+    )
+
+  for (const at of ['simple', 'full', 'framing'] as const) {
+    test(`${at}: a changed geometry field re-rises the node and it ends at rest`, async () => {
+      level = at
+      const { beam } = await builtBeam()
+      const events: RevealEvent[] = []
+      const stop = subscribeRevealEvents((event) => events.push(event))
+      await edit(beam.id, { scale: [1, 1, 1.5] })
+      await frame()
+      await frame()
+      expect(isNodeRevealing(beam.id)).toBe(true)
+      while (!(root(beam.id) && hasRevealPose(root(beam.id)!))) await frame()
+      expect(yScale(root(beam.id)!)).toBeLessThan(1)
+      await until(() => !isNodeRevealing(beam.id), 4000)
+      stop()
+      expect(composed(root(beam.id)!).equals(own(root(beam.id)!))).toBe(true)
+      expect(events.some((e) => e.type === 'node-start' && e.changed === true)).toBe(true)
+      expect(events.at(-1)).toMatchObject({ type: 'complete', changed: true })
+    })
+  }
+
+  test('an edit of a field that is not geometry stays instant', async () => {
+    const { beam } = await builtBeam()
+    await edit(beam.id, { name: 'North wall' })
+    await frames(100)
+    expect(isNodeRevealing(beam.id)).toBe(false)
+    expect(hasRevealPose(root(beam.id)!)).toBe(false)
+  })
+
+  test("a person's own edit stays instant", async () => {
+    const { beam } = await builtBeam()
+    await act(async () =>
+      useScene
+        .getState()
+        .updateNodes([{ id: beam.id as AnyNodeId, data: { scale: [2, 1, 1] } as never }]),
+    )
+    await frames(100)
+    expect(isNodeRevealing(beam.id)).toBe(false)
+  })
+
+  test('what the structure reconciler derived is not an edit, but its field-by-field writes leave the edit alone', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const plate = make(Floorplate)
+    await agentWrites(() => useScene.getState().createNode(plate, levelId))
+    await until(() => !isNodeRevealing(plate.id) && root(plate.id) !== undefined, 9000)
+    const before = useScene.getState().nodes
+    const after = { ...before, [plate.id]: { ...before[plate.id as AnyNodeId]!, scale: [3, 1, 3] } }
+    const commit = {
+      origin: 'local',
+      author: 'agent',
+      before: { nodes: before },
+      current: { nodes: after },
+    } as unknown as SceneCommit
+    expect(commitEditCandidates(commit, 'full').map((c) => c.id)).toEqual([plate.id])
+    const derived = {
+      ...commit,
+      derivedWrites: new Map([[plate.id as AnyNodeId, new Set(['scale'])]]),
+    } as SceneCommit
+    expect(commitEditCandidates(derived, 'full')).toEqual([])
+    const authored = {
+      ...commit,
+      derivedWrites: new Map([[plate.id as AnyNodeId, new Set(['name'])]]),
+    } as SceneCommit
+    expect(commitEditCandidates(authored, 'full').map((c) => c.id)).toEqual([plate.id])
+  })
+
+  test('a slab edit settles, as a slab came in', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const plate = make(Floorplate)
+    await agentWrites(() => useScene.getState().createNode(plate, levelId))
+    await until(() => !isNodeRevealing(plate.id) && root(plate.id) !== undefined, 9000)
+    const events: RevealEvent[] = []
+    const stop = subscribeRevealEvents((event) => events.push(event))
+    await edit(plate.id, { scale: [2, 1, 2] })
+    await frames(300)
+    stop()
+    expect(events.find((e) => e.type === 'node-start')).toMatchObject({
+      style: 'settle',
+      changed: true,
+    })
+  })
+
+  test('it plays at the person’s animation speed', async () => {
+    const took: Record<string, number> = {}
+    for (const speed of [0.5, 2]) {
+      await act(async () => driver?.stop())
+      await renderer?.unmount()
+      renderer = null
+      sceneRegistry.clear()
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start({ speed: () => speed })
+      const beam = make(Beam)
+      await agentWrites(() => useScene.getState().createNode(beam, levelId))
+      await until(() => !isNodeRevealing(beam.id) && root(beam.id) !== undefined, 20000)
+      await edit(beam.id, { scale: [1, 1, 1.5] })
+      const began = now
+      await frame()
+      await until(() => !isNodeRevealing(beam.id) && !hasRevealPose(root(beam.id)!), 8000)
+      took[speed] = now - began
+    }
+    expect(took[2]!).toBeLessThan(took[0.5]! / 1.5)
+  })
+
+  test('many edits begin spread over the same time, not piled on its last frame', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const beams = Array.from({ length: 24 }, () => make(Beam))
+    await agentWrites(() =>
+      useScene.getState().createNodes(beams.map((node) => ({ node, parentId: levelId }))),
+    )
+    await until(() => beams.every((b) => !isNodeRevealing(b.id) && root(b.id)), 30000)
+    const starts: number[] = []
+    const stop = subscribeRevealEvents((event) => {
+      if (event.type === 'node-start') starts.push(event.atMs)
+    })
+    await agentWrites(() =>
+      useScene
+        .getState()
+        .updateNodes(
+          beams.map((b) => ({ id: b.id as AnyNodeId, data: { scale: [1, 1, 2] } as never })),
+        ),
+    )
+    await until(() => beams.every((b) => !isNodeRevealing(b.id)), 12000)
+    stop()
+    expect(starts).toHaveLength(24)
+    const span = Math.max(...starts) - Math.min(...starts)
+    expect(span).toBeLessThanOrEqual(1300)
+    // No frame starts more than a few: the last ones are not clamped onto one moment.
+    const perMoment = new Map<number, number>()
+    for (const at of starts) perMoment.set(at, (perMoment.get(at) ?? 0) + 1)
+    expect(Math.max(...perMoment.values())).toBeLessThanOrEqual(3)
+  })
+
+  test('with the animation off, an edit is instant', async () => {
+    level = 'off'
+    const { beam } = await builtBeam()
+    await edit(beam.id, { scale: [1, 1, 1.5] })
+    await frames(100)
+    expect(isNodeRevealing(beam.id)).toBe(false)
+    expect(hasRevealPose(root(beam.id)!)).toBe(false)
+  })
+})
+
+// A deletion plays the creation backwards. The node is out of the scene at once; a snapshot of its
+// picture plays out, and is taken away.
+describe('a deletion plays the creation backwards', () => {
+  /** What stands in the scene that is not a mounted node: the snapshots. */
+  const pictures = () =>
+    (renderer!.scene.instance as Object3D).children.filter(
+      (child) => ![...sceneRegistry.nodes.values()].includes(child) && child.children.length > 0,
+    )
+  const remove = (ids: string[], author: 'agent' | null = 'agent') =>
+    act(async () => {
+      const run = () => useScene.getState().deleteNodes(ids as AnyNodeId[])
+      if (author) runAsSceneCommitAuthor(author, run)
+      else run()
+    })
+
+  async function builtWalls(count: number) {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const walls = Array.from({ length: count }, () => make(Wall))
+    await agentWrites(() =>
+      useScene.getState().createNodes(walls.map((node) => ({ node, parentId: levelId }))),
+    )
+    await until(() => walls.every((w) => !isNodeRevealing(w.id) && root(w.id)), 12000)
+    return { levelId: levelId!, walls }
+  }
+
+  for (const at of ['simple', 'full', 'framing'] as const) {
+    test(`${at}: the node is gone from the store at once and its picture plays out, then goes`, async () => {
+      level = at
+      const { walls } = await builtWalls(1)
+      const [wall] = walls
+      await remove([wall!.id])
+      expect(useScene.getState().nodes[wall!.id as AnyNodeId]).toBeUndefined()
+      await frame()
+      expect(pictures()).toHaveLength(1)
+      await frames(120)
+      const picture = pictures()[0]!
+      expect(hasRevealPose(picture)).toBe(true)
+      await until(() => pictures().length === 0, 4000)
+    })
+  }
+
+  // The owner's rule (15 Oct): a node that plays is never hidden by the cutaway.
+  test('a wall the cutaway was hiding plays its deletion whole, not as its stipple, then goes', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const wall = make(RealWall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId))
+    await until(() => !isNodeRevealing(wall.id) && Boolean(root(wall.id)), 12000)
+    // The wall as the wall system leaves it in cutaway: its mesh in the stipple, stamped hidden.
+    const stipple = new MeshBasicMaterial({ transparent: true, opacity: 0.2 })
+    const geometry = new BoxGeometry(4, 2.5, 0.2)
+    // One group over the whole mesh, as a wall's own geometry draws it: the palette covers it.
+    geometry.clearGroups()
+    geometry.addGroup(0, 6, 0)
+    const mesh = new Mesh(geometry, [stipple, stipple, stipple])
+    mesh.userData.wallHidden = true
+    // ...with the visible variant it keeps for whoever draws a copy of it.
+    visibleMaterialsOf.set(mesh, [new MeshBasicMaterial()])
+    root(wall.id)!.parent!.add(mesh)
+    sceneRegistry.nodes.set(wall.id, mesh)
+    useViewer.setState({ wallMode: 'cutaway' })
+    const copies = () => {
+      const found: Mesh[] = []
+      ;(renderer!.scene.instance as Object3D).traverse((object) => {
+        const candidate = object as Mesh
+        if (candidate.isMesh && candidate !== mesh && candidate.userData.wallHidden === true)
+          found.push(candidate)
+      })
+      return found
+    }
+    await remove([wall.id])
+    await frame()
+    const [copy] = copies()
+    expect(copy).toBeDefined()
+    const worn = copy!.material
+    expect(Array.isArray(worn) ? worn[0] : worn).not.toBe(stipple)
+    // It plays: the same visible variant on every frame of the reverse play, until it is taken away.
+    for (let step = 0; step < 6; step += 1) {
+      await frames(100)
+      if (!copies().includes(copy!)) break
+      expect(copy!.material).toBe(worn)
+    }
+    await until(() => !copies().includes(copy!), 6000)
+  })
+
+  test('a wall the cutaway showed plays its deletion in what it wore', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const wall = make(RealWall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId))
+    await until(() => !isNodeRevealing(wall.id) && Boolean(root(wall.id)), 12000)
+    const own = new MeshBasicMaterial()
+    const mesh = new Mesh(new BoxGeometry(4, 2.5, 0.2), own)
+    mesh.userData.wallHidden = false
+    root(wall.id)!.parent!.add(mesh)
+    sceneRegistry.nodes.set(wall.id, mesh)
+    useViewer.setState({ wallMode: 'cutaway' })
+    await remove([wall.id])
+    await frame()
+    const copy: Mesh | undefined = (renderer!.scene.instance as Object3D).getObjectByProperty(
+      'type',
+      'Mesh',
+    ) as Mesh | undefined
+    const ghosts: Mesh[] = []
+    ;(renderer!.scene.instance as Object3D).traverse((object) => {
+      const candidate = object as Mesh
+      if (candidate.isMesh && candidate !== mesh && candidate.material === own)
+        ghosts.push(candidate)
+    })
+    expect(copy).toBeDefined()
+    expect(ghosts.length).toBe(1)
+  })
+
+  test('many deletions stagger, the last built going first', async () => {
+    const { walls } = await builtWalls(4)
+    const events: RevealEvent[] = []
+    const stop = subscribeRevealEvents((event) => events.push(event))
+    await remove(walls.map((w) => w.id))
+    const poses: number[] = []
+    for (let step = 0; step < 100; step += 1) {
+      await frame()
+      poses.push(pictures().filter((p) => hasRevealPose(p)).length)
+    }
+    stop()
+    expect(Math.max(...poses)).toBeGreaterThan(0)
+    // Not all at once: some are still waiting for their turn while others are moving.
+    expect(poses.some((count) => count > 0 && count < walls.length)).toBe(true)
+    await until(() => pictures().length === 0, 6000)
+    const retract = events.filter((e) => e.type === 'retract-start' || e.type === 'retract-end')
+    expect(retract.map((e) => e.type)).toEqual(['retract-start', 'retract-end'])
+  })
+
+  test('it plays at the person’s animation speed', async () => {
+    const took: Record<string, number> = {}
+    for (const speed of [0.5, 2]) {
+      await act(async () => driver?.stop())
+      await renderer?.unmount()
+      renderer = null
+      sceneRegistry.clear()
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start({ speed: () => speed })
+      const wall = make(Wall)
+      await agentWrites(() => useScene.getState().createNode(wall, levelId))
+      await until(() => !isNodeRevealing(wall.id) && root(wall.id) !== undefined, 20000)
+      await remove([wall.id])
+      const began = now
+      await frame()
+      await until(() => pictures().length === 0, 8000)
+      took[speed] = now - began
+    }
+    expect(took[2]!).toBeLessThan(took[0.5]! / 1.5)
+  })
+
+  test("a person's delete plays when the host says so, and not otherwise", async () => {
+    const { walls } = await builtWalls(2)
+    await remove([walls[0]!.id], null)
+    await frame()
+    expect(pictures()).toHaveLength(0)
+
+    await act(async () => driver?.stop())
+    start({ deletes: () => true })
+    await remove([walls[1]!.id], null)
+    await frame()
+    expect(pictures()).toHaveLength(1)
+  })
+
+  test('an undo plays its own reverse and leaves no second picture', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId))
+    await until(() => !isNodeRevealing(wall.id) && root(wall.id) !== undefined, 9000)
+    await act(async () => useScene.temporal.getState().undo())
+    await frame()
+    expect(useScene.getState().nodes[wall.id as AnyNodeId]).toBeUndefined()
+    expect(pictures()).toHaveLength(0)
+  })
+
+  test('nothing plays with the animation off', async () => {
+    level = 'off'
+    const { walls } = await builtWalls(1)
+    await remove([walls[0]!.id])
+    await frame()
+    expect(pictures()).toHaveLength(0)
+  })
+
+  test('a load clears what is playing', async () => {
+    const { walls } = await builtWalls(1)
+    await remove([walls[0]!.id])
+    await frame()
+    expect(pictures()).toHaveLength(1)
+    await act(async () => {
+      const { nodes, rootNodeIds } = useScene.getState()
+      applySceneSnapshot(
+        { nodes, rootNodeIds, collections: {}, materials: {}, installedPlugins: [PLUGIN_ID] },
+        { origin: 'load' },
+      )
+    })
+    expect(pictures()).toHaveLength(0)
+  })
+
+  test('the level it was on shows while its picture plays', async () => {
+    const levelIds = loadLevels(2)
+    await mount(levelIds)
+    start()
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelIds[1]!))
+    await until(() => !isNodeRevealing(wall.id) && root(wall.id) !== undefined, 9000)
+    useViewer.setState({
+      hideLevelsAboveSelection: true,
+      selection: { ...useViewer.getState().selection, levelId: levelIds[0]! },
+    } as never)
+    await remove([wall.id])
+    await frame()
+    expect(useViewer.getState().levelsRevealing).toEqual([levelIds[1]!])
+    await until(() => pictures().length === 0, 6000)
+    await frame()
+    expect(useViewer.getState().levelsRevealing).toEqual([])
+  })
+
+  // The owner's rule (15 Oct): a node that plays is never hidden by the cutaway; the wall a
+  // departing opening stands in is no exception, though the opening is already out of the scene.
+  test('the wall an opening is leaving stays in play for as long as its picture plays', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const wall = make(RealWall)
+    const door = make(Door)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId))
+    await agentWrites(() => useScene.getState().createNode(door, wall.id as AnyNodeId))
+    await until(
+      () => !isNodeRevealing(wall.id) && !isNodeRevealing(door.id) && Boolean(root(door.id)),
+      12000,
+    )
+    expect(useViewer.getState().nodesRevealing).toEqual([])
+    await remove([door.id])
+    await frame()
+    expect(getRetractTurn(door.id)).not.toBeNull()
+    const inPlay = () => wallsInPlay(useScene.getState().nodes, useViewer.getState().nodesRevealing)
+    expect(inPlay().has(wall.id)).toBe(true)
+    await until(() => getRetractTurn(door.id) === null, 6000)
+    await frame()
+    expect(useViewer.getState().nodesRevealing).toEqual([])
+    expect(inPlay().size).toBe(0)
+  })
+})
+
+// Deleting a room or a whole floor takes it apart: every node it removes plays its build backwards,
+// room by room and floor by floor, the furniture first and the slab last.
+describe('deleting a floor or a room deconstructs it', () => {
+  const pictures = () =>
+    (renderer!.scene.instance as Object3D).children.filter(
+      (child) => ![...sceneRegistry.nodes.values()].includes(child) && child.children.length > 0,
+    )
+
+  /** A floor: its slab, walls with a pane in the first, and crates. */
+  const floor = (levelId: AnyNodeId) => {
+    const slab = make(Slab)
+    const walls = [make(Wall), make(Wall)]
+    const pane = make(Pane)
+    const crates = [make(Crate), make(Crate)]
+    return {
+      slab,
+      walls,
+      pane,
+      crates,
+      levelId,
+      all: [slab, ...walls, pane, ...crates],
+      create: () => {
+        const store = useScene.getState()
+        store.createNodes([
+          { node: slab, parentId: levelId },
+          ...walls.map((node) => ({ node, parentId: levelId })),
+          ...crates.map((node) => ({ node, parentId: levelId })),
+        ])
+        store.createNode(pane, walls[0]!.id as AnyNodeId)
+      },
+    }
+  }
+
+  async function builtFloors(count: number) {
+    const levelIds = loadLevels(count)
+    await mount(levelIds)
+    start({ deletes: () => true })
+    const floors = levelIds.map((levelId) => floor(levelId))
+    await agentWrites(() => {
+      for (const one of floors) one.create()
+    })
+    const everything = floors.flatMap((one) => one.all)
+    await until(() => everything.every((node) => !isNodeRevealing(node.id) && root(node.id)), 60000)
+    return { levelIds, floors, everything }
+  }
+
+  const removeLevels = (ids: string[]) =>
+    act(async () => {
+      runAsSceneCommitAuthor('agent', () => useScene.getState().deleteNodes(ids as AnyNodeId[]))
+    })
+
+  for (const at of ['full', 'framing'] as const) {
+    test(`${at}: a floor delete plays every node it removes, the furniture first and the slab last`, async () => {
+      level = at
+      const { floors, levelIds } = await builtFloors(1)
+      const [one] = floors
+      await removeLevels([levelIds[0]!])
+      for (const node of one!.all)
+        expect(useScene.getState().nodes[node.id as AnyNodeId]).toBeUndefined()
+      const turn = (id: string) => getRetractTurn(id)
+      for (const node of one!.all) expect(turn(node.id)).not.toBeNull()
+      const starts = (nodes: AnyNode[]) => nodes.map((node) => turn(node.id)!.startMs)
+      const furniture = Math.max(...starts(one!.crates))
+      const opening = turn(one!.pane.id)!.startMs
+      const walls = Math.min(...starts(one!.walls))
+      const slab = turn(one!.slab.id)!.startMs
+      expect(furniture).toBeLessThanOrEqual(opening)
+      expect(opening).toBeLessThanOrEqual(walls)
+      expect(walls).toBeLessThanOrEqual(slab)
+      // They play, and then every picture is gone.
+      await frame()
+      expect(pictures().length).toBeGreaterThan(0)
+      await until(() => pictures().length === 0, 60000)
+      for (const node of one!.all) expect(getRetractTurn(node.id)).toBeNull()
+    })
+  }
+
+  test('framing: two floors come apart from the top down, each floor in its own order', async () => {
+    level = 'framing'
+    const { floors, levelIds } = await builtFloors(2)
+    await removeLevels(levelIds as string[])
+    const [ground, top] = floors
+    const wallStart = (one: ReturnType<typeof floor>) =>
+      Math.min(...one.walls.map((wall) => getRetractTurn(wall.id)!.startMs))
+    expect(wallStart(top!)).toBeLessThan(wallStart(ground!))
+    for (const one of floors) {
+      const furniture = Math.max(...one.crates.map((crate) => getRetractTurn(crate.id)!.startMs))
+      expect(furniture).toBeLessThanOrEqual(wallStart(one))
+    }
+    await until(() => pictures().length === 0, 90000)
+  })
+
+  test('framing: the pictures of a deleted floor stand in their building, not in the floor that goes', async () => {
+    level = 'framing'
+    const building = BuildingNode.parse({ children: [] })
+    const [levelId] = loadLevels()
+    const levelNode = useScene.getState().nodes[levelId!] as AnyNode & { parentId: string | null }
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [building.id]: { ...building, children: [levelId] } as AnyNode,
+        [levelId!]: { ...levelNode, parentId: building.id } as AnyNode,
+      },
+    } as never)
+    await mount([levelId!])
+    start({ deletes: () => true })
+    const one = floor(levelId!)
+    await agentWrites(() => one.create())
+    await until(() => one.all.every((node) => !isNodeRevealing(node.id) && root(node.id)), 60000)
+    // The host's renderers register a group for the building and one for the floor that holds the roots.
+    const buildingGroup = new Group()
+    const levelGroup = new Group()
+    buildingGroup.add(levelGroup)
+    sceneRegistry.nodes.set(building.id, buildingGroup)
+    sceneRegistry.nodes.set(levelId!, levelGroup)
+    for (const node of one.all) levelGroup.add(root(node.id)!)
+    await removeLevels([levelId!])
+    await frame()
+    const standing = buildingGroup.children.filter((child) => child !== levelGroup)
+    expect(standing.length).toBeGreaterThan(0)
+    // The floor goes: its group is taken out of the building, and the pictures are still there.
+    buildingGroup.remove(levelGroup)
+    await frames(200)
+    expect(buildingGroup.children.length).toBeGreaterThan(0)
+    await until(() => buildingGroup.children.length === 0, 60000)
+  })
+
+  test('with the animation off a floor delete is instant: nothing plays', async () => {
+    level = 'off'
+    const { levelIds, floors } = await builtFloors(1)
+    await removeLevels([levelIds[0]!])
+    await frame()
+    expect(pictures()).toHaveLength(0)
+    for (const node of floors[0]!.all) expect(getRetractTurn(node.id)).toBeNull()
+  })
+
+  test('a big floor is planned in one frame’s budget', async () => {
+    level = 'framing'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start({ deletes: () => true })
+    const walls = Array.from({ length: 120 }, () => make(Wall))
+    const crates = Array.from({ length: 120 }, () => make(Crate))
+    await agentWrites(() =>
+      useScene
+        .getState()
+        .createNodes([...walls, ...crates].map((node) => ({ node, parentId: levelId }))),
+    )
+    await until(
+      () => [...walls, ...crates].every((node) => !isNodeRevealing(node.id) && root(node.id)),
+      120000,
+    )
+    const began = performance.now()
+    await removeLevels([levelId!])
+    const planned = performance.now() - began
+    expect(getRetractTurn(walls[0]!.id)).not.toBeNull()
+    // Planning 240 snapshots in the commit itself: well under what would hitch a frame twice over.
+    expect(planned).toBeLessThan(120)
+    const ends = [...walls, ...crates].map((node) => {
+      const turn = getRetractTurn(node.id)!
+      return turn.startMs + turn.durationMs
+    })
+    // However many pieces, the whole play ends within the cap of the reverse plan.
+    expect(Math.max(...ends) - now).toBeLessThanOrEqual(14_000 + 1000)
+  })
+})
+
+// Deleting a storey takes it apart where it stands. What stands above it (the roof level, the roofs
+// and everything on them) keeps its place meanwhile and comes down onto what is below in one eased
+// move once the floor has gone, so the roof is never drawn inside the storey that is coming apart.
+describe('what stands above a floor being deleted waits for it', () => {
+  const FLOOR_HEIGHT = 3
+
+  /** A two-storey house with a roof level on top: the stack create_roof leaves for a gable roof. */
+  async function houseWithRoof({ speed = 1, reducedMotion = false } = {}) {
+    const building = BuildingNode.parse({ children: [] })
+    const levels = [0, 1, 2].map((index) =>
+      LevelNode.parse({ level: index, height: FLOOR_HEIGHT, parentId: building.id, children: [] }),
+    )
+    const nodes: Record<string, AnyNode> = {
+      [building.id]: { ...building, children: levels.map((one) => one.id) } as AnyNode,
+    }
+    for (const one of levels) nodes[one.id] = one as AnyNode
+    useScene.getState().setScene(nodes, [building.id] as AnyNodeId[], {
+      installedPlugins: [PLUGIN_ID],
+      hasExplicitPluginInstallState: true,
+    })
+    clearSceneHistory()
+    const [ground, upper, roofLevel] = levels.map((one) => one.id as AnyNodeId) as [
+      AnyNodeId,
+      AnyNodeId,
+      AnyNodeId,
+    ]
+    const objects = new Map<string, Object3D>()
+    const register = (id: string) => {
+      const object = new Object3D()
+      objects.set(id, object)
+      sceneRegistry.nodes.set(id as AnyNodeId, object)
+      sceneRegistry.byType.level!.add(id as AnyNodeId)
+      return object
+    }
+    for (const id of [ground, upper, roofLevel]) register(id)
+    const roof = make(Gable)
+    useScene.getState().createNode(roof, roofLevel)
+    renderer = await create(
+      <>
+        {[ground, upper, roofLevel].map((levelId) => (
+          <LevelChildren key={levelId} levelId={levelId} />
+        ))}
+        <GeometrySystem />
+        <LevelSystem />
+      </>,
+    )
+    await frame(0)
+    // The roof's picture stands in its level's object, as the host's renderer mounts it.
+    objects.get(roofLevel)!.add(root(roof.id)!)
+    start({ deletes: () => true, speed: () => speed, prefersReducedMotion: () => reducedMotion })
+    const floors = [ground, upper].map((levelId) => {
+      const slab = make(Slab)
+      const walls = [make(Wall), make(Wall)]
+      const crates = [make(Crate), make(Crate)]
+      return { levelId, slab, walls, crates, all: [slab, ...walls, ...crates] }
+    })
+    await agentWrites(() => {
+      for (const one of floors)
+        useScene.getState().createNodes(
+          [one.slab, ...one.walls, ...one.crates].map((node) => ({
+            node,
+            parentId: one.levelId,
+          })),
+        )
+    })
+    const everything = floors.flatMap((one) => one.all)
+    await until(() => everything.every((node) => !isNodeRevealing(node.id) && root(node.id)), 60000)
+    await frames(100)
+    const y = (id: AnyNodeId) => objects.get(id)!.position.y
+    const dismantling = () => floors[1]!.all.some((node) => getRetractTurn(node.id) !== null)
+    /** The upper floor goes: its object leaves the registry as its renderer unmounts. */
+    const deleteUpper = async () => {
+      await removeLevel(upper)
+      sceneRegistry.nodes.delete(upper)
+      sceneRegistry.byType.level!.delete(upper)
+    }
+    return {
+      ground,
+      upper,
+      roofLevel,
+      roof,
+      floors,
+      objects,
+      register,
+      y,
+      dismantling,
+      deleteUpper,
+    }
+  }
+
+  const removeLevel = (id: AnyNodeId) =>
+    act(async () => {
+      runAsSceneCommitAuthor('agent', () => useScene.getState().deleteNodes([id]))
+    })
+
+  /** Frames until the dismantle has ended and the roof level is at rest; what each frame showed. */
+  async function playOut(house: Awaited<ReturnType<typeof houseWithRoof>>, targetY: number) {
+    const trace: { roofY: number; dismantling: boolean; held: boolean }[] = []
+    for (let elapsed = 0; elapsed < 60000; elapsed += 20) {
+      await frame()
+      trace.push({
+        roofY: house.y(house.roofLevel),
+        dismantling: house.dismantling(),
+        held: heldLevelY(house.roofLevel) !== undefined,
+      })
+      if (!house.dismantling() && Math.abs(house.y(house.roofLevel) - targetY) < 1e-4) break
+    }
+    await frames(400)
+    return trace
+  }
+
+  for (const at of ['full', 'framing'] as const) {
+    test(`${at}: the roof level keeps its place while the floor comes apart, then eases down onto what is below`, async () => {
+      level = at
+      const house = await houseWithRoof()
+      expect(house.y(house.roofLevel)).toBeCloseTo(2 * FLOOR_HEIGHT, 6)
+      await house.deleteUpper()
+      expect(house.dismantling()).toBe(true)
+      // The store already stacks the roof level on the ground floor; what is drawn waits.
+      expect(getLevelElevations(useScene.getState().nodes).get(house.roofLevel)?.baseY).toBeCloseTo(
+        FLOOR_HEIGHT,
+        6,
+      )
+      expect(heldLevelY(house.roofLevel)).toBeCloseTo(2 * FLOOR_HEIGHT, 6)
+      await frame()
+      expect(useViewer.getState().levelsRevealing).toContain(house.roofLevel)
+
+      const trace = await playOut(house, FLOOR_HEIGHT)
+      const lowering = trace.findIndex((sample) => sample.roofY < 2 * FLOOR_HEIGHT - 1e-9)
+      expect(lowering).toBeGreaterThan(0)
+      // Nothing overlaps: every frame the floor is in pieces, the roof is where it stood.
+      for (const sample of trace.slice(0, lowering)) expect(sample.roofY).toBeCloseTo(6, 9)
+      for (const sample of trace.filter((one) => one.dismantling))
+        expect(sample.roofY).toBeCloseTo(6, 9)
+      expect(trace.slice(lowering).every((sample) => !sample.dismantling)).toBe(true)
+      // One eased move: down only, ending exactly on the stack's elevation, slower at both ends.
+      const down = trace.slice(lowering - 1).map((sample) => sample.roofY)
+      for (let i = 1; i < down.length; i += 1)
+        expect(down[i]!).toBeLessThanOrEqual(down[i - 1]! + 1e-9)
+      expect(down.at(-1)!).toBeCloseTo(FLOOR_HEIGHT, 3)
+      const steps = down.slice(1).map((value, i) => down[i]! - value)
+      expect(steps[0]!).toBeLessThan(Math.max(...steps) / 2)
+      expect(steps.at(-2)!).toBeLessThan(Math.max(...steps) / 2)
+      // It takes the rewind's own drop time at this level.
+      const dropMs = (at === 'framing' ? lazyRetractTimingAt(1) : retractTimingAt(1)).durationMs
+        .drop
+      const lowered = trace.filter((sample) => sample.held && sample.roofY < 6 - 1e-9).length
+      expect(lowered * 20).toBeGreaterThanOrEqual(dropMs - 40)
+      expect(lowered * 20).toBeLessThanOrEqual(dropMs + 40)
+      // The hold is gone, and so is the level's reason to show.
+      expect(heldLevelY(house.roofLevel)).toBeUndefined()
+      await frame()
+      expect(useViewer.getState().levelsRevealing).toEqual([])
+      expect(house.y(house.roofLevel)).toBeCloseTo(FLOOR_HEIGHT, 6)
+      // What is below does not move, and the roof's picture is still in its level.
+      expect(house.y(house.ground)).toBe(0)
+      expect(root(house.roof.id)!.parent).toBe(house.objects.get(house.roofLevel)!)
+    })
+  }
+
+  test('the drop follows the animation speed', async () => {
+    level = 'framing'
+    const took: Record<number, number> = {}
+    for (const speed of [1, 2]) {
+      const house = await houseWithRoof({ speed })
+      await house.deleteUpper()
+      const trace = await playOut(house, FLOOR_HEIGHT)
+      took[speed] = trace.filter((sample) => sample.held && sample.roofY < 6 - 1e-9).length
+      await act(async () => driver?.stop())
+      await renderer?.unmount()
+      renderer = null
+      sceneRegistry.clear()
+    }
+    expect(took[2]!).toBeLessThan(took[1]! * 0.65)
+  })
+
+  test('with the animation off, or motion reduced, nothing is held: the stack settles as it always did', async () => {
+    for (const mode of ['off', 'reduced'] as const) {
+      level = mode === 'off' ? 'off' : 'framing'
+      const house = await houseWithRoof({ reducedMotion: mode === 'reduced' })
+      await house.deleteUpper()
+      expect(heldLevelY(house.roofLevel)).toBeUndefined()
+      await frame()
+      expect(house.dismantling()).toBe(false)
+      expect(useViewer.getState().levelsRevealing).toEqual([])
+      expect(house.y(house.roofLevel)).toBeLessThan(2 * FLOOR_HEIGHT)
+      await frames(1500)
+      expect(house.y(house.roofLevel)).toBeCloseTo(FLOOR_HEIGHT, 3)
+      await act(async () => driver?.stop())
+      await renderer?.unmount()
+      renderer = null
+      sceneRegistry.clear()
+    }
+  })
+
+  test('an undo mid-dismantle puts the floor back whole and the roof never moves', async () => {
+    level = 'framing'
+    const house = await houseWithRoof()
+    await house.deleteUpper()
+    await frames(400)
+    expect(house.dismantling()).toBe(true)
+    await act(async () => useScene.temporal.getState().undo())
+    const object = house.register(house.upper)
+    await frame()
+    expect(house.dismantling()).toBe(false)
+    expect(heldLevelY(house.roofLevel)).toBeUndefined()
+    expect(house.y(house.upper)).toBeCloseTo(FLOOR_HEIGHT, 6)
+    expect(object.position.y).toBeCloseTo(FLOOR_HEIGHT, 6)
+    for (let i = 0; i < 20; i += 1) {
+      await frame()
+      expect(house.y(house.roofLevel)).toBeCloseTo(2 * FLOOR_HEIGHT, 6)
+    }
+  })
+
+  test('the undo of a finished deletion brings the roof up and the floor back together, never through each other', async () => {
+    level = 'framing'
+    const house = await houseWithRoof()
+    await house.deleteUpper()
+    await playOut(house, FLOOR_HEIGHT)
+    expect(house.y(house.roofLevel)).toBeCloseTo(FLOOR_HEIGHT, 6)
+    await act(async () => useScene.temporal.getState().undo())
+    // The restored floor mounts at the origin, as every new level object does.
+    house.register(house.upper)
+    for (let i = 0; i < 30; i += 1) {
+      await frame()
+      // The floor's top never reaches the roof's base, and neither moves through the other.
+      expect(house.y(house.roofLevel) - house.y(house.upper)).toBeGreaterThanOrEqual(
+        FLOOR_HEIGHT - 1e-6,
+      )
+      expect(house.y(house.upper)).toBeCloseTo(FLOOR_HEIGHT, 6)
+      expect(house.y(house.roofLevel)).toBeCloseTo(2 * FLOOR_HEIGHT, 6)
+    }
   })
 })
 
@@ -1968,6 +3261,20 @@ describe('undo plays the build in reverse', () => {
     return { result: result as RetractResult | null, took: now - begun }
   }
 
+  test('a kind that declares no reveal, which came in with a default one, goes out the same way', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const loose = make(Part)
+    await agentWrites(() => useScene.getState().createNode(loose, levelId))
+    await until(() => !isNodeRevealing(loose.id) && root(loose.id) !== undefined, 9000)
+
+    const { result } = await retract([loose.id])
+    expect(result?.instant).toBe(false)
+    expect(result?.retracted).toEqual([loose.id])
+    expect(result?.skipped).toEqual([])
+  })
+
   test('the last phase goes first, back to the slab, each saying so, and all are hidden after', async () => {
     const { slab, walls, pane, crates, all } = await builtHouse()
     const events: RevealEvent[] = []
@@ -2547,5 +3854,166 @@ describe('a warm start', () => {
       highest = Math.max(highest, lift(roof))
     }
     expect(highest).toBeGreaterThan(2)
+  })
+})
+
+describe('nothing a build adds pops in at once', () => {
+  for (const at of ['full', 'framing'] as const) {
+    test(`${at}: a kind that declares no reveal, added on a level already there, waits for its turn`, async () => {
+      level = at
+      const [levelId] = loadLevels()
+      await mount([levelId!])
+      start()
+      const wall = make(Wall)
+      const loose = make(Part)
+      await agentWrites(() =>
+        useScene.getState().createNodes([
+          { node: wall, parentId: levelId! },
+          { node: loose, parentId: levelId! },
+        ]),
+      )
+      expect(root(loose.id)).toBeUndefined()
+      expect(isRevealWaiting(loose.id)).toBe(true)
+      await until(
+        () => !isNodeRevealing(loose.id) && !isNodeRevealing(wall.id),
+        LAZY_REVEAL_TIMING.capMs,
+      )
+      expect(root(loose.id)).toBeDefined()
+      expect(hasRevealPose(root(loose.id)!)).toBe(false)
+    })
+  }
+})
+
+describe('the framing level: the lazy schedule and its prerolls', () => {
+  test('a wall waits out its preroll, unmounted, on the reveal clock a plugin reads; then it rises past its top and settles', async () => {
+    level = 'framing'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    setRevealPreroll((candidate) => (candidate.style === 'rise' ? 1500 : 0))
+    const slab = make(Slab)
+    const walls = [make(Wall), make(Wall)]
+    await agentWrites(() =>
+      useScene
+        .getState()
+        .createNodes([
+          { node: slab, parentId: levelId! },
+          ...walls.map((node) => ({ node, parentId: levelId! })),
+        ]),
+    )
+    await until(() => getRevealTurn(walls[0]!.id) !== null)
+    expect(revealClockMs()).toBe(now)
+    const turns = walls.map((wall) => getRevealTurn(wall.id)!)
+    for (const turn of turns) expect(turn.prerollMs).toBe(1500)
+    // Its preroll: the plugin plays, the wall waits, unmounted or (the first of its kind, drawn up
+    // front for its shaders) hidden.
+    const unseen = (id: string) => {
+      const wallRoot = root(id)
+      return !wallRoot || yScale(wallRoot) < 0.01
+    }
+    while (revealClockMs() + 20 < turns[0]!.startMs) {
+      await frame()
+      expect(unseen(walls[0]!.id)).toBe(true)
+      expect(isRevealWaiting(walls[0]!.id)).toBe(true)
+    }
+    let tallest = 0
+    while (isNodeRevealing(walls[0]!.id)) {
+      await frame()
+      expect(now).toBeLessThan(turns[0]!.startMs + 3000)
+      const wallRoot = root(walls[0]!.id)
+      if (wallRoot?.children.length) tallest = Math.max(tallest, yScale(wallRoot))
+    }
+    expect(getRevealTurn(walls[0]!.id)).toBeNull()
+    // Overdone a little: past its full height, then back to exactly its own transform.
+    expect(tallest).toBeGreaterThan(1.01)
+    expect(composed(root(walls[0]!.id)!).elements).toEqual(own(root(walls[0]!.id)!).elements)
+  })
+
+  test('a capture ends a preroll at once: the wall stands whole', async () => {
+    level = 'framing'
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    setRevealPreroll((candidate) => (candidate.style === 'rise' ? 4000 : 0))
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId!))
+    await until(() => getRevealTurn(wall.id) !== null)
+    await frames(200)
+    const waiting = root(wall.id)
+    expect(!waiting || yScale(waiting) < 0.01).toBe(true)
+    await act(async () => {
+      emitter.emit('thumbnail:before-capture', undefined)
+    })
+    await frame()
+    expect(isNodeRevealing(wall.id)).toBe(false)
+    expect(getRevealTurn(wall.id)).toBeNull()
+    expect(root(wall.id)).toBeDefined()
+  })
+})
+
+describe('the animation speed', () => {
+  /** One wall written by the agent, and the progress it makes per frame once it moves. */
+  async function wallProgress(frameMs: number) {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    return { levelId: levelId! }
+  }
+
+  test('is read when the plan is made: the build plays at the speed the person had then', async () => {
+    let speed = 2
+    const { levelId } = await wallProgress(20)
+    start({ speed: () => speed })
+    const wall = make(Wall)
+    await agentWrites(() => useScene.getState().createNodes([{ node: wall, parentId: levelId }]))
+    // The build waits a few frames for its shaders, then is planned: at the speed asked for then.
+    for (let elapsed = 0; elapsed < 2000 && getRevealPlanSpeed() !== 2; elapsed += 20)
+      await frame(20)
+    expect(getRevealPlanSpeed()).toBe(2)
+    // Played at ×2, the wall rises in half the shipped time: its progress per frame is doubled.
+    let before = -1
+    let after = -1
+    for (let elapsed = 0; elapsed < 4000 && after < 0; elapsed += 20) {
+      await frame(20)
+      const state = getRevealPlanState(wall.id)
+      if (state && state.progress > 0.05 && state.progress < 0.8) {
+        before = state.progress
+        await frame(20)
+        after = getRevealPlanState(wall.id)!.progress
+      }
+    }
+    expect(before).toBeGreaterThan(0)
+    expect(after - before).toBeCloseTo(20 / revealTimingAt(2).durationMs.rise, 3)
+    speed = 1
+  })
+
+  test('a change applies to the next build and never moves one playing', async () => {
+    let speed = 1
+    const { levelId } = await wallProgress(20)
+    start({ speed: () => speed })
+    const first = make(Wall)
+    await agentWrites(() => useScene.getState().createNodes([{ node: first, parentId: levelId }]))
+    let mid = -1
+    for (let elapsed = 0; elapsed < 4000 && mid < 0; elapsed += 20) {
+      await frame(20)
+      const state = getRevealPlanState(first.id)
+      if (state && state.progress > 0.1) mid = state.progress
+    }
+    expect(mid).toBeGreaterThan(0.1)
+    // The person turns it up while this wall is rising: it keeps its own pace.
+    speed = 2
+    await frame(20)
+    const next = getRevealPlanState(first.id)!.progress
+    expect(next - mid).toBeCloseTo(20 / REVEAL_TIMING.durationMs.rise, 3)
+    // The next build is planned at the new speed.
+    const second = make(Wall)
+    await agentWrites(() => useScene.getState().createNodes([{ node: second, parentId: levelId }]))
+    for (let elapsed = 0; elapsed < 2000 && getRevealPlanSpeed() !== 2; elapsed += 20)
+      await frame(20)
+    expect(getRevealPlanSpeed()).toBe(2)
+  })
+
+  test('at ×1 a build plays on the shipped tables, at both levels', () => {
+    expect(revealTimingAt(1)).toBe(REVEAL_TIMING)
+    expect(lazyTimingAt(1)).toBe(LAZY_REVEAL_TIMING)
   })
 })

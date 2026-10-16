@@ -130,6 +130,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
   },
   capabilities: {
     reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
+    revealOnEdit: ['recipe'],
     batchable: {
       scope: 'level',
       // Part lights clone their emissive slot per node, and a playing motion

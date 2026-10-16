@@ -284,6 +284,21 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   },
 
   capabilities: {
+    exterior: true,
+    revealOnEdit: [
+      'roofType',
+      'width',
+      'depth',
+      'wallHeight',
+      'pitch',
+      'overhang',
+      'wallThickness',
+      'deckThickness',
+      'barrelRise',
+      'barrelSegments',
+      'roofSystem',
+      'glazing',
+    ],
     paint: roofSegmentPaint,
     slots: (node) => roofSegmentSlots(node as RoofSegmentNodeType),
     selectable: { hitVolume: 'bbox' },

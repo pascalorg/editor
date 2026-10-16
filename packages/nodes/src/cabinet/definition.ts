@@ -2341,6 +2341,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
   capabilities: {
     reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
+    revealOnEdit: ['width', 'depth', 'carcassHeight', 'plinthHeight'],
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     movable: {

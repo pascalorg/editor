@@ -1,5 +1,6 @@
-import type { RevealStyle } from '@pascal-app/core'
 import { Box3, Matrix4, type Mesh, type Object3D, Vector3 } from 'three'
+import type { PlayedStyle } from './reveal-wipe'
+import { clearRevealWipe } from './reveal-wipe'
 
 /**
  * A presentation-only pose composed on a registered root.
@@ -86,6 +87,8 @@ export function setGlidePose(
 }
 
 export function clearRevealPose(object: Object3D): void {
+  // A covering laid in place ends with the pose that held its node.
+  clearRevealWipe(object)
   if (!poses.delete(object)) return
   delete (object as Partial<Pick<Object3D, 'updateMatrix'>>).updateMatrix
   if (object.matrixAutoUpdate) object.updateMatrix()
@@ -118,7 +121,15 @@ export type RevealPoseOptions = {
   lead?: number
   /** A heavier drop lands with a bigger squash and hop; 1 by default. The last piece of a build is heavier. */
   weight?: number
+  /**
+   * A rise, a scale or a settle goes past its rest and comes back (GSAP's `back.out` strength,
+   * 1.7 is GSAP's default); 0, the default, is a plain ease out.
+   */
+  overshoot?: number
 }
+
+/** GSAP's `back.out(s)`: past 1 by a little near the end, exactly 1 at the end. */
+const easeOutBack = (t: number, s: number) => 1 + (s + 1) * (t - 1) ** 3 + s * (t - 1) ** 2
 
 /**
  * Where a `style` reveal holds its node at `t` in [0, 1]: a lift in metres
@@ -127,7 +138,7 @@ export type RevealPoseOptions = {
  * rounding error.
  */
 export function revealPoseAt(
-  style: RevealStyle,
+  style: PlayedStyle,
   t: number,
   height: number,
   out: RevealPoseSample = { lift: 0, scale: new Vector3() },
@@ -135,19 +146,21 @@ export function revealPoseAt(
 ): RevealPoseSample {
   out.lift = 0
   out.scale.set(1, 1, 1)
-  if (t >= 1 || style === 'assemble') return out
+  if (t >= 1 || style === 'assemble' || style === 'cover') return out
   const at = Math.max(0, t)
+  const overshoot = Math.max(0, options.overshoot ?? 0)
+  const eased = overshoot > 0 ? easeOutBack(at, overshoot) : easeOutCubic(at)
   switch (style) {
     case 'rise':
-      out.scale.y = Math.max(MIN_SCALE, easeOutCubic(at))
+      out.scale.y = Math.max(MIN_SCALE, eased)
       break
     case 'scale': {
-      const f = Math.max(MIN_SCALE, easeOutCubic(at))
+      const f = Math.max(MIN_SCALE, eased)
       out.scale.set(f, f, f)
       break
     }
     case 'settle':
-      out.lift = height * (1 - easeOutCubic(at))
+      out.lift = height * (1 - eased)
       break
     case 'drop': {
       const lead = Math.max(0, options.lead ?? 0)
@@ -203,7 +216,7 @@ const smoothstep = (low: number, high: number, value: number) => {
  * thrown up does. At `p >= 1` it is gone: its scale at the least and its opacity 0.
  */
 export function retractPoseAt(
-  style: RevealStyle,
+  style: PlayedStyle,
   p: number,
   height: number,
   out: RetractPoseSample = { lift: 0, scale: new Vector3(), opacity: 1 },
@@ -222,6 +235,10 @@ export function retractPoseAt(
       break
     case 'cut':
       out.scale.z = shrunk
+      break
+    case 'cover':
+      // Its covering lifts off row by row (`setRevealWipe`); the bare node goes with the last.
+      if (at >= 1) out.scale.set(MIN_SCALE, MIN_SCALE, MIN_SCALE)
       break
     case 'settle':
     case 'drop':
@@ -244,17 +261,19 @@ export function retractPoseAt(
  * How far into its duration each style has arrived, the frame its contact or its last movement
  * lands on: a drop's impact, a rise's last centimetre. An assembled node holds still: its parts land.
  */
-export const REVEAL_ARRIVAL: Record<RevealStyle, number> = {
+export const REVEAL_ARRIVAL: Record<PlayedStyle, number> = {
   rise: 1,
   scale: 1,
   settle: 1,
   drop: DROP_FALL,
   cut: 1,
   assemble: 0,
+  cover: 1,
 }
 
 /** Whether `style` has landed at `t`: a drop's impact, after which it only settles. */
-export function revealHasLanded(style: RevealStyle, t: number): boolean {
+export function revealHasLanded(style: PlayedStyle, t: number): boolean {
+  if (style === 'cover') return t >= 1
   return style !== 'drop' || t >= DROP_FALL
 }
 
@@ -286,7 +305,7 @@ export function revealLocalBounds(root: Object3D, out: Box3 = new Box3()): Box3 
  * base), the centre of the bounds for `cut`, and the base of their centre for
  * the rest.
  */
-export function revealPivot(box: Box3, style: RevealStyle): Vector3 {
+export function revealPivot(box: Box3, style: PlayedStyle): Vector3 {
   if (box.isEmpty()) return new Vector3()
   const centre = box.getCenter(new Vector3())
   if (style === 'rise') return new Vector3(0, box.min.y, 0)

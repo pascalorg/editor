@@ -509,16 +509,20 @@ function outwardOf(opening: AnyNode & { rotation?: number[] }, wall: WallNode, y
 
 /**
  * Which way a door or a window faces, outward, as a unit vector in the site's plan (x, z): what a
- * view of it is taken from, and what a camera that follows the build looks at it along. Null for
- * anything that is not an opening in a wall.
+ * view of it is taken from, and what a camera that follows the build looks at it along. The same
+ * for a wall with an exterior side: the way that side faces. Null for anything else, and for a wall
+ * with no exterior side.
  */
 export function sceneViewFacing(
   nodes: Readonly<Record<string, AnyNode>>,
   id: string,
 ): [number, number] | null {
   const opening = openingOf(nodes, nodes[id])
-  if (!opening) return null
-  return outwardOf(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
+  if (opening)
+    return outwardOf(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
+  const wall = nodes[id]
+  if (wall?.type !== 'wall' || resolveWallExteriorSide(wall) === null) return null
+  return outwardOf(wall, wall, standingOf(nodes, wall.parentId).yaw)
 }
 
 /**

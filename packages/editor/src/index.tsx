@@ -901,6 +901,12 @@ export { type CommandAction, useCommandRegistry } from './store/use-command-regi
 export {
   CONSTRUCTION_REVEAL_LEVELS,
   default as useConstructionReveal,
+  FRAMING_KIND,
+  getConstructionRevealLevel,
+  isFramingAvailable,
+  resolveConstructionLevel,
+  useConstructionRevealLevel,
+  useFramingAvailable,
 } from './store/use-construction-reveal'
 export {
   CORNER_BLOCK_NOTES,

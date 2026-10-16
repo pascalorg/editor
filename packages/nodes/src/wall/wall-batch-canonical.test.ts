@@ -1,7 +1,45 @@
-import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { sceneRegistry, useScene, WallNode } from '@pascal-app/core'
-import { getVisibleWallMaterials, useViewer } from '@pascal-app/viewer'
-import { BufferGeometry, Float32BufferAttribute, type Material, Mesh, Object3D } from 'three'
+import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from 'bun:test'
+import {
+  type AnyNodeId,
+  LevelNode,
+  loadPlugin,
+  MaterialPresetPayloadSchema,
+  nodeRegistry,
+  registerLibraryMaterials,
+  runAsSceneCommitAuthor,
+  SceneMaterial,
+  sceneRegistry,
+  unregisterLibraryMaterials,
+  useScene,
+  WallNode,
+} from '@pascal-app/core'
+import {
+  getVisibleWallMaterials,
+  isNodeRevealing,
+  SCENE_LAYER,
+  startConstructionReveal,
+  useViewer,
+  WallCutout,
+  WallCutoutCache,
+  WallSystem,
+} from '@pascal-app/viewer'
+import { act, create } from '@react-three/test-renderer'
+import { createElement, Fragment } from 'react'
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  type Material,
+  Mesh,
+  Object3D,
+  PerspectiveCamera,
+  Texture,
+  TextureLoader,
+  Vector3,
+} from 'three'
+import type { MeshStandardNodeMaterial } from 'three/webgpu'
+import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
+import { wallDefinition } from './definition'
+import WallRenderer from './renderer'
 import { canonicalWallMaterials, materialSetKey, runBatchFrame } from './wall-batch-system'
 
 // A 4 × 4 grid of 2 m rooms: 20 horizontal + 20 vertical walls = 40 walls. Rooms
@@ -118,6 +156,19 @@ const canonicalKey = (build: ReturnType<typeof wallBuild>) =>
 let nowMs = 0
 const performanceNow = spyOn(performance, 'now').mockImplementation(() => nowMs)
 const registered: string[] = []
+const actEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+const savedActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT
+const savedRequestAnimationFrame = globalThis.requestAnimationFrame
+const savedCancelAnimationFrame = globalThis.cancelAnimationFrame
+
+beforeAll(() => {
+  actEnvironment.IS_REACT_ACT_ENVIRONMENT = true
+  globalThis.requestAnimationFrame ??= (callback) => {
+    callback(0)
+    return 0
+  }
+  globalThis.cancelAnimationFrame ??= () => {}
+})
 
 afterEach(() => {
   useViewer.setState({ wallMode: 'down' } as never)
@@ -131,7 +182,12 @@ afterEach(() => {
   useViewer.setState({ wallMode: 'up' } as never)
 })
 
-afterAll(() => performanceNow.mockRestore())
+afterAll(() => {
+  performanceNow.mockRestore()
+  actEnvironment.IS_REACT_ACT_ENVIRONMENT = savedActEnvironment
+  globalThis.requestAnimationFrame = savedRequestAnimationFrame
+  globalThis.cancelAnimationFrame = savedCancelAnimationFrame
+})
 
 describe('canonical wall batch keys', () => {
   test('equal resolved material sets share a key whatever the palette order or unused entries', () => {
@@ -212,3 +268,429 @@ describe('canonical wall batch keys', () => {
     }
   })
 })
+
+function required<T>(value: T | null | undefined, label: string): T {
+  if (value === null || value === undefined) throw new Error(`Expected ${label}`)
+  return value
+}
+
+function lateBatchFixture(id: string) {
+  const root = new Object3D()
+  const builds = Array.from({ length: 8 }, (_, index) => {
+    const build = wallBuild({
+      node: WallNode.parse({
+        id: `wall_late_batch_${index}`,
+        parentId: 'level_late_batch',
+        start: [0, index * 4],
+        end: [4, index * 4],
+      }),
+      faces: { a: { room: null }, b: { room: null } },
+    })
+    const node = WallNode.parse({
+      ...build.node,
+      slots: { a: `library:${id}`, b: 'library:preset-white' },
+    })
+    const mesh = new Mesh(build.geometry, getVisibleWallMaterials(node))
+    root.add(mesh)
+    sceneRegistry.nodes.set(node.id, mesh)
+    sceneRegistry.byType.wall.add(node.id)
+    registered.push(node.id)
+    return { node, mesh }
+  })
+  sceneRegistry.nodes.set('level_late_batch', root)
+  sceneRegistry.byType.level.add('level_late_batch')
+  registered.push('level_late_batch')
+  useScene.setState({
+    nodes: {
+      level_late_batch: LevelNode.parse({
+        id: 'level_late_batch',
+        children: builds.map(({ node }) => node.id),
+      }),
+      ...Object.fromEntries(builds.map(({ node }) => [node.id, node])),
+    },
+    rootNodeIds: ['level_late_batch'],
+    dirtyNodes: new Set(),
+    materials: {},
+  } as never)
+  useViewer.setState({
+    wallMode: 'up',
+    shading: 'rendered',
+    textures: true,
+    selection: { ...useViewer.getState().selection, selectedIds: [], zoneId: null },
+    previewSelectedIds: [],
+    hoveredId: null,
+    hoverHighlightMode: 'default',
+  })
+  const cache = new WallCutoutCache(useViewer)
+  const camera = new PerspectiveCamera()
+  const wake = { current: null as ReturnType<typeof setTimeout> | null }
+  return { root, builds, cache, camera, wake }
+}
+
+function expectNoVisibleMaterial(root: Object3D, forbidden: Material) {
+  for (const child of root.children) {
+    const mesh = child as Mesh
+    if (!mesh.visible || !mesh.layers.isEnabled(SCENE_LAYER)) continue
+    const palette = mesh.material as Material[]
+    for (const group of mesh.geometry.groups) {
+      if (!group.count) continue
+      const index = required(group.materialIndex, 'draw group material index')
+      expect(required(palette[index], 'draw group material')).not.toBe(forbidden)
+    }
+  }
+}
+
+test('a late library finish replaces the materials drawn by an already sewn wall batch', () => {
+  const id = 'mtl_wall_batch_continuity'
+  const { root, builds, cache, camera, wake } = lateBatchFixture(id)
+  cache.update(camera, 0)
+  nowMs = 0
+  runBatchFrame(() => undefined, wake)
+  nowMs = 181
+  runBatchFrame(() => undefined, wake)
+  const old = root.children.find((child) => child.name === 'wall-batch') as Mesh
+  expect(old).toBeDefined()
+  const first = required(builds[0], 'first wall')
+  const fallback = required((first.mesh.material as Material[])[1], 'fallback face material')
+  try {
+    registerLibraryMaterials([
+      {
+        id,
+        label: 'Late batched wall finish',
+        category: 'colors',
+        preset: MaterialPresetPayloadSchema.parse({
+          maps: {},
+          mapProperties: { color: '#2468ac', roughness: 0.27, metalness: 0.63 },
+        }),
+      },
+    ])
+    cache.update(camera, 0.2)
+    const resolved = (first.mesh.material as Material[])[1] as MeshStandardNodeMaterial
+    expect(resolved).not.toBe(fallback)
+    expect(resolved.color.getHexString()).toBe('2468ac')
+    nowMs = 200
+    runBatchFrame(() => undefined, wake)
+    // No draw between invalidation and re-sewing may retain the stale finish.
+    expectNoVisibleMaterial(root, fallback)
+    nowMs = 381
+    runBatchFrame(() => undefined, wake)
+    const batches = root.children.filter((child) => child.name === 'wall-batch') as Mesh[]
+    expect(batches).toHaveLength(1)
+    expect(batches[0]).not.toBe(old)
+    expect(required(batches[0], 'replacement batch').material as Material[]).toContain(resolved)
+    expect(builds.every(({ mesh }) => !mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  } finally {
+    unregisterLibraryMaterials([id])
+    useViewer.setState({ wallMode: 'down' })
+    runBatchFrame(() => undefined, wake)
+    if (wake.current) clearTimeout(wake.current)
+  }
+})
+
+// Construction is presentation only: authored paint and metre UVs must survive every
+// live frame and the collective draw. Values come from the fixture, not the resolver.
+function materialState(material: Material) {
+  const surface = material as MeshStandardNodeMaterial
+  return {
+    type: surface.type,
+    color: surface.color?.getHexString(),
+    opacity: surface.opacity,
+    transparent: surface.transparent,
+    depthWrite: surface.depthWrite,
+    side: surface.side,
+    roughness: surface.roughness,
+    metalness: surface.metalness,
+    maps: [surface.map, surface.normalMap, surface.roughnessMap].map((map) =>
+      map
+        ? {
+            uuid: map.uuid,
+            repeat: map.repeat.toArray(),
+            rotation: map.rotation,
+            flipY: map.flipY,
+            channel: map.channel,
+            colorSpace: map.colorSpace,
+          }
+        : null,
+    ),
+  }
+}
+
+function LiveWalls() {
+  const nodes = useScene((state) => state.nodes)
+  return createElement(
+    'group',
+    {},
+    ...Object.values(nodes)
+      .filter((node): node is WallNode => node.type === 'wall')
+      .map((node) => createElement(WallRenderer, { key: node.id, node })),
+  )
+}
+
+function expectMetreFaceUVs(mesh: Mesh) {
+  mesh.updateWorldMatrix(true, false)
+  const position = mesh.geometry.getAttribute('position')
+  const index = mesh.geometry.index
+  let edges = 0
+  for (const name of ['uv', 'uv2']) {
+    const uv = mesh.geometry.getAttribute(name)
+    for (const group of mesh.geometry.groups) {
+      if (group.materialIndex !== 1 && group.materialIndex !== 2) continue
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        const start = index ? index.getX(offset) : offset
+        const a = new Vector3().fromBufferAttribute(position, start).applyMatrix4(mesh.matrixWorld)
+        for (const corner of [1, 2]) {
+          const end = index ? index.getX(offset + corner) : offset + corner
+          const b = new Vector3().fromBufferAttribute(position, end).applyMatrix4(mesh.matrixWorld)
+          // One UV unit is one drawn metre, not one pre-animation metre. The opposite
+          // face reverses U; both faces keep the resting wall's downward V orientation.
+          expect(uv.getX(end) - uv.getX(start)).toBeCloseTo(
+            (group.materialIndex === 1 ? 1 : -1) * (b.x - a.x),
+            5,
+          )
+          expect(uv.getY(end) - uv.getY(start)).toBeCloseTo(a.y - b.y, 5)
+          edges++
+        }
+      }
+    }
+  }
+  expect(edges).toBeGreaterThan(0)
+}
+
+function registerRevealTexture(id: string) {
+  registerLibraryMaterials([
+    {
+      id,
+      label: 'Directional wall texture',
+      category: 'colors',
+      preset: MaterialPresetPayloadSchema.parse({
+        maps: {
+          albedoMap: `/fixtures/${id}-albedo.png`,
+          normalMap: `/fixtures/${id}-normal.png`,
+          roughnessMap: `/fixtures/${id}-roughness.png`,
+        },
+        mapProperties: {
+          color: '#a47345',
+          roughness: 0.37,
+          metalness: 0.12,
+          repeatX: 2,
+          repeatY: 3,
+          rotation: Math.PI / 2,
+        },
+      }),
+    },
+  ])
+}
+
+function createRevealFixture(shading: 'solid' | 'rendered') {
+  const id = `mtl_wall_reveal_${shading}`
+  const textures: Texture[] = []
+  const loader = spyOn(TextureLoader.prototype, 'loadAsync').mockImplementation(async () => {
+    const texture = new Texture()
+    textures.push(texture)
+    return texture
+  })
+  const paint = SceneMaterial.parse({
+    id: 'smat_reveal_paint',
+    name: 'Face paint',
+    material: { properties: { color: '#2468ac', roughness: 0.61, metalness: 0.08 } },
+  })
+  const walls = Array.from({ length: 8 }, (_, index) =>
+    WallNode.parse({
+      id: `wall_material_reveal_${index}`,
+      start: [0, index * 4],
+      end: [4, index * 4],
+      height: 2.5,
+      thickness: 0.2,
+      slots: { a: `scene:${paint.id}`, b: `library:${id}` },
+    }),
+  )
+  return {
+    id,
+    shading,
+    paint,
+    walls,
+    textures,
+    loader,
+    level: LevelNode.parse({ id: 'level_material_reveal', level: 0 }),
+    savedScene: useScene.getState(),
+    savedViewer: useViewer.getState(),
+    restoreRegistry: nodeRegistry._snapshot(),
+    renderer: undefined as Awaited<ReturnType<typeof create>> | undefined,
+    driver: undefined as ReturnType<typeof startConstructionReveal> | undefined,
+    root: undefined as Object3D | undefined,
+    wake: { current: null as ReturnType<typeof setTimeout> | null },
+    samples: new Map<string, { materials: Material[]; states: unknown[] }>(),
+    rising: new Set<string>(),
+  }
+}
+
+type RevealFixture = ReturnType<typeof createRevealFixture>
+
+async function mountRevealFixture(fixture: RevealFixture) {
+  const { level, paint, shading, walls } = fixture
+  nodeRegistry._reset()
+  await loadPlugin({ id: 'fixture:wall-materials', apiVersion: 1, nodes: [wallDefinition] })
+  registerRevealTexture(fixture.id)
+  useScene.getState().setScene({ [level.id]: level }, [level.id as AnyNodeId], {
+    installedPlugins: ['fixture:wall-materials'],
+    hasExplicitPluginInstallState: true,
+  })
+  useScene.setState({ materials: { [paint.id]: paint }, dirtyNodes: new Set() })
+  useViewer.setState({
+    shading,
+    textures: true,
+    wallMode: 'up',
+    colorPreset: 'clay',
+    sceneTheme: 'studio',
+    selection: { ...fixture.savedViewer.selection, selectedIds: [], zoneId: null },
+    previewSelectedIds: [],
+    hoveredId: null,
+    hoverHighlightMode: 'default',
+  })
+  fixture.renderer = await create(
+    createElement(
+      Fragment,
+      {},
+      createElement(LiveWalls),
+      createElement(WallCutout, { materialResolver: getCurtainAwareWallMaterials }),
+      createElement(WallSystem),
+    ),
+  )
+  fixture.root = required(fixture.renderer.scene.children[0], 'mounted level').instance as Object3D
+  sceneRegistry.nodes.set(level.id, fixture.root)
+  sceneRegistry.byType.level.add(level.id)
+  fixture.driver = startConstructionReveal({
+    reveals: (commit) => commit.author === 'agent',
+    prefersReducedMotion: () => false,
+    level: () => 'full',
+  })
+  await act(async () => {
+    runAsSceneCommitAuthor('agent', () =>
+      useScene.getState().createNodes(walls.map((node) => ({ node, parentId: level.id }))),
+    )
+  })
+}
+
+function expectRevealingWall(fixture: RevealFixture, wall: WallNode, mesh: Mesh) {
+  const materials = mesh.material as Material[]
+  const faceA = materials[1] as MeshStandardNodeMaterial
+  const faceB = materials[2] as MeshStandardNodeMaterial
+  expect(faceA.color.getHexString()).toBe('2468ac')
+  expect(faceB.color.getHexString()).toBe('a47345')
+  expect(faceA.transparent).toBe(false)
+  expect(faceB.opacity).toBe(1)
+  expect(faceB.type).toBe(
+    fixture.shading === 'solid' ? 'MeshLambertNodeMaterial' : 'MeshStandardNodeMaterial',
+  )
+  expect(faceB.map).not.toBeNull()
+  const map = required(faceB.map, 'textured wall albedo map')
+  expect(map.repeat.toArray()).toEqual([2, 3])
+  expect(map.rotation).toBe(Math.PI / 2)
+  if (fixture.shading === 'rendered') {
+    expect(faceB.normalMap).not.toBeNull()
+    expect(faceB.roughnessMap).not.toBeNull()
+    expect(faceB.roughness).toBe(0.37)
+    expect(faceB.metalness).toBe(0.12)
+  }
+  const saved = fixture.samples.get(wall.id)
+  if (saved) {
+    materials.forEach((material, index) => {
+      expect(material).toBe(saved.materials[index])
+    })
+    expect(materials.map(materialState)).toEqual(saved.states)
+  } else {
+    fixture.samples.set(wall.id, {
+      materials: [...materials],
+      states: materials.map(materialState),
+    })
+  }
+  mesh.updateMatrix()
+  const scaleY = required(mesh.matrix.elements[5], 'wall world Y scale')
+  if (scaleY > 0.05 && scaleY < 0.95) {
+    fixture.rising.add(wall.id)
+    expect(isNodeRevealing(wall.id)).toBe(true)
+    expect(mesh.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expectMetreFaceUVs(mesh)
+  }
+}
+
+async function advanceRevealFixture(fixture: RevealFixture) {
+  const driver = required(fixture.driver, 'construction driver')
+  const renderer = required(fixture.renderer, 'mounted renderer')
+  nowMs = 0
+  for (let frame = 0; frame < 300; frame++) {
+    nowMs += 20
+    await act(async () => {
+      driver.tick(nowMs)
+      await renderer.advanceFrames(1, 0.02)
+    })
+    runBatchFrame(() => undefined, fixture.wake)
+    for (const wall of fixture.walls) {
+      const mesh = sceneRegistry.nodes.get(wall.id) as Mesh | undefined
+      if (mesh && !mesh.geometry.userData.placeholder) expectRevealingWall(fixture, wall, mesh)
+    }
+  }
+}
+
+// Compare the submitted UV/material tuples, allowing palette, vertex and triangle reordering.
+function triangleMaterialUVs(mesh: Mesh) {
+  const uv = mesh.geometry.getAttribute('uv')
+  const index = mesh.geometry.index
+  const palette = mesh.material as Material[]
+  return mesh.geometry.groups.flatMap((group) =>
+    Array.from({ length: group.count }, (_, offset) => {
+      const at = index ? index.getX(group.start + offset) : group.start + offset
+      const materialIndex = required(group.materialIndex, 'triangle material index')
+      const material = required(palette[materialIndex], 'triangle material')
+      return `${material.uuid}:${uv.getX(at)}:${uv.getY(at)}`
+    }),
+  )
+}
+
+function expectSettledRevealBatch(fixture: RevealFixture) {
+  expect(fixture.samples.size).toBe(8)
+  expect(fixture.rising.size).toBe(8)
+  const root = required(fixture.root, 'level root')
+  const batches = root.children.filter((child) => child.name === 'wall-batch') as Mesh[]
+  expect(batches).toHaveLength(1)
+  const batch = required(batches[0], 'settled wall batch')
+  const sources = fixture.walls.map((wall) => sceneRegistry.nodes.get(wall.id) as Mesh)
+  expect(triangleMaterialUVs(batch).sort()).toEqual(sources.flatMap(triangleMaterialUVs).sort())
+  for (const wall of fixture.walls) {
+    const mesh = sceneRegistry.nodes.get(wall.id) as Mesh
+    expect(isNodeRevealing(wall.id)).toBe(false)
+    expect(mesh.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    mesh.updateMatrix()
+    expect(mesh.matrix.elements[5]).toBe(1)
+    expectMetreFaceUVs(mesh)
+  }
+}
+
+async function disposeRevealFixture(fixture: RevealFixture) {
+  await act(async () => fixture.driver?.stop())
+  useViewer.setState({ wallMode: 'down' })
+  runBatchFrame(() => undefined, fixture.wake)
+  if (fixture.wake.current) clearTimeout(fixture.wake.current)
+  await fixture.renderer?.unmount()
+  fixture.restoreRegistry()
+  unregisterLibraryMaterials([fixture.id])
+  fixture.loader.mockRestore()
+  for (const texture of fixture.textures) texture.dispose()
+  sceneRegistry.clear()
+  useScene.setState(fixture.savedScene)
+  useViewer.setState(fixture.savedViewer)
+}
+
+test.each(['solid', 'rendered'] as const)(
+  '%s painted and textured wall faces keep their materials and UVs while rising and joining a batch',
+  async (shading) => {
+    const fixture = createRevealFixture(shading)
+    try {
+      await mountRevealFixture(fixture)
+      await advanceRevealFixture(fixture)
+      expectSettledRevealBatch(fixture)
+    } finally {
+      await disposeRevealFixture(fixture)
+    }
+  },
+)

@@ -439,6 +439,17 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
 
   capabilities: {
     reveal: { phase: 'circulation', style: 'drop', height: 2.5 },
+    revealOnEdit: [
+      'stairType',
+      'width',
+      'totalRise',
+      'stepCount',
+      'thickness',
+      'innerRadius',
+      'sweepAngle',
+      'railingMode',
+      'topLandingDepth',
+    ],
     hostRefFields: ['destinationSurfaceId'],
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },

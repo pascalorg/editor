@@ -295,7 +295,7 @@ test('overlapping preview holds end only after the final restore; failed preview
   expect(isSlotPaintPreviewActive('ceiling_0')).toBe(false)
 })
 
-test.each(['mode', 'selected-level'])(
+test.each(['mode', 'selected-level', 'revealing'])(
   'shadow-only candidates are re-offered on %s restoration',
   (change) => {
     const { root, meshes } = setup()
@@ -308,6 +308,7 @@ test.each(['mode', 'selected-level'])(
     expect(batches(root)).toHaveLength(0)
     clearShadowOnly(root)
     if (change === 'mode') useViewer.setState({ levelMode: 'stacked' })
+    else if (change === 'revealing') useViewer.setState({ levelsRevealing: ['level_test'] })
     else
       useViewer.setState({
         selection: { ...useViewer.getState().selection, levelId: 'level_test' },

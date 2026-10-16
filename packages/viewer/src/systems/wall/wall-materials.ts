@@ -187,10 +187,13 @@ function wallFaceMaterialSignature(
 ): string {
   const ref = wallNode.slots?.[face]
   if (ref) return refMaterialSignature(ref, sceneMaterials)
+  const spec = getEffectiveWallFaceMaterial(wallNode, face)
+  const assemblyRef = wallAssemblyFaceFinishRef(wallNode, face)
   return JSON.stringify({
-    legacy: getWallSurfaceMaterialSignature(getEffectiveWallFaceMaterial(wallNode, face)),
+    legacy: getWallSurfaceMaterialSignature(spec),
+    preset: spec.materialPreset ? materialPresetRefSignature(spec.materialPreset) : null,
     // Changing the assembly's cladding must re-skin the face.
-    assemblyFinish: wallAssemblyFaceFinishRef(wallNode, face),
+    assemblyFinish: assemblyRef ? materialPresetRefSignature(assemblyRef) : null,
   })
 }
 

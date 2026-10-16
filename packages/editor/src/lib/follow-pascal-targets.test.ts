@@ -13,6 +13,7 @@ import {
   WallNode,
 } from '@pascal-app/core'
 import type { RevealEvent } from '@pascal-app/viewer'
+import { openingExterior, wallExterior } from './follow-pascal-exterior.test-fixture'
 import { wantFromEvent } from './follow-pascal-targets'
 
 // What the camera looks at for each thing the reveal says: a floor when its walls rise, a window when
@@ -129,6 +130,33 @@ beforeAll(async () => {
             height: 4,
             clears: { for: 'furnishing', height: 2.4 },
           },
+          exterior: true,
+        },
+        geometry: () => null,
+      } as unknown as AnyNodeDefinition,
+      {
+        kind: 'wall',
+        schemaVersion: 1,
+        schema: WallNode,
+        category: 'structure',
+        defaults: () => ({}),
+        capabilities: {
+          reveal: { phase: 'structure', style: 'rise' },
+          revealOnEdit: ['start', 'end', 'curveOffset'],
+          exterior: wallExterior,
+        },
+        geometry: () => null,
+      } as unknown as AnyNodeDefinition,
+      {
+        kind: 'door',
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'structure',
+        defaults: () => ({}),
+        capabilities: {
+          reveal: { phase: 'openings', style: 'cut' },
+          revealOnEdit: ['position'],
+          exterior: openingExterior,
         },
         geometry: () => null,
       } as unknown as AnyNodeDefinition,
@@ -147,6 +175,14 @@ describe('what the camera looks at', () => {
       expect(want.box.max[2]).toBeGreaterThanOrEqual(8)
       expect(want.at).toBe(1)
     }
+  })
+
+  test('a wall the agent edited is looked at, close up: it is not a floor being built', () => {
+    const nodes = house()
+    const edited = { ...started('wall_0', 'structure', 'rise'), changed: true } as RevealEvent
+    const want = wantFromEvent(edited, nodes, 0)
+    expect(want?.kind).toBe('detail')
+    expect(want?.levelId).toBe('level_h')
   })
 
   test('the walls themselves are not targets: the floor already is', () => {
@@ -287,5 +323,69 @@ describe('what the camera looks at', () => {
     ).toBeNull()
     // A node that is gone is no target either.
     expect(wantFromEvent(started('item_gone', 'furnishing'), house(), 0)).toBeNull()
+  })
+})
+
+// The owner, 15 October: the cutaway hid the exterior wall the agent was bending. A change seen from
+// outside is looked at from outdoors, with the walls up; the rest keeps the cutaway.
+describe('what is seen from outside', () => {
+  const changed = (id: string, phase: string, style = 'rise') =>
+    ({ ...started(id, phase, style), changed: true }) as RevealEvent
+
+  test('an exterior wall the agent bent is an outside step, framed from its exterior face', () => {
+    const want = wantFromEvent(changed('wall_0', 'structure'), house(), 0)!
+    expect(want.exterior).toBe(true)
+    // wall_0 runs along +x with its exterior on the back side: it faces -z.
+    expect(want.normal).toEqual([0, -1])
+  })
+
+  test('a window moved on an exterior wall is an outside step; a chair moved is not', () => {
+    const nodes = house()
+    expect(wantFromEvent(changed('door_h', 'openings', 'cut'), nodes, 0)!.exterior).toBe(true)
+    expect(
+      wantFromEvent(changed('item_h', 'furnishing', 'drop'), nodes, 0)!.exterior,
+    ).toBeUndefined()
+  })
+
+  test('an interior wall the agent bent keeps the cutaway', () => {
+    const nodes = house() as Record<string, any>
+    nodes.wall_1 = { ...nodes.wall_1, frontSide: 'interior', backSide: 'interior' }
+    const want = wantFromEvent(changed('wall_1', 'structure'), nodes, 0)!
+    expect(want.exterior).toBeUndefined()
+    expect(want.normal).toBeUndefined()
+  })
+
+  test('an opening on an interior wall keeps the cutaway', () => {
+    const nodes = house() as Record<string, any>
+    nodes.wall_0 = { ...nodes.wall_0, frontSide: 'interior', backSide: 'interior' }
+    expect(wantFromEvent(changed('door_h', 'openings', 'cut'), nodes, 0)!.exterior).toBeUndefined()
+  })
+
+  // The owner, 15 Oct: the outside view is for edits and moves only; a build is followed as it was.
+  test('a build says nothing of outside: a roof assembling, an opening coming in, a floor of walls', () => {
+    const nodes = house()
+    for (const event of [
+      group('start', 'roof', ['roof_h'], 'level_roof'),
+      group('start', 'openings', ['door_h']),
+      group('start', 'structure', ['wall_0', 'wall_1']),
+      started('door_h', 'openings', 'cut'),
+      started('item_h', 'furnishing'),
+      { ...group('start', 'roof', ['roof_h'], 'level_roof'), type: 'retract-start' } as RevealEvent,
+    ])
+      expect(wantFromEvent(event, nodes, 0)?.exterior).toBeUndefined()
+  })
+
+  test('the same pieces edited or moved are outside steps', () => {
+    const nodes = house()
+    const edited = (id: string, phase: string) =>
+      ({ ...started(id, phase), changed: true }) as RevealEvent
+    expect(wantFromEvent(edited('door_h', 'openings'), nodes, 0)!.exterior).toBe(true)
+    expect(
+      wantFromEvent(
+        { ...group('start', 'roof', ['roof_h'], 'level_roof'), changed: true } as RevealEvent,
+        nodes,
+        0,
+      )!.exterior,
+    ).toBe(true)
   })
 })

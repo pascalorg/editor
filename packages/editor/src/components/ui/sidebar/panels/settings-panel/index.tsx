@@ -79,6 +79,7 @@ import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
 import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
 import { AudioSettingsDialog } from './audio-settings-dialog'
+import { AnimationSpeedSetting } from './animation-speed-setting'
 import { ConstructionAnimationSetting } from './construction-animation-setting'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
@@ -1272,6 +1273,7 @@ export function SettingsPanel({
           title="Preferences"
         >
           <ConstructionAnimationSetting />
+          <AnimationSpeedSetting />
           {preferences}
           <div className="grid gap-2 @sm:grid-cols-2">
             <AudioSettingsDialog />

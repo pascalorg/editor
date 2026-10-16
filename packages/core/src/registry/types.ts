@@ -1738,6 +1738,32 @@ export type Capabilities = {
    */
   reveal?: RevealConfig
   /**
+   * The fields that make the node's picture: an edit that changes one (a wall bent to a curve, a slab
+   * resized) plays the node's reveal again, quickly, instead of jumping. A change to any other field
+   * (a name, a colour) stays instant, and so does a change the structure reconciler derives. See
+   * `RevealConfig`.
+   */
+  revealOnEdit?: readonly string[]
+  /**
+   * What the node is in a floor's plan, for the order a build is revealed in (room by room, wall by
+   * wall). Set by a kind that outlines a room (a zone) or bounds rooms along a line (a wall); a kind
+   * that sets neither is placed by its own `position`, `polygon` or `start`/`end`. See `RevealLayout`.
+   */
+  revealLayout?: RevealLayout
+  /**
+   * Whether a change to the node is seen from outside the building, for hosts that follow a change
+   * with a camera (Follow Pascal). `true` for a kind that always stands outdoors (a roof and what is
+   * mounted on it, a fence, the site); `false` for one that never does, and that holds what is looked
+   * at through a cutaway (a storey, a room). A function decides from the node's fields and its
+   * surroundings (a wall with an exterior face, an opening in it) and returns `undefined` when the
+   * node says nothing. A node whose kind says nothing, or whose function does, is outdoors when what
+   * holds it is (a `true` kind, looking up to the first `false` one), or when it stands in no
+   * storey. Presentation only.
+   */
+  exterior?:
+    | boolean
+    | ((node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => boolean | undefined)
+  /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
    * directly (wall, slab). Lets a kind self-describe where it sits in plan
@@ -2617,6 +2643,26 @@ export type RevealConfig =
  * once the phase has landed. Presentation only, like the reveal itself.
  */
 export type RevealClears = { for: RevealPhase; height: number }
+
+/** A point of a level's plan, in metres: `[x, z]`. */
+export type RevealPlanPoint = readonly [x: number, z: number]
+
+/**
+ * What a kind is in its level's plan, read by the construction reveal to lay a build out room by
+ * room (`capabilities.revealLayout`). Both fields are pure: they read only the node.
+ *
+ * - `room` says the node outlines a room and returns its polygon, or `null` for a node with none yet.
+ *   What stands in the polygon (walls along it, furniture in it) is revealed together, around its
+ *   centre, and rooms sweep across the floor.
+ * - `line` says the node bounds rooms along a line and returns its two ends. Its middle is where it
+ *   stands; the room either side of it is its room; a line in no room runs with the lines it meets
+ *   end to end. The derived plates and ceilings of a level go out with the `room` and `line` nodes a
+ *   commit takes off it.
+ */
+export type RevealLayout = {
+  room?: (node: AnyNode) => readonly RevealPlanPoint[] | null
+  line?: (node: AnyNode) => readonly [start: RevealPlanPoint, end: RevealPlanPoint] | null
+}
 
 /**
  * Plan footprint a kind contributes to the alignment-anchor pool when it is

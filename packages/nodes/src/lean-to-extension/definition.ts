@@ -453,6 +453,7 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
     return defaults
   },
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

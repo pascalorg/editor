@@ -54,7 +54,12 @@ export class FollowSight {
         ) {
           const levelId = findLevelAncestorId(id as AnyNodeId, nodes)
           const level = levelId ? nodes[levelId as AnyNodeId] : undefined
-          if (level?.type === 'level' && level.level > selected.level) return
+          if (
+            level?.type === 'level' &&
+            level.level > selected.level &&
+            !viewer.levelsRevealing.includes(level.id)
+          )
+            return
         }
       }
       this.meshes.push(mesh)

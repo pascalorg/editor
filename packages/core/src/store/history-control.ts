@@ -66,6 +66,12 @@ export type SceneCommit = {
   before: SceneSnapshot
   current: SceneSnapshot
   changedNodeIds?: ReadonlySet<AnyNodeId>
+  /**
+   * What the structure reconciler wrote while this commit was made (plates, ceilings, side
+   * classification): derived from an edit, not authored by it. Each node it wrote, with the fields it
+   * wrote (`'all'` for one it created or deleted). Presentation does not play these as the edit's own.
+   */
+  derivedWrites?: ReadonlyMap<AnyNodeId, ReadonlySet<string> | 'all'>
 }
 
 export type SceneCommitListener = (commit: SceneCommit) => void
@@ -232,7 +238,27 @@ export function subscribeSceneCommits(listener: SceneCommitListener): () => void
   }
 }
 
-function emitSceneCommit(commit: SceneCommit): void {
+let derivedWrites = new Map<AnyNodeId, Set<string> | 'all'>()
+
+/**
+ * Records what the derived-writer capability writes, for the commit that follows: each node, and the
+ * fields written (none given: the node as a whole).
+ */
+export function noteDerivedNodeWrites(
+  writes: Iterable<{ id: AnyNodeId; fields?: Iterable<string> }>,
+): void {
+  for (const { id, fields } of writes) {
+    const noted = derivedWrites.get(id)
+    if (noted === 'all') continue
+    if (!fields) derivedWrites.set(id, 'all')
+    else derivedWrites.set(id, new Set([...(noted ?? []), ...fields]))
+  }
+}
+
+function emitSceneCommit(authored: SceneCommit): void {
+  const derived = derivedWrites
+  derivedWrites = new Map()
+  const commit = derived.size > 0 ? { ...authored, derivedWrites: derived } : authored
   for (const listener of [...sceneCommitListeners]) {
     try {
       listener(commit)
@@ -243,7 +269,10 @@ function emitSceneCommit(commit: SceneCommit): void {
 }
 
 export function notifySceneCommit(commit: SceneCommit): void {
-  if (areSceneSnapshotsEqual(commit.before, commit.current)) return
+  if (areSceneSnapshotsEqual(commit.before, commit.current)) {
+    if (sceneCommitTransactionDepth === 0) derivedWrites = new Map()
+    return
+  }
   const author = commit.author ?? activeSceneCommitAuthor()
   const contextualCommit: SceneCommit = {
     ...commit,
@@ -291,9 +320,9 @@ function endSceneCommitTransaction(): void {
 
   const commit = pendingSceneCommit
   pendingSceneCommit = null
-  if (commit && !areSceneSnapshotsEqual(commit.before, commit.current)) {
-    emitSceneCommit(commit)
-  }
+  if (!commit) return
+  if (areSceneSnapshotsEqual(commit.before, commit.current)) derivedWrites = new Map()
+  else emitSceneCommit(commit)
 }
 
 export function pauseSceneHistory(sceneStore: TemporalStoreLike): void {

@@ -27,6 +27,7 @@ import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-open
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { openingSeenFromOutside } from '../wall/exterior'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildWindowContextualDimensions } from './contextual-dimensions'
 import { buildWindowFloorplan } from './floorplan'
@@ -296,6 +297,8 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
 
   capabilities: {
     reveal: { phase: 'openings', style: 'cut' },
+    exterior: openingSeenFromOutside,
+    revealOnEdit: ['position', 'width', 'height', 'openingShape', 'windowType'],
     batchable: windowBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

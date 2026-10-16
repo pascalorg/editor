@@ -5,10 +5,10 @@ import {
   type AnyNodeId,
   criticallyDamped,
   emitter,
+  getLevelElevations,
   isRestoringSceneHistory,
   nodeRegistry,
   type RevealPhase,
-  type RevealStyle,
   type SceneCommit,
   sceneRegistry,
   subscribeSceneCommits,
@@ -16,12 +16,16 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { type Box3, type Object3D, Vector3 } from 'three'
+import { Box3, type Object3D, Vector3 } from 'three'
 import { DustPool, emitAlongBase, emitAroundFoot } from '../../lib/construction-dust'
+import { SCENE_LAYER } from '../../lib/layers'
 import {
   type ChangeCandidate,
+  CONTAINERS,
   type ConstructionRevealLevel,
   commitChangeCandidates,
+  commitDeleteCandidates,
+  commitEditCandidates,
   commitRevealCandidates,
   nodeRevealCandidates,
   PART_LEAD,
@@ -44,16 +48,38 @@ import {
   setRevealPose,
 } from '../../lib/reveal-pose'
 import {
+  coverRangeAt,
+  LAZY_REVEAL_TIMING,
+  type LazyRevealTiming,
+  lazyRetractTimingAt,
+  lazyTimingAt,
+  normalizeAnimationSpeed,
   type PlannedReveal,
+  planLazyRetract,
+  planLazyReveal,
   planRetract,
   planReveal,
-  REVEAL_TIMING,
   type RevealCandidate,
+  retractTimingAt,
   revealGroupKey,
+  revealTimingAt,
+  styleMs,
 } from '../../lib/reveal-schedule'
+import { clearRiseTextureScale, setRiseTextureScale } from '../../lib/reveal-texture-scale'
+import {
+  type CoverRange,
+  type CoverSweep,
+  coverDurationMs,
+  coverShareAt,
+  coverSweepOf,
+  type PlayedStyle,
+  setRevealWipe,
+} from '../../lib/reveal-wipe'
 import useViewer from '../../store/use-viewer'
-import { resolveLevelVisibility } from '../level/level-utils'
+import { releaseLevel, setHeldLevelY } from '../level/level-hold'
+import { getLevelPresentationY } from '../level/level-utils'
 import { ConstructionDust } from './construction-dust'
+import { dressDeletionGhost } from './ghost-dress'
 
 /**
  * Construction reveal: what an agent builds appears as a construction, not a
@@ -66,8 +92,9 @@ import { ConstructionDust } from './construction-dust'
  * The host decides which commits reveal (`reveals`) and how much animation
  * plays (`level`); the viewer knows no agent. A reveal ends at once on a load
  * or hydration, an undo, a capture or export, and for selected nodes; it
- * never plays under reduced motion or in a read-only viewer, and never for a
- * level nobody sees.
+ * never plays under reduced motion or in a read-only viewer. A level the person's
+ * display hides (the levels above the selected one, solo) shows while its work plays,
+ * so the build is seen; a level the author hid shows its build at once.
  */
 
 export type { ConstructionRevealLevel } from '../../lib/reveal-candidates'
@@ -76,11 +103,13 @@ export { isRevealWaiting }
 type ActiveReveal = {
   id: string
   candidate: RevealCandidate
-  style: RevealStyle
+  style: PlayedStyle
   height: number
   levelId: string | null
   startedAt: number
   durationMs: number
+  /** What an assembled node's own parts take to drop, at the speed its plan was made at. */
+  assembleMs: number
   clockStart: number | null
   pivot: Vector3 | null
   base: Box3 | null
@@ -89,9 +118,48 @@ type ActiveReveal = {
   /** A drop's anticipation, and how heavy it lands: the last piece of a build is heavier. */
   lead: number
   weight: number
+  /** A rise's or a scale's overshoot past its rest before it settles (the lazy schedule's). */
+  overshoot: number
   /** The last piece of the plan to arrive; the reveal says when it has. */
   finale: boolean
   finaleSaid: boolean
+  /** An edit plays the node again (`commitEditCandidates`): it counts in the changes' groups, not the build's. */
+  edit?: true
+  /** A `cover` node's covering, planned when it starts (see `layCover`). */
+  cover?: Cover
+  /** How long a covering takes by its size, at the speed this plan was made at (`cover` nodes). */
+  coverRange?: CoverRange
+}
+
+/** How a covering is laid over a node held still: its sweep along the node and how long it takes. */
+type Cover = { sweep: CoverSweep; durationMs: number }
+
+const coverBox = new Box3()
+
+/** The sweep over what is drawn under `root`, and the time it takes in `range`. */
+function planCover(root: Object3D, range: CoverRange): Cover {
+  root.updateWorldMatrix(true, true)
+  const sweep = coverSweepOf(coverBox.setFromObject(root))
+  return { sweep, durationMs: coverDurationMs(sweep, range) }
+}
+
+/**
+ * The world coordinate the covering has reached when `share` of its sweep is closed: a hair under
+ * the lowest edge at the start and over the highest at the end, so it is whole where it ends.
+ */
+const coverLevel = (sweep: CoverSweep, share: number) =>
+  sweep.from - 0.01 + (sweep.to - sweep.from + 0.02) * share
+
+/** Lays the covering `elapsedMs` into its time: it moves with every frame, easing in and out. */
+function layCover(root: Object3D, cover: Cover, elapsedMs: number) {
+  const share = coverShareAt(elapsedMs, cover.durationMs)
+  setRevealWipe(root, cover.sweep, coverLevel(cover.sweep, share))
+}
+
+/** Lifts the covering off: the same sweep played from the highest edge to the lowest. */
+function liftCover(root: Object3D, cover: Cover, progress: number) {
+  const left = (1 - Math.min(1, Math.max(0, progress))) * cover.durationMs
+  setRevealWipe(root, cover.sweep, coverLevel(cover.sweep, coverShareAt(left, cover.durationMs)))
 }
 
 export type RevealPhaseEvent = { phase: RevealPhase; levelId: string | null }
@@ -125,7 +193,7 @@ export type RevealNodeStartEvent = {
   phase: RevealPhase
   levelId: string | null
   /** `glide` is a piece moving from one place to another (`changed`). */
-  style: RevealStyle | 'glide'
+  style: PlayedStyle | 'glide'
   source: string | null
   atMs: number
   /** The agent moved this piece; it was already there. */
@@ -191,7 +259,7 @@ export type RetractResult = {
 }
 
 /** A node's reveal as a plan view draws it: its style and how far it has come, 0 → 1. */
-export type RevealPlanState = { style: RevealStyle; progress: number }
+export type RevealPlanState = { style: PlayedStyle; progress: number }
 
 /** A started node waits this long for its renderer to register (its kind may never mount). */
 const MOUNT_TIMEOUT_MS = 2000
@@ -208,6 +276,8 @@ const MIN_SCALE = 1e-3
 const FULL_DUST_DROP_M = 4
 /** The last piece of a build lands this much heavier: a bigger squash, a bigger puff. */
 const FINALE_WEIGHT = 1.7
+/** On the lazy schedule a drop lifts this share of its height before it falls (anticipation). */
+const LAZY_DROP_LEAD = 0.08
 /** A lifted node rises over this many seconds, and comes back a little quicker. */
 const LIFT_RESPONSE_UP_S = 0.55
 const LIFT_RESPONSE_DOWN_S = 0.45
@@ -251,6 +321,16 @@ const foot = [new Vector3(), new Vector3(), new Vector3(), new Vector3()]
 
 const pending = revealPending
 let queue: PlannedReveal[] = []
+/** The plan's entries still to start, by id: when each moves in, and its preroll before. */
+const planned = new Map<string, PlannedReveal>()
+/** How long a plugin plays before a node of the lazy schedule moves in (its preroll), if it plays any. */
+let prerollOf: RevealPreroll | null = null
+
+/** A plugin's preroll for a candidate: `nodes` is the scene the candidate stood in (the one before a deletion). */
+export type RevealPreroll = (
+  candidate: RevealCandidate,
+  nodes?: Readonly<Record<string, AnyNode>>,
+) => number
 let unplanned = false
 /** The plan is to be made again, once what mounts up front has drawn. */
 let replanning = false
@@ -276,6 +356,16 @@ let clockMs = 0
 let buildLandedMs = Number.NEGATIVE_INFINITY
 let tickedBusy = false
 let revealLevel: () => ConstructionRevealLevel = () => 'full'
+/** The person's animation speed, asked when a plan is made (never mid-animation). */
+let revealSpeed: () => number = () => 1
+/** The speed the plan in force was made at: what waits for its turn plays at it. */
+let planSpeed = 1
+const currentSpeed = () => normalizeAnimationSpeed(revealSpeed())
+
+/** The animation speed the plan in force was made at, for a plugin that stages its own pieces. */
+export function getRevealPlanSpeed(): number {
+  return planSpeed
+}
 let dust: DustPool | null = null
 
 type RevealGroup = {
@@ -522,9 +612,48 @@ export function getRevealPlanState(id: string): RevealPlanState | null {
   if (gone) return { style: gone.style, progress: 0 }
   const reveal = active.get(id)
   if (!reveal) return null
-  const durationMs = reveal.style === 'assemble' ? REVEAL_TIMING.durationMs.drop : reveal.durationMs
+  const durationMs = reveal.style === 'assemble' ? reveal.assembleMs : reveal.durationMs
   const progress = (clockMs - reveal.startedAt) / Math.max(1, durationMs)
   return { style: reveal.style, progress: Math.min(1, Math.max(0, progress)) }
+}
+
+/**
+ * When a waiting node of the plan moves in, on the reveal's clock (`revealClockMs`), and how long its
+ * preroll plays before: a plugin that stages its own pieces for it (a wall's frame and boards) plays
+ * them in `[startMs - prerollMs, startMs]`. Null once it has started, or when it is not planned.
+ */
+export function getRevealTurn(id: string): { startMs: number; prerollMs: number } | null {
+  const entry = planned.get(id)
+  return entry ? { startMs: entry.startMs, prerollMs: entry.prerollMs ?? 0 } : null
+}
+
+/** The reveal's own clock: what `getRevealTurn` counts in. */
+export function revealClockMs(): number {
+  return clockMs
+}
+
+/**
+ * Lets a plugin ask for a preroll before nodes of the lazy schedule (the `framing` level) move in:
+ * the plan leaves `prerollOf(candidate)` ms before each, and the plugin plays its own pieces then.
+ * Asked once per node when the plan is made; 0 for none. Null takes it back.
+ */
+export function setRevealPreroll(next: RevealPreroll | null): void {
+  prerollOf = next
+}
+
+const puffFoot = [new Vector3(), new Vector3(), new Vector3(), new Vector3()]
+
+/**
+ * A puff of the reveal's dust around `centre` (world), `radius` metres out, `strength` in (0, 1]:
+ * for a plugin's own pieces landing. Nothing when no dust plays (the simple level, no reveal).
+ */
+export function emitRevealPuff(centre: Vector3, radius: number, strength: number): void {
+  if (!(dust && dustOn())) return
+  puffFoot[0]!.set(centre.x - radius, centre.y, centre.z - radius)
+  puffFoot[1]!.set(centre.x + radius, centre.y, centre.z - radius)
+  puffFoot[2]!.set(centre.x + radius, centre.y, centre.z + radius)
+  puffFoot[3]!.set(centre.x - radius, centre.y, centre.z + radius)
+  emitAroundFoot(dust, puffFoot, Math.min(1, Math.max(0.05, strength)), clockMs)
 }
 
 /** Calls `listener` after every reveal step while anything reveals, and once when it all ends. */
@@ -742,7 +871,7 @@ function beginChange(change: ChangeCandidate, atMs: number) {
     id: change.id,
     phase: change.phase,
     levelId: change.levelId,
-    style: 'glide',
+    style: change.edited ? change.style : 'glide',
     source: change.source ?? null,
     atMs,
     changed: true,
@@ -799,7 +928,11 @@ function poseGlide(change: ChangeCandidate, root: Object3D, left: number) {
 
 /** Whether a move glides now: it has somewhere to glide from, and the animation plays. */
 function glidePlays(change: ChangeCandidate): boolean {
-  return change.from !== null && !showsAtOnce() && !useViewer.getState().renderPaused
+  return (
+    (change.from !== null || change.edited === true) &&
+    !showsAtOnce() &&
+    !useViewer.getState().renderPaused
+  )
 }
 
 /** The agent's moves wait for the reveal to be quiet; until then each piece holds at its old place. */
@@ -829,6 +962,8 @@ function flushChanges(now: number) {
   if (waiting.length === 0) return
   registerChanges(waiting, now)
   const atOnce: ChangeCandidate[] = []
+  // However many move, they begin spread over the same time, never piled on the last frame.
+  const stagger = Math.min(GLIDE_STAGGER_MS, GLIDE_STAGGER_CAP_MS / waiting.length)
   let delay = 0
   for (const change of waiting) {
     const root = sceneRegistry.nodes.get(change.id)
@@ -836,11 +971,11 @@ function flushChanges(now: number) {
       poseGlide(change, root, 1)
       glides.set(change.id, {
         change,
-        startAt: now + Math.min(delay, GLIDE_STAGGER_CAP_MS),
+        startAt: now + delay,
         state: { x: 1, v: 0 },
         began: false,
       })
-      delay += GLIDE_STAGGER_MS
+      delay += stagger
       const group = changeGroups.get(changeGroupOf.get(change.id) ?? '')
       if (group) group.animated = true
       if (changeRun) changeRun.animated = true
@@ -853,6 +988,41 @@ function flushChanges(now: number) {
   for (const change of atOnce) endChange(change.id, now, false)
 }
 
+/** An edited node plays again in this share of the time its first appearance took. */
+const EDIT_SHARE = 0.55
+
+/** An edited node begins its quick re-rise, at the person's animation speed. */
+function startEdit(change: ChangeCandidate, now: number) {
+  beginChange(change, now)
+  const speed = currentSpeed()
+  const lazy = lazyOn()
+  const timing = lazy ? lazyTimingAt(speed) : revealTimingAt(speed)
+  active.set(change.id, {
+    id: change.id,
+    candidate: change,
+    style: change.style,
+    height: change.height,
+    levelId: change.levelId,
+    startedAt: now,
+    durationMs: styleMs(timing.durationMs, change.style) * EDIT_SHARE,
+    assembleMs: 0,
+    clockStart: null,
+    pivot: null,
+    base: null,
+    landed: false,
+    root: null,
+    lead: 0,
+    weight: 1,
+    overshoot:
+      lazy && change.style in LAZY_REVEAL_TIMING.overshoot
+        ? LAZY_REVEAL_TIMING.overshoot[change.style as keyof LazyRevealTiming['overshoot']]
+        : 0,
+    finale: false,
+    finaleSaid: false,
+    edit: true,
+  })
+}
+
 function stepGlides(now: number) {
   const dt = Math.min(0.05, Math.max(0, (now - glideClockMs) / 1000))
   glideClockMs = now
@@ -863,6 +1033,12 @@ function stepGlides(now: number) {
     if (!nodes[change.id as AnyNodeId]) {
       glides.delete(change.id)
       endChange(change.id, now, true)
+      continue
+    }
+    if (change.edited) {
+      if (now < glide.startAt) continue
+      glides.delete(change.id)
+      startEdit(change, now)
       continue
     }
     if (!glide.began) {
@@ -929,6 +1105,10 @@ function announce(candidate: RevealCandidate) {
 function revealCandidates(commit: SceneCommit, at: ConstructionRevealLevel): StagedCandidate[] {
   const candidates = commitRevealCandidates(commit, at, arrivals)
   arrivals += candidates.length
+  // A kind that declares no reveal may have come in on its own (a default reveal): on a host still
+  // assembling, it is one of its parts instead; on a host still coming in, it comes in with it.
+  const staged = new Set(candidates.map((candidate) => candidate.id))
+  const replaced = new Set<string>()
   const { before, current } = commit
   for (const id in current.nodes) {
     if (before.nodes[id as AnyNodeId]) continue
@@ -936,6 +1116,8 @@ function revealCandidates(commit: SceneCommit, at: ConstructionRevealLevel): Sta
     if (!node || nodeRegistry.get(node.type)?.capabilities?.reveal) continue
     const hostId = node.parentId as string | null
     const host = hostId ? (pending.get(hostId) ?? active.get(hostId)?.candidate) : undefined
+    // Under a host still waiting or moving in, it is drawn inside it and comes in with it.
+    if (staged.has(id) && hostId && (pending.has(hostId) || active.has(hostId))) replaced.add(id)
     if (host?.style === 'assemble') {
       candidates.push({
         ...host,
@@ -948,32 +1130,92 @@ function revealCandidates(commit: SceneCommit, at: ConstructionRevealLevel): Sta
       })
     }
   }
-  return candidates
+  if (replaced.size === 0) return candidates
+  return candidates.filter(
+    (candidate) => !(replaced.has(candidate.id) && candidate.host === undefined),
+  )
 }
 
-function levelShown(levelId: string | null): boolean {
-  if (!levelId) return true
-  const nodes = useScene.getState().nodes
-  const level = nodes[levelId as AnyNodeId]
-  if (level?.type !== 'level') return true
-  const viewer = useViewer.getState()
-  const selectedId = viewer.selection.levelId
-  const selected = selectedId ? nodes[selectedId as AnyNodeId] : undefined
-  const { visible, shadowOnly } = resolveLevelVisibility({
-    levelMode: viewer.levelMode,
-    hideAbove: viewer.hideLevelsAboveSelection,
-    hasSelectedLevel: Boolean(selectedId),
-    isSelected: level.id === selectedId,
-    index: level.level,
-    selectedIndex: selected?.type === 'level' ? selected.level : undefined,
-    nodeVisible: level.visible !== false,
-  })
-  return visible && !shadowOnly
+/** The author's own eye on a level (the sidebar's) is the one thing that keeps its work out of sight. */
+function levelHiddenByAuthor(levelId: string | null): boolean {
+  if (!levelId) return false
+  const level = useScene.getState().nodes[levelId as AnyNodeId]
+  return level?.type === 'level' && level.visible === false
+}
+
+/** The levels the reveal has work on: what waits, moves, goes out or is carried to a new place. */
+function levelsAtWork(): string[] {
+  const levels = new Set<string>()
+  const add = (levelId: string | null) => {
+    if (levelId) levels.add(levelId)
+  }
+  for (const candidate of pending.values()) add(candidate.levelId)
+  for (const reveal of active.values()) add(reveal.levelId)
+  for (const retract of retracts.values()) add(retract.group.levelId)
+  for (const glide of glides.values()) add(glide.change.levelId)
+  for (const change of changeQueue) add(change.levelId)
+  for (const ghost of ghosts.values()) add(ghost.levelId)
+  for (const levelId of levelHolds.keys()) add(levelId)
+  return [...levels]
+}
+
+/**
+ * The nodes the agent changed that the reveal has not finished with: pieces moved or edited (not
+ * built, not going out), waiting for their turn, carried or replaying. What a commit that edits and
+ * moves is made of, read before its first piece plays.
+ */
+export function revealChangedNodeIds(): string[] {
+  const ids = new Set<string>(queuedChanges)
+  for (const change of changeQueue) ids.add(change.id)
+  for (const id of glides.keys()) ids.add(id)
+  for (const reveal of active.values()) if (reveal.edit) ids.add(reveal.id)
+  return [...ids]
+}
+
+/**
+ * Tells the viewer which levels the reveal is working on, so each shows while its work plays: a build
+ * on the storey above the one the person has selected, or in the solo view of another, is seen, not
+ * played to nobody. The person's own choice of level is left as it is; the level steps aside again
+ * when its work is done.
+ */
+function publishLevelsAtWork() {
+  publishNodesAtPlay()
+  const next = levelsAtWork()
+  const current = useViewer.getState().levelsRevealing
+  if (next.length === current.length && next.every((levelId) => current.includes(levelId))) return
+  useViewer.setState({ levelsRevealing: next })
+}
+
+/**
+ * The nodes playing now: moving in, going out, carried to a new place, or an edit waiting its turn
+ * with its new picture held. The cutaway leaves these, and what they host, in view
+ * (`nodesRevealing`); a node waiting for its turn is not drawn yet, so it is not among them. A
+ * deleted node's picture plays from a snapshot, out of the scene: what it leaves stands for it.
+ */
+function nodesAtPlay(): string[] {
+  const ids = new Set<string>()
+  for (const id of active.keys()) ids.add(id)
+  for (const id of glides.keys()) ids.add(id)
+  for (const id of retracts.keys()) ids.add(id)
+  for (const id of queuedChanges) ids.add(id)
+  for (const ghost of ghosts.values()) if (ghost.host) ids.add(ghost.host)
+  return [...ids]
+}
+
+function publishNodesAtPlay() {
+  const next = nodesAtPlay()
+  const current = useViewer.getState().nodesRevealing
+  if (next.length === current.length && next.every((id) => current.includes(id))) return
+  useViewer.setState({ nodesRevealing: next })
 }
 
 function endReveal(reveal: ActiveReveal, forced = false) {
-  if (reveal.root) clearRevealPose(reveal.root)
+  if (reveal.root) {
+    clearRevealPose(reveal.root)
+    clearRiseTextureScale(reveal.root)
+  }
   active.delete(reveal.id)
+  if (reveal.edit) return endChange(reveal.id, clockMs, forced)
   settle(reveal.id)
   closeNode(reveal.id, clockMs, forced)
 }
@@ -993,6 +1235,7 @@ function settle(id: string) {
 
 function startReveal(candidate: RevealCandidate, now: number, animate: boolean) {
   if (!pending.delete(candidate.id)) return
+  planned.delete(candidate.id)
   // A node shows only inside its host: a host still waiting starts with it.
   const nodes = useScene.getState().nodes
   let parentId = nodes[candidate.id as AnyNodeId]?.parentId as AnyNodeId | null | undefined
@@ -1015,20 +1258,34 @@ function startReveal(candidate: RevealCandidate, now: number, animate: boolean) 
   lastStartMs = now
   announce(candidate)
   groupReleased(candidate)
+  // The lazy schedule overdoes it a little: higher falls, an anticipation, an overshoot.
+  const lazy = lazyOn()
+  const timing = lazy ? lazyTimingAt(planSpeed) : revealTimingAt(planSpeed)
   active.set(candidate.id, {
     id: candidate.id,
     candidate,
     style: candidate.style,
-    height: candidate.height,
+    height: lazy
+      ? Math.max(candidate.height, LAZY_REVEAL_TIMING.minHeightM[candidate.style] ?? 0)
+      : candidate.height,
     levelId: candidate.levelId,
     startedAt: now,
-    durationMs: REVEAL_TIMING.durationMs[candidate.style],
+    durationMs: styleMs(timing.durationMs, candidate.style),
+    assembleMs: revealTimingAt(planSpeed).durationMs.drop,
+    ...(candidate.style === 'cover' ? { coverRange: coverRangeAt(planSpeed) } : {}),
     clockStart: null,
     pivot: null,
     base: null,
     landed: false,
     root: null,
-    lead: candidate.lead ?? 0,
+    lead:
+      lazy && candidate.style === 'drop'
+        ? Math.max(candidate.lead ?? 0, LAZY_DROP_LEAD)
+        : (candidate.lead ?? 0),
+    overshoot:
+      lazy && candidate.style in LAZY_REVEAL_TIMING.overshoot
+        ? LAZY_REVEAL_TIMING.overshoot[candidate.style as keyof LazyRevealTiming['overshoot']]
+        : 0,
     weight: 'finale' in candidate && candidate.finale ? FINALE_WEIGHT : 1,
     finale: 'finale' in candidate && candidate.finale === true,
     finaleSaid: false,
@@ -1074,14 +1331,18 @@ function puffAroundFoot(reveal: ActiveReveal, root: Object3D, now: number) {
 
 function stepReveal(reveal: ActiveReveal, now: number) {
   const { nodes, dirtyNodes } = useScene.getState()
-  if (!nodes[reveal.id as AnyNodeId] || !levelShown(reveal.levelId)) return endReveal(reveal)
+  if (!nodes[reveal.id as AnyNodeId] || levelHiddenByAuthor(reveal.levelId))
+    return endReveal(reveal)
   const root = sceneRegistry.nodes.get(reveal.id)
   if (!root) {
     if (now - reveal.startedAt > MOUNT_TIMEOUT_MS) endReveal(reveal)
     return
   }
   if (reveal.root !== root) {
-    if (reveal.root) clearRevealPose(reveal.root)
+    if (reveal.root) {
+      clearRevealPose(reveal.root)
+      clearRiseTextureScale(reveal.root)
+    }
     reveal.root = root
   }
   // An assembled node holds still; it is done once its last part has landed.
@@ -1103,17 +1364,25 @@ function stepReveal(reveal: ActiveReveal, now: number) {
     reveal.pivot = revealPivot(reveal.base, reveal.style)
     revealPoseAt(reveal.style, 0, reveal.height, sample, reveal)
     setRevealPose(root, reveal.pivot, sample.scale, sample.lift)
-    groupStarted(reveal.candidate, now)
+    if (reveal.style === 'cover') {
+      // The covering takes as long as what it covers is big, now that the roof is drawn.
+      reveal.cover = planCover(root, reveal.coverRange ?? coverRangeAt(planSpeed))
+      reveal.durationMs = reveal.cover.durationMs
+      layCover(root, reveal.cover, 0)
+    }
+    if (!reveal.edit) groupStarted(reveal.candidate, now)
     if (reveal.style === 'rise') puffAlongBase(reveal, root, now)
   }
   const t = (now - reveal.clockStart) / reveal.durationMs
   if (t < 1) {
     revealPoseAt(reveal.style, t, reveal.height, sample, reveal)
     setRevealPose(root, reveal.pivot ?? ORIGIN, sample.scale, sample.lift)
+    if (reveal.style === 'rise') setRiseTextureScale(root, sample.scale.y, reveal.pivot?.y ?? 0)
+    if (reveal.cover) layCover(root, reveal.cover, now - reveal.clockStart)
   }
   if (!reveal.landed && revealHasLanded(reveal.style, t)) {
     reveal.landed = true
-    groupLanded(reveal.id, now)
+    if (!reveal.edit) groupLanded(reveal.id, now)
     if (reveal.finale && !reveal.finaleSaid && t >= REVEAL_ARRIVAL[reveal.style])
       sayFinale(reveal, now)
     if (reveal.style === 'drop') puffAroundFoot(reveal, root, now)
@@ -1132,6 +1401,9 @@ const climbToBuilding = (id: string): string | null => {
   }
   return null
 }
+
+/** Whether the plan is the lazy, nested one: the framing level. */
+const lazyOn = () => revealLevel() === 'framing'
 
 /** Whether lifts play at the person's level: the full construction only. */
 const liftsPlay = () => revealLevel() === 'full' || revealLevel() === 'framing'
@@ -1298,7 +1570,7 @@ type RetractRun = {
 
 type Retract = {
   id: string
-  style: RevealStyle
+  style: PlayedStyle
   height: number
   startMs: number
   durationMs: number
@@ -1308,11 +1580,15 @@ type Retract = {
   run: RetractRun
   root: Object3D | null
   pivot: Vector3 | null
+  /** A `cover` node's rows, planned when it starts going: its covering lifts off in reverse. */
+  cover?: Cover
+  /** What a plugin that takes the node apart plays after it has gone. */
+  prerollMs?: number
 }
 
 type Held = {
   root: Object3D | null
-  style: RevealStyle
+  style: PlayedStyle
   pivot: Vector3
   scale: Vector3
   lift: number
@@ -1327,7 +1603,7 @@ const retractSample: RetractPoseSample = { lift: 0, scale: new Vector3(), opacit
 let showsAtOnce: () => boolean = () => true
 
 /** What lifts away as it goes fades with it; what shrinks does not. */
-const fadesAway = (style: RevealStyle) =>
+const fadesAway = (style: PlayedStyle) =>
   style === 'settle' || style === 'drop' || style === 'assemble'
 
 function emitRetract(type: RevealRetractEvent['type'], group: RetractGroup, atMs: number) {
@@ -1392,6 +1668,299 @@ function holdGone(retract: Retract, root: Object3D, atMs: number) {
   notifyPending(retract.id)
 }
 
+// ---------------------------------------------------------------------------------------------
+// Deletions. The nodes are out of the scene at once (selection, queries, saves); a snapshot of each
+// one's picture, taken as its commit lands, plays its construction backwards and is then taken away.
+// ---------------------------------------------------------------------------------------------
+
+type Ghost = {
+  id: string
+  levelId: string | null
+  /** The picture: a clone of the deleted node's root, standing where it stood. */
+  root: Object3D
+  parent: Object3D
+  /** What it left behind it in the scene that is not a storey or a building (the wall of a departing opening). */
+  host: string | null
+  style: PlayedStyle
+  height: number
+  startMs: number
+  durationMs: number
+  group: RetractGroup
+  pivot: Vector3 | null
+  cover?: Cover
+  /** What a plugin that takes the piece apart plays after it has gone (a wall's boards and studs). */
+  prerollMs?: number
+}
+
+const ghosts = new Map<string, Ghost>()
+
+/**
+ * Where a deleted node's snapshot stands: its own parent's object while that node stays in the
+ * scene, else the nearest object above it that does (a deleted floor's pictures stand in their
+ * building), so they outlive the object that held them.
+ */
+function ghostStand(id: string, commit: SceneCommit, own: Object3D): Object3D {
+  const above = survivingAbove(id, commit)
+  return (above ? sceneRegistry.nodes.get(above) : undefined) ?? own
+}
+
+/** The nearest node above a deleted one that the commit leaves in the scene. */
+function survivingAbove(id: string, commit: SceneCommit): AnyNodeId | null {
+  let above = commit.before.nodes[id as AnyNodeId]?.parentId as AnyNodeId | null | undefined
+  for (let guard = 0; above && !commit.current.nodes[above] && guard < 32; guard += 1)
+    above = commit.before.nodes[above]?.parentId as AnyNodeId | null | undefined
+  return above ?? null
+}
+
+/** The node a departing one hung on, when it stays: a storey or a building is not a host. */
+function ghostHost(id: string, commit: SceneCommit): string | null {
+  const above = survivingAbove(id, commit)
+  const type = above && commit.current.nodes[above]?.type
+  return above && type && !CONTAINERS.has(type) ? above : null
+}
+
+/**
+ * When a node that is going out (undone, or deleted) plays, on the reveal clock: its own going
+ * starts at `startMs` and takes `durationMs`; a plugin that takes it apart plays `prerollMs` after.
+ * Null when the node is not going.
+ */
+export function getRetractTurn(
+  id: string,
+): { startMs: number; durationMs: number; prerollMs: number } | null {
+  const ghost = ghosts.get(id)
+  if (ghost) {
+    return { startMs: ghost.startMs, durationMs: ghost.durationMs, prerollMs: ghost.prerollMs ?? 0 }
+  }
+  const retract = retracts.get(id)
+  if (!retract) return null
+  return {
+    startMs: retract.startMs,
+    durationMs: retract.durationMs,
+    prerollMs: retract.prerollMs ?? 0,
+  }
+}
+
+/** Draws the clone as the scene pass does: a batched source keeps no layer of its own. */
+function drawnInScenePass(root: Object3D) {
+  root.traverse((object) => {
+    object.layers.set(SCENE_LAYER)
+  })
+}
+
+/**
+ * The reverse plan of `candidates` from `at`: at the Framing level the build's own plan read from its
+ * end (the rooms come apart as they went up, a plugin's prerolls kept), else the Full rewind.
+ */
+function planBack(
+  candidates: readonly RevealCandidate[],
+  at: number,
+  speed: number,
+  nodes?: Readonly<Record<string, AnyNode>>,
+) {
+  if (!lazyOn()) return planRetract(candidates, at, retractTimingAt(speed), revealTimingAt(speed))
+  const asked = candidates.map((candidate) => {
+    let prerollMs = 0
+    try {
+      prerollMs = prerollOf?.(candidate, nodes) ?? 0
+    } catch (error) {
+      console.error('[viewer] reveal preroll failed', error)
+    }
+    return prerollMs > 0 ? { ...candidate, prerollMs } : candidate
+  })
+  return planLazyRetract(asked, at, lazyRetractTimingAt(speed), lazyTimingAt(speed))
+}
+
+/**
+ * A commit deleted nodes: each one that stages a reveal and is on screen leaves a ghost that plays the
+ * reveal backwards, staggered like a build in reverse. Nothing plays for an undo (it plays its own
+ * reverse), a load, the animation off, or a level the author hid.
+ */
+function playDeletions(commit: SceneCommit) {
+  if (commit.origin !== 'local' || isRestoringSceneHistory() || showsAtOnce()) return
+  if (useViewer.getState().renderPaused) return
+  const staged = commitDeleteCandidates(commit, revealLevel()).filter(
+    (candidate) =>
+      !(retracts.has(candidate.id) || held.has(candidate.id)) &&
+      !levelHiddenByAuthor(candidate.levelId) &&
+      sceneRegistry.nodes.get(candidate.id)?.parent,
+  )
+  if (staged.length === 0) return
+  const plan = planBack(
+    staged,
+    clockMs,
+    currentSpeed(),
+    commit.before.nodes as Readonly<Record<string, AnyNode>>,
+  )
+  const groupsByKey = new Map<string, RetractGroup>()
+  for (const entry of plan) {
+    const original = sceneRegistry.nodes.get(entry.id)
+    const own = original?.parent
+    if (!(original && own)) continue
+    const root = original.clone(true)
+    drawnInScenePass(root)
+    dressDeletionGhost(original, root)
+    const parent = ghostStand(entry.id, commit, own)
+    own.add(root)
+    // A deleted floor's pieces would go with their floor's object: they stand in the building.
+    if (parent !== own) {
+      own.updateWorldMatrix(true, false)
+      parent.attach(root)
+    }
+    const key = `${entry.phase}:${entry.levelId}`
+    let group = groupsByKey.get(key)
+    if (!group) {
+      group = { phase: entry.phase, levelId: entry.levelId, ids: [], remaining: 0, started: false }
+      groupsByKey.set(key, group)
+    }
+    group.ids.push(entry.id)
+    group.remaining += 1
+    const cover =
+      entry.style === 'cover' ? planCover(root, coverRangeAt(currentSpeed(), true)) : undefined
+    ghosts.set(entry.id, {
+      id: entry.id,
+      levelId: entry.levelId,
+      root,
+      parent,
+      host: ghostHost(entry.id, commit),
+      style: entry.style,
+      height: entry.height,
+      startMs: entry.startMs,
+      durationMs: cover?.durationMs ?? entry.durationMs,
+      ...(cover ? { cover } : {}),
+      group,
+      pivot: null,
+      ...(entry.prerollMs ? { prerollMs: entry.prerollMs } : {}),
+    })
+  }
+  holdLevelsAbove(commit, new Set(plan.map((entry) => entry.id).filter((id) => ghosts.has(id))))
+}
+
+/** A ghost has gone (or was cut short): its picture is taken away, and its group ends with its last. */
+function ghostGone(ghost: Ghost, atMs: number) {
+  if (!ghosts.delete(ghost.id)) return
+  clearRevealPose(ghost.root)
+  clearGhost(ghost.root)
+  ghost.parent.remove(ghost.root)
+  const { group } = ghost
+  group.remaining -= 1
+  if (group.remaining > 0) return
+  if (!group.started) {
+    group.started = true
+    emitRetract('retract-start', group, atMs)
+  }
+  emitRetract('retract-end', group, atMs)
+}
+
+function stepGhosts(now: number) {
+  for (const ghost of [...ghosts.values()]) {
+    if (now < ghost.startMs) continue
+    if (!ghost.pivot) {
+      ghost.pivot = revealPivot(revealLocalBounds(ghost.root), ghost.style)
+      if (!ghost.group.started) {
+        ghost.group.started = true
+        emitRetract('retract-start', ghost.group, now)
+      }
+    }
+    const t = (now - ghost.startMs) / ghost.durationMs
+    const pose = retractPoseAt(ghost.style, t, ghost.height, retractSample)
+    setRevealPose(ghost.root, ghost.pivot, pose.scale, pose.lift)
+    if (ghost.cover) liftCover(ghost.root, ghost.cover, t)
+    if (fadesAway(ghost.style)) setGhost(ghost.root, pose.opacity)
+    if (t >= 1) ghostGone(ghost, now)
+  }
+}
+
+function finishGhosts() {
+  for (const ghost of [...ghosts.values()]) ghostGone(ghost, clockMs)
+}
+
+/**
+ * A level that stands above a floor being taken apart. It keeps the height it stood at while the
+ * floor's pictures play (`ghostIds`), then comes down onto what is below in one eased move of the
+ * rewind's own length (`dropMs`). What it holds, a roof level and the roofs on it, goes with it.
+ */
+type LevelHold = {
+  ghostIds: Set<string>
+  dropMs: number
+  heldY: number
+  lowering: { startMs: number; fromY: number } | null
+}
+
+const levelHolds = new Map<string, LevelHold>()
+
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
+
+/**
+ * A commit deleted levels whose pictures now play: each level that stood above them, in the same
+ * building, and whose height changes, keeps its place until they have gone. The stack's elevations
+ * in the store are not written; only what is presented waits.
+ */
+function holdLevelsAbove(commit: SceneCommit, ghostIds: ReadonlySet<string>) {
+  const before = commit.before.nodes
+  const current = commit.current.nodes
+  const stack = getLevelElevations(before)
+  const going = [...stack].filter(([id]) => !current[id as AnyNodeId])
+  if (going.length === 0 || ghostIds.size === 0) return
+  const levelMode = useViewer.getState().levelMode
+  const dropMs = (lazyOn() ? lazyRetractTimingAt(currentSpeed()) : retractTimingAt(currentSpeed()))
+    .durationMs.drop
+  for (const [id, above] of stack) {
+    const node = current[id as AnyNodeId]
+    if (node?.type !== 'level' || node.visible === false) continue
+    if (
+      !going.some(
+        ([, gone]) => gone.buildingId === above.buildingId && gone.ordinal < above.ordinal,
+      )
+    )
+      continue
+    const object = sceneRegistry.nodes.get(id)
+    if (!object) continue
+    const standing = levelHolds.get(id)
+    const heldY = standing?.heldY ?? object.position.y
+    if (Math.abs(heldY - getLevelPresentationY(id, current, levelMode)) < 0.01) continue
+    if (standing) {
+      for (const ghostId of ghostIds) standing.ghostIds.add(ghostId)
+      standing.lowering = null
+      continue
+    }
+    levelHolds.set(id, { ghostIds: new Set(ghostIds), dropMs, heldY, lowering: null })
+    setHeldLevelY(id, heldY)
+  }
+}
+
+/** Holds each level at its place until its floor has gone, then eases it down to its elevation. */
+function stepLevelHolds(now: number) {
+  if (levelHolds.size === 0) return
+  const nodes = useScene.getState().nodes
+  const levelMode = useViewer.getState().levelMode
+  for (const [id, hold] of [...levelHolds]) {
+    if (!nodes[id as AnyNodeId]) {
+      levelHolds.delete(id)
+      releaseLevel(id)
+      continue
+    }
+    if (!hold.lowering) {
+      if ([...hold.ghostIds].some((ghostId) => ghosts.has(ghostId))) continue
+      hold.lowering = { startMs: now, fromY: hold.heldY }
+    }
+    const t = Math.min(1, (now - hold.lowering.startMs) / Math.max(1, hold.dropMs))
+    if (t >= 1) {
+      levelHolds.delete(id)
+      releaseLevel(id)
+      continue
+    }
+    const to = getLevelPresentationY(id, nodes, levelMode)
+    hold.heldY = hold.lowering.fromY + (to - hold.lowering.fromY) * easeInOut(t)
+    setHeldLevelY(id, hold.heldY)
+  }
+}
+
+/** Every level goes to its own height now (a load, an undo, a capture, the reveal stopping). */
+function releaseLevelHolds() {
+  for (const id of levelHolds.keys()) releaseLevel(id)
+  levelHolds.clear()
+}
+
 function stepRetracts(now: number) {
   const nodes = useScene.getState().nodes
   for (const retract of [...retracts.values()]) {
@@ -1427,6 +1996,7 @@ function stepRetracts(now: number) {
     const t = (now - retract.startMs) / retract.durationMs
     const pose = retractPoseAt(retract.style, t, retract.height, retractSample)
     setRevealPose(root, retract.pivot, pose.scale, retract.from.lift + pose.lift)
+    if (retract.cover) liftCover(root, retract.cover, t)
     if (fadesAway(retract.style)) setGhost(root, retract.from.opacity * pose.opacity)
     if (t >= 1) {
       holdGone(retract, root, now)
@@ -1495,7 +2065,7 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
       !pending.has(candidate.id) &&
       !retracts.has(candidate.id) &&
       !held.has(candidate.id) &&
-      levelShown(candidate.levelId),
+      !levelHiddenByAuthor(candidate.levelId),
   )
   const taken = new Set(staged.map((candidate) => candidate.id))
   const skipped = asked.filter((id) => !taken.has(id))
@@ -1531,11 +2101,13 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
   const clearingIds = new Set(clearing.map((candidate) => candidate.id))
   const roofFirst = clearing.some((candidate) => !from.has(candidate.id))
   const lead = liftWanted.size > lifting || roofFirst ? RETRACT_LIFT_LEAD_MS : 0
+  const speed = currentSpeed()
   const plan = [
-    ...planRetract(clearing, clockMs),
-    ...planRetract(
+    ...planBack(clearing, clockMs, speed),
+    ...planBack(
       staged.filter((candidate) => !clearingIds.has(candidate.id)),
       clockMs + lead,
+      speed,
     ),
   ].sort((left, right) => left.startMs - right.startMs)
   const end = Math.max(...plan.map((entry) => entry.startMs + entry.durationMs))
@@ -1568,21 +2140,27 @@ export function retractNodes(ids: Iterable<string>): Promise<RetractResult> {
       }
       group.ids.push(entry.id)
       group.remaining += 1
+      // A covering lifts off in a time that follows its size: known now, with the roof still drawn.
+      const mounted = entry.style === 'cover' ? sceneRegistry.nodes.get(entry.id) : undefined
+      const cover = mounted ? planCover(mounted, coverRangeAt(speed, true)) : undefined
       retracts.set(entry.id, {
         id: entry.id,
         style: entry.style,
         height: entry.height,
         startMs: entry.startMs,
-        durationMs: entry.durationMs,
+        durationMs: cover?.durationMs ?? entry.durationMs,
+        ...(cover ? { cover } : {}),
         from: from.get(entry.id) ?? { lift: 0, opacity: 1 },
         group,
         run,
         root: null,
         pivot: null,
+        ...(entry.prerollMs ? { prerollMs: entry.prerollMs } : {}),
       })
       // A plan entry that draws it hears that it is going.
       notifyPending(entry.id)
     }
+    publishLevelsAtWork()
     // With a roof to lift first, the first group is said to start now: the camera and the card move
     // with the roof, not a beat after it, and its pieces follow once the way is clear.
     const first = groups.get(plan[0]!.group)
@@ -1666,7 +2244,7 @@ function chooseWarm(now: number) {
       }
       if (kinds.has(kind)) continue
     }
-    if (!levelShown(candidate.levelId) || hasWaitingAncestor(candidate.id, nodes)) continue
+    if (levelHiddenByAuthor(candidate.levelId) || hasWaitingAncestor(candidate.id, nodes)) continue
     kinds.add(kind)
     warming.set(candidate.id, { culled: new Map(), builtTicks: 0 })
     notifyPending(candidate.id)
@@ -1748,6 +2326,42 @@ function stepWarm(now: number) {
     warmWaiting = false
 }
 
+/**
+ * The plan for what waits, from `now`. On the lazy schedule, a node whose preroll has begun keeps its
+ * turn (its plugin is playing it), and the rest are planned around it with their prerolls.
+ */
+function planPending(now: number): PlannedReveal[] {
+  // The person's speed is read here, when the plan is made: what is already moving keeps its own
+  // durations, and what is planned now keeps this speed until it starts.
+  planSpeed = currentSpeed()
+  if (!lazyOn()) {
+    const timing = revealTimingAt(planSpeed)
+    return planReveal([...pending.values()], Math.max(now, lastStartMs + timing.nodeGapMs), timing)
+  }
+  const kept: PlannedReveal[] = []
+  for (const entry of queue) {
+    if (pending.has(entry.id) && entry.prerollMs && entry.startMs - entry.prerollMs <= now)
+      kept.push(entry)
+  }
+  const keptIds = new Set(kept.map((entry) => entry.id))
+  const waiting: RevealCandidate[] = []
+  for (const candidate of pending.values()) {
+    if (keptIds.has(candidate.id)) continue
+    let prerollMs = 0
+    try {
+      prerollMs = prerollOf?.(candidate) ?? 0
+    } catch (error) {
+      console.error('[viewer] reveal preroll failed', error)
+    }
+    waiting.push(prerollMs > 0 ? { ...candidate, prerollMs } : candidate)
+  }
+  // What comes next waits for the prerolls already playing: nothing of it can pull their node in early.
+  const from = Math.max(now, ...kept.map((entry) => entry.startMs))
+  return [...kept, ...planLazyReveal(waiting, from, lazyTimingAt(planSpeed))].sort(
+    (left, right) => left.startMs - right.startMs || left.seq - right.seq,
+  )
+}
+
 function tickReveals(now: number, frameMs?: number) {
   clockMs = now
   frameQuiet = frameMs === undefined || frameMs < WARM_QUIET_FRAME_MS
@@ -1756,7 +2370,7 @@ function tickReveals(now: number, frameMs?: number) {
   if (unplanned) {
     unplanned = false
     for (const candidate of [...pending.values()]) {
-      if (!levelShown(candidate.levelId)) startReveal(candidate, now, false)
+      if (levelHiddenByAuthor(candidate.levelId)) startReveal(candidate, now, false)
     }
     chooseWarm(now)
     replanning = true
@@ -1764,17 +2378,22 @@ function tickReveals(now: number, frameMs?: number) {
   stepWarm(now)
   if (replanning && !warmWaiting) {
     replanning = false
-    queue = planReveal([...pending.values()], Math.max(now, lastStartMs + REVEAL_TIMING.nodeGapMs))
+    queue = planPending(now)
+    planned.clear()
+    for (const entry of queue) planned.set(entry.id, entry)
   }
   let due = 0
   while (due < queue.length && (queue[due]?.startMs ?? Number.POSITIVE_INFINITY) <= now) {
     const entry = queue[due++]!
-    if (pending.has(entry.id)) startReveal(entry, now, levelShown(entry.levelId))
+    planned.delete(entry.id)
+    if (pending.has(entry.id)) startReveal(entry, now, !levelHiddenByAuthor(entry.levelId))
   }
   if (due > 0) queue = queue.slice(due)
   for (const reveal of active.values()) stepReveal(reveal, now)
   stepLifts(now)
   stepRetracts(now)
+  stepGhosts(now)
+  stepLevelHolds(now)
   stepGlides(now)
   const building = pending.size > 0 || active.size > 0 || lifts.size > 0 || liftWanted.size > 0
   if (!building) {
@@ -1793,7 +2412,14 @@ function tickReveals(now: number, frameMs?: number) {
     flushChanges(now)
   }
   const busy =
-    building || retracts.size > 0 || held.size > 0 || glides.size > 0 || changeQueue.length > 0
+    building ||
+    retracts.size > 0 ||
+    held.size > 0 ||
+    glides.size > 0 ||
+    ghosts.size > 0 ||
+    levelHolds.size > 0 ||
+    changeQueue.length > 0
+  publishLevelsAtWork()
   if (busy || tickedBusy) notifyTicks()
   tickedBusy = busy
 }
@@ -1804,9 +2430,10 @@ function tickReveals(now: number, frameMs?: number) {
  */
 function finishReveals(keepHeld = false) {
   const waiting = [...pending.values()]
-  const busy = waiting.length > 0 || active.size > 0 || retracts.size > 0
+  const busy = waiting.length > 0 || active.size > 0 || retracts.size > 0 || ghosts.size > 0
   pending.clear()
   queue = []
+  planned.clear()
   unplanned = false
   replanning = false
   warmWaiting = false
@@ -1830,8 +2457,11 @@ function finishReveals(keepHeld = false) {
   dust?.clear()
   seatAllLifts()
   finishRetracts(keepHeld)
+  finishGhosts()
+  releaseLevelHolds()
   finishChanges()
   completeBuild(clockMs, true)
+  publishLevelsAtWork()
   if (busy) notifyTicks()
 }
 
@@ -1841,6 +2471,7 @@ function finishNode(id: string) {
     const root = sceneRegistry.nodes.get(id)
     if (root) clearRevealPose(root)
   }
+  planned.delete(id)
   const waiting = pending.get(id)
   if (waiting && pending.delete(id)) {
     released(waiting)
@@ -1895,6 +2526,16 @@ export type ConstructionRevealOptions = {
   reveals: (commit: SceneCommit) => boolean
   /** How much animation plays; defaults to `full`. Reduced motion always means `off`. */
   level?: () => ConstructionRevealLevel
+  /**
+   * The person's animation speed, a multiple of the shipped pace (higher is faster); defaults to ×1.
+   * Read when a plan is made: a change applies to the next build and never moves one playing.
+   */
+  speed?: () => number
+  /**
+   * Which commits play the nodes they delete backwards, as a snapshot of their picture (the nodes are out
+   * of the scene at once); defaults to `reveals`.
+   */
+  deletes?: (commit: SceneCommit) => boolean
   /** Defaults to the `prefers-reduced-motion` media query. */
   prefersReducedMotion?: () => boolean
   /** Where rising walls and landings puff their dust; none without it. */
@@ -1925,6 +2566,8 @@ export function startConstructionReveal(
   const token = {}
   currentDriver = token
   revealLevel = options.level ?? (() => 'full')
+  revealSpeed = options.speed ?? (() => 1)
+  planSpeed = 1
   dust = options.dust ?? null
   const reducedMotion = options.prefersReducedMotion ?? mediaPrefersReducedMotion()
   const instant = () => {
@@ -1937,19 +2580,27 @@ export function startConstructionReveal(
     )
   }
   showsAtOnce = instant
+  const deletes = options.deletes ?? options.reveals
   const stops = [
     subscribeSceneCommits((commit) => {
       if (currentDriver !== token) return
       if (commit.origin === 'load') return finishReveals()
-      if (!options.reveals(commit)) return
+      if (deletes(commit)) playDeletions(commit)
+      if (!options.reveals(commit)) return publishLevelsAtWork()
       const candidates = revealCandidates(commit, revealLevel())
       // Furniture the agent moved, that is shown and not still on its way in.
-      const changes = commitChangeCandidates(commit, revealLevel()).filter(
+      const moved = commitChangeCandidates(commit, revealLevel())
+      const movedIds = new Set(moved.map((change) => change.id))
+      const changes = [
+        ...moved,
+        ...commitEditCandidates(commit, revealLevel()).filter((edit) => !movedIds.has(edit.id)),
+      ].filter(
         (change) =>
           !(pending.has(change.id) || active.has(change.id) || isNodeRevealing(change.id)) &&
-          levelShown(change.levelId),
+          !levelHiddenByAuthor(change.levelId),
       )
       if (changes.length > 0) queueChanges(changes)
+      publishLevelsAtWork()
       if (candidates.length === 0) return
       registerCandidates(candidates, clockMs)
       if (instant()) {
@@ -1970,6 +2621,7 @@ export function startConstructionReveal(
         notifyPending(candidate.id)
       }
       for (const hostId of assembling) notifyAssembly(hostId, true)
+      publishLevelsAtWork()
       unplanned = true
     }),
     useScene.subscribe((state, previous) => {
@@ -2001,14 +2653,6 @@ export function startConstructionReveal(
           ...state.previewSelectedIds,
         ])
       }
-      if (
-        pending.size > 0 &&
-        (state.levelMode !== previous.levelMode ||
-          state.selection.levelId !== previous.selection.levelId ||
-          state.hideLevelsAboveSelection !== previous.hideLevelsAboveSelection)
-      ) {
-        unplanned = true
-      }
     }),
   ]
   const onCapture = () => {
@@ -2036,6 +2680,8 @@ export function startConstructionReveal(
       glideClockMs = Number.NEGATIVE_INFINITY
       frameQuiet = true
       revealLevel = () => 'full'
+      revealSpeed = () => 1
+      planSpeed = 1
       dust = null
       lastStartMs = Number.NEGATIVE_INFINITY
       buildLandedMs = Number.NEGATIVE_INFINITY
@@ -2052,13 +2698,21 @@ export function startConstructionReveal(
  */
 export function ConstructionReveal({
   reveals,
+  deletes,
   level = 'full',
+  speed = 1,
 }: {
   reveals: (commit: SceneCommit) => boolean
+  /** Which commits play what they delete backwards; defaults to `reveals`. */
+  deletes?: (commit: SceneCommit) => boolean
   level?: ConstructionRevealLevel
+  /** The person's animation speed (×0.5 to ×2); a change applies to the next build. */
+  speed?: number
 }) {
   const revealsRef = useRef(reveals)
+  const deletesRef = useRef(deletes)
   const levelRef = useRef(level)
+  const speedRef = useRef(speed)
   const driverRef = useRef<ConstructionRevealDriver | null>(null)
   const clockRef = useRef(0)
   const [pool] = useState(() => new DustPool())
@@ -2069,13 +2723,23 @@ export function ConstructionReveal({
   }, [reveals])
 
   useEffect(() => {
+    deletesRef.current = deletes
+  }, [deletes])
+
+  useEffect(() => {
     levelRef.current = level
   }, [level])
 
   useEffect(() => {
+    speedRef.current = speed
+  }, [speed])
+
+  useEffect(() => {
     const driver = startConstructionReveal({
       reveals: (commit) => revealsRef.current(commit),
+      deletes: (commit) => (deletesRef.current ?? revealsRef.current)(commit),
       level: () => levelRef.current,
+      speed: () => speedRef.current,
       dust: pool,
     })
     driverRef.current = driver

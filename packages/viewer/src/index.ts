@@ -189,6 +189,24 @@ export {
   type RendererInitializationResult,
   type RendererPowerPreference,
 } from './lib/renderer-capability'
+export { commitEditCandidates, commitRevealCandidates } from './lib/reveal-candidates'
+export {
+  ANIMATION_SPEEDS,
+  type AnimationSpeed,
+  DEFAULT_ANIMATION_SPEED,
+  FRAMING_PACE,
+  LAZY_REVEAL_BASE_TIMING,
+  LAZY_REVEAL_TIMING,
+  type LazyRevealTiming,
+  lazyTimingAt,
+  normalizeAnimationSpeed,
+  type PlannedReveal,
+  pacedLazyTiming,
+  planLazyReveal,
+  type RevealCandidate,
+  retractTimingAt,
+  revealTimingAt,
+} from './lib/reveal-schedule'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
@@ -258,7 +276,11 @@ export {
   type ConstructionRevealDriver,
   type ConstructionRevealLevel,
   type ConstructionRevealOptions,
+  emitRevealPuff,
+  getRetractTurn,
+  getRevealPlanSpeed,
   getRevealPlanState,
+  getRevealTurn,
   isNodeRevealing,
   isRevealAssembling,
   type RetractResult,
@@ -269,9 +291,13 @@ export {
   type RevealNodeStartEvent,
   type RevealPhaseEvent,
   type RevealPlanState,
+  type RevealPreroll,
   type RevealRetractEvent,
   retractNodes,
+  revealChangedNodeIds,
+  revealClockMs,
   seatLiftedNow,
+  setRevealPreroll,
   startConstructionReveal,
   subscribeRevealAssembling,
   subscribeRevealEvents,

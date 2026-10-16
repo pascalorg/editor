@@ -1,6 +1,13 @@
 'use client'
 
-import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  getLibraryMaterialsVersion,
+  sceneRegistry,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
@@ -55,6 +62,7 @@ type AppearanceInputs = {
   colorPreset: unknown
   sceneTheme: unknown
   materials: object | null
+  libraryVersion: number
 }
 
 const lastAppearance: AppearanceInputs = {
@@ -63,18 +71,21 @@ const lastAppearance: AppearanceInputs = {
   colorPreset: undefined,
   sceneTheme: undefined,
   materials: null,
+  libraryVersion: -1,
 }
 
 function appearanceChanged(): boolean {
   const viewer = useViewer.getState()
   const materials = useScene.getState().materials as object
+  const libraryVersion = getLibraryMaterialsVersion()
 
   if (
     lastAppearance.shading === viewer.shading &&
     lastAppearance.textures === viewer.textures &&
     lastAppearance.colorPreset === viewer.colorPreset &&
     lastAppearance.sceneTheme === viewer.sceneTheme &&
-    lastAppearance.materials === materials
+    lastAppearance.materials === materials &&
+    lastAppearance.libraryVersion === libraryVersion
   ) {
     return false
   }
@@ -84,6 +95,7 @@ function appearanceChanged(): boolean {
   lastAppearance.colorPreset = viewer.colorPreset
   lastAppearance.sceneTheme = viewer.sceneTheme
   lastAppearance.materials = materials
+  lastAppearance.libraryVersion = libraryVersion
   return true
 }
 
@@ -448,6 +460,7 @@ export const WallBatchSystem = () => {
       lastAppearance.colorPreset = undefined
       lastAppearance.sceneTheme = undefined
       lastAppearance.materials = null
+      lastAppearance.libraryVersion = -1
     },
     [],
   )
