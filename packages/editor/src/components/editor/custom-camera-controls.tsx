@@ -112,7 +112,7 @@ function orbitGroundY(
 function keepEyeOverGround(x: number, eyeY: number, z: number, previousEyeY = eyeY): number {
   const { nodes } = useScene.getState()
   const siteId = sceneRegistry.byType.site?.values().next().value as AnyNodeId | undefined
-  const groundY = groundHeightAt(siteId ? nodes[siteId] : null, nodes, x, z)
+  const groundY = groundHeightAt(siteId ? nodes[siteId] : null, x, z)
   return overviewEyeY(eyeY, previousEyeY, groundY, useViewer.getState().eyeUnderGround)
 }
 
