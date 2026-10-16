@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, BuildingNode, LevelNode, SlabNode } from '../schema'
-import { belowGradeFootprints } from './below-grade-footprints'
+import { belowGradeFloorY, belowGradeFootprints } from './below-grade-footprints'
 
 const square = (size: number): Array<[number, number]> => [
   [0, 0],
@@ -138,4 +138,13 @@ test('a level the author hid is not opened over when a level under it is shown',
   expect(belowGradeFootprints(nodes, 'level_m4').map(extent)).toEqual([{ x: [0, 16], z: [0, 8] }])
   // Not shown by the level display, the scene still has it below grade.
   expect(belowGradeFootprints(nodes).map(extent)).toEqual([{ x: [-3, 16], z: [-3, 11] }])
+})
+
+test('the pit goes down to the floor of the level shown, and to none when it is at grade', () => {
+  const nodes = houseOverBasement([0, 0, 0], 0)
+  // The villa's Lower Ground: -3.63 m with its 0.28 m plate.
+  expect(belowGradeFloorY(nodes, 'level_b')).toBeCloseTo(-3.35, 2)
+  expect(belowGradeFloorY(nodes, 'level_g')).toBeNull()
+  expect(belowGradeFloorY(nodes, null)).toBeNull()
+  expect(belowGradeFloorY(nodes)).toBeNull()
 })

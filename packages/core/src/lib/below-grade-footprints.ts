@@ -1,5 +1,5 @@
 import type { AnyNode, AnyNodeId } from '../schema'
-import { getLevelElevations } from '../services/storey'
+import { getLevelElevations, levelFloorWorldY } from '../services/storey'
 import { levelGradeStanding } from './grade-standing'
 import { type Point2D, unionPolygons } from './polygon-union'
 import { levelLocalToWorldXZ } from './terrain-support-query'
@@ -58,4 +58,17 @@ export function belowGradeFootprints(
     floors.push(...level.floors)
   }
   return unionPolygons(floors)
+}
+
+/**
+ * How deep the pit under the hole goes: the world Y of the floor of the level shown, the deepest
+ * of the levels the hole is cut over (`belowGradeFootprints` with the same id). `null` when no
+ * level is shown or it is not below grade.
+ */
+export function belowGradeFloorY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  shownLevelId?: string | null,
+): number | null {
+  if (!shownLevelId || levelGradeStanding(nodes, shownLevelId) === 'at-grade') return null
+  return levelFloorWorldY(nodes, shownLevelId)
 }
