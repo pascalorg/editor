@@ -454,7 +454,8 @@ function UnitFocusChip() {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export function FloatingLevelSelector() {
+// Steps inwards from an action menu docked to the left edge.
+export function FloatingLevelSelector({ besideLeftMenu = false }: { besideLeftMenu?: boolean }) {
   // Desktop's view bar is a row above the stage; mobile's floats over it.
   const isMobile = useIsMobile()
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
@@ -641,7 +642,13 @@ export function FloatingLevelSelector() {
 
   return (
     <>
-      <div className={cn('pointer-events-auto absolute left-3 z-20', isMobile ? 'top-14' : 'top-3')}>
+      <div
+        className={cn(
+          'pointer-events-auto absolute z-20',
+          besideLeftMenu ? 'left-[5.5rem]' : 'left-3',
+          isMobile ? 'top-14' : 'top-3',
+        )}
+      >
         <div className="relative">
           {/* Floating + at top edge: a floor on top, under the roof level when one tops the stack */}
           {!draggingLevelId && (

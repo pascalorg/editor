@@ -128,7 +128,7 @@ import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { HostView } from './views/host-view'
-import { SceneRegion } from './views/scene-region'
+import { SceneRegion, useSceneSpan } from './views/scene-region'
 import { useActiveViewLayout, useEditorViews } from './views/use-editor-views'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
@@ -1446,8 +1446,14 @@ function EditorContent({
   commandPaletteEmptyAction,
 }: EditorProps) {
   const isMobile = useIsMobile()
+  // The user's own pick wins over the host's default placement.
+  const userMenuPlacement = useEditor((state) => state.actionMenuPlacement)
+  const menuPlacement = userMenuPlacement ?? actionMenuPlacement ?? 'bottom'
   // A top-docked menu sits at the top of the scene panes on desktop (layout v2).
-  const dockMenuOnTop = actionMenuPlacement === 'top' && !isMobile
+  const dockMenuOnTop = menuPlacement === 'top' && !isMobile
+  const dockMenuOnRight = menuPlacement === 'right' && !isMobile
+  const dockMenuOnLeft = menuPlacement === 'left' && !isMobile
+  const reserveBottomMenu = menuPlacement === 'bottom' || isMobile
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
@@ -1504,10 +1510,14 @@ function EditorContent({
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const readOnly = useScene((s) => s.readOnly)
   // Chrome only steps down for the top menu while the menu is actually there.
-  const topMenuShown =
-    dockMenuOnTop &&
-    !(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
-    shouldShowEditingControls(readOnly)
+  const editingControlsShown = shouldShowEditingControls(readOnly)
+  // Layout v2 also hides the menu in version preview, capture and studio.
+  const menuShown = editingControlsShown && !(isVersionPreviewMode || isCaptureMode || isStudioMode)
+  const topMenuShown = dockMenuOnTop && menuShown
+  const leftMenuShown = dockMenuOnLeft && menuShown
+  const hasSceneView = useSceneSpan() !== null
+  // Every dock is scene chrome: it leaves with the last 3D or 2D pane.
+  const rightMenuShown = dockMenuOnRight && menuShown && hasSceneView
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
@@ -1830,8 +1840,11 @@ function EditorContent({
               overlays={
                 <>
                   <SceneRegion>
-                    {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
+                    {!(isCaptureMode || stageOverlay) && (
+                      <FloatingLevelSelector besideLeftMenu={leftMenuShown} />
+                    )}
                     {!(isVersionPreviewMode || isCaptureMode || isStudioMode) &&
+                      !dockMenuOnRight &&
                       (dockMenuOnTop ? (
                         // Own row under the toolbar, below the level selector's opening list (z-20).
                         // No transform: the menu's fixed pill must anchor to the scene region.
@@ -1842,15 +1855,22 @@ function EditorContent({
                         </div>
                       ) : (
                         <div className="pointer-events-auto">
-                          <ActionMenu placement={actionMenuPlacement} />
+                          <ActionMenu placement={menuPlacement} />
                         </div>
                       ))}
                     {sceneOverlay}
                   </SceneRegion>
+                  {/* A right rail sits on the stage edge with the column it pushes aside. */}
+                  {rightMenuShown && (
+                    <div className="pointer-events-auto">
+                      <ActionMenu placement="right" />
+                    </div>
+                  )}
                   {/* The inspector and the shortcuts card share one right column. */}
                   <RightStack
                     belowTopMenu={topMenuShown}
-                    reserveBottomMenu={!dockMenuOnTop}
+                    besideRightMenu={rightMenuShown}
+                    reserveBottomMenu={reserveBottomMenu}
                     helper={isCaptureMode ? null : <HelperManager />}
                     inspector={
                       isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
@@ -1929,12 +1949,13 @@ function EditorContent({
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
             <div className="pointer-events-auto">
-              <ActionMenu placement={actionMenuPlacement} />
+              <ActionMenu placement={menuPlacement} />
             </div>
             <RightStack
               helper={<HelperManager />}
               inspector={<PanelManager />}
-              reserveBottomMenu={actionMenuPlacement !== 'top' || isMobile}
+              besideRightMenu={dockMenuOnRight && editingControlsShown}
+              reserveBottomMenu={reserveBottomMenu}
             />
             <RiserDiagramPanel />
             {isFirstPersonMode && (
