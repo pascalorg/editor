@@ -328,6 +328,8 @@ export const NOTATION_CASES: NotationCase[] = [
  */
 export const NOT_LENGTHS = new Set([
   // Coordinates, in level metres.
+  // A light's relative brightness, 1 for an ordinary bulb.
+  'author_scene.payload.levels[].lights[].intensity',
   'add_column.x',
   'add_column.y',
   'add_column.z',
