@@ -110,6 +110,19 @@ function geometryOf(mesh: FoundationMesh | null): BufferGeometry | null {
   return geometry
 }
 
+/** The stem runs built of `material` as one geometry. */
+function stemGeometry(
+  members: readonly FoundationMember[],
+  material: FoundationMember['material'],
+) {
+  return geometryOf(
+    buildFoundationMesh(
+      members.filter((member) => member.material === material),
+      'stem',
+    ),
+  )
+}
+
 export function sameFoundation(a: readonly FoundationMember[], b: readonly FoundationMember[]) {
   return (
     a.length === b.length &&
@@ -188,15 +201,8 @@ export function GenericFoundation() {
     [concrete, block],
   )
   const footing = useMemo(() => geometryOf(buildFoundationMesh(members, 'footing')), [members])
-  const stemOf = (material: FoundationMember['material']) =>
-    geometryOf(
-      buildFoundationMesh(
-        members.filter((member) => member.material === material),
-        'stem',
-      ),
-    )
-  const blockStem = useMemo(() => stemOf('cmu'), [members])
-  const concreteStem = useMemo(() => stemOf('concrete'), [members])
+  const blockStem = useMemo(() => stemGeometry(members, 'cmu'), [members])
+  const concreteStem = useMemo(() => stemGeometry(members, 'concrete'), [members])
   return (
     <>
       <FoundationPart geometry={footing} material={concrete} part="footing" visible={shown} />
