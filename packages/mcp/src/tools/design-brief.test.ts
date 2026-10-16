@@ -54,7 +54,9 @@ const brief = (source: 'open' | 'catalog' | 'brand', extra: Record<string, unkno
   fixed: ['a 4 by 5 m bedroom', 'a double bed', 'two nightstands', 'a wardrobe'],
   open: ['style', 'the form and finish of each piece'],
   source,
-  ...(source === 'open' ? {} : { sourceQuote: 'IKEA furniture only' }),
+  ...(source === 'open'
+    ? {}
+    : { sourceQuote: source === 'catalog' ? 'the catalog only' : 'IKEA furniture only' }),
   vision: 'A calm room of oak and linen.',
   beyond: 'none: the test places what the request names.',
   ...extra,
@@ -233,6 +235,9 @@ describe('the design brief over MCP', () => {
   test('a source other than open must quote the request; the quote is required here and not checked', async () => {
     const bare = await call('design_brief', { ...brief('catalog'), sourceQuote: undefined })
     expect(bare.payload.code).toBe('source_quote_required')
+    expect(bridge.agentSession.read().designBrief).toBeUndefined()
+    const unnamed = await call('design_brief', brief('catalog', { sourceQuote: 'a house' }))
+    expect(unnamed.payload.code).toBe('source_not_named')
     expect(bridge.agentSession.read().designBrief).toBeUndefined()
     const quoted = await call('design_brief', brief('catalog', { sourceQuote: 'que du catalogue' }))
     expect(quoted.payload.brief).toMatchObject({

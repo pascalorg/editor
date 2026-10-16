@@ -1,6 +1,7 @@
 import {
   CATALOG_PLACEMENT_TOOLS,
   type DesignBrief,
+  type DesignBriefInput,
   FURNISHING_CREATION_TOOLS,
 } from '../agent-tools/design-brief'
 import { AgentRefusal, refuse } from '../agent-tools/refusal'
@@ -51,9 +52,62 @@ const notViewed = (ids: string[]) =>
   `${ids.join(', ')} ${ids.length === 1 ? 'was' : 'were'} not viewed: asIs keeps a catalog piece only after view_assets showed it earlier in the same turn (chat) or session (MCP).`
 
 const SOURCE_NOT_IN_REQUEST =
-  "A source is set by the request: the brief's sourceQuote must be the person's own words naming it; this request names none, so its source is open."
+  "A source is set by the request: the brief's sourceQuote must be the person's own words naming it, a brand, the catalog or what is already there; this request names none, so its source is open."
 
-const squash = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim()
+/** Case, accents and spaces folded away: how a quote is compared with the request and the lists. */
+const fold = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[\u2019\u2018]/g, "'")
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** The words that name the catalog as a source, English and French, folded; a word matches from its start. */
+const CATALOG_WORDS = [
+  'catalog',
+  'catalogue',
+  'library',
+  'bibliotheque',
+  "pascal's items",
+  "pascal's objects",
+  'pascal items',
+  'pascal objects',
+  'from the store',
+  'from the stock',
+  'du stock',
+  'du magasin',
+]
+
+/** The words that name what is already there as a source, English and French, folded. */
+const EXISTING_WORDS = [
+  'existing',
+  'existant',
+  'already',
+  'deja',
+  'current',
+  'actuel',
+  'my own',
+  'mes meubles',
+  'what is there',
+  "ce qu'il y a",
+  'keep',
+  'garde',
+]
+
+const wordsRegex = (words: string[]) =>
+  new RegExp(`\\b(?:${words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`)
+const CATALOG_WORD = wordsRegex(CATALOG_WORDS)
+const EXISTING_WORD = wordsRegex(EXISTING_WORDS)
+
+/** Whether the quote, at least two words, names the brief's source: its brand, the catalog, what is already there. */
+function quoteNamesSource(source: string, brand: string | undefined, quote: string): boolean {
+  const folded = fold(quote)
+  if (folded.split(' ').length < 2) return false
+  if (source === 'brand') return Boolean(brand) && folded.includes(fold(brand!))
+  return (source === 'catalog' ? CATALOG_WORD : EXISTING_WORD).test(folded)
+}
 
 /** Whether `design_brief` reads the item library: an open brief naming pieces as they are. */
 export function briefReadsCatalog(tool: string, input: unknown): boolean {
@@ -204,7 +258,7 @@ export function briefUnlocks(brief: DesignBrief): { unlocks: string[]; closed: s
  * echoes it with what it opens and hands it back for the host to keep with the session; nothing in
  * the scene changes.
  */
-export const designBrief: AgentOperation<DesignBrief> = (_nodes, input, context) => {
+export const designBrief: AgentOperation<DesignBriefInput> = (_nodes, input, context) => {
   const brand = input.brand?.trim()
   if (input.source === 'brand' && !brand)
     refuse('brand_required', 'source brand names a range: give its name as brand ("IKEA").')
@@ -215,7 +269,9 @@ export const designBrief: AgentOperation<DesignBrief> = (_nodes, input, context)
         'source_quote_required',
         `source ${input.source} is set by the request: give sourceQuote, the person's own words that name it ("IKEA furniture only"); a request that names no source is open.`,
       )
-    if (context.requestText !== undefined && !squash(context.requestText).includes(squash(quote)))
+    if (!quoteNamesSource(input.source, brand, quote))
+      refuse('source_not_named', SOURCE_NOT_IN_REQUEST)
+    if (context.requestText !== undefined && !fold(context.requestText).includes(fold(quote)))
       refuse('source_not_in_request', SOURCE_NOT_IN_REQUEST)
   }
   const brief: DesignBrief = {

@@ -518,7 +518,7 @@ describe('a source other than open quotes the request', () => {
     )
     expect(refusal?.code).toBe('source_not_in_request')
     expect(refusal?.message).toBe(
-      "A source is set by the request: the brief's sourceQuote must be the person's own words naming it; this request names none, so its source is open.",
+      "A source is set by the request: the brief's sourceQuote must be the person's own words naming it, a brand, the catalog or what is already there; this request names none, so its source is open.",
     )
   })
 
@@ -540,8 +540,59 @@ describe('a source other than open quotes the request', () => {
     })
   })
 
-  test('where no person’s message is lent (MCP) the quote is required and not checked', () => {
-    expect(refusalOf({ source: 'catalog', sourceQuote: 'anything at all' })).toBeNull()
+  test('where no person’s message is lent (MCP) the quote is not compared with a request, and must still name a source', () => {
+    expect(refusalOf({ source: 'catalog', sourceQuote: 'only the catalog' })).toBeNull()
+    expect(refusalOf({ source: 'catalog', sourceQuote: 'a house' })?.code).toBe('source_not_named')
+  })
+
+  test('a quote in the request that names no source is refused with the fact', () => {
+    const refusal = refusalOf({ source: 'catalog', sourceQuote: 'a house' }, 'Build a house')
+    expect(refusal?.code).toBe('source_not_named')
+    expect(refusal?.message).toBe(
+      "A source is set by the request: the brief's sourceQuote must be the person's own words naming it, a brand, the catalog or what is already there; this request names none, so its source is open.",
+    )
+  })
+
+  test('the quote names the brief’s own source, at least two words', () => {
+    const named = (source: string, sourceQuote: string, request: string, extra = {}) =>
+      refusalOf({ source, sourceQuote, ...extra }, request)?.code ?? null
+    expect(
+      named('brand', 'IKEA furniture only', 'a bedroom with IKEA furniture only', {
+        brand: 'IKEA',
+      }),
+    ).toBeNull()
+    expect(named('brand', 'catalog only', 'a bedroom, catalog only', { brand: 'IKEA' })).toBe(
+      'source_not_named',
+    )
+    expect(named('catalog', 'avec le catalogue', 'meuble la chambre avec le catalogue')).toBeNull()
+    expect(
+      named('catalog', 'depuis la bibliothèque Pascal', 'Depuis la Bibliothèque Pascal, meuble'),
+    ).toBeNull()
+    expect(named('catalog', 'Pascal’s items please', "use Pascal's items please")).toBeNull()
+    expect(named('catalog', 'catalog', 'a catalog')).toBe('source_not_named')
+    expect(named('existing', 'garde mes meubles actuels', 'garde mes meubles actuels')).toBeNull()
+    expect(named('existing', 'ce qu’il y a déjà', 'Ce qu’il y a déjà')).toBeNull()
+    expect(named('existing', 'use my existing furniture', 'use my existing furniture')).toBeNull()
+    expect(named('existing', 'IKEA furniture only', 'IKEA furniture only')).toBe('source_not_named')
+  })
+
+  test('an older stored brief (no beyond) still reads, with the session’s checkpoints, and still gates', () => {
+    const { beyond: _beyond, ...older } = open([{ assetId: 'toilet', reason: 'r' }])
+    const stored = JSON.parse(
+      JSON.stringify({
+        ...EMPTY_SESSION,
+        made: [{ id: 'wall_1', type: 'wall', levelId: null }],
+        designBrief: older,
+      }),
+    )
+    const read = parseSessionRecord(stored)
+    expect(read.made).toHaveLength(1)
+    expect(read.designBrief?.source).toBe('open')
+    expect(read.designBrief?.beyond).toBeUndefined()
+    expect(code('place_items', { items: [{ assetId: 'double-bed' }] }, read.designBrief!)).toBe(
+      'brief_source_open',
+    )
+    expect(code('place_items', { items: [{ assetId: 'toilet' }] }, read.designBrief!)).toBeNull()
   })
 
   test('an open brief needs no quote and keeps none', () => {
