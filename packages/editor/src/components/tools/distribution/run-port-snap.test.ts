@@ -7,12 +7,14 @@ const low: ScenePort = {
   nodeId: 'pipe-segment_low',
   id: 'end',
   position: [0, 0, 0],
+  diameter: 0.1,
   direction: [1, 0, 0],
 }
 const high: ScenePort = {
   nodeId: 'duct-segment_high',
   id: 'start',
   position: [0, 3, 0],
+  diameter: 0.1,
   direction: [1, 0, 0],
 }
 const camera = new PerspectiveCamera(50, 1, 0.1, 100)

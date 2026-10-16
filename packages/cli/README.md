@@ -84,10 +84,18 @@ npx @pascal-app/cli editor --foreground --no-open
 
 ## The web editor runtime
 
-The npm package carries the CLI and the MCP service only: about 0.5 MB compressed and
-2.5 MB installed. The web editor itself—the Next.js server, its static assets, and the
-bundled item library—is published as one archive per CLI version, about 64 MB compressed
-and 106 MB on disk.
+The npm package carries the CLI and the MCP service only: about 1.7 MiB compressed and
+8.5 MiB installed. The web editor itself—the Next.js server, its static assets, and the
+bundled item and plugin libraries—is published as one archive per CLI version.
+With Bath Space, Landscape, Pool, Streetscape and WebXR included, the current archive
+is about 126 MiB compressed, down from 184 MiB. Bath Space catalog thumbnails fit
+within 512 × 512 pixels; all catalog entries, offline models and material textures
+remain included. The runtime is downloaded once per version, outside the npm package.
+
+`stage-runtime` reports the compressed size and the static-media breakdown. The packed
+runtime smoke check enforces a 140 MiB release ceiling and verifies every bundled
+WebP image and GLB model through the installed editor's HTTP server. A package revision
+update should include this size report so media growth is visible in review.
 
 Every command that starts the editor (`editor`, `start`, `open`, `resume`, `projects`,
 `project open`, `update`) resolves that runtime in this order:

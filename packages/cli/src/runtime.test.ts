@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   activateEditorRuntime,
   getEditorStatus,
@@ -280,7 +281,26 @@ describe('managed runtime', () => {
     const started = await startEditor({ paths, runtimeSource: firstSource })
     const candidate = await installBundledRuntime(paths, secondSource, { activate: false })
 
-    const result = await activateEditorRuntime(paths, candidate)
+    // Exercise the published layout, where a CLI pin exists even for an explicit activation.
+    const cliDist = path.join(root, 'cli/dist')
+    const built = await Bun.build({
+      entrypoints: [fileURLToPath(new URL('./editor-process.ts', import.meta.url))],
+      outdir: cliDist,
+      target: 'node',
+    })
+    expect(built.success).toBe(true)
+    await writeFile(path.join(cliDist, '../package.json'), JSON.stringify({ version: '3.0.0' }))
+    await writeFile(
+      path.join(cliDist, 'runtime-source.json'),
+      JSON.stringify({
+        version: '3.0.0',
+        url: 'https://127.0.0.1:1/runtime.tar.gz',
+        sha256: 'a'.repeat(64),
+        size: 10,
+      }),
+    )
+    const packaged = await import(pathToFileURL(path.join(cliDist, 'editor-process.js')).href)
+    const result = await packaged.activateEditorRuntime(paths, candidate)
 
     expect(result.restarted).toBe(true)
     const status = await getEditorStatus(paths)

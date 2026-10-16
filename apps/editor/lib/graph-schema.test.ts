@@ -34,6 +34,26 @@ test('accepts a graph containing a plugin node kind', () => {
   expect(apiGraphSchema.safeParse(graph).success).toBe(true)
 })
 
+test('accepts namespaced attachment slots while validating plugin asset URLs', () => {
+  const node = pluginTree({ slotId: `wall-point:${TREE_ID}` })
+  expect(apiGraphSchema.safeParse(buildGraph({ [TREE_ID]: node })).success).toBe(true)
+
+  for (const url of [
+    'javascript:alert(1)',
+    'file:///etc/passwd',
+    'javascript:alert',
+    'file:secret',
+    'data:text',
+  ]) {
+    expect(
+      apiGraphSchema.safeParse(buildGraph({ [TREE_ID]: { ...node, thumbnail: url } })).success,
+    ).toBe(false)
+    expect(
+      apiGraphSchema.safeParse(buildGraph({ [TREE_ID]: { ...node, slotId: url } })).success,
+    ).toBe(false)
+  }
+})
+
 test('accepts a builtin container whose children include a plugin node id', () => {
   const graph = buildGraph({ [LEVEL_ID]: level([TREE_ID]), [TREE_ID]: pluginTree() }, [LEVEL_ID])
 

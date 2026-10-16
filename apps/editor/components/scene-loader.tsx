@@ -15,9 +15,14 @@ import { Hammer, Layers, Package, Palette, Settings } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PoolSectionBanner } from '@/components/pool-section-banner'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { useLocalArtifactStore } from '@/lib/local-artifact-store'
-import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
+import {
+  isPendingSceneGraphEcho,
+  type PersistedSceneGraph,
+  sceneGraphSignature,
+} from '@/lib/scene-signature'
 import { useThumbnailAutosave } from '@/lib/use-thumbnail-autosave'
 import { BuildTab } from './build-tab'
 import { EditorNavbar } from './editor-navbar'
@@ -187,6 +192,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
   // store must never overwrite a populated server copy.
   const serverNodeCountRef = useRef(meta.nodeCount)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
+  const pendingGraphSignaturesRef = useRef(new Set<string>())
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -249,6 +255,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         return
       }
 
+      pendingGraphSignaturesRef.current.add(graphJson)
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
           method: 'PUT',
@@ -285,11 +292,15 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         }
 
         const next = (await response.json()) as SceneMeta
-        versionRef.current = next.version
-        serverNodeCountRef.current = next.nodeCount
+        if (next.version >= versionRef.current) {
+          versionRef.current = next.version
+          serverNodeCountRef.current = next.nodeCount
+        }
         setSaveError(null)
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
+      } finally {
+        pendingGraphSignaturesRef.current.delete(graphJson)
       }
     },
     [meta.id, meta.name],
@@ -310,7 +321,11 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
 
       versionRef.current = payload.version
       serverNodeCountRef.current = countGraphNodes(payload.graph)
-      lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
+      const signature = sceneGraphSignature(payload.graph)
+      // SSE can deliver our save before its HTTP response. Reapplying that
+      // graph would reset tools and selection while the user keeps editing.
+      if (isPendingSceneGraphEcho(payload.graph, pendingGraphSignaturesRef.current)) return
+      lastRemoteGraphJsonRef.current = signature
       suppressRemoteSaveUntilRef.current = Date.now() + 2500
       applySceneGraphToEditor(payload.graph)
       setConflict(false)
@@ -381,6 +396,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         projectId={meta.projectId ?? 'default'}
         projectName={meta.name}
         sidebarTabs={SIDEBAR_TABS}
+        viewerBanner={<PoolSectionBanner />}
         viewerToolbarLeft={<EditorViewerToolbarLeft />}
         viewerToolbarRight={
           <EditorViewerToolbarRight

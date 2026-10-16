@@ -4,6 +4,7 @@ import {
   DuctSegmentNode,
   type PortConnection,
 } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Vector3 } from 'three'
 import { fittingLegLength, getDuctFittingPorts } from '../duct-fitting/ports'
 import type { DuctFittingNode } from '../duct-fitting/schema'
@@ -15,7 +16,6 @@ import {
   planElbowRealign,
   profileDiameterIn,
 } from './auto-fitting'
-import type { ScenePort } from './ports'
 
 /**
  * Center-cube vertical-move auto-routing for duct runs.

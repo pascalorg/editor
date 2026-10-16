@@ -8,8 +8,13 @@ import {
   isMagneticSnapActive,
   useEditor,
 } from '@pascal-app/editor'
-import { type ConnectionProfile, connectionCompatibility } from './connection-compatibility'
-import { collectScenePorts, findNearestPort3D, type ScenePort } from './ports'
+import {
+  type ConnectionProfile,
+  collectScenePorts,
+  connectionCompatibility,
+  findNearestPort3D,
+  type ScenePort,
+} from '@pascal-app/editor/distribution'
 
 const COLORS = { match: '#16a34a', adapter: '#d97706', incompatible: '#dc2626', unknown: '#d97706' }
 

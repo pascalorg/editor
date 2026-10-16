@@ -21,8 +21,11 @@ test.each(['duct-segment', 'pipe-segment'] as const)(
       configurable: true,
       writable: true,
     })
-    if (!previousWindow)
-      Object.defineProperty(globalThis, 'window', { value: new EventTarget(), configurable: true })
+    Object.defineProperty(globalThis, 'window', {
+      value: new EventTarget(),
+      configurable: true,
+      writable: true,
+    })
     const wall = WallNode.parse({ parentId: 'level_test', start: [0, 0], end: [10, 0] })
     let tool: ReturnType<typeof useDistributionRunTool> | undefined
     const commits: Array<[number, number, number]> = []
@@ -112,7 +115,8 @@ test.each(['duct-segment', 'pipe-segment'] as const)(
       useScene.setState(previousScene, true)
       useEditor.setState(previousEditor, true)
       useInteractionScope.setState(previousScope, true)
-      if (!previousWindow) Reflect.deleteProperty(globalThis, 'window')
+      if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow)
+      else Reflect.deleteProperty(globalThis, 'window')
       if (previousActEnvironment)
         Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', previousActEnvironment)
       else Reflect.deleteProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT')

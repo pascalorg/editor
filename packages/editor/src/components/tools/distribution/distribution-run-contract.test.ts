@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { offsetRunPointFromSurface, type RunSurfaceTarget } from './distribution-run-contract'
 
-const wall = (hostId = 'wall-1', side: 'front' | 'back' = 'front'): RunSurfaceTarget => ({
+const wall = (
+  hostId: `wall_${string}` = 'wall_1',
+  side: 'front' | 'back' = 'front',
+): RunSurfaceTarget => ({
   kind: 'wall',
-  levelId: 'level-1',
+  levelId: 'level_1',
   hostId,
   side,
   frame: {
