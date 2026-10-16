@@ -68,7 +68,7 @@ function buildingFoundation(nodes: Nodes, building: BuildingNode): FoundationMem
   if (walls.length === 0) return []
 
   const site = siteOf(nodes, building)
-  const gradeAt = (x: number, z: number) => groundHeightAt(site, nodes, x, z)
+  const gradeAt = (x: number, z: number) => groundHeightAt(site, x, z)
   const lowestGrade = Math.min(...walls.map((wall) => lowestGradeAlong(building, wall, gradeAt)))
   const floors = floorsOf(nodes, level)
   const wallBaseY = building.position[1] + (getLevelElevations(nodes).get(level.id)?.baseY ?? 0)

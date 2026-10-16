@@ -15,7 +15,7 @@ const lowestHeight = new WeakMap<TerrainField, number>()
  */
 export function lowestGroundY(nodes: Nodes): number {
   const site = Object.values(nodes).find((node) => node.type === 'site')
-  const field = site ? terrainFieldOf(site, nodes) : null
+  const field = site ? terrainFieldOf(site) : null
   if (!field) return FLAT_GROUND_Y
   let lowest = lowestHeight.get(field)
   if (lowest === undefined) {
