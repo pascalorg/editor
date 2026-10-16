@@ -29,6 +29,18 @@ import type { AgentToolCase, SceneGraph } from './cases'
 
 const SIDING = 'library:siding-lap-white'
 const SOFT_WHITE = 'library:preset-softwhite'
+/** The library `finishScene`'s vase is from: paint reads its surfaces by the catalog's entry. */
+const VASE_LIBRARY = [
+  {
+    id: 'vase',
+    name: 'Vase',
+    category: 'decor',
+    tags: [],
+    thumbnail: '/items/vase/thumbnail.webp',
+    src: '/items/vase/model.glb',
+    dimensions: [0.3, 0.5, 0.3] as [number, number, number],
+  },
+]
 const SHINGLES = 'library:roof-greyshingles'
 const CLAY_TILES = 'library:roof-claytiles'
 
@@ -564,7 +576,10 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
     tool: 'paint',
     scene: finishScene,
     input: { targets: ['item_vase'], material: SOFT_WHITE },
-    context: { assetViews: { vase: { surfaces: ['body', 'glaze', 'rim'] } } },
+    context: {
+      catalog: VASE_LIBRARY,
+      assetViews: { vase: { surfaces: ['body', 'glaze', 'rim'] } },
+    },
     expect: {
       refusal: 'unknown_role',
       mentions: ['its surfaces: body, glaze, rim', 'painted so far: glaze'],
@@ -575,7 +590,7 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
     tool: 'paint',
     scene: finishScene,
     input: { targets: ['item_vase'], material: SOFT_WHITE },
-    context: { assetViews: { vase: { surfaces: [] } } },
+    context: { catalog: VASE_LIBRARY, assetViews: { vase: { surfaces: [] } } },
     expect: { refusal: 'unknown_role', mentions: ['(painted so far: glaze)'] },
   },
   {

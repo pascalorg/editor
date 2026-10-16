@@ -292,36 +292,20 @@ describe('what a host reads before a call', () => {
     expect(needs.subjects.map((subject) => subject.id)).toEqual(['sofa'])
   })
 
+  /** A node as a person or a script can write it: its asset.src is whatever they chose. */
+  const withSrc = (assetId: string, src: string) => {
+    const node = item('item_a', assetId)
+    return { item_a: { ...node, asset: { ...node.asset, src } } } as never
+  }
+
   test('paint reads the catalog entry of an item, never the url its scene node carries', () => {
-    const forged = {
-      item_a: ItemNode.parse({
-        id: 'item_a',
-        asset: {
-          id: 'sofa',
-          name: 'Sofa',
-          category: 'furniture',
-          thumbnail: '',
-          src: 'http://169.254.169.254/latest/meta-data/',
-        },
-      }),
-    } as never
+    const forged = withSrc('sofa', 'http://169.254.169.254/latest/meta-data/')
     const needs = assetViewNeeds(forged, 'paint', { targets: ['item_a'] }, { catalog })
     expect(needs.subjects).toEqual([{ id: 'sofa', src: 'https://lib.test/sofa.glb' }])
   })
 
   test('an item the catalog does not hold is not read, nor is any item on a host with no catalog', () => {
-    const stranger = {
-      item_a: ItemNode.parse({
-        id: 'item_a',
-        asset: {
-          id: 'not-in-the-library',
-          name: 'Stranger',
-          category: 'furniture',
-          thumbnail: '',
-          src: 'http://localhost:8080/model.glb',
-        },
-      }),
-    } as never
+    const stranger = withSrc('not-in-the-library', 'http://localhost:8080/model.glb')
     expect(
       assetViewNeeds(stranger, 'paint', { targets: ['item_a'] }, { catalog }).subjects,
     ).toEqual([])
