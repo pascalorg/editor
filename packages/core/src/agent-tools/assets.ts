@@ -4,7 +4,7 @@ export const searchAssetsTool = {
   name: 'search_assets',
   title: 'Search assets',
   description:
-    "Search the item library (furniture, fixtures, lights, plants, outdoor) by keyword, with one or several queries in a call. Results provide valid asset ids and placement facts when these are not already known. A query matches the items whose name, id, category or tags hold every one of its words. Returns one group per query, each item with its id, name, category, dimensions [width, height, depth] in metres and attachTo (null on the floor, else 'wall', 'wall-side' or 'ceiling'). Related lookups (sofa, coffee table, tv stand) can share a call.",
+    "Search the item library (furniture, fixtures, lights, plants, outdoor) by keyword, with one or several queries in a call. The catalog is a limited set that varies by server: what a search returns is what exists. Results provide valid asset ids and placement facts when these are not already known. A query matches the items whose name, id, category or tags hold every one of its words. Returns one group per query, each item with its id, name, category, dimensions [width, height, depth] in metres and attachTo (null on the floor, else 'wall', 'wall-side' or 'ceiling'). Related lookups (sofa, coffee table, tv stand) can share a call.",
   input: {
     queries: z
       .array(

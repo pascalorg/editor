@@ -40,6 +40,31 @@ describe('the MCP agent guide is a glossary, not a recipe (owner, 15 Oct)', () =
     expect(AGENT_GUIDE).toContain('design left to the agent')
   })
 
+  test('the request is the constraint, and the sources of a scene stand side by side', () => {
+    expect(AGENT_GUIDE).toContain('binds the work exactly')
+    expect(AGENT_GUIDE).toContain('the size and number of storeys')
+    const sources = AGENT_GUIDE.match(/has these sources, side by side:.*$/m)?.[0] ?? ''
+    for (const tool of [
+      'search_assets',
+      'place_items',
+      'furnish_room',
+      'place_design',
+      'validate_design',
+      'add_object',
+      'paint',
+      'generate_material',
+    ]) {
+      expect(sources).toContain(`\`${tool}\``)
+    }
+    expect(sources).toContain('limited set that varies by server')
+  })
+
+  test('no source is ranked ahead of the others, and no line says when to stop', () => {
+    expect(AGENT_GUIDE).not.toMatch(
+      /\botherwise create\b|when catalog .{0,30}do not fit|catalog (first|before)|reply now|if the request is fulfilled/i,
+    )
+  })
+
   test('the editorUrl is stated as a fact about the output', () => {
     expect(AGENT_GUIDE).toContain('`editorUrl`')
     expect(AGENT_GUIDE).toMatch(/final response to the person is made of:.*`editorUrl`/)

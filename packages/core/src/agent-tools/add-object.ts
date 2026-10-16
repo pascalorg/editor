@@ -4,7 +4,7 @@ import { GeometryScriptLanguage } from '../schema/geometry-source'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
-const DESCRIPTION = `Author parametric Three.js furniture, decor and custom objects to match requested shapes, dimensions or style. A requested look or custom fit can justify authoring even when generic catalog equivalents exist; catalog items remain suitable when they fit. Examples include a low oak table, a slatted bench, a paper lantern, built-ins, custom columns and capitals, mouldings and trim, panels, exposed beams, ceiling bodies, canopies, a porch and railings. Pascal runs the module in a sandbox, stores the result and places it as one object the user can move, paint, and ask you to edit again.
+const DESCRIPTION = `Author parametric Three.js furniture, decor and custom objects of any shape, dimensions or style, whether or not the catalog holds something similar (the catalog is a limited set that varies by server). Examples include a low oak table, a slatted bench, a paper lantern, built-ins, custom columns and capitals, mouldings and trim, panels, exposed beams, ceiling bodies, canopies, a porch and railings. Pascal runs the module in a sandbox, stores the result and places it as one object the user can move, paint, and ask you to edit again.
 
 Module shape (import THREE from the three package as usual; the addons below too):
   // also available: three/addons/utils/BufferGeometryUtils.js, three/addons/geometries/{RoundedBoxGeometry,ConvexGeometry,LoftGeometry,ParametricGeometry}.js, three-bvh-csg (Brush, Evaluator, SUBTRACTION, ADDITION, INTERSECTION)

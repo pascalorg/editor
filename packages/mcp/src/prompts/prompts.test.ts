@@ -247,7 +247,10 @@ describe('scene design guidance on what a request leaves open', () => {
       '  - Defaults are for technical values (thicknesses, clearances, heights).',
     )
     expect(lines).toContain(
-      '  - What a request leaves open in form (proportions, massing, silhouette, roofscape) is design left to the agent: an open brief is room for a house with presence (composed volumes, interesting wings, roofs at different heights, good proportions) that stays credible and buildable, rather than a standard catalogue plan.',
+      '  - What a request states (sizes, counts, rooms, style, references, "catalog only", a single room) binds the work exactly: a request for one bedroom is one bedroom.',
+    )
+    expect(lines).toContain(
+      '  - What it leaves open is design left to the agent: the size and number of storeys, the massing and roofscape, the site and outdoor spaces, the furniture and decor, and the floor, wall and ceiling finishes and materials. An open brief is room for a building with presence (composed volumes, interesting wings, roofs at different heights, good proportions, a considered site, rooms furnished and finished with intent) that stays credible and buildable, rather than a standard catalogue plan.',
     )
     expect(lines).toContain('  - When a choice would change the project, the person can be asked.')
   })
