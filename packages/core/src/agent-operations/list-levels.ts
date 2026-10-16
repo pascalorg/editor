@@ -18,6 +18,7 @@ export const listLevels: AgentOperation = (nodes, _input, context) => {
               named: seat.explicit,
               floorElevation: seat.floorElevation,
               gradeElevation: seat.gradeElevation,
+              floorOverGrade: Math.round(seat.offset * 1000) / 1000,
               seated: seat.seated,
             },
           ]

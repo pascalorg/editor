@@ -5,8 +5,15 @@ import { groundLevelOf } from './ground-level'
 import { heightAt } from './terrain-field'
 import { levelLocalToWorldXZ, SITE_DATUM_Y } from './terrain-support-query'
 
-/** How far the ground floor's datum may stand from grade and still count as seated on it. */
+/** How far the ground floor's datum may stand from its seat and still count as seated on it. */
 export const GROUND_SEAT_TOLERANCE = 0.05
+
+/**
+ * Where "Set as ground floor" and `set_ground_level` stand the ground floor over finished grade:
+ * the top of the foundation, where the wood framing starts, 8 in (0.203 m) above the ground. IRC
+ * R317.1 keeps wood framing resting on a foundation wall at least 8 in from exposed ground.
+ */
+export const GROUND_FLOOR_ABOVE_GRADE = 0.203
 
 /**
  * The grade a level's floor is seated against: the flat datum on a flat site, and on shaped
@@ -40,8 +47,14 @@ export type GroundSeat = {
   gradeElevation: number
   /** How far the floor datum stands over grade: negative when it is sunk. */
   offset: number
-  /** The floor datum is at grade, within {@link GROUND_SEAT_TOLERANCE}. */
+  /**
+   * The floor datum stands between grade and the foundation's top, within
+   * {@link GROUND_SEAT_TOLERANCE}: what a scene seated before the 8 in rule and one seated by it
+   * both satisfy, so a check has nothing to say about either.
+   */
   seated: boolean
+  /** The floor datum stands at {@link GROUND_FLOOR_ABOVE_GRADE} over grade, within the tolerance. */
+  atFoundationTop: boolean
 }
 
 /** `null` for an id that is no building, or a building with no level at or over the ground. */
@@ -61,6 +74,9 @@ export function groundSeat(
     floorElevation: datum.floorElevation,
     gradeElevation,
     offset,
-    seated: Math.abs(offset) <= GROUND_SEAT_TOLERANCE,
+    seated:
+      offset >= -GROUND_SEAT_TOLERANCE &&
+      offset <= GROUND_FLOOR_ABOVE_GRADE + GROUND_SEAT_TOLERANCE,
+    atFoundationTop: Math.abs(offset - GROUND_FLOOR_ABOVE_GRADE) <= GROUND_SEAT_TOLERANCE,
   }
 }

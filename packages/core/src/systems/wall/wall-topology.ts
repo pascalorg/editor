@@ -1,4 +1,5 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
+import { withDefaultWallConstruction } from '../../lib/foundation-wall'
 import { detectOpenWallEnds, type OpenWallEnd, wallEndJoinCandidates } from '../../lib/room-graph'
 import { terrainSupportLift } from '../../lib/terrain-support'
 import {
@@ -546,7 +547,9 @@ export function planWallInsertion(
     return { ok: false, reason: 'segment-too-short' }
   }
 
-  const wallProperties = { ...(args.wallDefaults ?? {}) }
+  const wallProperties = withDefaultWallConstruction(nodes, args.levelId, {
+    ...(args.wallDefaults ?? {}),
+  })
   delete wallProperties.id
   delete wallProperties.parentId
   delete wallProperties.children

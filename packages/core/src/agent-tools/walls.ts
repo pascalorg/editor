@@ -24,7 +24,8 @@ export const addWallTool = {
     end: planPoint('end'),
     thickness: measurement('length', 'm', {
       positive: true,
-      description: 'Wall thickness (default 0.1 m).',
+      description:
+        'Wall thickness (default 0.1 m; on a level below grade a wall given none is an 8 in CMU foundation wall with 2x4 pressure-treated furring laid flat inside, 0.241 m).',
     }).optional(),
     height: measurement('length', 'm', {
       positive: true,

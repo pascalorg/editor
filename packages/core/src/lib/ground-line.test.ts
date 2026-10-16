@@ -14,7 +14,7 @@ import { getStoreyDatum } from '../services/storey-datum'
 import { belowGradeFootprints } from './below-grade-footprints'
 import { levelGradeStanding } from './grade-standing'
 import { groundLevelOf } from './ground-level'
-import { groundSeat } from './ground-seat'
+import { GROUND_FLOOR_ABOVE_GRADE, groundSeat } from './ground-seat'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
 
@@ -120,15 +120,23 @@ describe('the ground line', () => {
   test('setting the ground floor seats the building: Reception at grade, both basements under it', () => {
     const nodes = mansion()
     const changes = buildGroundLevelChanges({ nodes, levelId: 'level_reception' })
-    expect(changes?.moveBy).toBeCloseTo(-3.4, 9)
+    expect(changes?.moveBy).toBeCloseTo(-3.4 + GROUND_FLOOR_ABOVE_GRADE, 9)
     expect(changes?.renumbered).toBe(false)
     const next = apply(nodes, changes!)
-    expect((next.building_a as BuildingNode).position).toEqual([0, -3.4, 0])
+    expect((next.building_a as BuildingNode).position).toEqual([
+      0,
+      -3.4 + GROUND_FLOOR_ABOVE_GRADE,
+      0,
+    ])
     expect((next.building_a as BuildingNode).groundLevelId).toBe('level_reception')
-    expect(groundSeat(next, 'building_a')).toMatchObject({ seated: true, explicit: true })
-    expect(datum(next, 'level_reception')).toBeCloseTo(0.28, 9)
-    expect(datum(next, 'level_lg')).toBeCloseTo(-3.4 + 0.28, 9)
-    expect(datum(next, 'level_b2')).toBeCloseTo(-6.8 + 0.28, 9)
+    expect(groundSeat(next, 'building_a')).toMatchObject({
+      seated: true,
+      atFoundationTop: true,
+      explicit: true,
+    })
+    expect(datum(next, 'level_reception')).toBeCloseTo(0.28 + GROUND_FLOOR_ABOVE_GRADE, 9)
+    expect(datum(next, 'level_lg')).toBeCloseTo(-3.4 + 0.28 + GROUND_FLOOR_ABOVE_GRADE, 9)
+    expect(datum(next, 'level_b2')).toBeCloseTo(-6.8 + 0.28 + GROUND_FLOOR_ABOVE_GRADE, 9)
     expect(levelGradeStanding(next, 'level_reception')).toBe('at-grade')
     expect(levelGradeStanding(next, 'level_suites')).toBe('at-grade')
     expect(levelGradeStanding(next, 'level_lg')).toBe('below-grade')
@@ -169,10 +177,57 @@ describe('the ground line', () => {
       index('level_reception'),
       index('level_suites'),
     ]).toEqual([-1, 0, 1, 2])
-    // Already at grade: the building does not move.
-    expect((next.building_a as BuildingNode).position[1]).toBe(0)
+    // Already at grade: it only rises to the foundation's top, 8 in over the ground.
+    expect((next.building_a as BuildingNode).position[1]).toBe(GROUND_FLOOR_ABOVE_GRADE)
     expect(levelGradeStanding(next, 'level_b2')).toBe('below-grade')
     expect(levelGradeStanding(next, 'level_reception')).toBe('at-grade')
+  })
+
+  test('the ground floor stands 8 in (0.203 m) over finished grade on a flat site', () => {
+    const nodes = scene([
+      ['level_base', -1, -2.5, 2.5, rect(0, 0, 6, 6)],
+      ['level_ground', 0, 0, 2.5, rect(0, 0, 8, 8)],
+    ])
+    const changes = buildGroundLevelChanges({ nodes, levelId: 'level_ground' })
+    expect(GROUND_FLOOR_ABOVE_GRADE).toBe(0.203)
+    expect(changes?.unchanged).toBe(false)
+    const next = apply(nodes, changes!)
+    expect((next.building_a as BuildingNode).position[1]).toBeCloseTo(0.203, 9)
+    expect(getStoreyDatum(next, 'level_ground')?.floorElevation).toBeCloseTo(0.203, 9)
+    expect(groundSeat(next, 'building_a')?.offset).toBeCloseTo(0.203, 9)
+    expect(levelGradeStanding(next, 'level_base')).toBe('below-grade')
+    expect(levelGradeStanding(next, 'level_ground')).toBe('at-grade')
+  })
+
+  test('a ground floor seated before the 8 in rule, at grade, is still seated, and rises when set again', () => {
+    const nodes = scene([
+      ['level_base', -1, -2.5, 2.5, rect(0, 0, 6, 6)],
+      ['level_ground', 0, 0, 2.5, rect(0, 0, 8, 8)],
+    ])
+    const named = {
+      ...nodes,
+      building_a: { ...nodes.building_a, groundLevelId: 'level_ground' },
+    } as Nodes
+    expect(groundSeat(named, 'building_a')).toMatchObject({
+      explicit: true,
+      seated: true,
+      atFoundationTop: false,
+    })
+    const changes = buildGroundLevelChanges({ nodes: named, levelId: 'level_ground' })
+    expect(changes?.unchanged).toBe(false)
+    expect(changes?.moveBy).toBeCloseTo(0.203, 9)
+  })
+
+  test('a ground floor standing well over the ground, or under it, is not seated', () => {
+    const over = scene([['level_ground', 0, 0, 2.5, rect(0, 0, 8, 8)]], [], 0.6)
+    const under = scene([['level_ground', 0, 0, 2.5, rect(0, 0, 8, 8)]], [], -0.4)
+    for (const nodes of [over, under]) {
+      const named = {
+        ...nodes,
+        building_a: { ...nodes.building_a, groundLevelId: 'level_ground' },
+      } as Nodes
+      expect(groundSeat(named, 'building_a')?.seated).toBe(false)
+    }
   })
 
   test('is idempotent: the same level again changes nothing', () => {
@@ -241,10 +296,14 @@ describe('a hillside', () => {
     )
     const changes = buildGroundLevelChanges({ nodes, levelId: 'level_ground' })
     expect(changes?.seat.gradeElevation).toBeCloseTo(1.5, 6)
-    expect(changes?.moveBy).toBeCloseTo(1.5, 6)
+    expect(changes?.moveBy).toBeCloseTo(1.5 + GROUND_FLOOR_ABOVE_GRADE, 6)
     const next = apply(nodes, changes!)
-    expect((next.building_a as BuildingNode).position[1]).toBeCloseTo(1.5, 6)
-    expect(groundSeat(next, 'building_a')?.seated).toBe(true)
+    expect((next.building_a as BuildingNode).position[1]).toBeCloseTo(
+      1.5 + GROUND_FLOOR_ABOVE_GRADE,
+      6,
+    )
+    expect(groundSeat(next, 'building_a')).toMatchObject({ seated: true, atFoundationTop: true })
+    expect(groundSeat(next, 'building_a')?.offset).toBeCloseTo(GROUND_FLOOR_ABOVE_GRADE, 6)
     expect(levelGradeStanding(next, 'level_base')).toBe('below-grade')
     expect(levelGradeStanding(next, 'level_ground')).toBe('at-grade')
   })

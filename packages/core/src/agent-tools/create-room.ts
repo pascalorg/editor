@@ -42,7 +42,8 @@ export const createRoomTool = {
     }).optional(),
     wallThickness: measurement('length', 'm', {
       positive: true,
-      description: 'Thickness of the walls it builds.',
+      description:
+        'Thickness of the walls it builds. Omitted, a wall below grade is an 8 in CMU foundation wall with 2x4 pressure-treated furring laid flat inside (0.241 m); a thickness keeps the schema wall.',
     }).optional(),
     rename: z
       .boolean()

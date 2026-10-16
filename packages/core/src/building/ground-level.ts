@@ -1,11 +1,12 @@
-import { groundSeat } from '../lib/ground-seat'
+import { GROUND_FLOOR_ABOVE_GRADE, groundSeat } from '../lib/ground-seat'
 import type { AnyNode, AnyNodeId, BuildingNode, LevelNode } from '../schema'
 import { getLevelElevations } from '../services/storey'
 
 /**
  * Making `levelId` the building's ground floor, as the level panel's "Set as ground floor" and the
  * agent's `set_ground_level` do: the building names it (`groundLevelId`), is seated so that level's
- * floor datum stands at grade (its position moves in height, the plan stays where it is), and the
+ * floor datum, the top of the foundation, stands {@link GROUND_FLOOR_ABOVE_GRADE} over grade (its
+ * position moves in height, the plan stays where it is), and the
  * floor indices are renumbered so it is index 0 and the ones under it are the basements. Every
  * floor keeps its place relative to the others. One change set, one undo step. `null` for an id
  * that is no level of a building.
@@ -34,7 +35,9 @@ export function buildGroundLevelChanges({
 
   const [x, y, z] = (building as BuildingNode).position
   // Micrometres: the seat is measured through sums of storey heights, and a stored height keeps no noise.
-  const moveBy = seat.seated ? 0 : Math.round(-seat.offset * 1e6) / 1e6
+  const moveBy = seat.atFoundationTop
+    ? 0
+    : Math.round((GROUND_FLOOR_ABOVE_GRADE - seat.offset) * 1e6) / 1e6
   const shift = level.level
   const renumbered = Object.values(nodes).filter(
     (node): node is LevelNode =>
@@ -43,7 +46,7 @@ export function buildGroundLevelChanges({
       getLevelElevations(nodes).get(node.id)?.buildingId === building.id,
   )
   const unchanged =
-    before?.explicit === true && before.levelId === level.id && seat.seated && shift === 0
+    before?.explicit === true && before.levelId === level.id && seat.atFoundationTop && shift === 0
   return {
     buildingId: building.id,
     seat,

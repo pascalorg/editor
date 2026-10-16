@@ -452,17 +452,23 @@ function SortableLevelRow({
 
 // ── The ground line: between the level at grade and the ones under it ───────
 
-type GroundLineState = { levelId: string; floorElevation: number; seated: boolean; offset: number }
+type GroundLineState = {
+  levelId: string
+  seated: boolean
+  atFoundationTop: boolean
+  offset: number
+}
 
 /**
- * "Ground · 0.00": where the stack meets grade. The levels under it are below grade. It reads the
- * ground floor's datum; when that datum is not at grade (a stack that lifted it) the line says how
- * far, and a click seats the building there.
+ * "Ground · +0.20": where the stack meets grade, read as the ground floor's datum over the ground
+ * (the top of the foundation, 8 in over it once seated). The levels under it are below grade. When
+ * the datum stands outside the seat (a stack that lifted it, or sank it) the line turns amber and
+ * a click seats the building.
  */
 function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () => void }) {
   const { toDisplay, displayUnit, precision } = useLinearDisplay('m', 2)
-  const elevation = toDisplay(ground.floorElevation).toFixed(precision)
-  const label = `Ground · ${ground.floorElevation > 0 && !ground.seated ? '+' : ''}${elevation}`
+  const over = toDisplay(ground.offset)
+  const label = `Ground · ${over > 0 ? '+' : ''}${over.toFixed(precision)}`
   return (
     <div
       className="relative flex items-center gap-1.5 px-2 py-0.5"
@@ -479,7 +485,7 @@ function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () =>
         <button
           className="shrink-0 rounded-full px-1.5 font-mono text-[10px] text-amber-400 tabular-nums transition-colors hover:bg-amber-400/10"
           onClick={onSeat}
-          title={`The ground floor stands ${Math.abs(toDisplay(ground.offset)).toFixed(precision)} ${displayUnit} ${ground.offset > 0 ? 'over' : 'under'} grade. Seat the building at grade`}
+          title={`The ground floor stands ${Math.abs(toDisplay(ground.offset)).toFixed(precision)} ${displayUnit} ${ground.offset > 0 ? 'over' : 'under'} grade. Seat the ground floor 8 in over grade`}
           type="button"
         >
           {label}
@@ -589,8 +595,8 @@ export function FloatingLevelSelector() {
       return seat
         ? {
             levelId: seat.levelId,
-            floorElevation: seat.floorElevation,
             seated: seat.seated,
+            atFoundationTop: seat.atFoundationTop,
             offset: seat.offset,
           }
         : null
@@ -793,7 +799,7 @@ export function FloatingLevelSelector() {
                         }
                         onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
                         onPaste={() => handlePasteToLevel(level)}
-                        isGround={ground?.levelId === level.id && ground.seated}
+                        isGround={ground?.levelId === level.id && ground.atFoundationTop}
                         onRequestDelete={() => setDeletingLevel(level)}
                         onSetGround={() => handleSetGround(level.id)}
                         onSelect={() => {

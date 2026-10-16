@@ -119,7 +119,126 @@ const bareBuildingScene = (): SceneGraph => graph(BuildingNode.parse({ id: 'buil
 
 const emptyScene = (): SceneGraph => ({ nodes: {}, rootNodeIds: [] })
 
+/** A basement 2.8 m under a ground floor: the lower level stands below grade, the other at it. */
+function basementHouseScene(): SceneGraph {
+  const base = LevelNode.parse({
+    id: 'level_base',
+    parentId: 'building_basement',
+    level: -1,
+    name: 'Basement',
+    height: 2.8,
+    baseElevation: -2.8,
+  })
+  const ground = LevelNode.parse({
+    id: 'level_main',
+    parentId: 'building_basement',
+    level: 0,
+    name: 'Main',
+    height: 2.8,
+  })
+  return graph(
+    BuildingNode.parse({ id: 'building_basement', children: [base.id, ground.id] }),
+    base,
+    ground,
+  )
+}
+
+const SHELL: Pt[] = [
+  [0, 0],
+  [6, 0],
+  [6, 4],
+  [0, 4],
+]
+
+/** The below-grade default: 8 in CMU core, 2x4 pressure-treated furring flat inside, thickness the sum. */
+function foundationWallProblems(wall: AnyNode | undefined): string[] {
+  if (wall?.type !== 'wall') return [`not a wall: ${JSON.stringify(wall)}`]
+  const [block, furring, ...rest] = wall.assembly?.layers ?? []
+  const ok =
+    block?.core === true &&
+    block.material === 'cmu' &&
+    Math.abs(block.thickness - 0.203) < 1e-9 &&
+    furring?.role === 'furring' &&
+    Math.abs(furring.thickness - 0.038) < 1e-9 &&
+    rest.length === 0 &&
+    wall.assembly?.face === 'exterior' &&
+    Math.abs((wall.thickness ?? 0) - 0.241) < 1e-9
+  return ok ? [] : [`${wall.id} is not a foundation wall: ${JSON.stringify([wall.thickness, wall.assembly])}`]
+}
+
 export const ADD_WALL_CASES: AgentToolCase[] = [
+  {
+    name: 'a wall on a level below grade is an 8 in CMU wall with 2x4 furring laid flat inside, and says so',
+    tool: 'add_wall',
+    scene: basementHouseScene,
+    input: { levelId: 'level_base', start: [0, 0], end: [6, 0] },
+    expect: {
+      result: { ok: true, levelId: 'level_base', construction: { thickness: 0.241 } },
+      mentions: ['foundation wall', 'CMU', 'furring'],
+      check: (result, nodes) => foundationWallProblems(nodes[result.wallId as string]),
+    },
+  },
+  {
+    name: 'a wall below grade given a thickness keeps it, with no stack',
+    tool: 'add_wall',
+    scene: basementHouseScene,
+    input: { levelId: 'level_base', start: [0, 0], end: [6, 0], thickness: 0.3 },
+    expect: {
+      result: { ok: true },
+      absent: ['construction'],
+      check: (result, nodes) => {
+        const wall = nodes[result.wallId as string]
+        return wall?.type === 'wall' && wall.thickness === 0.3 && wall.assembly === undefined
+          ? []
+          : [`expected a plain 0.3 m wall, got ${JSON.stringify(wall)}`]
+      },
+    },
+  },
+  {
+    name: 'a wall on the ground floor over a basement keeps the schema wall',
+    tool: 'add_wall',
+    scene: basementHouseScene,
+    input: { levelId: 'level_main', start: [0, 0], end: [6, 0] },
+    expect: {
+      result: { ok: true },
+      absent: ['construction'],
+      check: (result, nodes) => {
+        const wall = nodes[result.wallId as string]
+        return wall?.type === 'wall' && (wall.thickness ?? 0.1) === 0.1 && wall.assembly === undefined
+          ? []
+          : [`expected a plain 0.1 m wall, got ${JSON.stringify(wall)}`]
+      },
+    },
+  },
+  {
+    name: 'the walls of a room below grade are foundation walls, the result says so',
+    tool: 'create_room',
+    scene: basementHouseScene,
+    input: { levelId: 'level_base', name: 'Cellar', polygon: SHELL },
+    expect: {
+      result: { ok: true, construction: {} },
+      mentions: ['foundation walls', 'CMU'],
+      check: (result, nodes) =>
+        (result.wallIds as string[]).flatMap((id) => foundationWallProblems(nodes[id])),
+    },
+  },
+  {
+    name: 'a room below grade given a wall thickness is built as asked',
+    tool: 'create_room',
+    scene: basementHouseScene,
+    input: { levelId: 'level_base', name: 'Cellar', polygon: SHELL, wallThickness: 0.2 },
+    expect: {
+      result: { ok: true },
+      absent: ['construction'],
+      check: (result, nodes) =>
+        (result.wallIds as string[]).flatMap((id) => {
+          const wall = nodes[id]
+          return wall?.type === 'wall' && wall.thickness === 0.2 && wall.assembly === undefined
+            ? []
+            : [`${id} is not a plain 0.2 m wall: ${JSON.stringify(wall)}`]
+        }),
+    },
+  },
   {
     name: 'a wall on the level named, numbered as the editor numbers walls',
     tool: 'add_wall',
@@ -276,6 +395,27 @@ export const ADD_FENCE_CASES: AgentToolCase[] = [
 
 export const ADD_LEVEL_CASES: AgentToolCase[] = [
   {
+    name: 'a basement says what a new wall on it is built of',
+    tool: 'add_level',
+    scene: storeysScene,
+    input: { buildingId: 'building_house', position: 'below', height: 2.8, name: 'Cellar' },
+    expect: {
+      result: { ok: true },
+      check: (result) =>
+        typeof result.wallConstruction === 'string' && /CMU/.test(result.wallConstruction)
+          ? []
+          : ['the result does not say what a wall on the basement is built of'],
+      mentions: ['foundation wall', 'CMU'],
+    },
+  },
+  {
+    name: 'a storey above the ground floor says nothing of foundation walls',
+    tool: 'add_level',
+    scene: storeysScene,
+    input: { buildingId: 'building_house', height: 2.8 },
+    expect: { result: { ok: true }, absent: ['wallConstruction'] },
+  },
+  {
     name: 'above the highest level of the viewed building, at the default storey height',
     tool: 'add_level',
     scene: storeysScene,
@@ -347,7 +487,7 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { levelId: 'level_upper' },
     expect: {
-      result: { ok: true, renumbered: true, floorElevation: 0 },
+      result: { ok: true, renumbered: true, floorElevation: 0.203 },
       after: {
         level_upper: { level: 0 },
         level_ground: { level: -1 },

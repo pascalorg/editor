@@ -3,6 +3,7 @@ import { doorFacing, planWallOpening } from '../building/wall-openings'
 import { createZone, walledRoomAt } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
 import { levelFootprintLoops } from '../lib/building-footprint'
+import { FOUNDATION_WALL_DESCRIPTION, levelHoldsFoundationWalls } from '../lib/foundation-wall'
 import { isAllocatedRoomName } from '../lib/room-name'
 import { lotOverhang } from '../lib/site-placement'
 import {
@@ -235,6 +236,11 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
   const raised = new Set(
     roomChanges.create.flatMap((entry) => (entry.node.type === 'wall' ? [entry.node.id] : [])),
   )
+  const foundation =
+    raised.size > 0 &&
+    !input.outdoor &&
+    input.wallThickness === undefined &&
+    levelHoldsFoundationWalls(scene, level.id)
   const site = lotOverhang(scene, level.id, [
     polygon,
     ...levelFootprintLoops(scene, scene[level.id] as LevelNode, null, raised),
@@ -251,11 +257,17 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
     windowIds,
     ...(skippedOpenings.length ? { skippedOpenings } : {}),
     ...(site ? { site } : {}),
+    ...(foundation ? { construction: { assembly: FOUNDATION_WALL_DESCRIPTION } } : {}),
     message: [
       plan.renamed
         ? `Named the ${input.outdoor ? 'outdoor room' : 'room'} the walls already enclose "${input.name}" (it was ${plan.renamed}) on ${level.name || level.id}`
         : `Created ${input.outdoor ? 'outdoor room' : 'room'} "${input.name}" on ${level.name || level.id}`,
       ...(reusedWalls ? [`reused ${plural(reusedWalls, 'wall')} already there`] : []),
+      ...(foundation
+        ? [
+            `the new walls are foundation walls (${FOUNDATION_WALL_DESCRIPTION}): the level is below grade`,
+          ]
+        : []),
       ...(doorIds.length ? [plural(doorIds.length, 'door')] : []),
       ...(windowIds.length ? [plural(windowIds.length, 'window')] : []),
       ...(skippedOpenings.length

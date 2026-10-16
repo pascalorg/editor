@@ -1,5 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
 import { levelFootprintLoops } from '../lib/building-footprint'
+import { defaultWallConstruction, FOUNDATION_WALL_DESCRIPTION } from '../lib/foundation-wall'
 import { lotOverhang } from '../lib/site-placement'
 import { type LevelNode, WallNode } from '../schema'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
@@ -35,12 +36,15 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ? normalizeWallCurveOffset({ start, end }, input.curveOffset)
     : 0
   const walls = Object.values(nodes).filter((node) => node.type === 'wall').length
+  const construction =
+    input.thickness === undefined ? defaultWallConstruction(nodes, level.id) : null
   const wall = WallNode.parse({
     name: `Wall ${walls + 1}`,
     parentId: level.id,
     start,
     end,
     ...(input.thickness === undefined ? {} : { thickness: input.thickness }),
+    ...(construction ?? {}),
     ...(input.height === undefined ? {} : { height: input.height }),
     ...(curveOffset ? { curveOffset } : {}),
   })
@@ -60,7 +64,19 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
       length: Math.round(length * 1000) / 1000,
       ...(curveOffset ? { curveOffset } : {}),
       ...(site ? { site } : {}),
+      ...(construction
+        ? {
+            construction: {
+              assembly: FOUNDATION_WALL_DESCRIPTION,
+              thickness: construction.thickness,
+            },
+          }
+        : {}),
       message: `Added wall "${wall.name}" on ${level.name ?? level.id}${
+        construction
+          ? `, a foundation wall (${FOUNDATION_WALL_DESCRIPTION}), ${construction.thickness.toFixed(3)} m thick; a wall given a thickness keeps it`
+          : ''
+      }${
         site
           ? `; it reaches ${site.overhangM} m past the lot line (${site.sides.join(', ')}): the house belongs inside the buildable area (get_site, place_building)`
           : ''

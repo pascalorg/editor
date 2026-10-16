@@ -145,11 +145,11 @@ describe('setGroundFloor', () => {
 
   const standing = (id: string) => levelGradeStanding(useScene.getState().nodes, id)
 
-  test('seats the building so the level stands at grade, the ones under it below it, in one undo step', () => {
+  test('seats the building so the level stands 8 in over grade, the ones under it below it, in one undo step', () => {
     expect(standing('level_lower')).toBe('at-grade')
     expect(setGroundFloor('level_reception' as LevelNode['id'])).toBe(true)
     const nodes = useScene.getState().nodes
-    expect((nodes[BUILDING as AnyNodeId] as BuildingNode).position).toEqual([0, -3.4, 0])
+    expect((nodes[BUILDING as AnyNodeId] as BuildingNode).position).toEqual([0, -3.197, 0])
     expect((nodes[BUILDING as AnyNodeId] as BuildingNode).groundLevelId).toBe('level_reception')
     expect(standing('level_reception')).toBe('at-grade')
     expect(standing('level_lower')).toBe('below-grade')
@@ -172,6 +172,6 @@ describe('setGroundFloor', () => {
     const basement = addStoreyBelow(BUILDING)
     expect(basement.level).toBe(-3)
     expect(standing(basement.id)).toBe('below-grade')
-    expect(levelFloorWorldY(useScene.getState().nodes, 'level_reception')).toBeCloseTo(0, 9)
+    expect(levelFloorWorldY(useScene.getState().nodes, 'level_reception')).toBeCloseTo(0.203, 9)
   })
 })
