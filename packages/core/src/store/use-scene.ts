@@ -775,14 +775,7 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'stair') {
-      const { landscapeSurfaceId, autoLandscapeSnap, ...canonicalStair } = node
-      const normalized = normalizeStairNode(
-        migrateStairSurfaceMaterials({
-          ...canonicalStair,
-          destinationSurfaceId: node.destinationSurfaceId ?? landscapeSurfaceId,
-          autoSurfaceSnap: node.autoSurfaceSnap ?? autoLandscapeSnap,
-        }),
-      )
+      const normalized = normalizeStairNode(migrateStairSurfaceMaterials(node))
       if (normalized) {
         patchedNodes[id] = normalized
       }

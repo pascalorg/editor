@@ -67,18 +67,7 @@ Each entry: decision · why · enforced by · revisit when. Detail and examples 
 
 **E-016 Plugins own their agent tools (owner, 2026-10-10).** A plugin's agent tools ship with the plugin, not in core: contracts as a `PluginAgentTools` in its `./agent-tools` export (zod only, like `core/agent-tools`, and versioned by the plugin), pure operations as an `AgentOperations` in `./agent-operations`, browser execution and cards as a `PluginChatExtension`. The `Plugin` manifest does not change (E-014), and one contract still serves both surfaces. Contract annotations are hints: the host decides which tools are offered, to whom, and with what authority. These are reviewed, trusted contributions, not a sandbox. · Why: a plugin with dozens of specialist tools keeps them versioned with its own code, and installing it extends every agent the way a connector does. · Enforced: `core/src/agent-tools/contracts-purity.test.ts` (the rule each plugin entry follows), `mcp/src/tools/shared-tools.test.ts` (a plugin's operation tool through a real client), the hosted parity test. · See `plugin-authoring.md`, `agent-surfaces.md`. · Revisit: when plugins are loaded without review.
 
-**E-017 Additive node editing and surface contracts (2026-10-16).** Surface boundaries,
-connected movement, primary inspector predicates, independent child movement and
-preserved level/elevation are optional contributions on `NodeDefinition` and its
-existing capability types. They do not add fields to the v1 `Plugin` manifest.
-Boundary providers own their geometry and coordinates; framework consumers dispatch
-through the registry. Connected-move providers return pure patches, previewed with
-live overrides and committed once per gesture. Inspector predicates select an ID
-without subscribing the card to whole nodes. `metadata.roomBoundary === false` is
-the explicit opt-out from room topology. Shared run-authoring tools are exported by
-`editor/distribution`, never by the built-in plugin. · Why: external node packs need
-the same authoring behavior without depending on built-in kinds or private plugin
-shapes. · Contract: `wiki/architecture/plugin-authoring.md`.
+**E-017 Additive node editing and surface contracts (owner, 2026-10-16).** Surface boundaries, connected movement, primary inspector predicates, independent child movement and preserved level/elevation are optional contributions on `NodeDefinition` and its existing capability types. They do not add fields to the v1 `Plugin` manifest (E-014). Boundary providers own their geometry and coordinates; framework consumers dispatch through the registry. Connected-move providers return pure patches, previewed with live overrides and committed once per gesture. Inspector predicates select an ID without subscribing the card to whole nodes. `metadata.roomBoundary === false` is the explicit opt-out from room topology. Authoring tools that node packs share come from a host package, never from importing the built-in plugin (E-001). · Why: external node packs need the same authoring behavior without depending on built-in kinds or private plugin shapes. · Enforced: `core/src/services/port-connectivity.test.ts` (connected move), `editor/src/lib/direct-manipulation.test.ts` (independent children), `core/src/lib/space-detection.test.ts` (room-boundary opt-out), `nodes/src/stair/surface-transition.test.ts` (surface boundaries). · See `plugin-authoring.md`. · Revisit: when a contribution needs a field on the `Plugin` manifest itself.
 
 ## Testing
 
