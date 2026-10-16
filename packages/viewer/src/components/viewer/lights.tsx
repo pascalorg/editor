@@ -103,8 +103,16 @@ export function Lights() {
   const theme = getSceneTheme(sceneTheme)
   const shadows = useViewer((state) => state.shadows)
   const veiled = useViewer(groundVeiled)
-  // The fill stays while the ambiance eases out, so it fades with the rest rather than cutting.
-  const filled = useViewer((state) => groundVeiled(state) || state.ambianceActive)
+  // The eye's fill is mounted once, and stays: adding or taking away a light changes every lit
+  // material's shader (a runtime compile that lagged the switch to a basement), so it is there
+  // from the moment the scene has a level below grade (or a view first needs it) and only its
+  // intensity, the ambiance's, moves.
+  const wantsFill = useViewer(
+    (state) => state.hasLevelBelowGrade || groundVeiled(state) || state.ambianceActive,
+  )
+  const fillMounted = useRef(false)
+  if (wantsFill) fillMounted.current = true
+  const filled = fillMounted.current
   const atmosphere = useSceneAtmosphere()
   const lightSlots = useMemo(
     () => Array.from({ length: atmosphere ? 2 : theme.lights.length }, (_, index) => index),

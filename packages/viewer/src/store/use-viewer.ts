@@ -158,6 +158,13 @@ type ViewerState = {
   groundMode: GroundMode
   setGroundMode: (mode: GroundMode) => void
   /**
+   * The scene has a level below grade (the below-grade footprint is not empty): set by the site
+   * renderer. The ground materials carry the hole's mask, and the eye's fill light is mounted,
+   * from the moment this is true, so that changing floors changes uniforms and never materials
+   * or the light count; scenes without a level below grade keep plain materials. Never persisted.
+   */
+  hasLevelBelowGrade: boolean
+  /**
    * The eye lies under the ground at its own position (a free orbit under the lid). Set by the
    * viewer's underground ambiance from the camera; never persisted.
    */
@@ -505,6 +512,7 @@ const useViewer = create<ViewerState>()(
       groundWindowVeiled: false,
       groundMode: 'auto',
       setGroundMode: (mode) => set({ groundMode: mode }),
+      hasLevelBelowGrade: false,
       eyeUnderGround: false,
       ambianceActive: false,
 

@@ -183,22 +183,85 @@ test("the veil sheets are faint, unlit, seen from both sides, and leave the scen
   }
 })
 
+/** True when the node graph under `root` reads the hole's opening uniform. */
+function readsHoleOpening(root: unknown) {
+  let reads = false
+  ;(root as { traverse: (visit: (child: unknown) => void) => void }).traverse((child) => {
+    if (child === groundHoleOpenNode()) reads = true
+  })
+  return reads
+}
+
 test('the ground’s mask is the ground window and the hole, and its colour carries the rim', async () => {
+  withBasement()
   const renderer = await create(<SiteRenderer node={lot(false)} />)
   try {
-    for (const surface of ground(renderer.scene.instance as Object3D, 'solid')) {
+    expect(useViewer.getState().hasLevelBelowGrade).toBe(true)
+    const solid = ground(renderer.scene.instance as Object3D, 'solid')
+    expect(solid.length).toBeGreaterThan(0)
+    for (const surface of solid) {
       const material = surface.material as MeshBasicNodeMaterial
       expect(material.maskNode).not.toBeNull()
       // The hole's own factor is in the mask: one uniform, no rebuild as it opens.
-      let reads = false
-      ;(
-        material.maskNode as unknown as { traverse: (visit: (child: unknown) => void) => void }
-      ).traverse((child) => {
-        if (child === groundHoleOpenNode()) reads = true
-      })
-      expect(reads).toBe(true)
+      expect(readsHoleOpening(material.maskNode)).toBe(true)
     }
   } finally {
+    await renderer.unmount()
+  }
+  expect(useViewer.getState().hasLevelBelowGrade).toBe(false)
+})
+
+test('a scene with no level below grade keeps the plain ground window mask, with no hole in it', async () => {
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    expect(useViewer.getState().hasLevelBelowGrade).toBe(false)
+    for (const surface of ground(renderer.scene.instance as Object3D, 'solid')) {
+      const material = surface.material as MeshBasicNodeMaterial
+      expect(material.maskNode).not.toBeNull()
+      expect(readsHoleOpening(material.maskNode)).toBe(false)
+    }
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+// The ground materials are built once, from the moment the scene has a level below grade; going
+// down to it, coming back, and the hole opening and closing are uniforms. No material is swapped,
+// none is rebuilt (`version` is the count of `needsUpdate`), so no shader is compiled on the way.
+test('switching floors and opening the hole swap and rebuild no ground material', async () => {
+  withBasement()
+  const renderer = await create(<SiteRenderer node={lot(true)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const snapshot = () =>
+      ground(scene, 'solid').map((surface) => {
+        const material = surface.material as MeshBasicNodeMaterial
+        return { surface, material, version: material.version, mask: material.maskNode }
+      })
+    const before = snapshot()
+    expect(before.length).toBeGreaterThanOrEqual(3)
+
+    for (const floor of [
+      { belowGrade: true, gradeStanding: 'below-grade' },
+      { belowGrade: false, gradeStanding: 'at-grade' },
+      { belowGrade: true, gradeStanding: 'below-grade' },
+      { belowGrade: true, gradeStanding: 'below-grade', groundMode: 'solid' },
+      { belowGrade: true, gradeStanding: 'below-grade', groundMode: 'auto' },
+    ] as const) {
+      await act(async () => useViewer.setState(floor))
+      groundHoleOpenNode().value = floor.belowGrade ? 1 : 0
+      await renderer.advanceFrames(3, 0.05)
+      const after = snapshot()
+      expect(after).toHaveLength(before.length)
+      after.forEach((entry, index) => {
+        expect(entry.surface).toBe(before[index]?.surface)
+        expect(entry.material).toBe(before[index]?.material)
+        expect(entry.mask).toBe(before[index]?.mask)
+        expect(entry.version).toBe(before[index]?.version ?? -1)
+      })
+    }
+  } finally {
+    groundHoleOpenNode().value = 0
     await renderer.unmount()
   }
 })

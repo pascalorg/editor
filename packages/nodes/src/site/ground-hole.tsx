@@ -1,6 +1,11 @@
 'use client'
 
-import { groundHoleOpenNode, groundHoleOpenNow, groundWindowMaskNode } from '@pascal-app/viewer'
+import {
+  groundHoleOpenNode,
+  groundHoleOpenNow,
+  groundWindowMaskNode,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { ClampToEdgeWrapping, DataTexture, LinearFilter, RedFormat, UnsignedByteType } from 'three'
 import {
@@ -220,11 +225,25 @@ export function groundHoleColorNode(rimColor: string) {
   return mix(materialColor as any, color(rimColor), holePieces().rim)
 }
 
-/** Feeds the hole the footprints it is cut over (the polygons the grade ring runs along). */
+/**
+ * Feeds the hole the footprints it is cut over (the polygons the grade ring runs along), and says
+ * to the rest of the viewer whether the scene has a level below grade at all: the ground materials
+ * carry the hole's mask, and the eye's fill light is mounted, from then on, once, so that changing
+ * floors only changes uniforms.
+ */
 export function GroundHole({ footprints }: { footprints: ReadonlyArray<ReadonlyArray<Point>> }) {
   useEffect(() => {
     setGroundHoleFootprints(footprints)
+    const has = footprints.length > 0
+    if (useViewer.getState().hasLevelBelowGrade !== has)
+      useViewer.setState({ hasLevelBelowGrade: has })
   }, [footprints])
-  useEffect(() => () => setGroundHoleFootprints([]), [])
+  useEffect(
+    () => () => {
+      setGroundHoleFootprints([])
+      if (useViewer.getState().hasLevelBelowGrade) useViewer.setState({ hasLevelBelowGrade: false })
+    },
+    [],
+  )
   return null
 }

@@ -21,6 +21,7 @@ import {
   backdropGradient,
   deepSkyColor,
   getSceneTheme,
+  groundWindowMaskNode,
   horizonHazeColor,
   NodeRenderer,
   SITE_GROUND,
@@ -244,9 +245,21 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return { cx, cz, radius }
   }, [polygonPoints])
 
+  // Where the ground meets the levels below grade: the grade ring runs there under the veil.
+  const buriedFootprintsCache = useRef<[number, number][][]>([])
+  const buriedFootprints = useScene((state: S) => {
+    const next = belowGradeFootprints(state.nodes)
+    const prev = buriedFootprintsCache.current
+    if (polygonsMatch(next, prev)) return prev
+    buriedFootprintsCache.current = next
+    return next
+  })
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
   // keeps it tucked behind the grid/slab as before.
+  // The hole's nodes are in the material from the moment the scene has a level below grade (once,
+  // not when a floor is picked), the opening a uniform; without one the materials stay plain.
+  const hasBasement = buriedFootprints.length > 0
   const groundMaterial = useMemo(() => {
     const material = new MeshLambertNodeMaterial({ color: bgColor })
     material.polygonOffset = true
@@ -255,11 +268,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     // The ground window cuts the solid ground where it stands in the eye's way (viewer
     // lib/ground-window), and the hole opens over a level below grade (ground-hole.tsx), its
     // edge a noise threshold with a thin slate rim; with both closed the mask passes everywhere.
-    ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
-    material.colorNode = groundHoleColorNode(UNDERGROUND_RIM)
-    material.receivedShadowNode = groundHoleShadowNode()
+    if (hasBasement) {
+      ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+      material.colorNode = groundHoleColorNode(UNDERGROUND_RIM)
+      material.receivedShadowNode = groundHoleShadowNode()
+    } else {
+      ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+    }
     return material
-  }, [bgColor])
+  }, [bgColor, hasBasement])
 
   // Presentation horizon: a large ground disc under the lot, fading into the
   // active fog radiance (or the theme backdrop when there is no atmosphere) so
@@ -311,10 +328,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     material.polygonOffset = true
     material.polygonOffsetFactor = 2
     material.polygonOffsetUnits = 2
-    ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
-    material.receivedShadowNode = groundHoleShadowNode()
+    if (hasBasement) {
+      ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+      material.receivedShadowNode = groundHoleShadowNode()
+    } else {
+      ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+    }
     return material
   }, [
+    hasBasement,
     atmosphere,
     bgColor,
     backgroundColor,
@@ -348,15 +370,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return next
   })
 
-  // Where the ground meets the levels below grade: the grade ring runs there under the veil.
-  const buriedFootprintsCache = useRef<[number, number][][]>([])
-  const buriedFootprints = useScene((state: S) => {
-    const next = belowGradeFootprints(state.nodes)
-    const prev = buriedFootprintsCache.current
-    if (polygonsMatch(next, prev)) return prev
-    buriedFootprintsCache.current = next
-    return next
-  })
   const gradeRings = useMemo(
     () => buriedFootprints.map((outline) => gradeRingGeometry(outline, persistedField)),
     [buriedFootprints, persistedField],

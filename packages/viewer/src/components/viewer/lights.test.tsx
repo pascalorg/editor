@@ -96,9 +96,11 @@ test('over a veiled ground a fill shines from the eye, and the hemisphere lights
     expect(hemisphere.groundColor.getHex()).toBe(hemisphere.color.getHex())
 
     await act(async () => useViewer.setState({ groundMode: 'solid' }))
-    // The fill leaves with the earth it came with: it fades out with the ambiance, then goes.
+    // The fill is a light, and a light is never taken away (it would rebuild every lit material):
+    // with the earth it came with it fades out to nothing and stays.
     await renderer.advanceFrames(30, 0.1)
-    expect(lightsOf(scene).directional).toHaveLength(before.directional.length)
+    expect(lightsOf(scene).directional).toHaveLength(before.directional.length + 1)
+    expect(fill?.intensity).toBe(0)
   } finally {
     await renderer.unmount()
   }
@@ -242,6 +244,48 @@ test('a veiled basement is the same under the ground: the fill comes up from the
     expect(mid).toBeLessThan(EYE_FILL_INTENSITY)
     await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
     expect(fillOf(scene)?.intensity).toBeCloseTo(EYE_FILL_INTENSITY, 6)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+// Adding or taking away a light changes every lit material's shader (a runtime compile, ~430 ms on
+// the villa). A scene with a level below grade has the eye's fill from the start; going down to the
+// basement, back, into Solid and under the ground are intensities.
+test('switching floors and diving add and take away no light', async () => {
+  // What the site renderer says once the scene has a level below grade.
+  useViewer.setState({ hasLevelBelowGrade: true })
+  const { renderer, scene, camera } = await mountLights()
+  try {
+    const lights = () => {
+      const { directional, hemisphere } = lightsOf(scene)
+      const objects: Object3D[] = [...directional, ...(hemisphere ? [hemisphere] : [])]
+      const ambient = ambientOf(scene)
+      return ambient ? [...objects, ambient] : objects
+    }
+    const start = lights()
+    expect(fillOf(scene)).not.toBeNull()
+    expect(fillOf(scene)?.intensity).toBe(0)
+    const sameLights = () => {
+      const now = lights()
+      expect(now).toHaveLength(start.length)
+      for (const light of now) expect(start).toContain(light)
+    }
+
+    const steps: Array<() => Promise<void>> = [
+      () => act(async () => void useViewer.setState(BELOW_GRADE)),
+      async () => void camera.position.set(0, -3, 8),
+      () =>
+        act(async () => void useViewer.setState({ belowGrade: false, gradeStanding: 'at-grade' })),
+      async () => void camera.position.set(0, 6, 8),
+      () => act(async () => void useViewer.setState({ ...BELOW_GRADE, groundMode: 'solid' })),
+      () => act(async () => void useViewer.setState({ groundMode: 'auto' })),
+    ]
+    for (const step of steps) {
+      await step()
+      await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+      sameLights()
+    }
   } finally {
     await renderer.unmount()
   }
