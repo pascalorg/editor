@@ -40,6 +40,7 @@ async function connect() {
       open: [],
       source: 'catalog',
       vision: 'The catalog as it is.',
+      beyond: 'none: the test places what the request names.',
     },
   })
   const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!

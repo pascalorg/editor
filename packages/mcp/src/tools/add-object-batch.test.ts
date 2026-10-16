@@ -110,6 +110,7 @@ describe('add_object in run_batch over MCP', () => {
         open: [],
         source: 'catalog',
         vision: 'The catalog as it is.',
+        beyond: 'none: the test places what the request names.',
       },
     })
   })

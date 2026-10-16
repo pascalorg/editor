@@ -34,13 +34,19 @@ export type SessionRecord = {
   made: MadeEntry[]
   /** The design brief in force: the last one written, which furnishing follows (design_brief). */
   designBrief?: DesignBrief
+  /** The catalog ids view_assets showed: a brief keeps a catalog piece as it is only after one. */
+  viewed?: string[]
 }
 
-/** What an operation or a write asks its host to keep; a `designBrief` of null takes the brief away. */
+/**
+ * What an operation or a write asks its host to keep; a `designBrief` of null takes the brief away,
+ * `viewed` adds the catalog ids view_assets showed and null forgets them.
+ */
 export type SessionKeep = {
   checkpoint?: SessionCheckpoint
   made?: readonly MadeEntry[]
   designBrief?: DesignBrief | null
+  viewed?: readonly string[] | null
 }
 
 export const EMPTY_SESSION: SessionRecord = { checkpoints: {}, made: [] }
@@ -51,6 +57,8 @@ export const MAX_CHECKPOINTS = 8
 export const MAX_CHECKPOINT_NODES = 5000
 /** The made list stops growing here; the session record stays bounded. */
 export const MAX_MADE = 20_000
+/** The viewed list keeps the most recent ids up to here. */
+export const MAX_VIEWED = 500
 
 /**
  * The record after a keep: a checkpoint of the same name is replaced, made entries accumulate. A node
@@ -67,12 +75,17 @@ export function keepInSession(session: SessionRecord, keep: SessionKeep): Sessio
     return true
   })
   const designBrief = 'designBrief' in keep ? keep.designBrief : session.designBrief
+  const viewed =
+    keep.viewed === null
+      ? []
+      : [...new Set([...(session.viewed ?? []), ...(keep.viewed ?? [])])].slice(-MAX_VIEWED)
   return {
     checkpoints: keep.checkpoint
       ? { ...session.checkpoints, [keep.checkpoint.name]: keep.checkpoint }
       : session.checkpoints,
     made: fresh.length ? [...session.made, ...fresh].slice(0, MAX_MADE) : session.made,
     ...(designBrief ? { designBrief } : {}),
+    ...(viewed.length ? { viewed } : {}),
   }
 }
 
@@ -213,6 +226,7 @@ const Record_ = z.object({
     .refine((checkpoints) => Object.keys(checkpoints).length <= MAX_CHECKPOINTS),
   made: z.array(Made).max(MAX_MADE),
   designBrief: DesignBriefRecord.optional(),
+  viewed: z.array(z.string()).max(MAX_VIEWED).optional(),
 })
 
 /**

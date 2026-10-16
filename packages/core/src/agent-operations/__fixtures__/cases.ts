@@ -72,6 +72,8 @@ export type AgentToolCase = {
     assetViews?: Record<string, AssetViewFacts>
     session?: () => SessionRecord
     designBrief?: AgentContext['designBrief']
+    /** The person's words of the turn, where the host has a person (core and chat; not MCP). */
+    requestText?: string
   }
   surfaces?: AgentSurface[]
   readOnly?: boolean

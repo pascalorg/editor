@@ -294,5 +294,6 @@ export const viewAssets: AgentOperation<ViewAssetsInput> = (_nodes, { ids }, con
       }),
       previews,
     },
+    keep: { viewed: items.map((item) => item.id) },
   }
 }

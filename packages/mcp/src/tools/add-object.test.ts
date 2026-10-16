@@ -55,6 +55,7 @@ describe('add_object over MCP', () => {
           open: [],
           source: 'catalog',
           vision: 'The catalog as it is.',
+          beyond: 'none: the test places what the request names.',
         },
       })
       compiled = c.compiled

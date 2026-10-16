@@ -4,7 +4,8 @@ import {
   FURNISHING_CREATION_TOOLS,
 } from '../agent-tools/design-brief'
 import { AgentRefusal, refuse } from '../agent-tools/refusal'
-import type { AgentOperation } from './types'
+import type { AssetInput } from '../schema'
+import type { AgentContext, AgentOperation } from './types'
 
 /**
  * Furnishing follows the turn's design brief. A host that gates keeps the brief in force
@@ -17,7 +18,69 @@ export const NO_BRIEF =
   "Furnishing follows the turn's design brief: design_brief records what the request fixes, what it leaves open and where objects come from; until then the catalog can be searched and viewed, not placed, and no furnishing is made."
 
 const openSource = (piece: string) =>
-  `The brief left the source open: ${piece} can be made with add_object or place_design (view_assets shows the catalog's for reference), or named in the brief's asIs with a reason.`
+  `The brief left the source open: ${piece} can be made with add_object or place_design (view_assets shows the catalog's for reference), or, for technical equipment, named in the brief's asIs after view_assets, with a reason.`
+
+/**
+ * The function tags of the catalog's technical equipment: sanitaryware, kitchen, laundry and climate
+ * appliances, fixed services. A hosted item's `category` is its primary function tag; the built-in
+ * list carries function tags too. An item whose tags are not all technical is furniture here.
+ */
+const TECHNICAL_FUNCTIONS: ReadonlySet<string> = new Set([
+  'plumbing',
+  'sinks',
+  'toilets',
+  'showers',
+  'bathtubs',
+  'appliances',
+  'appliance',
+  'kitchen-appliances',
+  'laundry-appliances',
+  'climate-appliances',
+  'utilities',
+])
+
+export function isTechnicalEquipment(item: Pick<AssetInput, 'category' | 'functionTags'>): boolean {
+  const tags = item.functionTags?.length ? item.functionTags : [item.category]
+  return tags.every((tag) => TECHNICAL_FUNCTIONS.has(tag))
+}
+
+const furnitureFact = (name: string) =>
+  `${name} is furniture: in an open brief furniture is made (add_object, place_design) or the request names a catalog source; asIs keeps technical equipment (sanitaryware, appliances).`
+
+const notViewed = (ids: string[]) =>
+  `${ids.join(', ')} ${ids.length === 1 ? 'was' : 'were'} not viewed: asIs keeps a catalog piece only after view_assets showed it earlier in the same turn (chat) or session (MCP).`
+
+const SOURCE_NOT_IN_REQUEST =
+  "A source is set by the request: the brief's sourceQuote must be the person's own words naming it; this request names none, so its source is open."
+
+const squash = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim()
+
+/** Whether `design_brief` reads the item library: an open brief naming pieces as they are. */
+export function briefReadsCatalog(tool: string, input: unknown): boolean {
+  const { source, asIs } = asRecord(input)
+  return tool === 'design_brief' && source === 'open' && Array.isArray(asIs) && asIs.length > 0
+}
+
+/**
+ * An open brief keeps a catalog piece as it is only if it is technical equipment and view_assets
+ * showed it to the agent (the session's `viewed`). Furniture is refused first: looking at it would
+ * change nothing.
+ */
+function requireAsIs(brief: DesignBrief, context: AgentContext): void {
+  const named = [...new Set((brief.asIs ?? []).map((piece) => piece.assetId))]
+  if (brief.source !== 'open' || !named.length) return
+  const furniture = named.flatMap((id) => {
+    const item = context.catalog?.find((candidate) => candidate.id === id)
+    return item && !isTechnicalEquipment(item) ? [{ id, name: item.name }] : []
+  })
+  if (furniture.length)
+    refuse('brief_as_is_furniture', furniture.map(({ name }) => furnitureFact(name)).join(' '), {
+      pieces: furniture.map(({ id }) => id),
+    })
+  const viewed = new Set(context.session?.viewed ?? [])
+  const unseen = named.filter((id) => !viewed.has(id))
+  if (unseen.length) refuse('brief_as_is_not_viewed', notViewed(unseen), { pieces: unseen })
+}
 
 const isCatalogPlacement = (tool: string) =>
   (CATALOG_PLACEMENT_TOOLS as readonly string[]).includes(tool)
@@ -124,13 +187,14 @@ export function briefUnlocks(brief: DesignBrief): { unlocks: string[]; closed: s
       `${FURNISHING_CREATION_TOOLS.join(', ')} make the pieces.`,
       ...(asIs.length
         ? [
-            `place_items and place_in_room place the catalog pieces named in asIs: ${asIs.map((piece) => piece.assetId).join(', ')}.`,
+            `place_items and place_in_room place the technical equipment named in asIs: ${asIs.map((piece) => piece.assetId).join(', ')}.`,
           ]
         : []),
     ],
     closed: [
       'furnish_room places a whole stock set.',
       'Catalog pieces not named in asIs: place_items and place_in_room refuse them; view_assets shows the catalog for reference.',
+      'asIs keeps technical equipment (sanitaryware, appliances); furniture is made.',
     ],
   }
 }
@@ -140,18 +204,31 @@ export function briefUnlocks(brief: DesignBrief): { unlocks: string[]; closed: s
  * echoes it with what it opens and hands it back for the host to keep with the session; nothing in
  * the scene changes.
  */
-export const designBrief: AgentOperation<DesignBrief> = (_nodes, input) => {
+export const designBrief: AgentOperation<DesignBrief> = (_nodes, input, context) => {
   const brand = input.brand?.trim()
   if (input.source === 'brand' && !brand)
     refuse('brand_required', 'source brand names a range: give its name as brand ("IKEA").')
+  const quote = input.sourceQuote?.trim()
+  if (input.source !== 'open') {
+    if (!quote)
+      refuse(
+        'source_quote_required',
+        `source ${input.source} is set by the request: give sourceQuote, the person's own words that name it ("IKEA furniture only"); a request that names no source is open.`,
+      )
+    if (context.requestText !== undefined && !squash(context.requestText).includes(squash(quote)))
+      refuse('source_not_in_request', SOURCE_NOT_IN_REQUEST)
+  }
   const brief: DesignBrief = {
     fixed: input.fixed,
     open: input.open,
     source: input.source,
+    ...(input.source !== 'open' && quote ? { sourceQuote: quote } : {}),
     ...(input.source === 'brand' && brand ? { brand } : {}),
     vision: input.vision,
+    beyond: input.beyond,
     ...(input.source === 'open' && input.asIs?.length ? { asIs: input.asIs } : {}),
   }
+  requireAsIs(brief, context)
   return {
     result: { status: 'recorded', brief, ...briefUnlocks(brief) },
     keep: { designBrief: brief },

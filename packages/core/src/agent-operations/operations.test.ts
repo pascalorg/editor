@@ -37,6 +37,7 @@ describe('agent operations', () => {
         catalog: c.context?.catalog,
         assetViews: c.context?.assetViews,
         designBrief: c.context?.designBrief,
+        requestText: c.context?.requestText,
         session,
         materials: {},
       }

@@ -31,7 +31,7 @@ type Result = {
 const asset = (id: string): AssetInput => ({
   id,
   name: id,
-  category: 'furniture',
+  category: id === 'toilet' ? 'toilets' : 'furniture',
   thumbnail: `/items/${id}/thumbnail.webp`,
   src: `/items/${id}/model.glb`,
   dimensions: [0.5, 0.5, 0.4],
@@ -54,7 +54,9 @@ const brief = (source: 'open' | 'catalog' | 'brand', extra: Record<string, unkno
   fixed: ['a 4 by 5 m bedroom', 'a double bed', 'two nightstands', 'a wardrobe'],
   open: ['style', 'the form and finish of each piece'],
   source,
+  ...(source === 'open' ? {} : { sourceQuote: 'IKEA furniture only' }),
   vision: 'A calm room of oak and linen.',
+  beyond: 'none: the test places what the request names.',
   ...extra,
 })
 
@@ -171,13 +173,15 @@ describe('the design brief over MCP', () => {
     })
     expect(placed.payload.code).toBe('brief_source_open')
     expect(placed.payload.error).toBe(
-      "The brief left the source open: double-bed can be made with add_object or place_design (view_assets shows the catalog's for reference), or named in the brief's asIs with a reason.",
+      "The brief left the source open: double-bed can be made with add_object or place_design (view_assets shows the catalog's for reference), or, for technical equipment, named in the brief's asIs after view_assets, with a reason.",
     )
     const set = await call('furnish_room', { zoneId, roomType: 'bedroom' })
     expect(set.payload.code).toBe('brief_source_open')
   })
 
-  test('an open brief: a WC named in asIs with its reason is placed as it is', async () => {
+  test('an open brief: a WC viewed, then named in asIs with its reason, is placed as it is', async () => {
+    await call('view_assets', { ids: ['toilet'] })
+    expect(bridge.agentSession.read().viewed).toEqual(['toilet'])
     await call(
       'design_brief',
       brief('open', { asIs: [{ assetId: 'toilet', reason: 'technical equipment' }] }),
@@ -185,6 +189,62 @@ describe('the design brief over MCP', () => {
     const wc = await call('place_items', { items: [{ assetId: 'toilet', x: 1, z: 1 }], levelId })
     expect(wc.result.isError).toBeFalsy()
     expect(Object.values(bridge.getNodes()).some((node) => node.type === 'item')).toBe(true)
+  })
+
+  test('the owner’s bedroom: furniture named in asIs is refused, a toilet not viewed is refused, viewed it is kept', async () => {
+    await call('view_assets', { ids: ['double-bed', 'bedside-table', 'closet', 'toilet'] })
+    const furniture = await call(
+      'design_brief',
+      brief('open', {
+        asIs: ['double-bed', 'bedside-table', 'closet'].map((assetId) => ({
+          assetId,
+          reason: 'fits the room',
+        })),
+      }),
+    )
+    expect(furniture.result.isError).toBe(true)
+    expect(furniture.payload.code).toBe('brief_as_is_furniture')
+    expect(String(furniture.payload.error)).toContain(
+      'double-bed is furniture: in an open brief furniture is made (add_object, place_design) or the request names a catalog source; asIs keeps technical equipment (sanitaryware, appliances).',
+    )
+    expect(bridge.agentSession.read().designBrief).toBeUndefined()
+
+    bridge.agentSession.keep({ viewed: null })
+    const unseen = await call(
+      'design_brief',
+      brief('open', { asIs: [{ assetId: 'toilet', reason: 'technical equipment' }] }),
+    )
+    expect(unseen.payload.code).toBe('brief_as_is_not_viewed')
+    expect(String(unseen.payload.error)).toContain('toilet was not viewed')
+    expect(String(unseen.payload.error)).toContain('view_assets')
+
+    await call('view_assets', { ids: ['toilet'] })
+    const kept = await call(
+      'design_brief',
+      brief('open', { asIs: [{ assetId: 'toilet', reason: 'technical equipment' }] }),
+    )
+    expect(kept.payload.status).toBe('recorded')
+    expect(
+      (await call('place_items', { items: [{ assetId: 'toilet', x: 1, z: 1 }], levelId })).result
+        .isError,
+    ).toBeFalsy()
+  })
+
+  test('a source other than open must quote the request; the quote is required here and not checked', async () => {
+    const bare = await call('design_brief', { ...brief('catalog'), sourceQuote: undefined })
+    expect(bare.payload.code).toBe('source_quote_required')
+    expect(bridge.agentSession.read().designBrief).toBeUndefined()
+    const quoted = await call('design_brief', brief('catalog', { sourceQuote: 'que du catalogue' }))
+    expect(quoted.payload.brief).toMatchObject({
+      source: 'catalog',
+      sourceQuote: 'que du catalogue',
+    })
+  })
+
+  test('beyond is required: a brief without it is not accepted', async () => {
+    const { result } = await call('design_brief', { ...brief('open'), beyond: undefined })
+    expect(result.isError).toBe(true)
+    expect(bridge.agentSession.read().designBrief).toBeUndefined()
   })
 
   test('a catalog brief (“IKEA only”): furnish_room and place_items answer', async () => {

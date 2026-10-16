@@ -13,18 +13,22 @@ import { storeysScene } from './structure-cases'
  * catalog brief places the catalog's.
  */
 
-const piece = (id: string, name: string, category: string): AssetInput => ({
+const piece = (id: string, name: string, functionTag: string): AssetInput => ({
   id,
   name,
-  category,
+  category: functionTag,
+  functionTags: [functionTag],
   thumbnail: `/items/${id}/thumbnail.webp`,
   src: `/items/${id}/model.glb`,
   dimensions: [1, 1, 1],
 })
 const CATALOG = [
-  piece('double-bed', 'Double bed', 'beds'),
-  piece('toilet', 'Toilet', 'bathroom'),
+  piece('double-bed', 'Double bed', 'double-beds'),
+  piece('bedside-table', 'Bedside table', 'coffee-tables'),
+  piece('closet', 'Closet', 'wardrobes'),
+  piece('toilet', 'Toilet', 'toilets'),
 ]
+const seen = (...ids: string[]) => () => ({ checkpoints: {}, made: [], viewed: ids })
 const library = { activeLevelId: null, catalog: CATALOG }
 
 const OPEN: DesignBrief = {
@@ -32,6 +36,7 @@ const OPEN: DesignBrief = {
   open: ['style and character', 'the form and finish of each piece', 'materials and finishes'],
   source: 'open',
   vision: 'A calm room of oak and linen, low furniture, the bed under the window wall.',
+  beyond: 'linen bedding and curtains, a wool rug, bedside lamps, a plant by the window, framed art',
 }
 const OPEN_AS_IS: DesignBrief = {
   ...OPEN,
@@ -41,8 +46,10 @@ const IKEA: DesignBrief = {
   fixed: ['a 4 by 5 m bedroom', 'furniture from the IKEA range only'],
   open: ['which pieces', 'the finishes'],
   source: 'brand',
+  sourceQuote: 'furniture from the IKEA range only',
   brand: 'IKEA',
   vision: 'IKEA pieces in pale birch, kept plain.',
+  beyond: 'none: the request says IKEA furniture only',
 }
 
 /** A brief that opens every furnishing tool, for the tests whose subject is not the gate. */
@@ -50,7 +57,9 @@ export const CATALOG_BRIEF: DesignBrief = {
   fixed: ['the furnishings the test places'],
   open: [],
   source: 'catalog',
+  sourceQuote: 'the catalog only',
   vision: "The catalog's pieces, as they are.",
+  beyond: 'none: the request says the catalog only',
 }
 
 const ground = { levelId: 'level_ground' }
@@ -60,7 +69,7 @@ const wc = { items: [{ assetId: 'toilet', x: 2, z: 2 }], ...ground }
 
 const BEFORE = ['design_brief records what the request fixes', 'searched and viewed, not placed']
 const OPEN_SOURCE = (pieceNamed: string) =>
-  `The brief left the source open: ${pieceNamed} can be made with add_object or place_design (view_assets shows the catalog's for reference), or named in the brief's asIs with a reason.`
+  `The brief left the source open: ${pieceNamed} can be made with add_object or place_design (view_assets shows the catalog's for reference), or, for technical equipment, named in the brief's asIs after view_assets, with a reason.`
 
 export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
   {
@@ -72,8 +81,10 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
       open: OPEN.open,
       source: 'open',
       vision: OPEN.vision,
+      beyond: OPEN.beyond,
       asIs: OPEN_AS_IS.asIs,
     },
+    context: { ...library, session: seen('toilet') },
     readOnly: true,
     expect: {
       result: { status: 'recorded', brief: OPEN_AS_IS },
@@ -85,7 +96,15 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     name: 'a brand names its range; the brief opens the catalog',
     tool: 'design_brief',
     scene: storeysScene,
-    input: { fixed: IKEA.fixed, open: IKEA.open, source: 'brand', brand: 'IKEA', vision: IKEA.vision },
+    input: {
+      fixed: IKEA.fixed,
+      open: IKEA.open,
+      source: 'brand',
+      sourceQuote: IKEA.sourceQuote,
+      brand: 'IKEA',
+      vision: IKEA.vision,
+      beyond: IKEA.beyond,
+    },
     readOnly: true,
     expect: {
       result: { status: 'recorded', brief: IKEA, closed: [] },
@@ -96,8 +115,137 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     name: 'a brand brief without a brand is refused',
     tool: 'design_brief',
     scene: storeysScene,
-    input: { fixed: IKEA.fixed, open: [], source: 'brand', vision: IKEA.vision },
+    input: {
+      fixed: IKEA.fixed,
+      open: [],
+      source: 'brand',
+      sourceQuote: IKEA.sourceQuote,
+      vision: IKEA.vision,
+      beyond: IKEA.beyond,
+    },
     expect: { refusal: 'brand_required', mentions: ['IKEA'] },
+  },
+  {
+    name: 'a source other than open without the request’s words is refused: "Build a house" does not name the catalog',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: ['A house (single-family home)'],
+      open: [],
+      source: 'catalog',
+      vision: 'Furnished from the catalog.',
+      beyond: 'none',
+    },
+    expect: { refusal: 'source_quote_required', mentions: ['sourceQuote', 'the person\'s own words'] },
+  },
+  {
+    name: 'a quote the request does not hold is refused with the fact, where a person’s message is lent',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: ['A house (single-family home)'],
+      open: [],
+      source: 'catalog',
+      sourceQuote: 'Furnished from the catalog',
+      vision: 'Furnished from the catalog.',
+      beyond: 'none',
+    },
+    context: { requestText: 'Build a house' },
+    surfaces: ['core', 'chat'],
+    expect: {
+      refusal: 'source_not_in_request',
+      mentions: ['this request names none, so its source is open'],
+    },
+  },
+  {
+    name: 'a quote the request holds opens the catalog: "IKEA furniture only" in a bedroom request',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: IKEA.fixed,
+      open: [],
+      source: 'brand',
+      sourceQuote: 'IKEA furniture only',
+      brand: 'IKEA',
+      vision: IKEA.vision,
+      beyond: IKEA.beyond,
+    },
+    context: { requestText: 'a bedroom with IKEA furniture only' },
+    surfaces: ['core', 'chat'],
+    readOnly: true,
+    expect: { result: { status: 'recorded', brief: { source: 'brand', sourceQuote: 'IKEA furniture only' } } },
+  },
+  {
+    name: 'view_assets records what it showed, for the brief’s asIs',
+    tool: 'view_assets',
+    scene: storeysScene,
+    input: { ids: ['toilet'] },
+    context: library,
+    readOnly: true,
+    expect: {
+      result: {},
+      session: (session) => (session.viewed?.includes('toilet') ? [] : ['not kept']),
+    },
+  },
+  {
+    name: 'an open brief naming a double bed, a bedside table and a closet as they are is refused: furniture is made',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: OPEN.fixed,
+      open: OPEN.open,
+      source: 'open',
+      vision: OPEN.vision,
+      beyond: OPEN.beyond,
+      asIs: ['double-bed', 'bedside-table', 'closet'].map((assetId) => ({
+        assetId,
+        reason: 'fits the room',
+      })),
+    },
+    context: { ...library, session: seen('double-bed', 'bedside-table', 'closet') },
+    expect: {
+      refusal: 'brief_as_is_furniture',
+      mentions: [
+        'Double bed is furniture: in an open brief furniture is made (add_object, place_design) or the request names a catalog source; asIs keeps technical equipment (sanitaryware, appliances).',
+        'Bedside table is furniture',
+        'Closet is furniture',
+      ],
+    },
+  },
+  {
+    name: 'an open brief keeping a toilet not viewed is refused: look first',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: OPEN.fixed,
+      open: OPEN.open,
+      source: 'open',
+      vision: OPEN.vision,
+      beyond: OPEN.beyond,
+      asIs: OPEN_AS_IS.asIs,
+    },
+    context: library,
+    expect: {
+      refusal: 'brief_as_is_not_viewed',
+      mentions: ['toilet was not viewed', 'view_assets'],
+    },
+  },
+  {
+    name: 'a brief that adds nothing says so and why',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: ['a bedroom', 'catalog only'],
+      open: [],
+      source: 'catalog',
+      sourceQuote: 'catalog only',
+      vision: 'The catalog as it is.',
+      beyond: 'none: the request says catalog only',
+    },
+    readOnly: true,
+    expect: {
+      result: { status: 'recorded', brief: { beyond: 'none: the request says catalog only' } },
+    },
   },
   {
     name: 'before a brief, a sofa is not made',

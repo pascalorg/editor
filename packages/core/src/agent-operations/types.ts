@@ -52,6 +52,12 @@ export type AgentContext = {
    * host that does not gate leaves it out.
    */
   designBrief?: DesignBrief | null
+  /**
+   * The person's words of the turn, on a host that has a person (the chat): the source quote of a
+   * design brief is checked against it. A host with no person's message (MCP) leaves it out and the
+   * quote is not checked.
+   */
+  requestText?: string
 }
 
 /** One add_object call of a batch, built by its host: the compiled module, or why it failed. */

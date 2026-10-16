@@ -32,6 +32,7 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
         open: [],
         source: 'open',
         vision: 'Carved oak.',
+        beyond: 'none: the test places what the request names.',
       },
     })
     const store = new InMemorySceneStore()

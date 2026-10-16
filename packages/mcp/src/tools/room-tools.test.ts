@@ -22,6 +22,7 @@ describe('room tools', () => {
         open: [],
         source: 'catalog',
         vision: 'The catalog as it is.',
+        beyond: 'none: the test places what the request names.',
       },
     })
     const server = new McpServer({ name: 'test', version: '0.0.0' })

@@ -10,6 +10,7 @@ import {
   applyAgentOutcome,
   assetViewNeeds,
   assetViewsReadCatalog,
+  briefReadsCatalog,
   createAssetViewLoader,
   createFetchAssetViewIO,
   buildBatchObjects,
@@ -635,7 +636,8 @@ export function registerOperationTool(
         ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
         ...(designBrief !== undefined && { designBrief }),
-        ...((tool.catalog || batchPlacesInRoom || assetViewsReadCatalog(tool.contract.name, input)) && {
+        ...((tool.catalog || batchPlacesInRoom || assetViewsReadCatalog(tool.contract.name, input) ||
+          (tool.contract.name === designBriefTool.name && briefReadsCatalog(input))) && {
           catalog: await catalog(),
         }),
         ...(batchesObjects && {
