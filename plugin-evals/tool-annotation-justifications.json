@@ -150,6 +150,19 @@
       }
     },
     {
+      "name": "author_scene",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes the whole conversion: levels, walls, openings, rooms, slabs, columns, items and lights replace what the scene held.",
+        "destructiveHint": "Replaces the scene's levels with the payload's; with replace it writes over a previous conversion.",
+        "openWorldHint": "Everything it touches is the scene and the project's own artifact store."
+      }
+    },
+    {
       "name": "check_collisions",
       "annotations": {
         "readOnlyHint": true,
