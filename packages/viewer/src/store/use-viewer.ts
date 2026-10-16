@@ -177,6 +177,13 @@ type ViewerState = {
    */
   eyeUnderGround: boolean
   /**
+   * Levels whose foundation a plugin is drawing under the ground right now (a framing plugin pours
+   * the real footing and stem from the building's record). The generic foundation derived from the
+   * walls is not drawn under these levels, so nothing is drawn twice. Written by that plugin while
+   * its meshes are mounted, empty otherwise; never persisted.
+   */
+  pluginFoundationLevelIds: readonly string[]
+  /**
    * The world is turned, or turning, to earth (the underground ambiance's factor is above 0).
    * Its factor itself eases every frame and lives with the shaders, not here; this flips only at
    * the crossing's ends. Set by the viewer's underground ambiance; never persisted.
@@ -535,6 +542,7 @@ const useViewer = create<ViewerState>()(
       hasLevelBelowGrade: false,
       diveAvailable: false,
       eyeUnderGround: false,
+      pluginFoundationLevelIds: [],
       ambianceActive: false,
       undergroundLook: DEFAULT_UNDERGROUND_LOOK,
       setUndergroundLook: (look) =>

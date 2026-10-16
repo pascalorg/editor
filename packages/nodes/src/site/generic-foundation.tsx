@@ -32,7 +32,8 @@ import { noopRaycast } from './ground-veil'
  *
  * Two meshes and two materials, made once; nothing about them depends on the level shown or on
  * where the eye is, so a floor switch or a dive compiles nothing. Geometry is rebuilt only when
- * the foundation itself changes.
+ * the foundation itself changes, or when a plugin takes a level's foundation over under the ground
+ * (`pluginFoundationLevelIds`): that level's members leave the geometry while it draws them.
  */
 
 const INCH = 0.0254
@@ -151,7 +152,15 @@ function FoundationPart({
 }
 
 export function GenericFoundation() {
-  const members = useFoundationMembers()
+  const derived = useFoundationMembers()
+  const takenOver = useViewer((state) => state.pluginFoundationLevelIds)
+  const members = useMemo(
+    () =>
+      takenOver.length === 0
+        ? derived
+        : derived.filter((member) => !takenOver.includes(member.levelId)),
+    [derived, takenOver],
+  )
   const shown = useViewer((state) => !state.walkthroughMode)
   const concrete = useMemo(concreteMaterial, [])
   const block = useMemo(blockMaterial, [])

@@ -189,6 +189,25 @@ test('switching floors and crossing the ground swap and rebuild no foundation me
   }
 })
 
+test("a plugin that draws a level's foundation under the ground takes that level's members out of the geometry, and gives them back", async () => {
+  setHouse(true)
+  const renderer = await create(<SiteRenderer node={lot()} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const names = () => parts(scene).map((part) => part.userData.genericFoundation)
+    expect(names()).toEqual(['footing'])
+    // another level's foundation is not this one's: nothing leaves
+    await act(async () => useViewer.setState({ pluginFoundationLevelIds: ['level_g'] }))
+    expect(names()).toEqual(['footing'])
+    await act(async () => useViewer.setState({ pluginFoundationLevelIds: ['level_b'] }))
+    expect(names()).toEqual([])
+    await act(async () => useViewer.setState({ pluginFoundationLevelIds: [] }))
+    expect(names()).toEqual(['footing'])
+  } finally {
+    await renderer.unmount()
+  }
+})
+
 test('an edit that leaves the foundation as it was rebuilds none of it', async () => {
   setHouse(false)
   const renderer = await create(<SiteRenderer node={lot()} />)
