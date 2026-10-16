@@ -290,9 +290,11 @@ export function foundationRegionOf(
 export function foundationReadingOf(nodes: Nodes, buildingId?: string | null): FoundationReading {
   const { region, basis: regionBasis } = foundationRegionOf(nodes, buildingId)
   const id: FoundationConstructionId = region === 'europe' ? 'cast-concrete' : 'cmu'
-  const regionName =
-    region === 'us' ? 'United States' : region === 'europe' ? 'Europe' : 'no region known'
-  const basis = `region ${regionName}: ${regionBasis}${region === 'generic' ? '; the generic block foundation applies' : ''}`
+  const regionPart =
+    region === 'generic'
+      ? `no region known (${regionBasis})`
+      : `region ${region === 'us' ? 'United States' : 'Europe'} (${regionBasis})`
+  const basis = `${regionPart}${region === 'generic' ? '; the generic block foundation applies' : ''}`
   return { region, construction: FOUNDATION_CONSTRUCTIONS[id], basis }
 }
 

@@ -203,10 +203,17 @@ function plainWallProblems(wall: AnyNode | undefined): string[] {
     : [`expected a plain 0.1 m wall, got ${JSON.stringify(wall)}`]
 }
 
-const withNodes = (scene: SceneGraph, ...added: { id: string }[]): SceneGraph => ({
-  ...scene,
-  nodes: { ...scene.nodes, ...Object.fromEntries(added.map((node) => [node.id, node])) },
-})
+/**
+ * `scene` standing on `site` the way a loaded project nests: the site holds the buildings, so every
+ * runner finds it.
+ */
+function onSite(scene: SceneGraph, site: { id: string; children: string[] }): SceneGraph {
+  const nodes: Record<string, any> = { ...scene.nodes }
+  const buildings = Object.values(nodes).filter((node) => node.type === 'building')
+  for (const building of buildings) nodes[building.id] = { ...building, parentId: site.id }
+  nodes[site.id] = { ...site, children: buildings.map((building) => building.id) }
+  return { nodes, rootNodeIds: [site.id] }
+}
 
 const dossierAt = (formatted: string) => ({
   provider: 'pascal-map',
@@ -217,12 +224,12 @@ const dossierAt = (formatted: string) => ({
 
 /** The basement house on a site in Paris, in Austin, or with no site at all (`basementHouseScene`). */
 const parisBasementScene = (): SceneGraph =>
-  withNodes(
+  onSite(
     basementHouseScene(),
     SiteNode.parse({ id: 'site_paris', dossier: dossierAt('12 Rue de Rivoli, 75004 Paris, France') }),
   )
 const austinBasementScene = (): SceneGraph =>
-  withNodes(
+  onSite(
     basementHouseScene(),
     SiteNode.parse({ id: 'site_austin', address: { city: 'Austin', state: 'Texas' } }),
   )
@@ -596,7 +603,7 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
   {
     name: 'add_level below on a site in Paris says its walls are cast concrete, and the region',
     tool: 'add_level',
-    scene: () => withNodes(storeysScene(), SiteNode.parse({ id: 'site_paris', dossier: dossierAt('Paris, France') })),
+    scene: () => onSite(storeysScene(), SiteNode.parse({ id: 'site_paris', dossier: dossierAt('Paris, France') })),
     input: { buildingId: 'building_house', position: 'below' },
     expect: {
       result: { ok: true },
@@ -607,7 +614,7 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     name: 'set_ground_level on a site in Paris seats the building 0.15 m over grade, as cast concrete foundations do',
     tool: 'set_ground_level',
     scene: () =>
-      withNodes(storeysScene(), SiteNode.parse({ id: 'site_paris', dossier: dossierAt('Paris, France') })),
+      onSite(storeysScene(), SiteNode.parse({ id: 'site_paris', dossier: dossierAt('Paris, France') })),
     input: { levelId: 'level_ground' },
     expect: {
       result: {

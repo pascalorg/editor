@@ -94,7 +94,7 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
         : {}),
       message: `Added wall "${wall.name}" on ${level.name ?? level.id}${
         foundation
-          ? `, a foundation wall against the ground (${reading.construction.description}), ${(wall.thickness ?? 0).toFixed(3)} m thick, built as ${reading.basis} says; a wall given a thickness keeps it`
+          ? `, a foundation wall against the ground (${reading.construction.description}), ${(wall.thickness ?? 0).toFixed(3)} m thick; ${reading.basis}; a wall given a thickness keeps it`
           : partition
             ? `, an ordinary wall: a partition inside the outline of this level's walls; ${foundationWallRule(reading)}`
             : ''
