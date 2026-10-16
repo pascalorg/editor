@@ -18,7 +18,7 @@
     "@pascal-app/ifc-converter": "*",
     "@pascal-app/nodes": "*",
     "@pascal-app/viewer": "*",
-    "lucide-react": "^1.57.0",
+    "lucide-react": "^1.58.0",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@tailwindcss/postcss": "^4.3.3",
