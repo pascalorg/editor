@@ -59,9 +59,10 @@ export type GroundSeat = {
   /** The construction, the region and style it was read from. */
   foundation: FoundationReading
   /**
-   * The floor datum stands between grade and the foundation's top (`aboveGrade`), within
-   * {@link GROUND_SEAT_TOLERANCE}: what a scene seated before the 8 in rule and one seated by it
-   * both satisfy, so a check has nothing to say about either.
+   * The floor datum stands between grade and the foundation's top (`aboveGrade`, or the block's
+   * 8 in where that is higher), within {@link GROUND_SEAT_TOLERANCE}: what a scene seated before
+   * the 8 in rule, one seated by it and one seated by its own region's construction all satisfy,
+   * so a check has nothing to say about any of them.
    */
   seated: boolean
   /** The floor datum stands at `aboveGrade` over grade, within the tolerance. */
@@ -89,7 +90,9 @@ export function groundSeat(
     offset,
     aboveGrade,
     foundation,
-    seated: offset >= -GROUND_SEAT_TOLERANCE && offset <= aboveGrade + GROUND_SEAT_TOLERANCE,
+    seated:
+      offset >= -GROUND_SEAT_TOLERANCE &&
+      offset <= Math.max(aboveGrade, GROUND_FLOOR_ABOVE_GRADE) + GROUND_SEAT_TOLERANCE,
     atFoundationTop: Math.abs(offset - aboveGrade) <= GROUND_SEAT_TOLERANCE,
   }
 }

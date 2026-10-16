@@ -336,6 +336,9 @@ describe('what reads the construction', () => {
     expect(paris).toMatchObject({ aboveGrade: 0.15, atFoundationTop: true, seated: true })
     const us = seated(house({ address: { state: 'TX' } }), 0.203)
     expect(us).toMatchObject({ aboveGrade: 0.203, atFoundationTop: true })
+    // a European scene seated at the block's 0.203 m before the region was read is still seated
+    const before = seated(house({ dossier: dossier('Paris, France') }), 0.203)
+    expect(before).toMatchObject({ seated: true, atFoundationTop: false })
     const tooHigh = seated(house({ dossier: dossier('Paris, France') }), 0.3)
     expect(tooHigh).toMatchObject({ seated: false })
   })
