@@ -382,7 +382,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
       skipped,
       doorWallIndex: doorWall,
       doorsDetected: doors.length,
-      message: `Furnished the ${input.roomType} with ${items.length} item${items.length === 1 ? '' : 's'}${skipped.length ? `, skipped ${skipped.length}` : ''}.${skipped.length ? ` For what was skipped: ${OTHER_SOURCES}` : ''}`,
+      message: `Furnished the ${input.roomType} with ${items.length} item${items.length === 1 ? '' : 's'}${skipped.length ? `, skipped ${skipped.length}` : ''}.${skipped.length ? ` For what was skipped: ${OTHER_SOURCES}` : ''}${input.zoneId && items.length ? ` view_scene with interior { zoneId: "${input.zoneId}" } shows the room from inside, at a person's height.` : ''}`,
     },
     ...(items.length
       ? { changes: { create: items.map((node) => ({ node, parentId: levelId })) } }

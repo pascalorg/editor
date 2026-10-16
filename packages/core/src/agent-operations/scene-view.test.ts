@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { z } from 'zod'
-import { isAgentRefusal, viewSceneTool } from '../agent-tools'
+import { furnishRoomTool, isAgentRefusal, viewSceneTool } from '../agent-tools'
 import {
   type AnyNode,
   BuildingNode,
@@ -19,8 +19,10 @@ import {
   StairNode,
   WallNode,
   WindowNode,
+  ZoneNode,
 } from '../schema'
 import { VIEW_SCENE_CASES, viewSceneCaseProblems } from './__fixtures__/view-scene-cases'
+import { pointInPolygon } from './plan-geometry'
 import {
   photoCropSize,
   type SceneViewBox,
@@ -911,4 +913,215 @@ describe('the case table', () => {
       }
     })
   }
+})
+
+// The study of 15 Oct: no interior view in 4 of 4 turns, and the model said it could not see
+// inside. interior {zoneId} puts the eye in a room at a person's height, looking across it.
+describe('a look from inside a room', () => {
+  type Poly = [number, number][]
+  const room = (id: string, polygon: Poly, levelId = 'level_0', holes: Poly[] = []) =>
+    ZoneNode.parse({ id, parentId: levelId, name: `Room ${id}`, polygon, holes })
+  const withRooms = (zones: ZoneNode[], base = finishedBuilding()) => {
+    const nodes = { ...base } as Record<string, AnyNode>
+    for (const zone of zones) {
+      nodes[zone.id] = zone
+      const level = nodes[zone.parentId!] as LevelNode
+      nodes[level.id] = { ...level, children: [...level.children, zone.id] } as AnyNode
+    }
+    return nodes
+  }
+  const rect = (x0: number, z0: number, x1: number, z1: number): Poly => [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+  const L: Poly = [
+    [0, 0],
+    [8, 0],
+    [8, 3],
+    [3, 3],
+    [3, 9],
+    [0, 9],
+  ]
+  const standsIn = (pose: ReturnType<typeof sceneViewPose>, polygon: Poly) =>
+    pointInPolygon([pose.position[0], pose.position[2]], polygon, false)
+
+  const SHAPES: [string, Poly][] = [
+    ['a bedroom', rect(1, 1, 5, 5)],
+    ['a long corridor', rect(0.2, 0.2, 1.4, 7)],
+    ['an L-shaped living room', L],
+    ['a small bathroom', rect(8, 1, 9.6, 2.5)],
+    ['a room with a pillar-sized hole in its middle', rect(10, 1, 16, 7)],
+  ]
+
+  for (const [name, polygon] of SHAPES) {
+    test(`the camera stands inside ${name}, at eye height, looking across it`, () => {
+      const hole: Poly = [
+        [12.8, 3.8],
+        [13.2, 3.8],
+        [13.2, 4.2],
+        [12.8, 4.2],
+      ]
+      const holes = name.includes('hole') ? [hole] : []
+      const nodes = withRooms([room('zone_a', polygon, 'level_0', holes)])
+      const before = structuredClone(nodes)
+      const plan = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' } })
+      expect(plan.interior).toEqual({ levelId: 'level_0', roomId: 'zone_a' })
+      expect(plan.pose.projection).toBe('perspective')
+      expect(standsIn(plan.pose, polygon)).toBe(true)
+      for (const h of holes) expect(standsIn(plan.pose, h)).toBe(false)
+      expect(plan.pose.position[1]).toBe(1.6)
+      // It looks at the room, across it, and not at the floor under its feet.
+      expect(standsIn({ ...plan.pose, position: plan.pose.target }, polygon)).toBe(true)
+      const [dx, dz] = [
+        plan.pose.target[0] - plan.pose.position[0],
+        plan.pose.target[2] - plan.pose.position[2],
+      ]
+      // A gentle look across, under 25 degrees down, not at the floor a step away.
+      const pitch = Math.atan2(plan.pose.position[1] - plan.pose.target[1], Math.hypot(dx, dz))
+      expect(pitch).toBeLessThan((25 * Math.PI) / 180)
+      expect(plan.pose.target[1]).toBeLessThan(plan.pose.position[1])
+      expect(plan.pose).toMatchObject({ fov: 75 })
+      expect(plan.size).toEqual({ w: VIEW_SIZE.w, h: VIEW_SIZE.h })
+      expect(nodes).toEqual(before)
+    })
+  }
+
+  test('the eye is a step in from the walls, never in one', () => {
+    const polygon = rect(1, 1, 5, 5)
+    const { pose } = sceneViewPlan(withRooms([room('zone_a', polygon)]), {
+      interior: { zoneId: 'zone_a' },
+    })
+    const nearest = Math.min(
+      pose.position[0] - 1,
+      5 - pose.position[0],
+      pose.position[2] - 1,
+      5 - pose.position[2],
+    )
+    expect(nearest).toBeGreaterThanOrEqual(0.25)
+  })
+
+  test('a room on the upper floor is stood in at that floor, its own storey cut', () => {
+    const nodes = withRooms([room('zone_up', rect(2, 2, 7, 6), 'level_1')])
+    const plan = sceneViewPlan(nodes, { interior: { zoneId: 'zone_up' } })
+    expect(plan.interior).toEqual({ levelId: 'level_1', roomId: 'zone_up' })
+    expect(plan.pose.position[1]).toBeCloseTo(3 + 1.6, 6)
+    expect(standsIn(plan.pose, rect(2, 2, 7, 6))).toBe(true)
+  })
+
+  test('a building away from the origin and turned is stood in where it stands', () => {
+    const base = finishedBuilding()
+    const building = base.building_main as BuildingNode
+    const turned = {
+      ...base,
+      building_main: { ...building, position: [30, 0, -12], rotation: [0, Math.PI / 2, 0] },
+    } as Record<string, AnyNode>
+    const nodes = withRooms([room('zone_a', rect(1, 1, 5, 5))], turned)
+    const { pose } = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' } })
+    // The building's frame turned a quarter about its origin, then moved: (x, z) → (30 + z, -12 - x).
+    const onSite = rect(1, 1, 5, 5).map(([x, z]) => [30 + z, -12 - x]) as Poly
+    expect(standsIn(pose, onSite)).toBe(true)
+  })
+
+  test('eyeHeight, fov and the side the eye stands on are the agent’s', () => {
+    const polygon = rect(1, 1, 9, 5)
+    const nodes = withRooms([room('zone_a', polygon)])
+    const sat = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' }, eyeHeight: 1.1, fov: 60 })
+    expect(sat.pose).toMatchObject({ fov: 60 })
+    expect(sat.pose.position[1]).toBe(1.1)
+    const west = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' }, from: 'west' }).pose
+    const east = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' }, from: 'east' }).pose
+    expect(west.position[0]).toBeLessThan(5)
+    expect(east.position[0]).toBeGreaterThan(5)
+    expect(standsIn(west, polygon) && standsIn(east, polygon)).toBe(true)
+  })
+
+  test('a target in the room is what the eye looks at', () => {
+    const polygon = rect(1, 1, 9, 5)
+    const sofa = ItemNode.parse({
+      id: 'item_sofa',
+      parentId: 'level_0',
+      name: 'Sofa',
+      position: [8, 0, 3],
+      asset: {
+        id: 'sofa',
+        category: 'furniture',
+        name: 'Sofa',
+        thumbnail: '',
+        src: '/items/sofa/model.glb',
+        dimensions: [2, 0.8, 0.9],
+      },
+    })
+    const base = withRooms([room('zone_a', polygon)])
+    const nodes = {
+      ...base,
+      item_sofa: sofa,
+      level_0: {
+        ...(base.level_0 as LevelNode),
+        children: [...(base.level_0 as LevelNode).children, 'item_sofa'],
+      },
+    } as Record<string, AnyNode>
+    const { pose } = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' }, target: 'item_sofa' })
+    expect(pose.target[0]).toBeCloseTo(8, 1)
+    expect(pose.target[2]).toBeCloseTo(3, 1)
+    expect(standsIn(pose, polygon)).toBe(true)
+    expect(pose.position[0]).toBeLessThan(5)
+  })
+
+  test('an eye put (position), lifted (elevation, above) or square on (orthographic) is outside, over the cut room', () => {
+    const nodes = withRooms([room('zone_a', rect(1, 1, 5, 5))])
+    const placed = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' }, position: [12, 4, 12] })
+    expect(placed.pose.position).toEqual([12, 4, 12])
+    expect(placed.interior).toEqual({ levelId: 'level_0', roomId: 'zone_a' })
+    for (const input of [
+      { elevation: 50 },
+      { from: 'above' as const },
+      { projection: 'orthographic' as const },
+    ]) {
+      const { pose } = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' }, ...input })
+      // Over the room, not in it: above its walls' height, or off to one side.
+      expect(standsIn(pose, rect(1, 1, 5, 5)) && pose.position[1] <= 3).toBe(false)
+      // Framed on the room, not on the whole floor of 20 × 10 m.
+      expect(Math.abs(pose.target[0] - 3)).toBeLessThan(0.01)
+      expect(Math.abs(pose.target[2] - 3)).toBeLessThan(0.01)
+    }
+  })
+
+  test('it is refused when the room is not one, or the request is neither a floor nor a room', () => {
+    const nodes = withRooms([room('zone_a', rect(1, 1, 5, 5))])
+    const refusal = (interior: Record<string, string>) =>
+      refusalOf(() => sceneViewPlan(nodes, { interior }))
+    expect(refusal({})).toBe('interior_one_of')
+    expect(refusal({ levelId: 'level_0', zoneId: 'zone_a' })).toBe('interior_one_of')
+    expect(refusal({ zoneId: 'wall_level_0_0' })).toBe('interior_room_invalid')
+    expect(refusal({ zoneId: 'zone_missing' })).toBe('interior_room_invalid')
+    const hidden = {
+      ...nodes,
+      building_main: { ...nodes.building_main!, visible: false },
+    } as Record<string, AnyNode>
+    expect(refusalOf(() => sceneViewPlan(hidden, { interior: { zoneId: 'zone_a' } }))).toBe(
+      'interior_hidden',
+    )
+  })
+
+  test('the picture says the eye is inside the room, and not when it is outside', () => {
+    const nodes = withRooms([room('zone_a', rect(1, 1, 5, 5))])
+    const inside = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' } })
+    const note = sceneViewNote(nodes, inside.interior, inside.pose)
+    expect(note).toContain('The eye stands inside Room zone_a')
+    expect(note).toContain('0.65')
+    const above = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' }, from: 'above' })
+    expect(sceneViewNote(nodes, above.interior, above.pose)).not.toContain('The eye stands inside')
+    const floor = sceneViewPlan(nodes, { interior: { levelId: 'level_0' } })
+    expect(sceneViewNote(nodes, floor.interior, floor.pose)).not.toContain('The eye stands inside')
+  })
+
+  test('the contract takes a zone id beside a level id, and the tools say so', () => {
+    const contract = z.object(viewSceneTool.input)
+    expect(contract.safeParse({ interior: { zoneId: 'zone_a' } }).success).toBe(true)
+    expect(contract.safeParse({ interior: { levelId: 'level_0' } }).success).toBe(true)
+    expect(viewSceneTool.description).toContain('interior {zoneId}')
+    expect(furnishRoomTool.description).toContain('view_scene with interior { zoneId }')
+  })
 })

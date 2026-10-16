@@ -1,7 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../operations'
 import { registerAddColumn } from './add-column'
-import { type GeometryScriptHost, registerAddObject, registerGetSource } from './add-object'
+import {
+  compileObjectOnHost,
+  type GeometryScriptHost,
+  registerAddObject,
+  registerGetSource,
+} from './add-object'
 import { registerApplyPatch } from './apply-patch'
 import type { AssetCatalog } from './asset-catalog'
 import { registerCheckCollisions } from './check-collisions'
@@ -48,7 +53,10 @@ export function registerTools(
   { catalog, geometryScripts, sceneViews, assetViews }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
-  registerSharedTools(server, operations, catalog, { assetViews })
+  registerSharedTools(server, operations, catalog, {
+    assetViews,
+    buildObject: (input) => compileObjectOnHost(geometryScripts, operations, input),
+  })
   registerAddColumn(server, operations, geometryScripts)
   registerAddObject(server, operations, geometryScripts)
   registerGetSource(server, operations, geometryScripts)

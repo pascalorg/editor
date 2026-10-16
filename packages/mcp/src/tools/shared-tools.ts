@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  type AddObjectInput,
   AGENT_OPERATIONS,
   type AgentContext,
   type AgentHostRuntime,
@@ -11,6 +12,7 @@ import {
   assetViewsReadCatalog,
   createAssetViewLoader,
   createFetchAssetViewIO,
+  buildBatchObjects,
   type SceneChanges,
   startOfSession,
   writeCollections,
@@ -21,6 +23,7 @@ import {
   addCornerWindowTool,
   addFenceTool,
   addLevelTool,
+  addObjectTool,
   addWallTool,
   createRoofTool,
   createRoomTool,
@@ -55,6 +58,7 @@ import {
 import {
   type AnyNode,
   type AnyNodeId,
+  type CompiledGeometryScript,
   MaterialSchema,
   SceneMaterial,
 } from '@pascal-app/core/schema'
@@ -94,6 +98,8 @@ export type OperationTool = {
 export type PlanReadingHosts = {
   /** Reads catalog pictures and surfaces before view_assets and paint. */
   assetViews?: AssetViewLoader
+  /** Compiles one add_object module for a batch before the synchronous operations run. */
+  buildObject?: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>
 }
 
 const defaultAssetViews = createAssetViewLoader(createFetchAssetViewIO())
@@ -106,6 +112,10 @@ type SharedTool = OperationTool & {
 }
 
 const jsonObject = z.record(z.string(), z.unknown())
+
+function refuseScripts(): never {
+  refuse('scripts_unavailable', 'This Pascal server cannot run geometry scripts.')
+}
 
 /** What the scene holds after a mutating call (core achievedChanges). */
 const achievedOutput = {
@@ -573,6 +583,16 @@ export function registerOperationTool(
             'tool' in call &&
             call.tool === placeInRoomTool.name,
         )
+      const batchesObjects =
+        tool.contract.name === runBatchTool.name &&
+        Array.isArray(input.calls) &&
+        input.calls.some(
+          (call) =>
+            typeof call === 'object' &&
+            call !== null &&
+            'tool' in call &&
+            call.tool === addObjectTool.name,
+        )
       const context: AgentContext = {
         activeLevelId: bridge.activeLevelId?.() ?? null,
         ...(bridge.supportsMaterialUpserts && bridge.getMaterials
@@ -582,6 +602,12 @@ export function registerOperationTool(
         session: bridge.agentSession?.read(),
         ...((tool.catalog || batchPlacesInRoom || assetViewsReadCatalog(tool.contract.name, input)) && {
           catalog: await catalog(),
+        }),
+        ...(batchesObjects && {
+          batchObjects: await buildBatchObjects(
+            input.calls as { tool?: unknown; input?: unknown }[],
+            hosts.buildObject ?? refuseScripts,
+          ),
         }),
       }
       const needs = assetViewNeeds(before, tool.contract.name, input, context)

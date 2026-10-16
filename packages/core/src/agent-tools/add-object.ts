@@ -31,6 +31,8 @@ Blender instead (language 'bpy'): when the shape is easier with Blender's modell
   def build(params): ...   # add objects to the empty scene; everything in it is exported, modifiers applied
 The same conventions in Blender terms: metres, Z up, the front faces -Y (Blender's Front view); part:<id>, light:<id> (a light object; its custom property intensity sets the brightness, default 2), anchor:<id> (an empty), cutout, cut:wall|ceiling|slab and collider are object names; userData is the object's custom properties (obj["type"] = "panel"); slot_<finish> are material names. A clip is one action named open, close, loop or anything else, assigned to every object that moves in it. Use the data API and bmesh, not operators that need a 3D viewport. A Blender build takes a few seconds.
 
+Several objects: they do not depend on each other, so several add_object calls can go in one step, or in one run_batch call (a call per object; each is reported on its own with its receipt, and one that fails does not stop the others).
+
 Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; get_source provides the current code and params when needed); identity, placement, paint and the params you leave out are kept. The result lists the size, parts, slots, lights, animations and params.`
 
 /** The `params` field every scripted tool shares (add_object, add_window, add_door, add_column). */

@@ -2,6 +2,7 @@ import { AGENT_TOOL_CONTRACTS, BATCHABLE_TOOLS } from '../agent-tools'
 import { addColumn } from './add-column'
 import { addFence } from './add-fence'
 import { addLevel } from './add-level'
+import { addObjectInBatch } from './add-object'
 import { addWall } from './add-wall'
 import { viewAssets } from './asset-views'
 import { createBatchOperation } from './batch'
@@ -115,8 +116,12 @@ const SINGLE_OPERATIONS = {
   ...ROOM_OPERATIONS,
 } as const
 
+// add_object is no single operation: its host compiles the module first, so it exists here only as
+// the batch's call, which places what the host built.
+const BATCH_OPERATIONS = { ...SINGLE_OPERATIONS, add_object: addObjectInBatch }
+
 const BATCHED_OPERATIONS = Object.fromEntries(
-  BATCHABLE_TOOLS.map((name) => [name, SINGLE_OPERATIONS[name]]),
+  BATCHABLE_TOOLS.map((name) => [name, BATCH_OPERATIONS[name]]),
 ) as Record<(typeof BATCHABLE_TOOLS)[number], AgentOperation<never>>
 
 /** Each shared agent tool's operation, by tool name: what every surface executes. */

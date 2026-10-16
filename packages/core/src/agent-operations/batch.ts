@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { INDEPENDENT_BATCH_TOOLS } from '../agent-tools/batch'
 import { isAgentRefusal, refuse } from '../agent-tools/refusal'
 import type { SceneMaterialId } from '../schema/scene-material'
 import { applySceneChanges, mergeSceneChanges } from './apply-changes'
@@ -15,6 +16,16 @@ type CallReport =
   | { index: number; tool: string; status: 'ok'; result: Record<string, unknown> }
   | { index: number; tool: string; status: 'refused'; code: string; error: string }
 
+type PreparedCall =
+  | { index: number; tool: string; invalid: string }
+  | {
+      index: number
+      tool: string
+      invalid?: undefined
+      operation: AgentOperation<never>
+      input: unknown
+    }
+
 /**
  * `run_batch`: shared tools in order, each on the scene the calls before it left, their changes
  * merged into one set — one undo step, one write on either surface. The user: the model spent a
@@ -27,7 +38,7 @@ export function createBatchOperation(
 ): AgentOperation<BatchInput> {
   const names = Object.keys(operations).join(', ')
   return (nodes, { calls, onRefusal = 'stop' }, context) => {
-    const prepared = calls.map((call, index) => {
+    const prepared = calls.map((call, index): PreparedCall => {
       const operation = operations[call.tool]
       const contract = contracts.find((candidate) => candidate.name === call.tool)
       if (!(operation && contract))
@@ -37,14 +48,15 @@ export function createBatchOperation(
           { index, tool: call.tool },
         )
       const parsed = z.object(contract.input).safeParse(call.input ?? {})
-      if (!parsed.success)
-        refuse(
-          'invalid_input',
-          `The batch's call ${index + 1} (${call.tool}) has an invalid input: ${parsed.error.issues
-            .map((issue) => `${issue.path.join('.') || 'input'}: ${issue.message}`)
-            .join('; ')}. Nothing ran.`,
-          { index, tool: call.tool },
-        )
+      if (!parsed.success) {
+        const message = `The batch's call ${index + 1} (${call.tool}) has an invalid input: ${parsed.error.issues
+          .map((issue) => `${issue.path.join('.') || 'input'}: ${issue.message}`)
+          .join('; ')}.`
+        // An independent call's bad input is its own report; the others still run.
+        if (INDEPENDENT_BATCH_TOOLS.includes(call.tool))
+          return { index, tool: call.tool, invalid: message }
+        refuse('invalid_input', `${message} Nothing ran.`, { index, tool: call.tool })
+      }
       return { index, tool: call.tool, operation, input: parsed.data }
     })
 
@@ -53,8 +65,21 @@ export function createBatchOperation(
     const sets: SceneChanges[] = []
     const reports: CallReport[] = []
     for (const call of prepared) {
+      if (call.invalid !== undefined) {
+        reports.push({
+          index: call.index,
+          tool: call.tool,
+          status: 'refused',
+          code: 'invalid_input',
+          error: call.invalid,
+        })
+        continue
+      }
       try {
-        const { result, changes } = call.operation(working, call.input as never, workingContext)
+        const { result, changes } = call.operation(working, call.input as never, {
+          ...workingContext,
+          batchCall: call.index,
+        })
         if (changes) {
           sets.push(changes)
           working = applySceneChanges(working, changes)
@@ -70,7 +95,7 @@ export function createBatchOperation(
         reports.push({ index: call.index, tool: call.tool, status: 'ok', result })
       } catch (error) {
         if (!isAgentRefusal(error)) throw error
-        if (onRefusal === 'stop')
+        if (onRefusal === 'stop' && !INDEPENDENT_BATCH_TOOLS.includes(call.tool))
           refuse(
             'batch_call_refused',
             `The batch stopped at call ${call.index + 1} (${call.tool}), refused with ${error.code}: ${error.message} Nothing in the batch was applied.`,

@@ -134,6 +134,49 @@ export async function readScript(
   return new TextDecoder().decode(bytes)
 }
 
+/**
+ * One object's module compiled and stored by the host: a new one from its code, an edit from its
+ * code or its stored script, with the params it keeps. The step a lone add_object and each
+ * add_object of a run_batch share.
+ */
+export async function compileObject(
+  host: GeometryScriptHost,
+  sceneId: string,
+  bridge: SceneOperations,
+  args: Omit<AddObjectInput, 'compiled'>,
+): Promise<CompiledGeometryScript> {
+  const code =
+    args.code ??
+    (args.nodeId ? await readScript(host, sceneId, bridge, args.nodeId) : refuseMissingCode())
+  const nodes = bridge.getNodes() as Record<string, AnyNode>
+  const previous = args.nodeId ? nodes[args.nodeId] : undefined
+  const language = editedScriptLanguage(previous, args)
+  const params = editedScriptParams(previous, args.params)
+  return compileAndStore(host, sceneId, { code, language, params }, 'object', {
+    nodeId: args.nodeId,
+    metadata: {
+      ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
+      ...GeometryReuseFields.parse(args),
+    },
+  })
+}
+
+/** What a batch's add_object builds with: the host's compile, on the scene open now. */
+export async function compileObjectOnHost(
+  host: GeometryScriptHost | undefined,
+  bridge: SceneOperations,
+  args: Omit<AddObjectInput, 'compiled'>,
+): Promise<CompiledGeometryScript> {
+  if (!host) refuse('scripts_unavailable', 'This Pascal server cannot run geometry scripts.')
+  const scene = bridge.getActiveScene()
+  if (!scene)
+    refuse(
+      'no_active_scene',
+      'Open or save a scene first: authored objects are stored with a scene.',
+    )
+  return compileObject(host, scene.id, bridge, args)
+}
+
 /** `add_object` on the MCP: the shared contract and operation, with the host's compile in front. */
 export function registerAddObject(
   server: McpServer,
@@ -164,22 +207,7 @@ export function registerAddObject(
       let compiled: CompiledGeometryScript
       try {
         requireAddObjectReason(args)
-        const code =
-          args.code ??
-          (args.nodeId
-            ? await readScript(host, scene.id, bridge, args.nodeId)
-            : refuseMissingCode())
-        const nodes = bridge.getNodes() as Record<string, AnyNode>
-        const previous = args.nodeId ? nodes[args.nodeId] : undefined
-        const language = editedScriptLanguage(previous, args)
-        const params = editedScriptParams(previous, args.params)
-        compiled = await compileAndStore(host, scene.id, { code, language, params }, 'object', {
-          nodeId: args.nodeId,
-          metadata: {
-            ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
-            ...GeometryReuseFields.parse(args),
-          },
-        })
+        compiled = await compileObject(host, scene.id, bridge, args)
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
         return toolError(

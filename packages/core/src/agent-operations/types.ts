@@ -1,5 +1,5 @@
 import type { ZodType } from 'zod'
-import type { AnyNode, AssetInput, Collection, SceneMaterial, SceneMaterialId } from '../schema'
+import type { AnyNode, AssetInput, Collection, CompiledGeometryScript, SceneMaterial, SceneMaterialId } from '../schema'
 import type { AssetViewFacts } from './asset-views'
 import type { SessionKeep, SessionRecord } from './scene-checkpoint'
 
@@ -35,7 +35,15 @@ export type AgentContext = {
    */
   assetViews?: Readonly<Record<string, AssetViewFacts>>
   materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
+  /** Modules built by the host before run_batch, indexed by call position. */
+  batchObjects?: Readonly<Record<number, BatchedObject>>
+  batchCall?: number
 }
+
+/** One add_object call of a batch, built by its host: the compiled module, or why it failed. */
+export type BatchedObject =
+  | { compiled: CompiledGeometryScript }
+  | { failure: { code: string; message: string } }
 
 /** A write's operations in order, as apply_patch and update_node carry them. */
 export type NodeWrite =

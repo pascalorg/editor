@@ -119,7 +119,7 @@ export const AGENT_TOOL_CONTRACTS = [
   runBatchTool,
 ] as const satisfies readonly AgentToolContract[]
 
-export { BATCHABLE_TOOLS, runBatchTool } from './batch'
+export { BATCHABLE_TOOLS, INDEPENDENT_BATCH_TOOLS, runBatchTool } from './batch'
 export { setCheckpointTool } from './checkpoints'
 export { straightenFacadePhotoTool } from './photo-elevation'
 export { placeInRoomTool } from './place-in-room'
