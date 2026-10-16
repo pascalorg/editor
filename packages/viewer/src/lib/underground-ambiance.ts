@@ -7,6 +7,7 @@ import {
   float,
   getViewPosition,
   max,
+  mix,
   mx_noise_float,
   screenUV,
   smoothstep,
@@ -35,6 +36,8 @@ import { UNDERGROUND_PALETTE } from './scene-themes'
 
 /** How long the crossing takes, in and out. */
 export const AMBIANCE_SECONDS = 0.7
+/** The simple fade's crossing (`UndergroundTransition` `fade`), in and out. */
+export const FADE_SECONDS = 0.4
 
 /**
  * The dark mode's palette is one place, beside the scene theme tokens
@@ -150,6 +153,11 @@ const earthNode = uniform(0)
  * {@link temporarilyWithoutAmbiance}).
  */
 const holeNode = uniform(0)
+/**
+ * How much of the crossing is the noise mask: 1 the blobs of the dark world spreading, 0 the whole
+ * frame fading at once (`UndergroundTransition`). A uniform, so the two share one pipeline.
+ */
+const grainWeightNode = uniform(1)
 let hole = 0
 let factor = 0
 let earth = 0
@@ -173,6 +181,11 @@ export function groundHoleOpenNode() {
 /** How far the ground's hole is open now (0 while a capture holds the world plain). */
 export function groundHoleOpenNow(): number {
   return holeNode.value as number
+}
+
+/** Sets how much the crossing is the noise mask (1) rather than a uniform fade (0); the system's word. */
+export function setDiveGrainWeight(next: number): void {
+  grainWeightNode.value = next
 }
 
 /** Sets the live opening of the ground's hole (the system's word). */
@@ -294,6 +307,7 @@ export function undergroundDissolveGrain(uv: any = screenUV): any {
  * from 0 everywhere at `amount` 0 (the factor, by default) to 1 everywhere at 1, through soft
  * blobs of the dark world spreading (a fine perlin mask in screen space, not a cross-fade). Weighs
  * the backdrop, the fog and the vignette; above and below the crossing it is exactly 0 and 1.
+ * With the simple fade chosen (`grainWeightNode` 0) it is `amount` itself, the same everywhere.
  */
 export function undergroundDissolve(
   uv: any = screenUV,
@@ -302,7 +316,7 @@ export function undergroundDissolve(
 ): any {
   const softness = 0.32
   const t = amount.mul(1 + 2 * softness).sub(softness)
-  return smoothstep(grain.sub(softness), grain.add(softness), t)
+  return mix(amount, smoothstep(grain.sub(softness), grain.add(softness), t), grainWeightNode)
 }
 
 /** The world position of the pixel at `uv` from the scene pass's raw depth. */

@@ -22,9 +22,11 @@ import {
   earthTarget,
   easeAmbiance,
   eyeUnderTheGround,
+  FADE_SECONDS,
   restoreSkyLights,
   setAmbianceFactor,
   setAmbianceFocus,
+  setDiveGrainWeight,
   setEarthFactor,
   setGroundHoleOpen,
   stepAmbianceProgress,
@@ -72,7 +74,9 @@ export function UndergroundAmbiance() {
 
     // The first frame takes the world as it is: a project opened below grade does not dive.
     const instant = revealMotionOff() || viewer.isExporting
-    const seconds = instant ? 0 : AMBIANCE_SECONDS
+    const fade = viewer.undergroundLook.transition === 'fade'
+    const seconds = instant ? 0 : fade ? FADE_SECONDS : AMBIANCE_SECONDS
+    setDiveGrainWeight(fade ? 0 : 1)
     const dt = Math.min(delta, 0.1)
 
     const target = ambianceTarget({
@@ -104,7 +108,7 @@ export function UndergroundAmbiance() {
       holeProgress.current ?? holeTarget,
       holeTarget,
       dt,
-      seconds,
+      instant ? 0 : AMBIANCE_SECONDS,
     )
     holeProgress.current = holeNext
     setGroundHoleOpen(easeAmbiance(holeNext))

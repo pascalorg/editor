@@ -29,6 +29,7 @@ import {
   ambianceNow,
   EYE_FILL_INTENSITY,
   earthNow,
+  FADE_SECONDS,
   groundHoleOpenNow,
   SKY_LIGHT_SCALE,
   setAmbianceFactor,
@@ -233,6 +234,43 @@ test('the eye going under the ground eases the dark mode in over the crossing, a
     expect(ambient.intensity).toBeCloseTo(above, 6)
   } finally {
     await renderer.unmount()
+  }
+})
+
+test('the simple fade crosses in FADE_SECONDS, the noise mask in AMBIANCE_SECONDS, and the hole opens at its own pace either way', async () => {
+  const fadeFrames = Math.ceil(FADE_SECONDS / 0.05) + 2
+  expect(fadeFrames).toBeLessThan(CROSSING_FRAMES - 3)
+  for (const transition of ['fade', 'noise'] as const) {
+    const { renderer, camera } = await mountLights()
+    try {
+      useViewer.getState().setUndergroundLook({ transition })
+      camera.position.set(0, 6, 8)
+      await renderer.advanceFrames(2, 0.05)
+      camera.position.set(0, -3, 8)
+      await renderer.advanceFrames(2, 0.05)
+      await act(async () => {})
+      await renderer.advanceFrames(fadeFrames, 0.05)
+      // Arrived on the fade's clock; still crossing on the mask's.
+      if (transition === 'fade') expect(ambianceNow()).toBe(1)
+      else {
+        expect(ambianceNow()).toBeGreaterThan(0)
+        expect(ambianceNow()).toBeLessThan(1)
+      }
+      camera.position.set(0, 6, 8)
+      await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+      expect(ambianceNow()).toBe(0)
+
+      // The hole is not the dive: the same 0.7 s whichever crossing is chosen.
+      await act(async () => useViewer.setState(BELOW_GRADE))
+      await renderer.advanceFrames(fadeFrames, 0.05)
+      expect(groundHoleOpenNow()).toBeGreaterThan(0)
+      expect(groundHoleOpenNow()).toBeLessThan(1)
+      await act(async () => useViewer.setState({ belowGrade: false, gradeStanding: 'at-grade' }))
+      await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
+    } finally {
+      useViewer.getState().setUndergroundLook({ transition: 'noise' })
+      await renderer.unmount()
+    }
   }
 })
 

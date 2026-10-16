@@ -175,6 +175,13 @@ type ViewerState = {
    * the crossing's ends. Set by the viewer's underground ambiance; never persisted.
    */
   ambianceActive: boolean
+  /**
+   * How the ground reads as a medium: the edge of the hole over a level below grade and the
+   * crossing as the eye dives under the ground. Variants the owner and the team choose from;
+   * every one is a uniform, so changing it compiles nothing. Never persisted.
+   */
+  undergroundLook: UndergroundLook
+  setUndergroundLook: (look: Partial<UndergroundLook>) => void
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -405,6 +412,9 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
   }
 }
 
+/** What ships until the owner picks: the eroded edge and the noise-mask crossing. */
+export const DEFAULT_UNDERGROUND_LOOK: UndergroundLook = { edge: 'noise', transition: 'noise' }
+
 const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
@@ -515,6 +525,9 @@ const useViewer = create<ViewerState>()(
       hasLevelBelowGrade: false,
       eyeUnderGround: false,
       ambianceActive: false,
+      undergroundLook: DEFAULT_UNDERGROUND_LOOK,
+      setUndergroundLook: (look) =>
+        set((state) => ({ undergroundLook: { ...state.undergroundLook, ...look } })),
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),
@@ -682,6 +695,19 @@ const useViewer = create<ViewerState>()(
  * seen and clicked; `solid` keeps it as it is everywhere else.
  */
 export type GroundMode = 'auto' | 'solid'
+
+/**
+ * The hole's edge seen from above: `noise` the eroded, scalloped border (today's), `quiet` the
+ * same with a fine, faint noise (almost straight from the default camera), `section` an
+ * architect's section cut (a constant offset of the footprint, straight edges, a flat face with a
+ * thin line at grade), `section-hatch` the same with the face hatched like a drawn section.
+ */
+export type UndergroundEdge = 'noise' | 'quiet' | 'section' | 'section-hatch'
+
+/** The dive under the ground: `noise` closes a noise mask over the screen, `fade` fades the whole frame at once. */
+export type UndergroundTransition = 'noise' | 'fade'
+
+export type UndergroundLook = { edge: UndergroundEdge; transition: UndergroundTransition }
 
 /**
  * Whether the site's ground is drawn as a veil wholesale: a level below grade is shown, the

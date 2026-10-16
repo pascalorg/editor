@@ -273,6 +273,7 @@ export {
   ambianceTarget,
   easeAmbiance,
   eyeUnderTheGround,
+  FADE_SECONDS,
   groundHoleOpenNode,
   groundHoleOpenNow,
   stepAmbianceProgress,
@@ -287,10 +288,14 @@ export { catalogLightSource, useItemLightPool } from './store/use-item-light-poo
 export {
   anyGroundVeiled,
   applyCountryUnitDefault,
+  DEFAULT_UNDERGROUND_LOOK,
   default as useViewer,
   type GroundMode,
   groundVeiled,
   type MetricNotation,
+  type UndergroundEdge,
+  type UndergroundLook,
+  type UndergroundTransition,
   type WallMode,
 } from './store/use-viewer'
 export {
