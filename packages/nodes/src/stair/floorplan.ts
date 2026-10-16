@@ -50,7 +50,7 @@ export function buildStairFloorplan(
     rotation?: [number, number, number]
   } | null
   let stair = rawStair
-  if (parent && parent.id === rawStair.landscapeSurfaceId && parent.position && parent.rotation) {
+  if (parent && parent.id === rawStair.destinationSurfaceId && parent.position && parent.rotation) {
     const angle = parent.rotation[1]
     const c = Math.cos(angle),
       s = Math.sin(angle)

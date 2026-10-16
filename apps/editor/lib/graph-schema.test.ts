@@ -38,7 +38,13 @@ test('accepts namespaced attachment slots while validating plugin asset URLs', (
   const node = pluginTree({ slotId: `wall-point:${TREE_ID}` })
   expect(apiGraphSchema.safeParse(buildGraph({ [TREE_ID]: node })).success).toBe(true)
 
-  for (const url of ['javascript:alert(1)', 'file:///etc/passwd']) {
+  for (const url of [
+    'javascript:alert(1)',
+    'file:///etc/passwd',
+    'javascript:alert',
+    'file:secret',
+    'data:text',
+  ]) {
     expect(
       apiGraphSchema.safeParse(buildGraph({ [TREE_ID]: { ...node, thumbnail: url } })).success,
     ).toBe(false)

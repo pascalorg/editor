@@ -1,18 +1,22 @@
 import { beforeEach, describe, expect, jest, test } from 'bun:test'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   type AnyNodeId,
   createSceneApi,
   type FenceNode,
   GROUND_SUPPORT_ID,
   type GridEvent,
+  nodeRegistry,
+  registerNode,
   type SlabNode,
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { createFenceOnCurrentLevel } from './drafting'
+import { z } from 'zod'
+import { createFenceOnCurrentLevel, getFenceDrawingSurface, snapFenceDraftPoint } from './drafting'
 
 const LEVEL_ID = 'level_test' as AnyNodeId
 
@@ -354,3 +358,48 @@ test('focus completion: ready spline fence ignores fields and commits outside En
     })
   }
 }, 15_000)
+
+test('railing snaps use inset edges and corners on the active floor at the deck top', () => {
+  const kind = 'test:railing-platform'
+  if (!nodeRegistry.has(kind))
+    registerNode({
+      kind,
+      schemaVersion: 1,
+      schema: z.object({ type: z.literal(kind) }),
+      category: 'site',
+      defaults: () => ({}),
+      capabilities: {
+        surfaces: {
+          top: {
+            height: 0.4,
+            boundary: (_node, inset = 0) => [
+              [inset, inset],
+              [4 - inset, inset],
+              [4 - inset, 3 - inset],
+              [inset, 3 - inset],
+            ],
+          },
+        },
+      },
+    } as AnyNodeDefinition)
+  const deck = {
+    id: 'platform_rail',
+    type: kind,
+    parentId: LEVEL_ID,
+    position: [0, 0.8, 0],
+  } as unknown as AnyNode
+  seedLevel([deck])
+  useViewer.setState({ selection: { ...useViewer.getState().selection, levelId: LEVEL_ID } })
+  useEditor.getState().setToolDefaults('fence', { supportSurfaceNodeId: deck.id })
+  const support = getFenceDrawingSurface()
+  expect(support?.elevation).toBeCloseTo(1.2)
+  expect(support?.boundary[0]).toEqual([0.08, 0.08])
+  expect(snapFenceDraftPoint({ point: [0.1, 0.1], walls: [], fences: [], magnetic: true })).toEqual(
+    [0.08, 0.08],
+  )
+  expect(snapFenceDraftPoint({ point: [2, 0.1], walls: [], fences: [], magnetic: true })).toEqual([
+    2, 0.08,
+  ])
+  expect(getFenceDrawingSurface(useScene.getState().nodes, deck.id, 'level_other')).toBeNull()
+  useEditor.getState().setToolDefaults('fence', null)
+})

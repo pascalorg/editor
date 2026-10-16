@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test'
-import { type PersistedSceneGraph, sceneGraphSignature } from './scene-signature'
+import {
+  isPendingSceneGraphEcho,
+  type PersistedSceneGraph,
+  sceneGraphSignature,
+} from './scene-signature'
 
 const NODE_ID = 'level_a1b2c3d4e5f6g7h8'
 const MATERIAL_ID = 'mat_a1b2c3d4e5f6g7h8'
@@ -38,4 +42,14 @@ test('changing any signed field changes the signature', () => {
   expect(sceneGraphSignature(graph({ installedPlugins: ['@pascal-app/plugin-trees'] }))).not.toBe(
     base,
   )
+})
+
+test('an in-flight save echo cannot replace tools when event metadata is omitted', () => {
+  const saved = graph({ installedPlugins: ['pascal:bath-space'], collections: { col_1: {} } })
+  const pending = new Set([sceneGraphSignature(saved)])
+  expect(isPendingSceneGraphEcho(graph(), pending)).toBe(true)
+  expect(isPendingSceneGraphEcho(graph({ installedPlugins: [] }), pending)).toBe(false)
+  expect(isPendingSceneGraphEcho(graph({ rootNodeIds: [] }), pending)).toBe(false)
+  pending.clear()
+  expect(isPendingSceneGraphEcho(saved, pending)).toBe(false)
 })

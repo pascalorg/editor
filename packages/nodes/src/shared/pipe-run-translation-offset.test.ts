@@ -5,10 +5,10 @@ import {
   PipeSegmentNode,
   type PortConnection,
 } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { getPipeFittingPorts } from '../pipe-fitting/ports'
 import { planPipeElbowAtPort } from './auto-fitting'
 import { planPipeRunTranslationOffsets } from './pipe-run-translation-offset'
-import type { ScenePort } from './ports'
 
 type Point = [number, number, number]
 

@@ -22,7 +22,7 @@ export function publishStairMovePreview(
           rotation,
           totalRise: snap.totalRise,
           stepCount: snap.stepCount,
-          landscapeSurfaceId: snap.surfaceId,
+          destinationSurfaceId: snap.surfaceId,
           railingMode: 'none',
         },
       ],
@@ -45,7 +45,7 @@ export function publishStairMovePreview(
     (flightId !== undefined && overrides.get(flightId) !== undefined)
   overrides.clearFields(stairId, ['totalRise', 'stepCount', 'railingMode'])
   if (flightId && overrides.get(flightId)) overrides.clear(flightId)
-  overrides.set(stairId, { position, rotation, landscapeSurfaceId: undefined })
+  overrides.set(stairId, { position, rotation, destinationSurfaceId: undefined })
   if (hadSnap) {
     useScene.getState().markDirty(stairId)
     if (flightId) useScene.getState().markDirty(flightId)

@@ -114,9 +114,9 @@ test('connects to a concrete slab and accepts a cursor on its edge', () => {
 
 test('per-stair switch disables magnetic attachment', () => {
   const deck = surface('landscape:deck')
-  const disabled = StairNode.parse({ ...stair, autoLandscapeSnap: false })
+  const disabled = StairNode.parse({ ...stair, autoSurfaceSnap: false })
   expect(resolveStairSurfaceSnap(disabled, { [deck.id]: deck }, [0, 0, -2], 3)).toBeNull()
-  expect(StairNode.parse({}).autoLandscapeSnap).toBeUndefined()
+  expect(StairNode.parse({}).autoSurfaceSnap).toBeUndefined()
 })
 
 test('reconnects a placed stair after its deck height changes', () => {
@@ -126,7 +126,7 @@ test('reconnects a placed stair after its deck height changes', () => {
     ...stair,
     position: first.position,
     rotation: first.rotation,
-    landscapeSurfaceId: deck.id,
+    destinationSurfaceId: deck.id,
     totalRise: first.totalRise,
     stepCount: first.stepCount,
   })
@@ -145,7 +145,11 @@ test('reconnects a placed stair after its deck height changes', () => {
 
 test('reconnects by the rotated high end of an existing stair', () => {
   const deck = surface('landscape:deck', { thickness: 0.8 })
-  const rotated = StairNode.parse({ ...stair, rotation: Math.PI / 2, landscapeSurfaceId: deck.id })
+  const rotated = StairNode.parse({
+    ...stair,
+    rotation: Math.PI / 2,
+    destinationSurfaceId: deck.id,
+  })
   const result = resolveStairSurfaceSnap(rotated, { [deck.id]: deck }, [-2.3, 0, 0], 0.8)
   expect(result?.totalRise).toBeCloseTo(0.8)
   expect(result?.rotation).toBeCloseTo(Math.PI / 2)
@@ -164,4 +168,29 @@ test('aligns to the actual curved edge of a circular patio', () => {
   expect(result).not.toBeNull()
   expect(result!.position[2] + result!.length).toBeCloseTo(-2, 2)
   expect(result!.rotation).toBeCloseTo(0, 1)
+})
+
+test('a surface-parented stair snaps in the same level frame without changing its stored base offset', () => {
+  const deck = surface('landscape:deck', {
+    position: [4, 0.3, 3],
+    rotation: [0, Math.PI / 2, 0],
+    thickness: 1.2,
+  })
+  const level = { id: 'level_1', type: 'level', parentId: null } as AnyNode
+  const child = StairNode.parse({
+    ...stair,
+    parentId: deck.id,
+    position: [0, -0.1, -2],
+    destinationSurfaceId: deck.id,
+  })
+  const snap = resolveStairSurfaceSnap(
+    child,
+    { [deck.id]: deck, [level.id]: level },
+    child.position,
+    1,
+  )
+  expect(snap).not.toBeNull()
+  expect(snap!.position[2] + snap!.length).toBeCloseTo(-1.5)
+  expect(snap!.position[1]).toBe(-0.1)
+  expect(snap!.totalRise).toBeCloseTo(1.3)
 })

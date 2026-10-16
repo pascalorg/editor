@@ -138,8 +138,7 @@ export function PanelWrapper({
   ) as AnyNodeId | undefined
   // Subscribe to the selected node's *type* only — a string primitive that
   // doesn't change as fields are edited (same trick as ParametricInspector).
-  const selectedNode = useScene((s) => (selectedId ? s.nodes[selectedId] : undefined))
-  const selectedType = selectedNode?.type ?? null
+  const selectedType = useScene((s) => (selectedId ? s.nodes[selectedId]?.type ?? null : null))
   const installedPlugins = useScene((s) => s.installedPlugins)
   const extensions = useMemo(() => {
     // re-derive when plugin extensions register after mount (async plugin load)
@@ -156,9 +155,11 @@ export function PanelWrapper({
   // See `lib/inspector-card-mode.ts` for the transition table.
   const [activeExtensionId, setActiveExtensionId] = useState<string | null>(null)
   // Stale ids (kind changed, plugin gated off) fall back to regular mode.
-  const primaryExtension = selectedNode
-    ? extensions.find((extension) => extension.primaryWhen?.(selectedNode))
-    : undefined
+  const primaryExtensionId = useScene((state) => {
+    const node = selectedId ? state.nodes[selectedId] : undefined
+    return node ? extensions.find((extension) => extension.primaryWhen?.(node))?.id : undefined
+  })
+  const primaryExtension = extensions.find((extension) => extension.id === primaryExtensionId)
   const activeExtension = primaryExtension ?? resolveActiveExtension(activeExtensionId, extensions)
 
   // The panel is collapsed to just its header until the user expands it. The

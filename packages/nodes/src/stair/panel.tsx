@@ -377,13 +377,13 @@ export default function StairPanel() {
           .reduce((sum, segment) => sum + segment.height, 0)
       : 0) + 0.001,
   )
-  const landscapeLevelId =
-    node.landscapeSurfaceId && node.parentId === node.landscapeSurfaceId
+  const surfaceLevelId =
+    node.destinationSurfaceId && node.parentId === node.destinationSurfaceId
       ? nodes[node.parentId as AnyNodeId]?.parentId
       : node.parentId
-  const landscapeSurfaces = getBoundarySurfaces(nodes, landscapeLevelId, installedPlugins)
-  const connectedSurface = node.landscapeSurfaceId
-    ? nodes[node.landscapeSurfaceId as AnyNodeId]
+  const boundarySurfaces = getBoundarySurfaces(nodes, surfaceLevelId, installedPlugins)
+  const connectedSurface = node.destinationSurfaceId
+    ? nodes[node.destinationSurfaceId as AnyNodeId]
     : undefined
 
   return (
@@ -589,18 +589,18 @@ export default function StairPanel() {
         />
       </PanelSection>
       {node.stairType === 'straight' &&
-        (landscapeSurfaces.length > 0 || node.landscapeSurfaceId) && (
-          <PanelSection title="Landscape connection">
+        (boundarySurfaces.length > 0 || node.destinationSurfaceId) && (
+          <PanelSection title="Surface connection">
             <div className="space-y-2">
               <ToggleControl
-                checked={node.autoLandscapeSnap !== false}
+                checked={node.autoSurfaceSnap !== false}
                 label="Snap to nearby surfaces"
-                onChange={(checked) => handleUpdate({ autoLandscapeSnap: checked })}
+                onChange={(checked) => handleUpdate({ autoSurfaceSnap: checked })}
               />
               <p className="px-1 text-[11px] text-muted-foreground">
-                {node.autoLandscapeSnap !== false
+                {node.autoSurfaceSnap !== false
                   ? connectedSurface
-                    ? `Connected to ${connectedSurface.name || 'landscape surface'}. Move the stair to connect to another edge.`
+                    ? `Connected to ${connectedSurface.name || 'surface'}. Move the stair to connect to another edge.`
                     : 'Drag near a deck, patio, concrete slab, or landing edge to fit the stair.'
                   : 'Moving this stair keeps its current rise, steps, and run.'}
               </p>

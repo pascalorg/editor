@@ -54,7 +54,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
       (child): child is StairSegmentNode =>
         child?.type === 'stair-segment' && child.segmentType === 'stair',
     )
-  let landscapeSnap: StairSurfaceSnap | null = null
+  let surfaceSnap: StairSurfaceSnap | null = null
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: flight ? [node.id as AnyNodeId, flight.id as AnyNodeId] : [node.id as AnyNodeId],
@@ -84,7 +84,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
         rotation: node.rotation,
         levelId: node.parentId,
       })[1]
-      landscapeSnap = !isMagneticSnapActive()
+      surfaceSnap = !isMagneticSnapActive()
         ? null
         : resolveStairSurfaceSnap(
             node,
@@ -94,33 +94,33 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
             baseElevation,
             sceneApi?.installedPlugins?.(),
           )
-      const position = landscapeSnap?.position ?? ([sx, startY, sz] as [number, number, number])
+      const position = surfaceSnap?.position ?? ([sx, startY, sz] as [number, number, number])
       if (
         lastValid &&
         lastValid.position[0] === position[0] &&
         lastValid.position[2] === position[2] &&
-        lastValid.rotation === landscapeSnap?.rotation
+        lastValid.rotation === surfaceSnap?.rotation
       )
         return
-      lastValid = { position, ...(landscapeSnap ? { rotation: landscapeSnap.rotation } : {}) }
-      if (!landscapeSnap) useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+      lastValid = { position, ...(surfaceSnap ? { rotation: surfaceSnap.rotation } : {}) }
+      if (!surfaceSnap) useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
       useLiveNodeOverrides.getState().set(node.id as AnyNodeId, {
         ...lastValid,
-        ...(landscapeSnap
+        ...(surfaceSnap
           ? {
-              totalRise: landscapeSnap.totalRise,
-              stepCount: landscapeSnap.stepCount,
-              landscapeSurfaceId: landscapeSnap.surfaceId,
+              totalRise: surfaceSnap.totalRise,
+              stepCount: surfaceSnap.stepCount,
+              destinationSurfaceId: surfaceSnap.surfaceId,
               railingMode: 'none' as const,
             }
-          : { landscapeSurfaceId: undefined }),
+          : { destinationSurfaceId: undefined }),
       })
       if (flight) {
-        if (landscapeSnap)
+        if (surfaceSnap)
           useLiveNodeOverrides.getState().set(flight.id as AnyNodeId, {
-            height: landscapeSnap.totalRise,
-            length: landscapeSnap.length,
-            stepCount: landscapeSnap.stepCount,
+            height: surfaceSnap.totalRise,
+            length: surfaceSnap.length,
+            stepCount: surfaceSnap.stepCount,
           })
         else useLiveNodeOverrides.getState().clear(flight.id as AnyNodeId)
       }
@@ -146,27 +146,27 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
             id: node.id as AnyNodeId,
             data: {
               ...lastValid,
-              ...(landscapeSnap
+              ...(surfaceSnap
                 ? {
-                    totalRise: landscapeSnap.totalRise,
-                    stepCount: landscapeSnap.stepCount,
+                    totalRise: surfaceSnap.totalRise,
+                    stepCount: surfaceSnap.stepCount,
                     slabOpeningMode: 'none' as const,
-                    landscapeSurfaceId: landscapeSnap.surfaceId,
+                    destinationSurfaceId: surfaceSnap.surfaceId,
                     railingMode: 'none' as const,
                   }
-                : node.landscapeSurfaceId
-                  ? { landscapeSurfaceId: undefined }
+                : node.destinationSurfaceId
+                  ? { destinationSurfaceId: undefined }
                   : {}),
             },
           },
-          ...(landscapeSnap && flight
+          ...(surfaceSnap && flight
             ? [
                 {
                   id: flight.id as AnyNodeId,
                   data: {
-                    height: landscapeSnap.totalRise,
-                    length: landscapeSnap.length,
-                    stepCount: landscapeSnap.stepCount,
+                    height: surfaceSnap.totalRise,
+                    length: surfaceSnap.length,
+                    stepCount: surfaceSnap.stepCount,
                   },
                 },
               ]

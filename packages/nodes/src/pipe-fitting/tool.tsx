@@ -19,6 +19,15 @@ import {
   useInteractionScope,
   useRegistryToolContext,
 } from '@pascal-app/editor'
+import {
+  alignDrawPoint,
+  clearDrawAlignment,
+  collectScenePorts,
+  DWV_PORT_SYSTEMS,
+  findNearestRunBody3D,
+  findNearestRunBodyXZ,
+  type ScenePort,
+} from '@pascal-app/editor/distribution'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, type Material, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three'
@@ -30,7 +39,6 @@ import {
   subscribeAccessorySnapping,
 } from '../shared/accessory-snapping'
 import { ConnectionFeedback } from '../shared/connection-feedback'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import {
   AXIS_VECTORS,
   cycleRotationAxis,
@@ -39,13 +47,6 @@ import {
 } from '../shared/fitting-rotation'
 import { createFittingSurfaceSupport } from '../shared/fitting-surface-support'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import {
-  collectScenePorts,
-  DWV_PORT_SYSTEMS,
-  findNearestRunBody3D,
-  findNearestRunBodyXZ,
-  type ScenePort,
-} from '../shared/ports'
 import { pipeFittingDefinition } from './definition'
 import { buildPipeFittingGeometry } from './geometry'
 import {

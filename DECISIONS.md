@@ -67,6 +67,19 @@ Each entry: decision · why · enforced by · revisit when. Detail and examples 
 
 **E-016 Plugins own their agent tools (owner, 2026-10-10).** A plugin's agent tools ship with the plugin, not in core: contracts as a `PluginAgentTools` in its `./agent-tools` export (zod only, like `core/agent-tools`, and versioned by the plugin), pure operations as an `AgentOperations` in `./agent-operations`, browser execution and cards as a `PluginChatExtension`. The `Plugin` manifest does not change (E-014), and one contract still serves both surfaces. Contract annotations are hints: the host decides which tools are offered, to whom, and with what authority. These are reviewed, trusted contributions, not a sandbox. · Why: a plugin with dozens of specialist tools keeps them versioned with its own code, and installing it extends every agent the way a connector does. · Enforced: `core/src/agent-tools/contracts-purity.test.ts` (the rule each plugin entry follows), `mcp/src/tools/shared-tools.test.ts` (a plugin's operation tool through a real client), the hosted parity test. · See `plugin-authoring.md`, `agent-surfaces.md`. · Revisit: when plugins are loaded without review.
 
+**E-017 Additive node editing and surface contracts (2026-10-16).** Surface boundaries,
+connected movement, primary inspector predicates, independent child movement and
+preserved level/elevation are optional contributions on `NodeDefinition` and its
+existing capability types. They do not add fields to the v1 `Plugin` manifest.
+Boundary providers own their geometry and coordinates; framework consumers dispatch
+through the registry. Connected-move providers return pure patches, previewed with
+live overrides and committed once per gesture. Inspector predicates select an ID
+without subscribing the card to whole nodes. `metadata.roomBoundary === false` is
+the explicit opt-out from room topology. Shared run-authoring tools are exported by
+`editor/distribution`, never by the built-in plugin. · Why: external node packs need
+the same authoring behavior without depending on built-in kinds or private plugin
+shapes. · Contract: `wiki/architecture/plugin-authoring.md`.
+
 ## Testing
 
 **T-001 (2026-10-01, owner).** A test protects an observable result, a persisted or wire contract, or an explicit architecture/performance invariant — and tolerates an equivalent implementation. Therefore: test through package exports; no source-grep, prose-pinning or import-spelling tests (use Biome rules); no cross-package `src/` imports in tests; no `mock.module` that forces sibling files to re-spawn `bun test`; no real sleeps (inject a clock); no tests named after review rounds or bots; refactor scaffolding (parity tables, "matches main" goldens, frozen copies of old code) is deleted in the PR that lands the refactor; performance claims live in `__bench__` / bench lanes, not unit gates; a bug fix is one repro in the feature's existing file, not a new `*-audit*` file; a test that needs an opt-in flag must have a lane that sets it, or go. "Internal" is not the deletion criterion: core's import boundary, the writers allowlist and the migration thresholds pin internals with external consequences and stay. · Why: 231k test lines (82k of them fixtures) had become the main cost of every change for people and agents alike. · Enforced: review; Biome rules as they land.

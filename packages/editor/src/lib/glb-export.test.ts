@@ -2438,3 +2438,26 @@ test('prepared exports preserve surface identities and IFC subpart roles on regi
   expect(exported.userData.pascalIfcRole).toBe('railing')
   expect(exported.userData.pascalIfcParts).toEqual([{ start: 0, count: 3, role: 'handrail' }])
 })
+
+test('exports a plugin LOD once without invoking its argument-requiring constructor', () => {
+  class PluginLOD extends THREE.LOD {
+    constructor(model: THREE.Mesh) {
+      super()
+      if (!model) throw new Error('Model is required')
+      this.addLevel(model, 0)
+      this.addLevel(model.clone(), 10)
+    }
+  }
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial())
+  const lod = new PluginLOD(mesh)
+  const root = new THREE.Group()
+  root.add(lod)
+  const { scene } = prepareSceneForExport(root, {})
+  const meshes: THREE.Mesh[] = []
+  scene.traverse((object) => {
+    if (object instanceof THREE.Mesh) meshes.push(object)
+  })
+  expect(meshes).toHaveLength(2)
+  expect(meshes[0]!.geometry).not.toBe(mesh.geometry)
+  expect(lod.levels).toHaveLength(2)
+})

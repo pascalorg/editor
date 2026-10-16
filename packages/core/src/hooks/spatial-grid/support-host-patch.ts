@@ -379,11 +379,17 @@ export function resolveFenceConstructionSupport(
   nodes: Record<string, AnyNode>,
   options?: FenceConstructionOptions,
 ): FenceNode {
-  if (options?.supportSurfaceNodeId && nodes[options.supportSurfaceNodeId]) {
+  const requestedSurface = options?.supportSurfaceNodeId
+    ? nodes[options.supportSurfaceNodeId]
+    : null
+  if (
+    requestedSurface?.parentId === levelId &&
+    nodeRegistry.get(requestedSurface.type)?.capabilities?.surfaces?.top
+  ) {
     return {
       ...fence,
       supportSlabId: undefined,
-      supportSurfaceNodeId: options.supportSurfaceNodeId,
+      supportSurfaceNodeId: requestedSurface.id,
     }
   }
   const surface = fence.supportSurfaceNodeId ? nodes[fence.supportSurfaceNodeId] : null

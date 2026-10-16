@@ -1,59 +1,42 @@
-import type { StairNode } from '@pascal-app/core'
+import { type AnyNode, nodeRegistry, type StairNode } from '@pascal-app/core'
 
 type Point = [number, number]
-type LandscapeSurface = {
-  position?: [number, number, number]
-  rotation?: [number, number, number]
-  width?: number
-  depth?: number
-  shape?: string
-  outline?: Point[]
-}
-
 export type TransitionProfile = { frontZ: number; samples: Point[] }
 
-export function landscapeTransitionProfile(
+export function surfaceTransitionProfile(
   stair: StairNode,
-  surface: LandscapeSurface,
+  surface: AnyNode,
   length: number,
 ): TransitionProfile | null {
-  if (!surface.position || !surface.width || !surface.depth || !Number.isFinite(length)) return null
-  const { width, depth, shape } = surface
-  const localOutline: Point[] =
-    shape === 'circle' || shape === 'oval'
-      ? Array.from({ length: 128 }, (_, index) => {
-          const angle = (index * Math.PI * 2) / 128
-          return [
-            (Math.cos(angle) * width) / 2,
-            (Math.sin(angle) * (shape === 'circle' ? width : depth)) / 2,
-          ]
-        })
-      : shape !== 'rectangle' && surface.outline && surface.outline.length >= 3
-        ? surface.outline.map(([x, z]): Point => [x * width, z * depth])
-        : []
-  if (localOutline.length < 3) return null
-
-  const surfaceAngle = surface.rotation?.[1] ?? 0
-  const attached = stair.parentId === stair.landscapeSurfaceId
+  if (!Number.isFinite(length)) return null
+  const boundary = nodeRegistry.get(surface.type)?.capabilities?.surfaces?.top?.boundary
+  if (!boundary) return null
+  const surfaceOutline = boundary(surface, 0)
+  if (surfaceOutline.length < 3) return null
+  const pose = surface as AnyNode & {
+    position?: [number, number, number]
+    rotation?: number | [number, number, number]
+  }
+  const surfacePosition = pose.position ?? [0, 0, 0]
+  const surfaceAngle = typeof pose.rotation === 'number' ? pose.rotation : (pose.rotation?.[1] ?? 0)
+  const attached = stair.parentId === stair.destinationSurfaceId
   const parentCos = Math.cos(surfaceAngle),
     parentSin = Math.sin(surfaceAngle)
   const stairPosition: [number, number, number] = attached
     ? [
-        surface.position[0] + parentCos * stair.position[0] + parentSin * stair.position[2],
-        surface.position[1] + stair.position[1],
-        surface.position[2] - parentSin * stair.position[0] + parentCos * stair.position[2],
+        surfacePosition[0] + parentCos * stair.position[0] + parentSin * stair.position[2],
+        surfacePosition[1] + stair.position[1],
+        surfacePosition[2] - parentSin * stair.position[0] + parentCos * stair.position[2],
       ]
     : stair.position
   const stairRotation = stair.rotation + (attached ? surfaceAngle : 0)
-  const sc = Math.cos(surfaceAngle),
-    ss = Math.sin(surfaceAngle)
   const cc = Math.cos(stairRotation),
     cs = Math.sin(stairRotation)
   const highX = stairPosition[0] + cs * length
   const highZ = stairPosition[2] + cc * length
-  const outline = localOutline.map(([x, z]): Point => {
-    const dx = surface.position![0] + x * sc + z * ss - highX
-    const dz = surface.position![2] - x * ss + z * sc - highZ
+  const outline = surfaceOutline.map(([x, z]): Point => {
+    const dx = x - highX
+    const dz = z - highZ
     return [dx * cc - dz * cs, dx * cs + dz * cc]
   })
 

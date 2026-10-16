@@ -643,13 +643,6 @@ function migrateNodes(nodes: Record<string, any>): {
   // "missing" — corrupting the level. Running elevators in a second pass after
   // all levels are stable avoids the race entirely.
   for (const [id, node] of Object.entries(patchedNodes)) {
-    if (node.type === 'fence' && 'supportSurfaceId' in node) {
-      const { supportSurfaceId, ...canonicalFence } = node
-      patchedNodes[id] = {
-        ...canonicalFence,
-        supportSurfaceNodeId: node.supportSurfaceNodeId ?? supportSurfaceId,
-      }
-    }
     // 1. Item scale migration
     if (node.type === 'item' && !('scale' in node)) {
       patchedNodes[id] = { ...node, scale: [1, 1, 1] }
@@ -782,7 +775,14 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'stair') {
-      const normalized = normalizeStairNode(migrateStairSurfaceMaterials(node))
+      const { landscapeSurfaceId, autoLandscapeSnap, ...canonicalStair } = node
+      const normalized = normalizeStairNode(
+        migrateStairSurfaceMaterials({
+          ...canonicalStair,
+          destinationSurfaceId: node.destinationSurfaceId ?? landscapeSurfaceId,
+          autoSurfaceSnap: node.autoSurfaceSnap ?? autoLandscapeSnap,
+        }),
+      )
       if (normalized) {
         patchedNodes[id] = normalized
       }

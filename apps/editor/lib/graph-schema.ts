@@ -84,13 +84,12 @@ function findRejectedUrl(root: unknown): ScanResult | null {
     if (value && typeof value === 'object') {
       for (const [key, child] of Object.entries(value)) {
         if (depth === 0 && key === 'type') continue
-        // Attachment slots can be namespaced, such as wall-point:<node-id>.
-        // Only identifier characters qualify; URL paths and controls still scan.
+        // Wall attachment slots contain a node ID, not a URL scheme.
         if (
           depth === 0 &&
           key === 'slotId' &&
           typeof child === 'string' &&
-          /^[\w.-]+(?::[\w.-]+)*$/.test(child)
+          /^wall-point:[\w.-]+$/.test(child)
         ) {
           continue
         }

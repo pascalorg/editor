@@ -2,11 +2,11 @@ import {
   type AnyNode,
   type AnyNodeId,
   createStairFlightFromStair,
+  DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
   type StairNode,
   type StairSegmentNode,
   type StairType,
 } from '@pascal-app/core'
-import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from './stair-defaults'
 
 export type StairTypeChange = {
   updates: Partial<StairNode>

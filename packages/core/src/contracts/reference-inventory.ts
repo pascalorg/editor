@@ -242,7 +242,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
   }),
   row({
     kind: 'stair',
-    path: 'landscapeSurfaceId',
+    path: 'destinationSurfaceId',
     ...policy('node', 'host', 'drop', 'strip'),
     remaps: [...CLONES, 'clone-nodes-into', 'delete-nodes'],
     note: 'A registered top surface supporting a stair connection.',

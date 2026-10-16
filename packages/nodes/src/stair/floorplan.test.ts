@@ -136,7 +136,7 @@ describe('buildStairFloorplan documentation', () => {
     const local = StairNode.parse({
       ...world,
       parentId: surface.id,
-      landscapeSurfaceId: surface.id,
+      destinationSurfaceId: surface.id,
       position: [1, 0, 1],
       rotation: 0,
     })

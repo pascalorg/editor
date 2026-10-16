@@ -437,3 +437,35 @@ describe('corner window partner remap', () => {
     expect(copyOf('window_b')).toMatchObject({ corner: { partnerId: idMap.get('window_a') } })
   })
 })
+
+test('whole-scene and level clones remap railing supports and stair destinations', () => {
+  const level = makeNode('level_surface', 'level', {
+    children: ['slab_surface', 'fence_surface', 'stair_surface'],
+  })
+  const slab = makeNode('slab_surface', 'slab', { parentId: level.id })
+  const fence = makeNode('fence_surface', 'fence', {
+    parentId: level.id,
+    supportSurfaceNodeId: slab.id,
+  })
+  const stair = makeNode('stair_surface', 'stair', {
+    parentId: level.id,
+    destinationSurfaceId: slab.id,
+  })
+  const nodes = Object.fromEntries([level, slab, fence, stair].map((node) => [node.id, node]))
+  for (const copy of [
+    cloneSceneGraph({ nodes, rootNodeIds: [level.id] }).nodes,
+    cloneLevelSubtree(nodes, level.id).clonedNodes,
+  ]) {
+    const entries = Object.values(copy)
+    const copiedSlab = entries.find((node) => node.type === 'slab')!
+    const copiedFence = entries.find((node) => node.type === 'fence')!
+    const copiedStair = entries.find((node) => node.type === 'stair')!
+    expect((copiedFence as unknown as { supportSurfaceNodeId: string }).supportSurfaceNodeId).toBe(
+      copiedSlab.id,
+    )
+    expect((copiedStair as unknown as { destinationSurfaceId: string }).destinationSurfaceId).toBe(
+      copiedSlab.id,
+    )
+    expect(copiedSlab.id).not.toBe(slab.id)
+  }
+})

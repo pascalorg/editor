@@ -4,6 +4,7 @@ import {
   DuctSegmentNode,
   type PortConnection,
 } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { fittingLegLength } from '../duct-fitting/ports'
 import type { DuctFittingNode } from '../duct-fitting/schema'
 import {
@@ -12,7 +13,6 @@ import {
   planElbowRealign,
   profileDiameterIn,
 } from './auto-fitting'
-import type { ScenePort } from './ports'
 
 type Point = [number, number, number]
 

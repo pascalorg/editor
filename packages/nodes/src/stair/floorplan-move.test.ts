@@ -118,12 +118,12 @@ test('2D landscape attachment previews without scene writes and commits the flig
   const previewStair = getEffectiveNode(stair)
   const previewFlight = getEffectiveNode(flight)
   expect(useScene.getState().nodes).toBe(before)
-  expect(previewStair.landscapeSurfaceId).toBe(deck.id)
+  expect(previewStair.destinationSurfaceId).toBe(deck.id)
   expect(previewFlight.height).toBeCloseTo(previewStair.totalRise!)
   expect(previewFlight.stepCount).toBe(previewStair.stepCount)
   expect(session.canCommit()).toBe(true)
   session.commit!()
-  expect(useScene.getState().nodes[stair.id]).toMatchObject({ landscapeSurfaceId: deck.id })
+  expect(useScene.getState().nodes[stair.id]).toMatchObject({ destinationSurfaceId: deck.id })
   expect(useScene.getState().nodes[flight.id]).toMatchObject({
     height: previewFlight.height,
     length: previewFlight.length,
@@ -136,12 +136,12 @@ test('2D landscape attachment previews without scene writes and commits the flig
 test('snap mode releases the landscape preview and commits the free position', () => {
   const { stair, flight, session } = setup()
   session.apply({ planPoint: [0, -2], modifiers })
-  expect(getEffectiveNode(stair).landscapeSurfaceId).toBeDefined()
+  expect(getEffectiveNode(stair).destinationSurfaceId).toBeDefined()
   session.apply({ planPoint: [0.13, -2.17], modifiers: { ...modifiers, altKey: true } })
-  expect(getEffectiveNode(stair).landscapeSurfaceId).toBeDefined()
+  expect(getEffectiveNode(stair).destinationSurfaceId).toBeDefined()
   useEditor.getState().setSnappingMode('polygon', 'off')
   session.apply({ planPoint: [0.13, -2.17], modifiers })
-  expect(getEffectiveNode(stair).landscapeSurfaceId).toBeUndefined()
+  expect(getEffectiveNode(stair).destinationSurfaceId).toBeUndefined()
   expect(getEffectiveNode(flight)).toEqual(flight)
   session.commit!()
   expect(useScene.getState().nodes[stair.id]).toMatchObject({ position: [0.13, 0, -2.17] })
@@ -155,7 +155,7 @@ test('fresh 2D stair replacement keeps the snapped flight preview', () => {
   const id = commitFreshPlacementSubtree(stair.id, getEffectiveNode(stair))!
   const committed = useScene.getState().nodes[id] as StairNode
   const committedFlight = useScene.getState().nodes[committed.children[0]!] as StairSegmentNode
-  expect(committed.landscapeSurfaceId).toBe(deck.id)
+  expect(committed.destinationSurfaceId).toBe(deck.id)
   expect(committedFlight.height).toBe(expected.height)
   expect(committedFlight.length).toBe(expected.length)
   expect(committedFlight.stepCount).toBe(expected.stepCount)

@@ -5,7 +5,7 @@ import {
   StairSegmentNode,
   useLiveNodeOverrides,
 } from '@pascal-app/core'
-import { clearStairMovePreview, publishStairMovePreview } from './landscape-move-preview'
+import { clearStairMovePreview, publishStairMovePreview } from './surface-move-preview'
 
 const flight = StairSegmentNode.parse({
   id: 'sseg_preview',
@@ -41,7 +41,7 @@ test('the visible stair model receives live pose and flight geometry during a sn
   expect(visibleStair.rotation).toBeCloseTo(Math.PI / 2)
   expect(visibleStair.totalRise).toBe(1.2)
   expect(visibleStair.railingMode).toBe('none')
-  expect(visibleStair.landscapeSurfaceId).toBe('deck_1')
+  expect(visibleStair.destinationSurfaceId).toBe('deck_1')
   expect(visibleFlight.height).toBe(1.2)
   expect(visibleFlight.length).toBe(2.24)
   expect(visibleFlight.stepCount).toBe(8)
@@ -49,7 +49,7 @@ test('the visible stair model receives live pose and flight geometry during a sn
   publishStairMovePreview(stair.id, flight.id, [4, 0, -3], 0, null)
   expect(getEffectiveNode(stair).position).toEqual([4, 0, -3])
   expect(getEffectiveNode(stair).railingMode).toBe('both')
-  expect(getEffectiveNode(stair).landscapeSurfaceId).toBeUndefined()
+  expect(getEffectiveNode(stair).destinationSurfaceId).toBeUndefined()
   expect(getEffectiveNode(flight).height).toBe(0.35)
   clearStairMovePreview(stair.id, flight.id)
   expect(getEffectiveNode(stair).position).toEqual(stair.position)

@@ -18,7 +18,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PoolSectionBanner } from '@/components/pool-section-banner'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { useLocalArtifactStore } from '@/lib/local-artifact-store'
-import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
+import {
+  isPendingSceneGraphEcho,
+  type PersistedSceneGraph,
+  sceneGraphSignature,
+} from '@/lib/scene-signature'
 import { useThumbnailAutosave } from '@/lib/use-thumbnail-autosave'
 import { BuildTab } from './build-tab'
 import { EditorNavbar } from './editor-navbar'
@@ -320,7 +324,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
       const signature = sceneGraphSignature(payload.graph)
       // SSE can deliver our save before its HTTP response. Reapplying that
       // graph would reset tools and selection while the user keeps editing.
-      if (pendingGraphSignaturesRef.current.has(signature)) return
+      if (isPendingSceneGraphEcho(payload.graph, pendingGraphSignaturesRef.current)) return
       lastRemoteGraphJsonRef.current = signature
       suppressRemoteSaveUntilRef.current = Date.now() + 2500
       applySceneGraphToEditor(payload.graph)

@@ -24,16 +24,18 @@ export function resolveStairSurfaceSnap(
   baseElevation = candidatePosition[1],
   installedPlugins?: readonly string[],
 ): StairSurfaceSnap | null {
-  if (stair.stairType !== 'straight' || stair.autoLandscapeSnap === false) return null
-  const candidate: Point = [candidatePosition[0], candidatePosition[2]]
+  if (stair.stairType !== 'straight' || stair.autoSurfaceSnap === false) return null
+  const parentFrame = surfaceFrame(stair.parentId, nodes)
+  const candidate = toFrame([candidatePosition[0], candidatePosition[2]], parentFrame)
+  const rotation = stair.rotation + parentFrame.rotation
   const highEnd: Point = [
-    candidate[0] + Math.sin(stair.rotation) * currentLength,
-    candidate[1] + Math.cos(stair.rotation) * currentLength,
+    candidate[0] + Math.sin(rotation) * currentLength,
+    candidate[1] + Math.cos(rotation) * currentLength,
   ]
   let closest: { distance: number; snap: StairSurfaceSnap } | null = null
   for (const raw of Object.values(nodes)) {
     if (
-      raw.parentId !== stair.parentId ||
+      surfaceFrame(raw.parentId, nodes).levelId !== parentFrame.levelId ||
       raw.visible === false ||
       !isNodeKindEnabled(raw.type, installedPlugins)
     )
@@ -41,7 +43,8 @@ export function resolveStairSurfaceSnap(
     const top = nodeRegistry.get(raw.type)?.capabilities?.surfaces?.top
     if (!top?.boundary) continue
     const surface = raw as AnyNode & { position?: [number, number, number] }
-    const outline = top.boundary(raw, 0)
+    const targetFrame = surfaceFrame(raw.parentId, nodes)
+    const outline = top.boundary(raw, 0).map((point) => toFrame(point, targetFrame))
     if (outline.length < 3) continue
     const area = outline.reduce((sum, p, index) => {
       const next = outline[(index + 1) % outline.length]!
@@ -70,21 +73,25 @@ export function resolveStairSurfaceSnap(
       const outside = -((candidate[0] - edge[0]) * nx + (candidate[1] - edge[1]) * nz)
       if (outside < -SNAP_DISTANCE) continue
       const distance = Math.min(lowDistance, highDistance)
-      const catchDistance = stair.landscapeSurfaceId === surface.id ? 1.25 : SNAP_DISTANCE
+      const catchDistance = stair.destinationSurfaceId === surface.id ? 1.25 : SNAP_DISTANCE
       if (distance > catchDistance || (closest && distance >= closest.distance)) continue
       const height =
-        typeof top.height === 'function' ? top.height(raw, { nodes, point: edge }) : top.height
-      const topElevation = (surface.position?.[1] ?? 0) + height + floorConstructionLift(nodes, raw)
-      const rise = topElevation - baseElevation
+        typeof top.height === 'function'
+          ? top.height(raw, { nodes, point: fromFrame(edge, targetFrame) })
+          : top.height
+      const topElevation =
+        targetFrame.y + (surface.position?.[1] ?? 0) + height + floorConstructionLift(nodes, raw)
+      const rise = topElevation - (baseElevation + parentFrame.y)
       if (!Number.isFinite(rise) || rise <= 0.01) continue
       const stepCount = Math.max(1, Math.round(rise / 0.16))
       const minRun = stepCount * 0.28
       const length = Math.max(minRun, outside, 0.4)
+      const localPoint = fromFrame([edge[0] - nx * length, edge[1] - nz * length], parentFrame)
       closest = {
         distance,
         snap: {
-          position: [edge[0] - nx * length, candidatePosition[1], edge[1] - nz * length],
-          rotation: Math.atan2(nx, nz),
+          position: [localPoint[0], candidatePosition[1], localPoint[1]],
+          rotation: Math.atan2(nx, nz) - parentFrame.rotation,
           totalRise: rise,
           stepCount,
           length,
@@ -108,4 +115,51 @@ export function getBoundarySurfaces(
       isNodeKindEnabled(node.type, installedPlugins) &&
       Boolean(nodeRegistry.get(node.type)?.capabilities?.surfaces?.top?.boundary),
   )
+}
+
+type SurfaceFrame = {
+  x: number
+  y: number
+  z: number
+  rotation: number
+  levelId: string | null | undefined
+}
+
+function surfaceFrame(
+  parentId: string | null | undefined,
+  nodes: Readonly<Record<string, AnyNode>>,
+): SurfaceFrame {
+  const frame: SurfaceFrame = { x: 0, y: 0, z: 0, rotation: 0, levelId: parentId }
+  const visited = new Set<string>()
+  while (frame.levelId && !visited.has(frame.levelId)) {
+    visited.add(frame.levelId)
+    const parent = nodes[frame.levelId]
+    if (!parent || parent.type === 'level') break
+    const pose = parent as AnyNode & {
+      position?: [number, number, number]
+      rotation?: number | [number, number, number]
+    }
+    const angle = typeof pose.rotation === 'number' ? pose.rotation : (pose.rotation?.[1] ?? 0)
+    const c = Math.cos(angle),
+      s = Math.sin(angle)
+    const [x, y, z] = pose.position ?? [0, 0, 0]
+    const nextX = x + frame.x * c + frame.z * s
+    frame.z = z - frame.x * s + frame.z * c
+    frame.x = nextX
+    frame.y += y
+    frame.rotation += angle
+    frame.levelId = parent.parentId
+  }
+  return frame
+}
+
+function toFrame([x, z]: readonly [number, number], frame: SurfaceFrame): Point {
+  const c = Math.cos(frame.rotation),
+    s = Math.sin(frame.rotation)
+  return [frame.x + x * c + z * s, frame.z - x * s + z * c]
+}
+function fromFrame([x, z]: Point, frame: SurfaceFrame): Point {
+  const c = Math.cos(frame.rotation),
+    s = Math.sin(frame.rotation)
+  return [(x - frame.x) * c - (z - frame.z) * s, (x - frame.x) * s + (z - frame.z) * c]
 }

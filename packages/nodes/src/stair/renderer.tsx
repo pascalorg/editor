@@ -42,13 +42,13 @@ import {
   type GuardBox,
   type GuardRail,
 } from './guard-path'
-import { landscapeTransitionProfile } from './landscape-transition'
 import {
   resolveStairBodySlotMaterials,
   resolveStairSegmentMaterials,
   resolveStairSlotMaterial,
 } from './materials'
 import { buildPostAndRailGuard, postAndRailGuardRails } from './post-and-rail-guard'
+import { surfaceTransitionProfile } from './surface-transition'
 import { type StairRenderData, useStairRenderData } from './use-stair-render-data'
 
 type StairRailPathSide = 'left' | 'right' | 'front'
@@ -222,8 +222,8 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
           ) : null}
         </>
       )}
-      {isSegmentBasedStair && node.landscapeSurfaceId && !detail.error ? (
-        <StairLandscapeTransition stair={node} materials={bodyMaterials} />
+      {isSegmentBasedStair && node.destinationSurfaceId && !detail.error ? (
+        <StairSurfaceTransition stair={node} materials={bodyMaterials} />
       ) : null}
       <StairWalkingLine stair={node} segments={segments} totalRise={totalRise} />
       {isSegmentBasedStair && !detail.error ? (
@@ -237,16 +237,16 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
   )
 }
 
-function StairLandscapeTransition({
+function StairSurfaceTransition({
   stair,
   materials,
 }: {
   stair: StairNode
   materials: StairBodyMaterials
 }) {
-  const rawSurface = useScene((state) => state.nodes[stair.landscapeSurfaceId as AnyNodeId])
+  const rawSurface = useScene((state) => state.nodes[stair.destinationSurfaceId as AnyNodeId])
   const surfaceOverride = useLiveNodeOverrides((state) =>
-    state.overrides.get(stair.landscapeSurfaceId as AnyNodeId),
+    state.overrides.get(stair.destinationSurfaceId as AnyNodeId),
   )
   const surface = useMemo(
     () => (rawSurface && surfaceOverride ? { ...rawSurface, ...surfaceOverride } : rawSurface),
@@ -276,9 +276,9 @@ function StairLandscapeTransition({
   const profile = useMemo(
     () =>
       surface
-        ? landscapeTransitionProfile(
+        ? surfaceTransitionProfile(
             stair,
-            surface as Parameters<typeof landscapeTransitionProfile>[1],
+            surface as Parameters<typeof surfaceTransitionProfile>[1],
             length,
           )
         : null,
@@ -393,7 +393,7 @@ function StairLandscapeTransition({
       castShadow
       geometry={geometry}
       material={materials}
-      name="landscape-stair-transition"
+      name="stair-surface-transition"
       receiveShadow
       userData={STAIR_BODY_SLOT_USER_DATA}
     />
@@ -474,7 +474,7 @@ function StairRailings({
   // reads as one coherent guard across straight, chained, winder, curved and
   // spiral layouts.
 
-  if (stair.landscapeSurfaceId || (stair.railingMode ?? 'none') === 'none') {
+  if (stair.destinationSurfaceId || (stair.railingMode ?? 'none') === 'none') {
     return null
   }
 
