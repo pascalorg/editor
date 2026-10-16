@@ -22,8 +22,6 @@ export type EdgeLook = {
   crumble: number
   /** 1: the wall is a flat section face with a line at grade, not strata under a topsoil layer. */
   section: number
-  /** 1: the section face is hatched. */
-  hatch: number
 }
 
 export const EDGE_LOOKS: Record<UndergroundEdge, EdgeLook> = {
@@ -37,7 +35,6 @@ export const EDGE_LOOKS: Record<UndergroundEdge, EdgeLook> = {
     lineColor: '#f4f4f4',
     crumble: 0.9,
     section: 0,
-    hatch: 0,
   },
   quiet: {
     margin: 1.6,
@@ -49,7 +46,6 @@ export const EDGE_LOOKS: Record<UndergroundEdge, EdgeLook> = {
     lineColor: '#f4f4f4',
     crumble: 0.25,
     section: 0,
-    hatch: 0,
   },
   section: {
     margin: 0.6,
@@ -61,9 +57,8 @@ export const EDGE_LOOKS: Record<UndergroundEdge, EdgeLook> = {
     lineColor: '#2b2b2b',
     crumble: 0,
     section: 1,
-    hatch: 0,
   },
-  'section-hatch': {
+  'section-earth': {
     margin: 0.6,
     erode: 0,
     scale: 0.6,
@@ -71,8 +66,7 @@ export const EDGE_LOOKS: Record<UndergroundEdge, EdgeLook> = {
     featherStrength: 0.4,
     lineWidth: 0.07,
     lineColor: '#2b2b2b',
-    crumble: 0,
-    section: 1,
-    hatch: 1,
+    crumble: 0.25,
+    section: 0,
   },
 }

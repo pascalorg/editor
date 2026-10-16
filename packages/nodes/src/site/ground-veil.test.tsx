@@ -700,7 +700,7 @@ test('every edge look puts the walls on its own contour and changes uniforms, ne
       })
     const before = snapshot()
     const geometries = new Set<unknown>()
-    for (const edge of ['section', 'quiet', 'section-hatch', 'noise', 'section'] as const) {
+    for (const edge of ['section', 'quiet', 'section-earth', 'noise', 'section'] as const) {
       await act(async () => useViewer.getState().setUndergroundLook({ edge }))
       await renderer.advanceFrames(3, 0.05)
       const after = snapshot()

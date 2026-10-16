@@ -412,8 +412,8 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
   }
 }
 
-/** What ships until the owner picks: the eroded edge and the noise-mask crossing. */
-export const DEFAULT_UNDERGROUND_LOOK: UndergroundLook = { edge: 'noise', transition: 'noise' }
+/** What ships until the owner picks an edge: the eroded edge and the simple fade. */
+export const DEFAULT_UNDERGROUND_LOOK: UndergroundLook = { edge: 'noise', transition: 'fade' }
 
 const useViewer = create<ViewerState>()(
   persist(
@@ -700,9 +700,10 @@ export type GroundMode = 'auto' | 'solid'
  * The hole's edge seen from above: `noise` the eroded, scalloped border (today's), `quiet` the
  * same with a fine, faint noise (almost straight from the default camera), `section` an
  * architect's section cut (a constant offset of the footprint, straight edges, a flat face with a
- * thin line at grade), `section-hatch` the same with the face hatched like a drawn section.
+ * thin line at grade), `section-earth` the same outline over the earth's walls (topsoil, strata,
+ * a low crumble that is zero at the rim).
  */
-export type UndergroundEdge = 'noise' | 'quiet' | 'section' | 'section-hatch'
+export type UndergroundEdge = 'noise' | 'quiet' | 'section' | 'section-earth'
 
 /** The dive under the ground: `noise` closes a noise mask over the screen, `fade` fades the whole frame at once. */
 export type UndergroundTransition = 'noise' | 'fade'

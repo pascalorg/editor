@@ -39,7 +39,7 @@ import {
   undergroundAmbianceNode,
   undergroundEarthNode,
 } from '../../lib/underground-ambiance'
-import useViewer from '../../store/use-viewer'
+import useViewer, { DEFAULT_UNDERGROUND_LOOK } from '../../store/use-viewer'
 import { startConstructionReveal } from '../../systems/construction-reveal/construction-reveal'
 import { Lights } from './lights'
 
@@ -268,7 +268,7 @@ test('the simple fade crosses in FADE_SECONDS, the noise mask in AMBIANCE_SECOND
       await act(async () => useViewer.setState({ belowGrade: false, gradeStanding: 'at-grade' }))
       await renderer.advanceFrames(CROSSING_FRAMES, 0.05)
     } finally {
-      useViewer.getState().setUndergroundLook({ transition: 'noise' })
+      useViewer.getState().setUndergroundLook(DEFAULT_UNDERGROUND_LOOK)
       await renderer.unmount()
     }
   }

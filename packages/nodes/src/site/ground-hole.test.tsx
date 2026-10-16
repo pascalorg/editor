@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { groundHoleOpenNode } from '@pascal-app/viewer'
+import { DEFAULT_UNDERGROUND_LOOK, groundHoleOpenNode } from '@pascal-app/viewer'
 import {
   groundHoleColorNode,
   groundHoleContains,
@@ -91,7 +91,7 @@ test('the mask, the rim and the shadow word build as TSL nodes', () => {
 })
 
 test('the section cut is a constant offset, the quiet edge a faint fine noise, today’s the eroded one', () => {
-  const spread = (edge: 'noise' | 'quiet' | 'section' | 'section-hatch') => {
+  const spread = (edge: 'noise' | 'quiet' | 'section' | 'section-earth') => {
     setGroundHoleEdge(edge)
     let low = Number.POSITIVE_INFINITY
     let high = Number.NEGATIVE_INFINITY
@@ -106,7 +106,7 @@ test('the section cut is a constant offset, the quiet edge a faint fine noise, t
   const section = spread('section')
   expect(section.low).toBe(0.6)
   expect(section.high).toBe(0.6)
-  expect(spread('section-hatch')).toEqual(section)
+  expect(spread('section-earth')).toEqual(section)
   const quiet = spread('quiet')
   const noise = spread('noise')
   expect(quiet.high - quiet.low).toBeGreaterThan(0.05)
@@ -115,6 +115,15 @@ test('the section cut is a constant offset, the quiet edge a faint fine noise, t
   // Today's numbers are the shipped ones.
   expect(EDGE_LOOKS.noise.margin).toBe(HOLE_MARGIN)
   expect(EDGE_LOOKS.noise.erode).toBe(HOLE_ERODE)
+})
+
+test('section-earth is the section cut’s outline over quiet’s earth walls', () => {
+  const { crumble: earthCrumble, section: earthSection, ...outline } = EDGE_LOOKS['section-earth']
+  const { crumble: _c, section: _s, ...cut } = EDGE_LOOKS.section
+  expect(outline).toEqual(cut)
+  expect(earthSection).toBe(0)
+  expect(earthCrumble).toBe(EDGE_LOOKS.quiet.crumble)
+  expect(DEFAULT_UNDERGROUND_LOOK.transition).toBe('fade')
 })
 
 test('a pick falls through the hole’s guaranteed core of the look in force', () => {

@@ -4,11 +4,9 @@ import { groundHoleOpenNode, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import { BufferAttribute, BufferGeometry, FrontSide } from 'three'
 import {
-  abs,
   attribute,
   color,
   float,
-  fract,
   mix,
   mx_noise_float,
   normalize,
@@ -70,26 +68,23 @@ const FLOOR_DROP = 0.05
 const FOOT_TUCK = FLOOR_DROP + 0.03
 
 /**
- * The section cut's face (`EdgeLook.section`): one flat tone, a darker line at grade, and when
- * hatched, diagonal lines every `SECTION_HATCH_STEP` metres along the face.
+ * The section cut's face (`EdgeLook.section`): one flat tone and a darker line at grade. Without
+ * it (`section-earth` too) the wall is the earth's: topsoil band, strata, a low crumble that is
+ * zero at the rim.
  */
 const SECTION_TONE = '#747474'
 const SECTION_LINE = '#1e1e1e'
-const SECTION_HATCH_TONE = '#505050'
 const SECTION_LINE_DEPTH = 0.07
-const SECTION_HATCH_STEP = 0.8
 
 const pitTopY = uniform(0)
 const pitFloorY = uniform(0)
 const pitCrumble = uniform(CRUMBLE)
 const pitSection = uniform(0)
-const pitHatch = uniform(0)
 
 /** Sets the walls' look for an edge look (uniforms: nothing recompiles). */
 export function setGroundPitEdge(look: EdgeLook): void {
   pitCrumble.value = look.crumble
   pitSection.value = look.section
-  pitHatch.value = look.hatch
 }
 
 /** The floor the pit goes down to now, world Y (the last level shown below grade). */
@@ -156,16 +151,11 @@ function wallMaterial(topsoil: string, foot: string) {
     .sub(smoothstep(edge.sub(0.04), edge, depthBelowTop))
     .mul(float(1).sub(pitSection))
   const earth = mix(toFoot, color(topsoil), soil)
-  // The section cut: a flat face, hatched on request, and a thin dark line where it meets grade.
-  // The hatch runs along the wall (its tangent, from the normal) and up, at 45 degrees.
-  const along = positionLocal.x.mul(normalLocal.z.negate()).add(positionLocal.z.mul(normalLocal.x))
-  const diagonal = fract(along.add(positionWorld.y).div(SECTION_HATCH_STEP))
-  const hatchLine = float(1).sub(smoothstep(float(0.02), float(0.05), abs(diagonal.sub(0.5))))
-  const face = mix(color(SECTION_TONE), color(SECTION_HATCH_TONE), hatchLine.mul(pitHatch))
+  // The section cut: a flat face and a thin dark line where it meets grade.
   const gradeLine = float(1).sub(
     smoothstep(float(SECTION_LINE_DEPTH), float(SECTION_LINE_DEPTH * 1.6), depthBelowTop),
   )
-  const section = mix(face, color(SECTION_LINE), gradeLine)
+  const section = mix(color(SECTION_TONE), color(SECTION_LINE), gradeLine)
   material.colorNode = mix(earth, section, pitSection)
   return material
 }
