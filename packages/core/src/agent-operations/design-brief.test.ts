@@ -16,6 +16,23 @@ import { AGENT_OPERATIONS } from './index'
 import { EMPTY_SESSION, keepInSession, parseSessionRecord } from './scene-checkpoint'
 import type { AgentContext, SceneNodes } from './types'
 
+const dressed = {
+  textiles: ['linen bedding', 'two cushions'],
+  light: ['two bedside lamps'],
+  windows: ['linen curtains'],
+  walls: ['framed art above the bed'],
+  floor: ['a wool rug'],
+  plants: ['a plant by the window'],
+  objects: ['books on the nightstands'],
+  smallFurniture: { none: 'the room is small' },
+}
+const nothing = (why: string) =>
+  Object.fromEntries(
+    ['textiles', 'light', 'windows', 'walls', 'floor', 'plants', 'objects', 'smallFurniture'].map(
+      (layer) => [layer, { none: why }],
+    ),
+  ) as never
+
 const open = (asIs?: DesignBrief['asIs']): DesignBrief => ({
   fixed: ['a 4 by 5 m bedroom with a double bed'],
   open: ['form and finish'],
@@ -195,7 +212,7 @@ describe('design_brief', () => {
     open: [],
     source: 'open' as const,
     vision: 'Calm.',
-    beyond: 'none: the test places what the request names.',
+    beyond: dressed,
     asIs: [{ assetId: 'toilet', reason: 'technical equipment' }],
   }
   const seen: AgentContext = {
@@ -362,7 +379,7 @@ describe('asIs keeps technical equipment, looked at first', () => {
     source,
     ...(source === 'open' ? {} : { sourceQuote: 'catalog only' }),
     vision: 'Calm.',
-    beyond: 'a rug, curtains, bedside lamps',
+    beyond: source === 'open' ? dressed : nothing('catalog only'),
     asIs: assetIds.map((assetId) => ({ assetId, reason: 'as drawn' })),
   })
   const run = (assetIds: string[], viewed: string[], source: 'open' | 'catalog' = 'open') => {
@@ -459,29 +476,132 @@ describe('asIs keeps technical equipment, looked at first', () => {
   })
 })
 
-describe('beyond: what is added to make the space lived-in', () => {
+describe('beyond: the dressing of the rooms, layer by layer', () => {
   const schema = z.object(designBriefTool.input)
   const base = { fixed: ['a bedroom'], open: [], source: 'open', vision: 'Calm.' }
+  const run = (
+    beyond: unknown,
+    extra: Partial<DesignBrief> = {},
+    context: Partial<AgentContext> = {},
+  ) => {
+    try {
+      return designBrief({}, { ...base, ...extra, beyond } as never, {
+        activeLevelId: null,
+        ...context,
+      })
+    } catch (error) {
+      if (isAgentRefusal(error)) return error
+      throw error
+    }
+  }
 
-  test('is required: an empty answer is a stated choice', () => {
+  test('is required, an object of eight layers each pieces or { none: why }', () => {
     expect(schema.safeParse(base).success).toBe(false)
-    expect(schema.safeParse({ ...base, beyond: '' }).success).toBe(false)
-    expect(
-      schema.safeParse({ ...base, beyond: 'a rug, linen curtains, a plant, framed art' }).success,
-    ).toBe(true)
-    expect(
-      schema.safeParse({ ...base, beyond: 'none: the request says only those pieces' }).success,
-    ).toBe(true)
+    expect(schema.safeParse({ ...base, beyond: 'a rug and curtains' }).success).toBe(false)
+    expect(schema.safeParse({ ...base, beyond: { ...dressed, floor: [] } }).success).toBe(false)
+    expect(schema.safeParse({ ...base, beyond: { ...dressed, floor: { none: '' } } }).success).toBe(
+      false,
+    )
+    const { floor: _floor, ...lacking } = dressed
+    expect(schema.safeParse({ ...base, beyond: lacking }).success).toBe(false)
+    expect(schema.safeParse({ ...base, beyond: dressed }).success).toBe(true)
+    expect(schema.safeParse({ ...base, beyond: nothing('only a bed') }).success).toBe(true)
   })
 
-  test('is echoed in the result and kept with the brief', () => {
-    const outcome = designBrief(
-      {},
-      { ...base, source: 'open', beyond: 'a rug and curtains' } as DesignBrief,
-      { activeLevelId: null },
+  test('an open request owes six of the eight layers, the empty ones named', () => {
+    const thin = run({ ...nothing('no'), floor: ['a wool rug'], light: ['a pendant'] }) as {
+      code: string
+      message: string
+    }
+    expect(thin.code).toBe('beyond_too_thin')
+    expect(thin.message).toBe(
+      'The request leaves the dressing open: beyond names pieces for at least 6 of its 8 layers (textiles, light, windows, walls, floor, plants, objects, small furniture); textiles, windows, walls, plants, objects, small furniture say none.',
     )
-    expect(outcome.result.brief).toMatchObject({ beyond: 'a rug and curtains' })
-    expect(outcome.keep?.designBrief?.beyond).toBe('a rug and curtains')
+    const five = { ...dressed, objects: { none: 'no' }, plants: { none: 'no' } }
+    expect((run(five) as { code: string }).code).toBe('beyond_too_thin')
+    const six = { ...dressed, objects: { none: 'no' } }
+    expect((run(six) as { code?: string }).code).toBeUndefined()
+  })
+
+  test('is handed back as the brief’s own list, flattened, and kept with the brief', () => {
+    const outcome = run(dressed) as ReturnType<typeof designBrief>
+    expect(outcome.result.dressing).toEqual([
+      'linen bedding',
+      'two cushions',
+      'two bedside lamps',
+      'linen curtains',
+      'framed art above the bed',
+      'a wool rug',
+      'a plant by the window',
+      'books on the nightstands',
+    ])
+    expect(outcome.keep?.designBrief?.beyond).toEqual(dressed)
+  })
+
+  test('a request that limits the pieces accepts none everywhere: the person’s words in the chat, the fixed lines over MCP', () => {
+    for (const words of [
+      'only',
+      'nothing else',
+      'just',
+      'seulement',
+      'uniquement',
+      "rien d'autre",
+      'juste',
+    ]) {
+      expect(
+        (run(nothing('limited'), { fixed: [`a bedroom, ${words} a bed`] }) as { code?: string })
+          .code,
+      ).toBeUndefined()
+      expect(
+        (
+          run(nothing('limited'), {}, { requestText: `une chambre, ${words} un lit` }) as {
+            code?: string
+          }
+        ).code,
+      ).toBeUndefined()
+    }
+    // The chat reads the person's message, not the fixed lines.
+    expect(
+      (
+        run(
+          nothing('limited'),
+          { fixed: ['a bedroom, only a bed'] },
+          { requestText: 'a bedroom' },
+        ) as { code: string }
+      ).code,
+    ).toBe('beyond_too_thin')
+    // A word that merely contains one does not limit.
+    expect(
+      (run(nothing('x'), { fixed: ['a justified layout, onlyish'] }) as { code: string }).code,
+    ).toBe('beyond_too_thin')
+  })
+
+  test('a source other than open owes no dressing', () => {
+    const outcome = run(nothing('catalog only'), {
+      source: 'catalog',
+      sourceQuote: 'the catalog only',
+    } as never) as ReturnType<typeof designBrief>
+    expect(outcome.result.dressing).toEqual([])
+  })
+
+  test('a brief stored with a string beyond (before the layers) still reads, with its session', () => {
+    const stored = JSON.parse(
+      JSON.stringify({
+        ...EMPTY_SESSION,
+        made: [{ id: 'wall_1', type: 'wall', levelId: null }],
+        designBrief: { ...open(), beyond: 'a wool rug and a soft ceiling pendant' },
+      }),
+    )
+    const read = parseSessionRecord(stored)
+    expect(read.made).toHaveLength(1)
+    expect(read.designBrief?.beyond).toBe('a wool rug and a soft ceiling pendant')
+    expect(
+      parseSessionRecord(
+        JSON.parse(
+          JSON.stringify({ ...EMPTY_SESSION, designBrief: { ...open(), beyond: dressed } }),
+        ),
+      ).designBrief?.beyond,
+    ).toEqual(dressed)
   })
 })
 
@@ -490,7 +610,7 @@ describe('a source other than open quotes the request', () => {
     fixed: ['a house'],
     open: [],
     vision: 'Furnished.',
-    beyond: 'none: the request says catalog only',
+    beyond: nothing('catalog only'),
   }
   const refusalOf = (input: Record<string, unknown>, requestText?: string) => {
     try {
@@ -613,7 +733,7 @@ describe('a source other than open quotes the request', () => {
   test('an open brief needs no quote and keeps none', () => {
     const outcome = designBrief(
       {},
-      { ...brief, source: 'open', sourceQuote: 'ignored' } as DesignBrief,
+      { ...brief, source: 'open', sourceQuote: 'ignored', beyond: dressed } as DesignBrief,
       { activeLevelId: null, requestText: 'Build a house' },
     )
     expect(outcome.result.brief).not.toHaveProperty('sourceQuote')

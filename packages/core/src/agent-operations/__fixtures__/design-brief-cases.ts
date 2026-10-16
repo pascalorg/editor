@@ -1,6 +1,6 @@
 import { DESIGN_EXAMPLE } from '../../procedural-items'
 import type { AssetInput } from '../../schema'
-import type { DesignBrief } from '../../agent-tools/design-brief'
+import type { Beyond, DesignBrief } from '../../agent-tools/design-brief'
 import type { AgentToolCase } from './cases'
 import { storeysScene } from './structure-cases'
 
@@ -31,12 +31,41 @@ const CATALOG = [
 const seen = (...ids: string[]) => () => ({ checkpoints: {}, made: [], viewed: ids })
 const library = { activeLevelId: null, catalog: CATALOG }
 
+/** Seven of the eight layers name pieces: what an open request owes. */
+export const DRESSED: Beyond = {
+  textiles: ['linen bedding', 'two cushions'],
+  light: ['two bedside lamps'],
+  windows: ['linen curtains'],
+  walls: ['framed art above the bed'],
+  floor: ['a wool rug'],
+  plants: ['a plant by the window'],
+  objects: ['books on the nightstands'],
+  smallFurniture: { none: 'the room is small' },
+}
+const DRESSING = [
+  'linen bedding',
+  'two cushions',
+  'two bedside lamps',
+  'linen curtains',
+  'framed art above the bed',
+  'a wool rug',
+  'a plant by the window',
+  'books on the nightstands',
+]
+/** Every layer says none, as a request that limits the pieces may. */
+const nothing = (why: string): Beyond =>
+  Object.fromEntries(
+    ['textiles', 'light', 'windows', 'walls', 'floor', 'plants', 'objects', 'smallFurniture'].map(
+      (layer) => [layer, { none: why }],
+    ),
+  ) as Beyond
+
 const OPEN: DesignBrief = {
   fixed: ['a 4 by 5 m bedroom', 'a double bed', 'two nightstands', 'a wardrobe'],
   open: ['style and character', 'the form and finish of each piece', 'materials and finishes'],
   source: 'open',
   vision: 'A calm room of oak and linen, low furniture, the bed under the window wall.',
-  beyond: 'linen bedding and curtains, a wool rug, bedside lamps, a plant by the window, framed art',
+  beyond: DRESSED,
 }
 const OPEN_AS_IS: DesignBrief = {
   ...OPEN,
@@ -49,7 +78,7 @@ const IKEA: DesignBrief = {
   sourceQuote: 'furniture from the IKEA range only',
   brand: 'IKEA',
   vision: 'IKEA pieces in pale birch, kept plain.',
-  beyond: 'none: the request says IKEA furniture only',
+  beyond: nothing('the request says IKEA furniture only'),
 }
 
 /** A brief that opens every furnishing tool, for the tests whose subject is not the gate. */
@@ -59,7 +88,7 @@ export const CATALOG_BRIEF: DesignBrief = {
   source: 'catalog',
   sourceQuote: 'the catalog only',
   vision: "The catalog's pieces, as they are.",
-  beyond: 'none: the request says the catalog only',
+  beyond: nothing('the request says the catalog only'),
 }
 
 const ground = { levelId: 'level_ground' }
@@ -134,7 +163,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
       open: [],
       source: 'catalog',
       vision: 'Furnished from the catalog.',
-      beyond: 'none',
+      beyond: nothing('catalog'),
     },
     expect: { refusal: 'source_quote_required', mentions: ['sourceQuote', 'the person\'s own words'] },
   },
@@ -148,7 +177,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
       source: 'catalog',
       sourceQuote: 'Furnished from the catalog',
       vision: 'Furnished from the catalog.',
-      beyond: 'none',
+      beyond: nothing('catalog'),
     },
     context: { requestText: 'Build a house' },
     surfaces: ['core', 'chat'],
@@ -240,12 +269,78 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
       source: 'catalog',
       sourceQuote: 'catalog only',
       vision: 'The catalog as it is.',
-      beyond: 'none: the request says catalog only',
+      beyond: nothing('the request says catalog only'),
     },
     readOnly: true,
     expect: {
-      result: { status: 'recorded', brief: { beyond: 'none: the request says catalog only' } },
+      result: { status: 'recorded', brief: { beyond: nothing('the request says catalog only') } },
     },
+  },
+  {
+    name: 'the owner’s bedroom with a two-piece beyond is refused: an open request owes the dressing, the empty layers named',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: OPEN.fixed,
+      open: OPEN.open,
+      source: 'open',
+      vision: OPEN.vision,
+      beyond: {
+        ...nothing('no need'),
+        floor: ['a wool rug'],
+        light: ['a soft ceiling pendant'],
+      },
+    },
+    expect: {
+      refusal: 'beyond_too_thin',
+      mentions: [
+        'The request leaves the dressing open: beyond names pieces for at least 6 of its 8 layers (textiles, light, windows, walls, floor, plants, objects, small furniture); textiles, windows, walls, plants, objects, small furniture say none.',
+      ],
+    },
+  },
+  {
+    name: 'the same request with the dressing stated layer by layer is recorded, and hands the dressing back',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: OPEN.fixed,
+      open: OPEN.open,
+      source: 'open',
+      vision: OPEN.vision,
+      beyond: DRESSED,
+    },
+    readOnly: true,
+    expect: { result: { status: 'recorded', dressing: DRESSING } },
+  },
+  {
+    name: '"a bedroom with only a bed", every layer none, is recorded: the request limits the pieces',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: ['a bedroom with only a bed'],
+      open: [],
+      source: 'open',
+      vision: 'A bed in a plain room.',
+      beyond: nothing('the request says only a bed'),
+    },
+    readOnly: true,
+    expect: { result: { status: 'recorded', dressing: [] } },
+  },
+  {
+    name: 'a person’s message that limits the pieces accepts none everywhere, whatever the fixed lines say',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      fixed: ['a bedroom', 'a double bed'],
+      open: [],
+      source: 'open',
+      vision: 'A bed in a plain room.',
+      beyond: nothing('the request says nothing else'),
+    },
+    context: { requestText: 'une chambre avec un lit, rien d’autre' },
+    surfaces: ['core', 'chat'],
+    readOnly: true,
+    expect: { result: { status: 'recorded', dressing: [] } },
   },
   {
     name: 'before a brief, a sofa is not made',

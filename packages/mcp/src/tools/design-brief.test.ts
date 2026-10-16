@@ -50,6 +50,22 @@ const compiledBox = (): CompiledGeometryScript => ({
   }),
 })
 
+const dressed = {
+  textiles: ['linen bedding', 'two cushions'],
+  light: ['two bedside lamps'],
+  windows: ['linen curtains'],
+  walls: ['framed art above the bed'],
+  floor: ['a wool rug'],
+  plants: ['a plant by the window'],
+  objects: ['books on the nightstands'],
+  smallFurniture: { none: 'the room is small' },
+}
+const nothing = Object.fromEntries(
+  ['textiles', 'light', 'windows', 'walls', 'floor', 'plants', 'objects', 'smallFurniture'].map(
+    (layer) => [layer, { none: 'the request limits the pieces' }],
+  ),
+)
+
 const brief = (source: 'open' | 'catalog' | 'brand', extra: Record<string, unknown> = {}) => ({
   fixed: ['a 4 by 5 m bedroom', 'a double bed', 'two nightstands', 'a wardrobe'],
   open: ['style', 'the form and finish of each piece'],
@@ -58,7 +74,7 @@ const brief = (source: 'open' | 'catalog' | 'brand', extra: Record<string, unkno
     ? {}
     : { sourceQuote: source === 'catalog' ? 'the catalog only' : 'IKEA furniture only' }),
   vision: 'A calm room of oak and linen.',
-  beyond: 'none: the test places what the request names.',
+  beyond: source === 'open' ? dressed : nothing,
   ...extra,
 })
 
@@ -244,6 +260,29 @@ describe('the design brief over MCP', () => {
       source: 'catalog',
       sourceQuote: 'que du catalogue',
     })
+  })
+
+  test('an open request owes the dressing: a two-piece beyond is refused, naming the empty layers; "only" accepts none', async () => {
+    const thin = await call('design_brief', {
+      ...brief('open'),
+      beyond: { ...nothing, floor: ['a wool rug'], light: ['a soft ceiling pendant'] },
+    })
+    expect(thin.result.isError).toBe(true)
+    expect(thin.payload.code).toBe('beyond_too_thin')
+    expect(String(thin.payload.error)).toContain(
+      'textiles, windows, walls, plants, objects, small furniture say none.',
+    )
+    expect(bridge.agentSession.read().designBrief).toBeUndefined()
+    const full = await call('design_brief', brief('open'))
+    expect(full.payload.status).toBe('recorded')
+    expect(full.payload.dressing).toHaveLength(8)
+    const limited = await call('design_brief', {
+      ...brief('open'),
+      fixed: ['a bedroom with only a bed'],
+      beyond: nothing,
+    })
+    expect(limited.payload.status).toBe('recorded')
+    expect(limited.payload.dressing).toEqual([])
   })
 
   test('beyond is required: a brief without it is not accepted', async () => {

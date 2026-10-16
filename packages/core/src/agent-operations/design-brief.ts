@@ -1,8 +1,11 @@
 import {
+  BEYOND_LAYERS,
+  BEYOND_MIN_LAYERS,
   CATALOG_PLACEMENT_TOOLS,
   type DesignBrief,
   type DesignBriefInput,
   FURNISHING_CREATION_TOOLS,
+  layerPieces,
 } from '../agent-tools/design-brief'
 import { AgentRefusal, refuse } from '../agent-tools/refusal'
 import type { AssetInput } from '../schema'
@@ -111,6 +114,32 @@ function quoteNamesSource(source: string, brand: string | undefined, quote: stri
   if (folded.split(' ').length < 2) return false
   if (source === 'brand') return Boolean(brand) && folded.includes(fold(brand!))
   return (source === 'catalog' ? CATALOG_WORD : EXISTING_WORD).test(folded)
+}
+
+/** The words by which a request limits the pieces: the dressing is then not owed. */
+const LIMITING_WORDS = /\b(?:only|nothing else|just|seulement|uniquement|rien d'autre|juste)\b/
+
+/** The pieces `beyond` names, flattened: the brief's own list of the dressing. */
+export function dressingOf(beyond: DesignBriefInput['beyond']): string[] {
+  return BEYOND_LAYERS.flatMap(([key]) => layerPieces(beyond[key]))
+}
+
+/**
+ * An open request owes most of the dressing layers: with source open and no word limiting the
+ * pieces, at least BEYOND_MIN_LAYERS of the layers name pieces. The words are the person's message
+ * where the host has one (the chat), else the brief's own `fixed` lines (MCP).
+ */
+function requireDressing(input: DesignBriefInput, context: AgentContext): void {
+  if (input.source !== 'open') return
+  const request = context.requestText ?? input.fixed.join(' ')
+  if (LIMITING_WORDS.test(fold(request))) return
+  const empty = BEYOND_LAYERS.filter(([key]) => layerPieces(input.beyond[key]).length === 0)
+  if (BEYOND_LAYERS.length - empty.length >= BEYOND_MIN_LAYERS) return
+  refuse(
+    'beyond_too_thin',
+    `The request leaves the dressing open: beyond names pieces for at least ${BEYOND_MIN_LAYERS} of its ${BEYOND_LAYERS.length} layers (${BEYOND_LAYERS.map(([, label]) => label).join(', ')}); ${empty.map(([, label]) => label).join(', ')} say none.`,
+    { layers: empty.map(([key]) => key) },
+  )
 }
 
 /** Whether `design_brief` reads the item library: an open brief naming pieces as they are. */
@@ -278,6 +307,7 @@ export const designBrief: AgentOperation<DesignBriefInput> = (_nodes, input, con
     if (context.requestText !== undefined && !fold(context.requestText).includes(fold(quote)))
       refuse('source_not_in_request', SOURCE_NOT_IN_REQUEST)
   }
+  requireDressing(input, context)
   const brief: DesignBrief = {
     fixed: input.fixed,
     open: input.open,
@@ -290,7 +320,12 @@ export const designBrief: AgentOperation<DesignBriefInput> = (_nodes, input, con
   }
   requireAsIs(brief, context)
   return {
-    result: { status: 'recorded', brief, ...briefUnlocks(brief) },
+    result: {
+      status: 'recorded',
+      brief,
+      dressing: dressingOf(input.beyond),
+      ...briefUnlocks(brief),
+    },
     keep: { designBrief: brief },
   }
 }
