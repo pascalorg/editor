@@ -11,7 +11,30 @@ export const ORBIT_FLOOR_CLEARANCE = 0.45
  */
 export const ORBIT_TARGET_HEIGHT = 1.1
 
+/**
+ * The dive under the ground: with the ground on Auto the orbit's eye may leave the ground for the
+ * earth under any building, down to a floor this far under the lowest ground, or this far under
+ * the deepest thing drawn (a basement's footing), whichever is deeper.
+ */
+export const DIVE_DEPTH = 3
+export const DIVE_MARGIN = 1
+
 const DEGREE = Math.PI / 180
+
+/** The floor of the dive, world Y: the eye's clearance over it is {@link ORBIT_FLOOR_CLEARANCE}. */
+export function diveFloorY(lowestGroundY: number, deepestDrawnY: number | null): number {
+  const underGround = lowestGroundY - DIVE_DEPTH
+  return deepestDrawnY === null ? underGround : Math.min(underGround, deepestDrawnY - DIVE_MARGIN)
+}
+
+/**
+ * The lowest the orbit's eye may sit: the clearance over the selected level's floor, or over the
+ * dive's floor when the person may dive and it lies deeper (`diveFloor` null: no dive). Selecting a
+ * level never lifts the limit above the dive floor, so a dive works from any storey.
+ */
+export function orbitFloorMinY(levelFloorY: number, diveFloor: number | null): number {
+  return Math.min(levelFloorY, diveFloor ?? levelFloorY) + ORBIT_FLOOR_CLEARANCE
+}
 
 /** The steepest an orbit camera looks: straight down is 0, straight up π. */
 export const MAX_ORBIT_POLAR_ANGLE = Math.PI - 0.05

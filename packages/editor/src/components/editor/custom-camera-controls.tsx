@@ -7,8 +7,10 @@ import {
   type CameraControlFitSceneEvent,
   type CameraControlFrameEvent,
   type CameraPose,
+  deepestDrawnY,
   emitter,
   groundHeightAt,
+  lowestGroundY,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -54,9 +56,10 @@ import {
   syncKeyboardPanMotion,
 } from '../../lib/keyboard-pan'
 import {
+  diveFloorY,
   MAX_ORBIT_POLAR_ANGLE,
-  ORBIT_FLOOR_CLEARANCE,
   ORBIT_TARGET_HEIGHT,
+  orbitFloorMinY,
   overviewEyeY,
 } from '../../lib/orbit-floor-clearance'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
@@ -407,7 +410,15 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     currentLevelId ? getLevelPresentationY(currentLevelId, state.nodes, levelMode) : 0,
   )
   const allowUnderground = !isPreviewMode && allowUndergroundCamera
-  const floorMinY = allowUnderground ? null : floorY + ORBIT_FLOOR_CLEARANCE
+  // With the ground on Auto the eye may dive under any building, down to the dive's floor; Solid
+  // keeps the eye over the ground.
+  const groundMode = useViewer((state) => state.groundMode)
+  const diveFloor = useScene((state) =>
+    groundMode === 'auto'
+      ? diveFloorY(lowestGroundY(state.nodes), deepestDrawnY(state.nodes))
+      : null,
+  )
+  const floorMinY = allowUnderground ? null : orbitFloorMinY(floorY, diveFloor)
   const maxPolarAngle =
     allowUnderground || cameraMode === 'perspective'
       ? MAX_ORBIT_POLAR_ANGLE
@@ -668,8 +679,9 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     floorSurface.levelId = currentLevelId ?? null
     if (!controls.current) return
     controls.current.floorMinY = floorMinY
-    controls.current.floorSurface = floorSurface
-  }, [camera, currentLevelId, floorMinY, floorSurface, isFirstPersonMode])
+    // The level's floor and the ground hold the eye over them; the dive goes through both.
+    controls.current.floorSurface = diveFloor === null ? floorSurface : null
+  }, [camera, currentLevelId, diveFloor, floorMinY, floorSurface, isFirstPersonMode])
 
   const focusNode = useCallback(
     (nodeId: string) => {

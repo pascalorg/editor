@@ -79,16 +79,18 @@ test('the lowest ground of a sculpted site is the terrain its lowest sample', ()
   expect(lowestGroundY(house(null, encodeTerrainField({ ...field, heights })))).toBeCloseTo(-1.8, 9)
 })
 
-test('over no floor and no wall the scene draws nothing deep', () => {
+test('over no floor the scene draws nothing deep', () => {
   expect(deepestDrawnY(keyed([site()]))).toBeNull()
 })
 
-test('a house at grade is deepest at the bottom of its footing', () => {
-  const { footingBelowGrade } = FOUNDATION_STANDARD
-  expect(deepestDrawnY(house(null))).toBeCloseTo(FLAT_GROUND_Y - footingBelowGrade, 9)
+test('a house at grade is deepest at a footing under its floor', () => {
+  expect(deepestDrawnY(house(null))).toBeCloseTo(
+    0.05 - 0.05 - FOUNDATION_STANDARD.footingThickness,
+    9,
+  )
 })
 
 test('a basement is deepest at the footing under its floor', () => {
-  const { footingThickness } = FOUNDATION_STANDARD
-  expect(deepestDrawnY(house(-3.63))).toBeCloseTo(-3.63 - footingThickness, 9)
+  // The floor top is at -3.63 + 0.05 on a 0.05 m slab.
+  expect(deepestDrawnY(house(-3.63))).toBeCloseTo(-3.63 - FOUNDATION_STANDARD.footingThickness, 9)
 })

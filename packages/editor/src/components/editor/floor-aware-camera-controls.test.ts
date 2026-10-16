@@ -2,11 +2,13 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { CameraControlsImpl } from '@react-three/drei'
 import * as THREE from 'three'
 import {
+  diveFloorY,
   LOOK_UP_PITCH_GAIN,
   LOOK_UP_PUSH_HALF_ANGLE,
   MAX_ORBIT_POLAR_ANGLE,
   ORBIT_FLOOR_CLEARANCE,
   ORBIT_TARGET_HEIGHT,
+  orbitFloorMinY,
 } from '../../lib/orbit-floor-clearance'
 import { FloorAwareCameraControls } from './floor-aware-camera-controls'
 
@@ -439,4 +441,26 @@ test('once the user moves the camera, a written low pose eases up to the clearan
     previous = controls.camera.position.y
   }
   expect(controls.camera.position.y).toBeCloseTo(0.05 + GROUND_MIN_Y, 4)
+})
+
+test('with the dive on the eye goes under the ground and stops at the dive floor', () => {
+  const controls = groundFloorControls()
+  const diveFloor = diveFloorY(-0.05, null)
+  controls.floorMinY = orbitFloorMinY(0, diveFloor)
+  // The dive turns the surface off: the ground and the floor would hold the eye over them.
+  controls.floorSurface = null
+  const { distance } = controls
+  orbitTo(controls, 100)
+  // The pivot is at the ground's level: 10° past the horizon the eye is about a metre under it.
+  expect(controls.camera.position.y).toBeCloseTo(distance * Math.cos(degrees(100)), 6)
+  expect(controls.camera.position.y).toBeLessThan(0)
+  orbitTo(controls, 150)
+  expect(controls.camera.position.y).toBeCloseTo(diveFloor + ORBIT_FLOOR_CLEARANCE, 6)
+})
+
+test('without the dive the same orbit stays over the ground floor', () => {
+  const controls = groundFloorControls()
+  controls.floorSurface = { revision: 0, topAt: () => 0 }
+  orbitTo(controls, 100)
+  expect(controls.camera.position.y).toBeGreaterThanOrEqual(GROUND_MIN_Y - 1e-6)
 })

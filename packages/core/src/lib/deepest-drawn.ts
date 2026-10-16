@@ -1,6 +1,6 @@
 import type { AnyNode, AnyNodeId, SlabNode } from '../schema'
 import { levelFloorWorldY } from '../services/storey'
-import { genericFoundation } from './generic-foundation'
+import { FOUNDATION_STANDARD } from './foundation-standard'
 import { FLAT_GROUND_Y } from './site-ground-height'
 import { heightAtSample, type TerrainField } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
@@ -30,14 +30,13 @@ export function lowestGroundY(nodes: Nodes): number {
 }
 
 /**
- * The world Y of the deepest thing the scene draws: the underside of the lowest floor slab, or the
- * bottom of a generic footing under it, whichever is lower. `null` for a scene with neither.
+ * The world Y of the deepest thing the scene draws: the bottom of the footing under the lowest floor
+ * slab (its underside less a footing's thickness). A footing under a floor at or over grade sits
+ * about as deep, and never nearer the dive's own floor, so the floors alone decide. `null` for a
+ * scene with no floor.
  */
 export function deepestDrawnY(nodes: Nodes): number | null {
   let deepest: number | null = null
-  const lower = (y: number) => {
-    if (deepest === null || y < deepest) deepest = y
-  }
   for (const node of Object.values(nodes)) {
     if (node.type !== 'level') continue
     const floorY = levelFloorWorldY(nodes, node.id)
@@ -46,8 +45,8 @@ export function deepestDrawnY(nodes: Nodes): number | null {
       const child = nodes[id as AnyNodeId]
       return child?.type === 'slab' ? Math.max(thickness, (child as SlabNode).thickness) : thickness
     }, 0)
-    lower(floorY - thickest)
+    const bottom = floorY - thickest - FOUNDATION_STANDARD.footingThickness
+    if (deepest === null || bottom < deepest) deepest = bottom
   }
-  for (const member of genericFoundation(nodes)) lower(member.bottomY)
   return deepest
 }
