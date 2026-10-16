@@ -91,7 +91,7 @@ const WALL_BAND_SPLIT_EPSILON = 1e-5
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as any).computeBoundsTree = computeBoundsTree
-  ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
+  ;(geometry as any).computeBoundsTree({ targetLeafSize: 10 })
 }
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {

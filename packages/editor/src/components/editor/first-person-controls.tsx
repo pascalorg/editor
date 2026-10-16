@@ -522,7 +522,7 @@ function createElevatorColliderMesh(
   ;(bvhGeometry as any).computeBoundsTree = computeBoundsTree
   ;(bvhGeometry as any).disposeBoundsTree = disposeBoundsTree
   bvhGeometry.computeBoundsTree?.({
-    maxLeafSize: 12,
+    targetLeafSize: 12,
     strategy: 0,
   } as never)
   bvhGeometry.computeBoundingBox()

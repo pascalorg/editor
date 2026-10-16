@@ -138,7 +138,7 @@
     "three": "^0.186"
   },
   "dependencies": {
-    "@pascal-app/lingo": "^0.2.0",
+    "@pascal-app/lingo": "^0.5.0",
     "dedent": "^1.7.2",
     "idb-keyval": "^6.3.0",
     "mitt": "^3.0.1",
@@ -154,7 +154,7 @@
     "@types/react": "19.3.0",
     "@types/three": "^0.186.0",
     "@typescript/typescript6": "6.0.2",
-    "fake-indexeddb": "^6.2.5",
+    "fake-indexeddb": "^6.2.6",
     "typescript": "7.0.2"
   },
   "keywords": [
