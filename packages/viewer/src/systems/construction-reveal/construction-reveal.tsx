@@ -21,6 +21,7 @@ import { DustPool, emitAlongBase, emitAroundFoot } from '../../lib/construction-
 import { SCENE_LAYER } from '../../lib/layers'
 import {
   type ChangeCandidate,
+  CONTAINERS,
   type ConstructionRevealLevel,
   commitChangeCandidates,
   commitDeleteCandidates,
@@ -1188,7 +1189,8 @@ function publishLevelsAtWork() {
 /**
  * The nodes playing now: moving in, going out, carried to a new place, or an edit waiting its turn
  * with its new picture held. The cutaway leaves these, and what they host, in view
- * (`nodesRevealing`); a node waiting for its turn is not drawn yet, so it is not among them.
+ * (`nodesRevealing`); a node waiting for its turn is not drawn yet, so it is not among them. A
+ * deleted node's picture plays from a snapshot, out of the scene: what it leaves stands for it.
  */
 function nodesAtPlay(): string[] {
   const ids = new Set<string>()
@@ -1196,6 +1198,7 @@ function nodesAtPlay(): string[] {
   for (const id of glides.keys()) ids.add(id)
   for (const id of retracts.keys()) ids.add(id)
   for (const id of queuedChanges) ids.add(id)
+  for (const ghost of ghosts.values()) if (ghost.host) ids.add(ghost.host)
   return [...ids]
 }
 
@@ -1676,6 +1679,8 @@ type Ghost = {
   /** The picture: a clone of the deleted node's root, standing where it stood. */
   root: Object3D
   parent: Object3D
+  /** What it left behind it in the scene that is not a storey or a building (the wall of a departing opening). */
+  host: string | null
   style: PlayedStyle
   height: number
   startMs: number
@@ -1695,10 +1700,23 @@ const ghosts = new Map<string, Ghost>()
  * building), so they outlive the object that held them.
  */
 function ghostStand(id: string, commit: SceneCommit, own: Object3D): Object3D {
+  const above = survivingAbove(id, commit)
+  return (above ? sceneRegistry.nodes.get(above) : undefined) ?? own
+}
+
+/** The nearest node above a deleted one that the commit leaves in the scene. */
+function survivingAbove(id: string, commit: SceneCommit): AnyNodeId | null {
   let above = commit.before.nodes[id as AnyNodeId]?.parentId as AnyNodeId | null | undefined
   for (let guard = 0; above && !commit.current.nodes[above] && guard < 32; guard += 1)
     above = commit.before.nodes[above]?.parentId as AnyNodeId | null | undefined
-  return (above ? sceneRegistry.nodes.get(above) : undefined) ?? own
+  return above ?? null
+}
+
+/** The node a departing one hung on, when it stays: a storey or a building is not a host. */
+function ghostHost(id: string, commit: SceneCommit): string | null {
+  const above = survivingAbove(id, commit)
+  const type = above && commit.current.nodes[above]?.type
+  return above && type && !CONTAINERS.has(type) ? above : null
 }
 
 /**
@@ -1803,6 +1821,7 @@ function playDeletions(commit: SceneCommit) {
       levelId: entry.levelId,
       root,
       parent,
+      host: ghostHost(entry.id, commit),
       style: entry.style,
       height: entry.height,
       startMs: entry.startMs,

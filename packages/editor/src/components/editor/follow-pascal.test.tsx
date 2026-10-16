@@ -15,7 +15,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { startConstructionReveal, useViewer } from '@pascal-app/viewer'
+import { isNodeRevealing, startConstructionReveal, useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { openingExterior, wallExterior } from '../../lib/follow-pascal-exterior.test-fixture'
@@ -108,8 +108,9 @@ afterEach(async () => {
   await renderer?.unmount()
   renderer = null
   restoreRegistry()
-  for (const id of ['item_follow', 'item_sofa', 'window_east', 'wall_east', 'roof_east'])
-    sceneRegistry.nodes.delete(id)
+  for (const id of [...sceneRegistry.nodes.keys()])
+    if (id.startsWith('item_') || ['window_east', 'wall_east', 'roof_east'].includes(id))
+      sceneRegistry.nodes.delete(id)
   useScene.setState(previousScene)
   useViewer.setState(previousViewer)
   useEditor.setState(previousEditor)
@@ -651,3 +652,143 @@ test.each([
     expect(useViewer.getState().wallMode).toBe(person)
   },
 )
+
+// A commit's outside view is its own: an exterior edit another commit queued behind a build, or an
+// exterior commit before an interior one, does not take the build's walls up between its steps.
+async function followBuildAmid(setup: {
+  first: 'build' | 'exterior'
+  next: 'exterior' | 'build'
+  /** When the second commit lands, on the reveal clock; with the first when absent. */
+  nextAtMs?: number
+}) {
+  const building = BuildingNode.parse({ id: 'building_follow' })
+  const level = LevelNode.parse({ id: 'level_ground', parentId: building.id, level: 0 })
+  const wall = WallNode.parse({
+    id: 'wall_east',
+    parentId: level.id,
+    start: [4, 0],
+    end: [4, 4],
+    frontSide: 'interior',
+    backSide: 'exterior',
+  })
+  const window = WindowNode.parse({
+    id: 'window_east',
+    parentId: wall.id,
+    wallId: wall.id,
+    position: [1, 1.2, 0],
+  })
+  const resting = ItemNode.parse({
+    id: 'item_sofa_resting',
+    parentId: level.id,
+    position: [3, 0, 3],
+    asset: {
+      id: 'sofa',
+      category: 'furniture',
+      name: 'Sofa',
+      thumbnail: '',
+      src: '/sofa.glb',
+      dimensions: [2, 1, 1],
+    },
+  })
+  building.children = [level.id]
+  level.children = [wall.id, resting.id]
+  wall.children = [window.id]
+  useScene
+    .getState()
+    .setScene(
+      Object.fromEntries([building, level, wall, window, resting].map((node) => [node.id, node])),
+      [building.id],
+    )
+  useViewer.getState().setSelection({ buildingId: building.id, levelId: level.id })
+  useViewer.setState({ levelMode: 'stacked', hideLevelsAboveSelection: false })
+  useViewer.getState().setWallMode('cutaway')
+  renderer = await create(
+    <>
+      <group name="scene-renderer" />
+      <FollowPascal />
+    </>,
+  )
+  shell = new Mesh(new BoxGeometry(6, 6, 6), new MeshBasicMaterial({ side: DoubleSide }))
+  shell.position.set(2, 0.5, 2)
+  renderer.scene.instance.getObjectByName('scene-renderer')!.add(shell)
+  shell.updateWorldMatrix(true, true)
+  for (const id of ['window_east', 'wall_east', resting.id])
+    sceneRegistry.nodes.set(id, new Group())
+  const sofa = ItemNode.parse({
+    id: 'item_sofa',
+    parentId: level.id,
+    position: [1, 0, 1],
+    asset: {
+      id: 'sofa',
+      category: 'furniture',
+      name: 'Sofa',
+      thumbnail: '',
+      src: '/sofa.glb',
+      dimensions: [2, 1, 1],
+    },
+  })
+  // Enough furniture that the build plays for seconds, in several steps.
+  const buildSofa = () => {
+    const pieces = Array.from({ length: 12 }, (_, index) =>
+      ItemNode.parse({
+        ...sofa,
+        id: `item_sofa${index === 0 ? '' : index}`,
+        position: [index * 0.3, 0, 1 + (index % 3)],
+      }),
+    )
+    for (const piece of pieces) {
+      useScene.getState().createNode(piece, level.id)
+      sceneRegistry.nodes.set(piece.id, new Group())
+    }
+  }
+  // A commit with a window and a sofa in it: the window takes it outdoors.
+  const moveWindow = () => {
+    useScene.getState().updateNode('window_east', { position: [2.5, 1.2, 0] } as never)
+    useScene.getState().updateNode(resting.id, { position: [2.5, 0, 2.5] } as never)
+  }
+  const playing = () =>
+    Array.from({ length: 12 }, (_, i) => `item_sofa${i === 0 ? '' : i}`).some((id) =>
+      isNodeRevealing(id),
+    )
+  const upDuringBuild: number[] = []
+  let at = 0
+  const stop = useViewer.subscribe((state, before) => {
+    if (state.wallMode === 'up' && before.wallMode !== 'up' && playing()) upDuringBuild.push(at)
+  })
+  driver = startConstructionReveal({ reveals: (commit) => commit.author === 'agent' })
+  usePointAsk.getState().setBusy(true)
+  await act(async () => {
+    const commit = (kind: 'build' | 'exterior') =>
+      runAsSceneCommitAuthor('agent', kind === 'build' ? buildSofa : moveWindow)
+    commit(setup.first)
+    if (setup.nextAtMs === undefined) commit(setup.next)
+    for (at = 50; at <= 12000; at += 50) {
+      if (at === setup.nextAtMs) commit(setup.next)
+      driver!.tick(at)
+      await renderer!.advanceFrames(1, 0.02)
+    }
+    await renderer!.advanceFrames(10, 0.1)
+  })
+  stop()
+  return { upDuringBuild }
+}
+
+test('an exterior edit queued behind a build does not put the walls up while the build plays', async () => {
+  const { upDuringBuild } = await followBuildAmid({ first: 'build', next: 'exterior' })
+  expect(poses.length).toBeGreaterThan(0)
+  expect(upDuringBuild).toEqual([])
+  // The edit itself is looked at from outside once it plays.
+  expect(useViewer.getState().wallMode).toBe('up')
+})
+
+test('an exterior edit that has played does not take the next build outdoors', async () => {
+  const { upDuringBuild } = await followBuildAmid({
+    first: 'exterior',
+    next: 'build',
+    nextAtMs: 3000,
+  })
+  expect(poses.length).toBeGreaterThan(0)
+  expect(upDuringBuild).toEqual([])
+  // The walls the edit put up are cut away again for the build, once.
+  expect(useViewer.getState().wallMode).toBe('cutaway')
+})

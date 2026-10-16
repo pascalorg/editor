@@ -45,7 +45,7 @@ import useViewer from '../../store/use-viewer'
 import { GeometrySystem } from '../geometry/geometry-system'
 import { heldLevelY } from '../level/level-hold'
 import { LevelSystem } from '../level/level-system'
-import { visibleMaterialsOf } from '../wall/wall-cutout-cache'
+import { visibleMaterialsOf, wallsInPlay } from '../wall/wall-cutout-cache'
 import { ConstructionDust } from './construction-dust'
 
 // Construction reveal, failure modes written before the code: a person's edit,
@@ -1971,6 +1971,32 @@ describe('a deletion plays the creation backwards', () => {
     await until(() => pictures().length === 0, 6000)
     await frame()
     expect(useViewer.getState().levelsRevealing).toEqual([])
+  })
+
+  // The owner's rule (15 Oct): a node that plays is never hidden by the cutaway; the wall a
+  // departing opening stands in is no exception, though the opening is already out of the scene.
+  test('the wall an opening is leaving stays in play for as long as its picture plays', async () => {
+    const [levelId] = loadLevels()
+    await mount([levelId!])
+    start()
+    const wall = make(RealWall)
+    const door = make(Door)
+    await agentWrites(() => useScene.getState().createNode(wall, levelId))
+    await agentWrites(() => useScene.getState().createNode(door, wall.id as AnyNodeId))
+    await until(
+      () => !isNodeRevealing(wall.id) && !isNodeRevealing(door.id) && Boolean(root(door.id)),
+      12000,
+    )
+    expect(useViewer.getState().nodesRevealing).toEqual([])
+    await remove([door.id])
+    await frame()
+    expect(getRetractTurn(door.id)).not.toBeNull()
+    const inPlay = () => wallsInPlay(useScene.getState().nodes, useViewer.getState().nodesRevealing)
+    expect(inPlay().has(wall.id)).toBe(true)
+    await until(() => getRetractTurn(door.id) === null, 6000)
+    await frame()
+    expect(useViewer.getState().nodesRevealing).toEqual([])
+    expect(inPlay().size).toBe(0)
   })
 })
 

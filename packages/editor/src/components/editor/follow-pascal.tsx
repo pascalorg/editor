@@ -164,6 +164,8 @@ export function FollowPascal() {
 
   /** The build in hand has a change seen from outside in it: all of it is looked at from outdoors. */
   const outsideBuild = useRef(false)
+  /** The last word was that the play is over: the next edit is another commit's. */
+  const played = useRef(false)
 
   const unobstructed = (want: FollowWant, goal: OrbitValue): OrbitValue => {
     sight.refresh(want)
@@ -240,13 +242,18 @@ export function FollowPascal() {
         synced.current = false
         outsideBuild.current = false
       }
-      // What the commit changes, read before its first piece plays: one change seen from outside
-      // takes the whole commit outdoors.
-      if (!outsideBuild.current) {
-        const changed = revealChangedNodeIds()
+      // An edit or a move is read before its first piece plays: one change seen from outside takes the
+      // whole commit outdoors, until the play is over. What is waiting in the queue belongs to a later
+      // commit, so a build, a deletion, or the edit that follows a finished play never inherits it.
+      const edit = 'changed' in event && event.changed === true
+      if (!edit) outsideBuild.current = false
+      else {
+        if (played.current) outsideBuild.current = false
+        const changed = outsideBuild.current ? [] : revealChangedNodeIds()
         if (changed.length && anyExterior(useScene.getState().nodes, changed))
           outsideBuild.current = true
       }
+      played.current = event.type === 'complete'
       over.current = setTimeout(() => useFollowPascal.getState().endBuild(), BUILD_OVER_MS)
       if (event.type === 'complete') return
       const want = wantFromEvent(event, useScene.getState().nodes, clock.current)

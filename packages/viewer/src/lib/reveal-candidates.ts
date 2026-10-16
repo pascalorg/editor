@@ -37,7 +37,7 @@ export function styleAt(style: RevealStyle, at: ConstructionRevealLevel): Played
 }
 
 /** Kinds that hold the others: staging one would unmount everything under it. */
-const CONTAINERS: ReadonlySet<string> = new Set(['site', 'building', 'level'])
+export const CONTAINERS: ReadonlySet<string> = new Set(['site', 'building', 'level'])
 
 /**
  * The reveal a new node of a kind that declares none comes in with, so nothing a build adds pops in
@@ -359,6 +359,8 @@ function layoutRuns(
     const [x, z] = middleOf(walls[index]!.line)
     return x + z
   }
+  const meeting = (index: number) =>
+    ends[index]!.flatMap((end) => byEnd.get(end) ?? []).filter((next) => next !== index)
   const seen = new Set<number>()
   const starts = walls
     .map((_, index) => index)
@@ -366,20 +368,22 @@ function layoutRuns(
   let outline = 0
   for (const first of starts) {
     if (seen.has(first)) continue
-    // Walk the outline from its first wall in the sweep, wall to the wall it meets.
+    // An open chain is walked from one of its free ends, a closed outline from its first wall in
+    // the sweep: wall to the wall it meets, so each run is one stretch of the outline.
+    const component = new Set([first])
+    for (const index of component) for (const next of meeting(index)) component.add(next)
+    const begin =
+      [...component]
+        .filter((index) => ends[index]!.some((end) => byEnd.get(end)?.length === 1))
+        .sort((left, right) => sweepOf(left) - sweepOf(right))[0] ?? first
     const order: number[] = []
-    const queue = [first]
-    seen.add(first)
-    while (queue.length > 0) {
-      const index = queue.shift()!
+    const stack = [begin]
+    while (stack.length > 0) {
+      const index = stack.pop()!
+      if (seen.has(index)) continue
+      seen.add(index)
       order.push(index)
-      for (const end of ends[index]!) {
-        for (const next of byEnd.get(end) ?? []) {
-          if (seen.has(next)) continue
-          seen.add(next)
-          queue.push(next)
-        }
-      }
+      stack.push(...meeting(index).reverse())
     }
     order.forEach((index, rank) => {
       const run = Math.floor(rank / WALLS_PER_RUN)
