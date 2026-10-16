@@ -2,12 +2,14 @@
 
 import {
   type AnyNodeId,
+  belowGradeFloorY,
   belowGradeFootprints,
   type SiteNode,
   sightTriangle,
   siteFrontEdge,
   siteSetbackEnvelope,
   streetCorners,
+  surfaceHeightAt,
   type TerrainField,
   terrainContours,
   terrainFieldOf,
@@ -253,24 +255,34 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   const shownLevelId = useViewer((state) =>
     state.hideLevelsAboveSelection ? state.selection.levelId : null,
   )
-  const buriedCache = useRef<{ all: [number, number][][]; shown: [number, number][][] }>({
-    all: [],
-    shown: [],
-  })
+  const buriedCache = useRef<{
+    all: [number, number][][]
+    shown: [number, number][][]
+    floorY: number | null
+  }>({ all: [], shown: [], floorY: null })
   const buried = useScene((state: S) => {
     const prev = buriedCache.current
     const found = belowGradeFootprints(state.nodes)
     const all = polygonsMatch(found, prev.all) ? prev.all : found
     let shown: [number, number][][] = []
+    let floorY: number | null = null
     if (all.length > 0) {
       shown = shownLevelId ? belowGradeFootprints(state.nodes, shownLevelId) : []
+      floorY = shownLevelId ? belowGradeFloorY(state.nodes, shownLevelId) : null
       if (shown.length === 0) shown = prev.shown.length > 0 ? prev.shown : all
+      floorY ??= prev.floorY
     }
     if (polygonsMatch(shown, prev.shown)) shown = prev.shown
-    if (all === prev.all && shown === prev.shown) return prev
-    buriedCache.current = { all, shown }
+    if (all === prev.all && shown === prev.shown && floorY === prev.floorY) return prev
+    buriedCache.current = { all, shown, floorY }
     return buriedCache.current
   })
+  // Where the pit's walls start: the ground itself, flat or the sculpted terrain.
+  const groundTopAt = useMemo(
+    () => (x: number, z: number) =>
+      persistedField ? surfaceHeightAt(persistedField, x, z) : GROUND_FILL_POSITION[1],
+    [persistedField],
+  )
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
   // keeps it tucked behind the grid/slab as before.
@@ -649,7 +661,14 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       <GroundWindowSystem />
-      <GroundHole footprints={buried.shown} present={hasBasement} />
+      <GroundHole
+        floorY={buried.floorY}
+        footprints={buried.shown}
+        present={hasBasement}
+        topAt={groundTopAt}
+        topsoil={bgColor}
+        topY={GROUND_FILL_POSITION[1]}
+      />
       {/* Render children (buildings and items) */}
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />

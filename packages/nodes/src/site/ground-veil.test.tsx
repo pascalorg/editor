@@ -20,7 +20,8 @@ import {
 import { act, create } from '@react-three/test-renderer'
 import { Box3, DoubleSide, type Line, type Mesh, type Object3D, Raycaster, Vector3 } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
-import { groundHoleDistanceAt } from './ground-hole'
+import { groundHoleDistanceAt, holeRadiusAt } from './ground-hole'
+import { groundPitFloorNow } from './ground-pit'
 import { SiteRenderer } from './renderer'
 
 // Over a level below grade the site's ground is veiled: the lot's fill, its sculpted terrain and
@@ -605,5 +606,112 @@ test('switching between a shallow and the deepest level swaps and rebuilds no gr
   } finally {
     groundHoleOpenNode().value = 0
     await renderer.unmount()
+  }
+})
+
+// The pit: over a deep level the hole is the ground cut open, its walls standing on the hole's own
+// contour down to the floor of the level shown (ground-pit.tsx).
+function pitParts(root: Object3D) {
+  const parts: Mesh[] = []
+  root.traverse((object) => {
+    if (object.userData.groundPit) parts.push(object as Mesh)
+  })
+  return parts
+}
+const pitWalls = (root: Object3D) =>
+  pitParts(root).filter((part) => part.userData.groundPit === 'walls')
+
+test('the pit’s walls stand on the hole’s contour and go down to the floor of the level shown', async () => {
+  withFourBasements()
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const floors: number[] = []
+    for (const levelId of ['level_m4', 'level_m2', 'level_m1']) {
+      await act(async () => showLevel(levelId))
+      groundHoleOpenNode().value = 1
+      await renderer.advanceFrames(3, 0.05)
+      const walls = pitWalls(scene)
+      expect(walls).toHaveLength(1)
+      const position = walls[0]!.geometry.getAttribute('position')
+      expect(position.count).toBeGreaterThan(400)
+      // Every wall's top is on the threshold the ground's mask cuts: distance = radius.
+      for (let i = 0; i < position.count; i += 97) {
+        const [x, z] = [position.getX(i), position.getZ(i)]
+        expect(Math.abs(groundHoleDistanceAt(x, z) - holeRadiusAt(x, z))).toBeLessThan(0.08)
+      }
+      floors.push(groundPitFloorNow())
+    }
+    // -4 sits 12 m down (its 0.2 m plate on top); the floor rises as the shallower levels are shown.
+    expect(floors[0]).toBeCloseTo(-11.8, 1)
+    expect(floors[1]!).toBeGreaterThan(floors[0]! + 5)
+    expect(floors[2]!).toBeGreaterThanOrEqual(floors[1]!)
+    expect(floors[2]!).toBeLessThan(0)
+  } finally {
+    groundHoleOpenNode().value = 0
+    await renderer.unmount()
+  }
+})
+
+test('switching floors changes the pit’s uniforms and geometry, never its meshes or materials', async () => {
+  withFourBasements()
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const snapshot = () =>
+      pitParts(scene).map((part) => {
+        const material = part.material as MeshBasicNodeMaterial
+        return { part, material, version: material.version, kind: part.userData.groundPit }
+      })
+    await act(async () => showLevel('level_m1'))
+    await renderer.advanceFrames(3, 0.05)
+    const before = snapshot()
+    expect(before.map((entry) => entry.kind).sort()).toEqual(['floor', 'walls'])
+    for (const levelId of ['level_m4', 'level_m2', 'level_m1', 'level_m3', 'level_m4']) {
+      await act(async () => showLevel(levelId))
+      groundHoleOpenNode().value = 1
+      await renderer.advanceFrames(3, 0.05)
+      const after = snapshot()
+      expect(after).toHaveLength(before.length)
+      after.forEach((entry, index) => {
+        expect(entry.part).toBe(before[index]?.part)
+        expect(entry.material).toBe(before[index]?.material)
+        expect(entry.version).toBe(before[index]?.version ?? -1)
+      })
+    }
+  } finally {
+    groundHoleOpenNode().value = 0
+    await renderer.unmount()
+  }
+})
+
+test('the eye under the ground sees no pit, and the pit is back when it surfaces', async () => {
+  withFourBasements()
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    await act(async () => showLevel('level_m4'))
+    groundHoleOpenNode().value = 1
+    await renderer.advanceFrames(2, 0.05)
+    expect(pitParts(scene).map((part) => part.visible)).toEqual([true, true])
+    await act(async () => useViewer.setState({ eyeUnderGround: true }))
+    await renderer.advanceFrames(2, 0.05)
+    expect(pitParts(scene).map((part) => part.visible)).toEqual([false, false])
+    await act(async () => useViewer.setState({ eyeUnderGround: false }))
+    await renderer.advanceFrames(2, 0.05)
+    expect(pitParts(scene).map((part) => part.visible)).toEqual([true, true])
+  } finally {
+    groundHoleOpenNode().value = 0
+    await renderer.unmount()
+  }
+})
+
+test('a scene with no level below grade has no pit', async () => {
+  useScene.setState({ nodes: {} as Record<AnyNodeId, AnyNode> })
+  const plain = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    expect(pitParts(plain.scene.instance as Object3D)).toHaveLength(0)
+  } finally {
+    await plain.unmount()
   }
 })

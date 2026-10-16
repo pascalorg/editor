@@ -6,7 +6,7 @@ import {
   groundWindowMaskNode,
   useViewer,
 } from '@pascal-app/viewer'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { ClampToEdgeWrapping, DataTexture, LinearFilter, RedFormat, UnsignedByteType } from 'three'
 import {
   color,
@@ -21,6 +21,9 @@ import {
   vec3,
 } from 'three/tsl'
 import { Vector2 } from 'three/webgpu'
+import { GroundPit } from './ground-pit'
+import { buildPitWalls, type PitWalls } from './ground-pit-geometry'
+import { fractalNoise3 } from './hole-noise'
 
 /**
  * The ground as the medium, seen from above: over a level below grade the ground stays solid and
@@ -57,6 +60,9 @@ const FEATHER_STRENGTH = 0.6
 /** The thin light line along the cut itself, in metres, and its colour. */
 const LINE_WIDTH = 0.09
 const LINE_COLOR = '#f4f4f4'
+
+/** How far the pit's floor reaches past the hole's cut, in metres (under the walls). */
+const FLOOR_OVERLAP = 0.08
 
 const GRID = 192
 /** The signed distance the texture stores: metres, negative inside, clamped to this range. */
@@ -181,6 +187,26 @@ export function groundHoleDistanceAt(x: number, z: number): number {
   return top * (1 - tv) + bottom * tv
 }
 
+/** The baked field's box in the world's plan, `null` while no footprint is baked. */
+export function groundHoleBox(): { originX: number; originZ: number; span: number } | null {
+  return hasField ? { originX, originZ, span } : null
+}
+
+/**
+ * The hole's radius at a world XZ at full opening, as the shader's noise gives it: what the pit's
+ * walls are laid along (`hole-noise.ts` is that noise on the CPU).
+ */
+export function holeRadiusAt(x: number, z: number): number {
+  return (
+    HOLE_MARGIN +
+    HOLE_ERODE *
+      fractalNoise3(x * NOISE_SCALE, z * NOISE_SCALE, 0.31, 3, NOISE_LACUNARITY, NOISE_DIMINISH)
+  )
+}
+
+/** The fractal's own bound (three octaves of perlin within ±1): the radius stays within this of its margin. */
+const NOISE_BOUND = 1 + NOISE_DIMINISH + NOISE_DIMINISH ** 2
+
 /**
  * The CPU twin of the hole for one pick: whether `(x, z)` is surely in the hole now. The edge's
  * noise is not replayed here, so this is the part of the hole that is open whatever the noise
@@ -195,7 +221,7 @@ export function groundHoleContains(x: number, z: number): boolean {
 
 // ── The shader pieces ────────────────────────────────────────────────────────────────────────
 
-let pieces: { inHole: any; feather: any; line: any } | null = null
+let pieces: { inHole: any; floorInHole: any; feather: any; line: any } | null = null
 
 function holePieces() {
   if (pieces) return pieces
@@ -219,7 +245,9 @@ function holePieces() {
     float(1)
       .sub(smoothstep(radius, radius.add(width), distance))
       .mul(opening)
-  pieces = { inHole, feather: beyond(FEATHER_WIDTH), line: beyond(LINE_WIDTH) }
+  // The pit's floor reaches a little past the cut, under the walls, so no hairline shows between.
+  const floorInHole = distance.lessThan(radius.add(FLOOR_OVERLAP)).and(open.greaterThan(0.001))
+  pieces = { inHole, floorInHole, feather: beyond(FEATHER_WIDTH), line: beyond(LINE_WIDTH) }
   return pieces
 }
 
@@ -229,6 +257,11 @@ function holePieces() {
  */
 export function solidGroundMaskNode() {
   return groundWindowMaskNode().and(holePieces().inHole.not())
+}
+
+/** Whether a fragment is in the hole, a hand's width over: what the pit's floor is drawn in. */
+export function groundHoleFloorNode() {
+  return holePieces().floorInHole
 }
 
 /**
@@ -257,17 +290,49 @@ export function groundHoleColorNode(shadeColor: string) {
  * shown and the ones between it and grade), and says to the rest of the viewer whether the scene
  * has a level below grade at all (`present`): the ground materials carry the hole's mask, and the
  * eye's fill light is mounted, from then on, once, so that changing floors only changes uniforms.
+ *
+ * It also stands the pit in the hole (`ground-pit.tsx`): walls cut along the hole's own contour
+ * from the ground (`topAt`, at `topY` flat) down to `floorY`, the floor of the level shown, in the
+ * `topsoil` colour at their top.
  */
 export function GroundHole({
   footprints,
   present,
+  floorY,
+  topY,
+  topAt,
+  topsoil,
 }: {
   footprints: ReadonlyArray<ReadonlyArray<Point>>
   present: boolean
+  floorY: number | null
+  topY: number
+  topAt: (x: number, z: number) => number
+  topsoil: string
 }) {
+  const [pit, setPit] = useState<{
+    walls: PitWalls | null
+    box: { originX: number; originZ: number; span: number } | null
+  } | null>(null)
   useEffect(() => {
     setGroundHoleFootprints(footprints)
-  }, [footprints])
+    const box = groundHoleBox()
+    setPit(
+      box
+        ? {
+            walls: buildPitWalls({
+              ...box,
+              distanceAt: groundHoleDistanceAt,
+              radiusAt: holeRadiusAt,
+              topAt,
+              radiusMin: HOLE_MARGIN - HOLE_ERODE * NOISE_BOUND,
+              radiusMax: HOLE_MARGIN + HOLE_ERODE * NOISE_BOUND,
+            }),
+            box,
+          }
+        : null,
+    )
+  }, [footprints, topAt])
   useEffect(() => {
     if (useViewer.getState().hasLevelBelowGrade !== present)
       useViewer.setState({ hasLevelBelowGrade: present })
@@ -279,5 +344,14 @@ export function GroundHole({
     },
     [],
   )
-  return null
+  return present ? (
+    <GroundPit
+      box={pit?.box ?? null}
+      floorY={floorY}
+      inHole={groundHoleFloorNode()}
+      topsoil={topsoil}
+      topY={topY}
+      walls={pit?.walls ?? null}
+    />
+  ) : null
 }
