@@ -26,7 +26,6 @@ import {
   clearDrawAlignment,
   collectScenePorts,
   findNearestPortXZ,
-  REFRIGERANT_PORT_SYSTEMS,
 } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -34,6 +33,7 @@ import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { offsetPathHorizontal } from '../shared/path-offset'
+import { REFRIGERANT_PORT_SYSTEMS } from '../shared/port-systems'
 import { liquidLineDefinition } from './definition'
 import { useLiquidLineToolOptions } from './options'
 

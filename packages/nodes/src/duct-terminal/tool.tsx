@@ -29,7 +29,6 @@ import {
   alignDrawPoint,
   clearDrawAlignment,
   collectScenePorts,
-  DUCT_PORT_SYSTEMS,
   findNearestPort3D,
 } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
@@ -40,6 +39,7 @@ import { Euler, Matrix3, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
 import { ConnectionFeedback } from '../shared/connection-feedback'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
+import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { ductTerminalDefinition } from './definition'
 import { buildDuctTerminalGeometry } from './geometry'
 import { COLLAR_LENGTH, getDuctTerminalPorts, mountQuaternion } from './ports'

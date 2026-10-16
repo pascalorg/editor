@@ -12,13 +12,11 @@ import {
   collectScenePorts,
   createRunWallAttachment,
   DistributionRunCursor,
-  DUCT_PORT_SYSTEMS,
   runDistanceSquared as dist2,
   findNearestRunBody3D,
   findRunBodyCrossingSurface,
   type RunBodyHit,
   type RunSurfaceTarget,
-  runSectionHalfSizeM,
   type ScenePort,
   stepNominalRunSize,
   useDistributionRunTool,
@@ -42,6 +40,7 @@ import { ductProfilesMatch, planDuctAdapter } from '../shared/duct-adapter'
 import { FITTING_CLEARANCE_MESSAGE, hasFittingClearance } from '../shared/fitting-clearance'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
+import { DUCT_PORT_SYSTEMS, runSectionHalfSizeM } from '../shared/port-systems'
 import { RunHangerPreview } from '../shared/run-hanger-controls'
 import { useRunHangerMode } from '../shared/run-hanger-mode'
 import { currentDuctContinuationSeed, ductEndpointPort } from './continuation'
@@ -415,7 +414,9 @@ export function planDuctDraw(
   const realigns = [startRealign, endRealign].filter((p) => p !== null)
 
   const crossHit = surface
-    ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surface)
+    ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surface, {
+        kinds: ['duct-segment'],
+      })
     : null
   const crossOwner = crossHit ? nodes[crossHit.nodeId] : null
   const crossTappedElsewhere =
@@ -566,7 +567,10 @@ const DuctSegmentTool = () => {
       : null,
     getPorts: () => getConnectionPorts(activeLevelId, sceneApi.nodes()),
     findBody: (point) =>
-      findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, { levelId: activeLevelId ?? undefined }),
+      findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, {
+        kinds: ['duct-segment'],
+        levelId: activeLevelId ?? undefined,
+      }),
     surfaceClearance: (surface) =>
       surface ? ductSurfaceClearanceM(profileRef.current, surface.kind === 'wall') : 0,
     minimumSegmentLength: 0.08,

@@ -12,7 +12,6 @@ import {
   collectScenePorts,
   createRunWallAttachment,
   DistributionRunCursor,
-  DWV_PORT_SYSTEMS,
   findNearestRunBody3D,
   findRunBodyCrossingSurface,
   RUN_PREVIEW_OPACITY,
@@ -20,7 +19,6 @@ import {
   type RunPoint,
   type RunSurfaceTarget,
   runDistanceSquared,
-  runSectionHalfSizeM,
   type ScenePort,
   stepNominalRunSize,
   useDistributionRunTool,
@@ -41,6 +39,7 @@ import { ConnectionFeedback } from '../shared/connection-feedback'
 import { FITTING_CLEARANCE_MESSAGE, hasFittingClearance } from '../shared/fitting-clearance'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { PipeFittingGhost } from '../shared/mep-ghost'
+import { DWV_PORT_SYSTEMS, runSectionHalfSizeM } from '../shared/port-systems'
 import { RunHangerPreview } from '../shared/run-hanger-controls'
 import { useRunHangerMode } from '../shared/run-hanger-mode'
 import { currentPipeContinuationSeed, pipeEndpointPort } from './continuation'
