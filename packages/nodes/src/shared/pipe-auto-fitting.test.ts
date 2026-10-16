@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { PipeSegmentNode } from '@pascal-app/core'
+import type { RunBodyHit, ScenePort } from '@pascal-app/editor/distribution'
 import { getPipeFittingPorts } from '../pipe-fitting/ports'
 import { planPipeBranchTap, planPipeElbowAtPort } from './auto-fitting'
-import type { RunBodyHit, ScenePort } from './ports'
 
 type Point = [number, number, number]
 

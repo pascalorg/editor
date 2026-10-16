@@ -11,13 +11,6 @@ import type { RunSurfaceTarget } from './distribution-run-contract'
 /** A port plus the scene node that owns it. */
 export type ScenePort = NodePort & { nodeId: AnyNodeId }
 
-/** Air-loop port systems — what duct runs and fittings snap to. */
-export const DUCT_PORT_SYSTEMS = ['supply', 'return'] as const
-/** DWV port systems — what drain / waste / vent pipe runs snap to. */
-export const DWV_PORT_SYSTEMS = ['waste', 'vent'] as const
-/** Refrigerant-loop port system — what linesets snap to. */
-export const REFRIGERANT_PORT_SYSTEMS = ['refrigerant'] as const
-
 /**
  * Filter narrowing which ports a tool will snap to.
  *   - `excludeNodeId` skips the node currently being drawn/placed so a
@@ -119,7 +112,7 @@ export function findNearestPort3D(
 
 // ─── Run-body hits ───────────────────────────────────────────────────
 
-/** Closest-point hit on a duct run's centerline (not its end ports). */
+/** Closest-point hit on a run's centerline (not its end ports). */
 export type RunBodyHit = {
   nodeId: AnyNodeId
   /** Polyline segment hit — between `path[segmentIndex]` and `path[segmentIndex + 1]`. */
@@ -129,20 +122,20 @@ export type RunBodyHit = {
 }
 
 /**
- * Nearest point on any duct-segment CENTERLINE within `radius` of `point`
+ * Nearest point on any run CENTERLINE of the given kinds within `radius` of `point`
  * on the XZ plane — how a branch taps the side of a trunk. Same XZ-only
  * distance convention as `findNearestPortXZ` (grid events ride the floor,
- * runs hang at duct height); the hit adopts the centerline's full 3D
+ * runs hang above it); the hit adopts the centerline's full 3D
  * position. Vertical risers project to a point in XZ and are skipped —
  * tapping those isn't meaningful.
  */
 export function findNearestRunBodyXZ(
   point: readonly [number, number, number],
   radius: number,
-  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[]; levelId?: AnyNodeId } = {},
+  filter: { excludeNodeId?: AnyNodeId; kinds: readonly string[]; levelId?: AnyNodeId },
   sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>,
 ): RunBodyHit | null {
-  const kinds = filter.kinds ?? ['duct-segment']
+  const { kinds } = filter
   const nodes = sceneNodes ?? useScene.getState().nodes
   let best: RunBodyHit | null = null
   let bestDistSq = radius * radius
@@ -184,11 +177,11 @@ export function findNearestRunBodyXZ(
 export function findNearestRunBody3D(
   point: readonly [number, number, number],
   radius: number,
-  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[]; levelId?: AnyNodeId } = {},
+  filter: { excludeNodeId?: AnyNodeId; kinds: readonly string[]; levelId?: AnyNodeId },
   surface?: RunSurfaceTarget | null,
   sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>,
 ): RunBodyHit | null {
-  const kinds = filter.kinds ?? ['duct-segment']
+  const { kinds } = filter
   const nodes = sceneNodes ?? useScene.getState().nodes
   let best: RunBodyHit | null = null
   let bestDistSq = radius * radius
@@ -255,9 +248,9 @@ export function findRunBodyCrossingXZ(
   start: readonly [number, number, number],
   end: readonly [number, number, number],
   endMargin: number,
-  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[] } = {},
+  filter: { excludeNodeId?: AnyNodeId; kinds: readonly string[] },
 ): RunBodyHit | null {
-  const kinds = filter.kinds ?? ['duct-segment']
+  const { kinds } = filter
   const { nodes } = useScene.getState()
   const dx = end[0] - start[0]
   const dz = end[2] - start[2]
@@ -313,7 +306,7 @@ export function findRunBodyCrossingSurface(
   end: readonly [number, number, number],
   endMargin: number,
   surface: RunSurfaceTarget,
-  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[] } = {},
+  filter: { excludeNodeId?: AnyNodeId; kinds: readonly string[] },
 ): RunBodyHit | null {
   const project = (p: readonly [number, number, number]): [number, number, number] => {
     const d: [number, number, number] = [
@@ -340,7 +333,7 @@ export function findRunBodyCrossingSurface(
   const drawnLen = Math.hypot(dx, dy)
   if (drawnLen < 1e-8) return null
   const drawnPad = Math.min(0.45, endMargin / drawnLen)
-  const kinds = filter.kinds ?? ['duct-segment']
+  const { kinds } = filter
   const { nodes } = useScene.getState()
   let best: RunBodyHit | null = null
   let bestScore = Number.POSITIVE_INFINITY

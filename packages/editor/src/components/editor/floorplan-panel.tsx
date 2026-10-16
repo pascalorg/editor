@@ -19,7 +19,6 @@ import {
   type FenceNode,
   type FloorplanGeometry,
   type GeometryContext,
-  type GridEvent,
   type GuideNode,
   getRenderableSlabPolygon,
   getWallChordFrame,
@@ -4204,6 +4203,8 @@ function FloorplanStairBuildPreviewLayer({
   const point = useStairBuildPreview((s) => s.point)
   const rotation = useStairBuildPreview((s) => s.rotation)
   const rise = useStairBuildPreview((s) => s.rise)
+  const length = useStairBuildPreview((s) => s.length)
+  const stepCount = useStairBuildPreview((s) => s.stepCount)
   const isActive = mode === 'build' && tool === 'stair'
 
   const previewGeometry = useMemo(() => {
@@ -4212,6 +4213,8 @@ function FloorplanStairBuildPreviewLayer({
     }
     const previewSegment = {
       ...createSizedStairFlight(rise),
+      ...(length !== null ? { length } : {}),
+      ...(stepCount !== null ? { stepCount } : {}),
       id: 'sseg_floorplan_preview' as const,
       parentId: 'stair_floorplan_preview' as const,
     }
@@ -4237,7 +4240,7 @@ function FloorplanStairBuildPreviewLayer({
         }),
       ) ?? null
     )
-  }, [isActive, point, rotation, rise, palette])
+  }, [isActive, point, rotation, rise, length, stepCount, palette])
 
   if (!previewGeometry) return null
   return <FloorplanGeometryRenderer geometry={previewGeometry} pointerEventsOverride="none" />
@@ -8050,22 +8053,6 @@ export function FloorplanPanel({
       useStairBuildPreview.getState().reset()
       return
     }
-
-    const handleGridMove = (event: GridEvent) => {
-      // Publish to the dedicated store (deduped on the snapped point), NOT panel
-      // state: the stair preview lives in `FloorplanStairBuildPreviewLayer`, so a
-      // per-move update re-renders only that tiny leaf instead of this entire
-      // (~200ms) panel — the same pattern that keeps column/elevator smooth.
-      useStairBuildPreview
-        .getState()
-        .setPoint(getSnappedFloorplanPoint([event.localPosition[0], event.localPosition[2]]))
-    }
-
-    emitter.on('grid:move', handleGridMove)
-
-    return () => {
-      emitter.off('grid:move', handleGridMove)
-    }
   }, [isStairBuildActive])
 
   useEffect(() => {
@@ -9338,7 +9325,9 @@ export function FloorplanPanel({
         )
         const fenceGridBase = snapWallPointToGrid(planPoint)
         const fenceLocked =
-          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
+          event.altKey ||
+          fenceSnapped[0] !== fenceGridBase[0] ||
+          fenceSnapped[1] !== fenceGridBase[1]
         let snappedPoint = fenceSnapped
         if (fenceLocked) useAlignmentGuides.getState().clear()
         // Alignment lines show in every mode; the pull applies only when

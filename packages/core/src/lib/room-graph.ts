@@ -988,6 +988,7 @@ export function extractRooms(
   boundaries: BoundaryNode[],
   options: { includeHoles?: boolean } = {},
 ): ExtractedRoom[] {
+  boundaries = boundaries.filter((boundary) => boundary.metadata?.roomBoundary !== false)
   const joined = extractRoomGraph(boundaries, options, true)
   if (!joined.bodyJoints) return joined.rooms
   const plain = extractRoomGraph(boundaries, options, false).rooms

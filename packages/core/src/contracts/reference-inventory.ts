@@ -227,17 +227,25 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     note: "'ground' pins the node to the level base; deleting the slab strips the field.",
   }),
   row({
-    kind: 'fence',
-    path: 'supportSurfaceNodeId',
-    ...policy('node', 'host', 'drop', 'strip'),
-    remaps: ['clone-scene-graph'],
-  }),
-  row({
     kind: 'stair',
     path: 'deckSlabId',
     ...policy('node', 'host', 'drop', 'strip'),
     targetKinds: ['slab'],
     remaps: [...CLONES, 'delete-nodes'],
+  }),
+  row({
+    kind: 'fence',
+    path: 'supportSurfaceNodeId',
+    ...policy('node', 'host', 'drop', 'strip'),
+    remaps: [...CLONES, 'clone-nodes-into', 'delete-nodes'],
+    note: 'A registered walking surface supporting a railing.',
+  }),
+  row({
+    kind: 'stair',
+    path: 'destinationSurfaceId',
+    ...policy('node', 'host', 'drop', 'strip'),
+    remaps: [...CLONES, 'clone-nodes-into', 'delete-nodes'],
+    note: 'A registered top surface supporting a stair connection.',
   }),
   row({
     kind: 'roof',
@@ -910,6 +918,7 @@ const described = (reason: string, paths: readonly string[]) =>
 
 /** Metadata keys found in editor sources that are not references. */
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
+  { path: 'metadata.roomBoundary', reason: 'Boolean opt-out from room boundary detection.' },
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',

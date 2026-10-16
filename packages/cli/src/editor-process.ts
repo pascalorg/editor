@@ -141,7 +141,10 @@ export async function startEditor(options: StartEditorOptions): Promise<StartEdi
   return withEditorLifecycleLock(options.paths, () => startEditorUnlocked(options))
 }
 
-async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEditorResult> {
+async function startEditorUnlocked(
+  options: StartEditorOptions,
+  selectedRuntime?: ActiveRuntime,
+): Promise<StartEditorResult> {
   await ensurePascalDirectories(options.paths)
   options.onProgress?.({ step: 'storage-ready', dataDirectory: options.paths.data })
   let currentStatus: EditorStatus
@@ -153,7 +156,8 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
     await rm(options.paths.currentRuntime, { force: true })
     currentStatus = await getEditorStatus(options.paths)
   }
-  const pinned = await pinnedRuntimeVersion(options)
+  // Activation and rollback must boot the chosen runtime, even when the CLI pins another version.
+  const pinned = selectedRuntime ? null : await pinnedRuntimeVersion(options)
   if (currentStatus.healthy && currentStatus.state) {
     const mcp = await ensureMcpService({
       paths: options.paths,
@@ -178,9 +182,12 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
   }
   await rm(options.paths.state, { force: true })
 
-  let runtime = await readActiveRuntime(options.paths)
+  let runtime = selectedRuntime ?? (await readActiveRuntime(options.paths))
   let installedRuntime = false
-  if (!runtime || options.runtimeSource || (pinned !== null && runtime.version !== pinned)) {
+  if (
+    !runtime ||
+    (!selectedRuntime && (options.runtimeSource || (pinned !== null && runtime.version !== pinned)))
+  ) {
     const provisioned = await ensureWebRuntime({
       paths: options.paths,
       runtimeSource: options.runtimeSource,
@@ -354,7 +361,7 @@ export async function activateEditorRuntime(
 
     try {
       await activateRuntime(paths, candidate.version, candidate.directory)
-      await startEditorUnlocked({ paths, port: previousPort })
+      await startEditorUnlocked({ paths, port: previousPort }, candidate)
       if (!wasRunning) {
         await stopEditorUnlocked(paths)
         await stopMcpService(paths)
@@ -378,7 +385,7 @@ export async function activateEditorRuntime(
       }
       if (!rollbackError && wasRunning && previousRuntime) {
         try {
-          await startEditorUnlocked({ paths, port: previousPort })
+          await startEditorUnlocked({ paths, port: previousPort }, previousRuntime)
         } catch (restartError) {
           rollbackError = restartError
         }

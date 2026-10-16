@@ -1,5 +1,6 @@
 import { type AnyNode, type AnyNodeId, type FloorplanAffordance, useScene } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
+import type { RunBodyHit, ScenePort } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import type { PipeFittingNode } from '../pipe-fitting/schema'
 import {
@@ -9,7 +10,6 @@ import {
   type RunContinuationHandlePlan,
   resolvePipeContinuationHandle,
 } from '../shared/elbow-branch-continuation'
-import type { RunBodyHit, ScenePort } from '../shared/ports'
 import type { PipeSegmentNode } from './schema'
 
 export type PipeEndpoint = 'start' | 'end'

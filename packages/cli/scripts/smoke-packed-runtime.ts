@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { copyFile, mkdtemp, open, readFile, rm, stat } from 'node:fs/promises'
+import { copyFile, mkdtemp, open, readdir, readFile, rm, stat } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -179,6 +179,7 @@ async function checkEditorFromLocalArchive(executable: string, archiveFile: stri
   if (!rootResponse.ok) throw new Error(`editor root returned ${rootResponse.status}`)
   const scenesResponse = await fetch(`${started.url}/scenes`)
   if (!scenesResponse.ok) throw new Error(`editor scenes returned ${scenesResponse.status}`)
+  await checkOfflineCatalogMedia(`http://127.0.0.1:${started.port}`)
   const repeatedStart = JSON.parse(
     (
       await run(
@@ -255,6 +256,37 @@ async function checkEditorFromLocalArchive(executable: string, archiveFile: stri
   await run(process.execPath, [executable, 'stop', '--json'], undefined, smokeEnvironment)
 }
 
+async function checkOfflineCatalogMedia(origin: string): Promise<void> {
+  const directory = path.join(packageDirectory, 'build/runtime/apps/editor/.next/static/media')
+  const files = (await readdir(directory)).filter((file) => /\.(webp|glb)$/.test(file))
+  if (
+    !files.some((file) => file.endsWith('.webp')) ||
+    !files.some((file) => file.endsWith('.glb'))
+  ) {
+    throw new Error('the staged runtime is missing offline catalog images or models')
+  }
+  for (let start = 0; start < files.length; start += 8) {
+    await Promise.all(
+      files.slice(start, start + 8).map(async (file) => {
+        const response = await fetch(`${origin}/_next/static/media/${encodeURIComponent(file)}`, {
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (!response.ok) throw new Error(`offline catalog asset ${file}: HTTP ${response.status}`)
+        const [served, staged] = await Promise.all([
+          response.arrayBuffer(),
+          readFile(path.join(directory, file)),
+        ])
+        if (!Buffer.from(served).equals(staged)) {
+          throw new Error(`the installed archive changed offline catalog asset ${file}`)
+        }
+      }),
+    )
+  }
+  console.log(
+    `Verified ${files.length} offline catalog images and models from the installed archive.`,
+  )
+}
+
 async function verifyStagedWebRuntime(): Promise<{ file: string; size: number; url: string }> {
   const source = JSON.parse(
     await readFile(path.join(packageDirectory, 'dist/runtime-source.json'), 'utf8'),
@@ -277,7 +309,8 @@ async function verifyStagedWebRuntime(): Promise<{ file: string; size: number; u
   if (size !== source.size) {
     throw new Error(`${archiveName} is ${size} bytes; runtime-source.json records ${source.size}`)
   }
-  const maximumArchiveSize = 70 * 1024 * 1024
+  // Catalog thumbnails are sized for the sidebar; retain bounded room for new assets.
+  const maximumArchiveSize = 140 * 1024 * 1024
   if (size > maximumArchiveSize) {
     throw new Error(
       `the web runtime archive exceeds its release budget: ${formatMb(size)} MB > ${formatMb(maximumArchiveSize)} MB`,
