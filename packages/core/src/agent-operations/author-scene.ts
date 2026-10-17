@@ -59,10 +59,15 @@ export type AuthorSceneReport = {
 
 const JOIN_REACH = 0.3
 
-/** Small, stable ids: the payload's own hash and a counter per kind, so a replay writes the same scene. */
-function idFactory(payload: AuthorScenePayload) {
+/**
+ * Small, stable ids: the payload's own hash and a counter per kind, so a replay writes the same
+ * scene. A revision salt keeps a replacement's ids apart from the conversion it replaces: the
+ * same payload written over itself would otherwise create nodes that already exist and then
+ * delete them with the old levels.
+ */
+function idFactory(payload: AuthorScenePayload, revision = 0) {
   let hash = 0x811c9dc5
-  for (const ch of JSON.stringify(payload))
+  for (const ch of `${revision}:${JSON.stringify(payload)}`)
     hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193) >>> 0
   const base = hash.toString(16).padStart(8, '0')
   const counts = new Map<string, number>()
@@ -129,7 +134,10 @@ export function authorScene(
       'This scene already holds a conversion. Pass replace: true to write over it.',
     )
 
-  const mint = idFactory(payload)
+  // The first revision whose ids are free in this scene.
+  let revision = 0
+  while (revision < 32 && scene[idFactory(payload, revision)('probe')]) revision++
+  const mint = idFactory(payload, revision)
   const report: AuthorSceneReport = {
     levels: 0,
     walls: 0,

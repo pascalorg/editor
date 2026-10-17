@@ -217,5 +217,8 @@ describe('author_scene', () => {
       { activeLevelId: null },
     )
     expect(again.result.walls).toBe(4)
+    // Written over itself, the same payload gets fresh ids, so nothing is created and then deleted.
+    const firstIds = new Set(first.changes!.create!.map((c) => c.node.id))
+    expect(again.changes!.create!.some((c) => firstIds.has(c.node.id))).toBe(false)
   })
 })
