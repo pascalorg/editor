@@ -1,7 +1,7 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import useViewer from './use-viewer'
+import useViewer, { anyGroundVeiled, groundVeiled } from './use-viewer'
 
 const resetMeasurementPreferences = () => {
   useViewer.setState({
@@ -149,5 +149,25 @@ describe('scene theme', () => {
 
     expect(useViewer.getState().sceneTheme).toBe('sunset')
     expect(useViewer.getState().savedSceneTheme).toBe('sunset')
+  })
+})
+
+describe('the ground over a level below grade', () => {
+  const below = { belowGrade: true, groundMode: 'auto', gradeStanding: 'below-grade' } as const
+
+  test('is veiled wholesale on Auto, not on Solid, not over a part-buried level', () => {
+    expect(groundVeiled(below)).toBe(true)
+    expect(groundVeiled({ ...below, groundMode: 'solid' })).toBe(false)
+    expect(groundVeiled({ ...below, gradeStanding: 'partly-below-grade' })).toBe(false)
+  })
+
+  test('is solid in the walkthrough, whatever level the overview had shown', () => {
+    expect(groundVeiled({ ...below, walkthroughMode: true })).toBe(false)
+    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: true })).toBe(
+      false,
+    )
+    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: false })).toBe(
+      true,
+    )
   })
 })

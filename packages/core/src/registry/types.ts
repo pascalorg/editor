@@ -1808,6 +1808,13 @@ export type Capabilities = {
    */
   sceneAction?: SceneActionCapability
   /**
+   * The node draws the foundation of its parent level itself (a framing plugin that pours the
+   * footing and stem from the building's record). While it returns `true` the generic foundation
+   * the viewer derives from the walls (`genericFoundation`) is not drawn under that level, so
+   * nothing is drawn twice. Only the building's lowest level carries a foundation.
+   */
+  drawsFoundation?: (node: AnyNode) => boolean
+  /**
    * Moving parts people run: Play/Stop in the action menu, E, and the
    * walkthrough read this instead of a kind name, so any kind (plugins
    * included) gets them by declaring it. See `MechanismCapability`.

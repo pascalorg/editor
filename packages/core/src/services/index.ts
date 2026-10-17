@@ -148,6 +148,7 @@ export {
   type StairSurfaceSnap,
 } from './stair-surface-snap'
 export {
+  BELOW_GRADE_TOLERANCE,
   CEILING_CLAMP_MARGIN,
   CEILING_DRAW_OFFSET,
   findLevelAboveId,
@@ -162,7 +163,9 @@ export {
   getStoredLevelHeight,
   getWallPlaneTop,
   getWallTop,
+  isLevelBelowGrade,
   type LevelElevation,
+  levelFloorWorldY,
 } from './storey'
 export {
   canHostSurfaceChild,

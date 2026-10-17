@@ -271,6 +271,14 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     remaps: CLONES,
   }),
   row({
+    kind: 'building',
+    path: 'groundLevelId',
+    ...policy('node', 'control', 'drop', 'keep'),
+    targetKinds: ['level'],
+    remaps: ['clone-scene-graph'],
+    note: 'The level at grade, the ground line of the stack. A level of another building, or a deleted one, is no ground level: the line is read off the elevations again (`groundLevelOf`).',
+  }),
+  row({
     kind: 'lean-to-extension',
     path: 'hostSlabId',
     ...policy('node', 'host', 'drop', 'strip'),
@@ -962,6 +970,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'storyShell',
     'suppressedDimensionSegmentIndexes',
   ]),
+  ...described(
+    "The site's hand-set code facts (Bones' `codeOverrides`: state, county, wind, snow…): numbers, flags and place names. Core reads only its `state`, to tell a US site from another, and names no node.",
+    ['codeOverrides'],
+  ),
   ...described('Read as a truthy flag only; no editor writer.', [
     'arrayModifier',
     'curvedWindowMaster',

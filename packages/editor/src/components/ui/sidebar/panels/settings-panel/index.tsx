@@ -72,7 +72,7 @@ import { Input } from './../../../../../components/ui/primitives/input'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import { cn } from './../../../../../lib/utils'
 import { refusedObjectsNotice } from './../../../../../components/editor/group-actions'
-import { addStoreyOnTop } from './../../../../../lib/add-storey'
+import { addStoreyBelow, addStoreyOnTop } from './../../../../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { bringBuildArtifacts } from './../../../../../lib/scene-clipboard'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
@@ -425,13 +425,7 @@ function FloorSettingsSection() {
     setSelection({ buildingId: building.id, levelId: newLevel.id })
   }
   const addBasement = () => {
-    const newLevel = LevelNode.parse({
-      level: Math.min(0, ...levels.map((level) => level.level)) - 1,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: building.id,
-    })
-    createNode(newLevel, building.id)
+    const newLevel = addStoreyBelow(building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
   }
 

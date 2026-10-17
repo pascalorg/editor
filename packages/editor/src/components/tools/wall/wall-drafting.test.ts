@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   applyHeightPatch,
   BlockNode,
+  BuildingNode,
   CeilingNode,
   createTerrainField,
   DoorNode as DoorSchema,
@@ -12,6 +13,7 @@ import {
   GROUND_SUPPORT_ID,
   getFloorPlacedElevation,
   initSpaceDetectionSync,
+  LevelNode as LevelSchema,
   nodeRegistry,
   registerNode,
   resolveTerrainWallConstructionOptions,
@@ -178,6 +180,116 @@ describe('createWallOnCurrentLevel', () => {
     seedLevel([makeWall([0, 0], [4, 0], 'wall_a')])
     useScene.temporal.getState().clear()
     useScene.temporal.getState().resume()
+  })
+
+  describe('on a level below grade', () => {
+    const seedBasement = (thickness?: number) => {
+      const basement = LevelSchema.parse({
+        id: 'level_cellar',
+        parentId: 'building_house',
+        level: -1,
+        baseElevation: -2.5,
+        height: 2.5,
+      })
+      const main = LevelSchema.parse({
+        id: 'level_main',
+        parentId: 'building_house',
+        level: 0,
+        height: 2.5,
+      })
+      const building = BuildingNode.parse({
+        id: 'building_house',
+        children: [basement.id, main.id],
+      })
+      useScene.setState({
+        nodes: Object.fromEntries(
+          [building, basement, main].map((node) => [node.id, node as AnyNode]),
+        ),
+        rootNodeIds: [building.id],
+        dirtyNodes: new Set(),
+        collections: {},
+      } as never)
+      useEditor.setState({
+        toolDefaults: {
+          ...useEditor.getState().toolDefaults,
+          wall: thickness === undefined ? {} : { thickness },
+        },
+      } as never)
+      useScene.temporal.getState().clear()
+      useScene.temporal.getState().resume()
+    }
+    const select = (levelId: string) =>
+      useViewer.setState({
+        selection: { buildingId: 'building_house', levelId, zoneId: null, selectedIds: [] },
+      } as never)
+    let previousDefaults: ReturnType<typeof useEditor.getState>['toolDefaults']
+    beforeEach(() => {
+      previousDefaults = useEditor.getState().toolDefaults
+    })
+    afterEach(() => {
+      useEditor.setState({ toolDefaults: previousDefaults } as never)
+    })
+
+    test('the wall tool draws an 8 in CMU foundation wall with 2x4 furring flat inside, 0.241 m thick', () => {
+      seedBasement()
+      select('level_cellar')
+      const created = createWallOnCurrentLevel([0, 0], [4, 0])
+      expect(created?.thickness).toBe(0.241)
+      expect(created?.assembly?.layers).toMatchObject([
+        { material: 'cmu', core: true, thickness: 0.203 },
+        { role: 'furring', thickness: 0.038 },
+      ])
+      const stored = useScene.getState().nodes[created!.id] as WallNode
+      expect(stored.assembly).toEqual(created?.assembly)
+    })
+
+    test('only the walls against the ground are foundation walls: the perimeter is, a partition and a wall inside are not', () => {
+      seedBasement()
+      select('level_cellar')
+      const sides: Array<[[number, number], [number, number]]> = [
+        [
+          [0, 0],
+          [8, 0],
+        ],
+        [
+          [8, 0],
+          [8, 6],
+        ],
+        [
+          [8, 6],
+          [0, 6],
+        ],
+        [
+          [0, 6],
+          [0, 0],
+        ],
+      ]
+      for (const [start, end] of sides) {
+        expect(createWallOnCurrentLevel(start, end)?.thickness).toBe(0.241)
+      }
+      const partition = createWallOnCurrentLevel([4, 0], [4, 6])
+      expect(partition?.assembly).toBeUndefined()
+      const dangling = createWallOnCurrentLevel([0, 3], [3, 3])
+      expect(dangling?.assembly).toBeUndefined()
+      // a bay on the outside of the east wall is on the outline again
+      const bay = createWallOnCurrentLevel([8, 1], [11, 1])
+      expect(bay?.thickness).toBe(0.241)
+    })
+
+    test('the ground floor over it keeps the plain wall', () => {
+      seedBasement()
+      select('level_main')
+      const created = createWallOnCurrentLevel([0, 0], [4, 0])
+      expect(created?.assembly).toBeUndefined()
+    })
+
+    test('a thickness set in the tool defaults is kept, with no stack', () => {
+      seedBasement(0.3)
+      select('level_cellar')
+      const created = createWallOnCurrentLevel([0, 0], [4, 0])
+      expect(created?.thickness).toBe(0.3)
+      expect(created?.assembly).toBeUndefined()
+    })
   })
 
   test('endpoint near an existing corner attaches to the corner instead of splitting', () => {

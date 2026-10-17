@@ -24,11 +24,13 @@ import {
   type BuildingNode,
   DEFAULT_LEVEL_HEIGHT,
   getStoredLevelHeight,
+  groundSeat,
   LevelNode,
   useScene,
 } from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import {
+  ArrowDownToLine,
   ClipboardPaste,
   Copy,
   GripVertical,
@@ -40,6 +42,7 @@ import {
 import {
   type ButtonHTMLAttributes,
   type CSSProperties,
+  Fragment,
   useCallback,
   useEffect,
   useRef,
@@ -57,7 +60,7 @@ import {
   roofLevelOrderBreach,
   servesAsRoofLevel,
 } from '@pascal-app/core'
-import { addStoreyOnTop } from '../../lib/add-storey'
+import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
 import { useLinearDisplay } from '../../lib/use-linear-display'
@@ -147,6 +150,8 @@ function LevelRow({
   onDuplicate,
   onPaste,
   onRequestDelete,
+  onSetGround,
+  isGround,
   unitDotColor,
 }: {
   level: LevelNode
@@ -160,6 +165,10 @@ function LevelRow({
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onPaste?: () => void
   onRequestDelete: () => void
+  /** Makes this level the ground floor: the line moves under it. */
+  onSetGround: () => void
+  /** This level is the ground floor, seated at grade: nothing left to set. */
+  isGround: boolean
 }) {
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -322,6 +331,23 @@ function LevelRow({
                 <Copy className="h-3 w-3" />
                 Duplicate with options...
               </button>
+              <button
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors enabled:hover:bg-black/6 dark:enabled:hover:bg-white/10 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isGround}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSetGround()
+                }}
+                title={
+                  isGround
+                    ? 'This floor stands at grade'
+                    : 'Seat the building so this floor stands at grade; the floors under it are below grade'
+                }
+                type="button"
+              >
+                <ArrowDownToLine className="h-3 w-3" />
+                Set as ground floor
+              </button>
               {onPaste && (
                 <button
                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
@@ -372,6 +398,8 @@ function SortableLevelRow({
   onDuplicate,
   onPaste,
   onRequestDelete,
+  onSetGround,
+  isGround,
   unitDotColor,
 }: {
   level: LevelNode
@@ -381,6 +409,8 @@ function SortableLevelRow({
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onPaste?: () => void
   onRequestDelete: () => void
+  onSetGround: () => void
+  isGround: boolean
 }) {
   const {
     attributes,
@@ -410,9 +440,62 @@ function SortableLevelRow({
         level={level}
         onDuplicate={onDuplicate}
         onPaste={onPaste}
+        isGround={isGround}
         onRequestDelete={onRequestDelete}
         onSelect={onSelect}
+        onSetGround={onSetGround}
         unitDotColor={unitDotColor}
+      />
+    </div>
+  )
+}
+
+// ── The ground line: between the level at grade and the ones under it ───────
+
+type GroundLineState = {
+  levelId: string
+  seated: boolean
+  atFoundationTop: boolean
+  offset: number
+}
+
+/**
+ * "Ground · +0.20": where the stack meets grade, read as the ground floor's datum over the ground
+ * (the top of the foundation, 8 in over it once seated). The levels under it are below grade. When
+ * the datum stands outside the seat (a stack that lifted it, or sank it) the line turns amber and
+ * a click seats the building.
+ */
+function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () => void }) {
+  const { toDisplay, displayUnit, precision } = useLinearDisplay('m', 2)
+  const over = toDisplay(ground.offset)
+  const label = `Ground · ${over > 0 ? '+' : ''}${over.toFixed(precision)}`
+  return (
+    <div
+      className="relative flex items-center gap-1.5 px-2 py-0.5"
+      data-guide-target="level-ground-line"
+    >
+      {ground.seated ? (
+        <span
+          className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums"
+          title="Ground line: the levels under it are below grade"
+        >
+          {label}
+        </span>
+      ) : (
+        <button
+          className="shrink-0 rounded-full px-1.5 font-mono text-[10px] text-amber-400 tabular-nums transition-colors hover:bg-amber-400/10"
+          onClick={onSeat}
+          title={`The ground floor stands ${Math.abs(toDisplay(ground.offset)).toFixed(precision)} ${displayUnit} ${ground.offset > 0 ? 'over' : 'under'} grade. Seat the ground floor 8 in over grade`}
+          type="button"
+        >
+          {label}
+        </button>
+      )}
+      <span
+        className={cn(
+          'h-px flex-1',
+          ground.seated ? 'bg-foreground/25' : 'bg-amber-400/60',
+        )}
       />
     </div>
   )
@@ -506,6 +589,24 @@ export function FloatingLevelSelector() {
     }),
   )
 
+  const ground = useScene(
+    useShallow((state): GroundLineState | null => {
+      const seat = resolvedBuildingId ? groundSeat(state.nodes, resolvedBuildingId) : null
+      return seat
+        ? {
+            levelId: seat.levelId,
+            seated: seat.seated,
+            atFoundationTop: seat.atFoundationTop,
+            offset: seat.offset,
+          }
+        : null
+    }),
+  )
+
+  const handleSetGround = useCallback((levelId: string) => {
+    setGroundFloor(levelId as LevelNode['id'])
+  }, [])
+
   const topIsRoofLevel = useScene((state) => {
     const top = levels.at(-1)
     return top ? servesAsRoofLevel(state.nodes, top) : false
@@ -519,16 +620,9 @@ export function FloatingLevelSelector() {
 
   const handleAddBelow = useCallback(() => {
     if (!resolvedBuildingId) return
-    const minLevel = levels.length > 0 ? Math.min(...levels.map((l) => l.level)) : 1
-    const newLevel = LevelNode.parse({
-      level: minLevel - 1,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: resolvedBuildingId,
-    })
-    createNode(newLevel, resolvedBuildingId)
+    const newLevel = addStoreyBelow(resolvedBuildingId)
     setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
-  }, [resolvedBuildingId, levels, createNode, setSelection])
+  }, [resolvedBuildingId, setSelection])
 
   const handleInsertBetween = useCallback(
     (lowerIndex: number) => {
@@ -686,6 +780,7 @@ export function FloatingLevelSelector() {
                   const showGapBelow = i < reversedLevels.length - 1
 
                   return (
+                    <Fragment key={level.id}>
                     <div
                       className="relative"
                       // A stable hook for host-app onboarding to point at, on
@@ -693,7 +788,6 @@ export function FloatingLevelSelector() {
                       // without knowing the building. Static, and read only
                       // from outside: nothing here depends on it.
                       data-guide-target={level.level === 0 ? 'level-ground' : undefined}
-                      key={level.id}
                     >
                       <SortableLevelRow
                         isSelected={isSelected}
@@ -705,7 +799,9 @@ export function FloatingLevelSelector() {
                         }
                         onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
                         onPaste={() => handlePasteToLevel(level)}
+                        isGround={ground?.levelId === level.id && ground.atFoundationTop}
                         onRequestDelete={() => setDeletingLevel(level)}
+                        onSetGround={() => handleSetGround(level.id)}
                         onSelect={() => {
                           if (!isSelected) markPerfAction('level-switch', level.id)
                           setSelection(
@@ -727,6 +823,10 @@ export function FloatingLevelSelector() {
                         </button>
                       )}
                     </div>
+                    {ground?.levelId === level.id && !draggingLevelId && (
+                      <GroundLine ground={ground} onSeat={() => handleSetGround(level.id)} />
+                    )}
+                    </Fragment>
                   )
                 })}
               </div>

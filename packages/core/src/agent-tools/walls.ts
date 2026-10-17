@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { FOUNDATION_BY_REGION_NOTE } from '../lib/foundation-construction'
 import { levelTarget } from './levels'
 import { measurement } from './measurement'
 
@@ -18,13 +19,18 @@ export const addWallTool = {
   name: 'add_wall',
   title: 'Add wall',
   description:
-    'Add a single wall between two points on a level, straight or, with curveOffset, an arc. Refused with a code: a level that is not a storey (a declared roof level), and a wall shorter than 1 cm.',
+    'Add a single wall between two points on a level, straight or, with curveOffset, an arc. Refused with a code: a level that is not a storey (a declared roof level), and a wall shorter than 1 cm. On a level below grade, a wall against the ground (on the outline of the walls of the level) is a foundation wall, ' +
+    FOUNDATION_BY_REGION_NOTE +
+    '; a partition inside the outline is an ordinary wall; the result says which.',
   input: {
     start: planPoint('start'),
     end: planPoint('end'),
     thickness: measurement('length', 'm', {
       positive: true,
-      description: 'Wall thickness (default 0.1 m).',
+      description:
+        'Wall thickness (default 0.1 m; a wall against the ground on a level below grade, given none, is a foundation wall ' +
+        FOUNDATION_BY_REGION_NOTE +
+        '; a partition inside it is an ordinary wall).',
     }).optional(),
     height: measurement('length', 'm', {
       positive: true,
