@@ -36,7 +36,7 @@ import { isLiveFrameHeld } from '../../lib/live-frame-hold'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { PostProcessingResources } from '../../lib/post-processing-resources'
-import { scenePassMrt } from '../../lib/scene-pass-mrt'
+import { sceneLightingMask, scenePassMrt } from '../../lib/scene-pass-mrt'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
@@ -474,6 +474,7 @@ const PostProcessingPasses = ({
             output,
             diffuseColor,
             normal: packNormalToRGB(normalView),
+            lighting: sceneLightingMask(),
           }),
         )
         scenePassNormal = scenePass.getTextureNode('normal')
@@ -481,6 +482,7 @@ const PostProcessingPasses = ({
       if (scenePassNormal) {
         const normalTexture = scenePass.getTexture('normal')
         normalTexture.type = UnsignedByteType
+        scenePass.getTexture('lighting').type = UnsignedByteType
       }
       // Extract normal from color-encoded texture (SSGI consumes the node form).
       const normalNode = scenePassNormal
@@ -532,10 +534,15 @@ const PostProcessingPasses = ({
         // band read as a visible line along the horizon.
         const aoFarFade = smoothstep(tslFloat(0.9994), tslFloat(0.9998), sampleEdgeDepth(screenUV))
         ao = mix(ao, tslFloat(1), aoFarFade)
+        const lightingWeight = scenePass.getTextureNode('lighting').r
+        ao = mix(tslFloat(1), ao, lightingWeight)
 
         // Composite: scene * AO + diffuse * GI
         sceneColor = vec4(
-          add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
+          add(
+            scenePassColor.rgb.mul(ao),
+            add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi).mul(lightingWeight)),
+          ),
           contentAlpha,
         )
       }

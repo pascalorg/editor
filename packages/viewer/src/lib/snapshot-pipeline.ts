@@ -8,7 +8,6 @@ import {
   diffuseColor,
   float,
   mix,
-  mrt,
   normalView,
   output,
   renderOutput,
@@ -33,6 +32,7 @@ import type { SceneAtmosphereSource } from '../components/viewer/scene-atmospher
 import { backdropGradient, deepSkyColor, horizonHazeColor } from './backdrop'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
 import { createEdgeDepthSampler, inkedEdges } from './ink-edges'
+import { sceneLightingMask, scenePassMrt } from './scene-pass-mrt'
 import { getSceneTheme } from './scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from './tsl-compat'
 
@@ -180,10 +180,11 @@ export async function createSnapshotPipeline({
     // inside FXAA's intermediate render target.
     const scenePass = new SnapshotScenePass('color', scene, camera)
     scenePass.setMRT(
-      mrt({
+      scenePassMrt({
         output,
         diffuseColor,
         normal: packNormalToRGB(normalView),
+        lighting: sceneLightingMask(),
       }),
     )
 
@@ -194,12 +195,14 @@ export async function createSnapshotPipeline({
 
     scenePass.getTexture('diffuseColor').type = UnsignedByteType
     scenePass.getTexture('normal').type = UnsignedByteType
+    scenePass.getTexture('lighting').type = UnsignedByteType
 
     const sceneNormal = sample((uv) => unpackRGBToNormal(scenePassNormal.sample(uv)))
 
     const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
-    giPass.sliceCount.value = SSGI_PARAMS.sliceCount
-    giPass.stepCount.value = SSGI_PARAMS.stepCount
+    // A saved still has no later frames to hide the viewport's sampling noise.
+    giPass.sliceCount.value = 3
+    giPass.stepCount.value = 8
     giPass.radius.value = SSGI_PARAMS.radius
     giPass.expFactor.value = SSGI_PARAMS.expFactor
     giPass.thickness.value = SSGI_PARAMS.thickness
@@ -222,14 +225,14 @@ export async function createSnapshotPipeline({
     // horizon picks up a visible AO line in captures.
     const aoFarFade = smoothstep(float(0.9994), float(0.9998), sampleEdgeDepth(screenUV))
     const ao = mix((denoisePass as any).r, float(1), aoFarFade)
-    const aoRgb = scenePassColor.rgb.mul(ao)
+    const aoRgb = scenePassColor.rgb.mul(mix(float(1), ao, scenePass.getTextureNode('lighting').r))
 
     // Ink edges, mirroring the viewport pipeline (AO → ink → grade) so
     // captures carry the same soft/strong edge look the canvas shows.
     // Uniform-gated like grade/backdrop: one cached pipeline serves all modes.
     // Radius scales with render height: a supersampled capture (4K → 1080p)
     // would otherwise halve the apparent line weight vs the viewport's 1px.
-    const inkRadius = Math.max(1, Math.round(renderer.domElement.height / 1080))
+    const inkRadius = uniform(1)
     const inkedRgb = inkedEdges({
       sceneRgb: aoRgb,
       sampleDepth: sampleEdgeDepth,
@@ -336,6 +339,7 @@ export async function createSnapshotPipeline({
         const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
         const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
         const { width: captureWidth, height: captureHeight } = renderer.domElement
+        inkRadius.value = Math.max(1, Math.round(captureHeight / 1080))
 
         // Resize RT if the canvas dimensions changed
         if (renderTarget.width !== captureWidth || renderTarget.height !== captureHeight) {

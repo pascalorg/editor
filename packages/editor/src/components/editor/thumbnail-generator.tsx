@@ -76,6 +76,25 @@ const TILE_OVERLAP = 96
 
 type CaptureLimits = { passEdge: number; maxPixels: number; software: boolean }
 
+export function captureDimensions(
+  canvasSize: readonly [number, number],
+  event: Pick<ThumbnailGenerateEvent, 'ortho' | 'perspective' | 'standardSize' | 'supersample'>,
+  maxPixels: number,
+): [number, number] {
+  const supersample = event.supersample ?? 1
+  // A requested camera must not inherit the editor pane's aspect or be upscaled from its crop.
+  const size =
+    (event.ortho || event.perspective) && event.standardSize && supersample === 1
+      ? [event.standardSize.w, event.standardSize.h]
+      : canvasSize
+  const scale = Math.min(
+    Math.max(1, supersample),
+    MAX_CAPTURE_EDGE / Math.max(size[0], size[1]),
+    Math.sqrt(maxPixels / (size[0] * size[1])),
+  )
+  return [Math.round(size[0] * scale), Math.round(size[1] * scale)]
+}
+
 /**
  * What one capture may ask of this GPU: a pass no larger than its biggest
  * texture (and MAX_PASS_EDGE), and — on a software renderer, where a big
@@ -700,21 +719,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           // a supersampled frame renders at a multiple of the canvas' size into
           // the capture's own targets; the live canvas is never resized
           const canvasSize: [number, number] = [gl.domElement.width, gl.domElement.height]
+          const pose = ortho ?? perspective
           const limits = captureLimits(gl)
-          const scale = Math.max(
-            1,
-            Math.min(
-              supersample,
-              MAX_CAPTURE_EDGE / Math.max(canvasSize[0], canvasSize[1]),
-              Math.sqrt(limits.maxPixels / (canvasSize[0] * canvasSize[1])),
-            ),
-          )
-          const width = Math.round(canvasSize[0] * scale)
-          const height = Math.round(canvasSize[1] * scale)
+          const [width, height] = captureDimensions(canvasSize, event, limits.maxPixels)
           // a supersampled picture is encoded at the size it could render (the
           // caller asked for canvas × supersample, maybe past this GPU's limits)
           const encodeSize = supersample > 1 ? { w: width, h: height } : standardSize
-          const pose = ortho ?? perspective
           // a background tab draws no frames and (on the WebGL backend) never
           // finishes a readback: a sheet's capture says so at once
           if (pose && isTabHidden()) throw new Error(HIDDEN_TAB)
@@ -1038,7 +1048,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
               // a sheet's picture (or a supersampled one) is never drawn into
               // the live canvas the viewport shows
-              if (pose || scale > 1) throw new Error('Snapshot renderer is not ready. Try again.')
+              if (pose || width !== canvasSize[0] || height !== canvasSize[1])
+                throw new Error('Snapshot renderer is not ready. Try again.')
               // Fallback: plain render directly to the canvas
               if (transparent) {
                 const clearColor = (

@@ -168,10 +168,13 @@ export function Lights() {
       const castsShadow = atmosphere ? true : Boolean(themeKey?.castShadow)
       if (light && castsShadow) {
         const focus = shadowFocus.current
-        const size = shadowRadius.current * SHADOW_MARGIN_SCALE + SHADOW_MARGIN
+        const size =
+          shadowRadius.current * SHADOW_MARGIN_SCALE +
+          Math.min(SHADOW_MARGIN, shadowRadius.current * 0.25)
         const distance = size + SHADOW_BACKOFF
         const near = SHADOW_BACKOFF
-        const far = distance + size
+        // Receivers can lie beyond the caster's bounds, especially under a low sun.
+        const far = distance + shadowRadius.current * SHADOW_MARGIN_SCALE + SHADOW_MARGIN
         const directionOverride = getKeyLightDirectionOverride()
         if (directionOverride) {
           shadowDir.current.set(...directionOverride)
@@ -190,6 +193,13 @@ export function Lights() {
 
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
         if (cam) {
+          // The calibrated building bias detaches furniture-scale contact shadows.
+          // Small scenes need finer shadow edges too; retain the building map budget.
+          const smallScene = shadowRadius.current < 1.5
+          light.shadow.mapSize.setScalar(smallScene ? 2048 : 1024)
+          light.shadow.normalBias = smallScene
+            ? Math.min(SHADOW_NORMAL_BIAS, (4 * size) / light.shadow.mapSize.x)
+            : SHADOW_NORMAL_BIAS
           cam.layers.enable(SHADOW_ONLY_LAYER)
           cam.left = -size
           cam.right = size
