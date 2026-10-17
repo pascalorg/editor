@@ -1,4 +1,7 @@
-import { refuse } from '../agent-tools/refusal'
+import { z } from 'zod'
+import { addObjectTool } from '../agent-tools/add-object'
+import { isAgentRefusal, refuse } from '../agent-tools/refusal'
+import { CATALOG_SOURCE } from '../agent-tools/sources'
 import { artifactUrl } from '../lib/artifact-store'
 import {
   isScriptedNode,
@@ -19,9 +22,10 @@ import {
   generateId,
   ItemNode,
 } from '../schema'
+import { achievedChanges } from './achieved'
 import { targetLevel } from './level-target'
 import { roofLevelRefusal } from './roof-writes'
-import type { AgentOperation } from './types'
+import type { AgentOperation, BatchedObject } from './types'
 
 type Vec3 = [number, number, number]
 
@@ -324,6 +328,88 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     result: { ...summary(node, compiled, []), ...(hint ? { hint } : {}) },
     changes: { create: [{ node, parentId: parent.id }] },
   }
+}
+
+/**
+ * `add_object` inside run_batch: the batch's host built the module before the batch ran (a compile
+ * is async, the operations are not), and the call places what was built, with the receipt a lone
+ * add_object gives.
+ */
+export const addObjectInBatch: AgentOperation<Omit<AddObjectInput, 'compiled'>> = (
+  nodes,
+  input,
+  context,
+) => {
+  const built =
+    context.batchCall === undefined ? undefined : context.batchObjects?.[context.batchCall]
+  if (!built)
+    refuse(
+      'object_not_built',
+      "This host did not build the batch's add_object calls: call add_object on its own.",
+    )
+  if ('failure' in built) refuse(built.failure.code, built.failure.message)
+  const outcome = addObject(nodes, { ...input, compiled: built.compiled }, context)
+  return {
+    ...outcome,
+    result: { ...outcome.result, achieved: achievedChanges(nodes, outcome.changes ?? {}) },
+  }
+}
+
+/** How many modules of one batch a host compiles at once. */
+const BATCH_COMPILES_AT_ONCE = 3
+
+/**
+ * Builds the module of every add_object call of a batch with the host's own compile, a few at a
+ * time, by call index. A call that fails (a reason missing, a script that does not run, a host
+ * that refuses) is kept with its own message, so the batch reports it and the others stand. A call
+ * whose input does not parse is left out: the batch refuses it with the contract's message.
+ */
+export async function buildBatchObjects(
+  calls: readonly { tool?: unknown; input?: unknown }[],
+  build: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>,
+): Promise<Record<number, BatchedObject>> {
+  const parse = z.object(addObjectTool.input)
+  const built: Record<number, BatchedObject> = {}
+  const edited = new Set<string>()
+  const jobs = calls.flatMap((call, index) => {
+    if (call?.tool !== addObjectTool.name) return []
+    const parsed = parse.safeParse(call.input ?? {})
+    if (!parsed.success) return []
+    const input = parsed.data as Omit<AddObjectInput, 'compiled'>
+    if (input.nodeId) {
+      if (edited.has(input.nodeId)) {
+        built[index] = {
+          failure: {
+            code: 'object_edit_conflict',
+            message: `${input.nodeId} is edited more than once in this batch: combine its changes in one add_object call, or edit it in separate calls. Modules are compiled before the batch runs.`,
+          },
+        }
+        return []
+      }
+      edited.add(input.nodeId)
+    }
+    return [{ index, input }]
+  })
+  let next = 0
+  const worker = async () => {
+    for (let job = jobs[next++]; job; job = jobs[next++]) {
+      try {
+        requireAddObjectReason(job.input)
+        built[job.index] = { compiled: await build(job.input) }
+      } catch (error) {
+        built[job.index] = {
+          failure: isAgentRefusal(error)
+            ? { code: error.code, message: error.message }
+            : {
+                code: 'script_failed',
+                message: `${error instanceof Error ? error.message : String(error)} ${CATALOG_SOURCE}`,
+              },
+        }
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(BATCH_COMPILES_AT_ONCE, jobs.length) }, worker))
+  return built
 }
 
 export type RescriptOpeningInput = {

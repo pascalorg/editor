@@ -275,17 +275,24 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
       continue
     }
 
-    // A catalog item's surfaces are its model's (slot_<id> materials), which a headless host
-    // cannot read: its role is written by name, as the editor's Paint writes the one clicked.
+    // A catalog item's surfaces are its model's (slot_<id> materials), which an operation cannot
+    // read: a host that has (assetViews) lets this name them; its role is written by name, as the
+    // editor's Paint writes the one clicked.
     const declared = nodeSlotDeclarations(node)
     if (!declared && node.type === 'item') {
       const own = Object.keys((node as AnyNode & { slots?: Record<string, string> }).slots ?? {})
-      if (!input.role)
+      if (!input.role) {
+        const surfaces = context.assetViews?.[node.asset.id]?.surfaces ?? []
+        const facts = [
+          ...(surfaces.length ? [`its surfaces: ${surfaces.join(', ')}`] : []),
+          ...(own.length ? [`painted so far: ${own.join(', ')}`] : []),
+        ]
         refuse(
           'unknown_role',
-          `Item ${id}'s surfaces are its model's: name one as role${own.length ? ` (painted so far: ${own.join(', ')})` : ''}.`,
-          { target: id, roles: own },
+          `Item ${id}'s surfaces are its model's: name one as role${facts.length ? ` (${facts.join('; ')})` : ''}.`,
+          { target: id, roles: surfaces.length ? [...surfaces] : own },
         )
+      }
       const slots = { ...((node as AnyNode & { slots?: Record<string, string> }).slots ?? {}) }
       if (ref) slots[input.role] = ref
       else delete slots[input.role]

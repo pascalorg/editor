@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { refuse } from '@pascal-app/core/agent-tools'
-import { type AnyNode, type AnyNodeId, WallNode } from '@pascal-app/core/schema'
+import { type AnyNode, type AnyNodeId, WallNode, ZoneNode } from '@pascal-app/core/schema'
 import {
   VIEW_SCENE_CASES,
   viewSceneCaseProblems,
@@ -56,6 +56,7 @@ async function viewWith(
   await Promise.all([server.connect(a), client.connect(b)])
   return {
     levelId: level.id,
+    bridge,
     call: async (args: Record<string, unknown>) => {
       const result = await client.callTool({ name: 'view_scene', arguments: args })
       return { isError: !!result.isError, content: result.content as Content[] }
@@ -140,7 +141,63 @@ describe('view_scene over the MCP', () => {
     }
   })
 
-  // A building standing away from the site's origin was looked for at the origin.
+  // The study of 15 Oct: no interior view in 4 of 4 turns. A room is stood in, at a person's
+  // height, inside its outline, and the tab's picture comes back as an image.
+  test('a room is looked at from inside, at eye height, and the picture comes back', async () => {
+    const asked: Parameters<SceneViewHost['capture']>[0][] = []
+    const view = await viewWith({
+      capture: async (request) => {
+        asked.push(request)
+        return {
+          image: new Uint8Array([1, 2, 3]),
+          mimeType: 'image/webp',
+          width: request.size.w,
+          height: request.size.h,
+          tab: 'tab_1',
+          capturedAt: '2026-10-16T09:00:00.000Z',
+        }
+      },
+    })
+    try {
+      const polygon: [number, number][] = [
+        [2, 1],
+        [8, 1],
+        [8, 6],
+        [2, 6],
+      ]
+      const zone = ZoneNode.parse({ name: 'Living room', polygon })
+      view.bridge.createNode(zone, view.levelId)
+      const { isError, content } = await view.call({ interior: { zoneId: zone.id } })
+      expect(isError).toBe(false)
+      expect(asked).toMatchObject([
+        {
+          interior: { levelId: view.levelId, roomId: zone.id },
+          pose: { projection: 'perspective' },
+        },
+      ])
+      const { position, target } = asked[0]!.pose
+      expect(position[0]).toBeGreaterThan(2)
+      expect(position[0]).toBeLessThan(8)
+      expect(position[2]).toBeGreaterThan(1)
+      expect(position[2]).toBeLessThan(6)
+      expect(position[1]).toBe(1.6)
+      expect(target[1]).toBeLessThan(position[1])
+      expect(content.find((part) => part.type === 'image')).toEqual({
+        type: 'image',
+        data: Buffer.from([1, 2, 3]).toString('base64'),
+        mimeType: 'image/webp',
+      })
+      expect(String(json(content).note)).toContain('The eye stands inside Living room')
+      const wrong = await view.call({ interior: { zoneId: view.levelId } })
+      expect(wrong.isError).toBe(true)
+      expect(json(wrong.content)).toMatchObject({ code: 'interior_room_invalid' })
+    } finally {
+      await view.close()
+    }
+  })
+
+  // The cottage of the coherence corpus stands at [5.7, 0, 16.5] on its site: a view of its window
+  // planned in the building's own frame looked at bare ground 16 m north of it.
   test('a building away from the origin is looked at where it stands', async () => {
     const asked: Parameters<SceneViewHost['capture']>[0][] = []
     const view = await viewWith(
