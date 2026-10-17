@@ -79,6 +79,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/finewood_27/finewood_27_thumb.webp',
+    previewColor: '#a7753f',
     preset: {
       maps: {
         albedoMap: '/material/wood/finewood_27/finewood_27_basecolor_512.ktx2',
@@ -117,6 +118,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Wood plank finish',
     previewThumbnailUrl: '/material/wood/floor_plank_1/floor_plank_1_thumb.webp',
+    previewColor: '#bf8552',
     preset: {
       maps: {
         albedoMap: '/material/wood/floor_plank_1/floor_plank_1_basecolor_512.ktx2',
@@ -154,6 +156,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/hungarian_parquet_10/hungarian_parquet_10_thumb.webp',
+    previewColor: '#a87d50',
     preset: {
       maps: {
         albedoMap: '/material/wood/hungarian_parquet_10/hungarian_parquet_10_basecolor_512.ktx2',
@@ -191,6 +194,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/hungarian_parquet_2/hungarian_parquet_2_thumb.webp',
+    previewColor: '#673021',
     preset: {
       maps: {
         albedoMap: '/material/wood/hungarian_parquet_2/hungarian_parquet_2_basecolor_512.ktx2',
@@ -228,6 +232,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/square_parquet_21/square_parquet_21_thumb.webp',
+    previewColor: '#3f220f',
     preset: {
       maps: {
         albedoMap: '/material/wood/square_parquet_21/square_parquet_21_basecolor_512.ktx2',
@@ -265,6 +270,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/square_wood_parquet_23/square_wood_parquet_23_thumb.webp',
+    previewColor: '#7e4108',
     preset: {
       maps: {
         albedoMap:
@@ -304,6 +310,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine/wood_fine_thumb.webp',
+    previewColor: '#ba9a80',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine/wood_fine_basecolor_512.ktx2',
@@ -341,6 +348,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_11/wood_fine_11_thumb.webp',
+    previewColor: '#f59d52',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_11/wood_fine_11_basecolor_512.ktx2',
@@ -378,6 +386,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_13/wood_fine_13_thumb.webp',
+    previewColor: '#e5a76f',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_13/wood_fine_13_basecolor_512.ktx2',
@@ -415,6 +424,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_2/wood_fine_2_thumb.webp',
+    previewColor: '#dcb791',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_2/wood_fine_2_basecolor_512.ktx2',
@@ -452,6 +462,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_22/wood_fine_22_thumb.webp',
+    previewColor: '#bfa67e',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_22/wood_fine_22_basecolor_512.ktx2',
@@ -489,6 +500,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_24/wood_fine_24_thumb.webp',
+    previewColor: '#a43c28',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_24/wood_fine_24_basecolor_512.ktx2',
@@ -526,6 +538,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/wood_parquet_14/wood_parquet_14_thumb.webp',
+    previewColor: '#e3d4c2',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_parquet_14/wood_parquet_14_basecolor_512.ktx2',
@@ -565,6 +578,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/wooden_parquet_11/wooden_parquet_11_thumb.webp',
+    previewColor: '#59392d',
     preset: {
       maps: {
         albedoMap: '/material/wood/wooden_parquet_11/wooden_parquet_11_basecolor_512.ktx2',
@@ -602,6 +616,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/woodparquet_121/woodparquet_121_thumb.webp',
+    previewColor: '#8f7247',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodparquet_121/woodparquet_121_basecolor_512.ktx2',
@@ -640,6 +655,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/woodparquet_56/woodparquet_56_thumb.webp',
+    previewColor: '#ba8b5d',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodparquet_56/woodparquet_56_basecolor_512.ktx2',
@@ -679,6 +695,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/woodparquet_65/woodparquet_65_thumb.webp',
+    previewColor: '#9f7841',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodparquet_65/woodparquet_65_basecolor_512.ktx2',
@@ -718,6 +735,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/woodparquet_99/woodparquet_99_thumb.webp',
+    previewColor: '#b69573',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodparquet_99/woodparquet_99_basecolor_512.ktx2',
@@ -757,6 +775,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Wood plank finish',
     previewThumbnailUrl: '/material/wood/woodplank_19/woodplank_19_thumb.webp',
+    previewColor: '#8f7b5f',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodplank_19/woodplank_19_basecolor_512.ktx2',
@@ -795,6 +814,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Wood plank finish',
     previewThumbnailUrl: '/material/wood/woodplank_48/woodplank_48_thumb.webp',
+    previewColor: '#89664d',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodplank_48/woodplank_48_basecolor_512.ktx2',
@@ -833,6 +853,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_quarry/tile_quarry_thumb.webp',
+    previewColor: '#484946',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_quarry/tile_quarry_basecolor_512.ktx2',
@@ -871,6 +892,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Brick finish',
     previewThumbnailUrl: '/material/flooring/brick_wall_rustic/brick_wall_rustic_thumb.webp',
+    previewColor: '#9b6f57',
     preset: {
       maps: {
         albedoMap: '/material/flooring/brick_wall_rustic/brick_wall_rustic_basecolor_512.ktx2',
@@ -910,6 +932,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Brick finish',
     previewThumbnailUrl: '/material/flooring/brick_wall_aged/brick_wall_aged_thumb.webp',
+    previewColor: '#be9877',
     preset: {
       maps: {
         albedoMap: '/material/flooring/brick_wall_aged/brick_wall_aged_basecolor_512.ktx2',
@@ -949,6 +972,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Brick finish',
     previewThumbnailUrl: '/material/flooring/brick_wall_weathered/brick_wall_weathered_thumb.webp',
+    previewColor: '#86513c',
     preset: {
       maps: {
         albedoMap:
@@ -989,6 +1013,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'furniture'],
     description: 'Panel finish',
     previewThumbnailUrl: '/material/flooring/garage_panel/garage_panel_thumb.webp',
+    previewColor: '#d7dad7',
     preset: {
       maps: {
         albedoMap: '/material/flooring/garage_panel/garage_panel_basecolor_512.ktx2',
@@ -1026,6 +1051,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Stone flooring finish',
     previewThumbnailUrl: '/material/flooring/green_labradorite/green_labradorite_thumb.webp',
+    previewColor: '#313828',
     preset: {
       maps: {
         albedoMap: '/material/flooring/green_labradorite/green_labradorite_basecolor_512.ktx2',
@@ -1063,6 +1089,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['outdoor', 'floor'],
     description: 'Ground surface finish',
     previewThumbnailUrl: '/material/flooring/ground_earth/ground_earth_thumb.webp',
+    previewColor: '#716c62',
     preset: {
       maps: {
         albedoMap: '/material/flooring/ground_earth/ground_earth_basecolor_512.ktx2',
@@ -1102,6 +1129,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'outdoor'],
     description: 'Pool tile finish',
     previewThumbnailUrl: '/material/flooring/pool_tiles/pool_tiles_thumb.webp',
+    previewColor: '#79b4ce',
     preset: {
       maps: {
         albedoMap: '/material/flooring/pool_tiles/pool_tiles_basecolor_512.ktx2',
@@ -1139,6 +1167,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Tile flooring finish',
     previewThumbnailUrl: '/material/flooring/tiles_checker/tiles_checker_thumb.webp',
+    previewColor: '#bab4b0',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tiles_checker/tiles_checker_basecolor_512.ktx2',
@@ -1176,6 +1205,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Tile flooring finish',
     previewThumbnailUrl: '/material/flooring/tiles_grid/tiles_grid_thumb.webp',
+    previewColor: '#828282',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tiles_grid/tiles_grid_basecolor_512.ktx2',
@@ -1213,6 +1243,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Stone finish',
     previewThumbnailUrl: '/material/flooring/stone_wall/stone_wall_thumb.webp',
+    previewColor: '#b2845c',
     preset: {
       maps: {
         albedoMap: '/material/flooring/stone_wall/stone_wall_basecolor_512.ktx2',
@@ -1250,6 +1281,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Wood-look ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/wooden_ceramic_3/wooden_ceramic_3_thumb.webp',
+    previewColor: '#977459',
     preset: {
       maps: {
         albedoMap: '/material/flooring/wooden_ceramic_3/wooden_ceramic_3_basecolor_512.ktx2',
@@ -1287,6 +1319,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/ceramic_mosaic/ceramic_mosaic_thumb.webp',
+    previewColor: '#b9b6ae',
     preset: {
       maps: {
         albedoMap: '/material/flooring/ceramic_mosaic/ceramic_mosaic_basecolor_512.ktx2',
@@ -1326,6 +1359,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Terrazzo flooring finish',
     previewThumbnailUrl: '/material/flooring/terrazzo/terrazzo_thumb.webp',
+    previewColor: '#939e9f',
     preset: {
       maps: {
         albedoMap: '/material/flooring/terrazzo/terrazzo_basecolor_512.ktx2',
@@ -1364,6 +1398,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_stone/tile_stone_thumb.webp',
+    previewColor: '#d1d0c9',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_stone/tile_stone_basecolor_512.ktx2',
@@ -1402,6 +1437,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_terracotta/tile_terracotta_thumb.webp',
+    previewColor: '#6e6b65',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_terracotta/tile_terracotta_basecolor_512.ktx2',
@@ -1441,6 +1477,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     description: 'Green quartzite flooring finish',
     previewThumbnailUrl:
       '/material/flooring/green_glass_quartzite/green_glass_quartzite_thumb.webp',
+    previewColor: '#5d6957',
     preset: {
       maps: {
         albedoMap:
@@ -1479,6 +1516,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Dark ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/dark_ceramic_grunge/dark_ceramic_grunge_thumb.webp',
+    previewColor: '#535351',
     preset: {
       maps: {
         albedoMap: '/material/flooring/dark_ceramic_grunge/dark_ceramic_grunge_basecolor_512.ktx2',
@@ -1520,6 +1558,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Light ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/light_ceramic_grunge/light_ceramic_grunge_thumb.webp',
+    previewColor: '#9c9b95',
     preset: {
       maps: {
         albedoMap:
@@ -1562,6 +1601,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'White marble flooring finish',
     previewThumbnailUrl: '/material/flooring/statuaretto/statuaretto_thumb.webp',
+    previewColor: '#bcbec2',
     preset: {
       maps: {
         albedoMap: '/material/flooring/statuaretto/statuaretto_basecolor_512.ktx2',
@@ -1599,6 +1639,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_mosaic/tile_mosaic_thumb.webp',
+    previewColor: '#d1ccbe',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_mosaic/tile_mosaic_basecolor_512.ktx2',
@@ -1638,6 +1679,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_pattern/tile_pattern_thumb.webp',
+    previewColor: '#999287',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_pattern/tile_pattern_basecolor_512.ktx2',
@@ -1677,6 +1719,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Wood-look ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/wooden_ceramic_2/wooden_ceramic_2_thumb.webp',
+    previewColor: '#786250',
     preset: {
       maps: {
         albedoMap: '/material/flooring/wooden_ceramic_2/wooden_ceramic_2_basecolor_512.ktx2',
@@ -1714,6 +1757,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Wood parquet flooring finish',
     previewThumbnailUrl: '/material/flooring/woodparquet/woodparquet_thumb.webp',
+    previewColor: '#bea27e',
     preset: {
       maps: {
         albedoMap: '/material/flooring/woodparquet/woodparquet_basecolor_512.ktx2',
@@ -1753,6 +1797,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['roof'],
     description: 'Classic roof shingle finish',
     previewThumbnailUrl: '/material/roofing/roof_shingles_classic/roof_shingles_classic_thumb.webp',
+    previewColor: '#9e5b46',
     preset: {
       maps: {
         albedoMap:
@@ -1795,6 +1840,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['roof'],
     description: 'Clay roof tile finish',
     previewThumbnailUrl: '/material/roofing/roof_tiles_clay/roof_tiles_clay_thumb.webp',
+    previewColor: '#765241',
     preset: {
       maps: {
         albedoMap: '/material/roofing/roof_tiles_clay/roof_tiles_clay_basecolor_512.ktx2',
@@ -1834,6 +1880,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['roof'],
     description: 'Terracotta roof tile finish',
     previewThumbnailUrl: '/material/roofing/roof_tiles_terracotta/roof_tiles_terracotta_thumb.webp',
+    previewColor: '#494b4d',
     preset: {
       maps: {
         albedoMap:
@@ -1876,6 +1923,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['roof'],
     description: 'Grey composition shingle finish',
     previewThumbnailUrl: '/material/roofing/roof_shingles_grey/roof_shingles_grey_thumb.webp',
+    previewColor: '#505050',
     preset: {
       maps: {
         albedoMap: '/material/roofing/roof_shingles_grey/roof_shingles_grey_basecolor_512.webp',
@@ -1918,6 +1966,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     description: 'Weathered roof shingle finish',
     previewThumbnailUrl:
       '/material/roofing/roof_shingles_weathered/roof_shingles_weathered_thumb.webp',
+    previewColor: '#a15e49',
     preset: {
       maps: {
         albedoMap:
@@ -3470,6 +3519,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture', 'wall'],
     description: 'Natural linen weave',
     previewThumbnailUrl: '/material/fabric/linen_hikari_fabric/linen_hikari_fabric_thumb.webp',
+    previewColor: '#aaa49f',
     preset: {
       maps: {
         albedoMap: '/material/fabric/linen_hikari_fabric/linen_hikari_fabric_basecolor_512.ktx2',
@@ -3506,6 +3556,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture', 'wall'],
     description: 'Plain cotton weave',
     previewThumbnailUrl: '/material/fabric/blue_cotton/blue_cotton_thumb.webp',
+    previewColor: '#528bc1',
     preset: {
       maps: {
         albedoMap: '/material/fabric/blue_cotton/blue_cotton_basecolor_512.ktx2',
@@ -3544,6 +3595,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Velvet with a soft sheen',
     previewThumbnailUrl: '/material/fabric/red_velvet/red_velvet_thumb.webp',
+    previewColor: '#781113',
     preset: {
       maps: {
         albedoMap: '/material/fabric/red_velvet/red_velvet_basecolor_512.ktx2',
@@ -3582,6 +3634,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Matte wool felt',
     previewThumbnailUrl: '/material/fabric/white_wool/white_wool_thumb.webp',
+    previewColor: '#d2d2d2',
     preset: {
       maps: {
         albedoMap: '/material/fabric/white_wool/white_wool_basecolor_512.ktx2',
@@ -3620,6 +3673,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Matte suede nap',
     previewThumbnailUrl: '/material/fabric/suede/suede_thumb.webp',
+    previewColor: '#c8be98',
     preset: {
       maps: {
         albedoMap: '/material/fabric/suede/suede_basecolor_512.ktx2',
@@ -3658,6 +3712,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Looped bouclé upholstery',
     previewThumbnailUrl: '/material/fabric/wool_boucle/wool_boucle_thumb.webp',
+    previewColor: '#776d60',
     preset: {
       maps: {
         albedoMap: '/material/fabric/wool_boucle/wool_boucle_basecolor_512.ktx2',
@@ -3694,6 +3749,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Smooth black leather',
     previewThumbnailUrl: '/material/leather/black_leather/black_leather_thumb.webp',
+    previewColor: '#2b2b2b',
     preset: {
       maps: {
         albedoMap: '/material/leather/black_leather/black_leather_basecolor_512.ktx2',
@@ -3731,6 +3787,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Pebbled calf leather',
     previewThumbnailUrl: '/material/leather/calf_leather/calf_leather_thumb.webp',
+    previewColor: '#78411a',
     preset: {
       maps: {
         albedoMap: '/material/leather/calf_leather/calf_leather_basecolor_512.ktx2',
@@ -3769,6 +3826,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'ceiling'],
     description: 'Smooth painted plaster wall',
     previewThumbnailUrl: '/material/concrete/plaster_painted/plaster_painted_thumb.webp',
+    previewColor: '#c8c5bd',
     preset: {
       maps: {
         albedoMap: '/material/concrete/plaster_painted/plaster_painted_basecolor_512.ktx2',
@@ -3807,6 +3865,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Polished concrete floor',
     previewThumbnailUrl: '/material/concrete/concrete_polished/concrete_polished_thumb.webp',
+    previewColor: '#6d6b69',
     preset: {
       maps: {
         albedoMap: '/material/concrete/concrete_polished/concrete_polished_basecolor_512.ktx2',
@@ -3844,6 +3903,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Board-formed raw concrete',
     previewThumbnailUrl: '/material/concrete/concrete_raw/concrete_raw_thumb.webp',
+    previewColor: '#a5a5a5',
     preset: {
       maps: {
         albedoMap: '/material/concrete/concrete_raw/concrete_raw_basecolor_512.ktx2',
@@ -3882,6 +3942,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor'],
     description: 'Smooth cast concrete plate',
     previewThumbnailUrl: '/material/concrete/concrete_plate/concrete_plate_thumb.webp',
+    previewColor: '#ababab',
     preset: {
       maps: {
         albedoMap: '/material/concrete/concrete_plate/concrete_plate_basecolor_512.ktx2',
@@ -3920,6 +3981,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior stucco render',
     previewThumbnailUrl: '/material/concrete/white_stucco/white_stucco_thumb.webp',
+    previewColor: '#cccccc',
     preset: {
       maps: {
         albedoMap: '/material/concrete/white_stucco/white_stucco_basecolor_512.ktx2',
@@ -3958,6 +4020,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'ceiling'],
     description: 'Smooth prepared drywall ready for paint',
     previewThumbnailUrl: '/material/concrete/prepared_drywall/prepared_drywall_thumb.webp',
+    previewColor: '#b1b1b1',
     preset: {
       maps: {
         albedoMap: '/material/concrete/prepared_drywall/prepared_drywall_basecolor_512.ktx2',
@@ -3996,6 +4059,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture', 'wall'],
     description: 'Warm copper',
     previewThumbnailUrl: '/material/metal/copper_metal/copper_metal_thumb.webp',
+    previewColor: '#cb845d',
     preset: {
       maps: {
         albedoMap: '/material/metal/copper_metal/copper_metal_basecolor_512.ktx2',
@@ -4034,6 +4098,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture', 'wall'],
     description: 'Polished stainless steel',
     previewThumbnailUrl: '/material/metal/polished_metal/polished_metal_thumb.webp',
+    previewColor: '#f2f4f3',
     preset: {
       maps: {
         albedoMap: '/material/metal/polished_metal/polished_metal_basecolor_512.ktx2',
@@ -4074,6 +4139,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     description: 'Brushed stainless steel',
     previewThumbnailUrl:
       '/material/metal/stainless_steel_brushed/stainless_steel_brushed_thumb.webp',
+    previewColor: '#636363',
     preset: {
       maps: {
         albedoMap:

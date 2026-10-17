@@ -919,6 +919,24 @@ const described = (reason: string, paths: readonly string[]) =>
 /** Metadata keys found in editor sources that are not references. */
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
   { path: 'metadata.roomBoundary', reason: 'Boolean opt-out from room boundary detection.' },
+  ...described(
+    "author_scene's provenance: the payload's own ids on walls and openings, a room's seed, a level's elevation, a slab's finish, a wall's colour, and on the building the stored payload, the report and when it was written; none of it names a node.",
+    [
+      'authorScene',
+      'authorScene.at',
+      'authorScene.color',
+      'authorScene.elevation',
+      'authorScene.finish',
+      'authorScene.id',
+      'authorScene.payload',
+      'authorScene.report',
+      'authorScene.seed',
+    ],
+  ),
+  ...described(
+    "An artifact's kind as the MCP host stores it (item, window, door, column): artifact metadata, not a node's.",
+    ['kind'],
+  ),
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',
