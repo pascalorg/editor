@@ -66,15 +66,25 @@ const nothing = Object.fromEntries(
   ),
 )
 
+const openAxis = (design: string) => ({ kind: 'open' as const, design })
+const axes = {
+  action: openAxis('the work the request calls for, designed as a whole'),
+  size: openAxis('sizes chosen to fit the rooms they serve'),
+  pieces: openAxis('the pieces each room needs, designed one by one'),
+  openings: openAxis('openings placed for light and passage room by room'),
+  style: openAxis('each piece designed in one calm character throughout'),
+  materials: openAxis('materials and finishes chosen surface by surface'),
+  dressing: openAxis('the rooms dressed lived-in, stated in beyond'),
+}
+
 const brief = (source: 'open' | 'catalog' | 'brand', extra: Record<string, unknown> = {}) => ({
-  fixed: ['a 4 by 5 m bedroom', 'a double bed', 'two nightstands', 'a wardrobe'],
-  open: ['style', 'the form and finish of each piece'],
+  axes,
   source,
   ...(source === 'open'
     ? {}
     : { sourceQuote: source === 'catalog' ? 'the catalog only' : 'IKEA furniture only' }),
   vision: 'A calm room of oak and linen.',
-  beyond: source === 'open' ? dressed : nothing,
+  beyond: dressed,
   ...extra,
 })
 
@@ -264,7 +274,7 @@ describe('the design brief over MCP', () => {
     })
   })
 
-  test('an open request owes the dressing: a two-piece beyond is refused, naming the empty layers; "only" accepts none', async () => {
+  test('a dressing left open owes the layers: a two-piece beyond is refused, naming the empty layers; a bounded dressing accepts none', async () => {
     const thin = await call('design_brief', {
       ...brief('open'),
       beyond: { ...nothing, floor: ['a wool rug'], light: ['a soft ceiling pendant'] },
@@ -280,7 +290,20 @@ describe('the design brief over MCP', () => {
     expect(full.payload.dressing).toHaveLength(8)
     const limited = await call('design_brief', {
       ...brief('open'),
-      fixed: ['a bedroom with only a bed'],
+      axes: {
+        ...axes,
+        pieces: {
+          kind: 'bounded',
+          quote: 'only a bed',
+          reading: 'a bed, and nothing else',
+          extent: 'exact',
+        },
+        dressing: {
+          kind: 'bounded',
+          quote: 'only a bed',
+          reading: 'the request limits the pieces to the bed',
+        },
+      },
       beyond: nothing,
     })
     expect(limited.payload.status).toBe('recorded')

@@ -8,7 +8,7 @@ import {
 } from '../agent-tools'
 import { isAgentRefusal } from '../agent-tools/refusal'
 import { type AssetInput, BuildingNode, LevelNode, ZoneNode } from '../schema'
-import { CATALOG_BRIEF } from './__fixtures__/design-brief-cases'
+import { CATALOG_BRIEF, OPEN_AXES } from './__fixtures__/design-brief-cases'
 import { applyAgentOutcome } from './apply-outcome'
 import {
   briefUnlocks,
@@ -213,8 +213,7 @@ describe('run_batch', () => {
 
 describe('design_brief', () => {
   const input = {
-    fixed: ['a bedroom'],
-    open: [],
+    axes: OPEN_AXES,
     source: 'open' as const,
     vision: 'Calm.',
     beyond: dressed,
@@ -274,11 +273,18 @@ describe('design_brief', () => {
     expect(isAgentRefusal(error) && error.code).toBe('brand_required')
   })
 
-  test('the contract asks for at least one fixed fact and refuses an empty vision', () => {
+  test('the contract refuses an empty vision, and an axis is bounded with a quote or open with a design', () => {
     const contract = AGENT_TOOL_CONTRACTS.find((entry) => entry.name === 'design_brief')!
-    const schema = contract.input.fixed as { safeParse: (v: unknown) => { success: boolean } }
-    expect(schema.safeParse([]).success).toBe(false)
-    expect((contract.input.vision as typeof schema).safeParse('').success).toBe(false)
+    const schema = contract.input.vision as { safeParse: (v: unknown) => { success: boolean } }
+    expect(schema.safeParse('').success).toBe(false)
+    const axes = contract.input.axes as typeof schema
+    expect(axes.safeParse({ style: { kind: 'bounded' } }).success).toBe(false)
+    expect(axes.safeParse({ style: { kind: 'open' } }).success).toBe(false)
+    expect(
+      axes.safeParse({ style: { kind: 'bounded', quote: 'in oak', reading: 'oak, as asked' } })
+        .success,
+    ).toBe(true)
+    expect(axes.safeParse({ style: { kind: 'open', design: '' } }).success).toBe(true)
   })
 })
 
@@ -410,8 +416,17 @@ describe('asIs keeps technical equipment, looked at first', () => {
     tagged('fridge', 'Fridge', 'kitchen-appliances'),
   ]
   const brief = (assetIds: string[], source: 'open' | 'catalog' = 'open') => ({
-    fixed: ['a bedroom'],
-    open: [],
+    axes:
+      source === 'open'
+        ? OPEN_AXES
+        : {
+            ...OPEN_AXES,
+            dressing: {
+              kind: 'bounded' as const,
+              quote: 'catalog only',
+              reading: 'the catalog, and nothing beyond it',
+            },
+          },
     source,
     ...(source === 'open' ? {} : { sourceQuote: 'catalog only' }),
     vision: 'Calm.',
@@ -514,7 +529,7 @@ describe('asIs keeps technical equipment, looked at first', () => {
 
 describe('beyond: the dressing of the rooms, layer by layer', () => {
   const schema = z.object(designBriefTool.input)
-  const base = { fixed: ['a bedroom'], open: [], source: 'open', vision: 'Calm.' }
+  const base = { axes: OPEN_AXES, source: 'open', vision: 'Calm.' }
   const run = (
     beyond: unknown,
     extra: Partial<DesignBrief> = {},
@@ -574,49 +589,120 @@ describe('beyond: the dressing of the rooms, layer by layer', () => {
     expect(outcome.keep?.designBrief?.beyond).toEqual(dressed)
   })
 
-  test('a request that limits the pieces accepts none everywhere: the person’s words in the chat, the fixed lines over MCP', () => {
-    for (const words of [
-      'only',
-      'nothing else',
-      'just',
-      'seulement',
-      'uniquement',
-      "rien d'autre",
-      'juste',
-    ]) {
-      expect(
-        (run(nothing('limited'), { fixed: [`a bedroom, ${words} a bed`] }) as { code?: string })
-          .code,
-      ).toBeUndefined()
-      expect(
-        (
-          run(nothing('limited'), {}, { requestText: `une chambre, ${words} un lit` }) as {
-            code?: string
-          }
-        ).code,
-      ).toBeUndefined()
+  test('a dressing bounded by the request’s words accepts none everywhere; the quote is checked where a message is lent, folded', () => {
+    const bounded = {
+      ...OPEN_AXES,
+      pieces: {
+        kind: 'bounded' as const,
+        quote: 'only a bed',
+        reading: 'a bed, and nothing else',
+        extent: 'exact' as const,
+      },
+      dressing: {
+        kind: 'bounded' as const,
+        quote: 'only a bed',
+        reading: 'the request limits the pieces to the bed',
+      },
     }
-    // The chat reads the person's message, not the fixed lines.
+    // Over MCP (no message lent) the quotes are required by the contract and not compared.
+    expect(
+      (run(nothing('only a bed'), { axes: bounded } as never) as { code?: string }).code,
+    ).toBeUndefined()
+    // In the chat the quote is in the person's message, whatever the case, accents and spacing.
     expect(
       (
-        run(
-          nothing('limited'),
-          { fixed: ['a bedroom, only a bed'] },
-          { requestText: 'a bedroom' },
-        ) as { code: string }
+        run(nothing('only a bed'), { axes: bounded } as never, {
+          requestText: 'Une chambre, ONLY  a bed s’il te plaît',
+        }) as { code?: string }
       ).code,
-    ).toBe('beyond_too_thin')
-    // A word that merely contains one does not limit.
-    expect(
-      (run(nothing('x'), { fixed: ['a justified layout, onlyish'] }) as { code: string }).code,
-    ).toBe('beyond_too_thin')
+    ).toBeUndefined()
+    const refused = run(nothing('only a bed'), { axes: bounded } as never, {
+      requestText: 'a bedroom',
+    }) as { code: string; message: string }
+    expect(refused.code).toBe('axis_quote_not_in_request')
+    expect(refused.message).toBe(
+      "The pieces is bounded by the request's own words: its quote must be words of the person's message.",
+    )
   })
 
-  test('a source other than open owes no dressing', () => {
+  test('the dressing cannot be bounded by the named pieces read as a minimum; exact pieces, or words outside the pieces quote, bound it', () => {
+    const pieces = (extent?: 'minimum' | 'exact') => ({
+      kind: 'bounded' as const,
+      quote: 'a double bed, two nightstands, a wardrobe',
+      reading: 'the pieces the request names',
+      ...(extent ? { extent } : {}),
+    })
+    const dressing = (quote: string) => ({
+      kind: 'bounded' as const,
+      quote,
+      reading: 'bounded by those words',
+    })
+    const refused = run(nothing('the bed is enough'), {
+      axes: { ...OPEN_AXES, pieces: pieces(), dressing: dressing('a double bed') },
+    } as never) as { code: string; message: string }
+    expect(refused.code).toBe('dressing_bounded_by_minimum')
+    expect(refused.message).toBe(
+      'The pieces the request names are a minimum: they do not bound the dressing. The dressing is bounded only by words that limit the pieces or the action.',
+    )
+    expect(
+      (
+        run(nothing('only those pieces'), {
+          axes: { ...OPEN_AXES, pieces: pieces('exact'), dressing: dressing('a double bed') },
+        } as never) as { code?: string }
+      ).code,
+    ).toBeUndefined()
+    expect(
+      (
+        run(nothing('one lamp'), {
+          axes: { ...OPEN_AXES, pieces: pieces(), dressing: dressing('add a lamp') },
+        } as never) as { code?: string }
+      ).code,
+    ).toBeUndefined()
+  })
+
+  test('every axis is stated: an absent one is refused with the list, an open one without a design of a few words too', () => {
+    const { style: _style, materials: _materials, ...lacking } = OPEN_AXES
+    const missing = run(dressed, { axes: lacking } as never) as {
+      code: string
+      message: string
+      details: { axes: string[] }
+    }
+    expect(missing.code).toBe('axis_missing')
+    expect(missing.message).toContain('style, materials are absent')
+    expect(missing.details.axes).toEqual(['style', 'materials'])
+    for (const design of ['', 'oak', 'calm oak']) {
+      const refused = run(dressed, {
+        axes: { ...OPEN_AXES, style: { kind: 'open' as const, design } },
+      } as never) as { code: string; message: string }
+      expect(refused.code).toBe('axis_open_without_design')
+      expect(refused.message).toBe('The style is open: say how it is designed.')
+    }
+    expect(
+      (
+        run(dressed, {
+          axes: {
+            ...OPEN_AXES,
+            style: { kind: 'open' as const, design: 'calm oak throughout' },
+          },
+        } as never) as { code?: string }
+      ).code,
+    ).toBeUndefined()
+  })
+
+  test('the dressing axis decides, whatever the source: catalog and dressing open still owes the layers, dressing bounded owes none', () => {
+    const catalog = { source: 'catalog', sourceQuote: 'the catalog only' } as never
+    expect((run(nothing('catalog'), catalog) as { code: string }).code).toBe('beyond_too_thin')
     const outcome = run(nothing('catalog only'), {
-      source: 'catalog',
-      sourceQuote: 'the catalog only',
-    } as never) as ReturnType<typeof designBrief>
+      ...catalog,
+      axes: {
+        ...OPEN_AXES,
+        dressing: {
+          kind: 'bounded' as const,
+          quote: 'the catalog only',
+          reading: 'the catalog, and nothing beyond it',
+        },
+      },
+    }) as ReturnType<typeof designBrief>
     expect(outcome.result.dressing).toEqual([])
   })
 
@@ -643,10 +729,9 @@ describe('beyond: the dressing of the rooms, layer by layer', () => {
 
 describe('a source other than open quotes the request', () => {
   const brief = {
-    fixed: ['a house'],
-    open: [],
+    axes: OPEN_AXES,
     vision: 'Furnished.',
-    beyond: nothing('catalog only'),
+    beyond: dressed,
   }
   const refusalOf = (input: Record<string, unknown>, requestText?: string) => {
     try {

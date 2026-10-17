@@ -1,6 +1,9 @@
 import {
+  AXIS_DESIGN_MIN_WORDS,
   BEYOND_LAYERS,
   BEYOND_MIN_LAYERS,
+  BRIEF_AXES,
+  type BriefAxes,
   CATALOG_PLACEMENT_TOOLS,
   type DesignBrief,
   type DesignBriefInput,
@@ -116,8 +119,40 @@ function quoteNamesSource(source: string, brand: string | undefined, quote: stri
   return (source === 'catalog' ? CATALOG_WORD : EXISTING_WORD).test(folded)
 }
 
-/** The words by which a request limits the pieces: the dressing is then not owed. */
-const LIMITING_WORDS = /\b(?:only|nothing else|just|seulement|uniquement|rien d'autre|juste)\b/
+/**
+ * Every axis is stated, bounded or open. A bounded axis quotes the person's own words: where
+ * the host lends the message (the chat, `requestText`) the quote is in it, folded as the
+ * source quote is; over MCP there is no message, so the quote is required by the contract and
+ * not compared with anything. An open axis carries a design statement of at least
+ * AXIS_DESIGN_MIN_WORDS words. The source axis is the `source` fields, checked separately.
+ */
+function requireAxes(input: DesignBriefInput, context: AgentContext): BriefAxes {
+  const axes = input.axes ?? {}
+  const missing = BRIEF_AXES.filter((axis) => !axes[axis])
+  if (missing.length)
+    refuse(
+      'axis_missing',
+      `The brief reads the request axis by axis: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} absent. Each axis is bounded by the person's words or open with a design statement; an axis the request does not touch is open.`,
+      { axes: missing },
+    )
+  for (const axis of BRIEF_AXES) {
+    const reading = axes[axis]!
+    if (reading.kind === 'bounded') {
+      const quote = fold(reading.quote)
+      if (
+        !quote ||
+        (context.requestText !== undefined && !fold(context.requestText).includes(quote))
+      )
+        refuse(
+          'axis_quote_not_in_request',
+          `The ${axis} is bounded by the request's own words: its quote must be words of the person's message.`,
+          { axis },
+        )
+    } else if (fold(reading.design).split(' ').filter(Boolean).length < AXIS_DESIGN_MIN_WORDS)
+      refuse('axis_open_without_design', `The ${axis} is open: say how it is designed.`, { axis })
+  }
+  return axes
+}
 
 /** The pieces `beyond` names, flattened: the brief's own list of the dressing. */
 export function dressingOf(beyond: DesignBriefInput['beyond']): string[] {
@@ -125,14 +160,27 @@ export function dressingOf(beyond: DesignBriefInput['beyond']): string[] {
 }
 
 /**
- * An open request owes most of the dressing layers: with source open and no word limiting the
- * pieces, at least BEYOND_MIN_LAYERS of the layers name pieces. The words are the person's message
- * where the host has one (the chat), else the brief's own `fixed` lines (MCP).
+ * The dressing axis alone decides what `beyond` owes. Bounded, `beyond` may say none
+ * everywhere, except that the named pieces read as a minimum do not bound it: a dressing
+ * quote inside a minimum pieces quote is refused. Open, at least BEYOND_MIN_LAYERS of the
+ * layers name pieces.
  */
-function requireDressing(input: DesignBriefInput, context: AgentContext): void {
-  if (input.source !== 'open') return
-  const request = context.requestText ?? input.fixed.join(' ')
-  if (LIMITING_WORDS.test(fold(request))) return
+function requireDressing(input: DesignBriefInput, axes: BriefAxes): void {
+  const dressing = axes.dressing!
+  if (dressing.kind === 'bounded') {
+    const pieces = axes.pieces!
+    if (
+      pieces.kind === 'bounded' &&
+      (pieces.extent ?? 'minimum') === 'minimum' &&
+      fold(dressing.quote) &&
+      fold(pieces.quote).includes(fold(dressing.quote))
+    )
+      refuse(
+        'dressing_bounded_by_minimum',
+        'The pieces the request names are a minimum: they do not bound the dressing. The dressing is bounded only by words that limit the pieces or the action.',
+      )
+    return
+  }
   const empty = BEYOND_LAYERS.filter(([key]) => layerPieces(input.beyond[key]).length === 0)
   if (BEYOND_LAYERS.length - empty.length >= BEYOND_MIN_LAYERS) return
   refuse(
@@ -292,6 +340,7 @@ export function briefUnlocks(brief: DesignBrief): { unlocks: string[]; closed: s
  * the scene changes.
  */
 export const designBrief: AgentOperation<DesignBriefInput> = (_nodes, input, context) => {
+  const axes = requireAxes(input, context)
   const brand = input.brand?.trim()
   if (input.source === 'brand' && !brand)
     refuse('brand_required', 'source brand names a range: give its name as brand ("IKEA").')
@@ -307,10 +356,9 @@ export const designBrief: AgentOperation<DesignBriefInput> = (_nodes, input, con
     if (context.requestText !== undefined && !fold(context.requestText).includes(fold(quote)))
       refuse('source_not_in_request', SOURCE_NOT_IN_REQUEST)
   }
-  requireDressing(input, context)
+  requireDressing(input, axes)
   const brief: DesignBrief = {
-    fixed: input.fixed,
-    open: input.open,
+    axes,
     source: input.source,
     ...(input.source !== 'open' && quote ? { sourceQuote: quote } : {}),
     ...(input.source === 'brand' && brand ? { brand } : {}),

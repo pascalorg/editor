@@ -1,6 +1,6 @@
 import { DESIGN_EXAMPLE } from '../../procedural-items'
 import type { AssetInput } from '../../schema'
-import type { Beyond, DesignBrief } from '../../agent-tools/design-brief'
+import type { Beyond, BriefAxes, DesignBrief } from '../../agent-tools/design-brief'
 import type { AgentToolCase } from './cases'
 import { storeysScene } from './structure-cases'
 
@@ -60,9 +60,53 @@ const nothing = (why: string): Beyond =>
     ),
   ) as Beyond
 
+const bounded = (quote: string, reading: string, extent?: 'minimum' | 'exact') => ({
+  kind: 'bounded' as const,
+  quote,
+  reading,
+  ...(extent ? { extent } : {}),
+})
+const openAxis = (design: string) => ({ kind: 'open' as const, design })
+
+/** The owner's bedroom, read axis by axis: action, size, pieces (a minimum) and openings bounded; style, materials and dressing open. */
+export const BEDROOM_AXES: BriefAxes = {
+  action: bounded('a 4 by 5 m bedroom', 'one bedroom, not a house; inside it, making it is the job'),
+  size: bounded('4 by 5 m', 'the room is 4 by 5 m'),
+  pieces: bounded(
+    'a double bed, two nightstands, a wardrobe',
+    'those pieces must be there; nothing says only, so more may come',
+    'minimum',
+  ),
+  openings: bounded('one window, one door', 'exactly one window and one door'),
+  style: openAxis('each piece designed in a calm oak and linen character, not defaulted'),
+  materials: openAxis('oak, linen and wool chosen for floor, walls and fabrics'),
+  dressing: openAxis('the room dressed lived-in, stated in beyond layer by layer'),
+}
+
+/** "add a lamp next to the sofa": action and dressing bounded by the same words, style open. */
+export const LAMP_AXES: BriefAxes = {
+  action: bounded('add a lamp', 'one object added to a room that exists; no redecoration'),
+  size: openAxis('the lamp sized to the sofa it stands beside'),
+  pieces: bounded('a lamp', 'the one lamp the request names', 'exact'),
+  openings: openAxis('no openings are touched by this addition'),
+  style: openAxis('a sculptural paper lamp echoing the oak sofa'),
+  materials: openAxis('paper shade and oak stem, warm against the sofa'),
+  dressing: bounded('add a lamp', 'the request adds one lamp; the room is not dressed further'),
+}
+
+/** Every axis open, for the briefs whose subject is the source or the gate, not the reading. */
+export const OPEN_AXES: BriefAxes = {
+  action: openAxis('the work the request calls for, designed as a whole'),
+  size: openAxis('sizes chosen to fit the rooms they serve'),
+  pieces: openAxis('the pieces each room needs, designed one by one'),
+  openings: openAxis('openings placed for light and passage room by room'),
+  style: openAxis('each piece designed in one calm character throughout'),
+  materials: openAxis('materials and finishes chosen surface by surface'),
+  dressing: openAxis('the rooms dressed lived-in, stated in beyond'),
+}
+
 const OPEN: DesignBrief = {
-  fixed: ['a 4 by 5 m bedroom', 'a double bed', 'two nightstands', 'a wardrobe'],
-  open: ['style and character', 'the form and finish of each piece', 'materials and finishes'],
+  axes: BEDROOM_AXES,
   source: 'open',
   vision: 'A calm room of oak and linen, low furniture, the bed under the window wall.',
   beyond: DRESSED,
@@ -72,8 +116,12 @@ const OPEN_AS_IS: DesignBrief = {
   asIs: [{ assetId: 'toilet', reason: 'technical equipment, as drawn in the catalog' }],
 }
 const IKEA: DesignBrief = {
-  fixed: ['a 4 by 5 m bedroom', 'furniture from the IKEA range only'],
-  open: ['which pieces', 'the finishes'],
+  axes: {
+    ...OPEN_AXES,
+    action: bounded('a bedroom', 'one bedroom'),
+    pieces: bounded('IKEA furniture only', 'the IKEA range, and nothing else', 'exact'),
+    dressing: bounded('IKEA furniture only', 'the request limits the pieces to the range'),
+  },
   source: 'brand',
   sourceQuote: 'furniture from the IKEA range only',
   brand: 'IKEA',
@@ -106,8 +154,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: OPEN.fixed,
-      open: OPEN.open,
+      axes: OPEN.axes,
       source: 'open',
       vision: OPEN.vision,
       beyond: OPEN.beyond,
@@ -126,8 +173,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: IKEA.fixed,
-      open: IKEA.open,
+      axes: IKEA.axes,
       source: 'brand',
       sourceQuote: IKEA.sourceQuote,
       brand: 'IKEA',
@@ -145,8 +191,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: IKEA.fixed,
-      open: [],
+      axes: IKEA.axes,
       source: 'brand',
       sourceQuote: IKEA.sourceQuote,
       vision: IKEA.vision,
@@ -159,8 +204,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: ['A house (single-family home)'],
-      open: [],
+      axes: OPEN_AXES,
       source: 'catalog',
       vision: 'Furnished from the catalog.',
       beyond: nothing('catalog'),
@@ -172,8 +216,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: ['A house (single-family home)'],
-      open: [],
+      axes: OPEN_AXES,
       source: 'catalog',
       sourceQuote: 'Furnished from the catalog',
       vision: 'Furnished from the catalog.',
@@ -191,8 +234,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: IKEA.fixed,
-      open: [],
+      axes: IKEA.axes,
       source: 'brand',
       sourceQuote: 'IKEA furniture only',
       brand: 'IKEA',
@@ -221,8 +263,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: OPEN.fixed,
-      open: OPEN.open,
+      axes: OPEN.axes,
       source: 'open',
       vision: OPEN.vision,
       beyond: OPEN.beyond,
@@ -246,8 +287,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: OPEN.fixed,
-      open: OPEN.open,
+      axes: OPEN.axes,
       source: 'open',
       vision: OPEN.vision,
       beyond: OPEN.beyond,
@@ -264,8 +304,10 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: ['a bedroom', 'catalog only'],
-      open: [],
+      axes: {
+        ...OPEN_AXES,
+        dressing: bounded('catalog only', 'the request limits the pieces to the catalog'),
+      },
       source: 'catalog',
       sourceQuote: 'catalog only',
       vision: 'The catalog as it is.',
@@ -281,8 +323,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: OPEN.fixed,
-      open: OPEN.open,
+      axes: OPEN.axes,
       source: 'open',
       vision: OPEN.vision,
       beyond: {
@@ -303,8 +344,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: OPEN.fixed,
-      open: OPEN.open,
+      axes: OPEN.axes,
       source: 'open',
       vision: OPEN.vision,
       beyond: DRESSED,
@@ -313,26 +353,35 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     expect: { result: { status: 'recorded', dressing: DRESSING } },
   },
   {
-    name: '"a bedroom with only a bed", every layer none, is recorded: the request limits the pieces',
+    name: '"a bedroom with only a bed and a lamp": pieces exact and dressing bounded by those words, style and materials open, every layer none, is recorded',
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: ['a bedroom with only a bed'],
-      open: [],
+      axes: {
+        ...OPEN_AXES,
+        action: bounded('a bedroom', 'one bedroom'),
+        pieces: bounded('only a bed and a lamp', 'a bed and a lamp, and nothing else', 'exact'),
+        dressing: bounded('only a bed and a lamp', 'the request limits the pieces to those two'),
+        style: openAxis('the bed and the lamp designed plainly in oak and paper'),
+        materials: openAxis('oak, paper and plain cotton chosen for the two pieces'),
+      },
       source: 'open',
-      vision: 'A bed in a plain room.',
-      beyond: nothing('the request says only a bed'),
+      vision: 'A bed and a lamp in a plain room, both designed.',
+      beyond: nothing('the request says only a bed and a lamp'),
     },
     readOnly: true,
     expect: { result: { status: 'recorded', dressing: [] } },
   },
   {
-    name: 'a person’s message that limits the pieces accepts none everywhere, whatever the fixed lines say',
+    name: 'a person’s message in French bounds the dressing by its own words: "rien d’autre" accepts none everywhere',
     tool: 'design_brief',
     scene: storeysScene,
     input: {
-      fixed: ['a bedroom', 'a double bed'],
-      open: [],
+      axes: {
+        ...OPEN_AXES,
+        pieces: bounded('un lit, rien d’autre', 'a bed and nothing else', 'exact'),
+        dressing: bounded('rien d’autre', 'the request limits the pieces to the bed'),
+      },
       source: 'open',
       vision: 'A bed in a plain room.',
       beyond: nothing('the request says nothing else'),
@@ -349,6 +398,104 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     input: sofa,
     context: { designBrief: null },
     expect: { refusal: 'design_brief_required', mentions: BEFORE },
+  },
+  {
+    name: '"add a lamp next to the sofa": action and dressing bounded by "add a lamp", style open with its design, beyond none everywhere, is recorded',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      axes: LAMP_AXES,
+      source: 'open',
+      vision: 'One lamp, designed for the sofa it stands beside.',
+      beyond: nothing('the request adds one lamp'),
+    },
+    readOnly: true,
+    expect: { result: { status: 'recorded', dressing: [] } },
+  },
+  {
+    name: 'the lamp with no style axis is refused, the absent axis named',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      axes: { ...LAMP_AXES, style: undefined },
+      source: 'open',
+      vision: 'One lamp beside the sofa.',
+      beyond: nothing('the request adds one lamp'),
+    },
+    expect: { refusal: 'axis_missing', mentions: ['style is absent'] },
+  },
+  {
+    name: 'the lamp with style open and no design statement is refused: an open axis says how it is designed',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      axes: { ...LAMP_AXES, style: openAxis('') },
+      source: 'open',
+      vision: 'One lamp beside the sofa.',
+      beyond: nothing('the request adds one lamp'),
+    },
+    expect: {
+      refusal: 'axis_open_without_design',
+      mentions: ['The style is open: say how it is designed.'],
+    },
+  },
+  {
+    name: 'a bounded axis whose quote is not in the person’s message is refused with the fact',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      axes: { ...LAMP_AXES, style: bounded('in brass and glass', 'brass and glass, as asked') },
+      source: 'open',
+      vision: 'One lamp beside the sofa.',
+      beyond: nothing('the request adds one lamp'),
+    },
+    context: { requestText: 'add a lamp next to the sofa' },
+    surfaces: ['core', 'chat'],
+    expect: {
+      refusal: 'axis_quote_not_in_request',
+      mentions: [
+        "The style is bounded by the request's own words: its quote must be words of the person's message.",
+      ],
+    },
+  },
+  {
+    name: '"Build a house" with the dressing bounded by "a house" is recorded: the quote is in the message, and whether it bounds the dressing is the brief’s reading',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      axes: {
+        ...OPEN_AXES,
+        action: bounded('a house', 'one house'),
+        dressing: bounded('a house', 'read as the house alone, undressed'),
+      },
+      source: 'open',
+      vision: 'A house, plainly built.',
+      beyond: nothing('read as the house alone'),
+    },
+    context: { requestText: 'Build a house' },
+    surfaces: ['core', 'chat'],
+    readOnly: true,
+    expect: { result: { status: 'recorded', dressing: [] } },
+  },
+  {
+    name: 'the bedroom with the dressing bounded by "a double bed" is refused: the named pieces are a minimum and do not bound the dressing',
+    tool: 'design_brief',
+    scene: storeysScene,
+    input: {
+      axes: {
+        ...BEDROOM_AXES,
+        dressing: bounded('a double bed', 'the bed is the room’s dressing'),
+      },
+      source: 'open',
+      vision: 'A bed in a plain room.',
+      beyond: nothing('the bed is enough'),
+    },
+    expect: {
+      refusal: 'dressing_bounded_by_minimum',
+      mentions: [
+        'The pieces the request names are a minimum: they do not bound the dressing. The dressing is bounded only by words that limit the pieces or the action.',
+      ],
+    },
   },
   {
     name: 'before a brief, the owner’s bedroom is not furnished in one call',
