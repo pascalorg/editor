@@ -163,7 +163,7 @@ export const authorSceneLevel = z.object({
 export const authorScenePayload = z.object({
   levels: z.array(authorSceneLevel).min(1),
   notes: z
-    .array(z.string().max(400))
+    .array(z.string().max(1200))
     .default([])
     .describe(
       'What you could not convert, or converted with a change, one sentence each. Kept with the scene.',

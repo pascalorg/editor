@@ -132,6 +132,9 @@ describe('author_scene (MCP)', () => {
     // Two artifacts per item (GLB + code), plus the module and the adapter.
     expect(stored.filter((s) => s.startsWith('model/gltf-binary'))).toHaveLength(2)
     expect(stored.filter((s) => s.startsWith('text/javascript'))).toHaveLength(4)
+    // The light rides on its fixture through the bridge, not only in the operation's draft.
+    const lamp = await client.callTool({ name: 'find_by_type', arguments: { type: 'item' } })
+    expect(JSON.stringify(lamp.structuredContent ?? lamp.content)).toContain('Lamp')
     const walls = await client.callTool({ name: 'get_walls', arguments: {} })
     expect(JSON.stringify(walls.structuredContent)).toContain('"height":2.7')
   })

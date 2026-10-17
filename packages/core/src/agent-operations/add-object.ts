@@ -201,10 +201,15 @@ function refuseWallOrSlabShape(
       { label },
     )
   const base = input.position?.[1] ?? 0
+  // A rug, carpet or mat is a thin wide box on the floor by nature, not a floor plate.
+  const covering = /\b(rug|carpet|mat|runner)\b/i.test(
+    `${input.name ?? ''} ${input.category ?? ''}`,
+  )
   if (
     height <= 0.35 &&
     short >= 2 &&
     base <= 0.05 &&
+    !covering &&
     shareOverFloor(nodes, levelId, compiled, input) < FLOOR_SHARE
   ) {
     // Its extent along x and z as it stands, so the numbers match the outline the agent drew.

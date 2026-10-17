@@ -161,7 +161,11 @@ describe('author_scene', () => {
     }
     const bedNode = byType('item').find((n) => (n as { name?: string }).name === 'Bed')!
     expect(lamp.parentId).toBe(bedNode.id)
-    expect(lamp.interactive?.effects).toHaveLength(1)
+    expect(
+      (lamp as unknown as { asset: { interactive?: { effects: unknown[] } } }).asset.interactive
+        ?.effects,
+    ).toHaveLength(1)
+    expect(r.ids.bed).toBe(bedNode.id)
     const painted = byType('wall').find(
       (w) =>
         (w as { metadata: { authorScene: { id: string } } }).metadata.authorScene.id === 'north',

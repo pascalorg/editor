@@ -55,6 +55,8 @@ export type AuthorSceneReport = {
   snapped: { id: string; end: 'start' | 'end'; movedM: number }[]
   defects: AuthorSceneDefect[]
   notes: string[]
+  /** The payload's own ids (walls, `wall/i` openings, `room/level/i`, items) to the nodes written. */
+  ids: Record<string, string>
 }
 
 const JOIN_REACH = 0.3
@@ -152,6 +154,7 @@ export function authorScene(
     snapped: [],
     defects: [],
     notes: [...payload.notes],
+    ids: {},
   }
   const defect = (id: string, code: string, message: string) =>
     report.defects.push({ id, code, message })
@@ -249,6 +252,7 @@ export function authorScene(
       })
       place(node)
       wallNodes.set(w.spec.id, node)
+      report.ids[w.spec.id] = node.id
       report.walls++
       // ---------- its openings ----------
       const length = dist(w.start, w.end)
@@ -294,6 +298,7 @@ export function authorScene(
                 position: [x, o.sill + o.height / 2, 0],
               })
         draft[opening.id] = opening
+        report.ids[id] = opening.id
         node.children.push(opening.id as never)
         if (o.kind === 'door') report.doors++
         else report.windows++
@@ -313,6 +318,7 @@ export function authorScene(
         polygon: s.polygon,
         elevation: s.top,
         thickness: s.thickness,
+        ...(finishRef(s.finish) ? { slots: { surface: finishRef(s.finish) } } : {}),
         ...(s.railing?.length
           ? { railing: s.railing.map((r) => ({ start: r.start, end: r.end })) }
           : {}),
@@ -330,7 +336,7 @@ export function authorScene(
         metadata: { authorScene: { color: c.color ?? null } },
         ...(c.name ? { name: c.name } : {}),
         position: [c.position[0], 0, c.position[1]],
-        shape: 'square',
+        crossSection: 'square',
         width: c.width,
         depth: c.depth,
         height: c.height,
@@ -387,6 +393,7 @@ export function authorScene(
             const parent = draft[parentId ?? levelNode.id] as AnyNode & { children?: string[] }
             parent.children = [...(parent.children ?? []), node.id]
             itemNodeIds.set(item.id, node.id)
+            report.ids[item.id] = node.id
             itemPositions.set(item.id, [item.position[0]!, item.position[1]!, item.position[2]!])
             report.items++
           }
@@ -423,11 +430,16 @@ export function authorScene(
         )
       }
       const hostNode = draft[itemNodeIds.get(hostKey)!] as AnyNode & {
-        interactive?: { controls?: unknown[]; effects?: unknown[] }
+        asset: { interactive?: { controls: unknown[]; effects: unknown[] } }
       }
       const hostPos = itemPositions.get(hostKey)!
+      // Where add_object keeps an object's lights: the asset's interactive block, with a toggle.
+      const interactive = hostNode.asset.interactive ?? { controls: [], effects: [] }
+      const controls = interactive.controls.some((c) => (c as { kind?: string }).kind === 'toggle')
+        ? interactive.controls
+        : [...interactive.controls, { kind: 'toggle', label: 'Lights', default: true }]
       const effects = [
-        ...(hostNode.interactive?.effects ?? []),
+        ...interactive.effects,
         {
           kind: 'light',
           color: light.color,
@@ -440,7 +452,7 @@ export function authorScene(
         },
       ]
       draft[hostNode.id] = Object.assign({}, hostNode, {
-        interactive: { controls: hostNode.interactive?.controls ?? [], effects },
+        asset: { ...hostNode.asset, interactive: { controls, effects } },
       }) as unknown as AnyNode
       report.lights++
     }
@@ -473,12 +485,22 @@ export function authorScene(
     draft[zone.parentId!] = { ...level, children: [...level.children, zone.id] } as AnyNode
     report.rooms++
   }
+  const claimed = new Map<string, string>()
   payload.levels.forEach((level, index) => {
     const levelNode = levelNodes[index]!
     for (const [i, room] of level.rooms.entries()) {
       const zone = zones.find(
         (z) => z.parentId === levelNode.id && pointInPolygon(room.seed, z.polygon),
       )
+      // Two seeds in one enclosure: the walls do not separate the rooms the payload names.
+      if (zone && claimed.has(zone.id)) {
+        defect(
+          `room/${index}/${i}`,
+          'room_shares_enclosure',
+          `"${room.name}" and "${claimed.get(zone.id)}" are one enclosure: no wall separates them.`,
+        )
+        continue
+      }
       if (!zone) {
         defect(
           `room/${index}/${i}`,
@@ -508,6 +530,8 @@ export function authorScene(
           : {}),
         metadata: { ...zone.metadata, authorScene: { seed: room.seed } },
       })
+      claimed.set(zone.id, room.name)
+      report.ids[`room/${index}/${i}`] = zone.id
       report.roomsNamed++
     }
   })
