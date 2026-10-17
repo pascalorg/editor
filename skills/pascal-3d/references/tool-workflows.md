@@ -51,6 +51,15 @@ If a live-sync version conflict occurs, call `load_scene`, inspect the newer gra
 
 `add_object`, and `add_window`, `add_door` or `add_column` with `code` or new params on a scripted node, compile in the user's open Pascal editor tab of the project (a `bpy` module builds in Pascal's Blender service instead, with no tab). When none is open the call answers `editor_tab_required` with `editorUrl` and `mutationApplied: false`; nothing changed. Show the user the link, wait until they confirm the tab is open, and repeat the same call. `editor_tab_busy` means a tab is open but busy or still loading: wait a few seconds and repeat the same call, without asking the user. Whether you may open the link yourself is the person's setting ("Agents may open the editor for me"; Ask first: ask the user to open the link (or bring the tab forward), or ask their permission before opening it yourself; Allow: you may open the link yourself, in a tab in front; Never: ask the user, and do not open or switch windows yourself); the refusal's words say which, so follow them. `editor_tab_timeout` means the tab stopped answering; ask whether it is still open, then retry. `script_failed` is the module's own error: fix the code.
 
+## Convert a design written as three.js
+
+`author_scene` turns a whole design you wrote as one three.js module into native, editable Pascal nodes in one call. The reading is yours; the writing is Pascal's.
+
+1. Read your module: its source for intent (helper names, declared opening types), the executed graph for truth (world transforms, deleted objects gone). Most designs make walls with a helper such as `wall(x1, z1, x2, z2, height, thickness, openings)`: those arguments are the payload's walls.
+2. Build the payload: per level, `walls` (centerline `start`/`end`, `height`, `thickness`, `color`, `openings` with `kind`, `along` from the wall's start, `width`, `height`, `sill`), `rooms` (`name`, `seed`, `floor` as `library:<id>` from `search_materials` or `#rrggbb`), `slabs`, `columns`, `items` (`id`, `name`, `category`, `code` as its own module, `position` at its bottom centre, `rotation`, `host` for a lamp on a nightstand), `lights` (`position`, `fixture`). End a partition on the centerline of the wall it meets. One item per piece: a bed, each nightstand, each chair.
+3. Call `author_scene` with `payload`, `module` and `adapter` (your program). Read the report: `defects` by your own ids with a code (`compile_failed`, `room_not_enclosed`, `host_missing`, `use_slab`…), `snapped` wall ends, `verify` issues, `itemsCompiled`, the editor link.
+4. Fix the program, not the payload by hand, and call again with `replace: true`. Stop when `green` is true and the scene looks like the design. Report what you could not convert in `notes`.
+
 ## Wrap a window around a corner
 
 Where a photo's glass meets at a corner with no wall between the panes, build one corner window rather than two windows near the corner (which leave it solid).
