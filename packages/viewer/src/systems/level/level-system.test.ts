@@ -218,6 +218,34 @@ describe('a level a construction reveal is playing on', () => {
 })
 
 describe('snapLevelsToTruePositions', () => {
+  test.each(['missing', 'unmounted', 'unindexed', 'hidden-level', 'hidden-building'])(
+    'refuses Solo for a %s floor before changing the live presentation',
+    (condition) => {
+      const { building, levels, objects } = setupLevels([0.5, 1.25])
+      const selected = levels[1]!
+      if (condition === 'missing') {
+        const nodes = { ...useScene.getState().nodes }
+        delete nodes[selected.id as AnyNodeId]
+        useScene.setState({ nodes })
+      } else if (condition === 'unmounted') sceneRegistry.nodes.delete(selected.id)
+      else if (condition === 'unindexed') sceneRegistry.byType.level!.delete(selected.id)
+      else hideLevel(condition === 'hidden-level' ? selected.id : building.id)
+      const snapshot = () =>
+        objects.map((obj) => ({
+          y: obj.position.y,
+          visible: obj.visible,
+          mask: obj.layers.mask,
+        }))
+      const before = snapshot()
+      const graph = useScene.getState().nodes
+      const preferences = useViewer.getState()
+      expect(() => presentLevelsForCapture({ mode: 'solo', levelId: selected.id })).toThrow()
+      expect(snapshot()).toEqual(before)
+      expect(useScene.getState().nodes).toBe(graph)
+      expect(useViewer.getState()).toBe(preferences)
+    },
+  )
+
   test('captures exact Solo and Exploded states, retaining batch masks and restoring live state', () => {
     const { levels, objects } = setupLevels([0.5, 1.25, 0])
     objects[0]!.visible = false
@@ -234,7 +262,9 @@ describe('snapLevelsToTruePositions', () => {
     const batchMask = batchSource.layers.mask
     let restore = presentLevelsForCapture({ mode: 'exploded' })
     expect(objects.map((obj) => obj.position.y)).toEqual([0.5, 9.25, 16.75])
-    expect(objects.every((obj) => obj.visible && obj.layers.isEnabled(SCENE_LAYER))).toBe(true)
+    expect(objects.every((obj) => obj.visible)).toBe(true)
+    expect(objects.map((obj) => obj.layers.isEnabled(SCENE_LAYER))).toEqual([true, true, false])
+    expect(objects[2]!.layers.isEnabled(SHADOW_ONLY_LAYER)).toBe(false)
     expect(batchSource.layers.isEnabled(BATCHED_LAYER)).toBe(true)
     expect(batchSource.layers.isEnabled(SCENE_LAYER)).toBe(false)
     restore()
@@ -245,7 +275,16 @@ describe('snapLevelsToTruePositions', () => {
     expect(objects[0]!.visible).toBe(false)
     expect(objects[1]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
     expect(objects[2]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
-    expect(objects[2]!.layers.isEnabled(SHADOW_ONLY_LAYER)).toBe(true)
+    expect(objects[2]!.layers.isEnabled(SHADOW_ONLY_LAYER)).toBe(false)
+    restore()
+    expect(snapshot()).toEqual(before)
+    restore = presentLevelsForCapture({ mode: 'solo', levelId: levels[2]!.id })
+    expect(objects[2]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    restore()
+    expect(snapshot()).toEqual(before)
+    restore = presentLevelsForCapture({ mode: 'stacked' })
+    expect(objects.map((obj) => obj.position.y)).toEqual([0.5, 4.25, 6.75])
+    expect(objects.map((obj) => obj.layers.isEnabled(SCENE_LAYER))).toEqual([true, true, false])
     restore()
     expect(snapshot()).toEqual(before)
     expect(batchSource.layers.mask).toBe(batchMask)

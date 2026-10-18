@@ -122,6 +122,7 @@ describe('view_scene over the MCP', () => {
           height: request.size.h,
           tab: 'tab_1',
           capturedAt: '2026-10-12T09:00:00.000Z',
+          presentation: request.presentation,
         }
       },
     })
@@ -140,12 +141,43 @@ describe('view_scene over the MCP', () => {
         { mode: 'exploded' },
         { mode: 'stacked' },
       ]) {
-        expect((await view.call({ presentation })).isError).toBe(false)
+        const result = await view.call({ presentation })
+        expect(result.isError).toBe(false)
+        expect(json(result.content).presentation).toEqual(presentation)
         expect(asked.at(-1)?.presentation).toEqual(presentation)
         expect(asked.at(-1)).not.toHaveProperty('interior')
       }
     } finally {
       await view.close()
+    }
+  })
+
+  test('an unconfirmed or different level view is refused, never labelled as verified', async () => {
+    for (const presentation of [
+      undefined,
+      { mode: 'stacked' as const },
+      { mode: 'solo' as const, levelId: 'level_wrong' },
+    ]) {
+      const view = await viewWith({
+        capture: async () => ({
+          image: new Uint8Array([1]),
+          mimeType: 'image/webp',
+          width: 640,
+          height: 400,
+          tab: 'tab_old',
+          capturedAt: '2026-10-18T18:00:00Z',
+          presentation,
+        }),
+      })
+      try {
+        const result = await view.call({ presentation: { mode: 'solo', levelId: view.levelId } })
+        expect(result.isError).toBe(true)
+        expect(json(result.content)).toMatchObject({ code: 'view_presentation_unconfirmed' })
+        expect(result.content.some((part) => part.type === 'image')).toBe(false)
+        expect((await view.call({})).isError).toBe(false)
+      } finally {
+        await view.close()
+      }
     }
   })
 

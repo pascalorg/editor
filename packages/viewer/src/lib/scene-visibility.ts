@@ -72,8 +72,7 @@ export function temporarilyHideFromScene(root: Object3D, reason: HiddenReason): 
     masks.set(obj, obj.layers.mask)
     const hold = (obj as Holder)[HOLD]
     const reasons = new Set(hold?.reasons)
-    // Captures lift the person's presentation, but keep batch ownership intact.
-    reasons.delete('isolated')
+    // Changing level presentation must not reveal isolated geometry or duplicate batch shadows.
     reasons.delete('shadow-only')
     reasons.add(reason)
     applyHold(obj, { original: hold?.original ?? obj.layers.mask, reasons })

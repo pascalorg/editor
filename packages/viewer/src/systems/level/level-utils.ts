@@ -5,7 +5,10 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import type { SceneViewPresentation } from '@pascal-app/core/agent-operations'
+import {
+  type SceneViewPresentation,
+  sceneViewPresentationLevel,
+} from '@pascal-app/core/agent-operations'
 import {
   temporarilyHideFromScene,
   temporarilyShowPresentation,
@@ -152,10 +155,12 @@ export function snapLevelsToTruePositions({
 /** The viewer's settled level presentation for one render, without changing saved preferences. */
 export function presentLevelsForCapture(presentation: SceneViewPresentation): () => void {
   const nodes = useScene.getState().nodes
-  const selected =
-    presentation.mode === 'solo' ? nodes[presentation.levelId as LevelNode['id']] : undefined
-  if (presentation.mode === 'solo' && selected?.type !== 'level')
-    throw new Error('The level to capture no longer exists. Try again.')
+  const selected = sceneViewPresentationLevel(nodes, presentation)
+  if (
+    selected &&
+    (!sceneRegistry.nodes.has(selected.id) || !sceneRegistry.byType.level?.has(selected.id))
+  )
+    throw new Error('The level to capture is not ready in this renderer. Try again.')
   const restores = [snapLevelsToTruePositions({ readOnly: true })]
   for (const levelId of sceneRegistry.byType.level ?? []) {
     const obj = sceneRegistry.nodes.get(levelId)
@@ -173,7 +178,9 @@ export function presentLevelsForCapture(presentation: SceneViewPresentation): ()
       revealing: false,
     })
     obj.visible = visible
-    restores.push(temporarilyShowPresentation(obj))
+    restores.push(
+      level.id === selected?.id ? temporarilyShowPresentation(obj) : temporarilyShowShadowOnly(obj),
+    )
     if (shadowOnly) restores.push(temporarilyHideFromScene(obj, 'shadow-only'))
   }
   return () => {

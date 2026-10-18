@@ -226,6 +226,7 @@ export interface SnapshotCapturedEvent {
   blob: Blob
   width: number
   height: number
+  presentation?: SceneViewPresentation
 }
 
 export interface ThumbnailGenerateEvent {

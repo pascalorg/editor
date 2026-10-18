@@ -56,6 +56,7 @@ export interface SnapshotCameraData {
   zoom?: number
   captureMode?: 'standard' | 'viewport' | 'area'
   resolution?: { w: number; h: number }
+  presentation?: ThumbnailGenerateEvent['presentation']
 }
 
 interface ThumbnailGeneratorProps {
@@ -945,7 +946,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // those meshes before either snapshot render path submits them,
               // and restore fog afterwards so the atmosphere never leaks in.
               restore(refreshIsolation(scene))
-              if (event.presentation) restore(presentLevelsForCapture(event.presentation))
+              if (event.presentation) {
+                restore(presentLevelsForCapture(event.presentation))
+                cameraData.presentation = event.presentation
+              }
               if (interior) {
                 interiorCutaway(interior.levelId, restore)
                 restore(lightInterior(scene, thumbnailCamera))

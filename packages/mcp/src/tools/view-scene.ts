@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  confirmSceneViewPresentation,
   type SceneViewCrop,
   type SceneViewInterior,
   type SceneViewLighting,
@@ -23,6 +24,7 @@ export type SceneViewCapture = {
   /** Which tab rendered it, and when: the scene as that tab showed it then. */
   tab: string
   capturedAt: string
+  presentation?: SceneViewPresentation
 }
 
 /**
@@ -90,13 +92,14 @@ export function registerViewScene(
           }),
           crop ? views!.crop!(crop) : undefined,
         ])
+        confirmSceneViewPresentation(presentation, shot.presentation)
         const payload = {
           status: 'viewed',
           camera: pose,
           size: { width: shot.width, height: shot.height },
           tab: shot.tab,
           capturedAt: shot.capturedAt,
-          ...(presentation ? { presentation } : {}),
+          ...(shot.presentation ? { presentation: shot.presentation } : {}),
           note: sceneViewNote(),
           ...(crop && cropped
             ? {

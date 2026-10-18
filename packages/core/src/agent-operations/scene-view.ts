@@ -13,6 +13,7 @@ import type {
   ColumnNode,
   FenceNode,
   ItemNode,
+  LevelNode,
   RoofNode,
   SlabNode,
   StairNode,
@@ -75,6 +76,42 @@ export type SceneViewInterior = { levelId: string }
 export type SceneViewPresentation =
   | { mode: 'stacked' | 'exploded' }
   | { mode: 'solo'; levelId: string }
+
+/** Validate against the scene being rendered as well as the scene used to request the view. */
+export function sceneViewPresentationLevel(
+  nodes: Readonly<Record<string, AnyNode>>,
+  presentation: SceneViewPresentation | undefined,
+): LevelNode | undefined {
+  if (presentation?.mode !== 'solo') return undefined
+  const level = nodes[presentation.levelId]
+  if (level?.type !== 'level')
+    refuse('presentation_level_invalid', 'Solo needs an existing level id.', {
+      levelId: presentation.levelId,
+    })
+  if (ancestry(nodes, level).some((node) => node.visible === false && node.type !== 'site'))
+    refuse('presentation_level_hidden', 'Show the level before inspecting it in Solo.', {
+      levelId: level.id,
+    })
+  return level
+}
+
+/** Older renderers may ignore new view options; their frames cannot verify those views. */
+export function confirmSceneViewPresentation(
+  requested: SceneViewPresentation | undefined,
+  applied: SceneViewPresentation | undefined,
+): void {
+  if (
+    requested &&
+    (applied?.mode !== requested.mode ||
+      (requested.mode === 'solo' &&
+        (applied?.mode !== 'solo' || applied.levelId !== requested.levelId)))
+  )
+    refuse(
+      'view_presentation_unconfirmed',
+      'The renderer did not confirm the requested level view. Refresh the renderer and retry; this picture cannot verify Solo or Exploded behavior.',
+      { requested, applied: applied ?? null },
+    )
+}
 
 /** How high up its storey an interior view cuts a floor: low enough to see every room. */
 const INTERIOR_CUT = 0.65
@@ -847,21 +884,11 @@ export function sceneViewPlan(
   const presentation = input.presentation
   if (presentation && input.interior)
     refuse('presentation_and_interior', 'Choose a level presentation or a clipped interior view.')
-  let solo: AnyNode | undefined
-  if (presentation?.mode === 'solo') {
-    const levelId = presentation.levelId
-    solo = nodes[levelId]
-    if (solo?.type !== 'level')
-      refuse('presentation_level_invalid', 'Solo needs an existing level id.', {
-        levelId: presentation.levelId,
-      })
-    if (ancestry(nodes, solo).some((node) => node.visible === false && node.type !== 'site'))
-      refuse('presentation_level_hidden', 'Show the level before inspecting it in Solo.', {
-        levelId: solo.id,
-      })
+  const solo = sceneViewPresentationLevel(nodes, presentation)
+  if (solo) {
     if (input.target && !nodes[input.target])
       refuse('target_not_found', 'The target is not in the scene.', { target: input.target })
-    if (input.target && !ancestry(nodes, nodes[input.target]!).some((node) => node.id === levelId))
+    if (input.target && !ancestry(nodes, nodes[input.target]!).some((node) => node.id === solo.id))
       refuse('presentation_target_elsewhere', 'The target must belong to the soloed level.', {
         target: input.target,
         levelId: solo.id,
