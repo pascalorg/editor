@@ -18,7 +18,23 @@ describe('SiteNode.terrain', () => {
         backgroundSky: null,
         ambient: { color: '#ffffff', intensity: 0 },
         hemi: { sky: '#e5f1ff', ground: '#92866c', intensity: 0.95 },
-        lights: [{ position: [-17, 29, 18], color: '#fff2d6', intensity: 2.8, castShadow: true }],
+        lights: [
+          {
+            position: [-17, 29, 18],
+            target: [0, 0, 0],
+            color: '#fff2d6',
+            intensity: 2.8,
+            castShadow: true,
+            shadow: {
+              intensity: 1,
+              mapSize: 4096,
+              bias: -0.0002,
+              normalBias: 0.015,
+              radius: 1,
+              camera: { left: -26, right: 26, top: 26, bottom: -26, near: 0.5, far: 500 },
+            },
+          },
+        ],
         environment: { source: 'room', intensity: 0.28 },
       },
       postprocessing: { ambientOcclusion: false, colorGrading: false },
@@ -32,6 +48,21 @@ describe('SiteNode.terrain', () => {
       SiteNode.safeParse({ ...legacy, presentation: { lighting: { background: 'url(secret)' } } })
         .success,
     ).toBe(false)
+    for (const shadow of [
+      { mapSize: 8192 },
+      { intensity: 1.1 },
+      { camera: { left: 26, right: -26, top: 26, bottom: -26, near: 0.5, far: 500 } },
+      { camera: { left: -26, right: 26, top: 26, bottom: -26, near: 500, far: 0.5 } },
+    ]) {
+      expect(
+        SiteNode.safeParse({
+          ...legacy,
+          presentation: {
+            lighting: { lights: [{ ...presentation.lighting.lights[0], shadow }] },
+          },
+        }).success,
+      ).toBe(false)
+    }
   })
   test('ground presentation is optional and survives a scene round-trip without changing children', () => {
     const original = SiteNode.parse({ id: 'site_authored-ground', children: ['building_house'] })

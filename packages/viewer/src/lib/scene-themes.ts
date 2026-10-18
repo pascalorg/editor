@@ -18,12 +18,7 @@ export type SceneTheme = {
   ground: string
   ambient: { color: string; intensity: number }
   hemi?: { sky: string; ground: string; intensity: number }
-  lights: Array<{
-    position: [number, number, number]
-    color: string
-    intensity: number
-    castShadow?: boolean
-  }>
+  lights: NonNullable<NonNullable<SitePresentation['lighting']>['lights']>
   toneMappingExposure: number
   environment?: NonNullable<SitePresentation['lighting']>['environment']
   postprocessing?: SitePresentation['postprocessing']

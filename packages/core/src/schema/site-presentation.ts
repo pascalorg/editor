@@ -3,6 +3,21 @@ import { z } from 'zod'
 const color = z.string().regex(/^#[\da-f]{6}$/i)
 const intensity = z.number().nonnegative()
 const light = z.object({ color, intensity })
+const vector = z.tuple([z.number(), z.number(), z.number()])
+const shadowCamera = z
+  .object({
+    left: z.number(),
+    right: z.number(),
+    top: z.number(),
+    bottom: z.number(),
+    near: z.number().positive(),
+    far: z.number().positive(),
+  })
+  .refine(
+    (camera) =>
+      camera.left < camera.right && camera.bottom < camera.top && camera.near < camera.far,
+    'A shadow camera needs ordered horizontal, vertical and depth bounds.',
+  )
 
 /** Saved rendering defaults. Geometry and canonical bake visibility are independent. */
 export const SitePresentation = z.object({
@@ -21,8 +36,22 @@ export const SitePresentation = z.object({
       lights: z
         .array(
           light.extend({
-            position: z.tuple([z.number(), z.number(), z.number()]),
+            position: vector,
+            target: vector.optional(),
             castShadow: z.boolean().optional(),
+            shadow: z
+              .object({
+                intensity: z.number().min(0).max(1).optional(),
+                bias: z.number().optional(),
+                normalBias: intensity.optional(),
+                radius: intensity.optional(),
+                // One 4096 square map is the shared viewer's authored-shadow memory budget.
+                mapSize: z
+                  .union([z.literal(512), z.literal(1024), z.literal(2048), z.literal(4096)])
+                  .optional(),
+                camera: shadowCamera.optional(),
+              })
+              .optional(),
           }),
         )
         .optional(),

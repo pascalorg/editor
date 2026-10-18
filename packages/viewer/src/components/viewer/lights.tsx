@@ -116,6 +116,8 @@ export function Lights() {
   useFrame((state, delta) => {
     // Clamp delta to avoid huge jumps on tab switch.
     const dt = Math.min(delta, 0.1) * 4
+    const sourceShadow = atmosphere ? undefined : theme.lights[0]?.shadow
+    const sourceCamera = sourceShadow?.camera
 
     // Atmosphere directions are stable mutable vectors. Keep both light
     // resources mounted and move them imperatively so time/angle changes never
@@ -129,6 +131,15 @@ export function Lights() {
         light.target.position.set(0, 0, 0)
         light.target.updateMatrixWorld()
       }
+    } else {
+      for (const index of lightSlots) {
+        const light = lightRefs.current[index]
+        const config = theme.lights[index]
+        if (!light || !config || (index === 0 && shadows && !sourceCamera)) continue
+        light.position.set(...config.position)
+        light.target.position.set(...(config.target ?? [0, 0, 0]))
+        light.target.updateMatrixWorld()
+      }
     }
 
     // Fit the single key-light shadow frustum to the BUILDING geometry rather
@@ -136,7 +147,7 @@ export function Lights() {
     // frustum extents are derived here.
     if (shadows) {
       const now = state.clock.elapsedTime
-      if (now - lastBoundsTime.current >= BOUNDS_REFRESH_INTERVAL) {
+      if (!sourceCamera && now - lastBoundsTime.current >= BOUNDS_REFRESH_INTERVAL) {
         lastBoundsTime.current = now
         const box = boundsBox.current.makeEmpty()
         for (const [id, obj] of sceneRegistry.nodes) {
@@ -180,31 +191,49 @@ export function Lights() {
           shadowDir.current.copy(atmosphere.sunDirection)
         } else if (themeKey) {
           shadowDir.current.set(...themeKey.position)
+          if (themeKey.target) {
+            const [x, y, z] = themeKey.target
+            shadowDir.current.x -= x
+            shadowDir.current.y -= y
+            shadowDir.current.z -= z
+          }
         } else {
           shadowDir.current.set(0, 1, 0)
         }
         if (shadowDir.current.lengthSq() === 0) shadowDir.current.set(0, 1, 0)
         shadowDir.current.normalize().multiplyScalar(distance)
-        light.position.copy(focus).add(shadowDir.current)
-        light.target.position.copy(focus)
-        light.target.updateMatrixWorld()
+        if (!sourceCamera) {
+          light.position.copy(focus).add(shadowDir.current)
+          light.target.position.copy(focus)
+          light.target.updateMatrixWorld()
+        } else if (directionOverride && themeKey) {
+          const [x, y, z] = themeKey.position
+          const [tx, ty, tz] = themeKey.target ?? [0, 0, 0]
+          shadowDir.current.normalize().multiplyScalar(Math.hypot(x - tx, y - ty, z - tz) || 1)
+          light.position.set(tx, ty, tz).add(shadowDir.current)
+        }
 
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
         if (cam) {
           // The calibrated building bias detaches furniture-scale contact shadows.
           // Small scenes need finer shadow edges too; retain the building map budget.
-          const smallScene = shadowRadius.current < 1.5
-          light.shadow.mapSize.setScalar(smallScene ? 2048 : 1024)
-          light.shadow.normalBias = smallScene
-            ? Math.min(SHADOW_NORMAL_BIAS, (4 * size) / light.shadow.mapSize.x)
-            : SHADOW_NORMAL_BIAS
+          const smallScene = !sourceCamera && shadowRadius.current < 1.5
+          light.shadow.mapSize.setScalar(sourceShadow?.mapSize ?? (smallScene ? 2048 : 1024))
+          light.shadow.bias = sourceShadow?.bias ?? SHADOW_DEPTH_BIAS
+          light.shadow.radius = sourceShadow?.radius ?? 2
+          light.shadow.normalBias =
+            sourceShadow?.normalBias ??
+            (smallScene
+              ? Math.min(SHADOW_NORMAL_BIAS, (4 * size) / light.shadow.mapSize.x)
+              : SHADOW_NORMAL_BIAS)
           cam.layers.enable(SHADOW_ONLY_LAYER)
-          cam.left = -size
-          cam.right = size
-          cam.top = size
-          cam.bottom = -size
-          cam.near = near
-          cam.far = far
+          // A retained source frustum keeps distant context from diluting the building's shadows.
+          cam.left = sourceCamera?.left ?? -size
+          cam.right = sourceCamera?.right ?? size
+          cam.top = sourceCamera?.top ?? size
+          cam.bottom = sourceCamera?.bottom ?? -size
+          cam.near = sourceCamera?.near ?? near
+          cam.far = sourceCamera?.far ?? far
           cam.updateProjectionMatrix()
           if (SHADOW_CAMERA_DEBUG) {
             let helper = shadowHelpers.current[0]
@@ -249,7 +278,8 @@ export function Lights() {
       }
 
       if (index === 0 && light.shadow?.intensity !== undefined) {
-        const shadowIntensity = intensity <= 1 ? intensity : MAX_SHADOW_INTENSITY
+        const shadowIntensity =
+          sourceShadow?.intensity ?? (intensity <= 1 ? intensity : MAX_SHADOW_INTENSITY)
         light.shadow.intensity =
           atmosphere || !initialized.current
             ? shadowIntensity
