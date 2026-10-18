@@ -275,6 +275,47 @@ export function SiteNodePanel() {
         </label>
       </PanelSection>
 
+      <PanelSection title="Project look">
+        <p className="text-muted-foreground text-xs">
+          Save the current lighting and display as this project's default. Personal display changes
+          stay in this browser.
+        </p>
+        <ActionGroup>
+          <ActionButton
+            label="Save current look"
+            onClick={() => {
+              const viewer = useViewer.getState()
+              const look = viewer.sceneAppearance
+              update({
+                presentation: {
+                  ...node.presentation,
+                  theme: viewer.sceneTheme,
+                  exposure: look.toneMappingExposure,
+                  shading: viewer.shading,
+                  edges: viewer.edges,
+                  shadows: viewer.shadows,
+                  lighting: {
+                    background: look.background,
+                    backgroundSky: look.backgroundSky,
+                    ground: look.ground,
+                    ambient: look.ambient,
+                    hemi: look.hemi,
+                    lights: look.lights,
+                    environment: look.environment,
+                  },
+                  postprocessing: look.postprocessing,
+                },
+              })
+              viewer.resetProjectLook()
+            }}
+          />
+          <ActionButton
+            label="Use project look"
+            onClick={() => useViewer.getState().resetProjectLook()}
+          />
+        </ActionGroup>
+      </PanelSection>
+
       <PanelSection title="Terrain">
         <label className="flex items-center gap-2 text-sm">
           <input

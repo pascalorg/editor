@@ -5,6 +5,34 @@ import { SiteNode } from './site'
 import { migrateSiteMetadata } from './site-facts'
 
 describe('SiteNode.terrain', () => {
+  test('project rendering defaults round-trip without changing geometry or legacy scenes', () => {
+    const legacy = SiteNode.parse({ id: 'site_look', children: ['building_house'] })
+    expect(legacy.presentation).toBeUndefined()
+    const presentation = {
+      theme: 'studio',
+      exposure: 0.94,
+      shading: 'rendered',
+      edges: 'off',
+      lighting: {
+        background: '#dce4e5',
+        backgroundSky: null,
+        ambient: { color: '#ffffff', intensity: 0 },
+        hemi: { sky: '#e5f1ff', ground: '#92866c', intensity: 0.95 },
+        lights: [{ position: [-17, 29, 18], color: '#fff2d6', intensity: 2.8, castShadow: true }],
+        environment: { source: 'room', intensity: 0.28 },
+      },
+      postprocessing: { ambientOcclusion: false, colorGrading: false },
+    }
+    const restored = SiteNode.parse(JSON.parse(JSON.stringify({ ...legacy, presentation })))
+    expect(restored.presentation).toEqual(presentation)
+    const { presentation: _look, ...geometry } = restored
+    expect(geometry).toEqual(legacy)
+    expect(SiteNode.safeParse({ ...legacy, presentation: { exposure: -1 } }).success).toBe(false)
+    expect(
+      SiteNode.safeParse({ ...legacy, presentation: { lighting: { background: 'url(secret)' } } })
+        .success,
+    ).toBe(false)
+  })
   test('ground presentation is optional and survives a scene round-trip without changing children', () => {
     const original = SiteNode.parse({ id: 'site_authored-ground', children: ['building_house'] })
     expect(original.showGround).toBeUndefined()

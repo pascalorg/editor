@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   nodeRegistry,
   RoofElevationSystem,
+  type SitePresentation,
   StairOpeningSystem,
   sceneRegistry,
   useInteractive,
@@ -257,16 +258,16 @@ function GPUDeviceWatcher({ intentionalWebGL = false }: { intentionalWebGL?: boo
 }
 
 function ToneMappingExposure() {
-  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const appearance = useViewer((state) => state.sceneAppearance)
   const atmosphere = useSceneAtmosphere()
   const gl = useThree((state) => state.gl)
   const invalidate = useThree((state) => state.invalidate)
 
   useEffect(() => {
     if (atmosphere) return
-    gl.toneMappingExposure = getSceneTheme(sceneTheme).toneMappingExposure
+    gl.toneMappingExposure = appearance.toneMappingExposure
     invalidate()
-  }, [atmosphere, gl, invalidate, sceneTheme])
+  }, [atmosphere, gl, invalidate, appearance])
 
   useFrame(() => {
     if (!atmosphere) return
@@ -277,7 +278,7 @@ function ToneMappingExposure() {
 }
 
 function ImmersiveXRBackground() {
-  const background = useViewer((state) => getSceneTheme(state.sceneTheme).background)
+  const background = useViewer((state) => state.sceneAppearance.background)
   return <color args={[background]} attach="background" />
 }
 
@@ -416,6 +417,8 @@ interface ViewerProps {
     textures?: boolean
     colorPreset?: ColorPreset
   }
+  /** Saved site appearance when rendering a baked asset without its graph. Null ignores it. */
+  presentation?: SitePresentation | null
   /**
    * Visibility filter on the live canvas. When non-null, every registered
    * node group whose id is not in `isolate` (or in the isolated set's
@@ -495,6 +498,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     renderContext = 'editor',
     transparent,
     defaultRender,
+    presentation: suppliedPresentation,
     isolate,
     sceneReadyKey,
     onSceneReadyChange,
@@ -541,7 +545,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
 
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
 
-  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const isDark = useViewer((state) => state.sceneAppearance.appearance === 'dark')
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const previousLampTheme = useRef(sceneTheme)
   useEffect(() => {
@@ -571,15 +575,29 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [transparent])
 
+  const scenePresentation = useScene((state) => {
+    for (const id of state.rootNodeIds) {
+      const node = state.nodes[id]
+      if (node?.type === 'site') return node.presentation
+    }
+    return undefined
+  })
+  const presentation =
+    suppliedPresentation === undefined ? scenePresentation : (suppliedPresentation ?? undefined)
+  const projectId = useViewer((state) => state.projectId)
+  useLayoutEffect(() => {
+    // Project selection clears the previous look even when both graphs share a preset.
+    if (useViewer.getState().projectId === projectId)
+      useViewer.getState().setProjectPresentation(presentation)
+  }, [presentation, projectId])
+
   const defaultShading = defaultRender?.shading
   const defaultTextures = defaultRender?.textures
   const defaultColorPreset = defaultRender?.colorPreset
   const hasDefaultRender = defaultRender != null
   useEffect(() => {
     const ctx = renderContext
-    useViewer.getState().setRenderContext(ctx)
-    const { shading, shadingByContext, setShading } = useViewer.getState()
-    setShading(shadingByContext[ctx] ?? defaultShading ?? shading)
+    useViewer.getState().setRenderContext(ctx, defaultShading)
 
     if (!hasDefaultRender || typeof window === 'undefined') return
 
@@ -670,9 +688,8 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                     trackTimestamp: PERF_OVERLAY_ENABLED,
                   })
                   renderer.toneMapping = THREE.ACESFilmicToneMapping
-                  renderer.toneMappingExposure = getSceneTheme(
-                    useViewer.getState().sceneTheme,
-                  ).toneMappingExposure
+                  renderer.toneMappingExposure =
+                    useViewer.getState().sceneAppearance.toneMappingExposure
                   return renderer
                 },
               })

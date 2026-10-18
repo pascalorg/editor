@@ -1,4 +1,18 @@
 import { abs, exp, mix, smoothstep } from 'three/tsl'
+import type { SceneTheme } from './scene-themes'
+
+/** Null explicitly removes the gradient; an omitted sky keeps the theme's derived atmosphere. */
+export function backdropColors(
+  theme: Pick<SceneTheme, 'background' | 'backgroundSky' | 'appearance'>,
+) {
+  const sky = theme.backgroundSky ?? theme.background
+  return {
+    background: theme.background,
+    sky,
+    haze: theme.backgroundSky === null ? theme.background : horizonHazeColor(sky, theme.appearance),
+    skyDeep: theme.backgroundSky === null ? theme.background : deepSkyColor(sky),
+  }
+}
 
 /**
  * Shared backdrop gradient: flat background looking down, a warm haze band

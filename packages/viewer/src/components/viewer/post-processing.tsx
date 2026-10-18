@@ -25,7 +25,7 @@ import {
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, TimestampQuery, type WebGPURenderer } from 'three/webgpu'
-import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/backdrop'
+import { backdropColors, backdropGradient } from '../../lib/backdrop'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { createEdgeDepthSampler, inkedEdges } from '../../lib/ink-edges'
@@ -37,7 +37,6 @@ import { mergedOutline } from '../../lib/merged-outline-node'
 import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { PostProcessingResources } from '../../lib/post-processing-resources'
 import { sceneLightingMask, scenePassMrt } from '../../lib/scene-pass-mrt'
-import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
@@ -217,22 +216,23 @@ const PostProcessingPasses = ({
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current scene theme so there's no flash on first render.
-  const initTheme = getSceneTheme(useViewer.getState().sceneTheme)
+  const initTheme = useViewer.getState().sceneAppearance
+  const initBackdrop = backdropColors(initTheme)
   const initBg = initTheme.background
   const bgUniform = useRef(uniform(new Color(initBg)))
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
   // Zenith colour of the backdrop gradient (falls back to the flat background).
-  const initSky = initTheme.backgroundSky ?? initBg
+  const initSky = initBackdrop.sky
   const bgSkyUniform = useRef(uniform(new Color(initSky)))
   const bgSkyCurrent = useRef(new Color(initSky))
   const bgSkyTarget = useRef(new Color())
   // Horizon haze band + deep zenith (derived — see lib/backdrop.ts).
-  const initHaze = horizonHazeColor(initSky, initTheme.appearance)
+  const initHaze = initBackdrop.haze
   const bgHazeUniform = useRef(uniform(new Color(initHaze)))
   const bgHazeCurrent = useRef(new Color(initHaze))
   const bgHazeTarget = useRef(new Color())
-  const initSkyDeep = deepSkyColor(initSky)
+  const initSkyDeep = initBackdrop.skyDeep
   const bgSkyDeepUniform = useRef(uniform(new Color(initSkyDeep)))
   const bgSkyDeepCurrent = useRef(new Color(initSkyDeep))
   const bgSkyDeepTarget = useRef(new Color())
@@ -282,6 +282,10 @@ const PostProcessingPasses = ({
   // Subscribe to projectId so the pipeline rebuilds on project switch
   const projectId = useViewer((s) => s.projectId)
   const shading = useViewer((s) => s.shading)
+  const ambientOcclusion = useViewer(
+    (s) => s.sceneAppearance.postprocessing?.ambientOcclusion !== false,
+  )
+  const colorGrading = useViewer((s) => s.sceneAppearance.postprocessing?.colorGrading !== false)
   const edges = useViewer((s) => s.edges)
   const inkOpacityOverride = useViewer((s) => s.inkOpacity)
   const transparentBackground = useViewer((s) => s.transparentBackground)
@@ -377,7 +381,8 @@ const PostProcessingPasses = ({
       disposePipeline()
       return
     }
-    const ssgiEnabled = shading === 'rendered' && SSGI_PARAMS.enabled && !perfDisable.ao
+    const ssgiEnabled =
+      shading === 'rendered' && ambientOcclusion && SSGI_PARAMS.enabled && !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
     const inkEnabled = edges !== 'off'
@@ -396,6 +401,8 @@ const PostProcessingPasses = ({
       perfDisable,
       projectId,
       shading,
+      ambientOcclusion,
+      colorGrading,
       transparentBackground,
       rendererCtor: (renderer as any).constructor?.name,
       width,
@@ -574,7 +581,7 @@ const PostProcessingPasses = ({
           rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
           GRADE_PARAMS.saturation,
         )
-      if (shading === 'rendered') {
+      if (shading === 'rendered' && colorGrading) {
         sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
 
@@ -645,7 +652,7 @@ const PostProcessingPasses = ({
             sky: bgSkyUniform.current,
             skyDeep: bgSkyDeepUniform.current,
           })
-      if (shading === 'rendered') {
+      if (shading === 'rendered' && colorGrading) {
         bgGradient = gradeRgb(bgGradient)
       }
       const sceneComposite = compositeWithOutlines.rgb
@@ -707,6 +714,8 @@ const PostProcessingPasses = ({
     renderer,
     scene,
     shading,
+    ambientOcclusion,
+    colorGrading,
     transparentBackground,
     size.height,
     size.width,
@@ -741,19 +750,18 @@ const PostProcessingPasses = ({
     }
 
     // Animate background colour toward the current scene theme target (same lerp as AnimatedBackground)
-    const bgTheme = getSceneTheme(useViewer.getState().sceneTheme)
+    const bgTheme = useViewer.getState().sceneAppearance
+    const backdrop = backdropColors(bgTheme)
     bgTarget.current.set(bgTheme.background)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
-    bgSkyTarget.current.set(bgTheme.backgroundSky ?? bgTheme.background)
+    bgSkyTarget.current.set(backdrop.sky)
     bgSkyCurrent.current.lerp(bgSkyTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyUniform.current.value.copy(bgSkyCurrent.current)
-    bgHazeTarget.current.set(
-      horizonHazeColor(bgTheme.backgroundSky ?? bgTheme.background, bgTheme.appearance),
-    )
+    bgHazeTarget.current.set(backdrop.haze)
     bgHazeCurrent.current.lerp(bgHazeTarget.current, Math.min(delta, 0.1) * 4)
     bgHazeUniform.current.value.copy(bgHazeCurrent.current)
-    bgSkyDeepTarget.current.set(deepSkyColor(bgTheme.backgroundSky ?? bgTheme.background))
+    bgSkyDeepTarget.current.set(backdrop.skyDeep)
     bgSkyDeepCurrent.current.lerp(bgSkyDeepTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyDeepUniform.current.value.copy(bgSkyDeepCurrent.current)
     camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)

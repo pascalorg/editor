@@ -10,7 +10,6 @@ import type {
 import * as THREE from 'three/webgpu'
 import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
-import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
@@ -77,8 +76,7 @@ const SHADOW_BACKOFF = 10
 const SHADOW_FALLBACK_RADIUS = 30
 
 export function Lights() {
-  const sceneTheme = useViewer((state) => state.sceneTheme)
-  const theme = getSceneTheme(sceneTheme)
+  const theme = useViewer((state) => state.sceneAppearance)
   const shadows = useViewer((state) => state.shadows)
   const atmosphere = useSceneAtmosphere()
   const lightSlots = useMemo(

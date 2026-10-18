@@ -824,7 +824,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             }
 
             pipeline?.applyEnvironment({
-              theme: useViewer.getState().sceneTheme,
+              theme: useViewer.getState().sceneAppearance,
               transparent,
               grade: useViewer.getState().shading === 'rendered',
               edges,
@@ -917,7 +917,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                   thumbnailCamera.lookAt(hero.target[0], hero.target[1], hero.target[2])
                   thumbnailCamera.updateMatrixWorld()
                   pipeline?.applyEnvironment({
-                    theme: useViewer.getState().sceneTheme,
+                    theme: useViewer.getState().sceneAppearance,
                     transparent,
                     grade: useViewer.getState().shading === 'rendered',
                     edges,
@@ -985,7 +985,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                   restore(() => thumbnailCamera.clearViewOffset())
                   thumbnailCamera.updateMatrixWorld()
                   pipeline.applyEnvironment({
-                    theme: useViewer.getState().sceneTheme,
+                    theme: useViewer.getState().sceneAppearance,
                     transparent,
                     grade: useViewer.getState().shading === 'rendered',
                     edges,
@@ -1183,7 +1183,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             if (transparent || edgesOverride !== undefined || ortho !== undefined) {
               try {
                 pipelineRef.current?.applyEnvironment({
-                  theme: useViewer.getState().sceneTheme,
+                  theme: useViewer.getState().sceneAppearance,
                   transparent: false,
                   grade: useViewer.getState().shading === 'rendered',
                   edges: useViewer.getState().edges,

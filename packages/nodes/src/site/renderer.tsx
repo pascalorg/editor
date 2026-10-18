@@ -17,10 +17,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  backdropColors,
   backdropGradient,
-  deepSkyColor,
-  getSceneTheme,
-  horizonHazeColor,
   NodeRenderer,
   useImmersiveXRPresentation,
   useNodeEvents,
@@ -176,16 +174,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   useRegistry(node.id, 'site', ref)
 
-  const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
-  const backgroundColor = useViewer((state) => getSceneTheme(state.sceneTheme).background)
-  const skyColor = useViewer((state) => {
-    const theme = getSceneTheme(state.sceneTheme)
-    return theme.backgroundSky ?? theme.background
-  })
-  const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
-  const maxLightIntensity = useViewer((state) =>
-    Math.max(1, ...getSceneTheme(state.sceneTheme).lights.map((light) => light.intensity)),
-  )
+  const theme = useViewer((state) => state.sceneAppearance)
+  const bgColor = theme.ground
+  const { background: backgroundColor, sky: skyColor, haze, skyDeep } = backdropColors(theme)
+  const maxLightIntensity = Math.max(1, ...theme.lights.map((light) => light.intensity))
   const livePolygon = useLiveNodeOverrides(
     (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
   )
@@ -271,9 +263,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       : backdropGradient({
           dirY: viewDir.y,
           background: color(backgroundColor),
-          haze: color(horizonHazeColor(skyColor, appearance)),
+          haze: color(haze),
           sky: color(skyColor),
-          skyDeep: color(deepSkyColor(skyColor)),
+          skyDeep: color(skyDeep),
         })
     // The halo also scales the in-band emissive: the dissolve starts at 1.05R,
     // so without it the (bright) backdrop dilutes the vignette exactly where
@@ -293,7 +285,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     bgColor,
     backgroundColor,
     skyColor,
-    appearance,
+    haze,
+    skyDeep,
     maxLightIntensity,
     fadeBounds,
     groundReplaced,

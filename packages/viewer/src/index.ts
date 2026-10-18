@@ -84,7 +84,7 @@ export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useLibraryMaterialsVersion } from './hooks/use-library-materials-version'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
-export { backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
+export { backdropColors, backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
 export { applyWorldScaleBoxUVs } from './lib/box-uv'
 // CSG primitives — used by chimney's roof-trim and other kinds whose
 // geometry subtracts pieces against their host. Lives in viewer
