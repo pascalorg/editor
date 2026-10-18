@@ -425,6 +425,10 @@ function HudHeader({ title }: { title: HudTitle }) {
 const isEscHint = (hint: ContextualShortcutHint) =>
   hint.keys.length === 1 && hint.keys[0] === 'Esc'
 
+// A "!" row says why something won't happen here (a wall end a window can't wrap), not a key to
+// press, so it is never folded under More shortcuts.
+const isNoteHint = (hint: ContextualShortcutHint) => hint.keys.length === 1 && hint.keys[0] === '!'
+
 function HintRow({ hint }: { hint: ContextualShortcutHint }) {
   return (
     <div className={cn(ROW_CLASS, 'items-start')}>
@@ -490,9 +494,10 @@ export function ContextualHelperPanel({
 
   const actionHints = hints.filter((hint) => !isEscHint(hint))
   const escHints = hints.filter(isEscHint)
-  const visibleHints = showAllHints
-    ? actionHints
-    : actionHints.filter((hint, index) => index === 0 || hint.active)
+  const collapsedHints = actionHints.filter(
+    (hint, index) => index === 0 || hint.active || isNoteHint(hint),
+  )
+  const visibleHints = showAllHints ? actionHints : collapsedHints
 
   return (
     <div
@@ -505,7 +510,7 @@ export function ContextualHelperPanel({
           <HintRow hint={hint} key={hintKey(hint)} />
         ))}
       </div>
-      {actionHints.length > 1 ? (
+      {collapsedHints.length < actionHints.length ? (
         <button
           aria-controls={hintsId}
           aria-expanded={showAllHints}
