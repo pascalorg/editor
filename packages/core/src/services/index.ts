@@ -106,6 +106,7 @@ export {
 } from './roof-bearing'
 export {
   coveredStoreyId,
+  isRoofGeometry,
   isRoofLevel,
   isStoreyContent,
   liftRoofLevels,

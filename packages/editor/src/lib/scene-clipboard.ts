@@ -603,7 +603,7 @@ function applyClipboardPayloadToLevel(
   // the plan is the storey's, and a roof in it that bears there is seated back up.
   const rootIdSet = new Set(payload.rootIds)
   const targetLevel = payload.nodes.some(
-    (node) => rootIdSet.has(node.id as AnyNodeId) && isStoreyContent(node.type),
+    (node) => rootIdSet.has(node.id as AnyNodeId) && isStoreyContent(node.type, node.metadata),
   )
     ? ((scene.nodes[storeyOf(scene.nodes, aimedLevel.id) as AnyNodeId] as LevelNode | undefined) ??
       aimedLevel)

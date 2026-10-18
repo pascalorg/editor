@@ -183,7 +183,7 @@ export const ToolManager: React.FC = () => {
   // Placing a roof makes its level active (selectPlacedNode); a wall, room, slab, stair or item tool
   // armed there, then or after a level change, draws on the storey the roof level covers.
   useEffect(() => {
-    if (!(tool && activeLevelId && isStoreyContent(tool))) return
+    if (!(tool && activeLevelId && isStoreyContent(tool, undefined))) return
     const storeyId = storeyOf(useScene.getState().nodes, activeLevelId)
     if (storeyId !== activeLevelId) setSelection({ levelId: storeyId as LevelNode['id'] })
   }, [tool, activeLevelId, setSelection])
