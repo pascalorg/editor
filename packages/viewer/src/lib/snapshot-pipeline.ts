@@ -29,7 +29,7 @@ import {
 } from 'three/webgpu'
 import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
 import type { SceneAtmosphereSource } from '../components/viewer/scene-atmosphere'
-import { backdropColors, backdropGradient } from './backdrop'
+import { backdropColors, backdropGradient, flatBackdropOutput } from './backdrop'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
 import { createEdgeDepthSampler, inkedEdges } from './ink-edges'
 import { sceneLightingMask, scenePassMrt } from './scene-pass-mrt'
@@ -170,6 +170,7 @@ export async function createSnapshotPipeline({
     const bgProjInvUniform = uniform(new Matrix4())
     const bgCamWorldUniform = uniform(new Matrix4())
     const bgMixUniform = uniform(1)
+    const flatBgMixUniform = uniform(0)
     const gradeMixUniform = uniform(0)
     const aoMixUniform = uniform(1)
     const inkMixUniform = uniform(0)
@@ -304,7 +305,23 @@ export async function createSnapshotPipeline({
     } else {
       // FXAA requires a texture node as input; convertToTexture renders finalOutput
       // into an intermediate RT so FXAA can sample it with neighbour UV offsets.
-      pipeline.outputNode = fxaa(convertToTexture(finalOutput))
+      const flatOutput = flatBackdropOutput({
+        background: bgColorUniform,
+        foreground: sceneRgb,
+        alpha,
+        toneMapping: renderer.toneMapping,
+        outputColorSpace: renderer.outputColorSpace,
+      })
+      const antialiased = fxaa(
+        convertToTexture(mix(finalOutput, flatOutput, flatBgMixUniform)),
+      ) as unknown as ReturnType<typeof vec4>
+      // One FXAA pass serves both inputs; transform only the linear input at output.
+      pipeline.outputColorTransform = false
+      pipeline.outputNode = mix(
+        renderOutput(antialiased, renderer.toneMapping, renderer.outputColorSpace),
+        antialiased,
+        flatBgMixUniform,
+      )
     }
 
     // Dedicated render target — pipeline outputs here instead of the canvas,
@@ -325,6 +342,8 @@ export async function createSnapshotPipeline({
         bgSkyDeepUniform.value.set(backdrop.skyDeep)
         bgHazeUniform.value.set(backdrop.haze)
         bgMixUniform.value = transparent ? 0 : 1
+        flatBgMixUniform.value =
+          !transparent && !atmosphere && sceneTheme.backgroundSky === null ? 1 : 0
         gradeMixUniform.value = grade && sceneTheme.postprocessing?.colorGrading !== false ? 1 : 0
         aoMixUniform.value = sceneTheme.postprocessing?.ambientOcclusion === false ? 0 : 1
 

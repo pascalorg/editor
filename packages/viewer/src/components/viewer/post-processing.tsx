@@ -25,7 +25,7 @@ import {
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, TimestampQuery, type WebGPURenderer } from 'three/webgpu'
-import { backdropColors, backdropGradient } from '../../lib/backdrop'
+import { backdropColors, backdropGradient, flatBackdropOutput } from '../../lib/backdrop'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { createEdgeDepthSampler, inkedEdges } from '../../lib/ink-edges'
@@ -41,9 +41,8 @@ import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
-// Scene-referred grade applied before the output tone mapping (AgX). AgX rolls
-// highlights off gently but reads flat on its own; a mild mid-gray-pivot
-// contrast + saturation lift restores the punch. Rendered shading only.
+// A mild mid-gray contrast and saturation lift separates surfaces before the
+// output transform. Saved project looks can turn it off. Rendered shading only.
 export const GRADE_PARAMS = {
   contrast: 1.05,
   saturation: 1.1,
@@ -286,6 +285,7 @@ const PostProcessingPasses = ({
     (s) => s.sceneAppearance.postprocessing?.ambientOcclusion !== false,
   )
   const colorGrading = useViewer((s) => s.sceneAppearance.postprocessing?.colorGrading !== false)
+  const flatBackground = useViewer((s) => s.sceneAppearance.backgroundSky === null)
   const edges = useViewer((s) => s.edges)
   const inkOpacityOverride = useViewer((s) => s.inkOpacity)
   const transparentBackground = useViewer((s) => s.transparentBackground)
@@ -672,11 +672,26 @@ const PostProcessingPasses = ({
           .add(sceneComposite.mul(visualAlpha).mul(overlayAlpha.oneMinus()))
           .div(alpha.max(tslFloat(0.00001)))
         finalOutput = premultiplyAlpha(renderOutput(vec4(straightRgb, alpha)))
+      } else if (flatBackground && !atmosphere) {
+        const backdrop = flatBackdropOutput({
+          background: bgUniform.current,
+          foreground: sceneComposite,
+          alpha: contentAlpha,
+          toneMapping: renderer.toneMapping,
+          outputColorSpace: renderer.outputColorSpace,
+        })
+        const overlay = renderOutput(
+          vec4(overlayColor.rgb, 1),
+          renderer.toneMapping,
+          renderer.outputColorSpace,
+        )
+        finalOutput = vec4(mix(backdrop.rgb, overlay.rgb, overlayColor.a), 1)
       }
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       resources.pipeline = renderPipeline
-      renderPipeline.outputColorTransform = !transparentBackground
+      renderPipeline.outputColorTransform =
+        !transparentBackground && !(flatBackground && !atmosphere)
       renderPipeline.outputNode = finalOutput
       retryCountRef.current = 0
     } catch (error) {
@@ -716,6 +731,7 @@ const PostProcessingPasses = ({
     shading,
     ambientOcclusion,
     colorGrading,
+    flatBackground,
     transparentBackground,
     size.height,
     size.width,
