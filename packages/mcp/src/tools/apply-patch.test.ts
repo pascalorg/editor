@@ -55,6 +55,26 @@ describe('apply_patch', () => {
     expect((stored as { thickness?: number }).thickness).toBe(0.2)
   })
 
+  test('can replace site ground presentation without changing the site or its buildings', async () => {
+    const before = structuredClone(bridge.getNodes())
+    const site = Object.values(before).find((node) => node.type === 'site')!
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'update', id: site.id, data: { showGround: false } }] },
+    })
+    expect(result.isError).toBeFalsy()
+    expect(bridge.getNodes()).toEqual({
+      ...before,
+      [site.id]: { ...site, showGround: false },
+    })
+    const restored = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'update', id: site.id, data: { showGround: null } }] },
+    })
+    expect(restored.isError).toBeFalsy()
+    expect(bridge.getNodes()).toEqual(before)
+  })
+
   // A pier's `material: {color}` reported applied and stored {}, and
   // `materialPreset: null` was refused, so the agent could not clear the preset hiding it.
   test('an update the node would drop is refused, naming the path; null clears a field', async () => {

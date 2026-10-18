@@ -549,8 +549,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // drops the parcel's own presentation — ground fill, sculpted ground, lot
   // line — while everything standing on the site keeps its own flag (the
   // exporter and the 2D plan draw the same line). The horizon disc is a world
-  // backdrop rather than part of the parcel, so it stays either way.
+  // backdrop rather than part of the parcel, so `visible` does not hide it.
+  // `showGround` hides both ground and horizon when authored geometry supplies them.
   const showSiteSurfaces = node.visible !== false
+  const showGround = node.showGround !== false
 
   if (!(node && lineGeometry)) {
     return null
@@ -564,7 +566,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ))}
 
       {/* Sculpted ground, when the site has terrain */}
-      {showSiteSurfaces && showTerrain && (
+      {showSiteSurfaces && showGround && showTerrain && (
         <TerrainRenderer
           holes={slabPolygons}
           material={groundMaterial}
@@ -574,7 +576,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       )}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {showSiteSurfaces && groundGeometry && !showTerrain && (
+      {showSiteSurfaces && showGround && groundGeometry && !showTerrain && (
         <mesh
           geometry={groundGeometry}
           material={groundMaterial}
@@ -585,7 +587,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       )}
 
       {/* Infinite-ground presentation disc fading into the sky at the horizon */}
-      {!immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
+      {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
         <mesh
           geometry={horizonGeometry}
           material={horizonMaterial}

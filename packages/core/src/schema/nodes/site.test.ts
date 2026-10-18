@@ -5,6 +5,17 @@ import { SiteNode } from './site'
 import { migrateSiteMetadata } from './site-facts'
 
 describe('SiteNode.terrain', () => {
+  test('ground presentation is optional and survives a scene round-trip without changing children', () => {
+    const original = SiteNode.parse({ id: 'site_authored-ground', children: ['building_house'] })
+    expect(original.showGround).toBeUndefined()
+    const restored = SiteNode.parse(JSON.parse(JSON.stringify({ ...original, showGround: false })))
+    expect(restored.showGround).toBe(false)
+    expect(restored.children).toEqual(original.children)
+    expect(restored.polygon).toEqual(original.polygon)
+    expect(restored.visible).toBe(original.visible)
+    expect(SiteNode.safeParse({ ...original, showGround: 'false' }).success).toBe(false)
+  })
+
   test('a scene saved before terrain existed still parses', () => {
     const parsed = SiteNode.parse({ id: 'site_1', type: 'site' })
     expect(parsed.terrain).toBeUndefined()

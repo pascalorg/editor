@@ -276,6 +276,14 @@ export function SiteNodePanel() {
       </PanelSection>
 
       <PanelSection title="Terrain">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            checked={node.showGround !== false}
+            onChange={(event) => update({ showGround: event.target.checked })}
+            type="checkbox"
+          />
+          <span className="text-muted-foreground">Show ground</span>
+        </label>
         <label className="space-y-1 text-sm">
           <span className="text-muted-foreground">Contour interval (site plan and 3D)</span>
           <select
