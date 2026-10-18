@@ -43,7 +43,7 @@ export const viewSceneTool = {
   name: 'view_scene',
   title: 'Look at the scene',
   description:
-    "Look at the building in 3D from a viewpoint you pick and get the picture back: the finished house, every storey and the roof, whatever floor or view mode the person has on. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from 'street', 'street-left', …, eyeHeight 1.7), in its light (lighting); one face square on (projection orthographic); the massing from above, or an aerial view (elevation 40). The view frames the target (a building, a level, a wall or a zone; the whole building, its roof included, by default) from outside, unless you place the eye yourself with position or camera. To see inside a floor, give interior {levelId}: the other floors and that floor's roofs and ceilings are left out of the picture, and everything on it, walls, openings and furniture alike, is cut at 0.65 of the storey's height (about two thirds), so a tall wardrobe or a door head is cut, not short; a roof level has no inside; with no eye given it looks down into the floor, or into the room or zone you target. The live view is not changed. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), a tab in the background must be brought to the front (editor_tab_hidden), and a tab that is open but busy or still loading answers editor_tab_busy: call view_scene again in a few seconds, the user need not be asked. A picture is not a measure: take sizes and counts from the tools.",
+    "Look at the building in 3D from a viewpoint you pick and get the picture back: the finished house, every storey and the roof by default, or an explicit Solo/Exploded level presentation, whatever view mode the person has on. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from 'street', 'street-left', …, eyeHeight 1.7), in its light (lighting); one face square on (projection orthographic); the massing from above, or an aerial view (elevation 40). The view frames the target (a building, a level, a wall or a zone; the whole building, its roof included, by default) from outside, unless you place the eye yourself with position or camera. To see inside a floor, give interior {levelId}: the other floors and that floor's roofs and ceilings are left out of the picture, and everything on it, walls, openings and furniture alike, is cut at 0.65 of the storey's height (about two thirds), so a tall wardrobe or a door head is cut, not short; a roof level has no inside; with no eye given it looks down into the floor, or into the room or zone you target. The live view is not changed. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP the user's editor tab open on the project renders the picture: with none open it is refused (editor_tab_required), a tab in the background must be brought to the front (editor_tab_hidden), and a tab that is open but busy or still loading answers editor_tab_busy: call view_scene again in a few seconds, the user need not be asked. A picture is not a measure: take sizes and counts from the tools.",
   input: {
     target: z
       .string()
@@ -56,6 +56,16 @@ export const viewSceneTool = {
       .optional()
       .describe(
         'Look inside this floor (a level id): the other floors and its roofs and ceilings are left out of the picture, everything on it (walls, openings, furniture) cut at 0.65 of the storey height. Default framing looks down into it; camera or position still wins.',
+      ),
+    presentation: z
+      .discriminatedUnion('mode', [
+        z.object({ mode: z.literal('stacked') }),
+        z.object({ mode: z.literal('exploded') }),
+        z.object({ mode: z.literal('solo'), levelId: z.string().min(1) }),
+      ])
+      .optional()
+      .describe(
+        'Verify the actual level presentation: stacked (default), exploded, or solo with a levelId. Solo keeps full-height geometry, including ceilings and any roofs incorrectly owned by that floor; it is not the clipped interior view. Does not change the live view. Do not combine with interior.',
       ),
     from: z
       .enum(VIEW_SIDES)

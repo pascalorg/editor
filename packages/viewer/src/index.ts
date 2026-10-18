@@ -333,6 +333,7 @@ export { LevelSystem } from './systems/level/level-system'
 export {
   EXPLODED_GAP,
   getLevelPresentationY,
+  presentLevelsForCapture,
   snapLevelsToTruePositions,
 } from './systems/level/level-utils'
 export { getRoofMaterialArray, levelWallCladdingRef } from './systems/roof/roof-materials'

@@ -65,6 +65,24 @@ export function temporarilyShowPresentation(root: Object3D): () => void {
   return temporarilyShowHeld(root, ['shadow-only', 'isolated'])
 }
 
+/** Add a capture-only mask without changing the live visibility reasons or batching. */
+export function temporarilyHideFromScene(root: Object3D, reason: HiddenReason): () => void {
+  const masks = new Map<Object3D, number>()
+  root.traverse((obj) => {
+    masks.set(obj, obj.layers.mask)
+    const hold = (obj as Holder)[HOLD]
+    const reasons = new Set(hold?.reasons)
+    // Captures lift the person's presentation, but keep batch ownership intact.
+    reasons.delete('isolated')
+    reasons.delete('shadow-only')
+    reasons.add(reason)
+    applyHold(obj, { original: hold?.original ?? obj.layers.mask, reasons })
+  })
+  return () => {
+    for (const [obj, mask] of masks) obj.layers.mask = mask
+  }
+}
+
 function temporarilyShowHeld(root: Object3D, lifted: readonly HiddenReason[]): () => void {
   const masks = new Map<Object3D, number>()
   root.traverse((obj) => {

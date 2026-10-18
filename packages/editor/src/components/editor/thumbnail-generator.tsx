@@ -16,6 +16,7 @@ import {
   heroCameraPose,
   holdLiveFrame,
   pendingSceneBuildCount,
+  presentLevelsForCapture,
   refreshIsolation,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
@@ -944,6 +945,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // those meshes before either snapshot render path submits them,
               // and restore fog afterwards so the atmosphere never leaks in.
               restore(refreshIsolation(scene))
+              if (event.presentation) restore(presentLevelsForCapture(event.presentation))
               if (interior) {
                 interiorCutaway(interior.levelId, restore)
                 restore(lightInterior(scene, thumbnailCamera))

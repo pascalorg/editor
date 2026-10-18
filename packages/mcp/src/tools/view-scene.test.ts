@@ -135,6 +135,15 @@ describe('view_scene over the MCP', () => {
       expect(wrong.isError).toBe(true)
       expect(json(wrong.content)).toMatchObject({ code: 'interior_level_invalid' })
       expect(asked).toHaveLength(2)
+      for (const presentation of [
+        { mode: 'solo', levelId: view.levelId },
+        { mode: 'exploded' },
+        { mode: 'stacked' },
+      ]) {
+        expect((await view.call({ presentation })).isError).toBe(false)
+        expect(asked.at(-1)?.presentation).toEqual(presentation)
+        expect(asked.at(-1)).not.toHaveProperty('interior')
+      }
     } finally {
       await view.close()
     }

@@ -2,7 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type { PointAskPin, PointAskStatus } from '../agent-operations/point-context'
-import type { SceneViewInterior } from '../agent-operations/scene-view'
+import type { SceneViewInterior, SceneViewPresentation } from '../agent-operations/scene-view'
 import type {
   BlockNode,
   BoxVentNode,
@@ -282,6 +282,8 @@ export interface ThumbnailGenerateEvent {
   clip?: readonly { normal: [number, number, number]; constant: number }[]
   /** Look inside this floor for the frame: the rest of the house left out, its walls cut (view_scene). */
   interior?: SceneViewInterior
+  /** The actual Solo/Exploded/Stacked presentation, without interior clipping. */
+  presentation?: SceneViewPresentation
   /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
   supersample?: number
 }

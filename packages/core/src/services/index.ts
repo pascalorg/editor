@@ -151,6 +151,7 @@ export {
 export {
   CEILING_CLAMP_MARGIN,
   CEILING_DRAW_OFFSET,
+  EXPLODED_GAP,
   findLevelAboveId,
   findLevelBelowId,
   getCeilingClampBound,

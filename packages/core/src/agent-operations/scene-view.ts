@@ -20,7 +20,7 @@ import type {
 } from '../schema'
 import { getActiveRoofHeight } from '../schema'
 import { isRoofGeometry } from '../services/roof-level'
-import { getLevelElevations } from '../services/storey'
+import { EXPLODED_GAP, getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 
 /**
@@ -38,6 +38,7 @@ export type SceneViewLighting = Exclude<(typeof VIEW_LIGHTING)[number], 'current
 export type SceneViewInput = {
   target?: string
   interior?: SceneViewInterior
+  presentation?: SceneViewPresentation
   from?: SceneViewSide
   position?: number[]
   elevation?: number
@@ -70,6 +71,10 @@ export type SceneViewCrop = { source: string; region: [number, number, number, n
 
 /** A look inside one floor; the host cuts it from its own scene with sceneViewInterior. */
 export type SceneViewInterior = { levelId: string }
+
+export type SceneViewPresentation =
+  | { mode: 'stacked' | 'exploded' }
+  | { mode: 'solo'; levelId: string }
 
 /** How high up its storey an interior view cuts a floor: low enough to see every room. */
 const INTERIOR_CUT = 0.65
@@ -581,6 +586,7 @@ function placedBox(box: SceneViewBox, at: Standing): SceneViewBox {
 export function sceneViewBounds(
   nodes: Readonly<Record<string, AnyNode>>,
   targetId?: string,
+  presentation?: SceneViewPresentation,
 ): SceneViewBox {
   const target = targetId ? nodes[targetId] : undefined
   if (targetId && !target)
@@ -588,8 +594,13 @@ export function sceneViewBounds(
       target: targetId,
     })
   const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
-  const baseOf = (levelId: string | null | undefined) =>
-    (levelId ? elevations.get(levelId)?.baseY : undefined) ?? 0
+  const baseOf = (levelId: string | null | undefined) => {
+    const level = levelId ? elevations.get(levelId) : undefined
+    return (
+      (level?.baseY ?? 0) +
+      (presentation?.mode === 'exploded' ? (level?.ordinal ?? 0) * EXPLODED_GAP : 0)
+    )
+  }
   const placed = (box: SceneViewBox, levelId: string | null | undefined) =>
     placedBox(box, standingOf(nodes, levelId))
   const opening = openingOf(nodes, target)
@@ -637,10 +648,11 @@ export function sceneViewBounds(
         points: (node.polygon as Pt[]).map((point) => onSite(point, at)),
         levelId: level.id,
       })
-    else if (node.type === 'item') held.push(placedBox(itemBox(node, baseOf(level.id)), at))
+    else if (node.type === 'item')
+      (isRoofGeometry(node) ? roofs : held).push(placedBox(itemBox(node, baseOf(level.id)), at))
     else if (node.type.includes(':')) {
       const storey = elevations.get(level.id)
-      if (storey) pluginTop = Math.max(pluginTop, storey.baseY + storey.height + at.y)
+      if (storey) pluginTop = Math.max(pluginTop, baseOf(level.id) + storey.height + at.y)
     } else {
       const box = levelChildBox(nodes, node, baseOf(level.id))
       if (box) (node.type === 'roof' ? roofs : held).push(placedBox(box, at))
@@ -662,8 +674,8 @@ export function sceneViewBounds(
   for (const { points, levelId } of outlines) {
     const storey = elevations.get(levelId) ?? { baseY: 0, height: 3 }
     const lift = standingOf(nodes, levelId).y
-    min[1] = Math.min(min[1], storey.baseY + lift)
-    max[1] = Math.max(max[1], storey.baseY + storey.height + lift)
+    min[1] = Math.min(min[1], baseOf(levelId) + lift)
+    max[1] = Math.max(max[1], baseOf(levelId) + storey.height + lift)
     for (const [x, z] of points) {
       min[0] = Math.min(min[0], x)
       max[0] = Math.max(max[0], x)
@@ -828,9 +840,33 @@ export function sceneViewPlan(
   size: { w: number; h: number }
   crop?: SceneViewCrop
   interior?: SceneViewInterior
+  presentation?: SceneViewPresentation
   lighting?: SceneViewLighting
 } {
   const { camera } = input
+  const presentation = input.presentation
+  if (presentation && input.interior)
+    refuse('presentation_and_interior', 'Choose a level presentation or a clipped interior view.')
+  let solo: AnyNode | undefined
+  if (presentation?.mode === 'solo') {
+    const levelId = presentation.levelId
+    solo = nodes[levelId]
+    if (solo?.type !== 'level')
+      refuse('presentation_level_invalid', 'Solo needs an existing level id.', {
+        levelId: presentation.levelId,
+      })
+    if (ancestry(nodes, solo).some((node) => node.visible === false && node.type !== 'site'))
+      refuse('presentation_level_hidden', 'Show the level before inspecting it in Solo.', {
+        levelId: solo.id,
+      })
+    if (input.target && !nodes[input.target])
+      refuse('target_not_found', 'The target is not in the scene.', { target: input.target })
+    if (input.target && !ancestry(nodes, nodes[input.target]!).some((node) => node.id === levelId))
+      refuse('presentation_target_elsewhere', 'The target must belong to the soloed level.', {
+        target: input.target,
+        levelId: solo.id,
+      })
+  }
   const crop = cropOf(input.photo)
   const inside = input.interior && sceneViewInterior(nodes, input.interior.levelId)
   const interior = input.interior && { levelId: input.interior.levelId }
@@ -838,6 +874,7 @@ export function sceneViewPlan(
   const extras = {
     ...(crop ? { crop } : {}),
     ...(interior ? { interior } : {}),
+    ...(presentation ? { presentation } : {}),
     ...(lighting ? { lighting } : {}),
   }
   const target = input.target ? nodes[input.target] : undefined
@@ -872,7 +909,11 @@ export function sceneViewPlan(
   const side = input.from
   const from = side
     ? isStreetSide(side)
-      ? streetDirection(nodes, side, target ?? (input.interior && nodes[input.interior.levelId]))
+      ? streetDirection(
+          nodes,
+          side,
+          target ?? solo ?? (input.interior && nodes[input.interior.levelId]),
+        )
       : side
     : opening && !input.position
       ? outsideSide(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
@@ -882,7 +923,9 @@ export function sceneViewPlan(
   const { position, elevation, eyeHeight, fov, projection } = input
   return {
     pose: sceneViewPose(
-      input.target || !inside ? sceneViewBounds(nodes, input.target) : inside.bounds,
+      input.target || !inside
+        ? sceneViewBounds(nodes, input.target ?? solo?.id, presentation)
+        : inside.bounds,
       {
         position,
         elevation: lookDown ? INTERIOR_ELEVATION : elevation,
