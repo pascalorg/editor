@@ -146,6 +146,41 @@ describe('a look inside one floor', () => {
     expect(inside.hiddenIds.sort()).toEqual(['level_0', 'roof_1'])
   })
 
+  test('interior capture leaves out explicitly classified retained roofs, not similarly named objects', () => {
+    const nodes = finishedBuilding()
+    const asset = {
+      id: 'retained',
+      name: 'Retained geometry',
+      category: 'roof',
+      thumbnail: '',
+      src: '/retained.glb',
+      dimensions: [1, 1, 1],
+    }
+    const roof = ItemNode.parse({
+      id: 'item_retained_roof',
+      parentId: 'level_1',
+      metadata: { role: 'roof' },
+      asset,
+    })
+    const item = ItemNode.parse({
+      id: 'item_roof_furniture',
+      name: 'Roof terrace chair',
+      parentId: 'level_1',
+      asset,
+    })
+    nodes[roof.id] = roof
+    nodes[item.id] = item
+    const level = nodes.level_1 as LevelNode
+    level.children.push(roof.id, item.id)
+    const before = structuredClone(nodes)
+    expect(sceneViewInterior(nodes, level.id).hiddenIds).toContain(roof.id)
+    expect(sceneViewInterior(nodes, level.id).hiddenIds).not.toContain(item.id)
+    expect(
+      refusalOf(() => sceneViewPlan(nodes, { interior: { levelId: level.id }, target: roof.id })),
+    ).toBe('interior_target_elsewhere')
+    expect(nodes).toEqual(before)
+  })
+
   test('a target in the floor frames it, and an eye given is kept', () => {
     const nodes = finishedBuilding()
     const wall = sceneViewPlan(nodes, {
