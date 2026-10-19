@@ -1,10 +1,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { floorScriptInputs } from '@pascal-app/core'
 import {
+  type AgentContext,
   type AuthorSceneReport,
   achievedChanges,
   authorScene,
   authorSceneCeilingPoints,
+  authorSceneFloorScripts,
   type SceneNodes,
+  setRoomFloorScript,
   verifyScene,
 } from '@pascal-app/core/agent-operations'
 import {
@@ -112,17 +116,18 @@ export function registerAuthorScene(
       }
 
       const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      const context: AgentContext = {
+        activeLevelId: bridge.activeLevelId?.() ?? null,
+        ...(bridge.supportsMaterialUpserts && bridge.getMaterials
+          ? { materials: bridge.getMaterials() }
+          : {}),
+      }
       let outcome: ReturnType<typeof authorScene>
       try {
         outcome = authorScene(
           before,
           { payload: args.payload, compiled, compileErrors, replace: args.replace },
-          {
-            activeLevelId: bridge.activeLevelId?.() ?? null,
-            ...(bridge.supportsMaterialUpserts && bridge.getMaterials
-              ? { materials: bridge.getMaterials() }
-              : {}),
-          },
+          context,
         )
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
@@ -132,6 +137,37 @@ export function registerAuthorScene(
       }
       const patches = outcome.changes ? toPatches(outcome.changes) : []
       if (patches.length) bridge.applyPatch(patches)
+      // A room's floor module needs its floor, which exists only now: compiled for it and written
+      // on the zone; a failure leaves the room its `floor` finish.
+      for (const { roomId, zoneId, code } of authorSceneFloorScripts(
+        args.payload,
+        outcome.result,
+      )) {
+        try {
+          const inputs = floorScriptInputs(bridge.getNodes() as SceneNodes, zoneId)
+          if (!inputs) throw new Error('The room has no floor to build on.')
+          const built = await compileAndStore(
+            host,
+            scene.id,
+            { code, language: 'three', params: undefined, inputs },
+            'floor',
+            { nodeId: zoneId, metadata: { name: 'Floor finish' } },
+          )
+          const written = setRoomFloorScript(
+            bridge.getNodes() as SceneNodes,
+            { zoneId, compiled: built, inputs },
+            context,
+          )
+          if (written.changes) bridge.applyPatch(toPatches(written.changes))
+          outcome.result.floorScripts++
+        } catch (error) {
+          outcome.result.defects.push({
+            id: roomId,
+            code: 'floor_script_failed',
+            message: `${error instanceof Error ? error.message : String(error)} (the room keeps its floor finish)`,
+          })
+        }
+      }
       const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
       if (building) {
         bridge.updateNode(building.id, {
@@ -182,6 +218,7 @@ function withoutCode(payload: AuthorScenePayload) {
         openings: (wall.openings ?? []).map(({ code: _, ...opening }) => opening),
       })),
       items: (level.items ?? []).map(({ code: _, ...item }) => item),
+      rooms: level.rooms.map(({ floorCode: _, ...room }) => room),
     })),
   }
 }

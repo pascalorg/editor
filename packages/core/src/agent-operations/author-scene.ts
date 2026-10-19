@@ -44,6 +44,7 @@ import { paint } from './paint'
 import { pointInPolygon, projectWorldPointToWallLocalX, type Vec2 } from './plan-geometry'
 import { resolveInlinePaintMaterial } from './scene-materials'
 import type { AgentContext, AgentOperationOutcome, NodeWrite, SceneNodes } from './types'
+import { setWallSkirting } from './wall-skirting'
 
 /**
  * `author_scene`: a whole design, read by its author from the three.js module it wrote, handed
@@ -81,6 +82,8 @@ export type AuthorSceneReport = {
   columns: number
   items: number
   lights: number
+  /** Rooms whose floor finish is their module, counted by the host that compiles them after the write. */
+  floorScripts: number
   /** The join rule applied: wall ends moved onto a centerline, with how far. */
   snapped: { id: string; end: 'start' | 'end'; movedM: number }[]
   /** What Pascal filled in or dropped, one sentence per fact. */
@@ -100,6 +103,7 @@ const MANY_REGIONS = 24
 const HEX = /^#[0-9a-f]{6}$/i
 
 type Vec3 = [number, number, number]
+type AuthorSceneWall = NonNullable<AuthorScenePayload['levels'][number]['walls']>[number]
 
 /**
  * Small, stable ids: the payload's own hash and a counter per kind, so a replay writes the same
@@ -264,6 +268,25 @@ export function authorSceneCeilingPoints(
   )
 }
 
+/**
+ * The rooms whose floor finish is a module, by their zone once the write made it: the host reads
+ * each room's floor (`floorScriptInputs`), compiles the module for it and writes it with
+ * `setRoomFloorScript`, which core cannot do without a three.js runtime. A room whose seed found
+ * no enclosure has no zone and is already a defect.
+ */
+export function authorSceneFloorScripts(
+  payload: AuthorScenePayload,
+  report: Pick<AuthorSceneReport, 'ids'>,
+): { roomId: string; zoneId: string; code: string }[] {
+  return payload.levels.flatMap((level, index) =>
+    level.rooms.flatMap((room, i) => {
+      const roomId = `room/${index}/${i}`
+      const zoneId = report.ids[roomId]
+      return room.floorCode && zoneId ? [{ roomId, zoneId, code: room.floorCode }] : []
+    }),
+  )
+}
+
 export function authorScene(
   scene: SceneNodes,
   input: AuthorSceneInput,
@@ -298,6 +321,7 @@ export function authorScene(
     columns: 0,
     items: 0,
     lights: 0,
+    floorScripts: 0,
     snapped: [],
     defaults: [],
     warnings: [],
@@ -360,6 +384,12 @@ export function authorScene(
   const levelNodes: ReturnType<typeof LevelNode.parse>[] = []
   const itemNodeIds = new Map<string, string>()
   const itemFrames = new Map<string, Frame>()
+  const skirtings: {
+    id: string
+    nodeId: string
+    levelId: string
+    skirting: NonNullable<AuthorSceneWall['skirting']>
+  }[] = []
   let untypedWindows = 0
 
   payload.levels.forEach((level, index) => {
@@ -427,6 +457,13 @@ export function authorScene(
       })
       place(node)
       wallNodes.set(w.spec.id, { ...w, node })
+      if (w.spec.skirting)
+        skirtings.push({
+          id: w.spec.id,
+          nodeId: node.id,
+          levelId: levelNode.id,
+          skirting: w.spec.skirting,
+        })
       report.ids[w.spec.id] = node.id
       report.walls++
       // ---------- its openings ----------
@@ -884,8 +921,37 @@ export function authorScene(
     mintId: (kind) => mint(kind),
   })
 
-  // Ceilings exist only after structure reconciliation; lights can now use their room's host.
   const written = { ...structure.nodes }
+
+  // ---------- skirting, native on each wall, along the faces its rooms stand on ----------
+  for (const { id, nodeId, levelId, skirting } of skirtings) {
+    const finish = finishRef(skirting.color, id)
+    try {
+      const { changes } = setWallSkirting(
+        written,
+        {
+          wallIds: [nodeId],
+          height: skirting.height,
+          depth: skirting.depth,
+          ...(finish ? { finish } : {}),
+        },
+        paintContext(levelId),
+      )
+      for (const u of changes?.update ?? [])
+        written[u.id] = { ...written[u.id], ...u.data } as AnyNode
+    } catch (error) {
+      const e = error as { code?: string; message?: string }
+      defect(
+        id,
+        'skirting_refused',
+        e.code === 'side_unknown'
+          ? `No room stands on either face of wall ${id}: its skirting was not written.`
+          : `Wall ${id}: ${e.message ?? String(error)}`,
+      )
+    }
+  }
+
+  // Ceilings exist only after structure reconciliation; lights can now use their room's host.
   payload.levels.forEach((level, index) => {
     const levelNode = levelNodes[index]!
     for (const [i, light] of level.lights.entries()) {

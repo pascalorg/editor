@@ -130,19 +130,36 @@ const payload = {
   notes: ['The rug was left out.'],
 }
 
+/** A floor of four boards across the bounds of the room's floor, at its top. */
+const BOARDS = `export default function build({ THREE, params }) {
+  const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const g = new THREE.Group()
+  const m = new THREE.MeshStandardMaterial({ color: '#b08060' }); m.name = 'slot_wood'
+  const w = (x1 - x0) / 4
+  for (let i = 0; i < 4; i++) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.01, z1 - z0), m)
+    b.position.set(x0 + w * (i + 0.5), params.elevation + 0.005, (z0 + z1) / 2)
+    g.add(b)
+  }
+  return g
+}`
+
 describe('author_scene (MCP)', () => {
   let client: Client
   const stored: string[] = []
+  const artifacts = new Map<string, Uint8Array>()
   const host: GeometryScriptHost = {
-    compile: async ({ code }) => {
-      const { glb, ...compiled } = await compileGeometryScript({ code })
+    compile: async ({ code, inputs }) => {
+      const { glb, ...compiled } = await compileGeometryScript({ code, inputs })
       return { ...compiled, glb: new Uint8Array(glb) }
     },
-    storeArtifact: async ({ sha256, mimeType }) => {
+    storeArtifact: async ({ sha256, mimeType, bytes }) => {
       stored.push(`${mimeType} ${sha256.slice(0, 8)}`)
+      artifacts.set(sha256, bytes)
       return sha256
     },
-    readArtifact: async () => null,
+    readArtifact: async ({ sha256 }) => artifacts.get(sha256) ?? null,
   }
 
   beforeEach(async () => {
@@ -286,5 +303,93 @@ describe('author_scene (MCP)', () => {
       arguments: { payload, replace: true },
     })
     expect((replaced.structuredContent as { walls: number }).walls).toBe(4)
+  })
+
+  test("writes a wall's skirting and a room's floor script, readable with get_source", async () => {
+    const level = payload.levels[0]!
+    const design = {
+      ...payload,
+      levels: [
+        {
+          ...level,
+          items: [],
+          lights: [],
+          walls: level.walls.map((w) =>
+            w.id === 'n' ? { ...w, skirting: { color: '#f1ece4' } } : w,
+          ),
+          rooms: [{ ...level.rooms[0]!, floorCode: BOARDS }],
+        },
+      ],
+    }
+    const response = await client.callTool({ name: 'author_scene', arguments: { payload: design } })
+    const report = response.structuredContent as {
+      floorScripts: number
+      defects: unknown[]
+      ids: Record<string, string>
+      payload?: unknown
+    }
+    expect(report.defects).toEqual([])
+    expect(report.floorScripts).toBe(1)
+    const read = async (id: string) => {
+      const got = await client.callTool({ name: 'get_node', arguments: { id } })
+      return JSON.parse((got.content as { text: string }[])[0]!.text).node as Record<string, any>
+    }
+    const room = await read(report.ids['room/0/0']!)
+    expect(room.floor.finish).toMatch(/^scene:/)
+    expect(room.floor.script.language).toBe('three')
+    expect(room.floor.script.manifest.slots.map((s: { id: string }) => s.id)).toEqual(['wood'])
+    expect(room.floor.script.inputs).toEqual(expect.any(String))
+    // The boards span the room inside the walls' faces: 4 m − 0.12 m by 5 m − 0.12 m.
+    const { min, max } = room.floor.script.manifest.bounds
+    expect(max[0] - min[0]).toBeCloseTo(3.88, 2)
+    expect(max[2] - min[2]).toBeCloseTo(4.88, 2)
+    const north = await read(report.ids.n!)
+    expect(north.skirting).toMatchObject({ enabled: true, sides: 'a', height: 0.1, proud: 0.012 })
+    expect(north.slots.aSkirting).toBe(north.slots.b)
+    const source = await client.callTool({
+      name: 'get_source',
+      arguments: { nodeId: report.ids['room/0/0']! },
+    })
+    expect(source.structuredContent).toMatchObject({
+      type: 'zone',
+      language: 'three',
+      code: BOARDS,
+    })
+  })
+
+  test('a floor script that fails is a defect and the room keeps its floor finish', async () => {
+    const level = payload.levels[0]!
+    const design = {
+      ...payload,
+      levels: [
+        {
+          ...level,
+          items: [],
+          lights: [],
+          rooms: [{ ...level.rooms[0]!, floorCode: 'import x from "nowhere"' }],
+        },
+      ],
+    }
+    const response = await client.callTool({ name: 'author_scene', arguments: { payload: design } })
+    const report = response.structuredContent as {
+      floorScripts: number
+      defects: { id: string; code: string; message: string }[]
+      ids: Record<string, string>
+    }
+    expect(report.floorScripts).toBe(0)
+    expect(report.defects).toEqual([
+      {
+        id: 'room/0/0',
+        code: 'floor_script_failed',
+        message: expect.stringContaining('Unsupported import'),
+      },
+    ])
+    const got = await client.callTool({
+      name: 'get_node',
+      arguments: { id: report.ids['room/0/0']! },
+    })
+    const room = JSON.parse((got.content as { text: string }[])[0]!.text).node
+    expect(room.floor.finish).toMatch(/^scene:/)
+    expect(room.floor.script).toBeUndefined()
   })
 })

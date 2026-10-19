@@ -621,8 +621,23 @@ export function scriptedFieldRefusal(node: AnyNode, data: Record<string, unknown
   return `${node.id} is built from a script, so ${fields.join(', ')} ${fields.length === 1 ? 'comes' : 'come'} from it: rebuild it with ${tool} with nodeId and params (get_source shows them); nothing was changed.`
 }
 
+/** What `get_source` reads: a scripted node, or a room by its zone id with its floor script. */
+export type ScriptReadable = Pick<ScriptedNode, 'name' | 'source'> & {
+  id: string
+  type: ScriptedNode['type'] | 'zone'
+}
+
+/** The script `get_source` reads at `nodeId`: an authored object's, or a room's floor script. */
+export function readableScript(nodes: Record<string, AnyNode>, nodeId: string): ScriptReadable {
+  const node = nodes[nodeId]
+  if (node?.type !== 'zone') return authoredObject(nodes, nodeId)
+  if (!node.floor?.script)
+    refuse('not_authored', `${node.name || nodeId} has no floor script.`, { id: nodeId })
+  return { id: node.id, type: 'zone', name: node.name, source: node.floor.script }
+}
+
 /** What `get_source` answers once the host has the module's text. */
-export function readSourceResult(node: ScriptedNode, code: string) {
+export function readSourceResult(node: ScriptReadable, code: string) {
   return {
     nodeId: node.id,
     type: node.type,

@@ -104,8 +104,10 @@ export const getSourceTool = {
   name: 'get_source',
   title: 'Read object script',
   description:
-    'The module (three.js or Blender bpy, named by language) an object (or a window, door or column built from code) runs, with its params and their current values. Optional source evidence when the current module is needed. An edited module can be passed back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.',
+    "The module (three.js or Blender bpy, named by language) an object (or a window, door or column built from code) runs, with its params and their current values; a room's id reads its floor script, the module that builds its floor finish. Optional source evidence when the current module is needed. An edited module can be passed back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.",
   input: {
-    nodeId: NodeId.describe('An object, window, door or column built from code.'),
+    nodeId: NodeId.describe(
+      'An object, window, door or column built from code, or a room with a floor script.',
+    ),
   },
 }

@@ -3,7 +3,7 @@ import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
-import { authorScene, authorSceneCeilingPoints } from './index'
+import { authorScene, authorSceneCeilingPoints, authorSceneFloorScripts } from './index'
 
 /** A site, a building and the empty level a new project starts with. */
 function scaffold(): Record<string, AnyNode> {
@@ -898,5 +898,94 @@ describe('author_scene', () => {
         message: expect.stringContaining('25 floor regions'),
       },
     ])
+  })
+
+  test("a wall's skirting is native on the wall, on its room's face, in its exact colour", () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) =>
+            w.id === 'north'
+              ? { ...w, skirting: { color: '#fafafa' } }
+              : w.id === 'east'
+                ? { ...w, skirting: { height: 0.14, depth: 0.02 } }
+                : w,
+          ),
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const white = outcome.changes!.materials!.find((m) => m.name === '#fafafa')!
+    // The room is south of the north wall, on its left looking from start to end: face a.
+    const north = byAuthorId(outcome, 'north')
+    expect(north.skirting).toMatchObject({ enabled: true, sides: 'a', height: 0.1, proud: 0.012 })
+    expect(north.slots.aSkirting).toBe(`scene:${white.id}`)
+    expect(north.slots.bSkirting).toBeUndefined()
+    const east = byAuthorId(outcome, 'east')
+    expect(east.skirting).toMatchObject({ enabled: true, height: 0.14, proud: 0.02 })
+    expect(east.slots?.aSkirting).toBeUndefined()
+    // A payload without skirting writes walls without one, as before.
+    expect(payload.levels[0]!.walls!.find((w) => w.id === 'south')).not.toHaveProperty('skirting')
+    expect(byAuthorId(outcome, 'south').skirting).toBeUndefined()
+  })
+
+  test('a skirting with no room on either face of its wall is a defect naming the wall', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: [
+            ...bedroom.levels[0]!.walls!,
+            { id: 'garden', start: [4, 4], end: [7, 4], height: 1.2, thickness: 0.2, skirting: {} },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toEqual([
+      {
+        id: 'garden',
+        code: 'skirting_refused',
+        message: 'No room stands on either face of wall garden: its skirting was not written.',
+      },
+    ])
+    expect(byAuthorId(outcome, 'garden').skirting).toBeUndefined()
+  })
+
+  test('rooms with a floor module are listed by their zone for the host to compile', () => {
+    const floorCode = 'export default function build({ THREE }) { return new THREE.Group() }'
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          rooms: [
+            { name: 'Bedroom', seed: [0, 0], floor: 'library:wood-floorplank1', floorCode },
+            { name: 'Garden', seed: [9, 9], floorCode },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(authorSceneFloorScripts(payload, outcome.result)).toEqual([
+      { roomId: 'room/0/0', zoneId: outcome.result.ids['room/0/0']!, code: floorCode },
+    ])
+    expect(outcome.result.floorScripts).toBe(0)
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['room/0/1', 'room_not_enclosed'],
+    ])
+    // The room keeps its floor finish as the fallback until the host writes the script.
+    expect(byAuthorId(outcome, 'room/0/0').floor.finish).toBe('library:wood-floorplank1')
+    expect(authorSceneFloorScripts(bedroom, outcome.result)).toEqual([])
   })
 })
