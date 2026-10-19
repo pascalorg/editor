@@ -536,6 +536,47 @@ function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['
   }
 }
 
+function flipWinding(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  const geometry = source.index ? source.toNonIndexed() : source.clone()
+  for (const [name, attribute] of Object.entries(geometry.attributes)) {
+    const { itemSize, array } = attribute as THREE.BufferAttribute
+    for (let vertex = 0; vertex + 2 < attribute.count; vertex += 3) {
+      for (let k = 0; k < itemSize; k++) {
+        const b = (vertex + 1) * itemSize + k
+        const c = (vertex + 2) * itemSize + k
+        const swapped = array[b]!
+        array[b] = array[c]!
+        array[c] = swapped
+      }
+    }
+    if (name === 'normal') for (let i = 0; i < array.length; i++) array[i] = -array[i]!
+  }
+  return geometry
+}
+
+/**
+ * The viewer draws every material front side only (its WebGPU MRT workaround),
+ * so a double-sided plane shows nothing from behind. The back face is baked into
+ * the geometry instead: the triangles again, wound the other way with their
+ * normals negated; a back-side material keeps only that copy. Runs before the
+ * triangle count and the merge, so both see what is exported.
+ */
+function bakeBackFaces(root: THREE.Object3D) {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || isHelper(mesh) || Array.isArray(mesh.material)) return
+    const { side } = mesh.material
+    if (side === THREE.FrontSide) return
+    const back = flipWinding(mesh.geometry)
+    mesh.geometry =
+      side === THREE.BackSide
+        ? back
+        : (BufferGeometryUtils.mergeGeometries([mesh.geometry.toNonIndexed(), back]) ??
+          mesh.geometry)
+    mesh.material.side = THREE.FrontSide
+  })
+}
+
 /**
  * Merges each part's meshes by material, so a porch draws as a few dozen
  * meshes instead of hundreds (draw calls, not triangles, are the cost). Part
@@ -859,6 +900,7 @@ export async function finishBuild({
   const read = readAnimations(built, root)
   const clips = sampleTransformClips(root, read.clips)
   const animated = read.animated
+  bakeBackFaces(root)
   const conventions = readConventions(root)
   if (conventions.triangles > GEOMETRY_SCRIPT_LIMITS.triangles) {
     throw new Error(

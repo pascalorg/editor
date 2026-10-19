@@ -25,6 +25,7 @@ import {
   AnimationMixer,
   Box3,
   BoxGeometry,
+  FrontSide,
   Group,
   LoopOnce,
   Mesh,
@@ -52,6 +53,53 @@ export default function build() {
   return g
 }
 `
+
+const plane = (side: string) => `
+import * as THREE from 'three'
+export default function build() {
+  const g = new THREE.Group()
+  const curtain = new THREE.Mesh(new THREE.PlaneGeometry(1, 2), new THREE.MeshStandardMaterial({ side: THREE.${side} }))
+  curtain.position.y = 1
+  g.add(curtain)
+  return g
+}
+`
+
+describe('material sides', () => {
+  const triangles = (mesh: Mesh) =>
+    (mesh.geometry.index?.count ?? mesh.geometry.getAttribute('position').count) / 3
+  const build = async (side: string) => {
+    const { glb, manifest } = await compileGeometryScript({ code: plane(side) })
+    const gltf = await new GLTFLoader().parseAsync(glb, '')
+    const mesh = gltf.scene.getObjectByProperty('isMesh', true) as Mesh
+    return { mesh, manifest, material: mesh.material as MeshStandardMaterial }
+  }
+
+  test('a double-sided plane is exported with its back face baked in, front side only', async () => {
+    const { mesh, manifest, material } = await build('DoubleSide')
+    expect(triangles(mesh)).toBe(4)
+    expect(manifest.triangles).toBe(4)
+    expect(material.side).toBe(FrontSide)
+    const normals = mesh.geometry.getAttribute('normal')
+    expect(normals.getZ(0)).toBeCloseTo(1)
+    expect(normals.getZ(normals.count - 1)).toBeCloseTo(-1)
+  })
+
+  test('a front-side plane is exported as authored', async () => {
+    const { mesh, manifest, material } = await build('FrontSide')
+    expect(triangles(mesh)).toBe(2)
+    expect(manifest.triangles).toBe(2)
+    expect(material.side).toBe(FrontSide)
+  })
+
+  test('a back-side plane becomes the flipped copy only', async () => {
+    const { mesh, manifest, material } = await build('BackSide')
+    expect(triangles(mesh)).toBe(2)
+    expect(manifest.triangles).toBe(2)
+    expect(material.side).toBe(FrontSide)
+    expect(mesh.geometry.getAttribute('normal').getZ(0)).toBeCloseTo(-1)
+  })
+})
 
 describe('clips', () => {
   test('a clip is stored ending on its last pose, not wrapped to its first', async () => {
