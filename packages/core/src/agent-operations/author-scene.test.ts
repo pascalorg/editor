@@ -263,7 +263,11 @@ describe('author_scene', () => {
     expect(again.result.walls).toBe(4)
     // Written over itself, the same payload gets fresh ids, so nothing is created and then deleted.
     const firstIds = new Set(first.changes!.create!.map((c) => c.node.id))
+    expect(again.changes!.create!.length).toBe(first.changes!.create!.length)
     expect(again.changes!.create!.some((c) => firstIds.has(c.node.id))).toBe(false)
+    expect(again.changes!.delete).toEqual([
+      first.changes!.create!.find((c) => c.node.type === 'level')!.node.id,
+    ])
   })
 
   test('an opening takes its type, style, leaves and a handle opposite the hinge', () => {

@@ -261,9 +261,10 @@ export function authorScene(
       'This scene already holds a conversion. Pass replace: true to write over it.',
     )
 
-  // The first revision whose ids are free in this scene.
+  // The first revision whose ids are free in this scene: every conversion writes a level, so its
+  // first level id tells whether this payload was written here before.
   let revision = 0
-  while (revision < 32 && scene[idFactory(payload, revision)('probe')]) revision++
+  while (revision < 32 && scene[idFactory(payload, revision)('level')]) revision++
   const mint = idFactory(payload, revision)
   const report: AuthorSceneReport = {
     levels: 0,
