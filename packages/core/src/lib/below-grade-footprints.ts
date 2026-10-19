@@ -43,8 +43,9 @@ function buriedLevels(nodes: Record<AnyNodeId, AnyNode>): BuriedLevel[] {
  *
  * With `shownLevelId`, only what the level display needs open over that level: the level itself and
  * the levels between it and grade (the ones the display hides above it: `level` index at or over
- * its own), the levels the author has hidden left out. The levels deeper than the one shown stay
- * under the ground. Without it, every level below grade.
+ * its own, in every building, as the display decides from the index alone), the levels the author
+ * has hidden left out. The levels deeper than the one shown stay under the ground. Without it,
+ * every level below grade.
  */
 export function belowGradeFootprints(
   nodes: Record<AnyNodeId, AnyNode>,

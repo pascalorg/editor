@@ -140,6 +140,77 @@ test('a level the author hid is not opened over when a level under it is shown',
   expect(belowGradeFootprints(nodes).map(extent)).toEqual([{ x: [-3, 16], z: [-3, 11] }])
 })
 
+/**
+ * Two houses on one site: A at the origin over one basement (-1, 8 × 4 m), B 30 m east over two (-1
+ * 8 × 4 m over -2 10 × 4 m, poking out past it), 3 m a floor.
+ */
+function twoHousesOverBasements() {
+  const rect = (x1: number, z1: number): Array<[number, number]> => [
+    [0, 0],
+    [x1, 0],
+    [x1, z1],
+    [0, z1],
+  ]
+  const level = (id: string, parentId: string, index: number, lowest = false) =>
+    LevelNode.parse({
+      id,
+      parentId,
+      level: index,
+      height: 3,
+      baseElevation: lowest ? 3 * index : 0,
+      children: [`slab${id.slice('level'.length)}`],
+    })
+  const plate = (id: string, parentId: string, x1: number) =>
+    SlabNode.parse({
+      id: `slab${id.slice('level'.length)}`,
+      parentId,
+      elevation: 0.2,
+      polygon: rect(x1, 4),
+    })
+  const nodes: AnyNode[] = [
+    BuildingNode.parse({ id: 'building_a', children: ['level_a_m1', 'level_a_g'] }),
+    level('level_a_m1', 'building_a', -1, true),
+    level('level_a_g', 'building_a', 0),
+    plate('level_a_m1', 'level_a_m1', 8),
+    BuildingNode.parse({
+      id: 'building_b',
+      position: [30, 0, 0],
+      children: ['level_b_m2', 'level_b_m1', 'level_b_g'],
+    }),
+    level('level_b_m2', 'building_b', -2, true),
+    level('level_b_m1', 'building_b', -1),
+    level('level_b_g', 'building_b', 0),
+    plate('level_b_m2', 'level_b_m2', 10),
+    plate('level_b_m1', 'level_b_m1', 8),
+  ]
+  return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+}
+
+test('the level display decides by level index alone, so the hole opens over every basement it leaves under the shown one, in every building', () => {
+  const nodes = twoHousesOverBasements()
+  const byX = (a: Array<[number, number]>, b: Array<[number, number]>) =>
+    extent(a).x[0]! - extent(b).x[0]!
+  const of = (levelId: string) => belowGradeFootprints(nodes, levelId).sort(byX).map(extent)
+  // A's -1 shown: B's -1 is as deep, and B's -2 is deeper than the level shown, so it stays under the ground.
+  expect(of('level_a_m1')).toEqual([
+    { x: [0, 8], z: [0, 4] },
+    { x: [30, 38], z: [0, 4] },
+  ])
+  // B's -2 shown: B's -1 over it, and A's -1, which the display hides just the same.
+  expect(of('level_b_m2')).toEqual([
+    { x: [0, 8], z: [0, 4] },
+    { x: [30, 40], z: [0, 4] },
+  ])
+  // B's -1 shown: A's -1 too, B's -2 under it not.
+  expect(of('level_b_m1')).toEqual([
+    { x: [0, 8], z: [0, 4] },
+    { x: [30, 38], z: [0, 4] },
+  ])
+  // The pit goes down to the floor of the level shown, whichever building it is in.
+  expect(belowGradeFloorY(nodes, 'level_a_m1')).toBeCloseTo(-2.8, 2)
+  expect(belowGradeFloorY(nodes, 'level_b_m2')).toBeCloseTo(-5.8, 2)
+})
+
 test('the pit goes down to the floor of the level shown, and to none when it is at grade', () => {
   const nodes = houseOverBasement([0, 0, 0], 0)
   // The villa's Lower Ground: -3.63 m with its 0.28 m plate.

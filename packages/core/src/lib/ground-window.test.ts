@@ -181,6 +181,32 @@ describe('levelStackGroundBox', () => {
     expect(levelStackGroundBox(levels, 'level_s4')?.max).toEqual([16, 3, 11])
   })
 
+  test('the level display has no building in its rule: the levels under the shown one count in every building', () => {
+    const both: Record<string, AnyNode> = { ...stack() }
+    for (const node of [
+      BuildingNode.parse({ id: 'building_t', position: [40, 0, 0], children: ['level_t0'] }),
+      LevelNode.parse({
+        id: 'level_t0',
+        parentId: 'building_t',
+        level: -3,
+        height: 3,
+        baseElevation: -3,
+        children: ['slab_t0'],
+      }),
+      SlabNode.parse({
+        id: 'slab_t0',
+        parentId: 'level_t0',
+        elevation: 0,
+        polygon: rect(0, 6, 0, 6),
+      }),
+    ])
+      both[node.id] = node
+    // -2 shown in the first house: its -2, -3 and -4, and the other house's -3 (6 m east of 40, up to the ground).
+    const box = levelStackGroundBox(both as Record<AnyNodeId, AnyNode>, 'level_s2')
+    expect(box?.min).toEqual([-3, -12, -3])
+    expect(box?.max).toEqual([46, 0, 11])
+  })
+
   test('a level the author hid is left out, an id that is no level has no box', () => {
     const levels = stack()
     levels.level_s0 = { ...levels.level_s0, visible: false } as AnyNode

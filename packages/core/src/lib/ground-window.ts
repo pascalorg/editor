@@ -45,10 +45,10 @@ export function buildingGroundBox(
 }
 
 /**
- * The world box of what the editor's level display shows of a building when `levelId` is the shown
- * level: that level and the ones under it (the display hides the ones above), the levels the author
- * hid left out. Where the fog of the underground keeps the world clear. `null` for an id that is no
- * level, or when nothing shown has a footprint.
+ * The world box of what the editor's level display shows when `levelId` is the shown level: that
+ * level and the ones under it, in every building (the display decides from the level index alone
+ * and hides the ones above), the levels the author hid left out. Where the fog of the underground
+ * keeps the world clear. `null` for an id that is no level, or when nothing shown has a footprint.
  */
 export function levelStackGroundBox(
   nodes: Record<AnyNodeId, AnyNode>,
