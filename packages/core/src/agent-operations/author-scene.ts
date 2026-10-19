@@ -10,6 +10,7 @@ import {
   type WindowStyle,
 } from '../building/opening-style-presets'
 import { windowTakesStyle, windowTypeFields } from '../building/window-types'
+import { floorRoomFaces } from '../lib/floor-room-faces'
 import {
   matchScriptSlotsToLibrary,
   requireMeasured,
@@ -19,6 +20,7 @@ import {
 import type { BoundaryNode } from '../lib/room-topology-index'
 import { detectSpacesForLevel } from '../lib/space-detection'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
+import { wallFaceScriptInputs } from '../lib/wall-face-script'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
   type AnyNode,
@@ -30,6 +32,7 @@ import {
   type SceneMaterial,
   type SceneMaterialId,
   SlabNode,
+  type WallFace,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -38,6 +41,7 @@ import { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
+import { roomFaceCover } from '../systems/wall/wall-room-sides'
 import { migrateRoomZones } from '../utils/room-zone-migration'
 import { addObject } from './add-object'
 import { paint } from './paint'
@@ -84,6 +88,8 @@ export type AuthorSceneReport = {
   lights: number
   /** Rooms whose floor finish is their module, counted by the host that compiles them after the write. */
   floorScripts: number
+  /** Wall faces whose finish is a module, counted by the host that compiles them after the write. */
+  faceScripts: number
   /** The join rule applied: wall ends moved onto a centerline, with how far. */
   snapped: { id: string; end: 'start' | 'end'; movedM: number }[]
   /** What Pascal filled in or dropped, one sentence per fact. */
@@ -287,6 +293,140 @@ export function authorSceneFloorScripts(
   )
 }
 
+/** A wall face whose finish is a module, for the host to compile once the write is applied. */
+export type AuthorSceneFaceScript = {
+  /** The payload's wall id. */
+  wallId: string
+  face: WallFace
+  nodeId: string
+  code: string
+  toHeight?: number
+}
+
+/**
+ * Which faces the payload's face modules build on, and why the others cannot be: a wall's own
+ * `faceLeft` (face a) and `faceRight` (face b), then each room's `wallCode` on the faces its floor
+ * meets (the spans of the room the zone was derived from, the faces `setWallSkirting` runs along),
+ * where a wall's own module wins. A face with nothing to build on (a curved or curtain wall) or
+ * that no room looks into is a `no_face` defect.
+ */
+function resolveFaceScripts(
+  payload: AuthorScenePayload,
+  ids: AuthorSceneReport['ids'],
+  nodes: SceneNodes,
+): {
+  scripts: AuthorSceneFaceScript[]
+  defects: AuthorSceneDefect[]
+  warnings: AuthorSceneDefect[]
+} {
+  const scripts: AuthorSceneFaceScript[] = []
+  const defects: AuthorSceneDefect[] = []
+  const warnings: AuthorSceneDefect[] = []
+  const side = (face: WallFace) => (face === 'a' ? 'left' : 'right')
+  const add = (wallId: string, face: WallFace, nodeId: string, code: string, toHeight?: number) =>
+    scripts.push({ wallId, face, nodeId, code, ...(toHeight === undefined ? {} : { toHeight }) })
+  const flat = 'is curved, a curtain wall or has no height'
+  payload.levels.forEach((level, index) => {
+    const walls = (level.walls ?? []).flatMap((spec) => {
+      const nodeId = ids[spec.id]
+      return nodeId && nodes[nodeId]?.type === 'wall' ? [{ spec, nodeId }] : []
+    })
+    const owned = new Set<string>()
+    for (const { spec, nodeId } of walls) {
+      for (const [face, module] of [
+        ['a', spec.faceLeft],
+        ['b', spec.faceRight],
+      ] as const) {
+        if (!module) continue
+        owned.add(`${nodeId}/${face}`)
+        const id = `${spec.id}/${face}`
+        if (!wallFaceScriptInputs(nodes, nodeId, face, module.toHeight))
+          defects.push({
+            id,
+            code: 'no_face',
+            message: `Wall ${spec.id} ${flat}: its ${side(face)} face has nothing a script can build on and keeps its paint.`,
+          })
+        else if (roomFaceCover(nodes, nodeId)[face] === 'none')
+          defects.push({
+            id,
+            code: 'no_face',
+            message: `No room looks into the ${side(face)} face of wall ${spec.id} (left and right as seen from its start to its end): its face script was not written.`,
+          })
+        else add(spec.id, face, nodeId, module.code, module.toHeight)
+      }
+    }
+    const byRoom = new Map<string, { name: string; code: string; toHeight?: number }>()
+    for (const [i, room] of level.rooms.entries()) {
+      const roomId = `room/${index}/${i}`
+      const zone = nodes[ids[roomId] ?? '']
+      if (!room.wallCode || zone?.type !== 'zone') continue
+      const boundaries = Object.values(nodes).filter(
+        (n): n is BoundaryNode =>
+          n.parentId === zone.parentId && (n.type === 'wall' || n.type === 'separator'),
+      )
+      const zoneWalls = [...zone.boundaryWallIds].sort().join()
+      const derived = floorRoomFaces(boundaries).find(
+        (r) =>
+          [...new Set(r.spans.filter((s) => s.kind === 'wall').map((s) => s.boundaryId))]
+            .sort()
+            .join() === zoneWalls && pointInPolygon(room.seed as Vec2, r.referencePolygon),
+      )
+      const faces = new Set(
+        (derived?.spans ?? [])
+          .filter((s) => s.kind === 'wall' && s.t1 > s.t0)
+          .map((s) => `${s.boundaryId}/${s.face}`),
+      )
+      if (!faces.size) {
+        defects.push({
+          id: roomId,
+          code: 'no_face',
+          message: `No wall face looks into "${room.name}": its wallCode was not written.`,
+        })
+        continue
+      }
+      for (const { spec, nodeId } of walls) {
+        for (const face of ['a', 'b'] as const) {
+          const key = `${nodeId}/${face}`
+          if (!faces.has(key) || owned.has(key)) continue
+          const other = byRoom.get(key)
+          if (other) {
+            if (other.code !== room.wallCode || other.toHeight !== room.wallToHeight)
+              warnings.push({
+                id: `${spec.id}/${face}`,
+                code: 'face_shared',
+                message: `The ${side(face)} face of wall ${spec.id} looks into "${other.name}" and "${room.name}": it is built by "${other.name}"'s wallCode.`,
+              })
+            continue
+          }
+          byRoom.set(key, { name: room.name, code: room.wallCode, toHeight: room.wallToHeight })
+          if (!wallFaceScriptInputs(nodes, nodeId, face, room.wallToHeight))
+            defects.push({
+              id: `${spec.id}/${face}`,
+              code: 'no_face',
+              message: `Wall ${spec.id} ${flat}: "${room.name}"'s wallCode was not written on its ${side(face)} face, which keeps its paint.`,
+            })
+          else add(spec.id, face, nodeId, room.wallCode, room.wallToHeight)
+        }
+      }
+    }
+  })
+  return { scripts, defects, warnings }
+}
+
+/**
+ * The wall faces whose finish is a module, once the write made the walls and the rooms: the host
+ * reads each face (`wallFaceScriptInputs`), compiles the module for it and writes it with
+ * `setWallFaceScript`, which core cannot do without a three.js runtime. The faces that cannot take
+ * one are already `no_face` defects in the operation's report.
+ */
+export function authorSceneFaceScripts(
+  payload: AuthorScenePayload,
+  report: Pick<AuthorSceneReport, 'ids'>,
+  nodes: SceneNodes,
+): AuthorSceneFaceScript[] {
+  return resolveFaceScripts(payload, report.ids, nodes).scripts
+}
+
 export function authorScene(
   scene: SceneNodes,
   input: AuthorSceneInput,
@@ -322,6 +462,7 @@ export function authorScene(
     items: 0,
     lights: 0,
     floorScripts: 0,
+    faceScripts: 0,
     snapped: [],
     defaults: [],
     warnings: [],
@@ -950,6 +1091,11 @@ export function authorScene(
       )
     }
   }
+
+  // ---------- face modules: which faces they build on is known now; the host compiles them ----------
+  const faces = resolveFaceScripts(payload, report.ids, written)
+  report.defects.push(...faces.defects)
+  report.warnings.push(...faces.warnings)
 
   // Ceilings exist only after structure reconciliation; lights can now use their room's host.
   payload.levels.forEach((level, index) => {

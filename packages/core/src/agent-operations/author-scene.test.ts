@@ -3,7 +3,12 @@ import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
-import { authorScene, authorSceneCeilingPoints, authorSceneFloorScripts } from './index'
+import {
+  authorScene,
+  authorSceneCeilingPoints,
+  authorSceneFaceScripts,
+  authorSceneFloorScripts,
+} from './index'
 
 /** A site, a building and the empty level a new project starts with. */
 function scaffold(): Record<string, AnyNode> {
@@ -102,6 +107,11 @@ const run = (
 
 const nodesOf = (outcome: ReturnType<typeof authorScene>) =>
   outcome.changes!.create!.map((c) => c.node)
+/** The scene once the outcome is applied, as the host reads it. */
+const sceneOf = (outcome: ReturnType<typeof authorScene>) => ({
+  ...scaffold(),
+  ...Object.fromEntries(nodesOf(outcome).map((n) => [n.id, n])),
+})
 const byAuthorId = (outcome: ReturnType<typeof authorScene>, id: string) =>
   nodesOf(outcome).find((n) => n.id === outcome.result.ids[id]) as AnyNode & Record<string, any>
 
@@ -987,5 +997,121 @@ describe('author_scene', () => {
     // The room keeps its floor finish as the fallback until the host writes the script.
     expect(byAuthorId(outcome, 'room/0/0').floor.finish).toBe('library:wood-floorplank1')
     expect(authorSceneFloorScripts(bedroom, outcome.result)).toEqual([])
+  })
+
+  test("wall face modules are listed by face; a room's wallCode covers the faces it looks into, a wall's own module over it", () => {
+    const tiles = 'export default function build({ THREE }) { return new THREE.Group() }'
+    const panels = 'export default function build({ THREE }) { return new THREE.Mesh() }'
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) =>
+            w.id === 'east' ? { ...w, faceLeft: { code: tiles } } : w,
+          ),
+          rooms: [{ ...bedroom.levels[0]!.rooms[0]!, wallCode: panels, wallToHeight: '120cm' }],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.faceScripts).toBe(0)
+    const ids = outcome.result.ids
+    // The room stands on each wall's left face (face a), the walls running round it.
+    expect(authorSceneFaceScripts(payload, outcome.result, sceneOf(outcome))).toEqual([
+      { wallId: 'east', face: 'a', nodeId: ids.east!, code: tiles },
+      { wallId: 'north', face: 'a', nodeId: ids.north!, code: panels, toHeight: 1.2 },
+      { wallId: 'south', face: 'a', nodeId: ids.south!, code: panels, toHeight: 1.2 },
+      { wallId: 'west', face: 'a', nodeId: ids.west!, code: panels, toHeight: 1.2 },
+    ])
+    // The faces keep their paint until the host writes the scripts; old payloads list none.
+    expect(byAuthorId(outcome, 'north').slots.a).toEqual(expect.any(String))
+    expect(byAuthorId(outcome, 'east').finishScripts).toBeUndefined()
+    const plain = run(bedroom, {})
+    expect(authorSceneFaceScripts(bedroom, plain.result, sceneOf(plain))).toEqual([])
+  })
+
+  test('a face module on a face no room looks into is a no_face defect naming the wall and face', () => {
+    const tiles = 'export default function build({ THREE }) { return new THREE.Group() }'
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: [
+            ...bedroom.levels[0]!.walls!.map((w) =>
+              w.id === 'north' ? { ...w, faceRight: { code: tiles } } : w,
+            ),
+            {
+              id: 'garden',
+              start: [4, 4],
+              end: [7, 4],
+              height: 1.2,
+              thickness: 0.2,
+              faceLeft: { code: tiles },
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toEqual([
+      {
+        id: 'north/b',
+        code: 'no_face',
+        message:
+          'No room looks into the right face of wall north (left and right as seen from its start to its end): its face script was not written.',
+      },
+      {
+        id: 'garden/a',
+        code: 'no_face',
+        message:
+          'No room looks into the left face of wall garden (left and right as seen from its start to its end): its face script was not written.',
+      },
+    ])
+    expect(authorSceneFaceScripts(payload, outcome.result, sceneOf(outcome))).toEqual([])
+  })
+
+  test("two rooms on one face: the first room's wallCode builds it and the other is warned", () => {
+    const [west, east] = ['export default () => 1', 'export default () => 2']
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: [
+            ...bedroom.levels[0]!.walls!,
+            { id: 'middle', start: [0, -2.5], end: [0, 2.5], height: 2.7, thickness: 0.1 },
+          ],
+          rooms: [
+            { name: 'Study', seed: [-1, 0], wallCode: west },
+            { name: 'Nursery', seed: [1, 0], wallCode: east },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toEqual([])
+    // The north and south walls run past the partition: one face each, seen from both rooms.
+    expect(outcome.result.warnings.map((w) => [w.id, w.code])).toEqual([
+      ['north/a', 'face_shared'],
+      ['south/a', 'face_shared'],
+    ])
+    const listed = authorSceneFaceScripts(payload, outcome.result, sceneOf(outcome))
+    expect(listed.map((f) => [f.wallId, f.face, f.code])).toEqual([
+      ['north', 'a', west],
+      ['south', 'a', west],
+      ['west', 'a', west],
+      ['middle', 'a', west],
+      ['east', 'a', east],
+      ['middle', 'b', east],
+    ])
   })
 })

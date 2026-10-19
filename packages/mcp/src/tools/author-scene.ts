@@ -1,14 +1,16 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { floorScriptInputs } from '@pascal-app/core'
+import { floorScriptInputs, wallFaceScriptInputs } from '@pascal-app/core'
 import {
   type AgentContext,
   type AuthorSceneReport,
   achievedChanges,
   authorScene,
   authorSceneCeilingPoints,
+  authorSceneFaceScripts,
   authorSceneFloorScripts,
   type SceneNodes,
   setRoomFloorScript,
+  setWallFaceScript,
   verifyScene,
 } from '@pascal-app/core/agent-operations'
 import {
@@ -168,6 +170,43 @@ export function registerAuthorScene(
           })
         }
       }
+      // A face module needs its face, its openings cut and its rooms derived: compiled for it and
+      // written on the wall; a failure leaves the face its paint.
+      for (const { wallId, face, nodeId, code, toHeight } of authorSceneFaceScripts(
+        args.payload,
+        outcome.result,
+        bridge.getNodes() as SceneNodes,
+      )) {
+        try {
+          const inputs = wallFaceScriptInputs(
+            bridge.getNodes() as SceneNodes,
+            nodeId,
+            face,
+            toHeight,
+          )
+          if (!inputs) throw new Error('The face has nothing to build on.')
+          const built = await compileAndStore(
+            host,
+            scene.id,
+            { code, language: 'three', params: undefined, inputs },
+            'wall-face',
+            { nodeId, metadata: { name: 'Wall finish' } },
+          )
+          const written = setWallFaceScript(
+            bridge.getNodes() as SceneNodes,
+            { wallId: nodeId, face, compiled: built, inputs, toHeight },
+            context,
+          )
+          if (written.changes) bridge.applyPatch(toPatches(written.changes))
+          outcome.result.faceScripts++
+        } catch (error) {
+          outcome.result.defects.push({
+            id: `${wallId}/${face}`,
+            code: 'face_script_failed',
+            message: `${error instanceof Error ? error.message : String(error)} (the face keeps its paint)`,
+          })
+        }
+      }
       const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
       if (building) {
         bridge.updateNode(building.id, {
@@ -213,12 +252,14 @@ function withoutCode(payload: AuthorScenePayload) {
     ...payload,
     levels: payload.levels.map((level) => ({
       ...level,
-      walls: (level.walls ?? []).map((wall) => ({
+      walls: (level.walls ?? []).map(({ faceLeft, faceRight, ...wall }) => ({
         ...wall,
         openings: (wall.openings ?? []).map(({ code: _, ...opening }) => opening),
+        ...(faceLeft ? { faceLeft: { toHeight: faceLeft.toHeight } } : {}),
+        ...(faceRight ? { faceRight: { toHeight: faceRight.toHeight } } : {}),
       })),
       items: (level.items ?? []).map(({ code: _, ...item }) => item),
-      rooms: level.rooms.map(({ floorCode: _, ...room }) => room),
+      rooms: level.rooms.map(({ floorCode: _, wallCode: _w, ...room }) => room),
     })),
   }
 }

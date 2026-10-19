@@ -145,6 +145,32 @@ const BOARDS = `export default function build({ THREE, params }) {
   return g
 }`
 
+/** Half-metre tiles over a wall face, none over its doors and windows. */
+const TILES = `export default function build({ THREE, params }) {
+  const { outline, holes } = params
+  const g = new THREE.Group()
+  const m = new THREE.MeshStandardMaterial({ color: '#ffffff' }); m.name = 'slot_tile'
+  const size = 0.5
+  for (let x = outline.x0; x + size <= outline.x1 + 1e-6; x += size)
+    for (let y = outline.y0; y + size <= outline.y1 + 1e-6; y += size) {
+      if (holes.some((h) => x < h.x1 && x + size > h.x0 && y < h.y1 && y + size > h.y0)) continue
+      const t = new THREE.Mesh(new THREE.BoxGeometry(size - 0.004, size - 0.004, 0.008), m)
+      t.position.set(x + size / 2, y + size / 2, 0.004)
+      g.add(t)
+    }
+  return g
+}`
+
+/** One panel over the whole outline of a wall face. */
+const PANEL = `export default function build({ THREE, params }) {
+  const { x0, y0, x1, y1 } = params.outline
+  const m = new THREE.MeshStandardMaterial({ color: '#c8b89a' }); m.name = 'slot_panel'
+  const b = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, 0.01), m)
+  b.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0.005)
+  const g = new THREE.Group(); g.add(b)
+  return g
+}`
+
 describe('author_scene (MCP)', () => {
   let client: Client
   const stored: string[] = []
@@ -391,5 +417,93 @@ describe('author_scene (MCP)', () => {
     const room = JSON.parse((got.content as { text: string }[])[0]!.text).node
     expect(room.floor.finish).toMatch(/^scene:/)
     expect(room.floor.script).toBeUndefined()
+  })
+
+  test("writes a wall's face module and a room's wallCode on its faces, readable with get_source", async () => {
+    const level = payload.levels[0]!
+    const design = {
+      ...payload,
+      levels: [
+        {
+          ...level,
+          items: [],
+          lights: [],
+          walls: level.walls.map((w) => (w.id === 'e' ? { ...w, faceLeft: { code: TILES } } : w)),
+          rooms: [{ ...level.rooms[0]!, wallCode: PANEL, wallToHeight: 1.2 }],
+        },
+      ],
+    }
+    const response = await client.callTool({ name: 'author_scene', arguments: { payload: design } })
+    const report = response.structuredContent as {
+      faceScripts: number
+      defects: unknown[]
+      ids: Record<string, string>
+    }
+    expect(report.defects).toEqual([])
+    expect(report.faceScripts).toBe(4)
+    const read = async (id: string) => {
+      const got = await client.callTool({ name: 'get_node', arguments: { id } })
+      return JSON.parse((got.content as { text: string }[])[0]!.text).node as Record<string, any>
+    }
+    // The tiles stay on the east wall's room face, between its mitred ends and under its top.
+    const east = await read(report.ids.e!)
+    const tiles = east.finishScripts.a
+    expect(east.finishScripts.b).toBeUndefined()
+    expect(tiles.language).toBe('three')
+    expect(tiles.toHeight).toBeUndefined()
+    expect(tiles.manifest.slots.map((s: { id: string }) => s.id)).toEqual(['tile'])
+    const { min, max } = tiles.manifest.bounds
+    expect(min[0]).toBeGreaterThanOrEqual(0)
+    expect(max[0]).toBeLessThanOrEqual(5)
+    expect(min[1]).toBeGreaterThanOrEqual(0)
+    expect(max[1]).toBeLessThanOrEqual(2.7)
+    expect(max[2] - min[2]).toBeCloseTo(0.008, 3)
+    // The room's other walls are panelled to 1.2 m on the face it looks into.
+    for (const id of ['n', 's', 'w']) {
+      const wall = await read(report.ids[id]!)
+      expect(wall.finishScripts.a.toHeight).toBe(1.2)
+      expect(wall.finishScripts.a.manifest.bounds.max[1]).toBeCloseTo(1.2, 3)
+      expect(wall.finishScripts.b).toBeUndefined()
+    }
+    const source = await client.callTool({
+      name: 'get_source',
+      arguments: { nodeId: report.ids.e!, face: 'a' },
+    })
+    expect(source.structuredContent).toMatchObject({ type: 'wall', language: 'three', code: TILES })
+  })
+
+  test('a face module that fails is a defect and the face keeps its paint', async () => {
+    const level = payload.levels[0]!
+    const design = {
+      ...payload,
+      levels: [
+        {
+          ...level,
+          items: [],
+          lights: [],
+          walls: level.walls.map((w) =>
+            w.id === 'n' ? { ...w, faceLeft: { code: 'import x from "nowhere"' } } : w,
+          ),
+        },
+      ],
+    }
+    const response = await client.callTool({ name: 'author_scene', arguments: { payload: design } })
+    const report = response.structuredContent as {
+      faceScripts: number
+      defects: { id: string; code: string; message: string }[]
+      ids: Record<string, string>
+    }
+    expect(report.faceScripts).toBe(0)
+    expect(report.defects).toEqual([
+      {
+        id: 'n/a',
+        code: 'face_script_failed',
+        message: expect.stringContaining('Unsupported import'),
+      },
+    ])
+    const got = await client.callTool({ name: 'get_node', arguments: { id: report.ids.n! } })
+    const north = JSON.parse((got.content as { text: string }[])[0]!.text).node
+    expect(north.slots.a).toMatch(/^scene:/)
+    expect(north.finishScripts).toBeUndefined()
   })
 })

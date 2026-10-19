@@ -6,7 +6,7 @@ import { NodeId } from './node-id'
 
 const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene, in one call. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls with their openings, rooms, slabs, columns, railings, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
 
-Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands; its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode; a slab is a terrace, a platform, a balcony. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
+Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands; its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode, tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode); a slab is a terrace, a platform, a balcony. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
 
 The report says what was written, what Pascal defaulted (defaults: a window with no type is fixed and cannot open), what it warns about but wrote (warnings: thin slabs, too many slabs or regions) and what it refused (defects, by your ids).
 
@@ -82,6 +82,19 @@ export const authorSceneOpening = z.object({
     .describe("The side the door opens towards: the wall's front or back face."),
 })
 
+const WALL_FACE_MODULE =
+  "a three.js module that builds this face's finish (tiles with joints, panelling, boards) for exactly the face: it receives params.outline, params.holes (its doors and windows), params.base and params.thickness in wall-local metres (x along the wall from its start, y up from the face's base, z out of the face) and returns the finish clipped to the outline; Pascal rebuilds it when the wall or its openings change"
+
+const faceToHeight = (whose: string) =>
+  length(`Where ${whose} stops, metres up from the face's base (default: the full face).`, {
+    positive: true,
+  }).optional()
+
+const authorSceneWallFace = z.object({
+  code: z.string().min(1).max(48_000).describe(`The face's finish: ${WALL_FACE_MODULE}.`),
+  toHeight: faceToHeight('the finish'),
+})
+
 export const authorSceneWall = z.object({
   id: z.string().min(1).max(64).describe('Your own id, for the report.'),
   start: plan('start'),
@@ -128,6 +141,16 @@ export const authorSceneWall = z.object({
     .describe(
       "The wall's skirting (baseboard), native on the wall: it runs along the faces a room stands on, steps with the floor and breaks at doors. Give it here, never as an item.",
     ),
+  faceLeft: authorSceneWallFace
+    .optional()
+    .describe(
+      `The face on the left looking from start to end (the front, colorLeft's face), built by ${WALL_FACE_MODULE}; colorLeft stays the paint under it. Over the room's wallCode.`,
+    ),
+  faceRight: authorSceneWallFace
+    .optional()
+    .describe(
+      `The face on the right looking from start to end (colorRight's face), built by ${WALL_FACE_MODULE}; colorRight stays the paint under it. Over the room's wallCode.`,
+    ),
 })
 
 export const authorSceneRoom = z.object({
@@ -159,6 +182,15 @@ export const authorSceneRoom = z.object({
     .describe(
       "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon, params.holes and params.elevation (level coordinates, metres) and returns the planks, tiles or boards clipped to that polygon. Pascal rebuilds it when the room changes; floor stays the fallback finish.",
     ),
+  wallCode: z
+    .string()
+    .min(1)
+    .max(48_000)
+    .optional()
+    .describe(
+      `The finish of every wall face that looks into this room (the faces its floor meets, where the skirting runs), each built by ${WALL_FACE_MODULE}. A wall's own faceLeft / faceRight wins over it.`,
+    ),
+  wallToHeight: faceToHeight("the room's wallCode"),
 })
 
 export const authorSceneSlab = z.object({
