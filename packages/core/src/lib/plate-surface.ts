@@ -224,6 +224,7 @@ function zoneSignature(zones: readonly ZoneNode[]): string {
       zone.polygon,
       zone.holes,
       zone.floor?.finish ?? null,
+      zone.floor?.script !== undefined,
       zone.floorStepFinish,
       zone.floorStepOverrides ?? null,
       zone.floorEdgeFinish,
@@ -483,7 +484,8 @@ function partitionTop(
   for (const zone of zones) {
     const clear = clearByZone.get(zone.id)
     const finish = zone.floor?.finish
-    if (!clear || (finish === undefined && !plate.plateRole)) continue
+    // A scripted floor is the room's own cell, so a hit on it names the room its script belongs to.
+    if (!clear || (finish === undefined && !zone.floor?.script && !plate.plateRole)) continue
     candidates.push({ role: roomFinishRole(zone.id), finish, polygons: clear })
   }
 

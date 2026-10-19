@@ -9,6 +9,7 @@ import {
 } from './add-object'
 import { registerApplyPatch } from './apply-patch'
 import type { AssetCatalog } from './asset-catalog'
+import { registerAuthorScene } from './author-scene'
 import { registerCheckCollisions } from './check-collisions'
 import { registerClearScene } from './clear-scene'
 import { registerConstructionTools } from './construction-tools'
@@ -57,6 +58,7 @@ export function registerTools(
   })
   registerAddColumn(server, operations, geometryScripts)
   registerAddObject(server, operations, geometryScripts)
+  registerAuthorScene(server, operations, geometryScripts)
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerViewScene(server, operations, sceneViews)

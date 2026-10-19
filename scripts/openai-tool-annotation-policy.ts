@@ -27,6 +27,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   find_by_type: policy(true, false, false),
   get_source: policy(true, false, false),
   add_object: policy(false, true, false),
+  author_scene: policy(false, true, false),
   edit_collection: policy(false, true, false),
   list_collections: policy(true, false, false),
   check_collisions: policy(true, false, false),

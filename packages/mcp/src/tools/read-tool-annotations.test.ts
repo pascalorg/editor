@@ -97,6 +97,7 @@ const TOOL_POLICIES = [
       'apply_patch',
       'clear_scene',
       'add_object',
+      'author_scene',
       'add_column',
       'edit_collection',
       'create_from_template',

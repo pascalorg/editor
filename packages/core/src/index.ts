@@ -165,6 +165,16 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  type FinishScriptHost,
+  type FinishScriptInputs,
+  type FinishScriptRefresh,
+  type FinishScriptTarget,
+  finishScriptWrites,
+  refreshFinishScripts,
+  type StaleFinishScript,
+  staleFinishScripts,
+} from './lib/finish-script'
 export { floorConstructionLift, liftedManualSlab } from './lib/floor-construction-lift'
 export { floorFootprintName } from './lib/floor-footprint-name'
 export {
@@ -189,7 +199,17 @@ export {
   floorOpeningTargets,
   openingsForSurface,
 } from './lib/floor-opening-intent'
-export { type FloorPlatePaintRefusal, floorPlatePaintRefusal } from './lib/floor-plate-paint'
+export {
+  type FloorPlatePaintRefusal,
+  floorPlatePaintRefusal,
+  floorScriptPaintRefusal,
+} from './lib/floor-plate-paint'
+export {
+  type FloorScriptInputs,
+  floorScriptInputs,
+  floorScriptInputsKey,
+  floorScriptRecord,
+} from './lib/floor-script'
 export {
   type FloorStepOverride,
   floorStepOverrideFor,
@@ -524,6 +544,18 @@ export {
   type WallSegment,
   type WallSegmentClosest,
 } from './lib/wall-distance'
+export {
+  type WallFacePaintRefusal,
+  type WallFaceRect,
+  type WallFaceScriptInputs,
+  wallFaceBaseOffset,
+  wallFaceScriptInputs,
+  wallFaceScriptInputsKey,
+  wallFaceScriptPaintRefusal,
+  wallFaceScriptPlacement,
+  wallFaceScriptRecord,
+  wallFaceScriptSkirtingGap,
+} from './lib/wall-face-script'
 export { ZONE_COLOR_PALETTE, zoneColorForSeed } from './lib/zone-colors'
 export {
   deriveZoneQuantityReport,
@@ -1006,6 +1038,7 @@ export {
   type WallJoinResult,
   type WallTopologyChanges,
 } from './systems/wall/wall-topology'
+export { wallTrimPatch } from './systems/wall/wall-trim'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { areSemanticValuesEqual } from './utils/semantic-equal'

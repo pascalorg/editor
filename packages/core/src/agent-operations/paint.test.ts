@@ -345,6 +345,24 @@ describe('a wall in a room with a wall finish', () => {
   })
 })
 
+describe("a wall's trim", () => {
+  test('named without a face is painted on both faces, the faces themselves untouched', () => {
+    const nodes = room()
+    const { changes } = paint(nodes, {
+      targets: ['wall_south'],
+      role: 'skirting',
+      material: 'library:preset-white',
+    })
+    const wall = applied(nodes, {}, changes).nodes.wall_south as WallNode
+    expect(wall.slots).toEqual({
+      a: DRYWALL,
+      b: 'library:concrete-raw',
+      aSkirting: 'library:preset-white',
+      bSkirting: 'library:preset-white',
+    })
+  })
+})
+
 describe('paint refuses the whole call', () => {
   for (const [label, input, code] of [
     ['a target not in the scene', timberOutside(['wall_south', 'wall_gone']), 'target_not_found'],

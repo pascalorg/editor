@@ -1,10 +1,12 @@
 import { refuse } from '../agent-tools/refusal'
+import { wallFaceScriptPaintRefusal } from '../lib/wall-face-script'
 import type { MaterialSurface } from '../material-kinds'
 import { GLAZED_ROOF_SLOTS, nodeSlotDeclarations } from '../node-slots'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
   type AnyNode,
   getEffectiveSegmentSurfaceMaterial,
+  getWallTrimSlotId,
   isGlazedRoofSegment,
   type MaterialSchema,
   type RoofNode,
@@ -12,6 +14,7 @@ import {
   type SceneMaterial,
   type WallFace,
   type WallNode,
+  type WallTrimKind,
 } from '../schema'
 import { buildWallFinishLayout, getWallLevelZones } from '../systems/wall/wall-finish'
 import { planWallPaint } from '../systems/wall/wall-paint-plan'
@@ -38,6 +41,8 @@ type PaintInput = {
   materialName?: string
   erase?: true
 }
+
+const WALL_TRIMS: readonly WallTrimKind[] = ['skirting', 'crown', 'chairRail']
 
 const ROOF_ROLES = ['top', 'edge', 'wall', 'fascia'] as const
 type RoofRole = (typeof ROOF_ROLES)[number]
@@ -325,6 +330,16 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
           `Wall ${id} has no ${input.role} face by its rooms or its stored sides: name its face, a or b.`,
           { target: id },
         )
+    } else if (node.type === 'wall' && WALL_TRIMS.includes(input.role as WallTrimKind)) {
+      // A trim named without a face is the trim on both faces, as a wall without a role is.
+      roles = (['a', 'b'] as const).map((face) =>
+        getWallTrimSlotId(face, input.role as WallTrimKind),
+      )
+      if (!roles.every((role) => ids.includes(role)))
+        refuse('unknown_role', `A ${node.type}'s roles are ${ids.join(', ')}.`, {
+          target: id,
+          roles: ids,
+        })
     } else if (input.role) {
       if (!ids.includes(input.role))
         refuse('unknown_role', `A ${node.type}'s roles are ${ids.join(', ')}.`, {
@@ -343,6 +358,12 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
       const target = current(id)!
       if (target.type === 'wall') {
         const face = role === 'a' || role === 'b' ? role : null
+        const scripted = face ? wallFaceScriptPaintRefusal(target, face) : undefined
+        if (scripted)
+          refuse('face_built_by_script', `${scripted.message} Nothing was painted.`, {
+            target: id,
+            face,
+          })
         Object.assign(
           written,
           face

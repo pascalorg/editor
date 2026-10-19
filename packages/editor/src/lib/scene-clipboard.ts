@@ -488,11 +488,17 @@ export async function pasteSystemEditorClipboardToLevel(
   return applyClipboardPayloadToLevel(payload, targetLevel.id, refused)
 }
 
+/** The script and GLB a scripted node, a room's floor script or a wall's face scripts reference. */
 function artifactHashes(node: AnyNode): string[] {
-  const source = 'source' in node ? node.source : undefined
-  return typeof source === 'object' && source.kind === 'script'
-    ? [source.script, source.artifact]
-    : []
+  const sources =
+    node.type === 'zone'
+      ? [node.floor?.script]
+      : node.type === 'wall'
+        ? [node.finishScripts?.a, node.finishScripts?.b]
+        : ['source' in node ? node.source : undefined]
+  return sources.flatMap((source) =>
+    typeof source === 'object' && source?.kind === 'script' ? [source.script, source.artifact] : [],
+  )
 }
 
 /**
