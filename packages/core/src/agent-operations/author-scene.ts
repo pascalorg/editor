@@ -16,6 +16,8 @@ import {
   scriptedSize,
   scriptSource,
 } from '../lib/geometry-script-node'
+import type { BoundaryNode } from '../lib/room-topology-index'
+import { detectSpacesForLevel } from '../lib/space-detection'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
@@ -391,8 +393,6 @@ export function authorScene(
         end: w.end,
         height: w.spec.height,
         thickness: w.spec.thickness,
-        frontSide: 'interior',
-        backSide: 'exterior',
       })
       place(node)
       wallNodes.set(w.spec.id, { ...w, node })
@@ -797,6 +797,16 @@ export function authorScene(
     say(
       `${untypedWindows} window${untypedWindows === 1 ? ' has' : 's have'} no type: written fixed (cannot open); give type`,
     )
+
+  // ---------- which face of each wall looks into a room: read from the plan, as the editor does ----------
+  for (const levelNode of levelNodes) {
+    const boundaries = Object.values(draft).filter(
+      (n): n is BoundaryNode =>
+        n.parentId === levelNode.id && (n.type === 'wall' || n.type === 'separator'),
+    )
+    for (const { wallId, ...sides } of detectSpacesForLevel(levelNode.id, boundaries).wallUpdates)
+      draft[wallId] = { ...draft[wallId], ...sides } as AnyNode
+  }
 
   // ---------- rooms: Pascal's own derivation, then the payload's names and floors ----------
   const { nodes: withZones, createdZoneIds } = migrateRoomZones(draft)

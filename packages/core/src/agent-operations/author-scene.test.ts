@@ -186,6 +186,9 @@ describe('author_scene', () => {
     const byType = (t: string) => created.filter((n) => n.type === t)
     expect(byType('level')).toHaveLength(1)
     expect(byType('wall')).toHaveLength(4)
+    // Each wall knows which face looks into the room, from the plan: never both the same.
+    for (const wall of byType('wall') as Array<AnyNode & { frontSide: string; backSide: string }>)
+      expect([wall.frontSide, wall.backSide].sort()).toEqual(['exterior', 'interior'])
     expect(byType('zone')).toHaveLength(1)
     const zone = byType('zone')[0] as AnyNode & { name: string; floor?: { finish?: string } }
     expect(zone.name).toBe('Bedroom')
