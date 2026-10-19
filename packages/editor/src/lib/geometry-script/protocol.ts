@@ -5,6 +5,7 @@ export type GeometryScriptWorkerRequest = {
   id: number
   code: string
   params?: Record<string, GeometryScriptParamValue>
+  inputs?: Record<string, unknown>
 }
 
 export type GeometryScriptWorkerResponse =

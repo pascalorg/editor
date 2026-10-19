@@ -43,6 +43,7 @@ import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { isSceneView } from '../../lib/editor-views'
+import { initFloorScriptRefresh } from '../../lib/geometry-script/floor-scripts'
 import { useGestureLifecycleOwner } from '../../lib/gesture-lifecycle'
 import { shouldShowEditingControls } from '../../lib/interaction/overlay-policy'
 import {
@@ -183,11 +184,13 @@ const EDITOR_DEFAULT_RENDER = { shading: 'solid' } as const
 function initializeEditorRuntime(): () => void {
   const unsubscribeSpatialGrid = initSpatialGridSync()
   const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor)
+  const stopFloorScriptRefresh = initFloorScriptRefresh()
   initSFXBus()
 
   return () => {
     unsubscribeSpatialGrid()
     unsubscribeSpaceDetection?.()
+    stopFloorScriptRefresh()
 
     spatialGridManager.clear()
     disposeSFXBus()

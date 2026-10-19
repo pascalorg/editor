@@ -488,9 +488,11 @@ export async function pasteSystemEditorClipboardToLevel(
   return applyClipboardPayloadToLevel(payload, targetLevel.id, refused)
 }
 
+/** The script and GLB a scripted node, or a room's floor script, references. */
 function artifactHashes(node: AnyNode): string[] {
-  const source = 'source' in node ? node.source : undefined
-  return typeof source === 'object' && source.kind === 'script'
+  const source =
+    node.type === 'zone' ? node.floor?.script : 'source' in node ? node.source : undefined
+  return typeof source === 'object' && source?.kind === 'script'
     ? [source.script, source.artifact]
     : []
 }

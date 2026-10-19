@@ -130,6 +130,12 @@ cuts withhold wall-body/contact evidence. Curved walls, nested hosts, deformed,
 animated, unfinished, dirty and oversized meshes are not assessed. No placement,
 artifact or scene data is changed by these checks.
 
+## Room floor scripts
+
+A room's floor finish can be a script: `zone.floor.script` holds the same source record as an item's `source` (language, script and artifact hashes, params, manifest) plus `inputs`, the key of the floor it was built for. The host reads the room's floor with `floorScriptInputs(nodes, zoneId)` (core): `polygon` and `holes`, the room's outline inside the wall faces clipped to its floor plate, and `elevation`, the plate's top, all in level coordinates and metres. It compiles the module with geometry-script's `inputs` (the module reads them as `params.polygon`, `params.holes`, `params.elevation`; they are never stored as params, and the build is kept in the level's frame instead of being re-origined for its mount) and stores the artifacts; `setRoomFloorScript` writes the result, or takes it off with `remove`. Only three.js modules: a Blender build is not given the floor.
+
+The zone renderer draws the artifact 1 mm over the plate, with no pointer events of its own, so a click reaches the floor beneath. The script owns the floor's colours: the plate gives a scripted room its own top cell, and `floorPlatePaintRefusal` (the editor's Paint) and `set_zone_intent` (`floor.finish`, `floor.regions`) refuse paint there with a sentence until it is removed. When the structure reconcile re-derives the room (a wall moved, an edge pushed, the floor raised), the key no longer matches (`staleFloorScripts`) and `refreshFloorScripts(nodes, host)` runs the stored module and params again for the new floor; the editor tab does this after each settled change, writing the rebuild outside history like the reconcile's derived writes. The room panel shows "Scripted finish" with its code and Remove.
+
 ## Cutter binding
 
 A bare `cutout` cuts the surface the object is mounted on. A wall or ceiling parent is the host; a floor item uses its preferred support slab while it overlaps, otherwise the same highest overlapping slab as floor placement. Items resting on other items do not cut a slab beneath them. `cut:wall`, `cut:ceiling` and `cut:slab` require that kind of host; they never select a neighbouring surface.

@@ -189,7 +189,22 @@ export {
   floorOpeningTargets,
   openingsForSurface,
 } from './lib/floor-opening-intent'
-export { type FloorPlatePaintRefusal, floorPlatePaintRefusal } from './lib/floor-plate-paint'
+export {
+  type FloorPlatePaintRefusal,
+  floorPlatePaintRefusal,
+  floorScriptPaintRefusal,
+} from './lib/floor-plate-paint'
+export {
+  type FloorScriptHost,
+  type FloorScriptInputs,
+  type FloorScriptRefresh,
+  floorScriptInputs,
+  floorScriptInputsKey,
+  floorScriptRecord,
+  refreshFloorScripts,
+  type StaleFloorScript,
+  staleFloorScripts,
+} from './lib/floor-script'
 export {
   type FloorStepOverride,
   floorStepOverrideFor,

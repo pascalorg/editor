@@ -579,6 +579,11 @@ export {
   storedScript,
 } from './lib/geometry-script/author'
 export { compileGeometryScriptInWorker } from './lib/geometry-script/client'
+export {
+  compileAndStoreFloorScript,
+  editorFloorScriptHost,
+  floorScriptCode,
+} from './lib/geometry-script/floor-scripts'
 export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
 export {
   type EditorGridEvent,

@@ -745,27 +745,28 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
     reason: 'Inline versioned recipe (R7 stores recipes above 24 KiB by hash).',
   },
   { kind: 'procedural-item', path: 'parameters.@key', reason: 'Recipe parameter name.' },
-  // Scripted nodes (an authored item, or a window or door built from code) share one `source`.
-  ...(['item', 'window', 'door', 'column'] as const).flatMap((kind) => [
-    ...(
-      [
-        'source.manifest.anchors[].id',
-        'source.manifest.lights[].id',
-        'source.manifest.params[].id',
-        'source.manifest.parts[].id',
-        'source.manifest.slots[].id',
-      ] as const
-    ).map((path) => ({
+  // Scripted nodes (an authored item, or a window or door built from code) share one `source`;
+  // a room's floor script keeps the same record on its zone.
+  ...(
+    [
+      ['item', 'source'],
+      ['window', 'source'],
+      ['door', 'source'],
+      ['column', 'source'],
+      ['zone', 'floor.script'],
+    ] as const
+  ).flatMap(([kind, source]) => [
+    ...(['anchors', 'lights', 'params', 'parts', 'slots'] as const).map((list) => ({
       kind,
-      path,
+      path: `${source}.manifest.${list}[].id`,
       reason: "Defines a key in a scripted node's compiled manifest, read from its script.",
     })),
-    { kind, path: 'source.params.@key', reason: 'Script parameter name.' },
-    { kind, path: 'source.params.*', reason: 'Script parameter value.' },
+    { kind, path: `${source}.params.@key`, reason: 'Script parameter name.' },
+    { kind, path: `${source}.params.*`, reason: 'Script parameter value.' },
     {
       kind,
-      path: 'source.images.thumbnail',
-      reason: 'Content hash of a project artifact, like source.artifact; forks carry it.',
+      path: `${source}.images.thumbnail`,
+      reason: `Content hash of a project artifact, like ${source}.artifact; forks carry it.`,
     },
   ]),
   { kind: 'scan', path: 'layers.@key', reason: 'Layer visibility flag name.' },

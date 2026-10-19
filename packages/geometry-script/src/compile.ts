@@ -24,6 +24,13 @@ export type { GeometryScriptMount }
 export type GeometryScriptCompileInput = {
   code: string
   params?: Record<string, GeometryScriptParamValue>
+  /**
+   * What the host builds the module for (a room floor's `polygon` and `elevation`): the build reads
+   * them in `params` beside its declared ones, and as `inputs`; they are not among the returned
+   * params, which the scene keeps. A build given them is in the host's frame, so it is not
+   * re-origined for its mount.
+   */
+  inputs?: Record<string, unknown>
 }
 
 export type GeometryScriptCompileOutput = CompiledGeometryScript & { glb: ArrayBuffer }
@@ -872,6 +879,7 @@ export async function finishBuild({
   params,
   code,
   language,
+  hostFrame = false,
 }: {
   built: THREE.Object3D
   mount: GeometryScriptMount
@@ -879,6 +887,8 @@ export async function finishBuild({
   params: Record<string, GeometryScriptParamValue>
   code: string
   language: GeometryScriptLanguage
+  /** Keep the build where it stands: its host placed it, so its mount does not re-origin it. */
+  hostFrame?: boolean
 }): Promise<GeometryScriptCompileOutput> {
   const root = new THREE.Group()
   root.name = 'pascal_script_root'
@@ -894,7 +904,7 @@ export async function finishBuild({
       `The object is ${vec(size).join(' × ')} m; the limit is ${GEOMETRY_SCRIPT_LIMITS.extent} m per side. Units are metres.`,
     )
   }
-  built.position.sub(originFor(box, mount))
+  if (!hostFrame) built.position.sub(originFor(box, mount))
   root.updateWorldMatrix(true, true)
 
   const read = readAnimations(built, root)
@@ -980,9 +990,10 @@ export async function compileGeometryScript(
   const specs = readParamSpecs(exported.params)
   const params = resolveParams(specs, input.params ?? {})
 
+  const inputs = input.inputs ?? {}
   const built = await (exported.build as (ctx: unknown) => unknown)({
-    params,
-    inputs: {},
+    params: { ...params, ...inputs },
+    inputs,
     THREE,
     lib: LIB,
   })
@@ -990,5 +1001,13 @@ export async function compileGeometryScript(
     throw new Error('build() must return a THREE.Object3D (usually a THREE.Group)')
   }
 
-  return finishBuild({ built, mount, specs, params, code: input.code, language: 'three' })
+  return finishBuild({
+    built,
+    mount,
+    specs,
+    params,
+    code: input.code,
+    language: 'three',
+    hostFrame: input.inputs !== undefined,
+  })
 }
