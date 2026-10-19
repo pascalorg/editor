@@ -844,14 +844,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // Scene writes, not overrides: leaving the wall must actually remove the
       // window from the wall's `children` or the CSG cut trails the ghost
       // around the old wall (see the wall-branch note in `applyPreview`).
-      if (currentHostId === levelId) {
-        updateDraft({
-          position: [localX, sillCenterY, localZ],
-          rotation: [0, yaw, 0],
-          side: sideOverride,
-          visible: false,
-        })
-      } else {
+      if (currentHostId !== levelId) {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
         updateDraft({
           position: [localX, sillCenterY, localZ],

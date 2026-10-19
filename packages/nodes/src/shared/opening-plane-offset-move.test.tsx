@@ -3,9 +3,14 @@ import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
+  clearSceneHistory,
   DoorNode,
   emitter,
+  getRoofSegmentWallFaces,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+  roofFacePointToSegment,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -236,3 +241,65 @@ describe('opening move keeps the wall-local plane offset on its own wall', () =>
     })
   }
 })
+
+for (const finish of ['commit', 'cancel'] as const) {
+  test(`door roof slide previews without scene writes and ${finish}s cleanly`, async () => {
+    const node = seedScene('door') as DoorNode
+    const roof = RoofNode.parse({ parentId: LEVEL_ID })
+    const segment = RoofSegmentNode.parse({
+      parentId: roof.id,
+      width: 12,
+      depth: 10,
+      wallHeight: 4,
+    })
+    const face = getRoofSegmentWallFaces(segment)[0]!
+    const segmentObject = new Group()
+    sceneRegistry.nodes.set(segment.id, segmentObject)
+    useScene.setState(({ nodes }) => ({
+      nodes: {
+        ...nodes,
+        [roof.id]: { ...roof, children: [segment.id] },
+        [segment.id]: segment,
+      },
+    }))
+    clearSceneHistory()
+    const renderer = await create(<MoveDoorTool node={node} />)
+    const event = (u: number) => ({
+      node: useScene.getState().nodes[roof.id],
+      position: roofFacePointToSegment(segment, face.id, [u, node.height / 2, 0]),
+      normal: face.normal,
+      object: segmentObject,
+      nativeEvent: { timeStamp: u },
+      stopPropagation() {},
+    })
+    try {
+      await act(async () => emitter.emit('roof:enter', event(2) as never))
+      expect(useScene.getState().nodes[node.id]?.parentId).toBe(segment.id)
+      const baseline = useScene.getState().nodes
+      await act(async () => {
+        emitter.emit('roof:move', event(3) as never)
+        emitter.emit('roof:move', event(4) as never)
+      })
+      expect(useScene.getState().nodes).toBe(baseline)
+      expect(useLiveNodeOverrides.getState().get(node.id)?.position).toEqual([
+        4,
+        node.height / 2,
+        0,
+      ])
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      await act(async () => {
+        if (finish === 'commit') emitter.emit('roof:click', event(4) as never)
+        else emitter.emit('tool:cancel')
+      })
+      expect(useLiveNodeOverrides.getState().get(node.id)).toBeUndefined()
+      if (finish === 'commit') {
+        expect((current(node.id) as DoorNode).position).toEqual([4, node.height / 2, 0])
+        expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+        useScene.temporal.getState().undo()
+      } else expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(current(node.id)).toEqual(node)
+    } finally {
+      await renderer.unmount()
+    }
+  })
+}

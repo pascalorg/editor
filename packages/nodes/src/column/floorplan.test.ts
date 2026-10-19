@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { ColumnNode, type GeometryContext, StructuralGridNode } from '@pascal-app/core'
 import { readFloorplanGeometryMetadata } from '@pascal-app/editor'
-import { buildColumnFloorplan, computeColumnFloorplanLevelData } from './floorplan'
+import { columnFootprintHalf } from './bounds'
+import { columnDefinition } from './definition'
+import {
+  buildColumnFloorplan,
+  computeColumnFloorplanLevelData,
+  getColumnFloorplanFootprint,
+} from './floorplan'
+import { columnFloorplanMoveTarget } from './floorplan-move'
 
 const context = {
   resolve: () => undefined,
@@ -93,4 +100,32 @@ describe('buildColumnFloorplan', () => {
     expect(label).toMatchObject({ kind: 'text', text: 'B-2', upright: true })
     expect(label && readFloorplanGeometryMetadata(label).annotationRole).toBe('column-center')
   })
+})
+
+test('managed posts expose rotation but no structural resize or move controls in plan', () => {
+  const column = ColumnNode.parse({ metadata: { managedByLeanTo: 'canopy', leanToRole: 'post' } })
+  const geometry = buildColumnFloorplan(column, { ...context, viewState: { selected: true } })
+  if (geometry?.kind !== 'group') throw new Error('Expected column plan')
+  expect(geometry.children.some((child) => child.kind === 'move-handle')).toBe(false)
+  expect(geometry.children.some((child) => child.kind === 'move-arrow')).toBe(false)
+  expect(geometry.children.some((child) => child.kind === 'rotate-arrow')).toBe(true)
+  const session = columnFloorplanMoveTarget({ node: column, nodes: { [column.id]: column } })
+  expect(session.canCommit?.()).toBe(false)
+})
+
+test('disabled base and capital do not enlarge the plan or collision footprint', () => {
+  const column = ColumnNode.parse({
+    radius: 0.2,
+    shaftStartScale: 1,
+    shaftEndScale: 1,
+    baseStyle: 'none',
+    capitalStyle: 'none',
+    baseWidthScale: 3,
+    capitalWidthScale: 3,
+  })
+  expect(columnFootprintHalf(column)).toEqual({ halfX: 0.2, halfZ: 0.2 })
+  const footprint = getColumnFloorplanFootprint(column)
+  expect(Math.max(...footprint.map(([x]) => x))).toBeCloseTo(0.2)
+  const floorPlaced = columnDefinition.capabilities.floorPlaced!
+  expect(floorPlaced.footprint!(column).dimensions).toEqual([0.4, column.height, 0.4])
 })

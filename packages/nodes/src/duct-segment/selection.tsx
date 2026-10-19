@@ -7,6 +7,7 @@ import {
   type Cursor,
   type DuctFittingNode,
   DuctSegmentNode,
+  findLevelAncestorId,
   nodeRegistry,
   type PortConnectivity,
   pauseSceneHistory,
@@ -601,6 +602,9 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           [next[0], next[1], next[2]],
           collectScenePorts({
             excludeNodeId: duct.id,
+            levelId: (findLevelAncestorId(duct.id, useScene.getState().nodes) ?? undefined) as
+              | AnyNodeId
+              | undefined,
             systems: DUCT_PORT_SYSTEMS,
           }),
           PORT_SNAP_RADIUS_M,

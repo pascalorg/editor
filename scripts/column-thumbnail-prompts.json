@@ -1,0 +1,88 @@
+{
+  "generator": "image_gen",
+  "workflow": "Each preset was placed alone using the actual editor column renderer, cropped to the item canvas, passed as the image reference, generated and installed before clearing the scene and placing the next preset.",
+  "format": {
+    "type": "webp",
+    "width": 256,
+    "height": 256,
+    "quality": 82,
+    "alphaQuality": 90
+  },
+  "images": [
+    {
+      "id": "basicPillar",
+      "path": "apps/editor/public/icons/column-presets/basicPillar.webp",
+      "prompt": "Generate a polished gallery thumbnail from the supplied actual-editor screenshot. Treat the screenshot as authoritative: preserve precisely the object's geometry, proportions, all parts, silhouette and camera angle. Change only material and lighting to soft matte lavender/periwinkle clay, subtle ambient occlusion, soft studio highlights. No added ornaments, no extra parts, no text. Single object centered, entirely visible, transparent background, square composition with generous even padding. This is Straight Round pillar. Preserve its slim cylindrical shaft, circular thick top cap and two stepped square base slabs."
+    },
+    {
+      "id": "squarePillar",
+      "path": "apps/editor/public/icons/column-presets/squarePillar.webp",
+      "prompt": "Generate a polished gallery thumbnail from the supplied actual-editor screenshot. Screenshot is authoritative: preserve exactly geometry, proportions, silhouette, parts and camera angle. Only change material/lighting to soft matte lavender/periwinkle clay, ambient occlusion and soft studio highlights. Square Block pillar: rectangular straight shaft, one thick square top slab and one thick square bottom slab as pictured. No additional steps or ornaments. Single centered fully visible object, transparent background, square composition, generous padding. No text."
+    },
+    {
+      "id": "taperedPillar",
+      "path": "apps/editor/public/icons/column-presets/taperedPillar.webp",
+      "prompt": "Create polished gallery thumbnail using supplied screenshot as authoritative geometry reference. Preserve exact silhouette, proportions, camera and every part: slightly tapered round shaft wider at bottom, narrower at top, thick circular cap, two stepped square base slabs. Only restyle material to soft matte lavender/periwinkle clay with soft studio lighting and ambient occlusion. No extra details or ornaments. Isolated single centered fully visible object, square composition with padding, transparent background, no text."
+    },
+    {
+      "id": "bulgedPillar",
+      "path": "apps/editor/public/icons/column-presets/bulgedPillar.webp",
+      "prompt": "Create polished gallery thumbnail from actual-editor screenshot, preserving exact geometry, silhouette, proportions and camera angle. Soft Bulged pillar has a slim round shaft subtly wider in the middle, tapering smoothly toward both ends, thick circular cap, two stepped square base slabs. Do not exaggerate bulge. Only change to soft matte lavender/periwinkle clay material with soft studio highlights and ambient occlusion. Transparent background, one centered fully visible object, square composition padded evenly, no text, no extra parts or ornaments."
+    },
+    {
+      "id": "hourglassPillar",
+      "path": "apps/editor/public/icons/column-presets/hourglassPillar.webp",
+      "prompt": "Make polished gallery thumbnail from actual-editor screenshot. Geometry reference is authoritative: preserve exact silhouette, proportions, all parts and camera. Slim round Hourglass pillar shaft with subtle inward waist, slightly wider at both ends, thick circular cap and two stepped square base slabs. Do not exaggerate waist. Change only material and lighting to soft matte lavender/periwinkle clay, soft studio highlights, subtle ambient occlusion. Single centered entirely visible object on transparent background, square padded composition. No text or added ornaments."
+    },
+    {
+      "id": "aFrameSupport",
+      "path": "apps/editor/public/icons/column-presets/aFrameSupport.webp",
+      "prompt": "Restyle actual-editor screenshot into polished lavender gallery icon. Preserve precisely the pictured geometry, all proportions and camera angle: just TWO straight rectangular beams leaning together at top, open inverted-V A-frame, NO horizontal crossbar, NO base plates, NO top plate. Keep beam lengths, thickness and spacing exact. Soft matte lavender/periwinkle clay, soft studio light, subtle ambient occlusion. One centered fully visible object, transparent background, square padded composition, no text or extra geometry."
+    },
+    {
+      "id": "yFrameSupport",
+      "path": "apps/editor/public/icons/column-presets/yFrameSupport.webp",
+      "prompt": "Create polished gallery thumbnail from screenshot of actual Y Support. Preserve exact geometry, camera, proportions, angles and silhouette: one vertical rectangular stem splitting into two straight rectangular upper arms. No caps, bases, plates or additional beams. Only change surface to matte lavender/periwinkle clay, soft studio lighting and subtle ambient occlusion. Keep screenshot orientation and relative lengths. One centered fully visible object, transparent background, square padded composition, no text."
+    },
+    {
+      "id": "vFrameSupport",
+      "path": "apps/editor/public/icons/column-presets/vFrameSupport.webp",
+      "prompt": "Restyle this actual-editor screenshot into a polished gallery thumbnail. Preserve exact geometry and view: two long narrow rectangular beams make a tall narrow V meeting at bottom, no vertical stem, no plates, no crossbars. Keep exact beam thickness, angles and proportions from screenshot. Soft matte lavender/periwinkle clay with soft studio highlights and subtle ambient occlusion. Transparent background, one fully visible centered object, square composition and generous even padding. No text, no invented parts."
+    },
+    {
+      "id": "xBraceSupport",
+      "path": "apps/editor/public/icons/column-presets/xBraceSupport.webp",
+      "prompt": "Create polished gallery thumbnail from supplied actual-editor screenshot. Preserve exact geometry, camera, silhouette and proportions: two long straight rectangular beams cross at center into a tall narrow X. No other beams, plates, bolts or ornaments. Keep screenshot angles and thickness. Restyle only material/lighting to soft matte lavender/periwinkle clay, soft studio highlights, ambient occlusion. Single centered entirely visible object, transparent background, padded square composition, no text."
+    },
+    {
+      "id": "kBraceSupport",
+      "path": "apps/editor/public/icons/column-presets/kBraceSupport.webp",
+      "prompt": "Restyle screenshot into polished gallery thumbnail, preserving EXACT pictured geometry, orientation and camera. This K brace has a full-height vertical rectangular beam on the RIGHT, and two diagonal rectangular beams branching from its midpoint toward UPPER LEFT and LOWER LEFT. Preserve lengths, angles, thickness, depth and silhouette from screenshot. Do not mirror or rotate. No additional parts. Soft matte lavender/periwinkle clay, soft studio lighting, subtle ambient occlusion. Single centered entirely visible object on transparent background, square padded composition, no text."
+    },
+    {
+      "id": "singleStrutSupport",
+      "path": "apps/editor/public/icons/column-presets/singleStrutSupport.webp",
+      "prompt": "Make a polished gallery thumbnail using actual-editor screenshot as exact geometry reference. One single long thin rectangular straight beam leaning diagonally from lower left to upper right. Preserve exact length-to-thickness proportions, angle, camera and flat ends. No plates or extra objects. Change only to soft matte lavender/periwinkle clay material, soft studio highlights, subtle ambient occlusion. Fully visible centered single object, transparent background, padded square composition. No text."
+    },
+    {
+      "id": "tripodSupport",
+      "path": "apps/editor/public/icons/column-presets/tripodSupport.webp",
+      "prompt": "Restyle actual-editor screenshot into polished gallery thumbnail, preserving EXACT geometry, camera, silhouette and proportions. Three straight slim rectangular legs meet at a single high apex and spread to three distinct feet: left slanting leg, near-central front leg, right rear leg, exactly as shown. Keep all three visible, no extra beams or connectors, no platform, no plates. Soft matte lavender/periwinkle clay, soft studio highlights, subtle ambient occlusion. Centered entirely visible isolated object, transparent background, square padded composition, no text."
+    },
+    {
+      "id": "trestleSupport",
+      "path": "apps/editor/public/icons/column-presets/trestleSupport.webp",
+      "prompt": "Restyle actual-editor screenshot into polished gallery thumbnail. Screenshot is authoritative for exact geometry and camera: tall trestle composed of FOUR long splayed rectangular legs in two inverted-V pairs connected by ONE narrow top ridge beam. Preserve the pictured overlapping legs, proportions and orientation precisely. No horizontal lower crossbars, no platforms, no plates. Soft matte lavender/periwinkle clay, soft studio highlights, subtle ambient occlusion. Single centered fully visible object, transparent background, square padded composition, no text."
+    },
+    {
+      "id": "portalFrameSupport",
+      "path": "apps/editor/public/icons/column-presets/portalFrameSupport.webp",
+      "prompt": "Make polished gallery thumbnail using supplied actual-editor screenshot as authoritative geometry. Preserve exactly the tall portal frame: TWO vertical slim rectangular posts connected by ONE top rectangular beam, open at bottom. Keep exact proportions, thickness, orientation, camera perspective and silhouette. No bottom beam, no plates or extra parts. Only restyle surface to soft matte lavender/periwinkle clay with soft studio highlights and ambient occlusion. Single centered fully visible object, transparent background, padded square composition, no text."
+    },
+    {
+      "id": "boxFrameSupport",
+      "path": "apps/editor/public/icons/column-presets/boxFrameSupport.webp",
+      "prompt": "Restyle this actual-editor screenshot into a polished gallery thumbnail. Preserve exactly its geometry, proportions, silhouette and camera: tall open rectangular cuboid frame, FOUR vertical rectangular corner posts connected by four top perimeter beams and four bottom perimeter beams. All sides hollow, no filled surfaces, no diagonal bracing. Keep precise relative heights, widths and slim beam thickness from screenshot. Soft matte lavender/periwinkle clay material, soft studio highlights, subtle ambient occlusion. One centered entirely visible object, transparent background, padded square composition. No text or added parts."
+    }
+  ]
+}

@@ -110,6 +110,7 @@ const cupolaHandles: HandleDescriptor<CupolaNodeType>[] = [
  */
 export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   kind: 'cupola',
+  snapProfile: 'item',
   schemaVersion: 4,
   schema: CupolaNode,
   category: 'structure',
