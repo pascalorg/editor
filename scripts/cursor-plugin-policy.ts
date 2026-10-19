@@ -31,10 +31,11 @@ export function validateCursorPluginPackage(root: string): string[] {
   if (JSON.stringify(config) !== JSON.stringify(rootConfig)) {
     failures.push('Cursor MCP configs must match at both install roots')
   }
+  const cliVersion = read('packages/cli/package.json').version
   const expectedLocalServer = {
     type: 'stdio',
     command: 'npx',
-    args: ['--yes', '--package=@pascal-app/cli@1.0.0', 'pascal', 'mcp', 'connect'],
+    args: ['--yes', `--package=@pascal-app/cli@${cliVersion}`, 'pascal', 'mcp', 'connect'],
   }
   if (
     JSON.stringify((config.mcpServers as Record<string, unknown> | undefined)?.pascal) !==
