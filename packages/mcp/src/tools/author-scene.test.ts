@@ -239,11 +239,15 @@ const PANEL = `export default function build({ THREE, params }) {
 
 describe('author_scene (MCP)', () => {
   let client: Client
+  let commitAllowed = true
   const stored: string[] = []
   const artifacts = new Map<string, Uint8Array>()
   /** What each build was for, by the hash of its GLB. */
   const builtFor = new Map<string, Record<string, unknown> | undefined>()
   const host: GeometryScriptHost = {
+    assertActive: async () => {
+      if (!commitAllowed) throw new Error('Invocation stopped before commit')
+    },
     compile: async ({ code, inputs }) => {
       const { glb, ...compiled } = await compileGeometryScript({ code, inputs })
       builtFor.set(compiled.sha256, inputs)
@@ -258,6 +262,7 @@ describe('author_scene (MCP)', () => {
   }
 
   beforeEach(async () => {
+    commitAllowed = true
     stored.length = 0
     const bridge = new SceneBridge()
     bridge.setScene({}, [], { materials: {} })
@@ -268,6 +273,17 @@ describe('author_scene (MCP)', () => {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test', version: '0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  })
+
+  test('a stopped invocation never commits its compiled candidate', async () => {
+    const before = await client.callTool({ name: 'get_scene', arguments: {} })
+    commitAllowed = false
+    const result = await client.callTool({ name: 'author_scene', arguments: { payload } })
+    expect(result.isError).toBe(true)
+    const after = await client.callTool({ name: 'get_scene', arguments: {} })
+    expect(after.structuredContent ?? after.content).toEqual(
+      before.structuredContent ?? before.content,
+    )
   })
 
   test('writes the design, keeps its provenance, and reports the gate', async () => {

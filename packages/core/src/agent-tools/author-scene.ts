@@ -10,7 +10,7 @@ Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own fram
 
 The report says what was written, what Pascal defaulted (defaults: a window with no type is fixed and cannot open), what it warns about but wrote (warnings: thin slabs, too many slabs or regions) and what it refused (defects, by your ids).
 
-Call again with the same scene and a corrected payload to replace the previous conversion (replace: true); the default refuses to overwrite a scene that already holds a conversion.`
+Call again with the same scene and a corrected payload to update the previous conversion (replace: true). Stable element identities and manual changes are retained; overlapping changes are refused. An existing building without a conversion baseline is never cleared.`
 
 const plan = (what: string) =>
   z.array(z.number()).length(2).describe(`[x, z] ${what} in plan metres.`)
@@ -273,7 +273,7 @@ export const authorSceneLevel = z.object({
     default: 0,
   }),
   walls: z.array(authorSceneWall).optional(),
-  rooms: z.array(authorSceneRoom).default([]),
+  rooms: z.array(authorSceneRoom).default([]).describe('Room seeds and finishes (default []).'),
   slabs: z.array(authorSceneSlab).optional(),
   columns: z.array(authorSceneColumn).optional(),
   items: z.array(authorSceneItem).optional(),
@@ -314,7 +314,15 @@ export const authorSceneTool = {
     replace: z
       .boolean()
       .default(false)
-      .describe('Replace the conversion this scene already holds (default false).'),
+      .describe(
+        'Apply a new design delta to the previous conversion, preserving manual edits (default false).',
+      ),
+    buildingId: z
+      .string()
+      .optional()
+      .describe(
+        'The building to convert into. Required when there are several and no active level selects one.',
+      ),
     sceneId: NodeId.optional().describe('The scene to write; the active one when omitted.'),
   },
   annotations: { destructiveHint: true },

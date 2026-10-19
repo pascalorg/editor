@@ -45,10 +45,11 @@ import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
 import { roomFaceCover } from '../systems/wall/wall-room-sides'
 import { migrateRoomZones } from '../utils/room-zone-migration'
 import { addObject } from './add-object'
+import { authoredSceneChanges } from './authored-scene-merge'
 import { paint } from './paint'
 import { pointInPolygon, projectWorldPointToWallLocalX, type Vec2 } from './plan-geometry'
 import { resolveInlinePaintMaterial } from './scene-materials'
-import type { AgentContext, AgentOperationOutcome, NodeWrite, SceneNodes } from './types'
+import type { AgentContext, AgentOperationOutcome, SceneNodes } from './types'
 import { setWallSkirting } from './wall-skirting'
 
 /**
@@ -72,6 +73,17 @@ export type AuthorSceneInput = {
   /** Why a module did not compile, keyed like `compiled`, for the report. */
   compileErrors?: Record<string, string>
   replace?: boolean
+  buildingId?: string
+  /** Hosts compile finishes against the candidate before making one scene commit. */
+  prepareOnly?: boolean
+}
+
+export type AuthorSceneState = {
+  version: 1
+  buildingId: string
+  seed: string
+  ids: Record<string, string>
+  nodes: Record<string, AnyNode>
 }
 
 export type AuthorSceneDefect = { id: string; code: string; message: string }
@@ -114,22 +126,27 @@ type Vec3 = [number, number, number]
 type AuthorSceneWall = NonNullable<AuthorScenePayload['levels'][number]['walls']>[number]
 
 /**
- * Small, stable ids: the payload's own hash and a counter per kind, so a replay writes the same
- * scene. A revision salt keeps a replacement's ids apart from the conversion it replaces: the
- * same payload written over itself would otherwise create nodes that already exist and then
- * delete them with the old levels.
+ * Explicit payload keys retain their identities across revisions; derived nodes use the
+ * conversion's retained seed. A changed payload never remints every existing wall or item.
  */
-function idFactory(payload: AuthorScenePayload, revision = 0) {
-  let hash = 0x811c9dc5
-  for (const ch of `${revision}:${JSON.stringify(payload)}`)
-    hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193) >>> 0
-  const base = hash.toString(16).padStart(8, '0')
+function idFactory(seed: string, previous: Record<string, string> = {}) {
   const counts = new Map<string, number>()
-  return (kind: string) => {
+  return (kind: string, key?: string) => {
     const n = (counts.get(kind) ?? 0) + 1
     counts.set(kind, n)
-    return `${kind}_as${base}${n.toString(36).padStart(4, '0')}`
+    if (key && previous[key]?.startsWith(`${kind}_`)) return previous[key]!
+    let hash = 0x811c9dc5
+    for (const ch of `${seed}:${kind}:${key ?? n}`)
+      hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193) >>> 0
+    return `${kind}_as${hash.toString(16).padStart(8, '0')}`
   }
+}
+
+function payloadSeed(payload: AuthorScenePayload) {
+  let hash = 0x811c9dc5
+  for (const ch of JSON.stringify(payload))
+    hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193) >>> 0
+  return hash.toString(16)
 }
 
 const dist = (a: readonly number[], b: readonly number[]) =>
@@ -505,25 +522,54 @@ export function authorScene(
   scene: SceneNodes,
   input: AuthorSceneInput,
   context: AgentContext,
-): AgentOperationOutcome & { result: AuthorSceneReport } {
+): AgentOperationOutcome & {
+  result: AuthorSceneReport
+  candidate: AuthorSceneState
+  buildingId: string
+} {
   const { payload } = input
-  const building = Object.values(scene).find((n) => n.type === 'building')
+  const buildings = Object.values(scene).filter((n) => n.type === 'building')
+  const selected =
+    input.buildingId ?? (context.activeLevelId ? scene[context.activeLevelId]?.parentId : undefined)
+  const building = selected
+    ? buildings.find((node) => node.id === selected)
+    : buildings.length === 1
+      ? buildings[0]
+      : undefined
   if (!building) refuse('no_building', 'The scene has no building to put the levels in.')
-  const existingLevels = Object.values(scene).filter((n) => n.type === 'level')
-  const converted = existingLevels.some(
-    (l) => (l.metadata as { authorScene?: unknown })?.authorScene,
+  const existingLevels = Object.values(scene).filter(
+    (n) => n.type === 'level' && n.parentId === building.id,
   )
+  const saved = building.metadata?.authorSceneState as AuthorSceneState | undefined
+  const previous =
+    saved?.version === 1 &&
+    saved.buildingId === building.id &&
+    saved.nodes &&
+    saved.ids &&
+    typeof saved.seed === 'string'
+      ? saved
+      : undefined
+  const converted = Boolean(previous) || existingLevels.some((l) => l.metadata?.authorScene)
   if (converted && !input.replace)
     refuse(
       'conversion_exists',
       'This scene already holds a conversion. Pass replace: true to write over it.',
     )
 
-  // The first revision whose ids are free in this scene: every conversion writes a level, so its
-  // first level id tells whether this payload was written here before.
-  let revision = 0
-  while (revision < 32 && scene[idFactory(payload, revision)('level')]) revision++
-  const mint = idFactory(payload, revision)
+  if (
+    !previous &&
+    (converted ||
+      existingLevels.some((level) =>
+        Object.values(scene).some((node) => node.parentId === level.id),
+      ))
+  )
+    refuse(
+      'existing_design',
+      'This building already contains work without a retained conversion baseline. Use its native edit tools or convert into a separate building; existing geometry will not be replaced.',
+      { mutationApplied: false },
+    )
+  const seed = previous?.seed ?? `${building.id}:${payloadSeed(payload)}`
+  const mint = idFactory(seed, previous?.ids)
   const report: AuthorSceneReport = {
     levels: 0,
     walls: 0,
@@ -584,28 +630,15 @@ export function authorScene(
     ...(finishes.materials ? { materials: finishes.materials } : {}),
   })
 
-  // The draft: the scene without its levels, then everything the payload describes.
+  // A separate candidate contains only its building and ancestors, never another building's work.
   const draft: Record<string, AnyNode> = {}
-  for (const [id, node] of Object.entries(scene)) {
-    if (node.type === 'level') continue
-    const levelIds = new Set<string>(existingLevels.map((l) => l.id))
-    if (node.parentId && levelIds.has(node.parentId)) continue
-    draft[id] = node
+  let ancestor: AnyNode | undefined = building
+  while (ancestor && !draft[ancestor.id]) {
+    draft[ancestor.id] = { ...ancestor, children: [] } as AnyNode
+    ancestor = ancestor.parentId ? scene[ancestor.parentId] : undefined
   }
-  const underLevel = new Set<string>()
-  for (const node of Object.values(scene)) {
-    let at = node.parentId
-    while (at) {
-      if (existingLevels.some((l) => l.id === at)) {
-        underLevel.add(node.id)
-        break
-      }
-      at = scene[at]?.parentId ?? null
-    }
-  }
-  for (const id of underLevel) delete draft[id]
-  const deleted = existingLevels.map((l) => l.id)
 
+  const scaffoldIds = new Set(Object.keys(draft))
   const levelNodes: ReturnType<typeof LevelNode.parse>[] = []
   const itemNodeIds = new Map<string, string>()
   const itemFrames = new Map<string, Frame>()
@@ -621,7 +654,7 @@ export function authorScene(
     const levelNode = LevelNode.parse({
       object: 'node',
       type: 'level',
-      id: mint('level'),
+      id: mint('level', `level/${index}`),
       parentId: building!.id,
       visible: true,
       metadata: { authorScene: { elevation: level.elevation } },
@@ -630,6 +663,7 @@ export function authorScene(
       children: [],
     })
     draft[levelNode.id] = levelNode
+    report.ids[`level/${index}`] = levelNode.id
     levelNodes.push(levelNode)
     const place = (node: AnyNode) => {
       draft[node.id] = node
@@ -670,7 +704,7 @@ export function authorScene(
       const node = WallNode.parse({
         object: 'node',
         type: 'wall',
-        id: mint('wall'),
+        id: mint('wall', w.spec.id),
         parentId: levelNode.id,
         visible: true,
         metadata: { authorScene: { id: w.spec.id } },
@@ -736,7 +770,7 @@ export function authorScene(
           )
         const common = {
           object: 'node',
-          id: mint(o.kind),
+          id: mint(o.kind, id),
           parentId: node.id,
           visible: true,
           metadata: { authorScene: { id, color: o.color ?? null } },
@@ -858,7 +892,7 @@ export function authorScene(
       const node = SlabNode.parse({
         object: 'node',
         type: 'slab',
-        id: mint('slab'),
+        id: mint('slab', id),
         parentId: levelNode.id,
         visible: true,
         metadata: { authorScene: { finish: s.finish ?? null } },
@@ -879,7 +913,7 @@ export function authorScene(
       const node = ColumnNode.parse({
         object: 'node',
         type: 'column',
-        id: mint('column'),
+        id: mint('column', `column/${index}/${i}`),
         parentId: levelNode.id,
         visible: true,
         metadata: { authorScene: { color: c.color ?? null } },
@@ -991,7 +1025,7 @@ export function authorScene(
           const outcome = addObject(
             draft,
             {
-              compiled: { ...placed.compiled, nodeId: mint('item') },
+              compiled: { ...placed.compiled, nodeId: mint('item', item.id) },
               name: item.name,
               category: item.category,
               reason: `author_scene: ${item.name}`,
@@ -1219,7 +1253,7 @@ export function authorScene(
           const outcome = addObject(
             written,
             {
-              compiled: { ...compiled, nodeId: mint('item') },
+              compiled: { ...compiled, nodeId: mint('item', id) },
               name: `Ceiling point in ${room!.name}`,
               category: 'light',
               reason: 'author_scene: ceiling point for a light without a fixture',
@@ -1292,18 +1326,55 @@ export function authorScene(
     }
   })
 
-  const create: NodeWrite[] = Object.values(written)
-    .filter((node) => !scene[node.id])
-    .map((node) => ({ op: 'create', node, parentId: node.parentId ?? undefined }))
-  return {
+  const nodes = Object.fromEntries(Object.entries(written).filter(([id]) => !scaffoldIds.has(id)))
+  const candidate: AuthorSceneState = {
+    version: 1,
+    buildingId: building.id,
+    seed,
+    ids: report.ids,
+    nodes,
+  }
+  const outcome = {
     result: report,
+    candidate,
+    buildingId: building.id,
+    changes: finishes.created.length ? { materials: finishes.created } : {},
+  }
+  return input.prepareOnly ? outcome : finalizeAuthorScene(scene, outcome)
+}
+
+/** Commit the complete candidate after the host has compiled all of its finishes. */
+export function finalizeAuthorScene(
+  scene: SceneNodes,
+  outcome: AgentOperationOutcome & {
+    result: AuthorSceneReport
+    candidate: AuthorSceneState
+    buildingId: string
+  },
+) {
+  const building = scene[outcome.buildingId]
+  if (building?.type !== 'building') refuse('no_building', 'The target building no longer exists.')
+  const previous = building.metadata?.authorSceneState as AuthorSceneState | undefined
+  const base =
+    previous?.nodes ??
+    Object.fromEntries(
+      Object.values(scene)
+        .filter((node) => node.type === 'level' && node.parentId === building.id)
+        .map((node) => [node.id, node]),
+    )
+  const changes = authoredSceneChanges(scene, base, outcome.candidate.nodes)
+  return {
+    ...outcome,
     changes: {
-      ...(finishes.created.length ? { materials: finishes.created } : {}),
-      delete: deleted,
-      create: create.map((c) => ({
-        node: (c as { node: AnyNode }).node,
-        parentId: (c as { parentId?: string }).parentId,
-      })),
+      ...changes,
+      ...(outcome.changes?.materials ? { materials: outcome.changes.materials } : {}),
+      update: [
+        ...(changes.update ?? []),
+        {
+          id: building.id,
+          data: { metadata: { ...building.metadata, authorSceneState: outcome.candidate } },
+        },
+      ],
     },
   }
 }

@@ -1,9 +1,23 @@
-import { getLevelElevations, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
-import { temporarilyShowShadowOnly } from '../../lib/scene-visibility'
+import {
+  EXPLODED_GAP,
+  getLevelElevations,
+  type LevelNode,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
+import {
+  type SceneViewPresentation,
+  sceneViewPresentationLevel,
+} from '@pascal-app/core/agent-operations'
+import {
+  temporarilyHideFromScene,
+  temporarilyShowPresentation,
+  temporarilyShowShadowOnly,
+} from '../../lib/scene-visibility'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import { shadowOnlyLevels } from './shadow-only-levels'
 
-export const EXPLODED_GAP = 5
+export { EXPLODED_GAP } from '@pascal-app/core'
 
 /**
  * The Y a level settles at under the given presentation mode — its stacked
@@ -135,5 +149,41 @@ export function snapLevelsToTruePositions({
     }
     if (readOnly) for (const restore of restoreMasks.reverse()) restore()
     else for (const { obj } of shadowOnly) applyShadowOnly(obj)
+  }
+}
+
+/** The viewer's settled level presentation for one render, without changing saved preferences. */
+export function presentLevelsForCapture(presentation: SceneViewPresentation): () => void {
+  const nodes = useScene.getState().nodes
+  const selected = sceneViewPresentationLevel(nodes, presentation)
+  if (
+    selected &&
+    (!sceneRegistry.nodes.has(selected.id) || !sceneRegistry.byType.level?.has(selected.id))
+  )
+    throw new Error('The level to capture is not ready in this renderer. Try again.')
+  const restores = [snapLevelsToTruePositions({ readOnly: true })]
+  for (const levelId of sceneRegistry.byType.level ?? []) {
+    const obj = sceneRegistry.nodes.get(levelId)
+    const level = nodes[levelId as LevelNode['id']]
+    if (!obj || level?.type !== 'level') continue
+    obj.position.y = getLevelPresentationY(levelId, nodes, presentation.mode)
+    const { visible, shadowOnly } = resolveLevelVisibility({
+      levelMode: presentation.mode,
+      hideAbove: false,
+      hasSelectedLevel: Boolean(selected),
+      isSelected: level.id === selected?.id,
+      index: level.level,
+      selectedIndex: selected?.type === 'level' ? selected.level : undefined,
+      nodeVisible: level.visible !== false,
+      revealing: false,
+    })
+    obj.visible = visible
+    restores.push(
+      level.id === selected?.id ? temporarilyShowPresentation(obj) : temporarilyShowShadowOnly(obj),
+    )
+    if (shadowOnly) restores.push(temporarilyHideFromScene(obj, 'shadow-only'))
+  }
+  return () => {
+    for (const restore of restores.reverse()) restore()
   }
 }

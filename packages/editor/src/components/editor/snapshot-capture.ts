@@ -149,7 +149,12 @@ export async function runSnapshotCapture(
  * Where a captured frame goes: to the host, which stores it (a snapshot, the project's
  * thumbnail), or for an ephemeral capture straight back to its caller, stored nowhere.
  */
-export function deliverSnapshot<T extends object & { resolution?: { w: number; h: number } }>(
+export function deliverSnapshot<
+  T extends object & {
+    resolution?: { w: number; h: number }
+    presentation?: ThumbnailGenerateEvent['presentation']
+  },
+>(
   event: Pick<ThumbnailGenerateEvent, 'requestId' | 'ephemeral'>,
   blob: Blob,
   cameraData: T,
@@ -163,6 +168,7 @@ export function deliverSnapshot<T extends object & { resolution?: { w: number; h
         blob,
         width: cameraData.resolution?.w ?? 0,
         height: cameraData.resolution?.h ?? 0,
+        ...(cameraData.presentation ? { presentation: cameraData.presentation } : {}),
       })
     return
   }

@@ -438,6 +438,37 @@ describe('scene clipboard', () => {
     expect(useViewer.getState().selection.levelId).toBe(storey.id)
   })
 
+  test('a retained roof pasted onto a roof level keeps its roof ownership and can be undone', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const roofLevel = LevelNode.parse({ level: 1, metadata: { role: 'roof' } })
+    seedHouse(storey, roofLevel)
+    const retained = ItemNode.parse({
+      parentId: sourceLevelId,
+      position: [1, 0.25, 2],
+      metadata: { role: 'roof' },
+      asset: {
+        id: 'retained',
+        name: 'Authored roof',
+        category: 'custom',
+        thumbnail: '',
+        src: '/roof.glb',
+      },
+      provenance: { refs: [{ ns: 'source', id: 'building/roof' }] },
+    })
+    useScene.getState().createNode(retained, sourceLevelId)
+    expect(copySelectedNodesToEditorClipboard([retained.id])).toBe(true)
+    const [pastedId] = pasteEditorClipboardToLevel(roofLevel.id)!.pastedIds
+    const pasted = useScene.getState().nodes[pastedId!] as typeof retained
+    expect(pasted.parentId).toBe(roofLevel.id)
+    expect(pasted.metadata.role).toBe('roof')
+    expect(pasted.asset).toEqual(retained.asset)
+    expect(pasted.provenance).toEqual(retained.provenance)
+    expect(useViewer.getState().selection.levelId).toBe(roofLevel.id)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[pastedId!]).toBeUndefined()
+    expect(useScene.getState().nodes[retained.id]).toBeDefined()
+  })
+
   // Measurements, cabinets and the like stayed on the roof level at its floor while the walls
   // copied with them went down: a paste lands on one level.
   test('a paste carrying walls lands whole on the storey a roof level covers', () => {

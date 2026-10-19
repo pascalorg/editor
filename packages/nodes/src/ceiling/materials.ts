@@ -1,22 +1,24 @@
 import {
   getCatalogMaterialById,
   getMaterialPresetByRef,
+  type MaterialSchema,
   parseMaterialColor,
   parseMaterialRef,
   resolveMaterial,
   type SceneMaterial,
   type SceneMaterialId,
 } from '@pascal-app/core'
+import { createMaterial, createMaterialFromPreset, type RenderShading } from '@pascal-app/viewer'
+import type { Material } from 'three'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, MeshBasicNodeMaterial } from 'three/webgpu'
 
 /**
  * Ceiling material builders, shared by the renderer (mesh appearance) and the
- * paint capability (hover preview). A ceiling is a flat tinted surface: the
- * underside (`bottom`, seen from inside the room, `BackSide`) is opaque, while
+ * paint capability (hover preview). The underside faces the room, while
  * the `top` carries a transparent TSL grid overlay used while placing /
- * selecting ceiling-hosted items. Both derive from a single colour, so slot
- * painting resolves a colour and rebuilds these — it never applies a PBR map.
+ * selecting ceiling-hosted items. Only the overlay reduces a finish to colour;
+ * the underside keeps its lighting, textures and physical properties.
  */
 
 const gridScale = 5
@@ -30,10 +32,10 @@ const gridOpacity = mix(float(0.2), float(0.6), gridPattern)
 
 export type CeilingMaterials = {
   topMaterial: MeshBasicNodeMaterial
-  bottomMaterial: MeshBasicNodeMaterial
+  bottomMaterial: Material
 }
 
-function createCeilingMaterials(color = '#999999'): CeilingMaterials {
+function createCeilingGrid(color: string): MeshBasicNodeMaterial {
   const topMaterial = new MeshBasicNodeMaterial({
     color,
     transparent: true,
@@ -42,22 +44,73 @@ function createCeilingMaterials(color = '#999999'): CeilingMaterials {
   })
   topMaterial.opacityNode = gridOpacity
 
-  const bottomMaterial = new MeshBasicNodeMaterial({
-    color,
-    side: BackSide,
-  })
-
-  return { topMaterial, bottomMaterial }
+  return topMaterial
 }
 
-const ceilingMaterialCache = new Map<string, CeilingMaterials>()
+const ceilingGridCache = new Map<string, MeshBasicNodeMaterial>()
 
-export function getCeilingMaterials(color = '#999999'): CeilingMaterials {
-  const cached = ceilingMaterialCache.get(color)
-  if (cached) return cached
-  const materials = createCeilingMaterials(color)
-  ceilingMaterialCache.set(color, materials)
-  return materials
+export function getCeilingMaterials(
+  color = '#999999',
+  shading: RenderShading = 'rendered',
+): CeilingMaterials {
+  let topMaterial = ceilingGridCache.get(color)
+  if (!topMaterial) {
+    topMaterial = createCeilingGrid(color)
+    ceilingGridCache.set(color, topMaterial)
+  }
+  return {
+    topMaterial,
+    bottomMaterial: createMaterial(
+      {
+        preset: 'custom',
+        properties: {
+          color,
+          roughness: 0.9,
+          metalness: 0,
+          opacity: 1,
+          transparent: false,
+          side: 'back',
+        },
+      },
+      shading,
+    ),
+  }
+}
+
+/** Resolve through the shared caches, without mutating another surface's material. */
+export function resolveCeilingFinish(
+  finish: MaterialSchema | string | undefined,
+  sceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined,
+  shading: RenderShading,
+): Material | null {
+  if (!finish) return null
+  if (typeof finish !== 'string') {
+    return createMaterial(
+      { ...finish, properties: { ...resolveMaterial(finish), side: 'back' } },
+      shading,
+    )
+  }
+  const color = parseMaterialColor(finish)
+  if (color)
+    return resolveCeilingFinish(
+      { properties: { ...resolveMaterial(), color } },
+      sceneMaterials,
+      shading,
+    )
+  const parsed = parseMaterialRef(finish)
+  if (parsed?.kind === 'scene')
+    return resolveCeilingFinish(
+      sceneMaterials?.[parsed.id as SceneMaterialId]?.material,
+      sceneMaterials,
+      shading,
+    )
+  const preset = getMaterialPresetByRef(finish)
+  return preset
+    ? createMaterialFromPreset(
+        { ...preset, mapProperties: { ...preset.mapProperties, side: BackSide } },
+        shading,
+      )
+    : null
 }
 
 /**

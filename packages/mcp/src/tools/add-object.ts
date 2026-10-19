@@ -43,6 +43,9 @@ import { briefInForce, toPatches } from './shared-tools'
  * artifacts live for the active scene.
  */
 export type GeometryScriptHost = {
+  readonly signal?: AbortSignal
+  /** Recheck the host's active authorization after a long compile and before scene mutation. */
+  assertActive?(): Promise<void>
   compile(input: {
     code: string
     language: GeometryScriptLanguage
