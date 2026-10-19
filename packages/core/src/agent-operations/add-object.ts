@@ -13,6 +13,7 @@ import {
   scriptSource,
 } from '../lib/geometry-script-node'
 import { geometryRestingHeight, resettledPosition } from '../lib/geometry-surfaces'
+import { area, intersection, union } from '../lib/polygon-boolean'
 import {
   type AnyNode,
   type CompiledGeometryScript,
@@ -21,11 +22,12 @@ import {
   type GeometryScriptParamValue,
   generateId,
   ItemNode,
+  type SlabNode,
 } from '../schema'
 import { achievedChanges } from './achieved'
 import { targetLevel } from './level-target'
 import { roofLevelRefusal } from './roof-writes'
-import type { AgentOperation, BatchedObject } from './types'
+import type { AgentOperation, BatchedObject, SceneNodes } from './types'
 
 type Vec3 = [number, number, number]
 
@@ -139,12 +141,55 @@ function wallSized(compiled: CompiledGeometryScript) {
 /** A plain box: one cuboid, as a wall is. A bookcase or a screen has shelves or holes. */
 const PLAIN_BOX = 12
 
+/** A plate with at least this share of its footprint over a floor lies on that floor. */
+const FLOOR_SHARE = 0.5
+
 /**
- * A floor object that is a plain box with a wall's size, or a floor plate, is refused: Pascal builds
- * those, and rooms, openings and facades only work with its own. Production saw whole houses of
- * plain custom solids, nothing editable as walls, rooms or doors.
+ * The share of a plate's footprint that lies over a floor of its level: the slabs the level owns (a
+ * room's floor plate, a drawn slab, a deck) with their holes left out. The footprint is the bounds
+ * the compile measured, turned and placed as the object will be.
  */
-function refuseWallOrSlabShape(compiled: CompiledGeometryScript, input: AddObjectInput) {
+function shareOverFloor(
+  nodes: SceneNodes,
+  levelId: string,
+  compiled: CompiledGeometryScript,
+  input: AddObjectInput,
+) {
+  const slabs = Object.values(nodes).filter(
+    (node): node is SlabNode => node.type === 'slab' && node.parentId === levelId,
+  )
+  const { min, max } = compiled.manifest.bounds
+  const footprintArea = (max[0] - min[0]) * (max[2] - min[2])
+  if (slabs.length === 0 || !(footprintArea > 0)) return 0
+  const [px = 0, , pz = 0] = input.position ?? []
+  const turn = ((input.rotation ?? 0) * Math.PI) / 180
+  const [cos, sin] = [Math.cos(turn), Math.sin(turn)]
+  const corners: [number, number][] = [
+    [min[0], min[2]],
+    [max[0], min[2]],
+    [max[0], max[2]],
+    [min[0], max[2]],
+  ]
+  const footprint = corners.map(([u, v]): [number, number] => [
+    px + u * cos + v * sin,
+    pz - u * sin + v * cos,
+  ])
+  const floor = union(slabs.map((slab) => ({ outer: slab.polygon, holes: slab.holes ?? [] })))
+  return area(intersection(footprint, floor)) / footprintArea
+}
+
+/**
+ * A floor object that is a plain box with a wall's size, or a floor plate with no floor under it, is
+ * refused: Pascal builds those, and rooms, openings and facades only work with its own. Production
+ * saw whole houses of plain custom solids, nothing editable as walls, rooms or doors. A flat object
+ * over a floor the level already has is furniture, a rug: the scene decides, not its name.
+ */
+function refuseWallOrSlabShape(
+  nodes: SceneNodes,
+  levelId: string,
+  compiled: CompiledGeometryScript,
+  input: AddObjectInput,
+) {
   const [width, height, depth] = scriptedSize(compiled.manifest)
   const long = Math.max(width, depth)
   const short = Math.min(width, depth)
@@ -156,7 +201,12 @@ function refuseWallOrSlabShape(compiled: CompiledGeometryScript, input: AddObjec
       { label },
     )
   const base = input.position?.[1] ?? 0
-  if (height <= 0.35 && short >= 2 && base <= 0.05) {
+  if (
+    height <= 0.35 &&
+    short >= 2 &&
+    base <= 0.05 &&
+    shareOverFloor(nodes, levelId, compiled, input) < FLOOR_SHARE
+  ) {
     // Its extent along x and z as it stands, so the numbers match the outline the agent drew.
     const turn = ((input.rotation ?? 0) * Math.PI) / 180
     const [c, s] = [Math.abs(Math.cos(turn)), Math.abs(Math.sin(turn))]
@@ -294,7 +344,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       ? null
       : roofLevelRefusal(nodes, parent.id, `"${input.name ?? 'the object'}"`)
     if (onRoofLevel) throw onRoofLevel
-    refuseWallOrSlabShape(compiled, input)
+    refuseWallOrSlabShape(nodes, parent.id, compiled, input)
   }
   requireAddObjectReason(input)
   const asset = scriptAsset(compiled, input, undefined)
