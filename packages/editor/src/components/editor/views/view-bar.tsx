@@ -302,7 +302,7 @@ function MoreViewsMenu({
               <IconRefGlyph icon={view.icon} size={16} />
               <span className="min-w-0 flex-1 truncate">{view.label}</span>
               {view.id === current && <Check className="h-3.5 w-3.5 text-muted-foreground" />}
-              {!isSceneView(view.id) && !view.onClose && (
+              {!isSceneView(view.id) && !view.onClose && !view.alwaysPinned && (
                 <button
                   aria-label={pinned ? `Unpin ${view.label}` : `Pin ${view.label}`}
                   aria-pressed={pinned}

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SELECT_HUD_TITLE, toolHudTitle } from '../../../lib/hud-title'
 import { snapContextOf } from '../../../lib/snapping-mode'
+import { cornerHintRows } from '../../../store/use-corner-snap-hint'
 import { TooltipProvider } from '../primitives/tooltip'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import { ROOM_DIVIDE_HINTS } from './helper-manager'
@@ -57,6 +58,36 @@ describe('Divide HUD', () => {
       expect(html).toContain(label)
     expect(html).not.toContain('Remove last point')
     expect(html).toContain('aria-expanded="false"')
+  })
+
+  test('keeps a note row visible while shortcuts are collapsed', () => {
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <ContextualHelperPanel
+          hints={[
+            { keys: ['Left click'], label: 'Place' },
+            ...cornerHintRows('free_end'),
+            { keys: ['R', 'T'], label: 'Rotate' },
+            { keys: ['Esc'], label: 'Cancel' },
+          ]}
+        />
+      </TooltipProvider>,
+    )
+    for (const label of ['Place', 'No wall meets here', 'More shortcuts', 'Cancel'])
+      expect(html).toContain(label)
+    expect(html).not.toContain('Rotate')
+  })
+
+  test('offers More shortcuts only when collapsing hides a row', () => {
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <ContextualHelperPanel
+          hints={[{ keys: ['Left click'], label: 'Place' }, ...cornerHintRows('free_end')]}
+        />
+      </TooltipProvider>,
+    )
+    expect(html).toContain('No wall meets here')
+    expect(html).not.toContain('More shortcuts')
   })
 })
 

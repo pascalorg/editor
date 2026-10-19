@@ -31,7 +31,7 @@
     "@typescript/typescript6": "6.0.2",
     "dotenv-cli": "^11.0.0",
     "fast-xml-parser": "^5.11.2",
-    "turbo": "^2.11.8",
+    "turbo": "^2.11.9",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "ultracite": "^8.0.1"
   },

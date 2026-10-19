@@ -19,6 +19,8 @@ export type EditorHostView = {
   description?: string
   /** Shown in the view bar until the user unpins it. Default false: the "More views" menu only. */
   defaultPinned?: boolean
+  /** Always in the view bar: the user cannot unpin it. */
+  alwaysPinned?: boolean
   /** Session views such as open documents can be dismissed from the tab bar. */
   onClose?: () => void
 }
@@ -171,5 +173,6 @@ export function isViewPinned(
   view: EditorViewDescriptor,
   pinnedViews: Readonly<Record<string, boolean>>,
 ): boolean {
+  if (view.alwaysPinned) return true
   return pinnedViews[view.id] ?? view.defaultPinned ?? false
 }
