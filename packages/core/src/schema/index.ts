@@ -435,6 +435,7 @@ export {
   WallAssemblyInteriorFinish,
   WallAssemblySheathingMaterial,
   WallFaceRegion,
+  WallFaceScript,
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,

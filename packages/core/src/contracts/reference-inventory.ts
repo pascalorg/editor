@@ -746,7 +746,7 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
   },
   { kind: 'procedural-item', path: 'parameters.@key', reason: 'Recipe parameter name.' },
   // Scripted nodes (an authored item, or a window or door built from code) share one `source`;
-  // a room's floor script keeps the same record on its zone.
+  // a room's floor script keeps the same record on its zone, a wall face's script on its wall.
   ...(
     [
       ['item', 'source'],
@@ -754,6 +754,8 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
       ['door', 'source'],
       ['column', 'source'],
       ['zone', 'floor.script'],
+      ['wall', 'finishScripts.a'],
+      ['wall', 'finishScripts.b'],
     ] as const
   ).flatMap(([kind, source]) => [
     ...(['anchors', 'lights', 'params', 'parts', 'slots'] as const).map((list) => ({

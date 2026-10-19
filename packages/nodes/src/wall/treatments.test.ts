@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   calculateLevelMiters,
   getWallThickness,
+  WallFaceScript,
   type WallNode,
   type WallTrimConfig,
 } from '@pascal-app/core'
@@ -239,5 +240,37 @@ describe('wall treatment miters', () => {
     }
     expect(xsUnder(0.9).some((x) => Math.abs(x - 1) < 1e-6 || Math.abs(x - 2) < 1e-6)).toBe(false)
     expect(xsUnder(0).every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
+  })
+
+  test("gives way to its face's script where the build covers it, and runs whole under a splashback", () => {
+    const scriptOver = (bottom: number) =>
+      WallFaceScript.parse({
+        kind: 'script',
+        script: 'a'.repeat(64),
+        artifact: 'b'.repeat(64),
+        inputs: 'key',
+        manifest: { bounds: { min: [1, bottom, 0], max: [2, 1.2, 0.01] }, triangles: 2 },
+      })
+    const xsOn = (side: 'a' | 'b', bottom: number) => {
+      const node = { ...wall('A', [0, 0], [3, 0]), finishScripts: { a: scriptOver(bottom) } }
+      const geometry = buildTrimGeometry(
+        node,
+        side,
+        trim,
+        'skirting',
+        [],
+        treatmentLevelData([node]),
+      )
+      if (!geometry) throw new Error('expected trim geometry')
+      const xs = allPositions(geometry).map((point) => point.x)
+      geometry.dispose()
+      return xs
+    }
+    // Panelling from the floor: the skirting stops at its ends on its face, as at a door.
+    expect(xsOn('a', 0).every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
+    expect(xsOn('a', 0).some((x) => Math.abs(x - 1) < 1e-6)).toBe(true)
+    // The other face keeps its skirting; a splashback from 0.9 m leaves the skirting whole.
+    for (const xs of [xsOn('b', 0), xsOn('a', 0.9)])
+      expect(xs.some((x) => Math.abs(x - 1) < 1e-6 || Math.abs(x - 2) < 1e-6)).toBe(false)
   })
 })

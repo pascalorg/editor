@@ -16,6 +16,7 @@ import {
   getWallCurveLength,
   normalizeWallCurveOffset,
   resolveWallAssembly,
+  runAsSingleSceneHistoryStep,
   SIDING_LAP,
   STONE_VENEER_UNVERIFIED,
   STUCCO_3_COAT,
@@ -31,6 +32,7 @@ import {
   type WallAssemblyFramingKind,
   type WallAssemblyInteriorFinish,
   type WallAssemblySheathingMaterial,
+  type WallFace,
   type WallNode,
   type WallTrimProfile,
   WSP_SHEATHING,
@@ -40,10 +42,12 @@ import {
   wallAssemblyUnverifiedNote,
   wallTrimPatch,
 } from '@pascal-app/core'
+import { setWallFaceScript } from '@pascal-app/core/agent-operations'
 import {
   ActionButton,
   ActionGroup,
   curveReshapeScope,
+  finishScriptCode,
   formatLinearMeasurement,
   getLinearUnitLabel,
   linearControlValueToMeters,
@@ -59,6 +63,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 import { CurtainWallPanel } from './curtain-wall-panel'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
@@ -445,6 +450,8 @@ export default function WallPanel() {
 
           <WallPaintRegionList wallId={node.id} />
 
+          <WallFaceScriptSection wallId={node.id} />
+
           <WallTrimSection
             node={node}
             onUpdate={handleUpdate}
@@ -490,6 +497,82 @@ export default function WallPanel() {
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+/**
+ * "Scripted finish": a face a script builds (it owns that face's colours, so Paint leaves it), with
+ * its code to read and a way to take it off, back to the face's own finish.
+ */
+function WallFaceScriptSection({ wallId }: { wallId: string }) {
+  const shas = useScene(
+    useShallow((scene) => {
+      const wall = scene.nodes[wallId as AnyNodeId]
+      return wall?.type === 'wall'
+        ? [wall.finishScripts?.a?.script, wall.finishScripts?.b?.script]
+        : []
+    }),
+  )
+  if (!(shas[0] || shas[1])) return null
+  return (
+    <PanelSection title="Scripted finish">
+      {(['a', 'b'] as const).map((face, index) => {
+        const sha = shas[index]
+        return sha ? <WallFaceScriptRow face={face} key={face} sha={sha} wallId={wallId} /> : null
+      })}
+    </PanelSection>
+  )
+}
+
+function WallFaceScriptRow({ face, sha, wallId }: { face: WallFace; sha: string; wallId: string }) {
+  const [code, setCode] = useState<{ sha: string; text: string } | null>(null)
+  const [open, setOpen] = useState(false)
+  const toggleCode = () => {
+    setOpen((shown) => !shown)
+    if (code?.sha === sha) return
+    finishScriptCode(sha).then(
+      (text) => setCode({ sha, text: text ?? 'The script could not be read.' }),
+      () => setCode({ sha, text: 'The script could not be read.' }),
+    )
+  }
+  const remove = () => {
+    const { changes } = setWallFaceScript(
+      useScene.getState().nodes,
+      { wallId, face, remove: true },
+      { activeLevelId: null },
+    )
+    runAsSingleSceneHistoryStep(useScene, () => {
+      for (const { id, data } of changes?.update ?? [])
+        useScene.getState().updateNode(id as AnyNodeId, data)
+    })
+  }
+  return (
+    <div className="flex flex-col gap-2" data-wall-face-script={face}>
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        <span className="text-muted-foreground text-xs">Side {face.toUpperCase()}</span>
+        <div className="flex items-center gap-1.5">
+          <button
+            className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
+            onClick={toggleCode}
+            type="button"
+          >
+            {open ? 'Hide code' : 'View code'}
+          </button>
+          <button
+            className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
+            onClick={remove}
+            type="button"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+      {open && (
+        <pre className="max-h-60 overflow-auto whitespace-pre rounded-lg border border-border/50 p-2 font-mono text-[11px] text-foreground">
+          {code?.sha === sha ? code.text : 'Loading…'}
+        </pre>
+      )}
+    </div>
   )
 }
 

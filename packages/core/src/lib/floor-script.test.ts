@@ -12,14 +12,14 @@ import {
   WallNode,
   ZoneNode,
 } from '../schema'
-import { floorPlatePaintRefusal } from './floor-plate-paint'
 import {
-  type FloorScriptHost,
-  type FloorScriptInputs,
-  floorScriptInputs,
-  refreshFloorScripts,
-  staleFloorScripts,
-} from './floor-script'
+  type FinishScriptHost,
+  finishScriptWrites,
+  refreshFinishScripts,
+  staleFinishScripts,
+} from './finish-script'
+import { floorPlatePaintRefusal } from './floor-plate-paint'
+import { type FloorScriptInputs, floorScriptInputs } from './floor-script'
 import { computePlateSurfacePartition, plateLevelContext } from './plate-surface'
 import { area } from './polygon-boolean'
 import type { SceneNodes } from './structure-kernel'
@@ -64,9 +64,10 @@ const zoneOf = (nodes: SceneNodes) =>
 /** A host that compiles nothing: it counts its builds and answers with hashes of what it was given. */
 function fakeHost() {
   const builds: FloorScriptInputs[] = []
-  const host: FloorScriptHost = {
+  const host: FinishScriptHost = {
     readScript: async (sha) => (sha === 'a'.repeat(64) ? 'export default () => {}' : null),
-    build: async ({ inputs }) => {
+    build: async (input) => {
+      const inputs = input.inputs as FloorScriptInputs
       builds.push(inputs)
       const xs = inputs.polygon.map(([x]) => x)
       const zs = inputs.polygon.map(([, z]) => z)
@@ -91,11 +92,11 @@ function fakeHost() {
 }
 
 /** The room with a floor script, built once by `host` for the room's floor. */
-async function scripted(host: FloorScriptHost) {
+async function scripted(host: FinishScriptHost) {
   const nodes = room()
   const zone = zoneOf(nodes)
   const inputs = floorScriptInputs(nodes, zone.id)!
-  const compiled = await host.build({ zoneId: zone.id, code: '', params: {}, inputs })
+  const compiled = await host.build({ nodeId: zone.id, code: '', params: {}, inputs })
   const { changes } = setRoomFloorScript(
     nodes,
     { zoneId: zone.id, compiled, inputs },
@@ -141,24 +142,26 @@ describe("a room's floor script", () => {
     const { host, builds } = fakeHost()
     let nodes: SceneNodes = await scripted(host)
     expect(builds).toHaveLength(1)
-    expect(staleFloorScripts(nodes)).toEqual([])
-    expect(await refreshFloorScripts(nodes, host)).toEqual({ update: [], failed: [] })
+    expect(staleFinishScripts(nodes)).toEqual([])
+    expect(await refreshFinishScripts(nodes, host)).toEqual({ rebuilt: [], failed: [] })
     expect(builds).toHaveLength(1)
 
     nodes = pushNorth(nodes)
     const zone = zoneOf(nodes)
     expect(zone.floor?.script?.artifact).toBe('1'.padStart(64, '0'))
-    expect(staleFloorScripts(nodes).map((stale) => stale.zoneId)).toEqual([zone.id])
+    expect(staleFinishScripts(nodes).map((stale) => stale.nodeId)).toEqual([zone.id])
 
-    const refresh = await refreshFloorScripts(nodes, host)
+    const refresh = await refreshFinishScripts(nodes, host)
     expect(refresh.failed).toEqual([])
     expect(builds).toHaveLength(2)
     expect(Math.max(...builds[1]!.polygon.map(([, z]) => z))).toBeCloseTo(4.9, 6)
-    nodes = applySceneChanges(nodes, refresh) as SceneNodes
+    nodes = applySceneChanges(nodes, {
+      update: finishScriptWrites(nodes, refresh.rebuilt),
+    }) as SceneNodes
     const rebuilt = zoneOf(nodes).floor?.script
     expect(rebuilt?.artifact).toBe('2'.padStart(64, '0'))
     expect(rebuilt?.params).toEqual({ plank: 0.18 })
-    expect(staleFloorScripts(nodes)).toEqual([])
+    expect(staleFinishScripts(nodes)).toEqual([])
   })
 
   test('refuses paint on its floor, through the Paint tool and the room intent, until removed', async () => {
@@ -191,7 +194,7 @@ describe("a room's floor script", () => {
     const zone = zoneOf(nodes)
     const { host } = fakeHost()
     const inputs = floorScriptInputs(nodes, zone.id)!
-    const compiled = await host.build({ zoneId: zone.id, code: '', params: {}, inputs })
+    const compiled = await host.build({ nodeId: zone.id, code: '', params: {}, inputs })
     const off = reconcile({ ...nodes, [zone.id]: { ...zone, hasFloor: false } }, nodes)
     expect(floorScriptInputs(off, zone.id)).toBeNull()
     expect(
@@ -207,5 +210,5 @@ test('a zone saved before floor scripts parses as it did, and nothing in its sce
   const zone = zoneOf(nodes)
   const saved = JSON.parse(JSON.stringify({ ...zone, floor: { finish: 'library:preset-white' } }))
   expect(ZoneNode.parse(saved)).toEqual(saved)
-  expect(staleFloorScripts({ ...nodes, [zone.id]: saved })).toEqual([])
+  expect(staleFinishScripts({ ...nodes, [zone.id]: saved })).toEqual([])
 })

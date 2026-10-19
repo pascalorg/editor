@@ -47,7 +47,7 @@ export type GeometryScriptHost = {
     code: string
     language: GeometryScriptLanguage
     params?: Record<string, GeometryScriptParamValue>
-    /** What the host builds it for (a room's floor: `floorScriptInputs`), kept in the host's frame. */
+    /** What the host builds it for (a room's floor, a wall's face: `floorScriptInputs`, `wallFaceScriptInputs`), kept in the host's frame. */
     inputs?: Record<string, unknown>
   }): Promise<CompiledGeometryScript & { glb: Uint8Array }>
   storeArtifact(input: {
@@ -77,15 +77,16 @@ export type GeometryScriptHost = {
   }): Promise<CompiledGeometryScript>
 }
 
-export type ScriptedKind = 'object' | 'window' | 'door' | 'column' | 'floor'
+export type ScriptedKind = 'object' | 'window' | 'door' | 'column' | 'floor' | 'wall-face'
 
-/** The kind an artifact records; a room's floor finish is none of the node kinds. */
+/** The kind an artifact records; a room's floor finish and a wall face's are none of the node kinds. */
 const ARTIFACT_KIND: Record<ScriptedKind, GeometryArtifactMetadata['kind']> = {
   object: 'item',
   window: 'window',
   door: 'door',
   column: 'column',
   floor: undefined,
+  'wall-face': undefined,
 }
 
 /** Compiles a module on the host and stores its GLB and text for the scene: the step every scripted tool shares. */
@@ -298,7 +299,7 @@ export function registerGetSource(
       inputSchema: getSourceTool.input,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
-    async ({ nodeId }: { nodeId: string }) => {
+    async ({ nodeId, face }: { nodeId: string; face?: 'a' | 'b' }) => {
       if (!host) {
         return toolError('This Pascal server cannot read geometry scripts.', {
           code: 'scripts_unavailable',
@@ -307,7 +308,7 @@ export function registerGetSource(
       const scene = bridge.getActiveScene()
       if (!scene) return toolError('Open a scene first.', { code: 'no_active_scene' })
       try {
-        const node = readableScript(bridge.getNodes() as Record<string, AnyNode>, nodeId)
+        const node = readableScript(bridge.getNodes() as Record<string, AnyNode>, nodeId, face)
         const payload = readSourceResult(node, await scriptText(host, scene.id, node))
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

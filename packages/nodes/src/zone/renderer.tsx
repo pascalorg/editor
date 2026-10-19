@@ -1,10 +1,7 @@
 'use client'
 
 import {
-  artifactUrl,
-  type ItemNode,
   polygonInteriorPoint,
-  scriptedSize,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
@@ -23,7 +20,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Color, DoubleSide, type Group } from 'three'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { ScriptedModel } from '../item/renderer'
+import { FinishScriptModel } from '../shared/finish-script-model'
 import { owningUnitForZone } from './unit-membership'
 
 const Y_OFFSET = 0.01
@@ -88,38 +85,14 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 /** Over the floor plate's top, so the plate's own finish never shows through the boards. */
 const FLOOR_SCRIPT_LIFT = 0.001
 
-/**
- * The room's floor finish its script built, drawn as an authored object's artifact is (its slots,
- * the render shading), in the level's frame it was built in, just over the plate. It belongs to the
- * room: no pointer events of its own, so a click on it reaches the floor below.
- */
+/** The room's floor finish its script built, in the level's frame, just over the plate. */
 function FloorScriptModel({ node, script }: { node: ZoneNode; script: ZoneFloorScript }) {
-  const view = useMemo(() => {
-    const [width, height, depth] = scriptedSize(script.manifest)
-    return {
-      id: node.id,
-      type: 'item',
-      parentId: node.parentId,
-      metadata: {},
-      source: script,
-      scale: [1, 1, 1],
-      asset: {
-        src: artifactUrl(script.artifact),
-        dimensions: [width, height, depth],
-        offset: [0, 0, 0],
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-      },
-    } as unknown as ItemNode
-  }, [node.id, node.parentId, script])
   return (
     <group position-y={FLOOR_SCRIPT_LIFT}>
-      <ScriptedModel setSettled={settleNothing} view={view} />
+      <FinishScriptModel ownerId={node.id} parentId={node.parentId} script={script} />
     </group>
   )
 }
-
-const settleNothing = () => {}
 
 function ZoneVisuals({ node }: { node: ZoneNode }) {
   // Group-transform drags publish a translated/rotated polygon to

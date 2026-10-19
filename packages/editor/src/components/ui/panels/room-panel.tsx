@@ -15,7 +15,7 @@ import { Check, ChevronDown, Plus } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { startCeilingEdit } from '../../../lib/ceiling-edit-session'
 import { resolveOverlayPolicy } from '../../../lib/interaction/overlay-policy'
-import { floorScriptCode } from '../../../lib/geometry-script/floor-scripts'
+import { finishScriptCode } from '../../../lib/geometry-script/finish-scripts'
 import { formatAreaLabel, formatLinearMeasurement } from '../../../lib/measurements'
 import { addMezzanineStairs } from '../../../lib/mezzanine-stairs'
 import { roomFloorBase, roomRelativeFloorHeight } from '../../../lib/room-construction-commands'
@@ -241,7 +241,7 @@ function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
   const toggleCode = () => {
     setOpen((shown) => !shown)
     if (code?.sha === sha) return
-    floorScriptCode(sha).then(
+    finishScriptCode(sha).then(
       (text) => setCode({ sha, text: text ?? 'The script could not be read.' }),
       () => setCode({ sha, text: 'The script could not be read.' }),
     )

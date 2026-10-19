@@ -1,4 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
+import { wallFaceScriptPaintRefusal } from '../lib/wall-face-script'
 import type { MaterialSurface } from '../material-kinds'
 import { GLAZED_ROOF_SLOTS, nodeSlotDeclarations } from '../node-slots'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
@@ -357,6 +358,12 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
       const target = current(id)!
       if (target.type === 'wall') {
         const face = role === 'a' || role === 'b' ? role : null
+        const scripted = face ? wallFaceScriptPaintRefusal(target, face) : undefined
+        if (scripted)
+          refuse('face_built_by_script', `${scripted.message} Nothing was painted.`, {
+            target: id,
+            face,
+          })
         Object.assign(
           written,
           face

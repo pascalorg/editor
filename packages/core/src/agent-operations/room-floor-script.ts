@@ -21,7 +21,7 @@ const round = (value: number) => Math.round(value * 1000) / 1000
  * `inputs`: the module reads `params.polygon`, `params.holes`, `params.elevation`, in level
  * coordinates) and stores the artifacts; this writes the result on the zone, with the key of the
  * floor it was built for. When the structure re-derives the room's floor the script is stale and
- * `refreshFloorScripts` runs it again. The script owns the floor's colours: paint on that floor is
+ * `refreshFinishScripts` runs it again. The script owns the floor's colours: paint on that floor is
  * refused while it is there.
  */
 export const setRoomFloorScript: AgentOperation<SetRoomFloorScriptInput> = (nodes, input) => {

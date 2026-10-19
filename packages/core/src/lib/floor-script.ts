@@ -1,10 +1,4 @@
-import type {
-  AnyNode,
-  CompiledGeometryScript,
-  GeometryScriptParamValue,
-  ZoneFloorScript,
-  ZoneNode,
-} from '../schema'
+import type { AnyNode, CompiledGeometryScript, ZoneFloorScript } from '../schema'
 import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
 import { scriptSource } from './geometry-script-node'
 import { levelWallCover, plateLevelContext } from './plate-surface'
@@ -17,6 +11,7 @@ import {
   union,
 } from './polygon-boolean'
 import { roomFloorPlate } from './room-floor-plate'
+import { scriptInputsKey } from './script-inputs-key'
 
 type SceneNodes = Readonly<Record<string, AnyNode>>
 
@@ -69,20 +64,9 @@ export function floorScriptInputs(nodes: SceneNodes, zoneId: string): FloorScrip
   return inputs
 }
 
-/** 32-bit FNV-1a: a change detector for a floor's inputs, not a content address. */
-function fnv1a(text: string, seed: number): string {
-  let hash = seed
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
-}
-
 /** The key a floor script keeps of the floor it was built for (`ZoneFloorScript.inputs`). */
 export function floorScriptInputsKey(inputs: FloorScriptInputs): string {
-  const text = JSON.stringify([inputs.polygon, inputs.holes, inputs.elevation])
-  return fnv1a(text, 0x811c9dc5) + fnv1a(text, 0x050c5d1f)
+  return scriptInputsKey(JSON.stringify([inputs.polygon, inputs.holes, inputs.elevation]))
 }
 
 /** A compile as the zone keeps it: its script source and the key of the floor it was built for. */
@@ -92,80 +76,4 @@ export function floorScriptRecord(
   previous?: ZoneFloorScript,
 ): ZoneFloorScript {
   return { ...scriptSource(compiled, {}, previous), inputs: floorScriptInputsKey(inputs) }
-}
-
-export type StaleFloorScript = {
-  zoneId: string
-  script: ZoneFloorScript
-  /** The room's floor now, which the script runs again for. */
-  inputs: FloorScriptInputs
-}
-
-/**
- * The floor scripts whose room's floor is no longer the one they were built for: the structure
- * reconcile re-derived the room's polygon or plate (a wall moved, a room edge pushed, a floor
- * raised), so the key differs. A room with no floor now keeps its script as it was.
- */
-export function staleFloorScripts(nodes: SceneNodes): StaleFloorScript[] {
-  return Object.values(nodes).flatMap((node) => {
-    const script = node.type === 'zone' ? node.floor?.script : undefined
-    if (!script) return []
-    const inputs = floorScriptInputs(nodes, node.id)
-    return inputs && floorScriptInputsKey(inputs) !== script.inputs
-      ? [{ zoneId: node.id, script, inputs }]
-      : []
-  })
-}
-
-/**
- * How a host runs a floor script: reads its module back by hash, and compiles and stores it for a
- * floor (`@pascal-app/geometry-script`'s `compileGeometryScript` with `inputs`, then the artifact
- * store), answering the compile with the stored hashes.
- */
-export type FloorScriptHost = {
-  readScript(sha256: string): Promise<string | null>
-  build(input: {
-    zoneId: string
-    code: string
-    params: Record<string, GeometryScriptParamValue>
-    inputs: FloorScriptInputs
-  }): Promise<CompiledGeometryScript>
-}
-
-export type FloorScriptRefresh = {
-  /** Each rebuilt room's new `floor`, its other floor fields as they were when the refresh began. */
-  update: { id: string; data: Pick<ZoneNode, 'floor'> }[]
-  failed: { zoneId: string; error: string }[]
-}
-
-/**
- * Runs every stale floor script again for its room's current floor, with its stored params. A host
- * applies an update while that room's floor is still the one it was built for (else a newer
- * refresh follows), and writes only `floor.script` over what the room holds then.
- */
-export async function refreshFloorScripts(
-  nodes: SceneNodes,
-  host: FloorScriptHost,
-): Promise<FloorScriptRefresh> {
-  const refresh: FloorScriptRefresh = { update: [], failed: [] }
-  await Promise.all(
-    staleFloorScripts(nodes).map(async ({ zoneId, script, inputs }) => {
-      try {
-        const code = await host.readScript(script.script)
-        if (code === null) throw new Error('its module could not be read')
-        const compiled = await host.build({ zoneId, code, params: script.params, inputs })
-        const zone = nodes[zoneId] as ZoneNode
-        refresh.update.push({
-          id: zoneId,
-          data: { floor: { ...zone.floor, script: floorScriptRecord(compiled, inputs, script) } },
-        })
-      } catch (error) {
-        refresh.failed.push({
-          zoneId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    }),
-  )
-  return refresh
 }
