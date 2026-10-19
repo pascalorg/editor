@@ -4,12 +4,16 @@ on:
   pull_request:
     paths:
       - server.json
+      - packages/mcp/package.json
       - .github/workflows/mcp-registry.yml
   push:
     branches: [main]
     paths:
       - server.json
+      - packages/mcp/package.json
       - .github/workflows/mcp-registry.yml
+  # Run before publishing: the hosted deployment must already serve this version.
+  workflow_dispatch:
 
 env:
   MCP_PUBLISHER_VERSION: 1.8.1
@@ -36,30 +40,56 @@ jobs:
       - name: Validate MCP Registry manifest
         run: "$RUNNER_TEMP/mcp-publisher validate"
 
+      # The registry verifies npm ownership through the published package's mcpName.
+      - name: Manifest follows the @pascal-app/mcp package
+        run: |
+          jq --exit-status --slurpfile pkg packages/mcp/package.json '
+            .version == $pkg[0].version
+            and .name == $pkg[0].mcpName
+            and .packages == [{
+              "registryType": "npm",
+              "registryBaseUrl": "https://registry.npmjs.org",
+              "identifier": $pkg[0].name,
+              "version": $pkg[0].version,
+              "runtimeHint": "npx",
+              "transport": { "type": "stdio" }
+            }]
+          ' server.json
+
+      # OAuth is discovered from the 401 challenge, so the remote declares no headers.
       - name: Verify hosted endpoint contract
         run: |
           jq --exit-status '
-            (.version | strings | test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
-            and .remotes == [{
+            .remotes == [{
               "type": "streamable-http",
-              "url": "https://editor.pascal.app/api/mcp",
-              "headers": [{
-                "name": "Authorization",
-                "description": "Bearer API key created in Pascal Settings, formatted as Bearer sk_live_...",
-                "isRequired": true,
-                "isSecret": true
-              }]
+              "url": "https://editor.pascal.app/api/mcp"
             }]
           ' server.json
           curl --fail --location --output /dev/null \
             https://editor.pascal.app/docs/developers/mcp
           status=$(curl --silent --show-error --output "$RUNNER_TEMP/mcp-response.json" \
+            --dump-header "$RUNNER_TEMP/mcp-response.headers" \
             --write-out '%{http_code}' \
             --request POST \
             --header 'content-type: application/json' \
             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-check","version":"1"}}}' \
             https://editor.pascal.app/api/mcp)
           test "$status" = "401"
+          grep --ignore-case --fixed-strings \
+            'resource_metadata="https://editor.pascal.app/.well-known/oauth-protected-resource"' \
+            "$RUNNER_TEMP/mcp-response.headers"
+
+  # The hosted API catalog and server card are served by the hosted deployment, not
+  # this repository, so they only match after that deployment picks up this version.
+  hosted-matches-manifest:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
       - name: Verify live API catalog matches manifest
         run: |
@@ -103,3 +133,18 @@ jobs:
             | tr -d '\r' \
             | grep --fixed-strings --ignore-case \
               'link: <https://editor.pascal.app/.well-known/api-catalog>; rel="api-catalog"'
+
+      - name: Verify live server card matches manifest
+        run: |
+          curl --fail \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-connrefused \
+            --retry-delay 2 \
+            --output "$RUNNER_TEMP/server-card.json" \
+            https://editor.pascal.app/.well-known/mcp/server-card.json
+          jq --exit-status --slurpfile manifest server.json '
+            .serverInfo.version == $manifest[0].version
+            and .transport.endpoint == $manifest[0].remotes[0].url
+          ' "$RUNNER_TEMP/server-card.json"
