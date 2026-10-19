@@ -48,9 +48,12 @@ export function foundationWallConstruction(construction: FoundationConstruction)
 /**
  * The `candidates` (walls among `levelWalls`, the level's walls with them in) that hold the earth
  * back: the level holds foundation walls and no closed circuit of walls encloses them. A partition
- * inside the outline is not one. A wall with no closed circuit around it yet (the first walls of a
- * basement, an open run) counts as the outline in the making, so a basement drawn wall by wall is
- * foundation all the way round. The outline is the one `genericFoundation` draws under.
+ * inside the outline is not one, nor is a ring of walls inside it (a courtyard walled on every
+ * side: a room open to the sky, as the structure kernel reads it, facing air, not earth). A wall
+ * outside the outline (a well against it) is. A wall with no closed circuit around it yet (the
+ * first walls of a basement, an open run) counts as the outline in the making, so a basement drawn
+ * wall by wall is foundation all the way round. The outline is the one `genericFoundation` draws
+ * under.
  */
 export function wallsAgainstGround(
   nodes: Record<AnyNodeId, AnyNode>,

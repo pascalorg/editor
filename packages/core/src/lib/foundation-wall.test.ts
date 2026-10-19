@@ -335,6 +335,46 @@ describe('only the walls against the ground are foundation walls', () => {
     for (const wall of drawn[4]!) expect(isPlainWall(wall)).toBe(true)
   })
 
+  test('a courtyard walled inside the outline holds no earth: its walls stay ordinary, a well outside the outline is foundation', () => {
+    const { scene } = drawEach(house(), 'level_base', PERIMETER)
+    const { drawn } = drawEach(scene, 'level_base', [
+      // a courtyard ring inside the outline, touching none of its walls
+      [
+        [2, 1],
+        [5, 1],
+      ],
+      [
+        [5, 1],
+        [5, 4],
+      ],
+      [
+        [5, 4],
+        [2, 4],
+      ],
+      [
+        [2, 4],
+        [2, 1],
+      ],
+      // a well on the outside of the east wall
+      [
+        [8, 1],
+        [11, 1],
+      ],
+      [
+        [11, 1],
+        [11, 4],
+      ],
+      [
+        [11, 4],
+        [8, 4],
+      ],
+    ])
+    for (const walls of drawn.slice(0, 4))
+      for (const wall of walls) expect(isPlainWall(wall)).toBe(true)
+    for (const walls of drawn.slice(4))
+      for (const wall of walls) expect(isFoundationWall(wall)).toBe(true)
+  })
+
   test('the walls a gesture draws are asked together: the candidates of one call', () => {
     const { scene } = drawEach(house(), 'level_base', PERIMETER)
     const walls = Object.values(scene).filter((node): node is WallNode => node.type === 'wall')
