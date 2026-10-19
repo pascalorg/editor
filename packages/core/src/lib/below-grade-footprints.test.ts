@@ -9,6 +9,7 @@ import {
 } from '../schema'
 import { belowGradeFloorY, belowGradeFootprints } from './below-grade-footprints'
 import { levelGradeStanding } from './grade-standing'
+import { levelStackGroundBox } from './ground-window'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
 
@@ -222,16 +223,26 @@ test('the level display decides by level index alone, so the hole opens over eve
 })
 
 /**
- * A hillside house: flat ground at 0 m west of x = 0, 4 m east of it. The cellar (-2, floor at
- * -2.8, x -2..5) is under the ground everywhere; the walk-out over it (-1, floor at 0.2, x -9..5)
- * is buried only on the east, its west part (x < 0) standing out of the hill.
+ * A hillside house: flat ground at 0 m west of x = 0, `riseCm` east of it (the ground climbs between
+ * x = -1 and 0). The cellar (-2, floor at -2.8, x -2..5) is under the ground everywhere; the
+ * walk-out over it (-1, floor at 0.2, x -9..`walkoutEast`) is buried only on the east, its west part
+ * (x < 0) standing out of the hill. With `named`, a main floor over them is the building's ground
+ * line, so both are below it whatever the ground does.
  */
-function houseOnHillside() {
+function houseOnHillside({
+  walkoutEast = 5,
+  riseCm = 400,
+  named = false,
+}: {
+  walkoutEast?: number
+  riseCm?: number
+  named?: boolean
+} = {}) {
   const field = createTerrainField({ cols: 33, rows: 33, spacing: 1, origin: [-16, -16] })
   const heights = new Int16Array(field.heights)
   for (let row = 0; row < field.rows; row += 1)
     for (let col = 0; col < field.cols; col += 1)
-      if (field.origin[0] + col * field.spacing >= 0) heights[row * field.cols + col] = 400
+      if (field.origin[0] + col * field.spacing >= 0) heights[row * field.cols + col] = riseCm
   const rect = (x0: number, x1: number): Array<[number, number]> => [
     [x0, -4],
     [x1, -4],
@@ -247,8 +258,20 @@ function houseOnHillside() {
     BuildingNode.parse({
       id: 'building_a',
       parentId: 'site_a',
-      children: ['level_cellar', 'level_walkout'],
+      children: ['level_cellar', 'level_walkout', ...(named ? ['level_main'] : [])],
+      ...(named ? { groundLevelId: 'level_main' } : {}),
     }),
+    ...(named
+      ? [
+          LevelNode.parse({
+            id: 'level_main',
+            parentId: 'building_a',
+            level: 0,
+            height: 3,
+            children: [],
+          }),
+        ]
+      : []),
     LevelNode.parse({
       id: 'level_cellar',
       parentId: 'building_a',
@@ -274,21 +297,53 @@ function houseOnHillside() {
       id: 'slab_walkout',
       parentId: 'level_walkout',
       elevation: 0.2,
-      polygon: rect(-9, 5),
+      polygon: rect(-9, walkoutEast),
     }),
   ]
   return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
 }
 
-test('a walk-out between the level shown and grade is opened over its whole plate, the part out of the hill included', () => {
+test('a walk-out between the level shown and grade is opened over the part the ground stands over, not its whole plate', () => {
   const nodes = houseOnHillside()
   expect(levelGradeStanding(nodes, 'level_cellar')).toBe('below-grade')
   expect(levelGradeStanding(nodes, 'level_walkout')).toBe('partly-below-grade')
-  // The cellar shown: the hole is the walk-out's plate (x -9..5), though the ground stands over it
-  // only east of x = 0.
+  // The cellar shown: the walk-out adds nothing the cellar does not hold (x -2..5), and its valley
+  // side (x < 0, where the ground is at 0 m, under its floor) stays closed. A fully buried level
+  // gives its whole floor.
   expect(belowGradeFootprints(nodes, 'level_cellar').map(extent)).toEqual([
-    { x: [-9, 5], z: [-4, 4] },
+    { x: [-2, 5], z: [-4, 4] },
   ])
+})
+
+test('a walk-out whose buried part is wider than the cellar opens it, the edge following the slope', () => {
+  const nodes = houseOnHillside({ walkoutEast: 9 })
+  // The cellar's west edge (-2) and the walk-out's buried east part (to 9): one outline.
+  expect(belowGradeFootprints(nodes, 'level_cellar').map(extent)).toEqual([
+    { x: [-2, 9], z: [-4, 4] },
+  ])
+  // The walk-out alone: its floor is 0.2 m, so the ground has to stand over 0.5 m (the floor and
+  // the tolerance). It climbs 4 m between x = -1 and x = 0: that height is reached at x = -0.875.
+  const [outline] = belowGradeFootprints(nodes, 'level_walkout')
+  const { x, z } = extent(outline ?? [])
+  expect(x[0]).toBeCloseTo(-0.875, 3)
+  expect(x[1]).toBe(9)
+  expect(z).toEqual([-4, 4])
+  expect(belowGradeFootprints(nodes, 'level_walkout')).toHaveLength(1)
+})
+
+test('a level under the ground line that the ground leaves out of the ground opens nothing', () => {
+  // A flat site at 0 m, the walk-out's floor at 0.2 m: the main floor over it is the ground line,
+  // so the walk-out reads partly below grade, and nothing stands over it.
+  const nodes = houseOnHillside({ riseCm: 0, named: true })
+  expect(levelGradeStanding(nodes, 'level_walkout')).toBe('partly-below-grade')
+  expect(belowGradeFootprints(nodes, 'level_walkout')).toEqual([])
+})
+
+test('the fog box of the underground still holds the walk-out whole: it is where the world stays clear, not where the ground opens', () => {
+  const nodes = houseOnHillside()
+  const box = levelStackGroundBox(nodes, 'level_walkout')
+  expect(box?.min[0]).toBe(-9)
+  expect(box?.max[0]).toBe(5)
 })
 
 test('the pit goes down to the floor of the level shown, and to none when it is at grade', () => {

@@ -653,6 +653,112 @@ test('the pit’s walls stand on the hole’s contour and go down to the floor o
   }
 })
 
+/**
+ * The hillside house of the core tests (`below-grade-footprints.test.ts`): ground at 0 m west of
+ * x = 0 and 4 m east of it, the terrain in the scene so the levels read it. A cellar (-2, x -2..5)
+ * under the ground everywhere, a walk-out over it (-1, floor 0.2 m, x -9..`walkoutEast`) buried only
+ * on the east.
+ */
+function withHillsideHouse(walkoutEast: number) {
+  const field = createTerrainField({ origin: [-12, -12], cols: 25, rows: 25, spacing: 1 })
+  const heights = new Int16Array(field.heights)
+  for (let row = 0; row < field.rows; row += 1)
+    for (let col = 0; col < field.cols; col += 1)
+      if (field.origin[0] + col * field.spacing >= 0) heights[row * field.cols + col] = 400
+  const site = SiteNode.parse({
+    id: 'site_lot',
+    polygon: { type: 'polygon', points: lotPoints },
+    terrain: encodeTerrainField({ ...field, heights }),
+    children: ['building_a'],
+  })
+  const rect = (x0: number, x1: number): Array<[number, number]> => [
+    [x0, -4],
+    [x1, -4],
+    [x1, 4],
+    [x0, 4],
+  ]
+  const list: AnyNode[] = [
+    site,
+    BuildingNode.parse({
+      id: 'building_a',
+      parentId: 'site_lot',
+      children: ['level_cellar', 'level_walkout'],
+    }),
+    LevelNode.parse({
+      id: 'level_cellar',
+      parentId: 'building_a',
+      level: -2,
+      height: 3,
+      baseElevation: -3,
+      children: ['slab_cellar'],
+    }),
+    LevelNode.parse({
+      id: 'level_walkout',
+      parentId: 'building_a',
+      level: -1,
+      height: 3,
+      children: ['slab_walkout'],
+    }),
+    SlabNode.parse({
+      id: 'slab_cellar',
+      parentId: 'level_cellar',
+      elevation: 0.2,
+      polygon: rect(-2, 5),
+    }),
+    SlabNode.parse({
+      id: 'slab_walkout',
+      parentId: 'level_walkout',
+      elevation: 0.2,
+      polygon: rect(-9, walkoutEast),
+    }),
+  ]
+  useScene.setState({
+    nodes: Object.fromEntries(list.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>,
+  })
+  return site
+}
+
+test('on a hillside the hole, the grade ring and the pit stop where the ground does: the valley side of a walk-out stays closed', async () => {
+  const site = withHillsideHouse(9)
+  const renderer = await create(<SiteRenderer node={site} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    await act(async () => showLevel('level_cellar'))
+    groundHoleOpenNode().value = 1
+    await renderer.advanceFrames(3, 0.05)
+
+    // The cellar (x -2..5) and the walk-out's buried part past it (to x = 9) are open; the walk-out's
+    // valley side (x -9..-2, the ground at 0 m, under its floor) is not.
+    expect(groundHoleDistanceAt(3, 0)).toBeLessThan(0)
+    expect(groundHoleDistanceAt(7, 0)).toBeLessThan(0)
+    expect(groundHoleDistanceAt(-6, 0)).toBeGreaterThan(1)
+
+    // The grade ring runs along the same outline.
+    const rings = ground(scene, 'veil').filter((veil) => {
+      veil.geometry.computeBoundingBox()
+      const box = veil.geometry.boundingBox ?? new Box3()
+      return box.max.x - box.min.x < 15
+    })
+    expect(rings).toHaveLength(1)
+    const ringBox = rings[0]!.geometry.boundingBox ?? new Box3()
+    expect(ringBox.min.x).toBeGreaterThan(-2.5)
+    expect(ringBox.max.x).toBeLessThan(9.5)
+
+    // The pit's walls stand on that contour, its floor covers the field baked round it.
+    const wallPositions = pitWalls(scene)[0]!.geometry.getAttribute('position')
+    let westmost = Number.POSITIVE_INFINITY
+    for (let i = 0; i < wallPositions.count; i += 1)
+      westmost = Math.min(westmost, wallPositions.getX(i))
+    expect(westmost).toBeGreaterThan(-5)
+    const floor = pitParts(scene).find((part) => part.userData.groundPit === 'floor')!
+    floor.geometry.computeBoundingBox()
+    expect(floor.geometry.boundingBox?.min.x).toBeGreaterThan(-9)
+  } finally {
+    groundHoleOpenNode().value = 0
+    await renderer.unmount()
+  }
+})
+
 test('switching floors changes the pit’s uniforms and geometry, never its meshes or materials', async () => {
   withFourBasements()
   const renderer = await create(<SiteRenderer node={lot(false)} />)

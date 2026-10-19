@@ -1,6 +1,7 @@
 import type { AnyNode, AnyNodeId } from '../schema'
-import { getLevelElevations, levelFloorWorldY } from '../services/storey'
-import { levelGradeStanding } from './grade-standing'
+import { BELOW_GRADE_TOLERANCE, getLevelElevations, levelFloorWorldY } from '../services/storey'
+import { levelGradeStanding, terrainFieldOverLevel } from './grade-standing'
+import { groundOverPart } from './ground-over-part'
 import { type Point2D, unionPolygons } from './polygon-union'
 import { levelLocalToWorldXZ } from './terrain-support-query'
 
@@ -17,15 +18,24 @@ function buriedLevels(nodes: Record<AnyNodeId, AnyNode>): BuriedLevel[] {
   const elevations = getLevelElevations(nodes)
   const buried: BuriedLevel[] = []
   for (const level of Object.values(nodes)) {
-    if (level.type !== 'level' || levelGradeStanding(nodes, level.id) === 'at-grade') continue
+    if (level.type !== 'level') continue
+    const standing = levelGradeStanding(nodes, level.id)
+    if (standing === 'at-grade') continue
     const buildingId = elevations.get(level.id)?.buildingId
     const building = buildingId ? nodes[buildingId as AnyNodeId] : undefined
     const placed = building?.type === 'building' ? building : null
+    // A floor only partly below grade (a walk-out on a hillside) is opened over the part the
+    // ground stands over, not its whole plate: on the valley side the ground stays closed.
+    const floorY = standing === 'partly-below-grade' ? levelFloorWorldY(nodes, level.id) : null
+    const field = floorY === null ? null : terrainFieldOverLevel(nodes, level)
     const floors: Point2D[][] = []
     for (const childId of level.children) {
       const slab = nodes[childId as AnyNodeId]
-      if (slab?.type === 'slab' && slab.recessed !== true)
-        floors.push(slab.polygon.map(([x, z]) => levelLocalToWorldXZ(placed, x, z)))
+      if (slab?.type !== 'slab' || slab.recessed === true) continue
+      const plate = slab.polygon.map(([x, z]) => levelLocalToWorldXZ(placed, x, z))
+      if (field && floorY !== null)
+        floors.push(...groundOverPart(plate, field, floorY + BELOW_GRADE_TOLERANCE))
+      else floors.push(plate)
     }
     buried.push({ index: level.level, visible: level.visible !== false, floors })
   }
@@ -39,7 +49,9 @@ function buriedLevels(nodes: Record<AnyNodeId, AnyNode>): BuriedLevel[] {
  * deeper level wider than the one over it, or under part of it, gives one outline, not overlapping
  * ones). The 3D view cuts its hole in the ground and draws its grade ring along them while the
  * ground is veiled. An automatic floor follows the walls' centrelines, so an outline runs half a
- * wall inside the outer faces.
+ * wall inside the outer faces. A level only partly below grade (a walk-out on a hillside) gives
+ * the part of its floor the ground stands over by more than {@link BELOW_GRADE_TOLERANCE}, the
+ * edge following the slope; fully buried levels give their whole floor.
  *
  * With `shownLevelId`, only what the level display needs open over that level: the level itself and
  * the levels between it and grade (the ones the display hides above it: `level` index at or over
