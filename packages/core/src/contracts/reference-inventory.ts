@@ -772,6 +772,16 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
     },
   ]),
   { kind: 'scan', path: 'layers.@key', reason: 'Layer visibility flag name.' },
+  {
+    kind: 'site',
+    path: 'presentation.display.disciplines.@key',
+    reason: 'Discipline display filter names.',
+  },
+  {
+    kind: 'site',
+    path: 'presentation.display.families.@key',
+    reason: 'Family display filter names.',
+  },
   { kind: 'site', path: 'frontEdge', reason: "Index of the lot polygon's street-facing edge." },
   ...[
     'boundaries',
@@ -809,6 +819,12 @@ const meta = (path: string, r: Omit<Row, 'kind' | 'path'>) =>
   row({ kind: '*', path: `metadata.${path}`, ...r })
 
 export const METADATA_REFERENCES: readonly ExistingReference[] = [
+  meta('authorSceneState.ids.*', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
+    dependents: ['metadata.authorSceneState.nodes'],
+    note: 'Stable source-to-node identities and the corresponding authored baseline snapshot; whole graph clones remap the snapshot recursively.',
+  }),
   meta('managedByLeanTo', {
     ...policy('node', 'internal', 'cascade', 'strip'),
     targetKinds: ['lean-to-extension'],

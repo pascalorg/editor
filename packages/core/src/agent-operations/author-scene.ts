@@ -1342,8 +1342,7 @@ export function finalizeAuthorScene(
   },
 ) {
   const building = scene[outcome.buildingId]
-  if (!building || building.type !== 'building')
-    refuse('no_building', 'The target building no longer exists.')
+  if (building?.type !== 'building') refuse('no_building', 'The target building no longer exists.')
   const previous = building.metadata?.authorSceneState as AuthorSceneState | undefined
   const base =
     previous?.nodes ??

@@ -273,7 +273,7 @@ export const authorSceneLevel = z.object({
     default: 0,
   }),
   walls: z.array(authorSceneWall).optional(),
-  rooms: z.array(authorSceneRoom).default([]),
+  rooms: z.array(authorSceneRoom).default([]).describe('Room seeds and finishes (default []).'),
   slabs: z.array(authorSceneSlab).optional(),
   columns: z.array(authorSceneColumn).optional(),
   items: z.array(authorSceneItem).optional(),
