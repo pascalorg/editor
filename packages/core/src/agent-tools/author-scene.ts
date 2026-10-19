@@ -83,7 +83,7 @@ export const authorSceneOpening = z.object({
 })
 
 const WALL_FACE_MODULE =
-  "a three.js module that builds this face's finish (tiles with joints, panelling, boards) for exactly the face: it receives params.outline, params.holes (its doors and windows), params.base and params.thickness in wall-local metres (x along the wall from its start, y up from the face's base, z out of the face) and returns the finish clipped to the outline; Pascal rebuilds it when the wall or its openings change"
+  "a three.js module that builds this face's finish (tiles with joints, panelling, boards) for exactly the face: it receives params.outline, params.holes (its doors and windows), params.base and params.thickness in wall-local metres (x along the wall from its start, y up from the face's base, z out of the face) and lays the finish out: Pascal cuts the build to the outline and its openings, so tiles and boards may run past the edges and over the doors and windows (the holes are there for a layout that wants them, tiles centred on a window); Pascal rebuilds it when the wall or its openings change"
 
 const faceToHeight = (whose: string) =>
   length(`Where ${whose} stops, metres up from the face's base (default: the full face).`, {
@@ -180,7 +180,7 @@ export const authorSceneRoom = z.object({
     .max(48_000)
     .optional()
     .describe(
-      "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon, params.holes and params.elevation (level coordinates, metres) and returns the planks, tiles or boards clipped to that polygon. Pascal rebuilds it when the room changes; floor stays the fallback finish.",
+      "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon, params.holes and params.elevation (level coordinates, metres) and lays out the planks, tiles or boards: Pascal cuts the build to the polygon and its holes, so a row may run past the edges (the holes are there for a layout that wants them). Pascal rebuilds it when the room changes; floor stays the fallback finish.",
     ),
   wallCode: z
     .string()

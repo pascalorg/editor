@@ -130,14 +130,17 @@ const payload = {
   notes: ['The rug was left out.'],
 }
 
-/** A floor of four boards across the bounds of the room's floor, at its top. */
+/**
+ * A floor of four boards over the bounds of the room's floor, run 0.3 m past them, and one more
+ * wholly outside it: Pascal cuts them to the floor.
+ */
 const BOARDS = `export default function build({ THREE, params }) {
   const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
-  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const [x0, x1, z0, z1] = [Math.min(...xs) - 0.3, Math.max(...xs) + 0.3, Math.min(...zs) - 0.3, Math.max(...zs) + 0.3]
   const g = new THREE.Group()
   const m = new THREE.MeshStandardMaterial({ color: '#b08060' }); m.name = 'slot_wood'
   const w = (x1 - x0) / 4
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.01, z1 - z0), m)
     b.position.set(x0 + w * (i + 0.5), params.elevation + 0.005, (z0 + z1) / 2)
     g.add(b)
@@ -145,21 +148,69 @@ const BOARDS = `export default function build({ THREE, params }) {
   return g
 }`
 
-/** Half-metre tiles over a wall face, none over its doors and windows. */
+/** Half-metre tiles from past the start of a wall face to past its end and top, over its openings. */
 const TILES = `export default function build({ THREE, params }) {
-  const { outline, holes } = params
+  const { outline } = params
   const g = new THREE.Group()
   const m = new THREE.MeshStandardMaterial({ color: '#ffffff' }); m.name = 'slot_tile'
   const size = 0.5
-  for (let x = outline.x0; x + size <= outline.x1 + 1e-6; x += size)
-    for (let y = outline.y0; y + size <= outline.y1 + 1e-6; y += size) {
-      if (holes.some((h) => x < h.x1 && x + size > h.x0 && y < h.y1 && y + size > h.y0)) continue
+  for (let x = outline.x0 - 0.25; x < outline.x1 + size; x += size)
+    for (let y = outline.y0; y < outline.y1 + size; y += size) {
       const t = new THREE.Mesh(new THREE.BoxGeometry(size - 0.004, size - 0.004, 0.008), m)
       t.position.set(x + size / 2, y + size / 2, 0.004)
       g.add(t)
     }
   return g
 }`
+
+/**
+ * The triangles' centroids of a compiled GLB, read straight from its chunks: the compiler writes
+ * a host's build in the host's frame, with no node transforms to apply.
+ */
+function glbCentroids(bytes: Uint8Array): [number, number, number][] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const jsonLength = view.getUint32(12, true)
+  const gltf = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)))
+  const bin = 20 + jsonLength + 8
+  expect(
+    gltf.nodes.every(
+      (node: Record<string, unknown>) =>
+        !node.translation && !node.rotation && !node.scale && !node.matrix,
+    ),
+  ).toBe(true)
+  const read = (accessorIndex: number) => {
+    const accessor = gltf.accessors[accessorIndex]
+    const bufferView = gltf.bufferViews[accessor.bufferView]
+    const offset = bin + (bufferView.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+    const width = { SCALAR: 1, VEC3: 3 }[accessor.type as 'SCALAR' | 'VEC3']
+    return Array.from({ length: accessor.count * width }, (_, i) =>
+      accessor.componentType === 5126
+        ? view.getFloat32(offset + i * 4, true)
+        : accessor.componentType === 5125
+          ? view.getUint32(offset + i * 4, true)
+          : view.getUint16(offset + i * 2, true),
+    )
+  }
+  const centroids: [number, number, number][] = []
+  for (const mesh of gltf.meshes)
+    for (const primitive of mesh.primitives) {
+      const position = read(primitive.attributes.POSITION)
+      const count = position.length / 3
+      const index =
+        primitive.indices === undefined
+          ? Array.from({ length: count }, (_, i) => i)
+          : read(primitive.indices)
+      for (let i = 0; i < index.length; i += 3) {
+        const corners = [index[i]!, index[i + 1]!, index[i + 2]!]
+        centroids.push(
+          [0, 1, 2].map(
+            (axis) => corners.reduce((sum, corner) => sum + position[corner * 3 + axis]!, 0) / 3,
+          ) as [number, number, number],
+        )
+      }
+    }
+  return centroids
+}
 
 /** One panel over the whole outline of a wall face. */
 const PANEL = `export default function build({ THREE, params }) {
@@ -175,9 +226,12 @@ describe('author_scene (MCP)', () => {
   let client: Client
   const stored: string[] = []
   const artifacts = new Map<string, Uint8Array>()
+  /** What each build was for, by the hash of its GLB. */
+  const builtFor = new Map<string, Record<string, unknown> | undefined>()
   const host: GeometryScriptHost = {
     compile: async ({ code, inputs }) => {
       const { glb, ...compiled } = await compileGeometryScript({ code, inputs })
+      builtFor.set(compiled.sha256, inputs)
       return { ...compiled, glb: new Uint8Array(glb) }
     },
     storeArtifact: async ({ sha256, mimeType, bytes }) => {
@@ -365,7 +419,8 @@ describe('author_scene (MCP)', () => {
     expect(room.floor.script.language).toBe('three')
     expect(room.floor.script.manifest.slots.map((s: { id: string }) => s.id)).toEqual(['wood'])
     expect(room.floor.script.inputs).toEqual(expect.any(String))
-    // The boards span the room inside the walls' faces: 4 m − 0.12 m by 5 m − 0.12 m.
+    // The boards, laid past the floor, are cut to the room inside the walls' faces:
+    // 4 m − 0.12 m by 5 m − 0.12 m.
     const { min, max } = room.floor.script.manifest.bounds
     expect(max[0] - min[0]).toBeCloseTo(3.88, 2)
     expect(max[2] - min[2]).toBeCloseTo(4.88, 2)
@@ -445,19 +500,32 @@ describe('author_scene (MCP)', () => {
       const got = await client.callTool({ name: 'get_node', arguments: { id } })
       return JSON.parse((got.content as { text: string }[])[0]!.text).node as Record<string, any>
     }
-    // The tiles stay on the east wall's room face, between its mitred ends and under its top.
+    // The tiles, laid past the east wall's room face and over its windows, are cut to the face
+    // between its mitred ends and under its top, and to each window's rectangle.
     const east = await read(report.ids.e!)
     const tiles = east.finishScripts.a
     expect(east.finishScripts.b).toBeUndefined()
     expect(tiles.language).toBe('three')
     expect(tiles.toHeight).toBeUndefined()
     expect(tiles.manifest.slots.map((s: { id: string }) => s.id)).toEqual(['tile'])
+    const face = builtFor.get(tiles.artifact) as {
+      outline: { x0: number; y0: number; x1: number; y1: number }
+      holes: { x0: number; y0: number; x1: number; y1: number }[]
+    }
     const { min, max } = tiles.manifest.bounds
-    expect(min[0]).toBeGreaterThanOrEqual(0)
-    expect(max[0]).toBeLessThanOrEqual(5)
-    expect(min[1]).toBeGreaterThanOrEqual(0)
-    expect(max[1]).toBeLessThanOrEqual(2.7)
+    expect(min[0]).toBeCloseTo(face.outline.x0, 4)
+    expect(max[0]).toBeCloseTo(face.outline.x1, 4)
+    // The first row stands half a joint (2 mm) off the floor; the top row is cut at the top.
+    expect(min[1]).toBeCloseTo(0.002, 4)
+    expect(max[1]).toBeCloseTo(2.7, 4)
     expect(max[2] - min[2]).toBeCloseTo(0.008, 3)
+    expect(face.holes).toHaveLength(2)
+    const inWindow = glbCentroids(artifacts.get(tiles.artifact)!).filter(([x, y]) =>
+      face.holes.some(
+        (h) => x > h.x0 + 1e-4 && x < h.x1 - 1e-4 && y > h.y0 + 1e-4 && y < h.y1 - 1e-4,
+      ),
+    )
+    expect(inWindow).toEqual([])
     // The room's other walls are panelled to 1.2 m on the face it looks into.
     for (const id of ['n', 's', 'w']) {
       const wall = await read(report.ids[id]!)

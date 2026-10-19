@@ -18,7 +18,8 @@ type SceneNodes = Readonly<Record<string, AnyNode>>
 /**
  * What a room's floor script is built for, in level coordinates and metres: the room's walking
  * floor (its outline inside the wall faces, on its floor plate) as `polygon` with its `holes`, and
- * the plate's top, `elevation`. The module lays its boards on exactly that; clipping is its job.
+ * the plate's top, `elevation`. The module lays its boards out over it; the compiler cuts the build
+ * to the polygon less its holes.
  */
 export type FloorScriptInputs = {
   polygon: [number, number][]

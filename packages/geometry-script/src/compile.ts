@@ -17,6 +17,7 @@ import { ParametricGeometry } from 'three/examples/jsm/geometries/ParametricGeom
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
+import { cutToRegion, hostRegion } from './cut'
 import { type ModuleTable, transformModule } from './transform'
 
 export type { GeometryScriptMount }
@@ -25,10 +26,11 @@ export type GeometryScriptCompileInput = {
   code: string
   params?: Record<string, GeometryScriptParamValue>
   /**
-   * What the host builds the module for (a room floor's `polygon` and `elevation`): the build reads
-   * them in `params` beside its declared ones, and as `inputs`; they are not among the returned
-   * params, which the scene keeps. A build given them is in the host's frame, so it is not
-   * re-origined for its mount.
+   * What the host builds the module for (a room floor's `polygon`, `holes` and `elevation`, a wall
+   * face's `outline` and `holes`): the build reads them in `params` beside its declared ones, and
+   * as `inputs`; they are not among the returned params, which the scene keeps. A build given them
+   * is in the host's frame, so it is not re-origined for its mount, and it is cut to the floor's
+   * polygon or the face's outline, less their holes: the module lays out, Pascal clips.
    */
   inputs?: Record<string, unknown>
 }
@@ -211,21 +213,28 @@ function unmeasurable(root: THREE.Object3D): Error {
   return new Error('The object cannot be measured: its size is not a finite number.')
 }
 
+/** The meshes that draw: helpers (cutout, collider), and anything under one, do not. */
+function visibleMeshes(root: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = []
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || isHelper(mesh)) return
+    for (let p: THREE.Object3D | null = mesh; p; p = p.parent) if (isHelper(p)) return
+    meshes.push(mesh)
+  })
+  return meshes
+}
+
 /** Bounds of the visible geometry: helpers (cutout, collider) and lights do not count. */
 function visibleBounds(root: THREE.Object3D): THREE.Box3 {
   const box = new THREE.Box3()
   const meshBox = new THREE.Box3()
   root.updateWorldMatrix(true, true)
-  root.traverse((object) => {
-    const mesh = object as THREE.Mesh
-    if (!mesh.isMesh || isHelper(mesh)) return
-    let hidden = false
-    for (let p: THREE.Object3D | null = mesh; p; p = p.parent) if (isHelper(p)) hidden = true
-    if (hidden) return
+  for (const mesh of visibleMeshes(root)) {
     mesh.geometry.computeBoundingBox()
     meshBox.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld)
     box.union(meshBox)
-  })
+  }
   return box
 }
 
@@ -869,8 +878,9 @@ async function digest(bytes: BufferSource): Promise<string> {
 
 /**
  * Everything after a module has built its object, whatever the language:
- * re-origins it for its mount, reads the conventions into the manifest, samples
- * its clips and exports the GLB. `built.animations` holds its clips.
+ * re-origins it for its mount (or, built for a host's inputs, cuts it to the
+ * floor or face they describe), reads the conventions into the manifest,
+ * samples its clips and exports the GLB. `built.animations` holds its clips.
  */
 export async function finishBuild({
   built,
@@ -879,7 +889,7 @@ export async function finishBuild({
   params,
   code,
   language,
-  hostFrame = false,
+  inputs,
 }: {
   built: THREE.Object3D
   mount: GeometryScriptMount
@@ -887,8 +897,11 @@ export async function finishBuild({
   params: Record<string, GeometryScriptParamValue>
   code: string
   language: GeometryScriptLanguage
-  /** Keep the build where it stands: its host placed it, so its mount does not re-origin it. */
-  hostFrame?: boolean
+  /**
+   * What the host built it for (`compileGeometryScript`'s `inputs`): the build stays where it
+   * stands, in the host's frame, and is cut to the floor or face they describe.
+   */
+  inputs?: Record<string, unknown>
 }): Promise<GeometryScriptCompileOutput> {
   const root = new THREE.Group()
   root.name = 'pascal_script_root'
@@ -904,12 +917,21 @@ export async function finishBuild({
       `The object is ${vec(size).join(' × ')} m; the limit is ${GEOMETRY_SCRIPT_LIMITS.extent} m per side. Units are metres.`,
     )
   }
-  if (!hostFrame) built.position.sub(originFor(box, mount))
+  if (!inputs) built.position.sub(originFor(box, mount))
   root.updateWorldMatrix(true, true)
 
   const read = readAnimations(built, root)
   const clips = sampleTransformClips(root, read.clips)
   const animated = read.animated
+  const region = inputs && hostRegion(inputs)
+  if (region) {
+    cutToRegion(visibleMeshes(root), region, box)
+    if (visibleBounds(root).isEmpty()) {
+      throw new Error(
+        `Nothing the build made lies on its ${region.axis === 'y' ? 'floor' : 'face'}: everything is outside it or in its openings.`,
+      )
+    }
+  }
   bakeBackFaces(root)
   const conventions = readConventions(root)
   if (conventions.triangles > GEOMETRY_SCRIPT_LIMITS.triangles) {
@@ -1008,6 +1030,6 @@ export async function compileGeometryScript(
     params,
     code: input.code,
     language: 'three',
-    hostFrame: input.inputs !== undefined,
+    inputs: input.inputs,
   })
 }
