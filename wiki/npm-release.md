@@ -44,6 +44,15 @@ The same `release.yml` run publishes `ghcr.io/pascalorg/pascal-editor` after the
 
 - A repository that pins this one as a git submodule bumps the pin to the release commit and runs `bun install`: its root lockfile records the workspace versions, so it changes with the pin.
 - Plugins that declare `@pascal-app/*` peer ranges must widen them when a release leaves the range; `bun install` reports unmet peers until they do.
-- Update anything that quotes a published CLI version, such as the `--package=@pascal-app/cli@<version>` pin in `.cursor-plugin/mcp.json` (checked by `scripts/cursor-plugin-policy.ts`). [`server.json`](../server.json) versions the hosted MCP server, not the npm packages, and does not change.
+- The release commit already carries the Cursor plugin's `--package=@pascal-app/cli@<version>` pin and the [`server.json`](../server.json) version: the workflow runs `bun scripts/sync-agent-versions.ts` after the bump, and `bun run skills:validate` fails when either drifts from `packages/*/package.json`. A manual release runs the same script before committing.
+
+## MCP Registry
+
+[`server.json`](../server.json) publishes as `app.pascal/editor` with the `@pascal-app/mcp` npm package and the hosted remote. Nothing publishes it automatically. After a release lands on `main`:
+
+1. The registry checks npm ownership by reading `mcpName` from the published `@pascal-app/mcp@<version>`, so publish only versions whose npm tarball carries `"mcpName": "app.pascal/editor"`.
+2. Deploy the hosted editor at the same version, then run the **MCP Registry** workflow by hand (`gh workflow run mcp-registry.yml`). Its `hosted-matches-manifest` job checks that the live API catalog and `/.well-known/mcp/server-card.json` report this version and registry name.
+3. Authenticate for the `app.pascal` namespace once per session: `mcp-publisher login dns --domain pascal.app --private-key <hex Ed25519 key>`, which needs the `pascal.app` TXT record `v=MCPv1; k=ed25519; p=<public key>`. HTTP verification (`mcp-publisher login http`, serving `https://pascal.app/.well-known/mcp-registry-auth`) is the alternative.
+4. From the repository root, `mcp-publisher publish`, then confirm with `curl "https://registry.modelcontextprotocol.io/v0/servers?search=app.pascal/editor"`.
 
 GitHub release notes follow the house style: emoji sections, every line linked to its PR, a 📦 package table, individual contributor attributions, and the compare link last. Verify the table against npm before publishing — an earlier release claimed versions that were never published.

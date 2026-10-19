@@ -127,10 +127,12 @@ These workflows require a connected Pascal MCP server for their tool-backed acti
 
 ### MCP Registry
 
-[`server.json`](server.json) is Pascal's manifest for the official MCP Registry. Its
-version tracks the hosted MCP implementation independently of the npm package version.
-Pull requests validate the manifest and production endpoint. A Pascal organization
-owner publishes an approved version from `main` with the official registry publisher.
+[`server.json`](server.json) is Pascal's manifest for the official MCP Registry, named
+`app.pascal/editor`. It lists the `@pascal-app/mcp` npm package and the hosted Streamable HTTP
+endpoint, which signs in with OAuth. Its version is the `@pascal-app/mcp` package version:
+`bun scripts/sync-agent-versions.ts` rewrites it, and the Cursor plugin's CLI pin, from the
+package versions, and CI fails when they drift. A Pascal owner publishes from `main` after a
+release; see [wiki/npm-release.md](wiki/npm-release.md#mcp-registry).
 
 ## Using Published Packages
 
