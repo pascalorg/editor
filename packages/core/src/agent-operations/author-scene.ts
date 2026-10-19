@@ -108,6 +108,7 @@ const THIN_SLAB = 0.02
 const MANY_SLABS = 20
 const MANY_REGIONS = 24
 const HEX = /^#[0-9a-f]{6}$/i
+const GLASS = 'library:preset-glass'
 
 type Vec3 = [number, number, number]
 type AuthorSceneWall = NonNullable<AuthorScenePayload['levels'][number]['walls']>[number]
@@ -202,10 +203,15 @@ function toLocal(frame: Frame, world: Vec3): Vec3 {
   return [c * dx - s * dz, dy, s * dx + c * dz]
 }
 
+/** How a colour's surface reflects: a module's own values, or a matte paint for a payload colour. */
+type Surface = { roughness: number; metalness: number }
+const MATTE: Surface = { roughness: 0.9, metalness: 0 }
+
 /**
  * The finish a payload value writes. A library or scene ref passes through; a hex colour is kept
- * as an exact native material, one scene material per distinct colour across the payload, named
- * by the colour. A host that keeps no scene materials gets the nearest library colour, said once.
+ * as an exact native material, one scene material per distinct colour and surface across the
+ * payload, named by them. A host that keeps no scene materials gets the nearest library colour,
+ * said once.
  */
 function finishPool(context: AgentContext, say: (sentence: string) => void) {
   const materials: Record<SceneMaterialId, SceneMaterial> | undefined = context.materials
@@ -216,7 +222,7 @@ function finishPool(context: AgentContext, say: (sentence: string) => void) {
   return {
     materials,
     created,
-    ref(value: string): { ref: string } | { error: string } {
+    ref(value: string, surface: Surface = MATTE): { ref: string } | { error: string } {
       if (value.startsWith('library:') || value.startsWith('scene:')) return { ref: value }
       if (!HEX.test(value)) return { error: `${value} is no colour: give #rrggbb or library:<id>.` }
       const hex = value.toLowerCase()
@@ -231,14 +237,16 @@ function finishPool(context: AgentContext, say: (sentence: string) => void) {
         {
           properties: {
             color: hex,
-            roughness: 0.9,
-            metalness: 0,
+            roughness: surface.roughness,
+            metalness: surface.metalness,
             opacity: 1,
             transparent: false,
             side: 'front',
           },
         },
-        hex,
+        surface.roughness === MATTE.roughness && surface.metalness === MATTE.metalness
+          ? hex
+          : `${hex}, roughness ${+surface.roughness.toFixed(2)}, metalness ${+surface.metalness.toFixed(2)}`,
       )
       if (resolved.created) {
         materials[resolved.sceneMaterial.id as SceneMaterialId] = resolved.sceneMaterial
@@ -542,9 +550,13 @@ export function authorScene(
     report.warnings.push({ id, code, message })
   const say = (sentence: string) => report.defaults.push(sentence)
   const finishes = finishPool(context, say)
-  const finishRef = (value: string | undefined, id: string): string | undefined => {
+  const finishRef = (
+    value: string | undefined,
+    id: string,
+    surface?: Surface,
+  ): string | undefined => {
     if (!value) return undefined
-    const got = finishes.ref(value)
+    const got = finishes.ref(value, surface)
     if ('error' in got) {
       defect(id, 'invalid_color', got.error)
       return undefined
@@ -554,8 +566,14 @@ export function authorScene(
   const exactSlots = (compiled: CompiledGeometryScript, id: string) => {
     const slots = matchScriptSlotsToLibrary(compiled.manifest)
     for (const slot of compiled.manifest.slots) {
-      if (!slot.color) continue
-      const ref = finishRef(slot.color, id)
+      // Glass keeps the glass add_object writes, drawn see-through and letting light pass. A
+      // scene material carries no emission, so an emissive slot keeps the module's own material
+      // (the library match leaves it alone) and a bulb stays lit.
+      if (!slot.color || slot.emissive || slots[slot.id] === GLASS) continue
+      const ref = finishRef(slot.color, id, {
+        roughness: slot.roughness ?? MATTE.roughness,
+        metalness: slot.metalness ?? MATTE.metalness,
+      })
       if (ref) slots[slot.id] = ref
     }
     return slots

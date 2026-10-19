@@ -331,7 +331,93 @@ describe('author_scene (MCP)', () => {
     expect(door.slots.panel).toBe(north.slots.a)
     expect(door.slots.frame).toBe(north.slots.b)
     expect(round.slots.frame).toBe(north.slots.b)
-    expect(trim.slots.body).toBe(north.slots.b)
+    // The baseboard's module material is rough 1, not the payload colour's matte 0.9: its own.
+    expect(trim.slots.body).toMatch(/^scene:/)
+    expect(trim.slots.body).not.toBe(north.slots.b)
+  })
+
+  test('authored glass stays glass, a bulb stays lit and a metal keeps its sheen, through the real compiler', async () => {
+    const LAMP = `export const mount = 'floor'
+export default function build({ THREE }) {
+  const g = new THREE.Group()
+  const brass = new THREE.MeshStandardMaterial({ color: '#ba9860', metalness: 0.72, roughness: 0.34 }); brass.name = 'slot_brass'
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#bfd6d3', transparent: true, opacity: 0.27, roughness: 0.12 }); glass.name = 'glass'
+  const bulb = new THREE.MeshStandardMaterial({ color: '#fff4e0', emissive: '#ffd27a', emissiveIntensity: 2 }); bulb.name = 'slot_fff4e0'
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4), brass); stem.position.y = 0.2; g.add(stem)
+  const shade = new THREE.Mesh(new THREE.SphereGeometry(0.12), glass); shade.position.y = 0.45; g.add(shade)
+  const filament = new THREE.Mesh(new THREE.SphereGeometry(0.03), bulb); filament.position.y = 0.45; g.add(filament)
+  return g
+}`
+    const CASEMENT = `export const mount = 'wall'
+export default function build({ THREE }) {
+  const g = new THREE.Group()
+  const frame = new THREE.MeshStandardMaterial({ color: '#f1ece4' }); frame.name = 'slot_frame'
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#d8e4dc', transparent: true, opacity: 0.64, roughness: 0.55 }); glass.name = 'glass'
+  const sash = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.06), frame); sash.position.y = 0.6; g.add(sash)
+  const pane = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 0.01), glass); pane.position.y = 0.6; g.add(pane)
+  const hole = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.3)); hole.position.y = 0.6; hole.name = 'cutout'; g.add(hole)
+  return g
+}`
+    const level = payload.levels[0]!
+    const design = {
+      ...payload,
+      levels: [
+        {
+          ...level,
+          walls: level.walls.map((w) =>
+            w.id === 'e'
+              ? {
+                  ...w,
+                  openings: [
+                    {
+                      kind: 'window',
+                      along: 2.5,
+                      width: 0.9,
+                      height: 1.2,
+                      sill: 0.9,
+                      code: CASEMENT,
+                    },
+                  ],
+                }
+              : w,
+          ),
+          items: [
+            { id: 'lamp', name: 'Glass lamp', category: 'lamp', code: LAMP, position: [1, 0, 1] },
+          ],
+          lights: [{ position: [1, 0.45, 1], fixture: 'lamp', color: '#ffd27a', intensity: 1.5 }],
+        },
+      ],
+    }
+    const response = await client.callTool({ name: 'author_scene', arguments: { payload: design } })
+    expect(response.isError, JSON.stringify(response)).not.toBe(true)
+    const report = response.structuredContent as { defects: unknown[]; ids: Record<string, string> }
+    expect(report.defects).toEqual([])
+    const read = async (id: string) => {
+      const got = await client.callTool({ name: 'get_node', arguments: { id } })
+      return JSON.parse((got.content as { text: string }[])[0]!.text) as {
+        node: Record<string, any>
+        materials?: Record<
+          string,
+          { name: string; material: { properties: Record<string, unknown> } }
+        >
+      }
+    }
+    const lamp = await read(report.ids.lamp!)
+    expect(lamp.node.slots.glass).toBe('library:preset-glass')
+    // The bulb keeps the module's emissive material: no override, and its hint and light survive.
+    expect(lamp.node.slots.fff4e0).toBeUndefined()
+    expect(lamp.node.source.manifest.slots).toContainEqual(
+      expect.objectContaining({ id: 'fff4e0', emissive: true }),
+    )
+    expect(lamp.node.asset.interactive.effects).toEqual([
+      expect.objectContaining({ kind: 'light', color: '#ffd27a' }),
+    ])
+    const brass = lamp.materials![lamp.node.slots.brass.slice('scene:'.length)]!
+    expect(brass.material.properties).toMatchObject({ color: '#ba9860', metalness: 0.72 })
+    expect(brass.material.properties.roughness).toBeCloseTo(0.34, 6)
+    const casement = await read(report.ids['e/0']!)
+    expect(casement.node.slots.glass).toBe('library:preset-glass')
+    expect(casement.node.slots.frame).toMatch(/^scene:/)
   })
 
   test('compiles a 60 mm ceiling point and persists its room ceiling host and light effect', async () => {

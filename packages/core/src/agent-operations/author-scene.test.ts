@@ -553,6 +553,176 @@ describe('author_scene', () => {
     expect(outcome.result.defects).toEqual([])
   })
 
+  // The living room's glazed balcony door and the house's casements and privacy glass (opacity
+  // 0.64, under the compiler's transparent cut-off but named glass) rendered opaque once exact.
+  test('a glass slot, by its name or a transparent hint, stays glass on items, scripted doors and scripted windows', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          lights: [],
+          items: [bedroom.levels[0]!.items![0]],
+          walls: bedroom.levels[0]!.walls!.map((w) =>
+            w.id === 'south'
+              ? {
+                  ...w,
+                  openings: [
+                    {
+                      kind: 'door',
+                      along: 1,
+                      width: 1,
+                      height: 2.1,
+                      code: '// glazed leaves',
+                      color: '#f5f4ef',
+                    },
+                    {
+                      kind: 'window',
+                      along: 3,
+                      width: 0.9,
+                      height: 1.2,
+                      sill: 0.9,
+                      code: '// casement',
+                    },
+                  ],
+                }
+              : w,
+          ),
+        },
+      ],
+    })
+    const withSlots = (base: CompiledGeometryScript, slots: object[]) =>
+      ({ ...base, manifest: { ...base.manifest, slots } }) as CompiledGeometryScript
+    const casement = {
+      ...arch,
+      manifest: { ...arch.manifest, bounds: { min: [-0.45, 0, -0.1], max: [0.45, 1.2, 0.1] } },
+    } as CompiledGeometryScript
+    const outcome = run(
+      payload,
+      {
+        bed: withSlots(bed, [
+          { id: 'glass', color: '#d8e4dc', roughness: 0.55, metalness: 0, transparent: false },
+          { id: 'pane', color: '#bfd6d3', roughness: 0.12, metalness: 0, transparent: true },
+          { id: 'wood', color: '#8a6a4a' },
+        ]),
+        'south/0': withSlots(arch, [
+          { id: 'glass', color: '#bfd6d3', roughness: 0.12, metalness: 0, transparent: true },
+          { id: 'f5f4ef', color: '#f5f4ef' },
+        ]),
+        'south/1': withSlots(casement, [
+          { id: 'frame', color: '#f1ece4' },
+          { id: 'glass', color: '#bfd6d3', roughness: 0.12, metalness: 0, transparent: true },
+        ]),
+      },
+      {},
+    )
+    expect(outcome.result.defects).toEqual([])
+    const item = byAuthorId(outcome, 'bed')
+    const door = byAuthorId(outcome, 'south/0')
+    const window = byAuthorId(outcome, 'south/1')
+    expect(item.slots.glass).toBe('library:preset-glass')
+    expect(item.slots.pane).toBe('library:preset-glass')
+    expect(door.slots.glass).toBe('library:preset-glass')
+    expect(window.slots.glass).toBe('library:preset-glass')
+    expect([item.slots.wood, door.slots.f5f4ef, window.slots.frame]).toEqual([
+      expect.stringMatching(/^scene:/),
+      expect.stringMatching(/^scene:/),
+      expect.stringMatching(/^scene:/),
+    ])
+    const colours = outcome.changes!.materials!.map((m) => m.material.properties!.color)
+    expect(colours).not.toContain('#bfd6d3')
+    expect(colours).not.toContain('#d8e4dc')
+    expect(outcome.changes!.materials!.every((m) => !m.material.properties!.transparent)).toBe(true)
+  })
+
+  test("an exact slot keeps its module's roughness and metalness, one material per colour and surface", () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [{ ...bedroom.levels[0], lights: [], items: [bedroom.levels[0]!.items![0]] }],
+    })
+    const compiled = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        slots: [
+          { id: 'brass', color: '#ba9860', roughness: 0.34, metalness: 0.72 },
+          { id: 'oak', color: '#8a6a4a', roughness: 1, metalness: 0 },
+          { id: 'oakSatin', color: '#8a6a4a', roughness: 0.4, metalness: 0 },
+          { id: 'oakTwin', color: '#8a6a4a', roughness: 1, metalness: 0 },
+          { id: 'plain', color: '#f1ece4' },
+        ],
+      },
+    } as CompiledGeometryScript
+    const outcome = run(payload, { bed: compiled }, {})
+    const item = byAuthorId(outcome, 'bed')
+    const material = (ref: string) =>
+      outcome.changes!.materials!.find((m) => `scene:${m.id}` === ref)!
+    expect(material(item.slots.brass)).toMatchObject({
+      name: '#ba9860, roughness 0.34, metalness 0.72',
+      material: { properties: { color: '#ba9860', roughness: 0.34, metalness: 0.72 } },
+    })
+    expect(material(item.slots.oak).material.properties).toMatchObject({
+      roughness: 1,
+      metalness: 0,
+    })
+    expect(material(item.slots.oakSatin).material.properties).toMatchObject({ roughness: 0.4 })
+    expect(item.slots.oak).not.toBe(item.slots.oakSatin)
+    expect(item.slots.oakTwin).toBe(item.slots.oak)
+    // No hint: the matte paint a payload colour gets, shared with the wall in that colour.
+    expect(material(item.slots.plain).material.properties).toMatchObject({
+      roughness: 0.9,
+      metalness: 0,
+    })
+    expect(item.slots.plain).toBe(byAuthorId(outcome, 'north').slots.a)
+  })
+
+  // A scene material has no emission: an emissive slot keeps the module's own material.
+  test("a bulb's emissive slot keeps the module's lit material and its fixture keeps the light", () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [
+            {
+              id: 'pendant',
+              name: 'Pendant',
+              category: 'lamp',
+              code: 'export default function build() {}',
+              position: [0, 2, 0],
+            },
+          ],
+          lights: [{ position: [0, 2.1, 0], fixture: 'pendant', color: '#ffd27a', intensity: 1.5 }],
+        },
+      ],
+    })
+    const pendant = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-0.1, 0, -0.1], max: [0.1, 0.3, 0.1] },
+        slots: [
+          { id: 'filament', color: '#ffd27a', roughness: 0.4, metalness: 0, emissive: true },
+          { id: 'cord', color: '#222222', roughness: 0.5, metalness: 0 },
+        ],
+      },
+    } as CompiledGeometryScript
+    const outcome = run(payload, { pendant }, {})
+    expect(outcome.result.defects).toEqual([])
+    const item = byAuthorId(outcome, 'pendant')
+    expect(item.slots.filament).toBeUndefined()
+    expect(item.slots.cord).toStartWith('scene:')
+    expect(
+      item.source.manifest.slots.find((s: { id: string }) => s.id === 'filament').emissive,
+    ).toBe(true)
+    expect(outcome.changes!.materials!.map((m) => m.material.properties!.color)).not.toContain(
+      '#ffd27a',
+    )
+    expect(item.asset.interactive.effects).toEqual([
+      expect.objectContaining({ kind: 'light', color: '#ffd27a', intensityRange: [0, 1.5] }),
+    ])
+  })
+
   test('opening colours paint panel and frame exactly, with an optional different frame', () => {
     const payload = authorScenePayload.parse({
       levels: [
