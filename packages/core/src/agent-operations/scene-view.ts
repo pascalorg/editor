@@ -20,7 +20,7 @@ import type {
   WallNode,
 } from '../schema'
 import { getActiveRoofHeight } from '../schema'
-import { isRoofGeometry } from '../services/roof-level'
+import { isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
 import { EXPLODED_GAP, getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 
@@ -156,7 +156,7 @@ export function sceneViewInterior(
     .filter((node) =>
       node.type === 'level'
         ? node.id !== levelId
-        : (isRoofGeometry(node) || node.type === 'ceiling') &&
+        : (isRoofGeometry(node) || isCeilingGeometry(node)) &&
           ancestry(nodes, node).some((at) => at.id === levelId),
     )
     .map((node) => node.id)

@@ -7,6 +7,7 @@ import { siteBrief } from '../lib/site-placement'
 import { nodeRegistry } from '../registry'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, type LevelNode } from '../schema'
 import { nodeSchemaForKind } from '../schema/compiled-node-parsers'
+import { isCeilingGeometry } from '../services/roof-level'
 import { isRoofOnStoreyWalls } from '../services/roof-move'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
@@ -394,10 +395,13 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
           'roof_level_no_roof',
           `${levelName} is a roof support level but has no roof geometry; add or move roof geometry there rather than deleting the support level to satisfy story count`,
         )
-      if (occupiedContent(content) > 0)
+      const retainedCeilings = onLevel(level.levelId).filter(
+        (node) => node.type === 'item' && isCeilingGeometry(node),
+      ).length
+      if (occupiedContent(content) - retainedCeilings > 0)
         report(
           'roof_level_occupied',
-          `${levelName} is a roof support level but contains occupied-story content; move rooms, walls, stairs, slabs, ceilings, and items to an occupied story and keep the roof level for roof geometry only`,
+          `${levelName} is a roof support level but contains occupied-story content; move rooms, walls, stairs, slabs, native room ceilings, and ordinary items to an occupied story; roof geometry and classified retained ceiling shells can stay`,
         )
       // An empty storey counts: it is a floor still to be built, and the roof goes above it.
       const storeyAbove = levels.find(
