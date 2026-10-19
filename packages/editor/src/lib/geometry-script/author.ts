@@ -54,6 +54,7 @@ export async function compileAndStoreGeometryScript(input: {
   nodeId?: string
   params?: Record<string, GeometryScriptParamValue>
   kind?: 'item' | 'door' | 'window' | 'column'
+  inputs?: Record<string, unknown>
   name?: string
   description?: string
   category?: string
@@ -80,7 +81,11 @@ export async function compileAndStoreGeometryScript(input: {
     if (!blenderBuilder) throw new Error('This editor cannot run Blender (bpy) scripts')
     return { ...(await blenderBuilder({ code, params, nodeId, metadata })), nodeId }
   }
-  const { glb, ...compiled } = await compileGeometryScriptInWorker({ code, params })
+  const { glb, ...compiled } = await compileGeometryScriptInWorker({
+    code,
+    params,
+    inputs: input.inputs,
+  })
   const context = { nodeId, metadata: { ...metadata, mount: compiled.mount } }
   const store = getArtifactStore()
   const [sha256] = await Promise.all([

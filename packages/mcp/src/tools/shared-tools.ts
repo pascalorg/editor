@@ -555,6 +555,7 @@ export function agentRuntime(bridge: SceneOperations): AgentHostRuntime {
 }
 
 export function briefInForce(bridge: SceneOperations): DesignBrief | null | undefined {
+  if (bridge.designBriefRequired === false) return undefined
   const session = bridge.agentSession
   return session ? (session.read().designBrief ?? null) : undefined
 }

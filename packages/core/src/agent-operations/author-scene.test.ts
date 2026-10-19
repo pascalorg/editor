@@ -4,6 +4,7 @@ import { authorScenePayload } from '../agent-tools/author-scene'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
 import {
+  applySceneChanges,
   authorScene,
   authorSceneCeilingPoints,
   authorSceneFaceScripts,
@@ -177,6 +178,79 @@ const bedroom: AuthorScenePayload = authorScenePayload.parse({
 })
 
 describe('author_scene', () => {
+  test('an existing building and unrelated buildings are never erased on a first conversion', () => {
+    const scene = scaffold()
+    const first = run(bedroom, { bed, lamp: bed })
+    const authored = applySceneChanges(scene, first.changes)
+    const foreign = Object.fromEntries(
+      Object.entries(authored).map(([id, node]) => [
+        `other_${id}`,
+        {
+          ...node,
+          id: `other_${id}`,
+          parentId: node.parentId ? `other_${node.parentId}` : null,
+          ...('children' in node ? { children: node.children.map((id) => `other_${id}`) } : {}),
+        },
+      ]),
+    ) as Record<string, AnyNode>
+    const combined = { ...scene, ...foreign }
+    const outcome = authorScene(
+      combined,
+      { payload: bedroom, compiled: { bed, lamp: bed } },
+      { activeLevelId: 'level_0' },
+    )
+    const saved = applySceneChanges(combined, outcome.changes)
+    for (const [id, node] of Object.entries(foreign)) expect(saved[id]).toEqual(node)
+    const manual = { ...authored, building_1: { ...authored.building_1!, metadata: {} } }
+    expect(() =>
+      authorScene(
+        manual,
+        { payload: bedroom, compiled: { bed, lamp: bed }, replace: true },
+        { activeLevelId: null },
+      ),
+    ).toThrow()
+  })
+
+  test('regeneration keeps a manual move, an added object and a deleted object, and refuses an overlapping move', () => {
+    const first = run(bedroom, { bed, lamp: bed })
+    const saved = applySceneChanges(scaffold(), first.changes)
+    const bedId = first.result.ids.bed!
+    const lampId = first.result.ids.lamp!
+    const moved = { ...saved[bedId]!, position: [0.4, 0, -1] } as AnyNode
+    const manual = applySceneChanges(saved, {
+      update: [{ id: bedId, data: moved }],
+      delete: [lampId],
+      create: [
+        {
+          node: {
+            ...saved[bedId],
+            id: 'item_manual',
+            children: [],
+            parentId: first.result.ids['level/0'],
+          } as AnyNode,
+        },
+      ],
+    })
+    const repeat = authorScene(
+      manual,
+      { payload: bedroom, compiled: { bed, lamp: bed }, replace: true },
+      { activeLevelId: null },
+    )
+    const after = applySceneChanges(manual, repeat.changes)
+    expect(after[bedId]).toEqual(manual[bedId])
+    expect(after.item_manual).toEqual(manual.item_manual)
+    expect(after[lampId]).toBeUndefined()
+    const changed = structuredClone(bedroom)
+    changed.levels[0]!.items![0]!.position = [0.8, 0, -1]
+    expect(() =>
+      authorScene(
+        manual,
+        { payload: changed, compiled: { bed, lamp: bed }, replace: true },
+        { activeLevelId: null },
+      ),
+    ).toThrow()
+  })
+
   test('writes the design as native nodes and reports what it did', () => {
     const outcome = authorScene(
       scaffold(),
@@ -375,9 +449,7 @@ describe('author_scene', () => {
       { payload: bedroom, compiled: { bed, lamp: bed } },
       { activeLevelId: 'level_0' },
     )
-    const scene = scaffold()
-    delete scene.level_0
-    for (const { node } of first.changes!.create!) scene[node.id] = node
+    const scene = applySceneChanges(scaffold(), first.changes)
     expect(() =>
       authorScene(
         scene,
@@ -391,13 +463,10 @@ describe('author_scene', () => {
       { activeLevelId: null },
     )
     expect(again.result.walls).toBe(4)
-    // Written over itself, the same payload gets fresh ids, so nothing is created and then deleted.
-    const firstIds = new Set(first.changes!.create!.map((c) => c.node.id))
-    expect(again.changes!.create!.length).toBe(first.changes!.create!.length)
-    expect(again.changes!.create!.some((c) => firstIds.has(c.node.id))).toBe(false)
-    expect(again.changes!.delete).toEqual([
-      first.changes!.create!.find((c) => c.node.type === 'level')!.node.id,
-    ])
+    expect(again.result.ids).toEqual(first.result.ids)
+    expect(again.changes!.create).toEqual([])
+    expect(again.changes!.delete).toEqual([])
+    expect(applySceneChanges(scene, again.changes)).toEqual(scene)
   })
 
   test('an opening takes its type, style, leaves and a handle opposite the hinge', () => {
