@@ -7,6 +7,7 @@ import {
   authorScene,
   authorSceneCeilingPoints,
   authorSceneFaceScripts,
+  authorSceneFinishGaps,
   authorSceneFloorScripts,
   type SceneNodes,
   setRoomFloorScript,
@@ -162,6 +163,12 @@ export function registerAuthorScene(
           )
           if (written.changes) bridge.applyPatch(toPatches(written.changes))
           outcome.result.floorScripts++
+          const room = (bridge.getNodes() as SceneNodes)[zoneId]?.name ?? roomId
+          const gaps = authorSceneFinishGaps(roomId, built.manifest, {
+            room,
+            polygon: inputs.polygon,
+          })
+          if (gaps) outcome.result.warnings.push(gaps)
         } catch (error) {
           outcome.result.defects.push({
             id: roomId,
@@ -199,6 +206,9 @@ export function registerAuthorScene(
           )
           if (written.changes) bridge.applyPatch(toPatches(written.changes))
           outcome.result.faceScripts++
+          const id = `${wallId}/${face}`
+          const gaps = authorSceneFinishGaps(id, built.manifest, { wall: wallId, face })
+          if (gaps) outcome.result.warnings.push(gaps)
         } catch (error) {
           outcome.result.defects.push({
             id: `${wallId}/${face}`,

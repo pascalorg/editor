@@ -731,6 +731,7 @@ export default function build({ params, inputs }) {
     })
     expect(compiled.manifest.bounds.min[0]).toBeCloseTo(-2, 5)
     expect(compiled.manifest.bounds.min[1]).toBeCloseTo(0, 5)
+    expect(compiled.manifest.coverage).toBeUndefined()
   })
 })
 
@@ -926,5 +927,90 @@ export default function build({ THREE, params }) {
     expect(bare).toEqual([])
     const again = await compileGeometryScript({ code: STAGGERED, inputs: floor })
     expect(again.sha256).toBe(compiled.sha256)
+  })
+})
+
+describe('how much of its floor or face a build covers', () => {
+  /** Rows of 1.2 × 0.2 m boards over the floor's bounds; odd rows start `oddStart` from its west edge. */
+  const BOARDS = (oddStart: number) => `
+export default function build({ THREE, params }) {
+  const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const m = new THREE.MeshStandardMaterial({ color: '#b08060' }); m.name = 'slot_oak'
+  const g = new THREE.Group()
+  const length = 1.2, width = 0.2, thickness = 0.01
+  for (let row = 0; z0 + row * width < z1; row++) {
+    for (let x = x0 + (row % 2 ? ${oddStart} : 0); x < x1; x += length) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(length, thickness, width), m)
+      plank.position.set(x + length / 2, params.elevation + thickness / 2, z0 + (row + 0.5) * width)
+      g.add(plank)
+    }
+  }
+  return g
+}
+`
+  const ROOM = {
+    polygon: [
+      [0, 0],
+      [3, 0],
+      [3, 4.9],
+      [0, 4.9],
+    ],
+    holes: [],
+    elevation: 0,
+  }
+
+  test('a plank floor laid to every edge covers all of it, with no patch', async () => {
+    const compiled = await compileGeometryScript({ code: BOARDS(0.4 - 1.2), inputs: ROOM })
+    expect(compiled.manifest.coverage).toBe(1)
+    expect(compiled.manifest.uncovered).toEqual([])
+  })
+
+  test('odd rows started 0.4 m in leave a strip bare along the west edge, measured and bounded', async () => {
+    const compiled = await compileGeometryScript({ code: BOARDS(0.4), inputs: ROOM })
+    // Every odd row leaves 0.4 m of its own width bare at x = 0; the far ends are cut, not short.
+    let bare = 0
+    for (let row = 1; row * 0.2 < 4.9; row += 2)
+      bare += 0.4 * (Math.min(4.9, row * 0.2 + 0.2) - row * 0.2)
+    expect(compiled.manifest.coverage).toBeCloseTo(1 - bare / (3 * 4.9), 2)
+    expect(compiled.manifest.uncovered).toHaveLength(1)
+    const [strip] = compiled.manifest.uncovered!
+    expect(strip!.min[0]).toBeCloseTo(0, 2)
+    expect(strip!.max[0]).toBeCloseTo(0.4, 2)
+    expect(strip!.min[1]).toBeCloseTo(0.2, 2)
+    expect(strip!.max[1]).toBeCloseTo(4.8, 2)
+  })
+
+  test('tile joints count as bare but make no patch', async () => {
+    const [size, joint] = [0.25, 0.004]
+    const TILES = `
+export default function build({ THREE, params }) {
+  const { outline } = params
+  const m = new THREE.MeshStandardMaterial({ color: '#ffffff' }); m.name = 'slot_tile'
+  const g = new THREE.Group()
+  const pitch = ${size + joint}
+  for (let x = outline.x0; x < outline.x1; x += pitch)
+    for (let y = outline.y0; y < outline.y1; y += pitch) {
+      const tile = new THREE.Mesh(new THREE.BoxGeometry(${size}, ${size}, 0.008), m)
+      tile.position.set(x + ${size / 2}, y + ${size / 2}, 0.004)
+      g.add(tile)
+    }
+  return g
+}
+`
+    const outline = { x0: 0, y0: 0, x1: 3, y1: 2.4 }
+    const compiled = await compileGeometryScript({
+      code: TILES,
+      inputs: { outline, holes: [], base: [], thickness: 0.1 },
+    })
+    const tiled = (length: number) => {
+      let covered = 0
+      for (let at = 0; at < length; at += size + joint) covered += Math.min(length, at + size) - at
+      return covered / length
+    }
+    const expected = tiled(outline.x1) * tiled(outline.y1)
+    expect(Math.abs(expected - 0.97)).toBeLessThan(0.01)
+    expect(Math.abs(compiled.manifest.coverage! - expected)).toBeLessThanOrEqual(0.01)
+    expect(compiled.manifest.uncovered).toEqual([])
   })
 })

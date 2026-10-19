@@ -126,6 +126,20 @@ export const GeometryArtifactManifest = z.object({
   cutout: z.boolean().default(false),
   collider: z.boolean().default(false),
   triangles: z.number().int().nonnegative(),
+  /**
+   * Built for a room's floor or a wall face: the share of it (less its holes) the build covers,
+   * seen square-on, two decimals. Joints count as bare.
+   */
+  coverage: finite.min(0).max(1).optional(),
+  /**
+   * With `coverage`, up to four rectangles bounding its largest bare patches, largest first, in
+   * the host's frame: a floor's plan (x, z), a face's (x along the wall from its start, y up).
+   * Gaps a joint's width (under 2 cm) are not patches.
+   */
+  uncovered: z
+    .array(z.object({ min: z.tuple([finite, finite]), max: z.tuple([finite, finite]) }))
+    .max(4)
+    .optional(),
 })
 export type GeometryArtifactManifest = z.infer<typeof GeometryArtifactManifest>
 

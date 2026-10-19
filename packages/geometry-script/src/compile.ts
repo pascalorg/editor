@@ -17,6 +17,7 @@ import { ParametricGeometry } from 'three/examples/jsm/geometries/ParametricGeom
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
+import { type Coverage, measureCoverage } from './coverage'
 import { cutToRegion, hostRegion } from './cut'
 import { type ModuleTable, transformModule } from './transform'
 
@@ -879,7 +880,7 @@ async function digest(bytes: BufferSource): Promise<string> {
 /**
  * Everything after a module has built its object, whatever the language:
  * re-origins it for its mount (or, built for a host's inputs, cuts it to the
- * floor or face they describe), reads the conventions into the manifest,
+ * floor or face they describe and measures how much of it the build covers), reads the conventions into the manifest,
  * samples its clips and exports the GLB. `built.animations` holds its clips.
  */
 export async function finishBuild({
@@ -924,6 +925,7 @@ export async function finishBuild({
   const clips = sampleTransformClips(root, read.clips)
   const animated = read.animated
   const region = inputs && hostRegion(inputs)
+  let coverage: Coverage | null = null
   if (region) {
     cutToRegion(visibleMeshes(root), region, box)
     if (visibleBounds(root).isEmpty()) {
@@ -931,6 +933,7 @@ export async function finishBuild({
         `Nothing the build made lies on its ${region.axis === 'y' ? 'floor' : 'face'}: everything is outside it or in its openings.`,
       )
     }
+    coverage = measureCoverage(visibleMeshes(root), region)
   }
   bakeBackFaces(root)
   const conventions = readConventions(root)
@@ -973,6 +976,7 @@ export async function finishBuild({
       cutout: conventions.cutout,
       collider: conventions.collider,
       triangles: conventions.triangles,
+      ...coverage,
     }),
   }
 }

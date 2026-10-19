@@ -28,6 +28,7 @@ import {
   ColumnNode,
   type CompiledGeometryScript,
   DoorNode,
+  type GeometryArtifactManifest,
   LevelNode,
   type SceneMaterial,
   type SceneMaterialId,
@@ -411,6 +412,71 @@ function resolveFaceScripts(
     }
   })
   return { scripts, defects, warnings }
+}
+
+/** Below this share a floor or face finish leaves enough of its host bare to be worth a warning. */
+const FINISH_COVERED = 0.98
+
+/** Where a floor or face script's build was compiled: the room's floor outline, or the wall's face. */
+export type AuthorSceneFinishHost =
+  | { room: string; polygon: [number, number][] }
+  | { wall: string; face: WallFace }
+
+const figure = (value: number) => String(Math.round(value * 100) / 100)
+
+/** A bare patch on a floor, by the edges of the floor's bounds it runs along, and its extent. */
+function floorPatch(
+  { min, max }: { min: [number, number]; max: [number, number] },
+  polygon: [number, number][],
+): string {
+  const reach = 0.05
+  const xs = polygon.map(([x]) => x)
+  const zs = polygon.map(([, z]) => z)
+  const touches = {
+    north: min[1] <= Math.min(...zs) + reach,
+    south: max[1] >= Math.max(...zs) - reach,
+    west: min[0] <= Math.min(...xs) + reach,
+    east: max[0] >= Math.max(...xs) - reach,
+  }
+  const sides = (Object.keys(touches) as (keyof typeof touches)[]).filter((side) => touches[side])
+  const ns = sides.filter((side) => side === 'north' || side === 'south')
+  const ew = sides.filter((side) => side === 'west' || side === 'east')
+  const where =
+    sides.length === 0
+      ? 'inside the floor'
+      : sides.length === 1
+        ? `along the ${sides[0]} edge`
+        : sides.length > 2
+          ? 'over most of the floor'
+          : ns.length === 1
+            ? `in the ${ns[0]}-${ew[0]} corner`
+            : `across the floor from ${sides[0]} to ${sides[1]}`
+  return `${where} (${figure(max[0] - min[0])} × ${figure(max[1] - min[1])} m, x ${figure(min[0])} to ${figure(max[0])}, z ${figure(min[1])} to ${figure(max[1])})`
+}
+
+/**
+ * The `finish_gaps` warning for a floor or face script whose build leaves part of its host bare:
+ * its `coverage` under FINISH_COVERED with at least one bare patch, each named by where it lies.
+ * Joints make no patch, so a tiled finish is never warned for its joints alone. Null otherwise.
+ */
+export function authorSceneFinishGaps(
+  id: string,
+  manifest: GeometryArtifactManifest,
+  host: AuthorSceneFinishHost,
+): AuthorSceneDefect | null {
+  const { coverage, uncovered } = manifest
+  if (coverage === undefined || coverage >= FINISH_COVERED || !uncovered?.length) return null
+  const share = `${Math.round(coverage * 100)}%`
+  const message =
+    'room' in host
+      ? `The floor finish of "${host.room}" covers ${share} of its floor: uncovered ${uncovered.map((patch) => floorPatch(patch, host.polygon)).join('; ')}.`
+      : `The finish on the ${host.face === 'a' ? 'left' : 'right'} face of wall ${host.wall} covers ${share} of the face: uncovered ${uncovered
+          .map(
+            ({ min, max }) =>
+              `${figure(min[0])} to ${figure(max[0])} m along the wall from its start, ${figure(min[1])} to ${figure(max[1])} m up (${figure(max[0] - min[0])} × ${figure(max[1] - min[1])} m)`,
+          )
+          .join('; ')}.`
+  return { id, code: 'finish_gaps', message }
 }
 
 /**

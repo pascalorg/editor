@@ -144,12 +144,12 @@ export const authorSceneWall = z.object({
   faceLeft: authorSceneWallFace
     .optional()
     .describe(
-      `The face on the left looking from start to end (the front, colorLeft's face), built by ${WALL_FACE_MODULE}; colorLeft stays the paint under it. Over the room's wallCode.`,
+      `The face on the left looking from start to end (the front, colorLeft's face), built by ${WALL_FACE_MODULE}; colorLeft stays the paint under it. Over the room's wallCode. The report warns when the build leaves part of the face uncovered.`,
     ),
   faceRight: authorSceneWallFace
     .optional()
     .describe(
-      `The face on the right looking from start to end (colorRight's face), built by ${WALL_FACE_MODULE}; colorRight stays the paint under it. Over the room's wallCode.`,
+      `The face on the right looking from start to end (colorRight's face), built by ${WALL_FACE_MODULE}; colorRight stays the paint under it. Over the room's wallCode. The report warns when the build leaves part of the face uncovered.`,
     ),
 })
 
@@ -180,7 +180,7 @@ export const authorSceneRoom = z.object({
     .max(48_000)
     .optional()
     .describe(
-      "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon, params.holes and params.elevation (level coordinates, metres) and lays out the planks, tiles or boards: Pascal cuts the build to the polygon and its holes, so a row may run past the edges (the holes are there for a layout that wants them). Pascal rebuilds it when the room changes; floor stays the fallback finish.",
+      "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon, params.holes and params.elevation (level coordinates, metres) and lays out the planks, tiles or boards: Pascal cuts the build to the polygon and its holes, so a row may run past the edges (the holes are there for a layout that wants them). Pascal rebuilds it when the room changes; floor stays the fallback finish. The report warns when the build leaves part of the floor uncovered.",
     ),
   wallCode: z
     .string()
@@ -188,7 +188,7 @@ export const authorSceneRoom = z.object({
     .max(48_000)
     .optional()
     .describe(
-      `The finish of every wall face that looks into this room (the faces its floor meets, where the skirting runs), each built by ${WALL_FACE_MODULE}. A wall's own faceLeft / faceRight wins over it.`,
+      `The finish of every wall face that looks into this room (the faces its floor meets, where the skirting runs), each built by ${WALL_FACE_MODULE}. A wall's own faceLeft / faceRight wins over it. The report warns when the build leaves part of a face uncovered.`,
     ),
   wallToHeight: faceToHeight("the room's wallCode"),
 })

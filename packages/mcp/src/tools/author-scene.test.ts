@@ -148,6 +148,21 @@ const BOARDS = `export default function build({ THREE, params }) {
   return g
 }`
 
+/** Rows of 1.2 × 0.2 m boards whose odd rows start 0.4 m in from the floor's west edge. */
+const GAPPED = `export default function build({ THREE, params }) {
+  const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const g = new THREE.Group()
+  const m = new THREE.MeshStandardMaterial({ color: '#b08060' }); m.name = 'slot_wood'
+  for (let row = 0; z0 + row * 0.2 < z1; row++)
+    for (let x = x0 + (row % 2 ? 0.4 : 0); x < x1; x += 1.2) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.01, 0.2), m)
+      b.position.set(x + 0.6, params.elevation + 0.005, z0 + (row + 0.5) * 0.2)
+      g.add(b)
+    }
+  return g
+}`
+
 /** Half-metre tiles from past the start of a wall face to past its end and top, over its openings. */
 const TILES = `export default function build({ THREE, params }) {
   const { outline } = params
@@ -405,11 +420,13 @@ describe('author_scene (MCP)', () => {
     const report = response.structuredContent as {
       floorScripts: number
       defects: unknown[]
+      warnings: { code: string }[]
       ids: Record<string, string>
       payload?: unknown
     }
     expect(report.defects).toEqual([])
     expect(report.floorScripts).toBe(1)
+    expect(report.warnings.filter((w) => w.code === 'finish_gaps')).toEqual([])
     const read = async (id: string) => {
       const got = await client.callTool({ name: 'get_node', arguments: { id } })
       return JSON.parse((got.content as { text: string }[])[0]!.text).node as Record<string, any>
@@ -436,6 +453,49 @@ describe('author_scene (MCP)', () => {
       language: 'three',
       code: BOARDS,
     })
+  })
+
+  test('a floor module that leaves a strip bare is written, with a warning that says how much and where', async () => {
+    const level = payload.levels[0]!
+    const design = {
+      ...payload,
+      levels: [
+        { ...level, items: [], lights: [], rooms: [{ ...level.rooms[0]!, floorCode: GAPPED }] },
+      ],
+    }
+    const response = await client.callTool({ name: 'author_scene', arguments: { payload: design } })
+    const report = response.structuredContent as {
+      floorScripts: number
+      defects: unknown[]
+      warnings: { id: string; code: string; message: string }[]
+      ids: Record<string, string>
+    }
+    expect(report.defects).toEqual([])
+    expect(report.floorScripts).toBe(1)
+    const got = await client.callTool({
+      name: 'get_node',
+      arguments: { id: report.ids['room/0/0']! },
+    })
+    const script = JSON.parse((got.content as { text: string }[])[0]!.text).node.floor.script
+    const { polygon } = builtFor.get(script.artifact) as { polygon: [number, number][] }
+    const xs = polygon.map(([x]) => x)
+    const zs = polygon.map(([, z]) => z)
+    const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+    // Each odd row leaves 0.4 m of its width bare at the west edge.
+    let bare = 0
+    for (let row = 1; z0 + row * 0.2 < z1; row += 2)
+      bare += 0.4 * Math.min(0.2, z1 - (z0 + row * 0.2))
+    const coverage = Math.round((1 - bare / ((x1 - x0) * (z1 - z0))) * 100) / 100
+    expect(script.manifest.coverage).toBe(coverage)
+    expect(report.warnings.filter((w) => w.code === 'finish_gaps')).toEqual([
+      {
+        id: 'room/0/0',
+        code: 'finish_gaps',
+        message: expect.stringContaining(
+          `covers ${Math.round(coverage * 100)}% of its floor: uncovered along the west edge (0.4 × `,
+        ),
+      },
+    ])
   })
 
   test('a floor script that fails is a defect and the room keeps its floor finish', async () => {
