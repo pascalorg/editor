@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
+import { cloneNodesInto } from '../registry/subtree'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
 import {
@@ -178,6 +179,31 @@ const bedroom: AuthorScenePayload = authorScenePayload.parse({
 })
 
 describe('author_scene', () => {
+  test('a copied baseline cannot authorize replacement of another building', () => {
+    const first = run(bedroom, { bed, lamp: bed })
+    const saved = applySceneChanges(scaffold(), first.changes)
+    const copied = cloneNodesInto(
+      Object.values(saved).filter((node) => node.type !== 'site'),
+      {
+        rootId: 'building_1',
+        parentId: 'site_1',
+      },
+    )
+    const nodes = { ...saved, ...Object.fromEntries(copied.nodes.map((node) => [node.id, node])) }
+    expect(() =>
+      authorScene(
+        nodes,
+        {
+          payload: bedroom,
+          compiled: { bed, lamp: bed },
+          buildingId: copied.root.id,
+          replace: true,
+        },
+        { activeLevelId: null },
+      ),
+    ).toThrow()
+    expect(nodes.building_1).toEqual(saved.building_1)
+  })
   test('an existing building and unrelated buildings are never erased on a first conversion', () => {
     const scene = scaffold()
     const first = run(bedroom, { bed, lamp: bed })

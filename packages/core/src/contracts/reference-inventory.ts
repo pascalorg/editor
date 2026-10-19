@@ -819,6 +819,12 @@ const meta = (path: string, r: Omit<Row, 'kind' | 'path'>) =>
   row({ kind: '*', path: `metadata.${path}`, ...r })
 
 export const METADATA_REFERENCES: readonly ExistingReference[] = [
+  meta('authorSceneState.buildingId', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
+    dependents: ['metadata.authorSceneState'],
+    note: 'The building that owns this conversion baseline; a partial copy cannot overwrite its source building.',
+  }),
   meta('authorSceneState.ids.*', {
     ...policy('node', 'internal', 'drop', 'strip'),
     remaps: ['clone-scene-graph', 'clone-level-subtree'],

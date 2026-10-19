@@ -80,6 +80,7 @@ export type AuthorSceneInput = {
 
 export type AuthorSceneState = {
   version: 1
+  buildingId: string
   seed: string
   ids: Record<string, string>
   nodes: Record<string, AnyNode>
@@ -541,7 +542,11 @@ export function authorScene(
   )
   const saved = building.metadata?.authorSceneState as AuthorSceneState | undefined
   const previous =
-    saved?.version === 1 && saved.nodes && saved.ids && typeof saved.seed === 'string'
+    saved?.version === 1 &&
+    saved.buildingId === building.id &&
+    saved.nodes &&
+    saved.ids &&
+    typeof saved.seed === 'string'
       ? saved
       : undefined
   const converted = Boolean(previous) || existingLevels.some((l) => l.metadata?.authorScene)
@@ -1322,7 +1327,13 @@ export function authorScene(
   })
 
   const nodes = Object.fromEntries(Object.entries(written).filter(([id]) => !scaffoldIds.has(id)))
-  const candidate: AuthorSceneState = { version: 1, seed, ids: report.ids, nodes }
+  const candidate: AuthorSceneState = {
+    version: 1,
+    buildingId: building.id,
+    seed,
+    ids: report.ids,
+    nodes,
+  }
   const outcome = {
     result: report,
     candidate,
