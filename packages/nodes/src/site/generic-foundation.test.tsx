@@ -2,8 +2,15 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  BaseNode,
   BuildingNode,
+  emitter,
+  isCaptureSessionOn,
   LevelNode,
+  nodeRegistry,
+  nodeType,
+  objectId,
+  registerNode,
   SiteNode,
   SlabNode,
   useScene,
@@ -234,6 +241,49 @@ test("a plugin that draws a level's foundation under the ground takes that level
     expect(names()).toEqual(['footing'])
   } finally {
     await renderer.unmount()
+  }
+})
+
+test('a plugin that steps aside from a picture has the foundation drawn for it while a capture session is on, with no scene edit', async () => {
+  const Framer = BaseNode.extend({
+    id: objectId('framer'),
+    type: nodeType('test:picture-framer-site'),
+  })
+  const restoreRegistry = nodeRegistry._snapshot()
+  registerNode({
+    kind: 'test:picture-framer-site',
+    schemaVersion: 1,
+    schema: Framer,
+    category: 'utility',
+    defaults: () => ({}),
+    capabilities: { drawsFoundation: () => !isCaptureSessionOn() },
+  })
+  setHouse(false)
+  const nodes = useScene.getState().nodes
+  const level = nodes['level_g' as AnyNodeId]
+  if (level?.type !== 'level') throw new Error('fixture')
+  useScene.setState({
+    nodes: {
+      ...nodes,
+      level_g: { ...level, children: [...level.children, 'framer_g'] },
+      framer_g: Framer.parse({ id: 'framer_g', parentId: 'level_g' }),
+    } as Record<AnyNodeId, AnyNode>,
+  })
+  const session = (active: boolean) =>
+    emitter.emit('camera-controls:capture-session', { owner: 'foundation-site-test', active })
+  const renderer = await create(<SiteRenderer node={lot()} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const names = () => parts(scene).map((part) => part.userData.genericFoundation)
+    expect(names()).toEqual([])
+    await act(async () => session(true))
+    expect(names()).toEqual(['footing', 'stem'])
+    await act(async () => session(false))
+    expect(names()).toEqual([])
+  } finally {
+    session(false)
+    await renderer.unmount()
+    restoreRegistry()
   }
 })
 

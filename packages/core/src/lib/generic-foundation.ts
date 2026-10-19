@@ -1,3 +1,4 @@
+import { isCaptureSessionOn } from '../events/capture-sessions'
 import { nodeRegistry } from '../registry'
 import type { AnyNode, AnyNodeId, BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import { getLevelElevations } from '../services/storey'
@@ -41,7 +42,9 @@ const GRADE_SAMPLES = 7
 /** A stem shorter than this is the floor sitting on the footing: nothing to draw. */
 const MIN_STEM_HEIGHT = 1e-3
 
-const memo = new WeakMap<object, FoundationMember[]>()
+// Per scene and per capture session: a plugin's `drawsFoundation` may step aside from a picture
+// (the pictures show the finished house), a state no node holds.
+const memo = new WeakMap<object, { capturing: boolean; members: FoundationMember[] }>()
 
 /**
  * The foundation a building stands on where the scene stores none: a continuous footing and a
@@ -58,17 +61,19 @@ const memo = new WeakMap<object, FoundationMember[]>()
  * - A slab that stores a solid foundation skirt (`foundation`) is the foundation under its level:
  *   walls without a stored stem get nothing.
  * - A node that declares `drawsFoundation` on the level (a framing plugin) draws it itself: the
- *   generic one steps aside.
+ *   generic one steps aside. The plugin may read `isCaptureSessionOn()` to give it back to a
+ *   picture, which shows the finished house.
  */
 export function genericFoundation(nodes: Nodes): FoundationMember[] {
+  const capturing = isCaptureSessionOn()
   const hit = memo.get(nodes)
-  if (hit) return hit
+  if (hit && hit.capturing === capturing) return hit.members
   const members: FoundationMember[] = []
   for (const node of Object.values(nodes)) {
     if (node.type === 'building' && node.visible !== false)
       members.push(...buildingFoundation(nodes, node))
   }
-  memo.set(nodes, members)
+  memo.set(nodes, { capturing, members })
   return members
 }
 

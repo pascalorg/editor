@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
+import { emitter } from '../events/bus'
+import { isCaptureSessionOn } from '../events/capture-sessions'
 import { nodeRegistry, registerNode } from '../registry'
 import {
   type AnyNode,
@@ -306,6 +308,39 @@ test('a framing plugin that draws the foundation itself takes the generic one aw
   }
   expect(genericFoundation(withFramer(true))).toEqual([])
   expect(genericFoundation(withFramer(false)).length).toBeGreaterThan(0)
+})
+
+test('a plugin that steps aside from a picture gives the generic foundation back for as long as a capture session is on', () => {
+  const Framer = BaseNode.extend({ id: objectId('framer'), type: nodeType('test:picture-framer') })
+  nodeRegistry._reset()
+  registerNode({
+    kind: 'test:picture-framer',
+    schemaVersion: 1,
+    schema: Framer,
+    category: 'utility',
+    defaults: () => ({}),
+    capabilities: { drawsFoundation: () => !isCaptureSessionOn() },
+  })
+  const house = flatHouse()
+  const level = house['level_g' as AnyNodeId]
+  if (level?.type !== 'level') throw new Error('fixture')
+  // the same scene state throughout: a session starting changes no node
+  const nodes = {
+    ...house,
+    level_g: { ...level, children: [...level.children, 'framer_g'] },
+    framer_g: Framer.parse({ id: 'framer_g', parentId: 'level_g' }),
+  } as Nodes
+  const session = (active: boolean) =>
+    emitter.emit('camera-controls:capture-session', { owner: 'generic-foundation-test', active })
+  expect(genericFoundation(nodes)).toEqual([])
+  session(true)
+  try {
+    expect(genericFoundation(nodes)).toHaveLength(8)
+    expect(genericFoundation(nodes)).toBe(genericFoundation(nodes))
+  } finally {
+    session(false)
+  }
+  expect(genericFoundation(nodes)).toEqual([])
 })
 
 test('a level with no walls draws nothing, and a hidden wall is not carried', () => {

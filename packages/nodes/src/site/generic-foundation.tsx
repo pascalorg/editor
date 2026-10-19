@@ -1,8 +1,14 @@
 'use client'
 
-import { type FoundationMember, genericFoundation, useScene } from '@pascal-app/core'
+import {
+  type FoundationMember,
+  genericFoundation,
+  isCaptureSessionOn,
+  subscribeCaptureSessions,
+  useScene,
+} from '@pascal-app/core'
 import { SITE_FOUNDATION, useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { BufferAttribute, BufferGeometry, FrontSide } from 'three'
 import {
   attribute,
@@ -148,6 +154,9 @@ export function sameFoundation(a: readonly FoundationMember[], b: readonly Found
 function useFoundationMembers(): readonly FoundationMember[] {
   // Stable across store writes that leave the foundation as it was.
   const kept = useRef<readonly FoundationMember[]>([])
+  // A capture session starting or ending changes what a plugin claims, though no node changes:
+  // the picture shows the finished house, with the generic course a framing plugin gives back.
+  useSyncExternalStore(subscribeCaptureSessions, isCaptureSessionOn, () => false)
   return useScene((state) => {
     const next = genericFoundation(state.nodes)
     if (sameFoundation(next, kept.current)) return kept.current
