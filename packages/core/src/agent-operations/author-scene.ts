@@ -22,6 +22,7 @@ import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
   type AnyNode,
+  type CeilingNode,
   ColumnNode,
   type CompiledGeometryScript,
   DoorNode,
@@ -34,6 +35,8 @@ import {
   ZoneNode,
 } from '../schema'
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
+import { resolveCeilingHeight } from '../services/level-height'
+import { CEILING_DRAW_OFFSET } from '../services/storey'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
 import { migrateRoomZones } from '../utils/room-zone-migration'
 import { addObject } from './add-object'
@@ -47,20 +50,20 @@ import type { AgentContext, AgentOperationOutcome, NodeWrite, SceneNodes } from 
  * over as a payload and written as native Pascal nodes in one step. Not in AGENT_OPERATIONS: the
  * host compiles every module first (the MCP on its server, the chat in its worker) and passes the
  * results as `compiled`, keyed by the payload's item ids and, for an opening with code, by
- * `<wallId>/<index>`; a module whose compile failed is absent there and comes back in the report
+ * `<wallId>/<index>`. Candidate ceiling points use `light/<level>/<index>` from
+ * `authorSceneCeilingPoints`; a module whose compile failed is absent and comes back in the report
  * with the host's reason.
  *
  * The policy, decided with the owner: accept and report. Everything valid is written; every
  * defect comes back by the payload's own id with a reason; what Pascal fills in or drops is a
- * sentence in `defaults`; what it writes but doubts is a `warning`. The one correction Pascal
- * makes itself is its join rule (a wall end within reach of another wall's centerline snaps onto
- * it), reported per wall. Ids are derived from the payload, so the same payload writes the same
+ * sentence in `defaults`; what it writes but doubts is a `warning`. Its join rule snaps a wall
+ * end within reach of another wall's centerline onto it, reported per wall. Ids are derived from the payload, so the same payload writes the same
  * scene.
  */
 export type AuthorSceneInput = {
   payload: AuthorScenePayload
   compiled: Record<string, CompiledGeometryScript>
-  /** Why a module did not compile, by the payload's item id or `<wallId>/<index>`, for the report. */
+  /** Why a module did not compile, keyed like `compiled`, for the report. */
   compileErrors?: Record<string, string>
   replace?: boolean
 }
@@ -86,7 +89,7 @@ export type AuthorSceneReport = {
   warnings: AuthorSceneDefect[]
   defects: AuthorSceneDefect[]
   notes: string[]
-  /** The payload's own ids (walls, `wall/i` openings, `room/level/i`, items) to the nodes written. */
+  /** Payload ids, `wall/i` openings, `room/level/i`, and `light/level/i` ceiling points to nodes. */
   ids: Record<string, string>
 }
 
@@ -243,6 +246,24 @@ const isDoorStyle = (style: string): style is DoorStyle =>
 const isWindowStyle = (style: string): style is WindowStyle =>
   (WINDOW_STYLES as readonly string[]).includes(style)
 
+const CEILING_POINT_CODE = `export const mount = 'ceiling'
+export default function build({ THREE }) {
+  const material = new THREE.MeshStandardMaterial({ color: '#ffffff' })
+  material.name = 'slot_body'
+  return new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 24), material)
+}`
+
+/** Candidate modules, compiled by the host before room derivation decides which points are used. */
+export function authorSceneCeilingPoints(
+  payload: AuthorScenePayload,
+): { id: string; code: string }[] {
+  return payload.levels.flatMap((level, index) =>
+    level.lights.flatMap((light, i) =>
+      light.fixture ? [] : [{ id: `light/${index}/${i}`, code: CEILING_POINT_CODE }],
+    ),
+  )
+}
+
 export function authorScene(
   scene: SceneNodes,
   input: AuthorSceneInput,
@@ -298,6 +319,15 @@ export function authorScene(
       return undefined
     }
     return got.ref
+  }
+  const exactSlots = (compiled: CompiledGeometryScript, id: string) => {
+    const slots = matchScriptSlotsToLibrary(compiled.manifest)
+    for (const slot of compiled.manifest.slots) {
+      if (!slot.color) continue
+      const ref = finishRef(slot.color, id)
+      if (ref) slots[slot.id] = ref
+    }
+    return slots
   }
   const paintContext = (levelId: string): AgentContext => ({
     ...context,
@@ -403,7 +433,7 @@ export function authorScene(
       const length = dist(w.start, w.end)
       ;(w.spec.openings ?? []).forEach((o, i) => {
         const id = `${w.spec.id}/${i}`
-        // A module builds the opening: its bounds are its size, its type and style do not apply.
+        // A module supplies geometry; the declared type still describes how the opening works.
         let compiled: CompiledGeometryScript | undefined
         if (o.code) {
           compiled = input.compiled[id]
@@ -426,8 +456,7 @@ export function authorScene(
             defect(id, e.code ?? 'unmeasurable_object', e.message ?? String(error))
             return
           }
-          if (o.type || o.style)
-            say(`${o.kind} ${id}: type and style ignored, its module builds it`)
+          if (o.style) say(`${o.kind} ${id}: style ignored, its module builds it`)
         }
         const [width, height] = compiled ? scriptedSize(compiled.manifest) : [o.width, o.height]
         if (width > length + 0.01) {
@@ -457,13 +486,13 @@ export function authorScene(
           ...(compiled
             ? {
                 source: scriptSource(compiled, { category: o.kind }),
-                slots: matchScriptSlotsToLibrary(compiled.manifest),
+                slots: exactSlots(compiled, id),
               }
             : {}),
         }
         let opening: AnyNode
         if (o.kind === 'door') {
-          const type = o.type && !compiled ? o.type : undefined
+          const type = o.type
           if (type && !isDoorType(type))
             defect(id, 'type_mismatch', `${type} is a window type; the door is written hinged.`)
           const style = o.style && !compiled ? o.style : undefined
@@ -489,7 +518,7 @@ export function authorScene(
           })
           report.doors++
         } else {
-          const type = o.type && !compiled ? o.type : undefined
+          const type = o.type
           if (type && !isWindowType(type))
             defect(id, 'type_mismatch', `${type} is a door type; the window is written fixed.`)
           const windowType = type && isWindowType(type) ? type : undefined
@@ -513,6 +542,17 @@ export function authorScene(
           })
           report.windows++
         }
+        const panel = o.kind === 'door' ? finishRef(o.color, id) : undefined
+        const frame = finishRef(o.frameColor ?? o.color, id)
+        if (panel || frame)
+          opening = {
+            ...opening,
+            slots: {
+              ...('slots' in opening ? opening.slots : {}),
+              ...(panel ? { panel } : {}),
+              ...(frame ? { frame } : {}),
+            },
+          } as AnyNode
         draft[opening.id] = opening
         report.ids[id] = opening.id
         node.children.push(opening.id as never)
@@ -648,9 +688,14 @@ export function authorScene(
             hostWall.end[1] - hostWall.start[1],
           ]
           // The wall's left (its local +z) is its front.
-          const left =
-            -dz * (world[0] - hostWall.start[0]) + dx * (world[2] - hostWall.start[1]) >= 0
-          const z = getWallLocalFaceZ(hostWall.node, left ? 'a' : 'b')
+          const localZ =
+            (-dz * (world[0] - hostWall.start[0]) + dx * (world[2] - hostWall.start[1])) / length
+          const left = localZ >= 0
+          const faceZ = getWallLocalFaceZ(hostWall.node, left ? 'a' : 'b')
+          const offset = (localZ - faceZ) * (left ? 1 : -1)
+          const z = faceZ + (left ? 1 : -1) * Math.max(0, offset)
+          if (offset < -1e-9)
+            say(`${item.id}: point inside wall ${item.host}, moved to its nearest face`)
           if (item.rotation)
             say(`${item.id}: rotation ignored on wall ${item.host}, it faces the room`)
           const [ux, uz] = [dx / length, dz / length]
@@ -696,8 +741,11 @@ export function authorScene(
             { ...context, activeLevelId: levelNode.id },
           )
           for (const { node, parentId } of outcome.changes?.create ?? []) {
-            draft[node.id] =
-              placed.wallT === undefined ? node : ({ ...node, wallT: placed.wallT } as AnyNode)
+            draft[node.id] = {
+              ...node,
+              slots: exactSlots(compiled, item.id),
+              ...(placed.wallT === undefined ? {} : { wallT: placed.wallT }),
+            } as AnyNode
             const parent = draft[parentId ?? levelNode.id] as AnyNode & { children?: string[] }
             parent.children = [...(parent.children ?? []), node.id]
             itemNodeIds.set(item.id, node.id)
@@ -713,53 +761,6 @@ export function authorScene(
     }
     for (const item of pending)
       defect(item.id, 'host_missing', `Its host ${item.host} was not placed.`)
-
-    // ---------- lights: on their fixture, else on the nearest item ----------
-    for (const [i, light] of level.lights.entries()) {
-      const id = `light/${index}/${i}`
-      const at: Vec3 = [light.position[0]!, light.position[1]!, light.position[2]!]
-      let hostKey = light.fixture && itemNodeIds.has(light.fixture) ? light.fixture : undefined
-      if (!hostKey) {
-        let best: { key: string; d: number } | null = null
-        for (const [key, frame] of itemFrames) {
-          const d = Math.hypot(frame.position[0] - at[0], frame.position[2] - at[2])
-          if (!best || d < best.d) best = { key, d }
-        }
-        if (!best) {
-          defect(
-            id,
-            'light_unhosted',
-            'No item on this level to hold the light; Pascal keeps lights inside objects.',
-          )
-          continue
-        }
-        hostKey = best.key
-        say(
-          `light at [${at.join(', ')}] has no fixture: hosted on the nearest item ${hostKey} (${best.d.toFixed(2)} m away); moving that item moves the light`,
-        )
-      }
-      const hostNode = draft[itemNodeIds.get(hostKey)!] as AnyNode & {
-        asset: { interactive?: { controls: unknown[]; effects: unknown[] } }
-      }
-      // Where add_object keeps an object's lights: the asset's interactive block, with a toggle.
-      const interactive = hostNode.asset.interactive ?? { controls: [], effects: [] }
-      const controls = interactive.controls.some((c) => (c as { kind?: string }).kind === 'toggle')
-        ? interactive.controls
-        : [...interactive.controls, { kind: 'toggle', label: 'Lights', default: true }]
-      const effects = [
-        ...interactive.effects,
-        {
-          kind: 'light',
-          color: light.color,
-          intensityRange: [0, light.intensity],
-          offset: toLocal(itemFrames.get(hostKey)!, at),
-        },
-      ]
-      draft[hostNode.id] = Object.assign({}, hostNode, {
-        asset: { ...hostNode.asset, interactive: { controls, effects } },
-      }) as unknown as AnyNode
-      report.lights++
-    }
 
     // ---------- wall paint, through the editor's paint: both faces, or each its own ----------
     for (const w of walls) {
@@ -883,7 +884,119 @@ export function authorScene(
     mintId: (kind) => mint(kind),
   })
 
-  const create: NodeWrite[] = Object.values(structure.nodes)
+  // Ceilings exist only after structure reconciliation; lights can now use their room's host.
+  const written = { ...structure.nodes }
+  payload.levels.forEach((level, index) => {
+    const levelNode = levelNodes[index]!
+    for (const [i, light] of level.lights.entries()) {
+      const id = `light/${index}/${i}`
+      const at: Vec3 = [light.position[0]!, light.position[1]!, light.position[2]!]
+      let hostId = light.fixture ? itemNodeIds.get(light.fixture) : undefined
+      let hostFrame = light.fixture ? itemFrames.get(light.fixture) : undefined
+      const room = !light.fixture
+        ? Object.values(written).find(
+            (node): node is ZoneNode =>
+              node.type === 'zone' &&
+              node.spaceRole === 'room' &&
+              node.parentId === levelNode.id &&
+              pointInPolygon([at[0], at[2]], node.polygon) &&
+              !node.holes.some((hole) => pointInPolygon([at[0], at[2]], hole)),
+          )
+        : undefined
+      const ceiling = room
+        ? Object.values(written).find(
+            (node): node is CeilingNode =>
+              node.type === 'ceiling' && node.zoneId === room.id && node.parentId === levelNode.id,
+          )
+        : undefined
+      if (ceiling) {
+        const compiled = input.compiled[id]
+        if (!compiled) {
+          defect(
+            id,
+            'compile_failed',
+            input.compileErrors?.[id] ?? 'The ceiling point module did not compile.',
+          )
+          continue
+        }
+        try {
+          const outcome = addObject(
+            written,
+            {
+              compiled: { ...compiled, nodeId: mint('item') },
+              name: `Ceiling point in ${room!.name}`,
+              category: 'light',
+              reason: 'author_scene: ceiling point for a light without a fixture',
+              parentId: ceiling.id,
+              position: [at[0], 0, at[2]],
+              rotation: 0,
+            },
+            { ...context, activeLevelId: levelNode.id },
+          )
+          const node = outcome.changes!.create![0]!.node
+          written[node.id] = { ...node, slots: exactSlots(compiled, id) } as AnyNode
+          written[ceiling.id] = { ...ceiling, children: [...ceiling.children, node.id as never] }
+          hostId = node.id
+          hostFrame = {
+            position: [at[0], resolveCeilingHeight(ceiling, written) - CEILING_DRAW_OFFSET, at[2]],
+            yaw: 0,
+          }
+          report.ids[id] = node.id
+          report.items++
+          say(`light at [${at.join(', ')}] has no fixture: a ceiling point in ${room!.name}`)
+        } catch (error) {
+          const e = error as { code?: string; message?: string }
+          defect(id, e.code ?? 'item_refused', e.message ?? String(error))
+          continue
+        }
+      }
+      if (!hostId) {
+        let best: { key: string; d: number } | null = null
+        for (const item of level.items ?? []) {
+          const frame = itemFrames.get(item.id)
+          if (!frame) continue
+          const d = Math.hypot(frame.position[0] - at[0], frame.position[2] - at[2])
+          if (!best || d < best.d) best = { key: item.id, d }
+        }
+        if (!best) {
+          defect(
+            id,
+            'light_unhosted',
+            'No item on this level to hold the light; Pascal keeps lights inside objects.',
+          )
+          continue
+        }
+        hostId = itemNodeIds.get(best.key)!
+        hostFrame = itemFrames.get(best.key)!
+        say(
+          `light at [${at.join(', ')}] has no fixture: ${!light.fixture ? 'no room contains its point; ' : ''}hosted on the nearest item ${best.key} (${best.d.toFixed(2)} m away); moving that item moves the light`,
+        )
+      }
+      const hostNode = written[hostId] as AnyNode & {
+        asset: { interactive?: { controls: unknown[]; effects: unknown[] } }
+      }
+      const interactive = hostNode.asset.interactive ?? { controls: [], effects: [] }
+      const controls = interactive.controls.some((c) => (c as { kind?: string }).kind === 'toggle')
+        ? interactive.controls
+        : [...interactive.controls, { kind: 'toggle', label: 'Lights', default: true }]
+      const effects = [
+        ...interactive.effects,
+        {
+          kind: 'light',
+          color: light.color,
+          intensityRange: [0, light.intensity],
+          offset: toLocal(hostFrame!, at),
+        },
+      ]
+      written[hostNode.id] = {
+        ...hostNode,
+        asset: { ...hostNode.asset, interactive: { controls, effects } },
+      } as unknown as AnyNode
+      report.lights++
+    }
+  })
+
+  const create: NodeWrite[] = Object.values(written)
     .filter((node) => !scene[node.id])
     .map((node) => ({ op: 'create', node, parentId: node.parentId ?? undefined }))
   return {

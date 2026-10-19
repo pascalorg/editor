@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
-import { authorScene } from './author-scene'
+import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
+import { authorScene, authorSceneCeilingPoints } from './index'
 
 /** A site, a building and the empty level a new project starts with. */
 function scaffold(): Record<string, AnyNode> {
@@ -156,7 +157,10 @@ const bedroom: AuthorScenePayload = authorScenePayload.parse({
           host: 'bed',
         },
       ],
-      lights: [{ position: [1.2, 1.1, -2], fixture: 'lamp' }, { position: [0, 2.5, 1] }],
+      lights: [
+        { position: [1.2, 1.1, -2], fixture: 'lamp' },
+        { position: [0, 2.5, 1], fixture: 'bed' },
+      ],
     },
   ],
   notes: ['The rug was left out.'],
@@ -211,6 +215,122 @@ describe('author_scene', () => {
         (w as { metadata: { authorScene: { id: string } } }).metadata.authorScene.id === 'north',
     ) as AnyNode & { slots?: Record<string, string> }
     expect(Object.keys(painted.slots ?? {}).length).toBeGreaterThan(0)
+  })
+
+  test('a light without a fixture gets a flush authored ceiling point in its room, with its effect', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [{ position: [0.5, 2.4, -0.75], color: '#ffeedd', intensity: 2 }],
+        },
+      ],
+    })
+    const points = authorSceneCeilingPoints(payload)
+    expect(points.map((point) => point.id)).toEqual(['light/0/0'])
+    const compiled = {
+      ...bed,
+      mount: 'ceiling',
+      manifest: { ...bed.manifest, bounds: { min: [-0.03, -0.008, -0.03], max: [0.03, 0, 0.03] } },
+    } as CompiledGeometryScript
+    const outcome = run(payload, { [points[0]!.id]: compiled }, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.lights).toBe(1)
+    expect(outcome.result.items).toBe(1)
+    expect(outcome.result.defaults).toContain(
+      'light at [0.5, 2.4, -0.75] has no fixture: a ceiling point in Bedroom',
+    )
+    const point = byAuthorId(outcome, 'light/0/0')
+    const ceiling = nodesOf(outcome).find((node) => node.id === point.parentId)!
+    expect(ceiling.type).toBe('ceiling')
+    expect((ceiling as { zoneId?: string }).zoneId).toBe(outcome.result.ids['room/0/0'])
+    expect((ceiling as { children?: string[] }).children).toContain(point.id)
+    expect(point.asset.category).toBe('light')
+    expect(point.asset.attachTo).toBe('ceiling')
+    expect(point.position).toEqual([0.5, 0, -0.75])
+    expect(point.asset.interactive.controls).toContainEqual({
+      kind: 'toggle',
+      label: 'Lights',
+      default: true,
+    })
+    expect(point.asset.interactive.effects).toEqual([
+      {
+        kind: 'light',
+        color: '#ffeedd',
+        intensityRange: [0, 2],
+        offset: [0, expect.any(Number), 0],
+      },
+    ])
+    expect(point.asset.interactive.effects[0].offset[1]).toBeCloseTo(
+      2.4 -
+        resolveCeilingHeight(
+          ceiling as never,
+          Object.fromEntries(nodesOf(outcome).map((n) => [n.id, n])),
+        ) +
+        CEILING_DRAW_OFFSET,
+      9,
+    )
+    expect(authorSceneCeilingPoints(bedroom)).toEqual([])
+  })
+
+  test('a light outside any room falls back to the nearest item on its own level and says why', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Lower',
+          items: [
+            {
+              id: 'lower',
+              name: 'Lower bed',
+              category: 'bed',
+              code: '// bed',
+              position: [0, 0, 0],
+            },
+          ],
+        },
+        {
+          name: 'Upper',
+          items: [
+            {
+              id: 'upper',
+              name: 'Upper bed',
+              category: 'bed',
+              code: '// bed',
+              position: [3, 0, 0],
+            },
+          ],
+          lights: [{ position: [0, 2, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, { lower: bed, upper: bed }, {})
+    expect(outcome.result.lights).toBe(1)
+    expect(outcome.result.defects).toEqual([])
+    expect(byAuthorId(outcome, 'lower').asset.interactive).toBeUndefined()
+    expect(byAuthorId(outcome, 'upper').asset.interactive.effects).toEqual([
+      { kind: 'light', color: '#ffffff', intensityRange: [0, 1], offset: [-3, 2, 0] },
+    ])
+    expect(outcome.result.defaults).toContain(
+      'light at [0, 2, 0] has no fixture: no room contains its point; hosted on the nearest item upper (3.00 m away); moving that item moves the light',
+    )
+  })
+
+  test('a ceiling point whose module failed is reported by the light id', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [{ ...bedroom.levels[0], items: [], lights: [{ position: [0, 2.4, 0] }] }],
+    })
+    const outcome = authorScene(
+      scaffold(),
+      { payload, compiled: {}, compileErrors: { 'light/0/0': 'Compiler unavailable' } },
+      { activeLevelId: null, materials: {} },
+    )
+    expect(outcome.result.lights).toBe(0)
+    expect(outcome.result.defects).toEqual([
+      { id: 'light/0/0', code: 'compile_failed', message: 'Compiler unavailable' },
+    ])
   })
 
   test('the same payload writes the same ids', () => {
@@ -373,17 +493,157 @@ describe('author_scene', () => {
     const outcome = authorScene(
       scaffold(),
       { payload, compiled: { 'south/0': arch }, compileErrors: { 'south/1': 'Syntax error' } },
-      { activeLevelId: 'level_0' },
+      { activeLevelId: 'level_0', materials: {} },
     )
     const door = byAuthorId(outcome, 'south/0')
     expect(door.source.kind).toBe('script')
     expect(door.source.artifact).toBe(arch.sha256)
-    expect(door.slots.wood).toStartWith('library:wood-')
+    expect(door.slots.wood).toStartWith('scene:')
     expect([door.width, door.height]).toEqual([1, 2.1])
     expect(outcome.result.defects).toEqual([
       { id: 'south/1', code: 'compile_failed', message: 'Syntax error' },
     ])
     expect(outcome.result.windows).toBe(1)
+  })
+
+  test('authored slot colours stay exact and share materials with walls; unhinted slots keep their default', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          lights: [],
+          items: [bedroom.levels[0]!.items![0]],
+        },
+      ],
+    })
+    const compiled = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        slots: [
+          { id: 'wood', color: '#8a6a4a' },
+          { id: 'book', color: '#ff0000' },
+          { id: 'rod', color: '#000000' },
+          { id: 'curtain', color: '#f1ece4' },
+          { id: 'unhinted' },
+        ],
+      },
+    } as CompiledGeometryScript
+    const outcome = run(payload, { bed: compiled }, {})
+    const item = byAuthorId(outcome, 'bed')
+    const materials = outcome.changes!.materials!
+    for (const slot of compiled.manifest.slots.filter((s) => s.color)) {
+      const material = materials.find((m) => `scene:${m.id}` === item.slots[slot.id])!
+      expect(material.material.properties.color).toBe(slot.color!)
+    }
+    expect(item.slots.curtain).toBe(byAuthorId(outcome, 'north').slots.a)
+    expect(item.slots.unhinted).toBeUndefined()
+    expect(outcome.result.defaults.some((s) => s.includes('colour'))).toBe(false)
+    expect(outcome.result.defects).toEqual([])
+  })
+
+  test('opening colours paint panel and frame exactly, with an optional different frame', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground',
+          walls: [
+            {
+              id: 'wall',
+              start: [0, 0],
+              end: [8, 0],
+              height: 3,
+              thickness: 0.2,
+              openings: [
+                { kind: 'door', along: 1, width: 1, height: 2, color: '#123456' },
+                {
+                  kind: 'door',
+                  along: 3,
+                  width: 1,
+                  height: 2,
+                  color: '#123456',
+                  frameColor: '#abcdef',
+                },
+                { kind: 'window', along: 5, width: 1, height: 1, color: '#123456' },
+                {
+                  kind: 'window',
+                  along: 7,
+                  width: 1,
+                  height: 1,
+                  color: '#123456',
+                  frameColor: '#abcdef',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    const materials = outcome.changes!.materials!
+    const ref = (color: string) =>
+      `scene:${materials.find((m) => m.material.properties.color === color)!.id}`
+    expect(materials).toHaveLength(2)
+    expect(byAuthorId(outcome, 'wall/0').slots).toEqual({
+      panel: ref('#123456'),
+      frame: ref('#123456'),
+    })
+    expect(byAuthorId(outcome, 'wall/1').slots).toEqual({
+      panel: ref('#123456'),
+      frame: ref('#abcdef'),
+    })
+    expect(byAuthorId(outcome, 'wall/2').slots).toEqual({ frame: ref('#123456') })
+    expect(byAuthorId(outcome, 'wall/3').slots).toEqual({ frame: ref('#abcdef') })
+    expect(outcome.result.defects).toEqual([])
+  })
+
+  test('scripted openings retain their declared type and report only an ignored style', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground',
+          walls: [
+            {
+              id: 'wall',
+              start: [0, 0],
+              end: [4, 0],
+              height: 3,
+              thickness: 0.2,
+              openings: [
+                {
+                  kind: 'door',
+                  along: 1,
+                  width: 1,
+                  height: 2,
+                  code: '// door',
+                  type: 'french',
+                  style: 'modern',
+                  color: '#123456',
+                },
+                {
+                  kind: 'window',
+                  along: 3,
+                  width: 1,
+                  height: 1,
+                  code: '// window',
+                  type: 'casement',
+                  frameColor: '#123456',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, { 'wall/0': arch, 'wall/1': arch }, {})
+    expect(byAuthorId(outcome, 'wall/0').doorType).toBe('french')
+    expect(byAuthorId(outcome, 'wall/1').windowType).toBe('casement')
+    expect(byAuthorId(outcome, 'wall/0').slots.panel).toBe(
+      byAuthorId(outcome, 'wall/1').slots.frame,
+    )
+    expect(outcome.result.defaults).toEqual(['door wall/0: style ignored, its module builds it'])
+    expect(outcome.result.defects).toEqual([])
   })
 
   test('a hex colour is one exact scene material per colour, a wall face each its own', () => {
@@ -489,11 +749,54 @@ describe('author_scene', () => {
     expect(trim.side).toBe('front')
     expect(trim.position[0]).toBeCloseTo(2, 6)
     expect(trim.position[1]).toBe(0)
-    expect(trim.position[2]).toBeCloseTo(0.06, 6)
+    expect(trim.position[2]).toBeCloseTo(0.1, 6)
     expect(trim.wallT).toBeCloseTo(0.5, 6)
     expect(trim.rotation[1]).toBe(0)
     expect(trim.asset.attachTo).toBe('wall-side')
     expect(wall.children).toContain(trim.id)
+  })
+
+  test('a wall curtain keeps its 4 cm face offset; points inside the wall move to the face', () => {
+    for (const [position, side, z] of [
+      [[0, 0, -2.4], 'front', 0.1],
+      [[0, 0, -2.6], 'back', -0.1],
+      [[0, 0, -2.48], 'front', 0.06],
+      [[0, 0, -2.44], 'front', 0.06],
+    ] as const) {
+      const payload = authorScenePayload.parse({
+        ...bedroom,
+        levels: [
+          {
+            ...bedroom.levels[0],
+            lights: [],
+            items: [
+              {
+                id: 'curtain',
+                name: 'Curtain',
+                category: 'curtain',
+                code: '// curtain',
+                position,
+                host: 'north',
+              },
+            ],
+          },
+        ],
+      })
+      const curtain = {
+        ...bed,
+        manifest: { ...bed.manifest, bounds: { min: [-1, 0, -0.035], max: [1, 2.4, 0.035] } },
+      } as CompiledGeometryScript
+      const outcome = run(payload, { curtain })
+      expect(outcome.result.defects).toEqual([])
+      expect(byAuthorId(outcome, 'curtain').side).toBe(side)
+      expect(byAuthorId(outcome, 'curtain').position[2]).toBeCloseTo(z, 6)
+      const corrections = outcome.result.defaults.filter((s) => s.startsWith('curtain:'))
+      expect(corrections).toEqual(
+        position[2] === -2.48
+          ? ['curtain: point inside wall north, moved to its nearest face']
+          : [],
+      )
+    }
   })
 
   test('warns about thin and many slabs and many regions, refuses a slab that would cap a wall', () => {

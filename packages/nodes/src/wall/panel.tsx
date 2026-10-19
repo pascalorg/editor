@@ -38,6 +38,7 @@ import {
   wallAssemblyPatch,
   wallAssemblyToLegacy,
   wallAssemblyUnverifiedNote,
+  wallTrimPatch,
 } from '@pascal-app/core'
 import {
   ActionButton,
@@ -512,12 +513,7 @@ function WallTrimSection({
   wallHeightMeters: number
 }) {
   const updateTrim = (patch: Partial<NonNullable<WallNode['skirting']>>) =>
-    onUpdate({
-      [trimKey]: {
-        ...trimValue,
-        ...patch,
-      },
-    } as Partial<WallNode>)
+    onUpdate(wallTrimPatch(node, trimKey, patch))
   const profileOptions = WALL_TRIM_PROFILE_OPTIONS[trimKey]
   const selectedProfile = profileOptions.some((option) => option.value === trimValue.profile)
     ? trimValue.profile
@@ -571,7 +567,7 @@ function WallTrimSection({
             value={metersToLinearUnit(trimValue.height, unit)}
           />
           <SliderControl
-            label="Proud"
+            label="Depth"
             max={metersToLinearUnit(0.2, unit)}
             min={metersToLinearUnit(0.001, unit)}
             onChange={(value) =>

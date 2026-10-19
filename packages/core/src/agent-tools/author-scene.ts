@@ -56,12 +56,20 @@ export const authorSceneOpening = z.object({
     .max(48_000)
     .optional()
     .describe(
-      "A three.js module for an opening type and style cannot express (an arched double door, a round window): the add_door / add_window code contract, mount 'wall', a cutout mesh the wall cuts, an open clip unless it is fixed. Width and height are what it builds; type and style do not apply. Compiled and stored as an item's module is.",
+      "A three.js module for an opening type and style cannot express (an arched double door, a round window): the add_door / add_window code contract, mount 'wall', a cutout mesh the wall cuts, an open clip unless it is fixed. Width and height are what it builds; type keeps its meaning (default hinged for a door, fixed for a window), style is ignored. Compiled and stored as an item's module is.",
     ),
   color: z
     .string()
     .optional()
-    .describe("The leaf's or frame's colour as #rrggbb, when the design has one."),
+    .describe(
+      'Exact #rrggbb for a door’s panel and frame or a window’s frame (default: the opening’s own finish).',
+    ),
+  frameColor: z
+    .string()
+    .optional()
+    .describe(
+      'Exact #rrggbb for the frame (default: color, or the opening’s own finish when color is absent).',
+    ),
   hinge: z
     .enum(['start', 'end'])
     .optional()
@@ -178,7 +186,7 @@ export const authorSceneItem = z.object({
     .string()
     .optional()
     .describe(
-      'The id of the item this one rests on or hangs from (a lamp on a nightstand), or of the wall it is fixed to (a baseboard, a casing, a mirror, art), so moving the host moves it. On a wall, position is still the world bottom centre: the item is fixed to the face nearest it and faces the room; rotation is ignored.',
+      'The id of the item this one rests on or hangs from (a lamp on a nightstand), or of the wall it is fixed to (a baseboard, a casing, a mirror, art), so moving the host moves it. On a wall, position is still the world bottom centre: the item faces the room on the nearest face, keeping its outward distance from that face; a point inside the wall moves to the face and is reported. Rotation is ignored.',
     ),
 })
 
@@ -194,7 +202,7 @@ export const authorSceneLight = z.object({
     .string()
     .optional()
     .describe(
-      'The id of the item holding this light (a pendant, a lamp). Without one, the light is attached to the nearest item.',
+      'The id of the item holding this light (a pendant, a lamp). Default: without a fixture, a minimal ceiling point is created on the ceiling of the room containing the light’s plan position; outside any room, it attaches to the nearest item on this level and reports the fallback.',
     ),
 })
 

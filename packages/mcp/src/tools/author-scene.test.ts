@@ -58,7 +58,16 @@ const payload = {
               sill: 0.9,
               type: 'casement',
             },
-            { kind: 'window', along: 3.8, width: 1, height: 1, sill: 1, code: ROUND_WINDOW },
+            {
+              kind: 'window',
+              along: 3.8,
+              width: 1,
+              height: 1,
+              sill: 1,
+              type: 'casement',
+              code: ROUND_WINDOW,
+              frameColor: '#f1ece4',
+            },
           ],
         },
         {
@@ -68,7 +77,16 @@ const payload = {
           height: 2.7,
           thickness: 0.12,
           openings: [
-            { kind: 'door', along: 1.2, width: 0.9, height: 2.1, style: 'glass', hinge: 'end' },
+            {
+              kind: 'door',
+              along: 1.2,
+              width: 0.9,
+              height: 2.1,
+              style: 'glass',
+              hinge: 'end',
+              color: '#8f9e8a',
+              frameColor: '#f1ece4',
+            },
           ],
         },
         { id: 'w', start: [-2, 2.5], end: [-2, -2.4], height: 2.7, thickness: 0.12 },
@@ -130,6 +148,7 @@ describe('author_scene (MCP)', () => {
   beforeEach(async () => {
     stored.length = 0
     const bridge = new SceneBridge()
+    bridge.setScene({}, [], { materials: {} })
     const operations = createSceneOperations({ bridge })
     operations.loadDefault()
     bridge.setActiveScene({ id: 'scene_test', name: 'Test' } as never)
@@ -183,6 +202,7 @@ describe('author_scene (MCP)', () => {
     expect((await node(report.ids['e/0']!)).windowType).toBe('casement')
     const round = await node(report.ids['e/1']!)
     expect(round.source?.kind).toBe('script')
+    expect(round.windowType).toBe('casement')
     expect(round.width).toBeCloseTo(0.88, 2)
     const door = await node(report.ids['s/0']!)
     expect(door.segments).toHaveLength(1)
@@ -196,6 +216,65 @@ describe('author_scene (MCP)', () => {
     expect(north.slots.a).not.toBe(north.slots.b)
     const room = await node(report.ids['room/0/0']!)
     expect(room.floor.finish).toBe(north.slots.a)
+    expect(door.slots.panel).toBe(north.slots.a)
+    expect(door.slots.frame).toBe(north.slots.b)
+    expect(round.slots.frame).toBe(north.slots.b)
+    expect(trim.slots.body).toBe(north.slots.b)
+  })
+
+  test('compiles a 60 mm ceiling point and persists its room ceiling host and light effect', async () => {
+    const design = {
+      ...payload,
+      levels: [
+        {
+          ...payload.levels[0],
+          items: [],
+          lights: [{ position: [0, 2.4, 0], color: '#ffeedd', intensity: 2 }],
+        },
+      ],
+    }
+    const response = await client.callTool({ name: 'author_scene', arguments: { payload: design } })
+    expect(response.isError, JSON.stringify(response)).not.toBe(true)
+    const report = response.structuredContent as {
+      items: number
+      lights: number
+      itemsCompiled: number
+      defects: unknown[]
+      defaults: string[]
+      ids: Record<string, string>
+    }
+    expect(report.defects).toEqual([])
+    expect(report.items).toBe(1)
+    expect(report.lights).toBe(1)
+    expect(report.itemsCompiled).toBe(2)
+    expect(report.defaults).toContain(
+      'light at [0, 2.4, 0] has no fixture: a ceiling point in Bedroom',
+    )
+    const read = async (id: string) => {
+      const got = await client.callTool({ name: 'get_node', arguments: { id } })
+      return JSON.parse((got.content as { text: string }[])[0]!.text).node as Record<string, any>
+    }
+    const point = await read(report.ids['light/0/0']!)
+    const ceiling = await read(point.parentId)
+    expect(ceiling.type).toBe('ceiling')
+    expect(ceiling.zoneId).toBe(report.ids['room/0/0'])
+    expect(ceiling.children).toContain(point.id)
+    expect(point.source.kind).toBe('script')
+    expect(point.asset.category).toBe('light')
+    expect(point.asset.attachTo).toBe('ceiling')
+    expect(point.asset.dimensions[0]).toBeCloseTo(0.06, 6)
+    expect(point.asset.dimensions[1]).toBeCloseTo(0.008, 6)
+    expect(point.asset.dimensions[2]).toBeCloseTo(0.06, 6)
+    expect(point.position).toEqual([0, 0, 0])
+    expect(point.asset.interactive.effects).toEqual([
+      {
+        kind: 'light',
+        color: '#ffeedd',
+        intensityRange: [0, 2],
+        offset: [0, expect.any(Number), 0],
+      },
+    ])
+    expect(stored.filter((s) => s.startsWith('model/gltf-binary'))).toHaveLength(2)
   })
 
   test('refuses to write over a conversion unless told to', async () => {

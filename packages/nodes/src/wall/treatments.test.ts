@@ -220,4 +220,24 @@ describe('wall treatment miters', () => {
     expect(xs.every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
     geometry.dispose()
   })
+
+  test('runs on under a window and breaks only under one that reaches the floor', () => {
+    const node = wall('A', [0, 0], [3, 0])
+    const xsUnder = (sill: number) => {
+      const geometry = buildTrimGeometry(
+        node,
+        'a',
+        trim,
+        'skirting',
+        [{ type: 'window', width: 1, height: 1.2, position: [1.5, sill + 0.6, 0] }],
+        treatmentLevelData([node]),
+      )
+      if (!geometry) throw new Error('expected trim geometry')
+      const xs = allPositions(geometry).map((point) => point.x)
+      geometry.dispose()
+      return xs
+    }
+    expect(xsUnder(0.9).some((x) => Math.abs(x - 1) < 1e-6 || Math.abs(x - 2) < 1e-6)).toBe(false)
+    expect(xsUnder(0).every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
+  })
 })

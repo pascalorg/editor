@@ -85,6 +85,7 @@ export * from './types'
 export * from './verify-scene'
 export * from './wall-object-observations'
 export * from './wall-opening'
+export * from './wall-skirting'
 
 const SINGLE_OPERATIONS = {
   measure_stair: measureStairOperation,

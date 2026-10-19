@@ -3,6 +3,7 @@ import {
   type AuthorSceneReport,
   achievedChanges,
   authorScene,
+  authorSceneCeilingPoints,
   type SceneNodes,
   verifyScene,
 } from '@pascal-app/core/agent-operations'
@@ -76,6 +77,12 @@ export function registerAuthorScene(
               modules.push({ id: `${wall.id}/${index}`, code: opening.code, kind: opening.kind })
           })
       }
+      modules.push(
+        ...authorSceneCeilingPoints(args.payload).map((point) => ({
+          ...point,
+          kind: 'object' as const,
+        })),
+      )
       for (const { id, code, kind } of modules) {
         try {
           compiled[id] = await compileAndStore(

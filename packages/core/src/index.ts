@@ -1006,6 +1006,7 @@ export {
   type WallJoinResult,
   type WallTopologyChanges,
 } from './systems/wall/wall-topology'
+export { wallTrimPatch } from './systems/wall/wall-trim'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { areSemanticValuesEqual } from './utils/semantic-equal'
