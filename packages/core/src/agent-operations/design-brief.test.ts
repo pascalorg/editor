@@ -689,6 +689,19 @@ describe('beyond: the dressing of the rooms, layer by layer', () => {
     ).toBeUndefined()
   })
 
+  test('a bounded axis with no words is refused, a message lent or not', () => {
+    for (const quote of ['', '   ']) {
+      const axes = {
+        ...OPEN_AXES,
+        style: { kind: 'bounded' as const, quote, reading: 'as asked' },
+      }
+      for (const context of [{}, { requestText: 'add a lamp next to the sofa' }]) {
+        const refused = run(dressed, { axes } as never, context) as { code: string }
+        expect(refused.code).toBe('axis_quote_not_in_request')
+      }
+    }
+  })
+
   test('the dressing axis decides, whatever the source: catalog and dressing open still owes the layers, dressing bounded owes none', () => {
     const catalog = { source: 'catalog', sourceQuote: 'the catalog only' } as never
     expect((run(nothing('catalog'), catalog) as { code: string }).code).toBe('beyond_too_thin')
@@ -849,6 +862,29 @@ describe('a source other than open quotes the request', () => {
       'brief_source_open',
     )
     expect(code('place_items', { items: [{ assetId: 'toilet' }] }, read.designBrief!)).toBeNull()
+  })
+
+  test('a brief stored as fixed and open lists with a string beyond, before the axes, still reads, with the session’s checkpoints', () => {
+    const older = open([{ assetId: 'toilet', reason: 'r' }])
+    const read = parseSessionRecord(
+      JSON.parse(
+        JSON.stringify({
+          ...EMPTY_SESSION,
+          made: [{ id: 'wall_1', type: 'wall', levelId: null }],
+          designBrief: older,
+        }),
+      ),
+    )
+    expect(read.made).toHaveLength(1)
+    expect(read.designBrief).toMatchObject({
+      fixed: older.fixed,
+      open: older.open,
+      beyond: older.beyond,
+    })
+    expect(read.designBrief?.axes).toBeUndefined()
+    expect(code('place_items', { items: [{ assetId: 'double-bed' }] }, read.designBrief!)).toBe(
+      'brief_source_open',
+    )
   })
 
   test('an open brief needs no quote and keeps none', () => {
