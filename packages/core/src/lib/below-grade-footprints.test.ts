@@ -1,6 +1,16 @@
 import { expect, test } from 'bun:test'
-import { type AnyNode, type AnyNodeId, BuildingNode, LevelNode, SlabNode } from '../schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  BuildingNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+} from '../schema'
 import { belowGradeFloorY, belowGradeFootprints } from './below-grade-footprints'
+import { levelGradeStanding } from './grade-standing'
+import { encodeTerrainField } from './terrain-codec'
+import { createTerrainField } from './terrain-field'
 
 const square = (size: number): Array<[number, number]> => [
   [0, 0],
@@ -209,6 +219,76 @@ test('the level display decides by level index alone, so the hole opens over eve
   // The pit goes down to the floor of the level shown, whichever building it is in.
   expect(belowGradeFloorY(nodes, 'level_a_m1')).toBeCloseTo(-2.8, 2)
   expect(belowGradeFloorY(nodes, 'level_b_m2')).toBeCloseTo(-5.8, 2)
+})
+
+/**
+ * A hillside house: flat ground at 0 m west of x = 0, 4 m east of it. The cellar (-2, floor at
+ * -2.8, x -2..5) is under the ground everywhere; the walk-out over it (-1, floor at 0.2, x -9..5)
+ * is buried only on the east, its west part (x < 0) standing out of the hill.
+ */
+function houseOnHillside() {
+  const field = createTerrainField({ cols: 33, rows: 33, spacing: 1, origin: [-16, -16] })
+  const heights = new Int16Array(field.heights)
+  for (let row = 0; row < field.rows; row += 1)
+    for (let col = 0; col < field.cols; col += 1)
+      if (field.origin[0] + col * field.spacing >= 0) heights[row * field.cols + col] = 400
+  const rect = (x0: number, x1: number): Array<[number, number]> => [
+    [x0, -4],
+    [x1, -4],
+    [x1, 4],
+    [x0, 4],
+  ]
+  const nodes: AnyNode[] = [
+    SiteNode.parse({
+      id: 'site_a',
+      children: ['building_a'],
+      terrain: encodeTerrainField({ ...field, heights }),
+    }),
+    BuildingNode.parse({
+      id: 'building_a',
+      parentId: 'site_a',
+      children: ['level_cellar', 'level_walkout'],
+    }),
+    LevelNode.parse({
+      id: 'level_cellar',
+      parentId: 'building_a',
+      level: -2,
+      height: 3,
+      baseElevation: -3,
+      children: ['slab_cellar'],
+    }),
+    LevelNode.parse({
+      id: 'level_walkout',
+      parentId: 'building_a',
+      level: -1,
+      height: 3,
+      children: ['slab_walkout'],
+    }),
+    SlabNode.parse({
+      id: 'slab_cellar',
+      parentId: 'level_cellar',
+      elevation: 0.2,
+      polygon: rect(-2, 5),
+    }),
+    SlabNode.parse({
+      id: 'slab_walkout',
+      parentId: 'level_walkout',
+      elevation: 0.2,
+      polygon: rect(-9, 5),
+    }),
+  ]
+  return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+}
+
+test('a walk-out between the level shown and grade is opened over its whole plate, the part out of the hill included', () => {
+  const nodes = houseOnHillside()
+  expect(levelGradeStanding(nodes, 'level_cellar')).toBe('below-grade')
+  expect(levelGradeStanding(nodes, 'level_walkout')).toBe('partly-below-grade')
+  // The cellar shown: the hole is the walk-out's plate (x -9..5), though the ground stands over it
+  // only east of x = 0.
+  expect(belowGradeFootprints(nodes, 'level_cellar').map(extent)).toEqual([
+    { x: [-9, 5], z: [-4, 4] },
+  ])
 })
 
 test('the pit goes down to the floor of the level shown, and to none when it is at grade', () => {
