@@ -372,6 +372,7 @@ export {
   type PlacementSurface,
   publishPlacementSurface,
 } from './lib/active-placement-surface'
+export { cameraFacingYaw } from './lib/camera-facing'
 export {
   activateCatalogItem,
   filterCatalogItems,
@@ -578,6 +579,11 @@ export {
   storedScript,
 } from './lib/geometry-script/author'
 export { compileGeometryScriptInWorker } from './lib/geometry-script/client'
+export {
+  compileAndStoreFinishScript,
+  editorFinishScriptHost,
+  finishScriptCode,
+} from './lib/geometry-script/finish-scripts'
 export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
 export {
   type EditorGridEvent,

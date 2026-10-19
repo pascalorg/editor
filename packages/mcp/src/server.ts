@@ -18,6 +18,7 @@ import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerProjectFileTools } from './tools/project-files'
 import { answerRetiredTools } from './tools/retired-tools'
+import type { PlanReadingHosts } from './tools/shared-tools'
 import type { SceneViewHost } from './tools/view-scene'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
@@ -56,6 +57,8 @@ export type CreatePascalMcpServerOptions = {
   files?: ProjectFileToolExecutor
   /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
   sceneViews?: SceneViewHost
+  /** Reads catalog items' pictures and surfaces before view_assets and paint. */
+  assetViews?: PlanReadingHosts['assetViews']
   /** Lines the host adds to what a client reads at connect (the person's own settings). */
   instructions?: string
 }
@@ -78,6 +81,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     catalog,
     geometryScripts: opts.geometryScripts,
     sceneViews: opts.sceneViews,
+    assetViews: opts.assetViews,
   })
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)

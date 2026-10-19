@@ -26,6 +26,7 @@ type OpeningSpec = {
   height?: number
   sillHeight?: number
   hingesSide?: 'left' | 'right'
+  handleSide?: 'left' | 'right'
   swingDirection?: 'inward' | 'outward'
   style?: string
 }

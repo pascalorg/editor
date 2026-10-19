@@ -17,6 +17,7 @@ import { AGENT_TOOL_CASES, finiteReadbackProblems } from './__fixtures__/cases'
 import { paintedKitchenScene } from './__fixtures__/room-cases'
 import { applyAgentOutcome } from './apply-outcome'
 import { AGENT_OPERATIONS, applySceneChanges } from './index'
+import { EMPTY_SESSION, keepInSession } from './scene-checkpoint'
 
 // Layer 1 of 3: the core operations, on every shared tool's edge cases.
 describe('agent operations', () => {
@@ -24,15 +25,21 @@ describe('agent operations', () => {
     if (c.surfaces && !c.surfaces.includes('core')) continue
     test(`${c.tool}: ${c.name}`, () => {
       const nodes = c.scene().nodes as Record<string, AnyNode>
-      const readBefore = ['get_walls', 'get_zones', 'get_level_summary'].includes(c.tool)
-        ? structuredClone(nodes)
-        : undefined
+      const readBefore =
+        c.readOnly || ['get_walls', 'get_zones', 'get_level_summary'].includes(c.tool)
+          ? structuredClone(nodes)
+          : undefined
+      let session = c.context?.session?.() ?? EMPTY_SESSION
       const operation = AGENT_OPERATIONS[c.tool as keyof typeof AGENT_OPERATIONS]
       expect(operation).toBeDefined()
       // A scene's materials, as both hosts keep them: a native finish becomes one.
       const context = {
         activeLevelId: c.context?.activeLevelId ?? null,
         catalog: c.context?.catalog,
+        assetViews: c.context?.assetViews,
+        designBrief: c.context?.designBrief,
+        requestText: c.context?.requestText,
+        session,
         materials: {},
       }
       // As on both surfaces, the operation gets the input its contract parsed ("36 in" → metres).
@@ -59,6 +66,9 @@ describe('agent operations', () => {
         expect(nodes).toEqual(readBefore)
       }
       const result = applyAgentOutcome(outcome, {
+        keep: (kept) => {
+          session = keepInSession(session, kept)
+        },
         getNodes: () => after,
         applyChanges: (changes) => {
           after = applySceneChanges(after, changes)
@@ -68,6 +78,7 @@ describe('agent operations', () => {
             .nodes as Record<string, AnyNode>
         },
       })
+      expect(c.expect.session?.(session) ?? []).toEqual([])
       expect(result).toMatchObject(c.expect.result)
       if (readBefore) {
         expect(after).toEqual(readBefore)

@@ -150,6 +150,19 @@
       }
     },
     {
+      "name": "author_scene",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes the whole conversion: levels, walls, openings, rooms, slabs, columns, items and lights replace what the scene held.",
+        "destructiveHint": "Replaces the scene's levels with the payload's; with replace it writes over a previous conversion.",
+        "openWorldHint": "Everything it touches is the scene and the project's own artifact store."
+      }
+    },
+    {
       "name": "check_collisions",
       "annotations": {
         "readOnlyHint": true,
@@ -342,6 +355,19 @@
         "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
         "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
+      "name": "design_brief",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it records the request's design brief in the agent's session record, which decides which furnishing tools run.",
+        "destructiveHint": "It only adds a brief to the session record, replacing the previous brief; it changes no scene content and removes nothing from the project.",
+        "openWorldHint": "It operates only on the connected Pascal session and does not access the public internet."
       }
     },
     {
@@ -1057,6 +1083,19 @@
         "readOnlyHint": "It computes verification results for the connected Pascal scene without repairing or changing it.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "view_assets",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It returns pictures and surface names of Pascal catalog items without placing an item or changing a scene.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It reads only the thumbnails and models of the connected Pascal service's own item library and does not access the public internet."
       }
     },
     {

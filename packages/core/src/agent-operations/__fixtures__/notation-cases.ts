@@ -360,4 +360,7 @@ export const NOT_LENGTHS = new Set([
   'create_roof.glazing.glassRoughness',
   'paint.material.texture.scale',
   'generate_studio_media.settings.durationSeconds',
+  // Design parameter values inherit their recipe's units, not one fixed physical length unit.
+  'place_design.parameters{}',
+  'validate_design.parameters{}',
 ])

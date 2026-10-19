@@ -22,6 +22,7 @@ import {
   useScene,
   WallNode,
   WindowNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
@@ -737,6 +738,59 @@ describe('scene clipboard', () => {
       expect(result?.pastedIds).toHaveLength(1)
       const pasted = useScene.getState().nodes[result!.pastedIds[0]!]
       expect(pasted?.type === 'window' && pasted.source?.artifact).toBe(readable.source!.artifact)
+    } finally {
+      configureArtifactStore(previousStore)
+      useViewer.getState().setProjectId(null)
+    }
+  })
+
+  test("a room copied to another project brings its floor script's artifacts", async () => {
+    let systemClipboardText = ''
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText: async () => systemClipboardText,
+        writeText: async (text: string) => {
+          systemClipboardText = text
+        },
+      },
+    })
+    const room = ZoneNode.parse({
+      id: 'zone_clipboard-floor-script',
+      parentId: sourceLevelId,
+      name: 'Hall',
+      polygon: [
+        [0, 0],
+        [3, 0],
+        [3, 3],
+        [0, 3],
+      ],
+      floor: {
+        script: {
+          kind: 'script',
+          script: 'e'.repeat(64),
+          artifact: 'f'.repeat(64),
+          inputs: 'key',
+          manifest: { bounds: { min: [0, 0, 0], max: [3, 0.01, 3] }, triangles: 2 },
+        },
+      },
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [sourceLevelId]: makeLevel(sourceLevelId, [room.id]),
+        [room.id]: room,
+      },
+    }))
+    useViewer.getState().setProjectId('project_clipboard-source')
+    expect(copySelectedNodesToEditorClipboard([room.id])).toBe(true)
+    useViewer.getState().setProjectId('project_clipboard-target')
+    const copyFrom = mock(async (_projectId: string, _sha256s: string[]) => [] as string[])
+    const previousStore = getArtifactStore()
+    configureArtifactStore({ ...previousStore, copyFrom })
+    try {
+      await pasteSystemEditorClipboardToLevel(targetLevelId)
+      expect(new Set(copyFrom.mock.calls[0]![1])).toEqual(new Set(['e'.repeat(64), 'f'.repeat(64)]))
     } finally {
       configureArtifactStore(previousStore)
       useViewer.getState().setProjectId(null)

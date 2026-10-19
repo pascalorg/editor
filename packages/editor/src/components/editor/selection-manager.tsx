@@ -27,6 +27,7 @@ import {
   useLiveNodeOverrides,
   useRegistryVersion,
   useScene,
+  wallFaceScriptPaintRefusal,
 } from '@pascal-app/core'
 import { getRoofMaterialArray, registerMaterialCacheCleanup, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -982,8 +983,11 @@ export const SelectionManager = () => {
             compatible && role
               ? () => {
                   // A surface with nothing of its own to paint (a footprint's
-                  // top where no room stands) says so instead of painting.
-                  const refusal = floorPlatePaintRefusal(useScene.getState().nodes, node, role)
+                  // top where no room stands), or one a script builds, says
+                  // so instead of painting.
+                  const refusal =
+                    floorPlatePaintRefusal(useScene.getState().nodes, node, role) ??
+                    wallFaceScriptPaintRefusal(node, role)
                   usePaintRegionMode.getState().setNotice(refusal?.message ?? null)
                   if (refusal) return
                   // Spread targets are all the same slot-model kind, so one
@@ -1793,6 +1797,9 @@ export const SelectionManager = () => {
           !getMovingNode() &&
           canDirectMoveNode(nodeToSelect)
         ) {
+          // The move tool mounts before the browser's click that ends this
+          // gesture, which would otherwise commit the node where it stands.
+          swallowNextClick()
           sfxEmitter.emit('sfx:item-pick')
           const moveTarget = resolveDirectManipulationNode(nodeToSelect, useScene.getState().nodes)
           useEditor.getState().setMovingNode(moveTarget as never)

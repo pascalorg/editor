@@ -100,7 +100,7 @@ export function registerViewScene(
           tab: shot.tab,
           capturedAt: shot.capturedAt,
           ...(shot.presentation ? { presentation: shot.presentation } : {}),
-          note: sceneViewNote(),
+          note: sceneViewNote(operations.getNodes() as Record<string, AnyNode>, interior, pose),
           ...(crop && cropped
             ? {
                 photoRegion: crop.region,
