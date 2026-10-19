@@ -17,7 +17,7 @@ import {
   GEOMETRY_SCRIPT_MIME_TYPES,
 } from '@pascal-app/core/schema'
 import type { SceneOperations } from '../operations'
-import { compileAndStore, type GeometryScriptHost } from './add-object'
+import { compileAndStore, type GeometryScriptHost, type ScriptedKind } from './add-object'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
 import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
@@ -62,21 +62,30 @@ export function registerAuthorScene(
           code: 'no_active_scene',
         })
       }
-      // The items' modules, compiled and stored one by one; a failure is a defect, not a stop.
+      // Every module, compiled and stored one by one: the items', and the openings' by
+      // `<wallId>/<index>`. A failure is a defect, not a stop.
       const compiled: Record<string, CompiledGeometryScript> = {}
       const compileErrors: Record<string, string> = {}
+      const modules: { id: string; code: string; kind: ScriptedKind }[] = []
       for (const level of args.payload.levels) {
-        for (const item of level.items ?? []) {
-          try {
-            compiled[item.id] = await compileAndStore(
-              host,
-              scene.id,
-              { code: item.code, language: 'three', params: undefined },
-              'object',
-            )
-          } catch (error) {
-            compileErrors[item.id] = error instanceof Error ? error.message : String(error)
-          }
+        for (const item of level.items ?? [])
+          modules.push({ id: item.id, code: item.code, kind: 'object' })
+        for (const wall of level.walls ?? [])
+          wall.openings?.forEach((opening, index) => {
+            if (opening.code)
+              modules.push({ id: `${wall.id}/${index}`, code: opening.code, kind: opening.kind })
+          })
+      }
+      for (const { id, code, kind } of modules) {
+        try {
+          compiled[id] = await compileAndStore(
+            host,
+            scene.id,
+            { code, language: 'three', params: undefined },
+            kind,
+          )
+        } catch (error) {
+          compileErrors[id] = error instanceof Error ? error.message : String(error)
         }
       }
       // Provenance: the design's module and the program that read it, kept as scripts of the scene.
@@ -101,7 +110,12 @@ export function registerAuthorScene(
         outcome = authorScene(
           before,
           { payload: args.payload, compiled, compileErrors, replace: args.replace },
-          { activeLevelId: bridge.activeLevelId?.() ?? null },
+          {
+            activeLevelId: bridge.activeLevelId?.() ?? null,
+            ...(bridge.supportsMaterialUpserts && bridge.getMaterials
+              ? { materials: bridge.getMaterials() }
+              : {}),
+          },
         )
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
@@ -150,12 +164,16 @@ export function registerAuthorScene(
   )
 }
 
-/** The payload as kept with the scene: every item's code is already its own artifact. */
+/** The payload as kept with the scene: every module is already its own artifact. */
 function withoutCode(payload: AuthorScenePayload) {
   return {
     ...payload,
     levels: payload.levels.map((level) => ({
       ...level,
+      walls: (level.walls ?? []).map((wall) => ({
+        ...wall,
+        openings: (wall.openings ?? []).map(({ code: _, ...opening }) => opening),
+      })),
       items: (level.items ?? []).map(({ code: _, ...item }) => item),
     })),
   }
