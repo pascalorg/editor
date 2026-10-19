@@ -45,8 +45,8 @@ const memo = new WeakMap<object, FoundationMember[]>()
 
 /**
  * The foundation a building stands on where the scene stores none: a continuous footing and a
- * foundation wall under the exterior walls of each building's lowest level, derived from those
- * walls, never stored, so nothing in a saved scene changes. The numbers are
+ * foundation wall under the exterior walls of each building's lowest level with a closed outline,
+ * derived from those walls, never stored, so nothing in a saved scene changes. The numbers are
  * {@link FOUNDATION_STANDARD}: a 16 × 8 in footing whose bottom sits 12 in under the lowest grade
  * (a generic depth: core has no frost data), and a wall from the footing up to the underside of the
  * lowest floor, of the building's foundation construction (`foundationReadingOf`): 8 in block by
@@ -73,10 +73,9 @@ export function genericFoundation(nodes: Nodes): FoundationMember[] {
 }
 
 function buildingFoundation(nodes: Nodes, building: BuildingNode): FoundationMember[] {
-  const level = lowestWalledLevel(nodes, building)
-  if (!level || levelDrawsFoundation(nodes, level)) return []
-  const walls = exteriorWalls(nodes, level)
-  if (walls.length === 0) return []
+  const enclosed = lowestEnclosedLevel(nodes, building)
+  if (!enclosed || levelDrawsFoundation(nodes, enclosed.level)) return []
+  const { level, walls } = enclosed
 
   const site = siteOf(nodes, building)
   const gradeAt = (x: number, z: number) => groundHeightAt(site, x, z)
@@ -140,7 +139,16 @@ function footingTopUnder(floorUnderside: number, lowestGrade: number): number {
   return Math.min(lowestGrade - footingBelowGrade + footingThickness, floorUnderside)
 }
 
-function lowestWalledLevel(nodes: Nodes, building: BuildingNode): LevelNode | null {
+/**
+ * The building's lowest level whose walls close an outline, with those exterior walls. A level
+ * under the ground still being drawn (a basement's first wall, an open run) carries no foundation
+ * yet, and the one over it does; a level at grade whose walls close nothing stands on nothing
+ * drawn, whatever is over it.
+ */
+function lowestEnclosedLevel(
+  nodes: Nodes,
+  building: BuildingNode,
+): { level: LevelNode; walls: WallNode[] } | null {
   const elevations = getLevelElevations(nodes)
   const levels = Object.values(nodes)
     .filter(
@@ -148,7 +156,13 @@ function lowestWalledLevel(nodes: Nodes, building: BuildingNode): LevelNode | nu
         node.type === 'level' && elevations.get(node.id)?.buildingId === building.id,
     )
     .sort((a, b) => a.level - b.level)
-  return levels.find((level) => level.children.some((id) => nodes[id]?.type === 'wall')) ?? null
+  for (const level of levels) {
+    if (!level.children.some((id) => nodes[id]?.type === 'wall')) continue
+    const walls = exteriorWalls(nodes, level)
+    if (walls.length > 0) return { level, walls }
+    if (levelGradeStanding(nodes, level.id) === 'at-grade') return null
+  }
+  return null
 }
 
 function levelDrawsFoundation(nodes: Nodes, level: LevelNode): boolean {

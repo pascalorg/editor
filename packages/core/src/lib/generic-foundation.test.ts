@@ -80,9 +80,12 @@ function flatHouse({ slab, wallExtra, thickness, terrain }: House = {}) {
   ])
 }
 
-/** The villa's shape: a Lower Ground at -3.63 m under a ground floor, both ringed by walls. */
-function houseOverBasement() {
-  const lower = ring('level_b')
+/**
+ * The villa's shape: a Lower Ground at -3.63 m under a ground floor, both ringed by walls (the
+ * Lower Ground's first `basementWalls` of them, to leave its outline open while it is drawn).
+ */
+function houseOverBasement(basementWalls = 4) {
+  const lower = ring('level_b').slice(0, basementWalls)
   const ground = ring('level_g')
   const plate = (id: string, parentId: string) =>
     SlabNode.parse({
@@ -116,6 +119,29 @@ function houseOverBasement() {
     plate('slab_g', 'level_g'),
     ...lower,
     ...ground,
+  ])
+}
+
+/** Two storeys at grade, both ringed by walls (the ground floor's first `groundWalls` of them). */
+function twoStoreys(groundWalls = 4) {
+  const ground = ring('level_g').slice(0, groundWalls)
+  const upper = ring('level_u')
+  return keyed([
+    BuildingNode.parse({ id: 'building_a', children: ['level_g', 'level_u'] }),
+    LevelNode.parse({
+      id: 'level_g',
+      parentId: 'building_a',
+      level: 0,
+      children: ground.map((w) => w.id),
+    }),
+    LevelNode.parse({
+      id: 'level_u',
+      parentId: 'building_a',
+      level: 1,
+      children: upper.map((w) => w.id),
+    }),
+    ...ground,
+    ...upper,
   ])
 }
 
@@ -203,6 +229,26 @@ test('a level below grade is its own foundation wall: only the footing, under it
     expect(footing.topY).toBeCloseTo(-3.63, 9)
     expect(footing.bottomY).toBeCloseTo(-3.63 - footingThickness, 9)
   }
+})
+
+test('a basement still being drawn does not take the foundation away: the lowest level with a closed outline carries it', () => {
+  for (const walls of [1, 3]) {
+    const members = genericFoundation(houseOverBasement(walls))
+    expect(new Set(members.map((member) => member.levelId))).toEqual(new Set(['level_g']))
+    expect(ofKind(members, 'footing')).toHaveLength(4)
+  }
+  // Its outline closed, the basement is the lowest level that carries one.
+  expect(new Set(genericFoundation(houseOverBasement()).map((member) => member.levelId))).toEqual(
+    new Set(['level_b']),
+  )
+})
+
+test('a ground floor at grade with an open outline stands on nothing drawn, the storey over it does not take the foundation', () => {
+  expect(new Set(genericFoundation(twoStoreys()).map((member) => member.levelId))).toEqual(
+    new Set(['level_g']),
+  )
+  // One wall taken out of the ground floor: no stem rises to the upper floor's underside.
+  expect(genericFoundation(twoStoreys(3))).toEqual([])
 })
 
 test('each building stands on the footing of its own lowest level only', () => {
