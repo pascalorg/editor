@@ -1,5 +1,14 @@
 import type { ZodType } from 'zod'
-import type { AnyNode, AssetInput, Collection, SceneMaterial, SceneMaterialId } from '../schema'
+import type { DesignBrief } from '../agent-tools/design-brief'
+import type {
+  AnyNode,
+  AssetInput,
+  Collection,
+  CompiledGeometryScript,
+  SceneMaterial,
+  SceneMaterialId,
+} from '../schema'
+import type { AssetViewFacts } from './asset-views'
 import type { SessionKeep, SessionRecord } from './scene-checkpoint'
 
 export type SceneNodes = Readonly<Record<string, AnyNode>>
@@ -27,8 +36,34 @@ export type AgentContext = {
   /** The agent's session so far. The host keeps it where its sessions live; it is never scene data. */
   session?: SessionRecord
   catalog?: readonly AssetInput[]
+  /**
+   * What a host read about catalog items before the call, by item id (`assetViewNeeds` says
+   * which): their pictures for view_assets, the names of their paintable surfaces for it and for
+   * paint. A host that cannot read them leaves them out.
+   */
+  assetViews?: Readonly<Record<string, AssetViewFacts>>
   materials?: Readonly<Record<SceneMaterialId, SceneMaterial>>
+  /** Modules built by the host before run_batch, indexed by call position. */
+  batchObjects?: Readonly<Record<number, BatchedObject>>
+  batchCall?: number
+  /**
+   * The design brief in force on a host that gates furnishing on one: `null` while there is none
+   * (placing or making furnishings is refused, `furnishingRefusal`), the brief once written. A
+   * host that does not gate leaves it out.
+   */
+  designBrief?: DesignBrief | null
+  /**
+   * The person's words of the turn, on a host that has a person (the chat): the source quote of a
+   * design brief is checked against it. A host with no person's message (MCP) leaves it out and the
+   * quote is not checked.
+   */
+  requestText?: string
 }
+
+/** One add_object call of a batch, built by its host: the compiled module, or why it failed. */
+export type BatchedObject =
+  | { compiled: CompiledGeometryScript }
+  | { failure: { code: string; message: string } }
 
 /** A write's operations in order, as apply_patch and update_node carry them. */
 export type NodeWrite =

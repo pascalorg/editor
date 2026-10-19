@@ -132,6 +132,9 @@ const asResult = (material: MaterialCatalogItem) => ({
 const byName = (a: MaterialCatalogItem, b: MaterialCatalogItem) =>
   a.label.localeCompare(b.label) || a.id.localeCompare(b.id)
 
+/** Colour options for a finish the library lacks: nearest library colour, or exact native. */
+const missingMaterialFacts = `paint with color gives the nearest library colour and says how far it moved (ΔE); a native material, paint with material: { properties: { color } }, keeps the exact colour.`
+
 /**
  * `search_materials`: the library's materials by words, best first, and the words none answers;
  * without a query, a browse of a kind, a surface or the whole library. Either lists a page at a
@@ -139,53 +142,52 @@ const byName = (a: MaterialCatalogItem, b: MaterialCatalogItem) =>
  */
 export const searchMaterials: AgentOperation<SearchMaterialsInput> = (_nodes, { queries }) => {
   const library = libraryMaterials()
+  const groups = queries.map(({ query = '', kind, surface, offset = 0 }) => {
+    const pool = library.filter(
+      (material) => (!kind || material.category === kind) && (!surface || suits(material, surface)),
+    )
+    const asked = {
+      ...(query ? { query } : {}),
+      ...(kind ? { kind } : {}),
+      ...(surface ? { surface } : {}),
+      ...(offset ? { offset } : {}),
+    }
+    const page = (listed: readonly MaterialCatalogItem[], size: number) => {
+      const more = listed.length - offset - size
+      return {
+        results: listed.slice(offset, offset + size).map(asResult),
+        ...(more > 0 ? { more, next: offset + size } : {}),
+      }
+    }
+    if (!query.trim()) return { ...asked, ...page([...pool].sort(byName), BROWSE_RESULTS) }
+    // A query of words too short or too common to tell materials apart finds nothing; it
+    // never browses the library in its place.
+    const said = wordsOf(query)
+    const words = said.filter(searches)
+    if (!words.length) return { ...asked, results: [], missing: said }
+    const scored = pool.map((material) => {
+      const text = wordsOf(
+        `${material.id} ${material.label} ${material.category} ${material.description ?? ''}`,
+      )
+      return { material, hits: words.filter((word) => answers(material, text, word)) }
+    })
+    // A three-letter piece nothing answers as a word ("cco" of stucco) is looked for in ids.
+    for (const word of words) {
+      if (word.length !== 3 || scored.some(({ hits }) => hits.includes(word))) continue
+      for (const entry of scored) if (idRun(entry.material).includes(word)) entry.hits.push(word)
+    }
+    const missing = words.filter((word) => !scored.some(({ hits }) => hits.includes(word)))
+    const best = scored
+      .filter(({ hits }) => hits.length)
+      .sort((a, b) => b.hits.length - a.hits.length || byName(a.material, b.material))
+      .map(({ material }) => material)
+    return { ...asked, ...page(best, SEARCH_RESULTS), ...(missing.length ? { missing } : {}) }
+  })
+  const lacking = groups.some((group) => 'missing' in group)
   return {
     result: {
-      groups: queries.map(({ query = '', kind, surface, offset = 0 }) => {
-        const pool = library.filter(
-          (material) =>
-            (!kind || material.category === kind) && (!surface || suits(material, surface)),
-        )
-        const asked = {
-          ...(query ? { query } : {}),
-          ...(kind ? { kind } : {}),
-          ...(surface ? { surface } : {}),
-          ...(offset ? { offset } : {}),
-        }
-        const page = (listed: readonly MaterialCatalogItem[], size: number) => {
-          const more = listed.length - offset - size
-          return {
-            results: listed.slice(offset, offset + size).map(asResult),
-            ...(more > 0 ? { more, next: offset + size } : {}),
-          }
-        }
-        if (!query.trim()) return { ...asked, ...page([...pool].sort(byName), BROWSE_RESULTS) }
-        // A query of words too short or too common to tell materials apart finds nothing; it
-        // never browses the library in its place.
-        const said = wordsOf(query)
-        const words = said.filter(searches)
-        if (!words.length) return { ...asked, results: [], missing: said }
-        const scored = pool.map((material) => {
-          const text = wordsOf(
-            `${material.id} ${material.label} ${material.category} ${material.description ?? ''}`,
-          )
-          return { material, hits: words.filter((word) => answers(material, text, word)) }
-        })
-        // A three-letter piece nothing answers as a word ("cco" of stucco) is looked for in ids.
-        for (const word of words) {
-          if (word.length !== 3 || scored.some(({ hits }) => hits.includes(word))) continue
-          for (const entry of scored)
-            if (idRun(entry.material).includes(word)) entry.hits.push(word)
-        }
-        const missing = words.filter((word) => !scored.some(({ hits }) => hits.includes(word)))
-        const best = scored
-          .filter(({ hits }) => hits.length)
-          .sort((a, b) => b.hits.length - a.hits.length || byName(a.material, b.material))
-          .map(({ material }) => material)
-        return { ...asked, ...page(best, SEARCH_RESULTS), ...(missing.length ? { missing } : {}) }
-      }),
-      message:
-        'Materials as library:<id> refs for paint: a search best first, a browse by name. A long list says how many more there are (more) and the offset that lists them (next). The words no material answers are under missing: the library lacks them.',
+      groups,
+      message: `Materials as library:<id> refs for paint: a search best first, a browse by name. A long list says how many more there are (more) and the offset that lists them (next). The words no material answers are under missing: the library lacks them.${lacking ? ` ${missingMaterialFacts}` : ''}`,
     },
   }
 }

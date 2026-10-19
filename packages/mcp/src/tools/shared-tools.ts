@@ -1,11 +1,20 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  type AddObjectInput,
   AGENT_OPERATIONS,
   type AgentContext,
   type AgentHostRuntime,
   type AgentOperation,
+  type AssetViewLoader,
   achievedChanges,
   applyAgentOutcome,
+  assetViewNeeds,
+  assetViewsReadCatalog,
+  briefReadsCatalog,
+  buildBatchObjects,
+  createAssetViewLoader,
+  createFetchAssetViewIO,
+  furnishingRefusal,
   type SceneChanges,
   startOfSession,
   writeCollections,
@@ -16,11 +25,14 @@ import {
   addCornerWindowTool,
   addFenceTool,
   addLevelTool,
+  addObjectTool,
   addWallTool,
   createRoofTool,
   createRoomTool,
   createStairTool,
+  type DesignBrief,
   deleteNodeTool,
+  designBriefTool,
   duplicateLevelTool,
   findByTypeTool,
   fitStairTool,
@@ -36,6 +48,7 @@ import {
   moveRoofsToRoofLevelTool,
   paintTool,
   placeBuildingTool,
+  placeDesignTool,
   placeInRoomTool,
   placeItemsTool,
   ROOM_TOOL_CONTRACTS,
@@ -44,11 +57,15 @@ import {
   searchAssetsTool,
   searchMaterialsTool,
   setCheckpointTool,
+  validateDesignTool,
   verifySceneTool,
+  viewAssetsTool,
 } from '@pascal-app/core/agent-tools'
+import { DesignValidationSchema } from '@pascal-app/core/procedural-items'
 import {
   type AnyNode,
   type AnyNodeId,
+  type CompiledGeometryScript,
   MaterialSchema,
   SceneMaterial,
 } from '@pascal-app/core/schema'
@@ -85,6 +102,15 @@ export type OperationTool = {
   catalog?: true
 }
 
+export type PlanReadingHosts = {
+  /** Reads catalog pictures and surfaces before view_assets and paint. */
+  assetViews?: AssetViewLoader
+  /** Compiles one add_object module for a batch before the synchronous operations run. */
+  buildObject?: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>
+}
+
+const defaultAssetViews = createAssetViewLoader(createFetchAssetViewIO())
+
 type SharedTool = OperationTool & {
   annotations:
     | typeof READ_ONLY_TOOL_ANNOTATIONS
@@ -93,6 +119,10 @@ type SharedTool = OperationTool & {
 }
 
 const jsonObject = z.record(z.string(), z.unknown())
+
+function refuseScripts(): never {
+  refuse('scripts_unavailable', 'This Pascal server cannot run geometry scripts.')
+}
 
 /** What the scene holds after a mutating call (core achievedChanges). */
 const achievedOutput = {
@@ -118,6 +148,23 @@ const levelRoleOutput = {
 }
 
 const SHARED_TOOLS: SharedTool[] = [
+  {
+    contract: validateDesignTool,
+    operation: AGENT_OPERATIONS.validate_design,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    outputSchema: DesignValidationSchema.shape,
+  },
+  {
+    contract: placeDesignTool,
+    operation: AGENT_OPERATIONS.place_design,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      designId: z.string(),
+      parentId: z.string(),
+      surfaceId: z.string().nullable(),
+      ...liveSyncOutput,
+    },
+  },
   {
     contract: measureStairTool,
     operation: AGENT_OPERATIONS.measure_stair,
@@ -269,6 +316,11 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: setCheckpointTool,
     operation: AGENT_OPERATIONS.set_checkpoint,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: designBriefTool,
+    operation: AGENT_OPERATIONS.design_brief,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
@@ -430,6 +482,12 @@ const SHARED_TOOLS: SharedTool[] = [
     catalog: true,
   },
   {
+    contract: viewAssetsTool,
+    operation: AGENT_OPERATIONS.view_assets,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    catalog: true,
+  },
+  {
     contract: searchMaterialsTool,
     operation: AGENT_OPERATIONS.search_materials,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -496,6 +554,11 @@ export function agentRuntime(bridge: SceneOperations): AgentHostRuntime {
   }
 }
 
+export function briefInForce(bridge: SceneOperations): DesignBrief | null | undefined {
+  const session = bridge.agentSession
+  return session ? (session.read().designBrief ?? null) : undefined
+}
+
 function writesScene(changes: SceneChanges | undefined): boolean {
   return Boolean(
     changes &&
@@ -508,8 +571,9 @@ export function registerSharedTools(
   server: McpServer,
   bridge: SceneOperations,
   catalog: AssetCatalog = builtInCatalog,
+  hosts: PlanReadingHosts = {},
 ): void {
-  for (const tool of SHARED_TOOLS) registerOperationTool(server, bridge, tool, catalog)
+  for (const tool of SHARED_TOOLS) registerOperationTool(server, bridge, tool, catalog, hosts)
   registerCollectionTools(server, bridge)
 }
 
@@ -522,6 +586,7 @@ export function registerOperationTool(
   bridge: SceneOperations,
   tool: OperationTool,
   catalog: AssetCatalog = builtInCatalog,
+  hosts: PlanReadingHosts = {},
 ): void {
   server.registerTool(
     tool.contract.name,
@@ -542,6 +607,12 @@ export function registerOperationTool(
       // The agent's session begins with its first call, before anything is written.
       const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
       if (first) bridge.agentSession?.keep(first)
+      // Gate before catalog I/O or module compilation.
+      const designBrief = briefInForce(bridge)
+      if (designBrief !== undefined) {
+        const refusal = furnishingRefusal(tool.contract.name, input, designBrief)
+        if (refusal) return refusalResult(refusal)
+      }
       const batchPlacesInRoom =
         tool.contract.name === runBatchTool.name &&
         Array.isArray(input.calls) &&
@@ -552,6 +623,16 @@ export function registerOperationTool(
             'tool' in call &&
             call.tool === placeInRoomTool.name,
         )
+      const batchesObjects =
+        tool.contract.name === runBatchTool.name &&
+        Array.isArray(input.calls) &&
+        input.calls.some(
+          (call) =>
+            typeof call === 'object' &&
+            call !== null &&
+            'tool' in call &&
+            call.tool === addObjectTool.name,
+        )
       const context: AgentContext = {
         activeLevelId: bridge.activeLevelId?.() ?? null,
         ...(bridge.supportsMaterialUpserts && bridge.getMaterials
@@ -559,8 +640,23 @@ export function registerOperationTool(
           : {}),
         ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
-        ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
+        ...(designBrief !== undefined && { designBrief }),
+        ...((tool.catalog ||
+          batchPlacesInRoom ||
+          assetViewsReadCatalog(tool.contract.name, input) ||
+          briefReadsCatalog(tool.contract.name, input)) && { catalog: await catalog() }),
+        ...(batchesObjects && {
+          batchObjects: await buildBatchObjects(
+            input.calls as { tool?: unknown; input?: unknown }[],
+            hosts.buildObject ?? refuseScripts,
+          ),
+        }),
       }
+      const needs = assetViewNeeds(before, tool.contract.name, input, context)
+      if (needs.subjects.length)
+        context.assetViews = await (hosts.assetViews ?? defaultAssetViews)(needs.subjects, {
+          pictures: needs.pictures,
+        })
       try {
         outcome = tool.operation(before, input as never, context)
       } catch (error) {
@@ -587,6 +683,23 @@ export function registerOperationTool(
         ...(tool.envelope?.(bridge) ?? {}),
         ...persistence,
       }
+      const { previews, ...shown } = payload as typeof payload & {
+        previews?: { label: string; image: string }[]
+      }
+      const pictures = (Array.isArray(previews) ? previews : []).flatMap(({ label, image }) => {
+        const [, mimeType, data] = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(image) ?? []
+        return mimeType && data
+          ? [
+              { type: 'text' as const, text: label },
+              { type: 'image' as const, data, mimeType },
+            ]
+          : []
+      })
+      if (pictures.length)
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(shown) }, ...pictures],
+          structuredContent: shown,
+        }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
         structuredContent: payload,

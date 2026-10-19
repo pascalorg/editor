@@ -1,5 +1,5 @@
 import { addObjectTool, getSourceTool } from './add-object'
-import { searchAssetsTool } from './assets'
+import { searchAssetsTool, viewAssetsTool } from './assets'
 import { runBatchTool } from './batch'
 import { setCheckpointTool } from './checkpoints'
 import { clearSceneTool } from './clear-scene'
@@ -8,6 +8,8 @@ import { addColumnTool } from './columns'
 import type { AgentToolContract } from './contract'
 import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
+import { designBriefTool } from './design-brief'
+import { placeDesignTool, validateDesignTool } from './designs'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
@@ -62,6 +64,7 @@ export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
 export * from './site'
+export { CATALOG_SOURCE, OTHER_SOURCES, OUTSIDE_SOURCES } from './sources'
 export * from './stairs'
 export * from './verify-scene'
 export * from './view-scene'
@@ -89,6 +92,9 @@ export const AGENT_TOOL_CONTRACTS = [
   duplicateLevelTool,
   verifySceneTool,
   setCheckpointTool,
+  designBriefTool,
+  placeDesignTool,
+  validateDesignTool,
   addWallTool,
   addFenceTool,
   addCornerWindowTool,
@@ -110,6 +116,7 @@ export const AGENT_TOOL_CONTRACTS = [
   paintTool,
   placeInRoomTool,
   searchAssetsTool,
+  viewAssetsTool,
   searchMaterialsTool,
   getSiteTool,
   placeBuildingTool,
@@ -117,8 +124,10 @@ export const AGENT_TOOL_CONTRACTS = [
   runBatchTool,
 ] as const satisfies readonly AgentToolContract[]
 
-export { BATCHABLE_TOOLS, runBatchTool } from './batch'
+export { BATCHABLE_TOOLS, INDEPENDENT_BATCH_TOOLS, runBatchTool } from './batch'
 export { setCheckpointTool } from './checkpoints'
+export * from './design-brief'
+export { placeDesignTool, validateDesignTool } from './designs'
 export { straightenFacadePhotoTool } from './photo-elevation'
 export { placeInRoomTool } from './place-in-room'
 export { createRoofTool } from './roofs'

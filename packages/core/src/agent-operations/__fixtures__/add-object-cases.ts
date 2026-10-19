@@ -7,6 +7,7 @@ import {
   type GeometryScriptMount,
   ItemNode,
   LevelNode,
+  SlabNode,
   WallNode,
 } from '../../schema'
 import type { AgentSurface, SceneGraph } from './cases'
@@ -14,7 +15,8 @@ import type { AgentSurface, SceneGraph } from './cases'
 /**
  * `add_object`, the one way to author an object Pascal has no type for. Each new object says what
  * it stands in for (its reason, listed by verify_scene), so every one names a gap in Pascal; one
- * on a floor shaped like a wall or a floor plate is refused with the tool to use; one named
+ * on a floor shaped like a wall, or like a floor plate with no floor under it (a rug lies over
+ * one), is refused with the tool to use; one named
  * after something Pascal builds gets a hint, not a refusal (a word gate once refused "entry door
  * pull handle (brass)", and the agent relabelled it until the label named nothing).
  *
@@ -159,6 +161,46 @@ function roofedFloorScene(): SceneGraph {
     rootNodeIds,
   }
 }
+
+/**
+ * The floor with a slab of a level beside its walls, as the host stores a room's floor plate: a
+ * child of the level, its outline in the level's x and z.
+ */
+function floorWithSlab(
+  polygon: [number, number][],
+  { holes = [], levelId = 'level_0' }: { holes?: [number, number][][]; levelId?: string } = {},
+) {
+  return (): SceneGraph => {
+    const { nodes, rootNodeIds } = levelId === 'level_0' ? floorScene() : roofedFloorScene()
+    const slab = SlabNode.parse({
+      id: 'slab_living',
+      parentId: levelId,
+      polygon,
+      holes,
+      boundary: 'auto',
+    })
+    const level = nodes[levelId] as LevelNode
+    return {
+      nodes: {
+        ...nodes,
+        [level.id]: { ...level, children: [...level.children, slab.id] },
+        [slab.id]: slab,
+      },
+      rootNodeIds,
+    }
+  }
+}
+
+/** A living room's floor: 6 m along x, 5 m along z. */
+const LIVING_ROOM: [number, number][] = [
+  [0, 0],
+  [6, 0],
+  [6, 5],
+  [0, 5],
+]
+
+/** The owner's rug (2026-10-19, "add a living room"): 2.40 × 3.18 m and 0.02 m thick. */
+const RUG: [number, number, number] = [2.4, 0.02, 3.18]
 
 const CODE = 'export default function build({ THREE }) { return new THREE.Group() }'
 
@@ -305,6 +347,152 @@ export const ADD_OBJECT_CASES: AddObjectCase[] = [
     [8.05, 0.15, 13.52],
     { refusal: 'use_slab', mentions: ['13.52 × 8.05'] },
   ),
+  // A flat object is refused only where it would serve as a floor: with no floor under it. The
+  // owner's rug was refused twice on a living room's floor and the agent painted one instead.
+  {
+    name: 'a rug lying over a room’s floor is furniture and is built',
+    scene: floorWithSlab(LIVING_ROOM),
+    input: {
+      code: CODE,
+      name: 'Fringed wool rug',
+      category: 'rug',
+      reason: 'Pascal has no rug type.',
+      position: [3, 0, 2.5],
+    },
+    compiled: compiledSolid(RUG),
+    expect: { result: { mount: 'floor' }, node: { name: 'Fringed wool rug', parentId: 'level_0' } },
+  },
+  {
+    name: 'a rug hanging over a floor’s edge, most of it on the floor, is built',
+    scene: floorWithSlab(LIVING_ROOM),
+    input: {
+      code: CODE,
+      name: 'Fringed wool rug',
+      category: 'rug',
+      reason: 'Pascal has no rug type.',
+      position: [0.5, 0, 2.5],
+    },
+    compiled: compiledSolid(RUG),
+    expect: { result: { mount: 'floor' }, node: { name: 'Fringed wool rug' } },
+  },
+  {
+    name: 'the same plate on a level with no floor stays refused, with its fact',
+    scene: floorScene,
+    input: {
+      code: CODE,
+      name: 'Fringed wool rug',
+      category: 'rug',
+      reason: 'Pascal has no rug type.',
+      position: [3, 0, 2.5],
+    },
+    compiled: compiledSolid(RUG),
+    expect: {
+      refusal: 'use_slab',
+      mentions: [
+        '2.40 × 3.18 m in x and z, 0.02 m thick, on the floor) is a floor plate: build it as a slab.',
+      ],
+    },
+  },
+  {
+    name: 'the same plate where the level’s floor is not stays refused: bare ground beside a floor',
+    scene: floorWithSlab(LIVING_ROOM),
+    input: {
+      code: CODE,
+      name: 'Fringed wool rug',
+      category: 'rug',
+      reason: 'Pascal has no rug type.',
+      position: [12, 0, 2.5],
+    },
+    compiled: compiledSolid(RUG),
+    expect: { refusal: 'use_slab', mentions: ['is a floor plate: build it as a slab.'] },
+  },
+  {
+    name: 'a plate mostly past the floor’s edge is a floor, not a rug: refused',
+    scene: floorWithSlab(LIVING_ROOM),
+    input: {
+      code: CODE,
+      name: 'Terrace',
+      category: 'deck',
+      reason: 'Pascal has no deck type.',
+      position: [-0.9, 0, 2.5],
+    },
+    compiled: compiledSolid(RUG),
+    expect: { refusal: 'use_slab', mentions: ['is a floor plate: build it as a slab.'] },
+  },
+  {
+    name: 'a plate over the opening cut in a floor has no floor under it: refused',
+    scene: floorWithSlab(LIVING_ROOM, {
+      holes: [
+        [
+          [1, 0.5],
+          [5, 0.5],
+          [5, 4.5],
+          [1, 4.5],
+        ],
+      ],
+    }),
+    input: {
+      code: CODE,
+      name: 'Fringed wool rug',
+      category: 'rug',
+      reason: 'Pascal has no rug type.',
+      position: [3, 0, 2.5],
+    },
+    compiled: compiledSolid(RUG),
+    expect: { refusal: 'use_slab', mentions: ['is a floor plate: build it as a slab.'] },
+  },
+  {
+    name: 'a floor on another level is no floor under the plate: refused',
+    scene: floorWithSlab(LIVING_ROOM, { levelId: 'level_roof' }),
+    input: {
+      code: CODE,
+      name: 'Fringed wool rug',
+      category: 'rug',
+      reason: 'Pascal has no rug type.',
+      position: [3, 0, 2.5],
+    },
+    compiled: compiledSolid(RUG),
+    expect: { refusal: 'use_slab', mentions: ['is a floor plate: build it as a slab.'] },
+  },
+  // The floor is read where the plate stands, turned as it is: a strip of floor 1.4 m deep holds
+  // 44% of the rug along z and 58% of the rug turned a quarter.
+  {
+    name: 'a rug short of the floor strip it lies along is refused, built once turned to lie along it',
+    scene: floorWithSlab([
+      [0, 0],
+      [8, 0],
+      [8, 1.4],
+      [0, 1.4],
+    ]),
+    input: {
+      code: CODE,
+      name: 'Fringed wool rug',
+      category: 'rug',
+      reason: 'Pascal has no rug type.',
+      position: [4, 0, 0.7],
+    },
+    compiled: compiledSolid(RUG),
+    expect: { refusal: 'use_slab', mentions: ['is a floor plate: build it as a slab.'] },
+  },
+  {
+    name: 'the same rug turned a quarter, 58% on the strip, is built',
+    scene: floorWithSlab([
+      [0, 0],
+      [8, 0],
+      [8, 1.4],
+      [0, 1.4],
+    ]),
+    input: {
+      code: CODE,
+      name: 'Fringed wool rug',
+      category: 'rug',
+      reason: 'Pascal has no rug type.',
+      position: [4, 0, 0.7],
+      rotation: 90,
+    },
+    compiled: compiledSolid(RUG),
+    expect: { result: { mount: 'floor' }, node: { name: 'Fringed wool rug' } },
+  },
   create(
     'a plate held off the floor is built: a canopy is no slab',
     { name: 'Canopy', category: 'canopy', position: [3, 2.6, 1] },

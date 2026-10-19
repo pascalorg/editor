@@ -49,6 +49,15 @@ describe('add_object over MCP', () => {
       const { nodes, rootNodeIds } = c.scene()
       bridge.setScene(nodes as never, rootNodeIds as never)
       bridge.setActiveScene({ id: 'scene_cases', name: 'Cases' } as never)
+      bridge.agentSession.keep({
+        designBrief: {
+          fixed: ['the test’s pieces'],
+          open: [],
+          source: 'catalog',
+          vision: 'The catalog as it is.',
+          beyond: 'none: the test places what the request names.',
+        },
+      })
       compiled = c.compiled
       compiles = 0
       viewed = c.context?.activeLevelId ?? null

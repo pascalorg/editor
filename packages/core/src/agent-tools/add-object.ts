@@ -4,7 +4,7 @@ import { GeometryScriptLanguage } from '../schema/geometry-source'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
-const DESCRIPTION = `Author parametric Three.js furniture, decor and custom objects to match requested shapes, dimensions or style. A requested look or custom fit can justify authoring even when generic catalog equivalents exist; catalog items remain suitable when they fit. Examples include a low oak table, a slatted bench, a paper lantern, built-ins, custom columns and capitals, mouldings and trim, panels, exposed beams, ceiling bodies, canopies, a porch and railings. Pascal runs the module in a sandbox, stores the result and places it as one object the user can move, paint, and ask you to edit again.
+const DESCRIPTION = `Author parametric Three.js furniture, decor and custom objects of any shape, dimensions or style, whether or not the catalog holds something similar (the catalog is a limited set that varies by server). Examples include a low oak table, a slatted bench, a paper lantern, built-ins, custom columns and capitals, mouldings and trim, panels, exposed beams, ceiling bodies, canopies, a porch and railings. Pascal runs the module in a sandbox, stores the result and places it as one object the user can move, paint, and ask you to edit again.
 
 Module shape (import THREE from the three package as usual; the addons below too):
   // also available: three/addons/utils/BufferGeometryUtils.js, three/addons/geometries/{RoundedBoxGeometry,ConvexGeometry,LoftGeometry,ParametricGeometry}.js, three-bvh-csg (Brush, Evaluator, SUBTRACTION, ADDITION, INTERSECTION)
@@ -30,6 +30,8 @@ Blender instead (language 'bpy'): when the shape is easier with Blender's modell
   MOUNT = "floor"
   def build(params): ...   # add objects to the empty scene; everything in it is exported, modifiers applied
 The same conventions in Blender terms: metres, Z up, the front faces -Y (Blender's Front view); part:<id>, light:<id> (a light object; its custom property intensity sets the brightness, default 2), anchor:<id> (an empty), cutout, cut:wall|ceiling|slab and collider are object names; userData is the object's custom properties (obj["type"] = "panel"); slot_<finish> are material names. A clip is one action named open, close, loop or anything else, assigned to every object that moves in it. Use the data API and bmesh, not operators that need a 3D viewport. A Blender build takes a few seconds.
+
+Several objects: they do not depend on each other, so several add_object calls can go in one step, or in one run_batch call (a call per object; each is reported on its own with its receipt, and one that fails does not stop the others).
 
 Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; get_source provides the current code and params when needed); identity, placement, paint and the params you leave out are kept. The result lists the size, parts, slots, lights, animations and params.`
 

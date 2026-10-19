@@ -16,6 +16,15 @@ describe('room tools', () => {
     bridge = new SceneBridge()
     bridge.setScene({}, [])
     bridge.loadDefault()
+    bridge.agentSession.keep({
+      designBrief: {
+        fixed: ['the test’s pieces'],
+        open: [],
+        source: 'catalog',
+        vision: 'The catalog as it is.',
+        beyond: 'none: the test places what the request names.',
+      },
+    })
     const server = new McpServer({ name: 'test', version: '0.0.0' })
     registerSharedTools(server, bridge)
     registerRoomTools(server, bridge)

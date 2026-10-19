@@ -10,6 +10,7 @@ import { SceneBridge } from '../bridge/scene-bridge'
 import { buildFromBriefPrompt, registerFromBrief } from './from-brief'
 import { buildIterateOnFeedbackPrompt, registerIterateOnFeedback } from './iterate-on-feedback'
 import { buildRenovationMessages, registerRenovationFromPhotos } from './renovation-from-photos'
+import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
 
 type ClientServerPair = {
   client: Client
@@ -231,6 +232,34 @@ describe('renovation_from_photos', () => {
     expect(last).toBeDefined()
     if (last && last.content.type === 'text') {
       expect(last.content.text).toContain('## Task')
+    }
+  })
+})
+
+describe('shared scene guidance delivery', () => {
+  test('brief and feedback prompts deliver their shared guidance through MCP', async () => {
+    // Photo renovation has its own evidence-grounded minimal-patch contract.
+    for (const { register, name, args } of [
+      { register: registerFromBrief, name: 'from_brief', args: { brief: 'A family house' } },
+      {
+        register: registerIterateOnFeedback,
+        name: 'iterate_on_feedback',
+        args: { feedback: 'Move the fridge' },
+      },
+    ]) {
+      const pair = await spinUp(register)
+      try {
+        const result = await pair.client.getPrompt({ name, arguments: args })
+        expect(
+          result.messages.some(
+            (message) =>
+              message.content.type === 'text' &&
+              message.content.text.includes(SCENE_DESIGN_GUIDANCE),
+          ),
+        ).toBe(true)
+      } finally {
+        await pair.close()
+      }
     }
   })
 })

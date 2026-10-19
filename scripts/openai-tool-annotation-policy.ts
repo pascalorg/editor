@@ -46,6 +46,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   delete_node: policy(false, true, false),
   delete_scene: policy(false, true, false),
   delete_zone: policy(false, true, false),
+  design_brief: policy(false, false, false),
   divide_zone: policy(false, true, false),
   duplicate_level: policy(false, false, false),
   duplicate_zone: policy(false, true, false),
@@ -95,6 +96,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   undo: policy(false, true, false),
   validate_design: policy(true, false, false),
   verify_scene: policy(true, false, false),
+  view_assets: policy(true, false, false),
   view_scene: policy(true, false, false),
 } as const satisfies Record<string, ToolAnnotations>
 

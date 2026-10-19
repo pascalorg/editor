@@ -26,6 +26,15 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
       end: [5, 0],
     })
     bridge.setScene({ [level.id]: level, [wall.id]: wall }, [level.id])
+    bridge.agentSession.keep({
+      designBrief: {
+        fixed: ['the test’s object'],
+        open: [],
+        source: 'open',
+        vision: 'Carved oak.',
+        beyond: 'none: the test places what the request names.',
+      },
+    })
     const store = new InMemorySceneStore()
     const operations = createSceneOperations({ bridge, store })
     operations.setActiveScene(
