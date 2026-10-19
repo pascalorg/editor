@@ -94,3 +94,50 @@ test('a basement is deepest at the footing under its floor', () => {
   // The floor top is at -3.63 + 0.05 on a 0.05 m slab.
   expect(deepestDrawnY(house(-3.63))).toBeCloseTo(-3.63 - FOUNDATION_STANDARD.footingThickness, 9)
 })
+
+/** A basement (-1, plane at -3.63) whose floor has two slabs on different elevations. */
+function splitBasement(slabs: Array<{ elevation: number; thickness: number; recessed?: boolean }>) {
+  const level = LevelNode.parse({
+    id: 'level_b',
+    parentId: 'building_a',
+    level: -1,
+    baseElevation: -3.63,
+    children: slabs.map((_, i) => `slab_${i}`),
+  })
+  return keyed([
+    site(),
+    BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_b'] }),
+    level,
+    ...slabs.map((slab, i) =>
+      SlabNode.parse({ id: `slab_${i}`, parentId: 'level_b', polygon: corners, ...slab }),
+    ),
+  ])
+}
+
+test('a split-level floor is deepest at its lowest slab underside, not the highest top less the thickest slab', () => {
+  // Raised part: top 0.05, 0.05 thick. Sunken part: top -1.2, 0.2 thick, underside at -1.4.
+  const nodes = splitBasement([
+    { elevation: 0.05, thickness: 0.05 },
+    { elevation: -1.2, thickness: 0.2 },
+  ])
+  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - 1.4 - FOUNDATION_STANDARD.footingThickness, 9)
+})
+
+test('a recessed slab counts where it is drawn: by its own underside, with no footing under it', () => {
+  // A pool basin: floor at -1.5, 0.3 thick, under a 0.05 m standing slab.
+  const nodes = splitBasement([
+    { elevation: 0.05, thickness: 0.05 },
+    { elevation: -1.5, thickness: 0.3, recessed: true },
+  ])
+  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - 1.8, 9)
+})
+
+test('a thick recessed slab that stays shallow does not deepen the standing plate’s footing', () => {
+  // A raised recessed plate (top 0.45, 0.5 thick: underside -0.05) beside a thin standing plate:
+  // the footing under the standing plate is the deeper thing, not a thickest-slab guess.
+  const nodes = splitBasement([
+    { elevation: 0.05, thickness: 0.05 },
+    { elevation: 0.45, thickness: 0.5, recessed: true },
+  ])
+  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - FOUNDATION_STANDARD.footingThickness, 9)
+})
