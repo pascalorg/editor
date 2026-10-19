@@ -1,10 +1,14 @@
 import { z } from 'zod'
+import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
+import { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
 const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene, in one call. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls with their openings, rooms, slabs, columns, railings, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
 
-Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre. An item's position is where its bottom centre stands; its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
+Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands; its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions; a slab is a terrace, a platform, a balcony. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
+
+The report says what was written, what Pascal defaulted (defaults: a window with no type is fixed and cannot open), what it warns about but wrote (warnings: thin slabs, too many slabs or regions) and what it refused (defects, by your ids).
 
 Call again with the same scene and a corrected payload to replace the previous conversion (replace: true); the default refuses to overwrite a scene that already holds a conversion.`
 
@@ -25,6 +29,35 @@ export const authorSceneOpening = z.object({
     { default: 0 },
   ),
   name: z.string().max(80).optional(),
+  type: z
+    .enum([...DoorType.options, ...WindowType.options.filter((t) => t !== 'sliding')])
+    .optional()
+    .describe(
+      'How it opens. A door: hinged (default), double (two leaves), french (two glazed leaves), folding, pocket, barn, sliding, garage-sectional, garage-rollup, garage-tiltup. A window: fixed (default; cannot open), sliding, casement, awning, hopper, single-hung, double-hung, bay, bow, louvered. Give it: a window with no type is written fixed.',
+    ),
+  style: z
+    .enum([...DOOR_STYLES, ...WINDOW_STYLES])
+    .optional()
+    .describe(
+      "Its look, by name. A door's leaf: panel (default), glass, modern, paneled-glass, french, shaker, six-panel, craftsman, half-louvered, barn. A fixed window's panes: single (default), double-hung, triple-hung, casement, sliding, grid, tall-grid, wide-grid, horizontal-bands, transom, picture; an operable window draws its own sashes, so a style on one is dropped and reported.",
+    ),
+  leaves: z
+    .number()
+    .int()
+    .min(1)
+    .max(4)
+    .optional()
+    .describe(
+      "A door's leaves, 1 to 4 (default: what its type has; 2 for double, french and sliding).",
+    ),
+  code: z
+    .string()
+    .min(1)
+    .max(48_000)
+    .optional()
+    .describe(
+      "A three.js module for an opening type and style cannot express (an arched double door, a round window): the add_door / add_window code contract, mount 'wall', a cutout mesh the wall cuts, an open clip unless it is fixed. Width and height are what it builds; type and style do not apply. Compiled and stored as an item's module is.",
+    ),
   color: z
     .string()
     .optional()
@@ -32,7 +65,9 @@ export const authorSceneOpening = z.object({
   hinge: z
     .enum(['start', 'end'])
     .optional()
-    .describe("Which end of the wall the door's hinge is nearer."),
+    .describe(
+      "Which end of the wall the door's hinge is nearer (default start). The handle goes on the opposite edge.",
+    ),
   swing: z
     .enum(['front', 'back'])
     .optional()
@@ -48,7 +83,21 @@ export const authorSceneWall = z.object({
   color: z
     .string()
     .optional()
-    .describe('Paint for both faces as #rrggbb; Pascal picks the nearest library colour.'),
+    .describe(
+      'Paint for both faces: #rrggbb, written as an exact material, or a library ref (library:<id>) from search_materials.',
+    ),
+  colorLeft: z
+    .string()
+    .optional()
+    .describe(
+      "Paint for the face on the left when looking from start to end, same forms as color; over color. The left is the wall's front.",
+    ),
+  colorRight: z
+    .string()
+    .optional()
+    .describe(
+      'Paint for the face on the right when looking from start to end, same forms as color; over color.',
+    ),
   openings: z.array(authorSceneOpening).optional(),
 })
 
@@ -65,12 +114,14 @@ export const authorSceneRoom = z.object({
     .string()
     .optional()
     .describe(
-      "The floor's material: a library ref (library:<id>) from search_materials, or #rrggbb for a flat colour.",
+      "The floor's material: a library ref (library:<id>) from search_materials, or #rrggbb for an exact flat colour.",
     ),
   floorRegions: z
     .array(z.object({ polygon: z.array(plan('vertex')).min(3), finish: z.string() }))
     .default([])
-    .describe('Parts of the floor in another finish (the kitchen tiles inside an open-plan room).'),
+    .describe(
+      'Parts of the floor in another finish (the kitchen tiles inside an open-plan room), library:<id> or #rrggbb. Regions are fixed polygons that do not follow a resize: one region per finish, never one per plank.',
+    ),
 })
 
 export const authorSceneSlab = z.object({
@@ -83,7 +134,7 @@ export const authorSceneSlab = z.object({
       default: 0,
     },
   ),
-  finish: z.string().optional().describe('library:<id> or #rrggbb.'),
+  finish: z.string().optional().describe('library:<id> or #rrggbb (an exact colour).'),
   railing: z
     .array(
       z.object({
@@ -127,7 +178,7 @@ export const authorSceneItem = z.object({
     .string()
     .optional()
     .describe(
-      'The id of the item this one rests on or hangs from (a lamp on a nightstand), so moving the host moves it.',
+      'The id of the item this one rests on or hangs from (a lamp on a nightstand), or of the wall it is fixed to (a baseboard, a casing, a mirror, art), so moving the host moves it. On a wall, position is still the world bottom centre: the item is fixed to the face nearest it and faces the room; rotation is ignored.',
     ),
 })
 

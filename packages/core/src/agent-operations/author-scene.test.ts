@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
-import type { AnyNode, CompiledGeometryScript } from '../schema'
+import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { authorScene } from './author-scene'
 
 /** A site, a building and the empty level a new project starts with. */
@@ -66,6 +66,43 @@ const bed: CompiledGeometryScript = {
     surfaces: [],
   } as unknown as CompiledGeometryScript['manifest'],
 }
+
+/** A host's compile of a 1 × 2.1 m door module, mount 'wall'. */
+const arch: CompiledGeometryScript = {
+  ...bed,
+  mount: 'wall',
+  manifest: {
+    ...bed.manifest,
+    bounds: { min: [-0.5, 0, -0.1], max: [0.5, 2.1, 0.1] },
+    slots: [{ id: 'wood', color: '#8a6a4a' }],
+    cutout: true,
+  } as unknown as CompiledGeometryScript['manifest'],
+}
+
+/** A host's compile of a baseboard, 2 m long, 12 cm high, 1.5 cm deep. */
+const baseboard: CompiledGeometryScript = {
+  ...bed,
+  manifest: {
+    ...bed.manifest,
+    bounds: { min: [-1, 0, -0.0075], max: [1, 0.12, 0.0075] },
+  } as unknown as CompiledGeometryScript['manifest'],
+}
+
+const run = (
+  payload: AuthorScenePayload,
+  compiled: Record<string, CompiledGeometryScript>,
+  materials?: Record<string, SceneMaterial>,
+) =>
+  authorScene(
+    scaffold(),
+    { payload, compiled },
+    { activeLevelId: 'level_0', ...(materials ? { materials } : {}) },
+  )
+
+const nodesOf = (outcome: ReturnType<typeof authorScene>) =>
+  outcome.changes!.create!.map((c) => c.node)
+const byAuthorId = (outcome: ReturnType<typeof authorScene>, id: string) =>
+  nodesOf(outcome).find((n) => n.id === outcome.result.ids[id]) as AnyNode & Record<string, any>
 
 const bedroom: AuthorScenePayload = authorScenePayload.parse({
   levels: [
@@ -224,5 +261,332 @@ describe('author_scene', () => {
     // Written over itself, the same payload gets fresh ids, so nothing is created and then deleted.
     const firstIds = new Set(first.changes!.create!.map((c) => c.node.id))
     expect(again.changes!.create!.some((c) => firstIds.has(c.node.id))).toBe(false)
+  })
+
+  test('an opening takes its type, style, leaves and a handle opposite the hinge', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) =>
+            w.id === 'south'
+              ? {
+                  ...w,
+                  openings: [
+                    {
+                      kind: 'door',
+                      along: 1.2,
+                      width: 1.5,
+                      height: 2.1,
+                      type: 'french',
+                      style: 'modern',
+                      hinge: 'end',
+                    },
+                    { kind: 'door', along: 3, width: 0.9, height: 2.1, leaves: 2 },
+                  ],
+                }
+              : w.id === 'east'
+                ? {
+                    ...w,
+                    openings: [
+                      {
+                        kind: 'window',
+                        along: 1.2,
+                        width: 1,
+                        height: 1.2,
+                        sill: 0.9,
+                        type: 'casement',
+                        style: 'grid',
+                      },
+                      {
+                        kind: 'window',
+                        along: 3.5,
+                        width: 1,
+                        height: 1.2,
+                        sill: 0.9,
+                        style: 'grid',
+                      },
+                    ],
+                  }
+                : w,
+          ),
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    const r = outcome.result
+    expect(r.defects).toEqual([])
+    const french = byAuthorId(outcome, 'south/0')
+    expect(french.doorType).toBe('french')
+    expect(french.leafCount).toBe(2)
+    expect(french.hingesSide).toBe('right')
+    expect(french.handleSide).toBe('left')
+    // The style's leaf over the type's: a modern French door is one flush slab.
+    expect(french.segments).toHaveLength(1)
+    expect(byAuthorId(outcome, 'south/1').leafCount).toBe(2)
+    expect(byAuthorId(outcome, 'south/1').handleSide).toBe('right')
+    const casement = byAuthorId(outcome, 'east/0')
+    expect(casement.windowType).toBe('casement')
+    expect(casement.columnRatios).toEqual([1])
+    const grid = byAuthorId(outcome, 'east/1')
+    expect(grid.windowType).toBe('fixed')
+    expect(grid.columnRatios).toEqual([0.5, 0.5])
+    expect(r.defaults).toContain('door south/0: handle set opposite the hinge (left)')
+    expect(r.defaults).toContain(
+      'window east/0: style grid dropped, a casement window draws its own sashes',
+    )
+    expect(r.defaults).toContain('1 window has no type: written fixed (cannot open); give type')
+  })
+
+  test('an opening with code is the scripted door or window add_door writes, by its own id', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) =>
+            w.id === 'south'
+              ? {
+                  ...w,
+                  openings: [
+                    { kind: 'door', along: 1, width: 0.9, height: 2.1, code: '// arch' },
+                    { kind: 'window', along: 3, width: 0.9, height: 1, code: '// round' },
+                  ],
+                }
+              : w,
+          ),
+        },
+      ],
+    })
+    const outcome = authorScene(
+      scaffold(),
+      { payload, compiled: { 'south/0': arch }, compileErrors: { 'south/1': 'Syntax error' } },
+      { activeLevelId: 'level_0' },
+    )
+    const door = byAuthorId(outcome, 'south/0')
+    expect(door.source.kind).toBe('script')
+    expect(door.source.artifact).toBe(arch.sha256)
+    expect(door.slots.wood).toStartWith('library:wood-')
+    expect([door.width, door.height]).toEqual([1, 2.1])
+    expect(outcome.result.defects).toEqual([
+      { id: 'south/1', code: 'compile_failed', message: 'Syntax error' },
+    ])
+    expect(outcome.result.windows).toBe(1)
+  })
+
+  test('a hex colour is one exact scene material per colour, a wall face each its own', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) =>
+            w.id === 'north'
+              ? { ...w, color: '#8f9e8a' }
+              : w.id === 'east'
+                ? { ...w, colorLeft: '#8f9e8a', colorRight: 'library:preset-white' }
+                : w,
+          ),
+          rooms: [
+            {
+              name: 'Bedroom',
+              seed: [0, 0],
+              floor: '#8f9e8a',
+              floorRegions: [
+                {
+                  polygon: [
+                    [-1, -1],
+                    [1, -1],
+                    [1, 1],
+                  ],
+                  finish: '#223344',
+                },
+              ],
+            },
+          ],
+          slabs: [
+            {
+              name: 'Terrace',
+              polygon: [
+                [3, -2],
+                [6, -2],
+                [6, 2],
+                [3, 2],
+              ],
+              finish: '#8f9e8a',
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    const materials = outcome.changes!.materials!
+    expect(materials.map((m) => m.name).sort()).toEqual(['#223344', '#8f9e8a'])
+    const sage = `scene:${materials.find((m) => m.name === '#8f9e8a')!.id}`
+    expect(materials[0]!.material.properties).toMatchObject({ roughness: 0.9, metalness: 0 })
+    const north = byAuthorId(outcome, 'north')
+    expect(north.slots.a).toBe(sage)
+    expect(north.slots.b).toBe(sage)
+    const east = byAuthorId(outcome, 'east')
+    expect(east.slots.a).toBe(sage)
+    expect(east.slots.b).toBe('library:preset-white')
+    expect(byAuthorId(outcome, 'room/0/0').floor.finish).toBe(sage)
+    expect(byAuthorId(outcome, 'room/0/0').floor.regions[0].finish).toBe(
+      `scene:${materials.find((m) => m.name === '#223344')!.id}`,
+    )
+    expect(byAuthorId(outcome, 'slab/0/0').slots.surface).toBe(sage)
+    expect(outcome.result.defects).toEqual([])
+    // A host that keeps no scene materials gets the nearest library colour, and is told.
+    const plain = run(payload, {})
+    expect(plain.changes!.materials).toBeUndefined()
+    expect(byAuthorId(plain, 'north').slots.a).toStartWith('library:')
+    expect(plain.result.defaults).toContain(
+      'this host keeps no scene materials: colours written as the nearest library colour',
+    )
+  })
+
+  test('an item hosted by a wall is fixed to the face nearest its point and faces the room', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          lights: [],
+          items: [
+            {
+              id: 'skirting',
+              name: 'Baseboard',
+              category: 'trim',
+              code: '// baseboard',
+              position: [0, 0, -2.4],
+              host: 'north',
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, { skirting: baseboard })
+    expect(outcome.result.defects).toEqual([])
+    const trim = byAuthorId(outcome, 'skirting')
+    const wall = byAuthorId(outcome, 'north')
+    expect(trim.parentId).toBe(wall.id)
+    expect(trim.wallId).toBe(wall.id)
+    // The north wall runs +x at z = -2.5; a point at z = -2.4 is on its left, its front (+z face).
+    expect(trim.side).toBe('front')
+    expect(trim.position[0]).toBeCloseTo(2, 6)
+    expect(trim.position[1]).toBe(0)
+    expect(trim.position[2]).toBeCloseTo(0.06, 6)
+    expect(trim.wallT).toBeCloseTo(0.5, 6)
+    expect(trim.rotation[1]).toBe(0)
+    expect(trim.asset.attachTo).toBe('wall-side')
+    expect(wall.children).toContain(trim.id)
+  })
+
+  test('warns about thin and many slabs and many regions, refuses a slab that would cap a wall', () => {
+    const slab = (top: number, thickness: number, polygon: number[][], name: string) => ({
+      name,
+      top,
+      thickness,
+      polygon,
+    })
+    const across = [
+      [-1, -2.7],
+      [1, -2.7],
+      [1, -2.3],
+      [-1, -2.3],
+    ]
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          rooms: [
+            {
+              name: 'Bedroom',
+              seed: [0, 0],
+              floorRegions: Array.from({ length: 25 }, (_, i) => ({
+                polygon: [
+                  [-1 + i * 0.05, -1],
+                  [-0.95 + i * 0.05, -1],
+                  [-0.95 + i * 0.05, 1],
+                ],
+                finish: '#ffffff',
+              })),
+            },
+          ],
+          slabs: [
+            // A cap on the north wall: refused.
+            slab(2.662, 0.012, across, 'Wall cap'),
+            // A terrace under the same wall's footprint at floor level: a slab.
+            slab(0, 0.15, across, 'Terrace'),
+            // A platform flush against the wall's inside face: not over it.
+            slab(
+              2.0,
+              0.2,
+              [
+                [-1, -2.44],
+                [1, -2.44],
+                [1, -1],
+                [-1, -1],
+              ],
+              'Shelf',
+            ),
+            slab(
+              0.3,
+              0.01,
+              [
+                [3, 3],
+                [4, 3],
+                [4, 4],
+              ],
+              'Film',
+            ),
+            ...Array.from({ length: 18 }, (_, i) =>
+              slab(
+                0,
+                0.15,
+                [
+                  [5 + i, 5],
+                  [5.5 + i, 5],
+                  [5.5 + i, 5.5],
+                ],
+                `Step ${i}`,
+              ),
+            ),
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    const r = outcome.result
+    expect(r.defects).toEqual([
+      {
+        id: 'slab/0/0',
+        code: 'slab_over_wall',
+        message: expect.stringContaining('"Wall cap" overlaps wall north with its top at 2.66 m'),
+      },
+    ])
+    expect(r.ids['slab/0/0']).toBeUndefined()
+    expect(r.ids['slab/0/1']).toBeDefined()
+    expect(r.ids['slab/0/2']).toBeDefined()
+    expect(r.slabs).toBe(21)
+    expect(r.warnings).toEqual([
+      { id: 'level/0', code: 'many_slabs', message: expect.stringContaining('22 slabs') },
+      { id: 'slab/0/3', code: 'thin_slab', message: expect.stringContaining('10 mm') },
+      {
+        id: 'room/0/0',
+        code: 'many_regions',
+        message: expect.stringContaining('25 floor regions'),
+      },
+    ])
   })
 })
