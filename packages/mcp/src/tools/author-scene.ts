@@ -87,6 +87,7 @@ export function registerAuthorScene(
               kind,
               { nodeId },
             ),
+          host.signal,
         )
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
@@ -110,6 +111,8 @@ export function registerAuthorScene(
         })
       }
 
+      host.signal?.throwIfAborted()
+      await host.assertActive?.()
       if (JSON.stringify(bridge.getNodes()) !== beforeJson) {
         return toolError(
           'The scene changed while its candidate was compiling. Read the current scene and retry the conversion.',
