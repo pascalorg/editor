@@ -59,9 +59,16 @@ export function GroundWindowSystem() {
     check.veiled = groundVeiled(viewer)
     check.nodes = nodes
     const eye: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z]
-    // The walkthrough walks on solid ground: no window, whatever the hillside.
+    // The walkthrough walks on solid ground: no window, whatever the hillside. A level shown fully
+    // below grade is seen through the hole in the ground (`groundVeiled`), solid round it: no
+    // window opens over it, which would cut the solid ground in the box's silhouette and show the
+    // level through a translucent sheet in front of the opening. Any terrain field asks for one (a
+    // custom terrain, a pad, a retaining break), not only a hillside.
     const inTheWay =
-      box !== null && !viewer.walkthroughMode && terrainBetweenEyeAndBox(nodes, eye, box)
+      !groundVeiled(viewer) &&
+      box !== null &&
+      !viewer.walkthroughMode &&
+      terrainBetweenEyeAndBox(nodes, eye, box)
     if (viewer.groundWindowVeiled !== inTheWay) useViewer.setState({ groundWindowVeiled: inTheWay })
     const open = inTheWay && viewer.groundMode === 'auto' ? box : null
     if (groundWindowBoxNow() !== open) setGroundWindow(open)

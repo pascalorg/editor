@@ -16,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   groundHoleOpenNode,
+  groundWindowBoxNow,
   SCENE_LAYER,
   SITE_GROUND,
   setSurfaceRaycastLayers,
@@ -448,6 +449,44 @@ test('a click on ground the window veils falls through to what it reveals', asyn
       await renderer.advanceFrames(3, 0.05)
     })
     expect(groundPickedFromAbove(scene).length).toBeGreaterThan(0)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a level shown fully below grade is seen through the hole: no window opens over it, on any terrain', async () => {
+  // Any terrain field asks for a window (a custom terrain, a pad, a retaining break), the flat one
+  // here included; the window cuts the solid ground in the box's silhouette and shows the level
+  // through a translucent sheet in front of the opening, where the hole already shows it.
+  const site = lot(true)
+  useScene.setState({ nodes: { [site.id]: site } as Record<AnyNodeId, AnyNode> })
+  const renderer = await create(<SiteRenderer node={site} />)
+  const settle = async (state: Partial<ReturnType<typeof useViewer.getState>>) =>
+    act(async () => {
+      useViewer.setState(state)
+      await renderer.advanceFrames(3, 0.05)
+    })
+  try {
+    const box = { min: [-2, -3, -2], max: [2, -0.5, 2] } as const
+    await settle({ groundWindowBox: box, groundMode: 'auto', belowGrade: false })
+    // At grade (the ground in the eye's way): the window opens.
+    expect(useViewer.getState().groundWindowVeiled).toBe(true)
+    expect(groundWindowBoxNow()).not.toBeNull()
+
+    // A level fully below grade shown: the hole is the opening, the ground solid round it.
+    await settle({ belowGrade: true, gradeStanding: 'below-grade' })
+    expect(useViewer.getState().groundWindowVeiled).toBe(false)
+    expect(groundWindowBoxNow()).toBeNull()
+    expect(ground(renderer.scene.instance as Object3D, 'veil').filter((v) => v.visible)).toEqual([])
+
+    // Only partly below grade (a walk-out): the hole is not cut wholesale, the window is.
+    await settle({ gradeStanding: 'partly-below-grade' })
+    expect(useViewer.getState().groundWindowVeiled).toBe(true)
+    expect(groundWindowBoxNow()).not.toBeNull()
+
+    // Ground: Solid over the level below grade: no window either, as before.
+    await settle({ gradeStanding: 'below-grade', groundMode: 'solid' })
+    expect(groundWindowBoxNow()).toBeNull()
   } finally {
     await renderer.unmount()
   }
