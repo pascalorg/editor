@@ -192,7 +192,16 @@ export const getStudioGenerationTool = {
   title: 'Read project media generation',
   description:
     'Poll or reopen a media job created for this project and plugin without another charge. May reconcile provider completion or failure and its refund. Does not submit another generation or edit the scene.',
-  input: { ...context, id: z.string().min(1).max(128) },
+  input: {
+    ...context,
+    id: z.string().min(1).max(128),
+    includePreview: z
+      .boolean()
+      .optional()
+      .describe(
+        'true to see a finished image: its preview (WebP, at most 1280 px) comes back as a picture. A video has none; give the person its video_url.',
+      ),
+  },
   annotations: resultAnnotations,
 } as const
 
