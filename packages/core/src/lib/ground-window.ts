@@ -1,5 +1,5 @@
 import type { AnyNode, AnyNodeId, BuildingNode, LevelNode } from '../schema'
-import { getLevelElevations, levelFloorWorldY } from '../services/storey'
+import { getLevelElevations, levelFloorWorldY, levelLowestFloorWorldY } from '../services/storey'
 import { isSiteFlatwork } from './site-flatwork'
 import { heightAt } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
@@ -13,7 +13,10 @@ import { levelLocalToWorldXZ } from './terrain-support-query'
  */
 export type GroundBox = { min: [number, number, number]; max: [number, number, number] }
 
-/** The world box of one level: its floor slabs' extent (its walls' if it has no slab), floor to ceiling. */
+/**
+ * The world box of one level: its floor slabs' extent (its walls' if it has no slab), from its
+ * lowest floor (the sunken room of a split level) to the height of its highest floor's ceiling.
+ */
 export function levelGroundBox(
   nodes: Record<AnyNodeId, AnyNode>,
   levelId: string,
@@ -24,7 +27,7 @@ export function levelGroundBox(
   const height = getLevelElevations(nodes).get(levelId)?.height ?? 3
   const points = footprintPoints(nodes, level)
   if (points.length === 0) return null
-  return boxOf(points, floorY, floorY + height)
+  return boxOf(points, levelLowestFloorWorldY(nodes, levelId) ?? floorY, floorY + height)
 }
 
 /**

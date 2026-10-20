@@ -15,7 +15,7 @@ import {
   groundPitFloorY,
 } from './below-grade-footprints'
 import { levelGradeStanding } from './grade-standing'
-import { levelGroundBox, levelStackGroundBox } from './ground-window'
+import { levelGroundBox, levelStackGroundBox, terrainBetweenEyeAndBox } from './ground-window'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
 
@@ -803,17 +803,21 @@ function splitLevelOnRamp(peakCm: number) {
   return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
 }
 
+/** The split level without its sunken room: one floor, the raised part. */
+function raisedPartOnly(nodes: Record<AnyNodeId, AnyNode>) {
+  return {
+    ...nodes,
+    level_split: { ...nodes.level_split, children: ['slab_raised'] },
+  } as unknown as Record<AnyNodeId, AnyNode>
+}
+
 test('ground over only the sunken room of a split level buries that room: the level is partly below grade', () => {
   // The ground peaks at 0.4 m over the room's far wall: 1.6 m over its floor (-1.2 m), but only
   // 0.2 m over the raised part's top (0.2 m), which is inside the 0.3 m tolerance.
   const nodes = splitLevelOnRamp(40)
   expect(levelGradeStanding(nodes, 'level_split')).toBe('partly-below-grade')
   // The raised part alone, on the flat ground west of the ramp, is at grade.
-  const raisedOnly = {
-    ...nodes,
-    level_split: { ...nodes.level_split, children: ['slab_raised'] },
-  } as unknown as Record<AnyNodeId, AnyNode>
-  expect(levelGradeStanding(raisedOnly, 'level_split')).toBe('at-grade')
+  expect(levelGradeStanding(raisedPartOnly(nodes), 'level_split')).toBe('at-grade')
 })
 
 test('the hole over a split level opens over the whole sunken room the ground stands over, not from the raised floor’s height', () => {
@@ -825,4 +829,18 @@ test('the hole over a split level opens over the whole sunken room the ground st
   expect(belowGradeFootprints(nodes, 'level_split').map(extent)).toEqual([
     { x: [0, 4], z: [-3, 3] },
   ])
+})
+
+test('the ground box of a split level reaches its lowest floor: the window aims at the sunken room', () => {
+  // Ground rising 0 → 0.1 m over the room: over its floor (-1.2 m), but under the raised part's
+  // top (0.2 m). It hides the room from an eye out west, low over the ground, yet no sight line to
+  // a point at the raised floor meets it.
+  const nodes = splitLevelOnRamp(10)
+  const box = levelGroundBox(nodes, 'level_split')
+  expect(box && terrainBetweenEyeAndBox(nodes, [-12, 3, 0], box)).toBe(true)
+  expect(box?.min[1]).toBeCloseTo(-1.2, 9)
+  // The ceiling stays where it was: the highest floor and the level's height over it.
+  expect(box?.max[1]).toBeCloseTo(3.2, 9)
+  // A level with one floor is boxed from that floor, as before.
+  expect(levelGroundBox(raisedPartOnly(nodes), 'level_split')?.min[1]).toBeCloseTo(0.2, 9)
 })
