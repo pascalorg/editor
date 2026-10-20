@@ -7,6 +7,7 @@ import {
 } from '../services/storey'
 import { pointInPolygon } from '../systems/slab/slab-support'
 import { levelUnderNamedGround } from './ground-level'
+import { isSiteFlatwork } from './site-flatwork'
 import { heightAt, type TerrainField } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
 import { levelLocalToWorldXZ } from './terrain-support-query'
@@ -91,6 +92,7 @@ export function footprintSamples(
   for (const childId of level.children) {
     const slab = nodes[childId as AnyNodeId]
     if (slab?.type !== 'slab' || slab.recessed === true || slab.polygon.length < 3) continue
+    if (isSiteFlatwork(slab)) continue
     for (const [x, z] of slabSamples(slab.polygon, field.spacing))
       samples.push(levelLocalToWorldXZ(placed, x, z))
   }

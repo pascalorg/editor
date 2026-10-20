@@ -1,5 +1,6 @@
 import type { AnyNode, AnyNodeId, BuildingNode, LevelNode } from '../schema'
 import { getLevelElevations, levelFloorWorldY } from '../services/storey'
+import { isSiteFlatwork } from './site-flatwork'
 import { heightAt } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
 import { levelLocalToWorldXZ } from './terrain-support-query'
@@ -144,7 +145,7 @@ function footprintPoints(
   const points: Array<[number, number]> = []
   for (const childId of level.children) {
     const child = nodes[childId as AnyNodeId]
-    if (child?.type === 'slab' && child.recessed !== true)
+    if (child?.type === 'slab' && child.recessed !== true && !isSiteFlatwork(child))
       for (const [x, z] of child.polygon) points.push(levelLocalToWorldXZ(placed, x, z))
     else if (child?.type === 'wall')
       for (const [x, z] of [child.start, child.end]) points.push(levelLocalToWorldXZ(placed, x, z))

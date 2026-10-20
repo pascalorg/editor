@@ -15,7 +15,7 @@ import {
   groundPitFloorY,
 } from './below-grade-footprints'
 import { levelGradeStanding } from './grade-standing'
-import { levelStackGroundBox } from './ground-window'
+import { levelGroundBox, levelStackGroundBox } from './ground-window'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
 
@@ -371,6 +371,8 @@ type Plate = {
   holes?: Array<Array<[number, number]>>
   /** More floor slabs on the same level. */
   more?: Array<Array<[number, number]>>
+  /** Site flatwork on the same level (a lawn, a driveway): slabs outdoors, not floors of the building. */
+  flatwork?: Array<Array<[number, number]>>
 }
 
 const rect = (x0: number, x1: number, z0: number, z1: number): Array<[number, number]> => [
@@ -384,12 +386,13 @@ const rect = (x0: number, x1: number, z0: number, z1: number): Array<[number, nu
 function building(
   id: string,
   plates: Plate[],
-  placement: { position?: [number, number, number]; yaw?: number } = {},
+  placement: { position?: [number, number, number]; yaw?: number; site?: string } = {},
 ): AnyNode[] {
   const lowest = Math.min(...plates.map((plate) => plate.index))
   return [
     BuildingNode.parse({
       id,
+      ...(placement.site ? { parentId: placement.site } : {}),
       children: plates.map((plate) => `level_${id}_${plate.id}`),
       position: placement.position ?? [0, 0, 0],
       rotation: [0, placement.yaw ?? 0, 0],
@@ -402,10 +405,22 @@ function building(
         height: 3,
         baseElevation: plate.index === lowest ? 3 * plate.index : 0,
         ...(plate.visible === false ? { visible: false } : {}),
-        children: [plate.polygon, ...(plate.more ?? [])].map(
-          (_, slab) => `slab_${id}_${plate.id}_${slab}`,
-        ),
+        children: [
+          ...[plate.polygon, ...(plate.more ?? [])].map(
+            (_, slab) => `slab_${id}_${plate.id}_${slab}`,
+          ),
+          ...(plate.flatwork ?? []).map((_, slab) => `slab_${id}_${plate.id}_lawn${slab}`),
+        ],
       }),
+      ...(plate.flatwork ?? []).map((polygon, slab) =>
+        SlabNode.parse({
+          id: `slab_${id}_${plate.id}_lawn${slab}`,
+          parentId: `level_${id}_${plate.id}`,
+          elevation: 0.01,
+          polygon,
+          metadata: { flatwork: 'lawn' },
+        }),
+      ),
       ...[plate.polygon, ...(plate.more ?? [])].map((polygon, slab) =>
         SlabNode.parse({
           id: `slab_${id}_${plate.id}_${slab}`,
@@ -591,4 +606,70 @@ test('the pit hangs its floor 5 cm under the plate, and 2 cm under its underside
   }
   // A thick plate puts its underside well under 5 cm below its top: the floor is not moved.
   expect(groundPitFloorY(seat({ thickness: 0.2 }), 'level_b')).toBeCloseTo(-2.7 + 0.05 - 0.05, 9)
+})
+
+// ── Site flatwork is not a floor of the house ───────────────────────────────────────────────
+
+/** A site with a hill: flat at 0 m west of x = 8, climbing 0.28 m per metre east of it. */
+function hillSite() {
+  const field = createTerrainField({ origin: [-20, -20], cols: 41, rows: 41, spacing: 1 })
+  const heights = new Int16Array(field.heights)
+  for (let row = 0; row < field.rows; row += 1)
+    for (let col = 0; col < field.cols; col += 1) {
+      const x = field.origin[0] + col * field.spacing
+      heights[row * field.cols + col] = Math.round(Math.max(0, x - 8) * 28)
+    }
+  return SiteNode.parse({ id: 'site_a', terrain: encodeTerrainField({ ...field, heights }) })
+}
+
+/** The house on the flat part, over a basement `basementEast` long; a lot-wide lawn laid on its ground level. */
+function houseWithLawn(lawn: 'flatwork' | 'plain-slab', basementEast = 6.1) {
+  const lot = rect(-15, 15, -15, 15)
+  return sceneOf(
+    [hillSite()],
+    building(
+      'building_a',
+      [
+        {
+          id: 'g',
+          index: 0,
+          polygon: rect(-6, 6, -5, 5),
+          ...(lawn === 'flatwork' ? { flatwork: [lot] } : { more: [lot] }),
+        },
+        { id: 'b', index: -1, polygon: rect(-6.1, basementEast, -5.1, 5.1) },
+      ],
+      { site: 'site_a' },
+    ),
+  )
+}
+
+test('a lawn laid on the ground level over a hill is not a floor buried by it: the level stays at grade and the hole is the basement', () => {
+  const nodes = houseWithLawn('flatwork')
+  expect(levelGradeStanding(nodes, 'level_building_a_g')).toBe('at-grade')
+  expect(belowGradeFootprints(nodes, 'level_building_a_b').map(extent)).toEqual([
+    { x: [-6.1, 6.1], z: [-5.1, 5.1] },
+  ])
+  // Control: the same lawn as a plain slab is a floor, and the hill buries its east half.
+  const plain = houseWithLawn('plain-slab')
+  expect(levelGradeStanding(plain, 'level_building_a_g')).toBe('partly-below-grade')
+  const [outline] = belowGradeFootprints(plain, 'level_building_a_b')
+  expect(extent(outline ?? []).x[1]).toBe(15)
+})
+
+test('a lawn does not cover the basement that reaches under the garden: only the house does', () => {
+  const nodes = houseWithLawn('flatwork', 14)
+  expect(coveredBelowGradeFootprints(nodes).map(extent)).toEqual([{ x: [-6, 6], z: [-5, 5] }])
+  // Control: as a floor the lawn would cover the basement out under the garden, up to where the
+  // hill buries it (x = 9.79).
+  const plain = houseWithLawn('plain-slab', 14)
+  const [covered] = coveredBelowGradeFootprints(plain)
+  const { x } = extent(covered ?? [])
+  expect(x[0]).toBe(-6.1)
+  expect(x[1]).toBeCloseTo(9.786, 2)
+})
+
+test('the box the ground floor stands in is the house, not the lawn laid on its level', () => {
+  const nodes = houseWithLawn('flatwork')
+  const box = levelGroundBox(nodes, 'level_building_a_g')
+  expect([box?.min[0], box?.max[0], box?.min[2], box?.max[2]]).toEqual([-6, 6, -5, 5])
 })

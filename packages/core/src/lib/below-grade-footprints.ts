@@ -13,6 +13,7 @@ import {
 import { groundOverPart } from './ground-over-part'
 import { difference, intersection, type MultiPolygon, union } from './polygon-boolean'
 import { type Point2D, unionPolygons } from './polygon-union'
+import { isSiteFlatwork } from './site-flatwork'
 import { levelLocalToWorldXZ } from './terrain-support-query'
 
 type LevelPlates = {
@@ -53,7 +54,7 @@ function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
     const buried: Point2D[][] = []
     for (const childId of level.children) {
       const slab = nodes[childId as AnyNodeId]
-      if (slab?.type !== 'slab' || slab.recessed === true) continue
+      if (slab?.type !== 'slab' || slab.recessed === true || isSiteFlatwork(slab)) continue
       const plate = slab.polygon.map(([x, z]) => levelLocalToWorldXZ(placed, x, z))
       plates.push(plate)
       if (standing === 'at-grade') continue

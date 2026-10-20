@@ -1,4 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
+import { isSiteFlatwork } from '../lib/site-flatwork'
 import {
   describeSiteBrief,
   placeBuildingPose,
@@ -88,11 +89,7 @@ function outdoorOnLevels(nodes: SceneNodes, buildingId: string, rings: readonly 
   const moved: { id: string; type: string; name?: string }[] = []
   for (const node of Object.values(nodes) as AnyNode[]) {
     if (!(node.parentId && levels.has(node.parentId))) continue
-    const flatwork =
-      node.type === 'slab' &&
-      typeof node.metadata === 'object' &&
-      node.metadata !== null &&
-      'flatwork' in node.metadata
+    const flatwork = node.type === 'slab' && isSiteFlatwork(node)
     const outdoorItem =
       node.type === 'item' && outside(node.position[0] ?? 0, node.position[2] ?? 0)
     if (node.type === 'fence' || flatwork || outdoorItem)
