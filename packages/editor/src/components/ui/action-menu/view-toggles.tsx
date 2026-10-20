@@ -20,7 +20,7 @@ import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
-import { useActionMenuPopupSide } from './placement'
+import { useActionMenuArrowCorner, useActionMenuArrowRotation, useActionMenuPopupSide, useActionMenuVertical } from './placement'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
@@ -661,11 +661,14 @@ function ReferenceListSection({
 
 function ReferencesControl() {
   const popupSide = useActionMenuPopupSide()
+  const vertical = useActionMenuVertical()
+  const arrowCorner = useActionMenuArrowCorner()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
   const [isOpen, setIsOpen] = useState(false)
+  const arrowRotation = useActionMenuArrowRotation(isOpen)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
   const scans = useLevelScans()
@@ -681,10 +684,10 @@ function ReferencesControl() {
 
   return (
     <Popover onOpenChange={setIsOpen} open={isOpen}>
-      <div className="flex items-center">
+      <div className={vertical ? 'relative' : 'flex items-center'}>
         <ActionButton
           className={cn(
-            'rounded-r-none p-0',
+            vertical ? 'p-0' : 'rounded-r-none p-0',
             anyVisible
               ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
               : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
@@ -711,7 +714,9 @@ function ReferencesControl() {
             aria-expanded={isOpen}
             aria-label="Reference settings"
             className={cn(
-              'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
+              vertical
+                ? `absolute top-0.5 ${arrowCorner} flex h-4 w-4 items-center justify-center rounded-sm transition-colors`
+                : 'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               anyVisible
                 ? isOpen
                   ? 'bg-black/6 dark:bg-white/10'
@@ -722,7 +727,12 @@ function ReferencesControl() {
             )}
             type="button"
           >
-            <ChevronDown className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')} />
+            <ChevronDown
+              className={cn(
+                'h-3 w-3 transition-transform',
+                arrowRotation,
+              )}
+            />
           </button>
         </PopoverTrigger>
       </div>
@@ -949,16 +959,18 @@ function RiserControl() {
 // ── Exports ─────────────────────────────────────────────────────────────────
 
 export function SecondaryToggles() {
+  const vertical = useActionMenuVertical()
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center gap-1', vertical && 'flex-col')}>
       <ReferencesControl />
     </div>
   )
 }
 
 export function ViewToggles() {
+  const vertical = useActionMenuVertical()
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center gap-1', vertical && 'flex-col')}>
       <ScansControl />
       <GuidesControl />
       <ReferenceFloorControl />
