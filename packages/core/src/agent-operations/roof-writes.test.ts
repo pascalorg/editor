@@ -102,6 +102,121 @@ const STOREY_CONTENT: [string, AnyNode][] = [
 ]
 
 describe('seatWrittenRoofs', () => {
+  test('classifying and reparenting a retained roof keeps source lineage and its world height', () => {
+    const original = ItemNode.parse({
+      ...STOREY_CONTENT.find(([kind]) => kind === 'item')![1],
+      parentId: 'level_g',
+      position: [2, 3.25, 1],
+      metadata: {
+        design: { originalSourceFileId: 'asset_original', mappingFileId: 'asset_map' },
+        note: 'manual',
+      },
+    })
+    const before = scene(
+      ...Object.values(bungalow(level('level_r', 1, { role: 'roof' }))),
+      original,
+    )
+    const ops: NodeWrite[] = [
+      {
+        op: 'update',
+        id: original.id,
+        data: {
+          parentId: 'level_r',
+          position: [2, 0.25, 1],
+          metadata: { ...original.metadata, role: 'roof' },
+        },
+      },
+    ]
+    seatWrittenRoofs(ops, before)
+    const after = landed(before, ops)
+    const saved = after[original.id] as typeof original
+    expect(saved.parentId).toBe('level_r')
+    expect(saved.position[1] + 3).toBe(original.position[1])
+    expect(saved.metadata.design).toEqual(original.metadata.design)
+    expect(saved.metadata.note).toBe('manual')
+    expect(saved.asset).toEqual(original.asset)
+    const move: NodeWrite[] = [{ op: 'update', id: saved.id, data: { position: [3, 0.25, 1] } }]
+    expect(() => seatWrittenRoofs(move, after)).not.toThrow()
+  })
+
+  test('legacy misplaced content still accepts unrelated metadata, but a retained roof cannot host storey content on its roof level', () => {
+    const wall = { ...STOREY_CONTENT[0]![1], parentId: 'level_r' }
+    const legacy = scene(...Object.values(underRoofLevel()), wall)
+    expect(() =>
+      seatWrittenRoofs(
+        [{ op: 'update', id: wall.id, data: { metadata: { note: 'existing condition' } } }],
+        legacy,
+      ),
+    ).not.toThrow()
+    const retained = ItemNode.parse({
+      ...STOREY_CONTENT.find(([kind]) => kind === 'item')![1],
+      id: 'item_roof',
+      metadata: { role: 'roof' },
+    })
+    const child = ItemNode.parse({
+      ...retained,
+      id: 'item_furniture',
+      parentId: retained.id,
+      metadata: {},
+    })
+    expect(
+      refusalOf(() => seatWrittenRoofs(creates(retained, child), underRoofLevel())),
+    ).toMatchObject({ code: 'roof_level', id: child.id })
+  })
+
+  test('retained roof geometry keeps its placement, asset and roof role through writes and duplication', () => {
+    const retained = ItemNode.parse({
+      ...STOREY_CONTENT.find(([kind]) => kind === 'item')![1],
+      id: 'item_retained-roof',
+      metadata: { role: 'roof' },
+      position: [2, -0.25, 1],
+      provenance: { refs: [{ ns: 'asset_source', id: 'scene.mjs#roof', role: 'primary' }] },
+    })
+    const nodes = bungalow(level('level_r', 1, { role: 'roof' }))
+    const ops = creates(retained)
+    seatWrittenRoofs(ops, nodes)
+    const after = landed(nodes, ops)
+    expect(after[retained.id]).toEqual(retained)
+    expect(servesAsRoofLevel(after, after.level_r as LevelNode)).toBe(true)
+    const report = verifyScene(after, {}, { activeLevelId: null }).result
+    expect(report.levels).toContainEqual(
+      expect.objectContaining({
+        levelId: 'level_r',
+        role: 'roof',
+        content: expect.objectContaining({ items: 0, roofs: 1 }),
+      }),
+    )
+    expect(report.issues).not.toContainEqual(
+      expect.objectContaining({ type: 'roof_level_occupied' }),
+    )
+    const duplicate = duplicateLevel(after, { levelId: 'level_r' }, { activeLevelId: null })
+    const copied = applySceneChanges(after, duplicate.changes)
+    const roofLevels = Object.values(copied).filter(
+      (node) => node.type === 'level' && node.metadata.role === 'roof',
+    )
+    expect(roofLevels).toHaveLength(2)
+    expect(
+      refusalOf(() =>
+        seatWrittenRoofs([{ op: 'update', id: retained.id, data: { metadata: {} } }], after),
+      ),
+    ).toMatchObject({ code: 'roof_level' })
+  })
+
+  test('a roof name or asset category does not admit furniture, and walls cannot claim the retained roof role', () => {
+    const item = ItemNode.parse({
+      ...STOREY_CONTENT.find(([kind]) => kind === 'item')![1],
+      name: 'Roof',
+    })
+    item.asset.category = 'roof'
+    expect(refusalOf(() => seatWrittenRoofs(creates(item), underRoofLevel()))).toMatchObject({
+      code: 'roof_level',
+    })
+    const wall = { ...STOREY_CONTENT[0]![1], metadata: { role: 'roof' } }
+    expect(refusalOf(() => seatWrittenRoofs(creates(wall), underRoofLevel()))).toMatchObject({
+      code: 'roof_level',
+    })
+  })
+
   for (const [kind, node] of STOREY_CONTENT)
     test(`a ${kind} created on the roof level is refused, naming the storey it covers`, () => {
       const refusal = refusalOf(() => seatWrittenRoofs(creates(node), underRoofLevel()))

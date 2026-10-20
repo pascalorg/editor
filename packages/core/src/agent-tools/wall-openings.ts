@@ -80,6 +80,10 @@ export const addDoorTool = {
         "door (default), or opening: a passage with no leaf, framed or arched by the outline, as the editor's door panel offers.",
       ),
     hingesSide: z.enum(['left', 'right']).optional().describe('Hinge side (default left).'),
+    handleSide: z
+      .enum(['left', 'right'])
+      .optional()
+      .describe('Handle side (default: opposite the hinges).'),
     swingDirection: z
       .enum(['inward', 'outward'])
       .optional()

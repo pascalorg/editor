@@ -1,13 +1,14 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.pascalorg/editor",
+  "name": "app.pascal/editor",
   "title": "Pascal 3D Editor",
-  "description": "Create, inspect, validate, and save editable 3D building scenes with Pascal's hosted MCP server.",
-  "version": "0.6.1",
+  "description": "Create, inspect, validate, and save editable 3D building scenes with Pascal's MCP server.",
+  "version": "1.0.4",
   "websiteUrl": "https://editor.pascal.app/docs/developers/mcp",
   "repository": {
     "url": "https://github.com/pascalorg/editor",
-    "source": "github"
+    "source": "github",
+    "subfolder": "packages/mcp"
   },
   "icons": [
     {
@@ -25,18 +26,22 @@
       ]
     }
   ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@pascal-app/mcp",
+      "version": "1.0.4",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://editor.pascal.app/api/mcp",
-      "headers": [
-        {
-          "name": "Authorization",
-          "description": "Bearer API key created in Pascal Settings, formatted as Bearer sk_live_...",
-          "isRequired": true,
-          "isSecret": true
-        }
-      ]
+      "url": "https://editor.pascal.app/api/mcp"
     }
   ]
 }

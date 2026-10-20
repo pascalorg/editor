@@ -435,6 +435,7 @@ export {
   WallAssemblyInteriorFinish,
   WallAssemblySheathingMaterial,
   WallFaceRegion,
+  WallFaceScript,
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,
@@ -445,7 +446,7 @@ export {
   WindowNode,
   WindowType,
 } from './nodes/window'
-export { ZoneNode } from './nodes/zone'
+export { ZoneFloorScript, ZoneNode } from './nodes/zone'
 // Typed source identity (D5)
 export {
   PROVENANCE_MAX_ID_BYTES,

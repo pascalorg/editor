@@ -29,6 +29,18 @@ import type { AgentToolCase, SceneGraph } from './cases'
 
 const SIDING = 'library:siding-lap-white'
 const SOFT_WHITE = 'library:preset-softwhite'
+/** The library `finishScene`'s vase is from: paint reads its surfaces by the catalog's entry. */
+const VASE_LIBRARY = [
+  {
+    id: 'vase',
+    name: 'Vase',
+    category: 'decor',
+    tags: [],
+    thumbnail: '/items/vase/thumbnail.webp',
+    src: '/items/vase/model.glb',
+    dimensions: [0.3, 0.5, 0.3] as [number, number, number],
+  },
+]
 const SHINGLES = 'library:roof-greyshingles'
 const CLAY_TILES = 'library:roof-claytiles'
 
@@ -558,6 +570,28 @@ export const SET_MATERIAL_CASES: AgentToolCase[] = [
     scene: finishScene,
     input: { targets: ['item_vase'], material: SOFT_WHITE },
     expect: { refusal: 'unknown_role', mentions: ['item_vase', 'glaze'] },
+  },
+  {
+    name: "paint with no role on a catalog item lists the surfaces its model has, when the host read them",
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['item_vase'], material: SOFT_WHITE },
+    context: {
+      catalog: VASE_LIBRARY,
+      assetViews: { vase: { surfaces: ['body', 'glaze', 'rim'] } },
+    },
+    expect: {
+      refusal: 'unknown_role',
+      mentions: ['its surfaces: body, glaze, rim', 'painted so far: glaze'],
+    },
+  },
+  {
+    name: 'paint with no role on a catalog item whose model has no named surface asks for a role, as before',
+    tool: 'paint',
+    scene: finishScene,
+    input: { targets: ['item_vase'], material: SOFT_WHITE },
+    context: { catalog: VASE_LIBRARY, assetViews: { vase: { surfaces: [] } } },
+    expect: { refusal: 'unknown_role', mentions: ['(painted so far: glaze)'] },
   },
   {
     name: "set_material took a bare community id ('mtl_…'): paint writes it as library:<id>",

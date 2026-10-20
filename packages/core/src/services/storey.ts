@@ -18,6 +18,9 @@ import { DEFAULT_LEVEL_HEIGHT } from './level-height'
  */
 export const CEILING_CLAMP_MARGIN = 0.01
 
+/** Metres added per level ordinal in Exploded view, also used to frame agent captures. */
+export const EXPLODED_GAP = 5
+
 /**
  * Stored storey height in meters (floor-to-floor). Falls back to
  * {@link DEFAULT_LEVEL_HEIGHT} for unmigrated legacy levels whose `height`

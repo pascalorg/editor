@@ -171,3 +171,118 @@ describe('the ground over a level below grade', () => {
     )
   })
 })
+
+describe('project rendering defaults', () => {
+  const original = useViewer.getState()
+  beforeEach(() => useViewer.setState(original, true))
+  afterEach(() => useViewer.setState(original, true))
+  const authored = {
+    theme: 'studio',
+    exposure: 0.94,
+    shading: 'rendered' as const,
+    edges: 'off' as const,
+    lighting: {
+      background: '#dce4e5',
+      backgroundSky: null,
+      ambient: { color: '#ffffff', intensity: 0 },
+    },
+    postprocessing: { ambientOcclusion: false, colorGrading: false },
+  }
+
+  test('project defaults survive context changes without becoming global user preferences', () => {
+    const store = useViewer.getState()
+    store.setSceneTheme('paper')
+    store.setEdges('strong')
+    store.setProjectId('look-a')
+    store.setProjectPresentation(authored)
+    store.setRenderContext('editor', 'solid')
+    expect(useViewer.getState()).toMatchObject({
+      sceneTheme: 'studio',
+      shading: 'rendered',
+      edges: 'off',
+    })
+    expect(useViewer.getState().sceneAppearance).toMatchObject({
+      background: '#dce4e5',
+      backgroundSky: null,
+      toneMappingExposure: 0.94,
+    })
+    expect(useViewer.getState().lookDefaults).toMatchObject({ theme: 'paper', edges: 'strong' })
+    expect(useViewer.getState().projectPreferences['look-a']?.look).toBeUndefined()
+    store.setProjectId('look-b')
+    expect(useViewer.getState()).toMatchObject({
+      sceneTheme: 'paper',
+      edges: 'strong',
+      shading: 'solid',
+    })
+  })
+
+  test('local choices override only their project and survive switching away and back', () => {
+    const store = useViewer.getState()
+    store.setProjectId('look-a')
+    store.setProjectPresentation(authored)
+    store.setSceneTheme('night')
+    store.setEdges('soft')
+    store.setShading('solid')
+    expect(useViewer.getState().sceneAppearance.background).not.toBe('#dce4e5')
+    store.setProjectId('look-b')
+    store.setProjectPresentation(authored)
+    expect(useViewer.getState()).toMatchObject({
+      sceneTheme: 'studio',
+      edges: 'off',
+      shading: 'rendered',
+    })
+    store.setProjectId('look-a')
+    store.setProjectPresentation(authored)
+    expect(useViewer.getState()).toMatchObject({
+      sceneTheme: 'night',
+      edges: 'soft',
+      shading: 'solid',
+    })
+    store.resetProjectLook()
+    expect(useViewer.getState()).toMatchObject({
+      sceneTheme: 'studio',
+      edges: 'off',
+      shading: 'rendered',
+    })
+    expect(useViewer.getState().sceneAppearance.toneMappingExposure).toBe(0.94)
+  })
+
+  test('an explicit temporary theme bypasses custom lighting even with the same theme id', () => {
+    const store = useViewer.getState()
+    store.setProjectId('look-a')
+    store.setProjectPresentation(authored)
+    store.showSceneTheme('studio')
+    expect(useViewer.getState().sceneAppearance.background).not.toBe('#dce4e5')
+    store.showSceneTheme(null)
+    expect(useViewer.getState().sceneAppearance.background).toBe('#dce4e5')
+    expect(useViewer.getState().projectPreferences['look-a']?.look).toBeUndefined()
+    store.setProjectPresentation(undefined)
+    expect(useViewer.getState().sceneAppearance.background).not.toBe('#dce4e5')
+  })
+
+  test('an embed without a project id can override and restore its authored look', () => {
+    const store = useViewer.getState()
+    store.setProjectPresentation({ ...authored, shadows: true })
+    store.setSceneTheme('night')
+    store.setEdges('strong')
+    store.setShadows(false)
+    store.setShading('solid')
+    expect(useViewer.getState()).toMatchObject({
+      sceneTheme: 'night',
+      edges: 'strong',
+      shadows: false,
+      shading: 'solid',
+    })
+    store.resetProjectLook()
+    expect(useViewer.getState()).toMatchObject({
+      sceneTheme: 'studio',
+      edges: 'off',
+      shadows: true,
+      shading: 'rendered',
+    })
+    store.setProjectId('look-next')
+    expect(useViewer.getState().projectPreferences['']).toBeUndefined()
+    store.setProjectPresentation(authored)
+    expect(useViewer.getState().sceneAppearance.background).toBe('#dce4e5')
+  })
+})

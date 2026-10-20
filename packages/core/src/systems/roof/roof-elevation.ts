@@ -1,11 +1,8 @@
-import {
-  getWallBaseElevationForNodes,
-  getWallEffectiveHeightForNodes,
-} from '../../hooks/spatial-grid/spatial-grid-manager'
-import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { resolveLevelId } from '../../lib/node-ancestry'
+import { wallSupportForNodes } from '../../lib/opening-floor-datum'
 import type { AnyNode, LevelNode, RoofNode, RoofSegmentNode, WallNode } from '../../schema'
 import { coveredStoreyId, servesAsRoofLevel } from '../../services/roof-level'
-import { findLevelBelowId, getLevelElevations } from '../../services/storey'
+import { findLevelBelowId, getLevelElevations, getWallTop } from '../../services/storey'
 import { wallOverlapsSlabFootprint } from '../slab/slab-support'
 import { getWallArcData } from '../wall/wall-curve'
 import { resolveRoomRoofFootprintOnLevel } from './roof-footprint'
@@ -16,14 +13,11 @@ export function resolveRoofWallTopElevation(
   nodes: Readonly<Record<string, AnyNode>>,
   elevations = getLevelElevations(nodes),
 ): number {
-  const sourceLevelY = elevations.get(resolveLevelId(wall, nodes))?.baseY ?? 0
+  const sourceLevelId = resolveLevelId(wall, nodes)
+  const sourceLevelY = elevations.get(sourceLevelId)?.baseY ?? 0
   const targetLevelY = elevations.get(targetLevelId)?.baseY ?? 0
-  return (
-    sourceLevelY +
-    getWallBaseElevationForNodes(wall, nodes) +
-    getWallEffectiveHeightForNodes(wall, nodes) -
-    targetLevelY
-  )
+  const support = wallSupportForNodes(wall, nodes)
+  return sourceLevelY + getWallTop(wall, sourceLevelId, nodes, support.elevation) - targetLevelY
 }
 
 /**

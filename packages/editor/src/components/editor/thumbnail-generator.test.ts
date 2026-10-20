@@ -45,6 +45,7 @@ import victorSeattle from '../../lib/__fixtures__/owner-victor-seattle-parking.j
 import villaAurelia from '../../lib/__fixtures__/owner-villa-aurelia-basement.json'
 import {
   atCaptureSize,
+  captureDimensions,
   capturesOrthographically,
   exteriorGroundForCapture,
   interiorCutaway,
@@ -88,6 +89,34 @@ function fakeRenderer(canvas: FakeCanvas, pixelRatio: number) {
 }
 
 describe('supersampled capture', () => {
+  test('an explicit camera renders at the requested resolution and aspect without resizing the pane', () => {
+    const live: FakeCanvas = { width: 800, height: 1000, style: {} }
+    const renderer = fakeRenderer(live, 1)
+    const position: [number, number, number] = [2, 1, 3]
+    const target: [number, number, number] = [0, 0, 0]
+    for (const pose of [
+      { perspective: { position, target, fov: 35 } },
+      { ortho: { position, target, viewWidth: 4 } },
+    ]) {
+      const size = captureDimensions(
+        [800, 1000],
+        { ...pose, standardSize: { w: 1920, h: 1280 } },
+        24_000_000,
+      )
+      expect(size).toEqual([1920, 1280])
+      const buffer = atCaptureSize(renderer, ...size, () =>
+        renderer.getDrawingBufferSize(new Vector2()).toArray(),
+      )
+      expect(buffer).toEqual([1920, 1280])
+      expect([live.width, live.height]).toEqual([800, 1000])
+    }
+    expect(
+      captureDimensions([800, 1000], { standardSize: { w: 1920, h: 1280 } }, 24_000_000),
+    ).toEqual([800, 1000])
+    expect(captureDimensions([800, 1000], { supersample: 2 }, 24_000_000)).toEqual([1600, 2000])
+    expect(captureDimensions([6000, 4000], { supersample: 2 }, 6_000_000)).toEqual([3000, 2000])
+  })
+
   test('renders at its own size while the live canvas keeps its size', () => {
     // a 1.5 dpr screen: the old capture resized the live canvas with drawing
     // buffer pixels where CSS pixels were due — 3× during the capture, 1.5×

@@ -205,6 +205,24 @@ jobs:
           # Refresh the lockfile so the release commit remains reproducible.
           bun install
 
+          # The Cursor plugin's CLI pin and server.json quote these versions; a beta
+          # leaves them on the last stable release.
+          bun scripts/sync-agent-versions.ts
+
+      # Publishing server.json to the MCP Registry stays a manual owner step after
+      # this release lands; see wiki/npm-release.md.
+      - name: Validate MCP Registry manifest
+        env:
+          MCP_PUBLISHER_VERSION: 1.8.1
+          MCP_PUBLISHER_LINUX_AMD64_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          curl --fail --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          echo "${MCP_PUBLISHER_LINUX_AMD64_SHA256}  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+          "$RUNNER_TEMP/mcp-publisher" validate
+
       - id: version
         run: |
           echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"

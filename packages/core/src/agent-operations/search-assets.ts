@@ -1,4 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
+import { OTHER_SOURCES } from '../agent-tools/sources'
 import type { AssetInput } from '../schema'
 import type { AgentOperation } from './types'
 
@@ -15,8 +16,8 @@ function matches(item: AssetInput, { query, category }: SearchAssetsInput['queri
 }
 
 /**
- * `search_assets`: the host's item library, one group of hits per query. A miss points to
- * add_object, the way to build what no library holds, without naming a design for it.
+ * `search_assets`: the host's item library, one group of hits per query. A miss names the other
+ * sources there are for the need, as a fact.
  */
 export const searchAssets: AgentOperation<SearchAssetsInput> = (_nodes, { queries }, context) => {
   const catalog = context.catalog
@@ -40,7 +41,7 @@ export const searchAssets: AgentOperation<SearchAssetsInput> = (_nodes, { querie
       groups,
       total: groups.reduce((sum, group) => sum + group.total, 0),
       ...(missed.length && {
-        hint: `Nothing in the library matches ${missed.join(', ')}. Build what it lacks with add_object.`,
+        hint: `Nothing in the library matches ${missed.join(', ')}. ${OTHER_SOURCES}`,
       }),
     },
   }

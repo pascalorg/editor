@@ -25,6 +25,7 @@ import {
   AnimationMixer,
   Box3,
   BoxGeometry,
+  FrontSide,
   Group,
   LoopOnce,
   Mesh,
@@ -52,6 +53,53 @@ export default function build() {
   return g
 }
 `
+
+const plane = (side: string) => `
+import * as THREE from 'three'
+export default function build() {
+  const g = new THREE.Group()
+  const curtain = new THREE.Mesh(new THREE.PlaneGeometry(1, 2), new THREE.MeshStandardMaterial({ side: THREE.${side} }))
+  curtain.position.y = 1
+  g.add(curtain)
+  return g
+}
+`
+
+describe('material sides', () => {
+  const triangles = (mesh: Mesh) =>
+    (mesh.geometry.index?.count ?? mesh.geometry.getAttribute('position').count) / 3
+  const build = async (side: string) => {
+    const { glb, manifest } = await compileGeometryScript({ code: plane(side) })
+    const gltf = await new GLTFLoader().parseAsync(glb, '')
+    const mesh = gltf.scene.getObjectByProperty('isMesh', true) as Mesh
+    return { mesh, manifest, material: mesh.material as MeshStandardMaterial }
+  }
+
+  test('a double-sided plane is exported with its back face baked in, front side only', async () => {
+    const { mesh, manifest, material } = await build('DoubleSide')
+    expect(triangles(mesh)).toBe(4)
+    expect(manifest.triangles).toBe(4)
+    expect(material.side).toBe(FrontSide)
+    const normals = mesh.geometry.getAttribute('normal')
+    expect(normals.getZ(0)).toBeCloseTo(1)
+    expect(normals.getZ(normals.count - 1)).toBeCloseTo(-1)
+  })
+
+  test('a front-side plane is exported as authored', async () => {
+    const { mesh, manifest, material } = await build('FrontSide')
+    expect(triangles(mesh)).toBe(2)
+    expect(manifest.triangles).toBe(2)
+    expect(material.side).toBe(FrontSide)
+  })
+
+  test('a back-side plane becomes the flipped copy only', async () => {
+    const { mesh, manifest, material } = await build('BackSide')
+    expect(triangles(mesh)).toBe(2)
+    expect(manifest.triangles).toBe(2)
+    expect(material.side).toBe(FrontSide)
+    expect(mesh.geometry.getAttribute('normal').getZ(0)).toBeCloseTo(-1)
+  })
+})
 
 describe('clips', () => {
   test('a clip is stored ending on its last pose, not wrapped to its first', async () => {
@@ -631,5 +679,338 @@ describe('what refuses an object that cannot be measured, for a Blender build to
     const built = new Group()
     built.add(new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial()))
     expect((await finish(built)).language).toBe('bpy')
+  })
+})
+
+describe("a build for its host's inputs", () => {
+  const FLOOR = `
+import * as THREE from 'three'
+export const params = { thickness: { default: 0.01, min: 0.005, max: 0.03 } }
+export default function build({ params, inputs }) {
+  const xs = params.polygon.map((p) => p[0])
+  const zs = params.polygon.map((p) => p[1])
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const board = new THREE.Mesh(
+    new THREE.BoxGeometry(x1 - x0, params.thickness, z1 - z0),
+    new THREE.MeshStandardMaterial({ name: 'slot_oak' }),
+  )
+  board.position.set((x0 + x1) / 2, inputs.elevation + params.thickness / 2, (z0 + z1) / 2)
+  const group = new THREE.Group()
+  group.add(board)
+  return group
+}
+`
+  const inputs = {
+    polygon: [
+      [2, 1],
+      [6, 1],
+      [6, 4],
+      [2, 4],
+    ],
+    holes: [],
+    elevation: 0.3,
+  }
+
+  test('reads them in params, stays in their frame and keeps only its own params', async () => {
+    const compiled = await compileGeometryScript({ code: FLOOR, inputs })
+    const { min, max } = compiled.manifest.bounds
+    expect(min[0]).toBeCloseTo(2, 5)
+    expect(max[0]).toBeCloseTo(6, 5)
+    expect(min[1]).toBeCloseTo(0.3, 5)
+    expect(min[2]).toBeCloseTo(1, 5)
+    expect(max[2]).toBeCloseTo(4, 5)
+    expect(compiled.params).toEqual({ thickness: 0.01 })
+  })
+
+  test('without them, the same kind of module is re-origined for its mount', async () => {
+    const compiled = await compileGeometryScript({
+      code: FLOOR.replaceAll('params.polygon', '[[2, 1], [6, 1], [6, 4], [2, 4]]').replace(
+        'inputs.elevation',
+        '0.3',
+      ),
+    })
+    expect(compiled.manifest.bounds.min[0]).toBeCloseTo(-2, 5)
+    expect(compiled.manifest.bounds.min[1]).toBeCloseTo(0, 5)
+    expect(compiled.manifest.coverage).toBeUndefined()
+  })
+})
+
+describe("a build cut to its host's floor or face", () => {
+  /** Every triangle of a compiled GLB, in the build's frame. */
+  const trianglesOf = async (glb: ArrayBuffer) => {
+    const gltf = await new GLTFLoader().parseAsync(glb, '')
+    gltf.scene.updateWorldMatrix(true, true)
+    const triangles: [Vector3, Vector3, Vector3][] = []
+    gltf.scene.traverse((object) => {
+      const mesh = object as Mesh
+      if (!mesh.isMesh) return
+      const position = mesh.geometry.getAttribute('position')
+      const index = mesh.geometry.getIndex()
+      const corner = (i: number) =>
+        new Vector3()
+          .fromBufferAttribute(position, index ? index.getX(i) : i)
+          .applyMatrix4(mesh.matrixWorld)
+      for (let i = 0; i < (index?.count ?? position.count); i += 3) {
+        triangles.push([corner(i), corner(i + 1), corner(i + 2)])
+      }
+    })
+    return triangles
+  }
+  const normalOf = ([a, b, c]: [Vector3, Vector3, Vector3]) =>
+    new Vector3().subVectors(b, a).cross(new Vector3().subVectors(c, a))
+  /** Area of the triangles facing `axis` (their normal within ~18° of it). */
+  const facingArea = (triangles: [Vector3, Vector3, Vector3][], axis: Vector3) =>
+    triangles.reduce((sum, triangle) => {
+      const normal = normalOf(triangle)
+      const area = normal.length() / 2
+      return area > 0 && normal.normalize().dot(axis) > 0.95 ? sum + area : sum
+    }, 0)
+  const centroid = ([a, b, c]: [Vector3, Vector3, Vector3]) =>
+    new Vector3().add(a).add(b).add(c).divideScalar(3)
+
+  const PLANKS = (planks: [number, number][]) => `
+export default function build({ THREE, params }) {
+  const m = new THREE.MeshStandardMaterial({ color: '#b08060' }); m.name = 'slot_oak'
+  const g = new THREE.Group()
+  for (const [from, to] of ${JSON.stringify(planks)}) {
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(to - from, 0.02, 0.2), m)
+    plank.position.set((from + to) / 2, params.elevation + 0.01, 1.5)
+    g.add(plank)
+  }
+  return g
+}
+`
+  const ROOM = {
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ],
+    holes: [],
+    elevation: 0,
+  }
+
+  test('a plank across the floor edge is cut at the edge, one wholly outside is dropped', async () => {
+    const compiled = await compileGeometryScript({
+      code: PLANKS([
+        [3, 5],
+        [6, 7],
+      ]),
+      inputs: ROOM,
+    })
+    const { min, max } = compiled.manifest.bounds
+    expect(min[0]).toBeCloseTo(3, 5)
+    expect(max[0]).toBeCloseTo(4, 5)
+    const triangles = await trianglesOf(compiled.glb)
+    expect(compiled.manifest.triangles).toBe(triangles.length)
+    // The cut plank is closed again: an end face stands on the edge.
+    expect(facingArea(triangles, new Vector3(1, 0, 0))).toBeCloseTo(0.02 * 0.2, 6)
+    expect(facingArea(triangles, new Vector3(0, 1, 0))).toBeCloseTo(1 * 0.2, 6)
+  })
+
+  test('a tile over a window is cut to its rectangle, one wholly in the window is dropped', async () => {
+    const TILES = `
+export default function build({ THREE }) {
+  const m = new THREE.MeshStandardMaterial({ color: '#ffffff' }); m.name = 'slot_tile'
+  const g = new THREE.Group()
+  for (const [size, x, y] of [[1, 1, 1], [0.5, 1.5, 1.5]]) {
+    const tile = new THREE.Mesh(new THREE.BoxGeometry(size, size, 0.01), m)
+    tile.position.set(x, y, 0.005)
+    g.add(tile)
+  }
+  return g
+}
+`
+    const window = { x0: 1, y0: 1, x1: 2, y1: 2 }
+    const compiled = await compileGeometryScript({
+      code: TILES,
+      inputs: {
+        outline: { x0: 0, y0: 0, x1: 4, y1: 2.5 },
+        holes: [window],
+        base: [],
+        thickness: 0.1,
+      },
+    })
+    const triangles = await trianglesOf(compiled.glb)
+    // The 1 m tile less the window's quarter of it; the small tile inside the window is gone.
+    expect(facingArea(triangles, new Vector3(0, 0, 1))).toBeCloseTo(0.75, 6)
+    for (const triangle of triangles) {
+      const { x, y } = centroid(triangle)
+      expect(
+        x > window.x0 + 1e-6 &&
+          x < window.x1 - 1e-6 &&
+          y > window.y0 + 1e-6 &&
+          y < window.y1 - 1e-6,
+      ).toBe(false)
+    }
+    expect(compiled.manifest.bounds.max[0]).toBeCloseTo(1.5, 5)
+    expect(compiled.manifest.triangles).toBe(triangles.length)
+  })
+
+  test('a plank wholly inside and away from the holes is exported as built, uncut', async () => {
+    const code = PLANKS([[1, 2.5]]).replace('params.elevation', '0')
+    const cut = await compileGeometryScript({
+      code,
+      inputs: {
+        ...ROOM,
+        holes: [
+          [
+            [3, 0.2],
+            [3.5, 0.2],
+            [3.5, 0.7],
+            [3, 0.7],
+          ],
+        ],
+      },
+    })
+    const uncut = await compileGeometryScript({ code, inputs: {} })
+    expect(Buffer.from(cut.glb).equals(Buffer.from(uncut.glb))).toBe(true)
+  })
+
+  test('a staggered floor laid past its edges covers the floor to the edge, the same every time', async () => {
+    // Odd rows start 0.4 m in: their first plank begins 0.8 m outside the floor and is cut to its
+    // edge; every row runs its last plank past the far edge and the notch of the L.
+    const STAGGERED = `
+export default function build({ THREE, params }) {
+  const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const m = new THREE.MeshStandardMaterial({ color: '#b08060' }); m.name = 'slot_oak'
+  const g = new THREE.Group()
+  const length = 1.2, width = 0.2, thickness = 0.01
+  for (let row = 0; z0 + row * width < z1; row++) {
+    for (let x = x0 + (row % 2 ? 0.4 - length : 0); x < x1; x += length) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(length, thickness, width), m)
+      plank.position.set(x + length / 2, params.elevation + thickness / 2, z0 + (row + 0.5) * width)
+      g.add(plank)
+    }
+  }
+  return g
+}
+`
+    const column: [number, number][] = [
+      [1, 1],
+      [1.5, 1],
+      [1.5, 1.5],
+      [1, 1.5],
+    ]
+    const floor = {
+      polygon: [
+        [0, 0],
+        [5, 0],
+        [5, 2],
+        [3, 2],
+        [3, 4],
+        [0, 4],
+      ],
+      holes: [column],
+      elevation: 0.2,
+    }
+    const compiled = await compileGeometryScript({ code: STAGGERED, inputs: floor })
+    const top = (await trianglesOf(compiled.glb)).filter(
+      (triangle) => normalOf(triangle).normalize().y > 0.95,
+    )
+    expect(facingArea(top, new Vector3(0, 1, 0))).toBeCloseTo(5 * 2 + 3 * 2 - 0.25, 4)
+    const onFloor = (x: number, z: number) =>
+      (z < 2 ? x < 5 : x < 3) && !(x > 1 && x < 1.5 && z > 1 && z < 1.5)
+    const covers = ([a, b, c]: [Vector3, Vector3, Vector3], x: number, z: number) => {
+      const side = (p: Vector3, q: Vector3) => (q.x - p.x) * (z - p.z) - (q.z - p.z) * (x - p.x)
+      const [ab, bc, ca] = [side(a, b), side(b, c), side(c, a)]
+      return (ab >= -1e-9 && bc >= -1e-9 && ca >= -1e-9) || (ab <= 1e-9 && bc <= 1e-9 && ca <= 1e-9)
+    }
+    const bare: [number, number][] = []
+    for (let x = 0.05; x < 5; x += 0.1) {
+      for (let z = 0.05; z < 4; z += 0.1) {
+        if (onFloor(x, z) && !top.some((triangle) => covers(triangle, x, z))) bare.push([x, z])
+      }
+    }
+    expect(bare).toEqual([])
+    const again = await compileGeometryScript({ code: STAGGERED, inputs: floor })
+    expect(again.sha256).toBe(compiled.sha256)
+  })
+})
+
+describe('how much of its floor or face a build covers', () => {
+  /** Rows of 1.2 × 0.2 m boards over the floor's bounds; odd rows start `oddStart` from its west edge. */
+  const BOARDS = (oddStart: number) => `
+export default function build({ THREE, params }) {
+  const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const m = new THREE.MeshStandardMaterial({ color: '#b08060' }); m.name = 'slot_oak'
+  const g = new THREE.Group()
+  const length = 1.2, width = 0.2, thickness = 0.01
+  for (let row = 0; z0 + row * width < z1; row++) {
+    for (let x = x0 + (row % 2 ? ${oddStart} : 0); x < x1; x += length) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(length, thickness, width), m)
+      plank.position.set(x + length / 2, params.elevation + thickness / 2, z0 + (row + 0.5) * width)
+      g.add(plank)
+    }
+  }
+  return g
+}
+`
+  const ROOM = {
+    polygon: [
+      [0, 0],
+      [3, 0],
+      [3, 4.9],
+      [0, 4.9],
+    ],
+    holes: [],
+    elevation: 0,
+  }
+
+  test('a plank floor laid to every edge covers all of it, with no patch', async () => {
+    const compiled = await compileGeometryScript({ code: BOARDS(0.4 - 1.2), inputs: ROOM })
+    expect(compiled.manifest.coverage).toBe(1)
+    expect(compiled.manifest.uncovered).toEqual([])
+  })
+
+  test('odd rows started 0.4 m in leave a strip bare along the west edge, measured and bounded', async () => {
+    const compiled = await compileGeometryScript({ code: BOARDS(0.4), inputs: ROOM })
+    // Every odd row leaves 0.4 m of its own width bare at x = 0; the far ends are cut, not short.
+    let bare = 0
+    for (let row = 1; row * 0.2 < 4.9; row += 2)
+      bare += 0.4 * (Math.min(4.9, row * 0.2 + 0.2) - row * 0.2)
+    expect(compiled.manifest.coverage).toBeCloseTo(1 - bare / (3 * 4.9), 2)
+    expect(compiled.manifest.uncovered).toHaveLength(1)
+    const [strip] = compiled.manifest.uncovered!
+    expect(strip!.min[0]).toBeCloseTo(0, 2)
+    expect(strip!.max[0]).toBeCloseTo(0.4, 2)
+    expect(strip!.min[1]).toBeCloseTo(0.2, 2)
+    expect(strip!.max[1]).toBeCloseTo(4.8, 2)
+  })
+
+  test('tile joints count as bare but make no patch', async () => {
+    const [size, joint] = [0.25, 0.004]
+    const TILES = `
+export default function build({ THREE, params }) {
+  const { outline } = params
+  const m = new THREE.MeshStandardMaterial({ color: '#ffffff' }); m.name = 'slot_tile'
+  const g = new THREE.Group()
+  const pitch = ${size + joint}
+  for (let x = outline.x0; x < outline.x1; x += pitch)
+    for (let y = outline.y0; y < outline.y1; y += pitch) {
+      const tile = new THREE.Mesh(new THREE.BoxGeometry(${size}, ${size}, 0.008), m)
+      tile.position.set(x + ${size / 2}, y + ${size / 2}, 0.004)
+      g.add(tile)
+    }
+  return g
+}
+`
+    const outline = { x0: 0, y0: 0, x1: 3, y1: 2.4 }
+    const compiled = await compileGeometryScript({
+      code: TILES,
+      inputs: { outline, holes: [], base: [], thickness: 0.1 },
+    })
+    const tiled = (length: number) => {
+      let covered = 0
+      for (let at = 0; at < length; at += size + joint) covered += Math.min(length, at + size) - at
+      return covered / length
+    }
+    const expected = tiled(outline.x1) * tiled(outline.y1)
+    expect(Math.abs(expected - 0.97)).toBeLessThan(0.01)
+    expect(Math.abs(compiled.manifest.coverage! - expected)).toBeLessThanOrEqual(0.01)
+    expect(compiled.manifest.uncovered).toEqual([])
   })
 })

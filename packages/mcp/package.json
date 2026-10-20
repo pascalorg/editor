@@ -2,6 +2,7 @@
   "name": "@pascal-app/mcp",
   "version": "1.0.4",
   "description": "Model Context Protocol server for Pascal 3D editor",
+  "mcpName": "app.pascal/editor",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

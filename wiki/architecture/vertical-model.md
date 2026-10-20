@@ -200,6 +200,16 @@ base. Structural steps and open edges paint `zone.floorStepFinish` and
 
 ## Roof levels
 
+Retained roof geometry may be an `item` explicitly classified with `metadata.role: 'roof'`.
+It can live on a declared roof level, remains roof content when copied, and participates in
+the same level visibility and exploded transforms. This classification does not supply native
+roof parameters, wall following or automatic roof seating. A name or asset category alone does
+not classify it. Split geometry spanning roof and occupied-storey content before classifying;
+preserve world placement when reparenting and retain the source mapping. Ordinary items, room
+ceilings and occupied walls stay on storeys. `apply_patch` can set the role and parent together: merge the role into the existing metadata
+to retain source lineage and other fields;
+removing the role while leaving the item on a roof level is refused.
+
 A roof lives on the level directly above the storey whose walls carry it; over a building's
 top storey that is its roof level (`metadata.role: 'roof'`, named Roof), kept above every storey,
 so exploded and solo level views lift the roof off the plan. One core service,

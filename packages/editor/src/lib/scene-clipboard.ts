@@ -488,11 +488,17 @@ export async function pasteSystemEditorClipboardToLevel(
   return applyClipboardPayloadToLevel(payload, targetLevel.id, refused)
 }
 
+/** The script and GLB a scripted node, a room's floor script or a wall's face scripts reference. */
 function artifactHashes(node: AnyNode): string[] {
-  const source = 'source' in node ? node.source : undefined
-  return typeof source === 'object' && source.kind === 'script'
-    ? [source.script, source.artifact]
-    : []
+  const sources =
+    node.type === 'zone'
+      ? [node.floor?.script]
+      : node.type === 'wall'
+        ? [node.finishScripts?.a, node.finishScripts?.b]
+        : ['source' in node ? node.source : undefined]
+  return sources.flatMap((source) =>
+    typeof source === 'object' && source?.kind === 'script' ? [source.script, source.artifact] : [],
+  )
 }
 
 /**
@@ -603,7 +609,7 @@ function applyClipboardPayloadToLevel(
   // the plan is the storey's, and a roof in it that bears there is seated back up.
   const rootIdSet = new Set(payload.rootIds)
   const targetLevel = payload.nodes.some(
-    (node) => rootIdSet.has(node.id as AnyNodeId) && isStoreyContent(node.type),
+    (node) => rootIdSet.has(node.id as AnyNodeId) && isStoreyContent(node.type, node.metadata),
   )
     ? ((scene.nodes[storeyOf(scene.nodes, aimedLevel.id) as AnyNodeId] as LevelNode | undefined) ??
       aimedLevel)

@@ -1,4 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
+import { OUTSIDE_SOURCES } from '../agent-tools/sources'
 import { floorItemFit } from '../building/floor-item-fit'
 import {
   flushMountRotation,
@@ -303,7 +304,7 @@ export const placeItems: AgentOperation<PlaceItemsInput> = (nodes, input, contex
       return refused(
         assetId,
         'outside_rooms',
-        `"${asset.name}" at (${x}, ${z}) is outside every room on this level: indoor items go inside a room (read the rooms with get_zones); trees and garden items may stand outside.`,
+        `"${asset.name}" at (${x}, ${z}) is outside every room on this level: indoor items go inside a room (read the rooms with get_zones); trees and garden items may stand outside. Outside a room, ${OUTSIDE_SOURCES}`,
       )
     doorsOn[floorId] ??= collectDoorKeepouts(Object.values(nodes), { levelId: floorId })
     const misfit = floorFit(nodes, floorId, entry, asset, doorsOn[floorId])

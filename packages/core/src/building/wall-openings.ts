@@ -180,6 +180,8 @@ export type WallOpeningInput = {
   height?: number
   sillHeight?: number
   hingesSide?: 'left' | 'right'
+  /** Defaults to the side opposite the hinges. */
+  handleSide?: 'left' | 'right'
   swingDirection?: 'inward' | 'outward'
   /** A door, or a passage with no leaf (a cased opening, an arch), as the editor's door panel. */
   openingKind?: 'door' | 'opening'
@@ -244,6 +246,18 @@ export function doorFacing(wall: Pick<WallNode, 'frontSide' | 'backSide'>): {
 }
 
 /** The face a door placed by hand takes: out on an outside wall, else the face hovered. */
+/**
+ * Hinges and handle are both measured from the door's own left, so a handle
+ * left where it is would hang on the hinge edge of a right-hinged door.
+ */
+export function doorHardwareSides(input: Pick<WallOpeningInput, 'hingesSide' | 'handleSide'>) {
+  const hingesSide = input.hingesSide ?? 'left'
+  return {
+    hingesSide,
+    handleSide: input.handleSide ?? (hingesSide === 'right' ? 'left' : 'right'),
+  } as const
+}
+
 export const placedDoorFace = (
   wall: Pick<WallNode, 'frontSide' | 'backSide'>,
   hovered: 'front' | 'back',
@@ -371,7 +385,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       ? DoorNode.parse({
           ...base,
           ...doorFacing(wall),
-          hingesSide: input.hingesSide ?? 'left',
+          ...doorHardwareSides(input),
           swingDirection: input.swingDirection ?? 'inward',
           ...(input.style ? doorStyleLook(input.style as DoorStyle) : {}),
           ...(input.doorType ? { doorType: input.doorType } : {}),

@@ -1,7 +1,17 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { GeometryScriptSource } from '../geometry-source'
 import { SurfacePaintRegion } from './surface-paint-region'
+
+/**
+ * A room's floor finish built by a three.js module for the room's floor (`lib/floor-script`): the
+ * module gets the floor's polygon and elevation and lays the planks, tiles or boards on exactly that
+ * outline. `inputs` is the key of the floor it was built for; once the room's floor differs (a wall
+ * moved, an edge pushed) the script is stale and runs again for the new one.
+ */
+export const ZoneFloorScript = GeometryScriptSource.extend({ inputs: z.string() })
+export type ZoneFloorScript = z.infer<typeof ZoneFloorScript>
 
 export const ZoneNode = BaseNode.extend({
   id: objectId('zone'),
@@ -26,6 +36,7 @@ export const ZoneNode = BaseNode.extend({
       sourceSlabId: z.templateLiteral(['slab_', z.string()]).optional(),
       finish: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
       regions: z.array(SurfacePaintRegion).optional(),
+      script: ZoneFloorScript.optional(),
     })
     .optional(),
   // Painted parts of the room's ceiling. The automatic ceilings are rebuilt
@@ -87,6 +98,7 @@ export const ZoneNode = BaseNode.extend({
   - spaceRole: generic site/analysis zone or architectural room
   - roomNumber/finishes/ceilingHeight/occupancy: construction-document room metadata
   - floor.regions / ceiling.regions: painted parts of the room's floor and ceiling ([x, z] polygons, later wins)
+  - floor.script: a three.js module that builds the room's floor finish (boards, tiles) for its floor polygon, drawn over the floor; it owns its colours
   - floorStepFinish: finish of the room's steps; floorStepOverrides: per-doorway step finishes keyed by door id (or the lower room id), optional step index
   - enclosureStatus: auto-detected, explicitly enclosed, or open
   - clearDimensionPolicy: optional room clear-dimension datum preference

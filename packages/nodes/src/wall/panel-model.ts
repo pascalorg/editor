@@ -17,6 +17,7 @@ import {
   WALL_SKIRTING_DEFAULT,
   type WallNode,
   type WallTrimProfile,
+  wallTrimPatch,
 } from '@pascal-app/core'
 import {
   curveReshapeScope,
@@ -267,7 +268,7 @@ export function wallSettings(
     ['chairRail', 'Chair rail', WALL_CHAIR_RAIL_DEFAULT],
   ] as const) {
     const trim = { ...defaults, ...node[key] }
-    const patch = (value: Partial<typeof trim>) => update({ [key]: { ...trim, ...value } })
+    const patch = (value: Partial<typeof trim>) => update(wallTrimPatch(node, key, value))
     choice(title, `${key}-enabled`, title, trim.enabled ? 'On' : 'Off', () =>
       patch({ enabled: !trim.enabled }),
     )
@@ -289,7 +290,7 @@ export function wallSettings(
       0.01,
       (height) => patch({ height }),
     )
-    number(title, `${key}-proud`, 'Projection', trim.proud, 0.001, 0.2, 0.005, (proud) =>
+    number(title, `${key}-proud`, 'Depth', trim.proud, 0.001, 0.2, 0.005, (proud) =>
       patch({ proud }),
     )
     if (key === 'chairRail')

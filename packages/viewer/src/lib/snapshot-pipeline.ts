@@ -8,7 +8,6 @@ import {
   diffuseColor,
   float,
   mix,
-  mrt,
   normalView,
   output,
   renderOutput,
@@ -30,10 +29,11 @@ import {
 } from 'three/webgpu'
 import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
 import type { SceneAtmosphereSource } from '../components/viewer/scene-atmosphere'
-import { backdropGradient, deepSkyColor, horizonHazeColor } from './backdrop'
+import { backdropColors, backdropGradient, flatBackdropOutput } from './backdrop'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
 import { createEdgeDepthSampler, inkedEdges } from './ink-edges'
-import { getSceneTheme } from './scene-themes'
+import { sceneLightingMask, scenePassMrt } from './scene-pass-mrt'
+import type { SceneTheme } from './scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from './tsl-compat'
 
 export const THUMBNAIL_WIDTH = 1920
@@ -108,7 +108,7 @@ export type SnapshotPipeline = {
     edges,
     camera,
   }: {
-    theme: string
+    theme: SceneTheme
     transparent: boolean
     grade: boolean
     edges: EdgeMode
@@ -170,7 +170,9 @@ export async function createSnapshotPipeline({
     const bgProjInvUniform = uniform(new Matrix4())
     const bgCamWorldUniform = uniform(new Matrix4())
     const bgMixUniform = uniform(1)
+    const flatBgMixUniform = uniform(0)
     const gradeMixUniform = uniform(0)
+    const aoMixUniform = uniform(1)
     const inkMixUniform = uniform(0)
     const inkColorUniform = uniform(new Color('#1a1d24'))
     const inkOpacityUniform = uniform(0.5)
@@ -180,10 +182,11 @@ export async function createSnapshotPipeline({
     // inside FXAA's intermediate render target.
     const scenePass = new SnapshotScenePass('color', scene, camera)
     scenePass.setMRT(
-      mrt({
+      scenePassMrt({
         output,
         diffuseColor,
         normal: packNormalToRGB(normalView),
+        lighting: sceneLightingMask(),
       }),
     )
 
@@ -194,12 +197,14 @@ export async function createSnapshotPipeline({
 
     scenePass.getTexture('diffuseColor').type = UnsignedByteType
     scenePass.getTexture('normal').type = UnsignedByteType
+    scenePass.getTexture('lighting').type = UnsignedByteType
 
     const sceneNormal = sample((uv) => unpackRGBToNormal(scenePassNormal.sample(uv)))
 
     const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
-    giPass.sliceCount.value = SSGI_PARAMS.sliceCount
-    giPass.stepCount.value = SSGI_PARAMS.stepCount
+    // A saved still has no later frames to hide the viewport's sampling noise.
+    giPass.sliceCount.value = 3
+    giPass.stepCount.value = 8
     giPass.radius.value = SSGI_PARAMS.radius
     giPass.expFactor.value = SSGI_PARAMS.expFactor
     giPass.thickness.value = SSGI_PARAMS.thickness
@@ -222,14 +227,16 @@ export async function createSnapshotPipeline({
     // horizon picks up a visible AO line in captures.
     const aoFarFade = smoothstep(float(0.9994), float(0.9998), sampleEdgeDepth(screenUV))
     const ao = mix((denoisePass as any).r, float(1), aoFarFade)
-    const aoRgb = scenePassColor.rgb.mul(ao)
+    const aoRgb = scenePassColor.rgb.mul(
+      mix(float(1), ao, scenePass.getTextureNode('lighting').r.mul(aoMixUniform)),
+    )
 
     // Ink edges, mirroring the viewport pipeline (AO → ink → grade) so
     // captures carry the same soft/strong edge look the canvas shows.
     // Uniform-gated like grade/backdrop: one cached pipeline serves all modes.
     // Radius scales with render height: a supersampled capture (4K → 1080p)
     // would otherwise halve the apparent line weight vs the viewport's 1px.
-    const inkRadius = Math.max(1, Math.round(renderer.domElement.height / 1080))
+    const inkRadius = uniform(1)
     const inkedRgb = inkedEdges({
       sceneRgb: aoRgb,
       sampleDepth: sampleEdgeDepth,
@@ -298,7 +305,23 @@ export async function createSnapshotPipeline({
     } else {
       // FXAA requires a texture node as input; convertToTexture renders finalOutput
       // into an intermediate RT so FXAA can sample it with neighbour UV offsets.
-      pipeline.outputNode = fxaa(convertToTexture(finalOutput))
+      const flatOutput = flatBackdropOutput({
+        background: bgColorUniform,
+        foreground: sceneRgb,
+        alpha,
+        toneMapping: renderer.toneMapping,
+        outputColorSpace: renderer.outputColorSpace,
+      })
+      const antialiased = fxaa(
+        convertToTexture(mix(finalOutput, flatOutput, flatBgMixUniform)),
+      ) as unknown as ReturnType<typeof vec4>
+      // One FXAA pass serves both inputs; transform only the linear input at output.
+      pipeline.outputColorTransform = false
+      pipeline.outputNode = mix(
+        renderOutput(antialiased, renderer.toneMapping, renderer.outputColorSpace),
+        antialiased,
+        flatBgMixUniform,
+      )
     }
 
     // Dedicated render target — pipeline outputs here instead of the canvas,
@@ -308,22 +331,21 @@ export async function createSnapshotPipeline({
 
     return {
       applyEnvironment: ({ theme, transparent, grade, edges, camera: captureCamera }) => {
-        const sceneTheme = getSceneTheme(theme)
+        const sceneTheme = theme
+        const backdrop = backdropColors(sceneTheme)
         inkMixUniform.value = edges === 'off' ? 0 : 1
         inkOpacityUniform.value = edges === 'strong' ? 1 : 0.5
         inkColorUniform.value.set(edgeColorFor(sceneTheme.background))
         inkOpacityScaleUniform.value = edgeOpacityScaleFor(sceneTheme.background)
         bgColorUniform.value.set(sceneTheme.background)
-        bgSkyUniform.value.set(sceneTheme.backgroundSky ?? sceneTheme.background)
-        bgSkyDeepUniform.value.set(deepSkyColor(sceneTheme.backgroundSky ?? sceneTheme.background))
-        bgHazeUniform.value.set(
-          horizonHazeColor(
-            sceneTheme.backgroundSky ?? sceneTheme.background,
-            sceneTheme.appearance,
-          ),
-        )
+        bgSkyUniform.value.set(backdrop.sky)
+        bgSkyDeepUniform.value.set(backdrop.skyDeep)
+        bgHazeUniform.value.set(backdrop.haze)
         bgMixUniform.value = transparent ? 0 : 1
-        gradeMixUniform.value = grade ? 1 : 0
+        flatBgMixUniform.value =
+          !transparent && !atmosphere && sceneTheme.backgroundSky === null ? 1 : 0
+        gradeMixUniform.value = grade && sceneTheme.postprocessing?.colorGrading !== false ? 1 : 0
+        aoMixUniform.value = sceneTheme.postprocessing?.ambientOcclusion === false ? 0 : 1
 
         // The capture camera never joins the scene graph, so its matrixWorld
         // is only refreshed by the render itself — too late for the backdrop
@@ -336,6 +358,7 @@ export async function createSnapshotPipeline({
         const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
         const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
         const { width: captureWidth, height: captureHeight } = renderer.domElement
+        inkRadius.value = Math.max(1, Math.round(captureHeight / 1080))
 
         // Resize RT if the canvas dimensions changed
         if (renderTarget.width !== captureWidth || renderTarget.height !== captureHeight) {
@@ -540,7 +563,7 @@ export async function createPlainSnapshotPipeline({
     return {
       applyEnvironment: ({ theme, transparent: alpha }) => {
         transparent = alpha
-        background.set(getSceneTheme(theme).background)
+        background.set(theme.background)
       },
       capture: async ({ captureMode, cropRegion, standardSize }) => {
         const standardW = standardSize?.w ?? THUMBNAIL_WIDTH

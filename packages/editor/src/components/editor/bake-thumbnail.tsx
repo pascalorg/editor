@@ -323,7 +323,7 @@ export function BakeThumbnail({
         }
 
         pipeline.applyEnvironment({
-          theme: useViewer.getState().sceneTheme,
+          theme: useViewer.getState().sceneAppearance,
           transparent: false,
           grade: true,
           edges: useViewer.getState().edges,

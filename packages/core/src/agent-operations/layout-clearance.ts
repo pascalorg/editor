@@ -32,6 +32,7 @@ import {
   resolveNodeLevelId,
 } from './door-clearance'
 import { furnitureKind, isFloorUnderlay } from './furniture-kind'
+import { itemHosts, itemLevelHeightRange, itemPlanAabbInLevel } from './item-space'
 import { pointInPolygon, type Vec2 } from './plan-geometry'
 
 export {
@@ -90,13 +91,13 @@ export function collectOccupiedFootprints(
     const levelId = resolveNodeLevelId(node.id, byId)
     if (options?.levelId && levelId !== options.levelId) continue
     if (levelId && node.parentId === levelId && isFloorUnderlay(node)) continue
-    // Floor packing: prefer level-parented items (not wall-hosted children).
+    // A wall's children keep wall-local coordinates and are read by the wall observations.
+    if (node.parentId && byId.get(node.parentId)?.type === 'wall') continue
+    // Floor packing: prefer level-parented items (not ceiling-hosted children).
     if (options?.floorOnly && node.parentId && levelId && node.parentId !== levelId) {
       if (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling') continue
-      // Wall-parented items without attachTo still skipped for floor packing.
-      if (byId.get(node.parentId)?.type === 'wall') continue
     }
-    const aabb = nodeItemAabb(node)
+    const aabb = itemPlanAabbInLevel(node, byId)
     if (!aabb) continue
     const name = node.name ?? node.asset?.name
     out.push({
@@ -265,29 +266,56 @@ export function findItemItemCollisions(args: {
   const footprints = collectOccupiedFootprints(list, { levelId: args.levelId })
   // Drawing fallbacks on invalid support heights cannot prove collision separation.
   const finiteContext = list.every((node) => node.type === 'item' || finiteNumbers(node))
+  const byId = new Map(list.map((node) => [node.id, node]))
+  // The measured interval when the model's bounds allow it, else the node's own height above its
+  // floor. A measured contact stays a collision (roundoff); a lamp standing on a table top by its
+  // own height is stacked.
   const intervals = new Map(
-    footprints.map(({ id }) => [
-      id,
-      finiteContext ? itemVerticalInterval(nodes[id], nodes) : undefined,
-    ]),
+    footprints.map(({ id }) => {
+      const node = nodes[id] as ItemNode
+      const measured = finiteContext ? itemVerticalInterval(node, nodes) : undefined
+      if (measured) return [id, { ...measured, measured: true }]
+      const range = itemLevelHeightRange(node, byId)
+      return [
+        id,
+        range
+          ? {
+              levelId: resolveNodeLevelId(id, byId) ?? '',
+              min: range.min,
+              max: range.max,
+              measured: false,
+            }
+          : undefined,
+      ]
+    }),
   )
+  const hosts = new Map(footprints.map(({ id }) => [id, itemHosts(nodes[id]!, byId)]))
   const collisions: ItemCollision[] = []
   for (let i = 0; i < footprints.length; i++) {
     for (let j = i + 1; j < footprints.length; j++) {
       const a = footprints[i]!
       const b = footprints[j]!
       if (a.levelId && b.levelId && a.levelId !== b.levelId) continue
+      // A thing resting on top of its host is stacked by design: its bottom at the host's top. A
+      // child sunk into its host, or one whose height is unknown, is still a collision.
+      const [child, host] = hosts.get(a.id)?.has(b.id)
+        ? [a, b]
+        : hosts.get(b.id)?.has(a.id)
+          ? [b, a]
+          : []
+      if (child && host) {
+        const cY = intervals.get(child.id)
+        const hY = intervals.get(host.id)
+        if (cY && hY && cY.min >= hY.max - 0.02) continue
+      }
       if (!aabbsOverlap(a.aabb, b.aabb, gap)) continue
       const aY = intervals.get(a.id)
       const bY = intervals.get(b.id)
       // Contact and sub-micrometre separation remain conservative against roundoff.
-      if (
-        aY &&
-        bY &&
-        aY.levelId === bY.levelId &&
-        (bY.min - aY.max > 1e-6 || aY.min - bY.max > 1e-6)
-      )
-        continue
+      if (aY && bY && aY.levelId === bY.levelId) {
+        const touch = aY.measured && bY.measured ? 1e-6 : -1e-6
+        if (bY.min - aY.max > touch || aY.min - bY.max > touch) continue
+      }
       collisions.push({
         aId: a.id,
         bId: b.id,

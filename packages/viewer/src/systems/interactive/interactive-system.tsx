@@ -3,8 +3,13 @@
 import {
   type AnyNodeId,
   type ItemNode,
+  isScriptedNode,
   pointInPolygon,
+  type ScriptedNode,
   sceneRegistry,
+  scriptedOrigin,
+  scriptedSize,
+  scriptInteractive,
   useInteractive,
   useScene,
   type ZoneNode,
@@ -45,7 +50,8 @@ export const InteractiveSystem = () => {
     useShallow((state) =>
       Object.values(state.nodes)
         .filter(
-          (n): n is ItemNode | ProceduralItemNode =>
+          (n): n is ItemNode | ProceduralItemNode | ScriptedNode =>
+            (isScriptedNode(n) && scriptInteractive(n.source.manifest) != null) ||
             (n.type === 'item' && n.asset.interactive != null) ||
             (n.type === 'procedural-item' &&
               (operableParts(n.recipe).length > 0 || n.recipe.parts.some((part) => part.light))),
@@ -83,7 +89,9 @@ const ItemControlsOverlay = ({
   zonePolygon: ZoneNode['polygon'] | null
   isSelected: boolean
 }) => {
-  const node = useScene((state) => state.nodes[nodeId] as ItemNode | ProceduralItemNode)
+  const node = useScene(
+    (state) => state.nodes[nodeId] as ItemNode | ProceduralItemNode | ScriptedNode | undefined,
+  )
   const [itemObj, setItemObj] = useState<Object3D | null>(null)
 
   useFrame(() => {
@@ -109,14 +117,23 @@ const ItemControlsOverlay = ({
 
   let descriptors: ControlDescriptor[] = []
   let height = 0
-  if (node?.type === 'item' && node.asset.interactive && controlValues) {
-    descriptors = node.asset.interactive.controls.map((control, i) => ({
+  const interactive = isScriptedNode(node)
+    ? scriptInteractive(node.source.manifest, scriptedOrigin(node))
+    : node?.type === 'item'
+      ? node.asset.interactive
+      : undefined
+  if (interactive && controlValues) {
+    descriptors = interactive.controls.map((control, i) => ({
       key: String(i),
       control,
       value: controlValues[i] ?? false,
       onChange: (value) => setControlValue(nodeId, i, value),
     }))
-    height = node.asset.dimensions[1]
+    height = isScriptedNode(node)
+      ? scriptedSize(node.source.manifest)[1] + scriptedOrigin(node)[1]
+      : node?.type === 'item'
+        ? node.asset.dimensions[1]
+        : 0
   } else if (node?.type === 'procedural-item') {
     descriptors = proceduralControlDescriptors(
       node.recipe,

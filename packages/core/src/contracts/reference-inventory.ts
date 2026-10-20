@@ -753,30 +753,43 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
     reason: 'Inline versioned recipe (R7 stores recipes above 24 KiB by hash).',
   },
   { kind: 'procedural-item', path: 'parameters.@key', reason: 'Recipe parameter name.' },
-  // Scripted nodes (an authored item, or a window or door built from code) share one `source`.
-  ...(['item', 'window', 'door', 'column'] as const).flatMap((kind) => [
-    ...(
-      [
-        'source.manifest.anchors[].id',
-        'source.manifest.lights[].id',
-        'source.manifest.params[].id',
-        'source.manifest.parts[].id',
-        'source.manifest.slots[].id',
-      ] as const
-    ).map((path) => ({
+  // Scripted nodes (an authored item, or a window or door built from code) share one `source`;
+  // a room's floor script keeps the same record on its zone, a wall face's script on its wall.
+  ...(
+    [
+      ['item', 'source'],
+      ['window', 'source'],
+      ['door', 'source'],
+      ['column', 'source'],
+      ['zone', 'floor.script'],
+      ['wall', 'finishScripts.a'],
+      ['wall', 'finishScripts.b'],
+    ] as const
+  ).flatMap(([kind, source]) => [
+    ...(['anchors', 'lights', 'params', 'parts', 'slots'] as const).map((list) => ({
       kind,
-      path,
+      path: `${source}.manifest.${list}[].id`,
       reason: "Defines a key in a scripted node's compiled manifest, read from its script.",
     })),
-    { kind, path: 'source.params.@key', reason: 'Script parameter name.' },
-    { kind, path: 'source.params.*', reason: 'Script parameter value.' },
+    { kind, path: `${source}.params.@key`, reason: 'Script parameter name.' },
+    { kind, path: `${source}.params.*`, reason: 'Script parameter value.' },
     {
       kind,
-      path: 'source.images.thumbnail',
-      reason: 'Content hash of a project artifact, like source.artifact; forks carry it.',
+      path: `${source}.images.thumbnail`,
+      reason: `Content hash of a project artifact, like ${source}.artifact; forks carry it.`,
     },
   ]),
   { kind: 'scan', path: 'layers.@key', reason: 'Layer visibility flag name.' },
+  {
+    kind: 'site',
+    path: 'presentation.display.disciplines.@key',
+    reason: 'Discipline display filter names.',
+  },
+  {
+    kind: 'site',
+    path: 'presentation.display.families.@key',
+    reason: 'Family display filter names.',
+  },
   { kind: 'site', path: 'frontEdge', reason: "Index of the lot polygon's street-facing edge." },
   ...[
     'boundaries',
@@ -814,6 +827,18 @@ const meta = (path: string, r: Omit<Row, 'kind' | 'path'>) =>
   row({ kind: '*', path: `metadata.${path}`, ...r })
 
 export const METADATA_REFERENCES: readonly ExistingReference[] = [
+  meta('authorSceneState.buildingId', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
+    dependents: ['metadata.authorSceneState'],
+    note: 'The building that owns this conversion baseline; a partial copy cannot overwrite its source building.',
+  }),
+  meta('authorSceneState.ids.*', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
+    dependents: ['metadata.authorSceneState.nodes'],
+    note: 'Stable source-to-node identities and the corresponding authored baseline snapshot; whole graph clones remap the snapshot recursively.',
+  }),
   meta('managedByLeanTo', {
     ...policy('node', 'internal', 'cascade', 'strip'),
     targetKinds: ['lean-to-extension'],
@@ -927,6 +952,24 @@ const described = (reason: string, paths: readonly string[]) =>
 /** Metadata keys found in editor sources that are not references. */
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
   { path: 'metadata.roomBoundary', reason: 'Boolean opt-out from room boundary detection.' },
+  ...described(
+    "author_scene's provenance: the payload's own ids on walls and openings, a room's seed, a level's elevation, a slab's finish, a wall's colour, and on the building the stored payload, the report and when it was written; none of it names a node.",
+    [
+      'authorScene',
+      'authorScene.at',
+      'authorScene.color',
+      'authorScene.elevation',
+      'authorScene.finish',
+      'authorScene.id',
+      'authorScene.payload',
+      'authorScene.report',
+      'authorScene.seed',
+    ],
+  ),
+  ...described(
+    "An artifact's kind as the MCP host stores it (item, window, door, column): artifact metadata, not a node's.",
+    ['kind'],
+  ),
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',

@@ -1,4 +1,4 @@
-import type { SurfaceRole } from '@pascal-app/core'
+import type { SitePresentation, SurfaceRole } from '@pascal-app/core'
 
 export type SceneTheme = {
   id: string
@@ -10,22 +10,31 @@ export type SceneTheme = {
   background: string
   // Optional zenith colour for the backdrop: the post pipeline renders a
   // vertical screen-space gradient from this (top) to `background` (horizon).
-  // Omitted → flat `background`, as before.
-  backgroundSky?: string
+  // Null → flat background; omitted keeps the derived horizon/zenith colours.
+  backgroundSky?: string | null
   // Colour of the site ground fill. Kept
   // separate from `background` so dark themes can have a lit ground that reads
   // as ground rather than going near-black.
   ground: string
   ambient: { color: string; intensity: number }
   hemi?: { sky: string; ground: string; intensity: number }
-  lights: Array<{
-    position: [number, number, number]
-    color: string
-    intensity: number
-    castShadow?: boolean
-  }>
+  lights: NonNullable<NonNullable<SitePresentation['lighting']>['lights']>
   toneMappingExposure: number
+  environment?: NonNullable<SitePresentation['lighting']>['environment']
+  postprocessing?: SitePresentation['postprocessing']
   clayTints?: Partial<Record<SurfaceRole, string>>
+}
+
+export function projectSceneTheme(theme: SceneTheme, presentation?: SitePresentation): SceneTheme {
+  if (!presentation) return theme
+  const { backgroundSky, ...lighting } = presentation.lighting ?? {}
+  return {
+    ...theme,
+    ...lighting,
+    ...(backgroundSky === undefined ? {} : { backgroundSky }),
+    toneMappingExposure: presentation.exposure ?? theme.toneMappingExposure,
+    postprocessing: presentation.postprocessing,
+  }
 }
 
 export const SCENE_THEMES: SceneTheme[] = [

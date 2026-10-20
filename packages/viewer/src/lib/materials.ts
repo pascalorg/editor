@@ -605,7 +605,8 @@ export function createMaterial(
   shading: RenderShading = 'rendered',
 ): THREE.Material {
   const props = resolveMaterial(material)
-  const cacheKey = `${getCacheKey(props, shading)}-${getTextureKey(material)}`
+  const glassPreset = material?.preset === 'glass'
+  const cacheKey = `${getCacheKey(props, shading)}-${getTextureKey(material)}-${glassPreset}`
 
   if (materialCache.has(cacheKey)) {
     return materialCache.get(cacheKey)!
@@ -636,7 +637,8 @@ export function createMaterial(
           metalness: props.metalness,
         })
 
-  maybeApplyGlassFresnel(threeMaterial)
+  // Explicit source transparency keeps its opacity; the glass preset owns this styling.
+  if (glassPreset) maybeApplyGlassFresnel(threeMaterial)
   threeMaterial.userData.__pascalCachedMaterial = true
   materialCache.set(cacheKey, threeMaterial)
   return threeMaterial

@@ -67,6 +67,18 @@ export const SEARCH_ASSETS_CASES: AgentToolCase[] = [
     },
   },
   {
+    name: 'a search that finds something says nothing of other sources',
+    tool: 'search_assets',
+    scene: noScene,
+    input: { queries: [{ query: 'sofa' }] },
+    context: library,
+    expect: {
+      result: { total: 1 },
+      absent: ['hint'],
+      check: (result) => (JSON.stringify(result).includes('add_object') ? ['names add_object'] : []),
+    },
+  },
+  {
     name: 'every word of a query must match',
     tool: 'search_assets',
     scene: noScene,
@@ -112,7 +124,7 @@ export const SEARCH_ASSETS_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'a fixture the library lacks points to add_object, not to a design of its own',
+    name: 'a fixture the library lacks names the other sources there are, as a fact',
     tool: 'search_assets',
     scene: noScene,
     input: { queries: [{ query: 'wall light' }] },
@@ -121,7 +133,7 @@ export const SEARCH_ASSETS_CASES: AgentToolCase[] = [
       result: {
         total: 0,
         groups: [{ query: 'wall light', total: 0, results: [] }],
-        hint: 'Nothing in the library matches "wall light". Build what it lacks with add_object.',
+        hint: 'Nothing in the library matches "wall light". add_object builds an object of any shape and size, place_design places a procedural design.',
       },
     },
   },
@@ -135,7 +147,7 @@ export const SEARCH_ASSETS_CASES: AgentToolCase[] = [
       result: {
         total: 1,
         groups: [{ total: 1 }, { query: 'gazebo', total: 0 }, { query: 'sconce', total: 0 }],
-        hint: 'Nothing in the library matches "gazebo", "sconce". Build what it lacks with add_object.',
+        hint: 'Nothing in the library matches "gazebo", "sconce". add_object builds an object of any shape and size, place_design places a procedural design.',
       },
     },
   },

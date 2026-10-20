@@ -1,5 +1,5 @@
 import type { AnyNode } from '../schema'
-import { servesAsRoofLevel } from '../services/roof-level'
+import { isCeilingGeometry, isRoofGeometry, servesAsRoofLevel } from '../services/roof-level'
 import type { SceneNodes } from './types'
 
 export type LevelRole = 'occupied' | 'roof' | 'support'
@@ -67,10 +67,12 @@ export function contentCounts(content: readonly AnyNode[]): ContentCounts {
     zones: count('zone'),
     doors: count('door'),
     windows: count('window'),
-    items: count('item'),
+    items: content.filter(
+      (node) => node.type === 'item' && !isRoofGeometry(node) && !isCeilingGeometry(node),
+    ).length,
     slabs: count('slab'),
-    ceilings: count('ceiling'),
-    roofs: count('roof'),
+    ceilings: content.filter(isCeilingGeometry).length,
+    roofs: content.filter(isRoofGeometry).length,
     stairs: count('stair'),
   }
 }

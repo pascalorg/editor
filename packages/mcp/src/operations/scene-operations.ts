@@ -38,6 +38,8 @@ export type CreateSceneOperationsOptions = {
 }
 
 export interface SceneOperations {
+  /** A host with an evidence-led design workflow owns its brief policy. */
+  designBriefRequired?: boolean
   readonly hasBridge: boolean
   readonly hasStore: boolean
   readonly hasSceneEvents: boolean

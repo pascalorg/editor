@@ -3,6 +3,7 @@ import {
   clampSlabElevationForWalls,
   computeWallSlabSupport,
   getSlabElevationUpperBound,
+  LevelNode,
   MIN_WALL_HEIGHT,
   SlabNode,
   WallNode,
@@ -155,5 +156,57 @@ describe('computeWallSlabSupport preferred host', () => {
     })
     const support = computeWallSlabSupport(wallLike, [low, high, island], [], 'slab_island')
     expect(support.elevation).toBeCloseTo(0.6)
+  })
+})
+
+describe('computeWallSlabSupport covering slabs', () => {
+  const wall = WallNode.parse({
+    id: 'wall_capped',
+    start: [0, 1.5],
+    end: [4, 1.5],
+    thickness: 0.2,
+    height: 2.6,
+  })
+  const floor = SlabNode.parse({ id: 'slab_floor', polygon: SQUARE, elevation: 0 })
+  // A 12 mm cap written exactly over the wall's top, covering its whole footprint.
+  const cap = SlabNode.parse({
+    id: 'slab_cap',
+    polygon: [
+      [0, 1.4],
+      [4, 1.4],
+      [4, 1.6],
+      [0, 1.6],
+    ],
+    elevation: 2.662,
+    thickness: 0.012,
+  })
+
+  it('a slab at or above the wall top rests on the wall and never lifts it', () => {
+    const support = computeWallSlabSupport(wall, [floor, cap], [wall])
+    expect(support.elevation).toBe(0)
+    expect(support.electedSlabId).toBe('slab_floor')
+  })
+
+  it('a plane-bound wall measures its top at the storey plane', () => {
+    const { height: _height, ...storeyWall } = wall
+    const level = LevelNode.parse({ id: 'level_capped', height: 2.6, children: [wall.id] })
+    const onLevel = WallNode.parse({ ...storeyWall, parentId: level.id })
+    const nodes = { [level.id]: level, [onLevel.id]: onLevel }
+    expect(
+      computeWallSlabSupport(onLevel, [floor, cap], [onLevel], undefined, undefined, 0, nodes)
+        .elevation,
+    ).toBe(0)
+  })
+
+  it('a raised floor reaching past the wall carries it, however short the wall', () => {
+    const raised = SlabNode.parse({ id: 'slab_raised', polygon: SQUARE, elevation: 0.6 })
+    const half = WallNode.parse({ ...wall, id: 'wall_half', height: 0.3 })
+    expect(computeWallSlabSupport(half, [floor, raised], [half]).elevation).toBeCloseTo(0.6)
+  })
+
+  it("the wall's explicit host wins even above its top", () => {
+    expect(computeWallSlabSupport(wall, [floor, cap], [wall], 'slab_cap').elevation).toBeCloseTo(
+      2.662,
+    )
   })
 })
