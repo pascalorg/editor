@@ -1,6 +1,7 @@
 import { footprintLift } from '../lib/floor-foundation-datum'
 import { levelConstructionDisplacements } from '../lib/floor-foundation-stack'
 import { area, intersection } from '../lib/polygon-boolean'
+import { isSiteFlatwork } from '../lib/site-flatwork'
 import type { BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -144,6 +145,30 @@ export function levelFloorWorldY(
   const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
   const siteY = building?.type === 'building' ? building.position[1] : 0
   return siteY + elevation.baseY + standingSlabTop(nodes, level)
+}
+
+/**
+ * The world Y of the top of the lowest floor slab `levelId` stands on: the floor a pit under the
+ * level has to go down to, the sunken room of a split level included ({@link levelFloorWorldY} is
+ * the highest). A recessed slab (a basin) and site flatwork are not floors. The same as
+ * `levelFloorWorldY` for a level with one floor, or none. `null` for an id that is no level.
+ */
+export function levelLowestFloorWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const elevation = getLevelElevations(nodes).get(levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (!elevation || level?.type !== 'level') return null
+  const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
+  const siteY = building?.type === 'building' ? building.position[1] : 0
+  let lowest: number | null = null
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (child?.type !== 'slab' || child.recessed === true || isSiteFlatwork(child)) continue
+    lowest = Math.min(lowest ?? child.elevation, child.elevation)
+  }
+  return siteY + elevation.baseY + (lowest ?? 0)
 }
 
 /**

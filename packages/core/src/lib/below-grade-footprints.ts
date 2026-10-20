@@ -3,6 +3,7 @@ import {
   BELOW_GRADE_TOLERANCE,
   getLevelElevations,
   levelFloorWorldY,
+  levelLowestFloorWorldY,
   levelPlateUndersideWorldY,
 } from '../services/storey'
 import {
@@ -159,16 +160,17 @@ export function coveredBelowGradeFootprints(nodes: Record<AnyNodeId, AnyNode>): 
 }
 
 /**
- * How deep the pit under the hole goes: the world Y of the floor of the level shown, the deepest
- * of the levels the hole is cut over (`belowGradeFootprints` with the same id). `null` when no
- * level is shown or it is not below grade.
+ * How deep the pit under the hole goes: the world Y of the top of the lowest floor of the level
+ * shown (the sunken room of a split level, not its raised part), the deepest of the levels the hole
+ * is cut over (`belowGradeFootprints` with the same id). `null` when no level is shown or it is
+ * not below grade.
  */
 export function belowGradeFloorY(
   nodes: Record<AnyNodeId, AnyNode>,
   shownLevelId?: string | null,
 ): number | null {
   if (!shownLevelId || levelGradeStanding(nodes, shownLevelId) === 'at-grade') return null
-  return levelFloorWorldY(nodes, shownLevelId)
+  return levelLowestFloorWorldY(nodes, shownLevelId)
 }
 
 /** How far under the top of the floor plate the pit hangs its own floor: the default plate's thickness. */
@@ -184,11 +186,11 @@ export const GROUND_PIT_PLATE_CLEARANCE = 0.02
 
 /**
  * The world Y the pit under the hole draws its dark floor at, over the level shown: under the top
- * of its floor (`belowGradeFloorY`) by {@link GROUND_PIT_FLOOR_DROP}, which for the default plate
- * is exactly its underside, where the footing and the walls on it stop. When that lands within
- * {@link GROUND_PIT_PLATE_CLEARANCE} of the underside (the default plate, a thinner one, a plate
- * whose top is the level plane) the floor lies that far under it instead; anywhere else it keeps
- * to its place. `null` when `belowGradeFloorY` is.
+ * of its lowest floor (`belowGradeFloorY`) by {@link GROUND_PIT_FLOOR_DROP}, which for the default
+ * plate is exactly its underside, where the footing and the walls on it stop. When that lands
+ * within {@link GROUND_PIT_PLATE_CLEARANCE} of the underside (the default plate, a thinner one, a
+ * plate whose top is the level plane) the floor lies that far under it instead; anywhere else it
+ * keeps to its place. `null` when `belowGradeFloorY` is.
  */
 export function groundPitFloorY(
   nodes: Record<AnyNodeId, AnyNode>,

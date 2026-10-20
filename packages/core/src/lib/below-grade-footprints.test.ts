@@ -608,6 +608,64 @@ test('the pit hangs its floor 5 cm under the plate, and 2 cm under its underside
   expect(groundPitFloorY(seat({ thickness: 0.2 }), 'level_b')).toBeCloseTo(-2.7 + 0.05 - 0.05, 9)
 })
 
+/** A basement at -2.7 m with a raised part (the default plate) and a room sunk 1.2 m (0.2 m plate). */
+function splitLevelBasement(extra: Array<Partial<SlabNode> & { id: string }> = []) {
+  const slabs = [
+    { id: 'slab_up', polygon: square(4), elevation: 0.05, thickness: 0.05 },
+    {
+      id: 'slab_low',
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 4],
+        [4, 4],
+      ] as Array<[number, number]>,
+      elevation: -1.2,
+      thickness: 0.2,
+    },
+    ...extra,
+  ]
+  const nodes: AnyNode[] = [
+    BuildingNode.parse({
+      id: 'building_a',
+      children: ['level_b', 'level_g'],
+      position: [0, -2.7, 0],
+    }),
+    LevelNode.parse({
+      id: 'level_b',
+      parentId: 'building_a',
+      level: -1,
+      children: slabs.map((slab) => slab.id),
+    }),
+    LevelNode.parse({ id: 'level_g', parentId: 'building_a', level: 0, children: ['slab_g'] }),
+    ...slabs.map((slab) => SlabNode.parse({ parentId: 'level_b', ...slab })),
+    SlabNode.parse({ id: 'slab_g', parentId: 'level_g', polygon: square(10), elevation: 0.05 }),
+  ]
+  return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+}
+
+test('the pit goes down under the sunken room of a split-level basement, not through it', () => {
+  const nodes = splitLevelBasement()
+  expect(levelGradeStanding(nodes, 'level_b')).toBe('below-grade')
+  // The raised part's top is -2.65, the sunken room's -3.9: the pit goes to the lowest floor, and
+  // hangs 5 cm under its top (the room's plate is 0.2 m thick, so its underside, -4.1, is further).
+  expect(belowGradeFloorY(nodes, 'level_b')).toBeCloseTo(-3.9, 9)
+  expect(groundPitFloorY(nodes, 'level_b')).toBeCloseTo(-3.95, 9)
+  // Nothing the level stands on lies under the dark floor.
+  for (const top of [-2.65, -3.9])
+    expect(groundPitFloorY(nodes, 'level_b') ?? Number.NaN).toBeLessThan(top)
+})
+
+test('a basin and site flatwork are not floors: they do not take the pit down', () => {
+  const nodes = splitLevelBasement([
+    // A pool sunk 2 m, and a lawn laid on the level lower than the house's floors.
+    { id: 'slab_pool', polygon: square(2), elevation: -2, thickness: 0.3, recessed: true },
+    { id: 'slab_lawn', polygon: square(9), elevation: -2.5, metadata: { flatwork: 'lawn' } },
+  ])
+  expect(belowGradeFloorY(nodes, 'level_b')).toBeCloseTo(-3.9, 9)
+  expect(groundPitFloorY(nodes, 'level_b')).toBeCloseTo(-3.95, 9)
+})
+
 // ── Site flatwork is not a floor of the house ───────────────────────────────────────────────
 
 /** A site with a hill: flat at 0 m west of x = 8, climbing 0.28 m per metre east of it. */
