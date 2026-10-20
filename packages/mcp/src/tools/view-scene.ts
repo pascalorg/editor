@@ -25,6 +25,8 @@ export type SceneViewCapture = {
   tab: string
   capturedAt: string
   presentation?: SceneViewPresentation
+  /** The host's id of the picture it kept, these exact pixels: a later call can name the frame. */
+  viewId?: string
 }
 
 /**
@@ -99,6 +101,7 @@ export function registerViewScene(
           size: { width: shot.width, height: shot.height },
           tab: shot.tab,
           capturedAt: shot.capturedAt,
+          ...(shot.viewId ? { viewId: shot.viewId } : {}),
           ...(shot.presentation ? { presentation: shot.presentation } : {}),
           note: sceneViewNote(operations.getNodes() as Record<string, AnyNode>, interior, pose),
           ...(crop && cropped

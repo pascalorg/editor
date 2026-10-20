@@ -26,7 +26,18 @@ export function registerHostedServiceTools(
       async (input: Record<string, unknown>, extra: { signal: AbortSignal }) => {
         try {
           const result = await executeHostedServiceTool(contract.name, input, execute, extra.signal)
-          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+          // A render's preview, inline in the result, is the picture the client shows the model.
+          const { preview, ...rest } = (result ?? {}) as { preview?: unknown }
+          const picture =
+            typeof preview === 'string' ? /^data:(image\/[a-z]+);base64,(.+)$/.exec(preview) : null
+          if (!picture)
+            return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+          return {
+            content: [
+              { type: 'text' as const, text: JSON.stringify(rest) },
+              { type: 'image' as const, data: picture[2]!, mimeType: picture[1]! },
+            ],
+          }
         } catch (error) {
           const result = isAgentRefusal(error)
             ? refusalPayload(error)

@@ -106,6 +106,28 @@ describe('view_scene over the MCP', () => {
         capturedAt: '2026-10-05T15:30:00.000Z',
       })
       expect(String(json(content).note)).toContain('not a measure')
+      expect(json(content)).not.toHaveProperty('viewId')
+    } finally {
+      await view.close()
+    }
+  })
+
+  test('a host that keeps the picture names it, so a later call can use that exact frame', async () => {
+    const view = await viewWith({
+      capture: async (request) => ({
+        image: new Uint8Array([1, 2, 3]),
+        mimeType: 'image/webp',
+        width: request.size.w,
+        height: request.size.h,
+        tab: 'tab_1',
+        capturedAt: '2026-10-20T10:00:00.000Z',
+        viewId: `${'a'.repeat(64)}.webp`,
+      }),
+    })
+    try {
+      const { isError, content } = await view.call({ from: 'south' })
+      expect(isError).toBe(false)
+      expect(json(content)).toMatchObject({ status: 'viewed', viewId: `${'a'.repeat(64)}.webp` })
     } finally {
       await view.close()
     }
