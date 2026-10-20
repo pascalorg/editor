@@ -91,6 +91,15 @@ function kitchenScene({ divided, hatch, lamp }: Build = {}): SceneGraph {
   return { nodes, rootNodeIds: [building.id] }
 }
 
+const LIT = { artificialLight: true, mechanicalVentilation: true }
+
+/** The kitchen with metadata already on its zone: what a plan import or an earlier edit left. */
+function withKitchenMetadata(metadata: Record<string, unknown>): SceneGraph {
+  const scene = kitchenScene()
+  scene.nodes.zone_kitchen = { ...(scene.nodes.zone_kitchen as ZoneNode), metadata }
+  return scene
+}
+
 export function paintedKitchenScene(): SceneGraph {
   const scene = kitchenScene({ divided: true })
   scene.nodes.zone_kitchen = {
@@ -239,6 +248,37 @@ export const ROOM_CASES: AgentToolCase[] = [
     expect: {
       result: { changes: 1 },
       after: { zone_kitchen: { name: 'Studio', floor: { finish: 'wood' } } },
+    },
+  },
+  {
+    name: 'declares a room lit and ventilated by artificial means, beside the rest of its metadata',
+    tool: 'set_zone_intent',
+    scene: () => withKitchenMetadata({ note: 'from the plan' }),
+    input: {
+      zoneId: 'zone_kitchen',
+      patch: { daylight: { artificialLight: true, mechanicalVentilation: true } },
+    },
+    expect: {
+      result: { changes: 1 },
+      check: (_result, nodes) =>
+        JSON.stringify((nodes.zone_kitchen as ZoneNode).metadata) ===
+        JSON.stringify({ note: 'from the plan', daylight: LIT })
+          ? []
+          : [`metadata must hold the note and the declaration: ${JSON.stringify((nodes.zone_kitchen as ZoneNode).metadata)}`],
+    },
+  },
+  {
+    name: 'a null daylight clears the declaration and keeps the rest of the metadata',
+    tool: 'set_zone_intent',
+    scene: () => withKitchenMetadata({ note: 'from the plan', daylight: LIT }),
+    input: { zoneId: 'zone_kitchen', patch: { daylight: null } },
+    expect: {
+      result: { changes: 1 },
+      check: (_result, nodes) =>
+        JSON.stringify((nodes.zone_kitchen as ZoneNode).metadata) ===
+        JSON.stringify({ note: 'from the plan' })
+          ? []
+          : [`metadata must hold the note alone: ${JSON.stringify((nodes.zone_kitchen as ZoneNode).metadata)}`],
     },
   },
   // Single public writes: room commands deliberately are not batchable.

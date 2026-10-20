@@ -1065,6 +1065,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'sitePlan',
     'textSizePt',
   ]),
+  ...described(
+    "A room's declaration of artificial light and mechanical ventilation (set_zone_intent): booleans, not ids.",
+    ['daylight'],
+  ),
   ...described('Site-plan facts kept on the node: values, not ids.', [
     'flatwork',
     'flatworkDims',

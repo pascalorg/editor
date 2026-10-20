@@ -58,6 +58,13 @@ Derived construction is a slab or ceiling marked `boundary: 'auto'` (legacy:
 zones with `spaceRole: 'room'` plus `floor`, `hasFloor` and `hasCeiling` — and the
 reconciler derives the construction from it.
 
+A room's **daylight declaration** is intent of the same kind, kept in the zone's
+`metadata.daylight = { artificialLight, mechanicalVentilation }` (no schema field): the IRC R303.1
+exceptions to daylight, both true when a habitable room (bedroom, living, kitchen) is lit and aired
+by artificial means instead of a window to outside. It is written by the shared `set_zone_intent`
+tool's `daylight` patch (`null` clears it), so the chat and the hosted MCP have it from one
+contract; a check of a room's daylight reads it beside the windows. Nothing derives from it.
+
 `store/derived-node-guard.ts` is the one state-aware validator. It runs at every
 public mutation boundary: the scene store's `createNodes` / `updateNodes` /
 `applyNodeChanges` actions, the registry `SceneApi`, and the MCP scene bridge
