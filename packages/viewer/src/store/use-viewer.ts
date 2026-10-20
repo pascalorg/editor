@@ -877,6 +877,21 @@ export function anyGroundVeiled(state: {
   )
 }
 
+/**
+ * Whether the site draws its own ground. `showGround: false` says other geometry supplies the
+ * ground (an authored landscape), which stands on a level above a basement; while a level below
+ * grade is shown, the level display hides the storeys above it (`belowGrade`) and the landscape
+ * with them. The site's ground stands in then, with its veil, hole and pit, so the basement is
+ * seen through an opening and not through nothing. With a level at or above grade shown, the
+ * landscape is shown and `showGround` is the author's.
+ */
+export function siteGroundShown(
+  site: { showGround?: boolean },
+  state: { belowGrade: boolean },
+): boolean {
+  return site.showGround !== false || state.belowGrade
+}
+
 /** Apply an authoritative country code (e.g. IP-derived by the host app) as
  * the unit default. Stronger signal than the timezone heuristic used at store
  * creation, but still a default: it never overrides an explicit user choice

@@ -22,11 +22,10 @@ import {
 import {
   backdropColors,
   backdropGradient,
-  deepSkyColor,
   groundWindowMaskNode,
-  horizonHazeColor,
   NodeRenderer,
   SITE_GROUND,
+  siteGroundShown,
   UNDERGROUND_RIM,
   useImmersiveXRPresentation,
   useNodeEvents,
@@ -250,6 +249,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   const shownLevelId = useViewer((state) =>
     state.hideLevelsAboveSelection ? state.selection.levelId : null,
   )
+  const belowGrade = useViewer((state) => state.belowGrade)
   const buriedCache = useRef<{
     all: [number, number][][]
     shown: [number, number][][]
@@ -648,9 +648,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // line — while everything standing on the site keeps its own flag (the
   // exporter and the 2D plan draw the same line). The horizon disc is a world
   // backdrop rather than part of the parcel, so `visible` does not hide it.
-  // `showGround` hides both ground and horizon when authored geometry supplies them.
+  // `showGround` hides both ground and horizon when authored geometry supplies them, unless a level
+  // below grade is shown: the level display hides that geometry then, and the ground stands in.
   const showSiteSurfaces = node.visible !== false
-  const showGround = node.showGround !== false
+  const showGround = siteGroundShown(node, { belowGrade })
 
   if (!(node && lineGeometry)) {
     return null

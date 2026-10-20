@@ -297,6 +297,7 @@ export {
   type GroundMode,
   groundVeiled,
   type MetricNotation,
+  siteGroundShown,
   type UndergroundEdge,
   type UndergroundLook,
   type UndergroundTransition,
