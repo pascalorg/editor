@@ -53,6 +53,7 @@ import {
   identifier,
   int,
   label,
+  logical,
   type PlanFrame,
   ratio,
   relativeFrame,
@@ -877,7 +878,8 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     if (Math.abs(sum - thickness) > 1e-4) return null
     // Layers run from the front face unless the stack starts at the exterior
     // and the exterior is the back face.
-    const startsAtBack = assembly.face === 'exterior' && resolveWallExteriorSide(wall) === -1
+    const startsAtBack =
+      assembly.face === 'exterior' && (resolveWallExteriorSide(wall) ?? -1) === -1
     const layers = startsAtBack ? [...assembly.layers].reverse() : assembly.layers
     const preset = getWallAssemblyPreset(assembly.presetId)
     return {
@@ -1006,7 +1008,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
                 'IFCMATERIALLAYER',
                 layerMaterial(l.material ?? l.role, category),
                 l.thickness,
-                l.role === 'air' ? bool(true) : null,
+                l.role === 'air' ? logical(true) : null,
                 l.id,
                 l.role,
                 category,

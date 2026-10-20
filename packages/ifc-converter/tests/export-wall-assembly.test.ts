@@ -106,6 +106,34 @@ describe('wall assemblies in IFC', () => {
     })
   }
 
+  test('an undetermined exterior side starts the stack at the back face, as core does', () => {
+    const nodes = exteriorStuccoScene(false)
+    for (const node of Object.values(nodes)) {
+      if (node.type === 'wall')
+        nodes[node.id] = { ...node, frontSide: 'unknown', backSide: 'unknown' }
+    }
+    const walls = Object.values(nodes).filter((n) => n.type === 'wall') as WallNode[]
+    expect(walls.every((w) => resolveWallExteriorSide(w) === null)).toBe(true)
+
+    const { ifc } = buildIfcExport({ nodes, timestamp: new Date(Date.UTC(2026, 0, 1)) })
+    for (const { layers } of wallLayers(ifc).values()) {
+      expect(layers[0]!.material).toBe('drywall')
+    }
+  })
+
+  test('air layers are ventilated as an IfcLogical', () => {
+    const nodes: Record<string, AnyNode> = roomWithOpenings()
+    const level = Object.values(nodes).find((n) => n.type === 'level')!
+    const preset = getWallAssemblyPreset('exterior-2x6-brick')!
+    for (const wall of wallsOn(nodes, level.id)) {
+      nodes[wall.id] = { ...wall, ...wallAssemblyPatch(preset.assembly) } as AnyNode
+    }
+    const { ifc } = buildIfcExport({ nodes, timestamp: new Date(Date.UTC(2026, 0, 1)) })
+    const airLayers = ifc.split('\n').filter((line) => /IFCMATERIALLAYER\(.*'air'/.test(line))
+    expect(airLayers.length).toBeGreaterThan(0)
+    for (const line of airLayers) expect(line).toContain('IFCLOGICAL(.T.)')
+  })
+
   test('walls without an assembly keep the single core layer', () => {
     const { ifc } = buildIfcExport({
       nodes: roomWithOpenings(),
