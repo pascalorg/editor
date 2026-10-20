@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
+import { FOUNDATION_BY_REGION_NOTE } from '../lib/foundation-construction'
 import { levelTarget } from './levels'
 import { measurement } from './measurement'
 
@@ -42,7 +43,10 @@ export const createRoomTool = {
     }).optional(),
     wallThickness: measurement('length', 'm', {
       positive: true,
-      description: 'Thickness of the walls it builds.',
+      description:
+        'Thickness of the walls it builds. Omitted, a wall against the ground on a level below grade is a foundation wall ' +
+        FOUNDATION_BY_REGION_NOTE +
+        ', a partition inside the outline is an ordinary wall; a thickness keeps the schema wall.',
     }).optional(),
     rename: z
       .boolean()

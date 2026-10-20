@@ -1,6 +1,7 @@
 import { footprintLift } from '../lib/floor-foundation-datum'
 import { levelConstructionDisplacements } from '../lib/floor-foundation-stack'
 import { area, intersection } from '../lib/polygon-boolean'
+import { isSiteFlatwork } from '../lib/site-flatwork'
 import type { BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -122,6 +123,122 @@ export function getAuthoredLevelElevations(
 
   authoredElevationMemo.set(nodes, elevations)
   return elevations
+}
+
+/**
+ * How far under the ground a floor has to sit to be below grade. A ground floor a few centimetres
+ * under the lawn (a basement deeper than it is tall pushes the stack down) stays a ground floor.
+ */
+export const BELOW_GRADE_TOLERANCE = 0.3
+
+/**
+ * The world Y of `levelId`'s own plane, the one its slabs' `elevation`s are measured from: the
+ * stacked base and the building's height on the site. A floor slab's top is this plus its
+ * elevation. `null` for an id that is no level.
+ */
+export function levelPlaneWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const elevation = getLevelElevations(nodes).get(levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (!elevation || level?.type !== 'level') return null
+  const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
+  const siteY = building?.type === 'building' ? building.position[1] : 0
+  return siteY + elevation.baseY
+}
+
+/**
+ * `levelId`'s world floor: the stacked base, the building's height on the site and the top of
+ * the highest slab it stands on. `null` for an id that is no level. A level with floors at
+ * several heights (a split level) has no single floor: this is the highest, and what asks where
+ * the ground stands over a floor asks per slab ({@link levelPlaneWorldY} plus the slab's
+ * elevation).
+ */
+export function levelFloorWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const plane = levelPlaneWorldY(nodes, levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (plane === null || level?.type !== 'level') return null
+  return plane + standingSlabTop(nodes, level)
+}
+
+/**
+ * The world Y of the top of the lowest floor slab `levelId` stands on: the floor a pit under the
+ * level has to go down to, the sunken room of a split level included ({@link levelFloorWorldY} is
+ * the highest). The same as `levelFloorWorldY` for a level with one floor, or none. `null` for an
+ * id that is no level.
+ */
+export function levelLowestFloorWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const plane = levelPlaneWorldY(nodes, levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (plane === null || level?.type !== 'level') return null
+  let lowest: number | null = null
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (!isFloorSlab(child)) continue
+    lowest = Math.min(lowest ?? child.elevation, child.elevation)
+  }
+  return plane + (lowest ?? 0)
+}
+
+/**
+ * The world Y of the underside of `levelId`'s lowest floor plate, never above the walls' base: the
+ * plane the foundation under the level tops out at, and the one the pit under the hole keeps its
+ * own floor clear of. `null` for an id that is no level.
+ */
+export function levelPlateUndersideWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const baseY = levelPlaneWorldY(nodes, levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (baseY === null || level?.type !== 'level') return null
+  let underside = baseY
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (!isFloorSlab(child)) continue
+    underside = Math.min(underside, baseY + child.elevation - child.thickness)
+  }
+  return underside
+}
+
+/**
+ * Whether `levelId` lies wholly below the flat site's grade (Y 0): its standing floor, the highest
+ * of its floor slabs, is under it by more than {@link BELOW_GRADE_TOLERANCE}. The level as a
+ * whole, which is what deriving a building's ground level asks. Sculpted terrain is not consulted,
+ * and neither is a lower floor of a split level: ask `levelGradeStanding`, which judges each floor
+ * against the datum or the terrain. `false` for an id that is no level.
+ */
+export function isLevelBelowGrade(nodes: Record<AnyNodeId, AnyNode>, levelId: string): boolean {
+  const floorY = levelFloorWorldY(nodes, levelId)
+  return floorY !== null && floorY < -BELOW_GRADE_TOLERANCE
+}
+
+/**
+ * Whether a node is a floor slab of the house a level stands on: not a recessed one (a pit or a
+ * basin, drawn down into the floor) and not site flatwork (a lawn, a driveway: outdoors, laid on the
+ * level for its elevation only). Where a level's floors are, how high and how deep, is read off
+ * these alone.
+ */
+function isFloorSlab(node: AnyNode | undefined): node is SlabNode {
+  return node?.type === 'slab' && node.recessed !== true && !isSiteFlatwork(node)
+}
+
+/** The top of the highest floor slab a level stands on, in its own Y; 0 for a level with none. */
+function standingSlabTop(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): number {
+  let top: number | null = null
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (!isFloorSlab(child)) continue
+    top = Math.max(top ?? child.elevation, child.elevation)
+  }
+  return top ?? 0
 }
 
 function resolveLevelFloorToFloorHeight(

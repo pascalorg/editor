@@ -19,6 +19,7 @@ import {
   screenUV,
   smoothstep,
   time,
+  color as tslColor,
   float as tslFloat,
   uniform,
   vec3,
@@ -38,6 +39,18 @@ import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { PostProcessingResources } from '../../lib/post-processing-resources'
 import { sceneLightingMask, scenePassMrt } from '../../lib/scene-pass-mrt'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
+import {
+  earthNow,
+  UNDERGROUND_VIGNETTE,
+  undergroundAmbianceNode,
+  undergroundBackdrop,
+  undergroundDissolve,
+  undergroundDissolveGrain,
+  undergroundEarthNode,
+  undergroundFogAmount,
+  undergroundVignette,
+  worldPositionFromDepth,
+} from '../../lib/underground-ambiance'
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
@@ -204,8 +217,16 @@ const PostProcessingPasses = ({
   const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const resourcesRef = useRef<PostProcessingResources | null>(null)
   const atmosphere = useSceneAtmosphere()
+  // Under the ground the sky is the dark mode's: the same mix the pipeline's backdrop makes.
   const directSkyNode = useMemo(
-    () => (atmosphere ? atmosphere.skyRadiance(normalWorldGeometry) : null),
+    () =>
+      atmosphere
+        ? mix(
+            atmosphere.skyRadiance(normalWorldGeometry),
+            undergroundBackdrop(normalWorldGeometry.y),
+            undergroundEarthNode(),
+          )
+        : null,
     [atmosphere],
   )
   const hasPipelineErrorRef = useRef(false)
@@ -240,6 +261,9 @@ const PostProcessingPasses = ({
   // view ray from these to find the true horizon (dir.y = 0).
   const camProjInvUniform = useRef(uniform(new Matrix4()))
   const camWorldUniform = useRef(uniform(new Matrix4()))
+  // The clear colour of the no-pipeline fallback under the ground (scratch, and the dark mode's tone).
+  const fallbackClear = useRef(new Color())
+  const fallbackEarth = useRef(new Color(UNDERGROUND_VIGNETTE))
 
   // Ink-line colour follows the scene-theme background luminance (dark lines on
   // light scenes, light on dark), refreshed each frame like the background.
@@ -655,8 +679,44 @@ const PostProcessingPasses = ({
       if (shading === 'rendered' && colorGrading) {
         bgGradient = gradeRgb(bgGradient)
       }
-      const sceneComposite = compositeWithOutlines.rgb
-      const composited = mix(bgGradient, sceneComposite, contentAlpha)
+      let sceneComposite = compositeWithOutlines.rgb
+      // Under the ground (the eye below the ground surface) the scene goes to its dark mode: the
+      // sky is the dark theme's backdrop, and what stands far from the shown level dissolves into
+      // it (distance outside the level's box, from the scene pass's own depth; backdrop and fog
+      // meet in one colour per pixel). A noise mask closes over the screen as the eye crosses,
+      // 0 everywhere above the ground, 1 everywhere below.
+      let dive: ReturnType<typeof undergroundDissolve> | null = null
+      if (!transparentBackground) {
+        const grain = undergroundDissolveGrain()
+        dive = undergroundDissolve(screenUV, undergroundAmbianceNode(), grain)
+        // The backdrop follows the earth factor, which is the dark mode's own in the overview and
+        // alone in the walkthrough (looking out of a basement window shows earth, the rooms keep
+        // their light: no fog, no vignette).
+        const earthDive = undergroundDissolve(screenUV, undergroundEarthNode(), grain)
+        const dark = undergroundBackdrop(worldDir.y)
+        // The day's backdrop leaves ahead of the blobs: it greys and dims over the first half of
+        // the crossing, so the anthracite spreads over a neutral grey picture, not a blue sky.
+        const leaving = smoothstep(tslFloat(0), tslFloat(0.5), undergroundEarthNode())
+        const day = saturation(bgGradient, tslFloat(1).sub(leaving)).mul(
+          tslFloat(1).sub(leaving.mul(0.35)),
+        )
+        bgGradient = mix(day, dark, earthDive)
+        const worldPosition = worldPositionFromDepth(
+          scenePassDepth.sample(screenUV).r,
+          camProjInvUniform.current,
+          camWorldUniform.current,
+        )
+        sceneComposite = mix(sceneComposite, dark, undergroundFogAmount(worldPosition).mul(dive))
+      }
+      let composited = mix(bgGradient, sceneComposite, contentAlpha)
+      // The screen's edges close in with it.
+      if (dive) {
+        composited = mix(
+          composited,
+          tslColor(UNDERGROUND_VIGNETTE),
+          undergroundVignette().mul(dive),
+        )
+      }
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
@@ -802,8 +862,13 @@ const PostProcessingPasses = ({
       if (directSkyNode && !transparentBackground) scene.backgroundNode = directSkyNode
       try {
         const clearAlpha = transparentBackground ? 0 : 1
+        // Without the pipeline there is no fog and no vignette: the clear colour is the dark mode's.
+        const underground = transparentBackground ? 0 : earthNow()
+        const clearColor =
+          underground > 0 ? fallbackClear.current.copy(bgCurrent.current) : bgCurrent.current
+        if (underground > 0) clearColor.lerp(fallbackEarth.current, underground)
         if ((renderer as any).setClearColor) {
-          ;(renderer as any).setClearColor(bgCurrent.current, clearAlpha)
+          ;(renderer as any).setClearColor(clearColor, clearAlpha)
         } else if ((renderer as any).setClearAlpha) {
           ;(renderer as any).setClearAlpha(clearAlpha)
         }

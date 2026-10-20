@@ -2521,6 +2521,17 @@ function mediaPrefersReducedMotion(): () => boolean {
   return () => query.matches
 }
 
+/** The reduced-motion reading of the driver in force; the media query while none runs. */
+let motionReduced: () => boolean = mediaPrefersReducedMotion()
+
+/**
+ * Whether the person's animation setting asks for no motion: Off, or reduced motion. What eases
+ * for the eye outside a build (the dive under the ground) is instant then, as the builds are.
+ */
+export function revealMotionOff(): boolean {
+  return motionReduced() || revealLevel() === 'off'
+}
+
 export type ConstructionRevealOptions = {
   /** Which commits stage their new nodes; every other commit appears at once. */
   reveals: (commit: SceneCommit) => boolean
@@ -2570,6 +2581,7 @@ export function startConstructionReveal(
   planSpeed = 1
   dust = options.dust ?? null
   const reducedMotion = options.prefersReducedMotion ?? mediaPrefersReducedMotion()
+  motionReduced = reducedMotion
   const instant = () => {
     const viewer = useViewer.getState()
     return (
@@ -2681,6 +2693,7 @@ export function startConstructionReveal(
       frameQuiet = true
       revealLevel = () => 'full'
       revealSpeed = () => 1
+      motionReduced = mediaPrefersReducedMotion()
       planSpeed = 1
       dust = null
       lastStartMs = Number.NEGATIVE_INFINITY

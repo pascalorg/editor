@@ -1,4 +1,5 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
+import { withFoundationConstruction } from '../../lib/foundation-wall'
 import { detectOpenWallEnds, type OpenWallEnd, wallEndJoinCandidates } from '../../lib/room-graph'
 import { terrainSupportLift } from '../../lib/terrain-support'
 import {
@@ -546,12 +547,12 @@ export function planWallInsertion(
     return { ok: false, reason: 'segment-too-short' }
   }
 
-  const wallProperties = { ...(args.wallDefaults ?? {}) }
+  const wallProperties: Partial<WallNode> = { ...(args.wallDefaults ?? {}) }
   delete wallProperties.id
   delete wallProperties.parentId
   delete wallProperties.children
   const existingWallCount = Object.values(nodes).filter((node) => node.type === 'wall').length
-  const insertedWalls = vertices.slice(0, -1).map((start, index) =>
+  const drawnWalls = vertices.slice(0, -1).map((start, index) =>
     WallSchema.parse({
       ...wallProperties,
       id: args.mintId?.(),
@@ -559,6 +560,13 @@ export function planWallInsertion(
       start,
       end: vertices[index + 1]!,
     }),
+  )
+  const insertedWalls = withFoundationConstruction(
+    nodes,
+    args.levelId,
+    [...walls, ...drawnWalls],
+    drawnWalls,
+    wallProperties,
   )
   const splitWalls = new Map<WallNode['id'], number[]>()
   const addSplitParameter = (wallId: WallNode['id'], wallT: number) => {

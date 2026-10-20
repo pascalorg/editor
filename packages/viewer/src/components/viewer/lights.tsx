@@ -1,6 +1,6 @@
 import { sceneRegistry } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { type RefObject, useEffect, useMemo, useRef } from 'react'
 import type {
   AmbientLight,
   DirectionalLight,
@@ -10,8 +10,10 @@ import type {
 import * as THREE from 'three/webgpu'
 import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
-import useViewer from '../../store/use-viewer'
+import { registerSkyLights } from '../../lib/underground-ambiance'
+import useViewer, { groundVeiled } from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
+import { UndergroundAmbiance } from './underground-ambiance'
 
 // Diagnostic toggle: `?disable=shadows` skips the shadow-map render pass
 // (which doubles draw calls for every shadow-casting mesh) so you can
@@ -75,9 +77,44 @@ const SHADOW_BACKOFF = 10
 // Fallback radius when the scene has no building geometry yet (empty scene).
 const SHADOW_FALLBACK_RADIUS = 30
 
+/**
+ * The live counterpart of the interior capture's lighting: a light that shines from the eye along
+ * the view, casting no shadow. Over a veiled ground the floor below grade still lies in the
+ * shadow of the storeys above and has no sky: this keeps it from reading as a cave. The
+ * underground ambiance owns its intensity (the veil's 1 at rest, brought up as the sky's light
+ * comes down when the eye dives, back to rest in a capture); the hemisphere's ground side is
+ * lifted in `Lights`.
+ */
+function UndergroundFill({ lightRef }: { lightRef: RefObject<DirectionalLight | null> }) {
+  const look = useMemo(() => new THREE.Vector3(), [])
+  useFrame(({ camera }) => {
+    const fill = lightRef.current
+    if (!fill) return
+    camera.getWorldPosition(fill.position)
+    fill.target.position.copy(fill.position).add(camera.getWorldDirection(look))
+    fill.target.updateMatrixWorld()
+  })
+  return <directionalLight intensity={0} ref={lightRef} />
+}
+
 export function Lights() {
   const theme = useViewer((state) => state.sceneAppearance)
   const shadows = useViewer((state) => state.shadows)
+  const veiled = useViewer(groundVeiled)
+  // The eye's fill is mounted once, and stays: adding or taking away a light changes every lit
+  // material's shader (a runtime compile that lagged the switch to a basement), so it is there
+  // from the moment the scene has a level below grade or the eye may dive (or a view first needs
+  // it) and only its intensity, the ambiance's, moves.
+  const wantsFill = useViewer(
+    (state) =>
+      state.hasLevelBelowGrade ||
+      state.diveAvailable ||
+      groundVeiled(state) ||
+      state.ambianceActive,
+  )
+  const fillMounted = useRef(false)
+  if (wantsFill) fillMounted.current = true
+  const filled = fillMounted.current
   const atmosphere = useSceneAtmosphere()
   const lightSlots = useMemo(
     () => Array.from({ length: atmosphere ? 2 : theme.lights.length }, (_, index) => index),
@@ -100,6 +137,22 @@ export function Lights() {
 
   const hemiRef = useRef<HemisphereLight>(null)
   const ambientRef = useRef<AmbientLight>(null)
+  const fillRef = useRef<DirectionalLight>(null)
+  // What the eye's fill shines at with no ambiance: the veil's own 1 over a veiled ground.
+  const fillRest = useRef(0)
+  fillRest.current = veiled ? 1 : 0
+
+  // The underground ambiance moves the sky's own light and the eye's fill for the frame it draws.
+  useEffect(
+    () =>
+      registerSkyLights(() => ({
+        ambient: ambientRef.current,
+        hemisphere: hemiRef.current,
+        fill: fillRef.current,
+        fillRest: fillRest.current,
+      })),
+    [],
+  )
 
   const initialized = useRef(false)
   const lightTargets = useRef<THREE.Color[]>([])
@@ -289,7 +342,8 @@ export function Lights() {
 
     const hemiIntensity = atmosphere ? atmosphere.hemisphereIntensity : theme.hemi?.intensity
     const hemiSky = atmosphere ? atmosphere.skyColor : theme.hemi?.sky
-    const hemiGround = atmosphere ? atmosphere.groundColor : theme.hemi?.ground
+    // Over a veiled ground the floor is lit from below as from above, as in an interior capture.
+    const hemiGround = veiled ? hemiSky : atmosphere ? atmosphere.groundColor : theme.hemi?.ground
     if (hemiRef.current && hemiIntensity !== undefined && hemiSky && hemiGround) {
       if (atmosphere || !initialized.current) {
         hemiRef.current.intensity = hemiIntensity
@@ -376,6 +430,8 @@ export function Lights() {
 
       {atmosphere || theme.hemi ? <hemisphereLight ref={hemiRef} /> : null}
       <ambientLight ref={ambientRef} />
+      {filled && <UndergroundFill lightRef={fillRef} />}
+      <UndergroundAmbiance />
     </>
   )
 }

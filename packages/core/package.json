@@ -96,6 +96,16 @@
       "import": "./dist/systems/stair/stair-rise-query.js",
       "default": "./dist/systems/stair/stair-rise-query.js"
     },
+    "./grade-standing": {
+      "types": "./dist/lib/grade-standing.d.ts",
+      "import": "./dist/lib/grade-standing.js",
+      "default": "./dist/lib/grade-standing.js"
+    },
+    "./ground-level": {
+      "types": "./dist/lib/ground-level.d.ts",
+      "import": "./dist/lib/ground-level.js",
+      "default": "./dist/lib/ground-level.js"
+    },
     "./procedural-items": {
       "types": "./dist/procedural-items/index.d.ts",
       "import": "./dist/procedural-items/index.js",

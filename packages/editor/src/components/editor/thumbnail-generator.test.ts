@@ -1,13 +1,53 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, emitter, sceneRegistry, useScene } from '@pascal-app/core'
-import { BuildingNode, CeilingNode, LevelNode, WallNode } from '@pascal-app/core/schema'
-import { hideFromScene, SCENE_LAYER, useViewer } from '@pascal-app/viewer'
-import { Group, Layers, Mesh, OrthographicCamera, PerspectiveCamera, Vector2 } from 'three'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  createTerrainField,
+  emitter,
+  encodeTerrainField,
+  getLevelElevations,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { type SceneViewPose, sceneViewPlan } from '@pascal-app/core/agent-operations'
+import {
+  BuildingNode,
+  CeilingNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  WallNode,
+} from '@pascal-app/core/schema'
+import {
+  groundWindowBoxNow,
+  hideFromScene,
+  SCENE_LAYER,
+  SITE_GROUND,
+  setGroundWindow,
+  useViewer,
+} from '@pascal-app/viewer'
+import {
+  Group,
+  Layers,
+  Mesh,
+  type Object3D,
+  OrthographicCamera,
+  PerspectiveCamera,
+  PlaneGeometry,
+  Raycaster,
+  Scene,
+  Vector2,
+  Vector3,
+} from 'three'
 import { CanvasTarget, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
+import hillside from '../../../../core/src/lib/__fixtures__/owner-hillside-grade.json'
+import victorSeattle from '../../lib/__fixtures__/owner-victor-seattle-parking.json'
+import villaAurelia from '../../lib/__fixtures__/owner-villa-aurelia-basement.json'
 import {
   atCaptureSize,
   captureDimensions,
   capturesOrthographically,
+  exteriorGroundForCapture,
   interiorCutaway,
   presentFinished,
   presentWhileCapturing,
@@ -356,6 +396,242 @@ describe('an interior view of a floor', () => {
     house()
     sceneRegistry.nodes.delete('level_ground')
     expect(() => interiorCutaway('level_ground', () => {})).toThrow('not built yet')
+  })
+})
+
+// What a capture's own camera sees of the ground, on the owner's scenes (13 and 14 Oct, trimmed to
+// their levels, slabs and walls) and a review's plate: the basement's floor and not the lawn, the
+// window opened for the frame (and the person's own given back), and nothing opened from the
+// garden side. Each test runs the cutaway as the capture does, looks, and restores.
+describe('what a capture sees of the ground', () => {
+  let previousScene: ReturnType<typeof useScene.getState>
+  beforeEach(() => {
+    previousScene = useScene.getState()
+  })
+  afterEach(() => {
+    sceneRegistry.clear()
+    useScene.setState(previousScene, true)
+  })
+
+  /**
+   * The scene as the editor holds it: every level's object at its height, a floor in `basement`, and
+   * the site's lawn (wider than any frame) with its veil, hidden. The veil is never picked, as
+   * GroundVeil mounts it: the ray below sees through it.
+   */
+  function editorScene(
+    nodes: Record<AnyNodeId, AnyNode>,
+    basement?: string,
+    siteId = 'site_owner',
+  ) {
+    useScene.setState({ nodes } as never)
+    const scene = new Scene()
+    for (const [levelId, { baseY }] of getLevelElevations(nodes)) {
+      const level = new Group()
+      level.position.y = baseY
+      scene.add(level)
+      sceneRegistry.nodes.set(levelId, level)
+    }
+    const floor = new Mesh(new PlaneGeometry(400, 400).rotateX(-Math.PI / 2))
+    if (basement) sceneRegistry.nodes.get(basement)?.add(floor)
+    const ground = new Mesh(new PlaneGeometry(400, 400).rotateX(-Math.PI / 2))
+    ground.userData[SITE_GROUND] = 'solid'
+    const veil = new Mesh(ground.geometry)
+    veil.userData[SITE_GROUND] = 'veil'
+    veil.visible = false
+    veil.raycast = () => {}
+    const lotLine = new Mesh()
+    const site = new Group().add(ground, veil, lotLine)
+    scene.add(site)
+    sceneRegistry.nodes.set(siteId, site)
+    sceneRegistry.byType.site?.add(siteId)
+    return { scene, floor, ground, veil, lotLine }
+  }
+
+  /** Opens the capture's ground cutaway, runs `look`, restores in reverse; returns what `look` returns. */
+  function whileCut<T>(open: (add: (restore: () => void) => void) => void, look: () => T): T {
+    const restorers: (() => void)[] = []
+    open((restore) => restorers.push(restore))
+    try {
+      return look()
+    } finally {
+      for (const restore of restorers.reverse()) restore()
+    }
+  }
+
+  /** The first thing the capture camera draws on the line from its eye to its aim. */
+  function firstSeen(scene: Scene, pose: SceneViewPose): Object3D | undefined {
+    const eye = new Vector3(...pose.position)
+    const ray = new Raycaster(eye, new Vector3(...pose.target).sub(eye).normalize())
+    ray.layers.set(SCENE_LAYER)
+    scene.updateMatrixWorld(true)
+    const drawn = (object: Object3D | null): boolean =>
+      !object || (object.visible && drawn(object.parent))
+    return ray.intersectObject(scene, true).find((hit) => drawn(hit.object))?.object
+  }
+
+  const cameraAt = (position: [number, number, number]) => {
+    const camera = new PerspectiveCamera()
+    camera.position.set(...position)
+    return camera
+  }
+  const persons = {
+    min: [-6, 0, -7] as [number, number, number],
+    max: [6, 3, 7] as [number, number, number],
+  }
+
+  // The villa's Lower Ground 3.35 m under the lawn, the Victor's parking 2.61 m under it and past
+  // its west lot line.
+  test.each([
+    ['the villa Aurelia', villaAurelia, 'level_68jf2zqaukfjof3m', 'level_ztimtvrgdzzd6c9f'],
+    ['the Victor Seattle', victorSeattle, 'level_q209tmgwuzcahwzj', 'level_wj5tz664u03eolux'],
+  ] as const)(
+    "the agent's picture of %s's basement sees its floor, not the lawn; a floor at grade is pictured on solid ground, even veiled",
+    (_, owner, basement, atGrade) => {
+      const nodes = owner.nodes as unknown as Record<AnyNodeId, AnyNode>
+      const plan = sceneViewPlan(nodes, { target: basement })
+      const { scene, floor, ground, veil, lotLine } = editorScene(nodes, basement)
+      expect(firstSeen(scene, plan.pose)).toBe(ground)
+      whileCut(
+        (add) => interiorCutaway(basement, add),
+        () => {
+          expect(firstSeen(scene, plan.pose)).toBe(floor)
+          expect(veil.visible).toBe(true)
+          expect(lotLine.layers.isEnabled(SCENE_LAYER)).toBe(true)
+        },
+      )
+      expect(firstSeen(scene, plan.pose)).toBe(ground)
+      expect(veil.visible).toBe(false)
+
+      // A floor at grade while the person has the ground veiled and aside.
+      hideFromScene(ground, 'ground-aside')
+      veil.visible = true
+      whileCut(
+        (add) => interiorCutaway(atGrade, add),
+        () => {
+          expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
+          expect(veil.visible).toBe(false)
+        },
+      )
+      expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(false)
+      expect(veil.visible).toBe(true)
+    },
+  )
+
+  // The owner's hillside house (14 Oct): no floor buried, a 6 m plateau on the street side. A
+  // capture from the street sees the house through the ground window, from its own camera,
+  // whatever the person's view holds; from the garden side the ground stands solid.
+  describe('on the hillside house', () => {
+    const nodes = hillside.nodes as unknown as Record<AnyNodeId, AnyNode>
+    const garden = Object.values(nodes).find(
+      (node) => node.type === 'level' && node.name === 'Garden level · walk-out',
+    )
+    if (!garden) throw new Error('the hillside fixture is missing its garden level')
+
+    test('from the street side the window opens for the frame and closes after it, the solid ground staying drawn; from the garden side none opens', () => {
+      const { ground, veil } = editorScene(nodes, undefined, 'site_hillside')
+      whileCut(
+        (add) => interiorCutaway(garden.id, add, cameraAt([0, 7, -20])),
+        () => {
+          expect(groundWindowBoxNow()).not.toBeNull()
+          expect(veil.visible).toBe(true)
+          // Its window is cut per fragment, not by hiding it.
+          expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
+        },
+      )
+      expect(groundWindowBoxNow()).toBeNull()
+      expect(veil.visible).toBe(false)
+      whileCut(
+        (add) => interiorCutaway(garden.id, add, cameraAt([0, 3, 20])),
+        () => {
+          expect(groundWindowBoxNow()).toBeNull()
+          expect(veil.visible).toBe(false)
+        },
+      )
+    })
+
+    // Both agent lanes ask with a perspective/orthographic pose of their own, not a cameraPose:
+    // the posed exterior frame decides its window from its own eye, not the person's closed one.
+    test('a posed exterior capture decides its own window and gives the person’s back; an unposed one decides none', () => {
+      const { veil } = editorScene(nodes, undefined, 'site_hillside')
+      whileCut(
+        (add) => exteriorGroundForCapture(add, true, cameraAt([0, 7, -20])),
+        () => {
+          expect(groundWindowBoxNow()).not.toBeNull()
+          expect(veil.visible).toBe(true)
+        },
+      )
+      expect(groundWindowBoxNow()).toBeNull()
+      expect(veil.visible).toBe(false)
+      // The person's window, open for their eye, closes for a garden-side frame and returns; an
+      // unposed capture leaves it alone.
+      setGroundWindow(persons)
+      whileCut(
+        (add) => exteriorGroundForCapture(add, true, cameraAt([0, 3, 20])),
+        () => expect(groundWindowBoxNow()).toBeNull(),
+      )
+      expect(groundWindowBoxNow()).toBe(persons)
+      whileCut(
+        (add) => exteriorGroundForCapture(add, false, cameraAt([0, 3, 20])),
+        () => expect(groundWindowBoxNow()).toBe(persons),
+      )
+      expect(groundWindowBoxNow()).toBe(persons)
+      setGroundWindow(null)
+    })
+  })
+
+  // The review's plate (14 Oct): [-5,5] × [-4,4] at Y 0.2, terrain 2 m only inside x 0…4, z -3…3.
+  // An interior capture from overhead opens the window over the buried eastern rooms: partly below
+  // grade has no wholesale veil to fall back on.
+  test('from overhead the window opens over the buried rooms of a floor partly below grade, and closes after', () => {
+    const field = createTerrainField({ cols: 25, rows: 25, spacing: 1, origin: [-12, -12] })
+    const heights = new Int16Array(field.heights)
+    for (let row = 0; row < field.rows; row += 1)
+      for (let col = 0; col < field.cols; col += 1) {
+        const x = field.origin[0] + col * field.spacing
+        const z = field.origin[1] + row * field.spacing
+        if (x >= 0 && x <= 4 && z >= -3 && z <= 3) heights[row * field.cols + col] = 200
+      }
+    const list: AnyNode[] = [
+      SiteNode.parse({
+        id: 'site_a',
+        children: ['building_a'],
+        terrain: encodeTerrainField({ ...field, heights }),
+      }),
+      BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_0'] }),
+      LevelNode.parse({
+        id: 'level_0',
+        level: 0,
+        height: 3,
+        parentId: 'building_a',
+        children: ['slab_0'],
+      }),
+      SlabNode.parse({
+        id: 'slab_0',
+        parentId: 'level_0',
+        elevation: 0.2,
+        polygon: [
+          [-5, -4],
+          [5, -4],
+          [5, 4],
+          [-5, 4],
+        ],
+      }),
+    ]
+    const { ground, veil } = editorScene(
+      Object.fromEntries(list.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>,
+      undefined,
+      'site_a',
+    )
+    whileCut(
+      (add) => interiorCutaway('level_0', add, cameraAt([0, 15, 0])),
+      () => {
+        expect(groundWindowBoxNow()).not.toBeNull()
+        expect(veil.visible).toBe(true)
+        expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
+      },
+    )
+    expect(groundWindowBoxNow()).toBeNull()
+    expect(veil.visible).toBe(false)
   })
 })
 

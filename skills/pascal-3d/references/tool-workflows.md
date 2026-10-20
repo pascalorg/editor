@@ -37,6 +37,10 @@ All three require edit access on the scan's own project; view access, including 
 
 Use `checkpoint` only at a meaningful milestone. A browser-visible draft and a durable checkpoint are distinct states.
 
+### The ground line
+
+A building's levels stand on a ground line: the level at grade (`set_ground_level` names it and seats the building with its floor 8 in over grade, the top of the foundation; until then it is the lowest level whose floor is not under the ground), the levels with a lower floor index below grade. `list_levels` reads `groundLevels` and each level's `gradeStanding`. A new wall on a level below grade is an 8 in CMU foundation wall with 2x4 pressure-treated furring laid flat inside (0.241 m); a wall given a thickness keeps it, and the result of `add_level`, `add_wall` and `create_room` says so. A basement added with `add_level` goes under the lowest floor and every existing floor keeps its place.
+
 ## Make a bounded edit
 
 1. Read the target and its surrounding level.
@@ -89,7 +93,7 @@ The arguments are the wrong shape or type for the tool's schema, and nothing ran
 
 `view_scene` returns a picture of the building from the viewpoint you pick, to compare with a reference before fixing. It is read-only and creates nothing. `interior: { levelId }` looks inside one floor, the other floors, its roof and its ceilings left out and everything on it, walls, openings and furniture alike, cut at 0.65 of the storey's height; the live view is not changed. On the hosted server the user's open editor tab renders it: `editor_tab_required` comes with `editorUrl` (show it, wait until the tab is open, repeat the call) `editor_tab_hidden` means the tab is in the background (ask the user to bring it forward, repeat), and `editor_tab_busy` means it is open but busy or still loading, and carries no link (wait a few seconds and repeat; if it is still busy after about a minute, tell the person; do not ask them to open anything). A server with no renderer answers `view_unavailable`. A picture is not a measure.
 
-If an authored landscape sits below Pascal’s generated ground, use `apply_patch` to set the site’s `showGround` to `false`. This hides the site ground, including sculpted terrain, and the horizon while preserving authored children, elevations, and parcel lines; omit the field or set it to `true` to restore them. By hand: Scene → select the site → expand its Site panel → Terrain → Show ground.
+If an authored landscape sits below Pascal’s generated ground, use `apply_patch` to set the site’s `showGround` to `false`. This hides the site ground, including sculpted terrain, and the horizon while preserving authored children, elevations, and parcel lines; omit the field or set it to `true` to restore them. By hand: Scene → select the site → expand its Site panel → Terrain → Show ground. While the level display shows a level below grade it hides the storeys above, the landscape with them, and the site's ground stands in over the basement (opening and all); at and above grade `showGround` is yours again.
 
 ## Start over
 

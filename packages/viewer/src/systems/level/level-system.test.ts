@@ -168,6 +168,64 @@ describe("the editor's level display", () => {
     expect(objects.every((object) => object.visible && object.layers.isEnabled(0))).toBe(true)
   })
 
+  test('decides from the level index alone: the levels above the selected one hide in every building', async () => {
+    const level = (id: string, parentId: string, index: number) => ({
+      object: 'node',
+      id,
+      type: 'level',
+      parentId,
+      visible: true,
+      metadata: {},
+      children: [],
+      level: index,
+      height: 2.5,
+    })
+    const building = (id: string, children: string[]) => ({
+      object: 'node',
+      id,
+      type: 'building',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children,
+    })
+    const levels = [
+      level('level_a_m1', 'building_a', -1),
+      level('level_a_g', 'building_a', 0),
+      level('level_b_m1', 'building_b', -1),
+      level('level_b_g', 'building_b', 0),
+    ]
+    useScene.setState({
+      nodes: Object.fromEntries(
+        [
+          building('building_a', ['level_a_m1', 'level_a_g']),
+          building('building_b', ['level_b_m1', 'level_b_g']),
+          ...levels,
+        ].map((node) => [node.id, node]),
+      ) as unknown as Record<AnyNodeId, AnyNode>,
+    })
+    const objects = new Map(
+      levels.map((entry) => {
+        const object = new Object3D()
+        sceneRegistry.nodes.set(entry.id, object)
+        sceneRegistry.byType.level!.add(entry.id)
+        return [entry.id, object] as const
+      }),
+    )
+    // The first house's basement selected: the second house's basement shows as it does, and both
+    // ground floors are hidden, whichever house they belong to.
+    setLevelMode('stacked', 'level_a_m1')
+    useViewer.setState({ hideLevelsAboveSelection: true })
+    await updateLevelPresentation(1 / 12)
+    const drawn = (id: string) => objects.get(id)!.layers.isEnabled(0)
+    expect(['level_a_m1', 'level_a_g', 'level_b_m1', 'level_b_g'].map(drawn)).toEqual([
+      true,
+      false,
+      true,
+      false,
+    ])
+  })
+
   test('a full-building capture shows the hidden upper levels for its render', async () => {
     const { levels, objects } = setupLevels([0, 0])
     setLevelMode('stacked', levels[0]!.id)

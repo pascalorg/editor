@@ -3,6 +3,7 @@
 import {
   emitter,
   isCaptureSessionOn,
+  levelGradeStanding,
   sceneRegistry,
   subscribeCaptureSessions,
   type ThumbnailGenerateEvent,
@@ -25,9 +26,12 @@ import {
   snapLevelsToTruePositions,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
+  temporarilyGroundWindowForCapture,
   temporarilyHideNodeTypes,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
+  temporarilyVeilGround,
+  temporarilyWithoutAmbiance,
   useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
@@ -543,10 +547,18 @@ function clipSceneFor(
  * floors and this floor's roofs and ceilings out of the picture, everything
  * on it cut where core says (sceneViewInterior, from the scene as this editor
  * has it) and its shadows with it, and whatever the user's solo or isolation
- * holds back on it shown.
+ * holds back on it shown. The site's ground follows this floor, not the
+ * user's: veiled wholesale over a floor below grade; over one only partly
+ * below grade, or at grade behind a hillside, veiled only where it stands
+ * between this frame's camera and the floor (the ground window).
  */
-export function interiorCutaway(levelId: string, restore: (callback: () => void) => void) {
-  const { cutHeight, hiddenIds } = sceneViewInterior(useScene.getState().nodes, levelId)
+export function interiorCutaway(
+  levelId: string,
+  restore: (callback: () => void) => void,
+  camera?: THREE.Camera,
+) {
+  const { nodes } = useScene.getState()
+  const { cutHeight, hiddenIds } = sceneViewInterior(nodes, levelId)
   const floor = sceneRegistry.nodes.get(levelId)
   if (!floor) throw new Error('The floor to look inside is not built yet. Try again.')
   for (const id of hiddenIds) {
@@ -559,6 +571,29 @@ export function interiorCutaway(levelId: string, restore: (callback: () => void)
   }
   restore(temporarilyShowPresentation(floor))
   restore(clipSceneFor(floor, [{ normal: [0, -1, 0], constant: cutHeight }], true))
+  const standing = levelGradeStanding(nodes, levelId)
+  if (standing === 'below-grade' || !camera) {
+    restore(temporarilyVeilGround(standing !== 'at-grade'))
+  } else {
+    restore(temporarilyVeilGround(false))
+    restore(temporarilyGroundWindowForCapture(camera, nodes, levelId))
+  }
+}
+
+/**
+ * The ground of an exterior picture, for one render: solid, whatever level the person is
+ * on — but a posed frame (an authored snapshot pose, or the caller's own perspective or
+ * orthographic view, which is how both agent lanes ask) decides its own ground window from
+ * its own camera, never inheriting the person's. An unposed frame (the person's viewport,
+ * the hero shot) makes no such decision: the window is the person's to hold.
+ */
+export function exteriorGroundForCapture(
+  restore: (callback: () => void) => void,
+  posed: boolean,
+  camera: THREE.Camera,
+) {
+  restore(temporarilyVeilGround(false))
+  if (posed) restore(temporarilyGroundWindowForCapture(camera, useScene.getState().nodes))
 }
 
 /**
@@ -878,6 +913,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             // the scene as the picture wants it, for one render; `restore` puts
             // every change back right after it
             const setUp = (restore: (callback: () => void) => void) => {
+              // A picture is read for its rooms, taken in the world's own light: the earth the
+              // person's view turns to under the ground (sky, fog, vignette, the sky's lights)
+              // is not in it.
+              restore(temporarilyWithoutAmbiance())
               if (snapLevels) {
                 const prevMode = useViewer.getState().levelMode
                 if (prevMode !== 'stacked') {
@@ -951,8 +990,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 cameraData.presentation = event.presentation
               }
               if (interior) {
-                interiorCutaway(interior.levelId, restore)
+                interiorCutaway(interior.levelId, restore, thumbnailCamera)
                 restore(lightInterior(scene, thumbnailCamera))
+              } else if (snapLevels || pose || cameraPose) {
+                exteriorGroundForCapture(restore, Boolean(cameraPose || pose), thumbnailCamera)
               }
             }
             // The scene pass is a FRAME-updated node: it renders once per node

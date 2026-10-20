@@ -6,6 +6,8 @@ import {
   VIEW_MAX_PX,
   type VIEW_SIDES,
 } from '../agent-tools/view-scene'
+import { levelGradeStanding } from '../lib/grade-standing'
+import { buildingGroundBox, levelGroundBox, terrainBetweenEyeAndBox } from '../lib/ground-window'
 import { distanceToSegment } from '../lib/room-topology-index'
 import { buildingStreet } from '../lib/site-placement'
 import type {
@@ -827,10 +829,22 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewPoseInput): Sce
   }
 }
 
+/** What a picture into a floor below grade shows over it, said so the agent describes it right. */
+const BELOW_GRADE_NOTE =
+  'The floor lies below grade: the ground over it is drawn as a faint veil, so its rooms show through it.'
+const PARTLY_BELOW_GRADE_NOTE =
+  'The floor lies partly below grade: the ground stands over part of it.'
+const GROUND_IN_THE_WAY_NOTE =
+  'Ground stands between this viewpoint and the building: where it would hide it, the ground is drawn as a faint veil; the rest of the ground is solid.'
+
 const ROOM_EYE_NOTE = (name: string) =>
   `The eye stands inside ${name} at a person's height, looking across it: the walls, openings and furniture of its floor are cut at ${INTERIOR_CUT_WORDS} of the storey's height and its ceiling is left out.`
 
-/** What a view comes with, on both surfaces: a picture to compare, not a measure. */
+/**
+ * What a view comes with, on both surfaces: a picture to compare, not a measure; a floor below grade
+ * is seen through the veiled ground. With the picture's `pose`, also the fact of ground standing
+ * between that viewpoint and the building, veiled where it would hide it.
+ */
 export function sceneViewNote(
   nodes?: Readonly<Record<string, AnyNode>>,
   interior?: SceneViewInterior,
@@ -839,6 +853,17 @@ export function sceneViewNote(
   const notes = [
     'A picture to compare with the reference, not a measure: take sizes and counts from the tools.',
   ]
+  if (nodes && interior) {
+    const standing = levelGradeStanding(nodes as Record<AnyNodeId, AnyNode>, interior.levelId)
+    if (standing === 'below-grade') notes.push(BELOW_GRADE_NOTE)
+    if (standing === 'partly-below-grade') notes.push(PARTLY_BELOW_GRADE_NOTE)
+  }
+  if (nodes && pose) {
+    const asNodes = nodes as Record<AnyNodeId, AnyNode>
+    const box = interior ? levelGroundBox(asNodes, interior.levelId) : buildingGroundBox(asNodes)
+    if (box && terrainBetweenEyeAndBox(asNodes, pose.position, box))
+      notes.push(GROUND_IN_THE_WAY_NOTE)
+  }
   const room = interior?.roomId ? nodes?.[interior.roomId] : undefined
   if (nodes && pose && room?.type === 'zone') {
     const { bounds } = sceneViewInterior(nodes, interior!.levelId)
@@ -1050,6 +1075,21 @@ function roomEyeView(
 }
 
 /**
+ * A level below grade on all of its footprint is seen from inside: from outside, the ground
+ * covers it. One only partly below grade keeps its outside view — the ground in the way is
+ * veiled in the picture instead.
+ */
+function belowGradeInterior(
+  nodes: Readonly<Record<string, AnyNode>>,
+  target: AnyNode | undefined,
+): SceneViewInterior | undefined {
+  return target?.type === 'level' &&
+    levelGradeStanding(nodes as Record<AnyNodeId, AnyNode>, target.id) === 'below-grade'
+    ? { levelId: target.id }
+    : undefined
+}
+
+/**
  * The view to render, its size and its light: through a camera given whole (a photo's, at the
  * photo's aspect so the two lay one beside the other, or the person's own, which the host passes
  * as `currentCamera`); else framing the target at the standard size, from a compass side or a side
@@ -1082,9 +1122,11 @@ export function sceneViewPlan(
       })
   }
   const crop = cropOf(input.photo)
+  const target = input.target ? nodes[input.target] : undefined
   const requested = input.interior ? interiorRequest(nodes, input.interior) : undefined
   const room = requested?.room
-  const interior = requested?.interior
+  // A level below grade is looked into when none is asked for: from outside, the ground covers it.
+  const interior = requested?.interior ?? belowGradeInterior(nodes, target)
   const inside = interior && sceneViewInterior(nodes, interior.levelId)
   const lighting = input.lighting === 'current' ? undefined : input.lighting
   const extras = {
@@ -1093,7 +1135,6 @@ export function sceneViewPlan(
     ...(presentation ? { presentation } : {}),
     ...(lighting ? { lighting } : {}),
   }
-  const target = input.target ? nodes[input.target] : undefined
   // An interior view shows this floor alone, without its roofs and ceilings: a target left out of
   // the picture would frame nothing shown.
   if (interior && inside && target) {

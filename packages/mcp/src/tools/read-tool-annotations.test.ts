@@ -121,6 +121,7 @@ const TOOL_POLICIES = [
       'get_project_status',
       'load_scene',
       'redo',
+      'set_ground_level',
       'rename_scene',
       'run_batch',
       'save_scene',
