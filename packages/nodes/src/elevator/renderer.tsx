@@ -1083,7 +1083,11 @@ function DoorLeaf({
   }, 2.6)
 
   return (
-    <group ref={ref} position={[getLeafX(doorOpen), y + height / 2, z]}>
+    <group
+      name={`${animated?.kind ?? 'landing'}-door-${side}`}
+      ref={ref}
+      position={[getLeafX(doorOpen), y + height / 2, z]}
+    >
       {resolvedPanelStyle === 'glass-frame' ? (
         <>
           <BoxPrimitive
@@ -1241,25 +1245,25 @@ function LandingDoorFrame({
   const jambCenterOffset = doorWidth / 2 + jambWidth / 2
   const headerHeight = Math.max(levelTopY - (levelY + doorHeight), 0)
   const trim = 0.055
+  const pocketDepth = 0.07
+  const faceDepth = (wallDepth - pocketDepth) / 2
+  const faceOffset = (pocketDepth + faceDepth) / 2
 
   return (
     <StaticBoxes>
-      <BoxPrimitive
-        castShadow
-        material={SHAFT_WALL_MATERIAL}
-        position={[-jambCenterOffset, levelY + levelHeight / 2, z]}
-        receiveShadow
-        scale={[jambWidth, levelHeight, wallDepth]}
-        slotId="shaft"
-      />
-      <BoxPrimitive
-        castShadow
-        material={SHAFT_WALL_MATERIAL}
-        position={[jambCenterOffset, levelY + levelHeight / 2, z]}
-        receiveShadow
-        scale={[jambWidth, levelHeight, wallDepth]}
-        slotId="shaft"
-      />
+      {[-1, 1].flatMap((side) =>
+        [-1, 1].map((face) => (
+          <BoxPrimitive
+            key={`${side}:${face}`}
+            castShadow
+            material={SHAFT_WALL_MATERIAL}
+            position={[side * jambCenterOffset, levelY + levelHeight / 2, z + face * faceOffset]}
+            receiveShadow
+            scale={[jambWidth, levelHeight, faceDepth]}
+            slotId="shaft"
+          />
+        )),
+      )}
       {headerHeight > 0.01 && (
         <BoxPrimitive
           castShadow
@@ -1490,9 +1494,15 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
     runtimeSnapshot?.phase === 'opening' ||
     runtimeStatus?.phase === 'open' ||
     runtimeSnapshot?.phase === 'open'
-  const frontWallZ = -shaftDepth / 2 - shaftWallThickness / 2
-  const frontZ = frontWallZ - shaftWallThickness / 2 - 0.018
-  const landingPanelX = Math.min(shaftWidth / 2 - 0.16, doorWidth / 2 + 0.18)
+  const frontWallDepth = Math.max(shaftWallThickness, 0.13)
+  const frontWallZ = -shaftDepth / 2 - frontWallDepth / 2
+  const landingDoorZ = frontWallZ
+  const cabDoorZ = -shaftDepth / 2 + 0.055
+  const frontZ = -shaftDepth / 2 - frontWallDepth
+  const jambWidth = (shaftWidth - doorWidth) / 2
+  const landingPanelWidth = Math.min(0.18, jambWidth - 0.02)
+  const landingPanelX = (shaftWidth + doorWidth) / 4
+  const cabReturnWidth = (cabWidth - doorWidth) / 2
   const cabCenterZ = -shaftDepth / 2 + cabDepth / 2
   const cabPanelX = cabWidth / 2 - 0.075
   const cabPanelZ = cabCenterZ - cabDepth / 2 + 0.36
@@ -1626,6 +1636,33 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
                 slotId="cab"
               />
             </StaticBoxes>
+            <group name="cab-door-surround">
+              <StaticBoxes>
+                {[-1, 1].map((side) => (
+                  <BoxPrimitive
+                    key={side}
+                    castShadow
+                    material={CAB_MATERIAL}
+                    position={[
+                      side * (doorWidth / 2 + cabReturnWidth / 2),
+                      cabHeight / 2,
+                      cabDoorZ + 0.065,
+                    ]}
+                    receiveShadow
+                    scale={[cabReturnWidth, cabHeight, 0.025]}
+                    slotId="cab"
+                  />
+                ))}
+                <BoxPrimitive
+                  castShadow
+                  material={CAB_MATERIAL}
+                  position={[0, (doorHeight + cabHeight) / 2, cabDoorZ + 0.065]}
+                  receiveShadow
+                  scale={[doorWidth, cabHeight - doorHeight, 0.025]}
+                  slotId="cab"
+                />
+              </StaticBoxes>
+            </group>
             <ElevatorDoorLeaves
               animated={{ elevatorId, kind: 'cab' }}
               doorOpen={doorOpen}
@@ -1634,7 +1671,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
               height={doorHeight}
               width={doorWidth}
               y={0}
-              z={frontZ}
+              z={cabDoorZ}
             />
 
             <ElevatorFloorIndicator
@@ -1642,7 +1679,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
               direction={indicatorDirection}
               faceSign={1}
               label={indicatorEntry?.label ?? '-'}
-              position={[0, doorHeight + 0.13, frontZ + 0.055]}
+              position={[0, doorHeight + 0.13, cabDoorZ + 0.075]}
               scale={0.78}
             />
 
@@ -1708,7 +1745,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
                   levelTopY={levelTopY}
                   levelY={entry.baseY}
                   shaftWidth={shaftWidth}
-                  wallDepth={shaftWallThickness}
+                  wallDepth={frontWallDepth}
                   z={frontWallZ}
                 />
                 <LandingDoor
@@ -1721,7 +1758,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
                   doorWidth={doorWidth}
                   levelId={entry.id as AnyNodeId}
                   levelY={entry.baseY}
-                  z={frontZ - 0.02}
+                  z={landingDoorZ}
                 />
                 <ElevatorFloorIndicator
                   active={showLandingReadout}
@@ -1731,12 +1768,15 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
                   scale={0.62}
                   showReadout={showLandingReadout}
                 />
-                <group position={[landingPanelX, entry.baseY + panelRelativeY, frontZ - 0.035]}>
+                <group
+                  name="landing-call-panel"
+                  position={[landingPanelX, entry.baseY + panelRelativeY, frontZ - 0.035]}
+                >
                   <BoxPrimitive
                     castShadow
                     material={LANDING_PANEL_MATERIAL}
                     receiveShadow
-                    scale={[0.18, 0.42, 0.04]}
+                    scale={[landingPanelWidth, 0.42, 0.04]}
                   />
                   <ElevatorMeshButton
                     active={
@@ -1748,14 +1788,14 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
                     levelId={entry.id as AnyNodeId}
                     position={[0, 0.06, -0.045]}
                     queued={isQueuedLevel}
-                    radius={0.045}
+                    radius={Math.min(0.045, landingPanelWidth * 0.3)}
                   />
                   <BoxPrimitive
                     material={
                       isQueuedLevel ? QUEUE_STRIP_MATERIALS.queued : QUEUE_STRIP_MATERIALS.idle
                     }
                     position={[0, -0.12, -0.035]}
-                    scale={[0.095, 0.025, 0.012]}
+                    scale={[Math.min(0.095, landingPanelWidth * 0.6), 0.025, 0.012]}
                   />
                 </group>
               </group>

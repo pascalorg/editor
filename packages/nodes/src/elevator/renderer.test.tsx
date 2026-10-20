@@ -1,7 +1,14 @@
 import { expect, test } from 'bun:test'
-import { ElevatorNode, elevatorSlots, useScene } from '@pascal-app/core'
+import {
+  BuildingNode,
+  ElevatorNode,
+  elevatorSlots,
+  LevelNode,
+  useInteractive,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { type Material, Mesh } from 'three'
+import { Box3, type Material, Mesh, Raycaster, Vector3 } from 'three'
 import { installMountedScene, mount } from '../__tests__/harness'
 import { useElevatorInspection } from './inspection'
 import { elevatorPaint } from './paint'
@@ -152,3 +159,51 @@ test('shaft cutaway hides its shell while retaining the cab, door surfaces and s
   expect(meshes.every((mesh) => mesh.visible)).toBe(true)
   await renderer.unmount()
 })
+
+for (const doorStyle of ['center-opening', 'single-left', 'single-right'] as const) {
+  test(`${doorStyle}: doors travel in separate pockets behind the stationary call panel`, async () => {
+    const building = BuildingNode.parse({})
+    const level = LevelNode.parse({ parentId: building.id, level: 0 })
+    building.children = [level.id]
+    const node = ElevatorNode.parse({ parentId: building.id, doorStyle, shaftWallThickness: 0.04 })
+    useScene.setState({ nodes: { [building.id]: building, [level.id]: level, [node.id]: node } })
+    useViewer.setState({ textures: true, shading: 'rendered' })
+    const renderer = await mount(<ElevatorRenderer node={node} />)
+    const root = renderer.scene.instance
+    const panel = root.getObjectByName('landing-call-panel')!
+    expect(panel).toBeDefined()
+    const walls: Mesh[] = []
+    root.traverse((object) => {
+      if (object instanceof Mesh && object.userData.slotId === 'shaft') walls.push(object)
+    })
+    for (const amount of [0, 0.5, 1]) {
+      useInteractive.getState().setElevatorState(node.id, {
+        currentLevelId: level.id,
+        doorOpen: amount,
+        carY: 0,
+      })
+      await renderer.advanceFrames(1, 1 / 60)
+      root.updateMatrixWorld(true)
+      const panelBounds = new Box3().setFromObject(panel)
+      const landing = new Box3(),
+        cab = new Box3()
+      root.traverse((object) => {
+        if (object.name.startsWith('landing-door-')) landing.union(new Box3().setFromObject(object))
+        if (object.name.startsWith('cab-door-') && object.name !== 'cab-door-surround')
+          cab.union(new Box3().setFromObject(object))
+      })
+      expect(landing.isEmpty()).toBe(false)
+      expect(cab.isEmpty()).toBe(false)
+      expect(landing.min.z).toBeGreaterThan(panelBounds.max.z)
+      expect(cab.min.z).toBeGreaterThan(landing.max.z + 0.01)
+      const ray = new Raycaster(
+        new Vector3(panel.position.x, 0.6, panelBounds.min.z - 1),
+        new Vector3(0, 0, 1),
+      )
+      const hits = ray.intersectObjects(walls, false)
+      expect(hits.length).toBeGreaterThan(0)
+      expect(hits[0]!.point.z).toBeLessThan(landing.min.z)
+    }
+    await renderer.unmount()
+  })
+}
