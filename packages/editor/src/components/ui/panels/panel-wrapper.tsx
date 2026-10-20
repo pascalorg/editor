@@ -55,7 +55,7 @@ function clamp(value: number, min: number, max: number): number {
  * `data-viewer-bounds`) so it can't slide under the sidebar or top bar.
  * Falls back to the viewport when the marker isn't found.
  */
-function getDragBounds(el: HTMLElement | null): {
+function getDragBounds(el: HTMLElement | null, inStack = false): {
   left: number
   top: number
   right: number
@@ -66,7 +66,15 @@ function getDragBounds(el: HTMLElement | null): {
   if (!rect) {
     return { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
   }
-  return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
+  const stack = inStack ? el?.closest('[data-right-stack]') : null
+  const stackRect = stack?.getBoundingClientRect()
+  const cardRect = stack?.querySelector('[data-right-stack-card]')?.getBoundingClientRect()
+  return {
+    left: rect.left,
+    top: stackRect ? stackRect.top - DRAG_MARGIN : rect.top,
+    right: rect.right,
+    bottom: cardRect && cardRect.height > 0 ? cardRect.top : rect.bottom,
+  }
 }
 
 /**
@@ -225,7 +233,7 @@ export function PanelWrapper({
       if ((e.target as HTMLElement).closest('button, input, label')) return
       const rect = panelRef.current?.getBoundingClientRect()
       if (!rect) return
-      const bounds = getDragBounds(panelRef.current)
+      const bounds = getDragBounds(panelRef.current, inStack)
       const base = offset ?? { x: 0, y: 0 }
       dragRef.current = {
         startX: e.clientX,
@@ -245,7 +253,7 @@ export function PanelWrapper({
       setIsDragging(true)
       e.currentTarget.setPointerCapture(e.pointerId)
     },
-    [offset],
+    [offset, inStack],
   )
 
   const handleHeaderPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -276,22 +284,37 @@ export function PanelWrapper({
     [handleCardToggle],
   )
 
-  // Expanding can grow the panel past an edge if it was dragged there while
-  // collapsed — nudge it back inside the viewer bounds.
+  // Keep repositioned panels inside the available space as the card or viewer resizes.
   useLayoutEffect(() => {
-    if (isMobile || collapsed) return
+    if (isMobile) return
     const el = panelRef.current
     if (!el) return
-    const rect = el.getBoundingClientRect()
-    const bounds = getDragBounds(el)
-    const left = clamp(rect.left, bounds.left + DRAG_MARGIN, bounds.right - rect.width - DRAG_MARGIN)
-    const top = clamp(rect.top, bounds.top + DRAG_MARGIN, bounds.bottom - rect.height - DRAG_MARGIN)
-    const dx = left - rect.left
-    const dy = top - rect.top
-    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-      setOffset((prev) => ({ x: (prev?.x ?? 0) + dx, y: (prev?.y ?? 0) + dy }))
+    const fit = () => {
+      const rect = el.getBoundingClientRect()
+      const bounds = getDragBounds(el, inStack)
+      const left = clamp(rect.left, bounds.left + DRAG_MARGIN, bounds.right - rect.width - DRAG_MARGIN)
+      const top = clamp(rect.top, bounds.top + DRAG_MARGIN, bounds.bottom - rect.height - DRAG_MARGIN)
+      const dx = left - rect.left
+      const dy = top - rect.top
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+        setOffset((prev) => ({ x: (prev?.x ?? 0) + dx, y: (prev?.y ?? 0) + dy }))
+      }
     }
-  }, [collapsed, isMobile])
+    fit()
+    const resize = new ResizeObserver(fit)
+    resize.observe(el)
+    const stack = el.closest('[data-right-stack]')
+    if (stack) {
+      resize.observe(stack)
+      const card = stack.querySelector('[data-right-stack-card]')
+      if (card) resize.observe(card)
+    }
+    window.addEventListener('resize', fit)
+    return () => {
+      resize.disconnect()
+      window.removeEventListener('resize', fit)
+    }
+  }, [collapsed, isMobile, inStack])
 
   return (
     <div
@@ -302,7 +325,7 @@ export function PanelWrapper({
           : inStack
             ? // In the shared right column: it grows down and scrolls on itself,
               // leaving the shortcuts card below it its room (`right-stack.tsx`).
-              'pointer-events-auto flex max-h-full min-h-0 flex-[0_1_auto] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground'
+              'pointer-events-auto flex max-h-[var(--inspector-available-height)] min-h-0 flex-[0_1_auto] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground'
           // Cap height at `100dvh - 154px` so a tall panel's bottom edge
           // aligns flush with the top of the floating bottom action bar.
           // Combined with `top-20` (80px), the panel's bottom sits at
@@ -329,7 +352,7 @@ export function PanelWrapper({
       {!isMobile && (
         <div
           className={cn(
-            'relative flex select-none items-center justify-between px-3 py-3',
+            'relative flex shrink-0 select-none items-center justify-between px-3 py-3',
             !collapsed && 'border-border/50 border-b',
             isDragging ? 'cursor-grabbing' : 'cursor-grab',
           )}

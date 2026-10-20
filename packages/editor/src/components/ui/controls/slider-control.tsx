@@ -247,6 +247,12 @@ export function SliderControl({
   )
 
   useEffect(() => {
+    const cancelOnBlur = () => { if (dragRef.current || editingRef.current) cancelEdit() }
+    window.addEventListener('blur', cancelOnBlur)
+    return () => window.removeEventListener('blur', cancelOnBlur)
+  }, [cancelEdit])
+
+  useEffect(() => {
     if (!isDragging) return
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') cancelEdit()
@@ -376,6 +382,7 @@ export function SliderControl({
               </span>
             )}
             <input
+              aria-label={typeof label === 'string' ? label : undefined}
               autoFocus
               className="w-14 bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
               onBlur={submitValue}
@@ -402,14 +409,18 @@ export function SliderControl({
             )}
           </>
         ) : mixed && !isDragging ? (
-          <div
+          <button
+            type="button"
+            aria-label={typeof label === 'string' ? `Edit ${label}` : undefined}
             className="flex cursor-text items-center text-muted-foreground transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
             <span className="font-mono tracking-tight">Mixed</span>
-          </div>
+          </button>
         ) : (
-          <div
+          <button
+            type="button"
+            aria-label={typeof label === 'string' ? `Edit ${label}` : undefined}
             className="flex cursor-text items-center text-foreground/60 transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
@@ -417,7 +428,7 @@ export function SliderControl({
               {Number(displayValue.toFixed(precision)).toFixed(precision)}
             </span>
             {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
-          </div>
+          </button>
         )}
       </div>
     </div>

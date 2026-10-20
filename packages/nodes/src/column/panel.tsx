@@ -22,7 +22,6 @@ import {
   armMaterialPaint,
   PanelSection as BasePanelSection,
   SliderControl as BaseSliderControl,
-  cn,
   PanelWrapper,
   ToggleControl,
   triggerSFX,
@@ -30,7 +29,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Move, PaintBucket, Trash2 } from 'lucide-react'
-import { type ComponentProps, useCallback, useEffect, useMemo } from 'react'
+import { type ComponentProps, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { AuthoredParams } from '../item/authored-params'
 import { isManagedColumn } from './edit-policy'
@@ -142,97 +141,6 @@ const COLUMN_PROPORTION_OPTIONS = Object.entries(COLUMN_PROPORTION_PRESETS).map(
   }),
 )
 
-const SUPPORT_STYLE_OPTIONS: Array<{ label: string; value: ColumnNode['supportStyle'] }> = [
-  { label: 'Vertical', value: 'vertical' },
-  { label: 'A-Frame', value: 'a-frame' },
-  { label: 'Y Support', value: 'y-frame' },
-  { label: 'V Support', value: 'v-frame' },
-  { label: 'X Brace', value: 'x-brace' },
-  { label: 'K Brace', value: 'k-brace' },
-  { label: 'Single Strut', value: 'single-strut' },
-  { label: 'Tripod', value: 'tripod' },
-  { label: 'Trestle', value: 'trestle' },
-  { label: 'Portal Frame', value: 'portal-frame' },
-  { label: 'Box Frame', value: 'box-frame' },
-]
-
-type NonVerticalSupportStyle = Exclude<ColumnNode['supportStyle'], 'vertical'>
-
-// Per-style brace defaults. Values mirror each support's renderer
-// fall-through expressions so switching styles snaps the column to the
-// shape that style was designed around — e.g. an A-frame opens wide at
-// the foot and pinches at the top, an X-brace runs parallel legs, a
-// tripod's "bottomSpread" / "topSpread" double as its X-span / Z-span.
-// Without these, a user who customised one style (say A-frame bottom =
-// 2.0) then switched to Y-frame would carry that 2.0 around in state
-// even though Y-frame doesn't use it — and switching back to X-brace
-// would inherit the leftover 0.12 top from A-frame, making the X look
-// pinched.
-const SUPPORT_STYLE_DEFAULTS: Record<NonVerticalSupportStyle, Partial<ColumnNode>> = {
-  'a-frame': {
-    braceBottomSpread: 1.4,
-    braceTopSpread: 0.12,
-    braceWidth: 0.16,
-    braceDepth: 0.16,
-  },
-  'y-frame': {
-    braceBottomSpread: 0.2,
-    braceTopSpread: 0.9,
-    braceWidth: 0.16,
-    braceDepth: 0.16,
-  },
-  'v-frame': {
-    braceBottomSpread: 0.2,
-    braceTopSpread: 1.0,
-    braceWidth: 0.16,
-    braceDepth: 0.16,
-  },
-  'x-brace': {
-    braceBottomSpread: 1.0,
-    braceTopSpread: 1.0,
-    braceWidth: 0.14,
-    braceDepth: 0.14,
-  },
-  'k-brace': {
-    braceBottomSpread: 1.0,
-    braceTopSpread: 1.0,
-    braceWidth: 0.14,
-    braceDepth: 0.14,
-  },
-  'single-strut': {
-    braceBottomSpread: 0.6,
-    braceTopSpread: 0.6,
-    braceWidth: 0.12,
-    braceDepth: 0.12,
-  },
-  tripod: {
-    // bottomSpread = X span, topSpread = Z span (tripod's three legs).
-    braceBottomSpread: 1.1,
-    braceTopSpread: 1.1,
-    braceWidth: 0.12,
-    braceDepth: 0.12,
-  },
-  trestle: {
-    braceBottomSpread: 1.2,
-    braceTopSpread: 1.0,
-    braceWidth: 0.16,
-    braceDepth: 0.16,
-  },
-  'portal-frame': {
-    braceBottomSpread: 1.4,
-    braceTopSpread: 1.0,
-    braceWidth: 0.16,
-    braceDepth: 0.16,
-  },
-  'box-frame': {
-    // bottomSpread = X span, topSpread = Z span (rectangular footprint).
-    braceBottomSpread: 1.4,
-    braceTopSpread: 1.0,
-    braceWidth: 0.16,
-    braceDepth: 0.16,
-  },
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
@@ -324,8 +232,11 @@ export default function ColumnPanel() {
   const overrides = useLiveNodeOverrides((s) =>
     selectedId ? s.overrides.get(selectedId as AnyNode['id']) : undefined,
   )
+  const [previewingPreset, setPreviewingPreset] = useState(false)
   const node =
-    storedNode && overrides ? ({ ...storedNode, ...overrides } as ColumnNode) : storedNode
+    storedNode && overrides && !previewingPreset
+      ? ({ ...storedNode, ...overrides } as ColumnNode)
+      : storedNode
   const preview = useMemo(
     () => (selectedId ? createColumnPropertyPreview(selectedId as AnyNode['id']) : null),
     [selectedId],
@@ -337,6 +248,18 @@ export default function ColumnPanel() {
   )
   const commitPreview = useCallback(() => preview?.commit(), [preview])
   const cancelPreview = useCallback(() => preview?.cancel(), [preview])
+  const previewPreset = useCallback(
+    (updates: Partial<ColumnNode>) => {
+      // Presets preview the scene, while controls keep the committed shape's layout.
+      setPreviewingPreset(true)
+      preview?.preview(updates)
+    },
+    [preview],
+  )
+  const cancelPresetPreview = useCallback(() => {
+    preview?.cancel()
+    setPreviewingPreset(false)
+  }, [preview])
   const handleUpdate = useCallback(
     (updates: Partial<ColumnNode>) => {
       if (!selectedId) return
@@ -451,50 +374,11 @@ export default function ColumnPanel() {
                 Reset shape
               </button>
               <ColumnPresetGallery
-                onPreview={previewProp}
-                onCancel={cancelPreview}
+                node={node}
+                onPreview={previewPreset}
+                onCancel={cancelPresetPreview}
                 onApply={handleUpdate}
               />
-              <div className="grid grid-cols-2 gap-2 px-1 pt-1">
-                {SUPPORT_STYLE_OPTIONS.map((option) => {
-                  const isSelected = supportStyle === option.value
-                  return (
-                    <button
-                      className={cn(
-                        'flex min-h-12 items-center rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
-                        isSelected
-                          ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                          : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
-                      )}
-                      key={option.value}
-                      onClick={() => {
-                        // Per-style brace defaults reset the column to that
-                        // style's natural proportions on switch. Spread last
-                        // so the preset's braceWidth / braceDepth win over
-                        // the carried-from-previous-style values.
-                        const stylePreset =
-                          option.value === 'vertical' ? {} : SUPPORT_STYLE_DEFAULTS[option.value]
-                        handleUpdate({
-                          supportStyle: option.value,
-                          ...(option.value !== 'vertical'
-                            ? {
-                                crossSection: 'rectangular',
-                                width: node.braceWidth ?? node.width,
-                                depth: node.braceDepth ?? node.depth,
-                                baseStyle: 'none',
-                                capitalStyle: 'none',
-                              }
-                            : {}),
-                          ...stylePreset,
-                        })
-                      }}
-                      type="button"
-                    >
-                      <span className="truncate font-medium">{option.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
               {!isBraceSupport && (
                 <>
                   <p className="text-xs text-muted-foreground">Style</p>

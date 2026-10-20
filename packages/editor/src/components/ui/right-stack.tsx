@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, type ReactNode, useContext, useEffect, useRef } from 'react'
+import { createContext, type ReactNode, useContext, useLayoutEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { cn } from '../../lib/utils'
 import { TOP_MENU_CLEARANCE } from './action-menu/placement'
@@ -20,9 +20,8 @@ const GAP = 8
 
 /**
  * The heights neither panel shrinks below. The inspector keeps 180 px (or its
- * own height, if shorter) while the full card fits under it, and never less
- * than its header row. The card shows in full whenever the column allows; on a
- * very short window it gives way and scrolls on itself — both stay usable.
+ * own height, if shorter) and never less than its header row when the column allows.
+ * The card uses the remaining room and scrolls on itself on a short window — both stay usable.
  */
 export function rightStackFloors(args: {
   naturalHeight: number
@@ -33,9 +32,10 @@ export function rightStackFloors(args: {
   const { naturalHeight, headerHeight, cardHeight, stackHeight } = args
   const gap = naturalHeight > 0 && cardHeight > 0 ? GAP : 0
   const header = Math.min(headerHeight, naturalHeight)
-  const inspector = Math.max(
-    header,
-    Math.min(INSPECTOR_MIN_HEIGHT, naturalHeight, stackHeight - cardHeight - gap),
+  const inspector = Math.min(
+    naturalHeight,
+    stackHeight,
+    Math.max(header, Math.min(INSPECTOR_MIN_HEIGHT, stackHeight - gap)),
   )
   const card = Math.max(0, Math.min(cardHeight, stackHeight - gap - inspector))
   return { inspector, card }
@@ -78,7 +78,7 @@ export function RightStack({
 
   // `min(180px, its own height)` has no CSS form for a flex item that scrolls,
   // so both floors are measured (`rightStackFloors`).
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isMobile) return
     const stack = stackRef.current
     const slot = inspectorRef.current
@@ -88,18 +88,29 @@ export function RightStack({
     const fit = () => {
       frame = 0
       const { natural, header } = inspectorHeights(slot)
+      const cardHeight = Array.from(card.children).reduce(
+        (height, child) => height + child.scrollHeight + (child instanceof HTMLElement ? child.offsetHeight - child.clientHeight : 0),
+        0,
+      )
       const floors = rightStackFloors({
         naturalHeight: natural,
         headerHeight: header,
-        cardHeight: card.scrollHeight,
+        cardHeight,
         stackHeight: stack.clientHeight,
       })
       const inspectorMin = `${floors.inspector}px`
       const cardMin = `${floors.card}px`
+      // Custom panels may wrap PanelWrapper in a non-flex element. Give the
+      // card an explicit inherited limit so those wrappers cannot bypass it.
+      const available = Math.max(0, stack.clientHeight - floors.card - (natural > 0 && floors.card > 0 ? GAP : 0))
+      const limit = `${available}px`
+      if (slot.style.getPropertyValue('--inspector-available-height') !== limit) {
+        slot.style.setProperty('--inspector-available-height', limit)
+      }
       if (slot.style.minHeight !== inspectorMin) slot.style.minHeight = inspectorMin
       if (card.style.minHeight !== cardMin) card.style.minHeight = cardMin
       // The card is click-through; it takes the pointer only when it has to scroll.
-      const pointer = floors.card < card.scrollHeight ? 'auto' : ''
+      const pointer = floors.card < cardHeight ? 'auto' : ''
       if (card.style.pointerEvents !== pointer) card.style.pointerEvents = pointer
     }
     const schedule = () => {

@@ -688,6 +688,9 @@ export {
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
+  ELEVATOR_MIN_CAB_DIMENSION,
+  ELEVATOR_MIN_CAB_HEIGHT,
+  ELEVATOR_MIN_WALL_THICKNESS,
   type ElevatorDoorSide,
   getElevatorCabCenterZ,
   getElevatorCabDepth,
@@ -701,6 +704,8 @@ export {
   getResolvedElevatorDoorPanelStyle,
   getResolvedElevatorDoorStyle,
   getResolvedElevatorShaftStyle,
+  normalizeElevatorDimensions,
+  resolveElevatorDimensions,
 } from './systems/elevator/elevator-geometry'
 export { syncAutoElevatorOpenings } from './systems/elevator/elevator-opening-sync'
 export { ElevatorOpeningSystem } from './systems/elevator/elevator-opening-system'

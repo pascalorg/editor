@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/nodes",
   "version": "1.0.4",
-  "description": "Built-in node bundles for the Pascal 3D editor — one folder per kind, exported as `builtinPlugin`",
+  "description": "Built-in node bundles for the Pascal 3D editor \u2014 one folder per kind, exported as `builtinPlugin`",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -35,7 +35,8 @@
     "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "test": "bun test",
-    "prepublishOnly": "bun run build && bun test"
+    "prepublishOnly": "bun run build && bun test",
+    "bench:elevator": "bun test ./src/elevator/__bench__/rendering.bench.tsx && bun ./src/elevator/__bench__/runtime.ts"
   },
   "peerDependencies": {
     "@pascal-app/core": "^1.0.4",

@@ -1,0 +1,20 @@
+{
+  "workflow": "Place each actual preset alone, crop the object screenshot, generate and install the WebP, then clear and repeat.",
+  "images": [
+    {
+      "id": "passenger",
+      "path": "apps/editor/public/icons/elevator-presets/passenger.webp",
+      "prompt": "Create a polished gallery thumbnail based on this actual editor screenshot. Preserve the exact geometry, silhouette, camera angle and proportions: tall rectangular solid elevator shaft with two stacked center-opening doors, floor indicator above each door and a small call panel beside each. Keep all details in their actual positions. Apply soft matte lavender/periwinkle clay material to the shaft, slightly darker lavender metal doors, retain small dark control screens. Soft studio lighting, subtle ambient occlusion. One centered fully visible object with even padding, square transparent background. No added objects, labels, people, extra floors or invented features."
+    },
+    {
+      "id": "service",
+      "path": "apps/editor/public/icons/elevator-presets/service.webp",
+      "prompt": "Create a polished gallery thumbnail using this actual editor screenshot as the authoritative geometry reference. Preserve exact proportions, silhouette and camera: tall wide/deep solid rectangular service elevator shaft, two stacked broad single sliding door panels with horizontal segmentation, one indicator above and call panel beside each. Keep all parts exactly positioned. Soft matte lavender/periwinkle clay shaft, slightly darker lavender metal doors, dark controls. Soft studio lighting and ambient occlusion. Fully visible centered single object, padded square composition, transparent background. No added details, text, people or extra floors."
+    },
+    {
+      "id": "glass",
+      "path": "apps/editor/public/icons/elevator-presets/glass.webp",
+      "prompt": "Generate a polished gallery thumbnail from this actual editor screenshot, preserving its exact geometry, camera, proportions and part positions. Tall rectangular two-level elevator: translucent pale blue glass side shaft panel, solid front facade with two stacked glass-frame center-opening doors, cap on top, visible lower cab through side glass, small dark call panels and floor indicators. Restyle the solid frame and cab to soft matte lavender/periwinkle clay; glass stays lightly translucent with cool lavender-blue tint. Do not add or remove any structures. Single entirely visible centered object, square padded composition, transparent background, soft studio lighting, no text or people."
+    }
+  ]
+}

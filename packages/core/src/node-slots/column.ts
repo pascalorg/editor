@@ -3,10 +3,10 @@ import type { ColumnNode } from '../schema/nodes/column'
 
 export type ColumnSlotId = 'shaft' | 'base' | 'capital' | 'frame'
 
-export const COLUMN_SHAFT_DEFAULT = 'library:concrete-plaster'
-export const COLUMN_BASE_DEFAULT = 'library:concrete-plaster'
-export const COLUMN_CAPITAL_DEFAULT = 'library:concrete-plaster'
-export const COLUMN_FRAME_DEFAULT = 'library:metal-steel'
+export const COLUMN_SHAFT_DEFAULT = 'library:preset-white'
+export const COLUMN_BASE_DEFAULT = 'library:preset-white'
+export const COLUMN_CAPITAL_DEFAULT = 'library:preset-white'
+export const COLUMN_FRAME_DEFAULT = 'library:preset-white'
 
 export function columnSlots(node: ColumnNode): SlotDeclaration[] {
   if (node.source)

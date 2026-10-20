@@ -8,7 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Mesh, MeshBasicMaterial } from 'three'
+import { Mesh, MeshBasicMaterial, type MeshStandardMaterial } from 'three'
 import { installMountedScene, mount } from '../__tests__/harness'
 import { columnPaint } from './paint'
 import { columnPresetUpdates } from './presets'
@@ -59,6 +59,10 @@ for (const { name, node } of cases) {
     const slots = columnSlots(node).map((slot) => slot.slotId)
     for (const mesh of meshes) {
       expect(slots).toContain(mesh.userData.slotId)
+      const material = mesh.material as MeshStandardMaterial
+      expect(material.color.getHexString()).toBe('e9e9e9')
+      expect(material.metalness).toBe(0)
+      expect(material.map).toBeNull()
       expect(mesh.geometry.getAttribute('uv').count).toBe(
         mesh.geometry.getAttribute('position').count,
       )
