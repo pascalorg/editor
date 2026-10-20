@@ -844,3 +844,52 @@ test('the ground box of a split level reaches its lowest floor: the window aims 
   // A level with one floor is boxed from that floor, as before.
   expect(levelGroundBox(raisedPartOnly(nodes), 'level_split')?.min[1]).toBeCloseTo(0.2, 9)
 })
+
+// ── The same split level on a flat site: every floor against the datum ──────────────────────
+
+/** One level with these slabs on a site with no terrain: the datum (0 m) is the ground everywhere. */
+function flatSplitLevel(slabs: SlabSpec[]) {
+  const nodes: AnyNode[] = [
+    BuildingNode.parse({ id: 'building_a', children: ['level_split'] }),
+    LevelNode.parse({
+      id: 'level_split',
+      parentId: 'building_a',
+      level: 0,
+      children: slabs.map((slab) => slab.id),
+    }),
+    ...slabs.map((slab) => SlabNode.parse({ parentId: 'level_split', ...slab })),
+  ]
+  return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+}
+
+test('on a flat site a split level with its raised part at grade is partly below grade, its sunken room buried', () => {
+  // The raised part's top is 0.05 m, the sunken room's -1.2 m: 1.2 m under the datum.
+  const nodes = flatSplitLevel([RAISED, SUNKEN])
+  expect(levelGradeStanding(nodes, 'level_split')).toBe('partly-below-grade')
+  // The ring and the hole footprint are the sunken room, not the raised part at grade.
+  expect(belowGradeFootprints(nodes, 'level_split').map(extent)).toEqual([{ x: [4, 8], z: [0, 4] }])
+  expect(belowGradeFloorY(nodes, 'level_split')).toBeCloseTo(-1.2, 9)
+})
+
+test('on a flat site each floor of a level is judged on its own, and a level of one kind reads as it did', () => {
+  const sunkenOnly = flatSplitLevel([SUNKEN])
+  expect(levelGradeStanding(sunkenOnly, 'level_split')).toBe('below-grade')
+  expect(belowGradeFootprints(sunkenOnly, 'level_split').map(extent)).toEqual([
+    { x: [4, 8], z: [0, 4] },
+  ])
+  expect(levelGradeStanding(flatSplitLevel([RAISED]), 'level_split')).toBe('at-grade')
+  // A step down inside the tolerance (0.3 m) buries nothing.
+  expect(
+    levelGradeStanding(flatSplitLevel([RAISED, { ...SUNKEN, elevation: -0.2 }]), 'level_split'),
+  ).toBe('at-grade')
+  // Two floors both under the ground: the level is below grade as a whole.
+  expect(
+    levelGradeStanding(
+      flatSplitLevel([
+        { ...RAISED, elevation: -0.6 },
+        { ...SUNKEN, elevation: -1.2 },
+      ]),
+      'level_split',
+    ),
+  ).toBe('below-grade')
+})

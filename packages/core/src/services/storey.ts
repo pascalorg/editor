@@ -209,10 +209,11 @@ export function levelPlateUndersideWorldY(
 }
 
 /**
- * Whether `levelId`'s floor lies below the flat site's grade (Y 0), by more than
- * {@link BELOW_GRADE_TOLERANCE}. Sculpted terrain is not consulted: where the ground itself
- * rises over a floor, ask `levelGradeStanding`, which falls back to this on flat sites.
- * `false` for an id that is no level.
+ * Whether `levelId` lies wholly below the flat site's grade (Y 0): its standing floor, the highest
+ * of its floor slabs, is under it by more than {@link BELOW_GRADE_TOLERANCE}. The level as a
+ * whole, which is what deriving a building's ground level asks. Sculpted terrain is not consulted,
+ * and neither is a lower floor of a split level: ask `levelGradeStanding`, which judges each floor
+ * against the datum or the terrain. `false` for an id that is no level.
  */
 export function isLevelBelowGrade(nodes: Record<AnyNodeId, AnyNode>, levelId: string): boolean {
   const floorY = levelFloorWorldY(nodes, levelId)

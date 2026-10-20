@@ -7,6 +7,7 @@ import {
   levelPlateUndersideWorldY,
 } from '../services/storey'
 import {
+  floorBuriedOnFlatSite,
   type LevelGradeStanding,
   levelGradeStanding,
   terrainFieldOverLevel,
@@ -63,7 +64,10 @@ function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
       if (standing === 'at-grade') continue
       if (field && plane !== null)
         buried.push(...groundOverPart(plate, field, plane + slab.elevation + BELOW_GRADE_TOLERANCE))
-      else buried.push(plate)
+      else if (plane !== null) {
+        // A flat site, a level of floors at different heights: a floor is buried or it is not.
+        if (floorBuriedOnFlatSite(plane + slab.elevation)) buried.push(plate)
+      } else buried.push(plate)
     }
     levels.push({
       buildingId,

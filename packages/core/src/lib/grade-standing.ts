@@ -1,4 +1,4 @@
-import type { AnyNode, AnyNodeId, BuildingNode, LevelNode } from '../schema'
+import type { AnyNode, AnyNodeId, BuildingNode, LevelNode, SlabNode } from '../schema'
 import {
   BELOW_GRADE_TOLERANCE,
   getLevelElevations,
@@ -10,7 +10,7 @@ import { levelUnderNamedGround } from './ground-level'
 import { isSiteFlatwork } from './site-flatwork'
 import { heightAt, type TerrainField } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
-import { levelLocalToWorldXZ } from './terrain-support-query'
+import { levelLocalToWorldXZ, SITE_DATUM_Y } from './terrain-support-query'
 
 /**
  * Where a level stands against the ground as it actually lies: at grade, below it everywhere,
@@ -50,7 +50,7 @@ export function levelGradeStanding(
         ? 'below-grade'
         : 'at-grade'
   const field = terrainFieldOverLevel(nodes, level)
-  if (!field) return flat
+  if (!field) return under === null ? flatFloorsStanding(nodes, level, flat) : flat
 
   const samples = footprintFloorSamples(nodes, level, field)
   if (samples.length === 0) return flat
@@ -60,6 +60,43 @@ export function levelGradeStanding(
   }
   if (buried === 0) return under ? 'partly-below-grade' : 'at-grade'
   return buried === samples.length ? 'below-grade' : 'partly-below-grade'
+}
+
+/**
+ * A flat site with no ground line named: the datum is the ground under every floor, and each floor
+ * slab of the level is judged against it as the sampled path judges them against the field. A split
+ * level whose raised part sits at grade is partly below grade over its sunken room, not at grade
+ * on the strength of its highest floor. A level with no floor slab reads as `fallback` (its plane).
+ */
+function flatFloorsStanding(
+  nodes: Record<AnyNodeId, AnyNode>,
+  level: LevelNode,
+  fallback: LevelGradeStanding,
+): LevelGradeStanding {
+  const plane = levelPlaneWorldY(nodes, level.id)
+  if (plane === null) return fallback
+  const slabs = floorSlabsOf(nodes, level)
+  if (slabs.length === 0) return fallback
+  const buried = slabs.filter((slab) => floorBuriedOnFlatSite(plane + slab.elevation)).length
+  if (buried === 0) return 'at-grade'
+  return buried === slabs.length ? 'below-grade' : 'partly-below-grade'
+}
+
+/** Whether a floor at world Y `floorY` lies under a flat site's datum by more than the tolerance. */
+export function floorBuriedOnFlatSite(floorY: number): boolean {
+  return SITE_DATUM_Y - floorY > BELOW_GRADE_TOLERANCE
+}
+
+/** The floor slabs of the house on a level: not a basin, not site flatwork, with a plan. */
+function floorSlabsOf(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): SlabNode[] {
+  const slabs: SlabNode[] = []
+  for (const childId of level.children) {
+    const slab = nodes[childId as AnyNodeId]
+    if (slab?.type !== 'slab' || slab.recessed === true || slab.polygon.length < 3) continue
+    if (isSiteFlatwork(slab)) continue
+    slabs.push(slab)
+  }
+  return slabs
 }
 
 /** The site's terrain field for the site this level stands on, or null on a flat site. */
@@ -104,10 +141,7 @@ export function footprintFloorSamples(
   const plane = levelPlaneWorldY(nodes, level.id)
   if (plane === null) return []
   const samples: Array<[number, number, number]> = []
-  for (const childId of level.children) {
-    const slab = nodes[childId as AnyNodeId]
-    if (slab?.type !== 'slab' || slab.recessed === true || slab.polygon.length < 3) continue
-    if (isSiteFlatwork(slab)) continue
+  for (const slab of floorSlabsOf(nodes, level)) {
     for (const [x, z] of slabSamples(slab.polygon, field.spacing)) {
       const [worldX, worldZ] = levelLocalToWorldXZ(placed, x, z)
       samples.push([worldX, worldZ, plane + slab.elevation])
