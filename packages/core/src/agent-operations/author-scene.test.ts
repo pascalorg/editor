@@ -179,6 +179,31 @@ const bedroom: AuthorScenePayload = authorScenePayload.parse({
 })
 
 describe('author_scene', () => {
+  test('repeated wall ids across storeys refuse before replacing any scene nodes', () => {
+    const scene = scaffold()
+    const before = structuredClone(scene)
+    const payload = authorScenePayload.parse({
+      levels: [bedroom.levels[0], { ...bedroom.levels[0], name: 'Upper floor', elevation: 2.8 }],
+    })
+    expect(() =>
+      authorScene(scene, { payload, compiled: { bed, lamp: bed } }, { activeLevelId: null }),
+    ).toThrow('Source id')
+    expect(scene).toEqual(before)
+  })
+
+  test('item ids cannot overwrite another item or a generated source mapping', () => {
+    for (const id of ['bed', 'room/0/0']) {
+      const scene = scaffold()
+      const before = structuredClone(scene)
+      const payload = structuredClone(bedroom)
+      payload.levels[0]!.items!.push({ ...payload.levels[0]!.items![0]!, id })
+      expect(() =>
+        authorScene(scene, { payload, compiled: { bed, lamp: bed } }, { activeLevelId: null }),
+      ).toThrow('Source id')
+      expect(scene).toEqual(before)
+    }
+  })
+
   test('a copied baseline cannot authorize replacement of another building', () => {
     const first = run(bedroom, { bed, lamp: bed })
     const saved = applySceneChanges(scaffold(), first.changes)

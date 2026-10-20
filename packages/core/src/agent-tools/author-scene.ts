@@ -96,7 +96,11 @@ const authorSceneWallFace = z.object({
 })
 
 export const authorSceneWall = z.object({
-  id: z.string().min(1).max(64).describe('Your own id, for the report.'),
+  id: z
+    .string()
+    .min(1)
+    .max(64)
+    .describe('Your own id, unique across every wall and item on all levels.'),
   start: plan('start'),
   end: plan('end'),
   height: length('Wall height.', { positive: true }),

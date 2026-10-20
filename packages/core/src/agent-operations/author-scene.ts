@@ -528,6 +528,35 @@ export function authorScene(
   buildingId: string
 } {
   const { payload } = input
+  const sourceKeys = new Set<string>()
+  const claimSourceKey = (key: string) => {
+    if (sourceKeys.has(key))
+      refuse(
+        'duplicate_source_id',
+        `Source id "${key}" is repeated. Give every wall and item a unique id across all levels; opening and generated-part keys must also remain distinct.`,
+        { id: key, mutationApplied: false },
+      )
+    sourceKeys.add(key)
+  }
+  payload.levels.forEach((level, index) => {
+    claimSourceKey(`level/${index}`)
+    for (const [kind, parts] of [
+      ['room', level.rooms],
+      ['slab', level.slabs],
+      ['column', level.columns],
+      ['light', level.lights],
+    ] as const)
+      parts?.forEach((_, i) => {
+        claimSourceKey(`${kind}/${index}/${i}`)
+      })
+    for (const wall of level.walls ?? []) {
+      claimSourceKey(wall.id)
+      wall.openings?.forEach((_, i) => {
+        claimSourceKey(`${wall.id}/${i}`)
+      })
+    }
+    for (const item of level.items ?? []) claimSourceKey(item.id)
+  })
   const buildings = Object.values(scene).filter((n) => n.type === 'building')
   const selected =
     input.buildingId ?? (context.activeLevelId ? scene[context.activeLevelId]?.parentId : undefined)
