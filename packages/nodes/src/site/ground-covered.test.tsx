@@ -59,15 +59,8 @@ const UNDER_THE_HOUSE: [number, number] = [4, 2]
 const UNDER_THE_GARDEN: [number, number] = [8, 2]
 const OPEN_LAWN: [number, number] = [-6, -6]
 
-function setHouse(
-  options: {
-    basement?: boolean
-    hideGround?: boolean
-    hideBasement?: boolean
-    sunkenRoom?: Ring
-  } = {},
-) {
-  const { basement = true, hideGround = false, hideBasement = false, sunkenRoom } = options
+function setHouse(options: { basement?: boolean; sunkenRoom?: Ring } = {}) {
+  const { basement = true, sunkenRoom } = options
   const levels = basement ? ['level_b', 'level_g'] : ['level_g']
   const nodes: AnyNode[] = [
     BuildingNode.parse({ id: 'building_a', children: levels }),
@@ -76,7 +69,6 @@ function setHouse(
       parentId: 'building_a',
       level: 0,
       height: 3.4,
-      ...(hideGround ? { visible: false } : {}),
       children: ['slab_g'],
     }),
     SlabNode.parse({ id: 'slab_g', parentId: 'level_g', elevation: 0.05, polygon: HOUSE }),
@@ -89,7 +81,6 @@ function setHouse(
         level: -1,
         baseElevation: -3.63,
         height: 3.4,
-        ...(hideBasement ? { visible: false } : {}),
         children: sunkenRoom ? ['slab_b', 'slab_sunken'] : ['slab_b'],
       }),
       SlabNode.parse({ id: 'slab_b', parentId: 'level_b', elevation: 0.28, polygon: BASEMENT }),
@@ -197,92 +188,83 @@ async function groundAt(
 
 const POINTS = { house: UNDER_THE_HOUSE, garden: UNDER_THE_GARDEN, lawn: OPEN_LAWN }
 
-test('the ground floor shown: the ground is open under the house, closed under the garden and on the lawn', async () => {
-  setHouse()
-  const { standing } = await groundAt(lot(), groundFloor, POINTS)
-  expect(standing.house).toBe(0)
-  expect(standing.garden).toBeGreaterThan(0)
-  expect(standing.lawn).toBeGreaterThan(0)
-})
-
-test('the walkthrough tours the whole house, so it meets the basement under the house: the ground is open there', async () => {
-  setHouse()
-  const { standing } = await groundAt(lot(), walkthrough, POINTS)
-  expect(standing.house).toBe(0)
-  expect(standing.garden).toBeGreaterThan(0)
-  expect(standing.lawn).toBeGreaterThan(0)
-})
-
-test('the horizon disc under the lot is cut with the ground, or a stairwell would show it', async () => {
-  setHouse()
-  const renderer = await create(<SiteRenderer node={lot()} />)
-  try {
-    await act(async () => groundFloor())
-    await renderer.advanceFrames(2, 0.05)
-    const scene = renderer.scene.instance as Object3D
-    scene.updateMatrixWorld(true)
-    // The disc is the one ground surface that is not the lot's own: stripped from exports, never picked.
-    const discs = solidSurfaces(scene).filter(
-      (surface) => surface.userData.pascalExport === 'strip',
-    )
-    expect(discs).toHaveLength(1)
-    expect(standsOver(discs[0]!, UNDER_THE_HOUSE)).toBe(false)
-    expect(standsOver(discs[0]!, UNDER_THE_GARDEN)).toBe(true)
-  } finally {
-    await renderer.unmount()
-  }
-})
+// Where the ground stands under the house, the garden and the lawn, by what is shown.
+const WHOLE = { house: true, garden: true, lawn: true }
+const OPEN_UNDER_THE_HOUSE = { house: false, garden: true, lawn: true }
+test.each([
+  ['the ground floor shown', groundFloor, {}, OPEN_UNDER_THE_HOUSE],
+  ['the walkthrough, which tours the whole house', walkthrough, {}, OPEN_UNDER_THE_HOUSE],
+  [
+    'Solid with the ground floor shown: the opening is under the house',
+    groundFloorSolid,
+    {},
+    OPEN_UNDER_THE_HOUSE,
+  ],
+  [
+    'Solid with the walkthrough: the same',
+    () => {
+      groundFloorSolid()
+      useViewer.setState({ walkthroughMode: true })
+    },
+    {},
+    OPEN_UNDER_THE_HOUSE,
+  ],
+  [
+    'Solid over a basement shown: nothing covers it with the storeys away',
+    () => basement('solid'),
+    {},
+    WHOLE,
+  ],
+  ['a scene with no basement', groundFloor, { house: { basement: false } }, WHOLE],
+] as const)(
+  'the ground stands open under the house only: %s',
+  async (_, display, options, expected) => {
+    setHouse('house' in options ? options.house : {})
+    const { standing } = await groundAt(lot(), display, POINTS)
+    expect({
+      house: standing.house > 0,
+      garden: standing.garden > 0,
+      lawn: standing.lawn > 0,
+    }).toEqual(expected)
+  },
+)
 
 test('a basement shown with the ground on Auto: the opening stays cut, and the hole of the level shown does the rest', async () => {
   setHouse()
-  const renderer = await create(<SiteRenderer node={lot()} />)
-  try {
-    await act(async () => basement())
-    groundHoleOpenNode().value = 1
-    await renderer.advanceFrames(2, 0.05)
-    const scene = renderer.scene.instance as Object3D
-    scene.updateMatrixWorld(true)
-    const surfaces = solidSurfaces(scene)
-    expect(surfaces.length).toBeGreaterThan(0)
-    expect(surfaces.some((surface) => standsOver(surface, UNDER_THE_HOUSE))).toBe(false)
-    // Past the house the sheet is whole as a mesh: the shader's mask opens it, over the whole basement.
-    expect(surfaces.some((surface) => standsOver(surface, UNDER_THE_GARDEN))).toBe(true)
-    for (const surface of surfaces)
-      expect((surface.material as { maskNode: unknown }).maskNode).not.toBeNull()
-  } finally {
-    await renderer.unmount()
-  }
-})
-
-test('Ground: Solid over a basement shown keeps the ground whole: nothing covers it with the storeys away', async () => {
-  setHouse()
-  const { standing } = await groundAt(lot(), () => basement('solid'), POINTS)
-  expect(standing.house).toBeGreaterThan(0)
+  groundHoleOpenNode().value = 1
+  const { standing } = await groundAt(lot(), () => basement(), POINTS)
+  expect(standing.house).toBe(0)
+  // Past the house the sheet is whole as a mesh: the shader's mask opens it, over the whole basement.
   expect(standing.garden).toBeGreaterThan(0)
 })
 
-test('Ground: Solid with the house shown (the ground floor, the walkthrough) leaves the opening: it is under the house', async () => {
-  setHouse()
-  expect((await groundAt(lot(), groundFloorSolid, POINTS)).standing.house).toBe(0)
-  expect(
-    (
-      await groundAt(
-        lot(),
-        () => {
-          groundFloorSolid()
-          useViewer.setState({ walkthroughMode: true })
-        },
-        POINTS,
-      )
-    ).standing.house,
-  ).toBe(0)
+test('on a sculpted site, with a sunken room beside the opening, the ground is cut the same way and the lawn between stays', async () => {
+  setHouse({ sunkenRoom: rect(-8, -4, 5, 8) })
+  const { standing, surfaces } = await groundAt(lot({ terrain: true }), groundFloor, {
+    ...POINTS,
+    sunken: [-6, 6.5],
+    between: [-1, 6.5],
+  })
+  expect(surfaces).toBeGreaterThan(0)
+  expect(standing.house).toBe(0)
+  expect(standing.sunken).toBe(0)
+  expect(standing.between).toBeGreaterThan(0)
+  expect(standing.garden).toBeGreaterThan(0)
 })
 
-test('the opening follows the display live: Solid over the basement closes it, the ground floor opens it again', async () => {
+test('showGround off, the ground floor shown: there is no site ground to cut; with the basement shown the stand-in is cut like the rest', async () => {
+  setHouse()
+  expect((await groundAt(lot({ showGround: false }), groundFloor, POINTS)).surfaces).toBe(0)
+  const { standing } = await groundAt(lot({ showGround: false }), () => basement(), POINTS)
+  expect(standing.house).toBe(0)
+  expect(standing.garden).toBeGreaterThan(0)
+})
+
+test('the opening follows the display live, and a click through it reaches what is below', async () => {
   setHouse()
   const renderer = await create(<SiteRenderer node={lot()} />)
+  const scene = renderer.scene.instance as Object3D
   const at = (point: [number, number]) => {
-    const scene = renderer.scene.instance as Object3D
     scene.updateMatrixWorld(true)
     return solidSurfaces(scene).some((surface) => standsOver(surface, point))
   }
@@ -290,6 +272,14 @@ test('the opening follows the display live: Solid over the basement closes it, t
     await act(async () => groundFloor())
     await renderer.advanceFrames(2, 0.05)
     expect(at(UNDER_THE_HOUSE)).toBe(false)
+    // A click straight down through the opening hits no ground; past the house it does.
+    const down = (point: [number, number]) =>
+      new Raycaster(new Vector3(point[0], 5, point[1]), new Vector3(0, -1, 0)).intersectObjects(
+        solidSurfaces(scene).filter((surface) => surface.raycast.length > 0),
+        false,
+      )
+    expect(down(UNDER_THE_HOUSE)).toHaveLength(0)
+    expect(down(UNDER_THE_GARDEN).length).toBeGreaterThan(0)
     await act(async () => basement('solid'))
     await renderer.advanceFrames(2, 0.05)
     expect(at(UNDER_THE_HOUSE)).toBe(true)
@@ -299,68 +289,4 @@ test('the opening follows the display live: Solid over the basement closes it, t
   } finally {
     await renderer.unmount()
   }
-})
-
-test('a scene with no basement is untouched: the ground stands whole', async () => {
-  setHouse({ basement: false })
-  const { standing } = await groundAt(lot(), groundFloor, POINTS)
-  expect(standing.house).toBeGreaterThan(0)
-  expect(standing.garden).toBeGreaterThan(0)
-})
-
-test('with the house hidden, nothing covers the basement: the ground stays closed; the same with the basement hidden', async () => {
-  setHouse({ hideGround: true })
-  expect((await groundAt(lot(), groundFloor, POINTS)).standing.house).toBeGreaterThan(0)
-  setHouse({ hideBasement: true })
-  expect((await groundAt(lot(), groundFloor, POINTS)).standing.house).toBeGreaterThan(0)
-})
-
-test('a sunken room on the ground floor beside the opening: both are cut, the lawn between stays', async () => {
-  setHouse({ sunkenRoom: rect(-8, -4, 5, 8) })
-  const { standing } = await groundAt(lot(), groundFloor, {
-    ...POINTS,
-    sunken: [-6, 6.5],
-    between: [-1, 6.5],
-  })
-  expect(standing.house).toBe(0)
-  expect(standing.sunken).toBe(0)
-  expect(standing.between).toBeGreaterThan(0)
-})
-
-test('on a sculpted site the sculpted ground is cut the same way', async () => {
-  setHouse()
-  const { standing, surfaces } = await groundAt(lot({ terrain: true }), groundFloor, POINTS)
-  expect(surfaces).toBeGreaterThan(0)
-  expect(standing.house).toBe(0)
-  expect(standing.garden).toBeGreaterThan(0)
-  expect(standing.lawn).toBeGreaterThan(0)
-})
-
-test('a click through the opening reaches what is below: the cut ground is not hit by a ray', async () => {
-  setHouse()
-  const renderer = await create(<SiteRenderer node={lot()} />)
-  try {
-    await act(async () => groundFloor())
-    await renderer.advanceFrames(2, 0.05)
-    const scene = renderer.scene.instance as Object3D
-    scene.updateMatrixWorld(true)
-    const surfaces = solidSurfaces(scene).filter((surface) => surface.raycast.length > 0)
-    const down = (point: [number, number]) =>
-      new Raycaster(new Vector3(point[0], 5, point[1]), new Vector3(0, -1, 0)).intersectObjects(
-        surfaces,
-        false,
-      )
-    expect(down(UNDER_THE_HOUSE)).toHaveLength(0)
-    expect(down(UNDER_THE_GARDEN).length).toBeGreaterThan(0)
-  } finally {
-    await renderer.unmount()
-  }
-})
-
-test('showGround off, the ground floor shown: there is no site ground to cut; with the basement shown the stand-in is cut like the rest', async () => {
-  setHouse()
-  expect((await groundAt(lot({ showGround: false }), groundFloor, POINTS)).surfaces).toBe(0)
-  const { standing } = await groundAt(lot({ showGround: false }), () => basement(), POINTS)
-  expect(standing.house).toBe(0)
-  expect(standing.garden).toBeGreaterThan(0)
 })

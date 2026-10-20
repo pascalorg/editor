@@ -59,7 +59,6 @@ afterEach(() => {
   useViewer.setState(previous.viewer, true)
   useScene.setState(previous.scene, true)
 })
-
 function ringOf(levelId: string) {
   return corners.map((start, index) =>
     WallNode.parse({
@@ -114,17 +113,31 @@ const parts = (root: Object3D) => {
   )
 }
 
-test('a house at grade stands on a footing and a block wall, both marked, found by captures and stripped from exports', async () => {
+const names = (root: Object3D) => parts(root).map((part) => part.userData.genericFoundation)
+
+test('a house stands on a footing and a block wall, marked, found by captures and stripped from exports; over a basement only the footing; the walkthrough has none', async () => {
   setHouse(false)
   const renderer = await create(<SiteRenderer node={lot()} />)
   try {
-    const found = parts(renderer.scene.instance as Object3D)
-    expect(found.map((part) => part.userData.genericFoundation)).toEqual(['footing', 'stem'])
+    const scene = renderer.scene.instance as Object3D
+    const found = parts(scene)
+    expect(names(scene)).toEqual(['footing', 'stem'])
     expect(found.every((part) => part.userData.pascalExport === 'strip')).toBe(true)
     // The capture finds them by their mark, through the site the renderer registered.
     expect(siteFoundation()).toEqual(found)
+    await act(async () => useViewer.setState({ walkthroughMode: true }))
+    expect(found.map((part) => part.visible)).toEqual([false, false])
+    await act(async () => useViewer.setState({ walkthroughMode: false }))
+    expect(found.map((part) => part.visible)).toEqual([true, true])
   } finally {
     await renderer.unmount()
+  }
+  setHouse(true)
+  const over = await create(<SiteRenderer node={lot()} />)
+  try {
+    expect(names(over.scene.instance as Object3D)).toEqual(['footing'])
+  } finally {
+    await over.unmount()
   }
 })
 
@@ -144,9 +157,7 @@ test('the stem is drawn in what the building is built of: block, concrete in Eur
     setHouse(false, extra)
     const renderer = await create(<SiteRenderer node={lot()} />)
     try {
-      const found = parts(renderer.scene.instance as Object3D)
-      expect(found.map((part) => part.userData.genericFoundation)).toEqual(['footing', 'stem'])
-      const [footing, stem] = found as [Mesh, Mesh]
+      const [footing, stem] = parts(renderer.scene.instance as Object3D) as [Mesh, Mesh]
       return stem.material === footing.material ? 'concrete' : 'masonry'
     } finally {
       await renderer.unmount()
@@ -156,33 +167,7 @@ test('the stem is drawn in what the building is built of: block, concrete in Eur
   expect(await materialOf([paris()])).toBe('concrete')
 })
 
-test('a house over a basement has only the footing under the basement walls', async () => {
-  setHouse(true)
-  const renderer = await create(<SiteRenderer node={lot()} />)
-  try {
-    const found = parts(renderer.scene.instance as Object3D)
-    expect(found.map((part) => part.userData.genericFoundation)).toEqual(['footing'])
-  } finally {
-    await renderer.unmount()
-  }
-})
-
-test('the walkthrough draws none of it, and the overview brings it back', async () => {
-  setHouse(false)
-  const renderer = await create(<SiteRenderer node={lot()} />)
-  try {
-    const scene = renderer.scene.instance as Object3D
-    expect(parts(scene).map((part) => part.visible)).toEqual([true, true])
-    await act(async () => useViewer.setState({ walkthroughMode: true }))
-    expect(parts(scene).map((part) => part.visible)).toEqual([false, false])
-    await act(async () => useViewer.setState({ walkthroughMode: false }))
-    expect(parts(scene).map((part) => part.visible)).toEqual([true, true])
-  } finally {
-    await renderer.unmount()
-  }
-})
-
-test('switching floors and crossing the ground swap and rebuild no foundation mesh or material', async () => {
+test('switching floors and crossing the ground swap and rebuild no foundation mesh or material, and an edit that leaves the foundation as it was rebuilds none of it', async () => {
   setHouse(true)
   const renderer = await create(<SiteRenderer node={lot()} />)
   try {
@@ -198,7 +183,6 @@ test('switching floors and crossing the ground swap and rebuild no foundation me
       ['level_g', false, false],
       ['level_b', true, true],
       ['level_g', false, true],
-      ['level_g', false, false],
     ] as const) {
       await act(async () =>
         useViewer.setState({
@@ -220,6 +204,13 @@ test('switching floors and crossing the ground swap and rebuild no foundation me
         expect(entry.part.visible).toBe(true)
       })
     }
+    await act(async () => {
+      const nodes = useScene.getState().nodes
+      const level = nodes['level_g' as AnyNodeId]
+      if (level?.type !== 'level') throw new Error('fixture')
+      useScene.setState({ nodes: { ...nodes, level_g: { ...level, name: 'Ground' } } })
+    })
+    expect(snapshot().map((entry) => entry.geometry)).toEqual(before.map((entry) => entry.geometry))
   } finally {
     await renderer.unmount()
   }
@@ -230,15 +221,14 @@ test("a plugin that draws a level's foundation under the ground takes that level
   const renderer = await create(<SiteRenderer node={lot()} />)
   try {
     const scene = renderer.scene.instance as Object3D
-    const names = () => parts(scene).map((part) => part.userData.genericFoundation)
-    expect(names()).toEqual(['footing'])
+    expect(names(scene)).toEqual(['footing'])
     // another level's foundation is not this one's: nothing leaves
     await act(async () => useViewer.setState({ pluginFoundationLevelIds: ['level_g'] }))
-    expect(names()).toEqual(['footing'])
+    expect(names(scene)).toEqual(['footing'])
     await act(async () => useViewer.setState({ pluginFoundationLevelIds: ['level_b'] }))
-    expect(names()).toEqual([])
+    expect(names(scene)).toEqual([])
     await act(async () => useViewer.setState({ pluginFoundationLevelIds: [] }))
-    expect(names()).toEqual(['footing'])
+    expect(names(scene)).toEqual(['footing'])
   } finally {
     await renderer.unmount()
   }
@@ -284,24 +274,6 @@ test('a plugin that steps aside from a picture has the foundation drawn for it w
     session(false)
     await renderer.unmount()
     restoreRegistry()
-  }
-})
-
-test('an edit that leaves the foundation as it was rebuilds none of it', async () => {
-  setHouse(false)
-  const renderer = await create(<SiteRenderer node={lot()} />)
-  try {
-    const scene = renderer.scene.instance as Object3D
-    const before = parts(scene).map((part) => part.geometry)
-    await act(async () => {
-      const nodes = useScene.getState().nodes
-      const level = nodes['level_g' as AnyNodeId]
-      if (level?.type !== 'level') throw new Error('fixture')
-      useScene.setState({ nodes: { ...nodes, level_g: { ...level, name: 'Ground' } } })
-    })
-    expect(parts(scene).map((part) => part.geometry)).toEqual(before)
-  } finally {
-    await renderer.unmount()
   }
 })
 

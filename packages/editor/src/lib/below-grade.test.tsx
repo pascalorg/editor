@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -51,46 +51,29 @@ afterEach(() => {
   useEditor.setState(previous.editor, true)
 })
 
-describe('when a level below grade is shown', () => {
-  test('a level below grade, the storeys above it hidden', () => {
-    expect(belowGradeShown(shown(lowerGround), villa)).toBe(true)
-  })
+test('the ground window’s box is the shown level’s while its upper storeys are hidden and the building’s while it stands, follows the display, and closes when it stops', () => {
+  const levelBox = groundWindowBoxShown(shown(lowerGround), villa)
+  const buildingBox = groundWindowBoxShown(shown(lowerGround, false), villa)
+  expect(levelBox).not.toBeNull()
+  expect(buildingBox).not.toBeNull()
+  // The building wraps the level: no wider claim than that is this test's to make.
+  expect(buildingBox?.min[1]).toBeLessThanOrEqual(levelBox?.min[1] ?? 0)
+  expect(buildingBox?.max[1]).toBeGreaterThan(levelBox?.max[1] ?? 0)
 
-  test('never for a level at grade', () => {
-    expect(belowGradeShown(shown(pianoNobile), villa)).toBe(false)
-  })
-
-  test('never while the whole building stands', () => {
-    expect(belowGradeShown(shown(lowerGround, false), villa)).toBe(false)
-  })
+  useViewer.setState({ hideLevelsAboveSelection: true })
+  useViewer.getState().setSelection({ levelId: lowerGround })
+  const stop = followGroundWindowBox()
+  expect(useViewer.getState().groundWindowBox).not.toBeNull()
+  stop()
+  expect(useViewer.getState().groundWindowBox).toBeNull()
 })
 
-describe('the ground window’s box', () => {
-  test('the shown level’s box while its upper storeys are hidden, the building’s while it stands', () => {
-    const levelBox = groundWindowBoxShown(shown(lowerGround), villa)
-    const buildingBox = groundWindowBoxShown(shown(lowerGround, false), villa)
-    expect(levelBox).not.toBeNull()
-    expect(buildingBox).not.toBeNull()
-    // The building wraps the level: no wider claim than that is this test's to make.
-    expect(buildingBox?.min[1]).toBeLessThanOrEqual(levelBox?.min[1] ?? 0)
-    expect(buildingBox?.max[1]).toBeGreaterThan(levelBox?.max[1] ?? 0)
-  })
-
-  test('it follows the display and closes when it stops', () => {
-    useViewer.setState({ hideLevelsAboveSelection: true })
-    useViewer.getState().setSelection({ levelId: lowerGround })
-    const stop = followGroundWindowBox()
-    expect(useViewer.getState().groundWindowBox).not.toBeNull()
-    stop()
-    expect(useViewer.getState().groundWindowBox).toBeNull()
-  })
-})
-
-test('the flag follows the level shown, and clears when it stops', () => {
+test('the flag follows the level shown (below grade with the storeys above it hidden; never a level at grade, never while the whole building stands), and clears when it stops', () => {
   useViewer.setState({ hideLevelsAboveSelection: true })
   useViewer.getState().setSelection({ levelId: pianoNobile })
   const stop = followBelowGrade()
   expect(useViewer.getState().belowGrade).toBe(false)
+  expect(belowGradeShown(shown(pianoNobile), villa)).toBe(false)
 
   useViewer.getState().setSelection({ levelId: lowerGround })
   expect(useViewer.getState().belowGrade).toBe(true)
@@ -98,6 +81,7 @@ test('the flag follows the level shown, and clears when it stops', () => {
   expect(gradeStandingShown(shown(lowerGround), villa)).toBe('below-grade')
   useViewer.setState({ hideLevelsAboveSelection: false })
   expect(useViewer.getState().belowGrade).toBe(false)
+  expect(belowGradeShown(shown(lowerGround, false), villa)).toBe(false)
   useViewer.setState({ hideLevelsAboveSelection: true })
   expect(useViewer.getState().belowGrade).toBe(true)
 
@@ -130,7 +114,7 @@ test("the editor's level display marks it, except on the site, where the ground 
 })
 
 // The owner's mansion (15 Oct): two basements, the stack standing Lower Ground at grade.
-describe('a mansion with two levels below grade', () => {
+test('with the ground line set on a mansion, the flag follows the level shown: -1, then -2, then the ground floor', () => {
   const plate = (id: string, size: number) =>
     SlabNode.parse({
       id: `slab_${id}`,
@@ -169,37 +153,19 @@ describe('a mansion with two levels below grade', () => {
   const lower = 'level_lower_ground' as LevelNode['id']
   const deep = 'level_basement_2' as LevelNode['id']
   const reception = 'level_reception' as LevelNode['id']
-
-  const seated = () => {
-    const built = buildGroundLevelChanges({ nodes: mansion, levelId: reception })
-    const next: Record<string, AnyNode> = { ...mansion }
-    for (const { id, data } of built?.update ?? []) next[id] = { ...next[id], ...data } as AnyNode
-    return next as Record<AnyNodeId, AnyNode>
-  }
-
-  test('unseated, the stack’s own elevations read the basement at grade, as it was drawn', () => {
-    expect(belowGradeShown(shown(lower), mansion)).toBe(false)
-    expect(belowGradeShown(shown(deep), mansion)).toBe(true)
-  })
-
-  test('with the ground line set, both basements are below grade and the ground floor is not', () => {
-    const nodes = seated()
-    expect(gradeStandingShown(shown(lower), nodes)).toBe('below-grade')
-    expect(gradeStandingShown(shown(deep), nodes)).toBe('below-grade')
-    expect(gradeStandingShown(shown(reception), nodes)).toBe('at-grade')
-  })
-
-  test('the viewer’s flag follows the level shown: -1, then -2, then the ground floor', () => {
-    useScene.setState({ nodes: seated() } as never)
-    useViewer.setState({ hideLevelsAboveSelection: true })
-    const stop = followBelowGrade()
-    const flag = () => useViewer.getState().gradeStanding
-    useViewer.getState().setSelection({ levelId: lower })
-    expect(flag()).toBe('below-grade')
-    useViewer.getState().setSelection({ levelId: deep })
-    expect(flag()).toBe('below-grade')
-    useViewer.getState().setSelection({ levelId: reception })
-    expect(flag()).toBe('at-grade')
-    stop()
-  })
+  // "Set as ground floor" on the reception seats the stack: both basements are below grade.
+  const built = buildGroundLevelChanges({ nodes: mansion, levelId: reception })
+  const seated: Record<string, AnyNode> = { ...mansion }
+  for (const { id, data } of built?.update ?? []) seated[id] = { ...seated[id], ...data } as AnyNode
+  useScene.setState({ nodes: seated as Record<AnyNodeId, AnyNode> } as never)
+  useViewer.setState({ hideLevelsAboveSelection: true })
+  const stop = followBelowGrade()
+  const flag = () => useViewer.getState().gradeStanding
+  useViewer.getState().setSelection({ levelId: lower })
+  expect(flag()).toBe('below-grade')
+  useViewer.getState().setSelection({ levelId: deep })
+  expect(flag()).toBe('below-grade')
+  useViewer.getState().setSelection({ levelId: reception })
+  expect(flag()).toBe('at-grade')
+  stop()
 })

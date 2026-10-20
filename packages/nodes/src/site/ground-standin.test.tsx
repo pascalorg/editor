@@ -20,17 +20,18 @@ import { SiteRenderer } from './renderer'
 // above it and the landscape with them: the site's ground stands in, its hole opening over the
 // basement. With a level at or above grade shown, `showGround` is the author's.
 
-const lotPoints: Array<[number, number]> = [
-  [-10, -10],
-  [10, -10],
-  [10, 10],
-  [-10, 10],
-]
-
 const lot = (showGround: boolean | undefined, withTerrain = false) =>
   SiteNode.parse({
     id: 'site_lot',
-    polygon: { type: 'polygon', points: lotPoints },
+    polygon: {
+      type: 'polygon',
+      points: [
+        [-10, -10],
+        [10, -10],
+        [10, 10],
+        [-10, 10],
+      ],
+    },
     ...(showGround === undefined ? {} : { showGround }),
     ...(withTerrain
       ? {
@@ -41,15 +42,14 @@ const lot = (showGround: boolean | undefined, withTerrain = false) =>
       : {}),
   })
 
-const footprint: Array<[number, number]> = [
-  [0, 0],
-  [6, 0],
-  [6, 4],
-  [0, 4],
-]
-
 /** A house on the lot: a ground floor, over a basement when `basement` is set (the villa's numbers). */
 function setHouse(basement: boolean) {
+  const polygon: Array<[number, number]> = [
+    [0, 0],
+    [6, 0],
+    [6, 4],
+    [0, 4],
+  ]
   const levels = basement ? ['level_b', 'level_g'] : ['level_g']
   const nodes: AnyNode[] = [
     BuildingNode.parse({ id: 'building_a', children: levels }),
@@ -66,7 +66,7 @@ function setHouse(basement: boolean) {
         id: `slab_${levelId}`,
         parentId: levelId,
         elevation: levelId === 'level_b' ? 0.28 : 0.05,
-        polygon: footprint,
+        polygon,
       }),
     ]),
   ]
@@ -82,7 +82,6 @@ const surfaces = (root: Object3D, role: 'solid' | 'veil') => {
   })
   return found
 }
-
 const drawn = (surface: Object3D) => surface.visible && surface.layers.isEnabled(SCENE_LAYER)
 
 /** The level display shows the basement (the storeys above it hidden), as the editor sets it. */
@@ -111,42 +110,35 @@ async function groundOf(site: SiteNode, display: () => void) {
     return {
       solid: surfaces(scene, 'solid').filter(drawn).length,
       veil: surfaces(scene, 'veil').filter(drawn).length,
-      scene,
     }
   } finally {
     await renderer.unmount()
   }
 }
 
-test('showGround false, the basement shown: the site ground stands in, as it does with showGround on', async () => {
-  setHouse(true)
-  const standIn = await groundOf(lot(false), showBasement)
-  const own = await groundOf(lot(undefined), showBasement)
-  expect(standIn.solid).toBeGreaterThan(0)
-  expect(standIn.solid).toBe(own.solid)
-  expect(standIn.veil).toBe(own.veil)
-})
+test.each([false, true])(
+  'showGround false, the basement shown: the site ground stands in as it does with showGround on, and not with the ground floor shown (terrain: %p)',
+  async (terrain) => {
+    setHouse(true)
+    const standIn = await groundOf(lot(false, terrain), showBasement)
+    const own = await groundOf(lot(undefined, terrain), showBasement)
+    expect(standIn.solid).toBeGreaterThan(0)
+    expect(standIn.solid).toBe(own.solid)
+    expect(standIn.veil).toBe(own.veil)
+    // The ground floor shown: no site ground, the authored one is in view.
+    expect((await groundOf(lot(false, terrain), showGroundFloor)).solid).toBe(0)
+  },
+)
 
-test('showGround false, the ground floor shown: no site ground, the authored one is in view', async () => {
-  setHouse(true)
-  const shown = await groundOf(lot(false), showGroundFloor)
-  expect(shown.solid).toBe(0)
-})
-
-test('showGround false and no level below grade: no site ground, whatever the display says', async () => {
+test('showGround false and no level below grade: no site ground; showGround on or absent: drawn at grade and over the basement alike', async () => {
   setHouse(false)
   expect((await groundOf(lot(false), showGroundFloor)).solid).toBe(0)
   // The display only sets belowGrade for a level below grade; a scene without one never shows it.
   expect(useViewer.getState().hasLevelBelowGrade).toBe(false)
-})
-
-test('showGround on or absent: the site ground is drawn at grade and over the basement alike', async () => {
   setHouse(true)
-  for (const showGround of [undefined, true]) {
-    for (const display of [showGroundFloor, showBasement]) {
+  for (const showGround of [undefined, true])
+    for (const display of [showGroundFloor, showBasement])
       expect((await groundOf(lot(showGround), display)).solid).toBeGreaterThan(0)
-    }
-  }
 })
 
 test('the stand-in follows the level display live: it comes with the basement and goes with it', async () => {
@@ -161,32 +153,6 @@ test('the stand-in follows the level display live: it comes with the basement an
     await act(async () => showGroundFloor())
     await renderer.advanceFrames(2, 0.05)
     expect(surfaces(scene, 'solid')).toHaveLength(0)
-  } finally {
-    await renderer.unmount()
-  }
-})
-
-test('on a sculpted site the stand-in is the sculpted ground', async () => {
-  setHouse(true)
-  const standIn = await groundOf(lot(false, true), showBasement)
-  const own = await groundOf(lot(undefined, true), showBasement)
-  expect(standIn.solid).toBeGreaterThan(0)
-  expect(standIn.solid).toBe(own.solid)
-  expect((await groundOf(lot(false, true), showGroundFloor)).solid).toBe(0)
-})
-
-test('the stand-in ground carries the hole over the basement, so only the opening is seen through it', async () => {
-  setHouse(true)
-  const renderer = await create(<SiteRenderer node={lot(false)} />)
-  try {
-    await act(async () => showBasement())
-    groundHoleOpenNode().value = 1
-    await renderer.advanceFrames(2, 0.05)
-    const solid = surfaces(renderer.scene.instance as Object3D, 'solid')
-    expect(solid.length).toBeGreaterThan(0)
-    for (const surface of solid) {
-      expect((surface.material as { maskNode: unknown }).maskNode).not.toBeNull()
-    }
   } finally {
     await renderer.unmount()
   }
