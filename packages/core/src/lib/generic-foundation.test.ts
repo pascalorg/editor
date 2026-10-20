@@ -300,6 +300,32 @@ test('the footing under a basement floor stands on the pit floor, never on its p
   }
 })
 
+test('the footing follows the house’s floor, not a driveway laid deeper on its level', () => {
+  const plain = seatedBasement()
+  const level = plain.level_b as LevelNode
+  const drive = SlabNode.parse({
+    id: 'slab_drive',
+    parentId: 'level_b',
+    polygon: [
+      [0, 0],
+      [10, 0],
+      [10, 8],
+      [0, 8],
+    ],
+    elevation: 0,
+    thickness: 0.4,
+    metadata: { flatwork: 'driveway' },
+  })
+  const withDrive = {
+    ...plain,
+    slab_drive: drive,
+    level_b: { ...level, children: [...level.children, 'slab_drive'] },
+  } as typeof plain
+  const tops = (nodes: typeof plain) =>
+    ofKind(genericFoundation(nodes), 'footing').map((footing) => footing.topY)
+  expect(tops(withDrive)).toEqual(tops(plain))
+})
+
 test('a basement still being drawn does not take the foundation away: the lowest level with a closed outline carries it', () => {
   for (const walls of [1, 3]) {
     const members = genericFoundation(houseOverBasement(walls))

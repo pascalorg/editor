@@ -1,6 +1,7 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 import { getLevelElevations } from '../services/storey'
 import { FOUNDATION_STANDARD } from './foundation-standard'
+import { isSiteFlatwork } from './site-flatwork'
 import { FLAT_GROUND_Y } from './site-ground-height'
 import { heightAtSample, type TerrainField } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
@@ -33,8 +34,9 @@ export function lowestGroundY(nodes: Nodes): number {
  * The world Y of the deepest thing the scene draws: the bottom of the footing under the lowest floor
  * slab (its underside less a footing's thickness; never above the walls' base, as the footing
  * itself is). A recessed slab (a basin) is drawn down to its own underside, with no footing under
- * it. A footing under a floor at or over grade sits about as deep, and never nearer the dive's own
- * floor, so the floors alone decide. `null` for a scene with no floor.
+ * it. Site flatwork (a lawn, a driveway) is not a floor of the house and counts for nothing. A
+ * footing under a floor at or over grade sits about as deep, and never nearer the dive's own floor,
+ * so the floors alone decide. `null` for a scene with no floor.
  */
 export function deepestDrawnY(nodes: Nodes): number | null {
   const elevations = getLevelElevations(nodes)
@@ -49,7 +51,7 @@ export function deepestDrawnY(nodes: Nodes): number | null {
     let basinUnderside = Number.POSITIVE_INFINITY
     for (const id of node.children) {
       const child = nodes[id as AnyNodeId]
-      if (child?.type !== 'slab') continue
+      if (child?.type !== 'slab' || isSiteFlatwork(child)) continue
       const underside = planeY + child.elevation - child.thickness
       if (child.recessed === true) basinUnderside = Math.min(basinUnderside, underside)
       else floorUnderside = Math.min(floorUnderside, underside)

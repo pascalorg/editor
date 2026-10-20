@@ -96,7 +96,14 @@ test('a basement is deepest at the footing under its floor', () => {
 })
 
 /** A basement (-1, plane at -3.63) whose floor has two slabs on different elevations. */
-function splitBasement(slabs: Array<{ elevation: number; thickness: number; recessed?: boolean }>) {
+function splitBasement(
+  slabs: Array<{
+    elevation: number
+    thickness: number
+    recessed?: boolean
+    metadata?: Record<string, unknown>
+  }>,
+) {
   const level = LevelNode.parse({
     id: 'level_b',
     parentId: 'building_a',
@@ -138,6 +145,15 @@ test('a thick recessed slab that stays shallow does not deepen the standing plat
   const nodes = splitBasement([
     { elevation: 0.05, thickness: 0.05 },
     { elevation: 0.45, thickness: 0.5, recessed: true },
+  ])
+  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - FOUNDATION_STANDARD.footingThickness, 9)
+})
+
+test('site flatwork is not a floor: a driveway laid deeper than the house’s slab does not take the dive depth down', () => {
+  // The house on its 0.05 m plate; a driveway on the same level, top -0.3, 0.3 thick (underside -0.6).
+  const nodes = splitBasement([
+    { elevation: 0.05, thickness: 0.05 },
+    { elevation: -0.3, thickness: 0.3, metadata: { flatwork: 'driveway' } },
   ])
   expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - FOUNDATION_STANDARD.footingThickness, 9)
 })

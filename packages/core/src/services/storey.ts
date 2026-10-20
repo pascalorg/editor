@@ -150,8 +150,8 @@ export function levelFloorWorldY(
 /**
  * The world Y of the top of the lowest floor slab `levelId` stands on: the floor a pit under the
  * level has to go down to, the sunken room of a split level included ({@link levelFloorWorldY} is
- * the highest). A recessed slab (a basin) and site flatwork are not floors. The same as
- * `levelFloorWorldY` for a level with one floor, or none. `null` for an id that is no level.
+ * the highest). The same as `levelFloorWorldY` for a level with one floor, or none. `null` for an
+ * id that is no level.
  */
 export function levelLowestFloorWorldY(
   nodes: Record<AnyNodeId, AnyNode>,
@@ -165,7 +165,7 @@ export function levelLowestFloorWorldY(
   let lowest: number | null = null
   for (const childId of level.children) {
     const child = nodes[childId as AnyNodeId]
-    if (child?.type !== 'slab' || child.recessed === true || isSiteFlatwork(child)) continue
+    if (!isFloorSlab(child)) continue
     lowest = Math.min(lowest ?? child.elevation, child.elevation)
   }
   return siteY + elevation.baseY + (lowest ?? 0)
@@ -188,7 +188,7 @@ export function levelPlateUndersideWorldY(
   let underside = baseY
   for (const childId of level.children) {
     const child = nodes[childId as AnyNodeId]
-    if (child?.type !== 'slab' || child.recessed === true) continue
+    if (!isFloorSlab(child)) continue
     underside = Math.min(underside, baseY + child.elevation - child.thickness)
   }
   return underside
@@ -205,12 +205,22 @@ export function isLevelBelowGrade(nodes: Record<AnyNodeId, AnyNode>, levelId: st
   return floorY !== null && floorY < -BELOW_GRADE_TOLERANCE
 }
 
-/** The top of the highest slab a level stands on, in its own Y; 0 for a level with none. */
+/**
+ * Whether a node is a floor slab of the house a level stands on: not a recessed one (a pit or a
+ * basin, drawn down into the floor) and not site flatwork (a lawn, a driveway: outdoors, laid on the
+ * level for its elevation only). Where a level's floors are, how high and how deep, is read off
+ * these alone.
+ */
+function isFloorSlab(node: AnyNode | undefined): node is SlabNode {
+  return node?.type === 'slab' && node.recessed !== true && !isSiteFlatwork(node)
+}
+
+/** The top of the highest floor slab a level stands on, in its own Y; 0 for a level with none. */
 function standingSlabTop(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): number {
   let top: number | null = null
   for (const childId of level.children) {
     const child = nodes[childId as AnyNodeId]
-    if (child?.type !== 'slab' || child.recessed === true) continue
+    if (!isFloorSlab(child)) continue
     top = Math.max(top ?? child.elevation, child.elevation)
   }
   return top ?? 0
