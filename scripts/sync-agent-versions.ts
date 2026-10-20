@@ -16,8 +16,15 @@ export const mcpPackageName = '@pascal-app/mcp'
 
 const cliPin = /@pascal-app\/cli@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/g
 
-function packageVersion(root: string, pkg: string): string {
-  return JSON.parse(readFileSync(join(root, 'packages', pkg, 'package.json'), 'utf8')).version
+/**
+ * The version integrations should quote for a package, or undefined while the tree is on a
+ * prerelease. Prereleases publish on npm's `beta` tag, so integrations keep the last stable one.
+ */
+export function stablePackageVersion(root: string, pkg: string): string | undefined {
+  const { version } = JSON.parse(
+    readFileSync(join(root, 'packages', pkg, 'package.json'), 'utf8'),
+  ) as { version: string }
+  return version.includes('-') ? undefined : version
 }
 
 function syncServerJson(source: string, version: string): string {
@@ -31,19 +38,23 @@ function syncServerJson(source: string, version: string): string {
 
 /** Returns each managed file whose content differs from what the package versions require. */
 export function agentVersionDrift(root: string): Map<string, string> {
-  const cliVersion = packageVersion(root, 'cli')
-  const mcpVersion = packageVersion(root, 'mcp')
+  const cliVersion = stablePackageVersion(root, 'cli')
+  const mcpVersion = stablePackageVersion(root, 'mcp')
   const expected = new Map<string, string>()
-  for (const path of cliPinFiles) {
+  if (cliVersion) {
+    for (const path of cliPinFiles) {
+      expected.set(
+        path,
+        readFileSync(join(root, path), 'utf8').replace(cliPin, `@pascal-app/cli@${cliVersion}`),
+      )
+    }
+  }
+  if (mcpVersion) {
     expected.set(
-      path,
-      readFileSync(join(root, path), 'utf8').replace(cliPin, `@pascal-app/cli@${cliVersion}`),
+      'server.json',
+      syncServerJson(readFileSync(join(root, 'server.json'), 'utf8'), mcpVersion),
     )
   }
-  expected.set(
-    'server.json',
-    syncServerJson(readFileSync(join(root, 'server.json'), 'utf8'), mcpVersion),
-  )
   for (const [path, content] of expected) {
     if (readFileSync(join(root, path), 'utf8') === content) expected.delete(path)
   }

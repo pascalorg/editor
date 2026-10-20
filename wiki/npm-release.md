@@ -44,7 +44,7 @@ The same `release.yml` run publishes `ghcr.io/pascalorg/pascal-editor` after the
 
 - A repository that pins this one as a git submodule bumps the pin to the release commit and runs `bun install`: its root lockfile records the workspace versions, so it changes with the pin.
 - Plugins that declare `@pascal-app/*` peer ranges must widen them when a release leaves the range; `bun install` reports unmet peers until they do.
-- The release commit already carries the Cursor plugin's `--package=@pascal-app/cli@<version>` pin and the [`server.json`](../server.json) version: the workflow runs `bun scripts/sync-agent-versions.ts` after the bump, and `bun run skills:validate` fails when either drifts from `packages/*/package.json`. A manual release runs the same script before committing.
+- The release commit already carries the Cursor plugin's `--package=@pascal-app/cli@<version>` pin and the [`server.json`](../server.json) version: the workflow runs `bun scripts/sync-agent-versions.ts` after the bump, and `bun run skills:validate` fails when either drifts from `packages/*/package.json`. A beta leaves both on the last stable release, so marketplace installs never pin a prerelease. A manual release runs the same script before committing.
 
 ## MCP Registry
 

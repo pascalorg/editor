@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { stablePackageVersion } from './sync-agent-versions'
 
 export function validateCursorPluginPackage(root: string): string[] {
   const failures: string[] = []
@@ -31,15 +32,24 @@ export function validateCursorPluginPackage(root: string): string[] {
   if (JSON.stringify(config) !== JSON.stringify(rootConfig)) {
     failures.push('Cursor MCP configs must match at both install roots')
   }
-  const cliVersion = read('packages/cli/package.json').version
+  const hasCliPackage = existsSync(join(root, 'packages/cli/package.json'))
+  if (!hasCliPackage) failures.push('Cursor CLI pin needs packages/cli/package.json')
+  const cliVersion = hasCliPackage ? stablePackageVersion(root, 'cli') : undefined
+  const localServer = (config.mcpServers as Record<string, unknown> | undefined)?.pascal as
+    | { args?: unknown[] }
+    | undefined
+  const pin = localServer?.args?.[1]
+  const pinnedVersion =
+    typeof pin === 'string' ? /^--package=@pascal-app\/cli@(\d+\.\d+\.\d+)$/.exec(pin)?.[1] : null
   const expectedLocalServer = {
     type: 'stdio',
     command: 'npx',
-    args: ['--yes', `--package=@pascal-app/cli@${cliVersion}`, 'pascal', 'mcp', 'connect'],
+    args: ['--yes', `--package=@pascal-app/cli@${pinnedVersion}`, 'pascal', 'mcp', 'connect'],
   }
   if (
-    JSON.stringify((config.mcpServers as Record<string, unknown> | undefined)?.pascal) !==
-    JSON.stringify(expectedLocalServer)
+    !pinnedVersion ||
+    (cliVersion !== undefined && pinnedVersion !== cliVersion) ||
+    JSON.stringify(localServer) !== JSON.stringify(expectedLocalServer)
   ) {
     failures.push(
       'Cursor local MCP must bootstrap the pinned npm CLI without a global Pascal dependency',

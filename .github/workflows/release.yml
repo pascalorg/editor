@@ -205,7 +205,8 @@ jobs:
           # Refresh the lockfile so the release commit remains reproducible.
           bun install
 
-          # The Cursor plugin's CLI pin and server.json quote these versions.
+          # The Cursor plugin's CLI pin and server.json quote these versions; a beta
+          # leaves them on the last stable release.
           bun scripts/sync-agent-versions.ts
 
       # Publishing server.json to the MCP Registry stays a manual owner step after

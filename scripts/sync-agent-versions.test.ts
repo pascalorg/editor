@@ -44,4 +44,8 @@ describe('agent integration versions follow the package versions', () => {
       expect.objectContaining({ identifier: '@pascal-app/mcp', version: '9.8.7' }),
     ])
   })
+
+  test('a beta release keeps every integration on the last stable version', () => {
+    expect([...agentVersionDrift(fixture('9.8.7-beta.1')).keys()]).toEqual([])
+  })
 })

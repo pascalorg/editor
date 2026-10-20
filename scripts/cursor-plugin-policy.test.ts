@@ -70,6 +70,29 @@ describe('Cursor marketplace installs from skills/', () => {
     )
   })
 
+  test('keeps the stable pin while the CLI is on a beta', () => {
+    const target = fixture()
+    const path = join(target, 'packages/cli/package.json')
+    writeFileSync(
+      path,
+      JSON.stringify({ ...JSON.parse(readFileSync(path, 'utf8')), version: '99.0.0-beta.1' }),
+    )
+    expect(validateCursorPluginPackage(target)).toEqual([])
+  })
+
+  test('rejects a prerelease pin', () => {
+    const target = fixture()
+    for (const name of ['.cursor-plugin/mcp.json', 'skills/.cursor-plugin/mcp.json']) {
+      const path = join(target, name)
+      const config = JSON.parse(readFileSync(path, 'utf8'))
+      config.mcpServers.pascal.args[1] = '--package=@pascal-app/cli@99.0.0-beta.1'
+      writeFileSync(path, JSON.stringify(config))
+    }
+    expect(validateCursorPluginPackage(target)).toContain(
+      'Cursor local MCP must bootstrap the pinned npm CLI without a global Pascal dependency',
+    )
+  })
+
   test('rejects a legacy API-key header on the browser OAuth server', () => {
     const target = fixture()
     for (const name of ['.cursor-plugin/mcp.json', 'skills/.cursor-plugin/mcp.json']) {

@@ -40,17 +40,19 @@ jobs:
       - name: Validate MCP Registry manifest
         run: "$RUNNER_TEMP/mcp-publisher validate"
 
-      # The registry verifies npm ownership through the published package's mcpName.
+      # The registry verifies npm ownership through the published package's mcpName. A
+      # prerelease tree keeps the manifest on the last stable version.
       - name: Manifest follows the @pascal-app/mcp package
         run: |
           jq --exit-status --slurpfile pkg packages/mcp/package.json '
-            .version == $pkg[0].version
+            (.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
+            and (($pkg[0].version | contains("-")) or .version == $pkg[0].version)
             and .name == $pkg[0].mcpName
             and .packages == [{
               "registryType": "npm",
               "registryBaseUrl": "https://registry.npmjs.org",
               "identifier": $pkg[0].name,
-              "version": $pkg[0].version,
+              "version": .version,
               "runtimeHint": "npx",
               "transport": { "type": "stdio" }
             }]
