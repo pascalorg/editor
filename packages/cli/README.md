@@ -159,6 +159,9 @@ downloaded the web runtime.
 | `pascal project open <id-or-name>`                       | Explicit form of `pascal open <project>`.                                                       |
 | `pascal agent claim [--no-open] [--json]`                | Link an autonomous hosted agent to the person accountable for it.                               |
 | `pascal agent status [--json]`                           | Verify the hosted agent credential and inspect its claim and organization scope.                |
+| `pascal architect run "<brief>"`                         | Start a hosted architect run from a brief and stream its output.                                |
+| `pascal architect status <id> [--json]`                  | Show a hosted architect run's status and output.                                                |
+| `pascal architect cancel <id> [--json]`                  | Cancel a queued or running hosted architect run.                                                |
 | `pascal mcp connect`                                     | Stable local connector for MCP clients; starts the bundled MCP service without the web runtime. |
 | `pascal mcp status [--json]`                             | Show managed MCP health.                                                                        |
 | `pascal mcp config [--json]`                             | Print generic MCP client configuration.                                                         |
@@ -232,6 +235,61 @@ Claiming lifts claim-gated capabilities for the autonomous agent. It does not tr
 ownership, grant the agent access to the person's private projects, or grant the person access
 to the agent's private projects. The local editor and its projects remain local unless a
 separate hosted project action explicitly moves data.
+
+## Hosted architect runs
+
+The `pascal architect` commands ship in the next `@pascal-app/cli` release after 1.0.5;
+1.0.5 and earlier do not include them.
+
+You hand Pascal's hosted architect a brief, and it designs the building on Pascal while you
+watch, detach, or come back later. You need an agent API key in `PASCAL_API_KEY`, the same
+key `pascal agent status` checks. The CLI sends it to Pascal and never stores or prints it.
+
+Start a run and stream its output:
+
+```bash
+PASCAL_API_KEY='sk_live_...' pascal architect run "A two-storey, three-bedroom house with an open-plan kitchen"
+```
+
+The design text streams to stdout and progress lines go to stderr, so you can pipe or
+redirect the output. The run executes in the background on Pascal: when you press Ctrl+C you
+detach, and the run keeps going. The CLI prints the run ID when it starts.
+
+| Flag                              | Effect                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `--effort low\|medium\|high\|pro` | Use the `architect-<effort>` model. Without it, the run uses `architect`.           |
+| `--project <id>`                  | Run in a hosted Pascal project; sent as `metadata.project_id`.                      |
+| `--max-credits <n>`               | Cap the credits this run may spend; sent as `metadata.pascal_max_credits`.          |
+| `--detach`                        | Queue the run, print its ID, and return without streaming.                          |
+| `--json`                          | Print the run as JSON; waits for the run to finish unless you also pass `--detach`. |
+
+Check on a run, including one you detached from:
+
+```bash
+PASCAL_API_KEY='sk_live_...' pascal architect status resp_abc123
+```
+
+You get the status (`queued`, `in progress`, `completed`, `failed`, `cancelled`, or
+`incomplete`), the model, project, credit cap, and the output so far. `--json` returns the
+same fields as a stable object with `schemaVersion: 1`.
+
+Stop a run you no longer need:
+
+```bash
+PASCAL_API_KEY='sk_live_...' pascal architect cancel resp_abc123
+```
+
+When something goes wrong, the CLI tells you whether retrying can help. Exit code `75` means
+Pascal is temporarily unable to take the request: `architect_executor_unavailable` (no
+architect executor is free, so no run started), `architect_rate_limited`, or
+`architect_unavailable`. Retry the same command later. `architect_unauthorized` and
+`architect_forbidden` mean the key is invalid, revoked, or not allowed to use the architect;
+check it with `pascal agent status`. `architect run` exits `1` when the run ends in any state
+other than `completed`, `2` on invalid usage, and `130` when you detach with Ctrl+C. With
+`--json`, errors go to stderr as `{ "error": "<code>", "message": "...", "details": { ... } }`.
+
+The commands are a thin client over Pascal's OpenAI-compatible Responses API at
+`https://editor.pascal.app/api/v1/responses`, using background mode.
 
 ## Plugins
 
