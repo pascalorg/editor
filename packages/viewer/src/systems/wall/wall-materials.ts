@@ -1,4 +1,5 @@
 import {
+  type ExposedStructure,
   getEffectiveWallFaceMaterial,
   getMaterialPresetByRef,
   getWallSurfaceMaterialSignature,
@@ -13,11 +14,18 @@ import {
   type WallFace,
   type WallNode,
   type WallSurfaceMaterialSpec,
+  wallAssemblyExposedStructure,
   wallAssemblyFinishRef,
 } from '@pascal-app/core'
 import { Color, type Material } from 'three'
-import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
+import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, uv, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import {
+  BLOCK_MASONRY,
+  concreteMaterial,
+  masonryMaterial,
+  STRUCTURE_COLORS,
+} from '../../lib/foundation-materials'
 import {
   baseMaterial,
   type ColorPreset,
@@ -126,6 +134,30 @@ function wallAssemblyFaceFinishRef(wallNode: WallNode, face: WallFace): string |
   return face === exteriorFace ? wallAssemblyFinishRef(wallNode) : null
 }
 
+// What `face` shows when it is the exterior face of a wall with no cladding over a bare masonry or
+// concrete core: the structure itself (null otherwise, and for any face with a cladding).
+function wallFaceExposedStructure(wallNode: WallNode, face: WallFace): ExposedStructure | null {
+  if (wallAssemblyFaceFinishRef(wallNode, face)) return null
+  const exteriorFace = resolveWallExteriorSide(wallNode) === 1 ? 'a' : 'b'
+  return face === exteriorFace ? wallAssemblyExposedStructure(wallNode) : null
+}
+
+// The structure as the generic foundation draws it (same courses, joints and colours), made once:
+// the block's bond runs along the face's world-planar U, the wall's own metres. Solid shading
+// keeps to a flat colour, like every other wall finish.
+const structureMaterials = new Map<ExposedStructure, Material>()
+function exposedStructureMaterial(structure: ExposedStructure, shading: RenderShading): Material {
+  if (shading !== 'rendered')
+    return createDefaultMaterial(STRUCTURE_COLORS[structure], 0.9, shading)
+  let material = structureMaterials.get(structure)
+  if (!material) {
+    material = structure === 'cmu' ? masonryMaterial(BLOCK_MASONRY, uv().x) : concreteMaterial()
+    material.userData.__pascalCachedMaterial = true
+    structureMaterials.set(structure, material)
+  }
+  return material
+}
+
 // Slot-first resolution for one wall face, matching every other paintable kind:
 //   node.slots[face] ref → legacy inline finish → declared slot default.
 // A dangling `scene:` ref (material deleted / copied across scenes) falls back
@@ -148,6 +180,8 @@ function resolveWallFaceMaterial(
   // exterior — a "2x6 lap siding" wall reads as lap siding without the user
   // painting it. Painting the face still wins.
   const assemblyRef = wallAssemblyFaceFinishRef(wallNode, face)
+  const exposed = assemblyRef ? null : wallFaceExposedStructure(wallNode, face)
+  if (exposed) return exposedStructureMaterial(exposed, shading)
   return resolveWallSlotDefault(assemblyRef ?? finish.ref, shading)
 }
 
@@ -194,6 +228,8 @@ function wallFaceMaterialSignature(
     preset: spec.materialPreset ? materialPresetRefSignature(spec.materialPreset) : null,
     // Changing the assembly's cladding must re-skin the face.
     assemblyFinish: assemblyRef ? materialPresetRefSignature(assemblyRef) : null,
+    // So must baring or covering its structure.
+    structure: assemblyRef ? null : wallFaceExposedStructure(wallNode, face),
   })
 }
 
@@ -225,6 +261,8 @@ function resolveWallFaceColor(
   if (assemblyRef && !(spec.materialPreset || spec.material)) {
     return getMaterialPresetByRef(assemblyRef)?.mapProperties?.color ?? fallback
   }
+  const exposed = assemblyRef ? null : wallFaceExposedStructure(wallNode, face)
+  if (exposed && !(spec.materialPreset || spec.material)) return STRUCTURE_COLORS[exposed]
   return getSurfaceColor(spec, fallback)
 }
 

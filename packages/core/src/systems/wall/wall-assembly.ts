@@ -644,6 +644,31 @@ export function wallAssemblyFinishRef(
   return WALL_FINISH_LIBRARY_REF[finish] ?? null
 }
 
+/** The structural cores that are left bare where nothing covers them: block and cast concrete. */
+export type ExposedStructure = 'cmu' | 'concrete'
+
+/**
+ * What the wall's exterior face shows when its assembly declares no cladding and no lining over
+ * the core and the core is masonry or concrete: the structure itself, exposed. A foundation wall's
+ * block or cast concrete above grade, and from under the ground, is what it is. `null` for a wall
+ * with a cladding (`wallAssemblyFinishRef` speaks for it), a lining outside the core (a
+ * partition), a framed or foam core (`wood`, `lgs`, `icf`), and a wall whose exterior side is not
+ * yet resolved. The viewer draws it as the generic foundation draws the same structure.
+ */
+export function wallAssemblyExposedStructure(
+  wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide'>,
+): ExposedStructure | null {
+  if (resolveWallExteriorSide(wall) === null) return null
+  const { layers } = layersOutsideIn(wall)
+  const coreIndex = layers.findIndex((layer) => layer.core)
+  const kind = layers[coreIndex]?.material
+  if (kind !== 'cmu' && kind !== 'concrete') return null
+  const covered = layers
+    .slice(0, coreIndex)
+    .some((layer) => layer.role === 'finish' || layer.role === 'lining')
+  return covered ? null : kind
+}
+
 export function getWallAssemblyPreset(id: string | undefined): WallAssemblyPreset | undefined {
   if (!id) return undefined
   return WALL_ASSEMBLY_PRESETS.find((preset) => preset.id === id)
