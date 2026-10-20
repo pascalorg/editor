@@ -147,6 +147,29 @@ export function levelFloorWorldY(
 }
 
 /**
+ * The world Y of the underside of `levelId`'s lowest floor plate, never above the walls' base: the
+ * plane the foundation under the level tops out at, and the one the pit under the hole keeps its
+ * own floor clear of. `null` for an id that is no level.
+ */
+export function levelPlateUndersideWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const elevation = getLevelElevations(nodes).get(levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (!elevation || level?.type !== 'level') return null
+  const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
+  const baseY = (building?.type === 'building' ? building.position[1] : 0) + elevation.baseY
+  let underside = baseY
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (child?.type !== 'slab' || child.recessed === true) continue
+    underside = Math.min(underside, baseY + child.elevation - child.thickness)
+  }
+  return underside
+}
+
+/**
  * Whether `levelId`'s floor lies below the flat site's grade (Y 0), by more than
  * {@link BELOW_GRADE_TOLERANCE}. Sculpted terrain is not consulted: where the ground itself
  * rises over a floor, ask `levelGradeStanding`, which falls back to this on flat sites.

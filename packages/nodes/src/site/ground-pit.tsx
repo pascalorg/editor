@@ -63,9 +63,8 @@ const CRUMBLE_DEPTH = 0.45
 /** Depth (m) below the rim where the roughness starts, and above the foot where it ends. */
 const CRUMBLE_RIM = 0.25
 const CRUMBLE_FOOT = 0.9
-const FLOOR_DROP = 0.05
-/** The walls' foot goes this far under the floor's plate, so no gap shows between them. */
-const FOOT_TUCK = FLOOR_DROP + 0.03
+/** The walls' foot goes this far under the pit's floor, so no gap shows between them. */
+const FOOT_TUCK = 0.03
 
 /**
  * The section cut's face (`EdgeLook.section`): one flat tone and a darker line at grade. Without
@@ -78,6 +77,9 @@ const SECTION_LINE_DEPTH = 0.07
 
 const pitTopY = uniform(0)
 const pitFloorY = uniform(0)
+// Where the dark floor is drawn: under the plate (`groundPitFloorY` in core), clear of the
+// plane the foundation stops on.
+const pitDrawnFloorY = uniform(0)
 const pitCrumble = uniform(CRUMBLE)
 const pitSection = uniform(0)
 
@@ -92,6 +94,11 @@ export function groundPitFloorNow(): number {
   return pitFloorY.value as number
 }
 
+/** Where the pit draws its dark floor now, world Y: under the plate of that floor. */
+export function groundPitDrawnFloorNow(): number {
+  return pitDrawnFloorY.value as number
+}
+
 function pitEase() {
   return smoothstep(float(0), float(1), groundHoleOpenNode())
 }
@@ -100,13 +107,13 @@ function wallMaterial(topsoil: string, foot: string) {
   const material = new MeshLambertNodeMaterial({ side: FrontSide })
   const drop = attribute<'float'>('drop', 'float')
   const slide = drop.mul(pitEase())
-  const drawnY = mix(positionLocal.y, pitFloorY.sub(FOOT_TUCK), slide)
+  const drawnY = mix(positionLocal.y, pitDrawnFloorY.sub(FOOT_TUCK), slide)
   // An earth cut is rough in depth: past the rim's own cut the wall is pushed sideways by a 3D
   // noise that changes with depth, so a wiggle of the rim does not run straight down as a fold.
   // Nothing at the rim (the top stays on the shader's cut) nor at the foot (it stays under the
   // floor's plate), both eased in over a few tenths of a metre.
   const belowRim = positionLocal.y.sub(drawnY)
-  const aboveFoot = drawnY.sub(pitFloorY.sub(FOOT_TUCK))
+  const aboveFoot = drawnY.sub(pitDrawnFloorY.sub(FOOT_TUCK))
   const rough = smoothstep(float(CRUMBLE_RIM), float(CRUMBLE_RIM * 5), belowRim).mul(
     smoothstep(float(0), float(CRUMBLE_FOOT), aboveFoot),
   )
@@ -164,7 +171,7 @@ function floorMaterial(inHole: unknown) {
   const material = new MeshLambertNodeMaterial({ side: FrontSide })
   material.positionNode = vec3(
     positionLocal.x,
-    mix(pitTopY, pitFloorY, pitEase()).sub(FLOOR_DROP),
+    mix(pitTopY, pitDrawnFloorY, pitEase()),
     positionLocal.z,
   )
   const grain = mx_noise_float(positionWorld.mul(vec3(0.8, 0, 0.8)))
@@ -177,13 +184,15 @@ function floorMaterial(inHole: unknown) {
 
 /**
  * The pit's walls and floor. `walls` is the cut contour (null: no hole), `box` the field's
- * footprint the floor covers, `topY` the grade and `floorY` the shown level's floor, both world Y.
+ * footprint the floor covers, `topY` the grade, `floorY` the shown level's floor and `drawnFloorY`
+ * where the dark floor is drawn (`groundPitFloorY`), all world Y.
  */
 export function GroundPit({
   walls,
   box,
   topY,
   floorY,
+  drawnFloorY,
   topsoil,
   inHole,
 }: {
@@ -191,6 +200,7 @@ export function GroundPit({
   box: { originX: number; originZ: number; span: number } | null
   topY: number
   floorY: number | null
+  drawnFloorY: number | null
   topsoil: string
   inHole: unknown
 }) {
@@ -238,7 +248,8 @@ export function GroundPit({
   useEffect(() => {
     pitTopY.value = topY
     if (floorY !== null) pitFloorY.value = floorY
-  }, [topY, floorY])
+    if (drawnFloorY !== null) pitDrawnFloorY.value = drawnFloorY
+  }, [topY, floorY, drawnFloorY])
 
   return (
     <>

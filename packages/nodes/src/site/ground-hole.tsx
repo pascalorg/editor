@@ -324,12 +324,13 @@ export function groundHoleColorNode(shadeColor: string) {
  *
  * It also stands the pit in the hole (`ground-pit.tsx`): walls cut along the hole's own contour
  * from the ground (`topAt`, at `topY` flat) down to `floorY`, the floor of the level shown, in the
- * `topsoil` colour at their top.
+ * `topsoil` colour at their top; its dark floor is drawn at `drawnFloorY` (`groundPitFloorY`).
  */
 export function GroundHole({
   footprints,
   present,
   floorY,
+  drawnFloorY,
   topY,
   topAt,
   topsoil,
@@ -337,6 +338,7 @@ export function GroundHole({
   footprints: ReadonlyArray<ReadonlyArray<Point>>
   present: boolean
   floorY: number | null
+  drawnFloorY: number | null
   topY: number
   topAt: (x: number, z: number) => number
   topsoil: string
@@ -380,6 +382,7 @@ export function GroundHole({
   return present ? (
     <GroundPit
       box={pit?.box ?? null}
+      drawnFloorY={drawnFloorY}
       floorY={floorY}
       inHole={groundHoleFloorNode()}
       topsoil={topsoil}

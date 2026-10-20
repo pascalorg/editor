@@ -7,7 +7,12 @@ import {
   SiteNode,
   SlabNode,
 } from '../schema'
-import { belowGradeFloorY, belowGradeFootprints } from './below-grade-footprints'
+import {
+  belowGradeFloorY,
+  belowGradeFootprints,
+  GROUND_PIT_PLATE_CLEARANCE,
+  groundPitFloorY,
+} from './below-grade-footprints'
 import { levelGradeStanding } from './grade-standing'
 import { levelStackGroundBox } from './ground-window'
 import { encodeTerrainField } from './terrain-codec'
@@ -353,4 +358,30 @@ test('the pit goes down to the floor of the level shown, and to none when it is 
   expect(belowGradeFloorY(nodes, 'level_g')).toBeNull()
   expect(belowGradeFloorY(nodes, null)).toBeNull()
   expect(belowGradeFloorY(nodes)).toBeNull()
+})
+
+test('the pit hangs its floor 5 cm under the plate, and 2 cm under its underside where that would meet it', () => {
+  // The villa's Lower Ground: -3.63 m, a 0.28 m plate raised well over the walls' base: the pit's
+  // floor keeps its place, 5 cm under the plate's top.
+  const raised = houseOverBasement([0, 0, 0], 0)
+  expect(groundPitFloorY(raised, 'level_b')).toBeCloseTo(-3.4, 9)
+  expect(groundPitFloorY(raised, 'level_g')).toBeNull()
+  expect(groundPitFloorY(raised, null)).toBeNull()
+  // A basement on the default 0.05 m plate at the level plane: 5 cm under the plate's top is its
+  // underside, so the floor goes 2 cm under it.
+  const seat = (slab: Partial<SlabNode>) =>
+    Object.fromEntries(
+      [
+        BuildingNode.parse({ id: 'building_a', children: ['level_b'], position: [0, -2.7, 0] }),
+        LevelNode.parse({ id: 'level_b', parentId: 'building_a', level: -1, children: ['slab_b'] }),
+        SlabNode.parse({ id: 'slab_b', parentId: 'level_b', polygon: square(8), ...slab }),
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+  for (const slab of [{}, { thickness: 0.03 }, { thickness: 0.06 }, { elevation: 0 }]) {
+    const nodes = seat(slab)
+    const underside = -2.7 + Math.min(0, (slab.elevation ?? 0.05) - (slab.thickness ?? 0.05))
+    expect(groundPitFloorY(nodes, 'level_b')).toBeCloseTo(underside - GROUND_PIT_PLATE_CLEARANCE, 9)
+  }
+  // A thick plate puts its underside well under 5 cm below its top: the floor is not moved.
+  expect(groundPitFloorY(seat({ thickness: 0.2 }), 'level_b')).toBeCloseTo(-2.7 + 0.05 - 0.05, 9)
 })
