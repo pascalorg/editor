@@ -1,46 +1,72 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 import { BELOW_GRADE_TOLERANCE, getLevelElevations, levelFloorWorldY } from '../services/storey'
-import { levelGradeStanding, terrainFieldOverLevel } from './grade-standing'
+import {
+  type LevelGradeStanding,
+  levelGradeStanding,
+  terrainFieldOverLevel,
+} from './grade-standing'
 import { groundOverPart } from './ground-over-part'
+import { difference, intersection, type MultiPolygon, union } from './polygon-boolean'
 import { type Point2D, unionPolygons } from './polygon-union'
 import { levelLocalToWorldXZ } from './terrain-support-query'
 
-type BuriedLevel = { index: number; visible: boolean; floors: Point2D[][] }
+type LevelPlates = {
+  buildingId: string | null | undefined
+  index: number
+  visible: boolean
+  standing: LevelGradeStanding
+  /** Every floor slab of the level (a recessed one is a pit, not a floor), placed on the site. */
+  plates: Point2D[][]
+  /**
+   * The part of those below grade: the whole plates of a fully buried level; for a floor only
+   * partly below grade (a walk-out on a hillside) the part the ground stands over, not its whole
+   * plate, the valley side staying closed; nothing at grade.
+   */
+  buried: Point2D[][]
+}
 
 // Identity-keyed memo (`nodes` is an immutable store slice): the standing of every level is worked
 // out once per scene state, however many sets the callers ask for (the hole and the ring ask for
-// the shown stack, the materials for whether any level is buried at all).
-const buriedMemo = new WeakMap<object, BuriedLevel[]>()
+// the shown stack, the materials for whether any level is buried at all, the ground for what the
+// house covers).
+const platesMemo = new WeakMap<object, LevelPlates[]>()
 
-function buriedLevels(nodes: Record<AnyNodeId, AnyNode>): BuriedLevel[] {
-  const hit = buriedMemo.get(nodes)
+function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
+  const hit = platesMemo.get(nodes)
   if (hit) return hit
   const elevations = getLevelElevations(nodes)
-  const buried: BuriedLevel[] = []
+  const levels: LevelPlates[] = []
   for (const level of Object.values(nodes)) {
     if (level.type !== 'level') continue
     const standing = levelGradeStanding(nodes, level.id)
-    if (standing === 'at-grade') continue
     const buildingId = elevations.get(level.id)?.buildingId
     const building = buildingId ? nodes[buildingId as AnyNodeId] : undefined
     const placed = building?.type === 'building' ? building : null
-    // A floor only partly below grade (a walk-out on a hillside) is opened over the part the
-    // ground stands over, not its whole plate: on the valley side the ground stays closed.
     const floorY = standing === 'partly-below-grade' ? levelFloorWorldY(nodes, level.id) : null
     const field = floorY === null ? null : terrainFieldOverLevel(nodes, level)
-    const floors: Point2D[][] = []
+    const plates: Point2D[][] = []
+    const buried: Point2D[][] = []
     for (const childId of level.children) {
       const slab = nodes[childId as AnyNodeId]
       if (slab?.type !== 'slab' || slab.recessed === true) continue
       const plate = slab.polygon.map(([x, z]) => levelLocalToWorldXZ(placed, x, z))
+      plates.push(plate)
+      if (standing === 'at-grade') continue
       if (field && floorY !== null)
-        floors.push(...groundOverPart(plate, field, floorY + BELOW_GRADE_TOLERANCE))
-      else floors.push(plate)
+        buried.push(...groundOverPart(plate, field, floorY + BELOW_GRADE_TOLERANCE))
+      else buried.push(plate)
     }
-    buried.push({ index: level.level, visible: level.visible !== false, floors })
+    levels.push({
+      buildingId,
+      index: level.level,
+      visible: level.visible !== false,
+      standing,
+      plates,
+      buried,
+    })
   }
-  buriedMemo.set(nodes, buried)
-  return buried
+  platesMemo.set(nodes, levels)
+  return levels
 }
 
 /**
@@ -66,11 +92,64 @@ export function belowGradeFootprints(
   const shown = shownLevelId ? nodes[shownLevelId as AnyNodeId] : undefined
   const fromIndex = shown?.type === 'level' ? shown.level : Number.NEGATIVE_INFINITY
   const floors: Point2D[][] = []
-  for (const level of buriedLevels(nodes)) {
+  for (const level of levelPlates(nodes)) {
+    if (level.standing === 'at-grade') continue
     if (level.index < fromIndex || (shown && !level.visible)) continue
-    floors.push(...level.floors)
+    floors.push(...level.buried)
   }
   return unionPolygons(floors)
+}
+
+const coveredMemo = new WeakMap<object, Point2D[][]>()
+
+/**
+ * The part of the ground that lies over the house itself: what is below grade under the footprint
+ * of the levels above it, in the site's plan. The house covers it, so the ground can stand open
+ * there whatever level is shown: from outside nothing changes (the storeys are over it), and the
+ * stairwells and floor openings of the stacked view, and the walkthrough on a stair, meet the
+ * basement and not a sheet of ground across it. A below-grade level reaching out under the garden
+ * gives only the part the house stands over; the rest stays closed, no pit in the garden.
+ *
+ * Per building, a level below grade is covered by the floor slabs of the visible levels over it
+ * (`level` index above its own) that are not themselves fully buried: the ones at grade, and the
+ * part of a floor only partly below grade that stands out of the hill. A hidden level covers
+ * nothing and is covered by nothing. Of a level only partly below grade, only the part the ground
+ * stands over is open. A slab's own openings do not count: the stairwell is where the ground
+ * should be open.
+ *
+ * Outlines with an inner outline (a courtyard the house wraps round) are left out: the ground
+ * cannot be cut around an island of itself, and closed is the safe side.
+ */
+export function coveredBelowGradeFootprints(nodes: Record<AnyNodeId, AnyNode>): Point2D[][] {
+  const hit = coveredMemo.get(nodes)
+  if (hit) return hit
+  const levels = levelPlates(nodes)
+  const covered: MultiPolygon[] = []
+  for (const level of levels) {
+    if (level.standing === 'at-grade' || !level.visible || level.buried.length === 0) continue
+    if (!level.buildingId) continue
+    const over: MultiPolygon[] = []
+    for (const upper of levels) {
+      if (
+        upper === level ||
+        upper.buildingId !== level.buildingId ||
+        !upper.visible ||
+        upper.index <= level.index ||
+        upper.standing === 'below-grade' ||
+        upper.plates.length === 0
+      )
+        continue
+      const plates = union(upper.plates)
+      over.push(upper.standing === 'at-grade' ? plates : difference(plates, union(upper.buried)))
+    }
+    if (over.length === 0) continue
+    covered.push(intersection(union(level.buried), union(over)))
+  }
+  const rings = union(covered.flat().map((polygon) => [polygon]))
+    .filter((polygon) => polygon.holes.length === 0)
+    .map((polygon) => polygon.outer)
+  coveredMemo.set(nodes, rings)
+  return rings
 }
 
 /**

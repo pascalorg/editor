@@ -7,7 +7,11 @@ import {
   SiteNode,
   SlabNode,
 } from '../schema'
-import { belowGradeFloorY, belowGradeFootprints } from './below-grade-footprints'
+import {
+  belowGradeFloorY,
+  belowGradeFootprints,
+  coveredBelowGradeFootprints,
+} from './below-grade-footprints'
 import { levelGradeStanding } from './grade-standing'
 import { levelStackGroundBox } from './ground-window'
 import { encodeTerrainField } from './terrain-codec'
@@ -353,4 +357,210 @@ test('the pit goes down to the floor of the level shown, and to none when it is 
   expect(belowGradeFloorY(nodes, 'level_g')).toBeNull()
   expect(belowGradeFloorY(nodes, null)).toBeNull()
   expect(belowGradeFloorY(nodes)).toBeNull()
+})
+
+// ── What the house covers ────────────────────────────────────────────────────────────────────
+
+type Plate = {
+  id: string
+  index: number
+  polygon: Array<[number, number]>
+  visible?: boolean
+  holes?: Array<Array<[number, number]>>
+  /** More floor slabs on the same level. */
+  more?: Array<Array<[number, number]>>
+}
+
+const rect = (x0: number, x1: number, z0: number, z1: number): Array<[number, number]> => [
+  [x0, z0],
+  [x1, z0],
+  [x1, z1],
+  [x0, z1],
+]
+
+/** One building, 3 m a floor: each level one floor slab, the lowest carrying the offset of the stack. */
+function building(
+  id: string,
+  plates: Plate[],
+  placement: { position?: [number, number, number]; yaw?: number } = {},
+): AnyNode[] {
+  const lowest = Math.min(...plates.map((plate) => plate.index))
+  return [
+    BuildingNode.parse({
+      id,
+      children: plates.map((plate) => `level_${id}_${plate.id}`),
+      position: placement.position ?? [0, 0, 0],
+      rotation: [0, placement.yaw ?? 0, 0],
+    }),
+    ...plates.flatMap((plate) => [
+      LevelNode.parse({
+        id: `level_${id}_${plate.id}`,
+        parentId: id,
+        level: plate.index,
+        height: 3,
+        baseElevation: plate.index === lowest ? 3 * plate.index : 0,
+        ...(plate.visible === false ? { visible: false } : {}),
+        children: [plate.polygon, ...(plate.more ?? [])].map(
+          (_, slab) => `slab_${id}_${plate.id}_${slab}`,
+        ),
+      }),
+      ...[plate.polygon, ...(plate.more ?? [])].map((polygon, slab) =>
+        SlabNode.parse({
+          id: `slab_${id}_${plate.id}_${slab}`,
+          parentId: `level_${id}_${plate.id}`,
+          elevation: 0.2,
+          polygon,
+          ...(plate.holes && slab === 0 ? { holes: plate.holes } : {}),
+        }),
+      ),
+    ]),
+  ]
+}
+
+const sceneOf = (...nodes: AnyNode[][]) =>
+  Object.fromEntries(nodes.flat().map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+
+test('a basement under the house is covered whole: the ground is open over all of it', () => {
+  const nodes = sceneOf(
+    building('building_a', [
+      { id: 'g', index: 0, polygon: rect(0, 10, 0, 8) },
+      { id: 'b', index: -1, polygon: rect(1, 9, 1, 5) },
+    ]),
+  )
+  expect(coveredBelowGradeFootprints(nodes).map(extent)).toEqual([{ x: [1, 9], z: [1, 5] }])
+})
+
+test('a basement reaching out under the garden is covered only where the house stands over it', () => {
+  const nodes = sceneOf(
+    building('building_a', [
+      { id: 'g', index: 0, polygon: rect(0, 10, 0, 8) },
+      { id: 'b', index: -1, polygon: rect(5, 16, 1, 5) },
+    ]),
+  )
+  // The whole basement is below grade for the hole of the level shown; the cover is its house part.
+  expect(belowGradeFootprints(nodes).map(extent)).toEqual([{ x: [5, 16], z: [1, 5] }])
+  expect(coveredBelowGradeFootprints(nodes).map(extent)).toEqual([{ x: [5, 10], z: [1, 5] }])
+})
+
+test('a basement wholly under the garden, or with no level over it, is covered nowhere', () => {
+  const garden = sceneOf(
+    building('building_a', [
+      { id: 'g', index: 0, polygon: rect(0, 10, 0, 8) },
+      { id: 'b', index: -1, polygon: rect(12, 18, 1, 5) },
+    ]),
+  )
+  expect(belowGradeFootprints(garden)).toHaveLength(1)
+  expect(coveredBelowGradeFootprints(garden)).toEqual([])
+  const alone = sceneOf(building('building_a', [{ id: 'b', index: -1, polygon: rect(0, 6, 0, 4) }]))
+  expect(coveredBelowGradeFootprints(alone)).toEqual([])
+})
+
+test('the deepest levels are covered by the house at grade, not by the basement over them', () => {
+  const nodes = houseOverFourBasements()
+  // -2 is wider than the house and -4 pokes out of it: of all of them only the house's own
+  // footprint (0..10 × 0..8) is under the ground floor.
+  expect(coveredBelowGradeFootprints(nodes).map(extent)).toEqual([{ x: [0, 10], z: [0, 8] }])
+  // Without the ground floor nothing stands over the basements: -1 is not a cover, it is buried.
+  const bare = { ...nodes, level_g: { ...nodes.level_g, children: [] } } as Record<
+    AnyNodeId,
+    AnyNode
+  >
+  expect(coveredBelowGradeFootprints(bare)).toEqual([])
+})
+
+test('a stairwell or floor opening in the slab over a basement does not shrink the cover', () => {
+  const nodes = sceneOf(
+    building('building_a', [
+      { id: 'g', index: 0, polygon: rect(0, 10, 0, 8), holes: [rect(4, 6, 3, 5)] },
+      { id: 'b', index: -1, polygon: rect(0, 10, 0, 8) },
+    ]),
+  )
+  const covered = coveredBelowGradeFootprints(nodes)
+  expect(covered).toHaveLength(1)
+  expect(covered.map(extent)).toEqual([{ x: [0, 10], z: [0, 8] }])
+})
+
+test('the cover lies where the building stands on the site, turned with it', () => {
+  const nodes = sceneOf(
+    building(
+      'building_a',
+      [
+        { id: 'g', index: 0, polygon: rect(0, 10, 0, 10) },
+        { id: 'b', index: -1, polygon: rect(0, 8, 0, 4) },
+      ],
+      { position: [10, 0, 20], yaw: Math.PI / 2 },
+    ),
+  )
+  const [outline] = coveredBelowGradeFootprints(nodes)
+  const { x, z } = extent(outline ?? [])
+  expect(x.map((v) => Math.round(v * 1e6) / 1e6)).toEqual([10, 14])
+  expect(z.map((v) => Math.round(v * 1e6) / 1e6)).toEqual([12, 20])
+})
+
+test('a level the author hid covers nothing and is covered by nothing', () => {
+  const plates = (hide: 'g' | 'b' | null): Plate[] => [
+    { id: 'g', index: 0, polygon: rect(0, 10, 0, 8), visible: hide !== 'g' },
+    { id: 'b', index: -1, polygon: rect(1, 9, 1, 5), visible: hide !== 'b' },
+  ]
+  expect(coveredBelowGradeFootprints(sceneOf(building('building_a', plates(null))))).toHaveLength(1)
+  // The house hidden: the garden would show a pit over the basement. The basement hidden: an
+  // opening onto nothing.
+  expect(coveredBelowGradeFootprints(sceneOf(building('building_a', plates('g'))))).toEqual([])
+  expect(coveredBelowGradeFootprints(sceneOf(building('building_a', plates('b'))))).toEqual([])
+})
+
+test('a building is covered by its own storeys, never by another building over the same ground', () => {
+  const nodes = sceneOf(
+    // A's ground floor stands over x 0..10; B's basement (5..13) has no storey of B over it.
+    building('building_a', [{ id: 'g', index: 0, polygon: rect(0, 10, 0, 8) }]),
+    building('building_b', [{ id: 'b', index: -1, polygon: rect(0, 8, 0, 4) }], {
+      position: [5, 0, 0],
+    }),
+  )
+  expect(belowGradeFootprints(nodes)).toHaveLength(1)
+  expect(coveredBelowGradeFootprints(nodes)).toEqual([])
+  // Give B a ground floor over half of it: that half, and in B's own frame.
+  const covered = sceneOf(
+    building('building_a', [{ id: 'g', index: 0, polygon: rect(0, 10, 0, 8) }]),
+    building(
+      'building_b',
+      [
+        { id: 'g', index: 0, polygon: rect(0, 4, 0, 4) },
+        { id: 'b', index: -1, polygon: rect(0, 8, 0, 4) },
+      ],
+      { position: [5, 0, 0] },
+    ),
+  )
+  expect(coveredBelowGradeFootprints(covered).map(extent)).toEqual([{ x: [5, 9], z: [0, 4] }])
+})
+
+test('a house wrapped round a courtyard is left closed, not cut around an island of ground', () => {
+  const nodes = sceneOf(
+    building('building_a', [
+      // Four wings, the courtyard (3..7 × 3..7) empty.
+      {
+        id: 'g',
+        index: 0,
+        polygon: rect(0, 10, 0, 3),
+        more: [rect(0, 10, 7, 10), rect(0, 3, 3, 7), rect(7, 10, 3, 7)],
+      },
+      { id: 'b', index: -1, polygon: rect(0, 10, 0, 10) },
+    ]),
+  )
+  expect(coveredBelowGradeFootprints(nodes)).toEqual([])
+})
+
+test('a cellar under a walk-out is covered by the part of the walk-out that stands out of the hill', () => {
+  const nodes = houseOnHillside()
+  expect(levelGradeStanding(nodes, 'level_cellar')).toBe('below-grade')
+  expect(levelGradeStanding(nodes, 'level_walkout')).toBe('partly-below-grade')
+  // The cellar spans x -2..5. The walk-out stands out of the hill west of x = -0.875 (where the
+  // ground climbs over its floor and tolerance); east of that the hill is over it, and over the
+  // cellar: closed. The walk-out itself, with no storey over it, is not covered by anything.
+  const covered = coveredBelowGradeFootprints(nodes)
+  expect(covered).toHaveLength(1)
+  const { x, z } = extent(covered[0] ?? [])
+  expect(x[0]).toBe(-2)
+  expect(x[1]).toBeCloseTo(-0.875, 3)
+  expect(z).toEqual([-4, 4])
 })

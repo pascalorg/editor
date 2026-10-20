@@ -131,7 +131,11 @@ export {
   resolveAssemblyStack,
 } from './lib/assembly-stack'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
-export { belowGradeFloorY, belowGradeFootprints } from './lib/below-grade-footprints'
+export {
+  belowGradeFloorY,
+  belowGradeFootprints,
+  coveredBelowGradeFootprints,
+} from './lib/below-grade-footprints'
 export {
   footprintOutline,
   levelFootprintLoops,

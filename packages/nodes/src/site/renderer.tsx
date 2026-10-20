@@ -4,6 +4,8 @@ import {
   type AnyNodeId,
   belowGradeFloorY,
   belowGradeFootprints,
+  coveredBelowGradeFootprints,
+  intersection,
   type SiteNode,
   sightTriangle,
   siteFrontEdge,
@@ -13,6 +15,7 @@ import {
   type TerrainField,
   terrainContours,
   terrainFieldOf,
+  union,
   unionPolygons,
   useLiveNodeOverrides,
   useLiveTerrain,
@@ -245,20 +248,25 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over and
   // the grade ring runs along under the veil: the level shown and the ones between it and grade, as
   // the level display hides them. While the level shown is not below grade the last such set is
-  // kept, so a hole easing shut keeps its shape.
+  // kept, so a hole easing shut keeps its shape. `covered` is the part of them under the house
+  // itself, whatever level is shown: the ground stands open there (see `holes`).
   const shownLevelId = useViewer((state) =>
     state.hideLevelsAboveSelection ? state.selection.levelId : null,
   )
   const belowGrade = useViewer((state) => state.belowGrade)
+  const groundMode = useViewer((state) => state.groundMode)
   const buriedCache = useRef<{
     all: [number, number][][]
     shown: [number, number][][]
     floorY: number | null
-  }>({ all: [], shown: [], floorY: null })
+    covered: [number, number][][]
+  }>({ all: [], shown: [], floorY: null, covered: [] })
   const buried = useScene((state: S) => {
     const prev = buriedCache.current
     const found = belowGradeFootprints(state.nodes)
     const all = polygonsMatch(found, prev.all) ? prev.all : found
+    const foundCovered = all.length > 0 ? coveredBelowGradeFootprints(state.nodes) : []
+    const covered = polygonsMatch(foundCovered, prev.covered) ? prev.covered : foundCovered
     let shown: [number, number][][] = []
     let floorY: number | null = null
     if (all.length > 0) {
@@ -268,8 +276,14 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       floorY ??= prev.floorY
     }
     if (polygonsMatch(shown, prev.shown)) shown = prev.shown
-    if (all === prev.all && shown === prev.shown && floorY === prev.floorY) return prev
-    buriedCache.current = { all, shown, floorY }
+    if (
+      all === prev.all &&
+      shown === prev.shown &&
+      floorY === prev.floorY &&
+      covered === prev.covered
+    )
+      return prev
+    buriedCache.current = { all, shown, floorY, covered }
     return buriedCache.current
   })
   // Where the pit's walls start: the ground itself, flat or the sculpted terrain.
@@ -395,6 +409,24 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return next
   })
 
+  // What the ground is cut open over: the recessed slabs, and the basement under the house. The
+  // house covers that part of a basement, so the ground there is open whatever level is shown:
+  // from outside nothing changes, and a stairwell, a floor opening or a walkthrough on the stair
+  // meets the basement, not a sheet of ground across it. A basement reaching out under the garden
+  // stays closed past the house (no pit in the garden) until its level is shown, and the hole of
+  // the level shown does the rest as it does. The one case it closes: the level display has the
+  // storeys away over a level below grade and the person keeps the ground Solid, nothing covers
+  // it then and Solid asks for solid ground. Clipped to the lot, as a hole past its line breaks
+  // the triangulation.
+  const coverOpen = !(belowGrade && groundMode === 'solid')
+  const holes = useMemo(() => {
+    if (!coverOpen || buried.covered.length === 0 || !polygonPoints || polygonPoints.length < 3)
+      return slabPolygons
+    const inLot = intersection(union(buried.covered), polygonPoints as [number, number][])
+    const covered = inLot.filter((piece) => piece.holes.length === 0).map((piece) => piece.outer)
+    return covered.length > 0 ? [...slabPolygons, ...covered] : slabPolygons
+  }, [coverOpen, buried.covered, polygonPoints, slabPolygons])
+
   const gradeRings = useMemo(
     () => buried.shown.map((outline) => gradeRingGeometry(outline, persistedField)),
     [buried.shown, persistedField],
@@ -418,10 +450,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i]![0], -pts[i]![1])
     shape.closePath()
 
-    addSlabHoles(shape, slabPolygons)
+    addSlabHoles(shape, holes)
 
     return shape
-  }, [polygonPoints, slabPolygons])
+  }, [polygonPoints, holes])
 
   // With terrain the lot is a block — its ground cut to the property line, its
   // skirt dropping to one flat base — and the disc lies just under that base, so
@@ -443,9 +475,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       shape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
     }
     shape.closePath()
-    addSlabHoles(shape, slabPolygons, fadeBounds.cx, fadeBounds.cz)
+    addSlabHoles(shape, holes, fadeBounds.cx, fadeBounds.cz)
     return new ShapeGeometry(shape)
-  }, [fadeBounds, slabPolygons, groundReplaced])
+  }, [fadeBounds, holes, groundReplaced])
   useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
   useEffect(() => () => horizonMaterial?.dispose(), [horizonMaterial])
 
@@ -677,7 +709,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       {/* Sculpted ground, when the site has terrain */}
       {showSiteSurfaces && showGround && showTerrain && (
         <TerrainRenderer
-          holes={slabPolygons}
+          holes={holes}
           material={groundMaterial}
           polygon={polygonPoints}
           site={node}

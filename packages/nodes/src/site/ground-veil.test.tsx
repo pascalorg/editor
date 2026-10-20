@@ -733,11 +733,12 @@ test('on a hillside the hole, the grade ring and the pit stop where the ground d
     expect(groundHoleDistanceAt(7, 0)).toBeLessThan(0)
     expect(groundHoleDistanceAt(-6, 0)).toBeGreaterThan(1)
 
-    // The grade ring runs along the same outline.
+    // The grade ring runs along the same outline. (The sheets are transparent: the terrain's cut
+    // round the opening under the walk-out, where the house covers the cellar, is one of them.)
     const rings = ground(scene, 'veil').filter((veil) => {
       veil.geometry.computeBoundingBox()
       const box = veil.geometry.boundingBox ?? new Box3()
-      return box.max.x - box.min.x < 15
+      return box.max.x - box.min.x < 15 && !(veil.material as { transparent?: boolean }).transparent
     })
     expect(rings).toHaveLength(1)
     const ringBox = rings[0]!.geometry.boundingBox ?? new Box3()
