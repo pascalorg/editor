@@ -309,7 +309,9 @@ export function declareActionDependencies(
 
 /**
  * A support index over the scene's own nodes that records, for every query about a level, a
- * `scope` dependency on that level: support reads walk spatial indexes the reader cannot see.
+ * `scope` dependency on that level: support reads walk spatial indexes the reader cannot see. A
+ * query names its level first, or a node on it (`canPlaceOnCeiling` its ceiling): the scope is the
+ * level that node is on, the whole document for one on none.
  */
 function recordingSupportGrid(
   store: SceneStore,
@@ -325,9 +327,12 @@ function recordingSupportGrid(
           const value = Reflect.get(target, key, receiver)
           if (typeof value !== 'function') return value
           return (...args: unknown[]) => {
-            const [levelId] = args
-            if (typeof levelId === 'string' && store.getState().nodes[levelId as AnyNodeId])
-              recorder.declare({ kind: 'scope', level: levelId })
+            const [subject] = args
+            const nodes = store.getState().nodes
+            if (typeof subject === 'string' && nodes[subject as AnyNodeId]) {
+              const level = levelOf(nodes, subject)
+              recorder.declare(level ? { kind: 'scope', level } : { kind: 'scope', whole: true })
+            }
             return value.apply(target, args)
           }
         },

@@ -8,6 +8,7 @@ import {
 } from '../agent-operations'
 import { AGENT_TOOL_CASES } from '../agent-operations/__fixtures__/cases'
 import { AGENT_TOOL_CONTRACTS } from '../agent-tools'
+import { activeSpatialGrid } from '../hooks/spatial-grid/spatial-grid-manager'
 import { initSpaceDetectionSync } from '../lib/space-detection'
 import { encodeTerrainField } from '../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../lib/terrain-field'
@@ -15,6 +16,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
+  CeilingNode,
   type Collection,
   ItemNode,
   LevelNode,
@@ -579,6 +581,59 @@ describe('reconciliation', () => {
     } finally {
       useLiveTerrain.getState().end('site_r')
     }
+  })
+
+  test("a ceiling placement read depends on the ceiling's level: a lamp moved there meanwhile conflicts", () => {
+    const lamp = ItemNode.parse({
+      id: 'item_lamp',
+      parentId: 'ceiling_c',
+      position: [3, 0, 3],
+      asset: {
+        id: 'lamp',
+        name: 'Lamp',
+        category: 'lighting',
+        thumbnail: '/items/lamp/thumbnail.webp',
+        src: '/items/lamp/model.glb',
+        attachTo: 'ceiling',
+        dimensions: [0.5, 0.2, 0.5],
+      },
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_c',
+      parentId: 'level_c',
+      children: [lamp.id],
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4],
+      ],
+    })
+    const level = LevelNode.parse({
+      id: 'level_c',
+      parentId: 'building_c',
+      level: 0,
+      height: 3,
+      children: [ceiling.id],
+    })
+    const building = BuildingNode.parse({ id: 'building_c', children: [level.id] })
+    const base = document(building, level, ceiling, lamp)
+    const scene = open(base)
+    const free = scene.run(() =>
+      activeSpatialGrid().canPlaceOnCeiling(ceiling.id, [1, 0, 1], [0.5, 0.2, 0.5], [0, 0, 0]),
+    )
+    expect(free.valid).toBe(true)
+    expect(scene.dependencies()).toContainEqual({ kind: 'scope', level: level.id })
+
+    const current = editedBy(base, (store) =>
+      store.getState().updateNode(lamp.id, { position: [1.2, 0, 1] }),
+    )
+    const applied = applyPatchWithDependencies(current, scene.patch(), scene.dependencies(), base)
+    expect(!applied.ok && applied.changed).toContainEqual({
+      kind: 'scope',
+      id: level.id,
+      reason: 'dependency',
+    })
   })
 
   test("support read on a level depends on what it stands on: the site's terrain", () => {
