@@ -10,6 +10,7 @@ import {
   nodeRegistry,
   RoofNode,
   runAsSceneCommitAuthor,
+  SlabNode,
   sceneRegistry,
   useScene,
   WallNode,
@@ -18,6 +19,7 @@ import {
 import { isNodeRevealing, startConstructionReveal, useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
+import { followBelowGrade } from '../../lib/below-grade'
 import { openingExterior, wallExterior } from '../../lib/follow-pascal-exterior.test-fixture'
 import useEditor from '../../store/use-editor'
 import useFollowPascal from '../../store/use-follow-pascal'
@@ -791,4 +793,117 @@ test('an exterior edit that has played does not take the next build outdoors', a
   expect(upDuringBuild).toEqual([])
   // The walls the edit put up are cut away again for the build, once.
   expect(useViewer.getState().wallMode).toBe('cutaway')
+})
+
+// The owner, 20 October, on the underground PR: with Follow Pascal on, the basement's opening
+// animation ran again and again while the agent worked. A level below grade is shown with the
+// floors above it hidden and the ground open over it; every pull-back to the finished house
+// showed the floors above and closed the ground, and the next piece on the basement opened it again.
+const basementPiece = (id: string, level: string, at: number) =>
+  ItemNode.parse({
+    id,
+    parentId: level,
+    position: [at, 0, 2],
+    asset: {
+      id: 'chair',
+      category: 'furniture',
+      name: 'Chair',
+      thumbnail: '',
+      src: '/chair.glb',
+      dimensions: [1, 1, 1],
+    },
+  })
+
+/**
+ * A house seated 2.9 m down: a basement (below grade) under a ground floor, the basement shown the
+ * way the level display shows it. `pieces` are agent commits, each at its own time (ms) on one of
+ * the two floors; the reveal plays them and Follow follows. What the ground did is returned:
+ * every time the level shown lay below grade, or stopped doing so.
+ */
+async function followBasement(pieces: Array<{ at: number; on: 'basement' | 'ground' }>) {
+  const square: Array<[number, number]> = [
+    [0, 0],
+    [6, 0],
+    [6, 6],
+    [0, 6],
+  ]
+  const building = BuildingNode.parse({ id: 'building_follow', position: [0, -2.9, 0] })
+  const basement = LevelNode.parse({
+    id: 'level_basement',
+    parentId: building.id,
+    level: -1,
+    height: 2.9,
+  })
+  const ground = LevelNode.parse({ id: 'level_ground', parentId: building.id, level: 0 })
+  building.children = [basement.id, ground.id]
+  basement.children = ['slab_basement'] as never
+  ground.children = ['slab_ground'] as never
+  const slabs = [basement, ground].map((level) =>
+    SlabNode.parse({
+      id: level === basement ? 'slab_basement' : 'slab_ground',
+      parentId: level.id,
+      polygon: square,
+    }),
+  )
+  useScene
+    .getState()
+    .setScene(
+      Object.fromEntries([building, basement, ground, ...slabs].map((node) => [node.id, node])),
+      [building.id],
+    )
+  useViewer.getState().setSelection({ buildingId: building.id, levelId: basement.id })
+  useViewer.setState({ levelMode: 'stacked', hideLevelsAboveSelection: true })
+  const stopBelowGrade = followBelowGrade()
+  const standing: boolean[] = [useViewer.getState().belowGrade]
+  const stopWatching = useViewer.subscribe((state) => {
+    if (state.belowGrade !== standing.at(-1)) standing.push(state.belowGrade)
+  })
+  renderer = await create(
+    <>
+      <group name="scene-renderer" />
+      <FollowPascal />
+    </>,
+  )
+  driver = startConstructionReveal({ reveals: (commit) => commit.author === 'agent' })
+  usePointAsk.getState().setBusy(true)
+  const end = Math.max(...pieces.map((piece) => piece.at)) + 7000
+  await act(async () => {
+    for (let at = 0; at <= end; at += 50) {
+      for (const [index, piece] of pieces.entries()) {
+        if (piece.at !== at) continue
+        const node = basementPiece(`item_piece${index}`, `level_${piece.on}`, index * 0.4)
+        runAsSceneCommitAuthor('agent', () => useScene.getState().createNode(node, node.parentId!))
+        sceneRegistry.nodes.set(node.id, new Group())
+      }
+      driver!.tick(at + 1)
+      await renderer!.advanceFrames(1, 0.02)
+    }
+    await renderer!.advanceFrames(10, 0.1)
+  })
+  stopWatching()
+  const result = { standing, shown: useViewer.getState().selection.levelId }
+  stopBelowGrade()
+  return result
+}
+
+test('following furnishing on a basement keeps the floors above hidden and the ground open', async () => {
+  const { standing, shown } = await followBasement([
+    { at: 0, on: 'basement' },
+    { at: 7000, on: 'basement' },
+    { at: 14000, on: 'basement' },
+  ])
+  expect(shown).toBe('level_basement')
+  // The basement is below grade from the first moment to the last: the ground is never asked to close.
+  expect(standing).toEqual([true])
+  expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
+})
+
+test('a piece on the ground floor between two on the basement leaves it once and comes back once', async () => {
+  const { standing } = await followBasement([
+    { at: 0, on: 'basement' },
+    { at: 7000, on: 'ground' },
+    { at: 14000, on: 'basement' },
+    { at: 21000, on: 'basement' },
+  ])
+  expect(standing).toEqual([true, false, true])
 })
