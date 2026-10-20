@@ -5,6 +5,7 @@ import {
   belowGradeFloorY,
   belowGradeFootprints,
   coveredBelowGradeFootprints,
+  groundPitFloorY,
   intersection,
   type SiteNode,
   sightTriangle,
@@ -259,8 +260,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     all: [number, number][][]
     shown: [number, number][][]
     floorY: number | null
+    drawnFloorY: number | null
     covered: [number, number][][]
-  }>({ all: [], shown: [], floorY: null, covered: [] })
+  }>({ all: [], shown: [], floorY: null, drawnFloorY: null, covered: [] })
   const buried = useScene((state: S) => {
     const prev = buriedCache.current
     const found = belowGradeFootprints(state.nodes)
@@ -269,21 +271,25 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     const covered = polygonsMatch(foundCovered, prev.covered) ? prev.covered : foundCovered
     let shown: [number, number][][] = []
     let floorY: number | null = null
+    let drawnFloorY: number | null = null
     if (all.length > 0) {
       shown = shownLevelId ? belowGradeFootprints(state.nodes, shownLevelId) : []
       floorY = shownLevelId ? belowGradeFloorY(state.nodes, shownLevelId) : null
+      drawnFloorY = shownLevelId ? groundPitFloorY(state.nodes, shownLevelId) : null
       if (shown.length === 0) shown = prev.shown.length > 0 ? prev.shown : all
       floorY ??= prev.floorY
+      drawnFloorY ??= prev.drawnFloorY
     }
     if (polygonsMatch(shown, prev.shown)) shown = prev.shown
     if (
       all === prev.all &&
       shown === prev.shown &&
       floorY === prev.floorY &&
+      drawnFloorY === prev.drawnFloorY &&
       covered === prev.covered
     )
       return prev
-    buriedCache.current = { all, shown, floorY, covered }
+    buriedCache.current = { all, shown, floorY, drawnFloorY, covered }
     return buriedCache.current
   })
   // Where the pit's walls start: the ground itself, flat or the sculpted terrain.
@@ -694,6 +700,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       <GroundWindowSystem />
       <GenericFoundation />
       <GroundHole
+        drawnFloorY={buried.drawnFloorY}
         floorY={buried.floorY}
         footprints={buried.shown}
         present={hasBasement}

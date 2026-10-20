@@ -1,7 +1,7 @@
 import { isCaptureSessionOn } from '../events/capture-sessions'
 import { nodeRegistry } from '../registry'
 import type { AnyNode, AnyNodeId, BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
-import { getLevelElevations } from '../services/storey'
+import { getLevelElevations, levelPlateUndersideWorldY } from '../services/storey'
 import { getWallCenterlineSegments } from '../systems/wall/wall-curve'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import { getWallBodyCenterOffset } from '../systems/wall/wall-frame'
@@ -88,10 +88,7 @@ function buildingFoundation(nodes: Nodes, building: BuildingNode): FoundationMem
   const floors = floorsOf(nodes, level)
   const wallBaseY = building.position[1] + (getLevelElevations(nodes).get(level.id)?.baseY ?? 0)
   // The footing never pokes above the wall's base into the room, nor above the floor's underside.
-  const floorUnderside = Math.min(
-    wallBaseY,
-    ...floors.map((floor) => wallBaseY + floor.elevation - floor.thickness),
-  )
+  const floorUnderside = levelPlateUndersideWorldY(nodes, level.id) ?? wallBaseY
   const { construction } = foundationReadingOf(nodes, building.id)
   const stemMaterial = STEM_MATERIAL[construction.id]
   const stemThickness = construction.stemThickness

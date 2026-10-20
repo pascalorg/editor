@@ -14,6 +14,7 @@ import {
   getStoredLevelHeight,
   getWallPlaneTop,
   isLevelBelowGrade,
+  levelPlateUndersideWorldY,
 } from './storey'
 
 const buildNodes = (list: AnyNode[]): Record<AnyNodeId, AnyNode> =>
@@ -680,5 +681,47 @@ describe('isLevelBelowGrade', () => {
   test('an id that is no level is not below grade', () => {
     expect(isLevelBelowGrade(villa, 'level_missing')).toBe(false)
     expect(isLevelBelowGrade(villa, 'slab_b')).toBe(false)
+  })
+})
+
+describe('levelPlateUndersideWorldY', () => {
+  const house = (
+    slabs: Array<{ id: string; elevation?: number; thickness?: number; recessed?: boolean }>,
+  ) =>
+    buildNodes([
+      BuildingNode.parse({ id: 'building_a', children: ['level_b'], position: [0, -2.7, 0] }),
+      level('level_b', -1, {
+        height: 2.9,
+        parentId: 'building_a',
+        children: slabs.map((slab) => slab.id),
+      }),
+      ...slabs.map((slab) => slabNode(slab.id, { ...slab })),
+    ])
+
+  test('is the underside of the lowest plate, never above the walls’ base', () => {
+    // The default plate: its top is 0.05 over the base and it is 0.05 thick, so the base is the underside.
+    expect(levelPlateUndersideWorldY(house([{ id: 'slab_a' }]), 'level_b')).toBeCloseTo(-2.7, 9)
+    // A thick plate reaches under the base; a raised one leaves the base the lowest.
+    expect(
+      levelPlateUndersideWorldY(house([{ id: 'slab_a', thickness: 0.2 }]), 'level_b'),
+    ).toBeCloseTo(-2.7 + 0.05 - 0.2, 9)
+    expect(
+      levelPlateUndersideWorldY(house([{ id: 'slab_a', elevation: 0.28 }]), 'level_b'),
+    ).toBeCloseTo(-2.7, 9)
+  })
+
+  test('takes the lowest of several plates and skips a recessed one', () => {
+    const nodes = house([
+      { id: 'slab_a' },
+      { id: 'slab_b', elevation: 0, thickness: 0.3 },
+      { id: 'slab_c', elevation: -1, thickness: 0.1, recessed: true },
+    ])
+    expect(levelPlateUndersideWorldY(nodes, 'level_b')).toBeCloseTo(-2.7 - 0.3, 9)
+  })
+
+  test('is the walls’ base for a level with no plate, and null for an id that is no level', () => {
+    expect(levelPlateUndersideWorldY(house([]), 'level_b')).toBeCloseTo(-2.7, 9)
+    expect(levelPlateUndersideWorldY(house([{ id: 'slab_a' }]), 'slab_a')).toBeNull()
+    expect(levelPlateUndersideWorldY(house([]), 'level_missing')).toBeNull()
   })
 })

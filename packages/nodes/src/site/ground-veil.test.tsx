@@ -5,10 +5,14 @@ import {
   BuildingNode,
   createTerrainField,
   encodeTerrainField,
+  GROUND_PIT_PLATE_CLEARANCE,
+  genericFoundation,
+  groundPitFloorY,
   LevelNode,
   SiteNode,
   SlabNode,
   useScene,
+  WallNode,
 } from '@pascal-app/core'
 import {
   groundHoleOpenNode,
@@ -21,7 +25,7 @@ import { act, create } from '@react-three/test-renderer'
 import { Box3, DoubleSide, type Line, type Mesh, type Object3D, Raycaster, Vector3 } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import { groundHoleDistanceAt, holeRadiusAt } from './ground-hole'
-import { groundPitFloorNow } from './ground-pit'
+import { groundPitDrawnFloorNow, groundPitFloorNow } from './ground-pit'
 import { SiteRenderer } from './renderer'
 
 // Over a level below grade the site's ground is veiled: the lot's fill, its sculpted terrain and
@@ -647,6 +651,92 @@ test('the pit’s walls stand on the hole’s contour and go down to the floor o
     expect(floors[1]!).toBeGreaterThan(floors[0]! + 5)
     expect(floors[2]!).toBeGreaterThanOrEqual(floors[1]!)
     expect(floors[2]!).toBeLessThan(0)
+  } finally {
+    groundHoleOpenNode().value = 0
+    await renderer.unmount()
+  }
+})
+
+/**
+ * A basement on the default 0.05 m plate, as a person draws one: the building seated 2.697 m down,
+ * the plate out to the walls' outer faces, a ground floor over it. The footing under it tops out
+ * at the plate's underside, which is where the pit's floor used to be drawn.
+ */
+function withSeatedBasement() {
+  const corners: Array<[number, number]> = [
+    [-5.875, -4.875],
+    [5.875, -4.875],
+    [5.875, 4.875],
+    [-5.875, 4.875],
+  ]
+  const walls = corners.map((start, index) =>
+    WallNode.parse({
+      id: `wall_b${index}`,
+      parentId: 'level_b',
+      start,
+      end: corners[(index + 1) % 4],
+      thickness: 0.25,
+    }),
+  )
+  const polygon: Array<[number, number]> = [
+    [-6, -5],
+    [6, -5],
+    [6, 5],
+    [-6, 5],
+  ]
+  const list: AnyNode[] = [
+    BuildingNode.parse({
+      id: 'building_a',
+      position: [0, -2.697, 0],
+      children: ['level_b', 'level_g'],
+    }),
+    LevelNode.parse({
+      id: 'level_b',
+      parentId: 'building_a',
+      level: -1,
+      height: 2.9,
+      children: [...walls.map((wall) => wall.id), 'slab_b'],
+    }),
+    LevelNode.parse({
+      id: 'level_g',
+      parentId: 'building_a',
+      level: 0,
+      height: 2.8,
+      children: ['slab_g'],
+    }),
+    SlabNode.parse({
+      id: 'slab_b',
+      parentId: 'level_b',
+      polygon,
+      elevation: 0.05,
+      thickness: 0.05,
+    }),
+    SlabNode.parse({ id: 'slab_g', parentId: 'level_g', polygon, elevation: 0.05 }),
+    ...walls,
+  ]
+  useScene.setState({
+    nodes: Object.fromEntries(list.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>,
+  })
+}
+
+test('the pit draws its floor off the plane the footing under the basement stops on', async () => {
+  withSeatedBasement()
+  const renderer = await create(<SiteRenderer node={lot(false)} />)
+  try {
+    await act(async () => showLevel('level_b'))
+    groundHoleOpenNode().value = 1
+    await renderer.advanceFrames(3, 0.05)
+    const { nodes } = useScene.getState()
+    const footings = genericFoundation(nodes).filter((member) => member.kind === 'footing')
+    expect(footings).toHaveLength(4)
+    // What the pit draws is what core says, and the footing's top is not on its plane.
+    expect(groundPitDrawnFloorNow()).toBeCloseTo(groundPitFloorY(nodes, 'level_b') ?? Number.NaN, 9)
+    for (const footing of footings)
+      expect(Math.abs(footing.topY - groundPitDrawnFloorNow())).toBeGreaterThanOrEqual(
+        GROUND_PIT_PLATE_CLEARANCE - 1e-9,
+      )
+    // The pit still goes down to the floor of the level shown (the floor top, -2.647).
+    expect(groundPitFloorNow()).toBeCloseTo(-2.647, 3)
   } finally {
     groundHoleOpenNode().value = 0
     await renderer.unmount()

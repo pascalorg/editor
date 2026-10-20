@@ -1,5 +1,10 @@
 import type { AnyNode, AnyNodeId } from '../schema'
-import { BELOW_GRADE_TOLERANCE, getLevelElevations, levelFloorWorldY } from '../services/storey'
+import {
+  BELOW_GRADE_TOLERANCE,
+  getLevelElevations,
+  levelFloorWorldY,
+  levelPlateUndersideWorldY,
+} from '../services/storey'
 import {
   type LevelGradeStanding,
   levelGradeStanding,
@@ -163,4 +168,36 @@ export function belowGradeFloorY(
 ): number | null {
   if (!shownLevelId || levelGradeStanding(nodes, shownLevelId) === 'at-grade') return null
   return levelFloorWorldY(nodes, shownLevelId)
+}
+
+/** How far under the top of the floor plate the pit hangs its own floor: the default plate's thickness. */
+export const GROUND_PIT_FLOOR_DROP = 0.05
+/**
+ * How far the pit's floor keeps from the plane of the plate's underside. The foundation under the
+ * level tops out on that plane (`genericFoundation`), and seen through the hole it has to stand
+ * on the pit's floor, not share its plane: two faces on one plane flicker. 2 cm is what a 24-bit
+ * depth buffer with the viewer's 0.3 m near plane tells apart out to about 300 m, further than
+ * the hole is ever looked into from.
+ */
+export const GROUND_PIT_PLATE_CLEARANCE = 0.02
+
+/**
+ * The world Y the pit under the hole draws its dark floor at, over the level shown: under the top
+ * of its floor (`belowGradeFloorY`) by {@link GROUND_PIT_FLOOR_DROP}, which for the default plate
+ * is exactly its underside, where the footing and the walls on it stop. When that lands within
+ * {@link GROUND_PIT_PLATE_CLEARANCE} of the underside (the default plate, a thinner one, a plate
+ * whose top is the level plane) the floor lies that far under it instead; anywhere else it keeps
+ * to its place. `null` when `belowGradeFloorY` is.
+ */
+export function groundPitFloorY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  shownLevelId?: string | null,
+): number | null {
+  const floorY = belowGradeFloorY(nodes, shownLevelId)
+  const underside = shownLevelId ? levelPlateUndersideWorldY(nodes, shownLevelId) : null
+  if (floorY === null || underside === null) return null
+  const hung = floorY - GROUND_PIT_FLOOR_DROP
+  return Math.abs(hung - underside) < GROUND_PIT_PLATE_CLEARANCE
+    ? underside - GROUND_PIT_PLATE_CLEARANCE
+    : hung
 }

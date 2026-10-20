@@ -135,6 +135,9 @@ export {
   belowGradeFloorY,
   belowGradeFootprints,
   coveredBelowGradeFootprints,
+  GROUND_PIT_FLOOR_DROP,
+  GROUND_PIT_PLATE_CLEARANCE,
+  groundPitFloorY,
 } from './lib/below-grade-footprints'
 export {
   footprintOutline,

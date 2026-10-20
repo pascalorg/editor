@@ -14,6 +14,7 @@ import {
   SlabNode,
   WallNode,
 } from '../schema'
+import { GROUND_PIT_PLATE_CLEARANCE, groundPitFloorY } from './below-grade-footprints'
 import { FOUNDATION_STANDARD } from './foundation-standard'
 import { type FoundationMember, genericFoundation } from './generic-foundation'
 import { FLAT_GROUND_Y } from './site-ground-height'
@@ -230,6 +231,72 @@ test('a level below grade is its own foundation wall: only the footing, under it
     expect(footing.levelId).toBe('level_b')
     expect(footing.topY).toBeCloseTo(-3.63, 9)
     expect(footing.bottomY).toBeCloseTo(-3.63 - footingThickness, 9)
+  }
+})
+
+/**
+ * A basement with the default 0.05 m plate, as a person draws one: the building seated 2.697 m
+ * down, walls 0.25 m thick on the plate's edge, a ground floor over it.
+ */
+function seatedBasement(slab: Partial<SlabNode> = {}) {
+  const lower = ring('level_b', {}, 0.25)
+  const ground = ring('level_g', {}, 0.25)
+  const polygon: Array<[number, number]> = [
+    [0, 0],
+    [10, 0],
+    [10, 8],
+    [0, 8],
+  ]
+  return keyed([
+    SiteNode.parse({ id: 'site_a', children: ['building_a'] }),
+    BuildingNode.parse({
+      id: 'building_a',
+      parentId: 'site_a',
+      position: [0, -2.697, 0],
+      children: ['level_b', 'level_g'],
+    }),
+    LevelNode.parse({
+      id: 'level_b',
+      parentId: 'building_a',
+      level: -1,
+      height: 2.9,
+      children: [...lower.map((w) => w.id), 'slab_b'],
+    }),
+    LevelNode.parse({
+      id: 'level_g',
+      parentId: 'building_a',
+      level: 0,
+      height: 2.8,
+      children: [...ground.map((w) => w.id), 'slab_g'],
+    }),
+    SlabNode.parse({
+      id: 'slab_b',
+      parentId: 'level_b',
+      polygon,
+      elevation: 0.05,
+      thickness: 0.05,
+      ...slab,
+    }),
+    SlabNode.parse({ id: 'slab_g', parentId: 'level_g', polygon, elevation: 0.05 }),
+    ...lower,
+    ...ground,
+  ])
+}
+
+test('the footing under a basement floor stands on the pit floor, never on its plane', () => {
+  // The default plate (0.05 on 0.05), a thick one, a thin one, a plate whose top is the level plane.
+  for (const slab of [
+    {},
+    { thickness: 0.2 },
+    { thickness: 0.03 },
+    { elevation: 0, thickness: 0.05 },
+  ]) {
+    const nodes = seatedBasement(slab)
+    const pitFloor = groundPitFloorY(nodes, 'level_b') ?? Number.NaN
+    const footings = ofKind(genericFoundation(nodes), 'footing')
+    expect(footings).toHaveLength(4)
+    for (const footing of footings)
+      expect(Math.abs(footing.topY - pitFloor)).toBeGreaterThanOrEqual(GROUND_PIT_PLATE_CLEARANCE)
   }
 })
 
