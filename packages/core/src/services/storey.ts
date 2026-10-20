@@ -132,10 +132,11 @@ export function getAuthoredLevelElevations(
 export const BELOW_GRADE_TOLERANCE = 0.3
 
 /**
- * `levelId`'s world floor: the stacked base, the building's height on the site and the top of
- * the highest slab it stands on. `null` for an id that is no level.
+ * The world Y of `levelId`'s own plane, the one its slabs' `elevation`s are measured from: the
+ * stacked base and the building's height on the site. A floor slab's top is this plus its
+ * elevation. `null` for an id that is no level.
  */
-export function levelFloorWorldY(
+export function levelPlaneWorldY(
   nodes: Record<AnyNodeId, AnyNode>,
   levelId: string,
 ): number | null {
@@ -144,7 +145,24 @@ export function levelFloorWorldY(
   if (!elevation || level?.type !== 'level') return null
   const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
   const siteY = building?.type === 'building' ? building.position[1] : 0
-  return siteY + elevation.baseY + standingSlabTop(nodes, level)
+  return siteY + elevation.baseY
+}
+
+/**
+ * `levelId`'s world floor: the stacked base, the building's height on the site and the top of
+ * the highest slab it stands on. `null` for an id that is no level. A level with floors at
+ * several heights (a split level) has no single floor: this is the highest, and what asks where
+ * the ground stands over a floor asks per slab ({@link levelPlaneWorldY} plus the slab's
+ * elevation).
+ */
+export function levelFloorWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const plane = levelPlaneWorldY(nodes, levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (plane === null || level?.type !== 'level') return null
+  return plane + standingSlabTop(nodes, level)
 }
 
 /**
@@ -157,18 +175,16 @@ export function levelLowestFloorWorldY(
   nodes: Record<AnyNodeId, AnyNode>,
   levelId: string,
 ): number | null {
-  const elevation = getLevelElevations(nodes).get(levelId)
+  const plane = levelPlaneWorldY(nodes, levelId)
   const level = nodes[levelId as LevelNode['id']]
-  if (!elevation || level?.type !== 'level') return null
-  const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
-  const siteY = building?.type === 'building' ? building.position[1] : 0
+  if (plane === null || level?.type !== 'level') return null
   let lowest: number | null = null
   for (const childId of level.children) {
     const child = nodes[childId as AnyNodeId]
     if (!isFloorSlab(child)) continue
     lowest = Math.min(lowest ?? child.elevation, child.elevation)
   }
-  return siteY + elevation.baseY + (lowest ?? 0)
+  return plane + (lowest ?? 0)
 }
 
 /**
@@ -180,11 +196,9 @@ export function levelPlateUndersideWorldY(
   nodes: Record<AnyNodeId, AnyNode>,
   levelId: string,
 ): number | null {
-  const elevation = getLevelElevations(nodes).get(levelId)
+  const baseY = levelPlaneWorldY(nodes, levelId)
   const level = nodes[levelId as LevelNode['id']]
-  if (!elevation || level?.type !== 'level') return null
-  const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
-  const baseY = (building?.type === 'building' ? building.position[1] : 0) + elevation.baseY
+  if (baseY === null || level?.type !== 'level') return null
   let underside = baseY
   for (const childId of level.children) {
     const child = nodes[childId as AnyNodeId]

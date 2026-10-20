@@ -751,3 +751,78 @@ test('the box the ground floor stands in is the house, not the lawn laid on its 
   const box = levelGroundBox(nodes, 'level_building_a_g')
   expect([box?.min[0], box?.max[0], box?.min[2], box?.max[2]]).toEqual([-6, 6, -5, 5])
 })
+
+// ── A split level under a hill: every floor is judged at its own height ───────────────────────
+
+/**
+ * One level with two floors, a raised part (top 0.2 m, x -6..0) over flat ground at 0 m, and the
+ * room sunk beside it (top -1.2 m, x 0..4) under ground that climbs from 0 m at x = 0 to `peakCm`
+ * at x = 4.
+ */
+function splitLevelOnRamp(peakCm: number) {
+  const field = createTerrainField({ cols: 33, rows: 33, spacing: 1, origin: [-16, -16] })
+  const heights = new Int16Array(field.heights)
+  for (let row = 0; row < field.rows; row += 1)
+    for (let col = 0; col < field.cols; col += 1) {
+      const x = field.origin[0] + col * field.spacing
+      heights[row * field.cols + col] = Math.round((Math.min(Math.max(x, 0), 4) / 4) * peakCm)
+    }
+  const rect = (x0: number, x1: number): Array<[number, number]> => [
+    [x0, -3],
+    [x1, -3],
+    [x1, 3],
+    [x0, 3],
+  ]
+  const nodes: AnyNode[] = [
+    SiteNode.parse({
+      id: 'site_a',
+      children: ['building_a'],
+      terrain: encodeTerrainField({ ...field, heights }),
+    }),
+    BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_split'] }),
+    LevelNode.parse({
+      id: 'level_split',
+      parentId: 'building_a',
+      level: -1,
+      height: 3,
+      children: ['slab_raised', 'slab_sunken'],
+    }),
+    SlabNode.parse({
+      id: 'slab_raised',
+      parentId: 'level_split',
+      polygon: rect(-6, 0),
+      elevation: 0.2,
+    }),
+    SlabNode.parse({
+      id: 'slab_sunken',
+      parentId: 'level_split',
+      polygon: rect(0, 4),
+      elevation: -1.2,
+    }),
+  ]
+  return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+}
+
+test('ground over only the sunken room of a split level buries that room: the level is partly below grade', () => {
+  // The ground peaks at 0.4 m over the room's far wall: 1.6 m over its floor (-1.2 m), but only
+  // 0.2 m over the raised part's top (0.2 m), which is inside the 0.3 m tolerance.
+  const nodes = splitLevelOnRamp(40)
+  expect(levelGradeStanding(nodes, 'level_split')).toBe('partly-below-grade')
+  // The raised part alone, on the flat ground west of the ramp, is at grade.
+  const raisedOnly = {
+    ...nodes,
+    level_split: { ...nodes.level_split, children: ['slab_raised'] },
+  } as unknown as Record<AnyNodeId, AnyNode>
+  expect(levelGradeStanding(raisedOnly, 'level_split')).toBe('at-grade')
+})
+
+test('the hole over a split level opens over the whole sunken room the ground stands over, not from the raised floor’s height', () => {
+  // Ground climbing 0 → 1 m across the room (x 0..4): it is over the room's floor (-1.2 m) from its
+  // first metre. Judged at the raised part's top (0.2 m) it would only open where the ground is over
+  // 0.5 m, from x = 2.
+  const nodes = splitLevelOnRamp(100)
+  expect(levelGradeStanding(nodes, 'level_split')).toBe('partly-below-grade')
+  expect(belowGradeFootprints(nodes, 'level_split').map(extent)).toEqual([
+    { x: [0, 4], z: [-3, 3] },
+  ])
+})

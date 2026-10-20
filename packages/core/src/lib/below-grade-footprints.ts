@@ -2,8 +2,8 @@ import type { AnyNode, AnyNodeId } from '../schema'
 import {
   BELOW_GRADE_TOLERANCE,
   getLevelElevations,
-  levelFloorWorldY,
   levelLowestFloorWorldY,
+  levelPlaneWorldY,
   levelPlateUndersideWorldY,
 } from '../services/storey'
 import {
@@ -49,8 +49,10 @@ function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
     const buildingId = elevations.get(level.id)?.buildingId
     const building = buildingId ? nodes[buildingId as AnyNodeId] : undefined
     const placed = building?.type === 'building' ? building : null
-    const floorY = standing === 'partly-below-grade' ? levelFloorWorldY(nodes, level.id) : null
-    const field = floorY === null ? null : terrainFieldOverLevel(nodes, level)
+    // A partly buried level is cut slab by slab, each over the ground that stands above its own
+    // floor: a split level's sunken room is buried by ground the raised part's top is above.
+    const plane = standing === 'partly-below-grade' ? levelPlaneWorldY(nodes, level.id) : null
+    const field = plane === null ? null : terrainFieldOverLevel(nodes, level)
     const plates: Point2D[][] = []
     const buried: Point2D[][] = []
     for (const childId of level.children) {
@@ -59,8 +61,8 @@ function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
       const plate = slab.polygon.map(([x, z]) => levelLocalToWorldXZ(placed, x, z))
       plates.push(plate)
       if (standing === 'at-grade') continue
-      if (field && floorY !== null)
-        buried.push(...groundOverPart(plate, field, floorY + BELOW_GRADE_TOLERANCE))
+      if (field && plane !== null)
+        buried.push(...groundOverPart(plate, field, plane + slab.elevation + BELOW_GRADE_TOLERANCE))
       else buried.push(plate)
     }
     levels.push({
