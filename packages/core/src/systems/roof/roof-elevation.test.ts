@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import {
   type AnyNode,
@@ -9,6 +9,7 @@ import {
   SlabNode,
   WallNode,
 } from '../../schema'
+import useScene from '../../store/use-scene'
 import { planWallSplitAtPoint } from '../wall/wall-topology'
 import { resolveRoofElevation } from './roof-elevation'
 
@@ -51,6 +52,19 @@ function scene(heights: Array<number | undefined>) {
 }
 
 describe('resolveRoofElevation', () => {
+  test('resolves a saved scene without reading the browser scene store', () => {
+    const { roof, nodes } = scene([4.5])
+    const browserStore = spyOn(useScene, 'getState').mockImplementation(() => {
+      throw new Error('No browser store in the hosted MCP')
+    })
+    try {
+      expect(resolveRoofElevation(roof, nodes)).toBe(1.5)
+      expect(browserStore).not.toHaveBeenCalled()
+    } finally {
+      browserStore.mockRestore()
+    }
+  })
+
   test("follows walls on the roof's own level when it sits on the top floor", () => {
     const { roof, level, upper, nodes } = scene([2.5])
     // Move the roof onto the walls' level: no storey above, roof and walls share it.

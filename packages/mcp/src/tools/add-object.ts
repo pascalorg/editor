@@ -8,9 +8,11 @@ import {
   editedScriptLanguage,
   editedScriptParams,
   furnishingRefusal,
+  readableScript,
   readSourceResult,
   requireAddObjectReason,
   type SceneNodes,
+  type ScriptReadable,
 } from '@pascal-app/core/agent-operations'
 import {
   addObjectTool,
@@ -41,10 +43,15 @@ import { briefInForce, toPatches } from './shared-tools'
  * artifacts live for the active scene.
  */
 export type GeometryScriptHost = {
+  readonly signal?: AbortSignal
+  /** Recheck the host's active authorization after a long compile and before scene mutation. */
+  assertActive?(): Promise<void>
   compile(input: {
     code: string
     language: GeometryScriptLanguage
     params?: Record<string, GeometryScriptParamValue>
+    /** What the host builds it for (a room's floor, a wall's face: `floorScriptInputs`, `wallFaceScriptInputs`), kept in the host's frame. */
+    inputs?: Record<string, unknown>
   }): Promise<CompiledGeometryScript & { glb: Uint8Array }>
   storeArtifact(input: {
     sceneId: string
@@ -65,6 +72,7 @@ export type GeometryScriptHost = {
     code: string
     language: GeometryScriptLanguage
     params?: Record<string, GeometryScriptParamValue>
+    inputs?: Record<string, unknown>
     /** What the script builds, for the host to name it to the user. */
     kind: ScriptedKind
     nodeId: string
@@ -72,7 +80,17 @@ export type GeometryScriptHost = {
   }): Promise<CompiledGeometryScript>
 }
 
-export type ScriptedKind = 'object' | 'window' | 'door' | 'column'
+export type ScriptedKind = 'object' | 'window' | 'door' | 'column' | 'floor' | 'wall-face'
+
+/** The kind an artifact records; a room's floor finish and a wall face's are none of the node kinds. */
+const ARTIFACT_KIND: Record<ScriptedKind, GeometryArtifactMetadata['kind']> = {
+  object: 'item',
+  window: 'window',
+  door: 'door',
+  column: 'column',
+  floor: undefined,
+  'wall-face': undefined,
+}
 
 /** Compiles a module on the host and stores its GLB and text for the scene: the step every scripted tool shares. */
 export async function compileAndStore(
@@ -82,25 +100,27 @@ export async function compileAndStore(
     code,
     language,
     params,
+    inputs,
   }: {
     code: string
     language: GeometryScriptLanguage
     params: Record<string, GeometryScriptParamValue> | undefined
+    inputs?: Record<string, unknown>
   },
   kind: ScriptedKind,
   context: { nodeId?: string; metadata?: GeometryArtifactMetadata } = {},
 ): Promise<CompiledGeometryScript> {
-  const nodeId = context.nodeId ?? generateId(kind === 'object' ? 'item' : kind)
+  const nodeId = context.nodeId ?? generateId(ARTIFACT_KIND[kind] ?? 'item')
   const metadata = GeometryArtifactMetadata.parse({
     ...context.metadata,
-    kind: kind === 'object' ? 'item' : kind,
+    kind: ARTIFACT_KIND[kind],
   })
   if (host.build)
     return {
-      ...(await host.build({ sceneId, code, language, params, kind, nodeId, metadata })),
+      ...(await host.build({ sceneId, code, language, params, inputs, kind, nodeId, metadata })),
       nodeId,
     }
-  const { glb, ...compiled } = await host.compile({ code, language, params })
+  const { glb, ...compiled } = await host.compile({ code, language, params, inputs })
   metadata.mount = compiled.mount
   const [sha256] = await Promise.all([
     host.storeArtifact({
@@ -123,16 +143,27 @@ export async function compileAndStore(
   return { ...compiled, sha256, nodeId }
 }
 
-export async function readScript(
+async function scriptText(
+  host: GeometryScriptHost,
+  sceneId: string,
+  node: ScriptReadable,
+): Promise<string> {
+  const bytes = await host.readArtifact({ sceneId, sha256: node.source.script })
+  if (!bytes) throw new Error(`The script of ${node.id} could not be read`)
+  return new TextDecoder().decode(bytes)
+}
+
+export function readScript(
   host: GeometryScriptHost,
   sceneId: string,
   bridge: SceneOperations,
   nodeId: string,
 ): Promise<string> {
-  const node = authoredObject(bridge.getNodes() as Record<string, AnyNode>, nodeId)
-  const bytes = await host.readArtifact({ sceneId, sha256: node.source.script })
-  if (!bytes) throw new Error(`The script of ${nodeId} could not be read`)
-  return new TextDecoder().decode(bytes)
+  return scriptText(
+    host,
+    sceneId,
+    authoredObject(bridge.getNodes() as Record<string, AnyNode>, nodeId),
+  )
 }
 
 /**
@@ -271,7 +302,7 @@ export function registerGetSource(
       inputSchema: getSourceTool.input,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
-    async ({ nodeId }: { nodeId: string }) => {
+    async ({ nodeId, face }: { nodeId: string; face?: 'a' | 'b' }) => {
       if (!host) {
         return toolError('This Pascal server cannot read geometry scripts.', {
           code: 'scripts_unavailable',
@@ -280,8 +311,8 @@ export function registerGetSource(
       const scene = bridge.getActiveScene()
       if (!scene) return toolError('Open a scene first.', { code: 'no_active_scene' })
       try {
-        const node = authoredObject(bridge.getNodes() as Record<string, AnyNode>, nodeId)
-        const payload = readSourceResult(node, await readScript(host, scene.id, bridge, nodeId))
+        const node = readableScript(bridge.getNodes() as Record<string, AnyNode>, nodeId, face)
+        const payload = readSourceResult(node, await scriptText(host, scene.id, node))
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
           structuredContent: payload,

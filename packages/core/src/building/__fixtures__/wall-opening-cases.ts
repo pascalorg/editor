@@ -164,6 +164,40 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     input: { wallId: main, t: 0.5 },
     expect: { localX: 2, centerY: 1.05, clamped: false, node: { rotation: [0, 0, 0] } },
   },
+  // Its hardware: the handle hangs opposite the hinges unless placed.
+  {
+    name: 'a right-hinged door takes its handle on the left',
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5, hingesSide: 'right' },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { hingesSide: 'right', handleSide: 'left' },
+    },
+  },
+  {
+    name: 'a left-hinged door takes its handle on the right',
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5 },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { hingesSide: 'left', handleSide: 'right' },
+    },
+  },
+  {
+    name: 'a handle side given is kept',
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5, hingesSide: 'right', handleSide: 'right' },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { hingesSide: 'right', handleSide: 'right' },
+    },
+  },
   // Where it goes
   {
     name: 'a door at t 0.5 is centred',

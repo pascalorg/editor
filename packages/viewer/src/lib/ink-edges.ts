@@ -14,6 +14,7 @@ import {
   viewZToPerspectiveDepth,
 } from 'three/tsl'
 
+import type { Node } from 'three/webgpu'
 import { unpackRGBToNormal } from './tsl-compat'
 
 export function createEdgeDepthSampler(depthTex: any, camera: Camera) {
@@ -62,7 +63,7 @@ export function inkedEdges({
   // darkness — these are what distinguish soft (thin/faint) from strong
   // (thick/solid); the edge masks themselves saturate, so a gain wouldn't.
   // Opacity may be a TSL node (theme-driven scaling) or a plain number.
-  radius: number
+  radius: number | Node<'float'>
   opacity: any
   sceneRgb: any
 }) {

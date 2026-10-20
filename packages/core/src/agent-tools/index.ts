@@ -1,5 +1,6 @@
 import { addObjectTool, getSourceTool } from './add-object'
 import { searchAssetsTool, viewAssetsTool } from './assets'
+import { authorSceneTool } from './author-scene'
 import { runBatchTool } from './batch'
 import { setCheckpointTool } from './checkpoints'
 import { clearSceneTool } from './clear-scene'
@@ -39,6 +40,7 @@ import { addWallTool } from './walls'
 export * from './achieved'
 export * from './add-object'
 export * from './assets'
+export * from './author-scene'
 export * from './clear-scene'
 export * from './collections'
 export * from './columns'
@@ -106,6 +108,7 @@ export const AGENT_TOOL_CONTRACTS = [
   moveRoofsToRoofLevelTool,
   deleteNodeTool,
   addObjectTool,
+  authorSceneTool,
   getSourceTool,
   findByTypeTool,
   editCollectionTool,

@@ -27,9 +27,21 @@ const STOREY_CONTENT: ReadonlySet<string> = new Set([
  * rooms, and every kind that stands on a floor (`capabilities.floorPlaced`: cabinets, shelves,
  * columns, …).
  */
-export const isStoreyContent = (type: string | undefined): boolean =>
+export const isStoreyContent = (
+  type: string | undefined,
+  metadata: Record<string, unknown> | undefined,
+): boolean =>
   type !== undefined &&
+  !(type === 'item' && (metadata?.role === 'roof' || metadata?.role === 'ceiling')) &&
   (STOREY_CONTENT.has(type) || nodeRegistry.get(type)?.capabilities?.floorPlaced !== undefined)
+
+/** Retained roof geometry participates in level presentation without becoming parametric. */
+export const isRoofGeometry = (node: AnyNode | undefined): boolean =>
+  node?.type === 'roof' || (node?.type === 'item' && node.metadata?.role === 'roof')
+
+/** Retained ceiling shells can lift with the roof while native room ceilings keep their hosts. */
+export const isCeilingGeometry = (node: AnyNode | undefined): boolean =>
+  node?.type === 'ceiling' || (node?.type === 'item' && node.metadata?.role === 'ceiling')
 
 /** A level declared for its building's roofs (`metadata.role: 'roof'`). */
 export function isRoofLevel(node: AnyNode | undefined): boolean {
@@ -47,8 +59,8 @@ const holdsOnlyRoofs = (nodes: Nodes, level: LevelNode) => {
   if (isSupportLevel(level)) return false
   const children = childrenOf(nodes, level)
   return (
-    children.some((child) => child.type === 'roof') &&
-    !children.some((child) => isStoreyContent(child.type))
+    children.some(isRoofGeometry) &&
+    !children.some((child) => isStoreyContent(child.type, child.metadata))
   )
 }
 

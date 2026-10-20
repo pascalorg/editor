@@ -65,6 +65,23 @@ export function temporarilyShowPresentation(root: Object3D): () => void {
   return temporarilyShowHeld(root, ['shadow-only', 'isolated'])
 }
 
+/** Add a capture-only mask without changing the live visibility reasons or batching. */
+export function temporarilyHideFromScene(root: Object3D, reason: HiddenReason): () => void {
+  const masks = new Map<Object3D, number>()
+  root.traverse((obj) => {
+    masks.set(obj, obj.layers.mask)
+    const hold = (obj as Holder)[HOLD]
+    const reasons = new Set(hold?.reasons)
+    // Changing level presentation must not reveal isolated geometry or duplicate batch shadows.
+    reasons.delete('shadow-only')
+    reasons.add(reason)
+    applyHold(obj, { original: hold?.original ?? obj.layers.mask, reasons })
+  })
+  return () => {
+    for (const [obj, mask] of masks) obj.layers.mask = mask
+  }
+}
+
 function temporarilyShowHeld(root: Object3D, lifted: readonly HiddenReason[]): () => void {
   const masks = new Map<Object3D, number>()
   root.traverse((obj) => {

@@ -5,6 +5,7 @@ import type {
   BaseNode,
   BuildingNode,
   LevelNode,
+  SitePresentation,
   UnitNode,
   ZoneNode,
 } from '@pascal-app/core'
@@ -14,7 +15,12 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { EdgeMode } from '../lib/edge-style'
 import type { ColorPreset, RenderShading } from '../lib/materials'
-import { SCENE_THEME_IDS } from '../lib/scene-themes'
+import {
+  getSceneTheme,
+  projectSceneTheme,
+  SCENE_THEME_IDS,
+  type SceneTheme,
+} from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
 export type MetricNotation = 'meters' | 'millimeters'
@@ -30,6 +36,11 @@ type SelectionPath = {
 type Outliner = {
   selectedObjects: Object3D[]
   hoveredObjects: Object3D[]
+}
+
+type LookDefaults = { theme: string; edges: EdgeMode; shadows: boolean }
+type LocalLook = Partial<LookDefaults> & {
+  shadingByContext?: Partial<Record<RenderContext, RenderShading>>
 }
 
 type ViewerState = {
@@ -56,7 +67,14 @@ type ViewerState = {
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
   sceneTheme: string
-  /** The user's own pick, and the only theme that persists. */
+  sceneAppearance: SceneTheme
+  lookDefaults: LookDefaults
+  projectPresentation?: SitePresentation
+  setProjectPresentation: (presentation: SitePresentation | undefined) => void
+  resetProjectLook: () => void
+  previewSceneTheme: string | null
+  contextDefaultShading: RenderShading
+  /** The selected project/global theme before a temporary preview. */
   savedSceneTheme: string
   setSceneTheme: (id: string) => void
   /** Show a theme without saving it (e.g. a project's own mood); `null`
@@ -64,7 +82,7 @@ type ViewerState = {
   showSceneTheme: (id: string | null) => void
 
   renderContext: RenderContext
-  setRenderContext: (context: RenderContext) => void
+  setRenderContext: (context: RenderContext, defaultShading?: RenderShading) => void
 
   /** True during a GLB bake/export pass. Renderers that normally draw via a
    * collective InstancedMesh (`def.system`) and mount only an invisible per-node
@@ -168,6 +186,7 @@ type ViewerState = {
   projectPreferences: Record<
     string,
     {
+      look?: LocalLook
       showScans?: boolean
       showGuides?: boolean
       showGrid?: boolean
@@ -324,7 +343,25 @@ function normalizeProjectPreferences(value: unknown): ViewerState['projectPrefer
   for (const [projectId, preferences] of Object.entries(value)) {
     if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) continue
     const record = preferences as Record<string, unknown>
+    const look =
+      record.look && typeof record.look === 'object'
+        ? (record.look as Record<string, unknown>)
+        : undefined
     next[projectId] = {
+      ...(look
+        ? {
+            look: {
+              ...(typeof look.theme === 'string' && SCENE_THEME_IDS.includes(look.theme)
+                ? { theme: look.theme }
+                : {}),
+              ...(typeof look.edges === 'string' && EDGE_MODES.includes(look.edges as EdgeMode)
+                ? { edges: look.edges as EdgeMode }
+                : {}),
+              ...(typeof look.shadows === 'boolean' ? { shadows: look.shadows } : {}),
+              shadingByContext: normalizeShadingByContext(look.shadingByContext),
+            },
+          }
+        : {}),
       ...(typeof record.showScans === 'boolean' ? { showScans: record.showScans } : {}),
       ...(typeof record.showGuides === 'boolean' ? { showGuides: record.showGuides } : {}),
       ...(typeof record.showGrid === 'boolean' ? { showGrid: record.showGrid } : {}),
@@ -360,6 +397,48 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     wallMode: pickString<ViewerState['wallMode']>(state.wallMode, WALL_MODES, 'up'),
     projectPreferences: normalizeProjectPreferences(state.projectPreferences),
   }
+}
+
+function resolveLook(state: ViewerState, patch: Partial<ViewerState>): Partial<ViewerState> {
+  const next = { ...state, ...patch }
+  const local = next.projectPreferences[next.projectId ?? '']?.look
+  const savedTheme = local?.theme ?? next.projectPresentation?.theme ?? next.lookDefaults.theme
+  const theme = getSceneTheme(next.previewSceneTheme ?? savedTheme)
+  return {
+    ...patch,
+    savedSceneTheme: savedTheme,
+    sceneTheme: theme.id,
+    sceneAppearance: projectSceneTheme(
+      theme,
+      next.previewSceneTheme === null && !local?.theme ? next.projectPresentation : undefined,
+    ),
+    shading:
+      local?.shadingByContext?.[next.renderContext] ??
+      next.projectPresentation?.shading ??
+      next.shadingByContext[next.renderContext] ??
+      next.contextDefaultShading,
+    edges: local?.edges ?? next.projectPresentation?.edges ?? next.lookDefaults.edges,
+    shadows: local?.shadows ?? next.projectPresentation?.shadows ?? next.lookDefaults.shadows,
+  }
+}
+
+function chooseLook(state: ViewerState, look: LocalLook): Partial<ViewerState> {
+  const key = state.projectId ?? ''
+  const previous = state.projectPreferences[key]
+  const { shadingByContext, ...defaults } = look
+  return resolveLook(state, {
+    ...(!state.projectId
+      ? {
+          lookDefaults: { ...state.lookDefaults, ...defaults },
+          shadingByContext: { ...state.shadingByContext, ...shadingByContext },
+        }
+      : {}),
+    projectPreferences: {
+      ...state.projectPreferences,
+      [key]: { ...previous, look: { ...previous?.look, ...look } },
+    },
+    ...('theme' in look ? { previewSceneTheme: null } : {}),
+  })
 }
 
 const useViewer = create<ViewerState>()(
@@ -403,12 +482,30 @@ const useViewer = create<ViewerState>()(
       setCameraMode: (mode) => set({ cameraMode: mode }),
 
       sceneTheme: 'studio',
+      sceneAppearance: getSceneTheme('studio'),
+      lookDefaults: { theme: 'studio', edges: 'soft', shadows: true },
+      projectPresentation: undefined,
+      setProjectPresentation: (projectPresentation) =>
+        set((state) => resolveLook(state, { projectPresentation })),
+      resetProjectLook: () =>
+        set((state) => {
+          const projectPreferences = { ...state.projectPreferences }
+          const key = state.projectId ?? ''
+          const { look: _look, ...rest } = projectPreferences[key] ?? {}
+          projectPreferences[key] = rest
+          return resolveLook(state, { projectPreferences, previewSceneTheme: null })
+        }),
+      previewSceneTheme: null,
+      contextDefaultShading: 'rendered',
       savedSceneTheme: 'studio',
-      setSceneTheme: (id) => set({ sceneTheme: id, savedSceneTheme: id }),
-      showSceneTheme: (id) => set((state) => ({ sceneTheme: id ?? state.savedSceneTheme })),
+      setSceneTheme: (id) => set((state) => chooseLook(state, { theme: id })),
+      showSceneTheme: (id) => set((state) => resolveLook(state, { previewSceneTheme: id })),
 
       renderContext: 'editor',
-      setRenderContext: (context) => set({ renderContext: context }),
+      setRenderContext: (context, defaultShading = 'rendered') =>
+        set((state) =>
+          resolveLook(state, { renderContext: context, contextDefaultShading: defaultShading }),
+        ),
 
       isExporting: false,
       setExporting: (value) => set({ isExporting: value }),
@@ -434,10 +531,14 @@ const useViewer = create<ViewerState>()(
       shading: 'rendered',
       shadingByContext: {},
       setShading: (shading) =>
-        set((state) => ({
-          shading,
-          shadingByContext: { ...state.shadingByContext, [state.renderContext]: shading },
-        })),
+        set((state) =>
+          chooseLook(state, {
+            shadingByContext: {
+              ...state.projectPreferences[state.projectId ?? '']?.look?.shadingByContext,
+              [state.renderContext]: shading,
+            },
+          }),
+        ),
 
       textures: true,
       setTextures: (textures) => set({ textures }),
@@ -446,10 +547,10 @@ const useViewer = create<ViewerState>()(
       setColorPreset: (preset) => set({ colorPreset: preset }),
 
       edges: 'soft',
-      setEdges: (edges) => set({ edges }),
+      setEdges: (edges) => set((state) => chooseLook(state, { edges })),
 
       shadows: true,
-      setShadows: (shadows) => set({ shadows }),
+      setShadows: (shadows) => set((state) => chooseLook(state, { shadows })),
 
       unit: detectDefaultUnit(),
       metricNotation: 'meters',
@@ -531,15 +632,19 @@ const useViewer = create<ViewerState>()(
       projectId: null,
       setProjectId: (id) =>
         set((state) => {
-          if (!id) return { projectId: id }
-          const prefs = state.projectPreferences?.[id] || {}
-          return {
+          if (id === state.projectId) return state
+          const prefs = (id && state.projectPreferences?.[id]) || {}
+          const { '': _unscoped, ...projectPreferences } = state.projectPreferences
+          return resolveLook(state, {
             projectId: id,
+            projectPreferences,
+            projectPresentation: undefined,
+            previewSceneTheme: null,
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
             showGrid: prefs.showGrid ?? true,
             showMeasurements: prefs.showMeasurements ?? true,
-          }
+          })
         }),
       projectPreferences: {},
 
@@ -604,22 +709,31 @@ const useViewer = create<ViewerState>()(
         return {
           ...currentState,
           ...persisted,
-          savedSceneTheme: persisted.sceneTheme ?? currentState.savedSceneTheme,
+          ...resolveLook(currentState, {
+            ...persisted,
+            lookDefaults: {
+              theme: persisted.sceneTheme ?? currentState.lookDefaults.theme,
+              edges: persisted.edges ?? currentState.lookDefaults.edges,
+              shadows: persisted.shadows ?? currentState.lookDefaults.shadows,
+            },
+          }),
         }
       },
       partialize: (state) => ({
         cameraMode: state.cameraMode,
-        sceneTheme: state.savedSceneTheme,
+        sceneTheme: state.lookDefaults.theme,
         shadingByContext: state.shadingByContext,
         textures: state.textures,
         colorPreset: state.colorPreset,
-        edges: state.edges,
-        shadows: state.shadows,
+        edges: state.lookDefaults.edges,
+        shadows: state.lookDefaults.shadows,
         ...(state.unitExplicit ? { unit: state.unit } : {}),
         metricNotation: state.metricNotation,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
-        projectPreferences: state.projectPreferences,
+        projectPreferences: Object.fromEntries(
+          Object.entries(state.projectPreferences).filter(([key]) => key !== ''),
+        ),
       }),
     },
   ),

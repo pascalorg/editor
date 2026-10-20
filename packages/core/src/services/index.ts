@@ -106,6 +106,7 @@ export {
 } from './roof-bearing'
 export {
   coveredStoreyId,
+  isRoofGeometry,
   isRoofLevel,
   isStoreyContent,
   liftRoofLevels,
@@ -150,6 +151,7 @@ export {
 export {
   CEILING_CLAMP_MARGIN,
   CEILING_DRAW_OFFSET,
+  EXPLODED_GAP,
   findLevelAboveId,
   findLevelBelowId,
   getCeilingClampBound,

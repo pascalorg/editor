@@ -25,6 +25,7 @@ import {
   type WallFaceChainFinish,
   type WallNode,
   type WallSurfaceSlotId,
+  wallFaceScriptPaintRefusal,
   wallRegionRole,
   wallRoomFaceRole,
   wallRoomFinishRole,
@@ -471,6 +472,8 @@ export const wallPaint: PaintCapability = {
   buildPatch: (args: PaintPatchArgs) =>
     parseWallPaintRole(args.role)?.kind === 'slot' ? base.buildPatch(args) : {},
   commit: (args: PaintPatchArgs) => {
+    const refusal = wallFaceScriptPaintRefusal(args.node, args.role)
+    if (refusal) return refusal
     const parsed = parseWallPaintRole(args.role)
     if (!parsed) return
     // A trim is a slot like any other; faces, regions and rooms go through the plan.

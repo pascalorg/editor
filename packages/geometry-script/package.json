@@ -6,6 +6,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./author-scene": {
+      "types": "./dist/author-scene.d.ts",
+      "import": "./dist/author-scene.js",
+      "default": "./dist/author-scene.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",

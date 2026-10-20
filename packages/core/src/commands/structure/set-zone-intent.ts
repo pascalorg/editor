@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { floorIntentConflicts } from '../../lib/floor-intent-changes'
+import { floorScriptPaintRefusal } from '../../lib/floor-plate-paint'
 import { ownFloorIntentChanges } from '../../lib/own-floor-intent'
 import { drawnFloorElevationConflict } from '../../lib/room-drawn-floor'
 import { roundFloorElevation } from '../../lib/room-floor-feasibility'
@@ -42,6 +43,13 @@ export function setZoneIntent(
 ): StructurePlan {
   const zone = requireZone(nodes, input.zoneId)
   const patch = ZoneIntentPatch.parse(input.patch)
+  const painted = zone.floor?.script && (patch.floor?.finish ?? patch.floor?.regions)
+  const scripted = painted ? floorScriptPaintRefusal(zone) : undefined
+  if (scripted)
+    return {
+      changes: [],
+      conflicts: [{ code: scripted.code, nodeIds: [zone.id], message: scripted.message }],
+    }
   const requestedKey = patch.floor?.footprint
   if (
     requestedKey &&

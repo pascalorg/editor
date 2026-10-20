@@ -123,6 +123,7 @@ describe('view_scene over the MCP', () => {
           height: request.size.h,
           tab: 'tab_1',
           capturedAt: '2026-10-12T09:00:00.000Z',
+          presentation: request.presentation,
         }
       },
     })
@@ -136,11 +137,52 @@ describe('view_scene over the MCP', () => {
       expect(wrong.isError).toBe(true)
       expect(json(wrong.content)).toMatchObject({ code: 'interior_level_invalid' })
       expect(asked).toHaveLength(2)
+      for (const presentation of [
+        { mode: 'solo', levelId: view.levelId },
+        { mode: 'exploded' },
+        { mode: 'stacked' },
+      ]) {
+        const result = await view.call({ presentation })
+        expect(result.isError).toBe(false)
+        expect(json(result.content).presentation).toEqual(presentation)
+        expect(asked.at(-1)?.presentation).toEqual(presentation)
+        expect(asked.at(-1)).not.toHaveProperty('interior')
+      }
     } finally {
       await view.close()
     }
   })
 
+  test('an unconfirmed or different level view is refused, never labelled as verified', async () => {
+    for (const presentation of [
+      undefined,
+      { mode: 'stacked' as const },
+      { mode: 'solo' as const, levelId: 'level_wrong' },
+    ]) {
+      const view = await viewWith({
+        capture: async () => ({
+          image: new Uint8Array([1]),
+          mimeType: 'image/webp',
+          width: 640,
+          height: 400,
+          tab: 'tab_old',
+          capturedAt: '2026-10-18T18:00:00Z',
+          presentation,
+        }),
+      })
+      try {
+        const result = await view.call({ presentation: { mode: 'solo', levelId: view.levelId } })
+        expect(result.isError).toBe(true)
+        expect(json(result.content)).toMatchObject({ code: 'view_presentation_unconfirmed' })
+        expect(result.content.some((part) => part.type === 'image')).toBe(false)
+        expect((await view.call({})).isError).toBe(false)
+      } finally {
+        await view.close()
+      }
+    }
+  })
+
+  // A building standing away from the site's origin was looked for at the origin.
   // The study of 15 Oct: no interior view in 4 of 4 turns. A room is stood in, at a person's
   // height, inside its outline, and the tab's picture comes back as an image.
   test('a room is looked at from inside, at eye height, and the picture comes back', async () => {

@@ -138,10 +138,17 @@ function startSandbox(): Promise<Window> {
 export async function compileGeometryScriptInWorker(input: {
   code: string
   params?: Record<string, GeometryScriptParamValue>
+  /** What the host builds it for (a room's floor), in the host's frame. */
+  inputs?: Record<string, unknown>
 }): Promise<GeometryScriptCompileOutput> {
   const target = await startSandbox()
   const id = nextId++
-  const request: GeometryScriptWorkerRequest = { id, code: input.code, params: input.params }
+  const request: GeometryScriptWorkerRequest = {
+    id,
+    code: input.code,
+    params: input.params,
+    inputs: input.inputs,
+  }
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reset(new Error(`The script ran longer than ${COMPILE_TIMEOUT_MS / 1000} s and was stopped`))

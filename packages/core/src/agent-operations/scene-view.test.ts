@@ -96,6 +96,80 @@ function building(): Record<string, AnyNode> {
 
 const box: SceneViewBox = { min: [0, 0, 0], max: [20, 6, 10] }
 
+test('level captures frame the settled Solo and Exploded geometry without changing the graph', () => {
+  const nodes = building()
+  const before = structuredClone(nodes)
+  const solo = sceneViewPlan(nodes, { presentation: { mode: 'solo', levelId: 'level_1' } })
+  expect(solo.presentation).toEqual({ mode: 'solo', levelId: 'level_1' })
+  expect(solo).not.toHaveProperty('interior')
+  expect(solo.pose.target[1]).toBe(4.5)
+  const exploded = sceneViewPlan(nodes, { presentation: { mode: 'exploded' } })
+  expect(framesBox(exploded.pose, { min: [0, 0, 0], max: [20, 11, 10] })).toBe(true)
+  expect(exploded.pose.target[1]).toBe(5.5)
+  expect(sceneViewBounds(nodes, 'wall_level_1_0', { mode: 'exploded' }).min[1]).toBe(8)
+  expect(z.object(viewSceneTool.input).safeParse({ presentation: { mode: 'solo' } }).success).toBe(
+    false,
+  )
+  expect(() =>
+    sceneViewPlan(nodes, {
+      presentation: { mode: 'solo', levelId: 'level_1' },
+      target: 'wall_level_0_0',
+    }),
+  ).toThrow('The target must belong')
+  expect(() =>
+    sceneViewPlan(nodes, {
+      presentation: { mode: 'solo', levelId: 'level_1' },
+      target: 'item_missing',
+    }),
+  ).toThrow('The target is not in the scene')
+  expect(() =>
+    sceneViewPlan(nodes, {
+      presentation: { mode: 'exploded' },
+      interior: { levelId: 'level_0' },
+    }),
+  ).toThrow('Choose a level presentation')
+  expect(() =>
+    sceneViewPlan(nodes, {
+      presentation: { mode: 'solo', levelId: 'level_missing' },
+    }),
+  ).toThrow('Solo needs an existing level')
+  expect(() =>
+    sceneViewPlan(
+      { ...nodes, level_1: { ...nodes.level_1!, visible: false } },
+      {
+        presentation: { mode: 'solo', levelId: 'level_1' },
+      },
+    ),
+  ).toThrow('Show the level')
+  expect(nodes).toEqual(before)
+})
+
+test('capture framing includes retained roof extents beyond the occupied walls in every level presentation', () => {
+  const nodes = building()
+  const roof = ItemNode.parse({
+    id: 'item_capture_roof',
+    parentId: 'level_1',
+    metadata: { role: 'roof' },
+    position: [-10, 0, 0],
+    asset: {
+      id: 'retained',
+      name: 'Roof',
+      category: 'roof',
+      thumbnail: '',
+      src: '/roof.glb',
+      dimensions: [10, 8, 10],
+    },
+  })
+  nodes[roof.id] = roof
+  const bounds = sceneViewBounds(nodes, 'level_1')
+  expect(bounds.min[0]).toBe(-15)
+  expect(bounds.max[1]).toBe(11)
+  const exploded = sceneViewBounds(nodes, undefined, { mode: 'exploded' })
+  expect(exploded.max[1]).toBe(16)
+  const plan = sceneViewPlan(nodes, { presentation: { mode: 'solo', levelId: 'level_1' } })
+  expect(framesBox(plan.pose, bounds)).toBe(true)
+})
+
 /** The two-storey house with a ceiling over the ground floor and a roof on the upper one. */
 function finishedBuilding(): Record<string, AnyNode> {
   const nodes = building()
@@ -146,6 +220,41 @@ describe('a look inside one floor', () => {
     expect([inside.bounds.min[1], inside.bounds.max[1]]).toEqual([3, 6])
     expect(inside.cutHeight).toBeCloseTo(4.95, 6)
     expect(inside.hiddenIds.sort()).toEqual(['level_0', 'roof_1'])
+  })
+
+  test('interior capture leaves out explicitly classified retained roofs, not similarly named objects', () => {
+    const nodes = finishedBuilding()
+    const asset = {
+      id: 'retained',
+      name: 'Retained geometry',
+      category: 'roof',
+      thumbnail: '',
+      src: '/retained.glb',
+      dimensions: [1, 1, 1],
+    }
+    const roof = ItemNode.parse({
+      id: 'item_retained_roof',
+      parentId: 'level_1',
+      metadata: { role: 'roof' },
+      asset,
+    })
+    const item = ItemNode.parse({
+      id: 'item_roof_furniture',
+      name: 'Roof terrace chair',
+      parentId: 'level_1',
+      asset,
+    })
+    nodes[roof.id] = roof
+    nodes[item.id] = item
+    const level = nodes.level_1 as LevelNode
+    level.children.push(roof.id, item.id)
+    const before = structuredClone(nodes)
+    expect(sceneViewInterior(nodes, level.id).hiddenIds).toContain(roof.id)
+    expect(sceneViewInterior(nodes, level.id).hiddenIds).not.toContain(item.id)
+    expect(
+      refusalOf(() => sceneViewPlan(nodes, { interior: { levelId: level.id }, target: roof.id })),
+    ).toBe('interior_target_elsewhere')
+    expect(nodes).toEqual(before)
   })
 
   test('a target in the floor frames it, and an eye given is kept', () => {

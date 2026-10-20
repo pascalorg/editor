@@ -438,13 +438,25 @@ describe('an ephemeral capture', () => {
       await deliverSnapshot(
         { requestId: 'view-1', ephemeral: true },
         blob,
-        { ...cameraData, resolution: { w: 1280, h: 800 } },
+        {
+          ...cameraData,
+          resolution: { w: 1280, h: 800 },
+          presentation: { mode: 'solo', levelId: 'level_upper' },
+        },
         (frame) => {
           stored.push(frame)
         },
       )
       expect(stored).toEqual([])
-      expect(received).toEqual([{ requestId: 'view-1', blob, width: 1280, height: 800 }])
+      expect(received).toEqual([
+        {
+          requestId: 'view-1',
+          blob,
+          width: 1280,
+          height: 800,
+          presentation: { mode: 'solo', levelId: 'level_upper' },
+        },
+      ])
     } finally {
       emitter.off('snapshot:captured', onCaptured)
     }
