@@ -72,3 +72,68 @@ test('a painted segment whose renderer mounts after the scene-load pass still bu
     await renderer.unmount()
   }
 })
+
+test('a failed roof rebuild keeps the last valid mesh and recovers after retry', async () => {
+  const { nodeRegistry, registerNode, SkylightNode } = await import('@pascal-app/core')
+  const { useRoofGeometryStatus } = await import('@pascal-app/viewer')
+  const previous = useScene.getState()
+  const restoreRegistry = nodeRegistry._snapshot()
+  let fail = false
+  registerNode({
+    kind: 'skylight',
+    schemaVersion: 1,
+    schema: SkylightNode,
+    capabilities: {
+      roofAccessory: {
+        buildCut: () => {
+          if (fail) throw new Error('Cut geometry unavailable')
+          return null
+        },
+      },
+    },
+  })
+  const roof = RoofNode.parse({ id: 'roof_recovery', children: ['rseg_recovery'] })
+  const segment = RoofSegmentNode.parse({
+    id: 'rseg_recovery',
+    parentId: roof.id,
+    children: ['skylight_recovery'],
+  })
+  const skylight = SkylightNode.parse({
+    id: 'skylight_recovery',
+    parentId: segment.id,
+    roofSegmentId: segment.id,
+  })
+  useScene.setState({
+    nodes: { [roof.id]: roof, [segment.id]: segment, [skylight.id]: skylight },
+    rootNodeIds: [roof.id],
+    dirtyNodes: new Set([segment.id]),
+  })
+  const renderer = await create(
+    <>
+      <RoofSystem />
+      <RoofSegmentRenderer node={segment} />
+    </>,
+  )
+  try {
+    await renderer.advanceFrames(2, 1 / 60)
+    const mesh = sceneRegistry.nodes.get(segment.id) as Mesh
+    const validGeometry = mesh.geometry
+    expect(validGeometry.getAttribute('position').count).toBeGreaterThan(3)
+    const stored = useScene.getState().nodes[segment.id]
+    fail = true
+    useScene.getState().markDirty(segment.id)
+    await renderer.advanceFrames(1, 1 / 60)
+    expect(mesh.geometry).toBe(validGeometry)
+    expect(useRoofGeometryStatus.getState().failures.has(segment.id)).toBe(true)
+    expect(useScene.getState().nodes[segment.id]).toBe(stored)
+    fail = false
+    useScene.getState().markDirty(segment.id)
+    await renderer.advanceFrames(1, 1 / 60)
+    expect(mesh.geometry).not.toBe(validGeometry)
+    expect(useRoofGeometryStatus.getState().failures.has(segment.id)).toBe(false)
+  } finally {
+    await renderer.unmount()
+    restoreRegistry()
+    useScene.setState(previous)
+  }
+})

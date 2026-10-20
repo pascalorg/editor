@@ -211,6 +211,7 @@ export { type RoofFootprintSourceChoice, roofDefinition, useRoofFootprintSource 
 export { glazedRoofGeometryAdapter } from './roof/glazed-geometry'
 export { createGlazedRoofMaterials } from './roof/glazed-materials'
 export { createRoofGlazingPreview } from './roof/glazing-preview'
+export { RoofTypeThumbnail } from './roof/type-thumbnail'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
 export { separatorDefinition } from './separator/definition'

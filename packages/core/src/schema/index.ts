@@ -319,6 +319,8 @@ export {
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   isBandedShedSegment,
+  MAX_ROOF_PITCH,
+  MIN_ROOF_SEGMENT_DIMENSION,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,

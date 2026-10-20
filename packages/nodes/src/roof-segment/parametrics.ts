@@ -1,17 +1,22 @@
-import { type ParametricDescriptor, type RoofSegmentNode, roofTypeHasRakes } from '@pascal-app/core'
+import {
+  MAX_ROOF_PITCH,
+  MIN_ROOF_SEGMENT_DIMENSION,
+  type ParametricDescriptor,
+  type RoofSegmentNode,
+  roofTypeHasRakes,
+} from '@pascal-app/core'
 
 export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
   groups: [
     {
       label: 'Footprint',
       fields: [
-        { key: 'width', kind: 'number', unit: 'm', min: 0.5, max: 1000, step: 0.5 },
+        { key: 'width', kind: 'number', unit: 'm', min: MIN_ROOF_SEGMENT_DIMENSION, step: 0.5 },
         {
           key: 'depth',
           kind: 'number',
           unit: 'm',
-          min: 0.5,
-          max: 1000,
+          min: MIN_ROOF_SEGMENT_DIMENSION,
           step: 0.5,
           visibleIf: (node) => node.roofType !== 'conical',
         },
@@ -26,10 +31,17 @@ export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
           label: 'Wall',
           unit: 'm',
           min: 0,
-          max: 1000,
           step: 0.1,
         },
-        { key: 'pitch', kind: 'number', label: 'Pitch', unit: '°', min: 0, max: 85, step: 1 },
+        {
+          key: 'pitch',
+          kind: 'number',
+          label: 'Pitch',
+          unit: '°',
+          min: 0,
+          max: MAX_ROOF_PITCH,
+          step: 1,
+        },
         {
           key: 'conicalFullCircle',
           kind: 'boolean',
@@ -130,7 +142,6 @@ export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
           label: 'Wall thickness',
           unit: 'm',
           min: 0.05,
-          max: 1,
           step: 0.05,
         },
         {
@@ -139,17 +150,15 @@ export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
           label: 'Deck thickness',
           unit: 'm',
           min: 0.04,
-          max: 0.3,
           step: 0.01,
         },
-        { key: 'overhang', kind: 'number', unit: 'm', min: 0, max: 1, step: 0.05 },
+        { key: 'overhang', kind: 'number', unit: 'm', min: 0, step: 0.05 },
         {
           key: 'gableOverhang',
           kind: 'number',
           label: 'Gable overhang',
           unit: 'm',
           min: 0,
-          max: 3,
           step: 0.05,
           visibleIf: (node) => roofTypeHasRakes(node.roofType),
         },
@@ -159,7 +168,6 @@ export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
           label: 'Shingle thickness',
           unit: 'm',
           min: 0.02,
-          max: 0.3,
           step: 0.01,
         },
         {

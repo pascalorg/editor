@@ -121,3 +121,105 @@ test('a porch drawn against the house over posts stays on its storey', () => {
   expect(roof.node).toMatchObject({ support: { kind: 'level' } })
   expect(updated).toEqual([])
 })
+
+test('drawing ghosts follow every selected roof form instead of a gable fallback', async () => {
+  const { RoofSegmentNode, getActiveRoofHeight, RoofType } = await import('@pascal-app/core')
+  const { buildRoofGhostGeometry } = await import('./tool')
+  const { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } = await import('three')
+  const material = new MeshBasicMaterial({ side: DoubleSide })
+  try {
+    for (const type of RoofType.options) {
+      const node = RoofSegmentNode.parse({
+        roofType: type,
+        width: 8,
+        depth: 6,
+        wallHeight: 0.5,
+        pitch: 40,
+      })
+      const geometry = buildRoofGhostGeometry(8, 6, 0.5, 40, type)
+      try {
+        geometry.computeBoundingBox()
+        expect(geometry.boundingBox!.max.y).toBeCloseTo(0.5 + getActiveRoofHeight(node), 5)
+        const mesh = new Mesh(geometry, material)
+        mesh.updateMatrixWorld(true)
+        const heightAt = (x: number, z: number) => {
+          const ray = new Raycaster(new Vector3(x, 20, z), new Vector3(0, -1, 0))
+          return ray.intersectObject(mesh)[0]?.point.y
+        }
+        const crown = heightAt(0, 0)!
+        expect(Number.isFinite(crown)).toBe(true)
+        if (type === 'flat') expect(heightAt(2, 1)).toBeCloseTo(0.5, 5)
+        if (type === 'hip') expect(heightAt(3.9, 0)!).toBeLessThan(crown / 2)
+        if (type === 'shed') expect(heightAt(0, -2.5)!).toBeGreaterThan(heightAt(0, 2.5)!)
+        if (type === 'barrel') expect(heightAt(0, 1.5)!).toBeGreaterThan(0.5)
+        if (type === 'conical') expect(heightAt(3.5, 0)!).toBeLessThan(crown / 2)
+      } finally {
+        geometry.dispose()
+      }
+    }
+  } finally {
+    material.dispose()
+  }
+})
+
+test('remounting the roof tool retains the menu-selected shape', async () => {
+  const { createElement, StrictMode } = await import('react')
+  const { create } = await import('@react-three/test-renderer')
+  const { RegistryToolProvider } = await import('@pascal-app/editor')
+  const { RoofTool } = await import('./tool')
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  const animationGlobals = [
+    'requestAnimationFrame',
+    'cancelAnimationFrame',
+    'IS_REACT_ACT_ENVIRONMENT',
+  ] as const
+  const previousGlobals = animationGlobals.map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+  )
+  Object.defineProperties(globalThis, {
+    requestAnimationFrame: { configurable: true, value: () => 0 },
+    cancelAnimationFrame: { configurable: true, value: () => {} },
+    IS_REACT_ACT_ENVIRONMENT: { configurable: true, value: true },
+  })
+  const previousScope = (await import('@pascal-app/editor')).useInteractionScope.getState().scope
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: Object.assign(new EventTarget(), {
+      requestAnimationFrame: () => 0,
+      cancelAnimationFrame: () => {},
+    }),
+  })
+  const nodes = {}
+  let renderer: Awaited<ReturnType<typeof create>> | undefined
+  try {
+    useEditor.getState().setToolDefaults('roof', { roofType: 'hip' })
+    renderer = await create(
+      createElement(
+        StrictMode,
+        {},
+        createElement(RegistryToolProvider, {
+          value: {
+            activeLevelId: null,
+            sceneApi: { nodes: () => nodes } as SceneApi,
+            isCameraDragging: () => false,
+            selectNode: () => {},
+            unit: 'metric',
+          },
+          children: createElement(RoofTool),
+        }),
+      ),
+    )
+    await renderer.unmount()
+    renderer = undefined
+    expect(useEditor.getState().toolDefaults.roof?.roofType).toBe('hip')
+  } finally {
+    await renderer?.unmount()
+    ;(await import('@pascal-app/editor')).useInteractionScope.setState({ scope: previousScope })
+    for (const [key, descriptor] of previousGlobals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else Reflect.deleteProperty(globalThis, key)
+    }
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow)
+    else Reflect.deleteProperty(globalThis, 'window')
+  }
+})

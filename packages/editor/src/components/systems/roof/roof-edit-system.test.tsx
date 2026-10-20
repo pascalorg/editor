@@ -38,7 +38,6 @@ test('roof trim drag keeps its plane hit over a surface joining and leaving a ba
     id: 'rseg_batch_drag',
     width: 10,
     depth: 10,
-    metadata: { showTrimPlanes: true },
   })
   const source = new THREE.Group()
   const surface = new THREE.Mesh(new THREE.BoxGeometry(30, 0.25, 30), new THREE.MeshBasicMaterial())
@@ -52,6 +51,9 @@ test('roof trim drag keeps its plane hit over a surface joining and leaving a ba
       hoveredId: null,
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [segment.id] },
     })
+    useInteractionScope
+      .getState()
+      .begin({ kind: 'reshaping', reshape: 'trim', nodeId: segment.id, driver: 'tool' })
     await root.configure({
       gl: {
         domElement: canvas,

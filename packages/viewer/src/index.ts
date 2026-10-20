@@ -333,6 +333,7 @@ export {
   getLevelPresentationY,
   snapLevelsToTruePositions,
 } from './systems/level/level-utils'
+export { useRoofGeometryStatus } from './systems/roof/roof-geometry-status'
 export { getRoofMaterialArray, levelWallCladdingRef } from './systems/roof/roof-materials'
 // Generic roof-segment primitives. Kinds that compose CSG against
 // the roof shell (chimney's self-trim, dormer's virtual-segment cut)

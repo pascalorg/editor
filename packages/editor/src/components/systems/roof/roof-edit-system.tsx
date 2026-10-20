@@ -1006,15 +1006,6 @@ function getTrimCursor(side: RoofTrimSide): string {
   }
 }
 
-function shouldShowTrimPlanes(metadata: unknown): boolean {
-  return (
-    typeof metadata === 'object' &&
-    metadata !== null &&
-    !Array.isArray(metadata) &&
-    (metadata as Record<string, unknown>).showTrimPlanes === true
-  )
-}
-
 function commitSegmentTrim(segment: RoofSegmentNode, trim: RoofSegmentTrim) {
   const scene = useScene.getState()
   scene.applyNodeChanges({
@@ -1031,6 +1022,27 @@ function RoofTrimHandles() {
     return node?.type === 'roof-segment' ? (node as RoofSegmentNode) : null
   })
   const readOnly = useScene((s) => s.readOnly)
+  const showTrimPlanes = useInteractionScope(
+    (s) =>
+      s.scope.kind === 'reshaping' && s.scope.reshape === 'trim' && s.scope.nodeId === selectedId,
+  )
+  useEffect(() => {
+    const end = () =>
+      useInteractionScope
+        .getState()
+        .endIf(
+          (scope) =>
+            scope.kind === 'reshaping' && scope.reshape === 'trim' && scope.nodeId === selectedId,
+        )
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') end()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      end()
+    }
+  }, [selectedId])
   const liveOverrideKey = useLiveNodeOverrides((s) =>
     segment ? JSON.stringify(s.overrides.get(segment.id) ?? null) : null,
   )
@@ -1042,7 +1054,10 @@ function RoofTrimHandles() {
   const zoom = camera instanceof THREE.OrthographicCamera ? 1 / camera.zoom : 1
   const handleBaseScale = zoom * TRIM_HANDLE_BASE_SCALE
 
-  useEffect(() => () => dragCleanupRef.current?.(), [])
+  useEffect(() => {
+    if (!selectedId || !showTrimPlanes || readOnly) dragCleanupRef.current?.()
+    return () => dragCleanupRef.current?.()
+  }, [selectedId, showTrimPlanes, readOnly])
 
   const liveSegment = useMemo(() => {
     if (!segment) return null
@@ -1058,8 +1073,6 @@ function RoofTrimHandles() {
     groupRef.current.matrix.copy(source.matrixWorld)
     groupRef.current.matrixAutoUpdate = false
   })
-
-  const showTrimPlanes = shouldShowTrimPlanes(liveSegment?.metadata)
 
   if (readOnly || !segment || !liveSegment || !showTrimPlanes) return null
 
@@ -1314,9 +1327,7 @@ function RoofTrimHandles() {
 
     document.body.style.cursor = getTrimCursor(side)
     setDraggingSide(side)
-    useInteractionScope
-      .getState()
-      .begin({ kind: 'handle-drag', nodeId: segmentId, handle: getTrimLabel(side) })
+
     useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
 
@@ -1355,9 +1366,7 @@ function RoofTrimHandles() {
         document.body.style.cursor = ''
       }
       useScene.temporal.getState().resume()
-      useInteractionScope
-        .getState()
-        .endIf((scope) => scope.kind === 'handle-drag' && scope.nodeId === segmentId)
+
       useViewer.getState().setInputDragging(false)
       setDraggingSide(null)
       dragCleanupRef.current = null
@@ -1393,7 +1402,7 @@ function RoofTrimHandles() {
       onCancel()
     }
 
-    dragCleanupRef.current = cleanup
+    dragCleanupRef.current = onCancel
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)

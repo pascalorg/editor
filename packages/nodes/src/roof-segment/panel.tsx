@@ -11,6 +11,8 @@ import {
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
   isGlazedRoofSegment,
+  MAX_ROOF_PITCH,
+  MIN_ROOF_SEGMENT_DIMENSION,
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
@@ -30,13 +32,16 @@ import {
   ToggleControl,
   triggerSFX,
   useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Check, Copy, Move, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { BarrelRoofPanel } from '../roof/barrel-panel'
+import { RoofGeometryNotice } from '../roof/geometry-notice'
 import { RoofGlazingPanel } from '../roof/glazing-panel'
 import { commitSeatedRoofEdit } from '../roof/roof-level-target'
+import { RoofTypeThumbnail } from '../roof/type-thumbnail'
 
 const ROOF_TYPE_OPTIONS: { label: string; value: RoofType }[] = [
   { label: 'Hip', value: 'hip' },
@@ -88,10 +93,6 @@ function hasSegmentTrim(node: RoofSegmentNode): boolean {
   return Object.values(normalizeRoofSegmentTrim(node)).some((value) => value > 0)
 }
 
-function shouldShowTrimPlanes(metadata: unknown): boolean {
-  return metadataRecord(metadata).showTrimPlanes === true
-}
-
 function isManagedLeanToRoofSegment(metadata: unknown): boolean {
   const record = metadataRecord(metadata)
   return record.managedByLeanTo !== undefined && record.leanToRole === 'roof-segment'
@@ -107,7 +108,10 @@ function metadataRecord(metadata: unknown): Record<string, unknown> {
 export default function RoofSegmentPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
+  const showTrimPlanes = useInteractionScope(
+    (s) =>
+      s.scope.kind === 'reshaping' && s.scope.reshape === 'trim' && s.scope.nodeId === selectedId,
+  )
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setRoofHostDragArmedId = useEditor((s) => s.setRoofHostDragArmedId)
 
@@ -166,7 +170,6 @@ export default function RoofSegmentPanel() {
                 ...metadataRecord(node?.metadata),
                 autoGutter: false,
                 autoRidgeVent: false,
-                showTrimPlanes: false,
               },
             }
           : roofType === 'dutch'
@@ -185,25 +188,27 @@ export default function RoofSegmentPanel() {
   )
 
   const handleClose = useCallback(() => {
-    if (node && shouldShowTrimPlanes(node.metadata)) {
-      updateNode(node.id, {
-        metadata: { ...metadataRecord(node.metadata), showTrimPlanes: false },
-      })
-    }
+    useInteractionScope
+      .getState()
+      .endIf(
+        (scope) =>
+          scope.kind === 'reshaping' && scope.reshape === 'trim' && scope.nodeId === node?.id,
+      )
     setSelection({ selectedIds: [] })
-  }, [node, setSelection, updateNode])
+  }, [node, setSelection])
 
   const handleBack = useCallback(() => {
     if (node?.parentId) {
-      if (shouldShowTrimPlanes(node.metadata)) {
-        updateNode(node.id, {
-          metadata: { ...metadataRecord(node.metadata), showTrimPlanes: false },
-        })
-      }
+      useInteractionScope
+        .getState()
+        .endIf(
+          (scope) =>
+            scope.kind === 'reshaping' && scope.reshape === 'trim' && scope.nodeId === node?.id,
+        )
       setRoofHostDragArmedId(node.parentId as AnyNodeId)
       setSelection({ selectedIds: [node.parentId] })
     }
-  }, [node, setRoofHostDragArmedId, setSelection, updateNode])
+  }, [node, setRoofHostDragArmedId, setSelection])
 
   const handleDuplicate = useCallback(() => {
     if (node) duplicateNodeAndPickUp(node)
@@ -289,11 +294,16 @@ export default function RoofSegmentPanel() {
     (editing: boolean) => {
       if (!node) return
       triggerSFX('sfx:item-pick')
-      handleUpdate({
-        metadata: { ...metadataRecord(node.metadata), showTrimPlanes: editing },
-      })
+      const interaction = useInteractionScope.getState()
+      if (editing)
+        interaction.begin({ kind: 'reshaping', reshape: 'trim', nodeId: node.id, driver: 'tool' })
+      else
+        interaction.endIf(
+          (scope) =>
+            scope.kind === 'reshaping' && scope.reshape === 'trim' && scope.nodeId === node.id,
+        )
     },
-    [handleUpdate, node],
+    [node],
   )
 
   const handleResetTrim = useCallback(() => {
@@ -304,7 +314,6 @@ export default function RoofSegmentPanel() {
 
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
-  const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
   const managedLeanToRoofSegment = isManagedLeanToRoofSegment(node.metadata)
   const conicalCoverage = getConicalRoofCoverage(node)
   // both overhangs in plan, past the walls' outside faces; the node keeps the eaves' along the slope
@@ -320,23 +329,48 @@ export default function RoofSegmentPanel() {
       title={node.name || 'Roof Segment'}
       width={300}
     >
+      <RoofGeometryNotice ids={[node.id, ...(node.parentId ? [node.parentId as AnyNodeId] : [])]} />
       <RoofGlazingPanel segments={[node]} />
       <PanelSection title="Roof Type">
         <SegmentedControl
           onChange={(v) => handleRoofTypeChange(v)}
-          options={ROOF_TYPE_OPTIONS}
+          options={ROOF_TYPE_OPTIONS.map((option) => ({
+            ...option,
+            label: (
+              <span className="flex flex-col items-center gap-1">
+                <RoofTypeThumbnail type={option.value} />
+                <span>{option.label}</span>
+              </span>
+            ),
+          }))}
           value={node.roofType}
           disabled={managedLeanToRoofSegment}
         />
         <SegmentedControl
           onChange={(v) => handleRoofTypeChange(v)}
-          options={ROOF_TYPE_OPTIONS_2}
+          options={ROOF_TYPE_OPTIONS_2.map((option) => ({
+            ...option,
+            label: (
+              <span className="flex flex-col items-center gap-1">
+                <RoofTypeThumbnail type={option.value} />
+                <span>{option.label}</span>
+              </span>
+            ),
+          }))}
           value={node.roofType}
           disabled={managedLeanToRoofSegment}
         />
         <SegmentedControl
           onChange={(v) => handleRoofTypeChange(v)}
-          options={ROOF_TYPE_OPTIONS_3}
+          options={ROOF_TYPE_OPTIONS_3.map((option) => ({
+            ...option,
+            label: (
+              <span className="flex flex-col items-center gap-1">
+                <RoofTypeThumbnail type={option.value} />
+                <span>{option.label}</span>
+              </span>
+            ),
+          }))}
           value={node.roofType}
           disabled={managedLeanToRoofSegment}
         />
@@ -388,8 +422,7 @@ export default function RoofSegmentPanel() {
         {node.roofType === 'conical' ? (
           <SliderControl
             label="Diameter"
-            max={1000}
-            min={0.5}
+            min={MIN_ROOF_SEGMENT_DIMENSION}
             onChange={(v) => handleUpdate({ width: v, depth: v })}
             precision={2}
             step={0.5}
@@ -400,8 +433,7 @@ export default function RoofSegmentPanel() {
           <>
             <SliderControl
               label={node.roofType === 'barrel' ? 'Length' : 'Width'}
-              max={1000}
-              min={0.5}
+              min={MIN_ROOF_SEGMENT_DIMENSION}
               onChange={(v) => handleUpdate({ width: v })}
               precision={2}
               step={0.5}
@@ -410,8 +442,7 @@ export default function RoofSegmentPanel() {
             />
             <SliderControl
               label={node.roofType === 'barrel' ? 'Span' : 'Depth'}
-              max={1000}
-              min={0.5}
+              min={MIN_ROOF_SEGMENT_DIMENSION}
               onChange={(v) => handleUpdate({ depth: v })}
               precision={2}
               step={0.5}
@@ -466,7 +497,6 @@ export default function RoofSegmentPanel() {
       <PanelSection title="Wall Height">
         <SliderControl
           label="Wall"
-          max={1000}
           min={0}
           onChange={(v) => handleUpdate({ wallHeight: v })}
           precision={2}
@@ -482,7 +512,7 @@ export default function RoofSegmentPanel() {
         <PanelSection title="Pitch">
           <SliderControl
             label="Angle"
-            max={60}
+            max={MAX_ROOF_PITCH}
             min={0}
             onChange={(v) => handleUpdate({ pitch: v })}
             precision={0}
@@ -614,7 +644,6 @@ export default function RoofSegmentPanel() {
       <PanelSection title="Structure">
         <SliderControl
           label="Wall Thick."
-          max={1}
           min={0.05}
           onChange={(v) => handleUpdate({ wallThickness: v })}
           precision={2}
@@ -625,7 +654,6 @@ export default function RoofSegmentPanel() {
         {!isGlazedRoofSegment(node) && (
           <SliderControl
             label="Deck Thick."
-            max={0.3}
             min={0.04}
             onChange={(v) => handleUpdate({ deckThickness: v })}
             precision={2}
@@ -637,7 +665,6 @@ export default function RoofSegmentPanel() {
         {node.roofType === 'barrel' ? (
           <SliderControl
             label="End overhang"
-            max={1}
             min={0}
             onChange={(v) => handleUpdate({ overhang: v })}
             precision={2}
@@ -648,7 +675,6 @@ export default function RoofSegmentPanel() {
         ) : (
           <SliderControl
             label="Eave overhang"
-            max={1}
             min={0}
             onChange={(v) => handleUpdate({ overhang: v / cosTheta })}
             precision={2}
@@ -660,7 +686,6 @@ export default function RoofSegmentPanel() {
         {roofTypeHasRakes(node.roofType) && (
           <SliderControl
             label="Gable overhang"
-            max={3}
             min={0}
             onChange={(v) => handleUpdate({ gableOverhang: v })}
             precision={2}
@@ -672,7 +697,6 @@ export default function RoofSegmentPanel() {
         {!isGlazedRoofSegment(node) && (
           <SliderControl
             label="Shingle Thick."
-            max={0.3}
             min={0.02}
             onChange={(v) => handleUpdate({ shingleThickness: v })}
             precision={2}
@@ -689,7 +713,6 @@ export default function RoofSegmentPanel() {
         {node.fascia && (
           <SliderControl
             label="Fascia height"
-            max={0.6}
             min={0.1}
             onChange={(v) => handleUpdate({ fasciaHeight: v })}
             precision={2}

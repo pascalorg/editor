@@ -36,5 +36,6 @@ test('roof creation exposes every supported roof type', () => {
     'dutch',
     'mansard',
     'conical',
+    'barrel',
   ])
 })
