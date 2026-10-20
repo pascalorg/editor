@@ -546,8 +546,9 @@ describe('reconciliation', () => {
     )
     const applied = applyPatchWithDependencies(current, patch, scene.dependencies(), base)
     expect(!applied.ok && applied.changed).toContainEqual({
-      kind: 'scope',
-      id: 'level_walls',
+      kind: 'node',
+      id: 'site_r',
+      field: 'terrain',
       reason: 'dependency',
     })
   })

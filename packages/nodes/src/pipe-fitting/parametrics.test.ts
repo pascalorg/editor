@@ -66,8 +66,8 @@ describe('pipeFittingParametrics', () => {
     const inletUpdate = updates.find((u) => u.id === inletRun.id)
     const outletUpdate = updates.find((u) => u.id === outletRun.id)
 
-    expect((inletUpdate?.data as Partial<PipeSegmentNode>).path?.[1]).toEqual([...fitting.position])
-    expect((outletUpdate?.data as Partial<PipeSegmentNode>).path?.[0]).toEqual([
+    expect((inletUpdate!.data as Partial<PipeSegmentNode>).path?.[1]).toEqual([...fitting.position])
+    expect((outletUpdate!.data as Partial<PipeSegmentNode>).path?.[0]).toEqual([
       ...fitting.position,
     ])
   })
@@ -86,7 +86,7 @@ describe('pipeFittingParametrics', () => {
 
     const updates = pipeFittingParametrics.onDelete?.(fitting, nodes) ?? []
 
-    expect((updates[0]?.data as Partial<PipeSegmentNode>).path?.[1]).toEqual([...fitting.position])
+    expect((updates[0]!.data as Partial<PipeSegmentNode>).path?.[1]).toEqual([...fitting.position])
   })
 
   test('deleting a branch fitting leaves mated pipe ends untouched', () => {

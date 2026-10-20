@@ -6,8 +6,7 @@ import {
   emitter,
   floorPlatePaintRefusal,
   type GridEvent,
-  getEffectiveRoofSurfaceMaterial,
-  getEffectiveSegmentSurfaceMaterial,
+  getRoofSegmentDeckReach,
   getRoofSegmentSurfaceY,
   getSelectableKinds,
   type ItemNode,
@@ -28,14 +27,9 @@ import {
   useLiveNodeOverrides,
   useRegistryVersion,
   useScene,
+  wallFaceScriptPaintRefusal,
 } from '@pascal-app/core'
-import {
-  createMaterial,
-  getRoofMaterialArray,
-  registerMaterialCacheCleanup,
-  resolveMaterialRef,
-  useViewer,
-} from '@pascal-app/viewer'
+import { getRoofMaterialArray, registerMaterialCacheCleanup, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
@@ -63,7 +57,6 @@ import {
 import { selectionEnabled } from '../../lib/interaction/scope'
 import {
   type ActivePaintMaterial,
-  buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
@@ -355,7 +348,7 @@ const wallPaintWorldPoint = new Vector3()
 
 const roomHitPoint = new Vector3()
 const roomHitXZ: [number, number] = [0, 0]
-function roomForEvent(event: NodeEvent) {
+export function roomForEvent(event: NodeEvent) {
   if (event.node.type !== 'wall' && event.node.type !== 'slab' && event.node.type !== 'ceiling')
     return null
   // The floor edge band and the foundation belong to the footprint, not the
@@ -400,7 +393,7 @@ function resolveWallPaintHit(event: NodeEvent): WallPaintHit | undefined {
   }
 }
 
-function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | null {
+export function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | null {
   const roof = event.node
   if (roof.type !== 'roof') return null
 
@@ -420,9 +413,9 @@ function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | 
 
     object.updateWorldMatrix(true, false)
     const local = object.worldToLocal(roofSelectionWorldPoint.clone())
-    const overhang = segment.overhang ?? 0
-    const halfWidth = segment.width / 2 + overhang
-    const halfDepth = segment.depth / 2 + overhang
+    const reach = getRoofSegmentDeckReach(segment)
+    const halfWidth = segment.width / 2 + reach.x
+    const halfDepth = segment.depth / 2 + reach.z
 
     if (Math.abs(local.x) > halfWidth || Math.abs(local.z) > halfDepth) {
       continue
@@ -499,47 +492,6 @@ function applyRoofPaintPreview(
   if (!previewMaterial) return null
 
   return previewMeshMaterial(mesh, previewMaterial)
-}
-
-function applyRoofSegmentPaintPreview(
-  node: RoofSegmentNode,
-  parent: RoofNode | null,
-  role: 'top' | 'edge' | 'wall',
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  const mesh = getRegisteredMesh(node.id)
-  if (!mesh) return null
-
-  // Synthesise the segment node as if the paint had committed, then build
-  // the same 4-slot array the renderer would. Mirrors getRoofMaterialArray
-  // layout (slot 0 ← edge, 1 ← wall, 2 ← wall, 3 ← top) so the preview
-  // material lands on the matching CSG groups.
-  const previewNode: RoofSegmentNode = {
-    ...node,
-    ...buildRoofSegmentSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
-  }
-  const sceneMaterials = useScene.getState().materials
-  const resolveSlot = (r: 'top' | 'edge' | 'wall'): Material | null => {
-    const parentSpec = parent ? getEffectiveRoofSurfaceMaterial(parent, r) : undefined
-    const spec = getEffectiveSegmentSurfaceMaterial(previewNode, r, parentSpec)
-    const resolved = resolveMaterialRef(spec.materialPreset, sceneMaterials)
-    if (resolved) return resolved
-    if (spec.material !== undefined) return createMaterial(spec.material)
-    return null
-  }
-  const edge = resolveSlot('edge')
-  const wall = resolveSlot('wall')
-  const top = resolveSlot('top')
-  if (!(edge || wall || top)) return null
-  const fallback = parent
-    ? getRoofMaterialArray(parent, undefined, undefined, undefined, undefined, null, sceneMaterials)
-    : null
-  const fb = (n: number) => fallback?.[n] ?? null
-  // Per-role only, then the parent's themed slot — matches the renderer so the
-  // preview never bleeds a painted surface onto the segment's other surfaces.
-  const arr: Material[] = [edge ?? fb(0)!, wall ?? fb(1)!, wall ?? fb(2)!, top ?? fb(3)!]
-  if (arr.some((m) => !m)) return null
-  return previewMeshMaterial(mesh, arr)
 }
 
 // Chimney + dormer paint dispatch lives on their NodeDefinition's
@@ -1031,8 +983,11 @@ export const SelectionManager = () => {
             compatible && role
               ? () => {
                   // A surface with nothing of its own to paint (a footprint's
-                  // top where no room stands) says so instead of painting.
-                  const refusal = floorPlatePaintRefusal(useScene.getState().nodes, node, role)
+                  // top where no room stands), or one a script builds, says
+                  // so instead of painting.
+                  const refusal =
+                    floorPlatePaintRefusal(useScene.getState().nodes, node, role) ??
+                    wallFaceScriptPaintRefusal(node, role)
                   usePaintRegionMode.getState().setNotice(refusal?.message ?? null)
                   if (refusal) return
                   // Spread targets are all the same slot-model kind, so one
@@ -1108,30 +1063,15 @@ export const SelectionManager = () => {
         }
       }
 
-      if (node.type === 'roof' || node.type === 'roof-segment') {
-        const isSegmentHit = node.type === 'roof-segment'
-        const roofNode =
-          node.type === 'roof'
-            ? node
-            : node.parentId
-              ? useScene.getState().nodes[node.parentId as AnyNodeId]
-              : null
-        if (roofNode?.type !== 'roof') return null
-
-        const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
-        if (isPaintPicking())
-          return pickInteraction(isSegmentHit ? node : roofNode, role, event, null)
+      // A segment paints through its definition's `capabilities.paint`; the merged shell's hit is
+      // the roof's, and fans to it.
+      if (node.type === 'roof') {
+        const role = resolveRoofMaterialTarget(event as RoofEvent)
+        if (isPaintPicking()) return pickInteraction(node, role, event, null)
         const compatible = role !== null && paintEnabled
-        // Painting directly on a segment (only possible in segment edit
-        // mode, where the per-segment mesh is visible) writes to the
-        // segment's own role-specific fields. Painting the merged shell
-        // — or a roof node directly — keeps fanning to the parent roof.
-        const segmentTarget = isSegmentHit ? (node as RoofSegmentNode) : null
         return {
-          key: `${segmentTarget ? 'roof-segment' : 'roof'}:${
-            segmentTarget ? segmentTarget.id : roofNode.id
-          }:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
-          hoveredId: (segmentTarget ? segmentTarget.id : roofNode.id) as AnyNodeId,
+          key: `roof:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
+          hoveredId: node.id as AnyNodeId,
           hoverMode: compatible ? (eraser ? 'erase-ready' : 'paint-ready') : 'paint-disabled',
           // Roof isn't on the slot model (role-specific fields, custom commit),
           // so it offers only the single surface — but still labels it.
@@ -1139,53 +1079,34 @@ export const SelectionManager = () => {
             compatible && role
               ? {
                   scopes: ['single'],
-                  slotLabel: slotDisplayLabel(roofNode, role),
+                  slotLabel: slotDisplayLabel(node, role),
                   nodeNoun: 'roof',
                 }
               : null,
           apply:
             compatible && role
               ? () => {
-                  const sceneState = useScene.getState()
-                  if (segmentTarget) {
-                    sceneState.updateNode(
-                      segmentTarget.id as AnyNodeId,
-                      buildRoofSegmentSurfaceMaterialPatch(
-                        segmentTarget,
-                        role,
-                        paintSpec.material,
-                        paintSpec.materialPreset,
-                      ),
-                    )
-                  } else {
-                    sceneState.updateNode(
-                      roofNode.id as AnyNodeId,
+                  useScene
+                    .getState()
+                    .updateNode(
+                      node.id as AnyNodeId,
                       buildRoofSurfaceMaterialPatch(
-                        roofNode as RoofNode,
+                        node,
                         role,
                         paintSpec.material,
                         paintSpec.materialPreset,
                       ),
                     )
-                  }
                 }
               : null,
           preview:
             compatible && role
-              ? () =>
-                  segmentTarget
-                    ? applyRoofSegmentPaintPreview(
-                        segmentTarget,
-                        roofNode as RoofNode,
-                        role,
-                        paintSpec,
-                      )
-                    : applyRoofPaintPreview(roofNode as RoofNode, role, paintSpec)
+              ? () => applyRoofPaintPreview(node, role, paintSpec)
               : () => previewCursor('not-allowed'),
         }
       }
 
-      // Only `roof` / `roof-segment` reach a legacy paint arm (above) — every
+      // Only `roof` reaches a legacy paint arm (above) — every
       // other paintable kind declares `capabilities.paint` and returns from the
       // registry-driven dispatch at the top of this function.
 
@@ -1244,23 +1165,20 @@ export const SelectionManager = () => {
 
     const onLeave = (event: NodeEvent) => {
       if (isCeilingGridHit(event)) return
-      const interaction = getPaintInteraction(event)
-      // A surface behind the hovered one (under an opening that never stops
-      // the pointer) leaving says nothing about the hover.
-      if (!interaction || interaction.hoveredId !== hoveredNodeId) return
+      // Only the hovered node leaving ends the hover; a surface behind it (under
+      // an opening that never stops the pointer) leaving says nothing about it.
+      // This goes by the node, not by resolving the hit again: a leave event's
+      // ray no longer meets the node, so that resolved to nothing and every
+      // leave was ignored — the last surface stayed previewed, with its HUD.
+      if (event.node.id !== hoveredNodeId) return
 
       // Leaving any surface → the HUD shows the "hover a surface" hint again.
       hoveredNodeId = null
       lastEnterEvent = null
       useEditor.getState().setPaintHover(null)
       usePaintOutline.setState({ surfaces: null })
-
-      if (activePreview?.key !== interaction.key) {
-        return
-      }
-
       clearActivePreview()
-      if (useViewer.getState().hoveredId === interaction.hoveredId) {
+      if (useViewer.getState().hoveredId === event.node.id) {
         useViewer.setState({ hoveredId: null })
       }
       setHoverHighlightMode('default')
@@ -1879,6 +1797,9 @@ export const SelectionManager = () => {
           !getMovingNode() &&
           canDirectMoveNode(nodeToSelect)
         ) {
+          // The move tool mounts before the browser's click that ends this
+          // gesture, which would otherwise commit the node where it stands.
+          swallowNextClick()
           sfxEmitter.emit('sfx:item-pick')
           const moveTarget = resolveDirectManipulationNode(nodeToSelect, useScene.getState().nodes)
           useEditor.getState().setMovingNode(moveTarget as never)

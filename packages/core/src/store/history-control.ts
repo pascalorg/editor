@@ -22,6 +22,8 @@ type HistoryControlState = {
   commitNodeIdScopes: Set<AnyNodeId>[]
   gesturePauseHolders: Map<string, Set<GesturePauseHolder>>
   livePauseHolders: Set<GesturePauseHolder>
+  writeGuards: Set<() => void>
+  derivedWrites: Map<AnyNodeId, Set<string> | 'all'>
 }
 
 const HISTORY_CONTROL = Symbol('scene-history-control')
@@ -38,6 +40,8 @@ function controlOf(environment: SceneEnvironment): HistoryControlState {
     commitNodeIdScopes: [],
     gesturePauseHolders: new Map(),
     livePauseHolders: new Set(),
+    writeGuards: new Set(),
+    derivedWrites: new Map(),
   }))
 }
 
@@ -90,11 +94,26 @@ export type SceneSnapshot = {
 
 export type SceneCommitOrigin = 'local' | 'load' | 'host'
 
+/**
+ * Who made a local commit when it was not the person at the keyboard: `agent`
+ * is an AI agent's tool write. Presentation reads it (the construction reveal
+ * stages agent writes); the document and its history are the same either way.
+ */
+export type SceneCommitAuthor = 'agent'
+
 export type SceneCommit = {
   origin: SceneCommitOrigin
+  /** Absent for the person's own edits. See `runAsSceneCommitAuthor`. */
+  author?: SceneCommitAuthor
   before: SceneSnapshot
   current: SceneSnapshot
   changedNodeIds?: ReadonlySet<AnyNodeId>
+  /**
+   * What the structure reconciler wrote while this commit was made (plates, ceilings, side
+   * classification): derived from an edit, not authored by it. Each node it wrote, with the fields it
+   * wrote (`'all'` for one it created or deleted). Presentation does not play these as the edit's own.
+   */
+  derivedWrites?: ReadonlyMap<AnyNodeId, ReadonlySet<string> | 'all'>
 }
 
 export type SceneCommitListener = (commit: SceneCommit) => void
@@ -204,7 +223,83 @@ export function subscribeSceneCommits(listener: SceneCommitListener): () => void
   }
 }
 
-function emitSceneCommit(control: HistoryControlState, commit: SceneCommit): void {
+/**
+ * Registers something that must let go of the current environment's scene before anything writes
+ * it: a preview that shows another state (`scene-preview.ts`) would otherwise swallow the write or
+ * have it land on the wrong state. Returns the unregister.
+ */
+export function registerSceneWriteGuard(guard: () => void): () => void {
+  const guards = current().writeGuards
+  guards.add(guard)
+  return () => {
+    guards.delete(guard)
+  }
+}
+
+/** Runs the guards of `sceneStore`'s environment, or of the current one. */
+export function runSceneWriteGuards(sceneStore?: object): void {
+  for (const guard of [...(sceneStore ? of(sceneStore) : current()).writeGuards]) guard()
+}
+
+const sceneCommitAuthorScopes: SceneCommitAuthor[] = []
+const sceneCommitAuthorLeases = new Map<symbol, SceneCommitAuthor>()
+
+export function activeSceneCommitAuthor(): SceneCommitAuthor | undefined {
+  const scoped = sceneCommitAuthorScopes.at(-1)
+  if (scoped) return scoped
+  for (const author of sceneCommitAuthorLeases.values()) return author
+  return undefined
+}
+
+/** Commits made while `run` runs carry `author`. */
+export function runAsSceneCommitAuthor<TResult>(
+  author: SceneCommitAuthor,
+  run: () => TResult,
+): TResult {
+  runSceneWriteGuards()
+  sceneCommitAuthorScopes.push(author)
+  try {
+    return run()
+  } finally {
+    sceneCommitAuthorScopes.pop()
+  }
+}
+
+/**
+ * The async form of `runAsSceneCommitAuthor`, for work that awaits between its
+ * writes: commits carry `author` until the returned release runs. Every commit
+ * in that window carries it, whoever made it, so hold it only around the
+ * author's own work. Release is idempotent.
+ */
+export function acquireSceneCommitAuthor(author: SceneCommitAuthor): () => void {
+  runSceneWriteGuards()
+  const lease = Symbol('scene-commit-author')
+  sceneCommitAuthorLeases.set(lease, author)
+  return () => {
+    sceneCommitAuthorLeases.delete(lease)
+  }
+}
+
+/**
+ * Records what the derived-writer capability writes, for the current environment's commit that
+ * follows: each node, and the fields written (none given: the node as a whole).
+ */
+export function noteDerivedNodeWrites(
+  writes: Iterable<{ id: AnyNodeId; fields?: Iterable<string> }>,
+): void {
+  const derivedWrites = current().derivedWrites
+  for (const { id, fields } of writes) {
+    const noted = derivedWrites.get(id)
+    if (noted === 'all') continue
+    if (!fields) derivedWrites.set(id, 'all')
+    else derivedWrites.set(id, new Set([...(noted ?? []), ...fields]))
+  }
+}
+
+function emitSceneCommit(control: HistoryControlState, authored: SceneCommit): void {
+  const derived = control.derivedWrites
+  control.derivedWrites = new Map()
+  const commit = derived.size > 0 ? { ...authored, derivedWrites: derived } : authored
   for (const listener of [...control.commitListeners]) {
     try {
       listener(commit)
@@ -215,23 +310,32 @@ function emitSceneCommit(control: HistoryControlState, commit: SceneCommit): voi
 }
 
 export function notifySceneCommit(commit: SceneCommit): void {
-  if (areSceneSnapshotsEqual(commit.before, commit.current)) return
   const control = current()
-  const contextualCommit = {
+  if (areSceneSnapshotsEqual(commit.before, commit.current)) {
+    if (control.commitTransactionDepth === 0) control.derivedWrites = new Map()
+    return
+  }
+  const author = commit.author ?? activeSceneCommitAuthor()
+  const contextualCommit: SceneCommit = {
     ...commit,
+    ...(author ? { author } : {}),
     changedNodeIds: mergedNodeIds(commit.changedNodeIds, activeSceneCommitNodeIds()),
   }
 
   if (control.commitTransactionDepth > 0) {
     const pending = control.pendingCommit
-    control.pendingCommit = pending
-      ? {
-          origin: pending.origin,
-          before: pending.before,
-          current: contextualCommit.current,
-          changedNodeIds: mergedNodeIds(pending.changedNodeIds, contextualCommit.changedNodeIds),
-        }
-      : contextualCommit
+    if (pending) {
+      const pendingAuthor = pending.author ?? contextualCommit.author
+      control.pendingCommit = {
+        origin: pending.origin,
+        ...(pendingAuthor ? { author: pendingAuthor } : {}),
+        before: pending.before,
+        current: contextualCommit.current,
+        changedNodeIds: mergedNodeIds(pending.changedNodeIds, contextualCommit.changedNodeIds),
+      }
+    } else {
+      control.pendingCommit = contextualCommit
+    }
     return
   }
 
@@ -240,8 +344,8 @@ export function notifySceneCommit(commit: SceneCommit): void {
 
 /**
  * Makes `commit` the one `store`'s open transaction (`runAsSingleSceneHistoryStep`) emits: the
- * pending commit, if any, keeps its origin and `before` and takes `commit`'s `current`, with both
- * sets of changed ids. Outside a transaction, `commit` is emitted.
+ * pending commit, if any, keeps its origin, author and `before` and takes `commit`'s `current`,
+ * with both sets of changed ids. Outside a transaction, `commit` is emitted.
  */
 export function settlePendingSceneCommit(store: object, commit: SceneCommit): void {
   const control = of(store)
@@ -250,8 +354,10 @@ export function settlePendingSceneCommit(store: object, commit: SceneCommit): vo
     return
   }
   const pending = control.pendingCommit
+  const author = pending?.author ?? commit.author ?? activeSceneCommitAuthor()
   control.pendingCommit = {
     origin: pending?.origin ?? commit.origin,
+    ...(author ? { author } : {}),
     before: pending?.before ?? commit.before,
     current: commit.current,
     changedNodeIds: mergedNodeIds(pending?.changedNodeIds, commit.changedNodeIds),
@@ -270,9 +376,9 @@ function endSceneCommitTransaction(control: HistoryControlState): void {
 
   const commit = control.pendingCommit
   control.pendingCommit = null
-  if (commit && !areSceneSnapshotsEqual(commit.before, commit.current)) {
-    emitSceneCommit(control, commit)
-  }
+  if (!commit) return
+  if (areSceneSnapshotsEqual(commit.before, commit.current)) control.derivedWrites = new Map()
+  else emitSceneCommit(control, commit)
 }
 
 const pauseDepthOf = (control: HistoryControlState) => control.pauseDepth + control.pauseLeases.size

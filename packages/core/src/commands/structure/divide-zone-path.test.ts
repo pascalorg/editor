@@ -82,38 +82,41 @@ test('L-shaped open path shares exact endpoints and splits wall T-vertices into 
   for (const face of faces) expect(face.spans.filter((s) => s.kind === 'separator')).toHaveLength(2)
 })
 
-test.each([
-  false,
-  true,
-])('four-point island preserves outer identity, inherits finishes and keeps one unholed base and two platforms (reverse=%s)', (reverse) => {
-  const { zoneId, plan, separators, faces, result, mintId } = run(
-    reverse ? [...island].reverse() : island,
-    true,
-  )
-  expect(plan.separatorIds).toHaveLength(4)
-  expect(separators.at(-1)!.end).toEqual(separators[0]!.start)
-  expect(faces).toHaveLength(2)
-  const outer = result.nodes[zoneId] as ZoneNode
-  const zones = Object.values(result.nodes).filter((n) => n.type === 'zone')
-  expect(zones).toHaveLength(2)
-  expect(outer.holes).toHaveLength(1)
-  expect(containsPoint([{ outer: outer.polygon, holes: outer.holes }], outer.seed!)).toBe(true)
-  for (const zone of zones)
-    expect(zone).toMatchObject({ floor: { finish: 'oak', elevation: 0.2 }, wallMaterial: 'paint' })
-  const inner = zones.find((n) => n.id !== zoneId)!
-  expect(inner.holes).toEqual([])
-  expect(inner.boundaryWallIds).toEqual([])
-  expect(inner.boundarySeparatorIds.sort()).toEqual([...plan.separatorIds].sort())
-  const plates = Object.values(result.nodes).filter((n) => n.type === 'slab')
-  expect(plates).toHaveLength(3)
-  const base = plates.find((plate) => plate.plateRole === 'base')!
-  expect(base.holes).toEqual([])
-  expect(base.zoneIds?.sort()).toEqual(zones.map((z) => z.id).sort())
-  const ceilings = Object.values(result.nodes).filter((n) => n.type === 'ceiling')
-  expect(ceilings).toHaveLength(2)
-  expect(ceilings.find((c) => c.zoneId === zoneId)!.holes).toHaveLength(1)
-  expect(reconcileSceneStructure({ nodes: result.nodes, mintId }).patches).toEqual([])
-})
+test.each([false, true])(
+  'four-point island preserves outer identity, inherits finishes and keeps one unholed base and two platforms (reverse=%s)',
+  (reverse) => {
+    const { zoneId, plan, separators, faces, result, mintId } = run(
+      reverse ? [...island].reverse() : island,
+      true,
+    )
+    expect(plan.separatorIds).toHaveLength(4)
+    expect(separators.at(-1)!.end).toEqual(separators[0]!.start)
+    expect(faces).toHaveLength(2)
+    const outer = result.nodes[zoneId] as ZoneNode
+    const zones = Object.values(result.nodes).filter((n) => n.type === 'zone')
+    expect(zones).toHaveLength(2)
+    expect(outer.holes).toHaveLength(1)
+    expect(containsPoint([{ outer: outer.polygon, holes: outer.holes }], outer.seed!)).toBe(true)
+    for (const zone of zones)
+      expect(zone).toMatchObject({
+        floor: { finish: 'oak', elevation: 0.2 },
+        wallMaterial: 'paint',
+      })
+    const inner = zones.find((n) => n.id !== zoneId)!
+    expect(inner.holes).toEqual([])
+    expect(inner.boundaryWallIds).toEqual([])
+    expect(inner.boundarySeparatorIds.sort()).toEqual([...plan.separatorIds].sort())
+    const plates = Object.values(result.nodes).filter((n) => n.type === 'slab')
+    expect(plates).toHaveLength(3)
+    const base = plates.find((plate) => plate.plateRole === 'base')!
+    expect(base.holes).toEqual([])
+    expect(base.zoneIds?.sort()).toEqual(zones.map((z) => z.id).sort())
+    const ceilings = Object.values(result.nodes).filter((n) => n.type === 'ceiling')
+    expect(ceilings).toHaveLength(2)
+    expect(ceilings.find((c) => c.zoneId === zoneId)!.holes).toHaveLength(1)
+    expect(reconcileSceneStructure({ nodes: result.nodes, mintId }).patches).toEqual([])
+  },
+)
 
 test('minimum 0.25 m² island is a graph face', () => {
   expect(
@@ -389,50 +392,52 @@ test('open and closed paths cannot cross or enclose an existing hole', () => {
   }
 })
 
-test.each([
-  false,
-  true,
-])('multi-separator Divide is one commit and one undo step (closed=%s)', (closed) => {
-  globalThis.requestAnimationFrame ??= (callback) => {
-    callback(0)
-    return 0
-  }
-  globalThis.cancelAnimationFrame ??= () => {}
-  const previous = useScene.getState()
-  const fixture = setup()
-  useScene.setState({
-    nodes: fixture.nodes,
-    rootNodeIds: [levelId],
-    readOnly: false,
-    materials: {},
-    collections: {},
-  })
-  clearSceneHistory()
-  const stop = initSpaceDetectionSync(useScene, {
-    getState: () => ({ spaces: {}, setSpaces: () => {} }),
-  })
-  const origins: string[] = []
-  const unsubscribe = subscribeSceneCommits((commit) => origins.push(commit.origin))
-  try {
-    const plan = divideZone(fixture.nodes, { ...fixture, path: closed ? island : elbow, closed })
-    expect(plan.conflicts).toBeUndefined()
-    useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
-    const after = useScene.getState().nodes
-    expect(Object.values(after).filter((n) => n.type === 'separator')).toHaveLength(closed ? 4 : 2)
-    expect(Object.values(after).filter((n) => n.type === 'zone')).toHaveLength(2)
-    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-    expect(origins).toEqual(['local'])
-    useScene.temporal.getState().undo()
-    expect(useScene.getState().nodes).toEqual(fixture.nodes)
-    useScene.temporal.getState().redo()
-    expect(useScene.getState().nodes).toEqual(after)
-  } finally {
-    unsubscribe()
-    stop()
-    useScene.setState(previous)
+test.each([false, true])(
+  'multi-separator Divide is one commit and one undo step (closed=%s)',
+  (closed) => {
+    globalThis.requestAnimationFrame ??= (callback) => {
+      callback(0)
+      return 0
+    }
+    globalThis.cancelAnimationFrame ??= () => {}
+    const previous = useScene.getState()
+    const fixture = setup()
+    useScene.setState({
+      nodes: fixture.nodes,
+      rootNodeIds: [levelId],
+      readOnly: false,
+      materials: {},
+      collections: {},
+    })
     clearSceneHistory()
-  }
-})
+    const stop = initSpaceDetectionSync(useScene, {
+      getState: () => ({ spaces: {}, setSpaces: () => {} }),
+    })
+    const origins: string[] = []
+    const unsubscribe = subscribeSceneCommits((commit) => origins.push(commit.origin))
+    try {
+      const plan = divideZone(fixture.nodes, { ...fixture, path: closed ? island : elbow, closed })
+      expect(plan.conflicts).toBeUndefined()
+      useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
+      const after = useScene.getState().nodes
+      expect(Object.values(after).filter((n) => n.type === 'separator')).toHaveLength(
+        closed ? 4 : 2,
+      )
+      expect(Object.values(after).filter((n) => n.type === 'zone')).toHaveLength(2)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      expect(origins).toEqual(['local'])
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes).toEqual(fixture.nodes)
+      useScene.temporal.getState().redo()
+      expect(useScene.getState().nodes).toEqual(after)
+    } finally {
+      unsubscribe()
+      stop()
+      useScene.setState(previous)
+      clearSceneHistory()
+    }
+  },
+)
 
 // divide_zone over the hosted MCP crashed with "Cannot
 // read properties of undefined (reading 'getState')". A host that brings its own runtime keeps its

@@ -62,6 +62,10 @@ The viewer store contains **only presentation state**:
 
 If a piece of state is only meaningful inside the editor (e.g. active tool, phase, edit mode) — it belongs in `useEditor`, not `useViewer`.
 
+The site's optional `presentation` field owns saved rendering defaults. The existing viewer store resolves explicit per-project browser choices above those defaults, then the normal theme. `sceneAppearance` is the resolved lighting/background/exposure/postprocessing used by the canvas and snapshots; `showSceneTheme` temporarily previews a preset without saving a choice. Anonymous embeds retain usable local controls without persisting an anonymous project entry. Site's Save current look writes through the normal scene owner; Use project look clears the local look. This does not change geometry, level ownership or plugin atmosphere precedence.
+
+Graph-backed viewers read the root site's presentation. A baked-asset host supplies the same saved value with `<Viewer presentation={site.presentation ?? null}>`; it does not need to mount the native graph. `presentation={null}` explicitly ignores authored appearance, as canonical bake/thumbnail hosts require. Supported fields are declared in `core/src/schema/site-presentation.ts`; display-family filtering and solar simulation are not implemented by this rendering slice.
+
 ## Nested Viewer for Editor-Specific Features
 
 When an editor feature needs to live "inside" the canvas but must not pollute the viewer package, inject it as a child:

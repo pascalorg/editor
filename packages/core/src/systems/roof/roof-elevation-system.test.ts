@@ -94,8 +94,8 @@ describe('RoofElevationSystem', () => {
     expect(currentRoof(manual.id).position).toEqual([6, 7, 8])
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     expect(commits).toHaveLength(2)
-    expect((commits[1]?.before.nodes[roof.id] as RoofNode).position[1]).toBe(0)
-    expect((commits[1]?.current.nodes[roof.id] as RoofNode).position[1]).toBeCloseTo(1.2)
+    expect((commits[1]!.before.nodes[roof.id] as RoofNode).position[1]).toBe(0)
+    expect((commits[1]!.current.nodes[roof.id] as RoofNode).position[1]).toBeCloseTo(1.2)
     expect(commits[1]?.changedNodeIds).toEqual(new Set([roof.id]))
     useScene.temporal.getState().undo()
     await Promise.resolve()
@@ -123,7 +123,7 @@ describe('RoofElevationSystem', () => {
   })
 
   test('waits for the slab grid listener and tracks subsequent slab elevation edits', async () => {
-    const { level, roof } = setup()
+    const { level, wall, roof } = setup()
     const slab = SlabNode.parse({
       elevation: 0.5,
       polygon: [
@@ -135,10 +135,13 @@ describe('RoofElevationSystem', () => {
     })
     useScene.getState().createNode(slab, level.id)
     await Promise.resolve()
-    expect(currentRoof(roof.id).position[1]).toBe(0.5)
+    expect(currentRoof(roof.id).position[1]).toBe(0)
+    useScene.getState().updateNode(wall.id, { height: 3.2 })
+    await Promise.resolve()
+    expect(currentRoof(roof.id).position[1]).toBeCloseTo(0.7)
     useScene.getState().updateNode(slab.id, { elevation: 0.9 })
     await Promise.resolve()
-    expect(currentRoof(roof.id).position[1]).toBeCloseTo(0.9)
+    expect(currentRoof(roof.id).position[1]).toBeCloseTo(1.1)
   })
 
   test('keeps a custom Y edit after follow mode is disabled', async () => {
@@ -149,6 +152,22 @@ describe('RoofElevationSystem', () => {
     await Promise.resolve()
     expect(currentRoof(roof.id).position[1]).toBe(9)
     expect(currentRoof(roof.id).support).toEqual({ kind: 'level' })
+  })
+
+  test('a roof above its storey at a height of its own keeps its height over that storey as the storey grows', async () => {
+    const { level, roof, manual } = setup()
+    await Promise.resolve()
+    useScene.getState().updateNode(roof.id, { support: { kind: 'level' }, position: [2, 0, 1] })
+    await Promise.resolve()
+    // the walls stay 3 m tall: the roof stays on them, 0.5 m under the risen roof level's floor
+    useScene.getState().updateNode(level.id, { height: 3.5 })
+    await Promise.resolve()
+    expect(currentRoof(roof.id).position).toEqual([2, -0.5, 1])
+    expect(currentRoof(manual.id).position).toEqual([6, 7, 8])
+    useScene.temporal.getState().undo()
+    await Promise.resolve()
+    expect((useScene.getState().nodes[level.id] as LevelNode).height).toBe(3)
+    expect(currentRoof(roof.id).position).toEqual([2, 0, 1])
   })
 
   test('undo and redo restore custom/follow mode and Y together', async () => {

@@ -583,6 +583,8 @@ export type FloorplanGeometry =
        * affordances (rotation, scale) without expanding the union.
        */
       variant?: 'endpoint' | 'curve'
+      /** Keep the drag target the same size in pixels when zooming out. */
+      screenSized?: boolean
       affordance: string
       payload: unknown
     }
@@ -982,6 +984,9 @@ export type FloorplanMoveTarget<N> = (args: {
  *
  * Extensions surface only when the contributing plugin is installed in
  * the project (same `installedPlugins` gate as panels and node kinds).
+ * An extension with `primaryWhen` replaces the regular controls for
+ * matching nodes on desktop and mobile. Its component supplies its own
+ * `PanelSection` groups.
  */
 export type InspectorExtension = {
   /** Globally unique id, e.g. `pascal:bones:wall-engineering`. */
@@ -996,6 +1001,8 @@ export type InspectorExtension = {
   title: string
   /** Lazy section body; receives `{ node }` (the selected node). */
   component: LazyComponent
+  /** When true for the selected node, this extension owns the inspector body. */
+  primaryWhen?: (node: AnyNode) => boolean
 }
 
 export type Plugin = {
@@ -1097,6 +1104,11 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * Has no effect when `distributionRole` is not `'fitting'`.
    */
   portConnectivityFollow?: boolean
+  connectedMove?: (
+    node: z.infer<S>,
+    preview: z.infer<S>,
+    nodes: Readonly<Record<string, AnyNode>>,
+  ) => { id: AnyNodeId; data: Partial<AnyNode> }[]
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
 
@@ -1720,6 +1732,38 @@ export type Capabilities = {
    */
   batchable?: BatchableConfig
   /**
+   * How the node appears when an agent builds it: its construction phase and
+   * motion. A kind without it appears at once, with its parent. See
+   * `RevealConfig`.
+   */
+  reveal?: RevealConfig
+  /**
+   * The fields that make the node's picture: an edit that changes one (a wall bent to a curve, a slab
+   * resized) plays the node's reveal again, quickly, instead of jumping. A change to any other field
+   * (a name, a colour) stays instant, and so does a change the structure reconciler derives. See
+   * `RevealConfig`.
+   */
+  revealOnEdit?: readonly string[]
+  /**
+   * What the node is in a floor's plan, for the order a build is revealed in (room by room, wall by
+   * wall). Set by a kind that outlines a room (a zone) or bounds rooms along a line (a wall); a kind
+   * that sets neither is placed by its own `position`, `polygon` or `start`/`end`. See `RevealLayout`.
+   */
+  revealLayout?: RevealLayout
+  /**
+   * Whether a change to the node is seen from outside the building, for hosts that follow a change
+   * with a camera (Follow Pascal). `true` for a kind that always stands outdoors (a roof and what is
+   * mounted on it, a fence, the site); `false` for one that never does, and that holds what is looked
+   * at through a cutaway (a storey, a room). A function decides from the node's fields and its
+   * surroundings (a wall with an exterior face, an opening in it) and returns `undefined` when the
+   * node says nothing. A node whose kind says nothing, or whose function does, is outdoors when what
+   * holds it is (a `true` kind, looking up to the first `false` one), or when it stands in no
+   * storey. Presentation only.
+   */
+  exterior?:
+    | boolean
+    | ((node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => boolean | undefined)
+  /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
    * directly (wall, slab). Lets a kind self-describe where it sits in plan
@@ -2190,6 +2234,8 @@ export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
+  /** Keep an existing floor-placed node on its current level and visual elevation while dragging. */
+  preserveLevelAndElevation?: boolean
   /** Allow an ordinary primary-button body drag to enter the move tool. */
   directDrag?: boolean
   /**
@@ -2259,6 +2305,8 @@ export type MovableConfig = {
 }
 
 export type MovableParentFrame = {
+  /** Keep selection and manipulation on the child instead of promoting its parent. */
+  independent?: boolean
   /** The parent node owning the local frame; `null` → move in plan frame. */
   resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => AnyNode | null
   /** Parent's Y rotation, composed onto the child's preview rotation. */
@@ -2398,7 +2446,13 @@ export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 export type SurfacesConfig = {
   hosting?: SurfaceProvider | false
   top?: {
-    height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
+    /** Height above the node origin; point, when supplied, is in the parent XZ frame. */
+    height:
+      | number
+      | ((
+          n: AnyNode,
+          context: { nodes: Readonly<Record<string, AnyNode>>; point?: readonly [number, number] },
+        ) => number)
     /** Resolve support from node data; null means this point is outside the support footprint. */
     supportHeight?: (
       node: AnyNode,
@@ -2406,6 +2460,8 @@ export type SurfacesConfig = {
       z: number,
       context: { nodes: Readonly<Record<AnyNodeId, AnyNode>> },
     ) => number | null
+    /** Closed walking-surface perimeter in the host's parent XZ frame; optional inward offset in metres. */
+    boundary?: (n: AnyNode, inset?: number) => ReadonlyArray<readonly [number, number]>
   }
   sides?: { faces: 'all' | ReadonlyArray<readonly [number, number, number]> }
   custom?: SurfaceQuery
@@ -2539,6 +2595,73 @@ export type BatchableConfig = {
   batchKey?: (node: AnyNode, meshIndex: number) => string
   /** Joins wait until wall rebuilds and wall drags on the node's level have settled. */
   waitsForWalls?: boolean
+}
+
+/**
+ * Construction phases, in the order a reveal plays them: slabs, then walls and
+ * columns, stairs, doors and windows, roofs and ceilings, furniture.
+ */
+export type RevealPhase =
+  | 'foundation'
+  | 'structure'
+  | 'circulation'
+  | 'openings'
+  | 'roof'
+  | 'furnishing'
+
+/**
+ * How a node moves into place when it is revealed:
+ *
+ * - `rise` grows it up from its base (walls, fences);
+ * - `scale` grows it from its footprint's centre;
+ * - `settle` lowers it the last few centimetres onto its support (slabs);
+ * - `drop` lets it fall from `height` like a dropped load and land with a small bounce;
+ * - `cut` pops it open from its centre (doors, windows);
+ * - `assemble` holds the node still while its child nodes, its parts, drop in one by one from
+ *   `height` (a roof and its segments). Its renderer reads `isRevealAssembling` and
+ *   `subscribeRevealAssembling` (`@pascal-app/viewer`) to draw them apart.
+ */
+export type RevealStyle = 'rise' | 'scale' | 'settle' | 'drop' | 'cut' | 'assemble'
+
+/**
+ * A staged appearance (`capabilities.reveal`), presentation only: the store
+ * write is already done. The styles that travel carry their height, in
+ * metres above the rest pose, so each kind tunes its own fall.
+ */
+export type RevealConfig =
+  | { phase: RevealPhase; style: 'rise' | 'scale' | 'cut'; clears?: RevealClears }
+  | {
+      phase: RevealPhase
+      style: 'settle' | 'drop' | 'assemble'
+      height: number
+      clears?: RevealClears
+    }
+
+/**
+ * A node that lifts out of the way while a phase of the build plays: a roof rises `height` metres
+ * and turns ghostly while the furniture drops in, so the rooms show from above, and seats again
+ * once the phase has landed. Presentation only, like the reveal itself.
+ */
+export type RevealClears = { for: RevealPhase; height: number }
+
+/** A point of a level's plan, in metres: `[x, z]`. */
+export type RevealPlanPoint = readonly [x: number, z: number]
+
+/**
+ * What a kind is in its level's plan, read by the construction reveal to lay a build out room by
+ * room (`capabilities.revealLayout`). Both fields are pure: they read only the node.
+ *
+ * - `room` says the node outlines a room and returns its polygon, or `null` for a node with none yet.
+ *   What stands in the polygon (walls along it, furniture in it) is revealed together, around its
+ *   centre, and rooms sweep across the floor.
+ * - `line` says the node bounds rooms along a line and returns its two ends. Its middle is where it
+ *   stands; the room either side of it is its room; a line in no room runs with the lines it meets
+ *   end to end. The derived plates and ceilings of a level go out with the `room` and `line` nodes a
+ *   commit takes off it.
+ */
+export type RevealLayout = {
+  room?: (node: AnyNode) => readonly RevealPlanPoint[] | null
+  line?: (node: AnyNode) => readonly [start: RevealPlanPoint, end: RevealPlanPoint] | null
 }
 
 /**
@@ -2936,6 +3059,7 @@ export type SceneApi = {
    * do not mutate.
    */
   nodes: () => Readonly<Record<AnyNodeId, AnyNode>>
+  installedPlugins?: () => readonly string[] | undefined
   update: (id: AnyNodeId, patch: Partial<AnyNode>) => void
   upsert: (node: AnyNode, parentId?: AnyNodeId) => AnyNodeId
   createMany?: (ops: { node: AnyNode; parentId?: AnyNodeId }[]) => void

@@ -6,6 +6,7 @@ import {
   bakePolicyOf,
   containsPoint,
   distanceToBoundary,
+  EXPLODED_GAP,
   itemInteraction,
   itemPrompt,
   operateItem,
@@ -33,9 +34,6 @@ import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
-
-/** Vertical gap added per floor in `exploded` level mode (matches LevelSystem). */
-const EXPLODED_GAP = 5
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
  *  parametric viewer (textures-off collapses each face to its themed clay). */
@@ -575,6 +573,7 @@ export function GlbScene({
             index,
             selectedIndex: selectedIdx >= 0 ? selectedIdx : undefined,
             nodeVisible: true,
+            revealing: false,
           })
       if (shadowOnly) applyShadowOnly(node)
       else clearShadowOnly(node)

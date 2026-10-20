@@ -373,61 +373,42 @@ export function insetPolygon(
 
 /**
  * Which envelope edge is the one behind the lot's front line: the longest
- * envelope edge running parallel to it (within 25°) with its midpoint
- * nearest that line; failing that, the envelope edge whose midpoint is
- * nearest the lot front's midpoint (a pie lot's curved frontage has no
- * single parallel — its longest arc chord fronts the house).
+ * envelope edge facing the same way (within 25°) with its midpoint nearest
+ * that line. Facing, not only parallel: on a lot that widens away from its
+ * street the rear edge is parallel too, and longer. Null when no edge faces
+ * the street: side setbacks wider than a narrow frontage take the whole
+ * front, and a side is no front.
  */
 export function envelopeFrontEdge(
   lot: readonly Pt[],
   frontIndex: number,
   envelope: readonly Pt[],
-): number {
+): number | null {
   const n = lot.length
   const m = envelope.length
-  if (n < 2 || m < 2) return 0
+  if (n < 2 || m < 2) return null
   const fi = ((frontIndex % n) + n) % n
   const a = lot[fi] as Pt
   const b = lot[(fi + 1) % n] as Pt
-  const fx = b[0] - a[0]
-  const fy = b[1] - a[1]
-  const fl = Math.hypot(fx, fy) || 1
-  const ux = fx / fl
-  const uy = fy / fl
-  const fmid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
-  let bestI = -1
+  const [fnx, fny] = outwardNormal(lot, fi)
+  let best: number | null = null
   let bestScore = Number.NEGATIVE_INFINITY
   for (let i = 0; i < m; i++) {
     const p = envelope[i] as Pt
     const q = envelope[(i + 1) % m] as Pt
-    const ex = q[0] - p[0]
-    const ey = q[1] - p[1]
-    const el = Math.hypot(ex, ey)
+    const el = Math.hypot(q[0] - p[0], q[1] - p[1])
     if (el < 1e-6) continue
-    const par = Math.abs((ex * ux + ey * uy) / el)
-    if (par < Math.cos((25 * Math.PI) / 180)) continue
-    const mid: Pt = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]
-    const dist = segDist(mid[0], mid[1], a, b)
+    const [enx, eny] = outwardNormal(envelope, i)
+    if (enx * fnx + eny * fny < Math.cos((25 * Math.PI) / 180)) continue
+    const dist = segDist((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, a, b)
     // long and close wins: the front's offset is one lot-front length away by the setback
     const score = el - 2 * dist
     if (score > bestScore) {
       bestScore = score
-      bestI = i
+      best = i
     }
   }
-  if (bestI >= 0) return bestI
-  let nearest = 0
-  let nd = Number.POSITIVE_INFINITY
-  for (let i = 0; i < m; i++) {
-    const p = envelope[i] as Pt
-    const q = envelope[(i + 1) % m] as Pt
-    const d = Math.hypot((p[0] + q[0]) / 2 - fmid[0], (p[1] + q[1]) / 2 - fmid[1])
-    if (d < nd) {
-      nd = d
-      nearest = i
-    }
-  }
-  return nearest
+  return best
 }
 
 /**
@@ -513,6 +494,392 @@ export function streetCorners(
     const cosTurn = (a[0] as number) * (b[0] as number) + (a[1] as number) * (b[1] as number)
     if (cosTurn > Math.cos((40 * Math.PI) / 180)) continue
     out.push([i, j])
+  }
+  return out
+}
+
+/* ---------------------------------------------- lot edges and setbacks */
+
+export interface SetbackInputs {
+  front: number
+  side: number
+  rear: number
+  left?: number
+  right?: number
+  /** A corner lot's second street side; absent = the front setback. */
+  streetSide?: number
+}
+
+/** Per-edge classification of a lot polygon relative to its front edge. */
+export type EdgeRole = 'front' | 'rear' | 'left' | 'right' | 'street'
+
+/** Unit normal of edge `i` pointing OUT of the polygon, winding-agnostic. */
+export function outwardNormal(points: readonly Pt[], i: number): Pt {
+  const n = points.length
+  const p = points[i % n] as Pt
+  const q = points[(i + 1) % n] as Pt
+  const dx = q[0] - p[0]
+  const dy = q[1] - p[1]
+  const len = Math.hypot(dx, dy) || 1
+  // Left normal of the edge direction. For a CCW ring (positive shoelace in
+  // this frame) the left normal points inward, so flip.
+  const sign = signedArea(points) > 0 ? -1 : 1
+  return [(sign * -dy) / len, (sign * dx) / len]
+}
+
+/**
+ * Compass heading of edge `i`'s outward normal, in DEGREES clockwise from
+ * north, where `northRotation` (radians, clockwise) is true north's offset
+ * from plan up (−y). This is the direction the edge faces.
+ */
+export function edgeHeadingDeg(points: readonly Pt[], i: number, northRotation = 0): number {
+  const [nx, ny] = outwardNormal(points, i)
+  // Plan up (−y) is 0°, +x (east) is 90°.
+  const raw = Math.atan2(nx, -ny) - northRotation
+  const deg = (raw * 180) / Math.PI
+  return ((deg % 360) + 360) % 360
+}
+
+/** Length of edge `i`, metres. */
+export function edgeLength(points: readonly Pt[], i: number): number {
+  const n = points.length
+  const p = points[i % n] as Pt
+  const q = points[(i + 1) % n] as Pt
+  return Math.hypot(q[0] - p[0], q[1] - p[1])
+}
+
+/**
+ * Fallback front edge: the edge whose outward normal points closest to true
+ * north. Ties break toward the longer edge — the street frontage of a typical
+ * lot is one of its long sides.
+ */
+export function mostNorthFacingEdge(points: readonly Pt[], northRotation = 0): number {
+  let best = 0
+  let bestScore = Number.POSITIVE_INFINITY
+  for (let i = 0; i < points.length; i++) {
+    const heading = edgeHeadingDeg(points, i, northRotation)
+    const off = Math.min(heading, 360 - heading)
+    // Sub-degree ties resolve on length so a chamfer corner never wins.
+    const score = off - Math.min(0.5, edgeLength(points, i) / 1000)
+    if (score < bestScore) {
+      bestScore = score
+      best = i
+    }
+  }
+  return best
+}
+
+/** `frontEdge` if it indexes a real edge, else the most north-facing edge. */
+export function resolveFrontEdge(
+  points: readonly Pt[],
+  frontEdge: number | undefined,
+  northRotation = 0,
+): number {
+  if (
+    typeof frontEdge === 'number' &&
+    Number.isInteger(frontEdge) &&
+    frontEdge >= 0 &&
+    frontEdge < points.length
+  ) {
+    return frontEdge
+  }
+  return mostNorthFacingEdge(points, northRotation)
+}
+
+/**
+ * Classify every edge as front / rear / left / right.
+ *
+ * - front = `frontIndex`.
+ * - rear  = the edge whose outward normal is most anti-parallel to the front's.
+ * - the rest are sides. LEFT / RIGHT are defined along the FRONT EDGE
+ *   DIRECTION (`points[front] → points[front + 1]`): an edge whose midpoint
+ *   projects behind the front-edge midpoint on that axis is `left`, ahead of
+ *   it is `right`. Deterministic and independent of winding.
+ */
+export function classifyEdges(
+  points: readonly Pt[],
+  frontIndex: number,
+  streetEdges: readonly number[] = [],
+): EdgeRole[] {
+  const n = points.length
+  const roles: EdgeRole[] = new Array(n).fill('left')
+  if (n === 0) return roles
+
+  const front = ((frontIndex % n) + n) % n
+  const fn = outwardNormal(points, front)
+  // a corner lot's other street edges (the parcel fabric's frontage) are
+  // 'street' — they take the street-side setback, never a side yard, and
+  // the rear is never one of them
+  const street = new Set(streetEdges.map((i) => ((i % n) + n) % n))
+  street.delete(front)
+
+  let rear = -1
+  let rearDot = Number.POSITIVE_INFINITY
+  for (let i = 0; i < n; i++) {
+    if (i === front || street.has(i)) continue
+    const ni = outwardNormal(points, i)
+    const dot = fn[0] * ni[0] + fn[1] * ni[1]
+    if (dot < rearDot) {
+      rearDot = dot
+      rear = i
+    }
+  }
+
+  const fp = points[front] as Pt
+  const fq = points[(front + 1) % n] as Pt
+  const dx = fq[0] - fp[0]
+  const dy = fq[1] - fp[1]
+  const len = Math.hypot(dx, dy) || 1
+  const ux = dx / len
+  const uy = dy / len
+  const fmx = (fp[0] + fq[0]) / 2
+  const fmy = (fp[1] + fq[1]) / 2
+
+  for (let i = 0; i < n; i++) {
+    if (i === front) {
+      roles[i] = 'front'
+      continue
+    }
+    if (street.has(i)) {
+      roles[i] = 'street'
+      continue
+    }
+    if (i === rear) {
+      roles[i] = 'rear'
+      continue
+    }
+    const p = points[i] as Pt
+    const q = points[(i + 1) % n] as Pt
+    const mx = (p[0] + q[0]) / 2 - fmx
+    const my = (p[1] + q[1]) / 2 - fmy
+    roles[i] = mx * ux + my * uy < 0 ? 'left' : 'right'
+  }
+  return roles
+}
+
+/** Required setback distance (metres) for each edge role. */
+export function setbackForRole(setbacks: SetbackInputs, role: EdgeRole): number {
+  switch (role) {
+    case 'front':
+      return setbacks.front
+    case 'street':
+      return setbacks.streetSide ?? setbacks.front
+    case 'rear':
+      return setbacks.rear
+    case 'left':
+      return setbacks.left ?? setbacks.side
+    case 'right':
+      return setbacks.right ?? setbacks.side
+  }
+}
+
+/**
+ * Buildable envelope — every lot edge pushed INWARD by its own setback
+ * (`insetPolygon`): straight where the lot is straight, concentric round a
+ * radius, clipped where the offsets cross. On a concave lot a reflex corner
+ * can self-intersect, in which case the caller still gets a ring but it is
+ * advisory, not a legal envelope.
+ *
+ * Returns `[]` when the polygon has fewer than 3 points, when a setback is
+ * not a distance, or when nothing buildable remains (setbacks larger than
+ * the lot).
+ */
+export function setbackEnvelope(
+  points: readonly Pt[],
+  setbacks: SetbackInputs,
+  frontIndex: number,
+  options: { streetEdges?: readonly number[]; sightTriangleM?: number } = {},
+): Pt[] {
+  const n = points.length
+  if (n < 3) return []
+  const streetEdges = options.streetEdges ?? []
+  const roles = classifyEdges(points, frontIndex, streetEdges)
+  // A radius drawn as a run of short edges takes ONE role. A curb return
+  // is street frontage: a run carrying, or touching, a front / street edge
+  // is front / street all along (otherwise the last sliver of the return
+  // became a side yard, and the envelope jutted out toward the corner); a
+  // run carrying the rear is rear; else
+  // each sliver keeps its own side.
+  const runs = arcRuns(points)
+  const runRole = new Map<number, EdgeRole>()
+  const streetLike = (r: EdgeRole) => r === 'front' || r === 'street'
+  for (let i = 0; i < n; i++) {
+    const r = roles[i] as EdgeRole
+    const g = runs[i] as number
+    const have = runRole.get(g)
+    if (streetLike(r) || (r === 'rear' && !(have && streetLike(have)))) runRole.set(g, r)
+    else if (!have) runRole.set(g, r)
+  }
+  for (let i = 0; i < n; i++) {
+    const g = runs[i] as number
+    const have = runRole.get(g) as EdgeRole
+    if (streetLike(have)) continue
+    const before = roles[(i - 1 + n) % n] as EdgeRole
+    const after = roles[(i + 1) % n] as EdgeRole
+    const members = runs.filter((x) => x === g).length
+    if (members > 1) {
+      if (runs[(i - 1 + n) % n] !== g && streetLike(before)) runRole.set(g, before)
+      else if (runs[(i + 1) % n] !== g && streetLike(after)) runRole.set(g, after)
+    }
+  }
+  // One lot line drawn as two: the county fabric splits a frontage at a kink of
+  // a degree or two, and only one half may come back from the street lookup
+  // (or the north-facing fallback). The half left out took a side yard, and
+  // the front yard swung round their shared corner in a circle as deep as
+  // itself. An edge running on nearly straight from a front or street edge
+  // is that frontage too.
+  const roleOf = (i: number) =>
+    runRole.get(runs[(i + n) % n] as number) ?? (roles[(i + n) % n] as EdgeRole)
+  const direction = (i: number) => {
+    const p = points[(i + n) % n] as Pt
+    const q = points[(i + 1 + n) % n] as Pt
+    const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1
+    return [(q[0] - p[0]) / l, (q[1] - p[1]) / l] as const
+  }
+  const straightOn = Math.cos((8 * Math.PI) / 180)
+  const continued = new Map<number, EdgeRole>()
+  for (let pass = 0; pass < n; pass++) {
+    let grew = false
+    for (let i = 0; i < n; i++) {
+      const own = continued.get(i) ?? roleOf(i)
+      if (streetLike(own)) continue
+      const d = direction(i)
+      for (const j of [i - 1, i + 1]) {
+        const k = (j + n) % n
+        const theirs = continued.get(k) ?? roleOf(k)
+        const e = direction(k)
+        if (streetLike(theirs) && d[0] * e[0] + d[1] * e[1] > straightOn) {
+          continued.set(i, theirs)
+          grew = true
+          break
+        }
+      }
+    }
+    if (!grew) break
+  }
+  const distances: number[] = []
+  for (let i = 0; i < n; i++) {
+    const role = continued.get(i) ?? runRole.get(runs[i] as number) ?? (roles[i] as EdgeRole)
+    const d = setbackForRole(
+      setbacks,
+      role === 'left' || role === 'right' ? (roles[i] as EdgeRole) : role,
+    )
+    if (!Number.isFinite(d) || d < 0) return []
+    distances.push(d)
+  }
+  // the corner sight triangles keep the envelope out of the clear-vision
+  // zone at each street intersection (the hypotenuse is a half-plane)
+  const keepOut: KeepOut[] = []
+  if (options.sightTriangleM && options.sightTriangleM > 0) {
+    for (const [a, b] of streetCorners(points, [frontIndex, ...streetEdges])) {
+      const tri = sightTriangle(points, a, b, options.sightTriangleM)
+      if (tri) keepOut.push({ a: tri.a, b: tri.b, inside: tri.corner })
+    }
+  }
+  return insetPolygon(points, distances, { keepOut })
+}
+
+/* ------------------------------------------------------------- yards */
+
+/**
+ * Distance from `origin` along unit direction `(dx, dy)` to the first crossing
+ * of the polygon boundary. `null` when the ray never hits (origin outside, or
+ * a degenerate ring).
+ */
+export function rayToPolygon(
+  points: readonly Pt[],
+  origin: Pt,
+  dx: number,
+  dy: number,
+): { distance: number; point: Pt } | null {
+  const n = points.length
+  let best: { distance: number; point: Pt } | null = null
+  for (let i = 0; i < n; i++) {
+    const p = points[i] as Pt
+    const q = points[(i + 1) % n] as Pt
+    const ex = q[0] - p[0]
+    const ey = q[1] - p[1]
+    const denom = dx * ey - dy * ex
+    if (Math.abs(denom) < 1e-12) continue
+    // origin + t*d = p + u*e
+    const t = ((p[0] - origin[0]) * ey - (p[1] - origin[1]) * ex) / denom
+    const u = ((p[0] - origin[0]) * dy - (p[1] - origin[1]) * dx) / denom
+    if (t <= 1e-9 || u < -1e-9 || u > 1 + 1e-9) continue
+    if (!best || t < best.distance) {
+      best = { distance: t, point: [origin[0] + dx * t, origin[1] + dy * t] }
+    }
+  }
+  return best
+}
+
+/** Yard sides in the order the site-plan dimensions are cast. */
+export type YardSide = 'north' | 'south' | 'east' | 'west'
+
+export interface YardDimension {
+  side: YardSide
+  /** Bounding-box edge midpoint the dimension starts at. */
+  from: Pt
+  /** Where the cast ray meets the lot line. */
+  to: Pt
+  /** Metres. */
+  distance: number
+}
+
+/**
+ * Yard dimensions for a building TURNED on its lot. The footprint's bounds
+ * are taken in the building's own frame (`yaw`, the building node's Y
+ * rotation), and the four edge midpoints cast square to the house's faces
+ * out to the lot line — the yards a plan checker measures. With a house
+ * square to a diagonal lot the axis-aligned bbox sticks out past the real
+ * corners and reads a front yard inches short of the setback it actually
+ * meets (Land Park, 2026-09-06). `side` is the compass direction nearest the
+ * cast, so labels keep reading N / S / E / W. Sides whose ray misses the lot
+ * line (footprint outside the lot) are omitted rather than faked.
+ */
+export function castYardDimensionsOriented(
+  lot: readonly Pt[],
+  footprintLoops: readonly (readonly Pt[])[],
+  yaw: number,
+): YardDimension[] {
+  if (lot.length < 3) return []
+  const c = Math.cos(yaw)
+  const s = Math.sin(yaw)
+  // world = (c·lx + s·lz, −s·lx + c·lz)  ⇒  local = (c·wx − s·wz, s·wx + c·wz)
+  const toLocal = (p: Pt): Pt => [c * p[0] - s * p[1], s * p[0] + c * p[1]]
+  const toWorld = (p: Pt): Pt => [c * p[0] + s * p[1], -s * p[0] + c * p[1]]
+  let minX = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const loop of footprintLoops) {
+    for (const p of loop) {
+      const [x, z] = toLocal(p)
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (z < minZ) minZ = z
+      if (z > maxZ) maxZ = z
+    }
+  }
+  if (!Number.isFinite(minX)) return []
+  const midX = (minX + maxX) / 2
+  const midZ = (minZ + maxZ) / 2
+  const casts: { from: Pt; dir: Pt }[] = [
+    { from: [midX, minZ], dir: [0, -1] },
+    { from: [midX, maxZ], dir: [0, 1] },
+    { from: [minX, midZ], dir: [-1, 0] },
+    { from: [maxX, midZ], dir: [1, 0] },
+  ]
+  const sides: YardSide[] = ['north', 'east', 'south', 'west']
+  const out: YardDimension[] = []
+  for (const cast of casts) {
+    const from = toWorld(cast.from)
+    const [dx, dy] = toWorld(cast.dir)
+    const hit = rayToPolygon(lot, from, dx, dy)
+    if (!hit) continue
+    // heading of the cast: plan up (−y) is north, +x east
+    const heading = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360
+    const side = sides[Math.round(heading / 90) % 4] as YardSide
+    out.push({ side, from, to: hit.point, distance: hit.distance })
   }
   return out
 }

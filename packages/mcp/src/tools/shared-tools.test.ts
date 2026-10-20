@@ -5,13 +5,15 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentOperations } from '@pascal-app/core/agent-operations'
 import { type PluginAgentTools, refuse } from '@pascal-app/core/agent-tools'
 import { type AnyNodeId, BuildingNode, type Collection, LevelNode } from '@pascal-app/core/schema'
+import { createPascalMcpServer } from '@pascal-app/mcp/server'
 import { z } from 'zod'
 import { AGENT_TOOL_CASES } from '../../../core/src/agent-operations/__fixtures__/cases'
+import { CATALOG_BRIEF } from '../../../core/src/agent-operations/__fixtures__/design-brief-cases'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { type AssetCatalog, builtInCatalog } from './asset-catalog'
-import { registerOperationTool, registerSharedTools } from './shared-tools'
+import { type PlanReadingHosts, registerOperationTool, registerSharedTools } from './shared-tools'
 
 // Layer 2 of 3: the MCP tools, through a real client, on every shared tool's edge cases.
 type Result = {
@@ -20,16 +22,75 @@ type Result = {
   structuredContent?: Record<string, unknown>
 }
 
+test('hosted file tools work through MCP without loading a scene and preserve access refusals', async () => {
+  const calls: unknown[] = []
+  const server = createPascalMcpServer({
+    bridge: new SceneBridge(),
+    files: async (request) => {
+      calls.push(request)
+      if (request.projectId === 'project_denied') refuse('file_access_denied', 'Project not found')
+      return { file: { id: 'asset_report', name: request.input.name } }
+    },
+  })
+  const client = new Client({ name: 'file-client', version: '0.0.0' })
+  const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const saved = (await client.callTool({
+      name: 'upload_project_file',
+      arguments: {
+        projectId: 'project_report',
+        phase: 'text',
+        name: 'Budget.csv',
+        mimeType: 'text/csv',
+        content: 'area,cost\n',
+      },
+    })) as Result
+    expect(saved.isError).toBeFalsy()
+    expect(JSON.parse(saved.content[0]!.text)).toMatchObject({
+      file: { id: 'asset_report', name: 'Budget.csv' },
+    })
+    expect(calls[0]).toMatchObject({
+      projectId: 'project_report',
+      name: 'upload_project_file',
+      input: { content: 'area,cost\n' },
+    })
+    const invalid = (await client.callTool({
+      name: 'upload_project_file',
+      arguments: { phase: 'complete', name: 'Budget.csv', mimeType: 'text/csv' },
+    })) as Result
+    expect(invalid.isError).toBe(true)
+    expect(calls).toHaveLength(1)
+    const denied = (await client.callTool({
+      name: 'get_project_file',
+      arguments: { projectId: 'project_denied', fileId: 'asset_report' },
+    })) as Result
+    expect(denied.isError).toBe(true)
+    expect(JSON.parse(denied.content[0]!.text)).toMatchObject({ code: 'file_access_denied' })
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
 describe('shared tools over MCP', () => {
   let bridge: SceneBridge
   let client: Client
   // The host's library for the case at hand: its own, else the server's built-in list.
   let catalog: AssetCatalog = builtInCatalog
+  // The floor the host's person views for the case at hand; none, as on the remote MCP.
+  let viewed: string | null = null
+  const hosts: PlanReadingHosts = {}
 
   beforeEach(async () => {
     bridge = new SceneBridge()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerSharedTools(server, bridge, () => catalog())
+    registerSharedTools(
+      server,
+      createSceneOperations({ bridge, activeLevelId: () => viewed }),
+      () => catalog(),
+      hosts,
+    )
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -41,10 +102,20 @@ describe('shared tools over MCP', () => {
     test(`${c.tool}: ${c.name}`, async () => {
       const { nodes, rootNodeIds } = c.scene()
       bridge.setScene(nodes as never, rootNodeIds as never)
+      const designBrief =
+        c.context?.designBrief === undefined ? CATALOG_BRIEF : (c.context.designBrief ?? undefined)
+      bridge.agentSession.replace({
+        ...(c.context?.session?.() ?? { checkpoints: {}, made: [] }),
+        ...(designBrief ? { designBrief } : {}),
+      })
       const own = c.context?.catalog
       catalog = own ? async () => own : builtInCatalog
+      // Catalog facts supplied by each shared case; nothing is fetched.
+      hosts.assetViews = async () => c.context?.assetViews ?? {}
+      viewed = c.context?.activeLevelId ?? null
       const result = (await client.callTool({ name: c.tool, arguments: c.input })) as Result
-      const payload = JSON.parse(result.content[0]!.text) as Record<string, unknown>
+      const payload =
+        result.structuredContent ?? (JSON.parse(result.content[0]!.text) as Record<string, unknown>)
       if ('refusal' in c.expect) {
         expect(result.isError).toBe(true)
         expect(payload.code).toBe(c.expect.refusal)
@@ -52,6 +123,7 @@ describe('shared tools over MCP', () => {
         return
       }
       expect(result.isError).toBeFalsy()
+      expect(c.expect.session?.(bridge.agentSession.read()) ?? []).toEqual([])
       expect(payload).toMatchObject(c.expect.result)
       for (const id of c.expect.present ?? []) expect(bridge.getNode(id as AnyNodeId)).toBeTruthy()
       for (const id of c.expect.absent ?? []) expect(bridge.getNode(id as AnyNodeId)).toBeFalsy()

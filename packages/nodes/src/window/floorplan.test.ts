@@ -50,3 +50,56 @@ describe('buildWindowFloorplan wall-local plane offset', () => {
     expect(frame?.max).toBeCloseTo(-0.1016, 9)
   })
 })
+
+describe('buildWindowFloorplan at a corner window', () => {
+  // Two 0.2 m walls meeting at the origin, inside the corner toward +x and +z.
+  const wallA = WallNode.parse({ id: 'wall_a', start: [4, 0], end: [0, 0], thickness: 0.2 })
+  const wallB = WallNode.parse({ id: 'wall_b', start: [0, 0], end: [0, 3], thickness: 0.2 })
+  const windowA = WindowNode.parse({
+    id: 'window_a',
+    parentId: wallA.id,
+    wallId: wallA.id,
+    position: [3.5, 1.5, 0],
+    width: 1,
+    corner: { end: 'end', partnerId: 'window_b', post: 'none' },
+  })
+  const windowB = WindowNode.parse({
+    id: 'window_b',
+    parentId: wallB.id,
+    wallId: wallB.id,
+    position: [0.5, 1.5, 0],
+    width: 1,
+    corner: { end: 'start', partnerId: 'window_a', post: 'none' },
+  })
+  const nodes: Record<string, unknown> = {
+    [wallA.id]: wallA,
+    [wallB.id]: wallB,
+    [windowA.id]: windowA,
+    [windowB.id]: windowB,
+  }
+  const footprint = (window: WindowNode) => {
+    const geometry = buildWindowFloorplan(window, {
+      children: [],
+      parent: wallA,
+      resolve: (id: string) => nodes[id],
+      siblings: [],
+    } as unknown as GeometryContext)
+    const children: FloorplanGeometry[] = geometry?.kind === 'group' ? geometry.children : []
+    const polygon = children.find((item) => item.kind === 'polygon')
+    return polygon?.kind === 'polygon' ? polygon.points : []
+  }
+  const reaches = (points: readonly (readonly number[])[], [x, z]: [number, number]) =>
+    points.some((point) => Math.hypot(point[0]! - x, point[1]! - z) < 1e-9)
+
+  test('runs to the walls’ mitre, so the corner between the sides is glass, not wall', () => {
+    const points = footprint(windowA)
+    expect(reaches(points, [0.1, 0.1])).toBe(true)
+    expect(reaches(points, [-0.1, -0.1])).toBe(true)
+  })
+
+  test('a window that is no corner pair stops square at its jambs', () => {
+    const points = footprint({ ...windowA, corner: undefined })
+    expect(reaches(points, [0, 0.1])).toBe(true)
+    expect(reaches(points, [0, -0.1])).toBe(true)
+  })
+})

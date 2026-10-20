@@ -397,19 +397,4 @@ export type DisplayFamily =
 
 export type Discipline = 'mechanical' | 'plumbing' | 'electrical' | 'low-voltage' | 'fire'
 
-/**
- * The project's saved look on the `site` node (owner decision O3, frozen), never
- * a scene-root key. `display` is the saved default for the personal display
- * state; SI-R5 adds `theme`, `sun`, `exposure`, `edges` and `shading` beside
- * it. Precedence: explicit local viewer toggles > `site.presentation` >
- * theme defaults. The canonical bake ignores it.
- */
-export type SitePresentation = {
-  display?: {
-    mode?: DisplayMode
-    families?: Partial<Record<DisplayFamily, boolean>>
-    disciplines?: Partial<Record<Discipline, boolean>>
-    xray?: boolean
-    colorBy?: 'material' | 'service'
-  }
-}
+export type { SitePresentation } from './site-presentation'

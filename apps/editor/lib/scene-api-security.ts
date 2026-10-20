@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { isLoopbackHostname, resolveAuthMode, sessionPrincipal } from './self-host-auth'
 
 const DEFAULT_RATE_LIMIT_PER_MINUTE = 120
 const WINDOW_MS = 60_000
@@ -62,19 +63,31 @@ function validateOrigin(request: Request): NextResponse | null {
   return sceneApiJson(request, { error: 'origin_not_allowed' }, { status: 403 })
 }
 
+/**
+ * Who may call the scene API: the signed-in admin (session cookie), an agent
+ * holding `PASCAL_SCENE_API_TOKEN`, or anyone on a loopback host when no
+ * token is configured. A network host with nothing configured answers 503
+ * so a misconfigured deployment is loud rather than open.
+ */
 function validateAuth(request: Request): NextResponse | null {
+  if (sessionPrincipal(request)) return null
+
   const token = process.env.PASCAL_SCENE_API_TOKEN
-  if (!token) {
-    if (isLoopbackRequest(request)) return null
-    return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
+  if (token) {
+    const supplied = bearerToken(request) ?? request.headers.get('x-pascal-scene-token')
+    if (supplied && safeEqual(supplied, token)) return null
+    return sceneApiJson(request, { error: 'unauthorized' }, { status: 401 })
   }
 
-  const supplied = bearerToken(request) ?? request.headers.get('x-pascal-scene-token')
-  if (supplied && safeEqual(supplied, token)) return null
-  return sceneApiJson(request, { error: 'unauthorized' }, { status: 401 })
+  const mode = resolveAuthMode(request)
+  if (mode === 'open') return null
+  if (mode === 'password') {
+    return sceneApiJson(request, { error: 'unauthorized' }, { status: 401 })
+  }
+  return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
 }
 
-function validateRateLimit(request: Request): NextResponse | null {
+export function validateRateLimit(request: Request): NextResponse | null {
   const limit = rateLimitPerMinute()
   if (limit <= 0) return null
 
@@ -149,16 +162,6 @@ function isSameOrigin(request: Request, origin: string): boolean {
   return normalizeOrigin(parsedOrigin) === normalizeOrigin(requestUrl)
 }
 
-function isLoopbackRequest(request: Request): boolean {
-  const host = request.headers.get('host') ?? new URL(request.url).host
-  return isLoopbackHostname(stripPort(host))
-}
-
-function isLoopbackHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase()
-  return h === 'localhost' || h.endsWith('.localhost') || h === '127.0.0.1' || h === '::1'
-}
-
 function parseUrl(value: string): URL | null {
   try {
     return new URL(value)
@@ -169,12 +172,4 @@ function parseUrl(value: string): URL | null {
 
 function normalizeOrigin(url: URL): string {
   return `${url.protocol}//${url.host}`.toLowerCase()
-}
-
-function stripPort(host: string): string {
-  if (host.startsWith('[')) {
-    const end = host.indexOf(']')
-    return end === -1 ? host : host.slice(1, end)
-  }
-  return host.split(':')[0] ?? host
 }

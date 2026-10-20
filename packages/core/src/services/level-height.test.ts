@@ -87,6 +87,42 @@ function createFixture(): Record<AnyNodeId, AnyNode> {
       end: [33, 2],
       height: 2.8,
     }),
+    // A 12 mm "wall cap" an importer wrote exactly over a 2.6 m wall: a slab the wall carries.
+    LevelNode.parse({
+      id: 'level_capped',
+      children: ['slab_capped_floor', 'wall_capped', 'slab_cap'],
+    }),
+    SlabNode.parse({
+      id: 'slab_capped_floor',
+      parentId: 'level_capped',
+      polygon: [
+        [50, 0],
+        [54, 0],
+        [54, 4],
+        [50, 4],
+      ],
+      elevation: 0,
+    }),
+    WallNode.parse({
+      id: 'wall_capped',
+      parentId: 'level_capped',
+      start: [50, 2],
+      end: [54, 2],
+      thickness: 0.2,
+      height: 2.6,
+    }),
+    SlabNode.parse({
+      id: 'slab_cap',
+      parentId: 'level_capped',
+      polygon: [
+        [50, 1.9],
+        [54, 1.9],
+        [54, 2.1],
+        [50, 2.1],
+      ],
+      elevation: 2.662,
+      thickness: 0.012,
+    }),
   ]
 
   return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
@@ -96,11 +132,12 @@ describe('deriveLegacyLevelHeight', () => {
   const nodes = createFixture()
   const cases = [
     ['level_no_slab', 2.5],
-    ['level_standard_slab', 2.5],
+    ['level_standard_slab', 2.55],
     ['level_tall_wall', 3.55],
     ['level_ceiling', 3.4],
     ['level_negative_slab', 2.8],
     ['level_empty', 2.5],
+    ['level_capped', 2.6],
   ] as const
 
   for (const [levelId, expected] of cases) {

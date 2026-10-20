@@ -23,6 +23,7 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
   },
 
   capabilities: {
+    exterior: false,
     // Building is a container — sidebar / building switcher drive
     // selection, never 3D click. Same reasoning as `level` / `site`.
     duplicable: false,

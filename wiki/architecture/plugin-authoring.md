@@ -39,7 +39,7 @@ The same shape powers the built-in `pascal:core` plugin in `@pascal-app/nodes` �
 The core `Plugin` manifest owns semantic node definitions (and registry-backed inspector extensions); host UI and viewer-wide presentation remain separate exports. Each `nodes` entry is a `NodeDefinition<S extends ZodObject>` that the registry stamps with `kind`, `schemaVersion`, `schema`, and any combination of:
 
 - `defaults` — initial field values for new instances.
-- `capabilities` — `selectable` / `duplicable` / `deletable` / `surfaces` / `relations` flags consumed by the framework.
+- `capabilities` — `selectable` / `duplicable` / `deletable` / `surfaces` / `relations` flags consumed by the framework. `reveal` (`{ phase, style }`, plus `height` in metres for `settle`, `drop` and `assemble`) stages the kind when an agent builds it (see [`systems.md`](systems.md#construction-reveal)); without it the node appears with its parent, or drops in as a part of an `assemble` parent. `exterior` says whether a change to the node is seen from outside, and `revealLayout` that it outlines a room or bounds rooms along a line (see [`node-definitions.md`](node-definitions.md#capabilitiesexterior)).
 - `parametrics` — auto-derived inspector UI shape (`fields` + optional `customPanel` escape hatch).
 - `renderer` — custom 3D React component (GLB, drei, TSL — opt-out of `def.geometry`).
 - `system` — per-frame work (animation, dirty-cascade, runtime state).
@@ -220,6 +220,8 @@ The host tells the directory about the open project with `setPluginDirectoryCont
 
 Host panels mount lazily inside an error boundary. Use host CSS variables, keep CSS scoped to the plugin, and do not write global styles.
 
+The rail remembers the panel last open in each workspace (Edit, Studio, …) with the editor's preferences (`sidebarPanels`): entering a workspace reopens its own, and a reload opens Edit on its last panel, the sidebar's width and collapse kept. A remembered panel the rail does not have — a plugin's panels join once the scene's `installedPlugins` load, or the plugin was uninstalled — leaves the first panel showing and is not overwritten by it (`useShownSidebarPanel`); `activeSidebarPanel` is always the panel on screen. A restored panel opens in select mode, so a panel that arms a tool arms it when the user opens it, not when it mounts (the community Paint panel; on mobile, tapping Items arms the item tool). `showSidebarPanel(id)` picks a panel and expands a collapsed sidebar onto it, in that order, so the panel left open never opens on the way. Host code that sets a persisted editor field before the editor mounts waits for `useEditor.persist.onFinishHydration`: until the editor rehydrates, writes are not saved, and the stored preferences replace them. A tab saves its preferences only when they change, so another tab's update leaves them alone.
+
 ## Host views
 
 The stage is one or two panes, and each pane shows a *view*: the 3D scene, the 2D plan, or a view a host or plugin registered. A view is the place for a surface that wants the room of the canvas — a schedule, a directory, a gallery — rather than the width of the rail. A plugin can ship panels, views or both, and as many of each as it needs; each view carries the plugin's `pluginId`:
@@ -237,9 +239,10 @@ export const scheduleView: EditorHostView = {
 }
 ```
 
-The host registers each with `registerEditorHostView`, in the same bootstrap pass as the panels. The view is offered only in its workspaces and only while its plugin is in the project's `installedPlugins`; registration is session-add-only, like panels.
+The host registers each with `registerEditorHostView`, in the same bootstrap pass as the panels. The view is offered only in its workspaces and only while its plugin is in the project's `installedPlugins`; registration lasts for the session unless the host calls `unregisterEditorHostView(id)`. Unregistering also removes the view from all stored workspace layouts and pin preferences.
 
 - **The view bar.** Each pane has a bar: its pinned views, the view it shows, and a "More views" menu with the rest. A registered view starts unpinned unless it sets `defaultPinned: true`; people pin and unpin per browser. The last pane's bar carries Split (`\`) and, split, the swap.
+- **Closable views.** A host can supply `onClose` for an open document. The tab gets a close button; the host disposes of its state and calls `unregisterEditorHostView`. `editorHostViewRegistry.updateView(id, { label })` keeps a renamed document’s tab current without replacing its component.
 - **Opening a view.** `openEditorView(id)` shows it — focusing it if it is on screen, else in the focused pane; `openEditorView(id, { beside: true })` splits and opens it next to what is there. A panel's "Open beside the scene" button is this call.
 - **One pane per view.** A view sits in at most one pane: picking the other pane's view swaps the two. The 3D canvas and the plan stay mounted across every layout change; a registered view mounts lazily while it is in a pane, inside an error boundary, and unmounts when it leaves.
 - **Scene chrome.** The level selector, the tool dock and the host's scene controls belong to the 3D and 2D views: side by side they span both panes, beside another view they sit over the scene pane, and with no scene view on screen they are hidden. A view draws its own chrome inside its pane, below the view bar.
@@ -356,6 +359,7 @@ export const signageChat: PluginChatExtension = {
   cards: { signage_schedule: () => import('./schedule-card') },
   actions: [{ id: 'exit-signs', label: 'Exit signs', hint: 'Sign every exit', prompt: 'Place exit signs on every level.' }],
   accepts: ['.csv'],
+  start: () => import('./chat-start'),
 }
 ```
 
@@ -366,6 +370,7 @@ export const signageChat: PluginChatExtension = {
 - **The host decides.** Which tools a turn offers, to whom and at what cost, whether a `chatOnly` request is honoured, and how far `timeoutMs` may go are host policy, like a panel's `access`. Being in `installedPlugins` is necessary, not sufficient. These packages define the shapes; a host keeps its own catalog of the plugins it serves.
 - **Trusted code.** These exports run with the application's privileges: a zod schema is code, and an executor or a card runs in the page. Hosts load reviewed, pinned plugins. The purity rule keeps contracts loadable in a sandboxed workflow; it does not isolate them.
 - **Cards and outputs.** A card renders from the persisted call alone (`toolName`, `input`, `output`, `state`), so a reloaded chat shows the same card; its `actions` open a view, select nodes or send a prompt. A `ChatToolOutput` carries images by reference (`ref`), never bytes. `actions` add entries to the composer's `/` menu; `accepts` lists the file types the plugin's tools read.
+- **A start screen.** `start` is what the host's chat shows while its thread is empty. It acts only through its `ChatStartProps`: `send` a message (pictures by reference) or `attach` files to the composer, both at the level the plugin's tools run at, and `requirePro()` before a step that needs that level: it answers false after the host offered the upgrade, and changes nothing in the chat. Render registry icons with `IconRefGlyph`, as the editor does.
 
 The rules both surfaces follow for these tools are in [agent surfaces](agent-surfaces.md#plugin-tools).
 
@@ -397,3 +402,57 @@ The boundary stays narrow on purpose so the contract is shippable. Each "not yet
 3. The dev-mode `[pascal:registry]` console log shows the loaded plugin id + node count — that's the verification anchor.
 
 The host's own parity test (`packages/nodes/src/index.test.ts`) asserts every `AnyNode` discriminator has a registered kind. Plugin-contributed kinds don't participate in that test (they're not in `AnyNode`); add an equivalent test on your own side if you maintain a hand-typed union elsewhere.
+
+## Surface connections and editing contributions
+
+These optional fields extend node definitions, not the `Plugin` v1 manifest. See
+DECISIONS.md E-017. Framework packages never import a node pack to implement them.
+
+- `capabilities.surfaces.top.boundary(node, inset)` returns an ordered polygon in
+  the node's parent XZ frame, in metres. The polygon can be clockwise or
+  counterclockwise. A positive inset moves the boundary inward. Return at least
+  three finite points; an unavailable boundary returns an empty array. `top.height`
+  is relative to `node.position[1]`, before floor construction lift, and its point
+  context is in the same parent frame. Snapping and railings consult the registry.
+- `connectedMove(node, preview, nodes)` returns data patches for connected nodes.
+  It is pure: it must not mutate `nodes` or write the store. The editor applies its
+  patches to live overrides during a drag and includes them in the one commit on
+  release. It may return an empty list when there is no connection to move.
+- `InspectorExtension.primaryWhen(node)` selects an extension as the card's main
+  content. Registered order breaks ties. It must be pure and cheap. The wrapper
+  subscribes to the resulting extension ID, so changes unrelated to that choice
+  do not rerender the whole card. The extension's own controls subscribe to the
+  fields they display.
+- `capabilities.movable.preserveLevelAndElevation` keeps an existing floor-placed
+  object on its original level and visual elevation during a move. Fresh placement
+  still follows the chosen support. Stored Y remains an offset from the support,
+  not an absolute world height.
+- `capabilities.movable.parentFrame.independent` keeps selection/manipulation on
+  the child instead of promoting its parent. The frame's conversion hooks still
+  own cursor and rotation conversion in 2D and 3D.
+- `node.metadata.roomBoundary === false` excludes a wall-like node from room
+  topology. Omitted or true retains ordinary room-boundary behavior. This flag
+  does not change the node's visible geometry or paint surfaces.
+
+### Shared run tools
+
+Use `@pascal-app/editor/distribution` for `useDistributionRunTool`,
+`DistributionRunCursor`, port queries, connection compatibility and screen/angle
+snapping. It depends on the framework packages and never on `@pascal-app/nodes`.
+External plugins must not depend on the built-in node pack.
+
+### Stair destination surfaces
+
+Stairs use `destinationSurfaceId` and `autoSurfaceSnap`. Their source support is
+still `supportSlabId` and the stored Y is the offset above that support. Both edge
+snapping and transition geometry read `surfaces.top.boundary`; they do not inspect
+another plugin's width, shape, or private polygon fields. The scene loader migrates
+old `landscapeSurfaceId` / `autoLandscapeSnap` values to these generic fields.
+
+### Stable package revisions
+
+Pin immutable commits reachable from a maintained publishing branch or release tag.
+Bath Space uses `pascal-cluster`'s `packages/bath-space` branch; Landscape uses
+`packages/landscape`. Do not use a temporary PR branch as the only reference to a
+published revision. Streetscape is maintained in `pascalorg/plugin-streetscape`
+with the existing package name and `pascal:streetscape` plugin ID.

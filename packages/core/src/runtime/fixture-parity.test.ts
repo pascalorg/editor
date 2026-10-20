@@ -66,7 +66,16 @@ const CASES: ParityCase[] = [
 ]
 
 /** Fixtures the contract does not cover today, and why. */
-const EXCEPTIONS: Record<string, string> = {}
+const MALFORMED =
+  'stores geometry its schema rejects, which the editor systems the live side mounts cannot load'
+const EXCEPTIONS: Record<string, string> = {
+  "verify_scene: validate_scene {} with malformed geometry (a zone's polygon, a wall's start null): every error, the other checks reading around those nodes":
+    MALFORMED,
+  'get_node: describe_node on a wall stored without its start (its properties as stored): the node as stored, unresolved says why':
+    MALFORMED,
+  'get_node: describe_node on a wall beside a slab stored without its polygon: the wall as stored, unresolved names what does not read':
+    MALFORMED,
+}
 
 type Outcome = { refusal: string } | { result: Record<string, unknown>; patch: SceneOperationPatch }
 

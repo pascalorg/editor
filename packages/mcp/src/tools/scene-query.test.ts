@@ -72,7 +72,7 @@ describe('scene query tools', () => {
     expect(parsed.zones[0].areaSqMeters).toBe(12)
   })
 
-  test('verify_scene reports practical issues without replacing validate_scene', async () => {
+  test('verify_scene reports practical issues in a schema-valid scene', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     bridge.createNode(WallNode.parse({ start: [0, 0], end: [4, 0] }), level.id)
 

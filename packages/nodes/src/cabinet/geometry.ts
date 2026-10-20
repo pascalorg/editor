@@ -190,6 +190,18 @@ export function buildCabinetGeometry(
   const group = new Group()
   const materials = getCabinetSlotMaterials(node, ctx, shading, textures, colorPreset, sceneTheme)
 
+  if (node.moduleKind === 'wall-filler') {
+    addBox(
+      group,
+      [node.width, node.carcassHeight, node.frontThickness],
+      [0, node.carcassHeight / 2, node.depth / 2 + node.frontThickness / 2 - 0.0015],
+      materials.front,
+      'cabinet-wall-filler',
+      'front',
+    )
+    return group
+  }
+
   const hoodRows = normalizeCabinetStack(node)
   if (hoodRows.length > 0 && hoodRows.every((row) => isHoodCompartmentType(row.compartment.type))) {
     const hoodPlinth = node.showPlinth ? node.plinthHeight : 0

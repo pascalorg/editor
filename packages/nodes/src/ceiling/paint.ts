@@ -12,15 +12,14 @@ import {
   type PaintPreviewArgs,
   parseCeilingRegionRole,
   parseMaterialRef,
-  resolveMaterial,
   type SceneMaterialId,
   useScene,
 } from '@pascal-app/core'
-import { CEILING_REGION_MESH } from '@pascal-app/viewer'
+import { CEILING_REGION_MESH, useViewer } from '@pascal-app/viewer'
 import type { Material, Mesh, Object3D } from 'three'
 import { createSlotPaintCapability, resolveSlotPaintMaterialRef } from '../shared/slot-paint'
 import { swapPreviewMaterial } from '../shared/swap-preview-material'
-import { ceilingColorFromRef, getCeilingMaterials } from './materials'
+import { getCeilingMaterials, resolveCeilingFinish } from './materials'
 
 /**
  * Ceiling paint on the unified slot model. A ceiling's own finish is its
@@ -28,17 +27,9 @@ import { ceilingColorFromRef, getCeilingMaterials } from './materials'
  * the room's (`zone.ceiling.regions`) for an automatic ceiling, the ceiling's
  * own (`ceiling.regions`) for a manual one — drawn as its own mesh tagged
  * `region:<id>`. A click lands on what shows there. Previews swap the ceiling's
- * flat-tinted material (built `BackSide`, the way it renders) on exactly the
+ * room-facing material on exactly the
  * mesh the click would change, so the hover matches the committed result.
  */
-
-function previewColor(material: MaterialSchema | undefined, materialPreset: string | undefined) {
-  return materialPreset
-    ? ceilingColorFromRef(materialPreset, useScene.getState().materials)
-    : material
-      ? (resolveMaterial(material).color ?? null)
-      : null
-}
 
 function regionMesh(root: Object3D, role: string): Mesh | null {
   let found: Mesh | null = null
@@ -52,22 +43,25 @@ function regionMesh(root: Object3D, role: string): Mesh | null {
 function applyCeilingPreview({ role, material, materialPreset, root }: PaintPreviewArgs) {
   const mesh = root as Mesh
   if (!mesh.isMesh) return null
-  const color = previewColor(material, materialPreset)
+  const shading = useViewer.getState().shading
+  const finish = resolveCeilingFinish(
+    materialPreset ?? material,
+    useScene.getState().materials,
+    shading,
+  )
   const erasing = material === undefined && materialPreset === undefined
   if (role === CEILING_SURFACE_ROLE) {
     // Erasing shows the default the ceiling returns to.
-    const shown = color ?? (erasing ? CEILING_SLOT_DEFAULT_COLOR : null)
+    const shown =
+      finish ??
+      (erasing ? getCeilingMaterials(CEILING_SLOT_DEFAULT_COLOR, shading).bottomMaterial : null)
     if (!shown) return () => {}
-    return swapPreviewMaterial(mesh, getCeilingMaterials(shown).bottomMaterial)
+    return swapPreviewMaterial(mesh, shown)
   }
   const region = regionMesh(mesh, role)
   if (!region) return null
   // An erased region shows the ceiling's own finish under it.
-  const preview: Material | null = color
-    ? getCeilingMaterials(color).bottomMaterial
-    : erasing
-      ? (mesh.material as Material)
-      : null
+  const preview: Material | null = finish ? finish : erasing ? (mesh.material as Material) : null
   return preview ? swapPreviewMaterial(region, preview) : () => {}
 }
 

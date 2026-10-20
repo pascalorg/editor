@@ -4,6 +4,8 @@ import {
   type AnyNodeId,
   type SiteNode,
   sightTriangle,
+  siteFrontEdge,
+  siteSetbackEnvelope,
   streetCorners,
   type TerrainField,
   terrainContours,
@@ -15,10 +17,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  backdropColors,
   backdropGradient,
-  deepSkyColor,
-  getSceneTheme,
-  horizonHazeColor,
   NodeRenderer,
   useImmersiveXRPresentation,
   useNodeEvents,
@@ -53,14 +53,13 @@ import {
   updateRibbonHeights,
 } from './line-ribbon'
 import { getRecessedSlabGroundHoles } from './recessed-slab-ground-holes'
-import { resolveFrontEdge, setbackEnvelope } from './setbacks'
 import {
   buildDrapedPolyline,
   type DrapedPolyline,
   terrainGridKey,
   updateDrapedHeights,
 } from './terrain-drape'
-import { HORIZON_PLANE_Y, terrainFootprint } from './terrain-geometry'
+import { HORIZON_PLANE_Y, terrainBlockBase } from './terrain-geometry'
 import { TerrainRenderer } from './terrain-renderer'
 
 const Y_OFFSET = 0.01
@@ -175,16 +174,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   useRegistry(node.id, 'site', ref)
 
-  const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
-  const backgroundColor = useViewer((state) => getSceneTheme(state.sceneTheme).background)
-  const skyColor = useViewer((state) => {
-    const theme = getSceneTheme(state.sceneTheme)
-    return theme.backgroundSky ?? theme.background
-  })
-  const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
-  const maxLightIntensity = useViewer((state) =>
-    Math.max(1, ...getSceneTheme(state.sceneTheme).lights.map((light) => light.intensity)),
-  )
+  const theme = useViewer((state) => state.sceneAppearance)
+  const bgColor = theme.ground
+  const { background: backgroundColor, sky: skyColor, haze, skyDeep } = backdropColors(theme)
+  const maxLightIntensity = Math.max(1, ...theme.lights.map((light) => light.intensity))
   const livePolygon = useLiveNodeOverrides(
     (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
   )
@@ -270,9 +263,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       : backdropGradient({
           dirY: viewDir.y,
           background: color(backgroundColor),
-          haze: color(horizonHazeColor(skyColor, appearance)),
+          haze: color(haze),
           sky: color(skyColor),
-          skyDeep: color(deepSkyColor(skyColor)),
+          skyDeep: color(skyDeep),
         })
     // The halo also scales the in-band emissive: the dissolve starts at 1.05R,
     // so without it the (bright) backdrop dilutes the vignette exactly where
@@ -292,7 +285,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     bgColor,
     backgroundColor,
     skyColor,
-    appearance,
+    haze,
+    skyDeep,
     maxLightIntensity,
     fadeBounds,
     groundReplaced,
@@ -324,10 +318,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return shape
   }, [polygonPoints, slabPolygons])
 
-  // The terrain footprint is punched out alongside the recessed slabs, and for the
-  // same reason: the disc must not cap ground that is modelled below it.
-  //
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `terrainKey` is the grid signature the footprint is a function of; depending on the field itself would rebuild an 800 m disc every dab.
+  // With terrain the lot is a block — its ground cut to the property line, its
+  // skirt dropping to one flat base — and the disc lies just under that base, so
+  // nothing of it caps the lot and nothing of the block stands proud of it from
+  // the far side. The recessed slabs are still punched: a basement can go deeper.
+  const horizonY = useMemo(
+    () => (terrainGrid ? terrainBlockBase(terrainGrid) - 0.02 : HORIZON_PLANE_Y),
+    [terrainGrid],
+  )
+
   const horizonGeometry = useMemo(() => {
     if (!fadeBounds || groundReplaced) return null
     const radius = Math.max(fadeBounds.radius * 8, 400)
@@ -339,10 +338,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       shape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
     }
     shape.closePath()
-    const holes = terrainGrid ? [...slabPolygons, terrainFootprint(terrainGrid)] : slabPolygons
-    addSlabHoles(shape, holes, fadeBounds.cx, fadeBounds.cz)
+    addSlabHoles(shape, slabPolygons, fadeBounds.cx, fadeBounds.cz)
     return new ShapeGeometry(shape)
-  }, [fadeBounds, slabPolygons, terrainKey, groundReplaced])
+  }, [fadeBounds, slabPolygons, groundReplaced])
   useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
   useEffect(() => () => horizonMaterial?.dispose(), [horizonMaterial])
 
@@ -380,13 +378,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     let envelopeGeometry: BufferGeometry | null = null
     const triangleGeometries: BufferGeometry[] = []
     const points = polygonPoints.map(([x, z]) => [x ?? 0, z ?? 0] as [number, number])
-    const front = resolveFrontEdge(points, node.frontEdge, node.northRotation ?? 0)
+    // the live ring, measured the one way the site plan and the agents measure it
+    const lot = { ...node, polygon: { type: 'polygon' as const, points } }
+    const front = siteFrontEdge(lot)
     const streetEdges = node.streetEdges ?? []
     const sightTriangleM =
       typeof node.sightTriangleFt === 'number' && node.sightTriangleFt > 0
         ? node.sightTriangleFt * 0.3048
         : 0
-    const envelope = setbackEnvelope(points, setbacks, front, { streetEdges, sightTriangleM })
+    const envelope = siteSetbackEnvelope(lot)
     if (envelope.length >= 3) {
       const draped = buildDrapedPolyline({
         points: envelope,
@@ -542,8 +542,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // drops the parcel's own presentation — ground fill, sculpted ground, lot
   // line — while everything standing on the site keeps its own flag (the
   // exporter and the 2D plan draw the same line). The horizon disc is a world
-  // backdrop rather than part of the parcel, so it stays either way.
+  // backdrop rather than part of the parcel, so `visible` does not hide it.
+  // `showGround` hides both ground and horizon when authored geometry supplies them.
   const showSiteSurfaces = node.visible !== false
+  const showGround = node.showGround !== false
 
   if (!(node && lineGeometry)) {
     return null
@@ -557,12 +559,17 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ))}
 
       {/* Sculpted ground, when the site has terrain */}
-      {showSiteSurfaces && showTerrain && (
-        <TerrainRenderer holes={slabPolygons} material={groundMaterial} site={node} />
+      {showSiteSurfaces && showGround && showTerrain && (
+        <TerrainRenderer
+          holes={slabPolygons}
+          material={groundMaterial}
+          polygon={polygonPoints}
+          site={node}
+        />
       )}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {showSiteSurfaces && groundGeometry && !showTerrain && (
+      {showSiteSurfaces && showGround && groundGeometry && !showTerrain && (
         <mesh
           geometry={groundGeometry}
           material={groundMaterial}
@@ -573,11 +580,11 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       )}
 
       {/* Infinite-ground presentation disc fading into the sky at the horizon */}
-      {!immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
+      {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
         <mesh
           geometry={horizonGeometry}
           material={horizonMaterial}
-          position={[fadeBounds.cx, HORIZON_PLANE_Y, fadeBounds.cz]}
+          position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
           raycast={noopRaycast}
           receiveShadow
           rotation={[-Math.PI / 2, 0, 0]}

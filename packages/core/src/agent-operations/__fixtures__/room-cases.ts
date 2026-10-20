@@ -1,6 +1,13 @@
 import { createZone, cutFloorOpening, divideZone, structureChangeBatch } from '../../commands/structure'
 import { reconcileSceneStructure } from '../../lib/structure-reconcile'
-import { type AnyNode, BuildingNode, ItemNode, LevelNode } from '../../schema'
+import {
+  type AnyNode,
+  BuildingNode,
+  ItemNode,
+  LevelNode,
+  type WallNode,
+  type ZoneNode,
+} from '../../schema'
 import { applySceneChanges } from '../apply-changes'
 import type { AgentToolCase, SceneGraph } from './cases'
 
@@ -82,6 +89,25 @@ function kitchenScene({ divided, hatch, lamp }: Build = {}): SceneGraph {
     nodes = applySceneChanges(nodes, { create: [{ node: item, parentId: 'ceiling_kitchen' }] })
   }
   return { nodes, rootNodeIds: [building.id] }
+}
+
+export function paintedKitchenScene(): SceneGraph {
+  const scene = kitchenScene({ divided: true })
+  scene.nodes.zone_kitchen = {
+    ...(scene.nodes.zone_kitchen as ZoneNode),
+    wallMaterial: 'library:preset-white',
+    wallOverrides: [{ wallId: 'wall_north', face: 'a', finish: 'library:local-tile' }],
+  }
+  scene.nodes.zone_pantry = {
+    ...(scene.nodes.zone_pantry as ZoneNode),
+    wallMaterial: 'library:pantry-blue',
+    wallOverrides: [{ wallId: 'wall_south', face: 'a', finish: 'library:pantry-tile' }],
+  }
+  scene.nodes.wall_north = {
+    ...(scene.nodes.wall_north as WallNode),
+    faceRegions: [{ id: 'wainscot', face: 'a', v1: 0.9, finish: 'library:wood' }],
+  }
+  return scene
 }
 
 /** The kitchen's floor plate: the reconciler names it from its footprint. */
@@ -215,6 +241,60 @@ export const ROOM_CASES: AgentToolCase[] = [
       after: { zone_kitchen: { name: 'Studio', floor: { finish: 'wood' } } },
     },
   },
+  // Single public writes: room commands deliberately are not batchable.
+  ...([
+    ['omitting wall intent retains chosen white', { name: 'Studio' }, 'library:preset-white'],
+    ['a wall intent string replaces chosen white', { wallMaterial: 'library:blue' }, 'library:blue'],
+    ['an empty wall intent string remains a string', { wallMaterial: '' }, ''],
+    ['null clears room wall intent without clearing local paint', { wallMaterial: null }, undefined],
+  ] as const).map(([name, patch, wallMaterial]): AgentToolCase => ({
+    name,
+    tool: 'set_zone_intent',
+    scene: paintedKitchenScene,
+    input: { zoneId: 'zone_kitchen', patch },
+    expect: {
+      result: { changes: 1 },
+      after: {
+        zone_kitchen: {
+          wallOverrides: [{ wallId: 'wall_north', face: 'a', finish: 'library:local-tile' }],
+        },
+        zone_pantry: {
+          wallMaterial: 'library:pantry-blue',
+          wallOverrides: [{ wallId: 'wall_south', face: 'a', finish: 'library:pantry-tile' }],
+        },
+        wall_north: {
+          faceRegions: [{ id: 'wainscot', face: 'a', v1: 0.9, finish: 'library:wood' }],
+        },
+      },
+      check: (_result, nodes) =>
+        (nodes.zone_kitchen as ZoneNode).wallMaterial === wallMaterial
+          ? []
+          : [`persisted wallMaterial must be ${String(wallMaterial)}`],
+    },
+  })),
+  {
+    name: 'adjacent rooms read independent wall defaults and local paint',
+    tool: 'get_zones',
+    scene: paintedKitchenScene,
+    input: { levelId: 'level_rooms' },
+    expect: {
+      result: {},
+      contains: {
+        zones: [
+          {
+            id: 'zone_kitchen',
+            wallMaterial: 'library:preset-white',
+            wallOverrides: [{ wallId: 'wall_north', face: 'a', finish: 'library:local-tile' }],
+          },
+          {
+            id: 'zone_pantry',
+            wallMaterial: 'library:pantry-blue',
+            wallOverrides: [{ wallId: 'wall_south', face: 'a', finish: 'library:pantry-tile' }],
+          },
+        ],
+      },
+    },
+  },
   {
     name: 'a floor key no room has is a conflict that says what to choose',
     tool: 'set_zone_intent',
@@ -236,6 +316,22 @@ export const ROOM_CASES: AgentToolCase[] = [
       result: { zoneId: 'zone_kitchen', idMap: { zone_kitchen: ['zone_kitchen'] } },
       after: { zone_kitchen: { seed: [14, 2] }, wall_south: { start: [10, 0], end: [18, 0] } },
       check: holds({ zone: 1, wall: 4 }),
+    },
+  },
+  {
+    name: 'a turn in degrees: half a turn about its centre, then moved',
+    tool: 'move_zone',
+    scene: kitchenScene,
+    input: { zoneId: 'zone_kitchen', rotate: { angle: '180°' }, translate: [10, 0] },
+    expect: {
+      result: { zoneId: 'zone_kitchen' },
+      check: (_result, nodes) => {
+        const wall = nodes.wall_south as WallNode
+        const off = [...wall.start, ...wall.end].some(
+          (value, i) => Math.abs(value - [18, 4, 10, 4][i]!) > 1e-9,
+        )
+        return off ? [`wall_south runs ${wall.start} → ${wall.end}, not 18,4 → 10,4`] : []
+      },
     },
   },
   {
@@ -339,11 +435,25 @@ export const ROOM_CASES: AgentToolCase[] = [
     expect: { result: {}, after: { [plateId]: { thickness: 0.3 } } },
   },
   {
+    name: 'a slab thickness in feet, as the person said it',
+    tool: 'set_room_floor_construction',
+    scene: kitchenScene,
+    input: { zoneId: 'zone_kitchen', patch: { thickness: '1 ft' } },
+    expect: { result: {}, after: { [plateId]: { thickness: 0.3048 } } },
+  },
+  {
     name: 'sets a footprint reference datum',
     tool: 'rebase_floor_reference',
     scene: kitchenScene,
     input: { slabId: plateId, referenceFloorElevation: 0.2 },
     expect: { result: {}, after: { [plateId]: { referenceFloorElevation: 0.2 } } },
+  },
+  {
+    name: 'a reference datum in inches',
+    tool: 'rebase_floor_reference',
+    scene: kitchenScene,
+    input: { slabId: plateId, referenceFloorElevation: '8 in' },
+    expect: { result: {}, after: { [plateId]: { referenceFloorElevation: 0.2032 } } },
   },
   {
     name: 'adds a mezzanine over part of a room',

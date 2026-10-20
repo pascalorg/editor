@@ -1,7 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  confirmSceneViewPresentation,
   type SceneViewCrop,
+  type SceneViewInterior,
+  type SceneViewLighting,
   type SceneViewPose,
+  type SceneViewPresentation,
   sceneViewNote,
   sceneViewPlan,
 } from '@pascal-app/core/agent-operations'
@@ -20,6 +24,9 @@ export type SceneViewCapture = {
   /** Which tab rendered it, and when: the scene as that tab showed it then. */
   tab: string
   capturedAt: string
+  presentation?: SceneViewPresentation
+  /** The host's id of the picture it kept, these exact pixels: a later call can name the frame. */
+  viewId?: string
 }
 
 /**
@@ -31,6 +38,11 @@ export type SceneViewHost = {
     projectId: string
     pose: SceneViewPose
     size: { w: number; h: number }
+    /** A look inside this floor: the editor leaves the rest out and cuts everything on it. */
+    interior?: SceneViewInterior
+    presentation?: SceneViewPresentation
+    /** The light to render it in; the scene's own when absent. */
+    lighting?: SceneViewLighting
   }): Promise<SceneViewCapture>
   /** Crops the reference photo to a region; without it a view with a photo is refused. */
   crop?(
@@ -61,7 +73,8 @@ export function registerViewScene(
         const projectId = operations.getActiveScene()?.projectId
         if (!projectId)
           refuse('no_project', 'This session has no project open to look at: load or create one.')
-        const { pose, size, crop } = sceneViewPlan(
+        // No view of the person's here: core refuses camera 'current' without one.
+        const { pose, size, crop, interior, presentation, lighting } = sceneViewPlan(
           operations.getNodes() as Record<string, AnyNode>,
           input,
         )
@@ -71,16 +84,26 @@ export function registerViewScene(
             'This Pascal server cannot crop a photo: crop the region yourself and lay it beside the view.',
           )
         const [shot, cropped] = await Promise.all([
-          views!.capture({ projectId: projectId!, pose, size }),
+          views!.capture({
+            projectId: projectId!,
+            pose,
+            size,
+            ...(interior ? { interior } : {}),
+            ...(presentation ? { presentation } : {}),
+            ...(lighting ? { lighting } : {}),
+          }),
           crop ? views!.crop!(crop) : undefined,
         ])
+        confirmSceneViewPresentation(presentation, shot.presentation)
         const payload = {
           status: 'viewed',
           camera: pose,
           size: { width: shot.width, height: shot.height },
           tab: shot.tab,
           capturedAt: shot.capturedAt,
-          note: sceneViewNote(),
+          ...(shot.viewId ? { viewId: shot.viewId } : {}),
+          ...(shot.presentation ? { presentation: shot.presentation } : {}),
+          note: sceneViewNote(operations.getNodes() as Record<string, AnyNode>, interior, pose),
           ...(crop && cropped
             ? {
                 photoRegion: crop.region,

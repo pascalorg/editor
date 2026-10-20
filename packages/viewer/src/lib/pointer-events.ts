@@ -21,8 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Vendored from R3F 9.8.1:
- * https://raw.githubusercontent.com/pmndrs/react-three-fiber/v9.8.1/packages/fiber/src/core/events.ts
+ * Vendored from R3F 9.8.2:
+ * https://raw.githubusercontent.com/pmndrs/react-three-fiber/v9.8.2/packages/fiber/src/core/events.ts
  * Ray collection is cached; camera-drag moves are throttled before stock dispatch.
  * The throttle is a vendored-manager policy; dev ?stockEvents uses untouched R3F.
  */
@@ -169,12 +169,15 @@ type CachedQuery = {
  * a material array by each geometry group, and one with no entry throws on
  * `material.side`. A mesh caught mid-swap (a preview restored an older array
  * over a rebuilt geometry) is skipped for this move instead of taking the whole
- * pointer event down; its children are still tested.
+ * pointer event down; its children are still tested. `material` asks the same of
+ * an array the mesh would wear.
  */
-export function hasMaterialsForGroups(object: THREE.Object3D): boolean {
+export function hasMaterialsForGroups(
+  object: THREE.Object3D,
+  material: THREE.Material | THREE.Material[] | undefined = (object as THREE.Mesh).material,
+): boolean {
   const mesh = object as THREE.Mesh
   if (!mesh.isMesh) return true
-  const material = mesh.material
   if (!material) return false
   if (!Array.isArray(material)) return true
   for (const group of mesh.geometry?.groups ?? []) {
@@ -317,7 +320,7 @@ export function createPascalPointerEvents(store: RootStore): EventManager<HTMLEl
 }
 
 function makeId(event: Intersection) {
-  // biome-ignore lint/style/useTemplate: Keep the vendored dispatch identical to R3F 9.8.1.
+  // biome-ignore lint/style/useTemplate: Keep the vendored dispatch identical to R3F 9.8.2.
   return (event.eventObject || event.object).uuid + '/' + event.index + event.instanceId
 }
 

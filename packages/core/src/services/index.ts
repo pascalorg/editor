@@ -91,6 +91,43 @@ export {
   type RiserLine,
   type RiserMarker,
 } from './riser-diagram'
+export {
+  type Bearing,
+  type RoofShape,
+  riseAt,
+  seatOn,
+  segmentBearing,
+  segmentShape,
+  shapeOfRect,
+  standsOverStorey,
+  type WallSpan,
+  wallSpans,
+  wallsUnder,
+} from './roof-bearing'
+export {
+  coveredStoreyId,
+  isRoofGeometry,
+  isRoofLevel,
+  isStoreyContent,
+  liftRoofLevels,
+  planRoofLevel,
+  type RoofLevelPlan,
+  roofLevelAbove,
+  roofLevelOrderBreach,
+  roofsOver,
+  servesAsRoofLevel,
+  storeyInsertIndex,
+  storeyOf,
+} from './roof-level'
+export {
+  isRoofOnStoreyWalls,
+  planRoofSeats,
+  planRoofsOffStorey,
+  type RoofMove,
+  type RoofSeat,
+  roofsKeptOverStorey,
+  seatRoofs,
+} from './roof-move'
 export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'
 export {
   DEFAULT_ANGLE_STEP,
@@ -107,8 +144,14 @@ export {
   snapWorldXZToBuildingLocal,
 } from './snap'
 export {
+  getBoundarySurfaces,
+  resolveStairSurfaceSnap,
+  type StairSurfaceSnap,
+} from './stair-surface-snap'
+export {
   CEILING_CLAMP_MARGIN,
   CEILING_DRAW_OFFSET,
+  EXPLODED_GAP,
   findLevelAboveId,
   findLevelBelowId,
   getCeilingClampBound,
@@ -120,6 +163,7 @@ export {
   getLevelFloorToFloorHeight,
   getStoredLevelHeight,
   getWallPlaneTop,
+  getWallTop,
   type LevelElevation,
 } from './storey'
 export {

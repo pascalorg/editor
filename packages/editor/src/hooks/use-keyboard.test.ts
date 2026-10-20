@@ -26,6 +26,7 @@ import {
   blocksSnappingShortcut,
   canCycleSnappingModeShortcut,
   canRunGlobalRotationShortcut,
+  hasSceneKeyboardFocus,
   isToolOwnedCanopyForm,
   isToolOwnedRotation,
   markToolCancelConsumed,
@@ -48,27 +49,75 @@ type RafFn = (callback: (time: number) => void) => number
 const NODE_ID = 'block_history' as AnyNodeId
 
 describe('snapping shortcuts while entering a run length', () => {
+  test('document panes keep copy, delete and editing shortcuts away from the scene until it is focused', () => {
+    useEditor.setState({ viewLayouts: {} })
+    expect(hasSceneKeyboardFocus()).toBe(true)
+    useEditor.getState().showView('document:plan', { beside: true })
+    expect(hasSceneKeyboardFocus()).toBe(false)
+    useEditor.getState().focusViewPane(0)
+    expect(hasSceneKeyboardFocus()).toBe(true)
+    useEditor
+      .getState()
+      .setViewLayout({ split: false, panes: ['document:plan', '3d'], ratio: 0.5, focus: 0 })
+    expect(hasSceneKeyboardFocus()).toBe(false)
+    useEditor.getState().closeView('document:plan')
+  })
   test('allows snap mode and spacing shortcuts in the duct and pipe length field', () => {
-    expect(
-      blocksSnappingShortcut({
-        tagName: 'INPUT',
-        isContentEditable: false,
-        hasAttribute: (name) => name === 'data-run-length-input',
-      }),
-    ).toBe(false)
+    const field = {
+      tagName: 'INPUT',
+      isContentEditable: false,
+      hasAttribute: (name: string) => name === 'data-run-length-input',
+      closest: (): object => field,
+    }
+    expect(blocksSnappingShortcut(field)).toBe(false)
   })
 
   test('continues to protect ordinary text fields and editable content', () => {
-    for (const tagName of ['INPUT', 'TEXTAREA', 'DIV']) {
-      expect(
-        blocksSnappingShortcut({
-          tagName,
-          isContentEditable: tagName === 'DIV',
-          hasAttribute: () => false,
-        }),
-      ).toBe(true)
+    for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT', 'DIV']) {
+      const field = {
+        tagName,
+        isContentEditable: tagName === 'DIV',
+        hasAttribute: () => false,
+        closest: (): object => field,
+      }
+      expect(blocksSnappingShortcut(field)).toBe(true)
     }
     expect(blocksSnappingShortcut(null)).toBe(false)
+  })
+
+  test('honors closest-owned fields and dialogs without claiming ordinary canvas keys', () => {
+    // Model the DOM closest result, not its selector spelling. Native descendant
+    // propagation is checked by the protected browser fixture.
+    for (const role of ['textbox', 'combobox', 'dialog', 'alertdialog']) {
+      const owner = { role }
+      const descendant = {
+        tagName: 'SPAN',
+        isContentEditable: false,
+        hasAttribute: () => false,
+        closest: () => owner,
+      }
+      expect(blocksSnappingShortcut(descendant)).toBe(true)
+    }
+    const canvas = {
+      tagName: 'CANVAS',
+      isContentEditable: false,
+      hasAttribute: () => false,
+      closest: () => null,
+    }
+    expect(blocksSnappingShortcut(canvas)).toBe(false)
+    expect(blocksSnappingShortcut({ ...canvas, tagName: 'SPAN', isContentEditable: true })).toBe(
+      true,
+    )
+  })
+
+  test('reserves the run-length exception for its actual input, not another editable owner', () => {
+    const textarea = {
+      tagName: 'TEXTAREA',
+      isContentEditable: false,
+      hasAttribute: (name: string) => name === 'data-run-length-input',
+      closest: (): object => textarea,
+    }
+    expect(blocksSnappingShortcut(textarea)).toBe(true)
   })
 })
 
@@ -89,7 +138,7 @@ beforeEach(() => {
 afterEach(() => {
   useInteractionScope.getState().end()
   useEditor.getState().armToolMode({ mode: 'select' })
-  useEditor.setState({ selectedItem: null })
+  useEditor.setState({ selectedItem: null, viewLayouts: {} })
   clearSceneHistory()
 })
 
@@ -383,6 +432,32 @@ describe('B and P open their panel', () => {
     expect(editor.getContinuation('wall')).toBe('rectangle')
     expect(editor.activeSidebarPanel).toBe('build')
     expect(useSidebarStore.getState().isCollapsed).toBe(false)
+  })
+
+  // A host may drop the armed tool when the panel changes (the community does,
+  // with any placement in flight), so B and F open their panel first.
+  test('B and F keep their tool from another panel where the host disarms on a panel change', () => {
+    setSidebarTabIds(['build', 'paint', 'items', 'ai'])
+    const unsubscribe = useEditor.subscribe((state, prev) => {
+      if (state.activeSidebarPanel !== prev.activeSidebarPanel) {
+        useEditor.getState().armToolMode({ mode: 'select' })
+      }
+    })
+    try {
+      for (const [arm, from, panel, tool] of [
+        [armWallToolFromShortcut, 'ai', 'build', 'wall'],
+        [openItemCatalogFromShortcut, 'paint', 'items', 'item'],
+      ] as const) {
+        useEditor.getState().setActiveSidebarPanel(from)
+        arm()
+        const editor = useEditor.getState()
+        expect(editor.activeSidebarPanel).toBe(panel)
+        expect(editor.mode).toBe('build')
+        expect(editor.tool).toBe(tool)
+      }
+    } finally {
+      unsubscribe()
+    }
   })
 
   test('P arms paint and shows the Paint panel, or Build where the host has none', () => {

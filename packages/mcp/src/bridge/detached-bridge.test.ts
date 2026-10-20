@@ -153,6 +153,15 @@ describe('every MCP tool on a detached scene', () => {
     } as SceneSnapshot)
     const bridge = new SceneBridge({ runtime: scene })
     bridge.setActiveScene({ id: 'scene_detached', name: 'Detached' } as never)
+    bridge.agentSession.keep({
+      designBrief: {
+        fixed: ['the test’s pieces'],
+        open: [],
+        source: 'catalog',
+        vision: 'The catalog as it is.',
+        beyond: 'none: the test places what the request names.',
+      },
+    })
     const client = await connect(createPascalMcpServer({ bridge, geometryScripts: host }))
     const calls = [
       ['create_unit', { buildingId: 'building_b', name: 'Flat' }],

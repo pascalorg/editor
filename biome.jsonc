@@ -274,7 +274,7 @@
         }
       }
     },
-    // E-017: shared operations select what they read, so a detached scene records a selection.
+    // E-018: shared operations select what they read, so a detached scene records a selection.
     {
       "includes": ["packages/core/src/agent-operations/**/*.ts", "!**/*.test.ts"],
       "plugins": ["./scripts/biome/raw-scene-enumeration.grit"]

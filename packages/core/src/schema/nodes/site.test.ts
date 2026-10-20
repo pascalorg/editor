@@ -1,9 +1,80 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeTerrainField } from '../../lib/terrain-codec'
 import { createTerrainField } from '../../lib/terrain-field'
-import { migrateSiteMetadata, SiteNode } from './site'
+import { SiteNode } from './site'
+import { migrateSiteMetadata } from './site-facts'
 
 describe('SiteNode.terrain', () => {
+  test('project rendering defaults round-trip without changing geometry or legacy scenes', () => {
+    const legacy = SiteNode.parse({ id: 'site_look', children: ['building_house'] })
+    expect(legacy.presentation).toBeUndefined()
+    const presentation = {
+      theme: 'studio',
+      exposure: 0.94,
+      shading: 'rendered',
+      edges: 'off',
+      lighting: {
+        background: '#dce4e5',
+        backgroundSky: null,
+        ambient: { color: '#ffffff', intensity: 0 },
+        hemi: { sky: '#e5f1ff', ground: '#92866c', intensity: 0.95 },
+        lights: [
+          {
+            position: [-17, 29, 18],
+            target: [0, 0, 0],
+            color: '#fff2d6',
+            intensity: 2.8,
+            castShadow: true,
+            shadow: {
+              intensity: 1,
+              mapSize: 4096,
+              bias: -0.0002,
+              normalBias: 0.015,
+              radius: 1,
+              camera: { left: -26, right: 26, top: 26, bottom: -26, near: 0.5, far: 500 },
+            },
+          },
+        ],
+        environment: { source: 'room', intensity: 0.28 },
+      },
+      postprocessing: { ambientOcclusion: false, colorGrading: false },
+    }
+    const restored = SiteNode.parse(JSON.parse(JSON.stringify({ ...legacy, presentation })))
+    expect(restored.presentation).toEqual(presentation)
+    const { presentation: _look, ...geometry } = restored
+    expect(geometry).toEqual(legacy)
+    expect(SiteNode.safeParse({ ...legacy, presentation: { exposure: -1 } }).success).toBe(false)
+    expect(
+      SiteNode.safeParse({ ...legacy, presentation: { lighting: { background: 'url(secret)' } } })
+        .success,
+    ).toBe(false)
+    for (const shadow of [
+      { mapSize: 8192 },
+      { intensity: 1.1 },
+      { camera: { left: 26, right: -26, top: 26, bottom: -26, near: 0.5, far: 500 } },
+      { camera: { left: -26, right: 26, top: 26, bottom: -26, near: 500, far: 0.5 } },
+    ]) {
+      expect(
+        SiteNode.safeParse({
+          ...legacy,
+          presentation: {
+            lighting: { lights: [{ ...presentation.lighting.lights[0], shadow }] },
+          },
+        }).success,
+      ).toBe(false)
+    }
+  })
+  test('ground presentation is optional and survives a scene round-trip without changing children', () => {
+    const original = SiteNode.parse({ id: 'site_authored-ground', children: ['building_house'] })
+    expect(original.showGround).toBeUndefined()
+    const restored = SiteNode.parse(JSON.parse(JSON.stringify({ ...original, showGround: false })))
+    expect(restored.showGround).toBe(false)
+    expect(restored.children).toEqual(original.children)
+    expect(restored.polygon).toEqual(original.polygon)
+    expect(restored.visible).toBe(original.visible)
+    expect(SiteNode.safeParse({ ...original, showGround: 'false' }).success).toBe(false)
+  })
+
   test('a scene saved before terrain existed still parses', () => {
     const parsed = SiteNode.parse({ id: 'site_1', type: 'site' })
     expect(parsed.terrain).toBeUndefined()

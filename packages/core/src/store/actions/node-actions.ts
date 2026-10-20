@@ -2,6 +2,7 @@ import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
 import type { StructurePlan } from '../../commands/structure/shared'
 import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
 import { isSpaceDetectionPaused } from '../../lib/space-detection'
+import { deletedSurfaceSupportPatch } from '../../lib/surface-support-references'
 import { nodeRegistry } from '../../registry/registry'
 import { validateNodeRelations } from '../../registry/validate-relations'
 import {
@@ -42,6 +43,7 @@ import {
   resolveMergedWallEndpoints,
   type WallAttachmentUpdate,
 } from '../../systems/wall/wall-merge'
+import { areSemanticValuesEqual } from '../../utils/semantic-equal'
 import {
   convertDerivedPlateHoleWrites,
   DERIVED_WRITER_TOKEN,
@@ -54,6 +56,7 @@ import {
 import {
   activeSceneCommitNodeIds,
   addActiveSceneCommitNodeIds,
+  noteDerivedNodeWrites,
   runWithSceneCommitNodeIds,
 } from '../history-control'
 import { currentSceneEnvironment } from '../scene-environment'
@@ -68,6 +71,25 @@ type NodeCreateOp = {
 }
 type NodeUpdateOp = { id: AnyNodeId; data: Partial<AnyNode> }
 type NodeDeleteOp = AnyNodeId
+
+/**
+ * What a derived write of `updates` changes, for the commit that carries it: a node, and the fields whose
+ * value differs from the node's own. A write that sets what is already there changes nothing, so it is
+ * not noted and cannot mark a later authored edit of that field as derived.
+ */
+function changedDerivedFields(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  updates: NodeUpdateOp[],
+) {
+  return updates.flatMap(({ id, data }) => {
+    const node = nodes[id] as Record<string, unknown> | undefined
+    if (!node) return []
+    const fields = Object.keys(data).filter(
+      (field) => !areSemanticValuesEqual(node[field], (data as Record<string, unknown>)[field]),
+    )
+    return fields.length ? [{ id, fields }] : []
+  })
+}
 type WallMergePlan = {
   primaryWallId: AnyNodeId
   secondaryWallId: AnyNodeId
@@ -80,11 +102,13 @@ type WallMergePlan = {
 }
 
 const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
+  'roofSystem',
   'roofType',
   'width',
   'depth',
   'pitch',
   'overhang',
+  'gableOverhang',
   'wallThickness',
   'shingleThickness',
   'gambrelLowerWidthRatio',
@@ -104,6 +128,8 @@ const DEFAULT_GUTTER_REFRESH_FIELDS = new Set<string>([
   'wallHeight',
   'pitch',
   'overhang',
+  'gableOverhang',
+  'wallThickness',
   'trim',
 ])
 
@@ -1075,6 +1101,11 @@ const pendingDirtyMarks = () =>
     ids: new Set(),
   }))
 
+/** The current environment's authored updates whose deferred dirty intent has not reached render systems yet. */
+export function getPendingNodeUpdateCount(): number {
+  return pendingDirtyMarks().ids.size
+}
+
 function buildWallMergePlans(
   nodes: Record<AnyNodeId, AnyNode>,
   idsToDelete: AnyNodeId[],
@@ -1164,6 +1195,8 @@ const createNodesActionImpl = (
   if (get().readOnly) return
   ops = filterDerivedNodeWrites(get().nodes, { create: ops }, options).create
   if (!ops.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(ops.map((op) => ({ id: op.node.id })))
   const extraNodesToMarkDirty = new Set<AnyNodeId>()
   const extraNodesToClearDirty = new Set<AnyNodeId>()
   set((state) => {
@@ -1306,6 +1339,12 @@ const applyNodeChangesActionImpl = (
   changes = convertDerivedPlateHoleWrites(get().nodes, changes, options)
   changes = filterDerivedNodeWrites(get().nodes, changes, options)
   if (!changes.create?.length && !changes.update?.length && !changes.delete?.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites([
+      ...(changes.create ?? []).map((op) => ({ id: op.node.id })),
+      ...changedDerivedFields(get().nodes, changes.update ?? []),
+      ...(changes.delete ?? []).filter((id) => get().nodes[id]).map((id) => ({ id })),
+    ])
 
   const createOps = changes.create ?? []
   const deletionIntent =
@@ -1487,6 +1526,8 @@ const updateNodesActionImpl = (
   }
   updates = filterDerivedNodeWrites(get().nodes, { update: converted.update ?? [] }, options).update
   if (!updates.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(changedDerivedFields(get().nodes, updates))
   const parentsToUpdate = new Set<AnyNodeId>()
   const extraNodesToUpdate = new Set<AnyNodeId>()
   const extraNodesToDelete = new Set<AnyNodeId>()
@@ -1831,6 +1872,14 @@ export function planNodeDeletion(
     }
   }
 
+  for (const node of Object.values(nextNodes)) {
+    if (allIds.has(node.id)) continue
+    const patch = deletedSurfaceSupportPatch(node, allIds)
+    if (!patch) continue
+    nextNodes[node.id] = { ...node, ...patch } as AnyNode
+    nodesToMarkDirty.add(node.id)
+  }
+
   // A deleted door takes its step paint with it, in the same undo step; every
   // other doorway keeps its own.
   for (const node of Object.values(nextNodes)) {
@@ -1956,6 +2005,8 @@ const deleteNodesActionImpl = (
   wallDeletionPlan?: StructurePlan,
 ) => {
   if (get().readOnly) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(ids.filter((id) => get().nodes[id]).map((id) => ({ id })))
   let deletedIds = new Set<AnyNodeId>()
   let parentsToMarkDirty = new Set<AnyNodeId>()
   let nodesToMarkDirty = new Set<AnyNodeId>()

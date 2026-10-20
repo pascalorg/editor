@@ -82,7 +82,7 @@ export function ParametricFieldControl({
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
           <select
-            className="rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+            className="rounded-md border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
             onChange={(e) => apply(e.target.value)}
             value={mixed ? '' : str}
           >
@@ -119,7 +119,7 @@ export function ParametricFieldControl({
               value={str}
             />
             <input
-              className="w-20 rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+              className="w-20 rounded-md border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
               onChange={(e) => apply(e.target.value)}
               type="text"
               value={mixed ? 'Mixed' : str}

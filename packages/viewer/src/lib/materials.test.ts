@@ -4,7 +4,11 @@ import { describe, expect, test } from 'bun:test'
 import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
 import { MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
-import { materialCastsShadow } from '../index'
+import {
+  createMaterial as createSceneMaterial,
+  materialCastsShadow,
+  resolveMaterialRef as resolveSceneMaterialRef,
+} from '../index'
 import {
   createMaterial,
   getTextureKey,
@@ -80,6 +84,39 @@ describe('material shadow policy', () => {
     expect(materialCastsShadow(transparent)).toBe(false)
     expect(materialCastsShadow(tinted)).toBe(true)
     expect(materialCastsShadow(opaque)).toBe(true)
+  })
+})
+
+describe('authored transparency', () => {
+  test('a scene material keeps its opacity and reflection intensity independently of glass styling', () => {
+    const properties = MaterialProperties.parse({
+      color: '#789ca2',
+      roughness: 0.14,
+      opacity: 0.38,
+      transparent: true,
+    })
+    const preset = createSceneMaterial({ preset: 'glass', properties }) as MeshStandardNodeMaterial
+    const materials = {
+      mat_authored: {
+        id: 'mat_authored' as const,
+        name: 'Authored glass',
+        material: { preset: 'custom' as const, properties },
+      },
+    }
+    const authored = resolveSceneMaterialRef(
+      'scene:mat_authored',
+      materials,
+    ) as MeshStandardNodeMaterial
+    expect(authored.opacity).toBe(0.38)
+    expect(authored.opacityNode).toBeNull()
+    expect(authored.envMapIntensity).toBe(1)
+    expect(authored.color.getHexString()).toBe('789ca2')
+    expect(authored.roughness).toBe(0.14)
+    expect(materialCastsShadow(authored)).toBe(false)
+    expect(preset.opacityNode).not.toBeNull()
+    expect(preset.envMapIntensity).toBe(1.4)
+    expect(preset).not.toBe(authored)
+    expect(resolveSceneMaterialRef('scene:mat_authored', materials)).toBe(authored)
   })
 })
 

@@ -234,7 +234,7 @@ export function FenceFeatureEditor({
                 <label className="flex min-h-9 items-center justify-between gap-3 text-xs text-muted-foreground">
                   Gate style
                   <select
-                    className="h-8 min-w-0 max-w-40 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-xs text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus-visible:ring-2 focus-visible:ring-ring"
+                    className="h-8 min-w-0 max-w-40 rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-xs text-foreground outline-none transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] focus-visible:ring-2 focus-visible:ring-ring"
                     value={feature.style && feature.style !== 'match' ? feature.style : 'picket'}
                     onChange={(event) => {
                       const style = FenceStyle.safeParse(event.currentTarget.value)
@@ -258,7 +258,7 @@ export function FenceFeatureEditor({
                   >
                     {field.label}
                     <select
-                      className="h-8 min-w-0 max-w-40 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-xs text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus-visible:ring-2 focus-visible:ring-ring"
+                      className="h-8 min-w-0 max-w-40 rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-xs text-foreground outline-none transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] focus-visible:ring-2 focus-visible:ring-ring"
                       value={field.value}
                       onChange={(event) => update(feature.id, { [field.key]: event.target.value })}
                     >

@@ -27,6 +27,7 @@ const sha = 'a'.repeat(64)
 const compiled = {
   sha256: sha,
   script: 'b'.repeat(64),
+  language: 'three' as const,
   mount: 'floor' as const,
   params: {},
   manifest: GeometryArtifactManifest.parse({

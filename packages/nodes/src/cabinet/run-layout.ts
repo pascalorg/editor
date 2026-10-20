@@ -508,13 +508,36 @@ export function getRunSpanEnds(
     if (childBaseLegSides.has('left') && spanIndex === 0) leftOverhang = 0
     if (childBaseLegSides.has('right') && spanIndex === spans.length - 1) rightOverhang = 0
 
+    const leftFiller = ctx?.children.find(
+      (child) =>
+        child.type === 'cabinet-module' &&
+        Math.abs(child.position[0] - child.width / 2 - span.minX) < RUN_ADJACENCY_EPSILON,
+    )
+    const rightFiller = ctx?.children.find(
+      (child) =>
+        child.type === 'cabinet-module' &&
+        Math.abs(child.position[0] + child.width / 2 - span.maxX) < RUN_ADJACENCY_EPSILON,
+    )
+    if (leftFiller?.type === 'cabinet-module' && leftFiller.moduleKind === 'wall-filler')
+      leftOverhang = 0
+    if (rightFiller?.type === 'cabinet-module' && rightFiller.moduleKind === 'wall-filler')
+      rightOverhang = 0
     const exposedLeft =
-      spanIndex === 0 && !hasExternalLeftNeighbor && !hasInternalLeftNeighbor && barEdge !== 'left'
+      !(leftFiller?.type === 'cabinet-module' && leftFiller.moduleKind === 'wall-filler') &&
+      spanIndex === 0 &&
+      !hasExternalLeftNeighbor &&
+      !hasInternalLeftNeighbor &&
+      barEdge !== 'left' &&
+      !(cornerLink?.role === 'base-leg' && cornerLink.side === 'right') &&
+      !childBaseLegSides.has('left')
     const exposedRight =
+      !(rightFiller?.type === 'cabinet-module' && rightFiller.moduleKind === 'wall-filler') &&
       spanIndex === spans.length - 1 &&
       !hasExternalRightNeighbor &&
       !hasInternalRightNeighbor &&
-      barEdge !== 'right'
+      barEdge !== 'right' &&
+      !(cornerLink?.role === 'base-leg' && cornerLink.side === 'left') &&
+      !childBaseLegSides.has('right')
 
     return { leftOverhang, rightOverhang, exposedLeft, exposedRight }
   })

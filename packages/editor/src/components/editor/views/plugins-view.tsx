@@ -30,6 +30,7 @@ import { openSidebarPanel } from '../../../lib/sidebar-panel'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { IconRefGlyph } from '../../ui/icon-ref'
+import { Badge } from '../../ui/primitives/badge'
 import { Button } from '../../ui/primitives/button'
 import { PLUGINS_VIEW_ID } from './use-editor-views'
 
@@ -97,14 +98,6 @@ function PluginIcon({ panel, size }: { panel: EditorHostPanel; size: 'md' | 'lg'
       )}
     >
       <IconRefGlyph icon={panel.icon} size={size === 'md' ? 28 : 36} />
-    </span>
-  )
-}
-
-function Badge({ label }: { label: string }) {
-  return (
-    <span className="rounded-[5px] border border-border px-1.5 py-px font-mono font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
-      {label}
     </span>
   )
 }

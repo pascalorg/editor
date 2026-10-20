@@ -4,6 +4,7 @@ import {
   type AddColumnInput,
   addColumn,
   columnScriptParams,
+  editedScriptLanguage,
 } from '@pascal-app/core/agent-operations'
 import { addColumnTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
 import { type AnyNode, GeometryReuseFields, generateId } from '@pascal-app/core/schema'
@@ -41,8 +42,9 @@ export function registerAddColumn(
           if (!scene) refuse('no_active_scene', 'Open or save a scene first.')
           // A new column's id is the scene's, minted before anything is awaited.
           const nodeId = input.nodeId ?? inScene(bridge, () => generateId('column'))
+          const language = editedScriptLanguage(previous, input)
           const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId!))
-          compiled = await compileAndStore(host, scene.id, code, params, 'column', {
+          compiled = await compileAndStore(host, scene.id, { code, language, params }, 'column', {
             nodeId,
             metadata: {
               ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
@@ -51,7 +53,11 @@ export function registerAddColumn(
           })
         }
         const outcome = inScene(bridge, () =>
-          addColumn(nodes, { ...input, compiled }, { activeLevelId: null }),
+          addColumn(
+            nodes,
+            { ...input, compiled },
+            { activeLevelId: bridge.activeLevelId?.() ?? null },
+          ),
         )
         if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))
         const payload = {

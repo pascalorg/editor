@@ -1,5 +1,5 @@
 // Agent operations run on detached scenes, whose reader records what they read (DECISIONS.md
-// E-017). Enumerating a whole `nodes` or collections record reads every entry, so any entity
+// E-018). Enumerating a whole `nodes` or collections record reads every entry, so any entity
 // created meanwhile conflicts. Select through `queryNodes` / `queryCollections` instead; an
 // operation that genuinely reads everything says why with a biome-ignore comment.
 language js
@@ -9,7 +9,7 @@ language js
   $record <: or { `nodes`, `scene.nodes`, `scene.collections` },
   register_diagnostic(
     span = $record,
-    message = "Enumerating the scene records a read of every node on a detached scene: select with queryNodes / queryCollections. See DECISIONS.md E-017.",
+    message = "Enumerating the scene records a read of every node on a detached scene: select with queryNodes / queryCollections. See DECISIONS.md E-018.",
     severity = "error"
   )
 }

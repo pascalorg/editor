@@ -7,9 +7,11 @@ import {
   CeilingNode,
   ColumnNode,
   createTerrainField,
+  DoorNode,
   ElevatorNode,
   encodeTerrainField,
   flattenPatch,
+  GeometryArtifactManifest,
   LevelNode,
   nodeRegistry,
   registerNode,
@@ -17,6 +19,7 @@ import {
   SiteNode,
   SlabNode,
   sceneRegistry,
+  useInteractive,
   useScene,
 } from '@pascal-app/core'
 import { hideFromScene, STAND_CLEARANCE, showInScene } from '@pascal-app/viewer'
@@ -323,5 +326,111 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     expect(standOn(-3, -3)).toBeCloseTo(0, 4)
 
     world.dispose()
+  })
+})
+
+// A door built from a script is drawn by its model: the leaves are the model's own and its `open`
+// clip moves them. What the player is stopped by is a stand-in leaf box at the door's frame, and
+// that box has to follow the door's own open state, not the native `operationState` the clip
+// never touches.
+describe('a door built from a script', () => {
+  const source = {
+    kind: 'script' as const,
+    script: 'b'.repeat(64),
+    artifact: 'a'.repeat(64),
+    manifest: GeometryArtifactManifest.parse({
+      bounds: { min: [-0.6, 0, -0.11], max: [0.6, 2.55, 0.11] },
+      triangles: 12,
+      animations: [{ name: 'open', duration: 1.3 }],
+    }),
+  }
+  // The door mechanism's open state for a script: the first control toggle of the item.
+  const mechanism = {
+    verb: 'open',
+    icon: 'door',
+    has: (node: AnyNode) => Boolean((node as { source?: unknown }).source),
+    isOn: (node: AnyNode, state: ReturnType<typeof useInteractive.getState>) =>
+      Boolean(state.items[node.id as never]?.controlValues[0]),
+    set: () => {},
+  }
+
+  function mountScriptedDoor(language: 'three' | 'bpy' = 'three') {
+    registerNode({
+      kind: 'door',
+      schema: DoorNode,
+      schemaVersion: 1,
+      category: 'structure',
+      capabilities: { mechanism },
+    } as unknown as AnyNodeDefinition)
+    registerColliderDefinition('column', ColumnNode, 'structure')
+    const door = DoorNode.parse({
+      id: 'door_shoji',
+      doorType: 'sliding',
+      width: 1.2,
+      height: 2.55,
+      source: { ...source, language },
+    })
+    const column = ColumnNode.parse({ id: 'column_far' })
+    setSceneNodes([door, column])
+    mountNode(column, [1, 2, 1], [10, 1, 0])
+    // The door's registered group, as its renderer builds it: the compiled model under it, with
+    // the agent's 1 m deep `cutout` box and two leaves.
+    const group = new Group()
+    group.position.set(0, 1.275, 0)
+    const box = (name: string, size: [number, number, number], x: number, z: number) => {
+      const mesh = new Mesh(new BoxGeometry(...size), new MeshBasicMaterial())
+      mesh.name = name
+      mesh.position.set(x, 0, z)
+      group.add(mesh)
+    }
+    box('cutout', [1.2, 2.55, 1], 0, 0)
+    box('leaf_0', [0.5, 2.4, 0.02], -0.255, 0.025)
+    box('leaf_1', [0.5, 2.4, 0.02], 0.255, -0.025)
+    group.updateMatrixWorld(true)
+    sceneRegistry.nodes.set(door.id, group)
+    sceneRegistry.byType.door!.add(door.id)
+    return door
+  }
+
+  /** Walk straight at the doorway from the front, at hip height: where the first thing is hit. */
+  function firstHitAcrossDoorway() {
+    const world = buildFirstPersonColliderWorldFromRegistry()
+    if (!world) return null
+    const raycaster = new Raycaster(new Vector3(0, 1, -3), new Vector3(0, 0, 1))
+    const hit = raycaster.intersectObject(world.mesh, false)[0]
+    world.dispose()
+    return hit ? { z: hit.point.z } : null
+  }
+
+  afterEach(() => {
+    useInteractive.setState({ items: {} } as never)
+    sceneRegistry.clear()
+    nodeRegistry._reset()
+    useScene.setState({ nodes: {}, rootNodeIds: [] } as never)
+  })
+
+  test('a closed one stops the player at its leaf, not at the model’s cutout box', () => {
+    mountScriptedDoor()
+    useInteractive.setState({ items: { door_shoji: { controlValues: [false] } } } as never)
+
+    const hit = firstHitAcrossDoorway()
+    expect(hit).not.toBeNull()
+    // the stand-in leaf is 0.06 m deep at the frame; the cutout would stop the player at z = -0.5
+    expect(hit!.z).toBeCloseTo(-0.03, 3)
+  })
+
+  test('an open one can be walked through, and its cutout never collides', () => {
+    mountScriptedDoor()
+    useInteractive.setState({ items: { door_shoji: { controlValues: [true] } } } as never)
+
+    expect(firstHitAcrossDoorway()).toBeNull()
+  })
+  test('a Blender-built door follows its mechanism the same way: the language makes no difference', () => {
+    mountScriptedDoor('bpy')
+    useInteractive.setState({ items: { door_shoji: { controlValues: [false] } } } as never)
+    expect(firstHitAcrossDoorway()?.z).toBeCloseTo(-0.03, 3)
+
+    useInteractive.setState({ items: { door_shoji: { controlValues: [true] } } } as never)
+    expect(firstHitAcrossDoorway()).toBeNull()
   })
 })

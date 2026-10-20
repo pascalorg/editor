@@ -13,14 +13,13 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-
+import { isTypingTarget } from '../../../lib/typing-target'
 import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../../store/use-editor'
-
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
@@ -286,9 +285,7 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const ROTATION_STEP = Math.PI / 4
       let rotationDelta = 0

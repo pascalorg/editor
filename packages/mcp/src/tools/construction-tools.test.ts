@@ -4,7 +4,13 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { measureStair } from '@pascal-app/core'
 import { pointInPolygon, type Vec2 } from '@pascal-app/core/agent-operations'
-import { type AnyNodeId, LevelNode, SlabNode } from '@pascal-app/core/schema'
+import {
+  type AnyNodeId,
+  LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+  SlabNode,
+} from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerConstructionTools } from './construction-tools'
 import { registerSharedTools } from './shared-tools'
@@ -326,19 +332,101 @@ describe('construction tools', () => {
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     const roofLevel = bridge.getNode(parsed.roofLevelId)
     const roof = bridge.getNode(parsed.roofId)
-    const segment = bridge.getNode(parsed.roofSegmentId)
+    const segment = bridge.getNode(parsed.segmentIds[0])
     expect(parsed.createdRoofLevelId).toBe(parsed.roofLevelId)
     expect(roofLevel?.parentId).toBe(building.id)
     expect(roofLevel?.type).toBe('level')
     if (roofLevel?.type === 'level') {
       expect(roofLevel.level).toBe(level.type === 'level' ? level.level + 1 : 1)
-      expect(roofLevel.metadata).toMatchObject({ role: 'roof', referenceLevelId: level.id })
+      expect(roofLevel.metadata).toMatchObject({ role: 'roof' })
     }
     expect(roof?.parentId).toBe(parsed.roofLevelId)
     expect(roof?.type).toBe('roof')
     expect(segment?.parentId).toBe(parsed.roofId)
     expect(segment?.type).toBe('roof-segment')
     expect(bridge.validateScene().valid).toBe(true)
+  })
+
+  for (const roofType of ['gable', 'shed', 'barrel'] as const) {
+    test(`create_roof persists ${roofType} glazing configuration`, async () => {
+      const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+      const result = await client.callTool({
+        name: 'create_roof',
+        arguments: {
+          levelId: level.id,
+          width: 8,
+          depth: 6,
+          roofType,
+          roofSystem: 'glazed',
+          glazing: { glassColor: '#abcdef', across: { layout: 'count', count: 4 } },
+        },
+      })
+      expect(result.isError).toBeFalsy()
+      const payload = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+      expect(bridge.getNode(payload.segmentIds[0])).toMatchObject({
+        roofType,
+        roofSystem: 'glazed',
+        glazing: { glassColor: '#abcdef', across: { layout: 'count', count: 4 } },
+      })
+      expect(bridge.validateScene().valid).toBe(true)
+    })
+  }
+
+  test('a barrel rise beyond a semicircle is refused without graph mutations', async () => {
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const before = Object.keys(bridge.getNodes()).length
+    const result = await client.callTool({
+      name: 'create_roof',
+      arguments: {
+        levelId: level.id,
+        width: 6,
+        depth: 4,
+        roofType: 'barrel',
+        barrelRise: 3,
+      },
+    })
+    expect(result.isError).toBe(true)
+    expect(Object.keys(bridge.getNodes())).toHaveLength(before)
+  })
+
+  test('unsupported glazed shapes are refused before creating scene nodes', async () => {
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const before = Object.keys(bridge.getNodes())
+    const result = await client.callTool({
+      name: 'create_roof',
+      arguments: {
+        levelId: level.id,
+        width: 8,
+        depth: 6,
+        roofType: 'conical',
+        roofSystem: 'glazed',
+      },
+    })
+    expect(result.isError).toBe(true)
+    expect(Object.keys(bridge.getNodes())).toEqual(before)
+  })
+
+  // Hawkesbury's flat roofs wear a black edge band, which only apply_patch could draw (2026-10-03).
+  test('create_roof gives a flat roof a fascia band of a height and a finish', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const result = await client.callTool({
+      name: 'create_roof',
+      arguments: {
+        levelId: level.id,
+        width: 6,
+        depth: 4,
+        roofType: 'flat',
+        fasciaHeight: 0.3,
+        fasciaMaterialPreset: 'library:preset-nearblack',
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(bridge.getNode(parsed.segmentIds[0])).toMatchObject({
+      fascia: true,
+      fasciaHeight: 0.3,
+      fasciaMaterialPreset: 'library:preset-nearblack',
+    })
   })
 
   test('story construction tools reject dedicated roof support levels', async () => {
@@ -365,6 +453,10 @@ describe('construction tools', () => {
       },
     })
     expect(shell.isError).toBe(true)
+    expect(JSON.parse((shell.content as Array<{ text: string }>)[0]!.text)).toMatchObject({
+      code: 'roof_level',
+      storeyId: level.id,
+    })
 
     const stair = await client.callTool({
       name: 'create_stair',
@@ -373,29 +465,33 @@ describe('construction tools', () => {
     expect(stair.isError).toBe(true)
   })
 
-  test('create_roof requires an explicit roof support level when roofLevelId is provided', async () => {
+  test('create_story_shell on a level that only holds a roof is refused like a declared one', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
-    const occupiedUpper = LevelNode.parse({
-      name: 'Second Floor',
-      level: 1,
-      children: [],
-    })
-    bridge.createNode(occupiedUpper, building.id)
-
-    const result = await client.callTool({
-      name: 'create_roof',
+    const roofOnly = LevelNode.parse({ level: 1 })
+    bridge.createNode(roofOnly, building.id)
+    bridge.createNode(RoofNode.parse({}), roofOnly.id)
+    const shell = await client.callTool({
+      name: 'create_story_shell',
       arguments: {
-        levelId: level.id,
-        roofLevelId: occupiedUpper.id,
-        width: 8,
-        depth: 6,
+        levelId: roofOnly.id,
+        footprint: [
+          [-4, -3],
+          [4, -3],
+          [4, 3],
+          [-4, 3],
+        ],
       },
     })
-    expect(result.isError).toBe(true)
+    expect(shell.isError).toBe(true)
+    expect(JSON.parse((shell.content as Array<{ text: string }>)[0]!.text)).toMatchObject({
+      code: 'roof_level',
+      levelId: roofOnly.id,
+      storeyId: level.id,
+    })
   })
 
-  test('verify_scene flags roofs mixed into occupied levels', async () => {
+  test('create_roof with no arguments covers the rooms a story shell derived', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     await client.callTool({
       name: 'create_story_shell',
@@ -410,23 +506,42 @@ describe('construction tools', () => {
       },
     })
 
-    const roof = await client.callTool({
-      name: 'create_roof',
+    const result = await client.callTool({ name: 'create_roof', arguments: {} })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed).toMatchObject({ coveredLevelId: level.id, roofType: 'gable' })
+    expect(bridge.getNode(parsed.roofId)).toMatchObject({ parentId: parsed.roofLevelId })
+    // The floor plate reaches the walls' outer faces: 8 × 6 m between centrelines, 0.16 m walls.
+    const segment = bridge.getNode(parsed.segmentIds[0])
+    expect(segment?.type === 'roof-segment' && [segment.width, segment.depth]).toEqual([8.2, 6.2])
+    expect(bridge.validateScene().valid).toBe(true)
+  })
+
+  test('verify_scene flags a roof standing on the walls of the storey holding it', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    await client.callTool({
+      name: 'create_story_shell',
       arguments: {
         levelId: level.id,
-        width: 8,
-        depth: 6,
-        useDedicatedRoofLevel: false,
+        footprint: [
+          [-4, -3],
+          [4, -3],
+          [4, 3],
+          [-4, 3],
+        ],
       },
     })
-    expect(roof.isError).toBeFalsy()
+    const segment = RoofSegmentNode.parse({ width: 8, depth: 6 })
+    const roof = RoofNode.parse({ support: { kind: 'walls' } })
+    bridge.createNode(roof, level.id as AnyNodeId)
+    bridge.createNode(segment, roof.id as AnyNodeId)
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
-      'dedicated roof level',
-    )
+    const messages = parsed.issues.map((issue: { message: string }) => issue.message).join('\n')
+    expect(messages).toContain('dedicated roof level')
+    expect(messages).toContain(`move_roofs_to_roof_level with levelId ${level.id}`)
   })
 
   // Main's sizing of a new flight (#1000), on create_stair: the run and the risers come from the

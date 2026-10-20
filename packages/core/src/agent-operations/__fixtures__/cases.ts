@@ -17,19 +17,44 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import type { AgentContext } from '../types'
+import type { SessionRecord } from '../scene-checkpoint'
+import type { AssetViewFacts } from '../asset-views'
+import { ADD_STAIR_CASES } from './add-stair-cases'
 import { CREATE_ROOM_CASES, FURNISH_ROOM_CASES } from './build-room-cases'
 import { PLACE_ITEMS_CASES } from './place-items-cases'
 import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
+import { FINISH_CASES } from './finish-cases'
+import { LOT_INFO_CASES } from './lot-info-cases'
+import { CREATE_ROOF_CASES, MOVE_ROOFS_CASES } from './roof-cases'
 import { ROOM_CASES } from './room-cases'
+import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
-import { ADD_LEVEL_CASES, ADD_WALL_CASES, CREATE_STAIR_CASES } from './structure-cases'
+import { VIEW_ASSETS_CASES } from './view-assets-cases'
+import { DESIGN_BRIEF_CASES } from './design-brief-cases'
+import { CORNER_WINDOW_CASES } from './corner-window-cases'
+import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
+import { DESCRIBE_NODE_CASES, FIND_NODES_CASES } from './node-read-cases'
+import {
+  GET_SITE_CASES,
+  PLACE_BUILDING_CASES,
+  SITE_LINE_CASES,
+  SITE_VERIFY_CASES,
+} from './site-cases'
+import {
+  ADD_FENCE_CASES,
+  ADD_LEVEL_CASES,
+  ADD_WALL_CASES,
+  CREATE_STAIR_CASES,
+} from './structure-cases'
 import { VERIFY_SCENE_CASES } from './verify-scene-cases'
 
 /**
  * Edge cases of the agent tools that run as core operations, written before the operations. One
  * declarative table per tool; the core, MCP and chat runners each run every table, so the three
- * layers cannot disagree. `surfaces` narrows a case whose setup only one surface has (the chat
- * knows the floor a person is viewing; the MCP has no such thing and falls back to the lowest).
+ * layers cannot disagree. `surfaces` narrows a case whose setup only one surface has (the live
+ * stores close level gaps when a scene loads). `context.activeLevelId` is the floor the host's
+ * person views: the chat's, or an in-page MCP host's; a remote MCP has none, so the lowest storey.
  * `after` lists fields some nodes must have once the operation's changes are applied.
  */
 
@@ -41,9 +66,17 @@ export type AgentToolCase = {
   tool: string
   scene: () => SceneGraph
   input: Record<string, unknown>
-  /** `catalog`: the item library the host hands search_assets. */
-  context?: { activeLevelId?: string | null; catalog?: AssetInput[] }
+  context?: {
+    activeLevelId?: string | null
+    catalog?: AssetInput[]
+    assetViews?: Record<string, AssetViewFacts>
+    session?: () => SessionRecord
+    designBrief?: AgentContext['designBrief']
+    /** The person's words of the turn, where the host has a person (core and chat; not MCP). */
+    requestText?: string
+  }
   surfaces?: AgentSurface[]
+  readOnly?: boolean
   expect:
     | { refusal: string; mentions?: string[] }
     | {
@@ -57,6 +90,7 @@ export type AgentToolCase = {
         /** Text the result must include. */
         mentions?: string[]
         /** What the table cannot state (minted ids, derived construction): the problems, if any. */
+        session?: (session: SessionRecord) => string[]
         check?: (result: Record<string, unknown>, nodes: Readonly<Record<string, AnyNode>>) => string[]
       }
 }
@@ -238,6 +272,40 @@ function houseScene(): SceneGraph {
 
 const emptyScene = (): SceneGraph => ({ nodes: {}, rootNodeIds: [] })
 
+/** Base chains are not the room/region finish, nor a promise that a ref renders. */
+export function finishReadbackScene(): SceneGraph {
+  const scene = houseScene()
+  const wall = scene.nodes.wall_ground as WallNode
+  scene.nodes.wall_ground = {
+    ...wall,
+    slots: { a: 'library:concrete-drywall' },
+    faceRegions: [{ id: 'wainscot', face: 'a', v1: 0.9, finish: 'library:wood' }],
+  }
+  scene.nodes.wall_side = {
+    ...(scene.nodes.wall_side as WallNode),
+    legacyFaceMaterials: {
+      a: { material: { preset: 'white' }, materialPreset: 'library:preset-white' },
+    },
+    materialPreset: 'library:legacy-wall',
+  }
+  scene.nodes.zone_ground = {
+    ...(scene.nodes.zone_ground as ZoneNode),
+    boundaryWallIds: [wall.id],
+    wallMaterial: 'library:preset-white',
+    wallOverrides: [{ wallId: wall.id, face: 'a', finish: 'library:local-tile' }],
+  }
+  return scene
+}
+
+/** Reject non-finite layout endpoints before JSON can silently turn them into null. */
+export function finiteReadbackProblems(value: unknown, path = 'result'): string[] {
+  if (typeof value === 'number') return Number.isFinite(value) ? [] : [`${path} is not finite`]
+  if (!value || typeof value !== 'object') return []
+  return Object.entries(value).flatMap(([key, entry]) =>
+    finiteReadbackProblems(entry, `${path}.${key}`),
+  )
+}
+
 /** A level no building holds. */
 function orphanLevelScene(): SceneGraph {
   const level = LevelNode.parse({ id: 'level_orphan', level: 0 })
@@ -291,7 +359,6 @@ export const LIST_LEVELS_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: {
       result: {
         activeLevelId: 'level_upper',
@@ -370,7 +437,6 @@ export const LEVEL_TARGET_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { levelId: 'level_upper' } },
   },
   {
@@ -442,6 +508,10 @@ export const GET_WALLS_CASES: AgentToolCase[] = [
             height: 2.5,
             resolvedHeight: 2.5,
             heightIsExplicit: true,
+            wallFaceChains: {
+              a: { kind: 'default', ref: 'library:concrete-drywall' },
+              b: { kind: 'default', ref: 'library:concrete-drywall' },
+            },
             openings: [
               { id: 'door_ground', type: 'door' },
               { id: 'window_ground', type: 'window' },
@@ -452,6 +522,10 @@ export const GET_WALLS_CASES: AgentToolCase[] = [
             length: 4,
             resolvedHeight: 2.8,
             heightIsExplicit: false,
+            wallFaceChains: {
+              a: { kind: 'default', ref: 'library:concrete-drywall' },
+              b: { kind: 'default', ref: 'library:concrete-drywall' },
+            },
             openings: [],
           },
         ],
@@ -481,6 +555,80 @@ export const GET_ZONES_CASES: AgentToolCase[] = [
             ],
             areaSqMeters: 12,
             bounds: { width: 4, depth: 3 },
+            wallMaterial: null,
+            wallOverrides: [],
+          },
+        ],
+      },
+    },
+  },
+]
+
+// Approved readback contract: preserve provenance, including a deliberate choice identical to
+// the fallback. Literal oracles deliberately do not call the finish resolver under test.
+export const FINISH_READBACK_CASES: AgentToolCase[] = [
+  ...(['get_walls', 'get_level_summary'] as const).map((tool): AgentToolCase => ({
+    name: 'base face chains distinguish chosen default, unchosen default and legacy finishes',
+    tool,
+    scene: finishReadbackScene,
+    input: { levelId: 'level_ground' },
+    expect: {
+      result: {
+        walls: [
+          {
+            id: 'wall_ground',
+            wallFaceChains: {
+              a: { kind: 'ref', ref: 'library:concrete-drywall' },
+              b: { kind: 'default', ref: 'library:concrete-drywall' },
+            },
+          },
+          {
+            id: 'wall_side',
+            wallFaceChains: {
+              a: {
+                kind: 'legacy',
+                spec: { material: { preset: 'white' }, materialPreset: 'library:preset-white' },
+              },
+              b: { kind: 'legacy', spec: { materialPreset: 'library:legacy-wall' } },
+            },
+          },
+        ],
+      },
+      check: (result) => finiteReadbackProblems(result),
+    },
+  })),
+  {
+    name: 'a chosen white room default and local face paint are persisted intent',
+    tool: 'get_zones',
+    scene: finishReadbackScene,
+    input: { levelId: 'level_ground' },
+    expect: {
+      result: {
+        zones: [
+          {
+            id: 'zone_ground',
+            wallMaterial: 'library:preset-white',
+            wallOverrides: [{ wallId: 'wall_ground', face: 'a', finish: 'library:local-tile' }],
+          },
+        ],
+      },
+      check: (result) => finiteReadbackProblems(result),
+    },
+  },
+  {
+    name: 'another storey does not inherit the painted storey base chains',
+    tool: 'get_walls',
+    scene: finishReadbackScene,
+    input: { levelId: 'level_upper' },
+    expect: {
+      result: {
+        walls: [
+          {
+            id: 'wall_upper',
+            wallFaceChains: {
+              a: { kind: 'default', ref: 'library:concrete-drywall' },
+              b: { kind: 'default', ref: 'library:concrete-drywall' },
+            },
           },
         ],
       },
@@ -657,7 +805,6 @@ export const DUPLICATE_LEVEL_CASES: AgentToolCase[] = [
     scene: houseScene,
     input: {},
     context: { activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { floorIndex: 2, copied: { level: 1, wall: 1 } } },
   },
   {
@@ -759,6 +906,46 @@ export const DELETE_NODE_CASES: AgentToolCase[] = [
   },
 ]
 
+/** The house's stair with design targets of its own, none of them the defaults. */
+const OWN_TARGETS = { maxRiserHeight: 0.19, minimumGoing: 0.26, targetGoing: 0.3, minimumHeadroom: 2.1 }
+function targetedStairScene(): SceneGraph {
+  const scene = houseScene()
+  scene.nodes.stair_main = { ...(scene.nodes.stair_main as StairNode), designTargets: OWN_TARGETS }
+  return scene
+}
+
+/** fit_stair's sizes and targets, said in inches (N1). */
+const FIT_STAIR_CASES: AgentToolCase[] = [
+  {
+    name: 'a straight flight 42 in wide',
+    tool: 'fit_stair',
+    scene: houseScene,
+    input: { stairId: 'stair_main', layout: 'straight', width: '42 in' },
+    expect: { result: { stairId: 'stair_main' }, after: { stair_main: { width: 1.0668 } } },
+  },
+  {
+    name: 'a target in inches changes that target, the stair keeps its others',
+    tool: 'fit_stair',
+    scene: targetedStairScene,
+    input: { stairId: 'stair_main', targets: { maxRiserHeight: '7 in' } },
+    expect: {
+      result: { stairId: 'stair_main' },
+      after: { stair_main: { designTargets: { ...OWN_TARGETS, maxRiserHeight: 0.1778 } } },
+    },
+  },
+  {
+    // The partial schema used to fill every target left out with its default.
+    name: 'a target given alone leaves the others as the stair has them, not the defaults',
+    tool: 'fit_stair',
+    scene: targetedStairScene,
+    input: { stairId: 'stair_main', targets: { targetGoing: 0.29 } },
+    expect: {
+      result: { stairId: 'stair_main' },
+      after: { stair_main: { designTargets: { ...OWN_TARGETS, targetGoing: 0.29 } } },
+    },
+  },
+]
+
 /** Every table the three runners run. */
 export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...LIST_LEVELS_CASES,
@@ -767,16 +954,36 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...GET_WALLS_CASES,
   ...GET_ZONES_CASES,
   ...GET_LEVEL_SUMMARY_CASES,
+  ...FINISH_READBACK_CASES,
   ...DUPLICATE_LEVEL_CASES,
   ...VERIFY_SCENE_CASES,
+  ...VALIDATE_SCENE_CASES,
+  ...CHECK_ROOMS_CASES,
   ...DELETE_NODE_CASES,
   ...ROOM_CASES,
   ...CREATE_ROOM_CASES,
   ...FURNISH_ROOM_CASES,
   ...SEARCH_ASSETS_CASES,
+  ...VIEW_ASSETS_CASES,
+  ...DESIGN_BRIEF_CASES,
   ...ADD_WALL_CASES,
+  ...ADD_FENCE_CASES,
+  ...CREATE_ROOF_CASES,
+  ...MOVE_ROOFS_CASES,
   ...ADD_LEVEL_CASES,
   ...CREATE_STAIR_CASES,
+  ...ADD_STAIR_CASES,
+  ...FIT_STAIR_CASES,
   ...PLACE_ITEMS_CASES,
   ...FIND_BY_TYPE_CASES,
+  ...FIND_NODES_CASES,
+  ...DESCRIBE_NODE_CASES,
+  ...CORNER_WINDOW_CASES,
+  ...MERGE_WINDOWS_CASES,
+  ...GET_SITE_CASES,
+  ...LOT_INFO_CASES,
+  ...PLACE_BUILDING_CASES,
+  ...SITE_LINE_CASES,
+  ...SITE_VERIFY_CASES,
+  ...FINISH_CASES,
 ]

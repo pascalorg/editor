@@ -1,6 +1,7 @@
 import { refuse } from '../agent-tools/refusal'
 import { BuildingNode, LevelNode, SiteNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
+import { storeyInsertIndex } from '../services/roof-level'
 import { levelsOf, queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
@@ -32,7 +33,7 @@ export function targetBuilding(
   if (holder?.type === 'building') return holder
   const buildings = queryNodes<BuildingNode>(nodes, { type: 'building' })
   if (buildings.length === 1) return buildings[0]!
-  if (!buildings.length) refuse('no_building', 'The scene has no building to add a level to.')
+  if (!buildings.length) refuse('no_building', 'The scene has no building.')
   return refuse(
     'building_required',
     `The scene has ${buildings.length} buildings; say which: ${buildings.map((building) => building.id).join(', ')}.`,
@@ -77,7 +78,10 @@ function freshStart(nodes: SceneNodes, input: AddLevelInput) {
   }
 }
 
-/** `add_level`: an empty level over the building's highest, or under its lowest — the editor's +. */
+/**
+ * `add_level`: an empty level over the building's top storey, under its roof level (which moves up
+ * one), or under its lowest level — the editor's +.
+ */
 export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) => {
   if (!(input.buildingId || queryNodes(nodes, { type: 'building' }).length))
     return freshStart(nodes, input)
@@ -86,7 +90,9 @@ export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) =
     .filter((level) => level.parentId === building.id || building.children.includes(level.id))
     .map((level) => level.level)
   const below = input.position === 'below'
-  const floorIndex = !floors.length ? 0 : below ? Math.min(...floors) - 1 : Math.max(...floors) + 1
+  const above = storeyInsertIndex(nodes, building.id)
+  const floorIndex = below && floors.length ? Math.min(...floors) - 1 : above.floorIndex
+  const shift = below ? [] : above.shift
   const level = LevelNode.parse({
     parentId: building.id,
     level: floorIndex,
@@ -102,8 +108,9 @@ export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) =
       floorIndex,
       ...(level.name ? { name: level.name } : {}),
       height: level.height,
-      message: `Added ${level.name ?? `level ${floorIndex}`} ${below ? 'below' : 'above'} the existing levels of ${building.name ?? building.id}.`,
+      ...(shift.length ? { shiftedLevelIds: shift.map(({ id }) => id) } : {}),
+      message: `Added ${level.name ?? `level ${floorIndex}`} ${below ? 'below the existing levels' : shift.length ? 'on top of the storeys, under the roof level' : 'above the existing levels'} of ${building.name ?? building.id}.`,
     },
-    changes: { create: [{ node: level, parentId: building.id }] },
+    changes: { create: [{ node: level, parentId: building.id }], update: shift },
   }
 }

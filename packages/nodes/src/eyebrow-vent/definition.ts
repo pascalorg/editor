@@ -128,6 +128,7 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
   },
 
   capabilities: {
+    exterior: true,
     slots: eyebrowVentSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

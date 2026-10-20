@@ -36,7 +36,7 @@ each claim directly off the geometry:
 1. **`[x, z] → world (x, 0, z)` is exact, no sign flip.** Demo A and
    Demo B both sit flat on the floor at Y = 0; their polygon vertices
    round-trip through `save_scene` / `get_scene` byte-identical to what
-   was authored (graph hash matches, see `validate_scene` output).
+   was authored (graph hash matches, see `save_scene` output).
 
 2. **Demo B is the rectangle the README says it is.** A simple analytic
    check on its 4 vertices yields side lengths 6, 4, 6, 4 m (to 4 dp)

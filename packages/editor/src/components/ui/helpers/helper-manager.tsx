@@ -66,6 +66,7 @@ import {
   usePaintRegionMode,
 } from '../../../lib/paint-region-mode'
 import { snapContextOf } from '../../../lib/snapping-mode'
+import { cornerHintRows, useCornerSnapHint } from '../../../store/use-corner-snap-hint'
 import useEditor, { getActiveContinuationContext } from '../../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
@@ -309,10 +310,11 @@ export function HelperManager() {
   const openingShape = useOpeningDraft((s) => (s.host ? s.shape : null))
   const terraceShape = useTerraceDraft((s) => (s.host ? s.shape : null))
   const movingNode = useMovingNode()
+  const cornerHint = useCornerSnapHint((s) => s.hint)
   // A tool whose kind gives placement notices: its transient draft is the node in hand.
   const toolNotices = !!(tool && nodeRegistry.get(tool)?.placementNotice)
   const toolDraftId = useScene((s) => (toolNotices ? transientDraftId(s.nodes) : null))
-  const placementNotice = usePlacementNotice(movingNode?.id ?? toolDraftId)
+  const placementNotice = usePlacementNotice(movingNode?.id ?? toolDraftId, toolNotices)
   const reshapingNode = useReshapingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const mezzanineHandle = useScene((s) => mezzanineGesture(activeHandleDrag, s.nodes))
@@ -560,6 +562,10 @@ export function HelperManager() {
         continuationContext={movingContinuationContext}
         notice={placementNotice?.line}
         showEsc
+        extraHints={movingNode.type === 'window' ? cornerHintRows(cornerHint) : []}
+        replacesPlace={
+          movingNode.type === 'window' && (cornerHint === 'join' || cornerHint === 'new')
+        }
         showForce={collisionValidatesDrop}
         snapContext={snapContext}
         title={movingTitle}

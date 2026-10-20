@@ -3,7 +3,10 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  type AnyNode,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
   SlabNode,
   StairNode,
   StairSegmentNode,
@@ -52,6 +55,52 @@ describe('apply_patch', () => {
     expect((stored as { thickness?: number }).thickness).toBe(0.2)
   })
 
+  test('can replace site ground presentation without changing the site or its buildings', async () => {
+    const before = structuredClone(bridge.getNodes())
+    const site = Object.values(before).find((node) => node.type === 'site')!
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'update', id: site.id, data: { showGround: false } }] },
+    })
+    expect(result.isError).toBeFalsy()
+    expect(bridge.getNodes()).toEqual({
+      ...before,
+      [site.id]: { ...site, showGround: false },
+    })
+    const restored = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'update', id: site.id, data: { showGround: null } }] },
+    })
+    expect(restored.isError).toBeFalsy()
+    expect(bridge.getNodes()).toEqual(before)
+  })
+
+  test('saves and clears project lighting through the existing patch contract', async () => {
+    const site = Object.values(bridge.getNodes()).find((node) => node.type === 'site')!
+    const before = structuredClone(bridge.getNodes())
+    const presentation = {
+      exposure: 0.94,
+      edges: 'off',
+      shading: 'rendered',
+      lighting: {
+        background: '#dce4e5',
+        backgroundSky: null,
+        environment: { source: 'room', intensity: 0.28 },
+      },
+      postprocessing: { ambientOcclusion: false, colorGrading: false },
+    }
+    for (const value of [presentation, null]) {
+      const result = await client.callTool({
+        name: 'apply_patch',
+        arguments: { patches: [{ op: 'update', id: site.id, data: { presentation: value } }] },
+      })
+      expect(result.isError).toBeFalsy()
+      expect((bridge.getNode(site.id) as typeof site).presentation).toEqual(value ?? undefined)
+      for (const [id, node] of Object.entries(before))
+        if (id !== site.id) expect(bridge.getNode(id)).toEqual(node)
+    }
+  })
+
   // A pier's `material: {color}` reported applied and stored {}, and
   // `materialPreset: null` was refused, so the agent could not clear the preset hiding it.
   test('an update the node would drop is refused, naming the path; null clears a field', async () => {
@@ -88,6 +137,114 @@ describe('apply_patch', () => {
     })
     expect(cleared.isError).toBeFalsy()
     expect(bridge.getNode(wall.id)).not.toHaveProperty('materialPreset')
+  })
+
+  // A level written without a height is legacy to the editor's load, which derives its storey from
+  // what it holds; the session read 2.5 m. The write now gets the derived height, said in notes.
+  test('a level created without a height gets the height its walls give, and says so', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const { height: _height, ...level } = LevelNode.parse({ parentId: building.id, level: 1 })
+    const walls = [
+      WallNode.parse({ parentId: level.id, start: [0, 0], end: [4, 0], height: 3 }),
+      WallNode.parse({ parentId: level.id, start: [4, 0], end: [4, 4], height: 3 }),
+    ]
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'create', node: level, parentId: building.id },
+          ...walls.map((wall) => ({ op: 'create', node: wall, parentId: level.id })),
+        ],
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const stored = bridge.getNode(level.id) as { height?: number }
+    expect(stored.height).toBe(3)
+    expect((result.structuredContent as { notes?: string[] }).notes).toEqual([
+      `level ${level.id}: height ${Math.round(stored.height! * 100) / 100} m derived from its walls and ceilings, as the editor reads a level written without one`,
+    ])
+  })
+
+  test('an empty level created without a height gets the default storey height', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const { height: _height, ...level } = LevelNode.parse({ parentId: building.id, level: 1 })
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'create', node: level, parentId: building.id }] },
+    })
+    expect(result.isError).toBeFalsy()
+    expect((bridge.getNode(level.id) as { height?: number }).height).toBe(2.5)
+  })
+
+  // The roof-level rule: a roof on the walls of the storey holding it goes to the level above
+  // them in the same write; storey content aimed at a roof level is refused at its index.
+  function roofedRoom(levelId: string) {
+    const corners: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ]
+    const walls = corners.map((start, i) =>
+      WallNode.parse({ parentId: levelId, start, end: corners[(i + 1) % 4], height: 2.5 }),
+    )
+    const roof = RoofNode.parse({ position: [4, 0, 3], support: { kind: 'walls' } })
+    const segment = RoofSegmentNode.parse({ width: 8, depth: 6 })
+    return {
+      roof,
+      patches: [
+        ...walls.map((wall) => ({ op: 'create', node: wall, parentId: levelId })),
+        { op: 'create', node: roof, parentId: levelId },
+        { op: 'create', node: segment, parentId: roof.id },
+      ],
+    }
+  }
+
+  test('a roof made on its walls’ storey lands on a new Roof level in the one undo step, said in notes', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const before = Object.keys(bridge.getNodes()).length
+    const roots = bridge.getRootNodeIds()
+    const { roof, patches } = roofedRoom(level.id)
+    const result = await client.callTool({ name: 'apply_patch', arguments: { patches } })
+    expect(result.isError).toBeFalsy()
+    const placed = bridge.getNode(roof.id)!
+    const roofLevel = bridge.getNode(placed.parentId as AnyNode['id']) as LevelNode
+    expect(roofLevel).toMatchObject({ type: 'level', metadata: { role: 'roof' } })
+    // in exactly one parent's children, no new root
+    const holders = Object.values(bridge.getNodes()).filter((node) =>
+      ((node as { children?: string[] }).children ?? []).includes(roof.id),
+    )
+    expect(holders.map((node) => node.id)).toEqual([roofLevel.id])
+    expect(bridge.getRootNodeIds()).toEqual(roots)
+    const notes = (result.structuredContent as { notes?: string[] }).notes ?? []
+    expect(
+      notes.some((note) => note.includes(`roof ${roof.id}`) && note.includes(roofLevel.id)),
+    ).toBe(true)
+    bridge.undo(1)
+    expect(Object.keys(bridge.getNodes())).toHaveLength(before)
+    expect(bridge.getNode(roofLevel.id)).toBeNull()
+  })
+
+  test('a wall written on the roof level is refused at its index, naming the storey it covers', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const { roof, patches } = roofedRoom(level.id)
+    await client.callTool({ name: 'apply_patch', arguments: { patches } })
+    const roofLevelId = bridge.getNode(roof.id)!.parentId!
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0] })
+    const refused = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'update', id: roof.id, data: { name: 'Main roof' } },
+          { op: 'create', node: wall, parentId: roofLevelId },
+        ],
+      },
+    })
+    expect(refused.isError).toBe(true)
+    const refusal = JSON.parse((refused.content as Array<{ text: string }>)[0]!.text)
+    expect(refusal).toMatchObject({ code: 'roof_level', patchIndex: 1, id: wall.id })
+    expect(refusal.message).toContain(level.id)
+    expect(bridge.getNode(wall.id)).toBeNull()
   })
 
   test('syncs derived stair openings after stair patches', async () => {

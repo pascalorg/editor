@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { geometryMetaFields } from '../schema/geometry-metadata'
-import { scriptParams } from './add-object'
+import { scriptLanguage, scriptParams } from './add-object'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
@@ -8,7 +8,7 @@ export const addColumnTool = {
   name: 'add_column',
   title: 'Add column',
   description:
-    'Add a structural or decorative column at (x, z), or rebuild one by nodeId. Native fields first; optional code uses the same module and conventions as add_object, with floor mount and its bottom centre at the support point. Params named height, width and depth drive the native size controls. Only add columns when requested.',
+    'Add a structural or decorative column at (x, z), or rebuild one by nodeId. Supports native fields or optional code using the same module and conventions as add_object, with floor mount and its bottom centre at the support point. Params named height, width and depth drive the native size controls. Only add columns when requested.',
   input: {
     x: z.number().optional().describe('X position of the column center (meters)'),
     z: z.number().optional().describe('Z position of the column center (meters)'),
@@ -53,7 +53,7 @@ export const addColumnTool = {
       .describe('Support point height above the level, in metres (default 0).'),
     ...geometryMetaFields,
     nodeId: NodeId.optional().describe(
-      'Rebuild this column with code, params or native size fields; get_source first when changing code.',
+      'Rebuild this column with code, params or native size fields; get_source provides current code when needed.',
     ),
     code: z
       .string()
@@ -61,8 +61,9 @@ export const addColumnTool = {
       .max(48_000)
       .optional()
       .describe(
-        'A three.js module when the native fields cannot express the column. Same module and conventions as add_object; mount floor. Declare height, width and depth params for editable dimensions.',
+        'A module (three.js, or bpy with language) when the native fields cannot express the column. Same module and conventions as add_object; mount floor. Declare height, width and depth params for editable dimensions.',
       ),
+    language: scriptLanguage,
     params: scriptParams,
   },
 }

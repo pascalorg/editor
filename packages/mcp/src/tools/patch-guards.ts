@@ -26,18 +26,23 @@ export type PatchRefusalCode =
   | 'unknown_material'
   | 'field_required'
   | 'shadowed_field'
+  // The roof-level rule (seatWrittenRoofs).
+  | 'roof_level'
+  | 'roof_level_holds_storey'
+  | 'roof_level_on_top'
 
 /**
  * A check apply_patch runs over the whole patch before applying it, registered by the module that
  * owns what it protects, so a feature brings its own check (the honest-update check is the
  * first). It may rewrite an update's data (the cleaned data is what is written) and
  * refuses by throwing: a PatchRefusedError comes back as `{ code, patchIndex, id, message }`, an
- * McpError as it is. Lower `order` runs first.
+ * McpError as it is. What it changed in the patch it says in notes, which the answer carries.
+ * Lower `order` runs first.
  */
 export type PatchGuard = {
   name: string
   order: number
-  run(patches: Patch[], nodes: Readonly<Record<string, AnyNode>>): void
+  run(patches: Patch[], nodes: Readonly<Record<string, AnyNode>>): string[] | void
 }
 
 const guards: PatchGuard[] = []
@@ -50,8 +55,15 @@ export function registerPatchGuard(guard: PatchGuard) {
   guards.sort((a, b) => a.order - b.order)
 }
 
-export function runPatchGuards(patches: Patch[], nodes: Readonly<Record<string, AnyNode>>) {
-  for (const guard of guards) guard.run(patches, nodes)
+/** Runs every guard in order; the notes are what the guards changed in the patch. */
+export function runPatchGuards(
+  patches: Patch[],
+  nodes: Readonly<Record<string, AnyNode>>,
+): string[] {
+  return guards.flatMap((guard) => {
+    const notes = guard.run(patches, nodes)
+    return Array.isArray(notes) ? notes : []
+  })
 }
 
 /**

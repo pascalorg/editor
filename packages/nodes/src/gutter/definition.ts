@@ -158,6 +158,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   },
 
   capabilities: {
+    exterior: true,
     slots: gutterSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

@@ -9,9 +9,13 @@ import {
 import { levelBaseElevationAt } from '../../lib/terrain-support-query'
 import type { AnyNode, SeparatorNode, SlabNode, WallNode, ZoneNode } from '../../schema'
 import { getWallCurveFrameAt, isCurvedWall } from '../wall/wall-curve'
-import { DEFAULT_WALL_THICKNESS } from '../wall/wall-footprint'
-import { getWallFaceOffsets, type WallJustification } from '../wall/wall-frame'
-import { MIN_WALL_HEIGHT } from '../wall/wall-top'
+import { DEFAULT_WALL_HEIGHT, DEFAULT_WALL_THICKNESS } from '../wall/wall-footprint'
+import {
+  getWallFaceOffsets,
+  type WallFaceOffsets,
+  type WallJustification,
+} from '../wall/wall-frame'
+import { MIN_WALL_HEIGHT, wallFollowsStorey } from '../wall/wall-top'
 
 export type SlabElevationClamp = {
   elevation: number
@@ -20,11 +24,12 @@ export type SlabElevationClamp = {
 
 /**
  * Clamp-never-ask upper bound for a slab's elevation. A plane-bound wall
- * (no stored `height`) keeps its top at the storey plane, so a slab that
+ * (no stored `height`, or height equal to the authored storey) keeps its
+ * top at the storey plane, so a slab that
  * rises past `storeyHeight - MIN_WALL_HEIGHT` while electing as that
  * wall's base would squeeze the wall body below its minimum (and at the
- * plane, to nothing). Walls with explicit heights don't constrain — their
- * top is an explicit level-local height rather than the storey plane. Negative proposals (the
+ * plane, to nothing). Walls with other explicit heights don't constrain —
+ * their body height stays fixed above the elected base. Negative proposals (the
  * drag-through-zero path that commits the `recessed` intent) pass
  * through untouched: this is a purely numeric upper bound.
  *
@@ -45,14 +50,18 @@ export function clampSlabElevationForWalls(
   if (proposedElevation <= bound) return { elevation: proposedElevation, clamped: false }
   if (slab.polygon.length < 3) return { elevation: proposedElevation, clamped: false }
 
+  // Probed just past the bound: a wall electing the slab there elects it at any
+  // height above, whereas a slab past the storey plane reads as resting on the
+  // wall — the state this clamp exists to prevent.
+  const probed = Math.min(proposedElevation, bound + MIN_WALL_HEIGHT / 2)
   const substituted = levelSlabs.some((candidate) => candidate.id === slab.id)
     ? levelSlabs.map((candidate) =>
-        candidate.id === slab.id ? { ...candidate, elevation: proposedElevation } : candidate,
+        candidate.id === slab.id ? { ...candidate, elevation: probed } : candidate,
       )
-    : [...levelSlabs, { ...slab, elevation: proposedElevation }]
+    : [...levelSlabs, { ...slab, elevation: probed }]
 
   for (const wall of levelWalls) {
-    if (wall.height != null) continue
+    if (!wallFollowsStorey(wall, storeyHeight)) continue
     const wallLike: WallOverlapInput = {
       start: wall.start,
       end: wall.end,
@@ -72,7 +81,7 @@ export function clampSlabElevationForWalls(
       0,
       nodes,
     )
-    if (Math.abs(support.elevation - proposedElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON) {
+    if (Math.abs(support.elevation - probed) <= WALL_SLAB_ELEVATION_POOL_EPSILON) {
       return { elevation: bound, clamped: true }
     }
   }
@@ -297,6 +306,8 @@ export type WallOverlapInput = {
   thickness?: number
   justification?: WallJustification
   supportOffset?: number
+  /** Authored body height; absent for a plane-bound wall (its top is the storey plane). */
+  height?: number
 }
 
 // Minimum length of wall that must lie on/inside a slab polygon before the
@@ -818,6 +829,7 @@ export function computeWallSlabSupport(
     wallLike.thickness,
     wallLike.justification,
     wallLike.supportOffset,
+    wallLike.height,
     preferredSlabId,
     maxElevation,
     levelBase,
@@ -918,6 +930,68 @@ function polygonBounds(polygon: MultiPolygon): SupportBounds {
   return bounds
 }
 
+/** A cap may run this far past the wall's faces and ends and still be its cap. */
+const WALL_CAP_SLACK = 0.05
+
+/** Whether every corner of the footprint lies on the wall body: between its faces, within its length. */
+function footprintOnWallBody(
+  polygon: MultiPolygon,
+  center: Array<{ x: number; y: number }>,
+  offsets: WallFaceOffsets,
+): boolean {
+  const onBody = ([px, pz]: [number, number]) => {
+    let nearest = Number.POSITIVE_INFINITY
+    let fits = false
+    for (let i = 1; i < center.length; i++) {
+      const s = center[i - 1]!,
+        e = center[i]!
+      const dx = e.x - s.x,
+        dz = e.y - s.y
+      const length = Math.hypot(dx, dz)
+      if (length < 1e-9) continue
+      const along = ((px - s.x) * dx + (pz - s.y) * dz) / length
+      const across = ((px - s.x) * -dz + (pz - s.y) * dx) / length
+      const distance = Math.hypot(
+        Math.max(0, -along, along - length),
+        Math.max(0, across - offsets.a, offsets.b - across),
+      )
+      if (distance < nearest) {
+        nearest = distance
+        fits = distance <= WALL_CAP_SLACK
+      }
+    }
+    return fits
+  }
+  return polygon.every((part) => [part.outer, ...part.holes].every((ring) => ring.every(onBody)))
+}
+
+/**
+ * Level-local Y of the wall's top when it stands at `base`: an authored height
+ * above it, else the storey plane of the level the walls belong to, else the
+ * legacy default (a level deriving its first height has no plane yet).
+ */
+function resolveWallTopAbove(
+  base: number,
+  wallLike: WallOverlapInput,
+  levelWalls: readonly WallNode[],
+  nodes?: Readonly<Record<string, AnyNode>>,
+): number {
+  const height =
+    wallLike.height ??
+    levelWalls.find(
+      (wall) =>
+        wall.start[0] === wallLike.start[0] &&
+        wall.start[1] === wallLike.start[1] &&
+        wall.end[0] === wallLike.end[0] &&
+        wall.end[1] === wallLike.end[1],
+    )?.height
+  if (height !== undefined) return base + height
+  const level = nodes?.[levelWalls[0]?.parentId ?? '']
+  return level?.type === 'level' && level.height !== undefined
+    ? level.height
+    : base + DEFAULT_WALL_HEIGHT
+}
+
 function computeWallSlabSupportUncached(
   memo: SupportMemo,
   wallLike: WallOverlapInput,
@@ -961,6 +1035,13 @@ function computeWallSlabSupportUncached(
   let preferredElevation: number | null = null
   let preferredElectedSlabId: string | null = null
 
+  type Candidate = {
+    slab: SlabNode
+    elevation: number
+    perPolyline: LengthInterval[][]
+    polygon: MultiPolygon
+  }
+  const candidates: Candidate[] = []
   for (const slab of slabs) {
     if (
       slab.support === 'open' ||
@@ -1000,6 +1081,27 @@ function computeWallSlabSupportUncached(
       nodes && slabs.some((slab) => slab.plateRole === 'base')
         ? liftedManualSlab(nodes, slab).elevation
         : (slab.elevation ?? 0.05)
+    candidates.push({ slab, elevation, perPolyline, polygon: renderedPolygon })
+  }
+
+  // A slab lying on the wall body with its underside at the wall's own top is
+  // a cap the wall carries (an importer's 12 mm "wall caps"), never a support.
+  // The top is measured from the lowest candidate, since the base being
+  // elected cannot decide it. A floor or terrace reaching past the wall keeps
+  // carrying it however short the wall, and an explicit host is the user's choice.
+  const floor = Math.min(levelBase, ...candidates.map((candidate) => candidate.elevation))
+  const wallTop = resolveWallTopAbove(floor, wallLike, levelWalls, nodes)
+  const offsets = getWallFaceOffsets({
+    ...wallLike,
+    thickness: Math.max(wallLike.thickness ?? DEFAULT_WALL_THICKNESS, 0),
+  })
+  for (const { slab, elevation, perPolyline, polygon } of candidates) {
+    if (
+      slab.id !== preferredSlabId &&
+      elevation - slab.thickness >= wallTop - 1e-6 &&
+      footprintOnWallBody(polygon, polylines[0]!, offsets)
+    )
+      continue
     if (preferredSlabId != null && slab.id === preferredSlabId) {
       preferredElevation = elevation
       preferredElectedSlabId = slab.id

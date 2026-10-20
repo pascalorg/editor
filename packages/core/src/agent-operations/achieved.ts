@@ -28,9 +28,31 @@ export function achievedChanges(before: SceneNodes, changes: SceneChanges): Achi
   const after = applySceneChanges(before as never, changes) as SceneNodes
   const created = Object.keys(after).filter((id) => !(id in before))
   const deleted = Object.keys(before).filter((id) => !(id in after))
-  const updated = (changes.update ?? []).filter(
-    ({ id }) => id in before && id in after && before[id] !== after[id],
+  // Once per node, and only when its data changed: an update that writes what a node already
+  // holds is no change.
+  const updated = [...new Set((changes.update ?? []).map(({ id }) => id))].filter(
+    (id) =>
+      id in before &&
+      id in after &&
+      before[id] !== after[id] &&
+      JSON.stringify(before[id]) !== JSON.stringify(after[id]),
   ).length
+  return {
+    created: countByType(created, after),
+    updated,
+    deleted: countByType(deleted, before),
+    ...(created.length || deleted.length || updated ? {} : { unchanged: true as const }),
+  }
+}
+
+/**
+ * Reads changes made through a host's own write path. `before` must be a copy
+ * when the host mutates the node map it returns.
+ */
+export function achievedBetween(before: SceneNodes, after: SceneNodes): Achieved {
+  const created = Object.keys(after).filter((id) => !(id in before))
+  const deleted = Object.keys(before).filter((id) => !(id in after))
+  const updated = Object.keys(after).filter((id) => id in before && before[id] !== after[id]).length
   return {
     created: countByType(created, after),
     updated,

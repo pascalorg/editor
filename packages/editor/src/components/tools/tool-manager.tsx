@@ -5,17 +5,21 @@ import {
   type CeilingNode,
   createSceneApi,
   type FenceNode,
+  isStoreyContent,
+  type LevelNode,
   nodeRegistry,
   type SlabNode,
+  storeyOf,
   useScene,
   type WallNode,
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { type ComponentType, lazy, Suspense, useMemo } from 'react'
+import { type ComponentType, lazy, Suspense, useEffect, useMemo } from 'react'
 import { useRegisteredToolEnabled } from '../../hooks/use-registered-tool-enabled'
 import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import type { ReshapeKind } from '../../lib/interaction/scope'
+import { selectPlacedNode } from '../../lib/level-selection'
 import { paintRegionTargets, usePaintRegionMode } from '../../lib/paint-region-mode'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Tool } from '../../store/use-editor'
@@ -48,7 +52,6 @@ import {
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { TerrainSculptTool } from './site/terrain-sculpt-tool'
-import { StairTool } from './stair/stair-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
 import { ZoneTool } from './zone/zone-tool'
 
@@ -109,7 +112,6 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
 // item / shelf / spawn now go through the registry path above.
 const tools: Partial<Record<Tool, React.FC>> = {
   'property-line': SiteBoundaryEditor,
-  stair: StairTool,
   zone: ZoneTool,
 }
 
@@ -178,16 +180,23 @@ export const ToolManager: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
+  // Placing a roof makes its level active (selectPlacedNode); a wall, room, slab, stair or item tool
+  // armed there, then or after a level change, draws on the storey the roof level covers.
+  useEffect(() => {
+    if (!(tool && activeLevelId && isStoreyContent(tool, undefined))) return
+    const storeyId = storeyOf(useScene.getState().nodes, activeLevelId)
+    if (storeyId !== activeLevelId) setSelection({ levelId: storeyId as LevelNode['id'] })
+  }, [tool, activeLevelId, setSelection])
   const registrySceneApi = useMemo(() => createSceneApi(useScene), [])
   const registryToolContext = useMemo(
     () => ({
       activeLevelId: activeLevelId ?? null,
       isCameraDragging: () => useViewer.getState().cameraDragging,
       sceneApi: registrySceneApi,
-      selectNode: (nodeId: AnyNodeId) => setSelection({ selectedIds: [nodeId] }),
+      selectNode: selectPlacedNode,
       unit,
     }),
-    [activeLevelId, registrySceneApi, setSelection, unit],
+    [activeLevelId, registrySceneApi, unit],
   )
 
   // Building transform for the local group — all building-relative tools live inside this group

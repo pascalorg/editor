@@ -53,15 +53,45 @@ export function showInScene(obj: Object3D, reason: HiddenReason): void {
 }
 
 export function temporarilyShowShadowOnly(root: Object3D): () => void {
+  return temporarilyShowHeld(root, ['shadow-only'])
+}
+
+/**
+ * Lifts what the user's view holds back under `root` — solo's shadow-only
+ * levels and isolation — for one capture: an interior view shows its floor
+ * whole, whatever the user isolated.
+ */
+export function temporarilyShowPresentation(root: Object3D): () => void {
+  return temporarilyShowHeld(root, ['shadow-only', 'isolated'])
+}
+
+/** Add a capture-only mask without changing the live visibility reasons or batching. */
+export function temporarilyHideFromScene(root: Object3D, reason: HiddenReason): () => void {
+  const masks = new Map<Object3D, number>()
+  root.traverse((obj) => {
+    masks.set(obj, obj.layers.mask)
+    const hold = (obj as Holder)[HOLD]
+    const reasons = new Set(hold?.reasons)
+    // Changing level presentation must not reveal isolated geometry or duplicate batch shadows.
+    reasons.delete('shadow-only')
+    reasons.add(reason)
+    applyHold(obj, { original: hold?.original ?? obj.layers.mask, reasons })
+  })
+  return () => {
+    for (const [obj, mask] of masks) obj.layers.mask = mask
+  }
+}
+
+function temporarilyShowHeld(root: Object3D, lifted: readonly HiddenReason[]): () => void {
   const masks = new Map<Object3D, number>()
   root.traverse((obj) => {
     const hold = (obj as Holder)[HOLD]
-    if (!hold?.reasons.has('shadow-only')) return
+    if (!hold || !lifted.some((reason) => hold.reasons.has(reason))) return
     masks.set(obj, obj.layers.mask)
     const reasons = new Set(hold.reasons)
-    reasons.delete('shadow-only')
+    for (const reason of lifted) reasons.delete(reason)
     // A capture needs the original scene geometry, while editor overlays and
-    // objects hidden by isolation or batching must retain their own masks.
+    // the reasons not lifted (batching) must retain their own masks.
     if (reasons.size === 0) obj.layers.mask = hold.original
     else applyHold(obj, { original: hold.original, reasons })
   })

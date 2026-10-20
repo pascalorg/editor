@@ -4,6 +4,7 @@ import {
   addColumn,
   addObject,
   applySceneChanges,
+  editedScriptLanguage,
   rescriptOpening,
 } from '@pascal-app/core/agent-operations'
 import {
@@ -26,6 +27,7 @@ import { z } from 'zod'
 const compiled: CompiledGeometryScript = {
   sha256: 'a'.repeat(64),
   script: 'b'.repeat(64),
+  language: 'three',
   mount: 'floor',
   params: {},
   manifest: GeometryArtifactManifest.parse({
@@ -198,4 +200,27 @@ test('a params-only rebuild runs the same script and keeps the lineage it had', 
   expect(
     (third.item_lineage as { source?: { meta?: { parent?: string } } }).source?.meta?.parent,
   ).toBe(compiled.script)
+})
+
+test('a build keeps its language: params rebuild the stored script, new code defaults to it', () => {
+  const level = LevelNode.parse({ id: 'level_language' })
+  const created = addObject(
+    { [level.id]: level },
+    {
+      parentId: level.id,
+      reason: 'no carved panel type',
+      compiled: { ...compiled, language: 'bpy' },
+    },
+    { activeLevelId: level.id },
+  )
+  const nodes = applySceneChanges({ [level.id]: level }, created.changes!)
+  const node = nodes[created.result.nodeId as string] as ScriptedNode
+  expect(node.source.language).toBe('bpy')
+  expect(editedScriptLanguage(node, {})).toBe('bpy')
+  expect(editedScriptLanguage(node, { code: 'x', language: 'three' })).toBe('three')
+  expect(editedScriptLanguage(node, { code: 'x' })).toBe('bpy')
+  expect(editedScriptLanguage(undefined, { code: 'x' })).toBe('three')
+  // A scene saved before languages existed still reads as three.js.
+  const { language: _, ...old } = node.source
+  expect(GeometryScriptSource.parse(old).language).toBe('three')
 })

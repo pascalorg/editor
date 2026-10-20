@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import type { AnyNodeId } from '../../schema'
+import type { AnyNode, AnyNodeId } from '../../schema'
+import { roofsKeptOverStorey } from '../../services/roof-move'
 import { isSettlingDocument } from '../../store/document-settling'
 import {
   getSceneHistoryPauseDepth,
@@ -22,17 +23,23 @@ export function initializeRoofElevationSync(): () => void {
   let disposed = false
   let queued = false
   let syncing = false
+  // The nodes before this pass's first change: a roof above its storey keeps its height over it.
+  let changedFrom: Readonly<Record<string, AnyNode>> | null = null
 
-  const schedule = () => {
+  const schedule = (previous: Readonly<Record<string, AnyNode>> | null = null) => {
     if (queued) return
     queued = true
+    changedFrom = previous
     // Wall bases use the spatial grid, whose listener must finish before this pass.
     queueMicrotask(() => {
       queued = false
       if (disposed) return
       const { nodes, updateNodes, readOnly } = useScene.getState()
       if (readOnly) return
-      const updates = planRoofElevationUpdates(nodes)
+      const updates = [
+        ...(changedFrom ? roofsKeptOverStorey(changedFrom, nodes) : []),
+        ...planRoofElevationUpdates(nodes),
+      ]
       if (updates.length === 0) return
       const before = sceneSnapshot()
       const publishCommit =
@@ -65,7 +72,7 @@ export function initializeRoofElevationSync(): () => void {
       const next = state.nodes[id as AnyNodeId]
       const prev = previous.nodes[id as AnyNodeId]
       if (next !== prev && (isRoofElevationInput(next) || isRoofElevationInput(prev))) {
-        schedule()
+        schedule(previous.nodes)
         return
       }
     }

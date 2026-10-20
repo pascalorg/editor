@@ -1,6 +1,8 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
+import type { PointAskPin, PointAskStatus } from '../agent-operations/point-context'
+import type { SceneViewInterior, SceneViewPresentation } from '../agent-operations/scene-view'
 import type {
   BlockNode,
   BoxVentNode,
@@ -224,6 +226,7 @@ export interface SnapshotCapturedEvent {
   blob: Blob
   width: number
   height: number
+  presentation?: SceneViewPresentation
 }
 
 export interface ThumbnailGenerateEvent {
@@ -278,6 +281,10 @@ export interface ThumbnailGenerateEvent {
   ephemeral?: boolean
   /** World clipping planes for this frame (a section's cut). */
   clip?: readonly { normal: [number, number, number]; constant: number }[]
+  /** Look inside this floor for the frame: the rest of the house left out, its walls cut (view_scene). */
+  interior?: SceneViewInterior
+  /** The actual Solo/Exploded/Stacked presentation, without interior clipping. */
+  presentation?: SceneViewPresentation
   /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
   supersample?: number
 }
@@ -326,6 +333,12 @@ type CameraControlEvents = {
   'camera-controls:fit-scene': CameraControlFitSceneEvent
   'camera-controls:frame': CameraControlFrameEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
+  /**
+   * A run of captures as one session (a sheet's pictures, an agent's view): while `active`, the
+   * editor presents the finished house (full-height walls, the storeys stacked, the materials' own
+   * look) and the viewport keeps its last frame, so the person never sees the switch.
+   */
+  'camera-controls:capture-session': { owner: string; active: boolean }
   'camera-controls:apply-pose': CameraPose
   'camera-controls:cancel-pose': undefined
   'camera-controls:interaction-start': undefined
@@ -356,7 +369,8 @@ type WindowAnimationEvents = {
 }
 
 type ThumbnailEvents = {
-  'thumbnail:before-capture': undefined
+  /** `wholeWalls`: every wall drawn whole for the frame, whatever the wall mode (an authored pose, an interior view). */
+  'thumbnail:before-capture': { wholeWalls?: boolean } | undefined
   'thumbnail:after-capture': undefined
 }
 
@@ -375,6 +389,13 @@ type AIChatEvents = {
 
 export interface RoomPresetCreateEvent {
   zoneId: ZoneNode['id']
+}
+
+type PointAskEvents = {
+  /** The chat's word on an ask's turn, for its pin. */
+  'point-ask:status': PointAskStatus
+  /** The pin tells the chat to light or open the ask's turn. */
+  'point-ask:pin': PointAskPin
 }
 
 type RoomPresetEvents = {
@@ -408,6 +429,7 @@ type EditorEvents = GridEvents &
   ThumbnailEvents &
   SnapshotEvents &
   AIChatEvents &
+  PointAskEvents &
   RoomPresetEvents &
   SelectionEvents
 

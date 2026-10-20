@@ -14,7 +14,14 @@ import {
   HOOD_CURVED_BODY_HEIGHT,
   HOOD_DUCT_SIZE,
 } from '../stack'
-import { addBox, type CabinetGeometryNode, type CabinetSlotMaterials, stampSlot } from './shared'
+import {
+  addBox,
+  applianceLampMaterial,
+  type CabinetGeometryNode,
+  type CabinetSlotMaterials,
+  microwavePanelMaterial,
+  stampSlot,
+} from './shared'
 
 function buildFrustumGeometry(
   bottomWidth: number,
@@ -149,7 +156,7 @@ export function addRangeHoodCompartment(
     const visorGeometry = new ExtrudeGeometry(profile, {
       depth: width,
       bevelEnabled: false,
-      curveSegments: 24,
+      curveSegments: 12,
       steps: 1,
     })
     visorGeometry.rotateY(-Math.PI / 2)
@@ -170,6 +177,47 @@ export function addRangeHoodCompartment(
     [0, ductBottomY + ductHeight / 2, ductCenterZ],
     materials.appliance,
     `${name}-duct`,
+    'appliance',
+  )
+
+  const bodyDepth = kind === 'hood-pyramid' ? HOOD_CANOPY_DEPTH : Math.min(0.3, HOOD_CANOPY_DEPTH)
+  const frontZ = backZ + bodyDepth
+  const filterDepth = bodyDepth * 0.58
+  const filterWidth = width * 0.64
+  addBox(
+    group,
+    [filterWidth, 0.004, filterDepth],
+    [0, bottomY - 0.001, backZ + bodyDepth * 0.48],
+    microwavePanelMaterial,
+    `${name}-filter`,
+    'applianceInterior',
+  )
+  for (let i = 0; i < 5; i++) {
+    addBox(
+      group,
+      [filterWidth - 0.012, 0.002, filterDepth * 0.09],
+      [0, bottomY - 0.004, backZ + bodyDepth * 0.48 + (i - 2) * filterDepth * 0.17],
+      materials.appliance,
+      `${name}-filter-slat-${i}`,
+      'appliance',
+    )
+  }
+  for (const side of [-1, 1]) {
+    addBox(
+      group,
+      [width * 0.09, 0.003, bodyDepth * 0.12],
+      [side * width * 0.4, bottomY - 0.002, backZ + bodyDepth * 0.65],
+      applianceLampMaterial,
+      `${name}-light-${side}`,
+      'appliance',
+    )
+  }
+  addBox(
+    group,
+    [Math.min(0.14, width * 0.3), 0.012, 0.002],
+    [0, bottomY + 0.01, frontZ + 0.001],
+    microwavePanelMaterial,
+    `${name}-controls`,
     'appliance',
   )
 }

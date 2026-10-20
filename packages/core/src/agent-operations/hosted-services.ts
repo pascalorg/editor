@@ -8,7 +8,8 @@ import { AgentRefusal } from '../agent-tools/refusal'
 
 export type HostedServiceRequest = {
   action: HostedServiceAction
-  pluginId: string
+  /** Absent: the person acts in Pascal's own Studio, not through a plugin's grant. */
+  pluginId?: string
   projectId?: string
   maxCredits?: number
   input: Record<string, unknown>
@@ -33,7 +34,7 @@ export async function executeHostedServiceTool(
       issues: parsed.error.issues.map(({ path, message }) => ({ path, message })),
     })
   const { pluginId, projectId, maxCredits, ...input } = parsed.data as {
-    pluginId: string
+    pluginId?: string
     projectId?: string
     maxCredits?: number
     [key: string]: unknown

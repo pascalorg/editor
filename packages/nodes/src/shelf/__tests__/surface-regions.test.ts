@@ -31,41 +31,41 @@ function sceneFor(nodes: AnyNode[]): SceneApi {
 }
 
 for (const style of ['wall-shelf', 'bookshelf', 'open-rack', 'cubby'] as const) {
-  test.each([
-    false,
-    true,
-  ])(`${style}, bottom %s: every row region matches the board mesh`, (withBottom) => {
-    for (const withSides of [false, true]) {
-      const host = ShelfNode.parse({
-        style,
-        withBottom,
-        withSides,
-        rows: 3,
-        width: 1.2,
-        depth: 0.5,
-      })
-      const mesh = buildShelfGeometry(host)
-      const boards = mesh.children.filter((m) => m.name.startsWith('shelf-board-'))
-      const surfaces = getSurfaceProvider(host).surfaces!(host, { scene: sceneFor([host]) })
-      expect(surfaces).toHaveLength(boards.length)
-      for (const surface of surfaces) {
-        const bottom = withBottom && (style === 'bookshelf' || style === 'cubby')
-        const index = Number(surface.id.split(':')[1])
-        const board = boards.find(
-          (m) =>
-            m.name ===
-            (bottom && index === 0
-              ? 'shelf-board-bottom'
-              : `shelf-board-${index - (bottom ? 1 : 0)}`),
-        )!
-        const box = new Box3().setFromObject(board)
-        expect(surface.region.size![0] * 2).toBeCloseTo(box.max.x - box.min.x, 6)
-        expect(surface.region.size![1] * 2).toBeCloseTo(box.max.z - box.min.z, 6)
-        expect(surface.region.center ?? [0, 0]).toEqual([0, 0])
+  test.each([false, true])(
+    `${style}, bottom %s: every row region matches the board mesh`,
+    (withBottom) => {
+      for (const withSides of [false, true]) {
+        const host = ShelfNode.parse({
+          style,
+          withBottom,
+          withSides,
+          rows: 3,
+          width: 1.2,
+          depth: 0.5,
+        })
+        const mesh = buildShelfGeometry(host)
+        const boards = mesh.children.filter((m) => m.name.startsWith('shelf-board-'))
+        const surfaces = getSurfaceProvider(host).surfaces!(host, { scene: sceneFor([host]) })
+        expect(surfaces).toHaveLength(boards.length)
+        for (const surface of surfaces) {
+          const bottom = withBottom && (style === 'bookshelf' || style === 'cubby')
+          const index = Number(surface.id.split(':')[1])
+          const board = boards.find(
+            (m) =>
+              m.name ===
+              (bottom && index === 0
+                ? 'shelf-board-bottom'
+                : `shelf-board-${index - (bottom ? 1 : 0)}`),
+          )!
+          const box = new Box3().setFromObject(board)
+          expect(surface.region.size![0] * 2).toBeCloseTo(box.max.x - box.min.x, 6)
+          expect(surface.region.size![1] * 2).toBeCloseTo(box.max.z - box.min.z, 6)
+          expect(surface.region.center ?? [0, 0]).toEqual([0, 0])
+        }
+        mesh.traverse((object) => (object as Mesh).geometry?.dispose())
       }
-      mesh.traverse((object) => (object as Mesh).geometry?.dispose())
-    }
-  })
+    },
+  )
 }
 
 test('every declaring provider publishes regions; ray-derived providers declare no surfaces', () => {

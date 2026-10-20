@@ -7,7 +7,6 @@ import {
   add,
   diffuseColor,
   mix,
-  mrt,
   normalView,
   normalWorldGeometry,
   oscSine,
@@ -26,25 +25,24 @@ import {
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, TimestampQuery, type WebGPURenderer } from 'three/webgpu'
-import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/backdrop'
+import { backdropColors, backdropGradient, flatBackdropOutput } from '../../lib/backdrop'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { createEdgeDepthSampler, inkedEdges } from '../../lib/ink-edges'
 import { refreshIsolation } from '../../lib/isolation'
 import { LayerPassIndex, LayerPassNode } from '../../lib/layer-pass'
-import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
+import { OVERLAY_LAYER, SCENE_LAYER, scenePassLayers, ZONE_LAYER } from '../../lib/layers'
 import { isLiveFrameHeld } from '../../lib/live-frame-hold'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { PostProcessingResources } from '../../lib/post-processing-resources'
-import { getSceneTheme } from '../../lib/scene-themes'
+import { sceneLightingMask, scenePassMrt } from '../../lib/scene-pass-mrt'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
-// Scene-referred grade applied before the output tone mapping (AgX). AgX rolls
-// highlights off gently but reads flat on its own; a mild mid-gray-pivot
-// contrast + saturation lift restores the punch. Rendered shading only.
+// A mild mid-gray contrast and saturation lift separates surfaces before the
+// output transform. Saved project looks can turn it off. Rendered shading only.
 export const GRADE_PARAMS = {
   contrast: 1.05,
   saturation: 1.1,
@@ -217,22 +215,23 @@ const PostProcessingPasses = ({
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current scene theme so there's no flash on first render.
-  const initTheme = getSceneTheme(useViewer.getState().sceneTheme)
+  const initTheme = useViewer.getState().sceneAppearance
+  const initBackdrop = backdropColors(initTheme)
   const initBg = initTheme.background
   const bgUniform = useRef(uniform(new Color(initBg)))
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
   // Zenith colour of the backdrop gradient (falls back to the flat background).
-  const initSky = initTheme.backgroundSky ?? initBg
+  const initSky = initBackdrop.sky
   const bgSkyUniform = useRef(uniform(new Color(initSky)))
   const bgSkyCurrent = useRef(new Color(initSky))
   const bgSkyTarget = useRef(new Color())
   // Horizon haze band + deep zenith (derived — see lib/backdrop.ts).
-  const initHaze = horizonHazeColor(initSky, initTheme.appearance)
+  const initHaze = initBackdrop.haze
   const bgHazeUniform = useRef(uniform(new Color(initHaze)))
   const bgHazeCurrent = useRef(new Color(initHaze))
   const bgHazeTarget = useRef(new Color())
-  const initSkyDeep = deepSkyColor(initSky)
+  const initSkyDeep = initBackdrop.skyDeep
   const bgSkyDeepUniform = useRef(uniform(new Color(initSkyDeep)))
   const bgSkyDeepCurrent = useRef(new Color(initSkyDeep))
   const bgSkyDeepTarget = useRef(new Color())
@@ -259,13 +258,10 @@ const PostProcessingPasses = ({
   // picking), so without this the gizmos/handles/tool previews land in the
   // depth+normal MRT and get inked / AO'd as if they were geometry. The grid is
   // kept in here (not the overlay pass) so scene geometry depth-occludes it; it's
-  // a flat, depth-non-writing plane so the ink never picks it up.
-  const sceneOnlyLayers = useMemo(() => {
-    const l = new Layers()
-    l.set(SCENE_LAYER)
-    l.enable(GRID_LAYER)
-    return l
-  }, [])
+  // a flat, depth-non-writing plane. The dust shares the layer and writes alpha 0 to
+  // the normal and diffuse attachments, which `scenePassMrt` blends, so the ink
+  // never sees its quads.
+  const sceneOnlyLayers = useMemo(scenePassLayers, [])
   // Editor overlays render in their own pass, composited on top after the ink
   // and outlines so they read as crisp UI rather than scene geometry.
   const overlayLayers = useMemo(() => {
@@ -273,7 +269,10 @@ const PostProcessingPasses = ({
     l.set(OVERLAY_LAYER)
     return l
   }, [])
-  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const hoverMode = useViewer((s) => s.hoverHighlightMode)
+  // Elements a chat chip points at draw in the `point` style whatever the editor's hover mode is.
+  const hasPointedIds = useViewer((s) => s.pointedIds.length > 0)
+  const hoverHighlightMode = hasPointedIds ? 'point' : hoverMode
   const hoverVisibleColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.visibleColor)), [])
   const hoverHiddenColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.hiddenColor)), [])
   const hoverStrength = useMemo(() => uniform(DEFAULT_HOVER_STYLE.strength), [])
@@ -282,6 +281,11 @@ const PostProcessingPasses = ({
   // Subscribe to projectId so the pipeline rebuilds on project switch
   const projectId = useViewer((s) => s.projectId)
   const shading = useViewer((s) => s.shading)
+  const ambientOcclusion = useViewer(
+    (s) => s.sceneAppearance.postprocessing?.ambientOcclusion !== false,
+  )
+  const colorGrading = useViewer((s) => s.sceneAppearance.postprocessing?.colorGrading !== false)
+  const flatBackground = useViewer((s) => s.sceneAppearance.backgroundSky === null)
   const edges = useViewer((s) => s.edges)
   const inkOpacityOverride = useViewer((s) => s.inkOpacity)
   const transparentBackground = useViewer((s) => s.transparentBackground)
@@ -377,7 +381,8 @@ const PostProcessingPasses = ({
       disposePipeline()
       return
     }
-    const ssgiEnabled = shading === 'rendered' && SSGI_PARAMS.enabled && !perfDisable.ao
+    const ssgiEnabled =
+      shading === 'rendered' && ambientOcclusion && SSGI_PARAMS.enabled && !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
     const inkEnabled = edges !== 'off'
@@ -396,6 +401,8 @@ const PostProcessingPasses = ({
       perfDisable,
       projectId,
       shading,
+      ambientOcclusion,
+      colorGrading,
       transparentBackground,
       rendererCtor: (renderer as any).constructor?.name,
       width,
@@ -470,10 +477,11 @@ const PostProcessingPasses = ({
       let scenePassNormal: any = null
       if (needsNormalMRT) {
         scenePass.setMRT(
-          mrt({
+          scenePassMrt({
             output,
             diffuseColor,
             normal: packNormalToRGB(normalView),
+            lighting: sceneLightingMask(),
           }),
         )
         scenePassNormal = scenePass.getTextureNode('normal')
@@ -481,6 +489,7 @@ const PostProcessingPasses = ({
       if (scenePassNormal) {
         const normalTexture = scenePass.getTexture('normal')
         normalTexture.type = UnsignedByteType
+        scenePass.getTexture('lighting').type = UnsignedByteType
       }
       // Extract normal from color-encoded texture (SSGI consumes the node form).
       const normalNode = scenePassNormal
@@ -532,10 +541,15 @@ const PostProcessingPasses = ({
         // band read as a visible line along the horizon.
         const aoFarFade = smoothstep(tslFloat(0.9994), tslFloat(0.9998), sampleEdgeDepth(screenUV))
         ao = mix(ao, tslFloat(1), aoFarFade)
+        const lightingWeight = scenePass.getTextureNode('lighting').r
+        ao = mix(tslFloat(1), ao, lightingWeight)
 
         // Composite: scene * AO + diffuse * GI
         sceneColor = vec4(
-          add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
+          add(
+            scenePassColor.rgb.mul(ao),
+            add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi).mul(lightingWeight)),
+          ),
           contentAlpha,
         )
       }
@@ -567,7 +581,7 @@ const PostProcessingPasses = ({
           rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
           GRADE_PARAMS.saturation,
         )
-      if (shading === 'rendered') {
+      if (shading === 'rendered' && colorGrading) {
         sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
 
@@ -638,7 +652,7 @@ const PostProcessingPasses = ({
             sky: bgSkyUniform.current,
             skyDeep: bgSkyDeepUniform.current,
           })
-      if (shading === 'rendered') {
+      if (shading === 'rendered' && colorGrading) {
         bgGradient = gradeRgb(bgGradient)
       }
       const sceneComposite = compositeWithOutlines.rgb
@@ -658,11 +672,26 @@ const PostProcessingPasses = ({
           .add(sceneComposite.mul(visualAlpha).mul(overlayAlpha.oneMinus()))
           .div(alpha.max(tslFloat(0.00001)))
         finalOutput = premultiplyAlpha(renderOutput(vec4(straightRgb, alpha)))
+      } else if (flatBackground && !atmosphere) {
+        const backdrop = flatBackdropOutput({
+          background: bgUniform.current,
+          foreground: sceneComposite,
+          alpha: contentAlpha,
+          toneMapping: renderer.toneMapping,
+          outputColorSpace: renderer.outputColorSpace,
+        })
+        const overlay = renderOutput(
+          vec4(overlayColor.rgb, 1),
+          renderer.toneMapping,
+          renderer.outputColorSpace,
+        )
+        finalOutput = vec4(mix(backdrop.rgb, overlay.rgb, overlayColor.a), 1)
       }
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       resources.pipeline = renderPipeline
-      renderPipeline.outputColorTransform = !transparentBackground
+      renderPipeline.outputColorTransform =
+        !transparentBackground && !(flatBackground && !atmosphere)
       renderPipeline.outputNode = finalOutput
       retryCountRef.current = 0
     } catch (error) {
@@ -700,6 +729,9 @@ const PostProcessingPasses = ({
     renderer,
     scene,
     shading,
+    ambientOcclusion,
+    colorGrading,
+    flatBackground,
     transparentBackground,
     size.height,
     size.width,
@@ -734,19 +766,18 @@ const PostProcessingPasses = ({
     }
 
     // Animate background colour toward the current scene theme target (same lerp as AnimatedBackground)
-    const bgTheme = getSceneTheme(useViewer.getState().sceneTheme)
+    const bgTheme = useViewer.getState().sceneAppearance
+    const backdrop = backdropColors(bgTheme)
     bgTarget.current.set(bgTheme.background)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
-    bgSkyTarget.current.set(bgTheme.backgroundSky ?? bgTheme.background)
+    bgSkyTarget.current.set(backdrop.sky)
     bgSkyCurrent.current.lerp(bgSkyTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyUniform.current.value.copy(bgSkyCurrent.current)
-    bgHazeTarget.current.set(
-      horizonHazeColor(bgTheme.backgroundSky ?? bgTheme.background, bgTheme.appearance),
-    )
+    bgHazeTarget.current.set(backdrop.haze)
     bgHazeCurrent.current.lerp(bgHazeTarget.current, Math.min(delta, 0.1) * 4)
     bgHazeUniform.current.value.copy(bgHazeCurrent.current)
-    bgSkyDeepTarget.current.set(deepSkyColor(bgTheme.backgroundSky ?? bgTheme.background))
+    bgSkyDeepTarget.current.set(backdrop.skyDeep)
     bgSkyDeepCurrent.current.lerp(bgSkyDeepTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyDeepUniform.current.value.copy(bgSkyDeepCurrent.current)
     camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)

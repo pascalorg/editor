@@ -4,38 +4,18 @@ import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 import { StairDesignTargets } from './stair-design-targets'
+import { StairRailingMode, StairRailingStyle } from './stair-types'
 
 export { StairDesignTargets } from './stair-design-targets'
+export { StairRailingMode, StairRailingStyle } from './stair-types'
 
 import { StairConstruction } from './stair-construction'
 import { StairSegmentNode } from './stair-segment'
 
-export const StairRailingMode = z.enum(['none', 'left', 'right', 'both'])
-/**
- * How a straight flight's guard is built: 'balusters' — the round baluster
- * at every nosing with two round rails (the original); 'post-and-rail' —
- * the way a deck stair is built: 4x4 posts no more than 4 ft apart (two on a
- * short flight), a top rail and a bottom rail following the flight, 1½ in
- * pickets between them at a 4 in-sphere gap (IRC R312.1.3); 'cable' — slim 2 in
- * posts spaced by run under a flat cap rail, with slender round cables 3 in
- * apart pulled as straight spans from post to post and a swage sleeve at each
- * terminal post (the modern cable rail; the cap follows a curve but the taut
- * cables span straight between the posts).
- */
-export const StairRailingStyle = z.enum([
-  'balusters',
-  'post-and-rail',
-  'cable',
-  'boards',
-  'glass',
-  'metal',
-])
 export const StairType = z.enum(['straight', 'curved', 'spiral'])
 export const StairTopLandingMode = z.enum(['none', 'integrated'])
 export const StairSlabOpeningMode = z.enum(['none', 'destination'])
 
-export type StairRailingMode = z.infer<typeof StairRailingMode>
-export type StairRailingStyle = z.infer<typeof StairRailingStyle>
 export type StairType = z.infer<typeof StairType>
 export type StairTopLandingMode = z.infer<typeof StairTopLandingMode>
 export type StairSlabOpeningMode = z.infer<typeof StairSlabOpeningMode>
@@ -84,6 +64,9 @@ export const StairNode = BaseNode.extend({
   designTargets: StairDesignTargets.optional(),
   uniformRisers: z.boolean().optional(),
   stepCount: z.number().default(10),
+  // Optional magnetic destination connection, independent of the source support.
+  autoSurfaceSnap: z.boolean().optional(),
+  destinationSurfaceId: z.string().optional(),
   thickness: z.number().default(0.25),
   fillToFloor: z.boolean().default(true),
   construction: StairConstruction.optional(),
@@ -132,6 +115,7 @@ export const StairNode = BaseNode.extend({
   - totalRise: total stair height
   - stepCount: number of visible steps
   - construction: optional explicit construction and finish details, inherited by child segments; absence preserves legacy bodies
+  - autoSurfaceSnap: magnetically connect straight flights to nearby registered top surfaces
   - thickness: stair slab / tread thickness
   - fillToFloor: whether the stair mass fills down to the floor or uses tread thickness only
   - innerRadius: inner curve radius for curved stairs

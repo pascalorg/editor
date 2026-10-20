@@ -105,6 +105,8 @@ function parentWorldYaw(parentId: string | null | undefined): number {
 export function createRegistryItemSurfaceMove(node: AnyNode) {
   const capabilities = nodeRegistry.get(node.type)?.capabilities
   const floorPlaced = capabilities?.floorPlaced
+  if (capabilities?.movable?.preserveLevelAndElevation && !isFreshPlacementMetadata(node.metadata))
+    return null
   if (!floorPlaced || (floorPlaced.applies && !floorPlaced.applies(node))) return null
 
   const original = node as AnyNode & {

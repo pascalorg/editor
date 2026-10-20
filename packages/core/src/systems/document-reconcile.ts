@@ -10,6 +10,7 @@ import { applyStructureReconciliation } from '../lib/structure-commit'
 import type { SceneNodes } from '../lib/structure-kernel'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
+import { roofsKeptOverStorey } from '../services/roof-move'
 import { pauseSceneHistory, resumeSceneHistory } from '../store/history-control'
 import { withoutLivePreviews } from '../store/live-previews'
 import type { SceneStore } from '../store/use-scene'
@@ -92,7 +93,8 @@ export type DocumentReconcileOptions = {
  * - room structure (zones, auto ceilings, floor plates) for the levels whose structure changed,
  *   as space detection derives it for a batch;
  * - stair rises and the floor openings stairs and elevators own, as the opening systems do;
- * - the elevation of wall-supported roofs, as the roof system does.
+ * - the elevation of wall-supported roofs, and of a roof kept over the storey it covers when its
+ *   level moves, as the roof system does.
  *
  * The opening and roof systems still run in the editor (on a microtask, for edits made by hand);
  * they plan with the same functions, so after this pass they find nothing to do. Writes are
@@ -182,10 +184,10 @@ export function reconcileDocument(
         const roofInput = (node: AnyNode | undefined) =>
           isRoofElevationInput(node) || node?.type === 'roof-segment'
         if (changed.some((id) => roofInput(roofsFrom[id]) || roofInput(current[id]))) {
-          const roofs = planRoofElevationUpdates(
-            view(),
-            roofsAffectedBy(roofsFrom, current, changed),
-          )
+          const roofs = [
+            ...roofsKeptOverStorey(roofsFrom, view()),
+            ...planRoofElevationUpdates(view(), roofsAffectedBy(roofsFrom, current, changed)),
+          ]
           if (roofs.length) write(() => store.getState().updateNodes(roofs))
           roofsFrom = nodes()
         }

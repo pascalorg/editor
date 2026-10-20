@@ -472,3 +472,41 @@ describe('item move history', () => {
     expect(history()).toEqual({ past: before.past, tracking: true, depth: 0 })
   })
 })
+
+describe('item placement selection', () => {
+  // A surface `:click` is synthesized on pointer-up (use-node-events), and the browser fires its
+  // own click after it. By then the editor is back in select mode, where the grid takes that click
+  // for one on empty ground and drops the selection of the item just placed.
+  test('a drop on pointer-up selects the new item and eats the click that follows', async () => {
+    const renderer = await create(<Placement />)
+    try {
+      await carry(10, 14)
+      const dropOnRelease = () =>
+        emitter.emit('node:click', {
+          node: { id: 'site_placement_history', type: 'site' },
+          position: [1.4, 0, 0.5],
+          localPosition: [1.4, 0, 0.5],
+          nativeEvent: { nativeEvent: {} },
+          stopPropagation() {},
+        } as never)
+      window.addEventListener('pointerup', dropOnRelease)
+      await act(async () => {
+        window.dispatchEvent(new Event('pointerup'))
+      })
+      window.removeEventListener('pointerup', dropOnRelease)
+      const placed = levelItems().find((node) => node.id !== item.id)
+      expect(placed).toBeDefined()
+      expect(useViewer.getState().selection.selectedIds).toEqual([placed!.id])
+      const click = new Event('click', { cancelable: true })
+      window.dispatchEvent(click)
+      expect(click.defaultPrevented).toBe(true)
+      // Only that one click: once the swallow window closes, a click reaches the editor again.
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      const next = new Event('click', { cancelable: true })
+      window.dispatchEvent(next)
+      expect(next.defaultPrevented).toBe(false)
+    } finally {
+      await renderer.unmount()
+    }
+  })
+})

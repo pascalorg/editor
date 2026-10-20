@@ -306,6 +306,15 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   }),
 
   capabilities: {
+    reveal: { phase: 'foundation', style: 'settle', height: 0.08 },
+    revealOnEdit: [
+      'polygon',
+      'holes',
+      'elevation',
+      'thickness',
+      'recessed',
+      'recessedRimElevation',
+    ],
     batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {

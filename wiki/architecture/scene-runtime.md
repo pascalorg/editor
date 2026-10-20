@@ -4,7 +4,7 @@
 
 Applies to: `packages/core/src/runtime/**`, `packages/core/src/store/**` (environments, history control), `packages/core/src/systems/document-reconcile.ts`, the shared operations in `packages/core/src/agent-operations/**`, and `packages/mcp/src/bridge/**`.
 
-A host that runs a long agent tool (a scene program, a compile, a batch of operations) does not want to hold the person's editor while it computes, nor let the computation touch the live store before it is known to fit. `@pascal-app/core/runtime` gives it a scene of its own: compute there, get a patch and the list of what was read, then apply the patch to the live scene only if nothing that was read has changed meanwhile. The runtime is library code; when and where a host applies is the host's (DECISIONS.md E-017).
+A host that runs a long agent tool (a scene program, a compile, a batch of operations) does not want to hold the person's editor while it computes, nor let the computation touch the live store before it is known to fit. `@pascal-app/core/runtime` gives it a scene of its own: compute there, get a patch and the list of what was read, then apply the patch to the live scene only if nothing that was read has changed meanwhile. The runtime is library code; when and where a host applies is the host's (DECISIONS.md E-018).
 
 ## One store, one environment
 

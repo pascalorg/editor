@@ -6,6 +6,8 @@ import {
   type LevelNode as LevelNodeType,
   resolveBuildingForLevel,
   type StairNode,
+  servesAsRoofLevel,
+  storeyInsertIndex,
 } from '@pascal-app/core'
 
 function sortLevelsByHeight(levels: LevelNodeType[]) {
@@ -141,30 +143,46 @@ export function resolveStairDestinationLevel({
     nodes as Record<AnyNodeId, AnyNode>,
   )
   const levels = getBuildingLevelsForLevel(nodes, fromLevel.id)
-  const nextExistingLevel = levels.find((level) => level.level > fromLevel.level) ?? null
+  // A stair rises to a storey: the roof level over the top one is not a floor to climb to.
+  const nextExistingLevel =
+    levels.find((level) => level.level > fromLevel.level && !servesAsRoofLevel(nodes, level)) ??
+    null
   if (nextExistingLevel) {
     return {
       buildingId,
       createdLevel: null,
       fromLevel,
       levels,
+      liftedLevels: [],
       toLevel: nextExistingLevel,
     }
   }
 
   if (createMissing && buildingId) {
+    // The new storey goes under the roof level, which moves up over it.
+    const { floorIndex, shift } = storeyInsertIndex(nodes, buildingId)
     const createdLevel = LevelNode.parse({
       children: [],
       height: DEFAULT_LEVEL_HEIGHT,
-      level: fromLevel.level + 1,
+      level: floorIndex,
       parentId: buildingId,
     })
+    const lifted = new Map(shift.map(({ id, data }) => [id, data.level]))
 
     return {
       buildingId,
       createdLevel,
       fromLevel,
-      levels: sortLevelsByHeight([...levels, createdLevel]),
+      levels: sortLevelsByHeight([
+        ...levels.map((level) =>
+          lifted.has(level.id) ? { ...level, level: lifted.get(level.id)! } : level,
+        ),
+        createdLevel,
+      ]),
+      liftedLevels: shift.map(({ id, data }) => ({
+        id: id as AnyNodeId,
+        data: data as Partial<AnyNode>,
+      })),
       toLevel: createdLevel,
     }
   }
@@ -174,6 +192,7 @@ export function resolveStairDestinationLevel({
     createdLevel: null,
     fromLevel,
     levels,
+    liftedLevels: [],
     toLevel: fromLevel,
   }
 }

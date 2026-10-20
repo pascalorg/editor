@@ -5,7 +5,7 @@
       "command": "npx",
       "args": [
         "--yes",
-        "--package=@pascal-app/cli@1.0.0",
+        "--package=@pascal-app/cli@1.0.4",
         "pascal",
         "mcp",
         "connect"

@@ -1,8 +1,11 @@
 import { afterEach, expect, test } from 'bun:test'
 import {
   BuildingNode,
+  beginScenePreview,
   ColumnNode,
   clearSceneHistory,
+  endScenePreview,
+  isScenePreviewing,
   LevelNode,
   SiteNode,
   useScene,
@@ -16,6 +19,7 @@ const previousScene = useScene.getState()
 let renderer: Awaited<ReturnType<typeof create>> | undefined
 
 afterEach(async () => {
+  endScenePreview()
   await renderer?.unmount()
   renderer = undefined
   globalThis.window = originalWindow
@@ -192,30 +196,29 @@ test('a save that came due mid-load is written once the load completes', async (
   expect(statuses.at(-1)).toBe('saved')
 })
 
-test.each([
-  'undo',
-  'redo',
-  'delete',
-] as const)('autosave permits a 5 to 4 single-node %s', async (action) => {
-  const { writes, statuses } = await mount(5)
-  if (action === 'undo') {
-    useScene.setState(graph(4))
-    clearSceneHistory()
-    useScene.setState(graph(5))
-    useScene.temporal.getState().undo()
-  } else if (action === 'redo') {
-    useScene.getState().deleteNode('column_autosave_1')
-    useScene.temporal.getState().undo()
-    useScene.temporal.getState().redo()
-  } else {
-    useScene.getState().deleteNode('column_autosave_1')
-  }
-  expect(Object.keys(useScene.getState().nodes)).toHaveLength(4)
-  await Bun.sleep(1100)
-  expect(statuses).not.toContain('error')
-  expect(writes).toEqual([4])
-  expect(statuses.at(-1)).toBe('saved')
-})
+test.each(['undo', 'redo', 'delete'] as const)(
+  'autosave permits a 5 to 4 single-node %s',
+  async (action) => {
+    const { writes, statuses } = await mount(5)
+    if (action === 'undo') {
+      useScene.setState(graph(4))
+      clearSceneHistory()
+      useScene.setState(graph(5))
+      useScene.temporal.getState().undo()
+    } else if (action === 'redo') {
+      useScene.getState().deleteNode('column_autosave_1')
+      useScene.temporal.getState().undo()
+      useScene.temporal.getState().redo()
+    } else {
+      useScene.getState().deleteNode('column_autosave_1')
+    }
+    expect(Object.keys(useScene.getState().nodes)).toHaveLength(4)
+    await Bun.sleep(1100)
+    expect(statuses).not.toContain('error')
+    expect(writes).toEqual([4])
+    expect(statuses.at(-1)).toBe('saved')
+  },
+)
 
 test('autosave permits a single-node deletion on exit', async () => {
   const { writes, statuses } = await mount(5)
@@ -252,20 +255,20 @@ test('collaboration scaffold deletion waits for persistence and reports saved', 
   expect(statuses).toEqual(['pending', 'saving', 'saved'])
 })
 
-test.each([
-  'pagehide',
-  'unmount',
-])('collaboration scaffold deletion still flushes on %s', async (event) => {
-  const { writes, statuses } = await mount(78, false)
-  useScene.setState(graph(4))
-  if (event === 'pagehide') window.dispatchEvent(new Event(event))
-  else {
-    await renderer!.unmount()
-    renderer = undefined
-  }
-  expect(statuses).not.toContain('error')
-  expect(writes).toEqual([4])
-})
+test.each(['pagehide', 'unmount'])(
+  'collaboration scaffold deletion still flushes on %s',
+  async (event) => {
+    const { writes, statuses } = await mount(78, false)
+    useScene.setState(graph(4))
+    if (event === 'pagehide') window.dispatchEvent(new Event(event))
+    else {
+      await renderer!.unmount()
+      renderer = undefined
+    }
+    expect(statuses).not.toContain('error')
+    expect(writes).toEqual([4])
+  },
+)
 
 test('collaboration guard exemption preserves preview pause and resume', async () => {
   const { writes, statuses, update } = await mount(78, false)
@@ -308,4 +311,59 @@ test('collaboration callback failures still report error', async () => {
   await Bun.sleep(0)
   expect(writes).toEqual([4])
   expect(statuses).toEqual(['pending', 'saving', 'error'])
+})
+
+// A scene preview (the scene as it was before an agent's turn, shown while a control is held) is not
+// an edit: it must reach neither the server nor the exit flush, and must not leave a save armed.
+const beforeLastEdit = () => useScene.temporal.getState().pastStates.at(-1) as never
+
+test('a held preview saves nothing and leaves nothing to save', async () => {
+  const { writes } = await mount(12)
+  agentAddsColumn()
+  await Bun.sleep(1100)
+  expect(writes).toEqual([13])
+
+  const preview = beginScenePreview(beforeLastEdit())
+  expect(Object.keys(useScene.getState().nodes)).toHaveLength(12)
+  await Bun.sleep(1100)
+  preview?.end()
+  await Bun.sleep(1100)
+
+  expect(writes).toEqual([13])
+})
+
+test('an edit that came due under a held preview is written after it, from the live scene', async () => {
+  const { writes } = await mount(12)
+  agentAddsColumn()
+  const preview = beginScenePreview(beforeLastEdit())
+  await Bun.sleep(1100)
+  expect(writes).toEqual([])
+
+  preview?.end()
+  await Bun.sleep(10)
+
+  expect(writes).toEqual([13])
+})
+
+test('leaving the page under a held preview writes the live scene, not the preview', async () => {
+  const { writes } = await mount(12)
+  agentAddsColumn()
+  beginScenePreview(beforeLastEdit())
+
+  window.dispatchEvent(new Event('pagehide'))
+
+  expect(isScenePreviewing()).toBe(false)
+  expect(writes).toEqual([13])
+})
+
+test('the save shortcut under a held preview writes the live scene', async () => {
+  const { writes, controls } = await mount(12)
+  agentAddsColumn()
+  beginScenePreview(beforeLastEdit())
+
+  controls.saveNow()
+  await Bun.sleep(0)
+
+  expect(isScenePreviewing()).toBe(false)
+  expect(writes).toEqual([13])
 })
