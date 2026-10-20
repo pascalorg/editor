@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNodeDefinition,
+  type AnyNodeId,
   BuildingNode,
   type CameraPose,
   emitter,
@@ -872,7 +873,9 @@ async function followBasement(pieces: Array<{ at: number; on: 'basement' | 'grou
       for (const [index, piece] of pieces.entries()) {
         if (piece.at !== at) continue
         const node = basementPiece(`item_piece${index}`, `level_${piece.on}`, index * 0.4)
-        runAsSceneCommitAuthor('agent', () => useScene.getState().createNode(node, node.parentId!))
+        runAsSceneCommitAuthor('agent', () =>
+          useScene.getState().createNode(node, node.parentId as AnyNodeId),
+        )
         sceneRegistry.nodes.set(node.id, new Group())
       }
       driver!.tick(at + 1)
