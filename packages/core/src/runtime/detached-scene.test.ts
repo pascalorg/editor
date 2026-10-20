@@ -8,6 +8,7 @@ import {
 } from '../agent-operations'
 import { AGENT_TOOL_CASES } from '../agent-operations/__fixtures__/cases'
 import { AGENT_TOOL_CONTRACTS } from '../agent-tools'
+import { initSpaceDetectionSync } from '../lib/space-detection'
 import { encodeTerrainField } from '../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../lib/terrain-field'
 import {
@@ -511,6 +512,55 @@ describe('reconciliation', () => {
     expect(getSceneDocument().nodes['wall_0' as AnyNodeId]).toEqual(
       base.nodes['wall_0' as AnyNodeId],
     )
+  })
+
+  test("a room an agent settles on the editor's store is not derived again by the person's next edit", async () => {
+    const { level, upper, building } = storeys()
+    await openLiveScene(document(building, level, upper))
+    let published = 0
+    const editor = {
+      getState: () => ({
+        spaces: {},
+        setSpaces: () => {
+          published += 1
+        },
+      }),
+    }
+    const stop = initSpaceDetectionSync(useScene, editor)
+    try {
+      const corners: [number, number][] = [
+        [0, 0],
+        [5, 0],
+        [5, 4],
+        [0, 4],
+      ]
+      createAgentHost(liveSceneRuntime).applyChanges({
+        create: corners.map((start, i) => ({
+          node: WallNode.parse({
+            id: `wall_${i}`,
+            parentId: level.id,
+            start,
+            end: corners[(i + 1) % corners.length]!,
+          }),
+          parentId: level.id,
+        })),
+      })
+      await settle()
+      expect(
+        queryNodes(useScene.getState().nodes as never, { type: 'zone', parentId: level.id }),
+      ).toHaveLength(1)
+
+      // A write that changes no level's structure: space detection has nothing to derive.
+      published = 0
+      const nodes = useScene.getState().nodes
+      useScene.setState({
+        nodes: { ...nodes, [building.id]: { ...nodes[building.id]!, name: 'Renamed' } as AnyNode },
+      })
+      await settle()
+      expect(published).toBe(0)
+    } finally {
+      stop()
+    }
   })
 
   test('a terrain stroke in progress reaches no detached computation', () => {

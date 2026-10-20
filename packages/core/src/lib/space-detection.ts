@@ -636,13 +636,10 @@ export function initSpaceDetectionSync(
       adoptSceneBaseline(state.nodes)
       return
     }
-    if (
-      getSceneHistoryPauseDepth(sceneStore) > 0 ||
-      sceneStore.temporal.getState().isTracking === false
-    )
-      return
     // A settling host derives this edit's structure itself (reconcileDocument): only the topology
-    // and spaces of the levels whose walls it changed are brought up to date here.
+    // and spaces of the levels whose walls it changed are brought up to date here. Its derived
+    // writes are history-paused, so this runs before the pause check: the baseline must take them
+    // in, or the next edit would derive the host's rooms again from before it.
     if (isSettlingDocument(sceneStore)) {
       const levels = [
         ...changedWallIdsByLevel(previousNodes, state.nodes, activeSceneCommitNodeIds()).keys(),
@@ -652,6 +649,11 @@ export function initSpaceDetectionSync(
       previousNodes = state.nodes
       return
     }
+    if (
+      getSceneHistoryPauseDepth(sceneStore) > 0 ||
+      sceneStore.temporal.getState().isTracking === false
+    )
+      return
 
     const nodes = state.nodes
     const candidateIds = activeSceneCommitNodeIds()
