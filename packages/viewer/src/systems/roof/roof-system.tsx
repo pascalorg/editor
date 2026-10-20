@@ -45,7 +45,7 @@ import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
 import { isRevealAssembling } from '../construction-reveal/construction-reveal'
-import { setRoofGeometryFailure, useRoofGeometryStatus } from './roof-geometry-status'
+import { setGeometryFailure, useGeometryStatus } from '../geometry/geometry-status'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -451,10 +451,7 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
       try {
         updateMergedRoofGeometry(node as RoofNode, group, nodes)
       } catch (error) {
-        setRoofGeometryFailure(
-          node.id,
-          'Roof geometry could not be rebuilt. The previous shape is still shown.',
-        )
+        setGeometryFailure(node.id, 'build-failed')
         console.error('Roof rebuild failed:', error)
       }
       roofsProcessed++
@@ -480,14 +477,11 @@ function updateRoofSegmentGeometry(
   try {
     newGeo = generateRoofSegmentGeometry(node, nodes)
   } catch (error) {
-    setRoofGeometryFailure(
-      node.id,
-      'Roof geometry could not be rebuilt. The previous shape is still shown.',
-    )
+    setGeometryFailure(node.id, 'build-failed')
     console.error('Roof segment rebuild failed:', error)
     return
   }
-  if (useRoofGeometryStatus.getState().failures.has(node.id)) {
+  if (useGeometryStatus.getState().failures.has(node.id)) {
     newGeo.dispose()
     return
   }
@@ -697,7 +691,7 @@ function updateMergedRoofGeometry(
     // Not BoxGeometry: its 6 groups against the merged mesh's 4-material array
     // crash GLTFExporter (materials[4] → undefined) when the roof bakes.
     mergedMesh.geometry = createDegenerateRoofPlaceholder()
-    setRoofGeometryFailure(roofNode.id, null)
+    setGeometryFailure(roofNode.id, null)
     return
   }
 
@@ -819,10 +813,7 @@ function updateMergedRoofGeometry(
           )
           warnedMergedRoofNaNIds.add(roofNode.id)
         }
-        setRoofGeometryFailure(
-          roofNode.id,
-          'Roof intersections produced invalid geometry. The previous shape is still shown.',
-        )
+        setGeometryFailure(roofNode.id, 'invalid-geometry')
         resultGeo.dispose()
         if (combined !== shinDeck) shinDeck.geometry.dispose()
         totalShinSlab.geometry.dispose()
@@ -863,14 +854,11 @@ function updateMergedRoofGeometry(
       ensureRenderableGeometryAttributes(finalGeo)
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = finalGeo
-      setRoofGeometryFailure(roofNode.id, null)
+      setGeometryFailure(roofNode.id, null)
 
       if (combined !== shinDeck) shinDeck.geometry.dispose()
     } catch (e) {
-      setRoofGeometryFailure(
-        roofNode.id,
-        'Roof intersections could not be rebuilt. The previous shape is still shown.',
-      )
+      setGeometryFailure(roofNode.id, 'build-failed')
       console.error('Merged roof CSG failed:', e)
     }
 
@@ -890,7 +878,7 @@ function updateMergedRoofGeometry(
       ensureRenderableGeometryAttributes(finalGeo)
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = finalGeo
-      setRoofGeometryFailure(roofNode.id, null)
+      setGeometryFailure(roofNode.id, null)
     }
     for (const geometry of directSegmentGeometries) {
       if (geometry !== finalGeo) geometry.dispose()
@@ -2087,17 +2075,14 @@ export function generateRoofSegmentGeometry(
     }
     result.computeVertexNormals()
     ensureRenderableGeometryAttributes(result)
-    setRoofGeometryFailure(node.id, null)
+    setGeometryFailure(node.id, null)
     return result
   }
   const brushes = withSegmentUvMatrix(segmentWorldMatrix, () =>
     getRoofSegmentBrushes(node, { fascia: wearsFascia(node, parentRoof) }),
   )
   if (!brushes) {
-    setRoofGeometryFailure(
-      node.id,
-      'Roof geometry could not be built. Adjust the dimensions and retry.',
-    )
+    setGeometryFailure(node.id, 'build-failed')
     return new THREE.BoxGeometry(node.width, node.wallHeight, node.depth)
   }
 
@@ -2136,12 +2121,9 @@ export function generateRoofSegmentGeometry(
     resultGeo = csgGeometry(combined)
     if (geometryHasInvalidAttributes(resultGeo)) {
       resultGeo.dispose()
-      setRoofGeometryFailure(
-        node.id,
-        'Roof geometry is invalid. Adjust the dimensions or intersections and retry.',
-      )
+      setGeometryFailure(node.id, 'invalid-geometry')
       resultGeo = csgGeometry(wallBrush).clone()
-    } else setRoofGeometryFailure(node.id, null)
+    } else setGeometryFailure(node.id, null)
 
     const resultMaterials = csgMaterials(combined)
 
@@ -2166,10 +2148,7 @@ export function generateRoofSegmentGeometry(
     hollowWall?.geometry.dispose()
     if (combined !== shinDeck) shinDeck.geometry.dispose()
   } catch (e) {
-    setRoofGeometryFailure(
-      node.id,
-      'Roof geometry could not be rebuilt. Adjust the dimensions or intersections and retry.',
-    )
+    setGeometryFailure(node.id, 'build-failed')
     console.error('Roof CSG failed:', e)
     resultGeo = csgGeometry(wallBrush).clone()
   }

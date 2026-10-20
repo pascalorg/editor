@@ -315,6 +315,11 @@ export { ElevatorInteractionSystem } from './systems/elevator/elevator-interacti
 // elevation under its footprint. Replaces the per-kind elevation block
 // that used to live inside `ItemSystem`.
 export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
+export {
+  type GeometryFailure,
+  setGeometryFailure,
+  useGeometryStatus,
+} from './systems/geometry/geometry-status'
 export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 export {
@@ -333,7 +338,6 @@ export {
   getLevelPresentationY,
   snapLevelsToTruePositions,
 } from './systems/level/level-utils'
-export { useRoofGeometryStatus } from './systems/roof/roof-geometry-status'
 export { getRoofMaterialArray, levelWallCladdingRef } from './systems/roof/roof-materials'
 // Generic roof-segment primitives. Kinds that compose CSG against
 // the roof shell (chimney's self-trim, dormer's virtual-segment cut)

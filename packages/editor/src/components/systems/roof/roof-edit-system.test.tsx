@@ -101,6 +101,18 @@ test('roof trim drag keeps its plane hit over a surface joining and leaving a ba
       events.dispatchEvent(new Event('pointercancel'))
     })
     expect(useLiveNodeOverrides.getState().overrides.has(segment.id)).toBe(false)
+    const fieldEscape = Object.assign(new Event('keydown'), { key: 'Escape' })
+    Object.defineProperty(fieldEscape, 'target', {
+      value: { closest: () => ({ tagName: 'INPUT' }) },
+    })
+    await act(async () => {
+      events.dispatchEvent(fieldEscape)
+    })
+    expect(useInteractionScope.getState().scope.kind).toBe('reshaping')
+    await act(async () => {
+      events.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' }))
+    })
+    expect(useInteractionScope.getState().scope.kind).toBe('idle')
   } finally {
     await act(async () => {
       root.render(null)

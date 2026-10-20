@@ -75,7 +75,7 @@ test('a painted segment whose renderer mounts after the scene-load pass still bu
 
 test('a failed roof rebuild keeps the last valid mesh and recovers after retry', async () => {
   const { nodeRegistry, registerNode, SkylightNode } = await import('@pascal-app/core')
-  const { useRoofGeometryStatus } = await import('@pascal-app/viewer')
+  const { useGeometryStatus } = await import('@pascal-app/viewer')
   const previous = useScene.getState()
   const restoreRegistry = nodeRegistry._snapshot()
   let fail = false
@@ -124,13 +124,13 @@ test('a failed roof rebuild keeps the last valid mesh and recovers after retry',
     useScene.getState().markDirty(segment.id)
     await renderer.advanceFrames(1, 1 / 60)
     expect(mesh.geometry).toBe(validGeometry)
-    expect(useRoofGeometryStatus.getState().failures.has(segment.id)).toBe(true)
+    expect(useGeometryStatus.getState().failures.has(segment.id)).toBe(true)
     expect(useScene.getState().nodes[segment.id]).toBe(stored)
     fail = false
     useScene.getState().markDirty(segment.id)
     await renderer.advanceFrames(1, 1 / 60)
     expect(mesh.geometry).not.toBe(validGeometry)
-    expect(useRoofGeometryStatus.getState().failures.has(segment.id)).toBe(false)
+    expect(useGeometryStatus.getState().failures.has(segment.id)).toBe(false)
   } finally {
     await renderer.unmount()
     restoreRegistry()
