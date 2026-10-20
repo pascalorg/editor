@@ -70,6 +70,7 @@ beforeEach(() => {
     readOnly: false,
   })
   useScene.temporal.getState().resume()
+  useScene.temporal.getState().clear()
   stop = initSpaceDetectionSync(useScene, { getState: () => ({ spaces: {}, setSpaces: () => {} }) })
   room(GROUND, rect(0, 0, 8, 5), 'Living')
   room(UPPER, rect(0, 0, 8, 5), 'Bedroom')
