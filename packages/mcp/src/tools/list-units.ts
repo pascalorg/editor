@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { buildUnitReport } from '@pascal-app/core'
 import { UnitNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -46,8 +46,8 @@ export function registerListUnits(server: McpServer, bridge: SceneOperations): v
       title: 'List units',
       description:
         'List units with their member zones and current area reports, optionally filtered by building.',
-      inputSchema: listUnitsInput,
-      outputSchema: listUnitsOutput,
+      inputSchema: z.object(listUnitsInput),
+      outputSchema: z.object(listUnitsOutput),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ buildingId }) => {

@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { cloneSceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -6,7 +6,7 @@ import { rehydrateSiteChildren } from '../../lib/rehydrate-site-children'
 import type { SceneOperations } from '../../operations'
 import { isTemplateId, TEMPLATES, type TemplateId } from '../../templates'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
-import { ErrorCode, throwMcpError } from '../errors'
+import { ProtocolErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
 import { currentLevelContext, sceneMetaPayload } from '../scene-lifecycle/metadata'
 
@@ -82,8 +82,8 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
       title: 'Create house from brief',
       description:
         'High-level hosted workflow for external agents: choose a starter house from a brief, create/save/publish it, and return the editor URL. Use semantic tools afterward for exact customization.',
-      inputSchema: createHouseFromBriefInput,
-      outputSchema: createHouseFromBriefOutput,
+      inputSchema: z.object(createHouseFromBriefInput),
+      outputSchema: z.object(createHouseFromBriefOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({
@@ -102,7 +102,7 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
         ...(landscaping !== undefined ? { landscaping } : {}),
       })
       if (!isTemplateId(templateId)) {
-        throwMcpError(ErrorCode.InternalError, `unknown_template: ${templateId}`)
+        throwMcpError(ProtocolErrorCode.InternalError, `unknown_template: ${templateId}`)
       }
 
       const entry = TEMPLATES[templateId]
@@ -115,7 +115,7 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
         bridge.setScene(nodes, rootNodeIds)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InternalError, `apply_failed: ${msg}`)
+        throwMcpError(ProtocolErrorCode.InternalError, `apply_failed: ${msg}`)
       }
 
       const rawValidation = bridge.validateScene()
@@ -205,7 +205,7 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InternalError, `save_failed: ${msg}`)
+        throwMcpError(ProtocolErrorCode.InternalError, `save_failed: ${msg}`)
       }
     },
   )

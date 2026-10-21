@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   type AddObjectInput,
   AGENT_OPERATIONS,
@@ -613,7 +613,7 @@ export function registerOperationTool(
     {
       title: tool.contract.title,
       description: tool.contract.description,
-      inputSchema: tool.contract.input,
+      inputSchema: z.object(tool.contract.input),
       // Loose: a client that listed the tools rejects any field the schema leaves out, and the
       // operations in core grow fields (verify_scene's guesses) that this list would miss.
       ...(tool.outputSchema ? { outputSchema: z.looseObject(tool.outputSchema) } : {}),

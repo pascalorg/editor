@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   achievedChanges,
@@ -23,6 +23,7 @@ import type {
   GeometryScriptParamValue,
 } from '@pascal-app/core/schema'
 import { GeometryReuseFields } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -162,8 +163,8 @@ export function registerAddDoor(
     {
       title: addDoorTool.title,
       description: addDoorTool.description,
-      inputSchema: addDoorTool.input,
-      outputSchema: addDoorOutput,
+      inputSchema: z.object(addDoorTool.input),
+      outputSchema: z.object(addDoorOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async (input) => {
@@ -198,8 +199,8 @@ export function registerAddWindow(
     {
       title: addWindowTool.title,
       description: addWindowTool.description,
-      inputSchema: addWindowTool.input,
-      outputSchema: addWindowOutput,
+      inputSchema: z.object(addWindowTool.input),
+      outputSchema: z.object(addWindowOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async (input) => {

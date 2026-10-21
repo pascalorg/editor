@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   type AddColumnInput,
@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/core/agent-operations'
 import { addColumnTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
 import { type AnyNode, GeometryReuseFields } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -25,7 +26,7 @@ export function registerAddColumn(
     {
       title: addColumnTool.title,
       description: addColumnTool.description,
-      inputSchema: addColumnTool.input,
+      inputSchema: z.object(addColumnTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async (input: AddColumnInput) => {

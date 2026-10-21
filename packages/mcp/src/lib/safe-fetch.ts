@@ -1,5 +1,5 @@
 import { isIPv4, isIPv6 } from 'node:net'
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 /**
  * SSRF-safe fetch for user-supplied URLs (image URLs in vision tools).
@@ -81,16 +81,16 @@ function assertAllowedUrl(url: string): URL {
   try {
     parsed = new URL(url)
   } catch {
-    throw new McpError(ErrorCode.InvalidParams, 'invalid_url', { url })
+    throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'invalid_url', { url })
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new McpError(ErrorCode.InvalidParams, 'url_scheme_not_allowed', {
+    throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'url_scheme_not_allowed', {
       url,
       protocol: parsed.protocol,
     })
   }
   if (isUnsafeHost(parsed.hostname)) {
-    throw new McpError(ErrorCode.InvalidParams, 'url_host_blocked', {
+    throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'url_host_blocked', {
       url,
       hostname: parsed.hostname,
     })
@@ -103,7 +103,7 @@ function assertAllowedUrl(url: string): URL {
       .map((s) => s.trim())
       .filter(Boolean)
     if (!origins.includes(parsed.origin)) {
-      throw new McpError(ErrorCode.InvalidParams, 'url_origin_not_allowlisted', {
+      throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'url_origin_not_allowlisted', {
         url,
         origin: parsed.origin,
       })
@@ -128,7 +128,7 @@ export type SafeFetchResult = {
 
 /**
  * SSRF-safe fetch that follows redirects manually, revalidating the host
- * allowlist + private-IP check on every hop. Throws `McpError` for blocked
+ * allowlist + private-IP check on every hop. Throws `ProtocolError` for blocked
  * URLs, non-2xx responses, oversize bodies, or timeouts.
  */
 export async function safeFetch(
@@ -154,7 +154,7 @@ export async function safeFetch(
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get('location')
         if (!location) {
-          throw new McpError(ErrorCode.InvalidParams, 'redirect_without_location', {
+          throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'redirect_without_location', {
             url: parsed.toString(),
             status: res.status,
           })
@@ -163,7 +163,7 @@ export async function safeFetch(
         continue
       }
       if (!res.ok) {
-        throw new McpError(ErrorCode.InvalidParams, 'fetch_failed', {
+        throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'fetch_failed', {
           url: parsed.toString(),
           status: res.status,
           statusText: res.statusText,
@@ -172,7 +172,7 @@ export async function safeFetch(
       // Enforce Content-Length up front if present.
       const declared = Number(res.headers.get('content-length'))
       if (Number.isFinite(declared) && declared > maxBytes) {
-        throw new McpError(ErrorCode.InvalidParams, 'response_too_large', {
+        throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'response_too_large', {
           url: parsed.toString(),
           declared,
           maxBytes,
@@ -181,7 +181,7 @@ export async function safeFetch(
       // Stream with a running cap so servers that lie about length still get bounded.
       const reader = res.body?.getReader()
       if (!reader) {
-        throw new McpError(ErrorCode.InvalidParams, 'empty_response', {
+        throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'empty_response', {
           url: parsed.toString(),
         })
       }
@@ -198,7 +198,7 @@ export async function safeFetch(
             } catch {
               // ignore
             }
-            throw new McpError(ErrorCode.InvalidParams, 'response_too_large', {
+            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'response_too_large', {
               url: parsed.toString(),
               received: total,
               maxBytes,
@@ -214,16 +214,22 @@ export async function safeFetch(
         hops,
       }
     }
-    throw new McpError(ErrorCode.InvalidParams, 'too_many_redirects', {
+    throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'too_many_redirects', {
       hops: hops.slice(0, MAX_REDIRECTS + 1),
     })
   } catch (err) {
-    if (err instanceof McpError) throw err
+    if (err instanceof ProtocolError) throw err
     if ((err as { name?: string }).name === 'AbortError') {
-      throw new McpError(ErrorCode.InvalidParams, 'fetch_timeout', { url: urlStr, timeoutMs })
+      throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'fetch_timeout', {
+        url: urlStr,
+        timeoutMs,
+      })
     }
     const message = err instanceof Error ? err.message : String(err)
-    throw new McpError(ErrorCode.InvalidParams, 'fetch_error', { url: urlStr, message })
+    throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'fetch_error', {
+      url: urlStr,
+      message,
+    })
   } finally {
     clearTimeout(timer)
   }

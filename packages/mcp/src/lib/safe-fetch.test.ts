@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { McpError } from '@modelcontextprotocol/sdk/types.js'
+import { ProtocolError } from '@modelcontextprotocol/server'
 import { safeFetch } from './safe-fetch'
 
 describe('safeFetch — SSRF protection', () => {
   test('rejects non-http schemes', async () => {
     for (const url of ['file:///etc/passwd', 'ftp://example.com/', 'javascript:alert(1)']) {
       const err = await safeFetch(url).catch((e) => e)
-      expect(err).toBeInstanceOf(McpError)
+      expect(err).toBeInstanceOf(ProtocolError)
       expect((err as Error).message).toContain('url_scheme_not_allowed')
     }
   })
@@ -19,7 +19,7 @@ describe('safeFetch — SSRF protection', () => {
       'http://[::1]/',
     ]) {
       const err = await safeFetch(url).catch((e) => e)
-      expect(err).toBeInstanceOf(McpError)
+      expect(err).toBeInstanceOf(ProtocolError)
       expect((err as Error).message).toContain('url_host_blocked')
     }
   })
@@ -28,7 +28,7 @@ describe('safeFetch — SSRF protection', () => {
     // 169.254.169.254 is the AWS/GCP/Azure instance-metadata endpoint.
     const url = 'http://169.254.169.254/latest/meta-data/'
     const err = await safeFetch(url).catch((e) => e)
-    expect(err).toBeInstanceOf(McpError)
+    expect(err).toBeInstanceOf(ProtocolError)
     expect((err as Error).message).toContain('url_host_blocked')
   })
 
@@ -40,7 +40,7 @@ describe('safeFetch — SSRF protection', () => {
       'http://192.168.1.1/',
     ]) {
       const err = await safeFetch(url).catch((e) => e)
-      expect(err).toBeInstanceOf(McpError)
+      expect(err).toBeInstanceOf(ProtocolError)
       expect((err as Error).message).toContain('url_host_blocked')
     }
   })
@@ -53,19 +53,19 @@ describe('safeFetch — SSRF protection', () => {
       'http://nope.localhost/',
     ]) {
       const err = await safeFetch(url).catch((e) => e)
-      expect(err).toBeInstanceOf(McpError)
+      expect(err).toBeInstanceOf(ProtocolError)
       expect((err as Error).message).toContain('url_host_blocked')
     }
   })
 
   test('rejects IPv4-mapped IPv6 loopback', async () => {
     const err = await safeFetch('http://[::ffff:127.0.0.1]/').catch((e) => e)
-    expect(err).toBeInstanceOf(McpError)
+    expect(err).toBeInstanceOf(ProtocolError)
   })
 
   test('rejects malformed URL', async () => {
     const err = await safeFetch('not a url').catch((e) => e)
-    expect(err).toBeInstanceOf(McpError)
+    expect(err).toBeInstanceOf(ProtocolError)
     expect((err as Error).message).toContain('invalid_url')
   })
 
@@ -74,7 +74,7 @@ describe('safeFetch — SSRF protection', () => {
     process.env.PASCAL_ALLOWED_ASSET_ORIGINS = 'https://cdn.example.com'
     try {
       const err = await safeFetch('https://other.example.com/x.png').catch((e) => e)
-      expect(err).toBeInstanceOf(McpError)
+      expect(err).toBeInstanceOf(ProtocolError)
       expect((err as Error).message).toContain('url_origin_not_allowlisted')
     } finally {
       if (prev === undefined) {

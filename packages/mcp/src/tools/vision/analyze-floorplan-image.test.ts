@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { CreateMessageRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerAnalyzeFloorplanImage } from './analyze-floorplan-image'
 
@@ -34,7 +32,7 @@ async function makeWiredPair(opts: {
   if (opts.withSampling && opts.samplingHandler) {
     const handler = opts.samplingHandler
     client.setRequestHandler(
-      CreateMessageRequestSchema,
+      'sampling/createMessage',
       async (request) =>
         // Cast to unknown — in tests we return arbitrary shapes to exercise
         // parse/validation paths in the tool handler.
@@ -106,7 +104,7 @@ describe('analyze_floorplan_image', () => {
       name: 'analyze_floorplan_image',
       arguments: { image: 'aGVsbG8=' },
     })
-    // The McpError thrown inside the tool handler is surfaced as a tool error.
+    // The ProtocolError thrown inside the tool handler is surfaced as a tool error.
     expect(result.isError).toBe(true)
     const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
     expect(text).toContain('sampling_unavailable')

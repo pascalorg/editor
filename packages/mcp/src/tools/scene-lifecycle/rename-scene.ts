@@ -1,9 +1,9 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { SceneNotFoundError, SceneVersionConflictError } from '../../storage/types'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
-import { ErrorCode, throwMcpError } from '../errors'
+import { ProtocolErrorCode, throwMcpError } from '../errors'
 
 export const renameSceneInput = {
   id: z.string().min(1).max(64),
@@ -31,8 +31,8 @@ export function registerRenameScene(server: McpServer, operations: SceneOperatio
       title: 'Rename scene',
       description:
         'Rename a scene in the SceneStore. Returns the updated SceneMeta. Optionally pass `expectedVersion` for optimistic concurrency.',
-      inputSchema: renameSceneInput,
-      outputSchema: renameSceneOutput,
+      inputSchema: z.object(renameSceneInput),
+      outputSchema: z.object(renameSceneOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id, newName, expectedVersion }) => {
@@ -58,16 +58,16 @@ export function registerRenameScene(server: McpServer, operations: SceneOperatio
         }
       } catch (err) {
         if (err instanceof SceneNotFoundError) {
-          throwMcpError(ErrorCode.InvalidParams, 'scene_not_found', { id })
+          throwMcpError(ProtocolErrorCode.InvalidParams, 'scene_not_found', { id })
         }
         if (err instanceof SceneVersionConflictError) {
-          throwMcpError(ErrorCode.InvalidRequest, 'version_conflict', {
+          throwMcpError(ProtocolErrorCode.InvalidRequest, 'version_conflict', {
             id,
             expectedVersion,
           })
         }
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InternalError, msg)
+        throwMcpError(ProtocolErrorCode.InternalError, msg)
       }
     },
   )

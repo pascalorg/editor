@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
@@ -32,9 +32,9 @@ export function registerIterateOnFeedback(server: McpServer, _bridge: SceneOpera
       title: 'Iterate on a scene from user feedback',
       description:
         'Produces a minimal-diff plan of apply_patch calls in response to user feedback on the current scene.',
-      argsSchema: {
+      argsSchema: z.object({
         feedback: z.string(),
-      },
+      }),
     },
     async ({ feedback }) => ({
       messages: [

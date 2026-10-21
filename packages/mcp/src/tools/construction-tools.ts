@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { createZone, generateId } from '@pascal-app/core'
 import { roofLevelRefusal, unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
@@ -108,8 +108,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       title: 'Create story shell',
       description:
         'Create one level-owned building shell from a footprint: the perimeter walls. The floor plate and the ceiling are DERIVED from the rooms the walls enclose — never author a slab or a ceiling here, and never pass boundary/autoFromWalls; createSlab / createCeiling / slabElevation are recorded as room intent instead. Use once per story; do not make first-floor walls span multiple stories.',
-      inputSchema: createStoryShellInput,
-      outputSchema: createStoryShellOutput,
+      inputSchema: z.object(createStoryShellInput),
+      outputSchema: z.object(createStoryShellOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({

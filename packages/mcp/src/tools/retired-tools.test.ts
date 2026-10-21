@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport, ProtocolErrorCode } from '@modelcontextprotocol/client'
 import { RETIRED_MCP_TOOLS } from '@pascal-app/core/agent-tools'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
@@ -53,9 +52,13 @@ describe('retired tools', () => {
 
   test('leave an unknown name to the SDK', async () => {
     const client = await connect()
-    const result = await client.callTool({ name: 'no_such_tool', arguments: {} })
-    expect(result.isError).toBe(true)
-    expect((result.content as Array<{ text: string }>)[0]!.text).toContain('no_such_tool')
-    expect((result.content as Array<{ text: string }>)[0]!.text).not.toContain('tool_retired')
+    const call = client.callTool({ name: 'no_such_tool', arguments: {} })
+    await expect(call).rejects.toMatchObject({
+      code: ProtocolErrorCode.InvalidParams,
+      message: expect.stringContaining('no_such_tool'),
+    })
+    await expect(call).rejects.not.toMatchObject({
+      message: expect.stringContaining('tool_retired'),
+    })
   })
 })

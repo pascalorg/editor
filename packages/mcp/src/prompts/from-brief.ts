@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
@@ -51,10 +51,10 @@ export function registerFromBrief(server: McpServer, _bridge: SceneOperations): 
       title: 'Generate a Pascal scene from a brief',
       description:
         'Generate a Pascal 3D scene from a natural-language brief. Binds an active scene, then produces semantic tool calls to realise the design.',
-      argsSchema: {
+      argsSchema: z.object({
         brief: z.string(),
         constraints: z.string().optional(),
-      },
+      }),
     },
     async ({ brief, constraints }) => ({
       messages: [

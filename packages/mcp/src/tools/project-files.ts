@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   executeProjectFileTool,
   type ProjectFileToolExecutor,
@@ -20,9 +20,14 @@ export function registerProjectFileTools(server: McpServer, execute: ProjectFile
         inputSchema: z.object(contract.input).strict(),
         annotations: contract.annotations,
       },
-      async (input: Record<string, unknown>, extra: { signal: AbortSignal }) => {
+      async (input: Record<string, unknown>, ctx) => {
         try {
-          const result = await executeProjectFileTool(contract.name, input, execute, extra.signal)
+          const result = await executeProjectFileTool(
+            contract.name,
+            input,
+            execute,
+            ctx.mcpReq.signal,
+          )
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
         } catch (error) {
           const result = isAgentRefusal(error)
