@@ -3,6 +3,7 @@ import { INCHES_TO_METERS } from '../duct-segment/geometry'
 import { runHangerFloorplan } from '../shared/run-hangers'
 import { pipeContinuationHandlePlan, pipeEndpointPort } from './continuation'
 import type { PipeSegmentNode } from './schema'
+import { pipeGrade } from './slope'
 
 const WASTE_COLOR = '#57534e'
 const VENT_COLOR = '#78716c'
@@ -87,6 +88,41 @@ export function buildPipeSegmentFloorplan(
   // Selection chrome: one draggable handle per path vertex (2D twin of the
   // 3D selection handles). Routes to the shared `move-path-point` affordance.
   if (view?.selected) {
+    for (let i = 1; i < node.path.length; i++) {
+      const a = node.path[i - 1]!,
+        b = node.path[i]!
+      const grade = pipeGrade(a, b)
+      if (grade === null || Math.abs(grade) < 1e-6) continue
+      const length = Math.hypot(b[0] - a[0], b[2] - a[2])
+      const sign = Math.sign(grade),
+        dx = ((b[0] - a[0]) / length) * sign,
+        dz = ((b[2] - a[2]) / length) * sign
+      const x = (a[0] + b[0]) / 2,
+        z = (a[2] + b[2]) / 2,
+        size = Math.min(0.12, length / 5)
+      children.push({
+        kind: 'polyline',
+        points: [
+          [x - dx * size - (dz * size) / 2, z - dz * size + (dx * size) / 2],
+          [x, z],
+          [x - dx * size + (dz * size) / 2, z - dz * size - (dx * size) / 2],
+        ],
+        stroke,
+        strokeWidth: 2,
+        vectorEffect: 'non-scaling-stroke',
+      })
+      children.push({
+        kind: 'text',
+        x: x - dz * 0.18,
+        y: z + dx * 0.18,
+        text: `${(Math.abs(grade) * 100).toFixed(2)}%`,
+        fontSize: 0.12,
+        fill: stroke,
+        textAnchor: 'middle',
+        upright: true,
+      })
+    }
+
     for (let k = 0; k < points.length; k++) {
       children.push({
         kind: 'endpoint-handle',

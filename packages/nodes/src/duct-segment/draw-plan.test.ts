@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
-import { DuctSegmentNode, useScene } from '@pascal-app/core'
+import { DuctSegmentNode, HvacEquipmentNode, useScene } from '@pascal-app/core'
+import { getHvacEquipmentPorts } from '../hvac-equipment/ports'
 import { ductSurfaceClearanceM, planDuctDraw } from './tool'
 
 const profile = { shape: 'round' as const, diameter: 6, width: 12, height: 8 }
@@ -88,5 +89,101 @@ test('a short branch reports failure instead of omitting its tee', () => {
     expect(plan?.updates).toHaveLength(0)
   } finally {
     useScene.setState({ nodes: original })
+  }
+})
+
+test('cross without joining leaves the trunk intact while connect inserts a cross', () => {
+  const trunk = DuctSegmentNode.parse({
+    parentId: 'level_test',
+    shape: 'round',
+    path: [
+      [0, 2, -3],
+      [0, 2, 3],
+    ],
+  })
+  const previous = useScene.getState().nodes
+  const nodes = { [trunk.id]: trunk }
+  useScene.setState({ nodes })
+  const surface = {
+    kind: 'surface' as const,
+    levelId: 'level_test' as const,
+    frame: {
+      origin: [0, 2, 0] as [number, number, number],
+      normal: [0, 1, 0] as [number, number, number],
+      tangent: [1, 0, 0] as [number, number, number],
+      bitangent: [0, 0, 1] as [number, number, number],
+    },
+  }
+  try {
+    const connected = planDuctDraw(
+      [-3, 2, 0],
+      [3, 2, 0],
+      null,
+      null,
+      null,
+      null,
+      profile,
+      nodes,
+      surface,
+    )
+    expect(connected?.validationMessage).toBeNull()
+    expect(connected?.fittings.some((fitting) => fitting.fittingType === 'cross')).toBe(true)
+    expect(connected?.updates.some((update) => update.id === trunk.id)).toBe(true)
+    const defaults = { crossingMode: 'cross', shape: 'round' as const }
+    const separate = planDuctDraw(
+      [-3, 2, 0],
+      [3, 2, 0],
+      null,
+      null,
+      null,
+      null,
+      profile,
+      nodes,
+      surface,
+      false,
+      defaults,
+    )
+    expect(separate?.validationMessage).toBeNull()
+    expect(separate?.fittings.some((fitting) => fitting.fittingType === 'cross')).toBe(false)
+    expect(separate?.updates.some((update) => update.id === trunk.id)).toBe(false)
+    expect(separate?.ducts).toHaveLength(1)
+    expect(useScene.getState().nodes[trunk.id]).toEqual(trunk)
+  } finally {
+    useScene.setState({ nodes: previous })
+  }
+})
+
+test('fixed equipment collars require a straight, matching-system connection', () => {
+  const equipment = HvacEquipmentNode.parse({
+    parentId: 'level_test',
+    supplyShape: 'round',
+    supplyDiameter: 6,
+    returnShape: 'round',
+    returnDiameter: 6,
+  })
+  const nodes = { [equipment.id]: equipment }
+  for (const port of getHvacEquipmentPorts(equipment).filter((p) => p.system !== 'refrigerant')) {
+    const source = { ...port, nodeId: equipment.id }
+    const start: [number, number, number] = [...port.position]
+    const end = start.map((value, index) => value + port.direction[index]! * 2) as [
+      number,
+      number,
+      number,
+    ]
+    const plan = planDuctDraw(start, end, source, null, null, null, profile, nodes)!
+    expect(plan.validationMessage).toBeNull()
+    expect(plan.ducts[0]!.system).toBe(port.system)
+    expect(plan.ducts[0]!.path[0]).toEqual(start)
+    const wrongAxis: [number, number, number] = [start[0], start[1], start[2] + 2]
+    for (const invalid of [
+      planDuctDraw(start, wrongAxis, source, null, null, null, profile, nodes),
+      planDuctDraw(start, end, source, null, null, null, profile, nodes, null, false, {
+        system: port.system === 'supply' ? 'return' : 'supply',
+      }),
+    ]) {
+      expect(invalid?.validationMessage).toBeTruthy()
+      expect(invalid?.ducts).toHaveLength(0)
+      expect(invalid?.updates).toHaveLength(0)
+    }
   }
 })
