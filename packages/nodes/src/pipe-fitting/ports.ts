@@ -1,6 +1,6 @@
 import type { NodePort } from '@pascal-app/core'
 import { Euler, Vector3 } from 'three'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import type { PipeFittingNode } from './schema'
 
 /** Hub stub length in meters — pipe fittings are stubbier than duct

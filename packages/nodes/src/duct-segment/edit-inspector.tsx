@@ -8,7 +8,10 @@ import { type DuctEditInput, editDuct } from './edit-operation'
 export default function DuctEditInspector({ node }: { node: DuctSegmentNode }) {
   return (
     <>
-      <DuctEditForm key={node.id} node={node} />
+      <DuctEditForm
+        key={`${node.id}:${node.shape}:${node.diameter}:${node.width}:${node.height}`}
+        node={node}
+      />
       <RunHangerInspector node={node} />
     </>
   )

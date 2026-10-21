@@ -12,11 +12,8 @@ import {
   TorusGeometry,
   Vector3,
 } from 'three'
-import {
-  createOvalSectionGeometry,
-  INCHES_TO_METERS,
-  rectSectionAxes,
-} from '../duct-segment/geometry'
+import { createOvalSectionGeometry } from '../duct-segment/geometry'
+import { INCHES_TO_METERS, rectSectionAxes } from '../duct-segment/profile'
 import { localEquipmentPorts, localRefrigerantPorts } from './ports'
 import type { HvacEquipmentNode } from './schema'
 

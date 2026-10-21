@@ -10,8 +10,8 @@ import { pipeGrade, pipeGradeLabel } from './slope'
 export default function PipeGradeInspector({ node }: { node: PipeSegmentNode }) {
   return (
     <>
-      <PipeResizeInspector key={`size:${node.id}`} node={node} />
-      <GradeForm key={node.id} node={node} />
+      <PipeResizeInspector key={`size:${node.id}:${node.diameter}`} node={node} />
+      <GradeForm key={`${node.id}:${JSON.stringify(node.path)}`} node={node} />
       <PipeOffsetInspector key={`offset:${node.id}`} node={node} />
       <RunHangerInspector node={node} />
     </>

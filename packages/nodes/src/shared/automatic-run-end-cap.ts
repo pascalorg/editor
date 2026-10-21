@@ -9,7 +9,7 @@ import {
 import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { localFittingPorts } from '../duct-fitting/ports'
-import { ductPortDiameterIn } from '../duct-segment/geometry'
+import { ductPortDiameterIn } from '../duct-segment/profile'
 import { localPipeFittingPorts } from '../pipe-fitting/ports'
 import { accessoryMateQuaternion } from './accessory-placement'
 

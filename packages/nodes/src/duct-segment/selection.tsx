@@ -66,7 +66,7 @@ import {
   type DuctEndpoint,
   ductContinuationHandlePlan,
 } from './continuation'
-import { INCHES_TO_METERS } from './geometry'
+import { INCHES_TO_METERS } from './profile'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
 const PORT_SNAP_RADIUS_M = 0.4
