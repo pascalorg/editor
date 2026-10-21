@@ -191,7 +191,12 @@ export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
-export { hasMaterialsForGroups, markPureRaycast } from './lib/pointer-events'
+export {
+  hasMaterialsForGroups,
+  markPureRaycast,
+  type ViewerBreadcrumb,
+  type ViewerBreadcrumbHandler,
+} from './lib/pointer-events'
 export {
   cloneWithProceduralEmission,
   decorateProceduralEmission,
