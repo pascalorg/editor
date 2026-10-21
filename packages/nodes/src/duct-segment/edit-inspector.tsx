@@ -9,7 +9,7 @@ export default function DuctEditInspector({ node }: { node: DuctSegmentNode }) {
   return (
     <>
       <DuctEditForm
-        key={`${node.id}:${node.shape}:${node.diameter}:${node.width}:${node.height}`}
+        key={`${node.id}:${node.shape}:${node.diameter}:${node.width}:${node.height}:${JSON.stringify(node.path)}`}
         node={node}
       />
       <RunHangerInspector node={node} />
