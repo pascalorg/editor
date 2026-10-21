@@ -19,6 +19,7 @@ import {
   SceneEnvironment,
   useViewer,
   Viewer,
+  type ViewerBreadcrumbHandler,
   type ViewerImmersiveSession,
   ViewerPresentations,
 } from '@pascal-app/viewer'
@@ -283,6 +284,9 @@ export interface EditorProps {
 
   // Thumbnail
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+
+  /** Viewer diagnostics for the host's error-reporter trail; see `<Viewer onBreadcrumb>`. */
+  onViewerBreadcrumb?: ViewerBreadcrumbHandler
 
   /**
    * When true, skip the viewer post-FX pipeline (same as `?disable=postFx`).
@@ -1115,6 +1119,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   sceneReadyKey,
   onSceneReadyChange,
   onThumbnailCapture,
+  onViewerBreadcrumb,
   presentationsReady,
   viewerSceneSlot,
   floorplanSceneSlot,
@@ -1133,6 +1138,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   sceneReadyKey: number
   onSceneReadyChange: (ready: boolean) => void
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  onViewerBreadcrumb?: ViewerBreadcrumbHandler
   presentationsReady: boolean
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
@@ -1292,6 +1298,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 // Other modes retain the viewer's configured background policy.
                 transparent={presetIsolation === null ? undefined : true}
                 onSceneReadyChange={onSceneReadyChange}
+                onBreadcrumb={onViewerBreadcrumb}
                 renderContext="editor"
                 renderPaused={!show3d && !showLoader}
                 sceneReadyKey={sceneReadyKey}
@@ -1438,6 +1445,7 @@ function EditorContent({
   loadingSlot,
   onLoaderChange,
   onThumbnailCapture,
+  onViewerBreadcrumb,
   disablePostFx = false,
   immersive,
   sidebarOverlay,
@@ -1711,6 +1719,7 @@ function EditorContent({
       defaultRender={EDITOR_DEFAULT_RENDER}
       disablePostFx={disablePostFx}
       hoverStyles={EDITOR_HOVER_STYLES}
+      onBreadcrumb={onViewerBreadcrumb}
       renderContext="editor"
       selectionManager="custom"
     >
@@ -1752,6 +1761,7 @@ function EditorContent({
       loadingOverlay={loadingOverlay}
       onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
+      onViewerBreadcrumb={onViewerBreadcrumb}
       presentationsReady={presentationsReady}
       sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}

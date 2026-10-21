@@ -27,6 +27,7 @@
  * The throttle is a vendored-manager policy; dev ?stockEvents uses untouched R3F.
  */
 
+import { sceneRegistry, useScene } from '@pascal-app/core'
 import {
   events as createWebEvents,
   type DomEvent,
@@ -43,6 +44,16 @@ import {
 import * as THREE from 'three'
 import { acceleratedRaycast } from 'three-mesh-bvh'
 import useViewer from '../store/use-viewer'
+
+/** A diagnostic the viewer hands its host, shaped for an error reporter's breadcrumb trail. */
+export type ViewerBreadcrumb = {
+  category: string
+  message: string
+  level: 'info' | 'warning'
+  data?: Record<string, unknown>
+}
+
+export type ViewerBreadcrumbHandler = (breadcrumb: ViewerBreadcrumb) => void
 
 // Keep navigation feedback at 10 Hz while avoiding raycasts for intervening moves.
 const CAMERA_DRAG_MOVE_INTERVAL_MS = 100
@@ -95,10 +106,11 @@ function isSupportedRaycast(raycast: THREE.Object3D['raycast']) {
 
 export function choosePointerEvents(
   search = typeof window !== 'undefined' ? window.location.search : '',
+  onBreadcrumb?: ViewerBreadcrumbHandler,
 ): typeof createWebEvents {
   return process.env.NODE_ENV !== 'production' && new URLSearchParams(search).has('stockEvents')
     ? createWebEvents
-    : createPascalPointerEvents
+    : (store) => createPascalPointerEvents(store, onBreadcrumb)
 }
 
 function querySnapshot(raycaster: THREE.Raycaster): unknown[] | undefined {
@@ -190,7 +202,69 @@ function distanceOrder(a: THREE.Intersection, b: THREE.Intersection) {
   return a.distance - b.distance
 }
 
-function createCachedRaycast() {
+type SkipInvalidMaterial = (object: THREE.Object3D) => void
+
+/** The scene node `object` draws for: itself or its nearest registered ancestor. */
+function owningNode(object: THREE.Object3D): { id: string; type: string | null } | null {
+  const owners = new Map<THREE.Object3D, string>()
+  for (const [id, registered] of sceneRegistry.nodes) owners.set(registered, id)
+  for (let at: THREE.Object3D | null = object; at; at = at.parent) {
+    const id = owners.get(at)
+    if (id === undefined) continue
+    const node = (useScene.getState().nodes as Record<string, { type?: string } | undefined>)[id]
+    return { id, type: node?.type ?? null }
+  }
+  return null
+}
+
+/**
+ * Reports each mesh a pointer raycast skips for groups with no material, once
+ * per material it wears: pointer moves would otherwise repeat it every frame.
+ */
+function createInvalidMaterialReporter(onBreadcrumb?: ViewerBreadcrumbHandler) {
+  const reported = new WeakMap<THREE.Object3D, unknown>()
+  return (object: THREE.Object3D) => {
+    const material = (object as THREE.Mesh).material
+    if (!onBreadcrumb || (reported.has(object) && reported.get(object) === material)) return
+    reported.set(object, material)
+    const node = owningNode(object)
+    onBreadcrumb({
+      category: 'raycast_invalid_material',
+      message: 'Pointer raycast skipped a mesh whose geometry groups have no material',
+      level: 'warning',
+      data: { nodeType: node?.type ?? null, nodeId: node?.id ?? null, objectName: object.name },
+    })
+  }
+}
+
+/**
+ * Three's recursive `intersectObject`, skipping meshes `hasMaterialsForGroups`
+ * rejects. A raycaster with its own `intersectObject` is asked directly.
+ */
+export function intersectDrawable(
+  raycaster: THREE.Raycaster,
+  object: THREE.Object3D,
+  skip: SkipInvalidMaterial,
+): THREE.Intersection[] {
+  if (raycaster.intersectObject !== stockIntersectObject) {
+    return raycaster.intersectObject(object, true)
+  }
+  const hits: THREE.Intersection[] = []
+  const visit = (current: THREE.Object3D) => {
+    let result: unknown
+    if (current.layers.test(raycaster.layers)) {
+      if (hasMaterialsForGroups(current)) result = current.raycast(raycaster, hits)
+      else skip(current)
+    }
+    if (result === false) return
+    const children = current.children
+    for (let i = 0, length = children.length; i < length; i++) visit(children[i]!)
+  }
+  visit(object)
+  return hits.sort(distanceOrder)
+}
+
+function createCachedRaycast(skip: SkipInvalidMaterial) {
   const queries = new WeakMap<RootState, CachedQuery>()
   const activeQueries: CachedQuery[] = []
   const rootHits: THREE.Intersection[] = []
@@ -220,6 +294,7 @@ function createCachedRaycast() {
         return false
       }
       if (hasMaterialsForGroups(object)) result = object.raycast(raycaster, hits)
+      else skip(object)
     }
     if (result !== false) {
       const children = object.children
@@ -298,9 +373,12 @@ function createCachedRaycast() {
   }
 }
 
-export function createPascalPointerEvents(store: RootStore): EventManager<HTMLElement> {
+export function createPascalPointerEvents(
+  store: RootStore,
+  onBreadcrumb?: ViewerBreadcrumbHandler,
+): EventManager<HTMLElement> {
   const manager = createWebEvents(store)
-  const { handlePointer } = createEvents(store)
+  const { handlePointer } = createEvents(store, onBreadcrumb)
   for (const name of Object.keys(manager.handlers!) as (keyof Events)[]) {
     manager.handlers![name] = handlePointer(name) as Events[typeof name]
   }
@@ -345,7 +423,8 @@ function releaseInternalPointerCapture(
   }
 }
 
-function createEvents(store: RootStore) {
+function createEvents(store: RootStore, onBreadcrumb?: ViewerBreadcrumbHandler) {
+  const skipInvalidMaterial = createInvalidMaterialReporter(onBreadcrumb)
   const stats: PointerEventsStats = {
     events: 0,
     cachedEvents: 0,
@@ -409,7 +488,7 @@ function createEvents(store: RootStore) {
       state.events.compute?.(event, state)
     }
 
-    collectors[collectionDepth] ??= createCachedRaycast()
+    collectors[collectionDepth] ??= createCachedRaycast(skipInvalidMaterial)
     const collector = collectors[collectionDepth++]!
     let hits: THREE.Intersection<THREE.Object3D>[] = []
     let stock = false
@@ -429,7 +508,7 @@ function createEvents(store: RootStore) {
         }
         if (layer.raycaster.camera) {
           const rootHits = stock
-            ? layer.raycaster.intersectObject(obj, true)
+            ? intersectDrawable(layer.raycaster, obj, skipInvalidMaterial)
             : collector.intersectObject(obj, layer)
           if (!rootHits) {
             const unsupported = collector.unsupportedObject
