@@ -99,7 +99,6 @@ update should include this size report so media growth is visible in review.
 
 Every command that starts the editor (`editor`, `start`, `open`, `resume`, `projects`,
 `project open`, `update`) resolves that runtime in this order:
-
 1. `PASCAL_BUNDLED_RUNTIME_DIR`, an already-extracted runtime directory.
 2. `--runtime <directory-or-archive>`, which every one of those commands accepts.
 3. The runtime already installed in `~/.pascal/runtime/<version>` for this CLI version.
@@ -142,29 +141,29 @@ downloaded the web runtime.
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `pascal editor [--runtime <path>]` | Install the web runtime if needed, ensure the editor is running, and open it. |
-| `pascal start [--runtime <path>]` | Ensure the editor is running without opening a browser. |
-| `pascal stop [--force]` | Stop the managed editor and MCP processes; `--force` is a guarded recovery path. |
-| `pascal restart` | Restart the editor and MCP service with their current configuration. |
-| `pascal status [--json]` | Show editor and MCP health, version, PIDs, ports, URL, and runtime metadata. |
-| `pascal open [project]` | Start Pascal if needed, then open the editor or a project by ID, ID prefix, or unique name. |
-| `pascal resume [project]` | Open the latest project, or a selected project. |
-| `pascal projects [--json]` | List local projects. |
-| `pascal logs [--follow]` | Read or follow the managed editor log. |
-| `pascal update [--version <version>] [--runtime <path>]` | Health-check and activate the runtime this CLI publishes, or an npm-published target. |
-| `pascal doctor [--json]` | Diagnose Node.js, storage, runtime, process, and plugin state. |
-| `pascal info [--json]` | Print platform, paths, runtime, and plugin context. |
-| `pascal project list [--json]` | Explicit form of `pascal projects`. |
-| `pascal project open <id-or-name>` | Explicit form of `pascal open <project>`. |
-| `pascal agent claim [--no-open] [--json]` | Link an autonomous hosted agent to the person accountable for it. |
-| `pascal agent status [--json]` | Verify the hosted agent credential and inspect its claim and organization scope. |
-| `pascal mcp connect` | Stable local connector for MCP clients; starts the bundled MCP service without the web runtime. |
-| `pascal mcp status [--json]` | Show managed MCP health. |
-| `pascal mcp config [--json]` | Print generic MCP client configuration. |
-| `pascal mcp setup <codex\|claude>` | Configure an installed client without overwriting existing entries. |
-| `pascal plugin list [--json]` | Inspect the reserved managed-plugin lock. |
+| Command                                                  | Purpose                                                                                         |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `pascal editor [--runtime <path>]`                       | Install the web runtime if needed, ensure the editor is running, and open it.                   |
+| `pascal start [--runtime <path>]`                        | Ensure the editor is running without opening a browser.                                         |
+| `pascal stop [--force]`                                  | Stop the managed editor and MCP processes; `--force` is a guarded recovery path.                |
+| `pascal restart`                                         | Restart the editor and MCP service with their current configuration.                            |
+| `pascal status [--json]`                                 | Show editor and MCP health, version, PIDs, ports, URL, and runtime metadata.                    |
+| `pascal open [project]`                                  | Start Pascal if needed, then open the editor or a project by ID, ID prefix, or unique name.     |
+| `pascal resume [project]`                                | Open the latest project, or a selected project.                                                 |
+| `pascal projects [--json]`                               | List local projects.                                                                            |
+| `pascal logs [--follow]`                                 | Read or follow the managed editor log.                                                          |
+| `pascal update [--version <version>] [--runtime <path>]` | Health-check and activate the runtime this CLI publishes, or an npm-published target.           |
+| `pascal doctor [--json]`                                 | Diagnose Node.js, storage, runtime, process, and plugin state.                                  |
+| `pascal info [--json]`                                   | Print platform, paths, runtime, and plugin context.                                             |
+| `pascal project list [--json]`                           | Explicit form of `pascal projects`.                                                             |
+| `pascal project open <id-or-name>`                       | Explicit form of `pascal open <project>`.                                                       |
+| `pascal agent claim [--no-open] [--json]`                | Link an autonomous hosted agent to the person accountable for it.                               |
+| `pascal agent status [--json]`                           | Verify the hosted agent credential and inspect its claim and organization scope.                |
+| `pascal mcp connect`                                     | Stable local connector for MCP clients; starts the bundled MCP service without the web runtime. |
+| `pascal mcp status [--json]`                             | Show managed MCP health.                                                                        |
+| `pascal mcp config [--json]`                             | Print generic MCP client configuration.                                                         |
+| `pascal mcp setup <codex\|claude>`                       | Configure an installed client without overwriting existing entries.                             |
+| `pascal plugin list [--json]`                            | Inspect the reserved managed-plugin lock.                                                       |
 
 When you do not install globally, prefix commands with a runner—for example,
 `npx @pascal-app/cli doctor`.

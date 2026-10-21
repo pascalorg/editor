@@ -1467,7 +1467,7 @@ function buildSegmentRailPath(
     points: [
       ...(previousLayout?.segment.segmentType === 'landing'
         ? []
-        : ([[flightStartX, stepHeight > 0 ? stepHeight : 0, flightSideOffset]] as [
+        : ([[flightStartX, Math.max(stepHeight, 0), flightSideOffset]] as [
             number,
             number,
             number,

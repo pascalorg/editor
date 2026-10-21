@@ -62,7 +62,7 @@ function resolveDefaultServiceRange(
     .filter((node): node is LevelNode => node?.type === 'level')
     .sort((left, right) => left.level - right.level)
   const selectedLevelIndex = levels.findIndex((level) => level.id === selectedLevelId)
-  const fromIndex = selectedLevelIndex >= 0 ? selectedLevelIndex : 0
+  const fromIndex = Math.max(selectedLevelIndex, 0)
   const fromLevel = levels[fromIndex]
   const toLevel = levels[Math.min(fromIndex + 1, levels.length - 1)] ?? fromLevel
 

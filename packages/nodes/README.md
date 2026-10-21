@@ -39,7 +39,6 @@ The built-in plugin exports `builtinAgentTools` from `@pascal-app/nodes/agent-to
 (zod-only contracts) and `builtinAgentOperations` from
 `@pascal-app/nodes/agent-operations` (headless planners). Both the inspector and
 agents execute the same finishing planner, including hosted-item support checks.
-
 - `kitchen_finish_run({ runId, action: 'align' | 'fill' })` aligns a run or closes
   50–150 mm wall gaps. Results apply in one undo step. Missing runs and unsupported
   hosted items return `cabinet_run_not_found` and `hosted_items_unsupported`.

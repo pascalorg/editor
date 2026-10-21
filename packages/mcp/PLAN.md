@@ -105,25 +105,25 @@ if (typeof (globalThis as any).requestAnimationFrame === 'undefined') {
 
 Every one of these has a Zod schema in `packages/core/src/schema/nodes/` and participates in `AnyNode` (discriminated union on `type`):
 
-| Type literal    | Schema export    | Parent expected  | Container? | Notes |
-|-----------------|------------------|------------------|------------|-------|
-| `site`          | `SiteNode`       | — (root)         | children via typed array | polygon (2D) |
-| `building`      | `BuildingNode`   | `site`           | children: level IDs      | position/rotation |
-| `level`         | `LevelNode`      | `building`       | children: mixed IDs      | level (int) |
-| `wall`          | `WallNode`       | `level`          | children: item/door/window IDs | 2D `start`/`end` |
-| `fence`         | `FenceNode`      | `level`          | — | 2D `start`/`end` |
-| `zone`          | `ZoneNode`       | `level`          | — | polygon (2D) |
-| `slab`          | `SlabNode`       | `level`          | — | polygon + holes |
-| `ceiling`       | `CeilingNode`    | `level`          | children: item IDs | polygon + holes |
-| `roof`          | `RoofNode`       | `level`          | children: roof-segment IDs | position/rotation |
-| `roof-segment`  | `RoofSegmentNode`| `roof`           | — | `roofType` enum |
-| `stair`         | `StairNode`      | `level`          | children: stair-segment IDs | from/toLevelId |
-| `stair-segment` | `StairSegmentNode`| `stair`         | — | flight/landing |
-| `item`          | `ItemNode`       | `wall` / `ceiling` / `site` | children: item IDs | `asset` payload |
-| `door`          | `DoorNode`       | `wall`           | — | segments/panels |
-| `window`        | `WindowNode`     | `wall`           | — | columns/rows |
-| `scan`          | `ScanNode`       | `level`          | — | external GLB url |
-| `guide`         | `GuideNode`      | `level`          | — | 2D guide image url |
+| Type literal    | Schema export      | Parent expected             | Container?                     | Notes              |
+| --------------- | ------------------ | --------------------------- | ------------------------------ | ------------------ |
+| `site`          | `SiteNode`         | — (root)                    | children via typed array       | polygon (2D)       |
+| `building`      | `BuildingNode`     | `site`                      | children: level IDs            | position/rotation  |
+| `level`         | `LevelNode`        | `building`                  | children: mixed IDs            | level (int)        |
+| `wall`          | `WallNode`         | `level`                     | children: item/door/window IDs | 2D `start`/`end`   |
+| `fence`         | `FenceNode`        | `level`                     | —                              | 2D `start`/`end`   |
+| `zone`          | `ZoneNode`         | `level`                     | —                              | polygon (2D)       |
+| `slab`          | `SlabNode`         | `level`                     | —                              | polygon + holes    |
+| `ceiling`       | `CeilingNode`      | `level`                     | children: item IDs             | polygon + holes    |
+| `roof`          | `RoofNode`         | `level`                     | children: roof-segment IDs     | position/rotation  |
+| `roof-segment`  | `RoofSegmentNode`  | `roof`                      | —                              | `roofType` enum    |
+| `stair`         | `StairNode`        | `level`                     | children: stair-segment IDs    | from/toLevelId     |
+| `stair-segment` | `StairSegmentNode` | `stair`                     | —                              | flight/landing     |
+| `item`          | `ItemNode`         | `wall` / `ceiling` / `site` | children: item IDs             | `asset` payload    |
+| `door`          | `DoorNode`         | `wall`                      | —                              | segments/panels    |
+| `window`        | `WindowNode`       | `wall`                      | —                              | columns/rows       |
+| `scan`          | `ScanNode`         | `level`                     | —                              | external GLB url   |
+| `guide`         | `GuideNode`        | `level`                     | —                              | 2D guide image url |
 
 The full union is `AnyNode` at `packages/core/src/schema/types.ts:20`. `AnyNodeType` and `AnyNodeId` are also exported there. **Subagents MUST reuse these — never redefine.**
 
@@ -379,25 +379,25 @@ The existing `turbo.json` globs `packages/*` implicitly via Bun workspaces and p
 
 **Rule: an agent may ONLY write files listed in their column. If they need a file outside their column, they must emit a `CROSS_CUTTING.md` entry instead.**
 
-| Path                                      | Agent |
-|-------------------------------------------|-------|
-| `packages/mcp/package.json`               | A     |
-| `packages/mcp/tsconfig.json`              | A     |
-| `packages/mcp/README.md`                  | G     |
-| `packages/mcp/CHANGELOG.md`               | G     |
-| `packages/mcp/src/index.ts`               | A     |
-| `packages/mcp/src/server.ts`              | C (registers tools; D extends with resources/prompts)* |
-| `packages/mcp/src/bridge/**`              | B     |
-| `packages/mcp/src/tools/**` (except vision) | C   |
-| `packages/mcp/src/tools/analyze-*.ts`     | E     |
-| `packages/mcp/src/resources/**`           | D     |
-| `packages/mcp/src/prompts/**`             | D     |
-| `packages/mcp/src/transports/**`          | F     |
-| `packages/mcp/src/bin/**`                 | F     |
-| `packages/mcp/scripts/smoke.ts`           | F     |
-| `packages/mcp/examples/**`                | G     |
-| Root `turbo.json` / CI workflows          | H (only if strictly needed) |
-| `packages/mcp/biome.jsonc` (if any)       | H     |
+| Path                                        | Agent                                                  |
+| ------------------------------------------- | ------------------------------------------------------ |
+| `packages/mcp/package.json`                 | A                                                      |
+| `packages/mcp/tsconfig.json`                | A                                                      |
+| `packages/mcp/README.md`                    | G                                                      |
+| `packages/mcp/CHANGELOG.md`                 | G                                                      |
+| `packages/mcp/src/index.ts`                 | A                                                      |
+| `packages/mcp/src/server.ts`                | C (registers tools; D extends with resources/prompts)* |
+| `packages/mcp/src/bridge/**`                | B                                                      |
+| `packages/mcp/src/tools/**` (except vision) | C                                                      |
+| `packages/mcp/src/tools/analyze-*.ts`       | E                                                      |
+| `packages/mcp/src/resources/**`             | D                                                      |
+| `packages/mcp/src/prompts/**`               | D                                                      |
+| `packages/mcp/src/transports/**`            | F                                                      |
+| `packages/mcp/src/bin/**`                   | F                                                      |
+| `packages/mcp/scripts/smoke.ts`             | F                                                      |
+| `packages/mcp/examples/**`                  | G                                                      |
+| Root `turbo.json` / CI workflows            | H (only if strictly needed)                            |
+| `packages/mcp/biome.jsonc` (if any)         | H                                                      |
 
 *Server.ts coordination: **Agent A writes a minimal `server.ts` stub exporting `createPascalMcpServer(bridge)` that returns an empty `McpServer`**. Agents C, D, E each export `register<Tools|Resources|Prompts|VisionTools>(server, bridge)` functions from their subtrees. Integration (me) wires them up in the final `server.ts` during Phase 2.
 
@@ -426,13 +426,13 @@ The existing `turbo.json` globs `packages/*` implicitly via Bun workspaces and p
 
 ## 16. Conventional commits (one per agent scope)
 
-- `feat(mcp): scaffold @pascal-app/mcp package`       — Agent A
-- `feat(mcp): add headless scene bridge`              — Agent B
+- `feat(mcp): scaffold @pascal-app/mcp package` — Agent A
+- `feat(mcp): add headless scene bridge` — Agent B
 - `feat(mcp): implement scene query and mutation tools` — Agent C
-- `feat(mcp): add resources and prompts`              — Agent D
+- `feat(mcp): add resources and prompts` — Agent D
 - `feat(mcp): add multimodal vision tools via sampling` — Agent E
-- `feat(mcp): add stdio + HTTP transports and CLI`    — Agent F
-- `docs(mcp): add README, examples, and changelog`    — Agent G
-- `chore(mcp): wire biome, tests, and CI`             — Agent H
+- `feat(mcp): add stdio + HTTP transports and CLI` — Agent F
+- `docs(mcp): add README, examples, and changelog` — Agent G
+- `chore(mcp): wire biome, tests, and CI` — Agent H
 
 Integration commits land under `feat(mcp): wire server + integration` and `feat(mcp): v0.1.0 ready`.

@@ -26,12 +26,12 @@
     "release:major": "gh workflow run release.yml -f bump=major"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
+    "@biomejs/biome": "^2.6.2",
     "@typescript/native-preview": "7.0.0-dev.20260624.1",
     "@typescript/typescript6": "6.0.2",
     "dotenv-cli": "^11.0.0",
     "fast-xml-parser": "^5.11.2",
-    "turbo": "^2.11.9",
+    "turbo": "^2.11.10",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "ultracite": "^8.0.1"
   },
@@ -43,6 +43,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.186.0",
+    "hono": "^4.13.11",
     "next": "16.4.2",
     "react-grab": "0.2.0",
     "three": "0.186.1",
