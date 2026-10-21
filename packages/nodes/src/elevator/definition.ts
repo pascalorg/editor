@@ -1,4 +1,6 @@
 import {
+  ELEVATOR_MIN_CAB_DIMENSION,
+  ELEVATOR_MIN_CAB_HEIGHT,
   ElevatorNode as ElevatorNodeSchema,
   type ElevatorNode as ElevatorNodeType,
   elevatorSlots,
@@ -9,8 +11,11 @@ import {
   getElevatorShaftWidth,
   type HandleDescriptor,
   type NodeDefinition,
+  normalizeElevatorDimensions,
+  resolveElevatorDimensions,
   resolveElevatorLevels,
 } from '@pascal-app/core'
+import { resolveElevatorNodeSupportY } from '@pascal-app/editor'
 import { buildElevatorFloorplan } from './floorplan'
 import { elevatorResizeAffordance, elevatorRotateAffordance } from './floorplan-affordances'
 import { elevatorPaint } from './paint'
@@ -20,8 +25,8 @@ import { ElevatorNode } from './schema'
 const SIDE_HANDLE_OFFSET = 0.22
 const HEIGHT_HANDLE_OFFSET = 0.3
 const MOVE_FRONT_OFFSET = 0.35
-const MIN_ELEVATOR_DIM = 0.6
-const MIN_CAB_HEIGHT = 1.4
+const MIN_ELEVATOR_DIM = ELEVATOR_MIN_CAB_DIMENSION
+const MIN_CAB_HEIGHT = ELEVATOR_MIN_CAB_HEIGHT
 const ROTATE_CORNER_OFFSET = 0.4
 const ROTATE_RING_OFFSET = 0.08
 
@@ -38,8 +43,13 @@ function elevatorAxisHandle(axis: 'x' | 'z'): HandleDescriptor<ElevatorNodeType>
     axis,
     anchor: 'center',
     min: MIN_ELEVATOR_DIM,
-    currentValue: (n) => (axis === 'x' ? n.width : n.depth),
-    apply: (_n, newValue) => (axis === 'x' ? { width: newValue } : { depth: newValue }),
+    currentValue: (n) =>
+      axis === 'x' ? resolveElevatorDimensions(n).width : resolveElevatorDimensions(n).depth,
+    apply: (n, newValue) =>
+      normalizeElevatorDimensions({
+        ...n,
+        ...(axis === 'x' ? { width: newValue } : { depth: newValue }),
+      }),
     placement: {
       position: (n) => {
         const cabWidth = getElevatorCabWidth(n)
@@ -72,7 +82,7 @@ function elevatorCabHeightHandle(): HandleDescriptor<ElevatorNodeType> {
     anchor: 'min',
     min: MIN_CAB_HEIGHT,
     currentValue: (n) => Math.max(n.cabHeight, MIN_CAB_HEIGHT),
-    apply: (_n, newValue) => ({ cabHeight: newValue }),
+    apply: (n, newValue) => normalizeElevatorDimensions({ ...n, cabHeight: newValue }),
     placement: {
       position: (n, scene) => {
         const { shaftTopY } = resolveElevatorLevels(n, scene.nodes())
@@ -164,13 +174,6 @@ const elevatorHandles: HandleDescriptor<ElevatorNodeType>[] = [
   elevatorMoveHandle(),
 ]
 
-/**
- * Elevator — Stage A registration. Wrap-exports the legacy renderer +
- * the three legacy systems (runtime / interaction / opening) bundled
- * as one `def.system`. Move / inspector still go through legacy
- * (`MoveElevatorTool`, `<ElevatorPanel>`) via panel-manager's
- * hardcoded switch.
- */
 export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   kind: 'elevator',
   schemaVersion: 1,
@@ -201,7 +204,15 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     // (and the side move-arrows emitted from `def.floorplan`) drive the
     // 2D body-move flow through `FloorplanRegistryMoveOverlay`'s
     // Path 2 — position[0] / position[2] update with a 0.5m grid snap.
-    movable: { axes: ['x', 'z'], gridSnap: true },
+    movable: {
+      axes: ['x', 'z'],
+      gridSnap: true,
+      resolvePosition: ({ node, position }) => [
+        position[0],
+        resolveElevatorNodeSupportY(node as ElevatorNodeType, position),
+        position[2],
+      ],
+    },
     // Align by the OUTER SHAFT (shaft + wall — what's drawn in plan and 3D),
     // not the cab `width × depth`: the cab is inset by the shaft wall +
     // clearance, so cab corners sit ~9 cm inside the visible edge — past the
@@ -227,7 +238,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
       const e = node as ElevatorNodeType
       const { halfX, halfZ } = elevatorOuterHalfExtents(e)
       const { shaftBaseY, totalHeight } = resolveElevatorLevels(e, nodes ?? {})
-      const cabHeight = Math.max(e.cabHeight, 1.4)
+      const cabHeight = resolveElevatorDimensions(e).cabHeight
       const shaftHeight = Math.max(totalHeight, cabHeight + 0.3)
       return {
         size: [halfX * 2, shaftHeight, halfZ * 2],
@@ -240,6 +251,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     paint: elevatorPaint,
   },
 
+  tool: () => import('./tool'),
   parametrics: elevatorParametrics,
   handles: elevatorHandles,
 
@@ -275,7 +287,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   presentation: {
     label: 'Elevator',
     description: 'A multi-level elevator shaft with configurable openings per level.',
-    icon: { kind: 'url', src: '/icons/wallcut.webp' },
+    icon: { kind: 'url', src: '/icons/elevator.webp' },
     paletteSection: 'structure',
     paletteOrder: 80,
   },

@@ -107,6 +107,7 @@ test('focus completion: mounted registry mover owns only outside R T and Alt', a
       cancelAnimationFrame: { configurable: true, value: (key: number) => frames.delete(key) },
       IS_REACT_ACT_ENVIRONMENT: { configurable: true, value: true },
     })
+    let supportY = 0
     core.registerNode({
       kind: node.type,
       schemaVersion: 1,
@@ -114,7 +115,14 @@ test('focus completion: mounted registry mover owns only outside R T and Alt', a
       schema: z.object({ type: z.literal(node.type) }).passthrough(),
       defaults: () => ({}),
       capabilities: {
-        movable: { isValidPosition: () => false },
+        movable: {
+          isValidPosition: () => false,
+          resolvePosition: ({ position }: { position: [number, number, number] }) => [
+            position[0],
+            supportY,
+            position[2],
+          ],
+        },
         floorPlaced: {
           collides: true,
           footprint: (candidate: AnyNode) => ({
@@ -251,6 +259,39 @@ test('focus completion: mounted registry mover owns only outside R T and Alt', a
     expect((await key('t', false)).defaultPrevented).toBe(true)
     expect(mesh.rotation.y).toBeCloseTo(0.25)
     expect(core.useLiveTransforms.getState().transforms.get(id)?.rotation).toBeCloseTo(0.25)
+    supportY = 0.75
+    await act(async () => {
+      core.emitter.emit('grid:move', {
+        nativeEvent: {
+          target: { closest: () => null },
+        } as unknown as import('@pascal-app/core').GridEvent['nativeEvent'],
+        position: [7, 0, 3],
+        localPosition: [7, 0, 3],
+        stopPropagation() {},
+      } as import('@pascal-app/core').GridEvent)
+      flushFrames()
+    })
+    expect(mesh.position.y).toBeCloseTo(0.75)
+    expect(core.useLiveTransforms.getState().transforms.get(id)?.position?.[1]).toBeCloseTo(0.75)
+    expect(
+      (core.useScene.getState().nodes[id] as unknown as { position: number[] }).position[1],
+    ).toBe(0)
+    supportY = 1.25
+    await key('Alt', false)
+    await act(async () => {
+      core.emitter.emit('grid:click', {
+        nativeEvent: {
+          target: { closest: () => null },
+        } as unknown as import('@pascal-app/core').GridEvent['nativeEvent'],
+        position: [7, 0, 3],
+        localPosition: [7, 0, 3],
+        stopPropagation() {},
+      } as import('@pascal-app/core').GridEvent)
+      flushFrames()
+    })
+    expect(
+      (core.useScene.getState().nodes[id] as unknown as { position: number[] }).position[1],
+    ).toBeCloseTo(1.25)
   } finally {
     if (root)
       await act(async () => {

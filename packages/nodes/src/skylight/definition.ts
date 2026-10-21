@@ -218,6 +218,7 @@ const skylightHandles: HandleDescriptor<SkylightNodeType>[] = [
  */
 export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   kind: 'skylight',
+  snapProfile: 'item',
   schemaVersion: 1,
   schema: SkylightNode,
   category: 'structure',

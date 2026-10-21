@@ -13,6 +13,7 @@ import {
   runSceneHistoryDraftWrite,
   sceneRegistry,
   spatialGridManager,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
   type WallEvent,
@@ -381,6 +382,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const applyPreview = (target: NonNullable<typeof lastTarget>) => {
+      useLiveNodeOverrides.getState().clear(movingDoorNode.id)
       // One grid-snap tick per real position step, keyed on the SNAPPED
       // along-wall position so it ticks only when the door actually moves to a
       // new cell (not on every micro mouse-move). Per-frame guard collapses any
@@ -682,6 +684,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     // later wall-snap / commit has a clean base, but stays `visible:false` until
     // a wall is hovered.
     const freeFollowAt = (localX: number, localZ: number) => {
+      useLiveNodeOverrides.getState().clear(movingDoorNode.id)
       freeFollowing = true
       lastTarget = null
       lastRoofEvent = null
@@ -699,14 +702,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       // (back = rotated π) instead of forcing 0, so an R press isn't undone on
       // the next mousemove.
       const yaw = sideOverride === 'back' ? Math.PI : 0
-      if (currentHostId === levelId) {
-        updateDraft({
-          position: [localX, y, localZ],
-          rotation: [0, yaw, 0],
-          side: sideOverride,
-          visible: false,
-        })
-      } else {
+      if (currentHostId !== levelId) {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
         updateDraft({
           position: [localX, y, localZ],
@@ -790,13 +786,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       // On a roof face the real mesh is the preview — drop the free-follow ghost
       // and reveal the node.
       revealRealNode()
-      if (currentHostId === target.segment.id) {
-        updateDraft({
-          position: target.position,
-          rotation: [0, 0, 0],
-          roofFace: target.face.id,
-        })
-      } else {
+      if (currentHostId !== target.segment.id) {
+        useLiveNodeOverrides.getState().clear(movingDoorNode.id)
         updateDraft({
           position: target.position,
           rotation: [0, 0, 0],
@@ -810,6 +801,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         markHostDirty(currentHostId)
         currentHostId = target.segment.id
       }
+      useLiveNodeOverrides.getState().set(movingDoorNode.id, {
+        position: target.position,
+        rotation: [0, 0, 0],
+        roofFace: target.face.id,
+      })
+      useScene.getState().markDirty(movingDoorNode.id)
+      markHostDirtyThrottled(target.segment.id)
       updateRoofCursor(target, event.node as RoofNode)
       event.stopPropagation()
     }
@@ -886,6 +884,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         placedId = movingDoorNode.id
       }
 
+      useLiveNodeOverrides.getState().clear(movingDoorNode.id)
       markHostDirty(segmentId)
       useLiveTransforms.getState().clear(movingDoorNode.id)
 
@@ -898,6 +897,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const onRoofLeave = () => {
+      useLiveNodeOverrides.getState().clear(movingDoorNode.id)
       // Mirror onWallLeave: don't revert to origin here — onGridMove takes
       // over on the same pointermove (snap to a nearby wall or free-follow).
       hideCursor()
@@ -908,6 +908,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const onCancel = () => {
+      useLiveNodeOverrides.getState().clear(movingDoorNode.id)
       useLiveTransforms.getState().clear(movingDoorNode.id)
       if (isNew) {
         useScene.getState().deleteNode(movingDoorNode.id)
@@ -1063,6 +1064,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     return () => {
+      useLiveNodeOverrides.getState().clear(movingDoorNode.id)
       const current = useScene.getState().nodes[movingDoorNode.id as AnyNodeId] as
         | DoorNode
         | undefined

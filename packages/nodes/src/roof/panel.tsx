@@ -37,6 +37,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { RoofGeometryNotice } from '../roof/geometry-notice'
 import { RoofGlazingPanel } from '../roof/glazing-panel'
 import { commitSeatedRoofEdit } from './roof-level-target'
 
@@ -288,6 +289,7 @@ export default function RoofPanel() {
       title={node.name || 'Roof'}
       width={300}
     >
+      <RoofGeometryNotice ids={[node.id, ...segments.map((segment) => segment.id)]} />
       <RoofGlazingPanel segments={segments} />
       {levelMove && (
         <PanelSection title="Level">

@@ -5,10 +5,13 @@ import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 import { getBarrelRoofProfile } from './barrel-roof'
 import { RoofGlazing, RoofSystemType } from './roof-glazing'
+import { getRoofModuleFaces, getRoofShapeRatios } from './roof-segment-shape'
 import { RoofType } from './roof-types'
 
 export { RoofType } from './roof-types'
 export const MIN_ROOF_SEGMENT_TRIM_SPAN = 0.1
+export const MIN_ROOF_SEGMENT_DIMENSION = 0.5
+export const MAX_ROOF_PITCH = 85
 const DEFAULT_ROOF_SEGMENT_WIDTH = 8
 const DEFAULT_ROOF_SEGMENT_DEPTH = 6
 
@@ -133,7 +136,7 @@ export const RoofSegmentNode = BaseNode.extend({
   // For gable/hip/shed this is the only slope; for gambrel/mansard/dutch
   // it is the steep (lower) slope. The overall peak height is derived
   // from pitch + footprint + roofType via getActiveRoofHeight().
-  pitch: z.number().min(0).max(85).default(40),
+  pitch: z.number().min(0).max(MAX_ROOF_PITCH).default(40),
   // Structure thicknesses
   wallThickness: z.number().default(0.1),
   deckThickness: z.number().default(0.1),
@@ -767,7 +770,40 @@ export function getRoofSegmentSurfaceY(
   const peakY = node.wallHeight + activeRh
   if (activeRh === 0) return node.wallHeight
 
-  if (node.roofType === 'gable' || node.roofType === 'gambrel' || node.roofType === 'mansard') {
+  if (node.roofType === 'gambrel' || node.roofType === 'mansard' || node.roofType === 'hip') {
+    const faces = getRoofModuleFaces({
+      type: node.roofType,
+      w: node.width,
+      d: node.depth,
+      wh: node.wallHeight,
+      rh: activeRh,
+      baseY: node.wallHeight - 1,
+      baseW: node.width,
+      baseD: node.depth,
+      tanTheta: slopeFrame.tanTheta,
+      insets: {},
+      shapeRatios: getRoofShapeRatios(node),
+    })
+    let top: number | undefined
+    for (const face of faces) {
+      const a = face[0]
+      if (!a) continue
+      for (let i = 1; i + 1 < face.length; i++) {
+        const b = face[i]!,
+          c = face[i + 1]!
+        const determinant = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z)
+        if (Math.abs(determinant) < 1e-10) continue
+        const u = ((b.z - c.z) * (localX - c.x) + (c.x - b.x) * (localZ - c.z)) / determinant
+        const v = ((c.z - a.z) * (localX - c.x) + (a.x - c.x) * (localZ - c.z)) / determinant
+        if (u < -1e-8 || v < -1e-8 || u + v > 1 + 1e-8) continue
+        const y = u * a.y + v * b.y + (1 - u - v) * c.y
+        top = top === undefined ? y : Math.max(top, y)
+      }
+    }
+    if (top !== undefined) return top
+  }
+
+  if (node.roofType === 'gable') {
     const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
     return peakY - t * activeRh
   }

@@ -6,7 +6,9 @@ import {
   type ElevatorNode,
   getLevelDisplayName,
   type LevelNode,
+  normalizeElevatorDimensions,
   requestElevatorLevel,
+  resolveElevatorDimensions,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -15,11 +17,9 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  PanelSection as BasePanelSection,
   duplicateNodeAndPickUp,
-  MetricControl,
-  PanelSection,
   PanelWrapper,
-  resolveElevatorNodeSupportY,
   resolveElevatorSupportY,
   SliderControl,
   triggerSFX,
@@ -27,8 +27,15 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Send, Trash2 } from 'lucide-react'
-import { useCallback, useEffect } from 'react'
+import { type ReactNode, useCallback, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { ElevatorInspectorHover, useElevatorInspection } from './inspection'
+import {
+  ELEVATOR_PRESETS,
+  ELEVATOR_SECTION_FIELDS,
+  elevatorPresetPatch,
+  elevatorSectionReset,
+} from './presets'
 
 function findLevelId(levels: LevelNode[], levelId: string | null | undefined) {
   if (!levelId) return null
@@ -94,6 +101,9 @@ type ElevatorMetricKey =
   | 'cabHeight'
   | 'doorWidth'
   | 'doorHeight'
+  | 'speed'
+  | 'doorDurationMs'
+  | 'dwellMs'
 
 type ElevatorAccessField = 'disabledLevelIds' | 'serviceOnlyLevelIds'
 
@@ -127,24 +137,52 @@ function roundMeters(value: number) {
   return Math.round(value * 100) / 100
 }
 
-function getResolvedShaftWidth(node: ElevatorNode) {
-  return Math.max(node.shaftWidth ?? node.width, node.width, 0.8)
-}
-
-function getResolvedShaftDepth(node: ElevatorNode) {
-  return Math.max(node.shaftDepth ?? node.depth, node.depth, 0.8)
-}
-
-function getResolvedShaftWallThickness(node: ElevatorNode) {
-  return Math.max(node.shaftWallThickness ?? 0.09, 0.04)
-}
-
 function radiansToDegrees(radians: number) {
   return Math.round((radians * 180) / Math.PI)
 }
 
 function degreesToRadians(degrees: number) {
   return (degrees * Math.PI) / 180
+}
+
+function PanelSection({
+  title,
+  children,
+  onReset,
+}: {
+  title: string
+  children: ReactNode
+  onReset: (title: string) => void
+}) {
+  return (
+    <div
+      data-elevator-part={
+        title === 'Cab'
+          ? 'cab'
+          : title === 'Doors'
+            ? 'doors'
+            : title === 'Shaft'
+              ? 'shaft'
+              : undefined
+      }
+    >
+      <BasePanelSection
+        title={title}
+        defaultExpanded={!['Position', 'Rotation', 'Actions', 'Motion'].includes(title)}
+      >
+        {ELEVATOR_SECTION_FIELDS[title] && (
+          <button
+            type="button"
+            className="self-end text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => onReset(title)}
+          >
+            Reset {title.toLowerCase()}
+          </button>
+        )}
+        {children}
+      </BasePanelSection>
+    </div>
+  )
 }
 
 export default function ElevatorPanel() {
@@ -166,6 +204,7 @@ export default function ElevatorPanel() {
     }),
   )
 
+  const cutaway = useElevatorInspection((state) => state.nodeId === selectedId && state.cutaway)
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as ElevatorNode | undefined) : undefined,
   )
@@ -210,43 +249,27 @@ export default function ElevatorPanel() {
     useLiveTransforms.getState().clear(selectedId as AnyNodeId)
   }, [selectedId])
 
-  useEffect(() => {
-    if (!(selectedId && node?.type === 'elevator')) return
-    const supportY = resolveElevatorNodeSupportY(node)
-    if (node.position[1] >= supportY - 1e-4) return
-
-    updateNode(selectedId as AnyNode['id'], {
-      position: [node.position[0], supportY, node.position[2]],
-    })
-  }, [
-    node?.defaultLevelId,
-    node?.fromLevelId,
-    node?.id,
-    node?.parentId,
-    node?.position[0],
-    node?.position[1],
-    node?.position[2],
-    node?.type,
-    selectedId,
-    updateNode,
-    node,
-  ])
-
   const previewMetric = useCallback(
     <K extends ElevatorMetricKey>(key: K, value: ElevatorNode[K]) => {
-      if (!selectedId) return
-      useLiveNodeOverrides.getState().set(selectedId as AnyNodeId, { [key]: value })
+      if (!(selectedId && node)) return
+      useLiveNodeOverrides.getState().set(selectedId as AnyNodeId, {
+        [key]: value,
+        ...normalizeElevatorDimensions({ ...node, [key]: value }),
+      })
     },
-    [selectedId],
+    [selectedId, node],
   )
 
   const commitMetric = useCallback(
     <K extends ElevatorMetricKey>(key: K, value: ElevatorNode[K]) => {
-      if (!selectedId) return
+      if (!(selectedId && node)) return
 
       const hasChange = !(node && Math.abs(Number(node[key]) - Number(value)) <= 1e-6)
       if (hasChange) {
-        updateNode(selectedId as AnyNode['id'], { [key]: value } as Partial<ElevatorNode>)
+        updateNode(selectedId as AnyNode['id'], {
+          [key]: value,
+          ...normalizeElevatorDimensions({ ...node, [key]: value }),
+        })
       }
       useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
     },
@@ -402,15 +425,26 @@ export default function ElevatorPanel() {
     [node, levels, handleUpdate],
   )
 
+  useEffect(() => {
+    const cancel = () => clearLivePreview()
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') cancel()
+    }
+    window.addEventListener('blur', cancel)
+    window.addEventListener('keydown', key)
+    return () => {
+      window.removeEventListener('blur', cancel)
+      window.removeEventListener('keydown', key)
+    }
+  }, [clearLivePreview])
+
   if (!(node && node.type === 'elevator' && selectedId && selectedCount === 1)) return null
 
   const displayNode = liveOverrides ? ({ ...node, ...liveOverrides } as ElevatorNode) : node
   const displayPosition = liveTransform?.position ?? displayNode.position
   const displayRotation = liveTransform?.rotation ?? displayNode.rotation
   const displayRotationDegrees = radiansToDegrees(displayRotation)
-  const displayShaftWidth = getResolvedShaftWidth(displayNode)
-  const displayShaftDepth = getResolvedShaftDepth(displayNode)
-  const displayShaftWallThickness = getResolvedShaftWallThickness(displayNode)
+  const dimensions = resolveElevatorDimensions(displayNode)
   const fromLevelId = getResolvedFromLevelId(node, levels)
   const toLevelId = getResolvedToLevelId(node, levels, fromLevelId)
   const servedLevels = getServiceLevels(levels, fromLevelId, toLevelId)
@@ -444,461 +478,542 @@ export default function ElevatorPanel() {
     destinationOrderByLevelId.set(levelId, index + 1)
   }
 
+  const resetSection = (title: string) => {
+    clearLivePreview()
+    handleUpdate(elevatorSectionReset(node, title))
+  }
+
   return (
-    <PanelWrapper
-      icon="/icons/elevator.webp"
-      onClose={handleClose}
-      title={node.name || 'Elevator'}
-      width={300}
-    >
-      <PanelSection title="Actions">
-        <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
-          <ActionButton
-            icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
-            onClick={handleDuplicate}
-          />
-          <ActionButton
-            className="text-destructive hover:text-destructive"
-            icon={<Trash2 className="h-3.5 w-3.5" />}
-            label="Delete"
-            onClick={handleDelete}
-          />
-        </ActionGroup>
-      </PanelSection>
-
-      <PanelSection title="Position">
-        <SliderControl
-          label="X"
-          onChange={(value) => {
-            const position = getSupportedPosition(value, displayPosition[2])
-            previewTransform(position, displayRotation)
-          }}
-          onCommit={(value) => {
-            const position = getSupportedPosition(value, displayPosition[2])
-            commitTransform(position, displayRotation)
-          }}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={roundMeters(displayPosition[0])}
-        />
-        <SliderControl
-          label="Y"
-          onChange={(value) => {
-            const position: ElevatorNode['position'] = [
-              displayPosition[0],
-              value,
-              displayPosition[2],
-            ]
-            previewTransform(position, displayRotation)
-          }}
-          onCommit={(value) => {
-            const position: ElevatorNode['position'] = [
-              displayPosition[0],
-              value,
-              displayPosition[2],
-            ]
-            commitTransform(position, displayRotation)
-          }}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={roundMeters(displayPosition[1])}
-        />
-        <SliderControl
-          label="Z"
-          onChange={(value) => {
-            const position = getSupportedPosition(displayPosition[0], value)
-            previewTransform(position, displayRotation)
-          }}
-          onCommit={(value) => {
-            const position = getSupportedPosition(displayPosition[0], value)
-            commitTransform(position, displayRotation)
-          }}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={roundMeters(displayPosition[2])}
-        />
-      </PanelSection>
-
-      <PanelSection title="Rotation">
-        <SliderControl
-          label="Yaw"
-          max={180}
-          min={-180}
-          onChange={(degrees) => previewTransform(displayPosition, degreesToRadians(degrees))}
-          onCommit={(degrees) => commitTransform(displayPosition, degreesToRadians(degrees))}
-          precision={0}
-          restoreOnCommit={false}
-          step={1}
-          unit="°"
-          value={displayRotationDegrees}
-        />
-        <div className="flex gap-1.5 px-1 pt-2 pb-1">
-          <ActionButton
-            label="-45°"
-            onClick={() => {
-              triggerSFX('sfx:item-rotate')
-              commitTransform(displayPosition, displayRotation - Math.PI / 4)
-            }}
-          />
-          <ActionButton
-            label="+45°"
-            onClick={() => {
-              triggerSFX('sfx:item-rotate')
-              commitTransform(displayPosition, displayRotation + Math.PI / 4)
-            }}
-          />
-        </div>
-      </PanelSection>
-
-      <PanelSection title="Service">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5">
-            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-              From
-            </div>
-            <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-sm text-foreground"
-              onChange={(event) => handleServiceBoundaryChange('fromLevelId', event.target.value)}
-              value={fromLevelId}
-            >
-              {levels.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {getLevelDisplayName(level)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-              To
-            </div>
-            <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-sm text-foreground"
-              onChange={(event) => handleServiceBoundaryChange('toLevelId', event.target.value)}
-              value={toLevelId}
-            >
-              {levels.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {getLevelDisplayName(level)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Default Floor
-          </div>
-          <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
-            onChange={(event) => handleUpdate({ defaultLevelId: event.target.value || null })}
-            value={selectedDefaultLevelId}
-          >
-            {defaultLevelOptions.map((level) => (
-              <option key={level.id} value={level.id}>
-                {getLevelDisplayName(level)}
-              </option>
-            ))}
-          </select>
-        </div>
-      </PanelSection>
-
-      <PanelSection title="Cab">
-        <MetricControl
-          label="Width"
-          max={4}
-          min={0.8}
-          onChange={(value) => previewMetric('width', value)}
-          onCommit={(value) => commitMetric('width', value)}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={displayNode.width}
-        />
-        <MetricControl
-          label="Depth"
-          max={4}
-          min={0.8}
-          onChange={(value) => previewMetric('depth', value)}
-          onCommit={(value) => commitMetric('depth', value)}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={displayNode.depth}
-        />
-        <MetricControl
-          label="Cab Height"
-          max={4}
-          min={1.8}
-          onChange={(value) => previewMetric('cabHeight', value)}
-          onCommit={(value) => commitMetric('cabHeight', value)}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={displayNode.cabHeight}
-        />
-      </PanelSection>
-
-      <PanelSection title="Shaft">
-        <div className="space-y-1.5">
-          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Shaft Style
-          </div>
-          <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
-            onChange={(event) =>
-              handleUpdate({ shaftStyle: event.target.value as ElevatorNode['shaftStyle'] })
-            }
-            value={displayNode.shaftStyle ?? 'solid'}
-          >
-            {SHAFT_STYLE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <MetricControl
-          label="Shaft Width"
-          max={5}
-          min={displayNode.width}
-          onChange={(value) => previewMetric('shaftWidth', Math.max(value, displayNode.width))}
-          onCommit={(value) => commitMetric('shaftWidth', Math.max(value, displayNode.width))}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={displayShaftWidth}
-        />
-        <MetricControl
-          label="Shaft Depth"
-          max={5}
-          min={displayNode.depth}
-          onChange={(value) => previewMetric('shaftDepth', Math.max(value, displayNode.depth))}
-          onCommit={(value) => commitMetric('shaftDepth', Math.max(value, displayNode.depth))}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={displayShaftDepth}
-        />
-        <MetricControl
-          label="Wall Thickness"
-          max={0.4}
-          min={0.04}
-          onChange={(value) => previewMetric('shaftWallThickness', value)}
-          onCommit={(value) => commitMetric('shaftWallThickness', value)}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.01}
-          unit="m"
-          value={displayShaftWallThickness}
-        />
-      </PanelSection>
-
-      <PanelSection title="Doors">
-        <div className="space-y-1.5">
-          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Opening Style
-          </div>
-          <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
-            onChange={(event) =>
-              handleUpdate({ doorStyle: event.target.value as ElevatorNode['doorStyle'] })
-            }
-            value={displayNode.doorStyle ?? 'center-opening'}
-          >
-            {DOOR_STYLE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Door Type
-          </div>
-          <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
-            onChange={(event) =>
-              handleUpdate({
-                doorPanelStyle: event.target.value as ElevatorNode['doorPanelStyle'],
-              })
-            }
-            value={displayNode.doorPanelStyle ?? 'glass-frame'}
-          >
-            {DOOR_PANEL_STYLE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <MetricControl
-          label="Door Width"
-          max={Math.max(displayNode.width - 0.1, 0.5)}
-          min={0.45}
-          onChange={(value) => previewMetric('doorWidth', value)}
-          onCommit={(value) => commitMetric('doorWidth', value)}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={displayNode.doorWidth}
-        />
-        <MetricControl
-          label="Door Height"
-          max={Math.max(displayNode.cabHeight - 0.1, 1.3)}
-          min={1.2}
-          onChange={(value) => previewMetric('doorHeight', value)}
-          onCommit={(value) => commitMetric('doorHeight', value)}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.05}
-          unit="m"
-          value={displayNode.doorHeight}
-        />
-      </PanelSection>
-
-      <PanelSection title="Access">
-        <div className="space-y-2">
-          {servedLevels.map((level) => {
-            const isDisabled = disabledLevelIds.has(level.id)
-            const isServiceOnly = serviceOnlyLevelIds.has(level.id)
-
-            return (
-              <div
-                className="flex items-center justify-between gap-2 rounded-lg border border-border/45 bg-black/4 dark:bg-[#2C2C2E] px-2.5 py-2"
-                key={level.id}
-              >
-                <span className="min-w-0 truncate text-sm">{getLevelDisplayName(level)}</span>
-                <div className="flex shrink-0 gap-1.5">
-                  <button
-                    className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
-                      isServiceOnly
-                        ? 'border-sky-600/40 bg-sky-400/15 text-sky-800 dark:border-sky-300/45 dark:text-sky-100'
-                        : 'border-border/50 bg-black/4 dark:bg-black/15 text-muted-foreground hover:text-foreground'
-                    } ${isDisabled ? 'cursor-not-allowed opacity-45' : ''}`}
-                    disabled={isDisabled}
-                    onClick={() => toggleLevelAccess('serviceOnlyLevelIds', level.id)}
-                    type="button"
-                  >
-                    Service
-                  </button>
-                  <button
-                    className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
-                      isDisabled
-                        ? 'border-red-600/40 bg-red-400/15 text-red-700 dark:border-red-300/45 dark:text-red-100'
-                        : 'border-border/50 bg-black/4 dark:bg-black/15 text-muted-foreground hover:text-foreground'
-                    }`}
-                    onClick={() => toggleLevelAccess('disabledLevelIds', level.id)}
-                    type="button"
-                  >
-                    Disabled
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </PanelSection>
-
-      <PanelSection title="Destination">
-        <div className="grid grid-cols-2 gap-1.5">
-          {servedLevels.map((level) => {
-            const isActive = activeLevelId === level.id
-            const stopOrder = destinationOrderByLevelId.get(level.id)
-            const isDisabled = disabledLevelIds.has(level.id)
-            const isServiceOnly = serviceOnlyLevelIds.has(level.id)
-            return (
+    <ElevatorInspectorHover nodeId={node.id}>
+      <PanelWrapper
+        icon="/icons/elevator.webp"
+        onClose={handleClose}
+        title={node.name || 'Elevator'}
+        width={300}
+      >
+        <BasePanelSection title="Presets and inspection">
+          <div className="grid grid-cols-3 gap-1.5">
+            {Object.entries(ELEVATOR_PRESETS).map(([id, preset]) => (
               <button
-                className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-2.5 text-left transition-colors ${
-                  isDisabled
-                    ? 'cursor-not-allowed border-border/35 bg-black/3 dark:bg-[#202024] text-muted-foreground/55'
-                    : isActive
-                      ? 'border-emerald-600/45 bg-emerald-400/15 text-emerald-800 dark:border-emerald-400/45 dark:text-emerald-100'
-                      : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e]'
-                }`}
-                disabled={isDisabled}
-                key={level.id}
-                onClick={() => requestLevel(level.id)}
+                key={id}
                 type="button"
+                className="rounded-lg border border-border/50 p-2 text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97]"
+                onClick={() => {
+                  clearLivePreview()
+                  handleUpdate(elevatorPresetPatch(node, id as keyof typeof ELEVATOR_PRESETS))
+                }}
               >
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-xs">{getLevelDisplayName(level)}</span>
-                  {isDisabled ? (
-                    <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
-                      Disabled
-                    </span>
-                  ) : isServiceOnly ? (
-                    <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
-                      Service
-                    </span>
-                  ) : (
-                    stopOrder && (
-                      <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
-                        Stop {stopOrder}
-                      </span>
-                    )
-                  )}
-                </span>
-                <span
-                  className={`flex h-6 min-w-6 items-center justify-center rounded-full border border-black/15 dark:border-white/15 bg-black/5 dark:bg-black/20 ${
-                    stopOrder ? 'px-1.5 font-mono text-[11px] font-semibold' : ''
-                  }`}
-                >
-                  {isDisabled ? '×' : (stopOrder ?? <Send className="h-3 w-3" />)}
-                </span>
+                <img
+                  src={`/icons/elevator-presets/${id}.webp`}
+                  alt=""
+                  width={256}
+                  height={256}
+                  className="h-20 w-full object-contain"
+                />
+                {preset.label}
               </button>
-            )
-          })}
-        </div>
-      </PanelSection>
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-pressed={cutaway}
+            className="rounded-lg border border-border/50 px-3 py-2 text-sm hover:bg-accent"
+            onClick={() => useElevatorInspection.setState({ cutaway: !cutaway })}
+          >
+            Cutaway shaft
+          </button>
+          <p className="text-xs text-muted-foreground">
+            Hover or focus a section to highlight its parts. Cutaway affects this inspection only.
+          </p>
+          <p className="text-xs">
+            Clear cab interior: {(dimensions.width - 0.16).toFixed(2)} ×{' '}
+            {(dimensions.depth - 0.08).toFixed(2)} × {(dimensions.cabHeight - 0.16).toFixed(2)} m.
+            Door opening: {dimensions.doorWidth.toFixed(2)} × {dimensions.doorHeight.toFixed(2)} m.
+          </p>
+          {servedLevels.some((level) => (level.height ?? 2.5) < dimensions.cabHeight + 0.3) && (
+            <p role="status" className="text-xs text-amber-700 dark:text-amber-300">
+              The cab needs more headroom than one or more served floors provide. Check the floor
+              heights.
+            </p>
+          )}
+        </BasePanelSection>
+        <PanelSection onReset={resetSection} title="Cab">
+          <SliderControl
+            label="Width"
+            min={0.8}
+            onChange={(value) => previewMetric('width', value)}
+            onCommit={(value) => commitMetric('width', value)}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={dimensions.width}
+          />
+          <SliderControl
+            label="Depth"
+            min={0.8}
+            onChange={(value) => previewMetric('depth', value)}
+            onCommit={(value) => commitMetric('depth', value)}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={dimensions.depth}
+          />
+          <SliderControl
+            label="Cab Height"
+            min={1.8}
+            onChange={(value) => previewMetric('cabHeight', value)}
+            onCommit={(value) => commitMetric('cabHeight', value)}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={dimensions.cabHeight}
+          />
+        </PanelSection>
 
-      <PanelSection title="Motion">
-        <SliderControl
-          label="Speed"
-          max={8}
-          min={0.5}
-          onChange={(value) => handleUpdate({ speed: value })}
-          precision={1}
-          step={0.1}
-          unit="m/s"
-          value={node.speed}
-        />
-        <SliderControl
-          label="Door Time"
-          max={2200}
-          min={300}
-          onChange={(value) => handleUpdate({ doorDurationMs: value })}
-          step={50}
-          unit="ms"
-          value={node.doorDurationMs}
-        />
-        <SliderControl
-          label="Dwell"
-          max={5000}
-          min={300}
-          onChange={(value) => handleUpdate({ dwellMs: value })}
-          step={100}
-          unit="ms"
-          value={node.dwellMs}
-        />
-      </PanelSection>
-    </PanelWrapper>
+        <PanelSection onReset={resetSection} title="Shaft">
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              Shaft Style
+            </div>
+            <select
+              aria-label="Shaft style"
+              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
+              onChange={(event) =>
+                handleUpdate({ shaftStyle: event.target.value as ElevatorNode['shaftStyle'] })
+              }
+              value={displayNode.shaftStyle ?? 'solid'}
+            >
+              {SHAFT_STYLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <SliderControl
+            label="Shaft Width"
+            min={dimensions.width}
+            onChange={(value) => previewMetric('shaftWidth', Math.max(value, dimensions.width))}
+            onCommit={(value) => commitMetric('shaftWidth', Math.max(value, dimensions.width))}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={dimensions.shaftWidth}
+          />
+          <SliderControl
+            label="Shaft Depth"
+            min={dimensions.depth}
+            onChange={(value) => previewMetric('shaftDepth', Math.max(value, dimensions.depth))}
+            onCommit={(value) => commitMetric('shaftDepth', Math.max(value, dimensions.depth))}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={dimensions.shaftDepth}
+          />
+          <SliderControl
+            label="Wall Thickness"
+            min={0.04}
+            onChange={(value) => previewMetric('shaftWallThickness', value)}
+            onCommit={(value) => commitMetric('shaftWallThickness', value)}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.01}
+            unit="m"
+            value={dimensions.shaftWallThickness}
+          />
+        </PanelSection>
+
+        <PanelSection onReset={resetSection} title="Doors">
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              Opening Style
+            </div>
+            <select
+              aria-label="Door opening style"
+              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
+              onChange={(event) =>
+                handleUpdate({ doorStyle: event.target.value as ElevatorNode['doorStyle'] })
+              }
+              value={displayNode.doorStyle ?? 'center-opening'}
+            >
+              {DOOR_STYLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              Door Type
+            </div>
+            <select
+              aria-label="Door panel style"
+              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
+              onChange={(event) =>
+                handleUpdate({
+                  doorPanelStyle: event.target.value as ElevatorNode['doorPanelStyle'],
+                })
+              }
+              value={displayNode.doorPanelStyle ?? 'glass-frame'}
+            >
+              {DOOR_PANEL_STYLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <SliderControl
+            label="Door Width"
+            max={dimensions.width - 0.18}
+            min={0.45}
+            onChange={(value) => previewMetric('doorWidth', value)}
+            onCommit={(value) => commitMetric('doorWidth', value)}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={dimensions.doorWidth}
+          />
+          <SliderControl
+            label="Door Height"
+            max={dimensions.cabHeight - 0.1}
+            min={1.2}
+            onChange={(value) => previewMetric('doorHeight', value)}
+            onCommit={(value) => commitMetric('doorHeight', value)}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={dimensions.doorHeight}
+          />
+        </PanelSection>
+
+        <PanelSection onReset={resetSection} title="Service">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                From
+              </div>
+              <select
+                aria-label="From level"
+                className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-sm text-foreground"
+                onChange={(event) => handleServiceBoundaryChange('fromLevelId', event.target.value)}
+                value={fromLevelId}
+              >
+                {levels.map((level) => (
+                  <option key={level.id} value={level.id}>
+                    {getLevelDisplayName(level)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                To
+              </div>
+              <select
+                aria-label="To level"
+                className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-sm text-foreground"
+                onChange={(event) => handleServiceBoundaryChange('toLevelId', event.target.value)}
+                value={toLevelId}
+              >
+                {levels.map((level) => (
+                  <option key={level.id} value={level.id}>
+                    {getLevelDisplayName(level)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              Default Floor
+            </div>
+            <select
+              aria-label="Default floor"
+              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
+              onChange={(event) => handleUpdate({ defaultLevelId: event.target.value || null })}
+              value={selectedDefaultLevelId}
+            >
+              {defaultLevelOptions.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {getLevelDisplayName(level)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </PanelSection>
+
+        <PanelSection onReset={resetSection} title="Access">
+          <div className="space-y-2">
+            {servedLevels.map((level) => {
+              const isDisabled = disabledLevelIds.has(level.id)
+              const isServiceOnly = serviceOnlyLevelIds.has(level.id)
+
+              return (
+                <div
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border/45 bg-black/4 dark:bg-[#2C2C2E] px-2.5 py-2"
+                  key={level.id}
+                >
+                  <span className="min-w-0 truncate text-sm">{getLevelDisplayName(level)}</span>
+                  <div className="flex shrink-0 gap-1.5">
+                    <button
+                      className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                        isServiceOnly
+                          ? 'border-sky-600/40 bg-sky-400/15 text-sky-800 dark:border-sky-300/45 dark:text-sky-100'
+                          : 'border-border/50 bg-black/4 dark:bg-black/15 text-muted-foreground hover:text-foreground'
+                      } ${isDisabled ? 'cursor-not-allowed opacity-45' : ''}`}
+                      disabled={isDisabled}
+                      aria-pressed={isServiceOnly}
+                      aria-label={`Service-only access for ${getLevelDisplayName(level)}`}
+                      onClick={() => toggleLevelAccess('serviceOnlyLevelIds', level.id)}
+                      type="button"
+                    >
+                      Service
+                    </button>
+                    <button
+                      className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                        isDisabled
+                          ? 'border-red-600/40 bg-red-400/15 text-red-700 dark:border-red-300/45 dark:text-red-100'
+                          : 'border-border/50 bg-black/4 dark:bg-black/15 text-muted-foreground hover:text-foreground'
+                      }`}
+                      aria-pressed={isDisabled}
+                      aria-label={`Disable ${getLevelDisplayName(level)}`}
+                      onClick={() => toggleLevelAccess('disabledLevelIds', level.id)}
+                      type="button"
+                    >
+                      Disabled
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </PanelSection>
+
+        <PanelSection onReset={resetSection} title="Destination">
+          <div className="grid grid-cols-2 gap-1.5">
+            {servedLevels.map((level) => {
+              const isActive = activeLevelId === level.id
+              const stopOrder = destinationOrderByLevelId.get(level.id)
+              const isDisabled = disabledLevelIds.has(level.id)
+              const isServiceOnly = serviceOnlyLevelIds.has(level.id)
+              return (
+                <button
+                  className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-2.5 text-left transition-colors ${
+                    isDisabled
+                      ? 'cursor-not-allowed border-border/35 bg-black/3 dark:bg-[#202024] text-muted-foreground/55'
+                      : isActive
+                        ? 'border-emerald-600/45 bg-emerald-400/15 text-emerald-800 dark:border-emerald-400/45 dark:text-emerald-100'
+                        : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e]'
+                  }`}
+                  disabled={isDisabled}
+                  key={level.id}
+                  onClick={() => requestLevel(level.id)}
+                  type="button"
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-xs">{getLevelDisplayName(level)}</span>
+                    {isDisabled ? (
+                      <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
+                        Disabled
+                      </span>
+                    ) : isServiceOnly ? (
+                      <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
+                        Service
+                      </span>
+                    ) : (
+                      stopOrder && (
+                        <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
+                          Stop {stopOrder}
+                        </span>
+                      )
+                    )}
+                  </span>
+                  <span
+                    className={`flex h-6 min-w-6 items-center justify-center rounded-full border border-black/15 dark:border-white/15 bg-black/5 dark:bg-black/20 ${
+                      stopOrder ? 'px-1.5 font-mono text-[11px] font-semibold' : ''
+                    }`}
+                  >
+                    {isDisabled ? '×' : (stopOrder ?? <Send className="h-3 w-3" />)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </PanelSection>
+
+        <PanelSection onReset={resetSection} title="Motion">
+          <SliderControl
+            label="Speed"
+            max={8}
+            min={0.5}
+            onChange={(value) => previewMetric('speed', value)}
+            onCommit={(value) => commitMetric('speed', value)}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            precision={1}
+            step={0.1}
+            unit="m/s"
+            value={node.speed}
+          />
+          <SliderControl
+            label="Door Time"
+            max={2200}
+            min={300}
+            onChange={(value) => previewMetric('doorDurationMs', value)}
+            onCommit={(value) => commitMetric('doorDurationMs', value)}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={50}
+            unit="ms"
+            value={node.doorDurationMs}
+          />
+          <SliderControl
+            label="Dwell"
+            max={5000}
+            min={300}
+            onChange={(value) => previewMetric('dwellMs', value)}
+            onCommit={(value) => commitMetric('dwellMs', value)}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={100}
+            unit="ms"
+            value={node.dwellMs}
+          />
+        </PanelSection>
+        <PanelSection onReset={resetSection} title="Actions">
+          <ActionGroup>
+            <ActionButton
+              icon={<Move className="h-3.5 w-3.5" />}
+              label="Move"
+              onClick={handleMove}
+            />
+            <ActionButton
+              icon={<Copy className="h-3.5 w-3.5" />}
+              label="Duplicate"
+              onClick={handleDuplicate}
+            />
+            <ActionButton
+              className="text-destructive hover:text-destructive"
+              icon={<Trash2 className="h-3.5 w-3.5" />}
+              label="Delete"
+              onClick={handleDelete}
+            />
+          </ActionGroup>
+        </PanelSection>
+
+        <PanelSection onReset={resetSection} title="Position">
+          <SliderControl
+            label="X"
+            onChange={(value) => {
+              const position = getSupportedPosition(value, displayPosition[2])
+              previewTransform(position, displayRotation)
+            }}
+            onCommit={(value) => {
+              const position = getSupportedPosition(value, displayPosition[2])
+              commitTransform(position, displayRotation)
+            }}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={roundMeters(displayPosition[0])}
+          />
+          <SliderControl
+            label="Y"
+            onChange={(value) => {
+              const position: ElevatorNode['position'] = [
+                displayPosition[0],
+                value,
+                displayPosition[2],
+              ]
+              previewTransform(position, displayRotation)
+            }}
+            onCommit={(value) => {
+              const position: ElevatorNode['position'] = [
+                displayPosition[0],
+                value,
+                displayPosition[2],
+              ]
+              commitTransform(position, displayRotation)
+            }}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={roundMeters(displayPosition[1])}
+          />
+          <SliderControl
+            label="Z"
+            onChange={(value) => {
+              const position = getSupportedPosition(displayPosition[0], value)
+              previewTransform(position, displayRotation)
+            }}
+            onCommit={(value) => {
+              const position = getSupportedPosition(displayPosition[0], value)
+              commitTransform(position, displayRotation)
+            }}
+            precision={2}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={0.05}
+            unit="m"
+            value={roundMeters(displayPosition[2])}
+          />
+        </PanelSection>
+
+        <PanelSection onReset={resetSection} title="Rotation">
+          <SliderControl
+            label="Yaw"
+            max={180}
+            min={-180}
+            onChange={(degrees) => previewTransform(displayPosition, degreesToRadians(degrees))}
+            onCommit={(degrees) => commitTransform(displayPosition, degreesToRadians(degrees))}
+            precision={0}
+            restoreOnCommit={false}
+            onCancel={clearLivePreview}
+            step={1}
+            unit="°"
+            value={displayRotationDegrees}
+          />
+          <div className="flex gap-1.5 px-1 pt-2 pb-1">
+            <ActionButton
+              label="-45°"
+              onClick={() => {
+                triggerSFX('sfx:item-rotate')
+                commitTransform(displayPosition, displayRotation - Math.PI / 4)
+              }}
+            />
+            <ActionButton
+              label="+45°"
+              onClick={() => {
+                triggerSFX('sfx:item-rotate')
+                commitTransform(displayPosition, displayRotation + Math.PI / 4)
+              }}
+            />
+          </div>
+        </PanelSection>
+      </PanelWrapper>
+    </ElevatorInspectorHover>
   )
 }

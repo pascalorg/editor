@@ -12,6 +12,8 @@ import {
   collectStructuralGridAxes,
   resolveStructuralGridReference,
 } from '../structural-grid/coordination'
+import { columnFootprintHalf } from './bounds'
+import { isManagedColumn } from './edit-policy'
 import type { ColumnResizePayload } from './floorplan-affordances'
 
 // Offsets for the floor-plan selection arrows. Resize chevrons hug the
@@ -69,7 +71,12 @@ export function buildColumnFloorplan(
   const isHighlighted = view?.highlighted ?? false
   const showSelectedChrome = isSelected || isHighlighted
 
-  const stroke = showSelectedChrome && palette ? palette.selectedStroke : '#374151'
+  const hovered = view?.hovered ?? false
+  const stroke = hovered
+    ? (palette?.wallHoverStroke ?? '#38bdf8')
+    : showSelectedChrome && palette
+      ? palette.selectedStroke
+      : '#374151'
   const fill = showSelectedChrome ? '#fed7aa' : '#9ca3af'
   // A scripted column draws its floor-plan image the way a catalog item does.
   const floorPlanUrl = scriptImages(node)?.floorPlan
@@ -80,7 +87,7 @@ export function buildColumnFloorplan(
     // Transparent, not none: the body stays the hit target under the image.
     fill: floorPlanUrl ? 'transparent' : fill,
     stroke,
-    strokeWidth: showSelectedChrome ? 0.03 : 0.02,
+    strokeWidth: hovered ? 0.045 : showSelectedChrome ? 0.03 : 0.02,
     opacity: 0.92,
     metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
   }
@@ -116,7 +123,7 @@ export function buildColumnFloorplan(
     if (showSelectedChrome)
       children.push({ ...body, fill: 'none', pointerEvents: 'none', metadata: undefined })
   }
-  const { halfX, halfZ } = columnPlanHalfExtents(node)
+  const { halfX, halfZ } = columnFootprintHalf(node)
   const centerMarkHalf = Math.min(0.09, Math.max(0.035, Math.min(halfX, halfZ) * 0.45))
   const centerX = node.position[0]
   const centerZ = node.position[2]
@@ -185,10 +192,11 @@ export function buildColumnFloorplan(
   // `column/definition.ts`'s handle selection so what users can
   // manipulate in 3D top-view is the same in the floor plan.
   if (isSelected) {
-    children.push({
-      kind: 'move-handle',
-      point: [node.position[0], node.position[2]],
-    })
+    if (!isManagedColumn(node))
+      children.push({
+        kind: 'move-handle',
+        point: [node.position[0], node.position[2]],
+      })
 
     const cx = node.position[0]
     const cz = node.position[2]
@@ -241,6 +249,8 @@ export function buildColumnFloorplan(
       const halfBraceZ = Math.max(node.depth, node.braceDepth ?? 0) / 2
       emitArrowAlong('brace-width', 'x', halfBraceX + RESIZE_ARROW_OFFSET)
       emitArrowAlong('brace-depth', 'z', halfBraceZ + RESIZE_ARROW_OFFSET)
+    } else if (isManagedColumn(node)) {
+      // The parent assembly owns this post's footprint.
     } else if (ROUND_CROSS_SECTIONS.has(node.crossSection)) {
       // Round shafts — single radius arrow. `radial-resize` factor 1
       // (cursor delta = radius delta), so dragging the chevron
@@ -298,40 +308,6 @@ export function getColumnFloorplanFootprint(node: ColumnNode): FloorplanPoint[] 
 
 type PlanPoint = { x: number; y: number }
 
-/**
- * XZ half-extents for the column's plan footprint. Mirrors the 3D
- * `columnFootprintHalf` so side-arrows + rotate-arrow ring the same
- * bounding box the in-world handles use. Vertical supports read the
- * shaft geometry; non-vertical supports use the widest brace bound so
- * arrows clear the splay.
- */
-function columnPlanHalfExtents(column: ColumnNode): { halfX: number; halfZ: number } {
-  if (column.source) return { halfX: column.width / 2, halfZ: column.depth / 2 }
-  if (column.supportStyle !== 'vertical') {
-    return {
-      halfX:
-        Math.max(
-          column.width,
-          column.braceWidth ?? 0,
-          column.braceBottomSpread ?? 0,
-          column.braceTopSpread ?? 0,
-        ) / 2,
-      halfZ: Math.max(column.depth, column.braceDepth ?? 0) / 2,
-    }
-  }
-  if (
-    column.crossSection === 'round' ||
-    column.crossSection === 'octagonal' ||
-    column.crossSection === 'sixteen-sided'
-  ) {
-    return { halfX: column.radius, halfZ: column.radius }
-  }
-  if (column.crossSection === 'square') {
-    return { halfX: column.width / 2, halfZ: column.width / 2 }
-  }
-  return { halfX: column.width / 2, halfZ: column.depth / 2 }
-}
-
 function rotatePlanVector(x: number, y: number, rotation: number): [number, number] {
   const c = Math.cos(rotation)
   const s = Math.sin(rotation)
@@ -359,88 +335,32 @@ function getRotatedRectanglePolygon(
 }
 
 function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
-  const center: PlanPoint = { x: column.position[0], y: column.position[2] }
-
-  // Brace-support columns: rotated rectangle spanning the base spread.
+  const { halfX, halfZ } = columnFootprintHalf(column)
   if (
-    column.supportStyle === 'a-frame' ||
-    column.supportStyle === 'y-frame' ||
-    column.supportStyle === 'v-frame' ||
-    column.supportStyle === 'x-brace' ||
-    column.supportStyle === 'k-brace' ||
-    column.supportStyle === 'single-strut' ||
-    column.supportStyle === 'tripod' ||
-    column.supportStyle === 'trestle' ||
-    column.supportStyle === 'portal-frame' ||
-    column.supportStyle === 'box-frame'
+    column.supportStyle === 'vertical' &&
+    column.style !== 'cluster' &&
+    ROUND_CROSS_SECTIONS.has(column.crossSection) &&
+    column.baseStyle === 'none' &&
+    ['none', 'simple', 'simple-slab'].includes(column.capitalStyle) &&
+    column.panelCount === 0 &&
+    column.shaftDetail !== 'panelled'
   ) {
-    const width = Math.max(
-      column.supportStyle === 'a-frame' ||
-        column.supportStyle === 'x-brace' ||
-        column.supportStyle === 'k-brace' ||
-        column.supportStyle === 'single-strut' ||
-        column.supportStyle === 'tripod' ||
-        column.supportStyle === 'trestle' ||
-        column.supportStyle === 'portal-frame' ||
-        column.supportStyle === 'box-frame'
-        ? (column.braceBottomSpread ?? 1.2)
-        : 0,
-      column.braceTopSpread ??
-        (column.supportStyle === 'y-frame' ||
-        column.supportStyle === 'v-frame' ||
-        column.supportStyle === 'x-brace' ||
-        column.supportStyle === 'k-brace' ||
-        column.supportStyle === 'single-strut' ||
-        column.supportStyle === 'tripod' ||
-        column.supportStyle === 'trestle' ||
-        column.supportStyle === 'portal-frame' ||
-        column.supportStyle === 'box-frame'
-          ? 1
-          : 0),
-      (column.braceWidth ?? column.width) * 2,
-    )
-    const depth = Math.max(
-      column.supportStyle === 'tripod' ||
-        column.supportStyle === 'trestle' ||
-        column.supportStyle === 'box-frame'
-        ? (column.braceTopSpread ?? 1)
-        : 0,
-      column.braceDepth ?? column.depth,
-      0.08,
-    )
-    return getRotatedRectanglePolygon(center, width, depth, -column.rotation)
+    const segments =
+      column.crossSection === 'octagonal' ? 8 : column.crossSection === 'sixteen-sided' ? 16 : 32
+    return Array.from({ length: segments }, (_, i) => {
+      const angle = (i * Math.PI * 2) / segments
+      const [x, z] = rotatePlanVector(
+        Math.sin(angle) * halfX,
+        Math.cos(angle) * halfZ,
+        -column.rotation,
+      )
+      return { x: column.position[0] + x, y: column.position[2] + z }
+    })
   }
-
-  // Standalone column: shaft profile expanded for base + capital.
-  const isRound =
-    column.crossSection === 'round' ||
-    column.crossSection === 'octagonal' ||
-    column.crossSection === 'sixteen-sided'
-  const shaftWidth = isRound ? column.radius * 2 : column.width
-  const shaftDepth = isRound ? column.radius * 2 : column.depth
-  const width = Math.max(
-    shaftWidth,
-    column.width * column.baseWidthScale,
-    column.width * column.capitalWidthScale,
+  return getRotatedRectanglePolygon(
+    { x: column.position[0], y: column.position[2] },
+    halfX * 2,
+    halfZ * 2,
+    -column.rotation,
   )
-  const depth = Math.max(
-    shaftDepth,
-    column.depth * column.baseDepthScale,
-    column.depth * column.capitalDepthScale,
-  )
-
-  if (column.crossSection === 'square' || column.crossSection === 'rectangular') {
-    return getRotatedRectanglePolygon(center, width, depth, -column.rotation)
-  }
-
-  const segmentCount =
-    column.crossSection === 'octagonal' ? 8 : column.crossSection === 'sixteen-sided' ? 16 : 32
-
-  return Array.from({ length: segmentCount }, (_, index) => {
-    const angle = (index / segmentCount) * Math.PI * 2
-    const localX = Math.cos(angle) * (width / 2)
-    const localY = Math.sin(angle) * (depth / 2)
-    const [offsetX, offsetY] = rotatePlanVector(localX, localY, -column.rotation)
-    return { x: center.x + offsetX, y: center.y + offsetY }
-  })
 }

@@ -41,7 +41,6 @@ import { FloorRegionControls3D } from '../editor/floor-region-controls'
 import { OpenWallEnds3DLayer } from '../editor/open-wall-ends-3d-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
-import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { WallPaintRegionTool } from './paint-region/wall-paint-region-tool'
 import { RegistryToolProvider } from './registry-tool-context'
@@ -305,21 +304,6 @@ export const ToolManager: React.FC = () => {
   const handlePlacedNodeSelected = (nodeId: AnyNodeId) => {
     setSelection({ selectedIds: [nodeId] })
   }
-  const handlePlacedElevatorSelected = (
-    nodeId: AnyNodeId,
-    elevatorBuildingId: BuildingNode['id'],
-  ) => {
-    // Preserve the active level. `setSelection`'s hierarchy guard nulls
-    // `levelId` whenever `buildingId` is passed without an explicit
-    // `levelId` — which deselected the current floor plan the moment an
-    // elevator was placed. Pass the current level through so the floor
-    // plan stays selected.
-    setSelection({
-      buildingId: elevatorBuildingId,
-      levelId: activeLevelId ?? null,
-      selectedIds: [nodeId],
-    })
-  }
 
   return (
     <RegistryToolProvider value={registryToolContext}>
@@ -463,14 +447,7 @@ export const ToolManager: React.FC = () => {
             <RegistryToolComponent />
           </Suspense>
         )}
-        {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (
-          <ElevatorTool
-            buildingId={buildingId as BuildingNode['id'] | null}
-            levelId={activeLevelId ?? null}
-            onPlaced={handlePlacedElevatorSelected}
-          />
-        )}
-        {!movingNode && BuildToolComponent && tool !== 'elevator' ? <BuildToolComponent /> : null}
+        {!movingNode && BuildToolComponent ? <BuildToolComponent /> : null}
         {/* Figma-style alignment guides published by the move / placement
             tools above. Lives inside the building-local group so the
             building-local guide coords render at the right world position. */}

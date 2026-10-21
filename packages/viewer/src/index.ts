@@ -366,6 +366,11 @@ export { ElevatorInteractionSystem } from './systems/elevator/elevator-interacti
 // elevation under its footprint. Replaces the per-kind elevation block
 // that used to live inside `ItemSystem`.
 export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
+export {
+  type GeometryFailure,
+  setGeometryFailure,
+  useGeometryStatus,
+} from './systems/geometry/geometry-status'
 export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 export {

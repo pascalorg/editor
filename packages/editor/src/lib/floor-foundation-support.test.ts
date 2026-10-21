@@ -164,7 +164,6 @@ describe('Upper-floor height drag release (round-final item 6)', () => {
     test(`a drag of ${delta} m lands on release`, () => {
       const bedroom = plateOf(UPPER, 'Bedroom')
       const start = footprintHeightValue(nodes(), bedroom)
-      const past = useScene.temporal.getState().pastStates.length
       const preview = beginFootprintHeightPreview(bedroom.id)
       expect(preview.preview(start + delta / 2)).toBeNull()
       expect(preview.preview(start + delta)).toBeNull()
@@ -172,7 +171,13 @@ describe('Upper-floor height drag release (round-final item 6)', () => {
       const after = nodes()[bedroom.id] as SlabNode
       expect(after.thickness).toBeCloseTo(bedroom.thickness + delta, 6)
       expect(footprintHeightValue(nodes(), after)).toBeCloseTo(start + delta, 6)
-      expect(useScene.temporal.getState().pastStates.length).toBe(past + 1)
+      useScene.temporal.getState().undo()
+      expect(footprintHeightValue(nodes(), nodes()[bedroom.id] as SlabNode)).toBeCloseTo(start, 6)
+      useScene.temporal.getState().redo()
+      expect(footprintHeightValue(nodes(), nodes()[bedroom.id] as SlabNode)).toBeCloseTo(
+        start + delta,
+        6,
+      )
     })
   }
 })

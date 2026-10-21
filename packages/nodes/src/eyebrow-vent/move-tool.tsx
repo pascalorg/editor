@@ -12,7 +12,10 @@ import {
 } from '@pascal-app/core'
 import {
   consumePlacementDragRelease,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -85,9 +88,9 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
       return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.altKey === true),
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
+        bypass: !isMagneticSnapActive() || event.nativeEvent?.altKey === true,
       })
     }
 
@@ -102,7 +105,8 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        isGridSnapActive() &&
+        event.nativeEvent?.altKey !== true &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
         triggerSFX('sfx:grid-snap')
@@ -160,7 +164,7 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
         position: [target.localX, target.localY, target.localZ],
         rotation: original.rotation,
         visible: true,
-        metadata: {},
+        metadata: stripPlacementMetadataFlags(original.metadata),
       })
       useScene.temporal.getState().pause()
 

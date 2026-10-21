@@ -90,39 +90,14 @@ function isCoveredByExistingHole(existingHoles: Point2D[][], autoHole: Point2D[]
   return existingHoles.some((existingHole) => polygonContainsPolygon(existingHole, autoHole))
 }
 
-function getServedLevelRange(elevator: ElevatorNode, nodes: Record<string, AnyNode>) {
-  const servedLevels = resolveElevatorServiceLevels(elevator, nodes)
-  if (servedLevels.length < 2) return null
-
-  const levelNumbers = servedLevels.map((level) => level.level)
-  return {
-    max: Math.max(...levelNumbers),
-    min: Math.min(...levelNumbers),
-    sortedServedLevels: servedLevels,
-  }
-}
-
-function getLevelNumber(levelId: string | null, nodes: Record<string, AnyNode>) {
-  if (!levelId) return
-  const node = nodes[levelId as AnyNodeId]
-  return node?.type === 'level' ? node.level : undefined
-}
-
 function shouldApplyElevatorToSlab(
   elevator: ElevatorNode,
   slabLevelId: string,
   nodes: Record<string, AnyNode>,
 ) {
-  const range = getServedLevelRange(elevator, nodes)
-  if (!range) return false
-
-  const slabLevel = getLevelNumber(slabLevelId, nodes)
-  if (slabLevel !== undefined) {
-    return slabLevel > range.min && slabLevel <= range.max
-  }
-
-  const servedIndex = range.sortedServedLevels.findIndex((level) => level.id === slabLevelId)
-  return servedIndex > 0
+  return (
+    resolveElevatorServiceLevels(elevator, nodes).findIndex((level) => level.id === slabLevelId) > 0
+  )
 }
 
 function shouldApplyElevatorToCeiling(
@@ -130,16 +105,9 @@ function shouldApplyElevatorToCeiling(
   ceilingLevelId: string,
   nodes: Record<string, AnyNode>,
 ) {
-  const range = getServedLevelRange(elevator, nodes)
-  if (!range) return false
-
-  const ceilingLevel = getLevelNumber(ceilingLevelId, nodes)
-  if (ceilingLevel !== undefined) {
-    return ceilingLevel >= range.min && ceilingLevel < range.max
-  }
-
-  const servedIndex = range.sortedServedLevels.findIndex((level) => level.id === ceilingLevelId)
-  return servedIndex >= 0 && servedIndex < range.sortedServedLevels.length - 1
+  const levels = resolveElevatorServiceLevels(elevator, nodes)
+  const index = levels.findIndex((level) => level.id === ceilingLevelId)
+  return index >= 0 && index < levels.length - 1
 }
 
 function getElevatorOpeningPolygon(elevator: ElevatorNode): Point2D[] {

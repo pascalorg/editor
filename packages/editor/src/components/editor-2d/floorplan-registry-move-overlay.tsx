@@ -844,14 +844,25 @@ export function FloorplanRegistryMoveOverlay() {
       }
       boxEl.setAttribute('transform', transform)
       const oldY = originalPosition[1]
+      const position = nodeRegistry.get(movingNode.type)?.capabilities?.movable?.resolvePosition?.({
+        node: useScene.getState().nodes[movingNode.id] ?? movingNode,
+        position: [finalX, oldY, finalZ],
+        nodes: useScene.getState().nodes,
+      }) ?? [finalX, oldY, finalZ]
+      if (def?.capabilities?.movable?.resolvePosition) {
+        useLiveTransforms.getState().set(movingNode.id, {
+          position: position as [number, number, number],
+          rotation: currentRotation,
+        })
+      }
       lastPositionValid = movableValidityConfig?.isValidPosition
         ? movableValidityConfig.isValidPosition({
             node: {
               ...movingNode,
-              position: [finalX, oldY, finalZ],
+              position,
               rotation: currentRotation,
             } as AnyNode,
-            position: [finalX, oldY, finalZ],
+            position: position as [number, number, number],
             rotation: currentRotation,
             levelId:
               (useViewer.getState().selection.levelId as AnyNodeId | null) ??
@@ -879,6 +890,11 @@ export function FloorplanRegistryMoveOverlay() {
             (storedRotation as [number?, number?, number?])[2] ?? 0,
           ]
         : snapped.rotation
+      const position = nodeRegistry.get(movingNode.type)?.capabilities?.movable?.resolvePosition?.({
+        node: useScene.getState().nodes[movingNode.id] ?? movingNode,
+        position: [sx, oldY, sz],
+        nodes: useScene.getState().nodes,
+      }) ?? [sx, oldY, sz]
       const rotationPatch = 'rotation' in movingNode ? { rotation } : {}
       const atomicPreview =
         isFreshPlacement &&
@@ -931,7 +947,7 @@ export function FloorplanRegistryMoveOverlay() {
         const committedId = commitFreshPlacementSubtree(
           movingNode.id as AnyNodeId,
           {
-            position: [sx, oldY, sz],
+            position,
             ...rotationPatch,
             metadata: stripPlacementMetadataFlags((movingNode as { metadata?: unknown }).metadata),
             visible: true,
@@ -947,7 +963,7 @@ export function FloorplanRegistryMoveOverlay() {
         useScene.getState().updateNode(
           movingNode.id as AnyNodeId,
           {
-            position: [sx, oldY, sz],
+            position,
             ...rotationPatch,
           } as Partial<AnyNode>,
         )
@@ -999,6 +1015,8 @@ export function FloorplanRegistryMoveOverlay() {
       for (const relatedEntry of relatedEntries) {
         relatedEntry.style.visibility = ''
       }
+      if (def?.capabilities?.movable?.resolvePosition)
+        useLiveTransforms.getState().clear(movingNode.id)
       boxEl.remove()
       useAlignmentGuides.getState().clear()
     }

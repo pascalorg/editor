@@ -39,6 +39,7 @@ export const ROOF_TYPE_OPTIONS: ReadonlyArray<{ label: string; value: RoofType }
   { label: 'Dutch', value: 'dutch' },
   { label: 'Mansard', value: 'mansard' },
   { label: 'Conical', value: 'conical' },
+  { label: 'Barrel', value: 'barrel' },
 ]
 
 export function getActiveRoofFeatureId(

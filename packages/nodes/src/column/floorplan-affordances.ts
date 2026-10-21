@@ -8,6 +8,7 @@ import {
 import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 import { rebuildScriptedSize } from '../shared/scripted-opening-handles'
+import { columnEditPatch } from './edit-policy'
 import { planColumnEdit } from './hosted-resize'
 
 // Floor minimums — mirror the 3D handles in `column/definition.ts` so a
@@ -64,6 +65,7 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
     let lastPatch: Partial<ColumnNode> = {}
 
     const previewPatch = (patch: Partial<ColumnNode>) => {
+      patch = columnEditPatch(node, patch)
       if (!planColumnEdit(columnId, patch)) return
       lastPatch = patch
       useLiveNodeOverrides.getState().set(columnId, patch)

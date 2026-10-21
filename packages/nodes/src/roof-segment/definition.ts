@@ -3,6 +3,8 @@ import {
   getPitchFromActiveRoofHeight,
   getRoofSegmentResizePatch,
   type HandleDescriptor,
+  MAX_ROOF_PITCH,
+  MIN_ROOF_SEGMENT_DIMENSION,
   type NodeDefinition,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofSegmentNode as RoofSegmentNodeType,
@@ -23,14 +25,14 @@ const HEIGHT_HANDLE_OFFSET = 0.3
 const ROOF_HANDLE_CLEARANCE = 0.15
 const ROTATE_CORNER_OFFSET = 0.4
 const ROTATE_RING_OFFSET = 0.08
-const MIN_ROOF_DIM = 1
+const MIN_ROOF_DIM = MIN_ROOF_SEGMENT_DIMENSION
 const MIN_WALL_HEIGHT = 0
 // Clamp used for handle Y placement so arrows stay visible on flat /
 // wall-less segments where `wallHeight ≈ 0` would put them on the floor.
 const MIN_WALL_DISPLAY = 0.3
 // Pitch is stored in degrees on the schema; same clamp the panel applies.
 const MIN_PITCH = 0
-const MAX_PITCH = 85
+const MAX_PITCH = MAX_ROOF_PITCH
 
 // Floor-to-peak height of the assembled segment. Pitch drag drives this
 // value directly and back-solves the pitch angle via the slope-frame

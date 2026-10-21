@@ -1,0 +1,58 @@
+{
+  "generator": "image_gen",
+  "workflow": "For each roof, place the actual roof alone, crop its screenshot, generate from that reference, install the WebP, clear the scene, then place the next roof.",
+  "format": {
+    "type": "webp",
+    "width": 256,
+    "height": 256,
+    "quality": 82,
+    "alphaQuality": 90
+  },
+  "images": [
+    {
+      "id": "gable",
+      "path": "apps/editor/public/icons/roof-types/gable.webp",
+      "prompt": "Create a polished architectural editor gallery thumbnail. Reference image 1 is the authoritative actual GABLE roof geometry: preserve its exact silhouette, proportions, roof slope, two sloped planes, ridge, eave overhangs and triangular end wall, and the same three-quarter camera view. Reference image 2 is STYLE ONLY: match its soft matte lavender/periwinkle clay shading, subtle ambient occlusion, clean edges, and transparent background. Restyle the roof and end wall in harmonious lavender tones. Remove the screenshot background, ground, textures, grid and UI. One fully visible centered roof object with even padding in a square transparent image. No house beneath it, extra features, gutters, text, labels, people, logos or invented geometry."
+    },
+    {
+      "id": "hip",
+      "path": "apps/editor/public/icons/roof-types/hip.webp",
+      "prompt": "Create a polished HIP roof thumbnail from reference image 1, the actual editor roof. Preserve exact geometry and the same elevated three-quarter camera: rectangular footprint, four sloping roof faces meeting at a short central ridge, continuous eave overhang and low wall base. This is a hip roof, with no triangular vertical gable ends. Reference image 2 is style only: match the matte lavender/periwinkle clay material, soft studio lighting, subtle ambient occlusion and clean edges of the existing gable thumbnail. Remove ground, screenshot background and shingle texture. Single complete centered object with even padding, square composition, transparent background. No house, added objects, text or invented structures."
+    },
+    {
+      "id": "shed",
+      "path": "apps/editor/public/icons/roof-types/shed.webp",
+      "prompt": "Generate a polished SHED roof gallery thumbnail. Image 1 is the authoritative geometry: preserve the single rectangular sloping roof plane, high rear edge, low front eave, triangular side infill wall, proportions, overhangs and elevated three-quarter view. Image 2 is style reference only: matte lavender/periwinkle clay, soft studio lighting, subtle ambient occlusion and clean edges. Match that thumbnail family. Remove ground, background, texture, and every UI fragment. Show one complete centered roof with even square padding on a transparent background. Do not add a second slope, house, people, text, gutters or new features."
+    },
+    {
+      "id": "flat",
+      "path": "apps/editor/public/icons/roof-types/flat.webp",
+      "prompt": "Make a polished FLAT roof thumbnail using image 1 as exact geometry reference: a thin flat rectangular roof plate with shallow wall base and slight perimeter overhang, viewed from the same elevated three-quarter angle. Preserve the completely level unbroken top and its proportions. Image 2 is STYLE ONLY: match matte lavender/periwinkle clay, soft lighting and ambient occlusion. Remove screenshot ground, texture and background. One fully visible centered object, padded square transparent background. No pitch, ridge, parapet, extra walls, house, labels or added objects."
+    },
+    {
+      "id": "gambrel",
+      "path": "apps/editor/public/icons/roof-types/gambrel.webp",
+      "prompt": "Create a polished architectural GAMBREL roof thumbnail from screenshot reference 1. Preserve the actual pictured geometry exactly: long central ridge, two slope sections on each side with the longitudinal kink/break, barn-shaped end-wall outline, overhangs, proportions and camera angle. Do not replace the observed shape with a different generic barn roof. Reference 2 is STYLE ONLY, matte lavender/periwinkle clay, soft studio lighting and subtle ambient occlusion. Remove shingle texture and background. One complete centered isolated roof, even padding, square transparent background. No added house, dormers, gutters, text or objects."
+    },
+    {
+      "id": "dutch",
+      "path": "apps/editor/public/icons/roof-types/dutch.webp",
+      "prompt": "Create a polished DUTCH roof gallery thumbnail based strictly on screenshot 1: preserve the broad lower hipped skirt, raised upper gable roof, small triangular white gablet end with its projecting rake board, the slope transition, all proportions, silhouette and same camera. Image 2 is only the desired matte lavender/periwinkle clay style with soft studio light and ambient occlusion. Remove screenshot ground, background and shingle texture. One complete roof, centered with even padding in a square transparent image. Do not simplify into a standard gable or hip, do not add a house, dormers, text or extra objects."
+    },
+    {
+      "id": "mansard",
+      "path": "apps/editor/public/icons/roof-types/mansard.webp",
+      "prompt": "Generate a polished MANSARD roof thumbnail from actual editor screenshot 1. Preserve the exact roof silhouette, rectangular footprint, lower four-sided skirt and distinct inset upper roof with its short ridge, all slope breaks and proportions, at the same elevated three-quarter camera. Follow the screenshot instead of a generic mansard house. Image 2 is STYLE ONLY: matte lavender/periwinkle clay, soft studio lighting, clean shading and ambient occlusion. Remove all ground, background and shingle textures. One complete centered roof, square padded transparent background, no house, windows, extra objects, labels or text."
+    },
+    {
+      "id": "conical",
+      "path": "apps/editor/public/icons/roof-types/conical.webp",
+      "prompt": "Create a polished CONICAL roof thumbnail from actual editor screenshot 1. Preserve exact circular eave, centered pointed apex, straight conical slope, shallow circular wall base, proportions and elevated camera angle. Reference 2 is STYLE ONLY: soft matte lavender/periwinkle clay with clean studio lighting and subtle ambient occlusion. Remove shingle lines, screenshot background and ground. Single fully visible centered cone roof with even square padding, transparent background. No tower, house, added rings, text, labels or objects."
+    },
+    {
+      "id": "barrel",
+      "path": "apps/editor/public/icons/roof-types/barrel.webp",
+      "prompt": "Generate a polished BARREL roof thumbnail from actual editor screenshot 1. Preserve its exact elongated arched roof geometry, circular cross-section, gently faceted curved covering, arched end infill, thin overhang edges, proportions and the same elevated three-quarter camera angle. Image 2 supplies STYLE ONLY: soft matte lavender/periwinkle clay, studio lighting and subtle ambient occlusion. Remove background, ground and shingle texture. One complete centered roof with even padding in a square transparent image. No gable ridge, house, glazing grid, extra features, text or other objects."
+    }
+  ]
+}

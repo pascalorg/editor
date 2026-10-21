@@ -43,7 +43,7 @@ describe('resolveElevatorLevels', () => {
       levels.map((level) => stacked.get(level.id)?.baseY),
     )
     expect(resolved.shaftBaseY).toBe(stacked.get('level_0')?.baseY)
-    expect(resolved.shaftTopY).toBeCloseTo(8.2)
+    expect(resolved.shaftTopY).toBeCloseTo(8.35)
   })
 
   // A negative offset large enough to sink the top level's ceiling below the
@@ -74,7 +74,29 @@ describe('resolveElevatorLevels', () => {
       [building, ...levels, elevator].map((node) => [node.id, node]),
     ) as Record<string, AnyNode>
 
-    // level_0 ceiling is 3; level_1 sits at 3 - 2.5 = 0.5 and tops out at 2.5.
-    expect(resolveElevatorLevels(elevator, nodes).shaftTopY).toBeCloseTo(3)
+    // The upper landing is at 0.5; its 2.35 m cab needs a further 0.3 m of headroom.
+    expect(resolveElevatorLevels(elevator, nodes).shaftTopY).toBeCloseTo(3.15)
   })
+})
+
+test('the shaft cap clears a tall cab at every landing, including a thick shaft shell', () => {
+  const building = BuildingNode.parse({})
+  const levels = [0, 1].map((level) =>
+    LevelNode.parse({ parentId: building.id, level, height: 2.5 }),
+  )
+  const elevator = ElevatorNode.parse({
+    parentId: building.id,
+    fromLevelId: levels[0]!.id,
+    toLevelId: levels[1]!.id,
+    cabHeight: 4,
+    shaftWallThickness: 0.8,
+  })
+  building.children = [...levels.map((level) => level.id), elevator.id]
+  const nodes = Object.fromEntries([building, ...levels, elevator].map((node) => [node.id, node]))
+  const resolved = resolveElevatorLevels(elevator, nodes)
+  for (const entry of resolved.entries) {
+    expect(resolved.shaftTopY - elevator.shaftWallThickness).toBeGreaterThan(
+      entry.baseY + elevator.cabHeight,
+    )
+  }
 })

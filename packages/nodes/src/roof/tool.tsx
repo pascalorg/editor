@@ -6,6 +6,9 @@ import {
   emitter,
   type GridEvent,
   getActiveRoofHeight,
+  getRoofModuleFaces,
+  getRoofShapeRatios,
+  getSegmentSlopeFrame,
   getWallArcData,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
@@ -441,182 +444,70 @@ type PreviewState = {
   levelY: number
 }
 
-function buildRoofGhostGeometry(
+export function buildRoofGhostGeometry(
   width: number,
   depth: number,
   wallHeight: number,
   pitchDeg: number,
   roofType: RoofType,
+  defaults: Record<string, unknown> = {},
 ) {
-  const safeWidth = Math.max(width, 0.1)
-  const safeDepth = Math.max(depth, 0.1)
-  const halfWidth = safeWidth / 2
-  const halfDepth = safeDepth / 2
-  const ridgeHeight = wallHeight + Math.tan((pitchDeg * Math.PI) / 180) * halfDepth
-
-  if (roofType === 'conical') {
-    const roofHeight = Math.max(0.001, Math.tan((pitchDeg * Math.PI) / 180) * halfWidth)
-    const geometry = new THREE.ConeGeometry(halfWidth, roofHeight, 48)
-    geometry.translate(0, wallHeight + roofHeight / 2, 0)
-    return geometry
+  const node = RoofSegmentNode.parse({
+    ...defaults,
+    width: Math.max(width, 0.1),
+    depth: Math.max(depth, 0.1),
+    wallHeight,
+    pitch: pitchDeg,
+    roofType,
+  })
+  const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
+  const faces = getRoofModuleFaces({
+    type: node.roofType,
+    w: node.width,
+    d: node.depth,
+    wh: node.wallHeight,
+    rh: activeRh,
+    baseY: 0,
+    baseW: node.width,
+    baseD: node.depth,
+    tanTheta,
+    insets: {},
+    shapeRatios: getRoofShapeRatios(node),
+    dutchTopRakeThickness: node.dutchTopRakeThickness,
+    conicalStartAngle: node.conicalFullCircle ? 0 : node.conicalStartAngle,
+    conicalSweepAngle: node.conicalFullCircle ? Math.PI * 2 : node.conicalSweepAngle,
+  })
+  const positions: number[] = []
+  for (const face of faces) {
+    if (face.length < 3) continue
+    const origin = new THREE.Vector3(face[0]!.x, face[0]!.y, face[0]!.z)
+    const normal = new THREE.Vector3()
+    for (let i = 1; i + 1 < face.length && normal.lengthSq() < 1e-12; i++) {
+      normal.crossVectors(
+        new THREE.Vector3(face[i]!.x, face[i]!.y, face[i]!.z).sub(origin),
+        new THREE.Vector3(face[i + 1]!.x, face[i + 1]!.y, face[i + 1]!.z).sub(origin),
+      )
+    }
+    if (normal.lengthSq() < 1e-12) continue
+    const axis =
+      Math.abs(normal.y) >= Math.max(Math.abs(normal.x), Math.abs(normal.z))
+        ? 'y'
+        : Math.abs(normal.x) > Math.abs(normal.z)
+          ? 'x'
+          : 'z'
+    const contour = face.map(
+      (v) => new THREE.Vector2(axis === 'x' ? v.y : v.x, axis === 'z' ? v.y : v.z),
+    )
+    for (const triangle of THREE.ShapeUtils.triangulateShape(contour, [])) {
+      for (const index of triangle) {
+        const vertex = face[index]!
+        positions.push(vertex.x, vertex.y, vertex.z)
+      }
+    }
   }
-
-  const vertices = [
-    // Front slope
-    -halfWidth,
-    wallHeight,
-    -halfDepth,
-    halfWidth,
-    wallHeight,
-    -halfDepth,
-    halfWidth,
-    ridgeHeight,
-    0,
-
-    -halfWidth,
-    wallHeight,
-    -halfDepth,
-    halfWidth,
-    ridgeHeight,
-    0,
-    -halfWidth,
-    ridgeHeight,
-    0,
-
-    // Back slope
-    -halfWidth,
-    ridgeHeight,
-    0,
-    halfWidth,
-    ridgeHeight,
-    0,
-    halfWidth,
-    wallHeight,
-    halfDepth,
-
-    -halfWidth,
-    ridgeHeight,
-    0,
-    halfWidth,
-    wallHeight,
-    halfDepth,
-    -halfWidth,
-    wallHeight,
-    halfDepth,
-
-    // Left gable
-    -halfWidth,
-    wallHeight,
-    -halfDepth,
-    -halfWidth,
-    ridgeHeight,
-    0,
-    -halfWidth,
-    wallHeight,
-    halfDepth,
-
-    // Right gable
-    halfWidth,
-    wallHeight,
-    -halfDepth,
-    halfWidth,
-    wallHeight,
-    halfDepth,
-    halfWidth,
-    ridgeHeight,
-    0,
-  ]
-
   const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3))
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
   geometry.computeVertexNormals()
-  return geometry
-}
-
-function buildRoofGhostEdges(
-  width: number,
-  depth: number,
-  wallHeight: number,
-  pitchDeg: number,
-  roofType: RoofType,
-) {
-  const safeWidth = Math.max(width, 0.1)
-  const safeDepth = Math.max(depth, 0.1)
-  const halfWidth = safeWidth / 2
-  const halfDepth = safeDepth / 2
-  const ridgeHeight = wallHeight + Math.tan((pitchDeg * Math.PI) / 180) * halfDepth
-
-  if (roofType === 'conical') {
-    const roofHeight = Math.max(0.001, Math.tan((pitchDeg * Math.PI) / 180) * halfWidth)
-    const cone = new THREE.ConeGeometry(halfWidth, roofHeight, 48)
-    cone.translate(0, wallHeight + roofHeight / 2, 0)
-    const edges = new THREE.EdgesGeometry(cone, 10)
-    cone.dispose()
-    return edges
-  }
-
-  const vertices = [
-    // Base rectangle
-    -halfWidth,
-    wallHeight,
-    -halfDepth,
-    halfWidth,
-    wallHeight,
-    -halfDepth,
-    halfWidth,
-    wallHeight,
-    -halfDepth,
-    halfWidth,
-    wallHeight,
-    halfDepth,
-    halfWidth,
-    wallHeight,
-    halfDepth,
-    -halfWidth,
-    wallHeight,
-    halfDepth,
-    -halfWidth,
-    wallHeight,
-    halfDepth,
-    -halfWidth,
-    wallHeight,
-    -halfDepth,
-
-    // Ridge + gable edges
-    -halfWidth,
-    ridgeHeight,
-    0,
-    halfWidth,
-    ridgeHeight,
-    0,
-    -halfWidth,
-    wallHeight,
-    -halfDepth,
-    -halfWidth,
-    ridgeHeight,
-    0,
-    -halfWidth,
-    ridgeHeight,
-    0,
-    -halfWidth,
-    wallHeight,
-    halfDepth,
-    halfWidth,
-    wallHeight,
-    -halfDepth,
-    halfWidth,
-    ridgeHeight,
-    0,
-    halfWidth,
-    ridgeHeight,
-    0,
-    halfWidth,
-    wallHeight,
-    halfDepth,
-  ]
-
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3))
   return geometry
 }
 
@@ -674,10 +565,6 @@ export const RoofTool: React.FC = () => {
         .endIf((scope) => scope.kind === 'placing' && scope.nodeId === draft.id)
     }
   }, [currentLevelId])
-
-  // Clear preset-seeded defaults on deactivation so a later manual roof draw
-  // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('roof', null), [])
 
   const corner1Ref = useRef<[number, number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
@@ -1183,6 +1070,7 @@ export const RoofTool: React.FC = () => {
       ghostWallHeight,
       previewPitch,
       roofType,
+      roofDefaults,
     )
   }, [
     footprintSource,
@@ -1192,38 +1080,13 @@ export const RoofTool: React.FC = () => {
     quarterTurn,
     resolvedPreviewDimensions,
     roofType,
+    roofDefaults,
   ])
 
-  const roofGhostEdges = useMemo(() => {
-    if (
-      invalidStandardWallHover ||
-      !resolvedPreviewDimensions ||
-      (roofType === 'conical' && footprintSource !== 'draw')
-    )
-      return null
-    const placement = resolveRoofDraftPlacement(
-      resolvedPreviewDimensions.length,
-      resolvedPreviewDimensions.width,
-      quarterTurn,
-      0,
-      roofType,
-    )
-    return buildRoofGhostEdges(
-      placement.width,
-      placement.depth,
-      ghostWallHeight,
-      previewPitch,
-      roofType,
-    )
-  }, [
-    footprintSource,
-    ghostWallHeight,
-    invalidStandardWallHover,
-    previewPitch,
-    quarterTurn,
-    resolvedPreviewDimensions,
-    roofType,
-  ])
+  const roofGhostEdges = useMemo(
+    () => (roofGhostGeometry ? new THREE.EdgesGeometry(roofGhostGeometry, 10) : null),
+    [roofGhostGeometry],
+  )
 
   useEffect(() => {
     if (invalidStandardWallHover) outlineRef.current.visible = false

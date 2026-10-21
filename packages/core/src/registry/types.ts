@@ -2241,6 +2241,12 @@ export type CapabilityCtx = { node: AnyNode }
 export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 
 export type MovableConfig = {
+  /** Resolve the stored pose after snapping, during preview and again on commit. */
+  resolvePosition?: (args: {
+    node: AnyNode
+    position: [number, number, number]
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => [number, number, number]
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
   /** Keep an existing floor-placed node on its current level and visual elevation while dragging. */

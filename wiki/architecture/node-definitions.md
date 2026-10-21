@@ -645,3 +645,13 @@ What stands in a `room` (walls along it, furniture in it) is revealed together a
 - [systems.md](systems.md) — per-kind systems, frame-priority ordering, and core/viewer split.
 - [scene-registry.md](scene-registry.md) — how `sceneRegistry` indexes nodes by ID and type.
 - [Registry type definitions](../../packages/core/src/registry/types.ts) — schemas, capabilities, parametrics and MCP contracts for node kinds.
+
+
+### Resolving a moved pose
+
+`capabilities.movable.resolvePosition({ node, position, nodes })` returns the
+stored position after snapping. Both the generic 3D mover and 2D plan mover call
+it for live preview and again at commit, so a changed support is re-elected at
+release. Use it for kind-owned placement rules such as a building-parented
+elevator's landing height. It must not write scene state; the framework owns
+live previews and the single commit. Omission preserves the proposed position.
