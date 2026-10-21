@@ -21,7 +21,7 @@ ENV PASCAL_PORTABLE_BUILD=1
 RUN ./node_modules/.bin/turbo run build --filter=editor
 RUN cd packages/cli && bun run build && bun run stage-runtime
 
-FROM node:22-alpine
+FROM node:22.23.4-alpine
 WORKDIR /app
 
 # GHCR reads these: the package page links to the repository, shows its
