@@ -3,6 +3,7 @@ import { ductBodyPaint } from '../shared/duct-body-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
 import { createRunHangerToolHint } from '../shared/run-hanger-mode'
+import { ductRunToolOptions } from '../shared/run-tool-options'
 import { ductBranchAffordance, ductContinuationAffordance } from './continuation'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
@@ -174,6 +175,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   },
 
   tool: () => import('./tool'),
+  toolOptions: ductRunToolOptions,
   toolHints: [
     { key: 'Click', label: 'Start segment' },
     { key: 'Click again', label: 'Place and continue' },

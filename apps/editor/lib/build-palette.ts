@@ -160,7 +160,7 @@ export function activateBuildTool(kind: string): void {
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   editor.setPhase('building')
   editor.setCatalogCategory(null)
-  editor.setToolDefaults(kind, null)
+  if (!definition?.distributionRole) editor.setToolDefaults(kind, null)
   editor.setMode('build')
   editor.setTool(kind)
 }

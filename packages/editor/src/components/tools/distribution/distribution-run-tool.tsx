@@ -11,6 +11,7 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   isTypingTarget,
+  isViewVisible,
   markToolCancelConsumed,
   publishPlacementSurface,
   triggerSFX,
@@ -218,6 +219,11 @@ export type DistributionRunToolConfig = {
   active: boolean
   levelId: AnyNodeId | null
   toolName: string
+  routingMode?: 'surface' | 'horizontal' | 'vertical'
+  /** Level-local centreline elevation, or the target height for a vertical leg. */
+  elevation?: number
+  targetElevation?: number
+  connectCrossings?: boolean
   initialStart?: RunPoint | null
   initialConnection?: RunConnection | null
   getPorts: () => ScenePort[]
@@ -516,6 +522,7 @@ function surfacePointFromEvent(
 
 export function useDistributionRunTool(config: DistributionRunToolConfig) {
   const { camera, gl } = useThree()
+  const planVisible = useEditor((state) => isViewVisible(state, '2d'))
   const initialStartRef = useRef<RunPoint | null>(
     config.initialStart ? [...config.initialStart] : null,
   )
@@ -526,6 +533,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
   const [cursor, setCursor] = useState<RunPoint | null>(initialStartRef.current)
   const [snapTarget, setSnapTarget] = useState<RunPoint | null>(null)
   const [snapScreen, setSnapScreen] = useState<PortScreenPoint | null>(null)
+  const [cursorScreen, setCursorScreen] = useState<PortScreenPoint | null>(null)
   const [endConnection, setEndConnection] = useState<RunConnection>({
     port: null,
     body: null,
@@ -584,6 +592,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const typed = Number.parseFloat(lengthInputRef.current)
       if (
         !currentStart ||
+        configRef.current.routingMode === 'vertical' ||
         !Number.isFinite(typed) ||
         typed <= 0 ||
         resolved.port ||
@@ -614,23 +623,26 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const hit = surfacePointFromEvent(event, adapter.levelId)
       const currentStart = startRef.current
       const previous = lastResolvedRef.current
-      const lockedWallTarget = currentStart ? lockedWallTargetRef.current : null
+      const explicitRoute = adapter.routingMode && adapter.routingMode !== 'surface'
+      const lockedWallTarget = currentStart && !explicitRoute ? lockedWallTargetRef.current : null
       const lockedWallHit =
         lockedWallTarget && isSameRunWallSurface(lockedWallTarget, event.surfaceHit)
-      const working = lockedWallTarget
-        ? {
-            ...lockedWallTarget.frame,
-            origin: lockedWallTarget.frame.origin.map(
-              (value, index) =>
-                value +
-                lockedWallTarget.frame.normal[index]! *
-                  (adapter.surfaceClearance?.(lockedWallTarget) ?? 0),
-            ) as RunPoint,
-          }
-        : !event.surfaceHit && previous?.surfaceTarget?.kind === 'wall' && currentStart
-          ? createRunSurfaceFrame(currentStart, UP)
-          : (previous?.frame ?? (currentStart ? createRunSurfaceFrame(currentStart) : null))
-      const hasSurface = !!event.surfaceHit || !working || !event.localRay
+      const working = explicitRoute
+        ? createRunSurfaceFrame([0, currentStart?.[1] ?? adapter.elevation ?? 0, 0])
+        : lockedWallTarget
+          ? {
+              ...lockedWallTarget.frame,
+              origin: lockedWallTarget.frame.origin.map(
+                (value, index) =>
+                  value +
+                  lockedWallTarget.frame.normal[index]! *
+                    (adapter.surfaceClearance?.(lockedWallTarget) ?? 0),
+              ) as RunPoint,
+            }
+          : !event.surfaceHit && previous?.surfaceTarget?.kind === 'wall' && currentStart
+            ? createRunSurfaceFrame(currentStart, UP)
+            : (previous?.frame ?? (currentStart ? createRunSurfaceFrame(currentStart) : null))
+      const hasSurface = !explicitRoute && (!!event.surfaceHit || !working || !event.localRay)
       const target = lockedWallTarget ?? (hasSurface ? hit.target : null)
       const hitForCursor = lockedWallTarget
         ? lockedWallHit
@@ -643,16 +655,35 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         hit: hitForCursor,
         working,
         ray: event.localRay,
-        fallback: previous?.point ?? currentStart ?? hit.point,
+        fallback: explicitRoute ? [...hit.point] : (previous?.point ?? currentStart ?? hit.point),
         clearance: adapter.surfaceClearance?.(target) ?? 0,
       })
+      if (explicitRoute) {
+        const elevation = currentStart?.[1] ?? adapter.elevation ?? 0
+        resolved.point[1] = elevation
+        if (currentStart && adapter.routingMode === 'vertical') {
+          return {
+            point: [currentStart[0], adapter.targetElevation ?? currentStart[1], currentStart[2]],
+            frame: createRunSurfaceFrame(currentStart),
+            surfaceTarget: null,
+            snapped: null,
+            directionMode: 'vertical',
+            port: null,
+            body: null,
+          }
+        }
+      }
       const bypass = event.nativeEvent?.altKey === true
       const gridStep = !bypass && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const angleLocked = !bypass && (isAngleSnapActive() || isGridSnapActive())
       let point = currentStart
         ? resolved.point
         : snapRunPointToSurface(resolved.point, resolved.frame, gridStep)
-      const forcedDirection = forcedDirectionRef.current
+      const selectedDirection = forcedDirectionRef.current
+      const forcedDirection =
+        explicitRoute && selectedDirection && Math.abs(selectedDirection[1]) > 1e-6
+          ? null
+          : selectedDirection
       if (currentStart && forcedDirection) {
         point = projectRunToDirection(currentStart, point, forcedDirection)
       }
@@ -665,7 +696,11 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       if (currentStart && gridStep > 0) {
         point = snapRunLength(currentStart, point, gridStep)
       }
-      const sample = { frame: resolved.frame, surfaceTarget: target }
+      const drawingTarget: RunSurfaceTarget | null =
+        explicitRoute && adapter.levelId
+          ? { kind: 'surface', levelId: adapter.levelId, frame: resolved.frame }
+          : target
+      const sample = { frame: resolved.frame, surfaceTarget: drawingTarget }
       const native = (event.nativeEvent ?? {}) as {
         clientX?: number
         clientY?: number
@@ -709,7 +744,10 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         if (bypass || !(isGridSnapActive() || isMagneticSnapActive() || isAngleSnapActive()))
           return null
         const source = startConnectionRef.current.port
-        const hit = findScreenPort(adapter.getPorts(), pointer, projectConnection, source)
+        const ports = adapter
+          .getPorts()
+          .filter((port) => !explicitRoute || Math.abs(port.position[1] - point[1]) < 1e-4)
+        const hit = findScreenPort(ports, pointer, projectConnection, source)
         if (hit) {
           return {
             frame: createRunSurfaceFrame([...hit.port.position]),
@@ -722,8 +760,14 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
             body: null,
           }
         }
-        const body = adapter.findBody(candidate, target)
-        if (body && acceptsConnection(body.point) && body.nodeId !== source?.nodeId) {
+        const body =
+          adapter.connectCrossings === false ? null : adapter.findBody(candidate, drawingTarget)
+        if (
+          body &&
+          (!explicitRoute || Math.abs(body.point[1] - point[1]) < 1e-4) &&
+          acceptsConnection(body.point) &&
+          body.nodeId !== source?.nodeId
+        ) {
           return {
             ...sample,
             point: body.point,
@@ -739,7 +783,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       if (connection) return connection
       // Rank displayed directions before a surface projection discards height.
       if (currentStart && event.localRay && !bypass && (forcedDirection || angleLocked)) {
-        const source = startConnectionRef.current.port?.direction ?? null
+        const source = explicitRoute ? null : (startConnectionRef.current.port?.direction ?? null)
         const candidates = forcedDirection
           ? [forcedDirection]
           : source
@@ -795,7 +839,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
               forcedDirection ||
               (Math.abs(directionHit.direction[1]) > 1e-6 && target?.kind === 'floor')
                 ? null
-                : target,
+                : drawingTarget,
             snapped: null,
             directionMode: 'angle',
             port: null,
@@ -943,7 +987,12 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       setAltActive(false)
     }
 
+    const updateCursorScreen = (event: GridEvent) => {
+      const pointer = getGridEventScreenProjection(event)?.pointer
+      setCursorScreen(pointer ? { x: pointer[0], y: pointer[1], depth: 0 } : null)
+    }
     const onMove = (event: RunPointerEvent) => {
+      updateCursorScreen(event)
       lastPointerRef.current = event
       const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       if (typeof clientY === 'number') lastClientYRef.current = clientY
@@ -965,6 +1014,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     }
 
     const onClick = (event: GridEvent) => {
+      updateCursorScreen(event)
       event.nativeEvent?.stopPropagation?.()
       const currentStart = startRef.current
       if (altAnchorRef.current && currentStart) {
@@ -985,8 +1035,10 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           port: resolved.port,
           body: resolved.port ? null : resolved.body,
         }
-        if (shouldLockRunWallSurface(resolved.surfaceTarget, connection)) {
-          lockedWallTargetRef.current = resolved.surfaceTarget
+        if (!configRef.current.routingMode || configRef.current.routingMode === 'surface') {
+          if (shouldLockRunWallSurface(resolved.surfaceTarget, connection)) {
+            lockedWallTargetRef.current = resolved.surfaceTarget
+          }
         }
         triggerSFX('sfx:grid-snap')
         startConnectionRef.current = connection
@@ -1029,6 +1081,11 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         return
       }
       if (
+        configRef.current.routingMode === 'vertical' &&
+        (event.key === 'Tab' || /^[0-9.,]$/.test(event.key))
+      )
+        return
+      if (
         event.key === 'Tab' &&
         startRef.current &&
         !event.altKey &&
@@ -1037,7 +1094,10 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       ) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        const source = startConnectionRef.current.port?.direction
+        const source =
+          configRef.current.routingMode === 'horizontal'
+            ? null
+            : startConnectionRef.current.port?.direction
         const candidates = source
           ? run3DDirectionCandidates(source)
           : runHorizontalDirectionCandidates(null)
@@ -1143,18 +1203,39 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     }
   }, [camera, gl, config.active, updateLengthInput])
 
+  // The resolver reads config through a ref; changing these controls must refresh a stationary cursor.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: configuration changes invalidate the cursor
+  useEffect(() => {
+    forcedDirectionRef.current = null
+    if (config.routingMode !== 'surface') lockedWallTargetRef.current = null
+    refreshCursor()
+  }, [
+    config.routingMode,
+    config.elevation,
+    config.targetElevation,
+    config.connectCrossings,
+    refreshCursor,
+  ])
+
   return {
     refreshCursor,
+    routingMode: config.routingMode,
     start,
     cursor,
     snapTarget,
     snapScreen,
+    cursorScreen: planVisible ? cursorScreen : null,
     altActive,
     directionMode,
     lengthInput,
     validationMessage,
     onLengthInputChange: updateLengthInput,
     onDirectionSelect: (direction: RunPoint) => {
+      if (
+        configRef.current.routingMode === 'vertical' ||
+        (configRef.current.routingMode === 'horizontal' && Math.abs(direction[1]) > 1e-6)
+      )
+        return
       forcedDirectionRef.current = direction
       setDirectionMode('angle')
       refreshCursorRef.current()
@@ -1175,6 +1256,7 @@ export function DistributionRunCursor({
   extraParts = [],
   cursorRef,
   directionMode,
+  routingMode,
   startDirection,
   lengthInput,
   validationMessage,
@@ -1190,6 +1272,7 @@ export function DistributionRunCursor({
   extraParts?: DimensionPillPart[]
   cursorRef?: RefObject<Group | null>
   directionMode: RunDirectionMode
+  routingMode?: 'surface' | 'horizontal' | 'vertical'
   startDirection?: readonly [number, number, number] | null
   lengthInput?: string
   validationMessage?: string | null
@@ -1199,8 +1282,8 @@ export function DistributionRunCursor({
 }) {
   const lengthFieldRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    if (start) lengthFieldRef.current?.focus()
-  }, [start])
+    if (start && routingMode !== 'vertical') lengthFieldRef.current?.focus()
+  }, [start, routingMode])
   if (!cursor) return null
   const parts: DimensionPillPart[] = [
     ...(start
@@ -1261,9 +1344,9 @@ export function DistributionRunCursor({
           cursor={cursor}
           mode={directionMode}
           snapped={!!snapTarget}
-          sourceDirection={startDirection ?? null}
+          sourceDirection={routingMode === 'horizontal' ? null : (startDirection ?? null)}
           start={start}
-          onDirectionSelect={onDirectionSelect}
+          onDirectionSelect={routingMode === 'vertical' ? undefined : onDirectionSelect}
         />
       )}
       <CursorSphere
@@ -1282,7 +1365,11 @@ export function DistributionRunCursor({
         >
           <div className="flex flex-col items-center gap-1">
             <DimensionPill parts={parts} primary={primary} unit={unit} />
-            {start ? (
+            {start && routingMode === 'vertical' ? (
+              <div className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-xs shadow-sm">
+                Target elevation: {cursor[1].toFixed(2)} m · click or Enter to place
+              </div>
+            ) : start ? (
               <label className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] tabular-nums text-muted-foreground shadow-sm backdrop-blur">
                 Length:{' '}
                 <input
