@@ -35,7 +35,6 @@ The importer writes intent for Pascal's room-first model; the scene load
 migrations (room adoption, floor plates) and the structure kernel turn it into
 rooms, floor plates and ceilings. `tests/room-first-load.test.ts` converts the
 reference files and runs that load chain.
-
 - **Walls.** Merged collinear fragments, then every straight wall end moves
   along its axis onto the centreline it meets (L and T joins; ends inside
   another wall's body reach its centreline, `IfcRelConnectsPathElements` widens

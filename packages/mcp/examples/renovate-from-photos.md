@@ -12,7 +12,6 @@ tools to propose a renovation plan grounded in real photos.
 ## The brief
 
 The user drops four photos into the chat:
-
 1. A floorplan PDF page (exported as PNG).
 2. A photo of the current living room.
 3. A photo of the current kitchen.
@@ -148,7 +147,6 @@ against the corresponding perimeter wall:
 
 Guided by the reference photo's analysis (bright neutrals, open plan,
 minimal furnishing), the agent proposes a single logical patch:
-
 - Remove the partition wall between Living and Kitchen.
 - Relocate the kitchen island further west.
 - Delete the bulky TV unit item; leave the sofa and coffee table.

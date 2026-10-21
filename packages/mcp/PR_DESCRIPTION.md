@@ -14,48 +14,48 @@ Issue [#74 "Viewer component API definition"](https://github.com/pascalorg/edito
 
 ### Tool inventory
 
-| Tool | Purpose |
-|------|---------|
-| `get_scene` | Return full scene JSON |
-| `get_node` | Fetch one node by ID |
-| `describe_node` | Human summary: ancestry, children, properties |
-| `find_nodes` | Filter by type / parentId / levelId / zoneId |
-| `measure` | Distance between two nodes; area if zone |
-| `apply_patch` | Atomic multi-op (create / update / delete). All-or-nothing |
-| `create_level` | Create a level under a building |
-| `create_wall` | Create a wall on a level with 2D endpoints |
-| `place_item` | Place an item on a wall / ceiling / site |
-| `cut_opening` | Cut a door or window into a wall at t ∈ [0,1] |
-| `set_zone` | Create a zone polygon on a level |
-| `duplicate_level` | Deep-clone a level subtree with new IDs |
-| `delete_node` | Delete a node (with optional cascade) |
-| `undo` / `redo` | Drive Zundo temporal store |
-| `export_json` | Serialize scene to JSON (pretty or compact) |
-| `export_glb` | Stub (`not_implemented` — renderer required) |
-| `validate_scene` | Zod-validate every node |
-| `check_collisions` | Item placement conflicts per level |
-| `analyze_floorplan_image` | (Vision/sampling) Extract structured floor plan |
-| `analyze_room_photo` | (Vision/sampling) Extract room dimensions + fixtures |
-| `save_scene` / `load_scene` / `list_scenes` / `rename_scene` / `delete_scene` | Persist scenes in local SQLite |
-| `list_templates` / `create_from_template` | Seed scenes from bundled templates |
-| `generate_variants` | Fork and mutate scene variants |
-| `photo_to_scene` | Vision sampling to scene graph, optionally saved |
+| Tool                                                                          | Purpose                                                    |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `get_scene`                                                                   | Return full scene JSON                                     |
+| `get_node`                                                                    | Fetch one node by ID                                       |
+| `describe_node`                                                               | Human summary: ancestry, children, properties              |
+| `find_nodes`                                                                  | Filter by type / parentId / levelId / zoneId               |
+| `measure`                                                                     | Distance between two nodes; area if zone                   |
+| `apply_patch`                                                                 | Atomic multi-op (create / update / delete). All-or-nothing |
+| `create_level`                                                                | Create a level under a building                            |
+| `create_wall`                                                                 | Create a wall on a level with 2D endpoints                 |
+| `place_item`                                                                  | Place an item on a wall / ceiling / site                   |
+| `cut_opening`                                                                 | Cut a door or window into a wall at t ∈ [0,1]              |
+| `set_zone`                                                                    | Create a zone polygon on a level                           |
+| `duplicate_level`                                                             | Deep-clone a level subtree with new IDs                    |
+| `delete_node`                                                                 | Delete a node (with optional cascade)                      |
+| `undo` / `redo`                                                               | Drive Zundo temporal store                                 |
+| `export_json`                                                                 | Serialize scene to JSON (pretty or compact)                |
+| `export_glb`                                                                  | Stub (`not_implemented` — renderer required)               |
+| `validate_scene`                                                              | Zod-validate every node                                    |
+| `check_collisions`                                                            | Item placement conflicts per level                         |
+| `analyze_floorplan_image`                                                     | (Vision/sampling) Extract structured floor plan            |
+| `analyze_room_photo`                                                          | (Vision/sampling) Extract room dimensions + fixtures       |
+| `save_scene` / `load_scene` / `list_scenes` / `rename_scene` / `delete_scene` | Persist scenes in local SQLite                             |
+| `list_templates` / `create_from_template`                                     | Seed scenes from bundled templates                         |
+| `generate_variants`                                                           | Fork and mutate scene variants                             |
+| `photo_to_scene`                                                              | Vision sampling to scene graph, optionally saved           |
 
 ### Resources
 
-| URI | MIME | Purpose |
-|-----|------|---------|
-| `pascal://scene/current` | `application/json` | Full scene |
-| `pascal://scene/current/summary` | `text/markdown` | Counts, areas, bbox |
-| `pascal://catalog/items` | `application/json` | Item catalog (unavailable headless) |
-| `pascal://constraints/{levelId}` | `application/json` | Slabs + wall footprints |
+| URI                              | MIME               | Purpose                             |
+| -------------------------------- | ------------------ | ----------------------------------- |
+| `pascal://scene/current`         | `application/json` | Full scene                          |
+| `pascal://scene/current/summary` | `text/markdown`    | Counts, areas, bbox                 |
+| `pascal://catalog/items`         | `application/json` | Item catalog (unavailable headless) |
+| `pascal://constraints/{levelId}` | `application/json` | Slabs + wall footprints             |
 
 ### Prompts
 
-| Prompt | Args |
-|--------|------|
-| `from_brief` | `brief`, `constraints?` |
-| `iterate_on_feedback` | `feedback` |
+| Prompt                   | Args                                        |
+| ------------------------ | ------------------------------------------- |
+| `from_brief`             | `brief`, `constraints?`                     |
+| `iterate_on_feedback`    | `feedback`                                  |
 | `renovation_from_photos` | `currentPhotos`, `referencePhotos`, `goals` |
 
 ## Architecture
@@ -152,7 +152,6 @@ and `save_scene`; the scene is openable at `/scene/<id>`.
 ## Cross-cutting changes
 
 Documented in [`packages/mcp/CROSS_CUTTING.md`](./CROSS_CUTTING.md):
-
 1. **`packages/core/package.json` — additive subpath exports.** Adds `./schema`, `./store`, `./material-library`, `./spatial-grid`, `./wall`. Needed because the main entry re-exports browser-only systems; subpath entries let Node consumers skip them. Zero impact on existing consumers (`apps/editor`, `@pascal-app/viewer` still use the main entry).
 2. **`.github/workflows/mcp-ci.yml` — new CI.** Kept because the repo otherwise only has manual release CI. It runs on PRs touching MCP/core/editor scene API code; installs with Bun 1.3.0, builds MCP, runs MCP tests, runs focused editor scene API tests, and biome-checks the touched surface.
 3. **`apps/editor` scene routes.** Adds scene API routes and pages that read from the same SQLite-backed `SceneOperations` layer as MCP.

@@ -33,7 +33,6 @@ The agent reads the attachment as a data URI and issues a single tool call:
 ```
 
 Optional knobs:
-
 - `save` (default `true`) — if `false`, the response includes `graph`
   inline instead of persisting to the `SceneStore`.
 - `defaultWallThickness` (default `0.2` m) — used when the vision model

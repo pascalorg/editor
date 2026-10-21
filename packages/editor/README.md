@@ -36,13 +36,13 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
 ## Host props
 
-| Prop | What it does |
-| --- | --- |
-| `loadingSlot` | Your loading surface, shown in the canvas panes of both layouts and in 2D and 3D while the scene loads. The editor still decides when loading is over and fires `onLoaderChange`; a failed load always shows the editor's error and retry screen. Omit it or pass `null` for the default loader. |
-| `actionMenuPlacement` | `'bottom'` (default) or `'top'`. With `'top'`, the v2 layout gives the tool menu its own row under the toolbar, centred on the scene panes and following them in split, so the bottom strip is free; v1 floats it at the top edge. Mobile keeps the bottom rail. |
-| `viewBar` | Each pane's view bar (v2, default `true`). Turn it off for a host that shows one fixed view. |
-| `sceneOverlay` | Chrome over the 3D and 2D panes with the level selector and tool dock, hidden while no scene view is on screen. |
-| `stageOverlay` | A full-bleed surface over the whole stage; the scene stays mounted underneath. To show something beside the scene, register a view instead. |
+| Prop                  | What it does                                                                                                                                                                                                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `loadingSlot`         | Your loading surface, shown in the canvas panes of both layouts and in 2D and 3D while the scene loads. The editor still decides when loading is over and fires `onLoaderChange`; a failed load always shows the editor's error and retry screen. Omit it or pass `null` for the default loader. |
+| `actionMenuPlacement` | `'bottom'` (default) or `'top'`. With `'top'`, the v2 layout gives the tool menu its own row under the toolbar, centred on the scene panes and following them in split, so the bottom strip is free; v1 floats it at the top edge. Mobile keeps the bottom rail.                                 |
+| `viewBar`             | Each pane's view bar (v2, default `true`). Turn it off for a host that shows one fixed view.                                                                                                                                                                                                     |
+| `sceneOverlay`        | Chrome over the 3D and 2D panes with the level selector and tool dock, hidden while no scene view is on screen.                                                                                                                                                                                  |
+| `stageOverlay`        | A full-bleed surface over the whole stage; the scene stays mounted underneath. To show something beside the scene, register a view instead.                                                                                                                                                      |
 
 ## Theme
 
