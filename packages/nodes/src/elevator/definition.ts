@@ -15,6 +15,7 @@ import {
   resolveElevatorDimensions,
   resolveElevatorLevels,
 } from '@pascal-app/core'
+import { resolveElevatorNodeSupportY } from '@pascal-app/editor'
 import { buildElevatorFloorplan } from './floorplan'
 import { elevatorResizeAffordance, elevatorRotateAffordance } from './floorplan-affordances'
 import { elevatorPaint } from './paint'
@@ -203,7 +204,15 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     // (and the side move-arrows emitted from `def.floorplan`) drive the
     // 2D body-move flow through `FloorplanRegistryMoveOverlay`'s
     // Path 2 — position[0] / position[2] update with a 0.5m grid snap.
-    movable: { axes: ['x', 'z'], gridSnap: true },
+    movable: {
+      axes: ['x', 'z'],
+      gridSnap: true,
+      resolvePosition: ({ node, position }) => [
+        position[0],
+        resolveElevatorNodeSupportY(node as ElevatorNodeType, position),
+        position[2],
+      ],
+    },
     // Align by the OUTER SHAFT (shaft + wall — what's drawn in plan and 3D),
     // not the cab `width × depth`: the cab is inset by the shaft wall +
     // clearance, so cab corners sit ~9 cm inside the visible edge — past the

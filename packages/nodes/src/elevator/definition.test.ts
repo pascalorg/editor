@@ -11,6 +11,8 @@ import {
   normalizeElevatorDimensions,
   registerNode,
   resolveElevatorDimensions,
+  SlabNode,
+  spatialGridManager,
   useScene,
 } from '@pascal-app/core'
 import { elevatorDefinition } from './definition'
@@ -135,5 +137,57 @@ test('preset and section edits preserve service configuration, transforms and pa
     const reset = { ...next, ...elevatorSectionReset(next, 'Cab') }
     expect(reset.width).toBe(1.84)
     expect(reset.slots).toEqual(node.slots)
+  }
+})
+
+test('moving an elevator resolves its landing across split-level slabs in both directions', () => {
+  const previous = useScene.getState()
+  const building = BuildingNode.parse({
+    id: 'building_move_support',
+    children: ['level_move_support'],
+  })
+  const level = LevelNode.parse({ id: 'level_move_support', parentId: building.id })
+  const elevator = ElevatorNode.parse({
+    parentId: building.id,
+    fromLevelId: level.id,
+    position: [0, 0, 0],
+  })
+  const slab = SlabNode.parse({
+    id: 'slab_move_support',
+    parentId: level.id,
+    polygon: [
+      [4, -4],
+      [10, -4],
+      [10, 4],
+      [4, 4],
+    ],
+    elevation: 0.8,
+  })
+  try {
+    useScene.setState({
+      nodes: {
+        [building.id]: building,
+        [level.id]: level,
+        [elevator.id]: elevator,
+        [slab.id]: slab,
+      },
+    })
+    spatialGridManager.handleNodeCreated(slab, level.id)
+    const resolve = elevatorDefinition.capabilities.movable!.resolvePosition!
+    for (const [x, expected] of [
+      [6, 0.8],
+      [0, 0],
+      [6, 0.8],
+    ]) {
+      const position = resolve({
+        node: elevator,
+        position: [x!, 0, 0],
+        nodes: useScene.getState().nodes,
+      })
+      expect(position).toEqual([x!, expected!, 0])
+    }
+  } finally {
+    spatialGridManager.handleNodeDeleted(slab.id, level.id)
+    useScene.setState(previous)
   }
 })

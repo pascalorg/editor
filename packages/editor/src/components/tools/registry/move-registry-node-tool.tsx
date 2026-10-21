@@ -484,6 +484,18 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       return Array.isArray(rotation) ? [rotation[0] ?? 0, y, rotation[2] ?? 0] : y
     }
 
+    const resolvePosition = (position: [number, number, number]) => {
+      const nodes = useScene.getState().nodes
+      const current = nodes[node.id] ?? node
+      return (
+        nodeRegistry.get(current.type)?.capabilities?.movable?.resolvePosition?.({
+          node: current,
+          position,
+          nodes,
+        }) ?? position
+      )
+    }
+
     const keepStartingElevation = (position: [number, number, number], yaw: number) => {
       if (!preserveLevelAndElevation) return position
       const rotation = toCommitRotation(yaw)
@@ -1026,7 +1038,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
           },
         ).position
       }
-      position = keepStartingElevation(position, rotationRef.current)
+      position = resolvePosition(keepStartingElevation(position, rotationRef.current))
       const visualPosition = getVisualPosition(position)
       hasMovedRef.current = true
       setCursorPosition(visualPosition)
@@ -1116,7 +1128,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       // tool — unless Alt (free place) is held to force placement. Other kinds
       // carry no validity box (`validRef` stays true), so they're never blocked.
       if (!validRef.current && !altRef.current) return
-      const position: [number, number, number] = [...lastCursorRef.current]
+      const position = resolvePosition([...lastCursorRef.current])
 
       const rotation = toCommitRotation(rotationRef.current)
       let committedId = node.id as AnyNodeId
