@@ -7,7 +7,10 @@ import {
   type CameraControlFitSceneEvent,
   type CameraControlFrameEvent,
   type CameraPose,
+  deepestDrawnY,
   emitter,
+  groundHeightAt,
+  lowestGroundY,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -53,9 +56,11 @@ import {
   syncKeyboardPanMotion,
 } from '../../lib/keyboard-pan'
 import {
+  diveFloorY,
   MAX_ORBIT_POLAR_ANGLE,
-  ORBIT_FLOOR_CLEARANCE,
   ORBIT_TARGET_HEIGHT,
+  orbitFloorMinY,
+  overviewEyeY,
 } from '../../lib/orbit-floor-clearance'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
 import { frameViewerCamera } from '../../lib/viewer-selection'
@@ -100,6 +105,18 @@ function orbitGroundY(
 ) {
   const floorY = levelId ? getLevelPresentationY(levelId, useScene.getState().nodes, levelMode) : 0
   return floorY + ORBIT_TARGET_HEIGHT
+}
+
+/**
+ * `eyeY` for an overview eye at (x, z) whose pivot is being sent to another level: kept over the
+ * ground it was over (a deep level shown is looked at through the hole, not from under the lid),
+ * unless the person has dived.
+ */
+function keepEyeOverGround(x: number, eyeY: number, z: number, previousEyeY = eyeY): number {
+  const { nodes } = useScene.getState()
+  const siteId = sceneRegistry.byType.site?.values().next().value as AnyNodeId | undefined
+  const groundY = groundHeightAt(siteId ? nodes[siteId] : null, x, z)
+  return overviewEyeY(eyeY, previousEyeY, groundY, useViewer.getState().eyeUnderGround)
 }
 
 function levelOf(nodeId: string): string | null {
@@ -393,7 +410,23 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     currentLevelId ? getLevelPresentationY(currentLevelId, state.nodes, levelMode) : 0,
   )
   const allowUnderground = !isPreviewMode && allowUndergroundCamera
-  const floorMinY = allowUnderground ? null : floorY + ORBIT_FLOOR_CLEARANCE
+  // With the ground on Auto the eye may dive under any building, down to the dive's floor; Solid
+  // keeps the eye over the ground.
+  const groundMode = useViewer((state) => state.groundMode)
+  const diveFloor = useScene((state) =>
+    groundMode === 'auto'
+      ? diveFloorY(lowestGroundY(state.nodes), deepestDrawnY(state.nodes))
+      : null,
+  )
+  const floorMinY = allowUnderground ? null : orbitFloorMinY(floorY, diveFloor)
+  // The viewer mounts the eye's fill light before the first dive, so crossing the ground compiles nothing.
+  const mayDive = allowUnderground || diveFloor !== null
+  useEffect(() => {
+    useViewer.setState({ diveAvailable: mayDive })
+    return () => {
+      useViewer.setState({ diveAvailable: false })
+    }
+  }, [mayDive])
   const maxPolarAngle =
     allowUnderground || cameraMode === 'perspective'
       ? MAX_ORBIT_POLAR_ANGLE
@@ -594,12 +627,39 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     if (!controls.current) return
     if (firstLoad.current) {
       firstLoad.current = false
-      controls.current.setLookAt(20, 20 + targetY, 20, 0, targetY, 0, true)
+      controls.current.setLookAt(
+        20,
+        keepEyeOverGround(20, 20 + targetY, 20, 20),
+        20,
+        0,
+        targetY,
+        0,
+        true,
+      )
     }
     controls.current.getOrbitTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
     if (Math.abs(currentTarget.y - targetY) < 1e-3) return
+    // The pivot goes down with the level; the eye follows it unless that would sink it under the
+    // ground (a basement four storeys down): then it stays over the ground, looking down.
+    controls.current.getPosition(tempPosition, false)
+    const movedEyeY = tempPosition.y + targetY - currentTarget.y
+    const eyeY = isPerspectiveCamera(camera)
+      ? keepEyeOverGround(tempPosition.x, movedEyeY, tempPosition.z, tempPosition.y)
+      : movedEyeY
+    if (eyeY > movedEyeY) {
+      controls.current.setLookAt(
+        tempPosition.x,
+        eyeY,
+        tempPosition.z,
+        currentTarget.x,
+        targetY,
+        currentTarget.z,
+        true,
+      )
+      return
+    }
     controls.current.moveTo(currentTarget.x, targetY, currentTarget.z, true)
   }, [
     camera,
@@ -627,8 +687,9 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     floorSurface.levelId = currentLevelId ?? null
     if (!controls.current) return
     controls.current.floorMinY = floorMinY
-    controls.current.floorSurface = floorSurface
-  }, [camera, currentLevelId, floorMinY, floorSurface, isFirstPersonMode])
+    // The level's floor and the ground hold the eye over them; the dive goes through both.
+    controls.current.floorSurface = diveFloor === null ? floorSurface : null
+  }, [camera, currentLevelId, diveFloor, floorMinY, floorSurface, isFirstPersonMode])
 
   const focusNode = useCallback(
     (nodeId: string) => {
@@ -660,7 +721,11 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       controls.current.getTarget(tempTarget)
       tempDelta.copy(tempCenter).sub(tempTarget)
 
-      const focusedY = tempPosition.y + tempDelta.y
+      const focusedX = tempPosition.x + tempDelta.x
+      const focusedZ = tempPosition.z + tempDelta.z
+      const focusedY = isPerspectiveCamera(camera)
+        ? keepEyeOverGround(focusedX, tempPosition.y + tempDelta.y, focusedZ, tempPosition.y)
+        : tempPosition.y + tempDelta.y
       const floorMinY = isPerspectiveCamera(camera) ? controls.current.floorLimitY : null
       controls.current.setLookAt(
         tempPosition.x + tempDelta.x,
@@ -1315,7 +1380,15 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       const groundY = orbitGroundY(lastLevelId.current)
       if (!bounds) {
         // Restore default framing pose when no bounds were computed.
-        controls.current.setLookAt(20, 20 + groundY, 20, 0, groundY, 0, true)
+        controls.current.setLookAt(
+          20,
+          keepEyeOverGround(20, 20 + groundY, 20, 20),
+          20,
+          0,
+          groundY,
+          0,
+          true,
+        )
         return
       }
       const [cx, cz] = bounds.center
@@ -1327,7 +1400,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       const height = Math.max(maxExtent * 0.8, 10)
       controls.current.setLookAt(
         cx + distance * 0.7,
-        height + groundY,
+        keepEyeOverGround(cx + distance * 0.7, height + groundY, cz + distance * 0.7, height),
         cz + distance * 0.7,
         cx,
         groundY,

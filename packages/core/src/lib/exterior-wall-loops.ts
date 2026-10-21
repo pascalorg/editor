@@ -1,5 +1,5 @@
 import type { WallNode } from '../schema'
-import { isCurvedWall } from '../systems/wall/wall-curve'
+import { getWallCurveFrameAt, isCurvedWall } from '../systems/wall/wall-curve'
 import {
   dedupeSequentialPoints,
   type Point2D,
@@ -370,6 +370,36 @@ export function exteriorWallOutlines(
   joinTolerance = WALL_ENDPOINT_TOLERANCE,
 ): [number, number][][] {
   return outerFaces(walls, joinTolerance).map((loop) => loop.polygon.map(pointToTuple))
+}
+
+/**
+ * The walls a closed circuit of walls encloses: not on the storey's outline and strictly inside one
+ * of its outside loops (a partition, as opposed to a wall that holds the outside back). A wall no
+ * closed circuit surrounds (an open run, the first walls of a plan, a wall drawn outside) is not
+ * enclosed.
+ */
+export function enclosedWallIds(
+  walls: WallNode[],
+  joinTolerance = WALL_ENDPOINT_TOLERANCE,
+): Set<WallNode['id']> {
+  const loops = outerFaces(walls, joinTolerance)
+  const enclosed = new Set<WallNode['id']>()
+  if (loops.length === 0) return enclosed
+  const onOutline = new Set(loops.flatMap((loop) => loop.boundaryFaces.map((face) => face.wallId)))
+  for (const wall of walls) {
+    if (onOutline.has(wall.id)) continue
+    const middle = getWallCurveFrameAt(wall, 0.5).point
+    const point = { x: middle.x, y: middle.y }
+    if (
+      loops.some(
+        (loop) =>
+          pointInPolygon(point, loop.polygon) &&
+          pointDistanceToPolygonBoundary(point, loop.polygon) >= 1e-4,
+      )
+    )
+      enclosed.add(wall.id)
+  }
+  return enclosed
 }
 
 function outerFaces(walls: WallNode[], joinTolerance: number) {

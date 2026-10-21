@@ -97,7 +97,7 @@ async function main(): Promise<void> {
     process.on('SIGTERM', shutdown)
   } else {
     // --stdio is the default when no transport flag is passed.
-    await connectStdio(createServer())
+    connectStdio(createServer)
     console.error('[pascal-mcp] stdio server running')
   }
 }

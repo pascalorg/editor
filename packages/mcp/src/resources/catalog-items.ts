@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import type { SceneOperations } from '../operations'
 import { type AssetCatalog, builtInCatalog } from '../tools/asset-catalog'
 

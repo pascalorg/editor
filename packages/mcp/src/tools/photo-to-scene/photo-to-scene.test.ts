@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { CreateMessageRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { createSceneOperations } from '../../operations'
 import { InMemorySceneStore } from '../scene-lifecycle/test-utils'
@@ -39,7 +37,7 @@ async function makeWiredPair(opts: { withSampling: boolean; samplingHandler?: Ha
   if (opts.withSampling && opts.samplingHandler) {
     const handler = opts.samplingHandler
     client.setRequestHandler(
-      CreateMessageRequestSchema,
+      'sampling/createMessage',
       async (request) =>
         // Cast to unknown — tests return arbitrary shapes to exercise
         // parse/validation paths in the tool handler.

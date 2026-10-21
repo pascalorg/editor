@@ -105,8 +105,24 @@ export {
 export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
 export type { EdgeMode } from './lib/edge-style'
+export {
+  BLOCK_MASONRY,
+  concreteMaterial,
+  type Masonry,
+  masonryMaterial,
+  STRUCTURE_COLORS,
+} from './lib/foundation-materials'
 export { preserveGltfUnlit } from './lib/gltf-unlit'
 export { PERF_OVERLAY_ENABLED } from './lib/gpu-perf'
+export {
+  groundWindowBoxNow,
+  groundWindowContains,
+  groundWindowEnabledNode,
+  groundWindowMaskNode,
+  inGroundWindowNode,
+  setGroundWindow,
+  temporarilyGroundWindowForCapture,
+} from './lib/ground-window'
 export {
   computeHeroFraming,
   DEFAULT_FRAMING_EXCLUDED_TYPES,
@@ -175,7 +191,12 @@ export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
-export { hasMaterialsForGroups, markPureRaycast } from './lib/pointer-events'
+export {
+  hasMaterialsForGroups,
+  markPureRaycast,
+  type ViewerBreadcrumb,
+  type ViewerBreadcrumbHandler,
+} from './lib/pointer-events'
 export {
   cloneWithProceduralEmission,
   decorateProceduralEmission,
@@ -226,6 +247,15 @@ export {
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
 export {
+  SITE_FOUNDATION,
+  SITE_GROUND,
+  type SiteGroundRole,
+  siteFoundation,
+  siteGround,
+  siteSurfaces,
+  temporarilyVeilGround,
+} from './lib/site-surfaces'
+export {
   createPlainSnapshotPipeline,
   createSnapshotPipeline,
   SNAPSHOT_MAX_EDGE,
@@ -253,13 +283,36 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
+export {
+  AMBIANCE_SECONDS,
+  ambianceNow,
+  ambianceTarget,
+  easeAmbiance,
+  eyeUnderTheGround,
+  FADE_SECONDS,
+  groundHoleOpenNode,
+  groundHoleOpenNow,
+  stepAmbianceProgress,
+  temporarilyWithoutAmbiance,
+  UNDERGROUND_RIM,
+  UNDERGROUND_RING,
+  undergroundAmbianceNode,
+} from './lib/underground-ambiance'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {
+  anyGroundVeiled,
   applyCountryUnitDefault,
+  DEFAULT_UNDERGROUND_LOOK,
   default as useViewer,
+  type GroundMode,
+  groundVeiled,
   type MetricNotation,
+  siteGroundShown,
+  type UndergroundEdge,
+  type UndergroundLook,
+  type UndergroundTransition,
   type WallMode,
 } from './store/use-viewer'
 export {
@@ -298,6 +351,7 @@ export {
   retractNodes,
   revealChangedNodeIds,
   revealClockMs,
+  revealMotionOff,
   seatLiftedNow,
   setRevealPreroll,
   startConstructionReveal,

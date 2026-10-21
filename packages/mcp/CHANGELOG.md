@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Built on the v2 MCP SDK (`@modelcontextprotocol/server` 2.2). Over stdio the
+  server answers clients on protocol 2026-07-28 as well as 2025 clients; HTTP
+  still serves the 2025 sessionful protocol. A call to a tool name no server
+  has is a JSON-RPC error (`-32602`), not a tool result with `isError`.
+  Embedding code imports `Client` and `InMemoryTransport` from
+  `@modelcontextprotocol/client`
+  ([#1118](https://github.com/pascalorg/editor/pull/1118)).
 - `get_site` gives the street's frontage and depth, each buildable edge as a
   front, the ground and the usual footprint range, and reads a lot by `site`
   with no building yet ([#1044](https://github.com/pascalorg/editor/pull/1044),

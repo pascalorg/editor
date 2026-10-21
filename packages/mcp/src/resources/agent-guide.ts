@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import type { SceneOperations } from '../operations'
 
 export const AGENT_GUIDE = [
@@ -48,6 +48,7 @@ export const AGENT_GUIDE = [
   "- Finishes are given with `paint`, as the editor's Paint does: a library material found with `search_materials`, a colour, or a native material for an exact finish. `slots` and material presets are what `paint` writes, not what `apply_patch` is for.",
   '- Floors and ceilings are derived from rooms, not authored: walls, separators and a zone with `spaceRole: "room"` state the intent, and the structure reconciler builds the floor plate and the ceiling. Creating a slab or ceiling carrying the derived markers (`boundary` / `autoFromWalls`), or reshaping or relinking one, is refused; deleting one records that opt-out on the zone instead. A room without a floor or ceiling is expressed on its zone (`hasFloor: false`, `hasCeiling: false`), and its floor height with `floor.elevation`.',
   '- Manual slabs remain valid for things that are not rooms: pools, platforms, stair decks, terraces at their own elevation.',
+  '- A building’s levels stand on a ground line: the level at grade, named by `set_ground_level` (which seats the building so its floor stands at grade and renumbers it to floor index 0) or, until named, the lowest level whose floor is not under the ground; levels with a lower floor index are below grade. `add_level` with `position: "below"` goes one storey under the lowest level and every floor keeps its place. `list_levels` reads it as `groundLevels` and each level’s `gradeStanding` and `isGroundLevel`; `verify_scene` reports a basement the stack stands at grade (basement_at_grade; `set_ground_level` is the fix).',
   '- `furnish_room` skips or nudges poses that block door clear zones or overlap other items; `verify_scene` and `check_collisions` report remaining issues.',
   '- Adjacent rooms can share one wall (or have openings that line up). A door keeps about 0.65 m clear on both sides; furniture footprints do not overlap.',
   '- A complete home is an exterior shell, interior rooms, openings, a roof, furniture and landscaping.',

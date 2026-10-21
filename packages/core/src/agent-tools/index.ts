@@ -21,6 +21,7 @@ import {
   getWallsTool,
   getZonesTool,
   listLevelsTool,
+  setGroundLevelTool,
 } from './levels'
 import { mergeWindowsTool } from './merge-windows'
 import { deleteNodeTool, getNodeTool } from './nodes'
@@ -102,6 +103,7 @@ export const AGENT_TOOL_CONTRACTS = [
   addCornerWindowTool,
   mergeWindowsTool,
   addLevelTool,
+  setGroundLevelTool,
   placeItemsTool,
   createStairTool,
   createRoofTool,

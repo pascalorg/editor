@@ -1,7 +1,7 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import useViewer from './use-viewer'
+import useViewer, { anyGroundVeiled, groundVeiled, siteGroundShown } from './use-viewer'
 
 const resetMeasurementPreferences = () => {
   useViewer.setState({
@@ -152,6 +152,26 @@ describe('scene theme', () => {
   })
 })
 
+describe('the ground over a level below grade', () => {
+  const below = { belowGrade: true, groundMode: 'auto', gradeStanding: 'below-grade' } as const
+
+  test('is veiled wholesale on Auto, not on Solid, not over a part-buried level', () => {
+    expect(groundVeiled(below)).toBe(true)
+    expect(groundVeiled({ ...below, groundMode: 'solid' })).toBe(false)
+    expect(groundVeiled({ ...below, gradeStanding: 'partly-below-grade' })).toBe(false)
+  })
+
+  test('is solid in the walkthrough, whatever level the overview had shown', () => {
+    expect(groundVeiled({ ...below, walkthroughMode: true })).toBe(false)
+    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: true })).toBe(
+      false,
+    )
+    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: false })).toBe(
+      true,
+    )
+  })
+})
+
 describe('project rendering defaults', () => {
   const original = useViewer.getState()
   beforeEach(() => useViewer.setState(original, true))
@@ -264,5 +284,21 @@ describe('project rendering defaults', () => {
     expect(useViewer.getState().projectPreferences['']).toBeUndefined()
     store.setProjectPresentation(authored)
     expect(useViewer.getState().sceneAppearance.background).toBe('#dce4e5')
+  })
+})
+
+describe('the site ground with showGround off', () => {
+  test('stands in while a level below grade is shown, and leaves showGround to the author otherwise', () => {
+    // An authored landscape supplies the ground (showGround false): the level display hides it
+    // with the storeys above a basement, so the site's ground draws then.
+    expect(siteGroundShown({ showGround: false }, { belowGrade: true })).toBe(true)
+    expect(siteGroundShown({ showGround: false }, { belowGrade: false })).toBe(false)
+  })
+
+  test('is the site’s own ground whatever the display says when showGround is on or absent', () => {
+    for (const showGround of [undefined, true]) {
+      expect(siteGroundShown({ showGround }, { belowGrade: false })).toBe(true)
+      expect(siteGroundShown({ showGround }, { belowGrade: true })).toBe(true)
+    }
   })
 })

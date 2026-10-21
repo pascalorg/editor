@@ -86,6 +86,11 @@
       }
     }
   },
+  "markdown": {
+    "formatter": {
+      "formatEmbeds": false
+    }
+  },
   "files": {
     "ignoreUnknown": true,
     "includes": [

@@ -12,6 +12,7 @@ import {
 import {
   hideFromScene,
   showInScene,
+  temporarilySetGroundAside,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './scene-visibility'
@@ -77,6 +78,47 @@ describe('scene visibility', () => {
     restore()
 
     expect([isolated, soloed, batched, elsewhere].map((obj) => obj.layers.mask)).toEqual(original)
+  })
+
+  // A level below grade sets the site's ground aside. A capture decides the ground for its own
+  // picture, whatever the person's view holds, and gives the person's view back after.
+  test('the ground set aside is out of every pass and every pick', () => {
+    const ground = sceneObject()
+    hideFromScene(ground, 'ground-aside')
+    expect(ground.layers.mask).toBe(0)
+    const picking = new THREE.Layers()
+    setSurfaceRaycastLayers(picking)
+    expect(ground.layers.test(picking)).toBe(false)
+  })
+
+  test("a capture below grade sets the ground aside for its picture, and keeps the person's own hold", () => {
+    const shown = sceneObject()
+    const heldByThePerson = sceneObject()
+    hideFromScene(heldByThePerson, 'ground-aside')
+
+    const restore = temporarilySetGroundAside([shown, heldByThePerson], true)
+    expect(shown.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    expect(heldByThePerson.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    restore()
+
+    expect(shown.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expect(heldByThePerson.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  })
+
+  test('a capture of the whole building stands it on the ground the person set aside, isolation kept', () => {
+    const ground = sceneObject()
+    const isolated = sceneObject()
+    for (const obj of [ground, isolated]) hideFromScene(obj, 'ground-aside')
+    hideFromScene(isolated, 'isolated')
+
+    const restore = temporarilySetGroundAside([ground, isolated], false)
+    expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expect(isolated.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    restore()
+
+    expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    showInScene(ground, 'ground-aside')
+    expect(ground.layers.isEnabled(SCENE_LAYER)).toBe(true)
   })
 
   test('one reason hides and gives the exact mask back', () => {

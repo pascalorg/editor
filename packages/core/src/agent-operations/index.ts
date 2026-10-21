@@ -28,6 +28,7 @@ import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
+import { setGroundLevel } from './set-ground-level'
 import { getSite, placeBuilding } from './site'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperation, AgentOperations } from './types'
@@ -99,6 +100,7 @@ const SINGLE_OPERATIONS = {
   get_walls: getWalls,
   get_zones: getZones,
   duplicate_level: duplicateLevel,
+  set_ground_level: setGroundLevel,
   verify_scene: verifyScene,
   validate_design: validateDesignOperation,
   place_design: gatedByBrief('place_design', placeDesign),

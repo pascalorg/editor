@@ -192,6 +192,22 @@ export function sampleWallCenterline(wall: WallCurveLike, segments = DEFAULT_SAM
   )
 }
 
+/**
+ * A wall's centreline as consecutive plan segments: its chord on a straight wall, the sampled
+ * arc's parts on a curved one.
+ */
+export function getWallCenterlineSegments(
+  wall: WallCurveLike,
+  segments = DEFAULT_SAMPLE_SEGMENTS,
+): [Point2D, Point2D][] {
+  if (!isCurvedWall(wall)) return [[getWallStartPoint(wall), getWallEndPoint(wall)]]
+  const points = sampleWallCenterline(wall, segments)
+  return points.slice(1).flatMap((end, index): [Point2D, Point2D][] => {
+    const start = points[index]
+    return start ? [[start, end]] : []
+  })
+}
+
 function segmentIntersectionPoint(a: Point2D, b: Point2D, c: Point2D, d: Point2D): Point2D | null {
   const abX = b.x - a.x
   const abY = b.y - a.y

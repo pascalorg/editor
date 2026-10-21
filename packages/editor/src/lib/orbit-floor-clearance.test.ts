@@ -1,5 +1,8 @@
 import { expect, test } from 'bun:test'
 import {
+  DIVE_DEPTH,
+  DIVE_MARGIN,
+  diveFloorY,
   floorLimitAt,
   glideFloorLimit,
   LOOK_UP_PITCH_GAIN,
@@ -7,8 +10,11 @@ import {
   MAX_ORBIT_POLAR_ANGLE,
   ORBIT_FLOOR_CLEARANCE,
   ORBIT_TARGET_HEIGHT,
+  OVERVIEW_GROUND_CLEARANCE,
   orbitAngleBelowFloor,
   orbitCameraAboveFloor,
+  orbitFloorMinY,
+  overviewEyeY,
 } from './orbit-floor-clearance'
 
 type Vec3 = { x: number; y: number; z: number }
@@ -162,4 +168,34 @@ test('a change in floor height is glided over, never popped', () => {
     previous = limit
   }
   expect(limit).toBeCloseTo(0.75, 6)
+})
+
+test('a pivot sent four storeys down keeps the eye where it was, over the ground; a diver stays under', () => {
+  // Eye 12 m up over a pivot at 1.1; the pivot goes to -12: the move alone would put the eye at -0.1.
+  expect(overviewEyeY(12 - 13.1, 12, -0.05, false)).toBe(12)
+  // An eye that was already low is brought up to the clearance.
+  expect(overviewEyeY(-9, 0.5, -0.05, false)).toBe(-0.05 + OVERVIEW_GROUND_CLEARANCE)
+  // The move leaves it high enough: it goes with the pivot, as always.
+  expect(overviewEyeY(20, 25, -0.05, false)).toBe(20)
+  // The person is under the ground: the move is theirs.
+  expect(overviewEyeY(-8, 12, -0.05, true)).toBe(-8)
+})
+
+test('the dive floor sits 3 m under the lowest ground, or 1 m under the deepest drawn thing when that is deeper', () => {
+  // A house at grade: nothing drawn is deeper than the ground's 3 m.
+  expect(diveFloorY(-0.05, -0.36)).toBeCloseTo(-0.05 - DIVE_DEPTH, 9)
+  expect(diveFloorY(-0.05, null)).toBeCloseTo(-0.05 - DIVE_DEPTH, 9)
+  // The villa's basement footing at -3.83 goes a metre deeper.
+  expect(diveFloorY(-0.05, -3.83)).toBeCloseTo(-3.83 - DIVE_MARGIN, 9)
+})
+
+test('the eye may sit the clearance over the dive floor from any storey, over the level floor otherwise', () => {
+  const dive = diveFloorY(-0.05, null)
+  // The ground floor, and a storey four metres up: both dive to the same floor.
+  expect(orbitFloorMinY(0, dive)).toBeCloseTo(dive + ORBIT_FLOOR_CLEARANCE, 9)
+  expect(orbitFloorMinY(4, dive)).toBeCloseTo(dive + ORBIT_FLOOR_CLEARANCE, 9)
+  // No dive (Solid): the level's floor, as before.
+  expect(orbitFloorMinY(4, null)).toBeCloseTo(4 + ORBIT_FLOOR_CLEARANCE, 9)
+  // A basement deeper than the dive floor keeps its own floor: the dive never lifts the limit.
+  expect(orbitFloorMinY(-12, dive)).toBeCloseTo(-12 + ORBIT_FLOOR_CLEARANCE, 9)
 })

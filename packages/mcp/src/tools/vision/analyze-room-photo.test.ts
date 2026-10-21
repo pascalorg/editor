@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { CreateMessageRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerAnalyzeRoomPhoto } from './analyze-room-photo'
 
@@ -29,7 +27,7 @@ async function makeWiredPair(opts: {
   if (opts.withSampling && opts.samplingHandler) {
     const handler = opts.samplingHandler
     client.setRequestHandler(
-      CreateMessageRequestSchema,
+      'sampling/createMessage',
       async (request) => (await handler(request)) as never,
     )
   }

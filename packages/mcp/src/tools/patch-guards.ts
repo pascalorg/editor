@@ -36,7 +36,7 @@ export type PatchRefusalCode =
  * owns what it protects, so a feature brings its own check (the honest-update check is the
  * first). It may rewrite an update's data (the cleaned data is what is written) and
  * refuses by throwing: a PatchRefusedError comes back as `{ code, patchIndex, id, message }`, an
- * McpError as it is. What it changed in the patch it says in notes, which the answer carries.
+ * ProtocolError as it is. What it changed in the patch it says in notes, which the answer carries.
  * Lower `order` runs first.
  */
 export type PatchGuard = {

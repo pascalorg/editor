@@ -79,6 +79,16 @@ function wholeHouse(nodes: Nodes, id: string, at: number): FollowWant | null {
 }
 
 /**
+ * A look at the whole house (the furniture has landed; a build has finished), made a look at the
+ * level the person is already on: the level whole, as when its floor starts, with no floors above
+ * to unhide and no lifted roof to clear.
+ */
+export function stayOnLevel(want: FollowWant, nodes: Nodes, levelId: string): FollowWant {
+  const box = boxOf(nodes, levelId)
+  return box ? { kind: 'floor', box, levelId, at: want.at } : { ...want, levelId }
+}
+
+/**
  * What the camera should look at for something the reveal said, or null when it says nothing about
  * where to look. A floor, whole, when its slabs and walls start (the walls are not targets one by
  * one: the floor already is); each opening close up from outside; each piece of furniture from above;

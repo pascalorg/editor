@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   type AddObjectInput,
@@ -32,6 +32,7 @@ import {
   type GeometryScriptParamValue,
   generateId,
 } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
@@ -223,7 +224,7 @@ export function registerAddObject(
     {
       title: addObjectTool.title,
       description: addObjectTool.description,
-      inputSchema: addObjectTool.input,
+      inputSchema: z.object(addObjectTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async (input: Record<string, unknown>) => {
@@ -308,7 +309,7 @@ export function registerGetSource(
     {
       title: getSourceTool.title,
       description: getSourceTool.description,
-      inputSchema: getSourceTool.input,
+      inputSchema: z.object(getSourceTool.input),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ nodeId, face }: { nodeId: string; face?: 'a' | 'b' }) => {

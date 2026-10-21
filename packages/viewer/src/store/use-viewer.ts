@@ -4,6 +4,8 @@ import type {
   AnyNode,
   BaseNode,
   BuildingNode,
+  GroundBox,
+  LevelGradeStanding,
   LevelNode,
   SitePresentation,
   UnitNode,
@@ -150,6 +152,68 @@ type ViewerState = {
    * is not written.
    */
   nodesRevealing: readonly string[]
+  /**
+   * The level shown lies below grade, the storeys above it hidden. Set by the host's level display
+   * beside `hideLevelsAboveSelection`; never persisted. Whether the ground over it is veiled also
+   * depends on `groundMode`: read both through `groundVeiled`.
+   */
+  belowGrade: boolean
+  /**
+   * The shown level's standing against the sculpted terrain, set beside `belowGrade`:
+   * only partly below grade, the ground veils just where it stands in the way (the ground
+   * window), not wholesale.
+   */
+  gradeStanding: LevelGradeStanding
+  /**
+   * The box the ground window opens for: the shown level, or the whole building when it is
+   * shown. Set by the host (never on the site phase, where the ground is the work); never
+   * persisted. `null` closes the window.
+   */
+  groundWindowBox: GroundBox | null
+  /** Ground stands between the eye and `groundWindowBox` now, set by the site renderer. */
+  groundWindowVeiled: boolean
+  /** The person's choice for the ground over a level below grade. Not persisted. */
+  groundMode: GroundMode
+  setGroundMode: (mode: GroundMode) => void
+  /**
+   * The scene has a level below grade (the below-grade footprint is not empty): set by the site
+   * renderer. The ground materials carry the hole's mask, and the eye's fill light is mounted,
+   * from the moment this is true, so that changing floors changes uniforms and never materials
+   * or the light count; scenes without a level below grade keep plain materials. Never persisted.
+   */
+  hasLevelBelowGrade: boolean
+  /**
+   * The host lets the eye dive under the ground (the editor's orbit may, with the ground on Auto).
+   * The eye's fill light is mounted, from the moment this is true, so that the first crossing of the
+   * ground compiles nothing: a scene with no level below grade is dived under as well. Set by the
+   * host's camera; never persisted.
+   */
+  diveAvailable: boolean
+  /**
+   * The eye lies under the ground at its own position (a free orbit under the lid). Set by the
+   * viewer's underground ambiance from the camera; never persisted.
+   */
+  eyeUnderGround: boolean
+  /**
+   * Levels whose foundation a plugin is drawing under the ground right now (a framing plugin pours
+   * the real footing and stem from the building's record). The generic foundation derived from the
+   * walls is not drawn under these levels, so nothing is drawn twice. Written by that plugin while
+   * its meshes are mounted, empty otherwise; never persisted.
+   */
+  pluginFoundationLevelIds: readonly string[]
+  /**
+   * The world is turned, or turning, to earth (the underground ambiance's factor is above 0).
+   * Its factor itself eases every frame and lives with the shaders, not here; this flips only at
+   * the crossing's ends. Set by the viewer's underground ambiance; never persisted.
+   */
+  ambianceActive: boolean
+  /**
+   * How the ground reads as a medium: the edge of the hole over a level below grade and the
+   * crossing as the eye dives under the ground. Variants the owner and the team choose from;
+   * every one is a uniform, so changing it compiles nothing. Never persisted.
+   */
+  undergroundLook: UndergroundLook
+  setUndergroundLook: (look: Partial<UndergroundLook>) => void
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -399,6 +463,12 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
   }
 }
 
+/** The owner's pick (16 Oct): the section cut's clean edge over earth walls, and the simple fade. */
+export const DEFAULT_UNDERGROUND_LOOK: UndergroundLook = {
+  edge: 'section-earth',
+  transition: 'fade',
+}
+
 function resolveLook(state: ViewerState, patch: Partial<ViewerState>): Partial<ViewerState> {
   const next = { ...state, ...patch }
   const local = next.projectPreferences[next.projectId ?? '']?.look
@@ -564,6 +634,20 @@ const useViewer = create<ViewerState>()(
       hideLevelsAboveSelection: false,
       levelsRevealing: [],
       nodesRevealing: [],
+      belowGrade: false,
+      gradeStanding: 'at-grade',
+      groundWindowBox: null,
+      groundWindowVeiled: false,
+      groundMode: 'auto',
+      setGroundMode: (mode) => set({ groundMode: mode }),
+      hasLevelBelowGrade: false,
+      diveAvailable: false,
+      eyeUnderGround: false,
+      pluginFoundationLevelIds: [],
+      ambianceActive: false,
+      undergroundLook: DEFAULT_UNDERGROUND_LOOK,
+      setUndergroundLook: (look) =>
+        set((state) => ({ undergroundLook: { ...state.undergroundLook, ...look } })),
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),
@@ -738,6 +822,75 @@ const useViewer = create<ViewerState>()(
     },
   ),
 )
+
+/**
+ * Over a level below grade the ground is `auto`: drawn as a faint veil, so the floor under it is
+ * seen and clicked; `solid` keeps it as it is everywhere else.
+ */
+export type GroundMode = 'auto' | 'solid'
+
+/**
+ * The hole's edge seen from above: `noise` the eroded, scalloped border (today's), `quiet` the
+ * same with a fine, faint noise (almost straight from the default camera), `section` an
+ * architect's section cut (a constant offset of the footprint, straight edges, a flat face with a
+ * thin line at grade), `section-earth` the same outline over the earth's walls (topsoil, strata,
+ * a low crumble that is zero at the rim).
+ */
+export type UndergroundEdge = 'noise' | 'quiet' | 'section' | 'section-earth'
+
+/** The dive under the ground: `noise` closes a noise mask over the screen, `fade` fades the whole frame at once. */
+export type UndergroundTransition = 'noise' | 'fade'
+
+export type UndergroundLook = { edge: UndergroundEdge; transition: UndergroundTransition }
+
+/**
+ * Whether the site's ground is drawn as a veil wholesale: a level below grade is shown, the
+ * ground on auto. A level only partly below grade is the exception — there the ground window
+ * veils just the ground in the way, and the rest stays solid. The walkthrough walks on its
+ * floors: its ground is always solid, whatever level the overview had shown.
+ */
+export function groundVeiled(state: {
+  belowGrade: boolean
+  groundMode: GroundMode
+  gradeStanding?: LevelGradeStanding
+  walkthroughMode?: boolean
+}): boolean {
+  return (
+    state.belowGrade &&
+    state.groundMode === 'auto' &&
+    state.gradeStanding !== 'partly-below-grade' &&
+    state.walkthroughMode !== true
+  )
+}
+
+/** Whether any ground is veiled now, wholesale or through the eye's window. */
+export function anyGroundVeiled(state: {
+  belowGrade: boolean
+  groundMode: GroundMode
+  gradeStanding?: LevelGradeStanding
+  groundWindowVeiled: boolean
+  walkthroughMode?: boolean
+}): boolean {
+  return (
+    groundVeiled(state) ||
+    (state.groundMode === 'auto' && state.groundWindowVeiled && state.walkthroughMode !== true)
+  )
+}
+
+/**
+ * Whether the site draws its own ground. `showGround: false` says other geometry supplies the
+ * ground (an authored landscape), which stands on a level above a basement; while a level below
+ * grade is shown, the level display hides the storeys above it (`belowGrade`) and the landscape
+ * with them. The site's ground stands in then, with its veil, hole and pit, so the basement is
+ * seen through an opening and not through nothing. With a level at or above grade shown, the
+ * landscape is shown and `showGround` is the author's.
+ */
+export function siteGroundShown(
+  site: { showGround?: boolean },
+  state: { belowGrade: boolean },
+): boolean {
+  return site.showGround !== false || state.belowGrade
+}
 
 /** Apply an authoritative country code (e.g. IP-derived by the host app) as
  * the unit default. Stronger signal than the timezone heuristic used at store

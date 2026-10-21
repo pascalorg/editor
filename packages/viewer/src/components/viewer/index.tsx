@@ -26,7 +26,7 @@ import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
-import { choosePointerEvents } from '../../lib/pointer-events'
+import { choosePointerEvents, type ViewerBreadcrumbHandler } from '../../lib/pointer-events'
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
@@ -444,6 +444,12 @@ interface ViewerProps {
    */
   onRenderError?: (cause: unknown) => void
   /**
+   * Called with diagnostics worth keeping on a host's error-reporter trail,
+   * such as `raycast_invalid_material` when a pointer raycast skips a mesh
+   * whose geometry groups point past its material array.
+   */
+  onBreadcrumb?: ViewerBreadcrumbHandler
+  /**
    * Wall-clock give-up cap for scene readiness, replacing the default
    * frame-count cap. Set it on hosts whose frame cadence is decoupled from
    * real time (the headless bake page's timer-driven loop runs the default
@@ -503,6 +509,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     sceneReadyKey,
     onSceneReadyChange,
     onRenderError,
+    onBreadcrumb,
     sceneReadyMaxWaitMs,
     maxFps = 50,
     disablePostFx = false,
@@ -541,7 +548,11 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [isolate])
 
-  const [pointerEvents] = useState(() => choosePointerEvents())
+  const onBreadcrumbRef = useRef(onBreadcrumb)
+  onBreadcrumbRef.current = onBreadcrumb
+  const [pointerEvents] = useState(() =>
+    choosePointerEvents(undefined, (breadcrumb) => onBreadcrumbRef.current?.(breadcrumb)),
+  )
 
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
 

@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   applySceneWrites,
   type NodeWrite,
@@ -12,7 +12,7 @@ import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { SceneVersionConflictError } from '../../storage/types'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
-import { ErrorCode, throwMcpError, toolError } from '../errors'
+import { ProtocolErrorCode, throwMcpError, toolError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
 import { currentLevelContext, sceneMetaPayload } from './metadata'
 
@@ -147,7 +147,7 @@ async function requireSceneLoadedFrom(
         : 0
   if (nodeCount <= HOLDS_CONTENT) return
   throwMcpError(
-    ErrorCode.InvalidRequest,
+    ProtocolErrorCode.InvalidRequest,
     `scene_not_loaded: this session's scene was not loaded from ${target.projectId ?? target.id}, which holds ${nodeCount} nodes — the server may have reloaded and this session started over. Call load_scene with it first, or pass replace: true to write this scene over it.`,
     { ...target, nodeCount },
   )
@@ -160,8 +160,8 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
       title: 'Save scene',
       description:
         'Save the current scene (or a provided graph) to the SceneStore. Without id or projectId it saves to the project this session is bound to (create_project or load_scene). Defaults to a browser-visible draft save so agents can iterate without creating many project versions. Use saveMode: "checkpoint" for meaningful version history.',
-      inputSchema: saveSceneInput,
-      outputSchema: saveSceneOutput,
+      inputSchema: z.object(saveSceneInput),
+      outputSchema: z.object(saveSceneOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({
@@ -193,13 +193,15 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
       if (includeCurrentScene) {
         const validation = bridge.validateScene()
         if (!validation.valid) {
-          throwMcpError(ErrorCode.InvalidRequest, 'scene_invalid', { errors: validation.errors })
+          throwMcpError(ProtocolErrorCode.InvalidRequest, 'scene_invalid', {
+            errors: validation.errors,
+          })
         }
         sceneGraph = bridge.exportSceneGraph()
       } else {
         if (!graph) {
           throwMcpError(
-            ErrorCode.InvalidParams,
+            ProtocolErrorCode.InvalidParams,
             'graph_required: pass `graph` when includeCurrentScene is false',
           )
         }
@@ -208,7 +210,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         // graph arg is a bypass for the URL hardening in A7. See P4 report.
         const rawNodes = (graph as { nodes?: unknown }).nodes
         if (!rawNodes || typeof rawNodes !== 'object') {
-          throwMcpError(ErrorCode.InvalidParams, 'graph.nodes must be an object')
+          throwMcpError(ProtocolErrorCode.InvalidParams, 'graph.nodes must be an object')
         }
         const migration = migrateLegacyWallAssemblies(rawNodes as Record<string, unknown>)
         const errors: { nodeId: string; path: string; message: string }[] = []
@@ -225,7 +227,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
           }
         }
         if (errors.length > 0) {
-          throwMcpError(ErrorCode.InvalidParams, 'graph_invalid', { errors })
+          throwMcpError(ProtocolErrorCode.InvalidParams, 'graph_invalid', { errors })
         }
         // The roof-level rule, as apply_patch holds it: what the graph changes in the scene it
         // replaces.
@@ -274,13 +276,13 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         }
       } catch (err) {
         if (err instanceof SceneVersionConflictError) {
-          throwMcpError(ErrorCode.InvalidRequest, 'version_conflict', {
+          throwMcpError(ProtocolErrorCode.InvalidRequest, 'version_conflict', {
             expectedVersion,
             id,
           })
         }
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InvalidRequest, msg)
+        throwMcpError(ProtocolErrorCode.InvalidRequest, msg)
       }
     },
   )

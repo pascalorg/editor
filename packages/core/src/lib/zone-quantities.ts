@@ -168,6 +168,7 @@ function boundaryFaceKey(boundary: Space['boundaryFaces'][number]): string {
   const pointKey = (point: Point2D) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`
   const forward = boundary.points.map(pointKey).join('|')
   const reverse = [...boundary.points].reverse().map(pointKey).join('|')
+  // biome-ignore lint/complexity/useMathMinMax: lexicographic string comparison
   return `${boundary.wallId}:${boundary.face}:${forward < reverse ? forward : reverse}`
 }
 
