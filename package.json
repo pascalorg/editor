@@ -43,6 +43,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.186.0",
+    "@hono/node-server": "^1.19.15",
     "hono": "^4.13.11",
     "next": "16.4.2",
     "react-grab": "0.2.0",
