@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { connectStdio } from './stdio'

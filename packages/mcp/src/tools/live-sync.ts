@@ -3,7 +3,7 @@ import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { SceneVersionConflictError, SceneWipeBlockedError } from '../storage/types'
-import { ErrorCode, McpError, throwMcpError } from './errors'
+import { ProtocolError, ProtocolErrorCode, throwMcpError } from './errors'
 
 export type LiveSyncStatus = 'published' | 'unbound' | 'events_unsupported'
 
@@ -65,7 +65,7 @@ const LIVE_SYNC_VERSION_CONFLICT = 'live_sync_version_conflict'
  * loaded it. The store refuses before writing, so nothing from the call persisted.
  */
 export function isLiveSyncVersionConflict(error: unknown): boolean {
-  return error instanceof McpError && error.message.endsWith(LIVE_SYNC_VERSION_CONFLICT)
+  return error instanceof ProtocolError && error.message.endsWith(LIVE_SYNC_VERSION_CONFLICT)
 }
 
 /**
@@ -125,13 +125,13 @@ export async function publishLiveSceneSnapshot(
       )
     }
     if (error instanceof SceneVersionConflictError) {
-      throwMcpError(ErrorCode.InvalidRequest, LIVE_SYNC_VERSION_CONFLICT, {
+      throwMcpError(ProtocolErrorCode.InvalidRequest, LIVE_SYNC_VERSION_CONFLICT, {
         sceneId: active.id,
         expectedVersion: active.version,
       })
     }
     const message = error instanceof Error ? error.message : String(error)
-    throwMcpError(ErrorCode.InternalError, `live_sync_failed: ${message}`)
+    throwMcpError(ProtocolErrorCode.InternalError, `live_sync_failed: ${message}`)
   }
   return { status: 'published', project }
 }

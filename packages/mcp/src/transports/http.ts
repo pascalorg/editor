@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node'
+import type { McpServer } from '@modelcontextprotocol/server'
 
 const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_RATE_LIMIT_PER_MINUTE = 120
@@ -38,9 +38,10 @@ export type HttpTransportOptions = {
 /**
  * Attach an `McpServer` to a Streamable HTTP transport bound to a local port.
  *
- * Uses the SDK's Node-flavored `StreamableHTTPServerTransport`, which accepts
+ * Uses the SDK's `NodeStreamableHTTPServerTransport`, which accepts
  * `IncomingMessage`/`ServerResponse` directly via `handleRequest(req, res)`.
  * A new session ID is generated per connection (stateful mode).
+
  *
  * Listens on `127.0.0.1:<port>` (pass `0` for an ephemeral port in tests). The
  * returned handle exposes the actual bound port and a `close()` that stops
@@ -65,7 +66,7 @@ export async function connectHttp(
     rateLimitPerMinute: options.rateLimitPerMinute ?? DEFAULT_RATE_LIMIT_PER_MINUTE,
   })
 
-  const transports = new Map<string, StreamableHTTPServerTransport>()
+  const transports = new Map<string, NodeStreamableHTTPServerTransport>()
 
   const httpServer = createServer((req, res) => {
     if (!guard(req, res)) return
@@ -101,8 +102,8 @@ export async function connectHttp(
     const sessionId = headerValue(req.headers['mcp-session-id'])
     let transport = sessionId ? transports.get(sessionId) : undefined
     if (!transport && req.method === 'POST' && !sessionId) {
-      let createdTransport: StreamableHTTPServerTransport
-      createdTransport = new StreamableHTTPServerTransport({
+      let createdTransport: NodeStreamableHTTPServerTransport
+      createdTransport = new NodeStreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
           transports.set(id, createdTransport)

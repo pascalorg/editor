@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   confirmSceneViewPresentation,
   type SceneViewCrop,
@@ -11,6 +11,7 @@ import {
 } from '@pascal-app/core/agent-operations'
 import { refuse, viewSceneTool } from '@pascal-app/core/agent-tools'
 import type { AnyNode } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult } from './errors'
@@ -60,7 +61,7 @@ export function registerViewScene(
     {
       title: viewSceneTool.title,
       description: viewSceneTool.description,
-      inputSchema: viewSceneTool.input,
+      inputSchema: z.object(viewSceneTool.input),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async (input) => {

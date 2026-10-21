@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   executeHostedServiceTool,
   type HostedServiceExecutor,
@@ -23,9 +23,14 @@ export function registerHostedServiceTools(
         inputSchema: z.object(contract.input).strict(),
         annotations: contract.annotations,
       },
-      async (input: Record<string, unknown>, extra: { signal: AbortSignal }) => {
+      async (input: Record<string, unknown>, ctx) => {
         try {
-          const result = await executeHostedServiceTool(contract.name, input, execute, extra.signal)
+          const result = await executeHostedServiceTool(
+            contract.name,
+            input,
+            execute,
+            ctx.mcpReq.signal,
+          )
           // A render's preview, inline in the result, is the picture the client shows the model.
           const { preview, ...rest } = (result ?? {}) as { preview?: unknown }
           const picture =

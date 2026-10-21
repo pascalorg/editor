@@ -231,8 +231,7 @@ for agent frameworks and tests.
 
 ```ts
 import { createPascalMcpServer, SceneBridge } from '@pascal-app/mcp'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 
 const bridge = new SceneBridge()
 bridge.loadDefault()

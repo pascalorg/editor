@@ -1,10 +1,10 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { forkSceneGraph, type SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from '../annotations'
-import { ErrorCode, throwMcpError } from '../errors'
+import { ProtocolErrorCode, throwMcpError } from '../errors'
 import { applyMutation, describeVariant, type MutationKind, mulberry32 } from './mutations'
 
 const MUTATION_KINDS = [
@@ -63,8 +63,8 @@ export function registerGenerateVariants(server: McpServer, bridge: SceneOperati
       title: 'Generate variants',
       description:
         'Generate N variations of a base scene by forking and applying seeded mutations. Example: "give me 5 variations of this kitchen". If `save=true`, each variant is persisted via scene operations and returned with an id + URL; otherwise the graph is returned inline.',
-      inputSchema: generateVariantsInput,
-      outputSchema: generateVariantsOutput,
+      inputSchema: z.object(generateVariantsInput),
+      outputSchema: z.object(generateVariantsOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ baseSceneId, count, vary, seed, save }) => {
@@ -74,7 +74,7 @@ export function registerGenerateVariants(server: McpServer, bridge: SceneOperati
       if (baseSceneId) {
         const loaded = await bridge.loadStoredScene(baseSceneId)
         if (!loaded) {
-          throwMcpError(ErrorCode.InvalidParams, 'scene_not_found', { id: baseSceneId })
+          throwMcpError(ProtocolErrorCode.InvalidParams, 'scene_not_found', { id: baseSceneId })
         }
         base = loaded.graph
         baseName = loaded.name
@@ -109,7 +109,7 @@ export function registerGenerateVariants(server: McpServer, bridge: SceneOperati
         const invalidCount = countInvalidNodes(forked)
         if (invalidCount > 0) {
           throwMcpError(
-            ErrorCode.InternalError,
+            ProtocolErrorCode.InternalError,
             `variant_invalid: variant ${i} produced ${invalidCount} invalid node(s)`,
             { index: i },
           )
@@ -133,7 +133,7 @@ export function registerGenerateVariants(server: McpServer, bridge: SceneOperati
             })
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
-            throwMcpError(ErrorCode.InternalError, `save_failed: ${msg}`, { index: i })
+            throwMcpError(ProtocolErrorCode.InternalError, `save_failed: ${msg}`, { index: i })
           }
         } else {
           variants.push({ index: i, description, nodeCount, graph: forked })

@@ -1,5 +1,5 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import type { McpServer } from '@modelcontextprotocol/server'
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 
 /**
  * Attach an `McpServer` to the stdio transport.

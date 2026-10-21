@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   type AgentContext,
   achievedChanges,
@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core/agent-tools'
 import { GEOMETRY_SCRIPT_MIME_TYPES } from '@pascal-app/core/schema'
 import { compileAuthorScene } from '@pascal-app/geometry-script/author-scene'
+import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost } from './add-object'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -43,7 +44,7 @@ export function registerAuthorScene(
     {
       title: authorSceneTool.title,
       description: authorSceneTool.description,
-      inputSchema: authorSceneTool.input,
+      inputSchema: z.object(authorSceneTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async (input: Record<string, unknown>) => {

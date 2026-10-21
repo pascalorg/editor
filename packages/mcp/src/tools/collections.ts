@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   type AgentOperationOutcome,
   type CollectionScene,
@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core/agent-operations'
 import { editCollectionTool, listCollectionsTool } from '@pascal-app/core/agent-tools'
 import type { AnyNodeId } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult } from './errors'
@@ -31,7 +32,7 @@ export function registerCollectionTools(server: McpServer, bridge: SceneOperatio
     {
       title: listCollectionsTool.title,
       description: listCollectionsTool.description,
-      inputSchema: listCollectionsTool.input,
+      inputSchema: z.object(listCollectionsTool.input),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async (input: { collectionId?: string }) => {
@@ -48,7 +49,7 @@ export function registerCollectionTools(server: McpServer, bridge: SceneOperatio
     {
       title: editCollectionTool.title,
       description: editCollectionTool.description,
-      inputSchema: editCollectionTool.input,
+      inputSchema: z.object(editCollectionTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async (input: EditCollectionInput) => {
