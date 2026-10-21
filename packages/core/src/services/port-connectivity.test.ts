@@ -1,10 +1,13 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import type { AnyNodeDefinition, DistributionRole, NodePort } from '../registry'
-import { registerNode } from '../registry'
+import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { analyzePortConnectivity, resolveConnectivityUpdates } from './port-connectivity'
 
 type Point = [number, number, number]
+
+const restoreRegistry = nodeRegistry._snapshot()
+afterAll(() => restoreRegistry())
 
 // Stub registrations mirroring the real kinds' port + role conventions
 // without importing the nodes package (which pulls in CSG and can't load
