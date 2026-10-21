@@ -348,3 +348,51 @@ test('agent operations bundle for a headless host without editor or viewer depen
   })
   expect(result.success).toBe(true)
 })
+
+test('duct offsets detach every split section from the original wall', () => {
+  const duct = run({
+    wallAttachment: {
+      wallId: 'wall_offset_host',
+      side: 'front',
+      startUV: [0, 0],
+      endUV: [6, 0],
+      offset: 0.1,
+    },
+  })
+  const nodes = scene(duct)
+  const before = JSON.stringify(nodes)
+  const outcome = edit(
+    nodes,
+    { nodeId: duct.id, action: 'offset', from: 1, to: 4, offset: 1 },
+    context,
+  )
+  const patch = outcome.changes!.update!.find((entry) => entry.id === duct.id)!.data
+  const sections = [
+    { ...duct, ...patch },
+    ...outcome
+      .changes!.create!.map((entry) => entry.node)
+      .filter((node) => node.type === 'duct-segment'),
+  ]
+  expect(sections).toHaveLength(5)
+  for (const section of sections) {
+    expect(section.wallAttachment).toBeUndefined()
+    expect(section.hangerOverrides).toBeUndefined()
+  }
+  expect(JSON.stringify(nodes)).toBe(before)
+})
+
+test('duct offsets refuse custom hangers and hosted children without partial edits', () => {
+  const custom = run({ hangerOverrides: { '0:0': { fraction: 0.5 } } })
+  const hosted = run()
+  const child = DuctFittingNode.parse({ parentId: hosted.id })
+  for (const [duct, nodes] of [
+    [custom, scene(custom)],
+    [hosted, scene(hosted, child)],
+  ] as const) {
+    const before = JSON.stringify(nodes)
+    expect(() =>
+      edit(nodes, { nodeId: duct.id, action: 'offset', from: 1, to: 4, offset: 1 }, context),
+    ).toThrow('Remove custom hanger adjustments or hosted children')
+    expect(JSON.stringify(nodes)).toBe(before)
+  }
+})

@@ -41,7 +41,7 @@ export const pipeGradeTool = {
   name: 'pipe_grade' as const,
   title: 'Edit pipe grade and elevation',
   description:
-    'Set grade (percent fall over horizontal travel), flow direction, or an anchored elevation above the level. Endpoint edits preserve each existing leg grade; vertical elevation edits translate the run. Vertical legs retain their rise. Refuses edits that would regrade connected pipes or move fixed equipment. One undo step.',
+    'Set grade (percent fall over horizontal travel), flow direction, or an anchored elevation above the level. point is a numeric [x, y, z] tuple in level-local metres, not a unit-bearing length string. Endpoint edits preserve each existing leg grade; vertical elevation edits translate the run. Vertical legs retain their rise. Refuses edits that would regrade connected pipes or move fixed equipment. One undo step.',
   input: {
     nodeId: z.string(),
     action: z.enum(['grade', 'endpoint', 'elevation']),
@@ -84,7 +84,7 @@ export const pipeConnectTool = {
   name: 'pipe_connect' as const,
   title: 'Connect a pipe to a fixed collar',
   description:
-    'Draw from an open registered waste/vent fixture, trap or fitting collar to a free endpoint in level-local metres. Inherits diameter, material and system. The first section must follow the collar direction; add subsequent bends from the new pipe. A different diameter inserts a reducer without moving the source. Refuses occupied collars, incompatible directions and insufficient reducer space. One undo step. Ordinary catalog models without authored ports are unsupported.',
+    'Draw from an open registered waste/vent fixture, trap or fitting collar to a free endpoint. end is a numeric [x, y, z] tuple in level-local metres, not a unit-bearing length string. Inherits diameter, material and system. The first section must follow the collar direction; add subsequent bends from the new pipe. A different diameter inserts a reducer without moving the source. Refuses occupied collars, incompatible directions and insufficient reducer space. One undo step. Ordinary catalog models without authored ports are unsupported.',
   input: {
     nodeId: z.string(),
     portId: z.string(),
@@ -96,7 +96,7 @@ export const pipeConnectTool = {
 export const builtinAgentTools = {
   pluginId: 'pascal:core',
   apiVersion: 1,
-  version: '1.1.0',
+  version: '1.1.1',
   tools: [
     finishKitchenRunTool,
     checkKitchenClearanceTool,

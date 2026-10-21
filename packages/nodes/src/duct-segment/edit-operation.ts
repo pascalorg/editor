@@ -81,6 +81,14 @@ export const editDuct: AgentOperation<DuctEditInput> = (before, input) => {
     return refuse('node_capability_unavailable', 'Register duct node definitions before editing.')
   const changes: SceneChanges = { create: [], update: [] }
   if (input.action === 'offset') {
+    if (
+      Object.values(before).some((node) => node.parentId === duct.id) ||
+      Object.keys(duct.hangerOverrides ?? {}).length
+    )
+      return refuse(
+        'duct_offset_attachments',
+        'Remove custom hanger adjustments or hosted children before splitting this run.',
+      )
     const { offset = 0, from = 0, to = 0 } = input
     if (
       ![offset, from, to].every(Number.isFinite) ||
@@ -136,13 +144,18 @@ export const editDuct: AgentOperation<DuctEditInput> = (before, input) => {
     // Rolled rectangular sections require a twist, which the elbow schema cannot express.
     if (duct.shape !== 'round' && Math.abs(duct.roll) > 0.001)
       return refuse('duct_offset_roll', 'Reset the section roll before adding an obstacle offset.')
-    changes.update!.push({ id: duct.id, data: { path: paths[0] } })
+    changes.update!.push({
+      id: duct.id,
+      data: { path: paths[0], wallAttachment: undefined, hangerOverrides: undefined },
+    })
     const { id: _id, ...defaults } = duct
     for (const path of paths.slice(1))
       changes.create!.push({
         node: DuctSegmentNode.parse({
           ...defaults,
           metadata: {},
+          wallAttachment: undefined,
+          hangerOverrides: undefined,
           path,
           roll:
             duct.shape === 'round'
