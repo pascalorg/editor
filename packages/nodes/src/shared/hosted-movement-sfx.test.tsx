@@ -99,7 +99,7 @@ let savedEditor: ReturnType<typeof useEditor.getState>
 let savedViewer: ReturnType<typeof useViewer.getState>
 let savedScope: ReturnType<typeof useInteractionScope.getState>
 let savedWindow: PropertyDescriptor | undefined
-let savedDocument: typeof document
+let savedDocument: PropertyDescriptor | undefined
 let savedRaf: typeof requestAnimationFrame
 let savedCancelRaf: typeof cancelAnimationFrame
 
@@ -115,7 +115,7 @@ beforeEach(() => {
   savedViewer = useViewer.getState()
   savedScope = useInteractionScope.getState()
   savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  savedDocument = globalThis.document
+  savedDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   savedRaf = globalThis.requestAnimationFrame
   savedCancelRaf = globalThis.cancelAnimationFrame
   globalThis.window = new EventTarget() as Window & typeof globalThis
@@ -179,7 +179,8 @@ afterEach(() => {
   restoreRegistry()
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else Reflect.deleteProperty(globalThis, 'window')
-  globalThis.document = savedDocument
+  if (savedDocument) Object.defineProperty(globalThis, 'document', savedDocument)
+  else Reflect.deleteProperty(globalThis, 'document')
   globalThis.requestAnimationFrame = savedRaf
   globalThis.cancelAnimationFrame = savedCancelRaf
 })

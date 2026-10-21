@@ -38,7 +38,7 @@ const OPENING_ID_WINDOW = 'window_plane-offset' as AnyNodeId
 const OFFSET = -0.3
 
 let savedWindow: PropertyDescriptor | undefined
-let savedDocument: typeof document
+let savedDocument: PropertyDescriptor | undefined
 let savedRaf: typeof requestAnimationFrame
 let savedCancelRaf: typeof cancelAnimationFrame
 let savedScene: ReturnType<typeof useScene.getState>
@@ -115,7 +115,7 @@ beforeEach(() => {
   savedEditor = useEditor.getState()
   savedViewer = useViewer.getState()
   savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  savedDocument = globalThis.document
+  savedDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   savedRaf = globalThis.requestAnimationFrame
   savedCancelRaf = globalThis.cancelAnimationFrame
   globalThis.window = new EventTarget() as Window & typeof globalThis
@@ -146,7 +146,8 @@ afterEach(() => {
   useViewer.setState(savedViewer)
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else Reflect.deleteProperty(globalThis, 'window')
-  globalThis.document = savedDocument
+  if (savedDocument) Object.defineProperty(globalThis, 'document', savedDocument)
+  else Reflect.deleteProperty(globalThis, 'document')
   globalThis.requestAnimationFrame = savedRaf
   globalThis.cancelAnimationFrame = savedCancelRaf
 })
