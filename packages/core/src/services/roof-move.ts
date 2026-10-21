@@ -287,8 +287,8 @@ export type RoofSeat = {
  */
 export function planRoofSeats(before: Nodes, after: Nodes): RoofSeat | null {
   const byStorey = new Map<string, RoofNode[]>()
-  for (const node of Object.values(after)) {
-    if (node.type !== 'roof' || !node.parentId) continue
+  for (const node of queryNodes<RoofNode>(after as SceneNodes, { type: 'roof' })) {
+    if (!node.parentId) continue
     if (!(touched(before, after, node) && isRoofOnStoreyWalls(after, node.id))) continue
     const prior = before[node.id]
     if (

@@ -25,6 +25,7 @@ export {
   DependencyRecorder,
   type DocumentReader,
   type DocumentSource,
+  draftOf,
   materialize,
   readerOf,
   untracked,

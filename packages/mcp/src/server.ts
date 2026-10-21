@@ -6,6 +6,7 @@ import {
   recordMade,
   type SceneNodes,
 } from '@pascal-app/core/agent-operations'
+import { untracked } from '@pascal-app/core/runtime'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
@@ -135,7 +136,8 @@ function recordingWhatToolsMake(
   const recording: PascalMcpToolExecutor = (input) =>
     recordMade(
       {
-        getNodes: () => operations.getNodes() as SceneNodes,
+        // What the tool made is bookkeeping, not what it read: the scene as stored.
+        getNodes: () => untracked(operations.getNodes()) as SceneNodes,
         readSession: () => session.read(),
         keep: (keep) => session.keep(keep),
       },

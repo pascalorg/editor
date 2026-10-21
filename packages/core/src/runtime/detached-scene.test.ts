@@ -46,6 +46,7 @@ import {
   createSceneEnvironment,
   createSceneStore,
   type DetachedScene,
+  draftOf,
   effectIds,
   isEmptyScenePatch,
   liveSceneRuntime,
@@ -732,6 +733,34 @@ describe('what a detached scene hands out', () => {
     expect(queryNodes(before, { type: 'roof' })).toEqual([])
     expect(queryNodes(scene.reader().nodes, { type: 'roof' })).toHaveLength(1)
     expect(orderedChildIds(before, upper.id)).toEqual([])
+  })
+
+  test('a draft over the scene reads what it is asked for, and selects as a copy would', () => {
+    const { level, upper, building } = storeys()
+    const roof = RoofNode.parse({ id: 'roof_a', parentId: upper.id })
+    const kept = RoofNode.parse({ id: 'roof_b', parentId: upper.id })
+    const scene = open(
+      document(building, { ...level }, { ...upper, children: [roof.id, kept.id] }, roof, kept),
+    )
+    const nodes = scene.reader().nodes
+    const draft = draftOf(nodes)
+    const copy = { ...untracked(nodes) } as Record<string, AnyNode>
+    const added = RoofNode.parse({ id: 'roof_c', parentId: level.id })
+    for (const record of [draft, copy]) {
+      record[added.id] = added
+      delete record[roof.id]
+      record[kept.id] = { ...record[kept.id]!, parentId: level.id } as AnyNode
+    }
+    const whole = expect.objectContaining({ kind: 'query', predicate: null })
+    expect(draft[roof.id]).toBeUndefined()
+    expect(queryNodes(draft, { type: 'roof' })).toEqual(queryNodes(copy, { type: 'roof' }))
+    expect(scene.dependencies()).not.toContainEqual(whole)
+    // A roof the draft moved onto the level: only the whole draft knows where it stands.
+    expect(queryNodes(draft, { type: 'roof', parentId: level.id })).toEqual(
+      queryNodes(copy, { type: 'roof', parentId: level.id }),
+    )
+    expect(scene.dependencies()).toContainEqual(whole)
+    expect(Object.keys(draft)).toEqual(Object.keys(copy))
   })
 
   test('materials read are dependencies', () => {

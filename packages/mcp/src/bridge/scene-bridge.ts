@@ -464,9 +464,12 @@ export class SceneBridge {
     if (this.store.getState().readOnly) throw new Error('scene_read_only')
 
     // Track synthesized state as we dry-run so later ops can reference
-    // earlier-created ids and reflect earlier-deleted ids.
-    const simAvailable = new Set<string>(Object.keys(nodes))
+    // earlier-created ids and reflect earlier-deleted ids. Existence is read
+    // id by id: enumerating the scene would read every node of a detached one.
+    const simCreated = new Set<string>()
     const simDeleted = new Set<string>()
+    const simAvailable = (id: string) =>
+      simCreated.has(id) || (!simDeleted.has(id) && nodes[id as AnyNodeId] !== undefined)
     // Parsed create nodes keyed by patch index — so the apply phase can use the
     // Zod-normalised copy (which has a generated id if the caller omitted one)
     // instead of the unparsed input.
@@ -490,20 +493,20 @@ export class SceneBridge {
             `invalid patch: patches[${i}] create node failed schema: ${res.error.message}`,
           )
         }
-        if (p.parentId !== undefined && !simAvailable.has(p.parentId)) {
+        if (p.parentId !== undefined && !simAvailable(p.parentId)) {
           throw new Error(`invalid patch: patches[${i}] create parentId "${p.parentId}" not found`)
         }
         parsedCreateNodes.set(i, p.parentId ? { ...res.data, parentId: p.parentId } : res.data)
-        simAvailable.add(res.data.id)
+        simCreated.add(res.data.id)
       } else if (p.op === 'update') {
-        if (!simAvailable.has(p.id) || simDeleted.has(p.id)) {
+        if (!simAvailable(p.id) || simDeleted.has(p.id)) {
           throw new Error(`invalid patch: patches[${i}] update id "${p.id}" not found`)
         }
         if (!p.data || typeof p.data !== 'object') {
           throw new Error(`invalid patch: patches[${i}] update data is not an object`)
         }
       } else if (p.op === 'delete') {
-        if (!simAvailable.has(p.id) || simDeleted.has(p.id)) {
+        if (!simAvailable(p.id) || simDeleted.has(p.id)) {
           throw new Error(`invalid patch: patches[${i}] delete id "${p.id}" not found`)
         }
         if (p.cascade === false) {
@@ -518,7 +521,7 @@ export class SceneBridge {
             )
           }
         }
-        simAvailable.delete(p.id)
+        simCreated.delete(p.id)
         simDeleted.add(p.id)
       } else {
         throw new Error(`invalid patch: patches[${i}] unknown op`)
@@ -538,19 +541,16 @@ export class SceneBridge {
     const createOps = new Map<AnyNodeId, { node: AnyNode; parentId?: AnyNodeId }>()
     const updateOps = new Map<AnyNodeId, Partial<AnyNode>>()
     const deleteIds = new Set<AnyNodeId>()
-    const nextNodes = { ...nodes }
     for (const [index, patch] of patches.entries()) {
       if (patch.op === 'create') {
         const parsed = parsedCreateNodes.get(index)!
         const node = { ...parsed, parentId: patch.parentId ?? parsed.parentId } as AnyNode
         createOps.set(node.id, { node, parentId: patch.parentId })
         deleteIds.delete(node.id)
-        nextNodes[node.id] = node
       } else if (patch.op === 'update') {
-        nextNodes[patch.id] = { ...nextNodes[patch.id], ...patch.data } as AnyNode
         const created = createOps.get(patch.id)
         if (created) {
-          created.node = nextNodes[patch.id]!
+          created.node = { ...created.node, ...patch.data } as AnyNode
           if (patch.data.parentId !== undefined) created.parentId = patch.data.parentId as AnyNodeId
         } else
           updateOps.set(patch.id, { ...updateOps.get(patch.id), ...patch.data } as Partial<AnyNode>)
@@ -558,17 +558,20 @@ export class SceneBridge {
         deleteIds.add(patch.id)
         createOps.delete(patch.id)
         updateOps.delete(patch.id)
-        delete nextNodes[patch.id]
       }
     }
     // Plan the entire deletion selection before applying anything. Interleaved
     // update operations must not turn an all-boundaries deletion into balconies.
+    // Only a deletion plans: the planner reads the whole scene for what the
+    // deleted nodes hold.
     const planned = structureChangeBatch(
-      planWallDeletion(nodes, {
-        nodeIds: [...deleteIds],
-        nextNodes,
-        mintId: generateId,
-      }).changes,
+      deleteIds.size
+        ? planWallDeletion(nodes, {
+            nodeIds: [...deleteIds],
+            nextNodes: patchedNodes(nodes, createOps, updateOps, deleteIds),
+            mintId: generateId,
+          }).changes
+        : [],
     )
     // What was asked for, before the deletion planner adds its own writes.
     const requested = {
@@ -790,4 +793,18 @@ export class SceneBridge {
     }
     return out
   }
+}
+
+/** The scene as a patch leaves it, for the deletion planner. */
+function patchedNodes(
+  nodes: Record<AnyNodeId, AnyNode>,
+  creates: ReadonlyMap<AnyNodeId, { node: AnyNode }>,
+  updates: ReadonlyMap<AnyNodeId, Partial<AnyNode>>,
+  deletes: ReadonlySet<AnyNodeId>,
+): Record<AnyNodeId, AnyNode> {
+  const next = { ...nodes }
+  for (const [id, data] of updates) next[id] = { ...next[id], ...data } as AnyNode
+  for (const [id, { node }] of creates) next[id] = node
+  for (const id of deletes) delete next[id]
+  return next
 }

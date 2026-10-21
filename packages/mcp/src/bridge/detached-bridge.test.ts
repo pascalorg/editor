@@ -7,6 +7,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { type SceneCommit, subscribeSceneCommits } from '@pascal-app/core'
 import {
+  applyPatchWithDependencies,
   captureRegistryVersions,
   effectIds,
   openDetachedScene,
@@ -18,6 +19,7 @@ import {
   type AnyNodeId,
   BuildingNode,
   GeometryArtifactManifest,
+  ItemNode,
   LevelNode,
   RoofNode,
   WallNode,
@@ -302,6 +304,84 @@ describe('SceneBridge writes on a detached scene', () => {
     ;(level.metadata.tags as string[]).push('two')
     expect(bridge.getNode('level_g' as AnyNodeId)?.metadata).toEqual({ tags: ['one'] })
     scene.dispose()
+  })
+  /** A rename of one chair, written by `write`; what it recorded, checked against edits meanwhile. */
+  async function readsOf(write: (bridge: SceneBridge) => Promise<void> | void) {
+    const base = snapshot()
+    const upper = LevelNode.parse({ id: 'level_u', parentId: 'building_b', level: 1, height: 2.8 })
+    const wall = (id: string) =>
+      WallNode.parse({ id, parentId: upper.id, start: [0, 0], end: [4, 0], height: 2.8 })
+    const chair = ItemNode.parse({
+      id: 'item_a',
+      parentId: 'level_g',
+      position: [1, 0, 1],
+      asset: {
+        id: 'chair',
+        name: 'Chair',
+        category: 'furniture',
+        thumbnail: '/items/chair/thumbnail.webp',
+        src: '/items/chair/model.glb',
+      },
+    })
+    const away = wall('wall_b')
+    const building = base.nodes['building_b' as AnyNodeId] as BuildingNode
+    const level = base.nodes['level_g' as AnyNodeId] as LevelNode
+    const from = {
+      ...base,
+      nodes: {
+        ...base.nodes,
+        [building.id]: { ...building, children: [level.id, upper.id] },
+        [level.id]: { ...level, children: [chair.id] },
+        [upper.id]: { ...upper, children: [away.id] },
+        [chair.id]: chair,
+        [away.id]: away,
+      },
+    } as SceneSnapshot
+    const scene = detached('effect_reads', from)
+    const bridge = new SceneBridge({ runtime: scene })
+    bridge.setActiveScene({ id: 'scene_reads', name: 'Reads' } as never)
+    await write(bridge)
+    const patch = scene.patch()
+    const dependencies = scene.dependencies()
+    scene.dispose()
+    expect(patch.nodeUpdates).toEqual([
+      expect.objectContaining({ id: chair.id, data: { name: 'North' } }),
+    ])
+
+    const edited = (nodes: Record<string, AnyNode>) => ({ ...from, nodes }) as SceneSnapshot
+    const { [away.id]: _gone, ...withoutAway } = from.nodes as Record<string, AnyNode>
+    const meanwhile = [
+      edited({
+        ...from.nodes,
+        [upper.id]: { ...upper, children: [away.id, 'wall_c'] },
+        wall_c: wall('wall_c'),
+      } as Record<string, AnyNode>),
+      edited({ ...withoutAway, [upper.id]: { ...upper, children: [] } } as Record<string, AnyNode>),
+    ]
+    for (const current of meanwhile)
+      expect(applyPatchWithDependencies(current, patch, dependencies, from).ok).toBe(true)
+    const renamed = edited({ ...from.nodes, [chair.id]: { ...chair, name: 'South' } } as Record<
+      string,
+      AnyNode
+    >)
+    expect(applyPatchWithDependencies(renamed, patch, dependencies, from).ok).toBe(false)
+  }
+
+  test('read what they touch: a create or delete elsewhere meanwhile merges, a rename of the same node conflicts', async () => {
+    await readsOf((bridge) => {
+      bridge.applyPatch([{ op: 'update', id: 'item_a' as AnyNodeId, data: { name: 'North' } }])
+    })
+  })
+
+  test('so does an MCP tool call: recording what it made reads no more of the scene', async () => {
+    await readsOf(async (bridge) => {
+      const client = await connect(createPascalMcpServer({ bridge }))
+      const result = await client.callTool({
+        name: 'apply_patch',
+        arguments: { patches: [{ op: 'update', id: 'item_a', data: { name: 'North' } }] },
+      })
+      expect(result.isError, JSON.stringify(result.content)).toBeFalsy()
+    })
   })
 })
 

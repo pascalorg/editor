@@ -10,12 +10,13 @@ import { type PatchRefusalCode, PatchRefusedError, registerPatchGuard } from './
  * one hides is refused, naming it; `null` clears. The cleaned data is what is written.
  */
 function honestUpdates(patches: Patch[], scene: Readonly<Record<string, AnyNode>>) {
-  const nodes: Record<string, AnyNode> = { ...scene }
+  // The batch over the scene, read id by id.
+  const written = new Map<string, AnyNode | undefined>()
   for (const [index, patch] of patches.entries()) {
-    if (patch.op === 'create') nodes[patch.node.id] = patch.node
-    else if (patch.op === 'delete') delete nodes[patch.id]
+    if (patch.op === 'create') written.set(patch.node.id, patch.node)
+    else if (patch.op === 'delete') written.set(patch.id, undefined)
     else if (patch.op === 'update') {
-      const current = nodes[patch.id]
+      const current = written.has(patch.id) ? written.get(patch.id) : scene[patch.id]
       if (!current) continue
       try {
         patch.data = honestNodePatch(
@@ -26,7 +27,7 @@ function honestUpdates(patches: Patch[], scene: Readonly<Record<string, AnyNode>
         if (!isAgentRefusal(error)) throw error
         throw new PatchRefusedError(error.code as PatchRefusalCode, index, patch.id, error.message)
       }
-      nodes[patch.id] = { ...current, ...patch.data } as AnyNode
+      written.set(patch.id, { ...current, ...patch.data } as AnyNode)
     }
   }
 }

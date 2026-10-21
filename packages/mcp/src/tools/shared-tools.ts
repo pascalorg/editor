@@ -547,7 +547,10 @@ export function agentRuntime(bridge: SceneOperations): AgentHostRuntime {
       const next = toPatches(changes)
       if (next.length) bridge.applyPatch(next)
       if (changes.collections && Object.keys(changes.collections).length)
-        bridge.setCollections(writeCollections(bridge.getCollections(), changes.collections))
+        // Copying the others is not a read: the operation recorded what it read of them.
+        bridge.setCollections(
+          writeCollections(untracked(bridge.getCollections()), changes.collections),
+        )
     },
     reconcile: () => {
       bridge.deriveStructure()

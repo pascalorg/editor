@@ -5,6 +5,7 @@ import {
   type CollectionPredicate,
   type Dependency,
   type EntityQuery,
+  matchesNodePredicate,
   type NodePredicate,
   type QueryDependency,
   queryIds,
@@ -136,6 +137,82 @@ const queriesOfRecord = new WeakMap<object, VersionQueries>()
  */
 export function readerOf(record: object): VersionQueries | undefined {
   return queriesOfRecord.get(record)
+}
+
+/** Drafts over a tracked view: a draft of one is a draft over it, never a copy. */
+const drafts = new WeakSet<object>()
+
+/**
+ * A record to write a draft into, over `record`: a plain record is copied; a tracked view's (or a
+ * draft's) draft reads through to it entry by entry, so a draft that is only written and read by id
+ * records those ids, not a read of every entry (enumerating the draft still reads the whole view).
+ */
+export function draftOf<T>(record: Readonly<Record<string, T>>): Record<string, T> {
+  if (!(rawOfView.has(record) || drafts.has(record))) return { ...record }
+  const written = new Map<string, T>()
+  const removed = new Set<string>()
+  const has = (key: string) => written.has(key) || (!removed.has(key) && key in record)
+  const read = (key: string) =>
+    written.has(key) ? written.get(key) : removed.has(key) ? undefined : record[key]
+  const draft = new Proxy({} as Record<string, T>, {
+    get: (_, key) => (typeof key === 'string' ? read(key) : undefined),
+    has: (_, key) => typeof key === 'string' && has(key),
+    set(_, key, value) {
+      if (typeof key !== 'string') return false
+      written.set(key, value as T)
+      removed.delete(key)
+      return true
+    },
+    deleteProperty(_, key) {
+      if (typeof key !== 'string') return false
+      written.delete(key)
+      removed.add(key)
+      return true
+    },
+    ownKeys: () => [
+      ...new Set([...Object.keys(record).filter((key) => !removed.has(key)), ...written.keys()]),
+    ],
+    getOwnPropertyDescriptor: (_, key) =>
+      typeof key === 'string' && has(key)
+        ? { value: read(key), writable: true, enumerable: true, configurable: true }
+        : undefined,
+  })
+  drafts.add(draft)
+  const base = readerOf(record)
+  if (base)
+    queriesOfRecord.set(draft, {
+      // What a selection over the record beneath finds, with the draft's writes over it.
+      query: ((selection: EntityQuery) => {
+        if (selection.entity !== 'node') return base.query(selection as never)
+        const where = selection.where ?? null
+        const matches = (node: unknown) => matchesNodePredicate(node as AnyNode, where)
+        const found: unknown[] = base.query({ entity: 'node', where: selection.where })
+        const idOf = (node: unknown) => (node as AnyNode).id as string
+        const listed = new Set(found.map(idOf))
+        const added: unknown[] = []
+        for (const [id, node] of written) {
+          if (listed.has(id) || !matches(node)) continue
+          // An entry the draft changed into the selection: only the whole draft knows its place.
+          if (id in record) return Object.values(draft).filter(matches)
+          added.push(node)
+        }
+        const kept = found.flatMap((node): unknown[] => {
+          const id = idOf(node)
+          if (removed.has(id)) return []
+          if (!written.has(id)) return [node]
+          const next = written.get(id)
+          return matches(next) ? [next] : []
+        })
+        return [...kept, ...added]
+      }) as DocumentReader['query'],
+      orderedChildren: (id) =>
+        written.has(id)
+          ? [...childIdsOf(written.get(id) as AnyNode | undefined)]
+          : removed.has(id)
+            ? []
+            : base.orderedChildren(id),
+    })
+  return draft
 }
 
 /** The plain value behind a tracked view (copying it records nothing); other values as they are. */
