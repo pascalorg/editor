@@ -41,7 +41,12 @@ export type HttpTransportOptions = {
  * Uses the SDK's `NodeStreamableHTTPServerTransport`, which accepts
  * `IncomingMessage`/`ServerResponse` directly via `handleRequest(req, res)`.
  * A new session ID is generated per connection (stateful mode).
-
+ *
+ * Serves the 2025 sessionful protocol only: a negotiating client falls back
+ * to it, and a client pinned to 2026-07-28 is refused. The SDK serves
+ * 2026-07-28 over HTTP per request (`createMcpHandler`), with a fresh server
+ * from the factory each time, and every server here owns its own scene, so a
+ * session is what keeps one client's scene between calls.
  *
  * Listens on `127.0.0.1:<port>` (pass `0` for an ephemeral port in tests). The
  * returned handle exposes the actual bound port and a `close()` that stops
