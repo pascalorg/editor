@@ -26,7 +26,7 @@ import {
   Vector2,
   Vector3,
 } from 'three'
-import { rectSectionAxes } from '../duct-segment/geometry'
+import { rectSectionAxes } from '../duct-segment/profile'
 import { hasWallChildOverlap, resolveWallAttachmentAtPlanPoint } from './wall-attach-target'
 
 export type SupportedRun = DuctSegmentNode | PipeSegmentNode

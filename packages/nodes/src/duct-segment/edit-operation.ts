@@ -14,7 +14,7 @@ import { type DuctProfile, planElbowAtPort, profileDiameterIn } from '../shared/
 import { autoOffsetInvalidationUpdates } from '../shared/auto-offset-tag'
 import { transferRunEndCapOwnership } from '../shared/automatic-run-end-cap'
 import { ductProfilesMatch, planDuctAdapter } from '../shared/duct-adapter'
-import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
+import { rectSectionAxes, rollToContinueAcrossElbow } from './profile'
 
 type Point = [number, number, number]
 export type DuctEditInput = {

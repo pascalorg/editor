@@ -17,7 +17,7 @@ import {
   type RunContinuationHandlePlan,
   resolveDuctContinuationHandle,
 } from '../shared/elbow-branch-continuation'
-import { ductPortDiameterIn } from './geometry'
+import { ductPortDiameterIn } from './profile'
 
 export type DuctEndpoint = 'start' | 'end'
 

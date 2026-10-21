@@ -6,8 +6,9 @@ import { createRunHangerToolHint } from '../shared/run-hanger-mode'
 import { ductRunToolOptions } from '../shared/run-tool-options'
 import { ductBranchAffordance, ductContinuationAffordance } from './continuation'
 import { buildDuctSegmentFloorplan } from './floorplan'
-import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
+import { buildDuctSegmentGeometry } from './geometry'
 import { ductSegmentParametrics } from './parametrics'
+import { ductPortDiameterIn } from './profile'
 import { DuctSegmentNode } from './schema'
 
 /**

@@ -96,7 +96,7 @@ export const pipeConnectTool = {
 export const builtinAgentTools = {
   pluginId: 'pascal:core',
   apiVersion: 1,
-  version: '1.0.0',
+  version: '1.1.0',
   tools: [
     finishKitchenRunTool,
     checkKitchenClearanceTool,

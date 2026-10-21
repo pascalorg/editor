@@ -1,5 +1,5 @@
 import { CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3 } from 'three'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import type { LiquidLineNode } from './schema'
 
 const RADIAL_SEGMENTS = 16

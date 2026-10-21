@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { fileURLToPath } from 'node:url'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -323,4 +324,27 @@ test('an obstacle offset transfers the far automatic cap to the tail section', (
   expect(
     ductSegmentDefinition.parametrics!.onDeleteCascade!(tail, next, new Set(), new Set([tail.id])),
   ).toContain(cap.id)
+})
+
+test('agent operations bundle for a headless host without editor or viewer dependencies', async () => {
+  const result = await Bun.build({
+    entrypoints: [fileURLToPath(import.meta.resolve('@pascal-app/nodes/agent-operations'))],
+    target: 'bun',
+    write: false,
+    external: ['@pascal-app/core', '@pascal-app/core/*', 'three', 'zod'],
+    plugins: [
+      {
+        name: 'headless-operation-boundary',
+        setup(build) {
+          build.onResolve(
+            { filter: /^(@pascal-app\/(viewer|editor)(\/|$)|react(-dom)?($|\/)|@react-three\/)/ },
+            (args) => {
+              throw new Error(`Headless operations cannot load ${args.path} from ${args.importer}`)
+            },
+          )
+        },
+      },
+    ],
+  })
+  expect(result.success).toBe(true)
 })

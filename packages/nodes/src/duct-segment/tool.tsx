@@ -46,7 +46,7 @@ import { useRunHangerMode } from '../shared/run-hanger-mode'
 import { clearRunContinuation, updateRunDefaults } from '../shared/run-tool-options'
 import { currentDuctContinuationSeed, ductEndpointPort } from './continuation'
 import { ductSegmentDefinition } from './definition'
-import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
+import { rectSectionAxes, rollToContinueAcrossElbow } from './profile'
 
 /**
  * Continuous placement tool for duct segments.

@@ -3,7 +3,7 @@ import { Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { findAutomaticRunEndCapIds } from '../shared/automatic-run-end-cap'
 import { fittingDeletionPlansForRun } from '../shared/fitting-deletion-cleanup'
-import { rollToContinueAcrossElbow } from './geometry'
+import { rollToContinueAcrossElbow } from './profile'
 import type { DuctSegmentNode } from './schema'
 
 /** A run endpoint sitting this close to a collar counts as mated. */
