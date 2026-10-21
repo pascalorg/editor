@@ -1,8 +1,11 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import type { AnyNodeDefinition, DistributionRole, NodePort } from '../registry'
-import { registerNode } from '../registry'
+import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { buildPortComponents, summarizeSystemFor } from './system-graph'
+
+// One registry serves every test file in the process: give back what this file found.
+afterAll(nodeRegistry._snapshot())
 
 type Point = [number, number, number]
 

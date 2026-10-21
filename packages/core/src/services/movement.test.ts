@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry/registry'
 import type { AnyNodeDefinition, Capabilities, MovableConfig } from '../registry/types'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { applyAxisLock, isMovable, movePlanToward, moveToward, resolveMovable } from './movement'
+
+// One registry serves every test file in the process: give back what this file found.
+afterAll(nodeRegistry._snapshot())
 
 const id = (s: string) => s as AnyNodeId
 

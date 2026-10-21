@@ -1,9 +1,12 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import { DoorNode, LevelNode, SiteNode, WallNode, WindowNode } from '../schema'
 import { validateBuildJson } from './validate-build-json'
+
+// One registry serves every test file in the process: give back what this file found.
+afterAll(nodeRegistry._snapshot())
 
 function makeScene() {
   const wall = WallNode.parse({

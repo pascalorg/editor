@@ -1,10 +1,13 @@
-import { beforeAll, expect, test } from 'bun:test'
-import { registerNode } from '../registry/registry'
+import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { nodeRegistry, registerNode } from '../registry/registry'
 import { ItemNode } from '../schema/nodes/item'
 import useScene from '../store/use-scene'
 import { shelfRecipe } from './fixtures'
 import { ProceduralItemNode } from './node'
 import { evaluateRecipe } from './recipe'
+
+// One registry serves every test file in the process: give back what this file found.
+afterAll(nodeRegistry._snapshot())
 
 globalThis.requestAnimationFrame ??= (cb: FrameRequestCallback) => {
   cb(0)

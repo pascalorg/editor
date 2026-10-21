@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
@@ -17,6 +17,9 @@ import {
   resolveSupportSlabPatch,
   resolveWallSupportSlabPatch,
 } from './support-host-patch'
+
+// One registry serves every test file in the process: give back what this file found.
+afterAll(nodeRegistry._snapshot())
 
 const LEVEL_ID = 'level_test'
 
