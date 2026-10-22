@@ -1,6 +1,9 @@
 import {
   BoxGeometry,
+  BufferGeometry,
   CylinderGeometry,
+  DoubleSide,
+  Float32BufferAttribute,
   Group,
   type Material,
   Mesh,
@@ -16,6 +19,7 @@ import {
   applianceLampMaterial,
   type CabinetGeometryNode,
   type CabinetSlotMaterials,
+  createCabinetPanelGeometry,
   microwaveButtonMaterial,
   microwaveCancelButtonMaterial,
   microwavePanelMaterial,
@@ -213,7 +217,7 @@ function addOvenRotaryDial(
   name: string,
 ) {
   const dial = stampSlot(
-    new Mesh(new CylinderGeometry(radius, radius, 0.018, 36), ovenDialMaterial),
+    new Mesh(new CylinderGeometry(radius, radius, 0.018, 20), ovenDialMaterial),
     'appliance',
   )
   dial.name = name
@@ -242,7 +246,7 @@ function addOvenRotaryDial(
   group.add(indicator)
 
   const ring = stampSlot(
-    new Mesh(new TorusGeometry(radius * 1.25, 0.002, 8, 36), microwaveScreenMaterial),
+    new Mesh(new TorusGeometry(radius * 1.25, 0.002, 4, 24), microwaveScreenMaterial),
     'appliance',
   )
   ring.name = `${name}-ring`
@@ -413,7 +417,7 @@ function addOvenInteriorDetails(
 ) {
   const fanRadius = Math.min(width, height) * 0.18
   const fanRing = stampSlot(
-    new Mesh(new TorusGeometry(fanRadius, 0.004, 8, 48), materials.applianceInterior),
+    new Mesh(new TorusGeometry(fanRadius, 0.004, 6, 24), materials.applianceInterior),
     'applianceInterior',
   )
   fanRing.name = `${name}-convection-fan-ring`
@@ -422,7 +426,7 @@ function addOvenInteriorDetails(
 
   const hub = stampSlot(
     new Mesh(
-      new CylinderGeometry(fanRadius * 0.22, fanRadius * 0.22, 0.008, 24),
+      new CylinderGeometry(fanRadius * 0.22, fanRadius * 0.22, 0.008, 12),
       materials.applianceInterior,
     ),
     'applianceInterior',
@@ -434,18 +438,26 @@ function addOvenInteriorDetails(
 
   for (let i = 0; i < 4; i += 1) {
     const blade = stampSlot(
-      new Mesh(new BoxGeometry(fanRadius * 0.72, 0.006, 0.003), materials.applianceInterior),
+      new Mesh(
+        new BoxGeometry(fanRadius * 0.6, fanRadius * 0.22, 0.003),
+        materials.applianceInterior,
+      ),
       'applianceInterior',
     )
     blade.name = `${name}-convection-fan-blade-${i}`
-    blade.rotation.z = (i * Math.PI) / 2
-    blade.position.set(x, y, z + 0.02)
+    const angle = (i * Math.PI) / 2
+    blade.rotation.z = angle + Math.PI / 8
+    blade.position.set(
+      x + Math.cos(angle) * fanRadius * 0.46,
+      y + Math.sin(angle) * fanRadius * 0.46,
+      z + 0.02,
+    )
     group.add(blade)
   }
 
   const element = stampSlot(
     new Mesh(
-      new TorusGeometry(Math.min(width, depth) * 0.32, 0.004, 8, 64),
+      new TorusGeometry(Math.min(width, depth) * 0.32, 0.004, 6, 32),
       ovenHeatElementMaterial,
     ),
     'applianceInterior',
@@ -457,6 +469,9 @@ function addOvenInteriorDetails(
   group.add(element)
 }
 
+const microwaveWindowMaterial = microwaveScreenMaterial.clone()
+microwaveWindowMaterial.side = DoubleSide
+
 function addMicrowaveDoorMesh(
   leaf: Object3D,
   width: number,
@@ -464,26 +479,40 @@ function addMicrowaveDoorMesh(
   z: number,
   name: string,
 ) {
-  const columns = 7
-  const rows = 5
-  const dotSize = Math.max(0.0035, Math.min(width, height) * 0.018)
+  const columns = 15
+  const rows = 9
   const meshWidth = width * 0.7
   const meshHeight = height * 0.55
+  const radius = Math.min(meshWidth / (columns - 1), meshHeight / (rows - 1)) * 0.18
+  const positions: number[] = []
+  const uvs: number[] = []
+  const indices: number[] = []
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < columns; col += 1) {
-      const dot = stampSlot(
-        new Mesh(new BoxGeometry(dotSize, dotSize, 0.002), microwaveScreenMaterial),
-        'glass',
-      )
-      dot.name = `${name}-window-dot-${row}-${col}`
-      dot.position.set(
-        -meshWidth / 2 + (meshWidth * col) / (columns - 1),
-        -meshHeight / 2 + (meshHeight * row) / (rows - 1),
-        z + 0.003,
-      )
-      leaf.add(dot)
+      const x = -meshWidth / 2 + (meshWidth * col) / (columns - 1)
+      const y = -meshHeight / 2 + (meshHeight * row) / (rows - 1)
+      const start = positions.length / 3
+      for (const [px, py] of [
+        [x - radius, y],
+        [x, y - radius],
+        [x + radius, y],
+        [x, y + radius],
+      ]) {
+        positions.push(px!, py!, 0)
+        uvs.push(px!, py!)
+      }
+      indices.push(start, start + 1, start + 2, start, start + 2, start + 3)
     }
   }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
+  geometry.setIndex(indices)
+  geometry.computeVertexNormals()
+  const screen = stampSlot(new Mesh(geometry, microwaveWindowMaterial), 'glass')
+  screen.name = `${name}-window-screen`
+  screen.position.z = z + 0.004
+  leaf.add(screen)
 }
 
 function addMicrowaveTurntable(
@@ -496,7 +525,7 @@ function addMicrowaveTurntable(
   name: string,
 ) {
   const plate = stampSlot(
-    new Mesh(new CylinderGeometry(radius, radius, 0.006, 48), materials.glass),
+    new Mesh(new CylinderGeometry(radius, radius, 0.006, 32), materials.glass),
     'glass',
   )
   plate.name = `${name}-turntable`
@@ -505,7 +534,7 @@ function addMicrowaveTurntable(
   group.add(plate)
 
   const ring = stampSlot(
-    new Mesh(new TorusGeometry(radius * 0.72, 0.004, 8, 48), materials.applianceInterior),
+    new Mesh(new TorusGeometry(radius * 0.72, 0.004, 6, 24), materials.applianceInterior),
     'applianceInterior',
   )
   ring.name = `${name}-roller-ring`
@@ -599,7 +628,8 @@ export function addApplianceCompartment(
 
   const wall = APPLIANCE_CAVITY_WALL
   const cavityWidth = Math.max(0.05, Math.min(doorWidth, openingWidth) - wall * 2)
-  const cavityHeight = Math.max(0.05, doorHeight - wall * 2)
+  // Keep the liner inside the cabinet envelope to avoid coplanar outer faces.
+  const cavityHeight = Math.max(0.05, doorHeight - wall * 2 - 0.004)
   const cavityFrontZ = frontZ - frontThickness / 2 - 0.001
   const cavityDepth = Math.max(0.05, Math.min(0.55, openingDepth - 0.04))
   const cavityBackZ = cavityFrontZ - cavityDepth
@@ -781,7 +811,7 @@ export function addApplianceCompartment(
   )
   const glassMesh = stampSlot(
     new Mesh(
-      new BoxGeometry(glassWidth, glassHeight, Math.max(0.003, frontThickness * 0.5)),
+      createCabinetPanelGeometry(glassWidth, glassHeight, Math.max(0.003, frontThickness * 0.5)),
       materials.glass,
     ),
     'glass',

@@ -9,7 +9,7 @@
       "expectations": [
         "Chooses the local CLI path and does not request or create a hosted credential.",
         "Uses pascal mcp setup codex or the pascal mcp connect configuration.",
-        "Runs validate_scene, verify_scene, save_scene, and get_project_status before claiming success.",
+        "Runs verify_scene, save_scene, and get_project_status before claiming success.",
         "Does not claim GLB export or cloud synchronization."
       ]
     },

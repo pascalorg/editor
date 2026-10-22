@@ -9,7 +9,6 @@ import { InlineRenameInput } from './inline-rename-input'
 import {
   focusTreeNode,
   handleTreeSelection,
-  routeTreeSelectionToNode,
   TreeNode,
   TreeNodeWrapper,
 } from './tree-node'
@@ -70,9 +69,8 @@ export const ShelfTreeNode = memo(function ShelfTreeNode({
     (e: React.MouseEvent) => {
       e.stopPropagation()
       handleTreeSelection(e, nodeId, useViewer.getState().selection.selectedIds, setSelection)
-      routeTreeSelectionToNode(node)
     },
-    [node, nodeId, setSelection],
+    [nodeId, setSelection],
   )
 
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])

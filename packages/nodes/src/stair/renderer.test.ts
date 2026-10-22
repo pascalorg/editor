@@ -17,7 +17,13 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { StairEditSystem, ToolManager, useAlignmentGuides, useEditor } from '@pascal-app/editor'
+import {
+  preloadRegistryToolModules,
+  StairEditSystem,
+  ToolManager,
+  useAlignmentGuides,
+  useEditor,
+} from '@pascal-app/editor'
 import { OVERLAY_LAYER, StairSystem, useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { createElement } from 'react'
@@ -275,7 +281,7 @@ test('stair placement preview follows raised support, survives level switches, a
       selection: { buildingId: building.id, levelId: ground.id, zoneId: null, selectedIds: [] },
     })
     useEditor.setState({
-      phase: 'structure',
+      phase: 'building',
       mode: 'build',
       tool: 'stair',
       isFloorplanHovered: true,
@@ -286,6 +292,8 @@ test('stair placement preview follows raised support, survives level switches, a
     camera.position.set(0, 10, 0)
     camera.lookAt(0, 0, 0)
     camera.updateMatrixWorld(true)
+    await loadPlugin(builtinPlugin)
+    await preloadRegistryToolModules('stair')
     renderer = await create(createElement(ToolManager), { camera })
     const move = { position: [0, 0, 0], localPosition: [0, 0, 0], nativeEvent: {} } as Parameters<
       typeof emitter.emit<'grid:move'>
@@ -728,6 +736,7 @@ test('stair railing geometry invalidates for its own live dependencies and resol
 })
 
 test('stair paint resolves inherited finishes from the supplied scene snapshot', async () => {
+  await loadPlugin(builtinPlugin)
   const previous = useScene.getState()
   const red = SceneMaterial.parse({
     id: 'mat_stair_context',

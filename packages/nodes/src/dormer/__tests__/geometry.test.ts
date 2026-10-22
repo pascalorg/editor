@@ -82,23 +82,23 @@ describe('buildDormerGhostGeometry (placement preview)', () => {
     ['gambrel', 3],
     ['mansard', 3],
     ['dutch', 4],
-  ] satisfies [
-    RoofType,
-    number,
-  ][])('builds the canonical %s height profile', (roofType, levels) => {
-    const wallHeight = 1
-    const geo = buildDormerGhostGeometry(
-      DormerNode.parse({ roofType, width: 4, depth: 3, height: wallHeight, roofHeight: 1.2 }),
-    )
-    const position = geo.getAttribute('position')
-    const roofLevels = new Set<number>()
-    for (let index = 0; index < position.count; index++) {
-      const y = position.getY(index)
-      if (y >= wallHeight - 0.001) roofLevels.add(Math.round(y * 1000))
-    }
+  ] satisfies [RoofType, number][])(
+    'builds the canonical %s height profile',
+    (roofType, levels) => {
+      const wallHeight = 1
+      const geo = buildDormerGhostGeometry(
+        DormerNode.parse({ roofType, width: 4, depth: 3, height: wallHeight, roofHeight: 1.2 }),
+      )
+      const position = geo.getAttribute('position')
+      const roofLevels = new Set<number>()
+      for (let index = 0; index < position.count; index++) {
+        const y = position.getY(index)
+        if (y >= wallHeight - 0.001) roofLevels.add(Math.round(y * 1000))
+      }
 
-    expect(roofLevels.size).toBe(levels)
-  })
+      expect(roofLevels.size).toBe(levels)
+    },
+  )
 
   test('assigns roof faces to the roof material slot', () => {
     const geo = buildDormerGhostGeometry(DormerNode.parse({ roofType: 'mansard' }))

@@ -17,6 +17,7 @@ import { type Camera, Plane, type Raycaster, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
@@ -380,6 +381,7 @@ export function armGroupMove3d(args: {
   // `use-keyboard` arms, which would otherwise act on stale store state
   // (or clear the multi-selection) mid-session.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (isTypingTarget(e.target)) return
     const key = e.key.toLowerCase()
     if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
       // Armed but still under the drag threshold: engage first (exactly what

@@ -293,6 +293,7 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
     case 'conical':
     case 'flat':
       break
+    case 'barrel':
     case 'gable':
       // Single ridge down the middle along the width axis.
       ridges.push([

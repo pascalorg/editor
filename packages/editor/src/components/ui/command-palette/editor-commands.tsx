@@ -1,7 +1,6 @@
 'use client'
 
-import type { AnyNodeId } from '@pascal-app/core'
-import { DEFAULT_LEVEL_HEIGHT, LevelNode, type UnitNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type LevelNode, type UnitNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
   AppWindow,
@@ -37,8 +36,10 @@ import {
   Video,
 } from 'lucide-react'
 import { useEffect } from 'react'
+import { addStoreyOnTop } from '../../../lib/add-storey'
 import { getHistoryCommandState, runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
+import { getSavedSceneDocument } from '../../../lib/scene'
 import { createUnitInBuilding, enterUnitFocus, leaveUnitFocus } from '../../../lib/units'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
@@ -49,10 +50,8 @@ export function EditorCommands() {
   const register = useCommandRegistry((s) => s.register)
   const { navigateTo, setInputValue, setOpen } = useCommandPalette()
 
-  const setPhase = useEditor((s) => s.setPhase)
   const armToolMode = useEditor((s) => s.armToolMode)
   const armMaterialPaint = useEditor((s) => s.armMaterialPaint)
-  const setStructureLayer = useEditor((s) => s.setStructureLayer)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const setPreviewMode = useEditor((s) => s.setPreviewMode)
 
@@ -78,12 +77,7 @@ export function EditorCommands() {
     )
 
     const activateTool = (tool: StructureTool) => {
-      run(() => {
-        setPhase('structure')
-        if (tool === 'zone') setStructureLayer('zones')
-        else setStructureLayer('elements')
-        armToolMode({ mode: 'build', tool })
-      })
+      run(() => armToolMode({ mode: 'build', tool }))
     }
 
     return register([
@@ -174,11 +168,7 @@ export function EditorCommands() {
         keywords: ['paint', 'material', 'texture', 'bucket', 'surface'],
         shortcut: ['P'],
         execute: () =>
-          run(() => {
-            setPhase('structure')
-            setStructureLayer('elements')
-            armMaterialPaint()
-          }),
+          run(() => armMaterialPaint()),
       },
       {
         id: 'editor.mode.terrain-sculpt',
@@ -213,16 +203,7 @@ export function EditorCommands() {
             const { nodes } = useScene.getState()
             const building = Object.values(nodes).find((n) => n.type === 'building')
             if (!building) return
-            const levelCount = building.children.filter(
-              (childId) => nodes[childId as keyof typeof nodes]?.type === 'level',
-            ).length
-            const newLevel = LevelNode.parse({
-              level: levelCount,
-              height: DEFAULT_LEVEL_HEIGHT,
-              children: [],
-              parentId: building.id,
-            })
-            useScene.getState().createNode(newLevel, building.id)
+            const newLevel = addStoreyOnTop(building.id)
             useViewer.getState().setSelection({ levelId: newLevel.id })
           }),
       },
@@ -408,7 +389,7 @@ export function EditorCommands() {
         keywords: ['export', 'download', 'json', 'save', 'data'],
         execute: () =>
           run(() => {
-            const { nodes, rootNodeIds } = useScene.getState()
+            const { nodes, rootNodeIds } = getSavedSceneDocument()
             const blob = new Blob([JSON.stringify({ nodes, rootNodeIds }, null, 2)], {
               type: 'application/json',
             })
@@ -462,10 +443,8 @@ export function EditorCommands() {
     navigateTo,
     setInputValue,
     setOpen,
-    setPhase,
     armToolMode,
     armMaterialPaint,
-    setStructureLayer,
     isPreviewMode,
     setPreviewMode,
     exportScene,

@@ -5,7 +5,7 @@ import {
   compartmentShelfCount,
   type PullOutPantryRackStyle,
 } from '../stack'
-import { addBarHandle, buildFrontGeometry } from './fronts'
+import { addHandleFeature, buildFrontGeometry } from './fronts'
 import { addBox, type CabinetGeometryNode, type CabinetSlotMaterials, stampSlot } from './shared'
 
 function addPullOutPantryBasket(
@@ -40,6 +40,7 @@ function addPullOutPantryBasket(
       material,
       `${name}-${rackStyle}-front-panel`,
       rackStyle === 'glass' ? 'glass' : 'carcass',
+      true,
     )
     addBox(
       group,
@@ -48,6 +49,7 @@ function addPullOutPantryBasket(
       material,
       `${name}-${rackStyle}-back-panel`,
       rackStyle === 'glass' ? 'glass' : 'carcass',
+      true,
     )
     for (const side of [-1, 1]) {
       addBox(
@@ -89,8 +91,8 @@ function addPullOutPantryBasket(
   for (const side of [-1, 1]) {
     addBox(
       group,
-      [rail, basketHeight, depth],
-      toLocal([side * (width / 2 - rail / 2), y + basketHeight / 2, zCenter]),
+      [rail, rail, depth],
+      toLocal([side * (width / 2 - rail / 2), y + basketHeight, zCenter]),
       materials.hardware,
       `${name}-${side < 0 ? 'left' : 'right'}-side-rail`,
       'hardware',
@@ -99,7 +101,7 @@ function addPullOutPantryBasket(
   for (let i = 1; i <= 3; i += 1) {
     addBox(
       group,
-      [rail, basketHeight * 0.72, depth * 0.84],
+      [rail, basketHeight * 0.72, rail],
       toLocal([-width / 2 + (width * i) / 4, y + basketHeight * 0.48, zCenter]),
       materials.hardware,
       `${name}-divider-${i}`,
@@ -150,14 +152,19 @@ export function addPullOutPantryCompartment(
   motion.add(front)
 
   if (node.handleStyle !== 'cutout' && node.handleStyle !== 'hole') {
-    const handleLength = Math.max(0.18, Math.min(frontHeight * 0.52, 0.72))
-    addBarHandle(
-      motion,
-      toLocal([0, faceCenterY, frontZ + node.frontThickness / 2]),
-      handleLength,
+    const handleGroup = new Group()
+    handleGroup.position.set(0, faceCenterY, frontZ)
+    motion.add(handleGroup)
+    addHandleFeature(
+      handleGroup,
+      node,
+      materials,
+      frontWidth,
+      frontHeight,
+      null,
       true,
+      false,
       `${name}-handle`,
-      materials.hardware,
     )
   }
 

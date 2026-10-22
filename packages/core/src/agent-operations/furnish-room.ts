@@ -1,6 +1,7 @@
 import type { FURNISHED_ROOM_TYPES } from '../agent-tools/furnish-room'
 import { refuse } from '../agent-tools/refusal'
-import { type AnyNode, type AssetInput, ItemNode } from '../schema'
+import { OTHER_SOURCES } from '../agent-tools/sources'
+import { type AssetInput, ItemNode } from '../schema'
 import { edgeProjection } from './create-room'
 import {
   collectDoorKeepouts,
@@ -10,7 +11,15 @@ import {
   keepoutForPolygonEdge,
   type PlanAabb,
 } from './door-clearance'
-import { collectOccupiedFootprints, findValidPlacement } from './layout-clearance'
+import { furnitureKind } from './furniture-kind'
+import {
+  collectOccupiedFootprints,
+  findValidPlacement,
+  lateralSteps,
+  MID_ROOM_DISTANCE_M,
+  PLACEMENT_INSETS_M,
+  wallFacesOn,
+} from './layout-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, polygonBounds, type Vec2 } from './plan-geometry'
 import { levelIdOf, levelRole } from './scene-queries'
@@ -28,10 +37,20 @@ type FurnishRoomInput = LevelTargetInput & {
 // A door belongs to a room edge when it stands this close to the edge's line, within its span.
 const DOOR_EDGE_TOLERANCE = 0.25
 // Clearance between a piece's back and the wall's centreline: half a wall and a hand's width.
-const WALL_GAP = 0.1
+export const WALL_GAP = 0.1
+// A wall-bound piece (a sofa, a bed, a TV stand) slides along its wall, within the wall's ends, to
+// clear a door or another piece, and steps off it only as far as verify_scene still reads it
+// against the wall (item_mid_room); where no wall stands, it is skipped.
+const AGAINST_WALL_INSETS_M = PLACEMENT_INSETS_M.filter(
+  (inset) => WALL_GAP + inset <= MID_ROOM_DISTANCE_M,
+)
 
 /** The room asked for: a zone's level and outline, or a polygon on the level named. */
-function roomToFurnish(nodes: SceneNodes, input: FurnishRoomInput, context: AgentContext) {
+export function roomToFurnish(
+  nodes: SceneNodes,
+  input: LevelTargetInput & Pick<FurnishRoomInput, 'zoneId' | 'polygon'>,
+  context: AgentContext,
+) {
   if (input.zoneId) {
     const zone = nodes[input.zoneId]
     if (!zone)
@@ -81,7 +100,7 @@ function doorsOfRoom(nodes: SceneNodes, levelId: string, polygon: Vec2[]) {
 }
 
 /** A polygon edge seen from inside the room: its middle, its direction, and the way into the room. */
-function edgeFrame(polygon: Vec2[], index: number, center: Vec2) {
+export function edgeFrame(polygon: Vec2[], index: number, center: Vec2) {
   const a = polygon[index % polygon.length]!
   const b = polygon[(index + 1) % polygon.length]!
   const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
@@ -102,6 +121,10 @@ type Pose = {
   rotationDeg: number
   along?: { x: number; z: number }
   inward?: { x: number; z: number }
+  /** The wall it stands against: its length, and the piece's offset along it from its middle. */
+  wall?: { length: number; lateral: number }
+  /** A piece placed before it that it keeps with (a bedside table its bed, the TV its sofa). */
+  follows?: string
 }
 
 /** Where each piece of a room type goes, sized from the catalog's own dimensions. */
@@ -122,16 +145,21 @@ function layout(
   const width = (assetId: string) => size(assetId)?.[0] ?? 1
   const depth = (assetId: string) => size(assetId)?.[2] ?? 1
   const poses: Pose[] = []
-  /** Back against `edge`, `lateral` along it from its middle, `out` further into the room. */
-  const against = (edge: Edge, assetId: string, lateral = 0, out = 0) => {
+  /**
+   * Back against `edge`, `lateral` along it from its middle, `out` further into the room; moved
+   * along `edge` as far as the piece it `follows` was moved.
+   */
+  const against = (edge: Edge, assetId: string, lateral = 0, out = 0, follows?: string) => {
     const inset = depth(assetId) / 2 + WALL_GAP + out
     poses.push({
+      follows,
       assetId,
       x: edge.mid[0] + edge.inward.x * inset + edge.along.x * lateral,
       z: edge.mid[1] + edge.inward.z * inset + edge.along.z * lateral,
       rotationDeg: edge.facing,
       along: edge.along,
       inward: edge.inward,
+      wall: { length: edge.length, lateral },
     })
   }
   const free = (assetId: string, x: number, z: number, rotationDeg = 0) =>
@@ -144,8 +172,8 @@ function layout(
       const table = width('bedside-table')
       if (back.length >= width(bed) + 2 * table + 0.2) {
         const lateral = width(bed) / 2 + table / 2 + 0.05
-        against(back, 'bedside-table', -lateral)
-        against(back, 'bedside-table', lateral)
+        against(back, 'bedside-table', -lateral, 0, bed)
+        against(back, 'bedside-table', lateral, 0, bed)
       }
       if (area >= 10) against(side, 'dresser', side.length * 0.22)
       if (area >= 13) against(side, 'closet', -side.length * 0.22)
@@ -159,15 +187,14 @@ function layout(
     case 'bathroom':
       against(back, 'toilet', back.length * 0.25)
       against(back, 'bathroom-sink', -back.length * 0.2)
-      if (area >= 6.5) against(side, 'bathtub')
-      else free('shower-square', bounds.centerX, bounds.centerZ)
+      against(side, area >= 6.5 ? 'bathtub' : 'shower-square')
       break
     case 'living':
       against(back, 'sofa')
-      against(back, 'coffee-table', 0, depth('sofa') + 0.4)
+      against(back, 'coffee-table', 0, depth('sofa') + 0.4, 'sofa')
       against(side, 'livingroom-chair', -side.length * 0.18)
       // The TV faces the sofa from the door wall; the placement slides it off the door's clear zone.
-      against(door, 'tv-stand')
+      against(door, 'tv-stand', 0, 0, 'sofa')
       break
     case 'dining': {
       free('dining-table', bounds.centerX, bounds.centerZ)
@@ -199,6 +226,7 @@ function layout(
 const SKIP_REASONS = {
   outside_bounds: 'outside the room',
   overlaps_item: 'overlaps another item',
+  off_wall: 'no wall to stand against there',
 } as const
 
 const round = (value: number) => Math.round(value * 100) / 100
@@ -234,6 +262,26 @@ function skipReason(
 }
 
 /**
+ * How a wall-bound piece looks for a spot: along its wall, its whole width within the wall's ends
+ * (`at` is where it starts, off the wall's middle), barely off it, against a wall that stands.
+ */
+function againstItsWall(
+  wall: { length: number },
+  at: number,
+  width: number,
+  walls: ReturnType<typeof wallFacesOn>,
+) {
+  // A piece wider than its wall stands at the wall's middle.
+  const reach = (wall.length - width) / 2
+  return {
+    lateralsM: reach >= 0 ? lateralSteps(-reach - at, reach - at) : [-at],
+    insetsM: AGAINST_WALL_INSETS_M,
+    // A level with no walls yet is furnished by its outline alone; verify_scene judges no piece there.
+    ...(walls.length > 0 ? { againstWalls: walls } : {}),
+  }
+}
+
+/**
  * `furnish_room`: a room type's pieces from the host's catalog, against the walls the door decides,
  * each moved off door clear zones and other items or skipped with the reason. The door wall is the
  * edge a door of the room stands on (found by position), else doorWallIndex, else edge 0.
@@ -266,28 +314,46 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
     (footprint) => footprint.aabb,
   )
   const { minX, maxX, minZ, maxZ } = polygonBounds(polygon)
+  const walls = wallFacesOn(all, levelId)
 
-  const items: AnyNode[] = []
+  const items: ItemNode[] = []
   const skipped: string[] = []
+  // How far each piece was moved off the spot the layout gave it, for the pieces that follow it.
+  const moved = new Map<string, Vec2>()
   for (const pose of layout(input.roomType, polygon, doorWall, catalog)) {
     const asset = catalog.find((entry) => entry.id === pose.assetId)
     if (!asset) {
       skipped.push(`${pose.assetId}: not in the catalog`)
       continue
     }
-    const { candidate, reason } = findValidPlacement({
-      primary: { x: pose.x, z: pose.z, rotationDeg: pose.rotationDeg },
+    // Along its own wall only: a TV across the room slides as its sofa did and stays on its wall.
+    const lead = pose.follows ? moved.get(pose.follows) : undefined
+    const slide = lead && pose.along ? lead[0] * pose.along.x + lead[1] * pose.along.z : 0
+    const spot = {
+      x: pose.x + (pose.along?.x ?? 0) * slide,
+      z: pose.z + (pose.along?.z ?? 0) * slide,
+      rotationDeg: pose.rotationDeg,
+    }
+    const found = findValidPlacement({
+      primary: spot,
       dimensions: asset.dimensions,
       doorKeepouts: keepouts,
       occupied,
       roomBounds: { minX, maxX, minZ, maxZ },
+      roomOutline: polygon,
       along: pose.along,
       inward: pose.inward,
+      ...(pose.wall && furnitureKind(asset) === 'wall'
+        ? againstItsWall(pose.wall, pose.wall.lateral + slide, asset.dimensions?.[0] ?? 1, walls)
+        : {}),
     })
-    if (!candidate) {
-      skipped.push(skipReason(asset, pose, reason, { minX, maxX, minZ, maxZ }, doorKeepouts))
+    if (!found.candidate) {
+      const at = found.refused ?? spot
+      skipped.push(skipReason(asset, at, found.reason, { minX, maxX, minZ, maxZ }, doorKeepouts))
       continue
     }
+    const { candidate } = found
+    moved.set(pose.assetId, [candidate.x - pose.x, candidate.z - pose.z])
     const rotation = (candidate.rotationDeg * Math.PI) / 180
     occupied.push(itemPlanAabb([candidate.x, 0, candidate.z], asset.dimensions, rotation))
     items.push(
@@ -302,15 +368,21 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
   }
 
   const itemIds = items.map((item) => item.id)
+  // Each piece with its size and id, as the skips are told: the set is not read back from the scene.
+  const pieces = items.map((item) => {
+    const [width = 1, , depth = 1] = item.asset.dimensions ?? [1, 1, 1]
+    return `${item.name ?? item.asset.name} (${round(width)} × ${round(depth)} m): ${item.id}`
+  })
   return {
     result: {
       ok: true,
       placed: items.length,
       itemIds,
+      pieces,
       skipped,
       doorWallIndex: doorWall,
       doorsDetected: doors.length,
-      message: `Furnished the ${input.roomType} with ${items.length} item${items.length === 1 ? '' : 's'}${skipped.length ? `, skipped ${skipped.length}` : ''}.`,
+      message: `Furnished the ${input.roomType} with ${items.length} item${items.length === 1 ? '' : 's'}${skipped.length ? `, skipped ${skipped.length}` : ''}.${skipped.length ? ` For what was skipped: ${OTHER_SOURCES}` : ''}${input.zoneId && items.length ? ` view_scene with interior { zoneId: "${input.zoneId}" } shows the room from inside, at a person's height.` : ''}`,
     },
     ...(items.length
       ? { changes: { create: items.map((node) => ({ node, parentId: levelId })) } }

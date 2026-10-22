@@ -6,7 +6,11 @@ import {
   type RadialResizeHandle,
   type RoofSegmentNode,
 } from '@pascal-app/core'
-import { roofSegmentDefinition } from './definition'
+import { builtinPlugin } from '@pascal-app/nodes'
+
+const roofSegmentDefinition = builtinPlugin.nodes.find(
+  (definition) => definition.kind === 'roof-segment',
+)!
 
 function segment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode {
   return {
@@ -65,8 +69,8 @@ function pitchHandle(): LinearResizeHandle<RoofSegmentNode> {
 }
 
 describe('roof-segment resize handles', () => {
-  test('records the shed joint schema update', () => {
-    expect(roofSegmentDefinition.schemaVersion).toBe(5)
+  test('versions the persisted roof segment schema', () => {
+    expect(roofSegmentDefinition.schemaVersion).toBe(7)
   })
 
   test('uses one center-anchored radius handle for a conical segment', () => {
@@ -135,4 +139,20 @@ describe('roof-segment resize handles', () => {
   test('hides all direct handles for parent-managed roof segments', () => {
     expect(handles(segment({ managedByParent: true }))).toEqual([])
   })
+})
+
+test('barrel handles preserve rise on span resize and adjust the crown without changing pitch', () => {
+  const node = segment({ roofType: 'barrel', depth: 4, barrelRise: 1 })
+  const resized = { ...node, ...linear('z', 'min').apply(node, 6, undefined as never) }
+  expect(resized.depth).toBe(6)
+  expect(getActiveRoofHeight(resized)).toBe(1)
+  expect(resized.position[2] - resized.depth / 2).toBe(node.position[2] - node.depth / 2)
+  const narrowed = { ...node, ...linear('z', 'min').apply(node, 1, undefined as never) }
+  expect(getActiveRoofHeight(narrowed)).toBe(0.5)
+  const raised = {
+    ...node,
+    ...pitchHandle().apply(node, node.wallHeight + 1.5, undefined as never),
+  }
+  expect(getActiveRoofHeight(raised)).toBe(1.5)
+  expect(raised.pitch).toBe(node.pitch)
 })

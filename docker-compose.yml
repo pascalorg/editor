@@ -1,19 +1,23 @@
 services:
   editor:
+    image: ghcr.io/pascalorg/pascal-editor:latest
+    # `docker compose build` rebuilds the image from this checkout; a plain
+    # `docker compose up` pulls the published one.
     build: .
     ports:
-      # Keep the container port at 3000. `/scenes` fetches its own API through a
-      # base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines
-      # that at build time — so a remapped host port 500s the page.
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     environment:
-      NODE_ENV: production
-      # Public editor origin used by Mint OAuth and same-origin checks.
-      MINT_PASCAL_HOST_ORIGIN: ${MINT_PASCAL_HOST_ORIGIN:-http://localhost:3000}
-      # Scene database location. Without the volume below, every saved project is
-      # discarded when the container is recreated.
-      PASCAL_DATA_DIR: /data
+      # The one password that unlocks this editor. Required on any host that is
+      # not loopback; without it the app serves a setup page and nothing else.
+      PASCAL_ADMIN_PASSWORD: ${PASCAL_ADMIN_PASSWORD:?Set PASCAL_ADMIN_PASSWORD}
+      # The address people use to reach it. Read per request, so the same image
+      # serves any domain or port.
+      PASCAL_PUBLIC_URL: ${PASCAL_PUBLIC_URL:-http://localhost:${PORT:-3000}}
+      # Optional bearer token for agents and scripts calling /api/scenes.
+      PASCAL_SCENE_API_TOKEN: ${PASCAL_SCENE_API_TOKEN:-}
     volumes:
+      # Scene database location. Without the volume, every saved project is
+      # discarded when the container is recreated.
       - pascal-data:/data
     restart: unless-stopped
 

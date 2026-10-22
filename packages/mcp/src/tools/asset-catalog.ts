@@ -12,6 +12,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'double-bed',
     category: 'furniture',
+    functionTags: ['double-beds'],
     tags: ['floor', 'bedroom'],
     name: 'Double Bed',
     thumbnail: '/items/double-bed/thumbnail.webp',
@@ -24,6 +25,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'single-bed',
     category: 'furniture',
+    functionTags: ['single-beds'],
     tags: ['floor', 'bedroom'],
     name: 'Single Bed',
     thumbnail: '/items/single-bed/thumbnail.webp',
@@ -36,6 +38,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'bedside-table',
     category: 'furniture',
+    functionTags: ['coffee-tables'],
     tags: ['floor', 'bedroom'],
     name: 'Bedside Table',
     thumbnail: '/items/bedside-table/thumbnail.webp',
@@ -49,6 +52,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'dresser',
     category: 'furniture',
+    functionTags: ['dressers'],
     tags: ['floor', 'storage', 'bedroom'],
     name: 'Dresser',
     thumbnail: '/items/dresser/thumbnail.webp',
@@ -62,6 +66,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'closet',
     category: 'furniture',
+    functionTags: ['wardrobes'],
     tags: ['floor', 'storage', 'bedroom'],
     name: 'Closet',
     thumbnail: '/items/closet/thumbnail.webp',
@@ -74,6 +79,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'sofa',
     category: 'furniture',
+    functionTags: ['sofas'],
     tags: ['floor', 'seating', 'living'],
     name: 'Sofa',
     thumbnail: '/items/sofa/thumbnail.webp',
@@ -86,6 +92,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'livingroom-chair',
     category: 'furniture',
+    functionTags: ['armchairs'],
     tags: ['floor', 'seating', 'living'],
     name: 'Livingroom Chair',
     thumbnail: '/items/livingroom-chair/thumbnail.webp',
@@ -98,6 +105,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'coffee-table',
     category: 'furniture',
+    functionTags: ['coffee-tables'],
     tags: ['floor', 'table', 'living'],
     name: 'Coffee Table',
     thumbnail: '/items/coffee-table/thumbnail.webp',
@@ -111,6 +119,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'tv-stand',
     category: 'furniture',
+    functionTags: ['cabinets'],
     tags: ['floor', 'storage', 'living'],
     name: 'TV Stand',
     thumbnail: '/items/tv-stand/thumbnail.webp',
@@ -124,6 +133,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'shelf',
     category: 'furniture',
+    functionTags: ['shelves'],
     tags: ['wall', 'storage'],
     name: 'Shelf',
     thumbnail: '/items/shelf/thumbnail.webp',
@@ -138,6 +148,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'dining-table',
     category: 'furniture',
+    functionTags: ['dining-tables'],
     tags: ['floor', 'table', 'dining'],
     name: 'Dining Table',
     thumbnail: '/items/dining-table/thumbnail.webp',
@@ -151,6 +162,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'dining-chair',
     category: 'furniture',
+    functionTags: ['dining-chairs'],
     tags: ['floor', 'seating', 'dining'],
     name: 'Dining Chair',
     thumbnail: '/items/dining-chair/thumbnail.webp',
@@ -163,6 +175,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'kitchen',
     category: 'kitchen',
+    functionTags: ['cabinets'],
     tags: ['floor', 'large', 'kitchen'],
     name: 'Kitchen',
     thumbnail: '/items/kitchen/thumbnail.webp',
@@ -175,6 +188,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'kitchen-counter',
     category: 'kitchen',
+    functionTags: ['counters'],
     tags: ['floor', 'large', 'storage', 'kitchen'],
     name: 'Kitchen Counter',
     thumbnail: '/items/kitchen-counter/thumbnail.webp',
@@ -188,6 +202,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'stove',
     category: 'kitchen',
+    functionTags: ['kitchen-appliances'],
     tags: ['floor', 'large', 'kitchen'],
     name: 'Stove',
     thumbnail: '/items/stove/thumbnail.webp',
@@ -200,6 +215,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'fridge',
     category: 'kitchen',
+    functionTags: ['kitchen-appliances'],
     tags: ['floor', 'large', 'kitchen'],
     name: 'Fridge',
     thumbnail: '/items/fridge/thumbnail.webp',
@@ -212,6 +228,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'toilet',
     category: 'bathroom',
+    functionTags: ['toilets'],
     tags: ['floor', 'large', 'bathroom'],
     name: 'Toilet',
     thumbnail: '/items/toilet/thumbnail.webp',
@@ -224,6 +241,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'bathroom-sink',
     category: 'bathroom',
+    functionTags: ['sinks'],
     tags: ['floor', 'large', 'bathroom'],
     name: 'Bathroom Sink',
     thumbnail: '/items/bathroom-sink/thumbnail.webp',
@@ -236,6 +254,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'shower-square',
     category: 'bathroom',
+    functionTags: ['showers'],
     tags: ['floor', 'large', 'bathroom'],
     name: 'Squared Shower',
     thumbnail: '/items/shower-square/thumbnail.webp',
@@ -248,6 +267,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'bathtub',
     category: 'bathroom',
+    functionTags: ['bathtubs'],
     tags: ['floor', 'large', 'bathroom'],
     name: 'Bathtub',
     thumbnail: '/items/bathtub/thumbnail.webp',
@@ -260,6 +280,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'washing-machine',
     category: 'bathroom',
+    functionTags: ['laundry-appliances'],
     tags: ['floor', 'large', 'electronics', 'laundry'],
     name: 'Washing Machine',
     thumbnail: '/items/washing-machine/thumbnail.webp',
@@ -272,6 +293,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'drying-rack',
     category: 'bathroom',
+    functionTags: ['laundry-appliances'],
     tags: ['floor', 'laundry'],
     name: 'Drying Rack',
     thumbnail: '/items/drying-rack/thumbnail.webp',
@@ -284,6 +306,7 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'coat-rack',
     category: 'furniture',
+    functionTags: ['racks'],
     tags: ['floor', 'storage', 'entry'],
     name: 'Coat Rack',
     thumbnail: '/items/coat-rack/thumbnail.webp',

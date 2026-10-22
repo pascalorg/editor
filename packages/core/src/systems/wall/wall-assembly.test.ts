@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { FOUNDATION_CONSTRUCTIONS } from '../../lib/foundation-construction'
 import type { WallNode } from '../../schema'
 import type { WallAssembly } from '../../schema/nodes/wall'
 import {
@@ -15,6 +16,7 @@ import {
   STUD_2X6,
   WALL_ASSEMBLY_PRESETS,
   WSP_SHEATHING,
+  wallAssemblyExposedStructure,
   wallAssemblyFromLegacy,
   wallAssemblyPatch,
   wallLayerBoundaryOffsets,
@@ -473,5 +475,70 @@ describe('offset miters', () => {
         expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeLessThan(TOL)
       }
     }
+  })
+})
+
+// A wall with no cladding over a bare masonry or concrete core shows the structure on its exterior
+// face (the foundation walls above grade, and seen from under the ground).
+describe('wallAssemblyExposedStructure', () => {
+  const outside = { frontSide: 'exterior', backSide: 'interior' } as const
+  /** A wall with the F2 stack as given, exterior on its front face unless the extras say else. */
+  const stacked = (assembly: WallNode['assembly'], extra: Partial<WallNode> = {}): WallNode => ({
+    ...wall('wall_stacked', [0, 0], [6, 0]),
+    ...(assembly ? { assembly } : { assembly: undefined }),
+    ...outside,
+    ...extra,
+  })
+  const foundation = (id: keyof typeof FOUNDATION_CONSTRUCTIONS, extra: Partial<WallNode> = {}) =>
+    stacked(FOUNDATION_CONSTRUCTIONS[id].assembly as WallNode['assembly'], extra)
+  const bare = (kind: string) =>
+    f2({
+      framing: { kind, depth: 0.25 } as WallAssembly['framing'],
+      sheathing: { material: 'none', thickness: 0 },
+      exterior: { finish: 'none', thickness: 0 },
+      interior: { finish: 'none', thickness: 0 },
+    })
+
+  test('block on a CMU foundation wall, concrete on a cast concrete one', () => {
+    expect(wallAssemblyExposedStructure(foundation('cmu'))).toBe('cmu')
+    expect(wallAssemblyExposedStructure(foundation('cast-concrete'))).toBe('concrete')
+  })
+
+  test('it is the exterior face of the stack, whichever side that is', () => {
+    const turned = foundation('cmu', { frontSide: 'interior', backSide: 'exterior' })
+    expect(wallAssemblyExposedStructure(turned)).toBe('cmu')
+  })
+
+  test('a wall whose exterior side is not resolved keeps its default', () => {
+    for (const sides of [
+      { frontSide: 'unknown', backSide: 'unknown' },
+      { frontSide: 'exterior', backSide: 'exterior' },
+    ] as const)
+      expect(wallAssemblyExposedStructure(foundation('cmu', sides))).toBeNull()
+  })
+
+  test('a cladding speaks for the wall: block under stucco, brick or siding shows no bare structure', () => {
+    for (const id of ['exterior-cmu-stucco', 'exterior-2x6-brick', 'exterior-2x6-siding']) {
+      expect(wallAssemblyExposedStructure(stacked(getWallAssemblyPreset(id)!.assembly))).toBeNull()
+    }
+  })
+
+  test('a framed wall with no cladding is unchanged: wood is not bare structure, nor are foam forms', () => {
+    expect(wallAssemblyExposedStructure(stacked(bare('wood')))).toBeNull()
+    expect(wallAssemblyExposedStructure(stacked(bare('lgs')))).toBeNull()
+    expect(wallAssemblyExposedStructure(stacked(bare('icf')))).toBeNull()
+    // The same bare stack in block is exposed block.
+    expect(wallAssemblyExposedStructure(stacked(bare('cmu')))).toBe('cmu')
+  })
+
+  test('a wall with no assembly is unchanged', () => {
+    expect(wallAssemblyExposedStructure(stacked(undefined))).toBeNull()
+  })
+
+  test('no wall assembly preset changes its look: the CMU one with no cladding is a lined partition', () => {
+    const changed = WALL_ASSEMBLY_PRESETS.filter(
+      (preset) => wallAssemblyExposedStructure(stacked(preset.assembly)) !== null,
+    ).map((preset) => preset.id)
+    expect(changed).toEqual([])
   })
 })

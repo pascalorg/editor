@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getBoundarySurfaces,
   getLevelDisplayName,
   type LevelNode,
   measureStair,
@@ -23,6 +24,7 @@ import {
   type StairSlabOpeningMode,
   type StairTopLandingMode,
   type StairType,
+  useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -104,6 +106,8 @@ export default function StairPanel() {
   const [walkingLineOffset, setWalkingLineOffset] = useState(0.5)
   const [division, setDivision] = useState<'equal-going' | 'equal-angle'>('equal-going')
   const [riseError, setRiseError] = useState<{ id: string; message: string } | null>(null)
+  const installedPlugins = useScene((s) => s.installedPlugins)
+  useRegistryVersion()
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
@@ -373,6 +377,14 @@ export default function StairPanel() {
           .reduce((sum, segment) => sum + segment.height, 0)
       : 0) + 0.001,
   )
+  const surfaceLevelId =
+    node.destinationSurfaceId && node.parentId === node.destinationSurfaceId
+      ? nodes[node.parentId as AnyNodeId]?.parentId
+      : node.parentId
+  const boundarySurfaces = getBoundarySurfaces(nodes, surfaceLevelId, installedPlugins)
+  const connectedSurface = node.destinationSurfaceId
+    ? nodes[node.destinationSurfaceId as AnyNodeId]
+    : undefined
 
   return (
     <PanelWrapper
@@ -576,6 +588,25 @@ export default function StairPanel() {
           onClick={() => applySizing(true)}
         />
       </PanelSection>
+      {node.stairType === 'straight' &&
+        (boundarySurfaces.length > 0 || node.destinationSurfaceId) && (
+          <PanelSection title="Surface connection">
+            <div className="space-y-2">
+              <ToggleControl
+                checked={node.autoSurfaceSnap !== false}
+                label="Snap to nearby surfaces"
+                onChange={(checked) => handleUpdate({ autoSurfaceSnap: checked })}
+              />
+              <p className="px-1 text-[11px] text-muted-foreground">
+                {node.autoSurfaceSnap !== false
+                  ? connectedSurface
+                    ? `Connected to ${connectedSurface.name || 'surface'}. Move the stair to connect to another edge.`
+                    : 'Drag near a deck, patio, concrete slab, or landing edge to fit the stair.'
+                  : 'Moving this stair keeps its current rise, steps, and run.'}
+              </p>
+            </div>
+          </PanelSection>
+        )}
 
       <PanelSection title="Opening">
         <div className="space-y-3">
@@ -592,7 +623,7 @@ export default function StairPanel() {
               From Level
             </div>
             <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-foreground text-sm"
+              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-foreground text-sm"
               onChange={(event) => handleFromLevelChange(event.target.value)}
               value={resolvedFromLevelId ?? ''}
             >
@@ -609,7 +640,7 @@ export default function StairPanel() {
               To
             </div>
             <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-foreground text-sm"
+              className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-foreground text-sm"
               onChange={(event) => handleDestinationChange(event.target.value)}
               value={attachedDeck ? attachedDeck.id : (resolvedToLevelId ?? '')}
             >
@@ -721,7 +752,7 @@ export default function StairPanel() {
           <div className="flex flex-col gap-1">
             {segments.map((seg, i) => (
               <button
-                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 key={seg.id}
                 onClick={() => handleSelectSegment(seg.id)}
                 type="button"
@@ -951,7 +982,7 @@ export default function StairPanel() {
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={handleDelete}
           />

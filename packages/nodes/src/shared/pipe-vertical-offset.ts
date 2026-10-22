@@ -4,10 +4,10 @@ import {
   PipeSegmentNode,
   type PortConnection,
 } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { getPipeFittingPorts, pipeFittingLegLength } from '../pipe-fitting/ports'
 import type { PipeFittingNode } from '../pipe-fitting/schema'
 import { type PipeElbowPlan, planPipeElbowAtPort, planPipeElbowRealign } from './auto-fitting'
-import type { ScenePort } from './ports'
 
 /**
  * Center-cube vertical-move auto-routing for pipe runs.

@@ -3,10 +3,9 @@ import {
   type NodeDefinition,
   planStairFlightHeightEdit,
   resolveStairWinder,
-  STAIR_BODY_SLOT_DEFAULT,
-  STAIR_TREADS_SLOT_DEFAULT,
   StairSegmentNode as StairSegmentNodeSchema,
   type StairSegmentNode as StairSegmentNodeType,
+  stairSegmentSlots,
 } from '@pascal-app/core'
 import { stairSegmentPaint } from '../stair/paint'
 import { stairSegmentParametrics } from './parametrics'
@@ -159,10 +158,7 @@ export const stairSegmentDefinition: NodeDefinition<typeof StairSegmentNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: false,
     deletable: true,
-    slots: () => [
-      { slotId: 'treads', label: 'Treads', default: STAIR_TREADS_SLOT_DEFAULT },
-      { slotId: 'body', label: 'Body', default: STAIR_BODY_SLOT_DEFAULT },
-    ],
+    slots: stairSegmentSlots,
     paint: stairSegmentPaint,
   },
 

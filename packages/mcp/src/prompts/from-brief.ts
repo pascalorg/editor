@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
@@ -38,7 +38,7 @@ export function buildFromBriefPrompt(args: {
     'Produce tool calls that realise the brief within the stated constraints.',
     '1. Bind a scene — `create_project` (new), `list_scenes` then `load_scene` (existing), or `create_house_from_brief` (starter template).',
     '2. Build the design — `create_story_shell` for exterior shells, `create_room`/`add_door`/`add_window`/`create_stair`/`furnish_room` for interior layout, `create_roof` for roofing, `apply_patch` for exact bulk graph work.',
-    '3. Finish — call `validate_scene`, `verify_scene`, and `get_project_status`, then return the `editorUrl`.',
+    '3. Finish — call `verify_scene` and `get_project_status`, then return the `editorUrl`.',
     'Call `save_scene` with `saveMode: "checkpoint"` only when the design reaches a meaningful milestone.',
   )
   return parts.join('\n')
@@ -51,10 +51,10 @@ export function registerFromBrief(server: McpServer, _bridge: SceneOperations): 
       title: 'Generate a Pascal scene from a brief',
       description:
         'Generate a Pascal 3D scene from a natural-language brief. Binds an active scene, then produces semantic tool calls to realise the design.',
-      argsSchema: {
+      argsSchema: z.object({
         brief: z.string(),
         constraints: z.string().optional(),
-      },
+      }),
     },
     async ({ brief, constraints }) => ({
       messages: [

@@ -2,14 +2,28 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  castYardDimensionsOriented,
+  classifyEdges,
+  edgeHeadingDeg,
+  edgeLength,
   envelopeFrontEdge,
   type FloorplanGeometry,
+  footprintOutline,
+  isRoofLevel,
   type LevelNode,
+  levelFootprintLoops,
+  outwardNormal,
   type SceneSnapshot,
   type SiteNode,
+  setbackForRole,
   sightTriangle,
+  siteFrame,
+  siteFrontEdge,
+  siteSetbackEnvelope,
   streetCorners,
   terrainFieldOf,
+  type YardDimension,
+  yawOf,
 } from '@pascal-app/core'
 import { sitePlanContributions } from './contributors'
 import {
@@ -20,21 +34,11 @@ import {
 } from './coverage'
 import {
   type Bounds,
-  boundsInsidePolygon,
-  castYardDimensionsOriented,
-  classifyEdges,
   compassLabel,
-  edgeHeadingDeg,
-  edgeLength,
   formatFeetInches,
   METRES_PER_FOOT,
-  outwardNormal,
   type Pt,
   polygonBounds,
-  resolveFrontEdge,
-  setbackEnvelope,
-  setbackForRole,
-  type YardDimension,
 } from './geometry'
 import {
   contourPrimitives,
@@ -47,17 +51,14 @@ import {
   streetEdgeNames,
 } from './site-annotations'
 import {
+  aboveGradeLevels,
   findBuilding,
   findLowestLevel,
   findSite,
-  footprintOutline,
-  levelFootprintLoops,
   roofOutlineRings,
-  siteFrame,
-  yawOf,
 } from './site-parts'
 
-export { footprintOutline, levelFootprintLoops, roofOutlineRings }
+export { roofOutlineRings }
 
 /** Contract shared by every drawing producer (see docs/construction-documents.md). */
 export interface SitePlanDrawing {
@@ -71,8 +72,11 @@ export interface SitePlanDrawing {
     frontEdge: number
     lot: Pt[]
     envelope: Pt[]
-    /** The envelope edge behind the lot's front line (the envelope has its own vertex count now). */
-    envelopeFrontEdge: number
+    /**
+     * The envelope edge behind the lot's front line (the envelope has its own vertex count now);
+     * null with no envelope, or when no envelope edge faces the street.
+     */
+    envelopeFrontEdge: number | null
     /** The corner sight triangles (corner, leg end A, leg end B), site metres. */
     sightTriangles: Pt[][]
     /** Per-wall footprint bands of the lowest level, in SITE metres. */
@@ -316,10 +320,10 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   const lot = (site?.polygon?.points ?? []) as Pt[]
   const building = findBuilding(scene, site)
   const level = findLowestLevel(scene, building)
-  const footprintLoops = levelFootprintLoops(scene, level, building)
+  const footprintLoops = levelFootprintLoops(scene.nodes, level, building)
   const footprintBounds = unionBounds(footprintLoops)
   const northRotation = site?.northRotation ?? 0
-  const frontEdge = resolveFrontEdge(lot, site?.frontEdge, northRotation)
+  const frontEdge = site ? siteFrontEdge(site) : 0
 
   const empty: SitePlanDrawing = {
     primitives: [],
@@ -330,7 +334,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       frontEdge,
       lot,
       envelope: [],
-      envelopeFrontEdge: 0,
+      envelopeFrontEdge: null,
       sightTriangles: [],
       footprintLoops,
       footprintBounds,
@@ -393,9 +397,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
     typeof site?.sightTriangleFt === 'number' && site.sightTriangleFt > 0
       ? site.sightTriangleFt * METRES_PER_FOOT
       : 0
-  const envelope = site?.setbacks
-    ? setbackEnvelope(lot, site.setbacks, frontEdge, { streetEdges, sightTriangleM })
-    : []
+  const envelope = site ? siteSetbackEnvelope(site) : []
   // the corner sight triangles (clear-vision at a street intersection):
   // dashed, labelled with the leg — the ordinance's figure, verify locally
   const sightTriangles: Pt[][] = []
@@ -566,7 +568,11 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   }
 
   // ── The roof line, dashed over the footprint ─────────────────────────
-  for (const ring of roofOutlineRings(scene, level, building)) {
+  // Every storey's roofs, and the roof level's above them all.
+  const roofRings = aboveGradeLevels(scene, building).flatMap((roofed) =>
+    roofOutlineRings(scene, roofed, building),
+  )
+  for (const ring of roofRings) {
     primitives.push({
       kind: 'polygon',
       points: ring,
@@ -650,7 +656,9 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
     let storeys = 0
     for (const childId of building?.children ?? []) {
       const child = scene.nodes[childId as AnyNodeId] as AnyNode | undefined
-      if (child?.type === 'level' && (child as LevelNode).level >= 0) storeys++
+      // The roof level is not a storey: a bungalow under it is one storey.
+      if (child?.type === 'level' && (child as LevelNode).level >= 0 && !isRoofLevel(child))
+        storeys++
     }
     const cx = (footprintBounds.minX + footprintBounds.maxX) / 2
     const cy = (footprintBounds.minY + footprintBounds.maxY) / 2
@@ -748,7 +756,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       frontEdge,
       lot,
       envelope,
-      envelopeFrontEdge: envelope.length >= 3 ? envelopeFrontEdge(lot, frontEdge, envelope) : 0,
+      envelopeFrontEdge: envelope.length >= 3 ? envelopeFrontEdge(lot, frontEdge, envelope) : null,
       sightTriangles,
       footprintLoops,
       footprintBounds,
@@ -757,23 +765,4 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       coverage,
     },
   }
-}
-
-/**
- * Translation (site metres, `[dx, dz]`) that centres the building's footprint
- * on the lot centroid. `null` when there is nothing to move or the footprint
- * already sits inside the ring.
- */
-export function buildingRecentreOffset(
-  lot: readonly Pt[],
-  footprintBounds: Bounds | null,
-): [number, number] | null {
-  if (lot.length < 3 || !footprintBounds) return null
-  if (boundsInsidePolygon(lot, footprintBounds)) return null
-  const lotB = polygonBounds(lot)
-  const lotCx = (lotB.minX + lotB.maxX) / 2
-  const lotCy = (lotB.minY + lotB.maxY) / 2
-  const fpCx = (footprintBounds.minX + footprintBounds.maxX) / 2
-  const fpCy = (footprintBounds.minY + footprintBounds.maxY) / 2
-  return [lotCx - fpCx, lotCy - fpCy]
 }

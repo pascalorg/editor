@@ -1,12 +1,18 @@
 'use client'
 
 import { emitter, type GridEvent, PipeTrapNode, useScene } from '@pascal-app/core'
-import { isGridSnapActive, isMagneticSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  isGridSnapActive,
+  isMagneticSnapActive,
+  isTypingTarget,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
+import { alignDrawPoint, clearDrawAlignment } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { pipeTrapDefinition } from './definition'
 import { buildPipeTrapGeometry } from './geometry'
@@ -90,8 +96,7 @@ const PipeTrapTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       const key = e.key
       if (key === 'r' || key === 'R' || key === 't' || key === 'T') {
         e.preventDefault()

@@ -1,11 +1,16 @@
 {
   "name": "@pascal-app/geometry-script",
-  "version": "1.0.3",
-  "description": "Compiles AI-authored three.js geometry scripts into GLB artifacts with a Pascal manifest. Runs in a browser worker, Bun or Node — no DOM, no React.",
+  "version": "1.0.5",
+  "description": "Compiles AI-authored three.js and Blender (bpy) geometry scripts into GLB artifacts with a Pascal manifest. Runs in a browser worker, Bun or Node — no DOM, no React.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./author-scene": {
+      "types": "./dist/author-scene.d.ts",
+      "import": "./dist/author-scene.js",
+      "default": "./dist/author-scene.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
@@ -20,10 +25,21 @@
       "types": "./dist/sandbox.d.ts",
       "import": "./dist/sandbox.js",
       "default": "./dist/sandbox.js"
+    },
+    "./blender": {
+      "types": "./dist/blender.d.ts",
+      "import": "./dist/blender.js",
+      "default": "./dist/blender.js"
+    },
+    "./blender-local": {
+      "types": "./dist/blender-local.d.ts",
+      "import": "./dist/blender-local.js",
+      "default": "./dist/blender-local.js"
     }
   },
   "files": [
     "dist",
+    "bpy",
     "README.md"
   ],
   "scripts": {
@@ -34,7 +50,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@pascal-app/core": "^1.0.3",
+    "@pascal-app/core": "^1.0.5",
     "three-bvh-csg": "^0.0.18"
   },
   "peerDependencies": {
@@ -42,9 +58,9 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.3.0",
-    "@types/three": "^0.184.0",
-    "typescript": "6.0.3"
+    "@types/bun": "^1.4.3",
+    "@types/three": "^0.186.0",
+    "typescript": "7.0.2"
   },
   "repository": {
     "type": "git",

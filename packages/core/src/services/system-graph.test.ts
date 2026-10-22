@@ -1,10 +1,13 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import type { AnyNodeDefinition, DistributionRole, NodePort } from '../registry'
-import { registerNode } from '../registry'
+import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { buildPortComponents, summarizeSystemFor } from './system-graph'
 
 type Point = [number, number, number]
+
+const restoreRegistry = nodeRegistry._snapshot()
+afterAll(() => restoreRegistry())
 
 // Stub registrations: the graph consults `def.ports` for the connectivity
 // graph and `def.distributionRole` to classify each node. Mirrors the real

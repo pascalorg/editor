@@ -1,4 +1,4 @@
-import type { SurfaceRole } from '@pascal-app/core'
+import type { SitePresentation, SurfaceRole } from '@pascal-app/core'
 
 export type SceneTheme = {
   id: string
@@ -10,22 +10,31 @@ export type SceneTheme = {
   background: string
   // Optional zenith colour for the backdrop: the post pipeline renders a
   // vertical screen-space gradient from this (top) to `background` (horizon).
-  // Omitted → flat `background`, as before.
-  backgroundSky?: string
+  // Null → flat background; omitted keeps the derived horizon/zenith colours.
+  backgroundSky?: string | null
   // Colour of the site ground fill. Kept
   // separate from `background` so dark themes can have a lit ground that reads
   // as ground rather than going near-black.
   ground: string
   ambient: { color: string; intensity: number }
   hemi?: { sky: string; ground: string; intensity: number }
-  lights: Array<{
-    position: [number, number, number]
-    color: string
-    intensity: number
-    castShadow?: boolean
-  }>
+  lights: NonNullable<NonNullable<SitePresentation['lighting']>['lights']>
   toneMappingExposure: number
+  environment?: NonNullable<SitePresentation['lighting']>['environment']
+  postprocessing?: SitePresentation['postprocessing']
   clayTints?: Partial<Record<SurfaceRole, string>>
+}
+
+export function projectSceneTheme(theme: SceneTheme, presentation?: SitePresentation): SceneTheme {
+  if (!presentation) return theme
+  const { backgroundSky, ...lighting } = presentation.lighting ?? {}
+  return {
+    ...theme,
+    ...lighting,
+    ...(backgroundSky === undefined ? {} : { backgroundSky }),
+    toneMappingExposure: presentation.exposure ?? theme.toneMappingExposure,
+    postprocessing: presentation.postprocessing,
+  }
 }
 
 export const SCENE_THEMES: SceneTheme[] = [
@@ -233,3 +242,28 @@ const SCENE_THEME_BY_ID = new Map(SCENE_THEMES.map((theme) => [theme.id, theme])
 export function getSceneTheme(id: string): SceneTheme {
   return SCENE_THEME_BY_ID.get(id) ?? SCENE_THEMES[0]!
 }
+
+/**
+ * The dark mode the eye dives into under the ground: a neutral anthracite / slate grey, no hue.
+ * Neither dark scene theme is neutral (`night` is navy, `twilight` is purple), and a theme would
+ * be a thing the person picks, so the underground has its own palette, here beside the theme
+ * tokens (`lib/underground-ambiance.ts` is its one reader). Every stop is a grey (R = G = B);
+ * the backdrop is the theme backdrop's own gradient (`lib/backdrop.ts`) in these stops.
+ */
+export const UNDERGROUND_PALETTE = {
+  /** The backdrop looking down, most of the frame under the lid: slate grey. */
+  background: '#4a4a4a',
+  /** The thin band hugging the horizon. */
+  haze: '#666666',
+  /** The sky above the horizon, and its zenith. */
+  sky: '#1b1b1b',
+  skyDeep: '#111111',
+  /** The corners the vignette closes in to. */
+  vignette: '#0c0c0c',
+  /** The thin rim along the cut of the hole in the ground, from above. */
+  rim: '#3c3c3c',
+  /** The grade ring under the ground: a light rim where the ground meets the level. */
+  ring: '#b4b4b4',
+  /** The sky light's tint (ambient and hemisphere pulled toward it under the ground). */
+  tint: '#c8c8c8',
+} as const

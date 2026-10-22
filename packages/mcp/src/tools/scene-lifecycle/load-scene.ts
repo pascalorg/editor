@@ -1,8 +1,8 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
-import { ErrorCode, throwMcpError } from '../errors'
+import { ProtocolErrorCode, throwMcpError } from '../errors'
 import { currentLevelContext, sceneMetaPayload } from './metadata'
 
 export const loadSceneInput = {
@@ -37,21 +37,21 @@ export function registerLoadScene(server: McpServer, bridge: SceneOperations): v
       title: 'Load scene',
       description:
         'Load a scene from the SceneStore into the bridge. Returns the scene metadata. Throws `scene_not_found` if the id does not exist.',
-      inputSchema: loadSceneInput,
-      outputSchema: loadSceneOutput,
+      inputSchema: z.object(loadSceneInput),
+      outputSchema: z.object(loadSceneOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id }) => {
       const result = await bridge.loadStoredScene(id)
       if (!result) {
-        throwMcpError(ErrorCode.InvalidParams, 'scene_not_found', { id })
+        throwMcpError(ProtocolErrorCode.InvalidParams, 'scene_not_found', { id })
       }
       try {
         bridge.loadJSON(result.graph)
         bridge.setActiveScene(result)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InvalidRequest, `load_failed: ${msg}`, { id })
+        throwMcpError(ProtocolErrorCode.InvalidRequest, `load_failed: ${msg}`, { id })
       }
       const payload = {
         ...sceneMetaPayload(result, result.graph),

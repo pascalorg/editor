@@ -6,7 +6,12 @@ export {
   type SupportHostAssignment,
 } from './apply-zone-transform'
 export { type CreateMezzanineInput, createMezzanine } from './create-mezzanine'
-export { type CreateZoneInput, createZone, outdoorRoomConflicts } from './create-zone'
+export {
+  type CreateZoneInput,
+  createZone,
+  outdoorRoomConflicts,
+  walledRoomAt,
+} from './create-zone'
 export { type DeleteZonePayload, deleteZone, SHARED_WALLS_DELETE_MESSAGE } from './delete-zone'
 export {
   createZoneDivisionContext,

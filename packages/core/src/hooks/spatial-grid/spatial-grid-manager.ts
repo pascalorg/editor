@@ -6,7 +6,7 @@ import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { floorPlacedCollides, nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
-import { getWallPlaneTop } from '../../services/storey'
+import { getWallTop } from '../../services/storey'
 import useLiveNodeOverrides, { getEffectiveNode } from '../../store/use-live-node-overrides'
 import useLiveTerrain from '../../store/use-live-terrain'
 import useLiveTransforms from '../../store/use-live-transforms'
@@ -19,7 +19,6 @@ import {
 } from '../../systems/slab/slab-support'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
 import type { WallJustification } from '../../systems/wall/wall-frame'
-import { resolveWallEffectiveHeight } from '../../systems/wall/wall-top'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
@@ -254,11 +253,7 @@ export class SpatialGridManager {
       wall.supportOffset,
       wall.justification,
     )
-    return resolveWallEffectiveHeight(
-      wall,
-      getWallPlaneTop(wall, levelId, nodes),
-      support.elevation,
-    )
+    return getWallTop(wall, levelId, nodes, support.elevation) - support.elevation
   }
 
   private getCeilingGrid(ceilingId: string): SpatialGrid {
@@ -1206,8 +1201,7 @@ export function getWallBaseElevationForNodes(
 
 /**
  * Effective (extruded) height of a wall resolved from a nodes record:
- * {@link resolveWallEffectiveHeight} over the covering-clamped plane top
- * (`getWallPlaneTop`) and the singleton manager's slab election — so the
+ * {@link getWallTop} minus the singleton manager's slab election — so the
  * value always agrees with the rendered wall. One shared resolver for the
  * editor overlays (measurement label, action menu, side handles) that used
  * to copy this derivation locally.
@@ -1228,5 +1222,5 @@ export function getWallEffectiveHeightForNodes(
     wall.supportOffset,
     wall.justification,
   )
-  return resolveWallEffectiveHeight(wall, getWallPlaneTop(wall, levelId, nodes), support.elevation)
+  return getWallTop(wall, levelId, nodes, support.elevation) - support.elevation
 }

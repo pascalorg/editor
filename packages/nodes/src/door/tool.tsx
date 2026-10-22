@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  beginSceneHistoryDraft,
   DoorNode,
   emitter,
   type GridEvent,
@@ -119,6 +120,29 @@ const DoorTool: React.FC = () => {
   useEffect(() => {
     useScene.temporal.getState().pause()
 
+    // The draft is a created carry draft: undo history and every save leave it out
+    // (core `getSceneDocument`), so a reload mid-placement never finds it in the scene.
+    const draftHistoryEnds = new Map<string, () => void>()
+    const createDraft = (node: DoorNode, parentId: AnyNodeId) => {
+      const end = beginSceneHistoryDraft(node.id as AnyNodeId, null)
+      draftHistoryEnds.set(node.id, end)
+      try {
+        useScene.getState().createNode(node, parentId)
+      } catch (error) {
+        end()
+        draftHistoryEnds.delete(node.id)
+        throw error
+      }
+    }
+    const deleteDraft = (id: string) => {
+      try {
+        useScene.getState().deleteNode(id as AnyNodeId)
+      } finally {
+        draftHistoryEnds.get(id)?.()
+        draftHistoryEnds.delete(id)
+      }
+    }
+
     const ownedPreviewIds = new Set<string>()
     const fallbackPreview = () =>
       DoorNode.parse({
@@ -193,7 +217,7 @@ const DoorTool: React.FC = () => {
         return
       }
       const wallId = draft.parentId
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       draftRef.current = null
       clearPlacementPreview()
       if (wallId) markHostDirty(wallId)
@@ -343,7 +367,7 @@ const DoorTool: React.FC = () => {
           parentId: wall.id,
           metadata: { isTransient: true },
         })
-        useScene.getState().createNode(node, wall.id as AnyNodeId)
+        createDraft(node, wall.id as AnyNodeId)
         draftRef.current = node
       }
 
@@ -421,7 +445,7 @@ const DoorTool: React.FC = () => {
       draftRef.current = null
       hostKind = null
 
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       useScene.temporal.getState().resume()
 
       const levelId = getLevelId()
@@ -639,7 +663,7 @@ const DoorTool: React.FC = () => {
           parentId: segment.id,
           metadata: { isTransient: true },
         })
-        useScene.getState().createNode(node, segment.id as AnyNodeId)
+        createDraft(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
       publishDraftPreview(segment)
@@ -662,7 +686,7 @@ const DoorTool: React.FC = () => {
       draftRef.current = null
       hostKind = null
 
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       useScene.temporal.getState().resume()
 
       const state = useScene.getState()
@@ -796,6 +820,7 @@ const DoorTool: React.FC = () => {
 
     return () => {
       destroyDraft()
+      for (const end of draftHistoryEnds.values()) end()
       hideCursor()
       clearPlacementPreview()
       useAlignmentGuides.getState().clear()

@@ -12,12 +12,13 @@ import {
   getLevelElevations,
   getOpeningWallCut,
   getRenderableSlabPolygon,
+  getWallAssemblyPreset,
   getWallBodyCenterOffset,
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallFaceOffsets,
-  getWallPlaneTop,
   getWallPlanFootprint,
+  getWallTop,
   hidesDescendants,
   type ImportedMeshNode,
   intersection,
@@ -27,7 +28,7 @@ import {
   measureStair,
   prepareSlabPolygonContext,
   resolveCeilingHeight,
-  resolveWallTop,
+  resolveWallExteriorSide,
   type SlabNode,
   type StairNode,
   type StairSegmentNode,
@@ -52,6 +53,7 @@ import {
   identifier,
   int,
   label,
+  logical,
   type PlanFrame,
   ratio,
   relativeFrame,
@@ -844,6 +846,48 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
   const layerUsages = new Map<string, { usage: StepRef; walls: StepRef[] }>()
   const wallMaterial = step.add('IFCMATERIAL', 'Wall', null, null)
 
+  // One IfcMaterial per (material, role) used by an assembly layer.
+  const layerMaterials = new Map<string, StepRef>()
+  const layerMaterial = (name: string, category: string | null) => {
+    const key = `${name}|${category ?? ''}`
+    let ref = layerMaterials.get(key)
+    if (!ref) {
+      ref = step.add('IFCMATERIAL', name, null, category)
+      layerMaterials.set(key, ref)
+    }
+    return ref
+  }
+  // IFC4's suggested layer categories.
+  const layerCategory = (role: string, core: boolean) =>
+    core
+      ? 'LoadBearing'
+      : role === 'insulation'
+        ? 'Insulation'
+        : role === 'finish' || role === 'lining'
+          ? 'Finish'
+          : null
+  /**
+   * The wall's assembly as IFC layers, ordered from Pascal's front face (+n),
+   * which is where an AXIS2/POSITIVE usage starting at -faces.a begins. Null
+   * when the wall has no assembly or its layers don't add up to the body.
+   */
+  const wallAssemblyLayers = (wall: WallNode, thickness: number) => {
+    const assembly = wall.assembly
+    if (!assembly?.layers.length) return null
+    const sum = assembly.layers.reduce((total, layer) => total + layer.thickness, 0)
+    if (Math.abs(sum - thickness) > 1e-4) return null
+    // Layers run from the front face unless the stack starts at the exterior
+    // and the exterior is the back face.
+    const startsAtBack =
+      assembly.face === 'exterior' && (resolveWallExteriorSide(wall) ?? -1) === -1
+    const layers = startsAtBack ? [...assembly.layers].reverse() : assembly.layers
+    const preset = getWallAssemblyPreset(assembly.presetId)
+    return {
+      name: preset?.label ?? null,
+      layers: layers.filter((layer) => layer.thickness > 0),
+    }
+  }
+
   const wallsByLevel = new Map<string, WallNode[]>()
   for (const wall of ofType<WallNode>('wall'))
     if (wall.parentId) pushTo(wallsByLevel, wall.parentId, wall)
@@ -863,11 +907,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       const chord = Math.hypot(endPlan[0] - startPlan[0], endPlan[1] - startPlan[1])
       const support = wallSupportForNodes(wall, nodes)
       const base = support.elevation
-      const top = resolveWallTop(
-        wall,
-        getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>),
-        base,
-      )
+      const top = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base)
       const cells = wallBaseCells(wall, support, top)
       if (chord < 1e-6 || cells.every((cell) => top - cell.bottom <= 1e-4)) {
         skipped.push({ nodeId: wall.id, type: wall.type, reason: 'degenerate' })
@@ -952,23 +992,34 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       // Pascal's body spans [b, a] along its left normal; that normal is
       // IFC -Y in the wall frame, so the first layer starts at -a.
       const offset = -faces.a
-      const usageKey = `${thickness.toFixed(6)}|${offset.toFixed(6)}`
+      const stack = wallAssemblyLayers(wall, thickness)
+      const stackKey = stack
+        ? stack.layers
+            .map((l) => `${l.role}:${l.material ?? ''}:${l.thickness.toFixed(6)}:${l.core ? 1 : 0}`)
+            .join(',')
+        : 'core'
+      const usageKey = `${thickness.toFixed(6)}|${offset.toFixed(6)}|${stackKey}`
       let usage = layerUsages.get(usageKey)
       if (!usage) {
-        const layer = step.add(
-          'IFCMATERIALLAYER',
-          wallMaterial,
-          thickness,
-          null,
-          'Core',
-          null,
-          null,
-          null,
-        )
+        const layers = stack
+          ? stack.layers.map((l) => {
+              const category = layerCategory(l.role, l.core === true)
+              return step.add(
+                'IFCMATERIALLAYER',
+                layerMaterial(l.material ?? l.role, category),
+                l.thickness,
+                l.role === 'air' ? logical(true) : null,
+                l.id,
+                l.role,
+                category,
+                null,
+              )
+            })
+          : [step.add('IFCMATERIALLAYER', wallMaterial, thickness, null, 'Core', null, null, null)]
         const layerSet = step.add(
           'IFCMATERIALLAYERSET',
-          [layer],
-          `Wall ${Math.round(thickness * 1000)} mm`,
+          layers,
+          stack?.name ?? `Wall ${Math.round(thickness * 1000)} mm`,
           null,
         )
         usage = {

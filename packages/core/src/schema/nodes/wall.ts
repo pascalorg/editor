@@ -2,6 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { Assembly } from '../assembly'
 import { BaseNode, nodeType, objectId } from '../base'
+import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
 import { CurtainWallConfig } from './curtain-wall'
 import { DoorNode } from './door'
@@ -116,6 +117,20 @@ export const WallFaceRegion = z.object({
   finish: z.string(),
 })
 export type WallFaceRegion = z.infer<typeof WallFaceRegion>
+
+/**
+ * One wall face's finish built by a three.js module for exactly that face (`lib/wall-face-script`):
+ * the module gets the face's rectangle, its openings and its base in the face's own frame and lays
+ * tiles, boards or panelling on them. `inputs` is the key of the face it was built for; once the
+ * face differs (the wall lengthened, an opening added) the script is stale and runs again.
+ * `toHeight` (metres above the face's base) stops it there, as a dado does; absent, it covers the
+ * whole face.
+ */
+export const WallFaceScript = GeometryScriptSource.extend({
+  inputs: z.string(),
+  toHeight: z.number().positive().optional(),
+})
+export type WallFaceScript = z.infer<typeof WallFaceScript>
 
 const WallSurfaceMaterialSpecSchema = z.object({
   material: MaterialSchema.optional(),
@@ -297,11 +312,16 @@ export const WallNode = BaseNode.extend({
   // Extend downward from the authored wall base to the terrain while keeping
   // the wall body height and top unchanged.
   fillToTerrain: z.boolean().optional(),
+  cap: z.boolean().optional(),
   // The finish and the foundation carried below the base — see WallUnderpinning.
   underpinning: WallUnderpinning.optional(),
   skirting: WallTrimConfig.optional(),
   crown: WallTrimConfig.optional(),
   chairRail: WallTrimConfig.optional(),
+  // Per-face finish built by a script — see WallFaceScript.
+  finishScripts: z
+    .object({ a: WallFaceScript.optional(), b: WallFaceScript.optional() })
+    .optional(),
   // e.g., start/end points for path
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
@@ -320,6 +340,7 @@ export const WallNode = BaseNode.extend({
   - underpinning: { rim, stem } — the finish carried rim metres below the base over the floor
     platform's edge, then stem metres of concrete stemwall to the ground (the foundation slot)
   - curveOffset: midpoint sagitta offset used to bend the wall into an arc
+  - finishScripts: { a?, b? } — a three.js module that builds one face's finish (tiles, boards, panelling) for that face, optionally only up to toHeight; it owns that face's colours
   - start: start point of the wall in level coordinate system
   - end: end point of the wall in level coordinate system
   - size: size of the wall in grid units

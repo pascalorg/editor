@@ -1,3 +1,4 @@
+import { madeEntries, type SessionKeep } from './scene-checkpoint'
 import type { AgentOperationOutcome, SceneChanges, SceneNodes } from './types'
 
 /** What a surface lends an operation's outcome: its scene, its writes and its reconciler. */
@@ -6,6 +7,11 @@ export type AgentHostRuntime = {
   applyChanges: (changes: SceneChanges) => void
   /** Derive construction from the scene as it now is: rooms, auto ceilings, floor plates. */
   reconcile: () => void
+  /**
+   * Keeps what the agent's session should remember: the checkpoint an operation took and the nodes
+   * a write created. The host stores it where its sessions live, never in the scene.
+   */
+  keep?: (keep: SessionKeep) => void
 }
 
 /**
@@ -17,13 +23,31 @@ export function applyAgentOutcome(
   outcome: AgentOperationOutcome,
   runtime: AgentHostRuntime,
 ): Record<string, unknown> {
-  if (outcome.changes) runtime.applyChanges(outcome.changes)
-  if (!outcome.afterReconcile) return outcome.result
-  runtime.reconcile()
-  const settled = outcome.afterReconcile(runtime.getNodes())
-  if (settled.changes) {
-    runtime.applyChanges(settled.changes)
-    runtime.reconcile()
+  const written: SceneChanges[] = []
+  if (outcome.changes) {
+    runtime.applyChanges(outcome.changes)
+    written.push(outcome.changes)
   }
-  return settled.result
+  let result = outcome.result
+  if (outcome.afterReconcile) {
+    runtime.reconcile()
+    const settled = outcome.afterReconcile(runtime.getNodes())
+    if (settled.changes) {
+      runtime.applyChanges(settled.changes)
+      written.push(settled.changes)
+      runtime.reconcile()
+    }
+    result = settled.result
+  }
+  if (runtime.keep) {
+    const made = madeEntries(runtime.getNodes(), written)
+    if (
+      outcome.keep?.checkpoint ||
+      outcome.keep?.designBrief !== undefined ||
+      outcome.keep?.viewed !== undefined ||
+      made.length
+    )
+      runtime.keep({ ...outcome.keep, ...(made.length ? { made } : {}) })
+  }
+  return result
 }

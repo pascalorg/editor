@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
 // Room transforms and floor construction, as the editor's room and floor commands do them. Points
@@ -14,8 +15,8 @@ const zoneIntentPatch = z.strictObject({
   floor: z
     .strictObject({
       footprint: z.string().min(1).nullable().optional(),
-      thickness: z.number().min(0.02).nullable().optional(),
-      elevation: z.number().nullable().optional(),
+      thickness: measurement('length', 'm', { min: 0.02 }).nullable().optional(),
+      elevation: measurement('length', 'm').nullable().optional(),
       finish: finish.nullable().optional(),
       regions: paintRegions.nullable().optional(),
     })
@@ -33,33 +34,32 @@ const zoneIntentPatch = z.strictObject({
   wallMaterial: z.string().nullable().optional(),
   hasFloor: z.boolean().nullable().optional(),
   hasCeiling: z.boolean().nullable().optional(),
+  daylight: z
+    .strictObject({
+      artificialLight: z.boolean().describe('The room is lit by artificial light.'),
+      mechanicalVentilation: z.boolean().describe('The room is aired by mechanical ventilation.'),
+    })
+    .nullable()
+    .optional(),
 })
 
 const floorFoundationPatch = z.strictObject({
-  thickness: z
-    .number()
-    .finite()
-    .min(0)
-    .optional()
-    .describe(
+  thickness: measurement('length', 'm', {
+    min: 0,
+    description:
       'Slab thickness in meters. On the ground it sits on the foundation (or the ground) and grows upward: a thicker slab raises the floor top and everything on it. Never below 0.01 m (smaller values are clamped). Upstairs the underside stays on the walls below.',
-    ),
-  foundationHeight: z
-    .number()
-    .finite()
-    .min(0)
-    .optional()
-    .describe(
+  }).optional(),
+  foundationHeight: measurement('length', 'm', {
+    min: 0,
+    description:
       'Ground-bearing floors only: height of the foundation under the slab, in meters. 0 = on the ground (no foundation); > 0 = raised on a solid foundation. The floor top is derived: grade + foundationHeight + thickness.',
-    ),
-  floorHeight: z
-    .number()
-    .finite()
-    .nullable()
-    .optional()
-    .describe(
+  }).optional(),
+  floorHeight: measurement('length', 'm', {
+    description:
       'Legacy: a target floor top in level-local meters. On the ground it is mapped to foundationHeight = top - grade - thickness (never below 0); null = on the ground. Prefer thickness and foundationHeight.',
-    ),
+  })
+    .nullable()
+    .optional(),
   foundation: z.object({ type: z.enum(['solid', 'none']), material: finish.optional() }).optional(),
   slots: z
     .strictObject({
@@ -73,7 +73,7 @@ const floorFoundationPatch = z.strictObject({
 const roomTransform = {
   zoneId: NodeId,
   translate: point.optional(),
-  rotate: z.object({ angle: z.number().finite(), pivot: point.optional() }).optional(),
+  rotate: z.object({ angle: measurement('angle', 'rad'), pivot: point.optional() }).optional(),
   force: z.boolean().optional(),
 }
 
@@ -91,8 +91,8 @@ export const cutFloorOpeningTool = {
       .object({
         x: z.number().finite(),
         z: z.number().finite(),
-        width: z.number().finite().positive(),
-        depth: z.number().finite().positive(),
+        width: measurement('length', 'm', { positive: true }),
+        depth: measurement('length', 'm', { positive: true }),
       })
       .optional(),
     drawnOn: z.enum(['floor', 'ceiling']).optional(),
@@ -137,7 +137,7 @@ export const rebaseFloorReferenceTool = {
   input: {
     slabId: NodeId.optional(),
     slabIds: z.array(NodeId).min(1).optional(),
-    referenceFloorElevation: z.number().finite().nullable(),
+    referenceFloorElevation: measurement('length', 'm').nullable(),
   },
 }
 
@@ -149,8 +149,8 @@ export const createMezzanineTool = {
   input: {
     hostZoneId: NodeId,
     polygon: z.array(point).min(3),
-    elevation: z.number().finite().optional(),
-    thickness: z.number().finite().min(0.02).optional(),
+    elevation: measurement('length', 'm').optional(),
+    thickness: measurement('length', 'm', { min: 0.02 }).optional(),
   },
 }
 
@@ -178,7 +178,7 @@ export const rotateZoneTool = {
   input: {
     zoneId: NodeId,
     quarterTurns: z.number().int().min(-1).max(1).describe('1 or -1.'),
-    gridStep: z.number().finite().positive().optional(),
+    gridStep: measurement('length', 'm', { positive: true }).optional(),
     force: z.boolean().optional(),
   },
 }
@@ -195,7 +195,7 @@ export const setZoneIntentTool = {
   name: 'set_zone_intent',
   title: 'Set room intent',
   description:
-    'Update room name, floor finish/elevation/regions, floor.footprint ("new" mints a unique floor key tied to this creator room, an existing key joins that floor on this level, null returns to the shared floor). Touching rooms with the same key share a base plate; disconnected pieces share construction settings. Conversion preserves world geometry in one edit and refuses when infeasible. get_zones exposes floor_choices. A keyed floor uses "<creator room name> floor" while the creator remains on that key; otherwise it uses the largest named room. Existing keys such as "own" without a creator use that fallback. A user-given plate name wins; the shared floor stays "Shared floor". Keyed rooms can have raised or sunken floor.elevation, stored as a level-local walking top. Slab thickness, foundation height and edge finish use set_room_floor_construction, updating every piece of the key. Update ceiling paint regions (ceiling.regions: [x, z] polygons with a finish, later wins), step finishes (floorStepFinish for every step of the room; floorStepOverrides: [{ key, step?, finish }] per doorway, key = the door id the step sits under or the lower room id), wall material and construction opt-outs. Absent fields are unchanged; null clears.',
+    'Update room name, floor finish/elevation/regions, floor.footprint ("new" mints a unique floor key tied to this creator room, an existing key joins that floor on this level, null returns to the shared floor). Touching rooms with the same key share a base plate; disconnected pieces share construction settings. Conversion preserves world geometry in one edit and refuses when infeasible. get_zones exposes floor_choices. A keyed floor uses "<creator room name> floor" while the creator remains on that key; otherwise it uses the largest named room. Existing keys such as "own" without a creator use that fallback. A user-given plate name wins; the shared floor stays "Shared floor". Keyed rooms can have raised or sunken floor.elevation, stored as a level-local walking top. Slab thickness, foundation height and edge finish use set_room_floor_construction, updating every piece of the key. Update ceiling paint regions (ceiling.regions: [x, z] polygons with a finish, later wins), step finishes (floorStepFinish for every step of the room; floorStepOverrides: [{ key, step?, finish }] per doorway, key = the door id the step sits under or the lower room id), wall material and construction opt-outs. daylight { artificialLight, mechanicalVentilation } declares a habitable room lit and aired by artificial means (the IRC R303.1 exceptions to daylight; both true), stored in the room\'s metadata; a bedroom, living room or kitchen needs a window to outside or this declaration, above and below grade alike. Absent fields are unchanged; null clears.',
   input: { zoneId: NodeId, patch: zoneIntentPatch },
 }
 

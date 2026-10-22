@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { castYardDimensions, castYardDimensionsOriented, type Pt } from './geometry'
+import { castYardDimensionsOriented } from '@pascal-app/core'
+import { castYardDimensions, type Pt } from './geometry'
 
 // 20 m × 30 m lot centred on the origin, y south
 const LOT: Pt[] = [

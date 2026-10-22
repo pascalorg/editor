@@ -94,6 +94,7 @@ await flattenBunNodeModules(outputDirectory)
 await materializeSymlinks(outputDirectory)
 await rm(path.join(outputDirectory, 'node_modules/.bun'), { recursive: true, force: true })
 await pruneBuildOnlyFiles(outputDirectory)
+await reportStaticMedia(path.join(outputDirectory, 'apps/editor/.next/static/media'))
 const nativeFiles = await findNativeModules(outputDirectory)
 if (nativeFiles.length > 0) {
   throw new Error(`portable runtime contains native modules:\n${nativeFiles.join('\n')}`)
@@ -347,4 +348,21 @@ async function findNativeModules(root: string): Promise<string[]> {
   }
   await walk(root)
   return result.sort()
+}
+
+async function reportStaticMedia(directory: string): Promise<void> {
+  const totals = new Map<string, { bytes: number; count: number }>()
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (!entry.isFile()) continue
+    const extension = path.extname(entry.name) || '(no extension)'
+    const total = totals.get(extension) ?? { bytes: 0, count: 0 }
+    total.bytes += (await stat(path.join(directory, entry.name))).size
+    total.count += 1
+    totals.set(extension, total)
+  }
+  for (const [extension, total] of [...totals].sort((a, b) => b[1].bytes - a[1].bytes)) {
+    console.log(
+      `Runtime media ${extension}: ${total.count} files, ${formatMegabytes(total.bytes)} MB`,
+    )
+  }
 }

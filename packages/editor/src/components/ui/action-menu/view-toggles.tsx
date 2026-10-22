@@ -20,6 +20,7 @@ import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
+import { useActionMenuPopupSide } from './placement'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
@@ -149,7 +150,7 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
     <>
       <button
         aria-label="Upload scan or guide image"
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
         disabled={isAddingGuide}
         onClick={() => fileInputRef.current?.click()}
         type="button"
@@ -170,6 +171,7 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
 // ── Guides toggle + dropdown ────────────────────────────────────────────────
 
 function GuidesControl() {
+  const popupSide = useActionMenuPopupSide()
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
   const setSelection = useViewer((state) => state.setSelection)
@@ -207,8 +209,8 @@ function GuidesControl() {
           className={cn(
             'rounded-r-none p-0',
             showGuides
-              ? 'bg-white/15'
-              : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
+              ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
+              : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
           )}
           label={`Guides: ${showGuides ? 'Visible' : 'Hidden'}`}
           onClick={() => setShowGuides(!showGuides)}
@@ -221,7 +223,7 @@ function GuidesControl() {
               className="h-[28px] w-[28px] object-contain"
               src="/icons/floorplan.webp"
             />
-            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
+            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-black/12 dark:bg-white/20 px-[3px] text-center font-medium text-[9px] text-foreground/70 dark:text-white/70 leading-[14px]">
               {guides.length}
             </span>
           </div>
@@ -236,11 +238,11 @@ function GuidesControl() {
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               showGuides
                 ? isOpen
-                  ? 'bg-white/10'
-                  : 'bg-white/5 hover:bg-white/8'
+                  ? 'bg-black/6 dark:bg-white/10'
+                  : 'bg-black/4 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/8'
                 : isOpen
-                  ? 'bg-white/8'
-                  : 'opacity-60 hover:bg-white/5 hover:opacity-100',
+                  ? 'bg-black/5 dark:bg-white/8'
+                  : 'opacity-60 hover:bg-black/4 dark:hover:bg-white/5 hover:opacity-100',
             )}
             type="button"
           >
@@ -252,7 +254,7 @@ function GuidesControl() {
       <PopoverContent
         align="center"
         className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div className="space-y-3">
@@ -284,7 +286,7 @@ function GuidesControl() {
                   className={cn(
                     'group/item space-y-2 rounded-xl border bg-background/75 p-2.5 transition-colors',
                     selectedReferenceId === guide.id
-                      ? 'border-foreground/35 bg-white/10'
+                      ? 'border-foreground/35 bg-black/6 dark:bg-white/10'
                       : 'border-border/45',
                   )}
                   key={guide.id}
@@ -349,6 +351,7 @@ function GuidesControl() {
 // ── Scans toggle + dropdown ─────────────────────────────────────────────────
 
 function ScansControl() {
+  const popupSide = useActionMenuPopupSide()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const setSelection = useViewer((state) => state.setSelection)
@@ -386,8 +389,8 @@ function ScansControl() {
           className={cn(
             'rounded-r-none p-0',
             showScans
-              ? 'bg-white/15'
-              : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
+              ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
+              : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
           )}
           label={`Scans: ${showScans ? 'Visible' : 'Hidden'}`}
           onClick={() => setShowScans(!showScans)}
@@ -396,7 +399,7 @@ function ScansControl() {
         >
           <div className="relative">
             <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.webp" />
-            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
+            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-black/12 dark:bg-white/20 px-[3px] text-center font-medium text-[9px] text-foreground/70 dark:text-white/70 leading-[14px]">
               {scans.length}
             </span>
           </div>
@@ -411,11 +414,11 @@ function ScansControl() {
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               showScans
                 ? isOpen
-                  ? 'bg-white/10'
-                  : 'bg-white/5 hover:bg-white/8'
+                  ? 'bg-black/6 dark:bg-white/10'
+                  : 'bg-black/4 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/8'
                 : isOpen
-                  ? 'bg-white/8'
-                  : 'opacity-60 hover:bg-white/5 hover:opacity-100',
+                  ? 'bg-black/5 dark:bg-white/8'
+                  : 'opacity-60 hover:bg-black/4 dark:hover:bg-white/5 hover:opacity-100',
             )}
             type="button"
           >
@@ -427,7 +430,7 @@ function ScansControl() {
       <PopoverContent
         align="center"
         className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div className="space-y-3">
@@ -459,7 +462,7 @@ function ScansControl() {
                   className={cn(
                     'group/item space-y-2 rounded-xl border bg-background/75 p-2.5 transition-colors',
                     selectedReferenceId === scan.id
-                      ? 'border-foreground/35 bg-white/10'
+                      ? 'border-foreground/35 bg-black/6 dark:bg-white/10'
                       : 'border-border/45',
                   )}
                   key={scan.id}
@@ -578,7 +581,7 @@ function ReferenceListSection({
         </div>
         <button
           aria-label={show ? `Hide ${title.toLowerCase()}` : `Show ${title.toLowerCase()}`}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
           onClick={() => setShow(!show)}
           type="button"
         >
@@ -594,7 +597,7 @@ function ReferenceListSection({
               className={cn(
                 'group/item space-y-2 rounded-xl border bg-background/75 p-2.5 transition-colors',
                 selectedReferenceId === node.id
-                  ? 'border-foreground/35 bg-white/10'
+                  ? 'border-foreground/35 bg-black/6 dark:bg-white/10'
                   : 'border-border/45',
               )}
               key={node.id}
@@ -657,6 +660,7 @@ function ReferenceListSection({
 }
 
 function ReferencesControl() {
+  const popupSide = useActionMenuPopupSide()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const showGuides = useViewer((state) => state.showGuides)
@@ -682,8 +686,8 @@ function ReferencesControl() {
           className={cn(
             'rounded-r-none p-0',
             anyVisible
-              ? 'bg-white/15'
-              : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
+              ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
+              : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
           )}
           label={`References: ${anyVisible ? 'Visible' : 'Hidden'}`}
           onClick={toggleAll}
@@ -696,7 +700,7 @@ function ReferencesControl() {
               className="h-[28px] w-[28px] object-contain"
               src="/icons/floorplan.webp"
             />
-            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
+            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-black/12 dark:bg-white/20 px-[3px] text-center font-medium text-[9px] text-foreground/70 dark:text-white/70 leading-[14px]">
               {total}
             </span>
           </div>
@@ -710,11 +714,11 @@ function ReferencesControl() {
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               anyVisible
                 ? isOpen
-                  ? 'bg-white/10'
-                  : 'bg-white/5 hover:bg-white/8'
+                  ? 'bg-black/6 dark:bg-white/10'
+                  : 'bg-black/4 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/8'
                 : isOpen
-                  ? 'bg-white/8'
-                  : 'opacity-60 hover:bg-white/5 hover:opacity-100',
+                  ? 'bg-black/5 dark:bg-white/8'
+                  : 'opacity-60 hover:bg-black/4 dark:hover:bg-white/5 hover:opacity-100',
             )}
             type="button"
           >
@@ -726,7 +730,7 @@ function ReferencesControl() {
       <PopoverContent
         align="center"
         className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div className="space-y-3">
@@ -765,6 +769,7 @@ function ReferencesControl() {
 // ── Reference floor control ────────────────────────────────────────────────────────────────────
 
 function ReferenceFloorControl() {
+  const popupSide = useActionMenuPopupSide()
   const showReferenceFloor = useEditor((state) => state.showReferenceFloor)
   const toggleReferenceFloor = useEditor((state) => state.toggleReferenceFloor)
   const referenceFloorOffset = useEditor((state) => state.referenceFloorOffset)
@@ -784,8 +789,8 @@ function ReferenceFloorControl() {
           className={cn(
             'rounded-r-none p-0',
             showReferenceFloor && selectedLevel
-              ? 'bg-white/15'
-              : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
+              ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
+              : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
           )}
           disabled={!hasLowerLevels}
           label={
@@ -801,7 +806,7 @@ function ReferenceFloorControl() {
         >
           <div className="relative">
             <Layers2 className="h-4 w-4" />
-            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
+            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-black/12 dark:bg-white/20 px-[3px] text-center font-medium text-[9px] text-foreground/70 dark:text-white/70 leading-[14px]">
               {lowerLevels.length}
             </span>
           </div>
@@ -815,11 +820,11 @@ function ReferenceFloorControl() {
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               showReferenceFloor && selectedLevel
                 ? isOpen
-                  ? 'bg-white/10'
-                  : 'bg-white/5 hover:bg-white/8'
+                  ? 'bg-black/6 dark:bg-white/10'
+                  : 'bg-black/4 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/8'
                 : isOpen
-                  ? 'bg-white/8'
-                  : 'opacity-60 hover:bg-white/5 hover:opacity-100',
+                  ? 'bg-black/5 dark:bg-white/8'
+                  : 'opacity-60 hover:bg-black/4 dark:hover:bg-white/5 hover:opacity-100',
             )}
             disabled={!hasLowerLevels}
             type="button"
@@ -832,7 +837,7 @@ function ReferenceFloorControl() {
       <PopoverContent
         align="center"
         className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.55),0_6px_16px_-10px_rgba(15,23,42,0.2)] backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div className="space-y-3">
@@ -848,7 +853,7 @@ function ReferenceFloorControl() {
             </div>
             <button
               aria-label={showReferenceFloor ? 'Hide reference floor' : 'Show reference floor'}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
               disabled={!hasLowerLevels}
               onClick={toggleReferenceFloor}
               type="button"
@@ -870,8 +875,8 @@ function ReferenceFloorControl() {
                   return (
                     <button
                       className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-white/8',
-                        isSelected && showReferenceFloor && 'bg-white/10 text-foreground',
+                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/8',
+                        isSelected && showReferenceFloor && 'bg-black/6 dark:bg-white/10 text-foreground',
                       )}
                       key={level.id}
                       onClick={() => {
@@ -928,8 +933,8 @@ function RiserControl() {
     <ActionButton
       className={cn(
         isRiserOpen
-          ? 'bg-white/15'
-          : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
+          ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
+          : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
       )}
       label="Riser diagram"
       onClick={toggleRiserOpen}

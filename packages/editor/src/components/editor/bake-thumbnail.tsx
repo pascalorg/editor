@@ -12,7 +12,9 @@ import {
   setKeyLightDirectionOverride,
   setProceduralEmission,
   setSlotDefaultOverrides,
+  siteSurfaces,
   temporarilyHideNodeTypes,
+  temporarilyWithoutAmbiance,
   useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
@@ -90,20 +92,6 @@ async function settledHeroFraming() {
     previous = next
   }
   return framing
-}
-
-/** The site's own surfaces (ground fill, horizon disc, property ribbons) —
- *  not its registered children (buildings, items), which are groups. */
-function siteSurfaces(): Object3D[] {
-  const surfaces: Object3D[] = []
-  for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of sceneRegistry.nodes.get(siteId)?.children ?? []) {
-      if (child.visible && !(child.type === 'Group' && child.children.length > 0)) {
-        surfaces.push(child)
-      }
-    }
-  }
-  return surfaces
 }
 
 /**
@@ -221,6 +209,8 @@ export function BakeThumbnail({
 
     const run = async () => {
       const restoreNodeVisibility = temporarilyHideNodeTypes(['scan', 'guide', 'spawn'])
+      // The hero is the building in the world's own light, wherever the person's eye is.
+      const restoreAmbiance = temporarilyWithoutAmbiance()
       const priorLights = new Map<string, boolean>()
       const restGroups = new Map<string, [number, number, number]>()
       for (const node of Object.values(useScene.getState().nodes)) {
@@ -333,7 +323,7 @@ export function BakeThumbnail({
         }
 
         pipeline.applyEnvironment({
-          theme: useViewer.getState().sceneTheme,
+          theme: useViewer.getState().sceneAppearance,
           transparent: false,
           grade: true,
           edges: useViewer.getState().edges,
@@ -399,6 +389,7 @@ export function BakeThumbnail({
             .getState()
             .setProceduralLights(id as import('@pascal-app/core').AnyNodeId, on)
         restoreNodeVisibility()
+        restoreAmbiance()
       }
     }
 

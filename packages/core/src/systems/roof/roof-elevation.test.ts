@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import {
   type AnyNode,
@@ -9,6 +9,7 @@ import {
   SlabNode,
   WallNode,
 } from '../../schema'
+import useScene from '../../store/use-scene'
 import { planWallSplitAtPoint } from '../wall/wall-topology'
 import { resolveRoofElevation } from './roof-elevation'
 
@@ -51,6 +52,19 @@ function scene(heights: Array<number | undefined>) {
 }
 
 describe('resolveRoofElevation', () => {
+  test('resolves a saved scene without reading the browser scene store', () => {
+    const { roof, nodes } = scene([4.5])
+    const browserStore = spyOn(useScene, 'getState').mockImplementation(() => {
+      throw new Error('No browser store in the hosted MCP')
+    })
+    try {
+      expect(resolveRoofElevation(roof, nodes)).toBe(1.5)
+      expect(browserStore).not.toHaveBeenCalled()
+    } finally {
+      browserStore.mockRestore()
+    }
+  })
+
   test("follows walls on the roof's own level when it sits on the top floor", () => {
     const { roof, level, upper, nodes } = scene([2.5])
     // Move the roof onto the walls' level: no storey above, roof and walls share it.
@@ -220,15 +234,42 @@ describe('resolveRoofElevation', () => {
     // A wall-less storey slipped between roof and walls: the walls are now two
     // floors down and the roof freezes where it is.
     expect(resolveRoofElevation(roof, { ...nodes, [middle.id]: middle })).toBe(0)
-    // Walls on the roof's own level count (top floor without a storey above).
+    // Walls on the roof's own level count when the roof stands on them (a roof written on its
+    // walls' level); near that level's floor it is a lower wing's, on the walls below.
     const onParent = room(upper, [20])
     const next = {
       ...nodes,
       [upper.id]: { ...upper, children: [...upper.children, ...onParent.map((wall) => wall.id)] },
       ...Object.fromEntries(onParent.map((wall) => [wall.id, wall])),
     }
-    expect(resolveRoofElevation(roof, next)).toBe(20)
+    expect(resolveRoofElevation({ ...roof, position: [2, 20, 1] }, next)).toBe(20)
+    expect(resolveRoofElevation(roof, next)).toBe(1)
     expect(resolveRoofElevation({ ...roof, parentId: level.id }, nodes)).toBe(4)
+  })
+
+  // A porch roof drawn by hand goes on the storey above its walls; the upper storey's wall along
+  // the porch's edge lifted it to that wall's top.
+  test("a lower wing's roof on the storey above stands on the wing's walls, not that storey's", () => {
+    const { level, upper, nodes } = scene([3])
+    const wing = room(level, [3], 4)
+    const upperWalls = room(upper, [2.5])
+    const segment = RoofSegmentNode.parse({ roofType: 'shed', width: 4, depth: 3 })
+    const porch = RoofNode.parse({
+      parentId: upper.id,
+      support: { kind: 'walls' },
+      position: [6, 0, 1.5],
+      children: [segment.id],
+    })
+    const next: Record<string, AnyNode> = {
+      ...nodes,
+      [level.id]: { ...level, children: [...level.children, ...wing.map((wall) => wall.id)] },
+      [upper.id]: { ...upper, children: [...upperWalls.map((wall) => wall.id), porch.id] },
+      ...Object.fromEntries(
+        [...wing, ...upperWalls, porch].map((node) => [node.id, node as AnyNode]),
+      ),
+      [segment.id]: { ...segment, parentId: porch.id },
+    }
+    expect(resolveRoofElevation(porch, next)).toBe(0)
   })
 
   test('matches a conical arc by centre and radius after replacement, without an enclosure', () => {

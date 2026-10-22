@@ -6,12 +6,12 @@ import {
   PipeFittingNode,
   type PipeSegmentNode,
 } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { localFittingPorts } from '../duct-fitting/ports'
 import { ductPortDiameterIn } from '../duct-segment/geometry'
 import { localPipeFittingPorts } from '../pipe-fitting/ports'
 import { accessoryMateQuaternion } from './accessory-placement'
-import type { ScenePort } from './ports'
 
 const END_CAP_OWNER_ID_KEY = 'automaticRunEndCapOwnerId'
 const END_CAP_ENDPOINT_KEY = 'automaticRunEndCapEndpoint'

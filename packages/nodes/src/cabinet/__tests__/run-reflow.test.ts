@@ -330,271 +330,374 @@ describe('cabinet preset run reflow', () => {
   test.each([
     { cornerSide: 'left', openDirection: -1, wallX: 0.5 },
     { cornerSide: 'right', openDirection: 1, wallX: -0.5 },
-  ] as const)('moves a linked $cornerSide L layout toward its unconstrained side', ({
-    cornerSide,
-    openDirection,
-    wallX,
-  }) => {
-    const level = LevelNode.parse({ id: `level_reflow-l-${cornerSide}` })
-    const run = CabinetNode.parse({
-      id: `cabinet_reflow-l-${cornerSide}`,
-      parentId: level.id,
-      children: [
-        `cabinet-module_reflow-l-${cornerSide}-left`,
-        `cabinet-module_reflow-l-${cornerSide}-right`,
-      ],
-    })
-    const sourceIsLeft = cornerSide === 'left'
-    const left = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-${cornerSide}-left`,
-      parentId: run.id,
-      position: sourceIsLeft ? [-0.4, 0.1, 0] : [-0.25, 0.1, 0],
-      width: sourceIsLeft ? 0.8 : 0.5,
-    })
-    const right = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-${cornerSide}-right`,
-      parentId: run.id,
-      position: sourceIsLeft ? [0.25, 0.1, 0] : [0.4, 0.1, 0],
-      width: sourceIsLeft ? 0.5 : 0.8,
-    })
-    const source = sourceIsLeft ? left : right
-    const selected = sourceIsLeft ? right : left
-    const wall = WallNode.parse({
-      id: `wall_reflow-l-${cornerSide}`,
-      parentId: level.id,
-      start: [wallX, -1],
-      end: [wallX, 1],
-    })
-    seedScene([level, run, left, right, wall] as AnyNode[], level.id as AnyNodeId)
-    const sceneApi = createSceneApi(useScene)
-    expect(addCornerRun({ module: source, run, sceneApi, side: cornerSide })).toBeTruthy()
+  ] as const)(
+    'moves a linked $cornerSide L layout toward its unconstrained side',
+    ({ cornerSide, openDirection, wallX }) => {
+      const level = LevelNode.parse({ id: `level_reflow-l-${cornerSide}` })
+      const run = CabinetNode.parse({
+        id: `cabinet_reflow-l-${cornerSide}`,
+        parentId: level.id,
+        children: [
+          `cabinet-module_reflow-l-${cornerSide}-left`,
+          `cabinet-module_reflow-l-${cornerSide}-right`,
+        ],
+      })
+      const sourceIsLeft = cornerSide === 'left'
+      const left = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-${cornerSide}-left`,
+        parentId: run.id,
+        position: sourceIsLeft ? [-0.4, 0.1, 0] : [-0.25, 0.1, 0],
+        width: sourceIsLeft ? 0.8 : 0.5,
+      })
+      const right = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-${cornerSide}-right`,
+        parentId: run.id,
+        position: sourceIsLeft ? [0.25, 0.1, 0] : [0.4, 0.1, 0],
+        width: sourceIsLeft ? 0.5 : 0.8,
+      })
+      const source = sourceIsLeft ? left : right
+      const selected = sourceIsLeft ? right : left
+      const wall = WallNode.parse({
+        id: `wall_reflow-l-${cornerSide}`,
+        parentId: level.id,
+        start: [wallX, -1],
+        end: [wallX, 1],
+      })
+      seedScene([level, run, left, right, wall] as AnyNode[], level.id as AnyNodeId)
+      const sceneApi = createSceneApi(useScene)
+      expect(addCornerRun({ module: source, run, sceneApi, side: cornerSide })).toBeTruthy()
 
-    const nodesBefore = useScene.getState().nodes
-    const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
-    const liveModules = liveRun.children
-      .map((id) => nodesBefore[id])
-      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
-        Boolean(node?.type === 'cabinet-module'),
+      const nodesBefore = useScene.getState().nodes
+      const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
+      const liveModules = liveRun.children
+        .map((id) => nodesBefore[id])
+        .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+          Boolean(node?.type === 'cabinet-module'),
+        )
+      const liveSelected = nodesBefore[selected.id] as ReturnType<typeof CabinetModuleNode.parse>
+      const derivedBaseRun = Object.values(nodesBefore).find(
+        (node): node is ReturnType<typeof CabinetNode.parse> =>
+          node.type === 'cabinet' && node.id !== run.id && node.runTier === 'base',
+      )!
+      const before = worldPosition(derivedBaseRun, nodesBefore)
+      const sourceXBefore = (nodesBefore[source.id] as ReturnType<typeof CabinetModuleNode.parse>)
+        .position[0]
+      const constraints = runWallConstraints(liveRun, liveModules, nodesBefore)
+
+      expect(wallConstraintFlags(constraints)).toEqual(
+        cornerSide === 'left' ? { left: false, right: true } : { left: true, right: false },
       )
-    const liveSelected = nodesBefore[selected.id] as ReturnType<typeof CabinetModuleNode.parse>
-    const derivedBaseRun = Object.values(nodesBefore).find(
-      (node): node is ReturnType<typeof CabinetNode.parse> =>
-        node.type === 'cabinet' && node.id !== run.id && node.runTier === 'base',
-    )!
-    const before = worldPosition(derivedBaseRun, nodesBefore)
-    const sourceXBefore = (nodesBefore[source.id] as ReturnType<typeof CabinetModuleNode.parse>)
-      .position[0]
-    const constraints = runWallConstraints(liveRun, liveModules, nodesBefore)
+      expect(
+        reflowRunModules({
+          modules: liveModules,
+          parentRun: liveRun,
+          patch: cabinetPresetById('fridge-single').createPatch(liveRun),
+          scene: useScene.getState(),
+          selected: liveSelected,
+        }),
+      ).toBe(true)
 
-    expect(wallConstraintFlags(constraints)).toEqual(
-      cornerSide === 'left' ? { left: false, right: true } : { left: true, right: false },
-    )
-    expect(
-      reflowRunModules({
-        modules: liveModules,
-        parentRun: liveRun,
-        patch: cabinetPresetById('fridge-single').createPatch(liveRun),
-        scene: useScene.getState(),
-        selected: liveSelected,
-      }),
-    ).toBe(true)
-
-    const nodesAfter = useScene.getState().nodes
-    const after = worldPosition(
-      nodesAfter[derivedBaseRun.id] as ReturnType<typeof CabinetNode.parse>,
-      nodesAfter,
-    )
-    const sourceAfter = nodesAfter[source.id] as ReturnType<typeof CabinetModuleNode.parse>
-    expect(sourceAfter.position[0] - sourceXBefore).toBeCloseTo(openDirection * 0.26)
-    expect((sourceAfter.metadata as Record<string, unknown>).cabinetCornerSourceLink).toBeDefined()
-    expect(after[0] - before[0]).toBeCloseTo(openDirection * 0.26)
-    expect(after[2]).toBeCloseTo(before[2])
-    expect(sourceAfter.width).toBeCloseTo(0.8)
-  })
+      const nodesAfter = useScene.getState().nodes
+      const after = worldPosition(
+        nodesAfter[derivedBaseRun.id] as ReturnType<typeof CabinetNode.parse>,
+        nodesAfter,
+      )
+      const sourceAfter = nodesAfter[source.id] as ReturnType<typeof CabinetModuleNode.parse>
+      expect(sourceAfter.position[0] - sourceXBefore).toBeCloseTo(openDirection * 0.26)
+      expect(
+        (sourceAfter.metadata as Record<string, unknown>).cabinetCornerSourceLink,
+      ).toBeDefined()
+      expect(after[0] - before[0]).toBeCloseTo(openDirection * 0.26)
+      expect(after[2]).toBeCloseTo(before[2])
+      expect(sourceAfter.width).toBeCloseTo(0.8)
+    },
+  )
 
   test.each([
     { cornerSide: 'left', openDirection: -1, turnSide: 'left', wallX: 0.8 },
     { cornerSide: 'left', openDirection: -1, turnSide: 'right', wallX: 0.8 },
     { cornerSide: 'right', openDirection: 1, turnSide: 'left', wallX: -0.8 },
     { cornerSide: 'right', openDirection: 1, turnSide: 'right', wallX: -0.8 },
-  ] as const)('moves a linked $cornerSide L layout turning $turnSide when its source grows', ({
-    cornerSide,
-    openDirection,
-    turnSide,
-    wallX,
-  }) => {
-    const level = LevelNode.parse({ id: `level_reflow-l-source-${cornerSide}-${turnSide}` })
-    const run = CabinetNode.parse({
-      id: `cabinet_reflow-l-source-${cornerSide}-${turnSide}`,
-      parentId: level.id,
-      children: [
-        `cabinet-module_reflow-l-source-${cornerSide}-${turnSide}-left`,
-        `cabinet-module_reflow-l-source-${cornerSide}-${turnSide}-right`,
-      ],
-    })
-    const sourceIsLeft = cornerSide === 'left'
-    const left = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-source-${cornerSide}-${turnSide}-left`,
-      parentId: run.id,
-      position: sourceIsLeft ? [-0.25, 0.1, 0] : [-0.4, 0.1, 0],
-      width: sourceIsLeft ? 0.5 : 0.8,
-    })
-    const right = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-source-${cornerSide}-${turnSide}-right`,
-      parentId: run.id,
-      position: sourceIsLeft ? [0.4, 0.1, 0] : [0.25, 0.1, 0],
-      width: sourceIsLeft ? 0.8 : 0.5,
-    })
-    const source = sourceIsLeft ? left : right
-    const wall = WallNode.parse({
-      id: `wall_reflow-l-source-${cornerSide}-${turnSide}`,
-      parentId: level.id,
-      start: [wallX, -1],
-      end: [wallX, 1],
-    })
-    seedScene([level, run, left, right, wall] as AnyNode[], level.id as AnyNodeId)
-    const sceneApi = createSceneApi(useScene)
-    expect(addCornerRun({ module: source, run, sceneApi, side: turnSide })).toBeTruthy()
+  ] as const)(
+    'moves a linked $cornerSide L layout turning $turnSide when its source grows',
+    ({ cornerSide, openDirection, turnSide, wallX }) => {
+      const level = LevelNode.parse({ id: `level_reflow-l-source-${cornerSide}-${turnSide}` })
+      const run = CabinetNode.parse({
+        id: `cabinet_reflow-l-source-${cornerSide}-${turnSide}`,
+        parentId: level.id,
+        children: [
+          `cabinet-module_reflow-l-source-${cornerSide}-${turnSide}-left`,
+          `cabinet-module_reflow-l-source-${cornerSide}-${turnSide}-right`,
+        ],
+      })
+      const sourceIsLeft = cornerSide === 'left'
+      const left = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-source-${cornerSide}-${turnSide}-left`,
+        parentId: run.id,
+        position: sourceIsLeft ? [-0.25, 0.1, 0] : [-0.4, 0.1, 0],
+        width: sourceIsLeft ? 0.5 : 0.8,
+      })
+      const right = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-source-${cornerSide}-${turnSide}-right`,
+        parentId: run.id,
+        position: sourceIsLeft ? [0.4, 0.1, 0] : [0.25, 0.1, 0],
+        width: sourceIsLeft ? 0.8 : 0.5,
+      })
+      const source = sourceIsLeft ? left : right
+      const wall = WallNode.parse({
+        id: `wall_reflow-l-source-${cornerSide}-${turnSide}`,
+        parentId: level.id,
+        start: [wallX, -1],
+        end: [wallX, 1],
+      })
+      seedScene([level, run, left, right, wall] as AnyNode[], level.id as AnyNodeId)
+      const sceneApi = createSceneApi(useScene)
+      expect(addCornerRun({ module: source, run, sceneApi, side: turnSide })).toBeTruthy()
 
-    const nodesBefore = useScene.getState().nodes
-    const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
-    const liveModules = liveRun.children
-      .map((id) => nodesBefore[id])
-      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
-        Boolean(node?.type === 'cabinet-module'),
+      const nodesBefore = useScene.getState().nodes
+      const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
+      const liveModules = liveRun.children
+        .map((id) => nodesBefore[id])
+        .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+          Boolean(node?.type === 'cabinet-module'),
+        )
+      const liveSource = nodesBefore[source.id] as ReturnType<typeof CabinetModuleNode.parse>
+      const derivedBaseRun = Object.values(nodesBefore).find(
+        (node): node is ReturnType<typeof CabinetNode.parse> =>
+          node.type === 'cabinet' && node.id !== run.id && node.runTier === 'base',
+      )!
+      const derivedPositionBefore = worldPosition(derivedBaseRun, nodesBefore)
+      const constraints = runWallConstraints(liveRun, liveModules, nodesBefore)
+
+      expect(wallConstraintFlags(constraints)).toEqual(
+        cornerSide === 'left' ? { left: false, right: true } : { left: true, right: false },
       )
-    const liveSource = nodesBefore[source.id] as ReturnType<typeof CabinetModuleNode.parse>
-    const derivedBaseRun = Object.values(nodesBefore).find(
-      (node): node is ReturnType<typeof CabinetNode.parse> =>
-        node.type === 'cabinet' && node.id !== run.id && node.runTier === 'base',
-    )!
-    const derivedPositionBefore = worldPosition(derivedBaseRun, nodesBefore)
-    const constraints = runWallConstraints(liveRun, liveModules, nodesBefore)
+      expect(
+        reflowRunModules({
+          modules: liveModules,
+          parentRun: liveRun,
+          patch: { cabinetType: 'tall', width: 0.76 },
+          scene: useScene.getState(),
+          selected: liveSource,
+        }),
+      ).toBe(true)
 
-    expect(wallConstraintFlags(constraints)).toEqual(
-      cornerSide === 'left' ? { left: false, right: true } : { left: true, right: false },
-    )
-    expect(
-      reflowRunModules({
-        modules: liveModules,
-        parentRun: liveRun,
-        patch: { cabinetType: 'tall', width: 0.76 },
-        scene: useScene.getState(),
-        selected: liveSource,
-      }),
-    ).toBe(true)
-
-    const nodesAfter = useScene.getState().nodes
-    const derivedPositionAfter = worldPosition(
-      nodesAfter[derivedBaseRun.id] as ReturnType<typeof CabinetNode.parse>,
-      nodesAfter,
-    )
-    expect(derivedPositionAfter[0] - derivedPositionBefore[0]).toBeCloseTo(openDirection * 0.26)
-    expect(derivedPositionAfter[2]).toBeCloseTo(derivedPositionBefore[2])
-  })
+      const nodesAfter = useScene.getState().nodes
+      const derivedPositionAfter = worldPosition(
+        nodesAfter[derivedBaseRun.id] as ReturnType<typeof CabinetNode.parse>,
+        nodesAfter,
+      )
+      expect(derivedPositionAfter[0] - derivedPositionBefore[0]).toBeCloseTo(openDirection * 0.26)
+      expect(derivedPositionAfter[2]).toBeCloseTo(derivedPositionBefore[2])
+    },
+  )
 
   test.each([
     { cornerSide: 'left', turnSide: 'left' },
     { cornerSide: 'left', turnSide: 'right' },
     { cornerSide: 'right', turnSide: 'left' },
     { cornerSide: 'right', turnSide: 'right' },
-  ] as const)('respects source-wall anchoring for a constrained $cornerSide-end/$turnSide-turn L', ({
-    cornerSide,
-    turnSide,
-  }) => {
-    const level = LevelNode.parse({ id: `level_reflow-l-constrained-${cornerSide}` })
-    const room = SiteNode.parse({
-      id: `site_reflow-l-constrained-${cornerSide}`,
-      parentId: level.id,
-    })
-    const run = CabinetNode.parse({
-      id: `cabinet_reflow-l-constrained-${cornerSide}`,
-      parentId: level.id,
-      children: [
-        `cabinet-module_reflow-l-constrained-${cornerSide}-left`,
-        `cabinet-module_reflow-l-constrained-${cornerSide}-right`,
-      ],
-    })
-    const sourceIsLeft = cornerSide === 'left'
-    const left = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-constrained-${cornerSide}-left`,
-      parentId: run.id,
-      position: sourceIsLeft ? [-0.4, 0.1, 0] : [-0.25, 0.1, 0],
-      width: sourceIsLeft ? 0.8 : 0.5,
-    })
-    const right = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-constrained-${cornerSide}-right`,
-      parentId: run.id,
-      position: sourceIsLeft ? [0.25, 0.1, 0] : [0.4, 0.1, 0],
-      width: sourceIsLeft ? 0.5 : 0.8,
-    })
-    const source = sourceIsLeft ? left : right
-    const selected = sourceIsLeft ? right : left
-    const outerEdges = sourceIsLeft ? [-0.8, 0.5] : [-0.5, 0.8]
-    const walls = outerEdges.map((edge, index) => {
-      const x = edge + (index === 0 ? -0.1 : 0.1)
-      return WallNode.parse({
-        id: `wall_reflow-l-constrained-${cornerSide}-${index}`,
-        parentId: room.id,
-        start: [x, -1],
-        end: [x, 1],
+  ] as const)(
+    'respects source-wall anchoring for a constrained $cornerSide-end/$turnSide-turn L',
+    ({ cornerSide, turnSide }) => {
+      const level = LevelNode.parse({ id: `level_reflow-l-constrained-${cornerSide}` })
+      const room = SiteNode.parse({
+        id: `site_reflow-l-constrained-${cornerSide}`,
+        parentId: level.id,
       })
-    })
-    seedScene([level, room, run, left, right] as AnyNode[], level.id as AnyNodeId)
-    const sceneApi = createSceneApi(useScene)
-    expect(addCornerRun({ module: source, run, sceneApi, side: turnSide })).toBeTruthy()
-    for (const wall of walls) sceneApi.upsert(wall as AnyNode, level.id as AnyNodeId)
+      const run = CabinetNode.parse({
+        id: `cabinet_reflow-l-constrained-${cornerSide}`,
+        parentId: level.id,
+        children: [
+          `cabinet-module_reflow-l-constrained-${cornerSide}-left`,
+          `cabinet-module_reflow-l-constrained-${cornerSide}-right`,
+        ],
+      })
+      const sourceIsLeft = cornerSide === 'left'
+      const left = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-constrained-${cornerSide}-left`,
+        parentId: run.id,
+        position: sourceIsLeft ? [-0.4, 0.1, 0] : [-0.25, 0.1, 0],
+        width: sourceIsLeft ? 0.8 : 0.5,
+      })
+      const right = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-constrained-${cornerSide}-right`,
+        parentId: run.id,
+        position: sourceIsLeft ? [0.25, 0.1, 0] : [0.4, 0.1, 0],
+        width: sourceIsLeft ? 0.5 : 0.8,
+      })
+      const source = sourceIsLeft ? left : right
+      const selected = sourceIsLeft ? right : left
+      const outerEdges = sourceIsLeft ? [-0.8, 0.5] : [-0.5, 0.8]
+      const walls = outerEdges.map((edge, index) => {
+        const x = edge + (index === 0 ? -0.1 : 0.1)
+        return WallNode.parse({
+          id: `wall_reflow-l-constrained-${cornerSide}-${index}`,
+          parentId: room.id,
+          start: [x, -1],
+          end: [x, 1],
+        })
+      })
+      seedScene([level, room, run, left, right] as AnyNode[], level.id as AnyNodeId)
+      const sceneApi = createSceneApi(useScene)
+      expect(addCornerRun({ module: source, run, sceneApi, side: turnSide })).toBeTruthy()
+      for (const wall of walls) sceneApi.upsert(wall as AnyNode, level.id as AnyNodeId)
 
-    const nodesBefore = useScene.getState().nodes
-    const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
-    const liveModules = liveRun.children
-      .map((id) => nodesBefore[id])
-      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
-        Boolean(node?.type === 'cabinet-module'),
+      const nodesBefore = useScene.getState().nodes
+      const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
+      const liveModules = liveRun.children
+        .map((id) => nodesBefore[id])
+        .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+          Boolean(node?.type === 'cabinet-module'),
+        )
+      const derivedBaseRun = Object.values(nodesBefore).find(
+        (node): node is ReturnType<typeof CabinetNode.parse> =>
+          node.type === 'cabinet' && node.id !== run.id && node.runTier === 'base',
+      )!
+      const footprintBefore = runModuleBounds(derivedBaseRun.id, nodesBefore)
+      const derivedPositionBefore = worldPosition(derivedBaseRun, nodesBefore)
+      const constraints = runWallConstraints(liveRun, liveModules, nodesBefore)
+      const extentBefore = { minX: runMinX(liveModules), maxX: runMaxX(liveModules) }
+
+      expect(wallConstraintFlags(constraints)).toEqual({ left: true, right: true })
+      expect(
+        reflowRunModules({
+          modules: liveModules,
+          parentRun: liveRun,
+          patch: { cabinetType: 'tall', width: 0.76 },
+          scene: useScene.getState(),
+          selected: nodesBefore[selected.id] as ReturnType<typeof CabinetModuleNode.parse>,
+        }),
+      ).toBe(true)
+
+      const nodesAfter = useScene.getState().nodes
+      const sourceAfter = nodesAfter[source.id] as ReturnType<typeof CabinetModuleNode.parse>
+      const liveModulesAfter = liveRun.children
+        .map((id) => nodesAfter[id])
+        .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+          Boolean(node?.type === 'cabinet-module'),
+        )
+      const footprintAfter = runModuleBounds(derivedBaseRun.id, nodesAfter)
+      const derivedPositionAfter = worldPosition(
+        nodesAfter[derivedBaseRun.id] as ReturnType<typeof CabinetNode.parse>,
+        nodesAfter,
       )
-    const derivedBaseRun = Object.values(nodesBefore).find(
-      (node): node is ReturnType<typeof CabinetNode.parse> =>
-        node.type === 'cabinet' && node.id !== run.id && node.runTier === 'base',
-    )!
-    const footprintBefore = runModuleBounds(derivedBaseRun.id, nodesBefore)
-    const derivedPositionBefore = worldPosition(derivedBaseRun, nodesBefore)
-    const constraints = runWallConstraints(liveRun, liveModules, nodesBefore)
-    const extentBefore = { minX: runMinX(liveModules), maxX: runMaxX(liveModules) }
+      expect(sourceAfter.width).toBeCloseTo(0.54)
+      expect(
+        (nodesAfter[selected.id] as ReturnType<typeof CabinetModuleNode.parse>).width,
+      ).toBeCloseTo(0.76)
+      expect(runMinX(liveModulesAfter)).toBeCloseTo(extentBefore.minX)
+      expect(runMaxX(liveModulesAfter)).toBeCloseTo(extentBefore.maxX)
+      const sideWallInnerFace =
+        cornerSide === 'left'
+          ? walls[0]!.start[0] + (walls[0]!.thickness ?? 0.2) / 2
+          : walls[1]!.start[0] - (walls[1]!.thickness ?? 0.2) / 2
+      if (turnSide === cornerSide) {
+        if (cornerSide === 'left') {
+          expect(footprintBefore.minX).toBeLessThan(sideWallInnerFace)
+          expect(footprintAfter.minX).toBeGreaterThanOrEqual(sideWallInnerFace - 1e-4)
+        } else {
+          expect(footprintBefore.maxX).toBeGreaterThan(sideWallInnerFace)
+          expect(footprintAfter.maxX).toBeLessThanOrEqual(sideWallInnerFace + 1e-4)
+        }
+      } else {
+        expect(derivedPositionAfter[0]).toBeCloseTo(derivedPositionBefore[0])
+        expect(derivedPositionAfter[2]).toBeCloseTo(derivedPositionBefore[2])
+      }
+      expect(footprintAfter.minZ).toBeCloseTo(footprintBefore.minZ)
+      expect(footprintAfter.maxZ).toBeCloseTo(footprintBefore.maxZ)
+    },
+  )
 
-    expect(wallConstraintFlags(constraints)).toEqual({ left: true, right: true })
-    expect(
-      reflowRunModules({
-        modules: liveModules,
-        parentRun: liveRun,
-        patch: { cabinetType: 'tall', width: 0.76 },
-        scene: useScene.getState(),
-        selected: nodesBefore[selected.id] as ReturnType<typeof CabinetModuleNode.parse>,
-      }),
-    ).toBe(true)
+  test.each(['left', 'right'] as const)(
+    'reanchors a two-wall %s L when its corner source donates',
+    (cornerSide) => {
+      const level = LevelNode.parse({ id: `level_reflow-l-slack-${cornerSide}` })
+      const run = CabinetNode.parse({
+        id: `cabinet_reflow-l-slack-${cornerSide}`,
+        parentId: level.id,
+        children: [
+          `cabinet-module_reflow-l-slack-${cornerSide}-left`,
+          `cabinet-module_reflow-l-slack-${cornerSide}-right`,
+        ],
+      })
+      const sourceIsLeft = cornerSide === 'left'
+      const left = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-slack-${cornerSide}-left`,
+        parentId: run.id,
+        position: sourceIsLeft ? [-0.4, 0.1, 0] : [-0.25, 0.1, 0],
+        width: sourceIsLeft ? 0.8 : 0.5,
+      })
+      const right = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-slack-${cornerSide}-right`,
+        parentId: run.id,
+        position: sourceIsLeft ? [0.25, 0.1, 0] : [0.4, 0.1, 0],
+        width: sourceIsLeft ? 0.5 : 0.8,
+      })
+      const source = sourceIsLeft ? left : right
+      const selected = sourceIsLeft ? right : left
+      const outerEdges = sourceIsLeft ? [-0.8, 0.5] : [-0.5, 0.8]
+      const walls = outerEdges.map((edge, index) => {
+        const side = index === 0 ? -1 : 1
+        const x = edge + side * 0.23
+        return WallNode.parse({
+          id: `wall_reflow-l-slack-${cornerSide}-${index}`,
+          parentId: level.id,
+          start: [x, -1],
+          end: [x, 1],
+          thickness: 0.2,
+        })
+      })
+      seedScene([level, run, left, right] as AnyNode[], level.id as AnyNodeId)
+      const sceneApi = createSceneApi(useScene)
+      expect(addCornerRun({ module: source, run, sceneApi, side: cornerSide })).toBeTruthy()
+      for (const wall of walls) sceneApi.upsert(wall as AnyNode, level.id as AnyNodeId)
 
-    const nodesAfter = useScene.getState().nodes
-    const sourceAfter = nodesAfter[source.id] as ReturnType<typeof CabinetModuleNode.parse>
-    const liveModulesAfter = liveRun.children
-      .map((id) => nodesAfter[id])
-      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
-        Boolean(node?.type === 'cabinet-module'),
-      )
-    const footprintAfter = runModuleBounds(derivedBaseRun.id, nodesAfter)
-    const derivedPositionAfter = worldPosition(
-      nodesAfter[derivedBaseRun.id] as ReturnType<typeof CabinetNode.parse>,
-      nodesAfter,
-    )
-    expect(sourceAfter.width).toBeCloseTo(0.54)
-    expect(
-      (nodesAfter[selected.id] as ReturnType<typeof CabinetModuleNode.parse>).width,
-    ).toBeCloseTo(0.76)
-    expect(runMinX(liveModulesAfter)).toBeCloseTo(extentBefore.minX)
-    expect(runMaxX(liveModulesAfter)).toBeCloseTo(extentBefore.maxX)
-    const sideWallInnerFace =
-      cornerSide === 'left'
-        ? walls[0]!.start[0] + (walls[0]!.thickness ?? 0.2) / 2
-        : walls[1]!.start[0] - (walls[1]!.thickness ?? 0.2) / 2
-    if (turnSide === cornerSide) {
+      const nodesBefore = useScene.getState().nodes
+      const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
+      const liveModules = liveRun.children
+        .map((id) => nodesBefore[id])
+        .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+          Boolean(node?.type === 'cabinet-module'),
+        )
+      const liveSelected = nodesBefore[selected.id] as ReturnType<typeof CabinetModuleNode.parse>
+      const derivedBaseRun = Object.values(nodesBefore).find(
+        (node): node is ReturnType<typeof CabinetNode.parse> =>
+          node.type === 'cabinet' && node.id !== run.id && node.runTier === 'base',
+      )!
+      const footprintBefore = runModuleBounds(derivedBaseRun.id, nodesBefore)
+      const constraints = runWallConstraints(liveRun, liveModules, nodesBefore)
+      const extentBefore = { minX: runMinX(liveModules), maxX: runMaxX(liveModules) }
+
+      expect(constraints.left.slack).toBeCloseTo(0.13)
+      expect(constraints.right.slack).toBeCloseTo(0.13)
+      expect(
+        reflowRunModules({
+          modules: liveModules,
+          parentRun: liveRun,
+          patch: cabinetPresetById('fridge-single').createPatch(liveRun),
+          scene: useScene.getState(),
+          selected: liveSelected,
+        }),
+      ).toBe(true)
+
+      const nodesAfter = useScene.getState().nodes
+      const sourceAfter = nodesAfter[source.id] as ReturnType<typeof CabinetModuleNode.parse>
+      const liveModulesAfter = liveRun.children
+        .map((id) => nodesAfter[id])
+        .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+          Boolean(node?.type === 'cabinet-module'),
+        )
+      const footprintAfter = runModuleBounds(derivedBaseRun.id, nodesAfter)
+      expect(sourceAfter.width).toBeCloseTo(0.54)
+      expect(
+        (nodesAfter[selected.id] as ReturnType<typeof CabinetModuleNode.parse>).width,
+      ).toBeCloseTo(0.76)
+      expect(runMinX(liveModulesAfter)).toBeCloseTo(extentBefore.minX)
+      expect(runMaxX(liveModulesAfter)).toBeCloseTo(extentBefore.maxX)
+      const sideWall = cornerSide === 'left' ? walls[0]! : walls[1]!
+      const sideWallInnerFace =
+        sideWall.start[0] + ((cornerSide === 'left' ? 1 : -1) * (sideWall.thickness ?? 0.2)) / 2
       if (cornerSide === 'left') {
         expect(footprintBefore.minX).toBeLessThan(sideWallInnerFace)
         expect(footprintAfter.minX).toBeGreaterThanOrEqual(sideWallInnerFace - 1e-4)
@@ -602,114 +705,10 @@ describe('cabinet preset run reflow', () => {
         expect(footprintBefore.maxX).toBeGreaterThan(sideWallInnerFace)
         expect(footprintAfter.maxX).toBeLessThanOrEqual(sideWallInnerFace + 1e-4)
       }
-    } else {
-      expect(derivedPositionAfter[0]).toBeCloseTo(derivedPositionBefore[0])
-      expect(derivedPositionAfter[2]).toBeCloseTo(derivedPositionBefore[2])
-    }
-    expect(footprintAfter.minZ).toBeCloseTo(footprintBefore.minZ)
-    expect(footprintAfter.maxZ).toBeCloseTo(footprintBefore.maxZ)
-  })
-
-  test.each([
-    'left',
-    'right',
-  ] as const)('reanchors a two-wall %s L when its corner source donates', (cornerSide) => {
-    const level = LevelNode.parse({ id: `level_reflow-l-slack-${cornerSide}` })
-    const run = CabinetNode.parse({
-      id: `cabinet_reflow-l-slack-${cornerSide}`,
-      parentId: level.id,
-      children: [
-        `cabinet-module_reflow-l-slack-${cornerSide}-left`,
-        `cabinet-module_reflow-l-slack-${cornerSide}-right`,
-      ],
-    })
-    const sourceIsLeft = cornerSide === 'left'
-    const left = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-slack-${cornerSide}-left`,
-      parentId: run.id,
-      position: sourceIsLeft ? [-0.4, 0.1, 0] : [-0.25, 0.1, 0],
-      width: sourceIsLeft ? 0.8 : 0.5,
-    })
-    const right = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-slack-${cornerSide}-right`,
-      parentId: run.id,
-      position: sourceIsLeft ? [0.25, 0.1, 0] : [0.4, 0.1, 0],
-      width: sourceIsLeft ? 0.5 : 0.8,
-    })
-    const source = sourceIsLeft ? left : right
-    const selected = sourceIsLeft ? right : left
-    const outerEdges = sourceIsLeft ? [-0.8, 0.5] : [-0.5, 0.8]
-    const walls = outerEdges.map((edge, index) => {
-      const side = index === 0 ? -1 : 1
-      const x = edge + side * 0.23
-      return WallNode.parse({
-        id: `wall_reflow-l-slack-${cornerSide}-${index}`,
-        parentId: level.id,
-        start: [x, -1],
-        end: [x, 1],
-        thickness: 0.2,
-      })
-    })
-    seedScene([level, run, left, right] as AnyNode[], level.id as AnyNodeId)
-    const sceneApi = createSceneApi(useScene)
-    expect(addCornerRun({ module: source, run, sceneApi, side: cornerSide })).toBeTruthy()
-    for (const wall of walls) sceneApi.upsert(wall as AnyNode, level.id as AnyNodeId)
-
-    const nodesBefore = useScene.getState().nodes
-    const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
-    const liveModules = liveRun.children
-      .map((id) => nodesBefore[id])
-      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
-        Boolean(node?.type === 'cabinet-module'),
-      )
-    const liveSelected = nodesBefore[selected.id] as ReturnType<typeof CabinetModuleNode.parse>
-    const derivedBaseRun = Object.values(nodesBefore).find(
-      (node): node is ReturnType<typeof CabinetNode.parse> =>
-        node.type === 'cabinet' && node.id !== run.id && node.runTier === 'base',
-    )!
-    const footprintBefore = runModuleBounds(derivedBaseRun.id, nodesBefore)
-    const constraints = runWallConstraints(liveRun, liveModules, nodesBefore)
-    const extentBefore = { minX: runMinX(liveModules), maxX: runMaxX(liveModules) }
-
-    expect(constraints.left.slack).toBeCloseTo(0.13)
-    expect(constraints.right.slack).toBeCloseTo(0.13)
-    expect(
-      reflowRunModules({
-        modules: liveModules,
-        parentRun: liveRun,
-        patch: cabinetPresetById('fridge-single').createPatch(liveRun),
-        scene: useScene.getState(),
-        selected: liveSelected,
-      }),
-    ).toBe(true)
-
-    const nodesAfter = useScene.getState().nodes
-    const sourceAfter = nodesAfter[source.id] as ReturnType<typeof CabinetModuleNode.parse>
-    const liveModulesAfter = liveRun.children
-      .map((id) => nodesAfter[id])
-      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
-        Boolean(node?.type === 'cabinet-module'),
-      )
-    const footprintAfter = runModuleBounds(derivedBaseRun.id, nodesAfter)
-    expect(sourceAfter.width).toBeCloseTo(0.54)
-    expect(
-      (nodesAfter[selected.id] as ReturnType<typeof CabinetModuleNode.parse>).width,
-    ).toBeCloseTo(0.76)
-    expect(runMinX(liveModulesAfter)).toBeCloseTo(extentBefore.minX)
-    expect(runMaxX(liveModulesAfter)).toBeCloseTo(extentBefore.maxX)
-    const sideWall = cornerSide === 'left' ? walls[0]! : walls[1]!
-    const sideWallInnerFace =
-      sideWall.start[0] + ((cornerSide === 'left' ? 1 : -1) * (sideWall.thickness ?? 0.2)) / 2
-    if (cornerSide === 'left') {
-      expect(footprintBefore.minX).toBeLessThan(sideWallInnerFace)
-      expect(footprintAfter.minX).toBeGreaterThanOrEqual(sideWallInnerFace - 1e-4)
-    } else {
-      expect(footprintBefore.maxX).toBeGreaterThan(sideWallInnerFace)
-      expect(footprintAfter.maxX).toBeLessThanOrEqual(sideWallInnerFace + 1e-4)
-    }
-    expect(footprintAfter.minZ).toBeCloseTo(footprintBefore.minZ)
-    expect(footprintAfter.maxZ).toBeCloseTo(footprintBefore.maxZ)
-  })
+      expect(footprintAfter.minZ).toBeCloseTo(footprintBefore.minZ)
+      expect(footprintAfter.maxZ).toBeCloseTo(footprintBefore.maxZ)
+    },
+  )
 
   test('keeps the native L footprint fixed when its corner source wins donor selection', () => {
     const level = LevelNode.parse({ id: 'level_reflow-native-l' })
@@ -908,97 +907,97 @@ describe('cabinet preset run reflow', () => {
     { endSide: 'left', turnSide: 'right' },
     { endSide: 'right', turnSide: 'left' },
     { endSide: 'right', turnSide: 'right' },
-  ] as const)('honors derived-leg walls for an open $endSide-end/$turnSide-turn source run', ({
-    endSide,
-    turnSide,
-  }) => {
-    const suffix = `${endSide}-${turnSide}`
-    const level = LevelNode.parse({ id: `level_reflow-l-leg-base-${suffix}` })
-    const run = CabinetNode.parse({
-      id: `cabinet_reflow-l-leg-base-${suffix}`,
-      parentId: level.id,
-      children:
-        endSide === 'left'
-          ? [
-              `cabinet-module_reflow-l-leg-base-source-${suffix}`,
-              `cabinet-module_reflow-l-leg-base-donor-${suffix}`,
-            ]
-          : [
-              `cabinet-module_reflow-l-leg-base-donor-${suffix}`,
-              `cabinet-module_reflow-l-leg-base-source-${suffix}`,
-            ],
-    })
-    const source = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-leg-base-source-${suffix}`,
-      parentId: run.id,
-      position: [endSide === 'left' ? -0.4 : 0.4, 0.1, 0],
-      width: 0.5,
-    })
-    const donor = CabinetModuleNode.parse({
-      id: `cabinet-module_reflow-l-leg-base-donor-${suffix}`,
-      parentId: run.id,
-      position: [endSide === 'left' ? 0.25 : -0.25, 0.1, 0],
-      width: 0.8,
-    })
-    seedScene([level, run, source, donor] as AnyNode[], level.id as AnyNodeId)
-    const sceneApi = createSceneApi(useScene)
-    expect(addCornerRun({ module: source, run, sceneApi, side: turnSide })).toBeTruthy()
+  ] as const)(
+    'honors derived-leg walls for an open $endSide-end/$turnSide-turn source run',
+    ({ endSide, turnSide }) => {
+      const suffix = `${endSide}-${turnSide}`
+      const level = LevelNode.parse({ id: `level_reflow-l-leg-base-${suffix}` })
+      const run = CabinetNode.parse({
+        id: `cabinet_reflow-l-leg-base-${suffix}`,
+        parentId: level.id,
+        children:
+          endSide === 'left'
+            ? [
+                `cabinet-module_reflow-l-leg-base-source-${suffix}`,
+                `cabinet-module_reflow-l-leg-base-donor-${suffix}`,
+              ]
+            : [
+                `cabinet-module_reflow-l-leg-base-donor-${suffix}`,
+                `cabinet-module_reflow-l-leg-base-source-${suffix}`,
+              ],
+      })
+      const source = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-leg-base-source-${suffix}`,
+        parentId: run.id,
+        position: [endSide === 'left' ? -0.4 : 0.4, 0.1, 0],
+        width: 0.5,
+      })
+      const donor = CabinetModuleNode.parse({
+        id: `cabinet-module_reflow-l-leg-base-donor-${suffix}`,
+        parentId: run.id,
+        position: [endSide === 'left' ? 0.25 : -0.25, 0.1, 0],
+        width: 0.8,
+      })
+      seedScene([level, run, source, donor] as AnyNode[], level.id as AnyNodeId)
+      const sceneApi = createSceneApi(useScene)
+      expect(addCornerRun({ module: source, run, sceneApi, side: turnSide })).toBeTruthy()
 
-    const nodesBeforeWalls = useScene.getState().nodes
-    const legRun = derivedBaseRunForSource(source.id, nodesBeforeWalls)
-    const legModules = legRun.children
-      .map((id) => nodesBeforeWalls[id])
-      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
-        Boolean(node?.type === 'cabinet-module'),
-      )
-    const selected = legModules.find((module) => module.name === 'Base Cabinet')!
-    const transform = worldTransform(legRun, nodesBeforeWalls)
-    const cos = Math.cos(transform.rotation)
-    const sin = Math.sin(transform.rotation)
-    const wallAxis: [number, number] = [sin, cos]
-    for (const [index, localX] of [runMinX(legModules), runMaxX(legModules)].entries()) {
-      const x = transform.position[0] + localX * cos
-      const z = transform.position[2] - localX * sin
-      sceneApi.upsert(
-        WallNode.parse({
-          id: `wall_reflow-l-leg-base-${suffix}-${index}`,
-          parentId: level.id,
-          start: [x - wallAxis[0], z - wallAxis[1]],
-          end: [x + wallAxis[0], z + wallAxis[1]],
-        }) as AnyNode,
-        level.id as AnyNodeId,
-      )
-    }
+      const nodesBeforeWalls = useScene.getState().nodes
+      const legRun = derivedBaseRunForSource(source.id, nodesBeforeWalls)
+      const legModules = legRun.children
+        .map((id) => nodesBeforeWalls[id])
+        .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+          Boolean(node?.type === 'cabinet-module'),
+        )
+      const selected = legModules.find((module) => module.name === 'Base Cabinet')!
+      const transform = worldTransform(legRun, nodesBeforeWalls)
+      const cos = Math.cos(transform.rotation)
+      const sin = Math.sin(transform.rotation)
+      const wallAxis: [number, number] = [sin, cos]
+      for (const [index, localX] of [runMinX(legModules), runMaxX(legModules)].entries()) {
+        const x = transform.position[0] + localX * cos
+        const z = transform.position[2] - localX * sin
+        sceneApi.upsert(
+          WallNode.parse({
+            id: `wall_reflow-l-leg-base-${suffix}-${index}`,
+            parentId: level.id,
+            start: [x - wallAxis[0], z - wallAxis[1]],
+            end: [x + wallAxis[0], z + wallAxis[1]],
+          }) as AnyNode,
+          level.id as AnyNodeId,
+        )
+      }
 
-    const nodesBefore = useScene.getState().nodes
-    const footprintBefore = moduleSubtreeBounds(legRun.id, nodesBefore)
-    expect(wallConstraintFlags(runWallConstraints(run, [source, donor], nodesBefore))).toEqual({
-      left: false,
-      right: false,
-    })
-    expect(wallConstraintFlags(runWallConstraints(legRun, legModules, nodesBefore))).toEqual({
-      left: true,
-      right: true,
-    })
-    expect(
-      reflowRunModules({
-        modules: legModules,
-        parentRun: legRun,
-        patch: cabinetPresetById('fridge-single').createPatch(legRun),
-        scene: useScene.getState(),
-        selected,
-      }),
-    ).toBe(true)
+      const nodesBefore = useScene.getState().nodes
+      const footprintBefore = moduleSubtreeBounds(legRun.id, nodesBefore)
+      expect(wallConstraintFlags(runWallConstraints(run, [source, donor], nodesBefore))).toEqual({
+        left: false,
+        right: false,
+      })
+      expect(wallConstraintFlags(runWallConstraints(legRun, legModules, nodesBefore))).toEqual({
+        left: true,
+        right: true,
+      })
+      expect(
+        reflowRunModules({
+          modules: legModules,
+          parentRun: legRun,
+          patch: cabinetPresetById('fridge-single').createPatch(legRun),
+          scene: useScene.getState(),
+          selected,
+        }),
+      ).toBe(true)
 
-    const nodesAfter = useScene.getState().nodes
-    expect(
-      (nodesAfter[selected.id] as ReturnType<typeof CabinetModuleNode.parse>).width,
-    ).toBeCloseTo(0.76)
-    const footprintAfter = moduleSubtreeBounds(legRun.id, nodesAfter)
-    const footprintLength = (bounds: ReturnType<typeof moduleSubtreeBounds>) =>
-      bounds.maxX - bounds.minX + (bounds.maxZ - bounds.minZ)
-    expect(footprintLength(footprintAfter) - footprintLength(footprintBefore)).toBeCloseTo(0)
-  })
+      const nodesAfter = useScene.getState().nodes
+      expect(
+        (nodesAfter[selected.id] as ReturnType<typeof CabinetModuleNode.parse>).width,
+      ).toBeCloseTo(0.76)
+      const footprintAfter = moduleSubtreeBounds(legRun.id, nodesAfter)
+      const footprintLength = (bounds: ReturnType<typeof moduleSubtreeBounds>) =>
+        bounds.maxX - bounds.minX + (bounds.maxZ - bounds.minZ)
+      expect(footprintLength(footprintAfter) - footprintLength(footprintBefore)).toBeCloseTo(0)
+    },
+  )
 
   test('uses only the real source wall when both source ends have L returns', () => {
     const level = LevelNode.parse({ id: 'level_reflow-two-corners' })

@@ -22,6 +22,8 @@ import {
   type WallTrimProfile,
   type WallTrimSlotId,
   wallDoorStepRuns,
+  wallFaceBaseOffset,
+  wallFaceScriptSkirtingGap,
 } from '@pascal-app/core'
 import {
   baseMaterial,
@@ -540,6 +542,8 @@ export function buildTrimGeometry(
     const frame = getWallCurveFrameAt(node, t)
     return wallToLocalTransform(node)(frame.point.x, frame.point.y).x
   }
+  const face = resolveTreatmentSideSign(node, side) > 0 ? 'a' : 'b'
+  const faceScript = kind === 'skirting' ? node.finishScripts?.[face] : undefined
   const runs = bases.flatMap((base) => {
     const bottom = support ? base.elevation - support.elevation : yBottom
     const openingRanges = trimOpeningRanges(node, childrenNodes, bottom, height)
@@ -549,6 +553,11 @@ export function buildTrimGeometry(
           if (run.bottom < bottom + height && run.top > bottom)
             openingRanges.push([run.start, run.end])
       }
+    const scripted =
+      faceScript && support
+        ? wallFaceScriptSkirtingGap(faceScript, bottom + height - wallFaceBaseOffset(support, face))
+        : null
+    if (scripted) openingRanges.push(scripted)
     return subtractOpeningRanges([[stationX(base.start), stationX(base.end)]], openingRanges).map(
       ([start, end]) => ({
         start,

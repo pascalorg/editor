@@ -214,6 +214,82 @@ const at = (node: Placed | undefined, position: number[], label: string) =>
     : [`${label} at ${node?.position}`]
 
 export const PLACE_ITEMS_CASES: AgentToolCase[] = [
+  ...([false, true] as const).flatMap((diagonal) =>
+    (['front', 'back'] as const).flatMap((side) =>
+      ([undefined, 270] as const).map((rotation): AgentToolCase => {
+        // The diagonal is the 3-4-5 triangle: its left normal is (-0.8, 0.6).
+        const normal = diagonal ? [-0.8, 0.6] : [0, 1]
+        const midpoint = diagonal ? [1.5, 2] : [3, 0]
+        const sign = side === 'front' ? 1 : -1
+        return {
+          name: `${diagonal ? 'diagonal' : 'axis'} wall ${side} keeps local planar yaw with ${rotation ?? 'unset'} world rotation`,
+          tool: 'place_items',
+          scene: () => {
+            const scene = hostScene()
+            const wall = scene.nodes.wall_south as AnyNode
+            scene.nodes.wall_south = {
+              ...wall,
+              ...(diagonal ? { end: [3, 4] } : {}),
+            }
+            return scene
+          },
+          input: {
+            items: [{
+              assetId: 'sconce',
+              targetNodeId: 'wall_south',
+              x: midpoint[0]! + sign * normal[0]! * 0.4,
+              z: midpoint[1]! + sign * normal[1]! * 0.4,
+              y: 1.5,
+              ...(rotation === undefined ? {} : { rotation }),
+            }],
+          },
+          context: hosts,
+          expect: {
+            result: { ok: true },
+            contains: { items: [{ ok: true, side, hostId: 'wall_south' }] },
+            check: (result, nodes) => {
+              const sconce = placed(nodes, 'sconce')
+              const entry = (result.items as Record<string, unknown>[])[0]!
+              const info = entry.info as { code?: string; message?: string } | undefined
+              return [
+                ...at(sconce, [diagonal ? 2.5 : 3, 1.5, sign * 0.1], 'sconce'),
+                ...(near(sconce?.rotation[0], 0) && near(sconce?.rotation[2], 0) &&
+                  near(Math.abs(sconce?.rotation[1] ?? NaN), side === 'front' ? 0 : Math.PI)
+                  ? [] : ['wall-hosted item is not planar in its local face frame']),
+                ...(rotation === undefined
+                  ? info === undefined ? [] : ['unset rotation was reported ignored']
+                  : info?.code === 'rotation_ignored' && Boolean(info.message?.length)
+                    ? [] : ['supplied rotation lacks explanatory rotation_ignored metadata']),
+              ]
+            },
+          },
+        }
+      }),
+    ),
+  ),
+  {
+    name: 'floor and item-hosted items retain explicit world yaw',
+    tool: 'place_items',
+    scene: hostScene,
+    input: {
+      items: [
+        { assetId: 'bench', x: 3, z: 2, rotation: 270 },
+        { assetId: 'table-lamp', targetNodeId: 'item_nightstand', x: 1, z: 4.1, rotation: 270 },
+      ],
+    },
+    context: hosts,
+    expect: {
+      result: { ok: true },
+      check: (result, nodes) => [
+        ...(near(placed(nodes, 'bench')?.rotation[1], 1.5 * Math.PI) ? [] : ['floor yaw changed']),
+        // The nightstand already supplies 90 degrees of the requested 270.
+        ...(near(Math.abs(placed(nodes, 'table-lamp')?.rotation[1] ?? NaN), Math.PI)
+          ? [] : ['item-host world yaw changed']),
+        ...((result.items as Record<string, unknown>[]).every((entry) => entry.info === undefined)
+          ? [] : ['non-wall rotation was reported ignored']),
+      ],
+    },
+  },
   {
     name: 'items stand on the floor of the level named, turned in degrees',
     tool: 'place_items',
@@ -268,6 +344,9 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
     expect: {
       result: { ok: false },
       contains: { items: [{ ok: false, assetId: 'sofa', code: 'outside_rooms' }] },
+      mentions: [
+        'Outside a room, add_object builds an object of any shape and size, and place_design places a procedural design.',
+      ],
     },
   },
   {
@@ -276,7 +355,11 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { levelId: 'level_ground', items: [{ assetId: 'palm', x: 10, z: 10 }] },
     context: library,
-    expect: { result: { ok: true }, contains: { items: [{ ok: true, assetId: 'palm' }] } },
+    expect: {
+      result: { ok: true },
+      contains: { items: [{ ok: true, assetId: 'palm' }] },
+      check: (result) => (JSON.stringify(result).includes('add_object') ? ['names add_object'] : []),
+    },
   },
   {
     name: 'a level without rooms takes items anywhere',
@@ -292,7 +375,6 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { items: [{ assetId: 'sofa', x: 10, z: 10 }] },
     context: { ...library, activeLevelId: 'level_upper' },
-    surfaces: ['core', 'chat'],
     expect: { result: { levelId: 'level_upper' } },
   },
   {

@@ -456,7 +456,6 @@ describe('floorplan opening placement interaction routing', () => {
   test('passes entries through only while an opening tool or moving opening is active', () => {
     expect(
       isFloorplanOpeningPlacementState({
-        phase: 'structure',
         mode: 'build',
         tool: 'window',
         movingNodeHasWallOpeningPlacement: false,
@@ -464,7 +463,6 @@ describe('floorplan opening placement interaction routing', () => {
     ).toBe(true)
     expect(
       isFloorplanOpeningPlacementState({
-        phase: 'structure',
         mode: 'select',
         tool: null,
         movingNodeHasWallOpeningPlacement: true,
@@ -472,7 +470,6 @@ describe('floorplan opening placement interaction routing', () => {
     ).toBe(true)
     expect(
       isFloorplanOpeningPlacementState({
-        phase: 'structure',
         mode: 'select',
         tool: null,
         movingNodeHasWallOpeningPlacement: false,

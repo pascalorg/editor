@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { useScene } from '@pascal-app/core'
 import {
   CeilingNode,
@@ -72,7 +71,7 @@ describe('scene query tools', () => {
     expect(parsed.zones[0].areaSqMeters).toBe(12)
   })
 
-  test('verify_scene reports practical issues without replacing validate_scene', async () => {
+  test('verify_scene reports practical issues in a schema-valid scene', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     bridge.createNode(WallNode.parse({ start: [0, 0], end: [4, 0] }), level.id)
 

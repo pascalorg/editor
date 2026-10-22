@@ -7,13 +7,22 @@ import {
   type HandleDragModifiers,
   nodeRegistry,
   type SceneApi,
+  type SurfaceProvider,
   surfaceRegionContainsFootprint,
 } from '@pascal-app/core'
-import { boundsOf, boxCorners, frame, transformPoint } from '@pascal-app/core/procedural-items'
+import {
+  boundsOf,
+  boxCorners,
+  evaluateRecipe,
+  frame,
+  isProceduralItem,
+  transformPoint,
+} from '@pascal-app/core/procedural-items'
 
 export type HostedEditPolicy = {
   host: (node: AnyNode) => boolean
   child: (node: AnyNode) => boolean
+  provider?: SurfaceProvider
 }
 
 type Nodes = Record<AnyNodeId, AnyNode>
@@ -40,7 +49,7 @@ export function hostedChildUpdates(
     if (!children.length) continue
     const nextHost = after[host.id]
     if (!nextHost || !policy.host(nextHost)) return null
-    const provider = getSurfaceProvider(host)
+    const provider = policy.provider ?? getSurfaceProvider(host)
     const nextSurfaces = provider.surfaces?.(nextHost, { scene: surfaceScene(after) }) ?? []
     if (
       JSON.stringify(provider.surfaces?.(host, { scene: surfaceScene(before) })) ===
@@ -49,10 +58,20 @@ export function hostedChildUpdates(
       continue
     for (const child of children) {
       if (!child || !('position' in child) || !('rotation' in child)) continue
+      const recipeBounds = isProceduralItem(child)
+        ? evaluateRecipe(child.recipe, child.parameters)
+        : null
       const bounds =
         child.type === 'item'
           ? { size: getScaledDimensions(child), center: undefined }
-          : nodeRegistry.get(child.type)?.capabilities.dragBounds?.(child, before)
+          : recipeBounds
+            ? {
+                size: recipeBounds.dimensions,
+                center: recipeBounds.min.map(
+                  (value, index) => (value + recipeBounds.max[index]!) / 2,
+                ) as [number, number, number],
+              }
+            : nodeRegistry.get(child.type)?.capabilities.dragBounds?.(child, before)
       if (!bounds) continue
       const center = bounds.center ?? [0, bounds.size[1] / 2, 0]
       const localBounds = {

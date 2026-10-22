@@ -137,7 +137,6 @@ export function ZonePanel() {
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const setSelection = useViewer((state) => state.setSelection)
-  const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
 
@@ -149,7 +148,6 @@ export function ZonePanel() {
 
   const handleAddZone = () => {
     if (currentLevelId) {
-      setPhase('structure')
       setMode('build')
       setTool('zone')
     }
@@ -197,14 +195,14 @@ export function ZonePanel() {
           />
           <ActionButton
             className="w-full flex-none"
-            icon={<Trash2 className="h-4 w-4 text-red-400" />}
+            icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={() => deleteSelectedZone(false)}
             type="button"
           />
           <ActionButton
             className="w-full flex-none"
-            icon={<Trash2 className="h-4 w-4 text-red-400" />}
+            icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
             label="Delete with contents"
             onClick={() => deleteSelectedZone(true)}
             type="button"

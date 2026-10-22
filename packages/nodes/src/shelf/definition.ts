@@ -165,6 +165,8 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   }),
 
   capabilities: {
+    reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
+    revealOnEdit: ['width', 'depth', 'height', 'thickness', 'rows', 'columns', 'style'],
     movable: { axes: ['x', 'z'], gridSnap: true },
     rotatable: {
       axes: ['y'],

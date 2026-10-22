@@ -1,12 +1,12 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { isAgentRefusal } from '@pascal-app/core/agent-tools'
 
 /**
- * Throw a structured MCP error. The SDK translates `McpError` into a
+ * Throw a structured MCP error. The SDK translates `ProtocolError` into a
  * JSON-RPC error response automatically.
  */
-export function throwMcpError(code: ErrorCode, message: string, data?: unknown): never {
-  throw new McpError(code, message, data)
+export function throwMcpError(code: ProtocolErrorCode, message: string, data?: unknown): never {
+  throw new ProtocolError(code, message, data)
 }
 
 /**
@@ -41,4 +41,4 @@ export function refusalResult(error: unknown) {
   throw error
 }
 
-export { ErrorCode, McpError }
+export { ProtocolError, ProtocolErrorCode }

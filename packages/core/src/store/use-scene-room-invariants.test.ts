@@ -329,33 +329,33 @@ test('I4/I9: split preserves larger-side ids and redistributes ceiling children;
   }
 })
 
-test.each([
-  false,
-  true,
-])('I5: deleting a manual cover restores the connected plate (partition=%s)', (partition) => {
-  closeRoom()
-  if (partition) {
-    useScene
-      .getState()
-      .createNode(
-        WallNode.parse({ id: 'wall_room_partition', start: [2, 0], end: [2, 4] }),
-        levelId,
-      )
-  }
-  expect(surfaces().filter((node) => node.type === 'slab')).toHaveLength(1)
-  const manual = SlabNode.parse({ id: 'slab_room_manual', polygon, autoFromWalls: false })
-  useScene.getState().createNode(manual, levelId)
-  expect(
-    surfaces()
-      .filter((node) => node.type === 'slab' && node.plateRole !== 'base')
-      .map((node) => node.id),
-  ).toEqual([manual.id])
-  useScene.getState().deleteNode(manual.id)
-  expect(surfaces().filter((node) => node.type === 'slab')).toHaveLength(1)
-  moveRightWall(8.3)
-  expect(surfaces().filter((node) => node.type === 'slab')).toHaveLength(1)
-  expect(surfaces().filter((node) => node.type === 'ceiling')).toHaveLength(partition ? 2 : 1)
-})
+test.each([false, true])(
+  'I5: deleting a manual cover restores the connected plate (partition=%s)',
+  (partition) => {
+    closeRoom()
+    if (partition) {
+      useScene
+        .getState()
+        .createNode(
+          WallNode.parse({ id: 'wall_room_partition', start: [2, 0], end: [2, 4] }),
+          levelId,
+        )
+    }
+    expect(surfaces().filter((node) => node.type === 'slab')).toHaveLength(1)
+    const manual = SlabNode.parse({ id: 'slab_room_manual', polygon, autoFromWalls: false })
+    useScene.getState().createNode(manual, levelId)
+    expect(
+      surfaces()
+        .filter((node) => node.type === 'slab' && node.plateRole !== 'base')
+        .map((node) => node.id),
+    ).toEqual([manual.id])
+    useScene.getState().deleteNode(manual.id)
+    expect(surfaces().filter((node) => node.type === 'slab')).toHaveLength(1)
+    moveRightWall(8.3)
+    expect(surfaces().filter((node) => node.type === 'slab')).toHaveLength(1)
+    expect(surfaces().filter((node) => node.type === 'ceiling')).toHaveLength(partition ? 2 : 1)
+  },
+)
 
 test('I6: a polygon-only store edit is ignored; explicit tool demotion protects later edits', () => {
   closeRoom()
@@ -566,60 +566,60 @@ test('separator edits and zone deletion reconcile without generating per-separat
   expect(surfaces().filter((node) => node.type === 'ceiling')).toHaveLength(1)
 })
 
-test.each([
-  false,
-  true,
-])('host patches never derive, including an external temporal pause (%s)', (paused) => {
-  const walls = openRoom()
-  if (paused) useScene.temporal.getState().pause()
-  try {
-    expect(
-      applySceneOperationPatch({
-        materialChanges: [],
-        nodeCreates: [{ node: walls[3]!, position: 3 }],
-        nodeUpdates: [],
-        nodeDeletes: [],
-      }),
-    ).toBe(true)
-    expect(rooms()).toHaveLength(0)
-    expect(surfaces()).toHaveLength(0)
-    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
-    expect(useScene.temporal.getState().isTracking).toBe(!paused)
-  } finally {
-    useScene.temporal.getState().resume()
-  }
-})
+test.each([false, true])(
+  'host patches never derive, including an external temporal pause (%s)',
+  (paused) => {
+    const walls = openRoom()
+    if (paused) useScene.temporal.getState().pause()
+    try {
+      expect(
+        applySceneOperationPatch({
+          materialChanges: [],
+          nodeCreates: [{ node: walls[3]!, position: 3 }],
+          nodeUpdates: [],
+          nodeDeletes: [],
+        }),
+      ).toBe(true)
+      expect(rooms()).toHaveLength(0)
+      expect(surfaces()).toHaveLength(0)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(useScene.temporal.getState().isTracking).toBe(!paused)
+    } finally {
+      useScene.temporal.getState().resume()
+    }
+  },
+)
 
-test.each([
-  false,
-  true,
-])('explicit ceiling deletion persists zone opt-out in one undo step (paused=%s)', (paused) => {
-  closeRoom()
-  const before = useScene.getState().nodes
-  const zone = rooms()[0]!
-  const ceiling = surfaces().find((node) => node.type === 'ceiling')!
-  clearSceneHistory()
-  const commits: SceneCommit[] = []
-  stopCommits = subscribeSceneCommits((commit) => commits.push(commit))
-  if (paused) pauseSpaceDetection()
-  try {
-    useScene.getState().deleteNode(ceiling.id)
-  } finally {
-    if (paused) resumeSpaceDetection()
-  }
-  expect(rooms()[0]).toMatchObject({ id: zone.id, hasCeiling: false })
-  expect(surfaces().filter((node) => node.type === 'ceiling')).toEqual([])
-  expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-  expect(commits.at(-1)!.current.nodes[zone.id]).toMatchObject({ hasCeiling: false })
-  if (!paused) expect(commits).toHaveLength(1)
-  useScene.temporal.getState().undo()
-  expect(useScene.getState().nodes).toEqual(before)
-  useScene.temporal.getState().redo()
-  moveRightWall(9)
-  expect(surfaces().filter((node) => node.type === 'ceiling')).toEqual([])
-  useScene.getState().updateNode(zone.id, { hasCeiling: true })
-  expect(surfaces().filter((node) => node.type === 'ceiling')).toHaveLength(1)
-})
+test.each([false, true])(
+  'explicit ceiling deletion persists zone opt-out in one undo step (paused=%s)',
+  (paused) => {
+    closeRoom()
+    const before = useScene.getState().nodes
+    const zone = rooms()[0]!
+    const ceiling = surfaces().find((node) => node.type === 'ceiling')!
+    clearSceneHistory()
+    const commits: SceneCommit[] = []
+    stopCommits = subscribeSceneCommits((commit) => commits.push(commit))
+    if (paused) pauseSpaceDetection()
+    try {
+      useScene.getState().deleteNode(ceiling.id)
+    } finally {
+      if (paused) resumeSpaceDetection()
+    }
+    expect(rooms()[0]).toMatchObject({ id: zone.id, hasCeiling: false })
+    expect(surfaces().filter((node) => node.type === 'ceiling')).toEqual([])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(commits.at(-1)!.current.nodes[zone.id]).toMatchObject({ hasCeiling: false })
+    if (!paused) expect(commits).toHaveLength(1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
+    useScene.temporal.getState().redo()
+    moveRightWall(9)
+    expect(surfaces().filter((node) => node.type === 'ceiling')).toEqual([])
+    useScene.getState().updateNode(zone.id, { hasCeiling: true })
+    expect(surfaces().filter((node) => node.type === 'ceiling')).toHaveLength(1)
+  },
+)
 
 test('a pre-existing manual ceiling prevents automatic ceiling creation on close', () => {
   const walls = openRoom()

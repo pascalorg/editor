@@ -1,10 +1,13 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import type { AnyNodeDefinition, NodePort } from '../registry'
-import { registerNode } from '../registry'
+import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { validateDwv } from './validate-dwv'
 
 type Point = [number, number, number]
+
+const restoreRegistry = nodeRegistry._snapshot()
+afterAll(() => restoreRegistry())
 
 // The validator reads node fields directly + buildPortComponents (which
 // consults def.ports), so register stub port-providers for the DWV kinds

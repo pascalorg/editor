@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   findItemItemCollisions,
   inspectItemPlanFootprint,
@@ -8,7 +8,7 @@ import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
-import { ErrorCode, throwMcpError } from './errors'
+import { ProtocolErrorCode, throwMcpError } from './errors'
 import { measurement } from './measurement'
 import { computeGraphHash } from './scene-lifecycle/metadata'
 import { NodeIdSchema } from './schemas'
@@ -155,15 +155,15 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
       title: 'Check collisions',
       description:
         'Assess declared item footprints with a rotation-aware plan AABB test. Supports an explicit minimum clearance and reports units, source dimensions, skipped evidence, and unsupported checks. Optionally scope to one level or floor-standing items.',
-      inputSchema: checkCollisionsInput,
-      outputSchema: checkCollisionsOutput,
+      inputSchema: z.object(checkCollisionsInput),
+      outputSchema: z.object(checkCollisionsOutput),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ levelId, minimumClearance, floorOnly, candidate }) => {
       const sceneNodes = Object.values(bridge.getNodes())
       if (candidate && levelId && candidate.levelId !== levelId) {
         throwMcpError(
-          ErrorCode.InvalidParams,
+          ProtocolErrorCode.InvalidParams,
           'candidate.levelId must match levelId when both are provided',
         )
       }
@@ -171,12 +171,15 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
       if (scopeLevelId) {
         const target = sceneNodes.find((node) => node.id === scopeLevelId)
         if (target?.type !== 'level') {
-          throwMcpError(ErrorCode.InvalidParams, `Level not found: ${scopeLevelId}`)
+          throwMcpError(ProtocolErrorCode.InvalidParams, `Level not found: ${scopeLevelId}`)
         }
       }
       if (candidate) {
         if (sceneNodes.some((node) => node.id === candidate.id)) {
-          throwMcpError(ErrorCode.InvalidParams, `Candidate id already exists: ${candidate.id}`)
+          throwMcpError(
+            ProtocolErrorCode.InvalidParams,
+            `Candidate id already exists: ${candidate.id}`,
+          )
         }
       }
 

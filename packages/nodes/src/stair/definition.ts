@@ -438,6 +438,19 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   },
 
   capabilities: {
+    reveal: { phase: 'circulation', style: 'drop', height: 2.5 },
+    revealOnEdit: [
+      'stairType',
+      'width',
+      'totalRise',
+      'stepCount',
+      'thickness',
+      'innerRadius',
+      'sweepAngle',
+      'railingMode',
+      'topLandingDepth',
+    ],
+    hostRefFields: ['destinationSurfaceId'],
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     // A stair has no centred box footprint: straight = a cumulative
@@ -465,6 +478,8 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   affordanceTools: {
     move: () => import('../shared/move-roof-tool'),
   },
+
+  tool: () => import('./tool'),
 
   parametrics: stairParametrics,
   handles: stairHandles,

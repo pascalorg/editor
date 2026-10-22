@@ -9,7 +9,6 @@ const baseArgs = {
   isWallBuildActive: false,
   modifierKeys: { meta: false, ctrl: false, shift: false, alt: false },
   planPoint: [0, 0] as [number, number],
-  structureLayer: 'elements',
 }
 
 describe('resolveFloorplanBackgroundSelection', () => {
@@ -87,7 +86,6 @@ describe('resolveFloorplanBackgroundSelection', () => {
       canSelectElementFloorplanGeometry: false,
       canSelectFloorplanZones: true,
       getFloorplanHitIdAtPoint: () => 'zone_1',
-      structureLayer: 'zones',
     })
 
     expect(result).toEqual({
@@ -95,5 +93,16 @@ describe('resolveFloorplanBackgroundSelection', () => {
       kind: 'select-zone',
       zoneId: 'zone_1',
     })
+  })
+
+  test('a miss while zones are pickable (unit focus) clears the zone selection', () => {
+    const result = resolveFloorplanBackgroundSelection({
+      ...baseArgs,
+      canSelectElementFloorplanGeometry: false,
+      canSelectFloorplanZones: true,
+      getFloorplanHitIdAtPoint: () => null,
+    })
+
+    expect(result).toEqual({ handled: true, kind: 'clear-zones' })
   })
 })

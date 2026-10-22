@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 
@@ -145,13 +145,13 @@ export function registerRenovationFromPhotos(server: McpServer, _bridge: SceneOp
       title: 'Plan a renovation from photos',
       description:
         'Plan a minimal-patch renovation given current-state photos, reference-state photos, and free-form goals.',
-      argsSchema: {
+      argsSchema: z.object({
         // MCP prompt arguments are stringly-typed; accept a JSON array or a
         // comma-separated list of base64 payloads / data URLs / http(s) URLs.
         currentPhotos: z.string(),
         referencePhotos: z.string(),
         goals: z.string(),
-      },
+      }),
     },
     async ({ currentPhotos, referencePhotos, goals }) => ({
       messages: buildRenovationMessages({ currentPhotos, referencePhotos, goals }),

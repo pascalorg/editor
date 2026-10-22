@@ -12,6 +12,8 @@ export type FloorplanViewState = {
   purpose?: 'edit' | 'document'
   /** Sheet drafting conventions (see `FloorplanContextExtension.drafting`). */
   drafting?: boolean
+  /** Room labels drawn as screen pills (see `FloorplanContextExtension.roomLabelOverlay`). */
+  roomLabelOverlay?: boolean
   wallDimensionReference?: FloorplanWallDimensionReference
   highlighted: boolean
   hovered: boolean
@@ -62,6 +64,7 @@ export function buildFloorplanContext(
       metricNotation: viewState.metricNotation ?? 'meters',
       purpose: viewState.purpose ?? 'edit',
       drafting: viewState.drafting === true,
+      roomLabelOverlay: viewState.roomLabelOverlay === true,
       wallDimensionReference: viewState.wallDimensionReference,
     }),
     viewState: viewState.palette

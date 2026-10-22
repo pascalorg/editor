@@ -3,8 +3,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { forwardRef, memo, useEffect, useRef } from 'react'
-import { resolveNodeSelectionTarget } from '../../../../../lib/selection-routing'
-import useEditor from '../../../../../store/use-editor'
 import { expandSessionSelectionForNode } from '../../../../../store/use-session-groups'
 
 export function handleTreeSelection(
@@ -61,31 +59,6 @@ export function handleTreeSelection(
 
 export function focusTreeNode(nodeId: AnyNodeId) {
   emitter.emit('camera-controls:focus', { nodeId })
-}
-
-export function routeTreeSelectionToNode(node: AnyNode | null | undefined) {
-  const target = node ? resolveNodeSelectionTarget(node) : null
-  if (!target) return
-
-  const selectedIdsAfterClick = useViewer.getState().selection.selectedIds
-  const editor = useEditor.getState()
-  let didRoute = false
-
-  if (target.phase !== editor.phase) {
-    editor.setPhase(target.phase)
-    didRoute = true
-  }
-  if (
-    target.phase === 'structure' &&
-    target.structureLayer &&
-    target.structureLayer !== useEditor.getState().structureLayer
-  ) {
-    useEditor.getState().setStructureLayer(target.structureLayer)
-    didRoute = true
-  }
-  if (didRoute) {
-    useViewer.getState().setSelection({ selectedIds: selectedIdsAfterClick })
-  }
 }
 
 import { cn } from '../../../../../lib/utils'
@@ -310,14 +283,15 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             />
           )}
 
-          <button
-            className="z-10 flex h-4 w-4 shrink-0 items-center justify-center bg-inherit"
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggle()
-            }}
-          >
-            {hasChildren ? (
+          {/* A row with nothing to fold keeps the space, and a click there selects the row. */}
+          {hasChildren ? (
+            <button
+              className="z-10 flex h-4 w-4 shrink-0 items-center justify-center bg-inherit"
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggle()
+              }}
+            >
               <motion.div
                 animate={{ rotate: expanded ? 90 : 0 }}
                 initial={false}
@@ -325,8 +299,10 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
               >
                 <ChevronRight className="h-3 w-3" />
               </motion.div>
-            ) : null}
-          </button>
+            </button>
+          ) : (
+            <span className="h-4 w-4 shrink-0" />
+          )}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span
               className={cn(

@@ -19,6 +19,7 @@ import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { intersectSpatialDragPlane } from '../../lib/spatial-drag-plane'
 import { getSpatialPointerId, spatialPointerInput } from '../../lib/spatial-pointer-input'
+import { isTypingTarget } from '../../lib/typing-target'
 import useEditor, { isAngleSnapActive } from '../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
@@ -377,6 +378,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     // Escape / ⌘Z abort the rotate — capture phase so they win over the global
     // use-keyboard arms (⌘Z must never history-jump under a live pointer).
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return
       if (e.key === 'Alt') {
         altKey = true
         return

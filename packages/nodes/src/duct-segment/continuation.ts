@@ -6,6 +6,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
+import type { RunBodyHit, ScenePort } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import {
   findMatedScenePorts,
@@ -14,7 +15,6 @@ import {
   type RunContinuationHandlePlan,
   resolveDuctContinuationHandle,
 } from '../shared/elbow-branch-continuation'
-import type { RunBodyHit, ScenePort } from '../shared/ports'
 import { ductPortDiameterIn } from './geometry'
 import type { DuctSegmentNode } from './schema'
 

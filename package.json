@@ -15,8 +15,8 @@
     "check-types": "turbo run check-types",
     "test": "turbo run test",
     "ci": "bun run check && bun run skills:validate && bun run check-types && bun run test && bun run build",
-    "postinstall": "[ -n \"$CI\" ] || [ ! -e .git ] || git config core.hooksPath .githooks",
-    "skills:validate": "bun scripts/validate-skills.ts && bun test scripts/cursor-plugin-policy.test.ts scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/openai-tool-annotation-policy.test.ts scripts/path-containment.test.ts scripts/public-skill-discovery-policy.test.ts",
+    "postinstall": "([ -n \"$CI\" ] || [ ! -e .git ] || git config core.hooksPath .githooks)",
+    "skills:validate": "bun scripts/validate-skills.ts && bun scripts/sync-agent-versions.ts --check && bun test scripts/sync-agent-versions.test.ts scripts/cursor-plugin-policy.test.ts scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/openai-tool-annotation-policy.test.ts scripts/path-containment.test.ts scripts/public-skill-discovery-policy.test.ts",
     "kill": "lsof -ti:3002 | xargs kill -9 2>/dev/null || echo 'No processes found on port 3002'",
     "clean:cache": "rm -rf apps/*/.next apps/*/.swc apps/*/.turbo packages/*/.turbo tooling/*/.turbo .turbo node_modules/.cache",
     "restart": "bun kill && bun clean:cache && bun dev",
@@ -26,31 +26,37 @@
     "release:major": "gh workflow run release.yml -f bump=major"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.16",
+    "@biomejs/biome": "^2.6.2",
     "@typescript/native-preview": "7.0.0-dev.20260624.1",
+    "@typescript/typescript6": "6.0.2",
     "dotenv-cli": "^11.0.0",
-    "fast-xml-parser": "^5.4.2",
-    "turbo": "^2.9.17",
-    "typescript": "6.0.3",
-    "ultracite": "^7.8.2"
+    "fast-xml-parser": "^5.11.2",
+    "turbo": "^2.11.10",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "ultracite": "^8.0.1"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.18"
   },
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.2",
   "overrides": {
-    "@types/react": "19.2.17",
-    "@types/react-dom": "19.2.3",
-    "@types/three": "0.184.1",
-    "next": "16.3.0",
-    "react-grab": "0.1.50",
-    "three": "0.186.0"
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
+    "@hono/node-server": "^1.19.15",
+    "hono": "^4.13.11",
+    "next": "16.4.2",
+    "react-grab": "0.2.0",
+    "three": "0.186.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "@react-three/fiber": "9.8.2"
   },
   "optionalDependencies": {
-    "@tailwindcss/oxide-darwin-arm64": "4.3.0",
-    "@tailwindcss/oxide-darwin-x64": "4.3.0",
-    "@tailwindcss/oxide-linux-arm64-gnu": "4.3.0",
-    "@tailwindcss/oxide-linux-x64-gnu": "4.3.0",
+    "@tailwindcss/oxide-darwin-arm64": "4.3.3",
+    "@tailwindcss/oxide-darwin-x64": "4.3.3",
+    "@tailwindcss/oxide-linux-arm64-gnu": "4.3.3",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",
     "lightningcss-darwin-arm64": "1.32.0",
     "lightningcss-darwin-x64": "1.32.0",
     "lightningcss-linux-arm64-gnu": "1.32.0",
@@ -63,6 +69,7 @@
   ],
   "patchedDependencies": {
     "iwer@2.3.0": "patches/iwer@2.3.0.patch",
-    "three@0.186.0": "patches/three@0.186.0.patch"
+    "three@0.186.1": "patches/three@0.186.1.patch",
+    "three-bvh-csg@0.0.18": "patches/three-bvh-csg@0.0.18.patch"
   }
 }

@@ -7,7 +7,11 @@
  * See docs/layout-clearance-error-log.md for pitfalls (levels, gap sign, scale).
  */
 
+import type { Vec3 } from '../procedural-items/recipe'
+import { boxCorners, rotateVector } from '../procedural-items/spatial'
 import { type AnyNode, getScaledDimensions } from '../schema'
+import { isFloorUnderlay } from './furniture-kind'
+import { itemLevelHeightRange, itemPlanAabbInLevel } from './item-space'
 import { type Vec2, wallLength } from './plan-geometry'
 
 export type PlanAabb = {
@@ -42,10 +46,12 @@ export type DoorKeepout = {
   doorId: string
   wallId: string
   levelId: string | null
-  /** World-space AABB on both sides of the wall opening. */
+  /** World-space AABB: the full clear depth on the swing side, a walkway on the other. */
   aabb: PlanAabb
   width: number
   localX: number
+  /** The door's height: an item whose bottom is above it does not block the door. */
+  height: number
 }
 
 /**
@@ -65,12 +71,18 @@ export type DoorOpeningLike = {
   id: string
   position?: readonly number[]
   width?: number
+  height?: number
+  /** Which face the leaf swings towards: 'inward' is the wall's +normal side, as the door plan draws it. */
+  swingDirection?: 'inward' | 'outward'
 }
 
 /** Plan depth (m) cleared on each side of the wall face through the opening. */
 export const DEFAULT_DOOR_CLEAR_DEPTH = 0.65
 /** Extra half-width (m) beyond the door leaf along the wall. */
 export const DEFAULT_DOOR_SIDE_PAD = 0.05
+/** Plan depth (m) kept free on the side a door does not swing to: room to walk through. */
+export const DOOR_WALKWAY_DEPTH = 0.35
+const DEFAULT_DOOR_HEIGHT = 2.1
 
 /**
  * True when A and B come closer than `gap` meters (including penetration).
@@ -154,11 +166,45 @@ export function itemNodePlanAabb(node: AnyNode): PlanAabb | null {
   ) {
     return null
   }
-  return itemPlanAabb(
-    node.position,
-    [Math.abs(width), Math.abs(height), Math.abs(depth)],
-    rotationY,
-  )
+  const corners = itemNodePlanCorners(node)
+  if (!corners.every((corner) => corner.every(Number.isFinite))) return null
+  return {
+    minX: Math.min(...corners.map(([x]) => x)),
+    maxX: Math.max(...corners.map(([x]) => x)),
+    minZ: Math.min(...corners.map(([, z]) => z)),
+    maxZ: Math.max(...corners.map(([, z]) => z)),
+  }
+}
+
+/**
+ * Script bounds need not be centred on the item origin, and the asset's own corrective scale,
+ * rotation and offset sit inside the node's scale, as `scriptItemBoundsInLevel` measures them;
+ * catalog bounds are normalized.
+ */
+export function itemNodePlanCorners(node: Extract<AnyNode, { type: 'item' }>): Vec2[] {
+  const yaw = node.rotation?.[1] ?? 0
+  const place = (lx: number, lz: number): Vec2 => [
+    node.position[0] + lx * Math.cos(yaw) + lz * Math.sin(yaw),
+    node.position[2] - lx * Math.sin(yaw) + lz * Math.cos(yaw),
+  ]
+  const bounds = node.source?.manifest.bounds
+  if (!bounds) {
+    const [width, , depth] = node.asset.dimensions
+    return [-width / 2, width / 2].flatMap((x) =>
+      [-depth / 2, depth / 2].map((z) => place(x * node.scale[0], z * node.scale[2])),
+    )
+  }
+  const assetScale = node.asset.scale ?? [1, 1, 1]
+  return boxCorners(bounds.min, bounds.max).map((point) => {
+    const [x, , z] = rotateVector(
+      point.map((value, axis) => value * assetScale[axis]!) as Vec3,
+      node.asset.rotation,
+    )
+    return place(
+      (x + node.asset.offset[0]) * node.scale[0],
+      (z + node.asset.offset[2]) * node.scale[2],
+    )
+  })
 }
 
 export function inspectItemPlanFootprint(
@@ -234,9 +280,11 @@ export function inspectItemPlanFootprint(
     return { ok: false, reason: 'non_positive_plan_dimensions' }
   }
 
+  const aabb = itemNodePlanAabb(node)
+  if (!aabb) return { ok: false, reason: 'non_finite_dimensions' }
   return {
     ok: true,
-    aabb: itemPlanAabb(node.position, effectiveDimensions, rotationY),
+    aabb,
     sourceDimensions: [width, height, depth],
     effectiveDimensions,
     rotationY,
@@ -268,11 +316,20 @@ export function doorKeepoutFromWall(
   const nz = dx
 
   const half = width / 2 + sidePad
+  // The leaf needs the full depth where it swings; the other side only needs a walkway. Without a
+  // known swing, both sides get the full depth.
+  const walkway = Math.min(clearDepth, DOOR_WALKWAY_DEPTH)
+  const [back, front] =
+    door.swingDirection === 'inward'
+      ? [-walkway, clearDepth]
+      : door.swingDirection === 'outward'
+        ? [-clearDepth, walkway]
+        : [-clearDepth, clearDepth]
   const corners: Vec2[] = []
   for (const along of [localX - half, localX + half]) {
     const cx = sx + dx * along
     const cz = sz + dz * along
-    for (const side of [-clearDepth, clearDepth]) {
+    for (const side of [back, front]) {
       corners.push([cx + nx * side, cz + nz * side])
     }
   }
@@ -285,6 +342,7 @@ export function doorKeepoutFromWall(
     levelId: options?.levelId ?? null,
     width,
     localX,
+    height: typeof door.height === 'number' && door.height > 0 ? door.height : DEFAULT_DOOR_HEIGHT,
     aabb: {
       minX: Math.min(...xs),
       maxX: Math.max(...xs),
@@ -354,15 +412,21 @@ export function findBlockedDoors(args: {
     if (node.type !== 'item') continue
     const itemLevel = resolveNodeLevelId(node.id, byId)
     if (args.levelId && itemLevel !== args.levelId) continue
+    // A rug is walked over; a thing on a wall is read by the wall observations.
+    if (isFloorUnderlay(node)) continue
+    if (node.parentId && byId.get(node.parentId as never)?.type === 'wall') continue
 
-    const aabb = itemNodePlanAabb(node)
+    const aabb = itemPlanAabbInLevel(node, byId)
     if (!aabb) continue
+    const heights = itemLevelHeightRange(node, byId)
 
     for (const keepout of keepouts) {
       // Same-level only (multi-story safety).
       if (keepout.levelId && itemLevel && keepout.levelId !== itemLevel) continue
       if (args.levelId && keepout.levelId && keepout.levelId !== args.levelId) continue
       if (!itemBlocksDoorKeepout(aabb, keepout)) continue
+      // A pendant over the doorway is above the leaf.
+      if (heights && heights.min >= keepout.height - 0.05) continue
       const itemName = node.name ?? node.asset?.name ?? node.id
       issues.push({
         doorId: keepout.doorId,

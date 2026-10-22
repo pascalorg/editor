@@ -19,6 +19,35 @@ export type EditorHostPanel = {
   defaultInstalled?: boolean
   /** Short label shown next to the plugin name in the manager, e.g. "Pro". */
   badge?: string
+  /** Directory grouping, e.g. "Outdoor & site". Uncategorised plugins list under "Other". */
+  category?: string
+  /** One line for the directory card; `description` is the full text on its detail. */
+  summary?: string
+  /** What the plugin reaches beyond the editor — the host's policy, shown before install. */
+  access?: readonly PluginAccess[]
+}
+
+/** One thing a plugin can reach once installed: a host service, an outside account, shared data. */
+export type PluginAccess = {
+  /** Picks the glyph: AI calls, media models, data pulls, an outside account, sharing. */
+  kind: 'ai' | 'media' | 'data' | 'account' | 'sharing'
+  label: string
+  detail: string
+  /** Calls spend the project's credits; the card sums these into one "Uses credits" chip. */
+  usesCredits?: boolean
+  /** Card chip for an access that spends no credits, e.g. "Mint account". Defaults to `label`. */
+  chip?: string
+}
+
+/**
+ * Host-owned facts about the open project that the plugin directory shows: its
+ * name, the credits plugin calls spend, and the house rules under the
+ * categories ("Installing is free", …).
+ */
+export type PluginDirectoryContext = {
+  projectName?: string
+  credits?: { remaining: number } | { unlimited: true } | null
+  notes?: readonly string[]
 }
 
 /**
@@ -119,6 +148,32 @@ class PluginInstallLocksImpl {
 }
 
 export const pluginInstallLocks = new PluginInstallLocksImpl()
+
+class PluginDirectoryContextImpl {
+  private context: PluginDirectoryContext = {}
+  private readonly listeners = new Set<() => void>()
+
+  subscribe = (onChange: () => void): (() => void) => {
+    this.listeners.add(onChange)
+    return () => {
+      this.listeners.delete(onChange)
+    }
+  }
+
+  getSnapshot = (): PluginDirectoryContext => this.context
+
+  set(context: PluginDirectoryContext): void {
+    this.context = context
+    for (const listener of this.listeners) listener()
+  }
+}
+
+export const pluginDirectoryContext = new PluginDirectoryContextImpl()
+
+/** Replaces what the plugin directory knows about the open project. */
+export function setPluginDirectoryContext(context: PluginDirectoryContext): void {
+  pluginDirectoryContext.set(context)
+}
 
 /** Replaces every install lock, keyed by `pluginId`. Pass `{}` to clear. */
 export function setPluginInstallLocks(locks: Record<string, PluginInstallLock>): void {

@@ -1,6 +1,6 @@
 import type { QuickMeasurementReport } from '@pascal-app/core'
 import { create } from 'zustand'
-import type { ViewMode } from './use-editor'
+import type { VisibleScene } from './view-layout'
 
 export type QuickMeasurementHudSource = '2d' | '3d'
 
@@ -55,9 +55,9 @@ export const useQuickMeasurementHud = create<QuickMeasurementHudState>((set) => 
 
 export function selectQuickMeasurementHudEntry(
   state: QuickMeasurementHudState,
-  viewMode: ViewMode,
+  scene: VisibleScene | null,
 ): QuickMeasurementHudEntry | null {
-  const source = viewMode === 'split' ? state.activeSource : viewMode
+  const source = scene === 'split' ? state.activeSource : scene
   return source ? state.sources[source] : null
 }
 

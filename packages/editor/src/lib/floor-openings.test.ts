@@ -90,7 +90,7 @@ beforeEach(() => {
   groundRoom = room(GROUND, 'Hall')
   upperRoom = room(UPPER, 'Landing')
   useScene.temporal.getState().clear()
-  useEditor.setState({ phase: 'structure', mode: 'select', room: null })
+  useEditor.setState({ phase: 'building', mode: 'select', room: null })
   useViewer.getState().setSelection({ buildingId: building.id, levelId: UPPER, selectedIds: [] })
 })
 afterEach(() => {

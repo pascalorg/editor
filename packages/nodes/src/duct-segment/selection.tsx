@@ -25,6 +25,7 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import { collectScenePorts, findNearestPortXZ } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
@@ -55,7 +56,7 @@ import {
   planFittingEndpointReaim,
 } from '../shared/fitting-endpoint-reaim'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
-import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
+import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { planRunTranslationOffsets } from '../shared/run-translation-offset'
 import { ContinuePlusHandle, HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/vertical-offset'

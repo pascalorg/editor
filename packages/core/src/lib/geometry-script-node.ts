@@ -1,3 +1,4 @@
+import { refuse } from '../agent-tools/refusal'
 import { matchPascalMaterial } from '../procedural-items/library-colors'
 import type { CompiledGeometryScript } from '../schema'
 import { GeometrySourceMeta } from '../schema/geometry-metadata'
@@ -7,7 +8,7 @@ import type { ItemNode } from '../schema/nodes/item'
 import type { WindowNode } from '../schema/nodes/window'
 import { artifactUrl } from './artifact-store'
 
-/** A node built from a three.js script: an authored item, or a window or door with a script source. */
+/** A node built from a script: an authored item, or a window, door or column with a script source. */
 export type ScriptedNode = (ItemNode | WindowNode | DoorNode | ColumnNode) & {
   source: NonNullable<ItemNode['source']>
 }
@@ -51,7 +52,7 @@ export const scriptSource = (
     {
       kind: 'script' as const,
       meta: previous?.meta,
-      language: 'three' as const,
+      language: compiled.language,
       script: compiled.script,
       params: compiled.params,
       artifact: compiled.sha256,
@@ -128,12 +129,50 @@ export function scriptedSize(
 }
 
 /**
+ * A compile whose bounds are not finite numbers cannot be sized or placed, and what is built from
+ * it would fail its schema with a raw validation array or carry a non-finite size: refused before
+ * anything is built, whichever scripted tool it came to. A mesh at a position that is not a number
+ * leaves NaN bounds (null once they crossed a JSON hop).
+ */
+export function requireMeasured(
+  compiled: CompiledGeometryScript,
+  subject: { label?: string; nodeId?: string; tool: string },
+) {
+  const { min, max } = compiled.manifest.bounds
+  if ([...min, ...max].every(Number.isFinite)) return
+  const label = subject.label ? `"${subject.label}"` : (subject.nodeId ?? 'The object')
+  refuse(
+    'unmeasurable_object',
+    `${label} cannot be measured: its bounds are not finite numbers (min [${min.map(String).join(', ')}], max [${max.map(String).join(', ')}]) with params ${JSON.stringify(compiled.params)}. A mesh in the script has a position, rotation or scale that is not a number (a helper called one argument short passes the next value in its place). Fix the script and call ${subject.tool} again; nothing was ${subject.nodeId ? 'changed' : 'added'}.`,
+    { label: subject.label ?? subject.nodeId },
+  )
+}
+
+/**
  * Where the script's origin (the bottom centre of what it built) sits in the
  * node's own frame: a window or door is placed by its centre.
  */
 export function scriptedOrigin(node: ScriptedNode): [number, number, number] {
   if (node.type !== 'window' && node.type !== 'door') return [0, 0, 0]
   return [0, -scriptedSize(node.source.manifest)[1] / 2, 0]
+}
+
+/**
+ * Where a ceiling item's origin sits in the ceiling's frame (y = 0 is the ceiling plane): a recessed
+ * fixture seats flush; a scripted object is origined at its top (the compiler's ceiling mount), so
+ * it hangs from its bounds' top; a catalog model is origined at its bottom and hangs its full height.
+ */
+export function ceilingSeatY(
+  item: {
+    asset: { recessed?: boolean }
+    source?: { manifest: { bounds: { max: readonly number[] } } }
+    scale?: readonly number[]
+  },
+  height: number,
+): number {
+  if (item.asset.recessed) return 0
+  if (item.source) return -(item.source.manifest.bounds.max[1] ?? 0) * (item.scale?.[1] ?? 1)
+  return -height
 }
 
 /**

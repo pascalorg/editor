@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { UnitNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -28,8 +28,8 @@ export function registerCreateUnit(server: McpServer, bridge: SceneOperations): 
       title: 'Create unit',
       description:
         'Create a named unit in a building, optionally referencing zones across its levels.',
-      inputSchema: createUnitInput,
-      outputSchema: createUnitOutput,
+      inputSchema: z.object(createUnitInput),
+      outputSchema: z.object(createUnitOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ buildingId, name, kind, color, memberZoneIds }) => {
