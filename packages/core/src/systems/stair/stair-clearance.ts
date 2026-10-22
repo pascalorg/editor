@@ -585,7 +585,7 @@ function expand(region: Polygon, offset: number): Polygon[] {
 }
 
 /** Surface-hole rings cannot contain islands; split annular cuts while preserving their centre. */
-function openingRings(regions: Polygon[]): Ring[] {
+export function openingRings(regions: Polygon[]): Ring[] {
   return regions.flatMap((region) => {
     if (!region.holes.length) return [region.outer]
     const hole = region.holes[0]!

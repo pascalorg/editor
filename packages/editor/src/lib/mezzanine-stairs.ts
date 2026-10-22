@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  type MezzanineStairPlacement,
   planMezzanineStair,
   runAsSingleSceneHistoryStep,
   useScene,
@@ -13,17 +14,21 @@ import { sfxEmitter } from './sfx-bus'
 export type MezzanineStairResult = { ok: true; stairId: string } | { ok: false; message: string }
 
 /**
- * "Add stairs": core places a straight flight from the host floor up to one of
- * the mezzanine's open edges (its railing opens there), as one undo step. The
- * new stair is selected, like a new mezzanine is, so it can be adjusted at once.
+ * "Add stairs": core places a straight flight from the host floor up to the
+ * mezzanine, as one undo step — outside, arriving at one of its open edges (its
+ * railing opens there), or inside, climbing through an opening cut in the deck.
+ * The new stair is selected, like a new mezzanine is, so it can be adjusted at once.
  */
-export function addMezzanineStairs(zoneId: string): MezzanineStairResult {
+export function addMezzanineStairs(
+  zoneId: string,
+  placement: MezzanineStairPlacement,
+): MezzanineStairResult {
   const nodes = useScene.getState().nodes
   if (useScene.getState().readOnly || !nodes[zoneId as AnyNodeId])
     return { ok: false, message: MEZZANINE_NO_STAIR_MESSAGE }
   let plan: ReturnType<typeof planMezzanineStair>
   try {
-    plan = planMezzanineStair(nodes, zoneId)
+    plan = planMezzanineStair(nodes, zoneId, placement)
   } catch {
     return { ok: false, message: MEZZANINE_NO_STAIR_MESSAGE }
   }
