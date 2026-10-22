@@ -1,0 +1,32 @@
+name: MCP Registry deprecate legacy entry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install MCP Registry publisher
+        run: |
+          curl --fail --location \
+            "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+
+      - name: Log in to MCP Registry
+        run: "$RUNNER_TEMP/mcp-publisher login github-oidc"
+
+      # Flags must precede the server name; --yes skips the bulk confirmation prompt.
+      - name: Deprecate io.github.pascalorg/editor
+        run: |
+          "$RUNNER_TEMP/mcp-publisher" status \
+            --status deprecated \
+            --message "Superseded by app.pascal/editor" \
+            --all-versions \
+            --yes \
+            io.github.pascalorg/editor
