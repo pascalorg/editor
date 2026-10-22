@@ -1,12 +1,13 @@
 'use client'
 
-import { type AnyNodeId, emitter, type RoofEvent, SolarPanelNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, type RoofEvent, SolarPanelNode } from '@pascal-app/core'
 import {
   isGridSnapActive,
   isMagneticSnapActive,
   triggerSFX,
   useEditor,
   usePlacementPreview,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
 import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
@@ -26,6 +27,7 @@ import { resolveSolarPanelPlacement } from './placement'
 import SolarPanelPreview from './preview'
 
 export default function SolarPanelTool() {
+  const { sceneApi } = useRegistryToolContext()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const seed = useMemo(
     () => SolarPanelNode.parse({ ...solarPanelDefinition.defaults(), name: 'Solar Panel' }),
@@ -52,7 +54,7 @@ export default function SolarPanelTool() {
       if (!hit) return null
       const force = event.nativeEvent?.altKey === true
       let placement = resolveSolarPanelPlacement(hit.segment, seed, hit.localX, hit.localZ, {
-        obstacles: solarPanelObstacles(hit.segment, seed, Object.values(useScene.getState().nodes)),
+        obstacles: solarPanelObstacles(hit.segment, seed, Object.values(sceneApi.nodes())),
         gridStep: !force && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
       })
       if (!force && isMagneticSnapActive()) {
@@ -67,11 +69,7 @@ export default function SolarPanelTool() {
           node: { ...seed, rotation: placement.rotation },
         })
         placement = resolveSolarPanelPlacement(hit.segment, seed, target.localX, target.localZ, {
-          obstacles: solarPanelObstacles(
-            hit.segment,
-            seed,
-            Object.values(useScene.getState().nodes),
-          ),
+          obstacles: solarPanelObstacles(hit.segment, seed, Object.values(sceneApi.nodes())),
         })
       }
       return { hit, placement, force }
@@ -126,7 +124,7 @@ export default function SolarPanelTool() {
         position: placement.position,
         rotation: placement.rotation,
       })
-      useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+      sceneApi.upsert(node, hit.segment.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       triggerSFX('sfx:item-place')
       clear()
@@ -145,7 +143,7 @@ export default function SolarPanelTool() {
       emitter.off('tool:cancel', clear)
       clear()
     }
-  }, [activeBuildingId, seed])
+  }, [activeBuildingId, seed, sceneApi])
 
   return (
     <>

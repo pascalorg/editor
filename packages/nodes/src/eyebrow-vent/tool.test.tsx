@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
   BuildingNode,
+  createSceneApi,
   emitter,
   LevelNode,
   nodeRegistry,
@@ -10,7 +11,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useEditor, usePlacementPreview } from '@pascal-app/editor'
+import { RegistryToolProvider, useEditor, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import * as THREE from 'three'
@@ -40,7 +41,19 @@ test('eyebrow-vent placement matches its preview, honors grid mode and blocks un
   useViewer.getState().setSelection({ buildingId: building.id, levelId: level.id })
   sceneRegistry.nodes.set(segment.id, new THREE.Group())
   const { default: Tool } = await eyebrowVentDefinition.tool!()
-  const renderer = await create(<Tool />)
+  const renderer = await create(
+    <RegistryToolProvider
+      value={{
+        activeLevelId: level.id,
+        isCameraDragging: () => false,
+        sceneApi: createSceneApi(useScene),
+        selectNode: () => {},
+        unit: 'metric',
+      }}
+    >
+      <Tool />
+    </RegistryToolProvider>,
+  )
   try {
     const event = {
       node: roof,

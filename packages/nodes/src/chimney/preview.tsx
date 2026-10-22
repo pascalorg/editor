@@ -5,6 +5,7 @@ import {
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentSchema,
 } from '@pascal-app/core'
+import { EDITOR_LAYER } from '@pascal-app/editor'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
@@ -63,11 +64,19 @@ const ChimneyPreview = ({
 
   return (
     <group rotation-y={node.rotation}>
-      <mesh geometry={geo.body} material={material} raycast={() => {}} />
-      {geo.bands && <mesh geometry={geo.bands} material={material} raycast={() => {}} />}
-      {geo.cap && <mesh geometry={geo.cap} material={material} raycast={() => {}} />}
-      {geo.flues && <mesh geometry={geo.flues} material={material} raycast={() => {}} />}
-      {geo.cricket && <mesh geometry={geo.cricket} material={material} raycast={() => {}} />}
+      <mesh layers={EDITOR_LAYER} geometry={geo.body} material={material} raycast={() => {}} />
+      {geo.bands && (
+        <mesh layers={EDITOR_LAYER} geometry={geo.bands} material={material} raycast={() => {}} />
+      )}
+      {geo.cap && (
+        <mesh layers={EDITOR_LAYER} geometry={geo.cap} material={material} raycast={() => {}} />
+      )}
+      {geo.flues && (
+        <mesh layers={EDITOR_LAYER} geometry={geo.flues} material={material} raycast={() => {}} />
+      )}
+      {geo.cricket && (
+        <mesh layers={EDITOR_LAYER} geometry={geo.cricket} material={material} raycast={() => {}} />
+      )}
     </group>
   )
 }

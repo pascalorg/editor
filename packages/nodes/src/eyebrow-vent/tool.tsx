@@ -1,18 +1,13 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  EyebrowVentNode,
-  emitter,
-  type RoofEvent,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNodeId, EyebrowVentNode, emitter, type RoofEvent } from '@pascal-app/core'
 import {
   isGridSnapActive,
   isMagneticSnapActive,
   triggerSFX,
   useEditor,
   usePlacementPreview,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
 import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
@@ -31,6 +26,7 @@ import { resolveEyebrowVentPlacement } from './placement'
 import EyebrowVentPreview from './preview'
 
 export default function EyebrowVentTool() {
+  const { sceneApi } = useRegistryToolContext()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const seed = useMemo(
     () => EyebrowVentNode.parse({ ...eyebrowVentDefinition.defaults(), name: 'Eyebrow Vent' }),
@@ -127,7 +123,7 @@ export default function EyebrowVentTool() {
         position: placement.position,
         rotation: placement.rotation,
       })
-      useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+      sceneApi.upsert(node, hit.segment.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       triggerSFX('sfx:item-place')
       clear()
@@ -146,7 +142,7 @@ export default function EyebrowVentTool() {
       emitter.off('tool:cancel', clear)
       clear()
     }
-  }, [activeBuildingId, seed])
+  }, [activeBuildingId, seed, sceneApi])
 
   return (
     <>

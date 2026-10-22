@@ -1,5 +1,7 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
+
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
@@ -44,13 +46,14 @@ const EyebrowVentPreview = ({ node, invalid }: { node: EyebrowVentNode; invalid?
   return (
     <group rotation-y={node.rotation ?? 0}>
       <mesh
+        layers={EDITOR_LAYER}
         geometry={geometry}
         material={material}
         raycast={() => {
           /* disabled — see component-level note */
         }}
       />
-      <lineSegments geometry={edgesGeometry} renderOrder={1000}>
+      <lineSegments layers={EDITOR_LAYER} geometry={edgesGeometry} renderOrder={1000}>
         <lineBasicMaterial
           color={invalid ? INVALID_GHOST_COLOR : 0x6c_a3_ff}
           depthTest={false}

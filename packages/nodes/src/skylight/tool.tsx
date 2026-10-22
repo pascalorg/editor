@@ -1,12 +1,13 @@
 'use client'
 
-import { type AnyNodeId, emitter, type RoofEvent, SkylightNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, type RoofEvent, SkylightNode } from '@pascal-app/core'
 import {
   isGridSnapActive,
   isMagneticSnapActive,
   triggerSFX,
   useEditor,
   usePlacementPreview,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
 import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
@@ -25,6 +26,7 @@ import { resolveSkylightPlacement } from './placement'
 import SkylightPreview from './preview'
 
 export default function SkylightTool() {
+  const { sceneApi } = useRegistryToolContext()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const seed = useMemo(
     () => SkylightNode.parse({ ...skylightDefinition.defaults(), name: 'Skylight' }),
@@ -118,7 +120,7 @@ export default function SkylightTool() {
         position: placement.position,
         rotation: placement.rotation,
       })
-      useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+      sceneApi.upsert(node, hit.segment.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       triggerSFX('sfx:item-place')
       clear()
@@ -137,7 +139,7 @@ export default function SkylightTool() {
       emitter.off('tool:cancel', clear)
       clear()
     }
-  }, [activeBuildingId, seed])
+  }, [activeBuildingId, seed, sceneApi])
 
   return (
     <>

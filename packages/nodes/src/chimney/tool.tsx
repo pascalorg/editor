@@ -8,7 +8,6 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
-  useScene,
 } from '@pascal-app/core'
 import {
   isGridSnapActive,
@@ -16,6 +15,7 @@ import {
   triggerSFX,
   useEditor,
   usePlacementPreview,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -51,6 +51,7 @@ type SegmentTransform = {
 }
 
 const ChimneyTool = () => {
+  const { sceneApi } = useRegistryToolContext()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const setSelection = useViewer((s) => s.setSelection)
 
@@ -187,7 +188,6 @@ const ChimneyTool = () => {
       hit.localZ = placement.position[2]
       setValid(placement.valid || event.nativeEvent?.altKey === true)
       if (!placement.valid && event.nativeEvent?.altKey !== true) return
-      const state = useScene.getState()
 
       const chimney = ChimneyNode.parse({
         ...chimneyDefinition.defaults(),
@@ -196,8 +196,8 @@ const ChimneyTool = () => {
         position: [hit.localX, hit.localY, hit.localZ],
         rotation: 0,
       })
-      state.createNode(chimney, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      sceneApi.upsert(chimney, hit.segment.id as AnyNodeId)
+      sceneApi.markDirty(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [chimney.id] })
       triggerSFX('sfx:item-place')
       const placementPreview = usePlacementPreview.getState()
@@ -228,7 +228,7 @@ const ChimneyTool = () => {
       if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
       clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+  }, [activeBuildingId, setSelection, previewNode, sceneApi])
 
   return (
     <>

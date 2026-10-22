@@ -6,9 +6,14 @@ import {
   RidgeVentNode,
   type RoofEvent,
   type RoofSegmentNode,
-  useScene,
 } from '@pascal-app/core'
-import { isGridSnapActive, triggerSFX, useEditor, usePlacementPreview } from '@pascal-app/editor'
+import {
+  isGridSnapActive,
+  triggerSFX,
+  useEditor,
+  usePlacementPreview,
+  useRegistryToolContext,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
 import { roofSegmentLocalToBuildingLocal } from '../shared/relative-roof-drag'
@@ -23,6 +28,7 @@ import { resolveRidgeVentPlacement } from './placement'
 import RidgeVentPreview from './preview'
 
 export default function RidgeVentTool() {
+  const { sceneApi } = useRegistryToolContext()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const seed = useMemo(
     () => RidgeVentNode.parse({ ...ridgeVentDefinition.defaults(), name: 'Ridge Vent' }),
@@ -104,7 +110,7 @@ export default function RidgeVentTool() {
         position: placement.position,
         rotation: placement.rotation,
       })
-      useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+      sceneApi.upsert(node, hit.segment.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       triggerSFX('sfx:item-place')
       clear()
@@ -123,7 +129,7 @@ export default function RidgeVentTool() {
       emitter.off('tool:cancel', clear)
       clear()
     }
-  }, [activeBuildingId, seed])
+  }, [activeBuildingId, seed, sceneApi])
 
   return (
     <>

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
   BuildingNode,
+  createSceneApi,
   emitter,
   LevelNode,
   nodeRegistry,
@@ -10,7 +11,12 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useEditor, usePlacementPreview } from '@pascal-app/editor'
+import {
+  EDITOR_LAYER,
+  RegistryToolProvider,
+  useEditor,
+  usePlacementPreview,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import * as THREE from 'three'
@@ -40,7 +46,19 @@ test('box-vent placement matches its preview, honors grid mode and blocks unsupp
   useViewer.getState().setSelection({ buildingId: building.id, levelId: level.id })
   sceneRegistry.nodes.set(segment.id, new THREE.Group())
   const { default: Tool } = await boxVentDefinition.tool!()
-  const renderer = await create(<Tool />)
+  const renderer = await create(
+    <RegistryToolProvider
+      value={{
+        activeLevelId: level.id,
+        isCameraDragging: () => false,
+        sceneApi: createSceneApi(useScene),
+        selectNode: () => {},
+        unit: 'metric',
+      }}
+    >
+      <Tool />
+    </RegistryToolProvider>,
+  )
   try {
     const event = {
       node: roof,
@@ -48,6 +66,14 @@ test('box-vent placement matches its preview, honors grid mode and blocks unsupp
       stopPropagation: () => {},
     }
     await act(async () => emitter.emit('roof:move', event))
+    let renderables = 0
+    renderer.scene.instance.traverse((object) => {
+      if (!(object instanceof THREE.Mesh || object instanceof THREE.LineSegments)) return
+      renderables++
+      expect(object.layers.isEnabled(0)).toBe(false)
+      expect(object.layers.isEnabled(EDITOR_LAYER)).toBe(true)
+    })
+    expect(renderables).toBeGreaterThan(0)
     const preview = usePlacementPreview.getState().node
     expect(preview?.type).toBe('box-vent')
     if (preview?.type !== 'box-vent') throw new Error('Missing box-vent preview')

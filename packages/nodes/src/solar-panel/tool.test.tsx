@@ -1,6 +1,7 @@
 import { expect, spyOn, test } from 'bun:test'
 import {
   BuildingNode,
+  createSceneApi,
   emitter,
   LevelNode,
   RoofNode,
@@ -8,7 +9,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { usePlacementPreview } from '@pascal-app/editor'
+import { RegistryToolProvider, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import * as THREE from 'three'
@@ -39,7 +40,19 @@ test('roof hover previews the same full array that clicking creates', async () =
   useViewer.getState().setSelection({ buildingId: building.id, levelId: level.id })
   sceneRegistry.nodes.set(segment.id, new THREE.Group())
   const { default: Tool } = await solarPanelDefinition.tool!()
-  const renderer = await create(<Tool />)
+  const renderer = await create(
+    <RegistryToolProvider
+      value={{
+        activeLevelId: level.id,
+        isCameraDragging: () => false,
+        sceneApi: createSceneApi(useScene),
+        selectNode: () => {},
+        unit: 'metric',
+      }}
+    >
+      <Tool />
+    </RegistryToolProvider>,
+  )
   try {
     const event = {
       node: roof,

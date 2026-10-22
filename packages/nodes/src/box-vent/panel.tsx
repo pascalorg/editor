@@ -19,7 +19,7 @@ import {
 } from '@pascal-app/editor'
 import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { getDownSlopeYaw } from '../shared/roof-surface'
 import { boxVentDimensionPatch, boxVentDimensions } from './dimensions'
 import type { BoxVentNode } from './schema'
@@ -57,6 +57,9 @@ export default function BoxVentPanel() {
 
   const node = effectiveNode ? { ...effectiveNode, ...boxVentDimensions(effectiveNode) } : undefined
 
+  const nodeRef = useRef(node)
+  nodeRef.current = node
+
   // Pull the parent segment so the Position sliders can clamp to the
   // segment's footprint (no point letting the user drag the vent off
   // the eaves into thin air).
@@ -72,12 +75,13 @@ export default function BoxVentPanel() {
   const previewProp = useCallback(
     (updates: Partial<BoxVentNode>) => {
       if (!selectedId) return
+      const node = nodeRef.current
       useLiveNodeOverrides.getState().set(selectedId as AnyNodeId, {
         ...updates,
         ...(node ? boxVentDimensionPatch({ ...node, ...updates }, updates) : {}),
       })
     },
-    [selectedId, node],
+    [selectedId],
   )
 
   // Slider release (commit): flush to the scene store as a single
@@ -85,13 +89,14 @@ export default function BoxVentPanel() {
   const commitProp = useCallback(
     (updates: Partial<BoxVentNode>) => {
       if (!selectedId) return
+      const node = nodeRef.current
       updateNode(selectedId as AnyNode['id'], {
         ...updates,
         ...(node ? boxVentDimensionPatch({ ...node, ...updates }, updates) : {}),
       })
       useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
     },
-    [selectedId, updateNode, node],
+    [selectedId, updateNode],
   )
 
   // Discrete / one-shot updates (style switch, end-cap toggle) bypass
