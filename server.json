@@ -3,7 +3,7 @@
   "name": "app.pascal/editor",
   "title": "Pascal 3D Editor",
   "description": "Create, inspect, validate, and save editable 3D building scenes with Pascal's MCP server.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "websiteUrl": "https://editor.pascal.app/docs/developers/mcp",
   "repository": {
     "url": "https://github.com/pascalorg/editor",
@@ -31,7 +31,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@pascal-app/mcp",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

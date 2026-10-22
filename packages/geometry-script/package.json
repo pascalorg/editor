@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/geometry-script",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Compiles AI-authored three.js and Blender (bpy) geometry scripts into GLB artifacts with a Pascal manifest. Runs in a browser worker, Bun or Node — no DOM, no React.",
   "type": "module",
   "main": "./dist/index.js",
@@ -50,7 +50,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@pascal-app/core": "^1.0.4",
+    "@pascal-app/core": "^1.0.5",
     "three-bvh-csg": "^0.0.18"
   },
   "peerDependencies": {

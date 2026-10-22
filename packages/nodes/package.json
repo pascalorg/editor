@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/nodes",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Built-in node bundles for the Pascal 3D editor — one folder per kind, exported as `builtinPlugin`",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,9 +38,9 @@
     "prepublishOnly": "bun run build && bun test"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.4",
-    "@pascal-app/editor": "^1.0.4",
-    "@pascal-app/viewer": "^1.0.4",
+    "@pascal-app/core": "^1.0.5",
+    "@pascal-app/editor": "^1.0.5",
+    "@pascal-app/viewer": "^1.0.5",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "lucide-react": "^1",
@@ -52,10 +52,10 @@
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/server": "^2.3.1",
-    "@pascal-app/core": "^1.0.4",
-    "@pascal-app/editor": "^1.0.4",
-    "@pascal-app/mcp": "^1.0.4",
-    "@pascal-app/viewer": "^1.0.4",
+    "@pascal-app/core": "^1.0.5",
+    "@pascal-app/editor": "^1.0.5",
+    "@pascal-app/mcp": "^1.0.5",
+    "@pascal-app/viewer": "^1.0.5",
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.1",
     "@types/bun": "^1.4.3",
