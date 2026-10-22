@@ -118,11 +118,13 @@ export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),
+  snapProfile: 'item',
   affordanceTools: {
     move: () => import('./move-tool'),
   },
   toolHints: [
     { key: 'Left click', label: 'Place turbine vent on roof' },
+    { key: 'Alt', label: 'Place freely' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

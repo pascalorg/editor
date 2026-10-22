@@ -23,7 +23,6 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { RIDGE_LIFT, resolveRidgeSnap } from '../shared/ridge-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildRidgeVentGeometry } from './geometry'
@@ -130,15 +129,8 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   const sceneMaterials = useScene((state) => state.materials)
   const segmentGeometryKey = ridgeVentSegmentGeometryKey(segment)
   const rotationY = node.rotation ?? 0
-  const snap = useMemo(
-    () =>
-      segment && Math.abs(rotationY) < 1e-5
-        ? resolveRidgeSnap(segment, nodePosition[0] ?? 0, nodePosition[2] ?? 0)
-        : null,
-    [segment, rotationY, nodePosition[0], nodePosition[2]],
-  )
-  const ridgeX = snap ? snap.localX : (nodePosition[0] ?? 0)
-  const ridgeZ = snap ? snap.localZ : (nodePosition[2] ?? 0)
+  const ridgeX = nodePosition[0] ?? 0
+  const ridgeZ = nodePosition[2] ?? 0
   const effectiveNode = useMemo<RidgeVentNode>(
     () => ({
       ...node,
@@ -231,7 +223,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
     if (!segment) return new THREE.Matrix4()
     const baseY = getRoofTopSurfaceY(ridgeX, ridgeZ, segment)
     const yOffset = Math.max(-2, Math.min(2, nodePosition[1] ?? 0))
-    const ridgeY = baseY + RIDGE_LIFT + yOffset
+    const ridgeY = baseY + yOffset
     return new THREE.Matrix4().compose(
       new THREE.Vector3(ridgeX, ridgeY, ridgeZ),
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY),
@@ -264,7 +256,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   // Clamp legacy stored Y (absolute peak height from earlier versions) so the
   // vent doesn't fly off when the field was an absolute Y instead of offset.
   const yOffset = Math.max(-2, Math.min(2, nodePosition[1] ?? 0))
-  const ridgeY = baseY + RIDGE_LIFT + yOffset
+  const ridgeY = baseY + yOffset
 
   return (
     <group position={segPos} rotation-y={segRotY}>

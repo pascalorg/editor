@@ -179,10 +179,16 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   schemaVersion: 3,
   schema: BoxVentNode,
   category: 'structure',
+  snapProfile: 'item',
   surfaceRole: 'roof',
 
   defaults: () => {
-    const stub = BoxVentNodeSchema.parse({ id: 'bvent_default' as never, type: 'box-vent' })
+    const stub = BoxVentNodeSchema.parse({
+      id: 'bvent_default' as never,
+      type: 'box-vent',
+      flashingWidth: 0.05,
+      capGap: 0.02,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },
@@ -217,6 +223,7 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   },
   toolHints: [
     { key: 'Left click', label: 'Place box vent on roof' },
+    { key: 'Alt', label: 'Place freely beyond roof edge' },
     { key: 'Esc', label: 'Cancel' },
   ],
 
@@ -230,6 +237,6 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
 
   mcp: {
     description:
-      'A louvered box vent sitting on a roof segment. Style: standard / low-profile / dome. Width/depth/height/hoodOverhang parametric.',
+      'A louvered box vent sitting on a roof segment. Style: box / cap / dome. Housing dimensions, flashingWidth, cap gap and style-specific shape controls are parametric.',
   },
 }

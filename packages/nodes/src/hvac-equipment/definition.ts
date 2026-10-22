@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildHvacEquipmentFloorplan } from './floorplan'
 import { buildHvacEquipmentGeometry } from './geometry'
+import { hvacEquipmentToolOptions } from './options'
 import { hvacEquipmentParametrics } from './parametrics'
 import { getHvacEquipmentPorts } from './ports'
 import { HvacEquipmentNode } from './schema'
@@ -33,6 +34,11 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
     width: 0.56,
     depth: 0.71,
     height: 1.1,
+    supplyFace: 'top',
+    returnFace: 'left',
+    serviceFace: 'right',
+    suctionDiameter: 0.875,
+    liquidDiameter: 0.375,
     supplyShape: 'round',
     returnShape: 'round',
     supplyDiameter: 8,
@@ -61,11 +67,17 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
   },
 
   parametrics: hvacEquipmentParametrics,
+  toolOptions: hvacEquipmentToolOptions,
 
   geometry: buildHvacEquipmentGeometry,
   geometryKey: (n) =>
     JSON.stringify([
       n.equipmentType,
+      n.supplyFace,
+      n.returnFace,
+      n.serviceFace,
+      n.suctionDiameter,
+      n.liquidDiameter,
       n.width,
       n.depth,
       n.height,
@@ -101,6 +113,6 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
 
   mcp: {
     description:
-      'HVAC equipment cabinet (furnace, air handler, or condenser). Furnaces and air handlers have supply/return duct ports; every unit also has a refrigerant service port that a lineset run connects to. Position is level-local meters; rotation is yaw radians.',
+      'HVAC equipment cabinet (furnace, air handler, or condenser). Furnaces and air handlers have supply/return duct ports; every unit has separate suction (lineset) and liquid ports, with configurable sizes and cabinet sides. Position is level-local meters; rotation is yaw radians.',
   },
 }

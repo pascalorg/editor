@@ -13,13 +13,14 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  getRoofOuterSurfaceFrameAtPoint,
   resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildBoxVentGeometry } from './geometry'
 
@@ -82,6 +83,7 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   const geometry = useMemo(
     () => buildBoxVentGeometry(node),
     [
+      node.flashingWidth,
       node.style,
       node.width,
       node.depth,
@@ -106,7 +108,11 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   // ran along segment-local Z.
   const surfaceQuat = useMemo(() => {
     if (!segment) return new THREE.Quaternion()
-    const normal = getAnalyticalNormal(node.position[0] ?? 0, node.position[2] ?? 0, segment)
+    const normal = getRoofOuterSurfaceFrameAtPoint(
+      segment,
+      node.position[0] ?? 0,
+      node.position[2] ?? 0,
+    ).normal
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 

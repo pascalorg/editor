@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getActiveRoofHeight,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   useScene,
@@ -14,12 +13,11 @@ import {
   duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
-  SegmentedControl,
   SliderControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Pause, Play, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import type { TurbineVentNode } from './schema'
@@ -102,15 +100,6 @@ export default function TurbineVentPanel() {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
     const segmentId = node.roofSegmentId
-    if (segmentId) {
-      const state = useScene.getState()
-      const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-      if (seg) {
-        state.updateNode(segmentId as AnyNode['id'], {
-          children: (seg.children ?? []).filter((id) => id !== selectedId),
-        })
-      }
-    }
     deleteNode(selectedId as AnyNodeId)
     if (segmentId) {
       useScene.getState().dirtyNodes.add(segmentId as AnyNodeId)
@@ -122,47 +111,61 @@ export default function TurbineVentPanel() {
 
   // Play / pause the idle spin. Pausing remembers the current speed so
   // Play restores it (falling back to the default if it was never running).
-  const lastSpeedRef = useRef(DEFAULT_SPIN_SPEED)
+  const lastSpeedRef = useRef(new Map<string, number>())
   const isSpinning = (node?.spinSpeed ?? 0) > 0
   const handleToggleSpin = useCallback(() => {
     if (!node) return
     const current = node.spinSpeed ?? 0
     if (current > 0) {
-      lastSpeedRef.current = current
+      lastSpeedRef.current.set(node.id, current)
       handleUpdate({ spinSpeed: 0 })
     } else {
       handleUpdate({
-        spinSpeed: lastSpeedRef.current > 0 ? lastSpeedRef.current : DEFAULT_SPIN_SPEED,
+        spinSpeed: lastSpeedRef.current.get(node.id) ?? DEFAULT_SPIN_SPEED,
       })
     }
   }, [node, handleUpdate])
 
   if (!(node && node.type === 'turbine-vent' && selectedId)) return null
 
+  const surfaceY = (x: number, z: number) =>
+    segment ? getRoofOuterSurfaceFrameAtPoint(segment, x, z).point.y : 0
+  const roofOffset = node.position[1] - surfaceY(node.position[0], node.position[2])
+  const at = (x: number, z: number): [number, number, number] => [x, surfaceY(x, z) + roofOffset, z]
+
   return (
     <PanelWrapper
-      icon="/icons/roof.webp"
+      icon="/icons/turbine-vent.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Turbine Vent'}
       width={300}
     >
       <PanelSection title="Style">
-        <SegmentedControl
-          onChange={(v) => handleUpdate({ style: v as TurbineVentNode['style'] })}
-          options={[
-            { label: 'Globe', value: 'globe' },
-            { label: 'Cylinder', value: 'cylinder' },
-          ]}
-          value={node.style ?? 'globe'}
-        />
+        <div className="grid grid-cols-2 gap-2">
+          {(['globe', 'cylinder'] as const).map((style) => (
+            <button
+              key={style}
+              type="button"
+              aria-pressed={node.style === style}
+              className={`rounded-lg border p-2 text-xs transition-colors ${node.style === style ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'}`}
+              onClick={() => handleUpdate({ style })}
+            >
+              <img
+                src={`/icons/turbine-vent/${style}.webp`}
+                alt=""
+                className="mx-auto h-16 w-16 object-contain"
+              />
+              {style === 'globe' ? 'Globe' : 'Cylinder'}
+            </button>
+          ))}
+        </div>
       </PanelSection>
 
       <PanelSection title="Dimensions">
         <SliderControl
           label="Diameter"
-          max={1000}
-          min={0.15}
+          min={0.1}
           onChange={(v) => previewProp({ diameter: v })}
           onCommit={(v) => handleUpdate({ diameter: v })}
           precision={2}
@@ -173,10 +176,13 @@ export default function TurbineVentPanel() {
         />
         <SliderControl
           label="Height"
-          max={1000}
-          min={0.2}
-          onChange={(v) => previewProp({ height: v })}
-          onCommit={(v) => handleUpdate({ height: v })}
+          min={0.12}
+          onChange={(v) =>
+            previewProp({ height: v, neckHeight: Math.min(node.neckHeight, v * 0.5) })
+          }
+          onCommit={(v) =>
+            handleUpdate({ height: v, neckHeight: Math.min(node.neckHeight, v * 0.5) })
+          }
           precision={2}
           restoreOnCommit={false}
           step={0.01}
@@ -185,7 +191,7 @@ export default function TurbineVentPanel() {
         />
         <SliderControl
           label="Neck Height"
-          max={Math.max(0.04, node.height * 0.5)}
+          max={node.height * 0.5}
           min={0.02}
           onChange={(v) => previewProp({ neckHeight: v })}
           onCommit={(v) => handleUpdate({ neckHeight: v })}
@@ -209,6 +215,38 @@ export default function TurbineVentPanel() {
         />
       </PanelSection>
 
+      <PanelSection title="Installation">
+        <SliderControl
+          label="Flashing overhang"
+          min={0}
+          value={node.baseOverhang}
+          onChange={(v) => previewProp({ baseOverhang: v })}
+          onCommit={(v) => handleUpdate({ baseOverhang: v })}
+          precision={2}
+          step={0.01}
+          unit="m"
+          restoreOnCommit={false}
+        />
+        <button
+          type="button"
+          disabled={!segment}
+          className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+          onClick={() =>
+            segment &&
+            handleUpdate({
+              position: [
+                node.position[0],
+                getRoofOuterSurfaceFrameAtPoint(segment, node.position[0], node.position[2]).point
+                  .y,
+                node.position[2],
+              ],
+            })
+          }
+        >
+          Seat on roof
+        </button>
+      </PanelSection>
+
       <PanelSection title="Motion">
         <ActionGroup>
           <ActionButton
@@ -219,7 +257,6 @@ export default function TurbineVentPanel() {
         </ActionGroup>
         <SliderControl
           label="Spin Speed"
-          max={4}
           min={0}
           onChange={(v) => previewProp({ spinSpeed: v })}
           onCommit={(v) => handleUpdate({ spinSpeed: v })}
@@ -231,17 +268,13 @@ export default function TurbineVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title="Position" defaultExpanded={false}>
         <SliderControl
           label="X"
           max={Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
-          onChange={(v) =>
-            previewProp({ position: [v, node.position[1] ?? 0, node.position[2] ?? 0] })
-          }
-          onCommit={(v) =>
-            handleUpdate({ position: [v, node.position[1] ?? 0, node.position[2] ?? 0] })
-          }
+          onChange={(v) => previewProp({ position: at(v, node.position[2]) })}
+          onCommit={(v) => handleUpdate({ position: at(v, node.position[2]) })}
           precision={2}
           restoreOnCommit={false}
           step={0.05}
@@ -249,34 +282,37 @@ export default function TurbineVentPanel() {
           value={node.position[0] ?? 0}
         />
         <SliderControl
-          label="Y"
-          max={Math.max(
-            (segment?.wallHeight ?? 3) + (segment ? getActiveRoofHeight(segment) : 3) + 2,
-            (node.position[1] ?? 0) + 0.1,
-          )}
-          min={Math.min(0, (node.position[1] ?? 0) - 0.5)}
+          label="Roof offset"
           onChange={(v) =>
-            previewProp({ position: [node.position[0] ?? 0, v, node.position[2] ?? 0] })
+            previewProp({
+              position: [
+                node.position[0],
+                surfaceY(node.position[0], node.position[2]) + v,
+                node.position[2],
+              ],
+            })
           }
           onCommit={(v) =>
-            handleUpdate({ position: [node.position[0] ?? 0, v, node.position[2] ?? 0] })
+            handleUpdate({
+              position: [
+                node.position[0],
+                surfaceY(node.position[0], node.position[2]) + v,
+                node.position[2],
+              ],
+            })
           }
           precision={2}
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={node.position[1] ?? 0}
+          value={roofOffset}
         />
         <SliderControl
           label="Z"
           max={Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
-          onChange={(v) =>
-            previewProp({ position: [node.position[0] ?? 0, node.position[1] ?? 0, v] })
-          }
-          onCommit={(v) =>
-            handleUpdate({ position: [node.position[0] ?? 0, node.position[1] ?? 0, v] })
-          }
+          onChange={(v) => previewProp({ position: at(node.position[0], v) })}
+          onCommit={(v) => handleUpdate({ position: at(node.position[0], v) })}
           precision={2}
           restoreOnCommit={false}
           step={0.05}

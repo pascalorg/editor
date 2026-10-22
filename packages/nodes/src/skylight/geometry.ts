@@ -119,9 +119,31 @@ export function buildLanternGlassGeometry(
       ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
       : [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15]
 
+  if (resolvedTopScale > 1e-4) {
+    const start = positions.length / 3
+    positions.push(
+      -topHalfW,
+      topY,
+      topHalfD,
+      topHalfW,
+      topY,
+      topHalfD,
+      topHalfW,
+      topY,
+      -topHalfD,
+      -topHalfW,
+      topY,
+      -topHalfD,
+    )
+    indices.push(start, start + 1, start + 2, start, start + 2, start + 3)
+  }
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.setIndex(indices)
   geometry.computeVertexNormals()
+  const uv: number[] = []
+  for (let i = 0; i < positions.length; i += 3) uv.push(positions[i]!, positions[i + 2]!)
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  geometry.setAttribute('uv2', geometry.getAttribute('uv').clone())
   return geometry
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import { type AnyNodeId, type RoofSegmentNode, useScene } from '@pascal-app/core'
+
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
@@ -13,10 +15,25 @@ import type { CupolaNode } from './schema'
  * so the preview doesn't intercept the cursor ray feeding the tool.
  */
 const CupolaPreview = ({ node, invalid }: { node: CupolaNode; invalid?: boolean }) => {
+  const segment = useScene((s) =>
+    node.roofSegmentId
+      ? (s.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
+      : undefined,
+  )
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
-    () => buildCupolaGeometry(node),
-    [node.width, node.depth, node.height, node.roofStyle, node.finial],
+    () => buildCupolaGeometry(node, segment),
+    [
+      node.width,
+      node.depth,
+      node.height,
+      node.roofStyle,
+      node.finial,
+      node.rotation,
+      node.position[0],
+      node.position[2],
+      segment,
+    ],
   )
 
   const material = useMemo(
@@ -37,14 +54,9 @@ const CupolaPreview = ({ node, invalid }: { node: CupolaNode; invalid?: boolean 
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])
 
-  useEffect(
-    () => () => {
-      geometry.dispose()
-      edgesGeometry.dispose()
-      material.dispose()
-    },
-    [geometry, edgesGeometry, material],
-  )
+  useEffect(() => () => geometry.dispose(), [geometry])
+  useEffect(() => () => edgesGeometry.dispose(), [edgesGeometry])
+  useEffect(() => () => material.dispose(), [material])
 
   return (
     <group rotation-y={node.rotation ?? 0}>
@@ -56,7 +68,12 @@ const CupolaPreview = ({ node, invalid }: { node: CupolaNode; invalid?: boolean 
         }}
       />
       <lineSegments geometry={edgesGeometry} renderOrder={1000}>
-        <lineBasicMaterial color={0x6c_a3_ff} depthTest={false} opacity={0.95} transparent />
+        <lineBasicMaterial
+          color={invalid ? INVALID_GHOST_COLOR : 0x6c_a3_ff}
+          depthTest={false}
+          opacity={0.95}
+          transparent
+        />
       </lineSegments>
     </group>
   )

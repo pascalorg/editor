@@ -77,6 +77,7 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
         direction: unit(first, second),
         diameter,
         system: 'refrigerant',
+        connectionType: 'liquid',
       },
       {
         id: 'end',
@@ -84,6 +85,7 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
         direction: unit(last, prev),
         diameter,
         system: 'refrigerant',
+        connectionType: 'liquid',
       },
     ]
   },

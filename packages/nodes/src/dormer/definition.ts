@@ -268,12 +268,20 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   schema: DormerNode,
   category: 'structure',
   surfaceRole: 'roof',
+  snapProfile: 'item',
 
   defaults: () => {
     // Zod fills in id/type via their .default() factories; we strip
     // both so the returned shape is a partial template a consumer can
     // spread into createNode() with a fresh id.
-    const stub = DormerNodeSchema.parse({})
+    const stub = DormerNodeSchema.parse({
+      height: 0.8,
+      wallSkirtHeight: 1.5,
+      windowOffsetY: 1.15,
+      windowColumns: 2,
+      windowRows: 2,
+      windowSill: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },
@@ -328,6 +336,7 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   toolHints: [
     { key: 'Left click', label: 'Place dormer on roof' },
     { key: 'R / Shift+R', label: 'Rotate ghost ±15°' },
+    { key: 'Alt', label: 'Place freely' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

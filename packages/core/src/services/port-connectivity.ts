@@ -1,5 +1,14 @@
-import { nodeRegistry } from '../registry'
+import { type NodePort, nodeRegistry } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
+import {
+  type DistributionFrame,
+  distributionFrame,
+  distributionPointFromWorld,
+  distributionPointInFrame,
+  distributionVectorToWorld,
+} from './distribution-frame'
+import { portConnection } from './port-connection'
+import { getLevelElevations } from './storey'
 
 /**
  * Connectivity-aware editing for port-bearing distribution kinds
@@ -40,11 +49,6 @@ import type { AnyNode, AnyNodeId } from '../schema'
 
 type Point = readonly [number, number, number]
 
-/** Distance (meters) under which two ports count as the same joint. Joints
- *  formed by placement snapping coincide to sub-millimeter; 5 cm leaves
- *  generous slack for grid-snapped hand placement without false matches. */
-const COINCIDENT_EPS_M = 0.05
-
 /** Below this (meters) a propagated delta is treated as zero — stops the
  *  walk from chasing sub-millimeter perpendicular residue. */
 const DELTA_EPS_M = 1e-4
@@ -75,7 +79,7 @@ export type PortConnection =
 type GraphNode = {
   id: AnyNodeId
   role: 'run' | 'fitting'
-  ports: ReadonlyArray<{ id: string; position: Point; system?: string }>
+  ports: readonly NodePort[]
   startPath?: Point[]
   startPosition?: Point
 }
@@ -84,6 +88,7 @@ type GraphNode = {
 type Adjacency = Record<string, Record<string, Array<{ nodeId: AnyNodeId; portId: string }>>>
 
 export type PortConnectivity = {
+  frames?: Record<string, DistributionFrame>
   customResolver?: (preview: AnyNode) => { id: AnyNodeId; data: Partial<AnyNode> }[]
   movedNodeId: AnyNodeId
   /** The moved node's port world positions at edit-start, keyed by port id —
@@ -98,36 +103,17 @@ export type PortConnectivity = {
   connections: PortConnection[]
 }
 
-function portsOf(
-  node: AnyNode,
-): ReadonlyArray<{ id: string; position: Point; system?: string }> | undefined {
-  return nodeRegistry.get(node.type)?.ports?.(node) as
-    | ReadonlyArray<{ id: string; position: Point; system?: string }>
-    | undefined
+function portsOf(node: AnyNode, frame: DistributionFrame): NodePort[] {
+  return (nodeRegistry.get(node.type)?.ports?.(node) ?? []).map((port) => ({
+    ...port,
+    position: distributionPointInFrame(frame, port.position),
+    direction: distributionVectorToWorld(frame, port.direction),
+  }))
 }
 
 /** A node's distribution role from the registry (run / fitting / …). */
 function roleOf(node: AnyNode): string | undefined {
   return nodeRegistry.get(node.type)?.distributionRole
-}
-
-function distSq(a: Point, b: Point): number {
-  const dx = a[0] - b[0]
-  const dy = a[1] - b[1]
-  const dz = a[2] - b[2]
-  return dx * dx + dy * dy + dz * dz
-}
-
-/** Two ports mate when they coincide AND don't cross incompatible systems
- *  (a supply duct and a waste pipe that merely touch must not fuse). */
-function portsMate(
-  a: { position: Point; system?: string },
-  b: { position: Point; system?: string },
-  epsSq: number,
-): boolean {
-  if (distSq(a.position, b.position) > epsSq) return false
-  if (a.system && b.system && a.system !== b.system) return false
-  return true
 }
 
 /**
@@ -178,9 +164,11 @@ export function analyzePortConnectivity(
       }),
     }
   }
-  const epsSq = COINCIDENT_EPS_M * COINCIDENT_EPS_M
-
-  const movedPorts = portsOf(movedNode) ?? []
+  const elevations = getLevelElevations(nodes)
+  const frames: Record<string, DistributionFrame> = {}
+  const frameOf = (node: AnyNode) =>
+    (frames[node.id] ??= distributionFrame(node, nodes, elevations))
+  const movedPorts = portsOf(movedNode, frameOf(movedNode))
   const startMovedPorts: Record<string, Point> = {}
   for (const p of movedPorts) startMovedPorts[p.id] = p.position
 
@@ -193,18 +181,20 @@ export function analyzePortConnectivity(
     if (role === 'fitting' && nodeRegistry.get(other.type)?.portConnectivityFollow === false) {
       continue
     }
-    const ports = portsOf(other)
-    if (!ports) continue
+    const ports = portsOf(other, frameOf(other))
+    if (ports.length === 0) continue
     const startPath =
       role === 'run'
-        ? (other as unknown as { path?: Point[] }).path?.map((p) => [...p] as Point)
+        ? (other as unknown as { path?: Point[] }).path?.map((p) =>
+            distributionPointInFrame(frameOf(other), p),
+          )
         : undefined
     if (role === 'run' && (!startPath || startPath.length < 2)) continue
     const startPosition =
       role === 'fitting'
         ? (() => {
             const pos = (other as unknown as { position?: Point }).position
-            return pos ? ([pos[0], pos[1], pos[2]] as Point) : undefined
+            return pos ? distributionPointInFrame(frameOf(other), pos) : undefined
           })()
         : undefined
     if (role === 'fitting' && !startPosition) continue
@@ -229,7 +219,7 @@ export function analyzePortConnectivity(
   // Seed: the moved node's own ports.
   const queue: Array<{
     id: string
-    ports: ReadonlyArray<{ id: string; position: Point; system?: string }>
+    ports: readonly NodePort[]
   }> = [{ id: movedNode.id, ports: movedPorts }]
 
   while (queue.length > 0) {
@@ -238,7 +228,7 @@ export function analyzePortConnectivity(
       for (const cand of candidates) {
         if (cand.id === id) continue
         for (const cp of cand.ports) {
-          if (!portsMate(port, cp, epsSq)) continue
+          if (portConnection(port, cp).status !== 'match') continue
           addEdge(id, port.id, { nodeId: cand.id, portId: cp.id })
           addEdge(cand.id, cp.id, { nodeId: id as AnyNodeId, portId: port.id })
           if (!visited.has(cand.id)) {
@@ -253,13 +243,24 @@ export function analyzePortConnectivity(
 
   const connections: PortConnection[] = Object.values(graph).map((g) =>
     g.role === 'fitting'
-      ? { kind: 'rigid-node', nodeId: g.id, startPosition: g.startPosition! }
-      : { kind: 'run', nodeId: g.id, startPath: g.startPath! },
+      ? {
+          kind: 'rigid-node',
+          nodeId: g.id,
+          startPosition: [...(nodes[g.id] as unknown as { position: Point }).position] as Point,
+        }
+      : {
+          kind: 'run',
+          nodeId: g.id,
+          startPath: (nodes[g.id] as unknown as { path: Point[] }).path.map(
+            (point) => [...point] as Point,
+          ),
+        },
   )
 
   return {
     movedNodeId: movedNode.id as AnyNodeId,
     startMovedPorts,
+    frames,
     graph,
     adjacency,
     connections,
@@ -391,7 +392,7 @@ export function resolveConnectivityUpdates(
   const { graph, adjacency, startMovedPorts, movedNodeId } = connectivity
   if (Object.keys(graph).length === 0) return []
 
-  const newPorts = portsOf(previewNode) ?? []
+  const newPorts = portsOf(previewNode, connectivity.frames![movedNodeId]!)
   const newMovedPos: Record<string, Point> = {}
   for (const p of newPorts) newMovedPos[p.id] = p.position
 
@@ -476,5 +477,16 @@ export function resolveConnectivityUpdates(
     }
   }
 
-  return Object.values(results)
+  return Object.values(results).map((result) => {
+    const frame = connectivity.frames![result.id]!
+    const data = result.data as { position?: Point; path?: Point[] }
+    return {
+      id: result.id,
+      data: data.path
+        ? ({
+            path: data.path.map((point) => distributionPointFromWorld(frame, point)),
+          } as Partial<AnyNode>)
+        : ({ position: distributionPointFromWorld(frame, data.position!) } as Partial<AnyNode>),
+    }
+  })
 }

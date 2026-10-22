@@ -79,6 +79,13 @@ export {
   type WallExtent,
 } from './opening-guides'
 export {
+  type ConnectionCompatibility,
+  type ConnectionProfile,
+  connectionCompatibility,
+  portConnection,
+  snapPlanarPortPosition,
+} from './port-connection'
+export {
   analyzePortConnectivity,
   type PortConnection,
   type PortConnectivity,

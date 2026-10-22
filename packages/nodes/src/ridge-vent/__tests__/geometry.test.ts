@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getDutchRoofMetrics, getRidgeVentLinesForSegment, RoofSegmentNode } from '@pascal-app/core'
-import type * as THREE from 'three'
+import * as THREE from 'three'
 import { getRoofTopSurfaceY } from '../../shared/roof-surface'
 import { buildRidgeVentGeometry } from '../geometry'
 import { RidgeVentNode } from '../schema'
@@ -374,4 +374,23 @@ describe('buildRidgeVentGeometry', () => {
     expect(endWidth).toBeGreaterThan(0.1)
     expect(bodyWidth).toBeGreaterThan(startWidth + 0.015)
   })
+})
+
+test('shingle seams have a closed visible top surface', () => {
+  const node = RidgeVentNode.parse({ style: 'shingled', length: 2.1, height: 0.1 })
+  const geometry = buildRidgeVentGeometry(node)
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
+  const ray = new THREE.Raycaster(new THREE.Vector3(-0.155, 1, 0), new THREE.Vector3(0, -1, 0))
+  const hit = ray.intersectObject(mesh)[0]
+  expect(hit).toBeDefined()
+  expect(hit!.point.y).toBeGreaterThan(node.height)
+  geometry.dispose()
+  mesh.material.dispose()
+})
+test('short metal profiles retain finite geometry within their requested height', () => {
+  const geometry = buildRidgeVentGeometry(RidgeVentNode.parse({ style: 'metal', height: 0.01 }))
+  geometry.computeBoundingBox()
+  expect(geometry.boundingBox!.max.y).toBeCloseTo(0.01)
+  expectFinitePositions(geometry)
+  geometry.dispose()
 })

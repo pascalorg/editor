@@ -1,159 +1,160 @@
 'use client'
 
+import { type AnyNodeId, emitter, type RoofEvent, SkylightNode, useScene } from '@pascal-app/core'
 import {
-  type AnyNodeId,
-  emitter,
-  type RoofEvent,
-  type RoofNode,
-  SkylightNode,
-  sceneRegistry,
-  useScene,
-} from '@pascal-app/core'
-import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+  isGridSnapActive,
+  isMagneticSnapActive,
+  triggerSFX,
+  useEditor,
+  usePlacementPreview,
+} from '@pascal-app/editor'
+import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
+import { useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
+import { roofSegmentLocalToBuildingLocal } from '../shared/relative-roof-drag'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
-  publishRoofSurfacePlacementGuides,
-  roofSurfaceFootprintFromNode,
+  publishRoofSurfaceNodePlacementGuides,
+  snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
 import { skylightDefinition } from './definition'
+import { resolveSkylightPlacement } from './placement'
 import SkylightPreview from './preview'
 
-const worldPoint = new THREE.Vector3()
-
-const SkylightTool = () => {
+export default function SkylightTool() {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
-  const setSelection = useViewer((s) => s.setSelection)
-
-  const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
-  const [previewYaw, setPreviewYaw] = useState(0)
-  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
-  const lastSnapRef = useRef<[number, number] | null>(null)
-
-  const previewNode = useMemo(
-    () =>
-      SkylightNode.parse({
-        ...skylightDefinition.defaults(),
-        name: 'Skylight',
-        position: [0, 0, 0],
-        rotation: 0,
-      }),
+  const seed = useMemo(
+    () => SkylightNode.parse({ ...skylightDefinition.defaults(), name: 'Skylight' }),
     [],
   )
+  const [preview, setPreview] = useState<{
+    node: SkylightNode
+    position: [number, number, number]
+    normal: THREE.Quaternion
+    yaw: number
+    valid: boolean
+  } | null>(null)
 
   useEffect(() => {
     if (!activeBuildingId) return
-
-    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
-      const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
-      if (!buildingObj) return [wx, wy, wz]
-      worldPoint.set(wx, wy, wz)
-      buildingObj.worldToLocal(worldPoint)
-      return [worldPoint.x, worldPoint.y, worldPoint.z]
+    const clear = () => {
+      setPreview(null)
+      if (usePlacementPreview.getState().node?.id === seed.id)
+        usePlacementPreview.getState().clear()
+      clearRoofSurfacePlacementGuides()
     }
-
-    const updatePreview = (event: RoofEvent) => {
-      const wx = event.position[0]
-      const wy = event.position[1]
-      const wz = event.position[2]
-
-      const sx = Math.round(wx * 20) / 20
-      const sz = Math.round(wz * 20) / 20
-      const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        triggerSFX('sfx:grid-snap')
-        lastSnapRef.current = [sx, sz]
+    const resolve = (event: RoofEvent) => {
+      const hit = resolveRoofSegmentHit(event.node, ...event.position)
+      if (!hit) return null
+      const force = event.nativeEvent?.altKey === true
+      let placement = resolveSkylightPlacement(hit.segment, seed, hit.localX, hit.localZ, {
+        gridStep: !force && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+      })
+      if (!force && isMagneticSnapActive()) {
+        const target = snapRoofSurfaceNodeTarget({
+          target: {
+            ...hit,
+            hit,
+            localX: placement.position[0],
+            localY: placement.position[1],
+            localZ: placement.position[2],
+          },
+          node: { ...seed, rotation: placement.rotation },
+        })
+        placement = resolveSkylightPlacement(hit.segment, seed, target.localX, target.localZ, {})
       }
-
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
-
-      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
-      setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
-      setPreviewPos(worldToBuildingLocal(wx, wy, wz))
-      usePlacementPreview.getState().set(
-        SkylightNode.parse({
-          ...previewNode,
-          parentId: hit.segment.id,
-          position: [hit.localX, hit.localY, hit.localZ],
-          roofSegmentId: hit.segment.id,
-        }),
-        hit.segment,
-      )
-      publishRoofSurfacePlacementGuides({
-        roof: event.node as RoofNode,
-        segment: hit.segment,
-        center: [hit.localX, hit.localY, hit.localZ],
-        footprint: roofSurfaceFootprintFromNode(previewNode),
-      })
-      event.stopPropagation()
+      return { hit, placement, force }
     }
-
-    const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
-      const state = useScene.getState()
-
-      const skylight = SkylightNode.parse({
-        ...skylightDefinition.defaults(),
-        name: 'Skylight',
+    const show = (event: RoofEvent) => {
+      const resolved = resolve(event)
+      if (!resolved) {
+        clear()
+        return
+      }
+      const { hit, placement, force } = resolved
+      const node = {
+        ...seed,
+        position: placement.position,
+        rotation: placement.rotation,
+        parentId: hit.segment.id,
         roofSegmentId: hit.segment.id,
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation: 0,
+      }
+      const normal = getRoofOuterSurfaceFrameAtPoint(
+        hit.segment,
+        placement.position[0],
+        placement.position[2],
+      ).normal
+      setPreview({
+        node,
+        position: roofSegmentLocalToBuildingLocal(hit.segment.id, placement.position),
+        normal: surfaceQuatFromNormal(normal, new THREE.Quaternion()),
+        yaw: event.node.rotation + hit.segment.rotation,
+        valid: placement.valid || force,
       })
-      state.createNode(skylight, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
-      setSelection({ selectedIds: [skylight.id] })
-      triggerSFX('sfx:item-place')
-      const placementPreview = usePlacementPreview.getState()
-      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
-      clearRoofSurfacePlacementGuides()
+      usePlacementPreview.getState().set(node, hit.segment)
+      publishRoofSurfaceNodePlacementGuides({
+        roof: event.node,
+        segment: hit.segment,
+        center: placement.position,
+        node,
+      })
       event.stopPropagation()
     }
-
-    emitter.on('roof:move', updatePreview)
-    emitter.on('roof:enter', updatePreview)
-    emitter.on('roof:click', onClick)
-
-    return () => {
-      emitter.off('roof:move', updatePreview)
-      emitter.off('roof:enter', updatePreview)
-      emitter.off('roof:click', onClick)
-      const placementPreview = usePlacementPreview.getState()
-      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
-      clearRoofSurfacePlacementGuides()
+    const place = (event: RoofEvent) => {
+      const resolved = resolve(event)
+      if (!resolved) return
+      const { hit, placement, force } = resolved
+      if (!placement.valid && !force) {
+        show(event)
+        return
+      }
+      const node = SkylightNode.parse({
+        ...seed,
+        id: undefined,
+        roofSegmentId: hit.segment.id,
+        position: placement.position,
+        rotation: placement.rotation,
+      })
+      useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      triggerSFX('sfx:item-place')
+      clear()
+      event.stopPropagation()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+    emitter.on('roof:move', show)
+    emitter.on('roof:enter', show)
+    emitter.on('roof:leave', clear)
+    emitter.on('roof:click', place)
+    emitter.on('tool:cancel', clear)
+    return () => {
+      emitter.off('roof:move', show)
+      emitter.off('roof:enter', show)
+      emitter.off('roof:leave', clear)
+      emitter.off('roof:click', place)
+      emitter.off('tool:cancel', clear)
+      clear()
+    }
+  }, [activeBuildingId, seed])
 
   return (
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
-        ghost={<SkylightPreview node={previewNode} invalid />}
+        ghost={<SkylightPreview node={seed} invalid />}
         onInvalidTarget={() => {
-          setPreviewPos(null)
-          setPreviewSurfaceQuat(null)
-          const placementPreview = usePlacementPreview.getState()
-          if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+          setPreview(null)
+          usePlacementPreview.getState().clear()
           clearRoofSurfacePlacementGuides()
         }}
       />
-      {activeBuildingId && previewPos && previewSurfaceQuat && (
-        <group position={previewPos}>
-          <group rotation-y={previewYaw}>
-            <group quaternion={previewSurfaceQuat}>
-              <SkylightPreview node={previewNode} />
+      {preview && (
+        <group position={preview.position}>
+          <group rotation-y={preview.yaw}>
+            <group quaternion={preview.normal}>
+              <SkylightPreview node={preview.node} invalid={!preview.valid} />
             </group>
           </group>
         </group>
@@ -161,5 +162,3 @@ const SkylightTool = () => {
     </>
   )
 }
-
-export default SkylightTool

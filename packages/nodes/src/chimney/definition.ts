@@ -344,11 +344,6 @@ const WHITE_MATERIAL = {
  * `segment.wallHeight + roofHeight + heightAboveRidge`), no `geometry`,
  * no `system`.
  *
- * **Option C scope**: chimney ships in the registry shape with solid
- * geometry. CSG-driven decoration (cap flue holes, body cavity,
- * panels, bands) is preserved in the schema but not rendered yet —
- * those re-light when roof-segment migrates to Stage B and introduces
- * a `roofCutout` capability the parent segment can read.
  */
 export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   kind: 'chimney',
@@ -356,6 +351,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   schema: ChimneyNode,
   category: 'structure',
   surfaceRole: 'wall',
+  snapProfile: 'item',
 
   defaults: () => {
     const stub = ChimneyNodeSchema.parse({
@@ -406,6 +402,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Place chimney on roof' },
+    { key: 'Alt', label: 'Place freely' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

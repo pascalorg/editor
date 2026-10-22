@@ -98,7 +98,7 @@ export const MEP_ITEMS: MepItem[] = [
     kind: 'duct-terminal',
   },
   { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/HVAC.webp', kind: 'hvac-equipment' },
-  { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.webp', kind: 'lineset' },
+  { id: 'lineset', label: 'Suction line', iconSrc: '/icons/lineset.webp', kind: 'lineset' },
   { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.webp', kind: 'liquid-line' },
   { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-segment' },
 ]
@@ -109,6 +109,23 @@ export const MEP_TOOL_KINDS = new Set<string>([
   'pipe-fitting',
   'pipe-trap',
 ])
+
+export function collectMepSearchTools(): MepItem[] {
+  const tools = [...MEP_ITEMS]
+  for (const kind of MEP_TOOL_KINDS) {
+    if (tools.some((tool) => tool.kind === kind)) continue
+    const definition = nodeRegistry.get(kind)
+    if (!definition?.tool || !definition.presentation) continue
+    const { label, icon } = definition.presentation
+    tools.push({
+      id: kind,
+      kind,
+      label,
+      iconSrc: icon.kind === 'url' ? icon.src : '/icons/HVAC.webp',
+    })
+  }
+  return tools
+}
 
 const MODULAR_CABINET_CATALOG_ITEM = CATALOG_ITEMS.find((item) => item.id === 'cabinet')
 export const MODULAR_CABINET_ICON = MODULAR_CABINET_CATALOG_ITEM?.thumbnail ?? '/icons/item.webp'

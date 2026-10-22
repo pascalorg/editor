@@ -93,21 +93,42 @@ export function buildTurbineVentHead(node: TurbineVentNode): THREE.BufferGeometr
 
   // Vanes.
   const dTheta = (Math.PI * 2) / d.vanes
-  const dw = dTheta * 0.55
+  const dw = dTheta * 0.85
   const totalTwist = dTheta * 0.9
   buildVanes(p, n, uv, d.vanes, rings, dw, totalTwist, d.thk)
+
+  for (const ring of [rings[0]!, rings[rings.length - 1]!]) {
+    const band = new THREE.TorusGeometry(
+      ring.r - Math.min(d.thk * 0.6, d.headH * 0.02),
+      Math.min(d.thk * 0.6, d.headH * 0.02),
+      6,
+      48,
+    )
+    band.rotateX(Math.PI / 2)
+    band.translate(0, ring.y, 0)
+    const positions = band.getAttribute('position')
+    const normals = band.getAttribute('normal')
+    const index = band.getIndex()!
+    for (let i = 0; i < index.count; i++) {
+      const j = index.getX(i)
+      p.push(positions.getX(j), positions.getY(j), positions.getZ(j))
+      n.push(normals.getX(j), normals.getY(j), normals.getZ(j))
+      uv.push(positions.getX(j), positions.getZ(j))
+    }
+    band.dispose()
+  }
 
   // Top cap + spindle knob.
   const topRing = rings[rings.length - 1]!
   if (node.style === 'cylinder') {
     // Straight barrel → flat disc lid with a slim rim.
     const lidY = topRing.y
-    cylinderWall(p, n, uv, topRing.r, lidY, lidY + d.headH * 0.04, 28)
-    disc(p, n, uv, topRing.r, lidY + d.headH * 0.04, [0, 1, 0])
-    knob(p, n, uv, d.ro, lidY + d.headH * 0.04, d.headH)
+    cylinderWall(p, n, uv, topRing.r, lidY, d.headH * 0.9, 28)
+    disc(p, n, uv, topRing.r, d.headH * 0.9, [0, 1, 0])
+    knob(p, n, uv, d.ro, d.headH * 0.9, d.headH)
   } else {
     // Globe → domed lid for the spherical whirlybird silhouette.
-    const apexY = d.headH * 0.96
+    const apexY = d.headH * 0.9
     dome(p, n, uv, topRing.r, topRing.y, apexY - topRing.y, 5, 24)
     knob(p, n, uv, d.ro, apexY, d.headH)
   }
@@ -132,17 +153,13 @@ export function buildTurbineVentGeometry(node: TurbineVentNode): THREE.BufferGeo
 // constant radius for a straight barrel.
 
 function vaneRings(node: TurbineVentNode, d: Dims): Array<{ r: number; y: number }> {
-  if (node.style === 'cylinder') {
-    return [
-      { r: d.ro, y: d.headH * 0.04 },
-      { r: d.ro, y: d.headH * 0.85 },
-    ]
-  }
-  return [
-    { r: d.ro * 0.6, y: d.headH * 0.05 },
-    { r: d.ro, y: d.headH * 0.42 },
-    { r: d.ro * 0.58, y: d.headH * 0.72 },
-  ]
+  return Array.from({ length: 13 }, (_, i) => {
+    const t = i / 12
+    return {
+      r: d.ro * (node.style === 'cylinder' ? 1 : 0.6 + 0.4 * Math.sin(Math.PI * t)),
+      y: d.headH * (0.05 + 0.72 * t),
+    }
+  })
 }
 
 // Each vane is a thin, twisted shell lofted through `rings`: an outer and
@@ -331,9 +348,9 @@ function dome(
 // Small spindle knob at the top centre.
 function knob(p: number[], n: number[], uv: number[], ro: number, y0: number, headH: number): void {
   const kr = ro * 0.12
-  const kh = headH * 0.06
+  const kh = headH * 0.05
   cylinderWall(p, n, uv, kr, y0, y0 + kh, 12)
-  dome(p, n, uv, kr, y0 + kh, kr * 0.9, 3, 12)
+  dome(p, n, uv, kr, y0 + kh, headH * 0.05, 3, 12)
 }
 
 // ─── Geometry plumbing ───────────────────────────────────────────────

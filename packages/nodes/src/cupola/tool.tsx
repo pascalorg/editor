@@ -1,149 +1,157 @@
 'use client'
 
+import { type AnyNodeId, CupolaNode, emitter, type RoofEvent, useScene } from '@pascal-app/core'
 import {
-  type AnyNodeId,
-  CupolaNode,
-  emitter,
-  type RoofEvent,
-  type RoofNode,
-  sceneRegistry,
-  useScene,
-} from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+  isGridSnapActive,
+  isMagneticSnapActive,
+  triggerSFX,
+  useEditor,
+  usePlacementPreview,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
+import { roofSegmentLocalToBuildingLocal } from '../shared/relative-roof-drag'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
-  publishRoofSurfacePlacementGuides,
-  roofSurfaceFootprintFromNode,
+  publishRoofSurfaceNodePlacementGuides,
+  snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
 import { cupolaDefinition } from './definition'
+import { resolveCupolaPlacement } from './placement'
 import CupolaPreview from './preview'
 
-const worldPoint = new THREE.Vector3()
-
-/**
- * Cupola placement tool. Mounts when the palette activates the cupola kind;
- * listens for `roof:*` events; on click commits a new `CupolaNode` parented
- * to the targeted segment with segment-local coordinates. Mirrors box-vent.
- */
-const CupolaTool = () => {
+export default function CupolaTool() {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
-  const setSelection = useViewer((s) => s.setSelection)
-
-  const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
-  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
-  const [previewYaw, setPreviewYaw] = useState(0)
-  const lastSnapRef = useRef<[number, number] | null>(null)
-
-  const previewNode = useMemo(
-    () =>
-      CupolaNode.parse({
-        ...cupolaDefinition.defaults(),
-        name: 'Cupola',
-        position: [0, 0, 0],
-        rotation: 0,
-      }),
+  const seed = useMemo(
+    () => CupolaNode.parse({ ...cupolaDefinition.defaults(), name: 'Cupola' }),
     [],
   )
+  const [preview, setPreview] = useState<{
+    node: CupolaNode
+    position: [number, number, number]
+    normal: THREE.Quaternion
+    yaw: number
+    valid: boolean
+  } | null>(null)
 
   useEffect(() => {
     if (!activeBuildingId) return
-
-    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
-      const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
-      if (!buildingObj) return [wx, wy, wz]
-      worldPoint.set(wx, wy, wz)
-      buildingObj.worldToLocal(worldPoint)
-      return [worldPoint.x, worldPoint.y, worldPoint.z]
+    const clear = () => {
+      setPreview(null)
+      if (usePlacementPreview.getState().node?.id === seed.id)
+        usePlacementPreview.getState().clear()
+      clearRoofSurfacePlacementGuides()
     }
-
-    const updatePreview = (event: RoofEvent) => {
-      const wx = event.position[0]
-      const wy = event.position[1]
-      const wz = event.position[2]
-
-      const sx = Math.round(wx * 20) / 20
-      const sz = Math.round(wz * 20) / 20
-      const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        triggerSFX('sfx:grid-snap')
-        lastSnapRef.current = [sx, sz]
+    const resolve = (event: RoofEvent) => {
+      const hit = resolveRoofSegmentHit(event.node, ...event.position)
+      if (!hit) return null
+      const force = event.nativeEvent?.altKey === true
+      let placement = resolveCupolaPlacement(hit.segment, seed, hit.localX, hit.localZ, {
+        gridStep: !force && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        alignRidge: !force && isMagneticSnapActive(),
+      })
+      if (!force && isMagneticSnapActive()) {
+        const target = snapRoofSurfaceNodeTarget({
+          target: {
+            ...hit,
+            hit,
+            localX: placement.position[0],
+            localY: placement.position[1],
+            localZ: placement.position[2],
+          },
+          node: { ...seed, rotation: placement.rotation },
+        })
+        placement = resolveCupolaPlacement(hit.segment, seed, target.localX, target.localZ, {
+          alignRidge: !force && isMagneticSnapActive(),
+        })
       }
-
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
-
-      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
-      setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
-      setPreviewPos(worldToBuildingLocal(wx, wy, wz))
-      publishRoofSurfacePlacementGuides({
-        roof: event.node as RoofNode,
-        segment: hit.segment,
-        center: [hit.localX, hit.localY, hit.localZ],
-        footprint: roofSurfaceFootprintFromNode(previewNode),
-      })
-      event.stopPropagation()
+      return { hit, placement, force }
     }
-
-    const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
-      const state = useScene.getState()
-
-      const cupola = CupolaNode.parse({
-        ...cupolaDefinition.defaults(),
-        name: 'Cupola',
+    const show = (event: RoofEvent) => {
+      const resolved = resolve(event)
+      if (!resolved) {
+        clear()
+        return
+      }
+      const { hit, placement, force } = resolved
+      const node = {
+        ...seed,
+        position: placement.position,
+        rotation: placement.rotation,
+        parentId: hit.segment.id,
         roofSegmentId: hit.segment.id,
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation: 0,
+      }
+      setPreview({
+        node,
+        position: roofSegmentLocalToBuildingLocal(hit.segment.id, placement.position),
+        normal: new THREE.Quaternion(),
+        yaw: event.node.rotation + hit.segment.rotation,
+        valid: placement.valid || force,
       })
-      state.createNode(cupola, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
-      setSelection({ selectedIds: [cupola.id] })
-      triggerSFX('sfx:item-place')
-      clearRoofSurfacePlacementGuides()
+      usePlacementPreview.getState().set(node, hit.segment)
+      publishRoofSurfaceNodePlacementGuides({
+        roof: event.node,
+        segment: hit.segment,
+        center: placement.position,
+        node,
+      })
       event.stopPropagation()
     }
-
-    emitter.on('roof:move', updatePreview)
-    emitter.on('roof:enter', updatePreview)
-    emitter.on('roof:click', onClick)
-
-    return () => {
-      emitter.off('roof:move', updatePreview)
-      emitter.off('roof:enter', updatePreview)
-      emitter.off('roof:click', onClick)
-      clearRoofSurfacePlacementGuides()
+    const place = (event: RoofEvent) => {
+      const resolved = resolve(event)
+      if (!resolved) return
+      const { hit, placement, force } = resolved
+      if (!placement.valid && !force) {
+        show(event)
+        return
+      }
+      const node = CupolaNode.parse({
+        ...seed,
+        id: undefined,
+        roofSegmentId: hit.segment.id,
+        position: placement.position,
+        rotation: placement.rotation,
+      })
+      useScene.getState().createNode(node, hit.segment.id as AnyNodeId)
+      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      triggerSFX('sfx:item-place')
+      clear()
+      event.stopPropagation()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+    emitter.on('roof:move', show)
+    emitter.on('roof:enter', show)
+    emitter.on('roof:leave', clear)
+    emitter.on('roof:click', place)
+    emitter.on('tool:cancel', clear)
+    return () => {
+      emitter.off('roof:move', show)
+      emitter.off('roof:enter', show)
+      emitter.off('roof:leave', clear)
+      emitter.off('roof:click', place)
+      emitter.off('tool:cancel', clear)
+      clear()
+    }
+  }, [activeBuildingId, seed])
 
   return (
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
-        ghost={<CupolaPreview node={previewNode} invalid />}
+        ghost={<CupolaPreview node={seed} invalid />}
         onInvalidTarget={() => {
-          setPreviewPos(null)
-          setPreviewSurfaceQuat(null)
+          setPreview(null)
+          usePlacementPreview.getState().clear()
           clearRoofSurfacePlacementGuides()
         }}
       />
-      {activeBuildingId && previewPos && previewSurfaceQuat && (
-        <group position={previewPos}>
-          <group rotation-y={previewYaw}>
-            <group quaternion={previewSurfaceQuat}>
-              <CupolaPreview node={previewNode} />
+      {preview && (
+        <group position={preview.position}>
+          <group rotation-y={preview.yaw}>
+            <group quaternion={preview.normal}>
+              <CupolaPreview node={preview.node} invalid={!preview.valid} />
             </group>
           </group>
         </group>
@@ -151,5 +159,3 @@ const CupolaTool = () => {
     </>
   )
 }
-
-export default CupolaTool

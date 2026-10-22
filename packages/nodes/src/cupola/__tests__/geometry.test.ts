@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildCupolaGeometry } from '../geometry'
-import { CupolaNode } from '../schema'
+import { buildCupolaGeometry, CupolaNode } from '../index'
 
 function allFinite(geo: { getAttribute: (n: string) => { array: ArrayLike<number> } }): boolean {
   const arr = geo.getAttribute('position').array
@@ -58,3 +57,18 @@ describe('buildCupolaGeometry', () => {
     expect(allFinite(geo)).toBe(true)
   })
 })
+
+for (const roofStyle of ['dome', 'pyramid'] as const) {
+  test(`${roofStyle} keeps the configured height with or without a finial`, () => {
+    for (const finial of [true, false]) {
+      for (const width of [0.2, 0.8, 4]) {
+        const node = CupolaNode.parse({ roofStyle, finial, width, depth: width, height: 0.3 })
+        const geometry = buildCupolaGeometry(node)
+        geometry.computeBoundingBox()
+        expect(geometry.boundingBox!.max.y).toBeCloseTo(node.height, 6)
+        expect(geometry.boundingBox!.min.y).toBeCloseTo(0, 6)
+        geometry.dispose()
+      }
+    }
+  })
+}

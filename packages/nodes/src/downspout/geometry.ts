@@ -35,7 +35,7 @@ import {
  *
  * Pure: no React, no scene access.
  */
-const RADIAL_SEGMENTS = 16
+const RADIAL_SEGMENTS = 24
 const JOINT_SEGMENTS = 12
 const FWD = new THREE.Vector3(0, 0, 1)
 const UP = new THREE.Vector3(0, 1, 0)
@@ -223,7 +223,7 @@ function buildStraps(
   if (runLen < STRAP_END_MARGIN * 2 + 0.05) return []
 
   const usable = runLen - STRAP_END_MARGIN * 2
-  const count = Math.max(1, Math.floor(usable / Math.max(0.2, spacing)) + 1)
+  const count = Math.max(1, Math.ceil(usable / Math.max(0.2, spacing)) + 1)
   const stride = count > 1 ? usable / (count - 1) : 0
   const w = 2 * dims.halfX + 2 * STRAP_OVERHANG
   const d = 2 * dims.halfZ + 2 * STRAP_OVERHANG
@@ -231,7 +231,10 @@ function buildStraps(
   const straps: THREE.BufferGeometry[] = []
   for (let i = 0; i < count; i++) {
     const y = count > 1 ? top - STRAP_END_MARGIN - i * stride : (top + bottom) / 2
-    const band = new THREE.BoxGeometry(w, STRAP_THICKNESS, d).toNonIndexed()
+    const band =
+      dims.shape === 'round'
+        ? new THREE.CylinderGeometry(w / 2, w / 2, STRAP_THICKNESS, RADIAL_SEGMENTS).toNonIndexed()
+        : new THREE.BoxGeometry(w, STRAP_THICKNESS, d).toNonIndexed()
     applyPlanarWorldUvs(band)
     band.translate(0, y, z)
     straps.push(band)
@@ -245,8 +248,16 @@ function buildStraps(
  */
 function buildSplash(path: DownspoutPath): THREE.BufferGeometry | null {
   const [bx, by, bz] = path.bottom
-  const slab = new THREE.BoxGeometry(SPLASH_WIDTH, SPLASH_THICKNESS, SPLASH_LENGTH).toNonIndexed()
-  applyPlanarWorldUvs(slab)
+  const base = new THREE.BoxGeometry(SPLASH_WIDTH, SPLASH_THICKNESS, SPLASH_LENGTH).toNonIndexed()
+  const pieces = [base]
+  for (const sign of [-1, 1]) {
+    const rail = new THREE.BoxGeometry(0.018, 0.025, SPLASH_LENGTH).toNonIndexed()
+    rail.translate(sign * (SPLASH_WIDTH / 2 - 0.009), SPLASH_THICKNESS / 2 + 0.0125, 0)
+    pieces.push(rail)
+  }
+  for (const piece of pieces) applyPlanarWorldUvs(piece)
+  const slab = mergeGeometries(pieces, false)!
+  for (const piece of pieces) piece.dispose()
   // Tilt the far (+Z) end down so it slopes away from the wall.
   slab.rotateX(SPLASH_TILT)
   slab.translate(bx, by - SPLASH_THICKNESS / 2, bz + SPLASH_LENGTH / 2)

@@ -61,8 +61,8 @@ export function buildEyebrowVentFloorplan(
   const fillOpacity = showSelectedChrome ? 0.55 : 0.7
   const lineWidth = showSelectedChrome ? 0.03 : 0.02
 
-  const hw = Math.max(node.width, 0.1) / 2
-  const hd = Math.max(node.depth, 0.1) / 2
+  const hw = Math.max(node.width, 0.15) / 2
+  const hd = Math.max(node.depth, 0.15) / 2
 
   const rect = (halfX: number, halfZ: number): FloorplanPoint[] => [
     toPlan(-halfX, -halfZ),
@@ -74,7 +74,17 @@ export function buildEyebrowVentFloorplan(
   const children: FloorplanGeometry[] = []
 
   // Hood footprint outline + hit target (no flashing plate).
-  const hood = rect(hw, hd)
+  const hood =
+    node.style === 'scoop'
+      ? [
+          ...Array.from({ length: 25 }, (_, i) =>
+            toPlan(hw * Math.cos(((i / 24) * Math.PI) / 2), hd - (i / 24) * 2 * hd),
+          ),
+          ...Array.from({ length: 25 }, (_, i) =>
+            toPlan(-hw * Math.cos((((24 - i) / 24) * Math.PI) / 2), hd - ((24 - i) / 24) * 2 * hd),
+          ),
+        ]
+      : rect(hw, hd)
   children.push({
     kind: 'polygon',
     points: hood,

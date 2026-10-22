@@ -11,25 +11,30 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  commitFreshPlacementSubtree,
   consumePlacementDragRelease,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import { getRoofOuterSurfaceFrameAtPoint } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
-  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
   snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
+import { resolveBoxVentPlacement } from './placement'
 import BoxVentPreview from './preview'
 
 /**
@@ -48,6 +53,7 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
 
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
+  const [previewValid, setPreviewValid] = useState(true)
   const [previewYaw, setPreviewYaw] = useState(0)
 
   useEffect(() => {
@@ -72,6 +78,15 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
     let lastSnap: [number, number] | null = null
     let lastTarget: RelativeRoofDragTarget | null = null
     let committed = false
+    let forcePlacement = false
+    const originalSegment = original.roofSegmentId
+      ? (useScene.getState().nodes[original.roofSegmentId as AnyNodeId] as RoofSegmentNode)
+      : undefined
+    const roofOffset = originalSegment
+      ? original.position[1] -
+        getRoofOuterSurfaceFrameAtPoint(originalSegment, original.position[0], original.position[2])
+          .point.y
+      : 0
     const roofDrag = createRelativeRoofDrag(original)
 
     const clearTarget = () => {
@@ -85,11 +100,32 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
     const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+      forcePlacement = event.nativeEvent?.altKey === true
+      let placement = resolveBoxVentPlacement(
+        rawTarget.segment,
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
-      })
+        rawTarget.localX,
+        rawTarget.localZ,
+        {
+          roofOffset,
+          gridStep: !forcePlacement && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        },
+      )
+      let target = {
+        ...rawTarget,
+        localX: placement.position[0],
+        localY: placement.position[1],
+        localZ: placement.position[2],
+      }
+      if (!forcePlacement && isMagneticSnapActive()) {
+        target = snapRoofSurfaceNodeTarget({ target, node })
+        placement = resolveBoxVentPlacement(target.segment, node, target.localX, target.localZ, {
+          roofOffset,
+        })
+        target = { ...target, localY: placement.position[1] }
+      }
+      setPreviewValid(placement.valid || forcePlacement)
+      return target
     }
 
     const updatePreview = (event: RoofEvent) => {
@@ -103,14 +139,19 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        !forcePlacement &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 
-      const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
+      const normal = getRoofOuterSurfaceFrameAtPoint(
+        target.segment,
+        target.localX,
+        target.localZ,
+      ).normal
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
       setPreviewPos(
@@ -131,43 +172,33 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
 
     const onRoofClick = (event: RoofEvent) => {
       if (committed) return
-      const target = lastTarget ?? resolveSnappedTarget(event)
+      const target = event.node ? resolveSnappedTarget(event) : lastTarget
       if (!target) return
+      if (
+        !forcePlacement &&
+        !resolveBoxVentPlacement(target.segment, node, target.localX, target.localZ, { roofOffset })
+          .valid
+      )
+        return
       committed = true
       const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
-      // Reparent if the cursor landed on a different segment than the
-      // node currently belongs to. Mirrors the skylight move flow:
-      // remove the node id from the old segment's children, append to
-      // the new one, mark both dirty so the merged-roof system rebuilds.
-      const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined
-      if (prevSegmentId && prevSegmentId !== targetSegmentId) {
-        const oldSeg = st.nodes[prevSegmentId] as RoofSegmentNode | undefined
-        if (oldSeg) {
-          st.updateNode(prevSegmentId, {
-            children: (oldSeg.children ?? []).filter((id) => id !== node.id),
-          })
-        }
-        const newSeg = st.nodes[targetSegmentId] as RoofSegmentNode | undefined
-        if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-          st.updateNode(targetSegmentId, {
-            children: [...(newSeg.children ?? []), node.id],
-          })
-        }
-        st.dirtyNodes.add(prevSegmentId)
-      }
-
-      useScene.temporal.getState().resume()
-      st.updateNode(node.id as AnyNodeId, {
+      const patch = {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [target.localX, target.localY, target.localZ],
+        position: [target.localX, target.localY, target.localZ] as [number, number, number],
         rotation: original.rotation,
         visible: true,
-        metadata: {},
-      })
-      useScene.temporal.getState().pause()
+        metadata: stripPlacementMetadataFlags(original.metadata) as BoxVentNode['metadata'],
+      }
+      if (isNew) {
+        commitFreshPlacementSubtree(node.id as AnyNodeId, patch)
+      } else {
+        useScene.temporal.getState().resume()
+        st.updateNode(node.id as AnyNodeId, patch)
+        useScene.temporal.getState().pause()
+      }
 
       st.dirtyNodes.add(targetSegmentId)
       st.dirtyNodes.add(node.id as AnyNodeId)
@@ -261,7 +292,7 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
     <group position={previewPos}>
       <group rotation-y={previewYaw}>
         <group quaternion={previewSurfaceQuat}>
-          <BoxVentPreview node={node} />
+          <BoxVentPreview node={node} invalid={!previewValid} />
         </group>
       </group>
     </group>

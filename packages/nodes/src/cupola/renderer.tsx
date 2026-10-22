@@ -19,7 +19,6 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildCupolaGeometry } from './geometry'
 
@@ -33,7 +32,7 @@ const defaultMaterial = new THREE.MeshStandardMaterial({
  * Cupola renderer. Same transform stack as the box vent — the cupola is
  * parented to a roof-segment, so this reads the segment directly and
  * reproduces the segment-local transform (segment position → rotation →
- * cupola position → slope tilt → cupola yaw → mesh). No animation.
+ * cupola position → cupola yaw → roof-fitting mesh). No animation.
  */
 const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -58,16 +57,20 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
-    () => buildCupolaGeometry(node),
-    [node.width, node.depth, node.height, node.roofStyle, node.finial],
+    () => buildCupolaGeometry(node, segment),
+    [
+      node.width,
+      node.depth,
+      node.height,
+      node.roofStyle,
+      node.finial,
+      node.rotation,
+      node.position[0],
+      node.position[2],
+      segment,
+    ],
   )
   useEffect(() => () => geometry.dispose(), [geometry])
-
-  const surfaceQuat = useMemo(() => {
-    if (!segment) return new THREE.Quaternion()
-    const normal = getAnalyticalNormal(node.position[0] ?? 0, node.position[2] ?? 0, segment)
-    return surfaceQuatFromNormal(normal, new THREE.Quaternion())
-  }, [segment, node.position[0], node.position[2]])
 
   const material = useMemo(() => {
     const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
@@ -96,8 +99,8 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
   const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), [])
   const composedQuat = useMemo(() => {
     const yawQuat = new THREE.Quaternion().setFromAxisAngle(yAxis, node.rotation ?? 0)
-    return new THREE.Quaternion().copy(surfaceQuat).multiply(yawQuat)
-  }, [surfaceQuat, node.rotation, yAxis])
+    return yawQuat
+  }, [node.rotation, yAxis])
 
   // Map cupola-local geometry into the host segment's local frame (where the
   // trim cut prisms live) — same pose the inner mesh group is mounted with.

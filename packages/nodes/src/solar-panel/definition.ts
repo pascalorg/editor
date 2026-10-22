@@ -228,6 +228,7 @@ const solarPanelHandles: HandleDescriptor<SolarPanelNodeType>[] = [
 export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   kind: 'solar-panel',
   schemaVersion: 1,
+  snapProfile: 'item',
   schema: SolarPanelNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -236,6 +237,9 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
     const stub = SolarPanelNodeSchema.parse({
       id: 'solarpanel_default' as never,
       type: 'solar-panel',
+      rows: 1,
+      columns: 1,
+      panelTypePreset: 'residential',
     })
     const { id: _id, type: _type, ...rest } = stub
     return rest
@@ -269,6 +273,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   },
   toolHints: [
     { key: 'Left click', label: 'Place solar panel array on roof' },
+    { key: 'Alt', label: 'Place freely' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

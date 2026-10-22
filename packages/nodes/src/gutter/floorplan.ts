@@ -60,7 +60,9 @@ export function buildGutterFloorplan(
   ]
 
   const halfLen = Math.max(node.length, 0.1) / 2
-  const width = Math.max(node.size, 0.05) // outward extent of the trough
+  const width =
+    Math.max(node.size, 0.04) *
+    (node.profile === 'half-round' ? 2 : node.profile === 'k-style' ? 0.95 : 1) // outward extent of the trough
 
   // The gutter's stored position is the eave drip edge — `halfD + overhang`
   // out from the segment centre (resolveEaveSnap). The roof floor plan

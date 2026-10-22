@@ -37,14 +37,9 @@ const EyebrowVentPreview = ({ node, invalid }: { node: EyebrowVentNode; invalid?
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])
 
-  useEffect(
-    () => () => {
-      geometry.dispose()
-      edgesGeometry.dispose()
-      material.dispose()
-    },
-    [geometry, edgesGeometry, material],
-  )
+  useEffect(() => () => geometry.dispose(), [geometry])
+  useEffect(() => () => edgesGeometry.dispose(), [edgesGeometry])
+  useEffect(() => () => material.dispose(), [material])
 
   return (
     <group rotation-y={node.rotation ?? 0}>
@@ -56,7 +51,12 @@ const EyebrowVentPreview = ({ node, invalid }: { node: EyebrowVentNode; invalid?
         }}
       />
       <lineSegments geometry={edgesGeometry} renderOrder={1000}>
-        <lineBasicMaterial color={0x6c_a3_ff} depthTest={false} opacity={0.95} transparent />
+        <lineBasicMaterial
+          color={invalid ? INVALID_GHOST_COLOR : 0x6c_a3_ff}
+          depthTest={false}
+          opacity={0.95}
+          transparent
+        />
       </lineSegments>
     </group>
   )

@@ -697,6 +697,13 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
 
 /** Candidate paths that are not references, with the reason. `kind: '*'` matches every kind. */
 export const NON_REFERENCES: readonly { kind: string; path: string; reason: string }[] = [
+  { kind: 'hvac-equipment', path: 'supplyFace', reason: 'Cabinet side enum, not a node reference' },
+  { kind: 'hvac-equipment', path: 'returnFace', reason: 'Cabinet side enum, not a node reference' },
+  {
+    kind: 'hvac-equipment',
+    path: 'serviceFace',
+    reason: 'Cabinet side enum, not a node reference',
+  },
   { kind: '*', path: 'id', reason: "The node's own id: a definition, not a reference." },
   {
     kind: '*',

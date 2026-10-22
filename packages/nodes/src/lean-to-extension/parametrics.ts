@@ -1,5 +1,6 @@
 import type { LeanToExtensionNode, ParametricDescriptor } from '@pascal-app/core'
 import { leanToLowEdgeHeight, MIN_LEAN_TO_POST_HEIGHT, resolveLeanToLayout } from './layout'
+import { CanopyStyleEditor } from './style-editor'
 
 const degrees = (rise: number, run: number) =>
   Math.max(1, Math.min(45, (Math.atan2(rise, Math.max(0.001, run)) * 180) / Math.PI))
@@ -89,16 +90,12 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
   },
   groups: [
     {
+      label: 'Style',
+      fields: [{ key: 'canopyForm', kind: 'custom', component: CanopyStyleEditor }],
+    },
+    {
       label: 'Size',
       fields: [
-        {
-          key: 'canopyForm',
-          label: 'Roof form',
-          kind: 'enum',
-          options: ['mono', 'gable', 'butterfly'],
-          display: 'segmented',
-          visibleIf: (node) => node.hostKind === 'freestanding',
-        },
         {
           key: 'autoSpan',
           label: 'Match host width',
@@ -111,7 +108,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'number',
           unit: 'm',
           min: 0.5,
-          max: 1000,
+          max: 100,
           step: 0.1,
         },
         {
@@ -120,7 +117,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'number',
           unit: 'm',
           min: 0.5,
-          max: 1000,
+          max: 10,
           step: 0.1,
         },
         {
@@ -129,7 +126,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'number',
           unit: 'm',
           min: 0.8,
-          max: 1000,
+          max: 10,
           step: 0.05,
           visibleIf: (node) => node.connectionMode === 'manual' || !node.hostRoofSegmentId,
         },
@@ -189,6 +186,18 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
     {
       label: 'Structure',
       fields: [
+        {
+          key: 'postBracing',
+          label: 'Post bracing',
+          kind: 'enum',
+          options: ['none', 'knee'],
+        },
+        {
+          key: 'footingStyle',
+          label: 'Footings',
+          kind: 'enum',
+          options: ['none', 'base-plate', 'concrete-pad'],
+        },
         {
           key: 'postLayoutMode',
           label: 'Post layout',
@@ -316,7 +325,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'number',
           unit: 'm',
           min: 0.2,
-          max: 1000,
+          max: 10,
           step: 0.05,
           visibleIf: (node) => node.connectionMode === 'manual' || !node.hostRoofSegmentId,
         },
@@ -532,18 +541,6 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           step: 0.05,
           visibleIf: (node) =>
             node.framingStrategy === 'purlins' || node.framingStrategy === 'covering-specific',
-        },
-        {
-          key: 'postBracing',
-          label: 'Post bracing',
-          kind: 'enum',
-          options: ['none', 'knee'],
-        },
-        {
-          key: 'footingStyle',
-          label: 'Footings',
-          kind: 'enum',
-          options: ['none', 'base-plate', 'concrete-pad'],
         },
       ],
     },

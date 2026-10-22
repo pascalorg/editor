@@ -219,6 +219,7 @@ const skylightHandles: HandleDescriptor<SkylightNodeType>[] = [
 export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   kind: 'skylight',
   schemaVersion: 1,
+  snapProfile: 'item',
   schema: SkylightNode,
   category: 'structure',
   surfaceRole: 'glazing',
@@ -268,6 +269,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   },
   toolHints: [
     { key: 'Left click', label: 'Place skylight on roof' },
+    { key: 'Alt', label: 'Place freely' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

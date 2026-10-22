@@ -34,8 +34,20 @@ stubDef('duct-segment', 'run', (node) => {
   const path = (node as unknown as { path: Point[] }).path
   const system = (node as unknown as { system: string }).system
   return [
-    { id: 'start', position: path[0]!, direction: [-1, 0, 0], diameter: 6, system },
-    { id: 'end', position: path[path.length - 1]!, direction: [1, 0, 0], diameter: 6, system },
+    {
+      id: 'start',
+      position: path[0]!,
+      direction: path[0]!.map((v, i) => v - path[1]![i]!) as Point,
+      diameter: 6,
+      system,
+    },
+    {
+      id: 'end',
+      position: path[path.length - 1]!,
+      direction: path.at(-1)!.map((v, i) => v - path.at(-2)![i]!) as Point,
+      diameter: 6,
+      system,
+    },
   ]
 })
 stubDef('duct-fitting', 'fitting', (node) => {
@@ -206,6 +218,10 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     const moved = makeNode('duct-segment', {
       path: [
         [0, 0, 0],
+        [-1, 0, 0],
+        [-1, 0, -1],
+        [4, 0, -1],
+        [4, 0, 0],
         [3, 0, 0],
       ],
       system: 'supply',
@@ -238,6 +254,10 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     const moved = makeNode('duct-segment', {
       path: [
         [0, 0, 0],
+        [-1, 0, 0],
+        [-1, 0, -1],
+        [4, 0, -1],
+        [4, 0, 3],
         [3, 0, 3],
       ],
       system: 'supply',
@@ -276,6 +296,10 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     const moved = makeNode('duct-segment', {
       path: [
         [-0.2, 0, 0],
+        [-1, 0, 0],
+        [-1, 0, -1],
+        [4, 0, -1],
+        [4, 0, 0],
         [0.2, 0, 0],
       ],
       system: 'supply',
@@ -284,7 +308,7 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     const downstream = makeNode('duct-segment', {
       path: [
         [0, 0, 0.2],
-        [3, 0, 0.2],
+        [0, 0, 3],
       ],
       system: 'supply',
     })
@@ -306,13 +330,17 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     )
     const path = (updates.find((u) => u.id === downstream.id)!.data as { path: Point[] }).path
     expectPointClose(path[0]!, [0, 0, 1.200025])
-    expectPointClose(path[1]!, [3, 0, 1.200025])
+    expectPointClose(path[1]!, [0, 0, 3])
   })
 
   test('a fitting reached from incompatible collars merges constraints deterministically', () => {
     const moved = makeNode('duct-segment', {
       path: [
         [-0.2, 0, 0],
+        [-1, 0, 0],
+        [-1, 0, -1],
+        [4, 0, -1],
+        [4, 0, 0],
         [0.2, 0, 0],
       ],
       system: 'supply',
@@ -407,4 +435,121 @@ test('kind-owned connectivity keeps fixed neighbors and snapshots custom move fo
     [0, 0, 0],
     [5, 0, 0],
   ])
+})
+
+test('connected movement does not join matching local endpoints on different floors', () => {
+  const lower = makeNode('level', { level: 0, height: 3, children: [] })
+  const upper = makeNode('level', { level: 1, height: 3, children: [] })
+  const a = makeNode('duct-segment', {
+    parentId: lower.id,
+    system: 'supply',
+    path: [
+      [0, 0, 0],
+      [3, 0, 0],
+    ],
+  })
+  const b = makeNode('duct-segment', {
+    parentId: upper.id,
+    system: 'supply',
+    path: [
+      [3, 0, 0],
+      [6, 0, 0],
+    ],
+  })
+  expect(analyzePortConnectivity(a, sceneOf(lower, upper, a, b)).connections).toEqual([])
+})
+
+test('a real cross-floor joint follows in world space and returns level-local patches', () => {
+  const lower = makeNode('level', { level: 0, height: 3, children: [] })
+  const upper = makeNode('level', { level: 1, height: 3, children: [] })
+  const a = makeNode('duct-segment', {
+    parentId: lower.id,
+    system: 'supply',
+    path: [
+      [0, 0, 0],
+      [0, 3, 0],
+    ],
+  })
+  const b = makeNode('duct-segment', {
+    parentId: upper.id,
+    system: 'supply',
+    path: [
+      [0, 0, 0],
+      [0, 2, 0],
+    ],
+  })
+  const snapshot = analyzePortConnectivity(a, sceneOf(lower, upper, a, b))
+  expect(snapshot.connections).toEqual([
+    {
+      kind: 'run',
+      nodeId: b.id,
+      startPath: [
+        [0, 0, 0],
+        [0, 2, 0],
+      ],
+    },
+  ])
+  const preview = {
+    ...a,
+    path: [
+      [0, 0, 0],
+      [1, 3, 0],
+    ],
+  } as AnyNode
+  expect(resolveConnectivityUpdates(snapshot, preview)).toEqual([
+    {
+      id: b.id,
+      data: {
+        path: [
+          [1, 0, 0],
+          [1, 2, 0],
+        ],
+      },
+    },
+  ])
+})
+
+test('movement across differently rotated building frames preserves follower coordinates', () => {
+  const building = makeNode('building', {
+    position: [10, 0, 0],
+    rotation: [0, Math.PI / 2, 0],
+    children: [],
+  })
+  const level = makeNode('level', { parentId: building.id, level: 0, height: 3, children: [] })
+  const a = makeNode('duct-segment', {
+    system: 'supply',
+    path: [
+      [10, 0, 2],
+      [10, 0, 0],
+    ],
+  })
+  const b = makeNode('duct-segment', {
+    parentId: level.id,
+    system: 'supply',
+    path: [
+      [0, 0, 0],
+      [2, 0, 0],
+    ],
+  })
+  const snapshot = analyzePortConnectivity(a, sceneOf(building, level, a, b))
+  expect(snapshot.connections).toEqual([
+    {
+      kind: 'run',
+      nodeId: b.id,
+      startPath: [
+        [0, 0, 0],
+        [2, 0, 0],
+      ],
+    },
+  ])
+  const updates = resolveConnectivityUpdates(snapshot, {
+    ...a,
+    path: [
+      [10, 0, 2],
+      [11, 0, 0],
+    ],
+  } as AnyNode)
+  const path = (updates[0]!.data as { path: Point[] }).path
+  expectPointClose(path[0]!, [0, 0, 1])
+  expectPointClose(path[1]!, [2, 0, 1])
 })

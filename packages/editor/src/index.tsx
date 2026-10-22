@@ -870,6 +870,7 @@ export {
   getWallDrawVariant,
   selectWallDrawVariant,
   useWallDrawVariant,
+  WALL_DRAW_VARIANTS,
   type WallDrawVariant,
 } from './lib/wall-draw-variant'
 export {

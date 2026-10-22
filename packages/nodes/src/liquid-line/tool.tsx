@@ -90,7 +90,10 @@ function snap(value: number, step: number): number {
 function findNearbyPort(point: Vec3): Vec3 | null {
   const port = findNearestPortXZ(
     point,
-    collectScenePorts({ systems: REFRIGERANT_PORT_SYSTEMS }),
+    collectScenePorts({
+      systems: REFRIGERANT_PORT_SYSTEMS,
+      levelId: useViewer.getState().selection.levelId ?? undefined,
+    }).filter((port) => !port.connectionType || port.connectionType === 'liquid'),
     ENDPOINT_SNAP_RADIUS_M,
   )
   return port ? [port.position[0], port.position[1], port.position[2]] : null

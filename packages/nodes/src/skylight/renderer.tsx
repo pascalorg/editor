@@ -210,7 +210,7 @@ function PaneFrame({
   )
 }
 
-function LanternGlass({
+export function LanternGlass({
   curbHeight,
   frameMaterial,
   glassMaterial,
@@ -399,7 +399,7 @@ function ElectricMotorHousing({
   )
 }
 
-function HingedGlass({
+export function HingedGlass({
   curbHeight,
   frameMaterial,
   glassMaterial,
@@ -518,7 +518,7 @@ function HingedGlass({
   )
 }
 
-function SlidingGlass({
+export function SlidingGlass({
   curbHeight,
   frameMaterial,
   glassMaterial,

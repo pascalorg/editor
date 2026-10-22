@@ -9,6 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { PanelSection, SliderControl } from '@pascal-app/editor'
+import { getRoofOuterSurfaceFrameAtPoint } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import { Vector3 } from 'three'
 
@@ -49,12 +50,12 @@ export function DormerPositionSection({
     let worldRotation = nodeRotation ?? 0
     if (dormerObj) {
       dormerObj.updateWorldMatrix(true, false)
-      const localPt = new Vector3(px ?? 0, 0, pz ?? 0)
+      const localPt = new Vector3()
       const worldPt = localPt.applyMatrix4(dormerObj.matrixWorld)
       worldX = worldPt.x
       worldZ = worldPt.z
       const m = dormerObj.matrixWorld.elements
-      worldRotation = Math.atan2(-(m[2] ?? 0), m[0] ?? 1) + (nodeRotation ?? 0)
+      worldRotation = Math.atan2(-(m[2] ?? 0), m[0] ?? 1)
     }
 
     let bounds: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null
@@ -97,7 +98,7 @@ export function DormerPositionSection({
     const state = useScene.getState()
     const worldPt = new Vector3(wx, 0, wz)
     for (const candidate of Object.values(state.nodes)) {
-      if (candidate?.type !== 'roof-segment') continue
+      if (candidate?.type !== 'roof-segment' || candidate.parentId !== segment?.parentId) continue
       const seg = candidate as RoofSegmentNode
       const segObj = sceneRegistry.nodes.get(seg.id)
       if (!segObj) continue
@@ -122,6 +123,8 @@ export function DormerPositionSection({
     return { localX: local.x, localZ: local.z }
   }
 
+  const surfaceOffset = segment ? py - getRoofOuterSurfaceFrameAtPoint(segment, px, pz).point.y : 0
+
   const commitWorldPosition = (newWorldX: number, newWorldZ: number) => {
     if (!segment) return
     const oldWorldRotation = worldRotation_now
@@ -141,14 +144,26 @@ export function DormerPositionSection({
       commitProp({
         roofSegmentId: target.segment.id,
         parentId: target.segment.id,
-        position: [target.localX, 0, target.localZ],
+        position: [
+          target.localX,
+          getRoofOuterSurfaceFrameAtPoint(target.segment, target.localX, target.localZ).point.y +
+            surfaceOffset,
+          target.localZ,
+        ],
         rotation: newSegLocalRot,
       } as Partial<DormerNode>)
     } else {
       // Same segment — preserve the existing Y so the dormer doesn't
       // snap back to the segment foot when the user only adjusts X/Z.
       const local = worldToSegLocal(newWorldX, newWorldZ, segment)
-      commitProp({ position: [local.localX, py ?? 0, local.localZ] })
+      commitProp({
+        position: [
+          local.localX,
+          getRoofOuterSurfaceFrameAtPoint(segment, local.localX, local.localZ).point.y +
+            surfaceOffset,
+          local.localZ,
+        ],
+      })
     }
   }
 
@@ -165,7 +180,7 @@ export function DormerPositionSection({
   }
 
   return (
-    <PanelSection title="Position">
+    <PanelSection title="Position" defaultExpanded={false}>
       <SliderControl
         label="X"
         max={Math.round(worldMaxX * 10) / 10}
@@ -173,7 +188,14 @@ export function DormerPositionSection({
         onChange={(newWorldX) => {
           if (!segment) return
           const local = worldToSegLocal(newWorldX, worldZ_now, segment)
-          previewProp({ position: [local.localX, py ?? 0, local.localZ] })
+          previewProp({
+            position: [
+              local.localX,
+              getRoofOuterSurfaceFrameAtPoint(segment, local.localX, local.localZ).point.y +
+                surfaceOffset,
+              local.localZ,
+            ],
+          })
         }}
         onCommit={(newWorldX) => commitWorldPosition(newWorldX, worldZ_now)}
         precision={2}
@@ -189,7 +211,14 @@ export function DormerPositionSection({
         onChange={(newWorldZ) => {
           if (!segment) return
           const local = worldToSegLocal(worldX_now, newWorldZ, segment)
-          previewProp({ position: [local.localX, py ?? 0, local.localZ] })
+          previewProp({
+            position: [
+              local.localX,
+              getRoofOuterSurfaceFrameAtPoint(segment, local.localX, local.localZ).point.y +
+                surfaceOffset,
+              local.localZ,
+            ],
+          })
         }}
         onCommit={(newWorldZ) => commitWorldPosition(worldX_now, newWorldZ)}
         precision={2}

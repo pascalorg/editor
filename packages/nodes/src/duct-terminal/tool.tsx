@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   type CeilingNode,
+  connectionCompatibility,
   DuctTerminalNode,
   emitter,
   type GridEvent,
@@ -35,20 +36,19 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Euler, Matrix3, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
+import { Matrix3, Matrix4, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
 import { ConnectionFeedback } from '../shared/connection-feedback'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { ductTerminalDefinition } from './definition'
 import { buildDuctTerminalGeometry } from './geometry'
-import { COLLAR_LENGTH, getDuctTerminalPorts, mountQuaternion } from './ports'
+import { resolveTerminalPortPlacement, terminalProfileForPort } from './placement'
+import { getDuctTerminalPorts } from './ports'
 
 const PREVIEW_OPACITY = 0.55
 /** R/T yaw step — 45°. */
 const ROTATE_STEP_RAD = Math.PI / 4
-/** Snap radius (meters) for mating the collar onto a nearby duct port. */
-const PORT_SNAP_RADIUS_M = 0.5
 
 type Mount = DuctTerminalNode['mount']
 const MOUNT_CYCLE: Mount[] = ['floor', 'ceiling', 'wall']
@@ -56,19 +56,6 @@ const MOUNT_CYCLE: Mount[] = ['floor', 'ceiling', 'wall']
 function snap(value: number, step: number): number {
   if (step <= 0) return value
   return Math.round(value / step) * step
-}
-
-/**
- * Collar-port offset from the node origin for a given mount + yaw, in
- * level-local meters — the same transform `def.ports` applies, so the
- * placement tool can predict where the collar lands and shift the whole
- * terminal to mate it onto a duct port.
- */
-function collarOffset(mount: Mount, yaw: number): Vector3 {
-  const transform = new Quaternion()
-    .setFromEuler(new Euler(0, yaw, 0))
-    .multiply(mountQuaternion(mount))
-  return new Vector3(0, -COLLAR_LENGTH, 0).applyQuaternion(transform)
 }
 
 /** The active level's mesh, or null. Carries the building transform plus the
@@ -88,67 +75,6 @@ type Placement = {
   mount: Mount
   /** True when the collar mated onto a nearby duct port (magnetic snap). */
   snapped?: boolean
-}
-
-/** Direction is "vertical" when its Y component dominates this much. */
-const VERTICAL_DOT = 0.7
-
-/**
- * Pick the mount that makes a collar mate onto a duct port pointing
- * `dir` (the port's outward direction). The collar leaves the face along
- * −Y in the canonical frame, so the mount rotation must turn −Y to face
- * *into* the port (i.e. opposite `dir`):
- *   - port pointing up (a riser top) → collar must point down → **floor**
- *   - port pointing down (a ceiling drop) → collar points up → **ceiling**
- *   - port horizontal (a wall stub) → **wall**, yawed so the collar runs
- *     back along the port. `lockYaw` is set only for wall (floor / ceiling
- *     yaw is free — the user keeps spinning the face with R/T).
- */
-function inferMountFromPort(dir: readonly [number, number, number]): {
-  mount: Mount
-  lockYaw: number | null
-} {
-  const v = new Vector3(dir[0], dir[1], dir[2])
-  if (v.lengthSq() < 1e-8) return { mount: 'floor', lockYaw: null }
-  v.normalize()
-  if (v.y > VERTICAL_DOT) return { mount: 'floor', lockYaw: null }
-  if (v.y < -VERTICAL_DOT) return { mount: 'ceiling', lockYaw: null }
-  // Wall collar dir after mount + yaw is (−sin yaw, 0, −cos yaw); set it
-  // opposite the port so the collar runs back into the wall stub.
-  return { mount: 'wall', lockYaw: Math.atan2(v.x, v.z) }
-}
-
-/**
- * If a duct port is within snap range of `position` in three dimensions, mate the register onto it:
- * the port's direction *picks the mount* (floor / ceiling / wall) and, for
- * walls, the yaw; the whole terminal then hops so its collar lands exactly
- * on the port. Null when nothing is in range. `fallbackYaw` keeps the
- * user's R/T face orientation for floor / ceiling mounts.
- */
-function resolvePortSnap(
-  position: [number, number, number],
-  fallbackYaw: number,
-): { position: [number, number, number]; mount: Mount; yaw: number } | null {
-  const levelId = useViewer.getState().selection.levelId
-  if (!levelId) return null
-  const port = findNearestPort3D(
-    position,
-    collectScenePorts({ systems: DUCT_PORT_SYSTEMS, levelId }),
-    PORT_SNAP_RADIUS_M,
-  )
-  if (!port) return null
-  const { mount, lockYaw } = inferMountFromPort(port.direction)
-  const yaw = lockYaw ?? fallbackYaw
-  const offset = collarOffset(mount, yaw)
-  return {
-    position: [
-      port.position[0] - offset.x,
-      port.position[1] - offset.y,
-      port.position[2] - offset.z,
-    ],
-    mount,
-    yaw,
-  }
 }
 
 /**
@@ -182,7 +108,12 @@ const DuctTerminalTool = () => {
       DuctTerminalNode.parse({
         ...ductTerminalDefinition.defaults(),
         ...toolDefaults,
-        name: 'Register',
+        name:
+          toolDefaults?.terminalType === 'return-grille'
+            ? 'Return grille'
+            : toolDefaults?.terminalType === 'diffuser'
+              ? 'Diffuser'
+              : 'Supply register',
       }),
     [toolDefaults],
   )
@@ -206,7 +137,7 @@ const DuctTerminalTool = () => {
     mountRef.current = configuredNode.mount
     setMount(configuredNode.mount)
     setPlacement(null)
-  }, [configuredNode.mount])
+  }, [configuredNode])
 
   useEffect(() => {
     if (!activeLevelId) return
@@ -294,7 +225,12 @@ const DuctTerminalTool = () => {
       // raw-cursor `'off'` mode bypasses it.
       const snapEnabled = isGridSnapActive() || isMagneticSnapActive()
       if (snapEnabled) {
-        const mated = resolvePortSnap(position, yawRef.current)
+        const mated = resolveTerminalPortPlacement(
+          configuredNode,
+          position,
+          yawRef.current,
+          collectScenePorts({ systems: DUCT_PORT_SYSTEMS, levelId: activeLevelId }),
+        )
         if (mated) {
           return { position: mated.position, yaw: mated.yaw, mount: mated.mount, snapped: true }
         }
@@ -306,7 +242,12 @@ const DuctTerminalTool = () => {
       const terminal = DuctTerminalNode.parse({
         ...ductTerminalDefinition.defaults(),
         ...toolDefaults,
-        name: 'Register',
+        name:
+          toolDefaults?.terminalType === 'return-grille'
+            ? 'Return grille'
+            : toolDefaults?.terminalType === 'diffuser'
+              ? 'Diffuser'
+              : 'Supply register',
         mount: p.mount,
         position: p.position,
         rotation: p.yaw,
@@ -332,7 +273,14 @@ const DuctTerminalTool = () => {
         { applySnap: isMagneticSnapActive(), bypass: !isMagneticSnapActive() },
       )
       const snapEnabled = isGridSnapActive() || isMagneticSnapActive()
-      const mated = snapEnabled ? resolvePortSnap(position, yawRef.current) : null
+      const mated = snapEnabled
+        ? resolveTerminalPortPlacement(
+            configuredNode,
+            position,
+            yawRef.current,
+            collectScenePorts({ systems: DUCT_PORT_SYSTEMS, levelId: activeLevelId }),
+          )
+        : null
       return mated
         ? { position: mated.position, yaw: mated.yaw, mount: mated.mount, snapped: true }
         : { position, yaw: yawRef.current, mount: 'floor' }
@@ -485,7 +433,7 @@ const DuctTerminalTool = () => {
       window.removeEventListener('keydown', onKeyDown, true)
       clearDrawAlignment()
     }
-  }, [activeLevelId, camera, gl, toolDefaults])
+  }, [activeLevelId, camera, gl, toolDefaults, configuredNode])
 
   if (!activeLevelId || !placement) return null
 
@@ -510,6 +458,13 @@ const DuctTerminalTool = () => {
     rotation: placement.yaw,
     mount: effectiveMount,
   })[0]!
+  const nearby = findNearestPort3D(
+    collar.position,
+    collectScenePorts({ systems: DUCT_PORT_SYSTEMS, levelId: activeLevelId }),
+    0.5,
+  )
+  const mismatch = nearby && connectionCompatibility(collar, nearby).status !== 'match'
+  const matchingProfile = mismatch ? terminalProfileForPort(configuredNode, nearby) : null
   return (
     <LevelOffsetGroup>
       <ConnectionFeedback point={[...collar.position]} profile={collar} levelId={activeLevelId} />
@@ -535,6 +490,21 @@ const DuctTerminalTool = () => {
                 ·
               </span>
             </>
+          )}
+          {matchingProfile && (
+            <button
+              type="button"
+              className="pointer-events-auto rounded border px-2 py-1"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                useEditor
+                  .getState()
+                  .setToolDefaults('duct-terminal', { ...toolDefaults, ...matchingProfile })
+              }}
+            >
+              Match terminal to port
+            </button>
           )}
           <span className="font-medium text-foreground">Mount {mountLabel}</span>
           <span aria-hidden className="text-muted-foreground">

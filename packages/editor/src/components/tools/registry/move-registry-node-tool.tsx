@@ -33,6 +33,7 @@ import {
   resolveSupportSlabPatch,
   type SurfaceRejectReason,
   sceneRegistry,
+  snapPlanarPortPosition,
   spatialGridManager,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -103,8 +104,6 @@ export function resolveMoveRotationStep(
   return freeRotation + delta
 }
 
-/** Default magnetic radius (meters, XZ) for `movable.portSnap`. */
-const PORT_SNAP_RADIUS_M = 0.5
 const VALID_COLOR = 0x22_c5_5e
 const INVALID_COLOR = 0xef_44_44
 
@@ -145,62 +144,6 @@ function alignmentGuideFromParentFrameMatch(match: ParentFrameSnapMatch): Alignm
     candidateNodeId: match.candidateNodeId,
     distance: Math.hypot(match.to.x - match.from.x, match.to.z - match.from.z),
   }
-}
-
-/**
- * Magnetic port snap for a dragged node: if one of the node's own ports
- * (read live from `def.ports`) lands within `radius` of a matching scene
- * port at the candidate XZ, return the node XZ that mates them exactly.
- *
- * Pure core: ports come through `nodeRegistry` so this stays layer-clean.
- * Ports are level-local meters — the same frame as the cursor's
- * `localPosition`, so no extra transform is needed. The dragged node's
- * ports move rigidly with its position, so a port at candidate `(x,z)`
- * sits at `portStored + (candidate - nodeStored)`. We pick the closest
- * (own-port, target-port) pair and shift the node so they coincide in XZ.
- */
-function resolvePortSnap(
-  node: AnyNode,
-  candidate: [number, number],
-  config: { systems?: readonly string[]; radius?: number },
-): [number, number] | null {
-  const nodePos = (node as { position?: [number, number, number] }).position
-  if (!nodePos) return null
-  const ownPorts = nodeRegistry.get(node.type)?.ports?.(node)
-  if (!ownPorts || ownPorts.length === 0) return null
-
-  const radius = config.radius ?? PORT_SNAP_RADIUS_M
-  const radiusSq = radius * radius
-  const { systems } = config
-  const dragDx = candidate[0] - nodePos[0]
-  const dragDz = candidate[1] - nodePos[2]
-
-  const nodes = useScene.getState().nodes
-  let bestDistSq = radiusSq
-  let snap: [number, number] | null = null
-
-  for (const node2 of Object.values(nodes)) {
-    if (!node2 || node2.id === node.id) continue
-    const targets = nodeRegistry.get(node2.type)?.ports?.(node2)
-    if (!targets) continue
-    for (const target of targets) {
-      if (systems && target.system !== undefined && !systems.includes(target.system)) continue
-      for (const own of ownPorts) {
-        // Own port at the candidate position = stored port + drag delta.
-        const ownX = own.position[0] + dragDx
-        const ownZ = own.position[2] + dragDz
-        const dx = target.position[0] - ownX
-        const dz = target.position[2] - ownZ
-        const distSq = dx * dx + dz * dz
-        if (distSq <= bestDistSq) {
-          bestDistSq = distSq
-          // Shift the node so this own port lands on the target (XZ only).
-          snap = [candidate[0] + dx, candidate[1] + dz]
-        }
-      }
-    }
-  }
-  return snap
 }
 
 /** Figma-style alignment-snap threshold (meters), matching the 2D
@@ -963,7 +906,12 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         // this the snap solver mates the pre-rotation collar and commit then
         // writes the rotated node offset from the port it visually snapped to.
         const snapNode = buildPreviewNode(originalPosition, rotationRef.current)
-        const mated = resolvePortSnap(snapNode, [x, z], portSnapConfig)
+        const mated = snapPlanarPortPosition(
+          snapNode,
+          [x, z],
+          useScene.getState().nodes,
+          portSnapConfig,
+        )
         if (mated) {
           x = mated[0]
           z = mated[1]

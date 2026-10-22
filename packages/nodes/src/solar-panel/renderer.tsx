@@ -112,6 +112,8 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
       node.frameThickness,
       node.frameDepth,
       node.standoffHeight,
+      node.mountingType,
+      node.tiltAngle,
     ],
   )
 

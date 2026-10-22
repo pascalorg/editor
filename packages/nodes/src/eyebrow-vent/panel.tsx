@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getActiveRoofHeight,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   useScene,
@@ -14,14 +13,14 @@ import {
   duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
-  SegmentedControl,
   SliderControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { resolveEyebrowVentPlacement } from './placement'
 import type { EyebrowVentNode } from './schema'
 
 /**
@@ -97,15 +96,6 @@ export default function EyebrowVentPanel() {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
     const segmentId = node.roofSegmentId
-    if (segmentId) {
-      const state = useScene.getState()
-      const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-      if (seg) {
-        state.updateNode(segmentId as AnyNode['id'], {
-          children: (seg.children ?? []).filter((id) => id !== selectedId),
-        })
-      }
-    }
     deleteNode(selectedId as AnyNodeId)
     if (segmentId) {
       useScene.getState().dirtyNodes.add(segmentId as AnyNodeId)
@@ -117,24 +107,40 @@ export default function EyebrowVentPanel() {
 
   if (!(node && node.type === 'eyebrow-vent' && selectedId)) return null
 
+  const surfaceY = (x: number, z: number) =>
+    segment ? getRoofOuterSurfaceFrameAtPoint(segment, x, z).point.y : 0
+  const offset = node.position[1] - surfaceY(node.position[0], node.position[2])
+  const at = (x: number, z: number): [number, number, number] => [x, surfaceY(x, z) + offset, z]
+
   return (
     <PanelWrapper
-      icon="/icons/roof.webp"
+      icon="/icons/eyebrow-vent.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Eyebrow Vent'}
       width={300}
     >
       <PanelSection title="Style">
-        <SegmentedControl
-          onChange={(v) => handleUpdate({ style: v as EyebrowVentNode['style'] })}
-          options={[
-            { label: 'Scoop', value: 'scoop' },
-            { label: 'Half-round', value: 'half-round' },
-            { label: 'Slant-box', value: 'slant-box' },
-          ]}
-          value={node.style ?? 'scoop'}
-        />
+        <div className="grid grid-cols-3 gap-2">
+          {(['scoop', 'half-round', 'slant-box'] as const).map((style) => (
+            <button
+              key={style}
+              type="button"
+              aria-pressed={node.style === style}
+              className={`rounded-lg border p-2 text-xs transition-colors ${node.style === style ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'}`}
+              onClick={() => handleUpdate({ style })}
+            >
+              <img
+                src={`/icons/eyebrow-vent/${style}.webp`}
+                alt=""
+                className="mx-auto h-14 w-14 object-contain"
+              />
+              {style === 'scoop' ? 'Scoop' : style === 'half-round' ? 'Half-round' : 'Slant-box'}
+            </button>
+          ))}
+        </div>
+      </PanelSection>
+      <PanelSection title="Opening">
         <SliderControl
           label="Louvers"
           max={8}
@@ -146,17 +152,21 @@ export default function EyebrowVentPanel() {
           step={1}
           value={node.louverCount ?? 3}
         />
+        <p className="text-xs text-muted-foreground">
+          Zero louvers leaves the recessed screen visible.
+        </p>
         {node.style === 'slant-box' ? (
           <SliderControl
-            label="Back height"
-            max={1}
-            min={0.15}
-            onChange={(v) => previewProp({ backRatio: v })}
-            onCommit={(v) => handleUpdate({ backRatio: v })}
+            label="Rear height"
+            max={100}
+            min={15}
+            onChange={(v) => previewProp({ backRatio: v / 100 })}
+            onCommit={(v) => handleUpdate({ backRatio: v / 100 })}
             precision={2}
             restoreOnCommit={false}
-            step={0.05}
-            value={Math.round((node.backRatio ?? 0.5) * 100) / 100}
+            step={1}
+            unit="%"
+            value={Math.round((node.backRatio ?? 0.5) * 100)}
           />
         ) : null}
       </PanelSection>
@@ -164,8 +174,7 @@ export default function EyebrowVentPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={1000}
-          min={0.4}
+          min={0.15}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => handleUpdate({ width: v })}
           precision={2}
@@ -176,8 +185,7 @@ export default function EyebrowVentPanel() {
         />
         <SliderControl
           label="Depth"
-          max={1000}
-          min={0.2}
+          min={0.15}
           onChange={(v) => previewProp({ depth: v })}
           onCommit={(v) => handleUpdate({ depth: v })}
           precision={2}
@@ -188,8 +196,7 @@ export default function EyebrowVentPanel() {
         />
         <SliderControl
           label="Height"
-          max={1000}
-          min={0.08}
+          min={0.06}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => handleUpdate({ height: v })}
           precision={2}
@@ -200,17 +207,54 @@ export default function EyebrowVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title="Placement">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={!segment}
+            className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+            onClick={() =>
+              segment &&
+              handleUpdate({
+                position: resolveEyebrowVentPlacement(
+                  segment,
+                  node,
+                  node.position[0],
+                  node.position[2],
+                ).position,
+              })
+            }
+          >
+            Seat on roof
+          </button>
+          <button
+            type="button"
+            disabled={!segment}
+            className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+            onClick={() =>
+              segment &&
+              handleUpdate({
+                rotation: resolveEyebrowVentPlacement(
+                  segment,
+                  node,
+                  node.position[0],
+                  node.position[2],
+                  { alignDownslope: true },
+                ).rotation,
+              })
+            }
+          >
+            Face downslope
+          </button>
+        </div>
+      </PanelSection>
+      <PanelSection title="Position" defaultExpanded={false}>
         <SliderControl
           label="X"
           max={Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
-          onChange={(v) =>
-            previewProp({ position: [v, node.position[1] ?? 0, node.position[2] ?? 0] })
-          }
-          onCommit={(v) =>
-            handleUpdate({ position: [v, node.position[1] ?? 0, node.position[2] ?? 0] })
-          }
+          onChange={(v) => previewProp({ position: at(v, node.position[2]) })}
+          onCommit={(v) => handleUpdate({ position: at(v, node.position[2]) })}
           precision={2}
           restoreOnCommit={false}
           step={0.05}
@@ -218,34 +262,37 @@ export default function EyebrowVentPanel() {
           value={node.position[0] ?? 0}
         />
         <SliderControl
-          label="Y"
-          max={Math.max(
-            (segment?.wallHeight ?? 3) + (segment ? getActiveRoofHeight(segment) : 3) + 2,
-            (node.position[1] ?? 0) + 0.1,
-          )}
-          min={Math.min(0, (node.position[1] ?? 0) - 0.5)}
+          label="Roof offset"
           onChange={(v) =>
-            previewProp({ position: [node.position[0] ?? 0, v, node.position[2] ?? 0] })
+            previewProp({
+              position: [
+                node.position[0],
+                surfaceY(node.position[0], node.position[2]) + v,
+                node.position[2],
+              ],
+            })
           }
           onCommit={(v) =>
-            handleUpdate({ position: [node.position[0] ?? 0, v, node.position[2] ?? 0] })
+            handleUpdate({
+              position: [
+                node.position[0],
+                surfaceY(node.position[0], node.position[2]) + v,
+                node.position[2],
+              ],
+            })
           }
           precision={2}
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={node.position[1] ?? 0}
+          value={offset}
         />
         <SliderControl
           label="Z"
           max={Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
-          onChange={(v) =>
-            previewProp({ position: [node.position[0] ?? 0, node.position[1] ?? 0, v] })
-          }
-          onCommit={(v) =>
-            handleUpdate({ position: [node.position[0] ?? 0, node.position[1] ?? 0, v] })
-          }
+          onChange={(v) => previewProp({ position: at(node.position[0], v) })}
+          onCommit={(v) => handleUpdate({ position: at(node.position[0], v) })}
           precision={2}
           restoreOnCommit={false}
           step={0.05}

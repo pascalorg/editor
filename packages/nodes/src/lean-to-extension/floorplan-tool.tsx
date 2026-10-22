@@ -23,7 +23,6 @@ import {
 import { leanToFacetCount } from './geometry'
 import { resolveLeanToSpanArc } from './layout'
 import {
-  LEAN_TO_RUN_CONNECT_SNAP_RADIUS,
   LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS,
   type LeanToPlanPlacementTarget,
   nextLeanToCanopyForm,
@@ -118,19 +117,18 @@ const FloorplanLeanToExtensionTool = ({
       if (chainStartRef.current && isContinuous()) {
         const proposedEnd = snappedEventPoint(event)
         if (!proposedEnd) return null
-        const snap = event.altKey
-          ? null
-          : resolveLeanToFreestandingRunEndpointSnap({
-              activeLevelId,
-              canopyForm: formRef.current,
-              flipProjection: chainFlipRef.current,
-              maxDistance: isMagneticSnapActive()
-                ? LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS
-                : LEAN_TO_RUN_CONNECT_SNAP_RADIUS,
-              nodes,
-              proposedEnd,
-              start: chainStartRef.current,
-            })
+        const snap =
+          event.altKey || !isMagneticSnapActive()
+            ? null
+            : resolveLeanToFreestandingRunEndpointSnap({
+                activeLevelId,
+                canopyForm: formRef.current,
+                flipProjection: chainFlipRef.current,
+                maxDistance: LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS,
+                nodes,
+                proposedEnd,
+                start: chainStartRef.current,
+              })
         const snapKey = snap ? `${snap.nodeId}:${snap.side}` : null
         if (snapKey && snapKey !== lastRunSnapKey) triggerSFX('sfx:grid-snap')
         lastRunSnapKey = snapKey
@@ -228,19 +226,19 @@ const FloorplanLeanToExtensionTool = ({
       }
     }
     const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target instanceof HTMLElement && event.target.isContentEditable)
+      ) {
+        return
+      }
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopImmediatePropagation()
         markToolCancelConsumed()
         if (chainStartRef.current) finishRun()
         else finishTool()
-        return
-      }
-      if (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement ||
-        (event.target instanceof HTMLElement && event.target.isContentEditable)
-      ) {
         return
       }
       if (

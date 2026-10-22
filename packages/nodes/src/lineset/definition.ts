@@ -51,7 +51,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
   parametrics: linesetParametrics,
 
   geometry: buildLinesetGeometry,
-  geometryKey: (n) => JSON.stringify([n.path, n.suctionDiameter, n.liquidDiameter, n.insulated]),
+  geometryKey: (n) => JSON.stringify([n.path, n.suctionDiameter, n.insulated]),
 
   // Open run ends as typed refrigerant ports — directions point outward
   // along the path tangent so they mate flush onto a service valve. Path
@@ -78,6 +78,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
         direction: unit(first, second),
         diameter,
         system: 'refrigerant',
+        connectionType: 'suction',
       },
       {
         id: 'end',
@@ -85,6 +86,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
         direction: unit(last, prev),
         diameter,
         system: 'refrigerant',
+        connectionType: 'suction',
       },
     ]
   },
@@ -121,9 +123,9 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
   ],
 
   presentation: {
-    label: 'Lineset',
+    label: 'Suction line',
     description:
-      'Refrigerant lineset — copper suction + liquid pair joining a condenser to the indoor coil.',
+      'Refrigerant suction line joining a condenser to the indoor coil. Draw its liquid line separately.',
     icon: { kind: 'url', src: '/icons/lineset.webp' },
     paletteSection: 'structure',
     paletteOrder: 93,
@@ -131,6 +133,6 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
 
   mcp: {
     description:
-      'A refrigerant lineset defined as a polyline: an insulated suction line plus a bare liquid line, joining an HVAC condenser to its indoor coil. Snaps onto refrigerant service ports.',
+      'A refrigerant lineset defined as a polyline: one suction line with optional insulation, joining an HVAC condenser to its indoor coil. Create a liquid-line node for the separate liquid route. Snaps onto refrigerant service ports.',
   },
 }
