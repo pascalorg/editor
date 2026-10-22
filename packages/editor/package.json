@@ -56,14 +56,14 @@
     "lucide-react": "^1.61.0",
     "manifold-3d": "3.5.4",
     "mitt": "^3.0.1",
-    "motion": "^14.5.0",
+    "motion": "^14.6.0",
     "nanoid": "^6.0.2",
     "pdfkit": "^0.20.2",
     "tailwind-merge": "^3.7.0",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "~0.9.16",
     "zod": ">=4.6.7 <4.7",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@pascal-app/core": "^1.0.5",
@@ -73,7 +73,7 @@
     "@types/blob-stream": "^0.1.33",
     "@types/bun": "^1.4.3",
     "@types/howler": "^2.2.13",
-    "@types/pdfkit": "^0.17.6",
+    "@types/pdfkit": "^0.17.7",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "^0.186.0",
