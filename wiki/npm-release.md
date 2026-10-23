@@ -48,11 +48,14 @@ The same `release.yml` run publishes `ghcr.io/pascalorg/pascal-editor` after the
 
 ## MCP Registry
 
-[`server.json`](../server.json) publishes as `app.pascal/editor` with the `@pascal-app/mcp` npm package and the hosted remote. Nothing publishes it automatically. After a release lands on `main`:
+[`server.json`](../server.json) publishes as `app.pascal/editor` with the `@pascal-app/mcp` npm package and the hosted remote. Its version is never edited by hand: `bun scripts/sync-agent-versions.ts` rewrites it from `packages/mcp/package.json`.
 
-1. The registry checks npm ownership by reading `mcpName` from the published `@pascal-app/mcp@<version>`, so publish only versions whose npm tarball carries `"mcpName": "app.pascal/editor"`.
-2. Deploy the hosted editor at the same version, then run the **MCP Registry** workflow by hand (`gh workflow run mcp-registry.yml`). Its `hosted-matches-manifest` job checks that the live API catalog and `/.well-known/mcp/server-card.json` report this version and registry name.
-3. Authenticate for the `app.pascal` namespace once per session: `mcp-publisher login dns --domain pascal.app --private-key <hex Ed25519 key>`, which needs the `pascal.app` TXT record `v=MCPv1; k=ed25519; p=<public key>`. HTTP verification (`mcp-publisher login http`, serving `https://pascal.app/.well-known/mcp-registry-auth`) is the alternative.
-4. From the repository root, `mcp-publisher publish`, then confirm with `curl "https://registry.modelcontextprotocol.io/v0/servers?search=app.pascal/editor"`.
+A stable `release.yml` run ends with the `mcp-registry` job, which calls [`mcp-registry.yml`](../.github/workflows/mcp-registry.yml) with the released version. It checks out the `@pascal-app/mcp@<version>` tag, waits until `npm view @pascal-app/mcp@<version> mcpName` reports `app.pascal/editor` (the registry verifies npm ownership through that field), publishes, and fails unless `https://registry.modelcontextprotocol.io/v0/servers/app.pascal%2Feditor/versions` then lists the version. A version that is already listed is skipped, so reruns are safe. Betas are not published: server.json stays on the last stable version.
+
+The `app.pascal` namespace is verified by DNS: the `pascal.app` TXT record `v=MCPv1; k=ed25519; p=<public key>`, whose hex private key is the `MCP_REGISTRY_PRIVATE_KEY` secret (repository or `npm` environment). Without it the job fails and says so.
+
+To recover a version the release did not list, dispatch the workflow: `gh workflow run mcp-registry.yml -f version=<version> -f publish=true`. With `check-hosted` (on by default) the `hosted-matches-manifest` job also checks that the live API catalog and `/.well-known/mcp/server-card.json` report this version; those are served by the hosted deployment, so that job only passes once it runs the same `@pascal-app/mcp`, and it does not gate the publish.
+
+By hand, from the release tag: `mcp-publisher login dns --domain pascal.app --private-key <hex key>`, then `mcp-publisher publish`.
 
 GitHub release notes follow the house style: emoji sections, every line linked to its PR, a 📦 package table, individual contributor attributions, and the compare link last. Verify the table against npm before publishing — an earlier release claimed versions that were never published.
