@@ -74,6 +74,7 @@ The compiler also derives upward surfaces (where things rest) and undersides (wh
 
 `@pascal-app/geometry-script` compiles a module to a GLB and manifest in a browser worker, Bun or Node, and returns both hashes. The host decides the isolation: the editor runs it in a worker with network and storage removed; an MCP server receives a `GeometryScriptHost` (compile, store, read) or answers `scripts_unavailable`. The default in-memory artifact store lasts one session. Local MCP and the standalone editor use a disk store beside the SQLite database that holds their saved scenes (`<database-path>.artifacts/<sha256>`). Keep this directory with the database. Writes verify the hash and publish complete bytes atomically without replacing existing artifacts. Local MCP compilation is opt-in (`PASCAL_SERVER_SCRIPT_COMPILE=1`; bpy modules run in the Blender binary `PASCAL_BLENDER` names); reading saved source does not require compilation.
 
+An `InstancedMesh` in a build is expanded first, into a group of plain meshes, one per drawn instance (`count`), each at its `instanceMatrix` under the instanced mesh's own transform, with its `instanceColor` as a vertex colour. Everything after reads plain meshes: the bounds, the cut to a host's floor or face, coverage, the triangle count and the merge by part and material, so a floor of instanced planks is measured and cut like one of meshes. Every instance counts toward the 300k triangle limit: instancing does not buy a larger budget.
 
 ### Saved ceiling objects
 

@@ -22,7 +22,7 @@ Conventions (they make the object work in Pascal; follow them):
 - Motion: put THREE.AnimationClips on the returned group's .animations, as in any three.js project; tracks target <objectName>.<property> or <object.uuid>.<property> and may use any transform property (position, rotation, rotation[y], quaternion, scale); material and visibility tracks do not animate. A clip named open becomes the object's open/close control (close plays a clip named close, or open reversed); a clip named loop runs continuously; every other clip gets its own play toggle labelled with its name (name it for the person: "Twirl", "Music"). Write as many clips as the object needs.
 - Cuts: a mesh named cutout cuts only the mounted host; cut:wall, cut:ceiling and cut:slab require that host kind (floor items cut their support slab). The hidden cutter must reach the host; walls use its real shape, ceilings and slabs its through-hole footprint.
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
-- No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
+- No textures, network or DOM. At most 300k triangles (every instance of an InstancedMesh counts), 32 materials, 60 m per side.
 
 Blender instead (language 'bpy'): when the shape is easier with Blender's modelling (bevelled or rounded edges, subdivision-smooth and organic forms, booleans, curves and text, solidify, array, screw and other modifiers), write a bpy module:
   import bpy, bmesh

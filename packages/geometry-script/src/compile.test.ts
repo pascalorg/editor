@@ -1007,3 +1007,123 @@ export default function build({ THREE, params }) {
     expect(compiled.manifest.uncovered).toEqual([])
   })
 })
+
+describe('an InstancedMesh in a build', () => {
+  /** A compiled GLB's meshes, loaded back as a viewer would. */
+  const meshesOf = async (glb: ArrayBuffer) => {
+    const gltf = await new GLTFLoader().parseAsync(glb, '')
+    const meshes: Mesh[] = []
+    gltf.scene.traverse((object) => {
+      if ((object as Mesh).isMesh) meshes.push(object as Mesh)
+    })
+    return meshes
+  }
+  const trianglesIn = (meshes: Mesh[]) =>
+    meshes.reduce(
+      (sum, { geometry }) =>
+        sum + (geometry.index?.count ?? geometry.getAttribute('position').count) / 3,
+      0,
+    )
+
+  /** Red and blue stripes 0.2 m wide across the floor, laid from y = 0, as meshes or as two InstancedMeshes. */
+  const STRIPES = (instanced: boolean) => `
+export default function build({ THREE, params }) {
+  const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const red = new THREE.MeshStandardMaterial({ color: '#cc2222' }); red.name = 'slot_red'
+  const blue = new THREE.MeshStandardMaterial({ color: '#2244cc' }); blue.name = 'slot_blue'
+  const stripe = new THREE.BoxGeometry(x1 - x0, 0.015, 0.2)
+  const rows = Math.ceil((z1 - z0) / 0.2)
+  const g = new THREE.Group()
+  const at = (row) => new THREE.Vector3((x0 + x1) / 2, 0.0075, z0 + 0.1 + row * 0.2)
+  if (${instanced}) {
+    for (const [k, material] of [red, blue].entries()) {
+      const mesh = new THREE.InstancedMesh(stripe, material, rows)
+      let count = 0
+      for (let row = k; row < rows; row += 2)
+        mesh.setMatrixAt(count++, new THREE.Matrix4().makeTranslation(at(row)))
+      mesh.count = count
+      g.add(mesh)
+    }
+  } else {
+    for (let row = 0; row < rows; row++) {
+      const mesh = new THREE.Mesh(stripe, row % 2 ? blue : red)
+      mesh.position.copy(at(row))
+      g.add(mesh)
+    }
+  }
+  return g
+}
+`
+  const FLOOR = {
+    polygon: [
+      [4.1, 0.1],
+      [7.9, 0.1],
+      [7.9, 3.9],
+      [4.1, 3.9],
+    ],
+    holes: [],
+  }
+
+  test('a floor of instanced stripes compiles as the same floor of meshes does', async () => {
+    const meshes = await compileGeometryScript({ code: STRIPES(false), inputs: FLOOR })
+    const instanced = await compileGeometryScript({ code: STRIPES(true), inputs: FLOOR })
+    expect(instanced.manifest.coverage).toBe(1)
+    expect(instanced.manifest.coverage).toBe(meshes.manifest.coverage!)
+    expect(instanced.manifest.triangles).toBe(meshes.manifest.triangles)
+    expect(instanced.manifest.bounds).toEqual(meshes.manifest.bounds)
+    expect(instanced.manifest.slots.map((slot) => slot.id).sort()).toEqual(['blue', 'red'])
+    expect(trianglesIn(await meshesOf(instanced.glb))).toBe(meshes.manifest.triangles)
+  })
+
+  test("an item's instances are measured where they are drawn, and none is lost in the merge", async () => {
+    // Two rows of four 1 m crates sharing one material, the second row's InstancedMesh moved 2 m.
+    const CRATES = `
+export default function build({ THREE }) {
+  const wood = new THREE.MeshStandardMaterial({ color: '#a07040' }); wood.name = 'slot_wood'
+  const g = new THREE.Group()
+  for (const z of [0, 2]) {
+    const crates = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), wood, 4)
+    for (let i = 0; i < 4; i++) crates.setMatrixAt(i, new THREE.Matrix4().makeTranslation(i, 0.5, 0))
+    crates.position.z = z
+    g.add(crates)
+  }
+  return g
+}
+`
+    const compiled = await compileGeometryScript({ code: CRATES })
+    const { min, max } = compiled.manifest.bounds
+    expect([max[0] - min[0], max[1] - min[1], max[2] - min[2]]).toEqual([4, 1, 3])
+    expect(compiled.manifest.triangles).toBe(8 * 12)
+    expect(trianglesIn(await meshesOf(compiled.glb))).toBe(8 * 12)
+  })
+
+  test('each instance keeps its own colour', async () => {
+    const TINTED = `
+export default function build({ THREE }) {
+  const tiles = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.5, 0.01, 0.5),
+    new THREE.MeshStandardMaterial({ name: 'slot_tile' }),
+    2,
+  )
+  tiles.setMatrixAt(1, new THREE.Matrix4().makeTranslation(1, 0, 0))
+  tiles.setColorAt(0, new THREE.Color(1, 0, 0))
+  tiles.setColorAt(1, new THREE.Color(0, 0, 1))
+  return tiles
+}
+`
+    const compiled = await compileGeometryScript({ code: TINTED })
+    expect(compiled.manifest.triangles).toBe(2 * 12)
+    const colours = new Set<string>()
+    for (const mesh of await meshesOf(compiled.glb)) {
+      expect((mesh.material as MeshStandardMaterial).vertexColors).toBe(true)
+      const colour = mesh.geometry.getAttribute('color')
+      const position = mesh.geometry.getAttribute('position')
+      for (let v = 0; v < colour.count; v++) {
+        const side = position.getX(v) < 0 ? 'west' : 'east'
+        colours.add(`${side} ${[colour.getX(v), colour.getY(v), colour.getZ(v)].map(Math.round)}`)
+      }
+    }
+    expect([...colours].sort()).toEqual(['east 0,0,1', 'west 1,0,0'])
+  })
+})

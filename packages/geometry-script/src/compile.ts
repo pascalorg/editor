@@ -215,6 +215,64 @@ function unmeasurable(root: THREE.Object3D): Error {
   return new Error('The object cannot be measured: its size is not a finite number.')
 }
 
+/**
+ * Every InstancedMesh as a group of plain meshes, one per drawn instance: the bounds, the cut to a
+ * host's floor or face, the coverage, the triangle count and the merge read each mesh's own
+ * geometry and matrixWorld, so an instanced mesh would count as one copy at its own origin. The
+ * group takes its place with its uuid, name, transform, userData and children, so part names and
+ * clip targets hold; `instanceColor` becomes a vertex colour, on a vertex-coloured copy of the
+ * material (times the geometry's own vertex colours when the material already drew them).
+ */
+function expandInstances(root: THREE.Object3D) {
+  const instanced: THREE.InstancedMesh[] = []
+  root.traverse((object) => {
+    if ((object as THREE.InstancedMesh).isInstancedMesh)
+      instanced.push(object as THREE.InstancedMesh)
+  })
+  const matrix = new THREE.Matrix4()
+  const color = new THREE.Color()
+  for (const source of instanced) {
+    const group = THREE.Object3D.prototype.copy.call(
+      new THREE.Group(),
+      source,
+      false,
+    ) as THREE.Group
+    group.uuid = source.uuid
+    for (const child of [...source.children]) group.add(child)
+    const authored = Array.isArray(source.material) ? source.material : [source.material]
+    const tint = source.instanceColor
+    const own = authored.some((m) => m.vertexColors) ? source.geometry.getAttribute('color') : null
+    const materials = tint
+      ? authored.map((m) => Object.assign(m.clone(), { vertexColors: true }))
+      : authored
+    const material = materials.length === 1 ? materials[0]! : materials
+    for (let i = 0; i < source.count; i++) {
+      let geometry = source.geometry
+      if (tint) {
+        source.getColorAt(i, color)
+        geometry = source.geometry.clone()
+        const count = geometry.getAttribute('position').count
+        const size = own?.itemSize ?? 3
+        const values = new Float32Array(count * size)
+        for (let v = 0; v < count; v++) {
+          values[v * size] = color.r * (own ? own.getX(v) : 1)
+          values[v * size + 1] = color.g * (own ? own.getY(v) : 1)
+          values[v * size + 2] = color.b * (own ? own.getZ(v) : 1)
+          if (own && size === 4) values[v * 4 + 3] = own.getW(v)
+        }
+        geometry.setAttribute('color', new THREE.BufferAttribute(values, size))
+      }
+      const mesh = new THREE.Mesh(geometry, material)
+      // A helper stays one: each copy of an instanced cutout or collider is one too.
+      if (isHelper(source)) mesh.name = source.name
+      source.getMatrixAt(i, matrix)
+      matrix.decompose(mesh.position, mesh.quaternion, mesh.scale)
+      group.add(mesh)
+    }
+    source.parent?.add(group).remove(source)
+  }
+}
+
 /** The meshes that draw: helpers (cutout, collider), and anything under one, do not. */
 function visibleMeshes(root: THREE.Object3D): THREE.Mesh[] {
   const meshes: THREE.Mesh[] = []
@@ -908,6 +966,9 @@ export async function finishBuild({
   const root = new THREE.Group()
   root.name = 'pascal_script_root'
   root.add(built)
+  expandInstances(root)
+  // A build that is itself an InstancedMesh has given its place to its group.
+  const model = root.children[0]!
   const box = visibleBounds(root)
   if (box.isEmpty()) throw new Error('build() returned no visible meshes')
   if (![box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z].every(Number.isFinite)) {
@@ -919,10 +980,10 @@ export async function finishBuild({
       `The object is ${vec(size).join(' × ')} m; the limit is ${GEOMETRY_SCRIPT_LIMITS.extent} m per side. Units are metres.`,
     )
   }
-  if (!inputs) built.position.sub(originFor(box, mount))
+  if (!inputs) model.position.sub(originFor(box, mount))
   root.updateWorldMatrix(true, true)
 
-  const read = readAnimations(built, root)
+  const read = readAnimations(model, root)
   const clips = sampleTransformClips(root, read.clips)
   const animated = read.animated
   const region = inputs && hostRegion(inputs)
