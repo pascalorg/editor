@@ -1,12 +1,9 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry/registry'
 import type { AnyNodeDefinition, DragAction, Relations, SceneApi } from '../registry/types'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { createDragSession } from './drag-session'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 const id = (s: string) => s as AnyNodeId
 

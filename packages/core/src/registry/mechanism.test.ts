@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { useInteractive } from '../store/use-interactive'
@@ -6,9 +6,6 @@ import useScene from '../store/use-scene'
 import { nodeMechanism, toggleNodeMechanism } from './mechanism'
 import { nodeRegistry, registerNode } from './registry'
 import type { AnyNodeDefinition } from './types'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 const KIND = 'test:articulated'
 const NODE_ID = 'articulated_one' as AnyNodeId

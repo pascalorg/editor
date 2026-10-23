@@ -1,13 +1,10 @@
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { loadPlugin, nodeRegistry } from '../registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { type SceneCommit, subscribeSceneCommits } from './history-control'
 import useScene, { applySceneOperationPatch, applySceneSnapshot } from './use-scene'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 describe('scene plugin installation state', () => {
   beforeEach(() => {

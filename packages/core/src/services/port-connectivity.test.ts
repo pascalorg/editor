@@ -4,10 +4,10 @@ import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { analyzePortConnectivity, resolveConnectivityUpdates } from './port-connectivity'
 
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
-
 type Point = [number, number, number]
+
+const restoreRegistry = nodeRegistry._snapshot()
+afterAll(() => restoreRegistry())
 
 // Stub registrations mirroring the real kinds' port + role conventions
 // without importing the nodes package (which pulls in CSG and can't load

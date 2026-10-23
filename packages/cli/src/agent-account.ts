@@ -33,17 +33,22 @@ interface AgentAccountRequestOptions {
   timeoutMs?: number
 }
 
+export function requireAgentApiKey(apiKey: string | undefined, holder = "this agent's"): string {
+  const credential = apiKey?.trim()
+  if (!credential) {
+    throw new CliError(
+      'agent_api_key_missing',
+      `Set PASCAL_API_KEY to ${holder} API key and try again.`,
+    )
+  }
+  return credential
+}
+
 export async function startAgentClaim(
   apiKey: string,
   options: AgentAccountRequestOptions = {},
 ): Promise<AgentClaim> {
-  const credential = apiKey.trim()
-  if (!credential) {
-    throw new CliError(
-      'agent_api_key_missing',
-      "Set PASCAL_API_KEY to this autonomous agent's API key and try again.",
-    )
-  }
+  const credential = requireAgentApiKey(apiKey, "this autonomous agent's")
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
@@ -89,13 +94,7 @@ export async function getAgentStatus(
   apiKey: string,
   options: AgentAccountRequestOptions = {},
 ): Promise<AgentStatus> {
-  const credential = apiKey.trim()
-  if (!credential) {
-    throw new CliError(
-      'agent_api_key_missing',
-      "Set PASCAL_API_KEY to this agent's API key and try again.",
-    )
-  }
+  const credential = requireAgentApiKey(apiKey)
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS)

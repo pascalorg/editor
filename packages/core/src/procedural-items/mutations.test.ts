@@ -6,15 +6,14 @@ import { shelfRecipe } from './fixtures'
 import { ProceduralItemNode } from './node'
 import { evaluateRecipe } from './recipe'
 
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
-
 globalThis.requestAnimationFrame ??= (cb: FrameRequestCallback) => {
   cb(0)
   return 0
 }
 globalThis.cancelAnimationFrame ??= () => {}
-beforeAll(() =>
+let restoreRegistry = () => {}
+beforeAll(() => {
+  restoreRegistry = nodeRegistry._snapshot()
   registerNode({
     kind: 'procedural-item',
     schemaVersion: 1,
@@ -22,8 +21,9 @@ beforeAll(() =>
     category: 'furnish',
     defaults: () => ({}),
     capabilities: {},
-  } as never),
-)
+  } as never)
+})
+afterAll(() => restoreRegistry())
 test('invalid direct and atomic mutations preserve the previous scene', () => {
   const node = ProceduralItemNode.parse({ recipe: shelfRecipe })
   useScene.setState({ nodes: { [node.id]: node } as never, rootNodeIds: [], readOnly: false })

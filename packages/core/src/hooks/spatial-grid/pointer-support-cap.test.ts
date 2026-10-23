@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../../registry'
 import type { AnyNodeDefinition } from '../../registry/types'
@@ -7,9 +7,6 @@ import useScene from '../../store/use-scene'
 import { GROUND_SUPPORT_ID, getFloorPlacedElevation } from './floor-placed-elevation'
 import { spatialGridManager } from './spatial-grid-manager'
 import { resolveSupportSlabPatch } from './support-host-patch'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 const LEVEL_ID = 'level_test'
 

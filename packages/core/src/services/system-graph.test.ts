@@ -4,10 +4,10 @@ import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { buildPortComponents, summarizeSystemFor } from './system-graph'
 
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
-
 type Point = [number, number, number]
+
+const restoreRegistry = nodeRegistry._snapshot()
+afterAll(() => restoreRegistry())
 
 // Stub registrations: the graph consults `def.ports` for the connectivity
 // graph and `def.distributionRole` to classify each node. Mirrors the real

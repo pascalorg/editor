@@ -4,10 +4,10 @@ import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { validateDwv } from './validate-dwv'
 
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
-
 type Point = [number, number, number]
+
+const restoreRegistry = nodeRegistry._snapshot()
+afterAll(() => restoreRegistry())
 
 // The validator reads node fields directly + buildPortComponents (which
 // consults def.ports), so register stub port-providers for the DWV kinds

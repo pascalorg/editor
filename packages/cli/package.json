@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/cli",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "description": "Run the open-source Pascal 3D editor, local projects, and MCP agent tools from your terminal",
   "type": "module",
   "bin": {
@@ -35,8 +35,8 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "^2.2.0",
-    "@modelcontextprotocol/server": "^2.2.0"
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/server": "^2.3.1"
   },
   "engines": {
     "node": ">=22.13.0"

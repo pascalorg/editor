@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNodeDefinition } from '../registry/types'
@@ -18,9 +18,6 @@ import {
   polygonAnchors,
   wallSegmentAnchors,
 } from './alignment-anchors'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 // Minimal floor-placed def whose footprint reads `dimensions` / `rotation`
 // straight off the node, so tests can drive the AABB math directly.

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, expect, it } from 'bun:test'
+import { beforeEach, expect, it } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
@@ -16,9 +16,6 @@ import {
   spatialGridManager,
   syncStairRises,
 } from '../../index'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 type SceneOptions = {
   levelHeight?: number

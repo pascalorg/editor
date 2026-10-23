@@ -1,4 +1,4 @@
-import { afterAll, afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { emitter } from '../events/bus'
 import { isCaptureSessionOn } from '../events/capture-sessions'
 import { nodeRegistry, registerNode } from '../registry'
@@ -19,9 +19,6 @@ import { FOUNDATION_STANDARD } from './foundation-standard'
 import { type FoundationMember, genericFoundation } from './generic-foundation'
 import { FLAT_GROUND_Y } from './site-ground-height'
 import { encodeTerrainField } from './terrain-codec'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 import { createTerrainField } from './terrain-field'
 

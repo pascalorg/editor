@@ -2,7 +2,7 @@
 
 # Matches `packageManager` in package.json and the version CI installs — a skew
 # here is what makes `--frozen-lockfile` fail inside the image but not locally.
-FROM oven/bun:1.3.14-alpine AS build
+FROM oven/bun:1.4.4-alpine AS build
 WORKDIR /app
 
 # `next build` runs under `node`, and this image's `node` is a shim that re-execs
@@ -21,7 +21,7 @@ ENV PASCAL_PORTABLE_BUILD=1
 RUN ./node_modules/.bin/turbo run build --filter=editor
 RUN cd packages/cli && bun run build && bun run stage-runtime
 
-FROM node:22-alpine
+FROM node:22.23.4-alpine
 WORKDIR /app
 
 # GHCR reads these: the package page links to the repository, shows its

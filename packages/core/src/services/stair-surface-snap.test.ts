@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
@@ -8,9 +8,6 @@ import {
   StairNode,
 } from '@pascal-app/core'
 import { z } from 'zod'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 const stair = StairNode.parse({ parentId: 'level_1', position: [0, 0, -2], width: 1 })
 type FixtureSurface = {

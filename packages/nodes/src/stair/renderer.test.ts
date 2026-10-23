@@ -736,6 +736,7 @@ test('stair railing geometry invalidates for its own live dependencies and resol
 })
 
 test('stair paint resolves inherited finishes from the supplied scene snapshot', async () => {
+  await loadPlugin(builtinPlugin)
   const previous = useScene.getState()
   const red = SceneMaterial.parse({
     id: 'mat_stair_context',

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import {
   applyZoneTransformPlan,
   createMezzanine,
@@ -29,9 +29,6 @@ import { migrateCeilingRoomLinks } from '../utils/room-zone-migration'
 import { mezzanineFixture, mezzaninePolygon } from './__fixtures__/mezzanine'
 import { exposedIntervals } from './level-footprints'
 import { initSpaceDetectionSync } from './space-detection'
-
-// One registry serves every test file in the process: give back what this file found.
-afterAll(nodeRegistry._snapshot())
 
 globalThis.requestAnimationFrame ??= (callback) => {
   callback(0)
