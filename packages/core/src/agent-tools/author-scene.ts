@@ -338,6 +338,18 @@ export const authorSceneStair = z.object({
     "The flights' run along the climb, landings aside (default: 0.28 m of going per riser, risers of at most 0.18 m).",
     { positive: true },
   ).optional(),
+  steps: z
+    .number()
+    .int()
+    .min(2)
+    .optional()
+    .describe('Risers in all (default: from the storey, risers of at most 0.18 m).'),
+  lowerSteps: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("An L or U's risers up to its landing; the rest climb after it (default half)."),
 })
 
 export const authorSceneLight = z.object({

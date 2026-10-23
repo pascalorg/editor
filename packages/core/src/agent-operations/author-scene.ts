@@ -1360,6 +1360,8 @@ export function authorScene(
             width: stair.width,
             ...(stair.turn ? { turn: stair.turn } : {}),
             ...(stair.length === undefined ? {} : { length: stair.length }),
+            ...(stair.steps === undefined ? {} : { steps: stair.steps }),
+            ...(stair.lowerSteps === undefined ? {} : { lowerSteps: stair.lowerSteps }),
             ...(stair.name ? { name: stair.name } : {}),
             levelId: levelNode.id,
             toLevelId: upper.id,

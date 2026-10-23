@@ -1728,6 +1728,39 @@ describe('author_scene', () => {
         .map((n) => n.id),
     )
   })
+  test('an L stair turns where its risers say; a straight one is refused a landing', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          stairs: [
+            { start: [-1.2, -2.3], layout: 'l', turn: 'right', steps: 17, lowerSteps: 5 },
+            { start: [1, -2.3], lowerSteps: 5 },
+          ],
+        },
+        { name: 'First floor', elevation: 3, walls: storey('up-') },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['stair/0/1', 'stair_layout_required'],
+    ])
+    const stair = byAuthorId(outcome, 'stair/0/0')
+    const flights = (stair.children as string[])
+      .map(
+        (id) =>
+          nodesOf(outcome).find((n) => n.id === id) as AnyNode & {
+            segmentType: string
+            stepCount: number
+          },
+      )
+      .filter((segment) => segment.segmentType === 'stair')
+      .map((segment) => segment.stepCount)
+    expect(flights).toEqual([5, 12])
+  })
   test('a curved outside wall with a window is one curved wall, the window along its arc, and its room derives from the arc', () => {
     const wall = (id: string, start: number[], end: number[], extra = {}) => ({
       id,
