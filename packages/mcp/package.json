@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/mcp",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Model Context Protocol server for Pascal 3D editor",
   "mcpName": "app.pascal/editor",
   "type": "module",
@@ -62,19 +62,19 @@
     "prepublishOnly": "bun run build && bun test && bun run smoke:node"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.5"
+    "@pascal-app/core": "^1.0.6"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.15",
     "@modelcontextprotocol/node": "^2.1.1",
     "@modelcontextprotocol/server": "^2.3.1",
-    "@pascal-app/geometry-script": "^1.0.5",
+    "@pascal-app/geometry-script": "^1.0.6",
     "@pascal-app/lingo": "^0.5.0",
     "zod": ">=4.6.7 <4.7"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.3.1",
-    "@pascal-app/core": "^1.0.5",
+    "@pascal-app/core": "^1.0.6",
     "@pascal/typescript-config": "*",
     "@types/node": "^26.6.5",
     "typescript": "7.0.2"

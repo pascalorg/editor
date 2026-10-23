@@ -2,7 +2,7 @@
 
 # Matches `packageManager` in package.json and the version CI installs — a skew
 # here is what makes `--frozen-lockfile` fail inside the image but not locally.
-FROM oven/bun:1.3.14-alpine AS build
+FROM oven/bun:1.4.4-alpine AS build
 WORKDIR /app
 
 # `next build` runs under `node`, and this image's `node` is a shim that re-execs
