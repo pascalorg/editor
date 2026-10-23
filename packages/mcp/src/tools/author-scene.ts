@@ -168,11 +168,12 @@ function withoutCode(payload: AuthorScenePayload) {
     ...payload,
     levels: payload.levels.map((level) => ({
       ...level,
-      walls: (level.walls ?? []).map(({ faceLeft, faceRight, ...wall }) => ({
+      walls: (level.walls ?? []).map(({ faceLeft, faceRight, faceOutside, ...wall }) => ({
         ...wall,
         openings: (wall.openings ?? []).map(({ code: _, ...opening }) => opening),
         ...(faceLeft ? { faceLeft: { toHeight: faceLeft.toHeight } } : {}),
         ...(faceRight ? { faceRight: { toHeight: faceRight.toHeight } } : {}),
+        ...(faceOutside ? { faceOutside: { toHeight: faceOutside.toHeight } } : {}),
       })),
       items: (level.items ?? []).map(({ code: _, ...item }) => item),
       rooms: level.rooms.map(({ floorCode: _, wallCode: _w, ...room }) => room),

@@ -642,7 +642,7 @@ export default function build({ THREE }) {
     expect(room.floor.script).toBeUndefined()
   })
 
-  test("writes a wall's face module and a room's wallCode on its faces, readable with get_source", async () => {
+  test("writes a wall's face modules and a room's wallCode on its faces, readable with get_source", async () => {
     const level = payload.levels[0]!
     const design = {
       ...payload,
@@ -651,7 +651,13 @@ export default function build({ THREE }) {
           ...level,
           items: [],
           lights: [],
-          walls: level.walls.map((w) => (w.id === 'e' ? { ...w, faceLeft: { code: TILES } } : w)),
+          walls: level.walls.map((w) =>
+            w.id === 'e'
+              ? { ...w, faceLeft: { code: TILES } }
+              : w.id === 'w'
+                ? { ...w, faceOutside: { code: TILES } }
+                : w,
+          ),
           rooms: [{ ...level.rooms[0]!, wallCode: PANEL, wallToHeight: 1.2 }],
         },
       ],
@@ -663,7 +669,7 @@ export default function build({ THREE }) {
       ids: Record<string, string>
     }
     expect(report.defects).toEqual([])
-    expect(report.faceScripts).toBe(4)
+    expect(report.faceScripts).toBe(5)
     const read = async (id: string) => {
       const got = await client.callTool({ name: 'get_node', arguments: { id } })
       return JSON.parse((got.content as { text: string }[])[0]!.text).node as Record<string, any>
@@ -699,8 +705,13 @@ export default function build({ THREE }) {
       const wall = await read(report.ids[id]!)
       expect(wall.finishScripts.a.toHeight).toBe(1.2)
       expect(wall.finishScripts.a.manifest.bounds.max[1]).toBeCloseTo(1.2, 3)
-      expect(wall.finishScripts.b).toBeUndefined()
+      if (id !== 'w') expect(wall.finishScripts.b).toBeUndefined()
     }
+    // The west wall's outside face, the one no room looks into, is tiled to its top.
+    const outside = (await read(report.ids.w!)).finishScripts.b
+    expect(outside.toHeight).toBeUndefined()
+    const outsideFace = builtFor.get(outside.artifact) as { outline: { y1: number } }
+    expect(outside.manifest.bounds.max[1]).toBeCloseTo(outsideFace.outline.y1, 4)
     const source = await client.callTool({
       name: 'get_source',
       arguments: { nodeId: report.ids.e!, face: 'a' },

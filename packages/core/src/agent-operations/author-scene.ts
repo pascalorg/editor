@@ -429,10 +429,11 @@ export type AuthorSceneFaceScript = {
 
 /**
  * Which faces the payload's face modules build on, and why the others cannot be: a wall's own
- * `faceLeft` (face a) and `faceRight` (face b), then each room's `wallCode` on the faces its floor
- * meets (the spans of the room the zone was derived from, the faces `setWallSkirting` runs along),
- * where a wall's own module wins. A face with nothing to build on (a curved or curtain wall) or
- * that no room looks into is a `no_face` defect.
+ * `faceLeft` (face a) and `faceRight` (face b), its `faceOutside` on the faces no room of its level
+ * looks into, then each room's `wallCode` on the faces its floor meets (the spans of the room the
+ * zone was derived from, the faces `setWallSkirting` runs along), where a wall's own module wins.
+ * A face with nothing to build on (a curved or curtain wall), a left or right face no room looks
+ * into, or an outside module on a wall with rooms on both faces is a `no_face` defect.
  */
 function resolveFaceScripts(
   payload: AuthorScenePayload,
@@ -478,6 +479,25 @@ function resolveFaceScripts(
           })
         else add(spec.id, face, nodeId, module.code, module.toHeight)
       }
+      const outside = spec.faceOutside
+      if (!outside) continue
+      if (!wallFaceScriptInputs(nodes, nodeId, 'a', outside.toHeight)) {
+        defects.push({
+          id: `${spec.id}/outside`,
+          code: 'no_face',
+          message: `Wall ${spec.id} ${flat}: its outside face has nothing a script can build on and keeps its paint.`,
+        })
+        continue
+      }
+      const cover = roomFaceCover(nodes, nodeId)
+      const faces = (['a', 'b'] as const).filter((face) => cover[face] === 'none')
+      if (!faces.length)
+        defects.push({
+          id: `${spec.id}/outside`,
+          code: 'no_face',
+          message: `Rooms look into both faces of wall ${spec.id}: it has no outside face, so its faceOutside was not written.`,
+        })
+      for (const face of faces) add(spec.id, face, nodeId, outside.code, outside.toHeight)
     }
     const byRoom = new Map<string, { name: string; code: string; toHeight?: number }>()
     for (const [i, room] of level.rooms.entries()) {

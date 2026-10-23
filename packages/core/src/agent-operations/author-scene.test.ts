@@ -1368,6 +1368,69 @@ describe('author_scene', () => {
     expect(authorSceneFaceScripts(payload, outcome.result, sceneOf(outcome))).toEqual([])
   })
 
+  test("a wall's faceOutside builds on the faces no room looks into, and is a no_face defect where rooms stand on both", () => {
+    const cladding = 'export default function build({ THREE }) { return new THREE.Group() }'
+    const tiles = 'export default function build({ THREE }) { return new THREE.Mesh() }'
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: [
+            ...bedroom.levels[0]!.walls!.map((w) =>
+              w.id === 'west'
+                ? { ...w, faceOutside: { code: cladding }, faceLeft: { code: tiles } }
+                : { ...w, faceOutside: { code: cladding, toHeight: 0.9 } },
+            ),
+            {
+              id: 'garden',
+              start: [4, 4],
+              end: [7, 4],
+              height: 1.2,
+              thickness: 0.2,
+              faceOutside: { code: cladding },
+            },
+            {
+              id: 'middle',
+              start: [0, -2.5],
+              end: [0, 2.5],
+              height: 2.7,
+              thickness: 0.1,
+              faceOutside: { code: cladding },
+            },
+          ],
+          rooms: [
+            { name: 'Study', seed: [-1, 0] },
+            { name: 'Nursery', seed: [1, 0] },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toEqual([
+      {
+        id: 'middle/outside',
+        code: 'no_face',
+        message:
+          'Rooms look into both faces of wall middle: it has no outside face, so its faceOutside was not written.',
+      },
+    ])
+    const listed = authorSceneFaceScripts(payload, outcome.result, sceneOf(outcome))
+    // The rooms stand on each outside wall's left face (a), so its outside is b; a wall in the
+    // garden has two outsides; the west wall's tiles inside and its cladding outside both build.
+    expect(listed.map((f) => [f.wallId, f.face, f.code === cladding, f.toHeight ?? null])).toEqual([
+      ['north', 'b', true, 0.9],
+      ['east', 'b', true, 0.9],
+      ['south', 'b', true, 0.9],
+      ['west', 'a', false, null],
+      ['west', 'b', true, null],
+      ['garden', 'a', true, null],
+      ['garden', 'b', true, null],
+    ])
+  })
+
   test("two rooms on one face: the first room's wallCode builds it and the other is warned", () => {
     const [west, east] = ['export default () => 1', 'export default () => 2']
     const payload = authorScenePayload.parse({
