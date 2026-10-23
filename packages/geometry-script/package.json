@@ -58,7 +58,7 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.4.3",
+    "@types/bun": "^1.4.4",
     "@types/three": "^0.186.0",
     "typescript": "7.0.2"
   },
