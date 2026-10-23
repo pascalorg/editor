@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { emitter, type SnapshotSavedEvent } from '@pascal-app/core'
 import { downloadSnapshot } from './snapshot-download'
 
@@ -76,4 +76,58 @@ test('PNG captures download with the correct extension and portrait dimensions',
       return 'blob:portrait'
     },
   )
+})
+
+test('the browser download URL stays usable for 60 seconds, then is revoked', async () => {
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  const previousTimer = Object.getOwnPropertyDescriptor(globalThis, 'setTimeout')
+  const timers: Array<{ run: () => void; delay: number }> = []
+  let clicked = false
+  let removed = false
+  const anchor = {
+    href: '',
+    download: '',
+    click: () => {
+      clicked = true
+    },
+    remove: () => {
+      removed = true
+    },
+  }
+  const created = spyOn(URL, 'createObjectURL').mockReturnValue('blob:browser-download')
+  const revoked = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      createElement: () => anchor,
+      body: { appendChild: () => {} },
+    },
+  })
+  Object.defineProperty(globalThis, 'setTimeout', {
+    configurable: true,
+    value: (run: () => void, delay: number) => {
+      timers.push({ run, delay })
+      return 0
+    },
+  })
+  try {
+    await downloadSnapshot('project', 'Room', new Blob(['pixels'], { type: 'image/webp' }), camera)
+    expect(clicked).toBe(true)
+    expect(removed).toBe(true)
+    expect(anchor.href).toBe('blob:browser-download')
+    expect(revoked).not.toHaveBeenCalled()
+    expect(timers.map(({ delay }) => delay)).toEqual([60_000])
+    timers[0].run()
+    expect(revoked).toHaveBeenCalledWith('blob:browser-download')
+  } finally {
+    created.mockRestore()
+    revoked.mockRestore()
+    for (const [key, descriptor] of [
+      ['document', previousDocument],
+      ['setTimeout', previousTimer],
+    ] as const) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else Reflect.deleteProperty(globalThis, key)
+    }
+  }
 })

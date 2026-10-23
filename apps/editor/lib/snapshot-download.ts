@@ -12,11 +12,14 @@ function downloadImage(blob: Blob, filename: string) {
     return url
   } finally {
     anchor.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 0)
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
 }
 
-/** A user snapshot downloads locally; background thumbnails use their own upload path. */
+/**
+ * A user snapshot downloads locally; background thumbnails use their own upload path.
+ * The saved event's URL is a temporary download URL, valid for 60 seconds, not stored media.
+ */
 export async function downloadSnapshot(
   projectId: string,
   projectName: string,
