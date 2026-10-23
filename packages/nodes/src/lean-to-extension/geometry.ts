@@ -205,7 +205,7 @@ function resolveLeanToSlotMaterial(
   return (
     (ref ? resolveMaterialRef(ref, ctx?.materials, shading) : null) ??
     (slotDefault
-      ? resolveSlotDefaultMaterial(slotDefault, shading)
+      ? resolveSlotDefaultMaterial(slotDefault, shading, slotId === 'footings' ? 0.9 : 0.48)
       : createSurfaceRoleMaterial(role, colorPreset, FrontSide, sceneTheme))
   )
 }

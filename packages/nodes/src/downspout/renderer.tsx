@@ -13,7 +13,6 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   resolveMaterialRef,
   useNodeEvents,
   useViewer,
@@ -22,6 +21,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { computeEaveY } from '../gutter/eave-snap'
 import { resolveGutterOutletById } from '../gutter/outlet-lookup'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildDownspoutGeometry } from './geometry'
 import { computeDownspoutRouting } from './routing'
@@ -138,12 +138,12 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
 
   const material = useMemo(() => {
     if (!textures) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+      return accessoryFinish('roof', colorPreset, THREE.FrontSide, sceneTheme, shading, 'metal')
     }
     const slotMaterial = resolveMaterialRef(node.slots?.surface, sceneMaterials, shading)
     if (slotMaterial) return slotMaterial
     if (!node.material && !node.materialPreset) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+      return accessoryFinish('roof', colorPreset, THREE.FrontSide, sceneTheme, shading, 'metal')
     }
     return node.material
       ? createMaterial(node.material, shading)

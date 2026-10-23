@@ -2,6 +2,7 @@ import type { DownspoutNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { OutletDims } from '../gutter/profile-geometry'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import {
   applyCylinderWorldUvs,
   applyPlanarWorldUvs,
@@ -54,7 +55,7 @@ const SPLASH_LENGTH = 0.34
 const SPLASH_THICKNESS = 0.05
 const SPLASH_TILT = 0.1
 
-export function buildDownspoutGeometry(
+function buildUnsmoothedDownspoutGeometry(
   node: DownspoutNode,
   routing?: DownspoutRouting | null,
 ): THREE.BufferGeometry {
@@ -262,4 +263,11 @@ function buildSplash(path: DownspoutPath): THREE.BufferGeometry | null {
   slab.rotateX(SPLASH_TILT)
   slab.translate(bx, by - SPLASH_THICKNESS / 2, bz + SPLASH_LENGTH / 2)
   return slab
+}
+
+export function buildDownspoutGeometry(
+  node: DownspoutNode,
+  routing?: DownspoutRouting | null,
+): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedDownspoutGeometry(node, routing))
 }

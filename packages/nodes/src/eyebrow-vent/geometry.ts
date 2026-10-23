@@ -1,5 +1,6 @@
 import type { EyebrowVentNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import {
   copyUvToSecondaryChannel,
   cumulativeProfileDistances,
@@ -33,7 +34,7 @@ export const EYEBROW_VENT_MATERIAL_INDEX = {
  * Pure: no React, no scene access, no store mutation. Safe for unit tests, the
  * placement preview, and the move-tool ghost.
  */
-export function buildEyebrowVentGeometry(node: EyebrowVentNode): THREE.BufferGeometry {
+function buildUnsmoothedEyebrowVentGeometry(node: EyebrowVentNode): THREE.BufferGeometry {
   const w = Math.max(0.15, node.width)
   const d = Math.max(0.15, node.depth)
   const h = Math.max(0.06, node.height)
@@ -604,4 +605,8 @@ function pushTri(
     uvs.push(...uvA, ...uvB, ...uvC)
   }
   for (let i = 0; i < 3; i++) normals.push(nx, ny, nz)
+}
+
+export function buildEyebrowVentGeometry(node: EyebrowVentNode): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedEyebrowVentGeometry(node))
 }

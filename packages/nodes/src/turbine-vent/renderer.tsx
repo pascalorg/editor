@@ -12,7 +12,6 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   getRoofOuterSurfaceFrameAtPoint,
   resolveMaterialRef,
   useNodeEvents,
@@ -21,6 +20,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildTurbineVentBase, buildTurbineVentHead } from './geometry'
@@ -106,7 +106,14 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
   }, [segment, node.position[0], node.position[2]])
 
   const material = useMemo(() => {
-    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = accessoryFinish(
+      'roof',
+      colorPreset,
+      THREE.FrontSide,
+      sceneTheme,
+      shading,
+      'metal',
+    )
     const resolve = (role: 'base' | 'head') => {
       if (!textures) return roleDefault
       const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)

@@ -12,6 +12,7 @@ import {
   isOperableSkylightNode,
   toggleSkylightOpenState,
 } from './interaction'
+import { skylightPaint } from './paint'
 import { skylightParametrics } from './parametrics'
 import { buildSkylightRoofCut } from './roof-cut'
 import { SkylightNode } from './schema'
@@ -234,6 +235,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   },
 
   capabilities: {
+    paint: skylightPaint,
     exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

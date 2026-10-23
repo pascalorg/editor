@@ -8,6 +8,7 @@ import { BaseNode, nodeType, objectId } from '../base'
 export const LinesetNode = BaseNode.extend({
   id: objectId('lineset'),
   type: nodeType('lineset'),
+  slots: z.record(z.string(), z.string()).optional(),
   // Polyline path in level-local meters. Minimum two points (start, end).
   path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
   // Nominal suction-line copper OD in inches (the large insulated line).

@@ -5,6 +5,7 @@ import {
   type SolarPanelNode as SolarPanelNodeType,
 } from '@pascal-app/core'
 import { buildSolarPanelFloorplan } from './floorplan'
+import { solarPanelPaint } from './paint'
 import { solarPanelParametrics } from './parametrics'
 import { SolarPanelNode } from './schema'
 
@@ -246,6 +247,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   },
 
   capabilities: {
+    paint: solarPanelPaint,
     exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

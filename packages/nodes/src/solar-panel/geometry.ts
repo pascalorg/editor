@@ -1,4 +1,5 @@
 import type { SolarPanelNode } from '@pascal-app/core'
+import { applyWorldScaleBoxUVs } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
@@ -6,8 +7,8 @@ import { MeshStandardNodeMaterial } from 'three/webgpu'
 const SOLAR_CELL_SIZE_M = 0.16
 
 // Procedurally generated cell texture used by the default panel material.
-// Drawn once into an offscreen canvas, wrapped, and tiled per cell by the
-// stretched UVs assigned in `buildSolarPanelGeometry`.
+// Drawn once into an offscreen canvas and repeated at cell scale. Geometry
+// keeps metre UVs so painted materials use the same scale as other surfaces.
 export function createSolarPanelTexture(): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null
 
@@ -18,10 +19,10 @@ export function createSolarPanelTexture(): THREE.CanvasTexture | null {
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
-  ctx.fillStyle = '#dde3ec'
+  ctx.fillStyle = '#18202b'
   ctx.fillRect(0, 0, size, size)
 
-  const pad = size * 0.04
+  const pad = size * 0.018
   const x = pad
   const y = pad
   const cellW = size - pad * 2
@@ -40,8 +41,8 @@ export function createSolarPanelTexture(): THREE.CanvasTexture | null {
   ctx.closePath()
 
   const grad = ctx.createLinearGradient(x, y, x + cellW, y + cellH)
-  grad.addColorStop(0, '#0f1b3a')
-  grad.addColorStop(1, '#162546')
+  grad.addColorStop(0, '#101b29')
+  grad.addColorStop(1, '#1b2c3e')
   ctx.fillStyle = grad
   ctx.fill()
 
@@ -73,6 +74,7 @@ export function createSolarPanelTexture(): THREE.CanvasTexture | null {
   tex.colorSpace = THREE.SRGBColorSpace
   tex.wrapS = THREE.RepeatWrapping
   tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(1 / SOLAR_CELL_SIZE_M, 1 / SOLAR_CELL_SIZE_M)
   tex.anisotropy = 8
   tex.needsUpdate = true
   return tex
@@ -86,8 +88,8 @@ export function getDefaultPanelMaterial(): THREE.Material {
   // MRT error that fires when MeshStandardMaterial is used in the WebGPU pass.
   const mat = new MeshStandardNodeMaterial({
     color: new THREE.Color(map ? 0xffffff : 0x0c0c1f),
-    roughness: 0.22,
-    metalness: 0.35,
+    roughness: 0.16,
+    metalness: 0.08,
   })
   if (map) mat.map = map
   _defaultPanelMaterial = mat
@@ -145,15 +147,7 @@ export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeome
       if (glassW > 0 && glassH > 0) {
         const glass = new THREE.BoxGeometry(glassW, frameDepth * 0.6, glassH)
         glass.translate(cx, y + frameDepth * 0.1, cz)
-        // Stretch the cell UVs so a tiled cell texture reads correctly
-        // regardless of the panel's aspect ratio.
-        const cellsU = Math.max(1, Math.round(glassW / SOLAR_CELL_SIZE_M))
-        const cellsV = Math.max(1, Math.round(glassH / SOLAR_CELL_SIZE_M))
-        const uv = glass.getAttribute('uv') as THREE.BufferAttribute
-        for (let i = 0; i < uv.count; i++) {
-          uv.setXY(i, uv.getX(i) * cellsU, uv.getY(i) * cellsV)
-        }
-        uv.needsUpdate = true
+        applyWorldScaleBoxUVs(glass, glassW, frameDepth * 0.6, glassH)
         panelGeos.push(glass)
       }
 
@@ -209,6 +203,12 @@ export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeome
 
   if (frameGeos.length === 0) return null
 
+  for (const geometry of frameGeos) {
+    if (geometry instanceof THREE.BoxGeometry) {
+      const { width, height, depth } = geometry.parameters
+      applyWorldScaleBoxUVs(geometry, width, height, depth)
+    }
+  }
   const frameMerged = mergeGeometries(frameGeos, false)
   const panelMerged = panelGeos.length > 0 ? mergeGeometries(panelGeos, false) : null
   for (const g of frameGeos) g.dispose()

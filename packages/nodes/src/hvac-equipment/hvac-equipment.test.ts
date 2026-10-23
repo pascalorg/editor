@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { HvacEquipmentNode, LinesetNode, LiquidLineNode, portConnection } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
-import { Box3, type Group, Vector3 } from 'three'
+import { Box3, type Group, Mesh, Vector3 } from 'three'
 import { hvacEquipmentDefinition, linesetDefinition, liquidLineDefinition } from '../index'
 
 const equipment = HvacEquipmentNode.parse({})
@@ -100,3 +100,72 @@ test('equipment choices apply valid named cabinet presets before placement', () 
     useEditor.setState({ toolDefaults: previous })
   }
 })
+
+for (const [definition, schema] of [
+  [hvacEquipmentDefinition, HvacEquipmentNode],
+  [linesetDefinition, LinesetNode],
+  [liquidLineDefinition, LiquidLineNode],
+] as const) {
+  test(`${definition.kind} paint survives reload without moving geometry or adding triangles`, () => {
+    const node = schema.parse({
+      path: [
+        [0, 0, 0],
+        [2, 0, 0],
+      ],
+    })
+    const before = JSON.stringify(node)
+    const build = definition.geometry as (value: typeof node, ctx: never) => Group
+    const original = build(node, {} as never)
+    expect(JSON.stringify(node)).toBe(before)
+    expect(node.slots).toBeUndefined()
+    const meshes: Mesh[] = []
+    original.traverse((object) => {
+      if (object instanceof Mesh) meshes.push(object)
+    })
+    expect(meshes.length).toBeGreaterThan(0)
+    for (const mesh of meshes) {
+      const role = definition.capabilities!.paint!.resolveRole({ node, hitObject: mesh } as never)
+      expect(role).toBe(mesh.userData.slotId)
+      expect(role).toBeTruthy()
+    }
+    const role = meshes[0]!.userData.slotId as string
+    const paint = definition.capabilities!.paint!
+    const patch = paint.buildPatch({
+      node,
+      role,
+      material: undefined,
+      materialPreset: 'library:preset-white',
+    })
+    const restored = schema.parse(JSON.parse(JSON.stringify({ ...node, ...patch })))
+    expect(restored.slots?.[role]).toBe('library:preset-white')
+    const painted = build(restored, {} as never)
+    const snapshot = (group: Group) => {
+      const result: unknown[] = []
+      group.traverse((object) => {
+        if (!(object instanceof Mesh)) return
+        result.push({
+          name: object.name,
+          position: object.position.toArray(),
+          vertices: Array.from(object.geometry.getAttribute('position').array),
+          indices: object.geometry.index ? Array.from(object.geometry.index.array) : null,
+        })
+      })
+      return result
+    }
+    expect(snapshot(painted)).toEqual(snapshot(original))
+    const paintedMesh = painted.getObjectByName(meshes[0]!.name) as Mesh
+    expect(paintedMesh.material).not.toBe(meshes[0]!.material)
+    meshes[0]!.userData.__fromGeometry = true
+    const previous = meshes[0]!.material
+    const restore = paint.applyPreview({
+      node,
+      role,
+      root: original,
+      material: undefined,
+      materialPreset: 'library:preset-white',
+    })
+    expect(meshes[0]!.material).not.toBe(previous)
+    restore?.()
+    expect(meshes[0]!.material).toBe(previous)
+  })
+}

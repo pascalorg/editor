@@ -19,6 +19,7 @@ import { BaseNode, nodeType, objectId } from '../base'
 export const HvacEquipmentNode = BaseNode.extend({
   id: objectId('hvac-equipment'),
   type: nodeType('hvac-equipment'),
+  slots: z.record(z.string(), z.string()).optional(),
   // Level-local meters, y at the unit's base.
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Yaw in radians.

@@ -1,5 +1,6 @@
 import type { CupolaNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import {
   copyUvToSecondaryChannel,
   cumulativeProfileDistances,
@@ -35,7 +36,7 @@ export const CUPOLA_MATERIAL_INDEX = {
  * Pure: no React, no scene access, no store mutation. Safe for unit tests,
  * the placement preview, and the move-tool ghost.
  */
-export function buildCupolaGeometry(
+function buildUnsmoothedCupolaGeometry(
   node: CupolaNode,
   segment?: RoofSegmentNode,
 ): THREE.BufferGeometry {
@@ -494,4 +495,11 @@ function pushTri(
     uvs.push(...uvA, ...uvB, ...uvC)
   }
   for (let i = 0; i < 3; i++) normals.push(nx, ny, nz)
+}
+
+export function buildCupolaGeometry(
+  node: CupolaNode,
+  segment?: RoofSegmentNode,
+): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedCupolaGeometry(node, segment))
 }

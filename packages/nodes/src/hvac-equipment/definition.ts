@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { mechanicalPaint } from '../shared/mechanical-paint'
 import { buildHvacEquipmentFloorplan } from './floorplan'
 import { buildHvacEquipmentGeometry } from './geometry'
 import { hvacEquipmentToolOptions } from './options'
@@ -50,6 +51,12 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
   }),
 
   capabilities: {
+    paint: mechanicalPaint,
+    slots: () => [
+      { slotId: 'cabinet', label: 'Cabinet' },
+      { slotId: 'mechanical', label: 'Mechanical parts' },
+      { slotId: 'service', label: 'Service connections' },
+    ],
     selectable: { hitVolume: 'bbox' },
     movable: { axes: ['x', 'z'], gridSnap: true },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
@@ -72,6 +79,7 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
   geometry: buildHvacEquipmentGeometry,
   geometryKey: (n) =>
     JSON.stringify([
+      n.slots,
       n.equipmentType,
       n.supplyFace,
       n.returnFace,

@@ -42,6 +42,7 @@ export type RidgeVentLine = {
 export const RidgeVentNode = BaseNode.extend({
   id: objectId('rvent'),
   type: nodeType('ridge-vent'),
+  slots: z.record(z.string(), z.string()).optional(),
 
   material: MaterialSchema.optional(),
   // Unpainted ridge vents inherit the roof top material in the renderer.

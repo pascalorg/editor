@@ -1,6 +1,7 @@
 import { type BoxVentNode, getActiveRoofHeight, type RoofType } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import { copyUvToSecondaryChannel } from '../shared/primitive-uv'
 import { boxVentDimensions } from './dimensions'
 
@@ -10,7 +11,7 @@ export const BOX_VENT_MATERIAL_INDEX = {
 } as const
 
 /** Shared housing and flashing geometry for the renderer, preview and exports. */
-export function buildBoxVentGeometry(input: BoxVentNode): THREE.BufferGeometry {
+function buildUnsmoothedBoxVentGeometry(input: BoxVentNode): THREE.BufferGeometry {
   const node = { ...input, ...boxVentDimensions(input) }
   const housing =
     node.style === 'box'
@@ -705,4 +706,8 @@ export function computeBoxVentSlopeTilt(
   const rh = getActiveRoofHeight(segment)
   const slopeAngle = Math.atan2(rh, segment.depth / 2)
   return localZ > 0 ? slopeAngle : -slopeAngle
+}
+
+export function buildBoxVentGeometry(input: BoxVentNode): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedBoxVentGeometry(input))
 }

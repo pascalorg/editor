@@ -12,13 +12,13 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildCupolaGeometry } from './geometry'
 
@@ -73,7 +73,7 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
   useEffect(() => () => geometry.dispose(), [geometry])
 
   const material = useMemo(() => {
-    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = accessoryFinish('roof', colorPreset, THREE.FrontSide, sceneTheme, shading)
     const resolve = (role: 'base' | 'body' | 'roof' | 'louvers') => {
       if (!textures) return roleDefault
       const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
@@ -82,7 +82,14 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
       if (node.materialPreset) {
         return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
       }
-      return roleDefault
+      return accessoryFinish(
+        'roof',
+        colorPreset,
+        THREE.FrontSide,
+        sceneTheme,
+        shading,
+        role === 'roof' ? 'metal' : 'coated',
+      )
     }
     return [resolve('base'), resolve('body'), resolve('roof'), resolve('louvers')]
   }, [

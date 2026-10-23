@@ -6,6 +6,7 @@ import {
   type RoofSegmentNode,
 } from '@pascal-app/core'
 import * as THREE from 'three'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 
 const ARC_SEGS = 16
@@ -60,7 +61,7 @@ type RidgeVentEndTaper = {
  *
  * `endCaps` closes both ends. Pure: no React, no scene access, no mutation.
  */
-export function buildRidgeVentGeometry(
+function buildUnsmoothedRidgeVentGeometry(
   node: RidgeVentNode,
   segment?: RoofSegmentNode,
 ): THREE.BufferGeometry {
@@ -817,4 +818,11 @@ function pushQuad(
     uvs.push(0, 0, 0, v, u, v)
   }
   for (let i = 0; i < 6; i++) normals.push(nx, ny, nz)
+}
+
+export function buildRidgeVentGeometry(
+  node: RidgeVentNode,
+  segment?: RoofSegmentNode,
+): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedRidgeVentGeometry(node, segment))
 }

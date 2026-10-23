@@ -1,6 +1,7 @@
 import type { TurbineVentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import {
   copyUvToSecondaryChannel,
   cumulativeProfileDistances,
@@ -57,7 +58,7 @@ function resolveDims(node: TurbineVentNode): Dims {
 
 // ─── Public builders ─────────────────────────────────────────────────
 
-export function buildTurbineVentBase(node: TurbineVentNode): THREE.BufferGeometry {
+function buildUnsmoothedTurbineVentBase(node: TurbineVentNode): THREE.BufferGeometry {
   const d = resolveDims(node)
   const p: number[] = []
   const n: number[] = []
@@ -76,7 +77,7 @@ export function buildTurbineVentBase(node: TurbineVentNode): THREE.BufferGeometr
   return toGeometry(p, n, uv)
 }
 
-export function buildTurbineVentHead(node: TurbineVentNode): THREE.BufferGeometry {
+function buildUnsmoothedTurbineVentHead(node: TurbineVentNode): THREE.BufferGeometry {
   const d = resolveDims(node)
   const p: number[] = []
   const n: number[] = []
@@ -467,4 +468,12 @@ function toGeometry(positions: number[], normals: number[], uvs: number[]): THRE
   copyUvToSecondaryChannel(geo)
   geo.computeBoundingSphere()
   return geo
+}
+
+export function buildTurbineVentBase(node: TurbineVentNode): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedTurbineVentBase(node))
+}
+
+export function buildTurbineVentHead(node: TurbineVentNode): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedTurbineVentHead(node))
 }

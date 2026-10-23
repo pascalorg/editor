@@ -12,7 +12,6 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   getRoofOuterSurfaceFrameAtPoint,
   resolveMaterialRef,
   useNodeEvents,
@@ -20,6 +19,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildEyebrowVentGeometry } from './geometry'
@@ -77,7 +77,7 @@ const EyebrowVentRenderer = ({ node: storeNode }: { node: EyebrowVentNode }) => 
   }, [segment, node.position[0], node.position[2]])
 
   const material = useMemo(() => {
-    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = accessoryFinish('roof', colorPreset, THREE.FrontSide, sceneTheme, shading)
     const resolve = (role: 'hood' | 'front') => {
       if (!textures) return roleDefault
       const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
@@ -86,7 +86,14 @@ const EyebrowVentRenderer = ({ node: storeNode }: { node: EyebrowVentNode }) => 
       if (node.materialPreset) {
         return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
       }
-      return roleDefault
+      return accessoryFinish(
+        'roof',
+        colorPreset,
+        THREE.FrontSide,
+        sceneTheme,
+        shading,
+        role === 'hood' ? 'metal' : 'coated',
+      )
     }
     return [resolve('hood'), resolve('front')]
   }, [

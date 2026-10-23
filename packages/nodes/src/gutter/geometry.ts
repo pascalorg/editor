@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import {
   applyCylinderWorldUvs,
   applyPlanarWorldUvs,
@@ -58,7 +59,7 @@ import {
  *
  * Pure: no React, no scene access, no store mutation.
  */
-export function buildGutterGeometry(
+function buildUnsmoothedGutterGeometry(
   node: GutterNode,
   mitres: GutterMitres = NO_MITRES,
 ): THREE.BufferGeometry {
@@ -766,4 +767,11 @@ function buildOutletDrill(p: OutletPlacement, size: number): THREE.BufferGeometr
   const drill = outletSolid(p.inner, height)
   drill.translate(p.x, centerY, p.z)
   return drill
+}
+
+export function buildGutterGeometry(
+  node: GutterNode,
+  mitres: GutterMitres = NO_MITRES,
+): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedGutterGeometry(node, mitres))
 }

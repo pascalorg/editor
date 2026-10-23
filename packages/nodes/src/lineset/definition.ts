@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { mechanicalPaint } from '../shared/mechanical-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { buildLinesetFloorplan } from './floorplan'
 import { buildLinesetGeometry } from './geometry'
@@ -43,6 +44,11 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
   }),
 
   capabilities: {
+    paint: mechanicalPaint,
+    slots: () => [
+      { slotId: 'copper', label: 'Copper' },
+      { slotId: 'insulation', label: 'Insulation' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -51,7 +57,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
   parametrics: linesetParametrics,
 
   geometry: buildLinesetGeometry,
-  geometryKey: (n) => JSON.stringify([n.path, n.suctionDiameter, n.insulated]),
+  geometryKey: (n) => JSON.stringify([n.slots, n.path, n.suctionDiameter, n.insulated]),
 
   // Open run ends as typed refrigerant ports — directions point outward
   // along the path tangent so they mate flush onto a service valve. Path

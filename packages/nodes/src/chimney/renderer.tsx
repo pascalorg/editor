@@ -12,13 +12,13 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   getRoofSegmentBrushes,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildChimneyGeometry } from './geometry'
 import { carveChimneyHoles } from './holes'
@@ -184,7 +184,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
     // the themed 'wall' role colour; only an explicit preset/material keeps
     // its texture when textures are on.
     if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
+      return accessoryFinish('wall', colorPreset, undefined, sceneTheme, shading)
     }
     if (node.material) return createMaterial(node.material, shading)
     return createMaterialFromPresetRef(node.materialPreset, shading) ?? fallbackBodyMaterial
@@ -206,7 +206,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
       !textures ||
       (!node.topMaterial && !node.topMaterialPreset && !node.material && !node.materialPreset)
     ) {
-      return createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
+      return accessoryFinish('roof', colorPreset, undefined, sceneTheme, shading)
     }
     if (node.topMaterial) return createMaterial(node.topMaterial, shading)
     const preset = createMaterialFromPresetRef(node.topMaterialPreset, shading)

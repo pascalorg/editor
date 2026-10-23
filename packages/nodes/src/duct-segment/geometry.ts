@@ -360,7 +360,7 @@ export function createDuctMaterial(
     if (resolved) return resolved
   }
 
-  return resolveSlotDefaultMaterial(DUCT_BODY_SLOT_DEFAULT, shading, 0.7)
+  return resolveSlotDefaultMaterial(DUCT_BODY_SLOT_DEFAULT, shading, 0.48)
 }
 
 /**

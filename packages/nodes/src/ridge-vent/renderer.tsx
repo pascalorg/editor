@@ -15,7 +15,6 @@ import {
 import {
   type ColorPreset,
   createMaterial,
-  createSurfaceRoleMaterial,
   getRoofMaterialArray,
   resolveMaterialRef,
   useNodeEvents,
@@ -23,6 +22,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildRidgeVentGeometry } from './geometry'
@@ -188,10 +188,13 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
         : null
       return (
         roofMaterials?.[3] ??
-        createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+        accessoryFinish('roof', colorPreset, THREE.FrontSide, sceneTheme, shading)
       )
     }
 
+    if (!textures) return accessoryFinish('roof', colorPreset, THREE.FrontSide, sceneTheme, shading)
+    const painted = resolveMaterialRef(node.slots?.surface, sceneMaterials, shading)
+    if (painted) return painted
     if (node.material) {
       return createMaterial(node.material, shading)
     }
@@ -207,6 +210,7 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
     colorPreset,
     sceneTheme,
     shading,
+    node.slots,
     node.material,
     node.materialPreset,
     segment,

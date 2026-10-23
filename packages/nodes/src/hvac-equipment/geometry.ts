@@ -1,3 +1,5 @@
+import type { GeometryContext } from '@pascal-app/core'
+import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import {
   BoxGeometry,
   type BufferGeometry,
@@ -17,6 +19,7 @@ import {
   INCHES_TO_METERS,
   rectSectionAxes,
 } from '../duct-segment/geometry'
+import { finishMechanicalGeometry } from '../shared/mechanical-finish'
 import { localEquipmentPorts, localRefrigerantPorts } from './ports'
 import type { HvacEquipmentNode } from './schema'
 
@@ -64,7 +67,7 @@ const UP = new Vector3(0, 1, 0)
  * the front and finned coil bands down the sides (vertical fan-coil look).
  * Condenser: squat cabinet with a fan ring and hub on top.
  */
-export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
+function buildUnpaintedGeometry(node: HvacEquipmentNode): Group {
   const group = new Group()
   if (node.equipmentType === 'condenser') return buildCondenser(node, group)
   if (node.equipmentType === 'air-handler') return buildAirHandler(node, group)
@@ -817,4 +820,29 @@ function buildAirHandler(node: HvacEquipmentNode, group: Group): Group {
   buildCollars(node, group)
   buildServiceValves(node, group)
   return group
+}
+
+export function buildHvacEquipmentGeometry(
+  node: HvacEquipmentNode,
+  ctx?: GeometryContext,
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): Group {
+  return finishMechanicalGeometry(
+    buildUnpaintedGeometry(node),
+    node.slots,
+    (name) =>
+      name.startsWith('service-') || name.startsWith('gas-')
+        ? 'service'
+        : name.startsWith('equipment-') && !name.includes('collar') && !name.includes('control')
+          ? 'cabinet'
+          : 'mechanical',
+    ctx,
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+  )
 }
