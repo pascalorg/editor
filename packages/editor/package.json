@@ -71,7 +71,7 @@
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.1",
     "@types/blob-stream": "^0.1.33",
-    "@types/bun": "^1.4.3",
+    "@types/bun": "^1.4.4",
     "@types/howler": "^2.2.13",
     "@types/pdfkit": "^0.17.7",
     "@types/react": "19.3.0",
