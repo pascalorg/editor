@@ -768,14 +768,15 @@ export default function build({ params, inputs }) {
 })
 
 describe("a build cut to its host's floor or face", () => {
-  /** Every triangle of a compiled GLB, in the build's frame. */
-  const trianglesOf = async (glb: ArrayBuffer) => {
+  /** Every triangle of a compiled GLB (or of its meshes in one material), in the build's frame. */
+  const trianglesOf = async (glb: ArrayBuffer, material?: string) => {
     const gltf = await new GLTFLoader().parseAsync(glb, '')
     gltf.scene.updateWorldMatrix(true, true)
     const triangles: [Vector3, Vector3, Vector3][] = []
     gltf.scene.traverse((object) => {
       const mesh = object as Mesh
       if (!mesh.isMesh) return
+      if (material && (mesh.material as MeshStandardMaterial).name !== material) return
       const position = mesh.geometry.getAttribute('position')
       const index = mesh.geometry.getIndex()
       const corner = (i: number) =>
@@ -840,7 +841,7 @@ export default function build({ THREE, params }) {
     expect(facingArea(triangles, new Vector3(0, 1, 0))).toBeCloseTo(1 * 0.2, 6)
   })
 
-  test('a tile over a window is cut to its rectangle, one wholly in the window is dropped', async () => {
+  test('a tile over a window is cut a few mm outside it, one wholly in the window is dropped', async () => {
     const TILES = `
 export default function build({ THREE }) {
   const m = new THREE.MeshStandardMaterial({ color: '#ffffff' }); m.name = 'slot_tile'
@@ -864,19 +865,87 @@ export default function build({ THREE }) {
       },
     })
     const triangles = await trianglesOf(compiled.glb)
-    // The 1 m tile less the window's quarter of it; the small tile inside the window is gone.
-    expect(facingArea(triangles, new Vector3(0, 0, 1))).toBeCloseTo(0.75, 6)
+    // The 1 m tile less the window's quarter of it and a margin round the window, so its cut faces
+    // stand clear of the frame's and the reveal's planes; the small tile inside the window is gone.
+    const front = facingArea(triangles, new Vector3(0, 0, 1))
+    expect(front).toBeLessThan(1 - 0.5005 ** 2)
+    expect(front).toBeGreaterThan(1 - 0.505 ** 2)
     for (const triangle of triangles) {
       const { x, y } = centroid(triangle)
       expect(
-        x > window.x0 + 1e-6 &&
-          x < window.x1 - 1e-6 &&
-          y > window.y0 + 1e-6 &&
-          y < window.y1 - 1e-6,
+        x > window.x0 - 5e-4 &&
+          x < window.x1 + 5e-4 &&
+          y > window.y0 - 5e-4 &&
+          y < window.y1 + 5e-4,
       ).toBe(false)
     }
     expect(compiled.manifest.bounds.max[0]).toBeCloseTo(1.5, 5)
     expect(compiled.manifest.triangles).toBe(triangles.length)
+  })
+
+  test('tiles over a grout bed, cut at a window and the face top, share no plane with the bed', async () => {
+    const TILED = `
+export default function build({ THREE }) {
+  const tile = new THREE.MeshStandardMaterial({ color: '#ffffff' }); tile.name = 'slot_tile'
+  const grout = new THREE.MeshStandardMaterial({ color: '#999999' }); grout.name = 'slot_grout'
+  const g = new THREE.Group()
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 0.004), grout)
+  bed.position.set(1.5, 0.75, 0.002)
+  g.add(bed)
+  for (let x = 0; x < 3; x += 0.303) for (let y = 0; y < 1.5; y += 0.303) {
+    const piece = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.009), tile)
+    piece.position.set(x + 0.15, y + 0.15, 0.0045)
+    g.add(piece)
+  }
+  return g
+}
+`
+    const compiled = await compileGeometryScript({
+      code: TILED,
+      inputs: {
+        outline: { x0: 0, y0: 0, x1: 3, y1: 1.2 },
+        holes: [{ x0: 1, y0: 0.4, x1: 2, y1: 0.9 }],
+        base: [],
+        thickness: 0.1,
+      },
+    })
+    const tiles = await trianglesOf(compiled.glb, 'slot_tile')
+    const bed = await trianglesOf(compiled.glb, 'slot_grout')
+    /** A face across the finish's thickness (a cut or an edge): its plane and its extent in it. */
+    const across = (triangle: [Vector3, Vector3, Vector3]) => {
+      const normal = normalOf(triangle).normalize()
+      const axis = Math.abs(normal.x) > 0.999 ? 'x' : Math.abs(normal.y) > 0.999 ? 'y' : null
+      if (!axis) return null
+      const along = axis === 'x' ? 'y' : 'x'
+      const values = (key: 'x' | 'y' | 'z') => triangle.map((corner) => corner[key])
+      return {
+        facing: `${axis}${Math.sign(normal[axis])}`,
+        plane: triangle[0][axis],
+        along: [Math.min(...values(along)), Math.max(...values(along))],
+        depth: [Math.min(...values('z')), Math.max(...values('z'))],
+      }
+    }
+    const shared = (a: [number, number], b: [number, number]) =>
+      Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > 1e-6
+    const tileFaces = tiles.flatMap((triangle) => across(triangle) ?? [])
+    const coplanar = bed.flatMap((triangle) => {
+      const face = across(triangle)
+      return face
+        ? tileFaces.filter(
+            (other) =>
+              other.facing === face.facing &&
+              Math.abs(other.plane - face.plane) < 1e-5 &&
+              shared(other.along, face.along) &&
+              shared(other.depth, face.depth),
+          )
+        : []
+    })
+    expect(coplanar).toEqual([])
+    // The bed still runs to within a few mm of the window's side and the face's top.
+    const reach = (triangles: [Vector3, Vector3, Vector3][], test: (p: Vector3) => boolean) =>
+      triangles.some((triangle) => test(centroid(triangle)))
+    expect(reach(bed, (p) => p.x > 0.994 && p.x < 1 && p.y > 0.4 && p.y < 0.9)).toBe(true)
+    expect(reach(bed, (p) => p.y > 1.194 && p.y < 1.2)).toBe(true)
   })
 
   test('a plank wholly inside and away from the holes is exported as built, uncut', async () => {
