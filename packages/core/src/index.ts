@@ -215,6 +215,7 @@ export {
   floorScriptPaintRefusal,
 } from './lib/floor-plate-paint'
 export {
+  FLOOR_SCRIPT_LIFT,
   type FloorScriptInputs,
   floorScriptInputs,
   floorScriptInputsKey,

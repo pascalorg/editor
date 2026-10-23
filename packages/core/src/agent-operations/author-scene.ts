@@ -17,6 +17,7 @@ import {
   scriptedSize,
   scriptSource,
 } from '../lib/geometry-script-node'
+import { roundFloorElevation } from '../lib/room-floor-feasibility'
 import type { BoundaryNode } from '../lib/room-topology-index'
 import { detectSpacesForLevel } from '../lib/space-detection'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
@@ -39,6 +40,7 @@ import {
   ZoneNode,
 } from '../schema'
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
+import { MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
 import { DEFAULT_LEVEL_HEIGHT, resolveCeilingHeight } from '../services/level-height'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
@@ -124,8 +126,8 @@ export type AuthorSceneReport = {
 }
 
 const JOIN_REACH = 0.3
-/** How far under (or over) the floor above a wall's top may stop and still be a full-storey wall. */
-const STOREY_REACH = 0.5
+/** The deepest floor between storeys: a wall stopping this far under the floor above carries it. */
+const FLOOR_DEPTH = 0.5
 const THIN_SLAB = 0.02
 const MANY_SLABS = 20
 const MANY_REGIONS = 24
@@ -139,7 +141,7 @@ type JoinedWall = {
   spec: AuthorSceneWall
   start: [number, number]
   end: [number, number]
-  /** Its height as written: the payload's, or its storey's when it reaches the floor above. */
+  /** Its height as written: the payload's, or its storey's when it reaches into the floor above. */
   height: number
 }
 
@@ -702,6 +704,8 @@ export function authorScene(
     skirting: NonNullable<AuthorSceneWall['skirting']>
   }[] = []
   let untypedWindows = 0
+  /** By upper level index: the storey under it and the height of the tallest wall carrying it. */
+  const floorsAbove = new Map<number, { below: string; wallHeight: number; storey: number }>()
 
   payload.levels.forEach((level, index) => {
     // A storey is as tall as the climb to the next level's floor; the top one, as its walls.
@@ -734,21 +738,27 @@ export function authorScene(
     }
 
     // ---------- walls, joined ----------
-    // Pascal draws no floor structure between storeys: a wall within reach of the floor above
-    // (a room height under a slab's depth) follows the storey up to it, as a drawn wall does.
-    const toFloorAbove = (height: number) => storey > 0 && Math.abs(storey - height) <= STOREY_REACH
+    // Walls keep their height; the floor above is built between the storeys, from the tallest wall
+    // carrying it up to its surface. A wall reaching into that floor stops under it, following the
+    // storey as a drawn wall does.
+    const reaches = (height: number) => storey > 0 && height > storey - MIN_SLAB_THICKNESS
     const walls: JoinedWall[] = (level.walls ?? []).map((w) => ({
       spec: w,
       start: [...w.start] as [number, number],
       end: [...w.end] as [number, number],
-      height: toFloorAbove(w.height) ? storey : w.height,
+      height: reaches(w.height) ? storey : w.height,
     }))
-    const raised = [
+    const carrying = walls
+      .map((w) => w.spec.height)
+      .filter((height) => storey > 0 && !reaches(height) && height >= storey - FLOOR_DEPTH)
+    if (carrying.length)
+      floorsAbove.set(index + 1, { below: level.name, wallHeight: Math.max(...carrying), storey })
+    const stopped = [
       ...new Set(walls.filter((w) => w.height !== w.spec.height).map((w) => w.spec.height)),
     ]
-    if (raised.length)
+    if (stopped.length)
       say(
-        `walls of "${level.name}" given ${raised.map(metres).join(', ')} follow the storey to the floor above, ${metres(storey)}: Pascal draws no floor structure between storeys`,
+        `walls of "${level.name}" given ${stopped.map(metres).join(', ')} reach the floor of "${above!.name}", ${metres(storey)} up: they stop under it, following the storey`,
       )
     for (const w of walls) {
       for (const end of ['start', 'end'] as const) {
@@ -1094,6 +1104,28 @@ export function authorScene(
   const levelIds = levelNodes.map((l) => l.id as `level_${string}`)
   let written: Record<string, AnyNode> = {
     ...reconcileSceneStructure({ nodes: draft, levelIds, mintId: (kind) => mint(kind) }).nodes,
+  }
+
+  // ---------- the floor between storeys: each upper plate keeps its top and reaches down to the walls ----------
+  for (const [index, { below, wallHeight, storey }] of floorsAbove) {
+    const plates = (levelId: string) =>
+      Object.values(written).filter(
+        (node): node is SlabNode =>
+          node.type === 'slab' && node.parentId === levelId && node.plateRole === 'base',
+      )
+    // The carrying walls stand on the floor below; their tops, in this level's frame, are its underside.
+    const lower = plates(levelNodes[index - 1]!.id)
+    const underside = (lower.length ? Math.max(...lower.map((p) => p.elevation)) : 0) + wallHeight
+    const depths = new Set<number>()
+    for (const plate of plates(levelNodes[index]!.id)) {
+      const thickness = roundFloorElevation(plate.elevation - (underside - storey))
+      written[plate.id] = { ...plate, thickness }
+      depths.add(thickness)
+    }
+    if (depths.size)
+      say(
+        `"${payload.levels[index]!.name}" stands on a ${[...depths].map(metres).join(', ')} floor over the ${metres(wallHeight)} walls of "${below}": its plate reaches down to their tops`,
+      )
   }
 
   /** The room a plan point of a level is in, its ceiling, and the height that ceiling hangs things from. */

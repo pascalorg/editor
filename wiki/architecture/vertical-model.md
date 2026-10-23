@@ -369,7 +369,9 @@ Three ways a kind's Y reaches the ground, in the order to prefer them:
 
 1. **`capabilities.floorPlaced`** — the resolver (`getFloorPlacedElevation`) elects per footprint
    between the overlapping slabs and the level base, and `FloorElevationSystem` writes the result to
-   the registered mesh every frame. Correct for anything that stands on a surface.
+   the registered mesh every frame. Correct for anything that stands on a surface. On a room's floor
+   plate where the room's floor script built a finish, the surface is that finish's top
+   (`floorFinishTopAt`), so things stand on the planks rather than in them.
 2. **`ctx.levelBaseAt(x, z)` in a pure `def.geometry` builder** — for kinds that bake their own
    vertical origin into the meshes (a fence's inner lift group). Calling it also *enrols* the kind in
    terrain invalidation: `noteLevelBaseConsumer` records the type on first build, and

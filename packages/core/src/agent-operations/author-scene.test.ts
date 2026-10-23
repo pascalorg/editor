@@ -1513,6 +1513,72 @@ describe('author_scene', () => {
     )
   })
 
+  test('2.7 m walls under a floor at 2.9 m keep their height and the 0.2 m between is the floor above', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Living room', seed: [0, 0] }],
+        },
+        {
+          name: 'First floor',
+          elevation: 2.9,
+          walls: storey('up-'),
+          rooms: [{ name: 'Bedroom', seed: [0, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    const scene = sceneOf(outcome)
+    const ground = outcome.result.ids['level/0']!
+    const first = outcome.result.ids['level/1']!
+    expect(byAuthorId(outcome, 'level/0').height).toBe(2.9)
+    // The ground walls are 2.7 m, standing on the ground floor's plate.
+    expect(byAuthorId(outcome, 'north').height).toBe(2.7)
+    const plateOf = (levelId: string) =>
+      Object.values(scene).find(
+        (n) => n.type === 'slab' && n.parentId === levelId && n.plateRole === 'base',
+      ) as AnyNode & { elevation: number; thickness: number }
+    const below = plateOf(ground)
+    const above = plateOf(first)
+    const wallTop = below.elevation + 2.7
+    // The floor above keeps its surface a storey up and reaches down to the walls' tops: 0.2 m.
+    expect(above.elevation).toBeCloseTo(below.elevation, 6)
+    expect(above.thickness).toBeCloseTo(0.2, 6)
+    expect(2.9 + above.elevation - above.thickness).toBeCloseTo(wallTop, 6)
+    // The ground room's ceiling is under that floor, at the walls' tops.
+    const ceiling = Object.values(scene).find(
+      (n) => n.type === 'ceiling' && n.parentId === ground,
+    ) as AnyNode & { type: 'ceiling' }
+    expect(resolveCeilingHeight(ceiling, scene)).toBeCloseTo(wallTop - 0.01, 6)
+    expect(outcome.result.defaults).toContain(
+      '"First floor" stands on a 0.20 m floor over the 2.70 m walls of "Ground floor": its plate reaches down to their tops',
+    )
+  })
+
+  test('a wall reaching into the floor above stops under it', () => {
+    const walls = bedroom.levels[0]!.walls!.map((w) => ({ ...w, openings: [], height: 3 }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        { name: 'Ground floor', walls, rooms: [{ name: 'Hall', seed: [0, 0] }] },
+        {
+          name: 'First floor',
+          elevation: 2.9,
+          walls: walls.map((w) => ({ ...w, id: `up-${w.id}`, height: 2.7 })),
+          rooms: [{ name: 'Landing', seed: [0, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(byAuthorId(outcome, 'north').height).toBeUndefined()
+    expect(outcome.result.defaults).toContain(
+      'walls of "Ground floor" given 3.00 m reach the floor of "First floor", 2.90 m up: they stop under it, following the storey',
+    )
+  })
+
   test('a stair rises to the next level and owns the opening in its floor; on the top level it is refused', () => {
     const storey = (prefix: string) =>
       bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
@@ -1545,12 +1611,6 @@ describe('author_scene', () => {
     // Each storey reaches the next level's floor, the top one its walls, and the stair climbs it.
     expect(byAuthorId(outcome, 'level/0').height).toBe(3)
     expect(byAuthorId(outcome, 'level/1').height).toBe(2.7)
-    // The ground floor's 2.7 m walls reach the floor above; the top floor's keep their height.
-    expect(byAuthorId(outcome, 'north').height).toBeUndefined()
-    expect(byAuthorId(outcome, 'up-north').height).toBe(2.7)
-    expect(outcome.result.defaults).toContain(
-      'walls of "Ground floor" given 2.70 m follow the storey to the floor above, 3.00 m: Pascal draws no floor structure between storeys',
-    )
     const rise = nodesOf(outcome)
       .filter((n) => n.parentId === stair.id)
       .reduce((sum, n) => sum + (n as AnyNode & { height: number }).height, 0)

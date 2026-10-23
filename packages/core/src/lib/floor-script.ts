@@ -1,9 +1,10 @@
-import type { AnyNode, CompiledGeometryScript, ZoneFloorScript } from '../schema'
+import type { AnyNode, CompiledGeometryScript, SlabNode, ZoneFloorScript } from '../schema'
 import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
 import { scriptSource } from './geometry-script-node'
 import { levelWallCover, plateLevelContext } from './plate-surface'
 import {
   area,
+  containsPoint,
   difference,
   intersection,
   type MultiPolygon,
@@ -42,13 +43,50 @@ function roomPlate(nodes: SceneNodes, zoneId: string) {
   return plate ? { zone, plate, walls: context.walls } : null
 }
 
+/** Over the floor plate's top, so the plate's own finish never shows through the boards. */
+export const FLOOR_SCRIPT_LIFT = 0.001
+
+const plateTop = (plate: SlabNode) => round(plate.elevation ?? DEFAULT_SLAB_ELEVATION)
+
 /**
  * The height, in level coordinates, of the floor surface a room's floor script stands on (its
  * floor plate's top), where the build's y = 0 is drawn; null when the room has no floor plate.
  */
 export function floorScriptSurface(nodes: SceneNodes, zoneId: string): number | null {
   const plate = roomPlate(nodes, zoneId)?.plate
-  return plate ? round(plate.elevation ?? DEFAULT_SLAB_ELEVATION) : null
+  return plate ? plateTop(plate) : null
+}
+
+/**
+ * Where a plan point standing on `slabId` finds a room's floor finish its script built: the top of
+ * that build, in level coordinates, so a rug or a sofa stands on the boards rather than in them.
+ * Null where no script builds on that plate there. Reads the level's children, and its slabs only
+ * once a scripted room holds the point.
+ */
+export function floorFinishTopAt(
+  nodes: SceneNodes,
+  levelId: string,
+  slabId: string,
+  x: number,
+  z: number,
+): number | null {
+  const level = nodes[levelId]
+  if (level?.type !== 'level') return null
+  let slabs: SlabNode[] | undefined
+  for (const id of level.children) {
+    const zone = nodes[id]
+    if (zone?.type !== 'zone' || !zone.floor?.script) continue
+    if (!containsPoint([{ outer: zone.polygon, holes: zone.holes ?? [] }], [x, z])) continue
+    slabs ??= level.children.flatMap((child) => {
+      const node = nodes[child]
+      return node?.type === 'slab' ? [node] : []
+    })
+    const plate = roomFloorPlate(slabs, zone.id)
+    if (plate?.id !== slabId) continue
+    const height = Math.max(0, zone.floor.script.manifest.bounds.max[1])
+    return plateTop(plate) + FLOOR_SCRIPT_LIFT + height
+  }
+  return null
 }
 
 /**

@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  FLOOR_SCRIPT_LIFT,
   floorScriptSurface,
   polygonInteriorPoint,
   useLiveNodeOverrides,
@@ -82,9 +83,6 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     </group>
   )
 }
-
-/** Over the floor plate's top, so the plate's own finish never shows through the boards. */
-const FLOOR_SCRIPT_LIFT = 0.001
 
 /**
  * The room's floor finish its script built: in the level's plan, its y = 0 on the floor plate's
