@@ -12,6 +12,8 @@ import {
 export type AgentSession = {
   read(): SessionRecord
   keep(keep: SessionKeep): void
+  /** Starts another session, or puts one back: a host reloading the scene it is bound to keeps it. */
+  replace(record?: SessionRecord): void
 }
 
 /** The standalone server's: in memory, for as long as the bridge holds a scene. */
@@ -26,7 +28,6 @@ export class InMemoryAgentSession implements AgentSession {
     this.#record = keepInSession(this.#record, keep)
   }
 
-  /** Binding another scene starts another session. */
   replace(record: SessionRecord = EMPTY_SESSION): void {
     this.#record = record
   }
