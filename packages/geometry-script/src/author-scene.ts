@@ -40,7 +40,7 @@ export async function compileAuthorScene(
       modules.push({ id: item.id, code: item.code, kind: 'object' })
     for (const wall of level.walls ?? [])
       wall.openings?.forEach((opening, index) => {
-        if (opening.code)
+        if (opening.code && opening.kind !== 'passage')
           modules.push({ id: `${wall.id}/${index}`, code: opening.code, kind: opening.kind })
       })
   }

@@ -4,6 +4,7 @@ import { authorScenePayload } from '../agent-tools/author-scene'
 import { cloneNodesInto } from '../registry/subtree'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
+import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-curve'
 import {
   applySceneChanges,
   authorScene,
@@ -1663,5 +1664,375 @@ describe('author_scene', () => {
         .filter((n) => n.parentId === stair.id)
         .map((n) => n.id),
     )
+  })
+  test('a curved outside wall with a window is one curved wall, the window along its arc, and its room derives from the arc', () => {
+    const wall = (id: string, start: number[], end: number[], extra = {}) => ({
+      id,
+      start,
+      end,
+      height: 2.7,
+      thickness: 0.2,
+      colorInside: '#f1ece4',
+      colorOutside: '#2e5a4b',
+      ...extra,
+    })
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: [
+            wall('north', [0, 0], [6, 0]),
+            wall('east', [6, 0], [6, 4]),
+            // Bulges 1.2 m out of the room, through (3, 5.2).
+            wall('bay', [6, 4], [0, 4], {
+              through: [3, 5.2],
+              skirting: { height: 0.12 },
+              openings: [{ kind: 'window', along: 3.5, width: 1.2, height: 1.4, sill: 0.8 }],
+            }),
+            wall('west', [0, 4], [0, 0]),
+            // Stops 20 cm short of the arc: the join rule meets the curve, not the chord.
+            wall('partition', [3, 0], [3, 5], { thickness: 0.1 }),
+          ],
+          rooms: [
+            { name: 'Salon', seed: [4.5, 4.6] },
+            { name: 'Library', seed: [1.5, 2] },
+          ],
+          items: [
+            {
+              id: 'mirror',
+              name: 'Mirror',
+              category: 'art',
+              code: 'export default function build() {}',
+              position: [3, 1.2, 5],
+              host: 'bay',
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, { mirror: baseboard }, {})
+    const bay = byAuthorId(outcome, 'bay')
+    expect(bay.curveOffset).toBeCloseTo(1.2, 9)
+    // The window sits along the arc, 3.5 m of curve from the wall's start.
+    const window = byAuthorId(outcome, 'bay/0')
+    expect(window.parentId).toBe(bay.id)
+    expect(window.position[0]).toBeCloseTo(3.5, 6)
+    expect(window.position[1]).toBeCloseTo(0.8 + 0.7, 6)
+    // The partition's end met the arc's middle, 1.2 m past the chord.
+    const partition = byAuthorId(outcome, 'partition')
+    const middle = getWallCurveFrameAt(bay, 0.5).point
+    expect(partition.end[0]).toBeCloseTo(middle.x, 2)
+    expect(partition.end[1]).toBeCloseTo(middle.y, 2)
+    expect(outcome.result.snapped).toContainEqual(
+      expect.objectContaining({ id: 'partition', end: 'end' }),
+    )
+    // Each room reaches into the bay: its outline follows the curve past the chord at z = 4.
+    expect(outcome.result.defects.filter((d) => d.id !== 'mirror')).toEqual([])
+    expect(outcome.result.roomsNamed).toBe(2)
+    const salon = byAuthorId(outcome, 'room/0/0')
+    expect(salon.name).toBe('Salon')
+    expect(Math.max(...salon.polygon.map(([, z]: number[]) => z))).toBeGreaterThan(5)
+    // Inside is the arc's left face, painted, with its skirting; outside the cladding.
+    const scene = sceneOf(outcome)
+    const materialOf = (ref: string) =>
+      outcome.changes!.materials!.find((m) => `scene:${m.id}` === ref)?.name
+    expect(materialOf(bay.slots.a)).toBe('#f1ece4')
+    expect(materialOf(bay.slots.b)).toBe('#2e5a4b')
+    expect((scene[bay.id] as AnyNode & { skirting?: unknown }).skirting).toBeDefined()
+    // Nothing hangs on a curved wall, as in the editor.
+    expect(outcome.result.defects).toEqual([
+      expect.objectContaining({ id: 'mirror', code: 'curved_host' }),
+    ])
+    expect(getWallCurveLength(bay)).toBeGreaterThan(6.5)
+  })
+
+  test('a flat opening too wide for its arc is warned with the widest that fits; a curve past a half circle is clamped', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: [
+            {
+              id: 'apse',
+              start: [0, 0],
+              end: [4, 0],
+              height: 2.7,
+              thickness: 0.2,
+              through: [2, -3],
+              openings: [{ kind: 'window', along: 3, width: 2.4, height: 1.4, sill: 0.8 }],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(byAuthorId(outcome, 'apse').curveOffset).toBe(2)
+    expect(outcome.result.defaults).toContain(
+      'wall apse: its through point stands 3.00 m off the straight line, more than half its 4.00 m span: written as a half circle, 2.00 m out',
+    )
+    expect(outcome.result.warnings).toEqual([
+      expect.objectContaining({ id: 'apse/0', code: 'flat_on_arc' }),
+    ])
+    expect(outcome.result.warnings[0]!.message).toMatch(/at most 1\.25 m wide\.$/)
+  })
+
+  test('a void in the floor above opens that floor and the ceiling under it, with a railing on its open edge', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map(({ color: _, ...w }) => ({
+        ...w,
+        id: `${prefix}${w.id}`,
+        openings: [],
+        colorInside: '#efe6d8',
+        colorOutside: '#2e5a4b',
+      }))
+    const code = 'export default function build() {}'
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Living room', seed: [0, 0] }],
+          items: [
+            // Under the void: it hangs from the ceiling of the gallery above, the double height.
+            {
+              id: 'chandelier',
+              name: 'Chandelier',
+              category: 'lamp',
+              code,
+              position: [0, 2.5, -1.2],
+            },
+            { id: 'pendant', name: 'Pendant', category: 'lamp', code, position: [0, 2.5, 1.5] },
+          ],
+        },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Gallery', seed: [0, 1] }],
+          // Drawn to the centerlines: the cut stops at the faces of the walls.
+          voids: [
+            {
+              name: 'Double height',
+              polygon: [
+                [-2, -2.5],
+                [2, -2.5],
+                [2, 0],
+                [-2, 0],
+              ],
+            },
+          ],
+          items: [{ id: 'chair', name: 'Chair', category: 'chair', code, position: [0, 0, -1] }],
+        },
+      ],
+    })
+    const ceilingLamp = { ...bed, mount: 'ceiling' as const }
+    const outcome = run(payload, { chandelier: ceilingLamp, pendant: ceilingLamp, chair: bed }, {})
+    expect(outcome.result.voids).toBe(1)
+    expect(outcome.result.defects).toEqual([])
+    const ground = outcome.result.ids['level/0']!
+    const first = outcome.result.ids['level/1']!
+    const opening = byAuthorId(outcome, 'void/1/0')
+    expect(opening).toMatchObject({ type: 'floor-opening', parentId: first, name: 'Double height' })
+    expect(opening.cutsAdjacent).toBe(true)
+    const xs = opening.polygon.map(([x]: number[]) => x)
+    const zs = opening.polygon.map(([, z]: number[]) => z)
+    expect([Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]).toEqual([
+      -1.94, 1.94, -2.44, 0,
+    ])
+    // The floor above and the ceiling under it both have the hole.
+    const scene = sceneOf(outcome)
+    const plate = Object.values(scene).find(
+      (n) => n.type === 'slab' && n.parentId === first && n.plateRole === 'base',
+    ) as AnyNode & { holes: unknown[]; id: string }
+    expect(plate.holes.length).toBe(1)
+    // The floor's edge round the void wears the walls' inside paint; its facade edge the cladding.
+    const named = (hex: string) =>
+      `scene:${outcome.changes!.materials!.find((m) => m.name === hex)!.id}`
+    expect((plate as AnyNode & { slots: Record<string, string> }).slots.edge).toBe(named('#2e5a4b'))
+    expect(byAuthorId(outcome, 'room/1/0').floorEdgeFinish).toBe(named('#efe6d8'))
+    const ceiling = Object.values(scene).find(
+      (n) => n.type === 'ceiling' && n.parentId === ground,
+    ) as AnyNode & { holes: unknown[] }
+    expect(ceiling.holes.length).toBe(1)
+    // One railing, on the open edge only: the other three are walls.
+    const railings = nodesOf(outcome).filter((n) => n.type === 'fence') as (AnyNode &
+      Record<string, any>)[]
+    expect(railings.length).toBe(1)
+    expect(railings[0]).toMatchObject({ parentId: first, height: 1.1, style: 'rail' })
+    expect(railings[0]!.supportSlabId).toBe(plate.id)
+    expect(railings[0]!.start[1]).toBeCloseTo(0, 6)
+    expect(Math.abs(railings[0]!.end[0] - railings[0]!.start[0])).toBeCloseTo(3.87, 2)
+    // The chandelier hangs from the gallery's ceiling; the pendant away from the void from its own.
+    const upperCeiling = Object.values(scene).find(
+      (n) => n.type === 'ceiling' && n.parentId === first,
+    )!
+    expect(byAuthorId(outcome, 'chandelier').parentId).toBe(upperCeiling.id)
+    expect(byAuthorId(outcome, 'pendant').parentId).toBe(ceiling.id)
+    expect(outcome.result.warnings).toEqual([
+      expect.objectContaining({ id: 'chair', code: 'over_void' }),
+    ])
+    expect(outcome.result.defaults).toEqual(
+      expect.arrayContaining([
+        'void/1/0: the floor of "First floor" opened over 9.5 m², and the ceiling of "Ground floor" under it',
+        'void/1/0: a 1.10 m railing along 3.87 m of its edges',
+      ]),
+    )
+  })
+
+  test('a void drawn past a curved outside wall opens only the floor inside it', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({
+        ...w,
+        id: `${prefix}${w.id}`,
+        openings: [],
+        // The west wall bows 1.5 m out of the building.
+        ...(w.id === 'west' ? { through: [-3.5, 0] } : {}),
+      }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        { name: 'Ground floor', walls: storey(''), rooms: [{ name: 'Salon', seed: [0, 0] }] },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Gallery', seed: [1, 1.5] }],
+          voids: [
+            {
+              polygon: [
+                [-5, -2.5],
+                [0, -2.5],
+                [0, 2.5],
+                [-5, 2.5],
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const openings = nodesOf(outcome).filter(
+      (n) => n.type === 'floor-opening' && n.metadata?.authorScene,
+    )
+    expect(openings.length).toBe(1)
+    const xs = (openings[0] as AnyNode & { polygon: number[][] }).polygon.map(([x]) => x!)
+    // Inside the arc's inner face, which stands 1.5 m out less half the 12 cm wall.
+    expect(Math.min(...xs)).toBeGreaterThan(-3.5 + 0.06 - 0.01)
+    // The one railing is the open edge across the floor, at x = 0.
+    const railings = nodesOf(outcome).filter((n) => n.type === 'fence') as (AnyNode &
+      Record<string, any>)[]
+    expect(railings.map((r) => [r.start[0], r.end[0]])).toEqual([[0, 0]])
+  })
+
+  test('a void on the first level, over no floor, or without a railing is reported by its id', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const square = (x: number) => [
+      [x, -1],
+      [x + 1, -1],
+      [x + 1, 0],
+      [x, 0],
+    ]
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Hall', seed: [0, 0] }],
+          voids: [{ polygon: square(-0.5) }],
+        },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Landing', seed: [0, 1] }],
+          voids: [
+            { name: 'Lightwell', polygon: square(-0.5), railing: null },
+            { polygon: square(8) },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['void/0/0', 'no_level_below'],
+      ['void/1/1', 'no_floor'],
+    ])
+    expect(outcome.result.voids).toBe(1)
+    expect(byAuthorId(outcome, 'void/1/0').type).toBe('floor-opening')
+    expect(nodesOf(outcome).some((n) => n.type === 'fence')).toBe(false)
+  })
+
+  test('a curtain wall is glass between mullions, a passage a doorway with no leaf, an arch its outline, a column round', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: [
+            ...bedroom.levels[0]!.walls!.slice(0, 2).map((w) => ({ ...w, openings: [] })),
+            {
+              id: 'glass',
+              start: [2, 2.5],
+              end: [-2, 2.5],
+              height: 2.7,
+              thickness: 0.12,
+              through: [0, 3.3],
+              color: '#ffffff',
+              curtain: { spacing: 1.2, frameColor: '#1c1a19' },
+              openings: [{ kind: 'door', along: 2, width: 0.9, height: 2.1, type: 'sliding' }],
+            },
+            {
+              id: 'west',
+              start: [-2, 2.5],
+              end: [-2, -2.5],
+              height: 2.7,
+              thickness: 0.12,
+              openings: [
+                {
+                  kind: 'passage',
+                  along: 2.5,
+                  width: 1.2,
+                  height: 2.4,
+                  shape: 'arch',
+                  hinge: 'end',
+                },
+                {
+                  kind: 'window',
+                  along: 1,
+                  width: 0.8,
+                  height: 1.2,
+                  sill: 1,
+                  shape: 'arch',
+                  archHeight: 0.3,
+                },
+              ],
+            },
+          ],
+          rooms: [{ name: 'Winter garden', seed: [0, 0] }],
+          columns: [{ position: [0, 0], shape: 'round', width: 0.3, height: 2.7 }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.roomsNamed).toBe(1)
+    const glass = byAuthorId(outcome, 'glass')
+    expect(glass.wallType).toBe('curtain')
+    expect(glass.curveOffset).toBeCloseTo(0.8, 9)
+    expect(glass.curtainWall.columns).toMatchObject({ layout: 'maximum-spacing', spacing: 1.2 })
+    expect(byAuthorId(outcome, 'glass/0').type).toBe('door')
+    expect(outcome.result.defaults).toContain(
+      'wall glass: a curtain wall has no faces to paint, its color ignored; curtain.frameColor colours its frame',
+    )
+    const passage = byAuthorId(outcome, 'west/0')
+    expect(passage).toMatchObject({ type: 'door', openingKind: 'opening', openingShape: 'arch' })
+    expect(outcome.result.passages).toBe(1)
+    expect(outcome.result.defaults).toContain('passage west/0: it has no leaf, its hinge ignored')
+    expect(byAuthorId(outcome, 'west/1')).toMatchObject({ openingShape: 'arch', archHeight: 0.3 })
+    expect(byAuthorId(outcome, 'column/0/0')).toMatchObject({
+      crossSection: 'round',
+      radius: 0.15,
+      width: 0.3,
+    })
   })
 })

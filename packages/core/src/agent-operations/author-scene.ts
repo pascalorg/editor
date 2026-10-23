@@ -10,6 +10,7 @@ import {
   type WindowStyle,
 } from '../building/opening-style-presets'
 import { windowTakesStyle, windowTypeFields } from '../building/window-types'
+import { cutFloorOpening } from '../commands/structure/floor-opening'
 import { floorRoomFaces } from '../lib/floor-room-faces'
 import {
   matchScriptSlotsToLibrary,
@@ -17,6 +18,15 @@ import {
   scriptedSize,
   scriptSource,
 } from '../lib/geometry-script-node'
+import { exposedIntervals } from '../lib/level-footprints'
+import {
+  area,
+  containsPoint,
+  difference,
+  intersection,
+  type MultiPolygon,
+  union,
+} from '../lib/polygon-boolean'
 import { roundFloorElevation } from '../lib/room-floor-feasibility'
 import type { BoundaryNode } from '../lib/room-topology-index'
 import { detectSpacesForLevel } from '../lib/space-detection'
@@ -28,12 +38,16 @@ import {
   type CeilingNode,
   ColumnNode,
   type CompiledGeometryScript,
+  CurtainWallConfig,
   DoorNode,
+  FenceNode,
+  type FloorOpeningNode,
   type GeometryArtifactManifest,
   LevelNode,
   type SceneMaterial,
   type SceneMaterialId,
   SlabNode,
+  type StairNode,
   type WallFace,
   WallNode,
   WindowNode,
@@ -43,7 +57,18 @@ import { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
 import { DEFAULT_LEVEL_HEIGHT, resolveCeilingHeight } from '../services/level-height'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
+import { stairArrivalOpening } from '../systems/stair/stair-footprint'
+import {
+  getMaxWallCurveOffset,
+  getWallCenterlineSegments,
+  getWallCurveLength,
+  getWallSurfacePolygon,
+  isCurvedWall,
+  normalizeWallCurveOffset,
+} from '../systems/wall/wall-curve'
+import { getWallPlanFootprint, getWallThickness } from '../systems/wall/wall-footprint'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
+import { calculateLevelMiters } from '../systems/wall/wall-mitering'
 import { roomFaceCover } from '../systems/wall/wall-room-sides'
 import { migrateRoomZones } from '../utils/room-zone-migration'
 import { addObject } from './add-object'
@@ -98,6 +123,8 @@ export type AuthorSceneReport = {
   walls: number
   doors: number
   windows: number
+  /** Doorways with no leaf. */
+  passages: number
   rooms: number
   roomsNamed: number
   slabs: number
@@ -105,6 +132,8 @@ export type AuthorSceneReport = {
   items: number
   /** Stairs written, each with the floor opening it owns in the level above. */
   stairs: number
+  /** Voids cut through a level's floor and the ceiling under it. */
+  voids: number
   lights: number
   /** Rooms whose floor finish is their module, counted by the host that compiles them after the write. */
   floorScripts: number
@@ -119,8 +148,8 @@ export type AuthorSceneReport = {
   defects: AuthorSceneDefect[]
   notes: string[]
   /**
-   * Payload ids, `wall/i` openings, `room/level/i`, `stair/level/i` and `light/level/i` ceiling
-   * points to nodes.
+   * Payload ids, `wall/i` openings, `room/level/i`, `stair/level/i`, `void/level/i` (its floor
+   * opening) and `light/level/i` ceiling points to nodes.
    */
   ids: Record<string, string>
 }
@@ -197,6 +226,37 @@ function nearestOnSegment(p: readonly number[], a: readonly number[], b: readonl
   return { point: q, distance: dist(p, q) }
 }
 
+/**
+ * The bend Pascal stores (`curveOffset`) for an arc from start to end through a plan point: the
+ * point's distance from the straight line, positive when it lies to the right looking from start
+ * to end (away from the wall's left normal).
+ */
+function bendThrough(start: Vec2, end: Vec2, through: readonly number[]) {
+  const [dx, dz] = [end[0] - start[0], end[1] - start[1]]
+  return ((through[0]! - start[0]) * dz - (through[1]! - start[1]) * dx) / (Math.hypot(dx, dz) || 1)
+}
+
+/** The same on a curved wall: the nearest point of its arc, so a partition meets the curve. */
+function nearestOnWall(p: readonly number[], wall: JoinedWall) {
+  if (!wall.spec.through) return nearestOnSegment(p, wall.start, wall.end)
+  const arc = {
+    start: wall.start,
+    end: wall.end,
+    curveOffset: bendThrough(wall.start, wall.end, wall.spec.through),
+  }
+  let best = { point: [p[0]!, p[1]!] as [number, number], distance: Number.POSITIVE_INFINITY }
+  for (const [a, b] of getWallCenterlineSegments(arc, 64)) {
+    const [dx, dz] = [b.x - a.x, b.y - a.y]
+    const t = ((p[0]! - a.x) * dx + (p[1]! - a.y) * dz) / (dx * dx + dz * dz || 1)
+    const q: [number, number] = [
+      a.x + Math.max(0, Math.min(1, t)) * dx,
+      a.y + Math.max(0, Math.min(1, t)) * dz,
+    ]
+    if (dist(p, q) < best.distance) best = { point: q, distance: dist(p, q) }
+  }
+  return best
+}
+
 const cross = (o: Vec2, a: Vec2, b: Vec2) =>
   (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
 
@@ -217,7 +277,16 @@ function polygonsOverlap(a: Vec2[], b: Vec2[]): boolean {
 }
 
 /** A wall's footprint, pulled in by a few millimetres so a slab meeting its face is not on it. */
-function wallFootprint(wall: { start: Vec2; end: Vec2; thickness: number }): Vec2[] {
+function wallFootprint(wall: {
+  start: Vec2
+  end: Vec2
+  thickness: number
+  curveOffset?: number
+}): Vec2[] {
+  if (wall.curveOffset)
+    return getWallSurfacePolygon({ ...wall, thickness: wall.thickness - 0.01 }).map(
+      ({ x, y }): Vec2 => [x, y],
+    )
   const inset = 0.005
   const [dx, dz] = [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
   const len = Math.hypot(dx, dz) || 1
@@ -575,6 +644,7 @@ export function authorScene(
       ['column', level.columns],
       ['light', level.lights],
       ['stair', level.stairs],
+      ['void', level.voids],
     ] as const)
       parts?.forEach((_, i) => {
         claimSourceKey(`${kind}/${index}/${i}`)
@@ -634,12 +704,14 @@ export function authorScene(
     walls: 0,
     doors: 0,
     windows: 0,
+    passages: 0,
     rooms: 0,
     roomsNamed: 0,
     slabs: 0,
     columns: 0,
     items: 0,
     stairs: 0,
+    voids: 0,
     lights: 0,
     floorScripts: 0,
     faceScripts: 0,
@@ -775,7 +847,7 @@ export function authorScene(
         let best: { point: [number, number]; distance: number } | null = null
         for (const o of walls) {
           if (o === w) continue
-          const near = nearestOnSegment(pt, o.start, o.end)
+          const near = nearestOnWall(pt, o)
           if (near.distance < JOIN_REACH && (!best || near.distance < best.distance)) best = near
         }
         if (best && best.distance > 0.001) {
@@ -794,6 +866,15 @@ export function authorScene(
         defect(w.spec.id, 'wall_too_short', 'The wall is shorter than 5 cm after joining.')
         continue
       }
+      const bend = w.spec.through ? bendThrough(w.start, w.end, w.spec.through) : 0
+      const curve = bend ? normalizeWallCurveOffset(w, bend) : 0
+      if (w.spec.through && !curve)
+        say(`wall ${w.spec.id}: its through point is on the straight line: written straight`)
+      else if (Math.abs(bend) > getMaxWallCurveOffset(w) + 1e-9)
+        say(
+          `wall ${w.spec.id}: its through point stands ${metres(Math.abs(bend))} off the straight line, more than half its ${metres(dist(w.start, w.end))} span: written as a half circle, ${metres(Math.abs(curve))} out`,
+        )
+      const { curtain } = w.spec
       const node = WallNode.parse({
         object: 'node',
         type: 'wall',
@@ -806,6 +887,18 @@ export function authorScene(
         end: w.end,
         ...(w.height === w.spec.height ? { height: w.spec.height } : {}),
         thickness: w.spec.thickness,
+        ...(curve ? { curveOffset: curve } : {}),
+        ...(curtain
+          ? {
+              wallType: 'curtain',
+              curtainWall: CurtainWallConfig.parse({
+                columns: {
+                  layout: 'maximum-spacing',
+                  spacing: Math.min(100, Math.max(0.2, curtain.spacing)),
+                },
+              }),
+            }
+          : {}),
       })
       place(node)
       wallNodes.set(w.spec.id, { ...w, node })
@@ -818,13 +911,21 @@ export function authorScene(
         })
       report.ids[w.spec.id] = node.id
       report.walls++
-      // ---------- its openings ----------
-      const length = dist(w.start, w.end)
+      // ---------- its openings: along the arc on a curved wall, as Pascal places them ----------
+      const length = curve ? getWallCurveLength(node) : dist(w.start, w.end)
       ;(w.spec.openings ?? []).forEach((o, i) => {
         const id = `${w.spec.id}/${i}`
+        const passage = o.kind === 'passage'
+        const kind = passage ? 'door' : o.kind
+        if (passage) {
+          const leaf = (['type', 'style', 'leaves', 'hinge', 'swing', 'code'] as const).filter(
+            (field) => o[field] !== undefined,
+          )
+          if (leaf.length) say(`passage ${id}: it has no leaf, its ${leaf.join(', ')} ignored`)
+        }
         // A module supplies geometry; the declared type still describes how the opening works.
         let compiled: CompiledGeometryScript | undefined
-        if (o.code) {
+        if (o.code && !passage) {
           compiled = input.compiled[id]
           if (!compiled) {
             defect(id, 'compile_failed', input.compileErrors?.[id] ?? 'The module did not compile.')
@@ -856,6 +957,19 @@ export function authorScene(
           )
           return
         }
+        // A door or window is flat, set on the arc at its centre: its ends leave the curve.
+        if (curve) {
+          const chord = dist(w.start, w.end)
+          const radius = (chord * chord) / (8 * Math.abs(curve)) + Math.abs(curve) / 2
+          const standoff = radius - Math.sqrt(Math.max(0, radius ** 2 - (width / 2) ** 2))
+          const half = w.spec.thickness / 2
+          if (standoff > half)
+            warn(
+              id,
+              'flat_on_arc',
+              `The ${metres(width)} ${o.kind} is flat on wall ${w.spec.id}, an arc of radius ${metres(radius)}: its ends stand ${metres(standoff)} off the curve, past the wall's faces. Set narrower ones side by side, at most ${metres(2 * Math.sqrt(radius ** 2 - (radius - half) ** 2))} wide.`,
+            )
+        }
         const x = Math.min(Math.max(o.along, width / 2), length - width / 2)
         if (Math.abs(x - o.along) > 0.01)
           say(
@@ -863,7 +977,7 @@ export function authorScene(
           )
         const common = {
           object: 'node',
-          id: mint(o.kind, id),
+          id: mint(kind, id),
           parentId: node.id,
           visible: true,
           metadata: { authorScene: { id, color: o.color ?? null } },
@@ -872,6 +986,8 @@ export function authorScene(
           height,
           rotation: [0, 0, 0],
           ...(o.name ? { name: o.name } : {}),
+          ...(o.shape ? { openingShape: o.shape } : {}),
+          ...(o.archHeight === undefined ? {} : { archHeight: Math.min(o.archHeight, height) }),
           ...(compiled
             ? {
                 source: scriptSource(compiled, { category: o.kind }),
@@ -880,7 +996,15 @@ export function authorScene(
             : {}),
         }
         let opening: AnyNode
-        if (o.kind === 'door') {
+        if (passage) {
+          opening = DoorNode.parse({
+            ...common,
+            type: 'door',
+            position: [x, height / 2, 0],
+            openingKind: 'opening',
+          })
+          report.passages++
+        } else if (o.kind === 'door') {
           const type = o.type
           if (type && !isDoorType(type))
             defect(id, 'type_mismatch', `${type} is a window type; the door is written hinged.`)
@@ -931,7 +1055,7 @@ export function authorScene(
           })
           report.windows++
         }
-        const panel = o.kind === 'door' ? finishRef(o.color, id) : undefined
+        const panel = kind === 'door' ? finishRef(o.color, id) : undefined
         const frame = finishRef(o.frameColor ?? o.color, id)
         if (panel || frame)
           opening = {
@@ -965,7 +1089,14 @@ export function authorScene(
       const lifted = [...wallNodes.values()].find(
         (w) =>
           s.top > w.height / 2 &&
-          polygonsOverlap(polygon, wallFootprint({ ...w, thickness: w.spec.thickness })),
+          polygonsOverlap(
+            polygon,
+            wallFootprint({
+              ...w,
+              thickness: w.spec.thickness,
+              curveOffset: w.node.curveOffset,
+            }),
+          ),
       )
       if (lifted) {
         defect(
@@ -1012,9 +1143,10 @@ export function authorScene(
         metadata: { authorScene: { color: c.color ?? null } },
         ...(c.name ? { name: c.name } : {}),
         position: [c.position[0], 0, c.position[1]],
-        crossSection: 'square',
+        crossSection: c.shape,
+        ...(c.shape === 'round' ? { radius: c.width / 2 } : {}),
         width: c.width,
-        depth: c.depth,
+        depth: c.shape === 'round' ? c.width : (c.depth ?? c.width),
         height: c.height,
         baseHeight: 0,
         capitalHeight: 0,
@@ -1148,8 +1280,17 @@ export function authorScene(
       )
   }
 
-  /** The room a plan point of a level is in, its ceiling, and the height that ceiling hangs things from. */
-  const ceilingAt = (levelId: string, x: number, z: number) => {
+  /**
+   * The room a plan point of a level is in, its ceiling, and the height in that level's frame that
+   * ceiling hangs things from. Under an opening in the ceiling (a void, a stairwell) it is the
+   * ceiling above, the room's double height.
+   */
+  const ceilingAt = (
+    index: number,
+    x: number,
+    z: number,
+  ): { room: ZoneNode; ceiling: CeilingNode; height: number } | undefined => {
+    const levelId = levelNodes[index]!.id
     const room = Object.values(written).find(
       (node): node is ZoneNode =>
         node.type === 'zone' &&
@@ -1164,9 +1305,13 @@ export function authorScene(
         (node): node is CeilingNode =>
           node.type === 'ceiling' && node.zoneId === room.id && node.parentId === levelId,
       )
-    return room && ceiling
-      ? { room, ceiling, height: resolveCeilingHeight(ceiling, written) - CEILING_DRAW_OFFSET }
-      : undefined
+    if (!room || !ceiling) return undefined
+    if (levelNodes[index + 1] && ceiling.holes.some((hole) => pointInPolygon([x, z], hole))) {
+      const above = ceilingAt(index + 1, x, z)
+      const climb = payload.levels[index + 1]!.elevation - payload.levels[index]!.elevation
+      if (above) return { ...above, height: above.height + climb }
+    }
+    return { room, ceiling, height: resolveCeilingHeight(ceiling, written) - CEILING_DRAW_OFFSET }
   }
 
   // ---------- stairs, as create_stair builds them: up to the next level, opening its floor ----------
@@ -1232,11 +1377,189 @@ export function authorScene(
       }
     })
   })
-  // The openings the stairs own cut the floor plates and ceilings they pass, as on load.
-  if (stairsWritten)
+  /** The plan footprints of a level's walls as written, each grown by `grow` on both faces. */
+  const wallFootprints = (levelId: string, grow = 0) => {
+    const walls = Object.values(written).flatMap((node) =>
+      node.type === 'wall' && node.parentId === levelId
+        ? [grow ? { ...node, thickness: getWallThickness(node) + 2 * grow } : node]
+        : [],
+    )
+    const miters = calculateLevelMiters(walls)
+    return walls.map((wall) => getWallPlanFootprint(wall, miters).map(({ x, y }): Vec2 => [x, y]))
+  }
+
+  // ---------- voids: openings in a level's floor, the room below rising through them ----------
+  const voidCuts = new Map<number, MultiPolygon>()
+  const voidsCut: {
+    id: string
+    index: number
+    cut: MultiPolygon
+    railing: { height: number; color?: string } | null
+  }[] = []
+  payload.levels.forEach((level, index) => {
+    const levelNode = levelNodes[index]!
+    ;(level.voids ?? []).forEach((v, i) => {
+      const id = `void/${index}/${i}`
+      const label = v.name ? `"${v.name}"` : `void ${i}`
+      if (index === 0) {
+        defect(
+          id,
+          'no_level_below',
+          `${label} is in the floor of "${level.name}", the first level, with nothing under it to open onto: give it in the floor of the level above the room that rises through it.`,
+        )
+        return
+      }
+      // The cut stops at the faces of the walls standing on this floor, as the floor carries them,
+      // and at the floor's own edge (a void drawn past a curved outside wall).
+      const floor = union(
+        Object.values(written).flatMap((node) =>
+          node.type === 'slab' && node.parentId === levelNode.id && node.plateRole === 'base'
+            ? [node.polygon]
+            : [],
+        ),
+      )
+      const cut = intersection(
+        difference(v.polygon as Vec2[], union(wallFootprints(levelNode.id))),
+        floor,
+      ).filter((part) => area([part]) > 1e-4)
+      const opened = area(cut)
+      if (opened < 1e-4) {
+        defect(
+          id,
+          'no_floor',
+          `No floor of "${level.name}" lies under ${label} clear of its walls: there is nothing to open.`,
+        )
+        return
+      }
+      if (cut.some((part) => part.holes.length))
+        warn(
+          id,
+          'wall_in_void',
+          `A wall of "${level.name}" stands inside ${label}, over the opening around it: end the void at the wall, or move the wall.`,
+        )
+      let cutsCeiling = false
+      cut.forEach((part, k) => {
+        const plan = cutFloorOpening(written, {
+          levelId: levelNode.id,
+          polygon: part.outer,
+          drawnOn: 'floor',
+          mintId: () => mint('floor-opening', k ? `${id}/${k}` : id) as FloorOpeningNode['id'],
+        })
+        for (const change of plan.changes) {
+          if (change.op === 'create') {
+            const opening = change.node as FloorOpeningNode
+            cutsCeiling ||= opening.cutsAdjacent
+            written[opening.id] = {
+              ...opening,
+              name: v.name ?? 'Void',
+              metadata: { ...opening.metadata, authorScene: { id } },
+            }
+            if (!k) report.ids[id] = opening.id
+          } else if (change.op === 'update')
+            written[change.id] = { ...written[change.id], ...change.data } as AnyNode
+        }
+      })
+      report.voids++
+      say(
+        `${id}: the floor of "${level.name}" opened over ${opened.toFixed(1)} m², ${cutsCeiling ? `and the ceiling of "${payload.levels[index - 1]!.name}" under it` : `with no ceiling of "${payload.levels[index - 1]!.name}" under it`}`,
+      )
+      voidCuts.set(index, union([...(voidCuts.get(index) ?? []), ...cut]))
+      voidsCut.push({
+        id,
+        index,
+        cut,
+        railing: v.railing === null ? null : (v.railing ?? { height: 1.1 }),
+      })
+    })
+  })
+
+  // The openings the stairs and voids own cut the floor plates and ceilings they pass, as on load.
+  if (stairsWritten || report.voids)
     written = {
       ...reconcileSceneStructure({ nodes: written, levelIds, mintId: (kind) => mint(kind) }).nodes,
     }
+
+  // ---------- each void's railing: along its open edges, on the floor, as the slab railing looks ----------
+  for (const { id, index, cut, railing } of voidsCut) {
+    const levelNode = levelNodes[index]!
+    // Inside the double height the floor's edge round the void continues the walls it rises
+    // between: it wears their inside paint, where the facade's edge keeps the cladding.
+    const insides = (payload.levels[index - 1]!.walls ?? []).flatMap((w) =>
+      w.colorInside ? [w.colorInside] : [],
+    )
+    const edge = finishRef(mostCommon(insides), id)
+    if (edge)
+      for (const zone of Object.values(written))
+        if (
+          zone.type === 'zone' &&
+          zone.parentId === levelNode.id &&
+          zone.spaceRole === 'room' &&
+          area(intersection(cut, zone.polygon)) > 1e-4
+        )
+          written[zone.id] = { ...zone, floorEdgeFinish: edge }
+    if (!railing) continue
+    // A run stops at a wall standing on the edge and where a stair arrives.
+    const arrivals = Object.values(written).flatMap((node) =>
+      node.type === 'stair' && node.toLevelId === levelNode.id
+        ? [stairArrivalOpening(node as StairNode, written)]
+        : [],
+    )
+    const cover = union([
+      ...wallFootprints(levelNode.id, 0.005),
+      ...arrivals.filter((ring) => ring.length >= 3),
+    ])
+    const runs = exposedIntervals(cut, [], cover).filter(
+      ({ start, end }) => dist(start, end) >= 0.1,
+    )
+    const plate = Object.values(written)
+      .filter(
+        (node): node is SlabNode =>
+          node.type === 'slab' && node.parentId === levelNode.id && node.plateRole === 'base',
+      )
+      .map((node) => ({ node, shared: area(intersection(cut, node.polygon)) }))
+      .sort((a, b) => b.shared - a.shared)[0]?.node
+    const fences = runs.map((run, k) =>
+      FenceNode.parse({
+        object: 'node',
+        id: mint('fence', `${id}/railing/${k}`),
+        parentId: levelNode.id,
+        visible: true,
+        metadata: { authorScene: { id } },
+        name: 'Railing',
+        start: run.start,
+        end: run.end,
+        height: railing.height,
+        style: 'rail',
+        baseStyle: 'floating',
+        baseHeight: 0,
+        postCap: 'none',
+        ...(plate ? { supportSlabId: plate.id } : {}),
+      }),
+    )
+    if (!fences.length) continue
+    const level = written[levelNode.id] as AnyNode & { children: string[] }
+    written[level.id] = {
+      ...level,
+      children: [...level.children, ...fences.map((f) => f.id)],
+    } as AnyNode
+    for (const fence of fences) written[fence.id] = fence
+    const finish = finishRef(railing.color, id)
+    if (finish)
+      try {
+        const { changes } = paint(
+          written,
+          { targets: fences.map((fence) => fence.id), material: finish },
+          paintContext(levelNode.id),
+        )
+        for (const u of changes?.update ?? [])
+          written[u.id] = { ...written[u.id], ...u.data } as AnyNode
+      } catch (error) {
+        defect(id, 'paint_refused', (error as Error).message)
+      }
+    say(
+      `${id}: a ${metres(railing.height)} railing along ${metres(runs.reduce((sum, run) => sum + dist(run.start, run.end), 0))} of its edges`,
+    )
+  }
 
   // ---------- items, on their floors and ceilings, then each wall's paint ----------
   payload.levels.forEach((level, index) => {
@@ -1278,6 +1601,14 @@ export function authorScene(
           side?: 'front' | 'back'
           wallT?: number
           frame: Frame
+        }
+        if (hostWall && isCurvedWall(hostWall.node)) {
+          defect(
+            item.id,
+            'curved_host',
+            `Wall ${item.host} is curved: nothing hangs on a curved wall, as in the editor. Hang "${item.name}" on a straight wall, or stand it on the floor.`,
+          )
+          continue
         }
         if (hostWall) {
           // On the wall as place_items puts a wall-side item there: along it from its start, the
@@ -1330,7 +1661,7 @@ export function authorScene(
           }
         } else if (compiled.mount === 'ceiling' && !item.host) {
           // From the ceiling of the room its plan point is in, its top on that ceiling.
-          const over = ceilingAt(levelNode.id, world[0], world[2])
+          const over = ceilingAt(index, world[0], world[2])
           if (!over) {
             defect(
               item.id,
@@ -1349,6 +1680,13 @@ export function authorScene(
           }
         } else {
           const host = hostItemId ? itemFrames.get(item.host!) : undefined
+          const opening = voidCuts.get(index)
+          if (!host && opening && containsPoint(opening, [world[0], world[2]]))
+            warn(
+              item.id,
+              'over_void',
+              `"${item.name}" stands at (${world[0]}, ${world[2]}), over a void in the floor of "${level.name}": nothing is under it. Move it onto the floor.`,
+            )
           placed = {
             compiled,
             parentId: hostItemId ?? levelNode.id,
@@ -1407,7 +1745,20 @@ export function authorScene(
     for (const w of walls) {
       const node = wallNodes.get(w.spec.id)?.node
       if (!node) continue
-      const { colorInside, colorOutside } = w.spec
+      const coats: { role?: string; material: string }[] = []
+      if (w.spec.curtain) {
+        // Glass and mullions: no face to paint; its frame takes the colour.
+        const ignored = (
+          ['color', 'colorInside', 'colorOutside', 'colorLeft', 'colorRight'] as const
+        ).filter((field) => w.spec[field])
+        if (ignored.length)
+          say(
+            `wall ${w.spec.id}: a curtain wall has no faces to paint, its ${ignored.join(', ')} ignored; curtain.frameColor colours its frame`,
+          )
+        const frame = finishRef(w.spec.curtain.frameColor, w.spec.id)
+        if (frame) coats.push({ role: 'curtain-frame', material: frame })
+      }
+      const { colorInside, colorOutside } = w.spec.curtain ? {} : w.spec
       // A face is inside when a room of this level stands on it, known once the rooms are derived.
       const cover = colorInside || colorOutside ? roomFaceCover(written, node.id) : undefined
       const meant = (face: WallFace) =>
@@ -1424,11 +1775,12 @@ export function authorScene(
                 : 'right'
         ].push(w.spec.id)
       }
-      const faces = {
-        a: w.spec.colorLeft ?? meant('a') ?? w.spec.color,
-        b: w.spec.colorRight ?? meant('b') ?? w.spec.color,
-      }
-      const coats: { role?: 'a' | 'b'; material: string }[] = []
+      const faces: Partial<Record<WallFace, string>> = w.spec.curtain
+        ? {}
+        : {
+            a: w.spec.colorLeft ?? meant('a') ?? w.spec.color,
+            b: w.spec.colorRight ?? meant('b') ?? w.spec.color,
+          }
       if (faces.a && faces.a === faces.b) {
         const ref = finishRef(faces.a, w.spec.id)
         if (ref) coats.push({ material: ref })
@@ -1504,7 +1856,7 @@ export function authorScene(
       const at: Vec3 = [light.position[0]!, light.position[1]!, light.position[2]!]
       let hostId = light.fixture ? itemNodeIds.get(light.fixture) : undefined
       let hostFrame = light.fixture ? itemFrames.get(light.fixture) : undefined
-      const over = light.fixture ? undefined : ceilingAt(levelNode.id, at[0], at[2])
+      const over = light.fixture ? undefined : ceilingAt(index, at[0], at[2])
       if (over) {
         const { room, ceiling } = over
         const compiled = input.compiled[id]
