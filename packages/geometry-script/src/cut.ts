@@ -34,7 +34,7 @@ const pieces = (rings: Ring[]): MultiPolygon => rings.map((outer) => ({ outer, h
  * casing and the wall's reveal stand on the opening's edges: a finish cut exactly there would close
  * with faces in their planes, and two faces in one plane flicker.
  */
-const OPENING_MARGIN = 0.002
+const OPENING_MARGIN = 0.001
 
 /**
  * The region a build for these inputs is cut to: a floor's `polygon` less its `holes`, or a wall
