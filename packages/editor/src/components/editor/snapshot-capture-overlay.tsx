@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter, type SnapshotSavedEvent } from '@pascal-app/core'
+import { emitter, type SnapshotCaptureFailedEvent, type SnapshotSavedEvent } from '@pascal-app/core'
 import { SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
 import {
   Check,
@@ -224,6 +224,8 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const [drag, setDrag] = useState<Drag | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [captureState, setCaptureState] = useState<CaptureState>('idle')
+  const [captureError, setCaptureError] = useState<string | null>(null)
+  const pendingCapture = useRef<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
   // Overlay size drives the computed standard-frame rect + resolution HUD.
   const [overlaySize, setOverlaySize] = useState<{ w: number; h: number } | null>(null)
@@ -251,6 +253,8 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     setAspectMenuOpen(false)
     setIsDragging(false)
     setCaptureState('idle')
+    setCaptureError(null)
+    pendingCapture.current = null
     if (isPreset && overlayRef.current) {
       const rect = overlayRef.current.getBoundingClientRect()
       const side = Math.min(rect.width, rect.height) * 0.75
@@ -270,7 +274,12 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     if (!isCaptureMode) return
     let timer: ReturnType<typeof setTimeout> | undefined
     const handler = (event: SnapshotSavedEvent | undefined) => {
-      if (!isOverlaySnapshotSave(event, projectId)) return
+      if (
+        !pendingCapture.current ||
+        !isOverlaySnapshotSave(event, projectId, pendingCapture.current)
+      )
+        return
+      pendingCapture.current = null
       setCaptureState('saved')
       clearTimeout(timer)
       timer = setTimeout(() => {
@@ -278,9 +287,17 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         setCaptureState('idle')
       }, 1500)
     }
+    const onFailure = (event: SnapshotCaptureFailedEvent) => {
+      if (event.requestId !== pendingCapture.current) return
+      pendingCapture.current = null
+      setCaptureError(event.error)
+      setCaptureState('idle')
+    }
+    emitter.on('snapshot:capture-failed', onFailure)
     emitter.on('snapshot:saved', handler)
     return () => {
       emitter.off('snapshot:saved', handler)
+      emitter.off('snapshot:capture-failed', onFailure)
       clearTimeout(timer)
     }
   }, [isCaptureMode, projectId, setCaptureMode])
@@ -423,7 +440,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   )
 
   const handleCapture = useCallback(() => {
-    if (captureState !== 'idle') return
+    if (captureState !== 'idle' || pendingCapture.current) return
 
     let cropRegion: { x: number; y: number; width: number; height: number } | undefined
     if (mode === 'area' && drag && overlayRef.current) {
@@ -440,9 +457,13 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       }
     }
 
+    const requestId = crypto.randomUUID()
+    pendingCapture.current = requestId
+    setCaptureError(null)
     setCaptureState('capturing')
     triggerSFX('sfx:snapshot-capture')
     emitter.emit('camera-controls:generate-thumbnail', {
+      requestId,
       projectId,
       captureMode: mode,
       cropRegion,
@@ -886,6 +907,14 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
             </span>
           ))}
 
+        {captureError && (
+          <p
+            className="max-w-sm rounded-lg bg-neutral-950/90 px-3 py-2 text-center text-red-300 text-xs"
+            role="alert"
+          >
+            {captureError}
+          </p>
+        )}
         <button
           aria-label={isPreset ? 'Capture' : 'Take snapshot'}
           className="group pointer-events-auto relative grid h-14 w-14 place-items-center rounded-full disabled:opacity-50"
