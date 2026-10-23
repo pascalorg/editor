@@ -47,7 +47,7 @@ export const GEOMETRY_SCRIPT_LIMITS = {
 
 const csg = { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION }
 
-const MODULES: ModuleTable = {
+export const MODULES: ModuleTable = {
   three: THREE as unknown as Record<string, unknown>,
   'three-bvh-csg': csg,
   BufferGeometryUtils: BufferGeometryUtils as unknown as Record<string, unknown>,
@@ -58,7 +58,7 @@ const MODULES: ModuleTable = {
   RoundedBoxGeometry: { RoundedBoxGeometry },
 }
 
-const LIB = {
+export const LIB = {
   BufferGeometryUtils,
   ConvexGeometry,
   LoftGeometry,
@@ -1064,7 +1064,7 @@ export async function finishBuild({
 }
 
 // A deterrent, not the isolation boundary: hosts run this in a locked-down worker or process.
-const SOURCE_GUARD =
+export const SOURCE_GUARD =
   /\bimport\s*\(|\beval\s*\(|\bFunction\s*\(|\.constructor\s*\(|\bprocess\b|\brequire\s*\(/
 
 export function assertScriptSize(code: string) {

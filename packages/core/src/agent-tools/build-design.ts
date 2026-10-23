@@ -2,15 +2,16 @@ import { z } from 'zod'
 import type { AgentToolContract } from './contract'
 
 /**
- * A hosted builder: a team of model calls designs and models a whole home in parallel and writes
- * it as ordinary Pascal nodes. The host runs it (it calls models and spends credits); the contract
- * is shared so the chat and the hosted MCP offer one tool.
+ * A hosted builder: one model writes a whole home as free three.js, others model its furniture in
+ * parallel, and the host converts the design into ordinary Pascal nodes. The host runs it (it
+ * calls models and spends credits); the contract is shared so the chat and the hosted MCP offer
+ * one tool.
  */
 export const buildDesignTool = {
   name: 'build_design',
   title: 'Build a design',
   description:
-    "Design and build a whole home from a brief, in parallel: first the structure (levels, walls, doors, windows, rooms, finishes, roof), written at once as editable walls, then every room's furniture, fixtures, decor, lights and floor finish, each piece modelled on its own and placed as it is finished. Use it to design a new home, or to rebuild a design it made before (replace: true); change what it built with the ordinary tools, since it writes ordinary walls, rooms and objects. It takes several minutes and spends credits on every model call it makes; it stops starting pieces when the balance would not cover them. It answers a report: what it built by kind, the pieces it could not build or place with their reasons, and what it skipped. Where the host runs it in the background (the hosted MCP), it answers at once with a turn id instead: poll get_architect_turn with it.",
+    'Design and build a whole home from a brief: one architect writes the whole house freely, as three.js (its shape, walls, windows and doors, facades, roof, finishes and lights), Pascal converts it by code into editable walls, doors, windows, rooms with their floors and authored objects, and every piece of furniture it delegates is modelled on its own and placed as it is finished. Use it to design a new home, or to rebuild a design it made before (replace: true); change what it built with the ordinary tools, since it writes ordinary walls, rooms and objects. It takes several minutes and spends credits on every model call it makes; it stops starting pieces when the balance would not cover them. It answers a report: what it built by kind, what it converted, what it could not convert and why, the pieces it could not build or place with their reasons, and what it skipped. Where the host runs it in the background (the hosted MCP), it answers at once with a turn id instead: poll get_architect_turn with it.',
   input: {
     brief: z
       .string()
