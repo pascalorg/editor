@@ -970,6 +970,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     "An artifact's kind as the MCP host stores it (item, window, door, column): artifact metadata, not a node's.",
     ['kind'],
   ),
+  ...described(
+    "An architect CLI run's request metadata: the hosted project it belongs to and its credit cap; names no node.",
+    ['pascal_max_credits', 'project_id'],
+  ),
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',
