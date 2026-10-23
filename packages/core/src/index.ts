@@ -219,6 +219,7 @@ export {
   floorScriptInputs,
   floorScriptInputsKey,
   floorScriptRecord,
+  floorScriptSurface,
 } from './lib/floor-script'
 export {
   type FloorStepOverride,

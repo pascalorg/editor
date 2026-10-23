@@ -131,7 +131,7 @@ const payload = {
 
 /**
  * A floor of four boards over the bounds of the room's floor, run 0.3 m past them, and one more
- * wholly outside it: Pascal cuts them to the floor.
+ * wholly outside it, laid from y = 0, the floor's surface: Pascal cuts them to the floor.
  */
 const BOARDS = `export default function build({ THREE, params }) {
   const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
@@ -141,7 +141,7 @@ const BOARDS = `export default function build({ THREE, params }) {
   const w = (x1 - x0) / 4
   for (let i = 0; i < 5; i++) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.01, z1 - z0), m)
-    b.position.set(x0 + w * (i + 0.5), params.elevation + 0.005, (z0 + z1) / 2)
+    b.position.set(x0 + w * (i + 0.5), 0.005, (z0 + z1) / 2)
     g.add(b)
   }
   return g
@@ -156,7 +156,7 @@ const GAPPED = `export default function build({ THREE, params }) {
   for (let row = 0; z0 + row * 0.2 < z1; row++)
     for (let x = x0 + (row % 2 ? 0.4 : 0); x < x1; x += 1.2) {
       const b = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.01, 0.2), m)
-      b.position.set(x + 0.6, params.elevation + 0.005, z0 + (row + 0.5) * 0.2)
+      b.position.set(x + 0.6, 0.005, z0 + (row + 0.5) * 0.2)
       g.add(b)
     }
   return g
@@ -537,11 +537,18 @@ export default function build({ THREE }) {
     expect(room.floor.script.language).toBe('three')
     expect(room.floor.script.manifest.slots.map((s: { id: string }) => s.id)).toEqual(['wood'])
     expect(room.floor.script.inputs).toEqual(expect.any(String))
+    // Built for the floor's outline alone, its y = 0 the floor's surface.
+    expect(Object.keys(builtFor.get(room.floor.script.artifact)!).sort()).toEqual([
+      'holes',
+      'polygon',
+    ])
     // The boards, laid past the floor, are cut to the room inside the walls' faces:
     // 4 m − 0.12 m by 5 m − 0.12 m.
     const { min, max } = room.floor.script.manifest.bounds
     expect(max[0] - min[0]).toBeCloseTo(3.88, 2)
     expect(max[2] - min[2]).toBeCloseTo(4.88, 2)
+    expect(min[1]).toBeCloseTo(0, 6)
+    expect(max[1]).toBeCloseTo(0.01, 6)
     const north = await read(report.ids.n!)
     expect(north.skirting).toMatchObject({ enabled: true, sides: 'a', height: 0.1, proud: 0.012 })
     expect(north.slots.aSkirting).toBe(north.slots.b)

@@ -184,7 +184,7 @@ export const authorSceneRoom = z.object({
     .max(48_000)
     .optional()
     .describe(
-      "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon, params.holes and params.elevation (level coordinates, metres) and lays out the planks, tiles or boards: Pascal cuts the build to the polygon and its holes, so a row may run past the edges (the holes are there for a layout that wants them). Pascal rebuilds it when the room changes; floor stays the fallback finish. The report warns when the build leaves part of the floor uncovered.",
+      "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon and params.holes (plan x/z in level coordinates, metres) and lays out the planks, tiles or boards. y = 0 is the floor's surface: lay the finish from there up, and Pascal stands the build on the room's floor plate. Pascal cuts the build to the polygon and its holes, so a row may run past the edges (the holes are there for a layout that wants them). Pascal rebuilds it when the room changes; floor stays the fallback finish. The report warns when the build leaves part of the floor uncovered.",
     ),
   wallCode: z
     .string()

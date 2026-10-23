@@ -688,13 +688,13 @@ import * as THREE from 'three'
 export const params = { thickness: { default: 0.01, min: 0.005, max: 0.03 } }
 export default function build({ params, inputs }) {
   const xs = params.polygon.map((p) => p[0])
-  const zs = params.polygon.map((p) => p[1])
+  const zs = inputs.polygon.map((p) => p[1])
   const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
   const board = new THREE.Mesh(
     new THREE.BoxGeometry(x1 - x0, params.thickness, z1 - z0),
     new THREE.MeshStandardMaterial({ name: 'slot_oak' }),
   )
-  board.position.set((x0 + x1) / 2, inputs.elevation + params.thickness / 2, (z0 + z1) / 2)
+  board.position.set((x0 + x1) / 2, params.thickness / 2, (z0 + z1) / 2)
   const group = new THREE.Group()
   group.add(board)
   return group
@@ -708,15 +708,14 @@ export default function build({ params, inputs }) {
       [2, 4],
     ],
     holes: [],
-    elevation: 0.3,
   }
 
-  test('reads them in params, stays in their frame and keeps only its own params', async () => {
+  test('reads them in params and inputs, stays in their frame and keeps only its own params', async () => {
     const compiled = await compileGeometryScript({ code: FLOOR, inputs })
     const { min, max } = compiled.manifest.bounds
     expect(min[0]).toBeCloseTo(2, 5)
     expect(max[0]).toBeCloseTo(6, 5)
-    expect(min[1]).toBeCloseTo(0.3, 5)
+    expect(min[1]).toBeCloseTo(0, 5)
     expect(min[2]).toBeCloseTo(1, 5)
     expect(max[2]).toBeCloseTo(4, 5)
     expect(compiled.params).toEqual({ thickness: 0.01 })
@@ -724,10 +723,7 @@ export default function build({ params, inputs }) {
 
   test('without them, the same kind of module is re-origined for its mount', async () => {
     const compiled = await compileGeometryScript({
-      code: FLOOR.replaceAll('params.polygon', '[[2, 1], [6, 1], [6, 4], [2, 4]]').replace(
-        'inputs.elevation',
-        '0.3',
-      ),
+      code: FLOOR.replace(/(params|inputs)\.polygon/g, '[[2, 1], [6, 1], [6, 4], [2, 4]]'),
     })
     expect(compiled.manifest.bounds.min[0]).toBeCloseTo(-2, 5)
     expect(compiled.manifest.bounds.min[1]).toBeCloseTo(0, 5)
@@ -774,7 +770,7 @@ export default function build({ THREE, params }) {
   const g = new THREE.Group()
   for (const [from, to] of ${JSON.stringify(planks)}) {
     const plank = new THREE.Mesh(new THREE.BoxGeometry(to - from, 0.02, 0.2), m)
-    plank.position.set((from + to) / 2, params.elevation + 0.01, 1.5)
+    plank.position.set((from + to) / 2, 0.01, 1.5)
     g.add(plank)
   }
   return g
@@ -788,7 +784,6 @@ export default function build({ THREE, params }) {
       [0, 3],
     ],
     holes: [],
-    elevation: 0,
   }
 
   test('a plank across the floor edge is cut at the edge, one wholly outside is dropped', async () => {
@@ -849,7 +844,7 @@ export default function build({ THREE }) {
   })
 
   test('a plank wholly inside and away from the holes is exported as built, uncut', async () => {
-    const code = PLANKS([[1, 2.5]]).replace('params.elevation', '0')
+    const code = PLANKS([[1, 2.5]])
     const cut = await compileGeometryScript({
       code,
       inputs: {
@@ -881,7 +876,7 @@ export default function build({ THREE, params }) {
   for (let row = 0; z0 + row * width < z1; row++) {
     for (let x = x0 + (row % 2 ? 0.4 - length : 0); x < x1; x += length) {
       const plank = new THREE.Mesh(new THREE.BoxGeometry(length, thickness, width), m)
-      plank.position.set(x + length / 2, params.elevation + thickness / 2, z0 + (row + 0.5) * width)
+      plank.position.set(x + length / 2, thickness / 2, z0 + (row + 0.5) * width)
       g.add(plank)
     }
   }
@@ -904,7 +899,6 @@ export default function build({ THREE, params }) {
         [0, 4],
       ],
       holes: [column],
-      elevation: 0.2,
     }
     const compiled = await compileGeometryScript({ code: STAGGERED, inputs: floor })
     const top = (await trianglesOf(compiled.glb)).filter(
@@ -942,7 +936,7 @@ export default function build({ THREE, params }) {
   for (let row = 0; z0 + row * width < z1; row++) {
     for (let x = x0 + (row % 2 ? ${oddStart} : 0); x < x1; x += length) {
       const plank = new THREE.Mesh(new THREE.BoxGeometry(length, thickness, width), m)
-      plank.position.set(x + length / 2, params.elevation + thickness / 2, z0 + (row + 0.5) * width)
+      plank.position.set(x + length / 2, thickness / 2, z0 + (row + 0.5) * width)
       g.add(plank)
     }
   }
@@ -957,7 +951,6 @@ export default function build({ THREE, params }) {
       [0, 4.9],
     ],
     holes: [],
-    elevation: 0,
   }
 
   test('a plank floor laid to every edge covers all of it, with no patch', async () => {

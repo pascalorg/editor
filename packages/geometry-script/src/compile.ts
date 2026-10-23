@@ -27,11 +27,12 @@ export type GeometryScriptCompileInput = {
   code: string
   params?: Record<string, GeometryScriptParamValue>
   /**
-   * What the host builds the module for (a room floor's `polygon`, `holes` and `elevation`, a wall
-   * face's `outline` and `holes`): the build reads them in `params` beside its declared ones, and
-   * as `inputs`; they are not among the returned params, which the scene keeps. A build given them
-   * is in the host's frame, so it is not re-origined for its mount, and it is cut to the floor's
-   * polygon or the face's outline, less their holes: the module lays out, Pascal clips.
+   * What the host builds the module for (a room floor's `polygon` and `holes` in plan x/z, with
+   * y = 0 the floor's surface; a wall face's `outline` and `holes`): the build reads them in
+   * `params` beside its declared ones, and as `inputs`; they are not among the returned params,
+   * which the scene keeps. A build given them is in the host's frame, so it is not re-origined for
+   * its mount, and it is cut to the floor's polygon or the face's outline, less their holes: the
+   * module lays out, Pascal clips.
    */
   inputs?: Record<string, unknown>
 }
