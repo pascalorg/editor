@@ -958,6 +958,10 @@ const described = (reason: string, paths: readonly string[]) =>
 
 /** Metadata keys found in editor sources that are not references. */
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
+  ...described(
+    'Architect API request metadata: hosted project identity and credit budget, not scene-node references.',
+    ['project_id', 'pascal_max_credits'],
+  ),
   { path: 'metadata.roomBoundary', reason: 'Boolean opt-out from room boundary detection.' },
   ...described(
     "author_scene's provenance: the payload's own ids on walls and openings, a room's seed, a level's elevation, a slab's finish, a wall's colour, and on the building the stored payload, the report and when it was written; none of it names a node.",

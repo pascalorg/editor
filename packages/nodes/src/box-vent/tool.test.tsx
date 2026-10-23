@@ -79,6 +79,7 @@ test('box-vent placement matches its preview, honors grid mode and blocks unsupp
     if (preview?.type !== 'box-vent') throw new Error('Missing box-vent preview')
     await act(async () => emitter.emit('roof:click', event))
     const placed = Object.values(useScene.getState().nodes).find((node) => node.type === 'box-vent')
+    expect(useScene.getState().dirtyNodes.has(segment.id)).toBe(true)
     expect(placed).toBeDefined()
     if (placed?.type !== 'box-vent') throw new Error('Missing box vent')
     expect(preview.position).toEqual(placed.position)
