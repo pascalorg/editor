@@ -685,7 +685,7 @@ export default function build({ THREE }) {
     expect(max[0]).toBeCloseTo(face.outline.x1, 4)
     // The first row stands half a joint (2 mm) off the floor; the top row is cut at the top.
     expect(min[1]).toBeCloseTo(0.002, 4)
-    expect(max[1]).toBeCloseTo(2.7, 4)
+    expect(max[1]).toBeCloseTo(face.outline.y1, 4)
     expect(max[2] - min[2]).toBeCloseTo(0.008, 3)
     expect(face.holes).toHaveLength(2)
     const inWindow = glbCentroids(artifacts.get(tiles.artifact)!).filter(([x, y]) =>

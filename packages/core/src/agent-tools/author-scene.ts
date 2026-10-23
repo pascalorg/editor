@@ -4,9 +4,9 @@ import { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
-const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene, in one call. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls with their openings, rooms, slabs, columns, railings, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
+const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene, in one call. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls with their openings, rooms, slabs, columns, railings, stairs, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
 
-Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands; its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode, tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode); a slab is a terrace, a platform, a balcony. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
+Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands, except a ceiling item's (mount 'ceiling': a pendant, a ceiling light): it hangs from the ceiling of the room containing its plan position, its top on that ceiling, and its y is not read. A rug, a mat or a runner is an item lying on the room's floor. Its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode, tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode); a slab is a terrace, a platform, a balcony; a stair is its level's stairs, which open the floor above. Paint a wall by what its faces look onto, colorInside and colorOutside: which face is inside is Pascal's to find. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
 
 The report says what was written, what Pascal defaulted (defaults: a window with no type is fixed and cannot open), what it warns about but wrote (warnings: thin slabs, too many slabs or regions) and what it refused (defects, by your ids).
 
@@ -103,7 +103,10 @@ export const authorSceneWall = z.object({
     .describe('Your own id, unique across every wall and item on all levels.'),
   start: plan('start'),
   end: plan('end'),
-  height: length('Wall height.', { positive: true }),
+  height: length(
+    "Wall height. Below another level, a wall within 0.5 m of the climb to that level's floor follows the storey up to it: Pascal draws no floor structure between storeys.",
+    { positive: true },
+  ),
   thickness: length('Wall thickness.', { positive: true }),
   color: z
     .string()
@@ -111,17 +114,29 @@ export const authorSceneWall = z.object({
     .describe(
       'Paint for both faces: #rrggbb, written as an exact material, or a library ref (library:<id>) from search_materials.',
     ),
+  colorInside: z
+    .string()
+    .optional()
+    .describe(
+      'Paint for the face or faces that look into a room of this level, same forms as color: both faces of a partition, the room side of an outside wall. Pascal finds them once the rooms are derived and the report says which face it was; over color.',
+    ),
+  colorOutside: z
+    .string()
+    .optional()
+    .describe(
+      "Paint for a face no room of this level looks into (an outside wall's cladding or render), same forms as color; over color. Say an outside wall's two finishes this way, not by left and right.",
+    ),
   colorLeft: z
     .string()
     .optional()
     .describe(
-      "Paint for the face on the left when looking from start to end, same forms as color; over color. The left is the wall's front.",
+      "Paint for the face on the left when looking from start to end, same forms as color; over colorInside, colorOutside and color. The left is the wall's front.",
     ),
   colorRight: z
     .string()
     .optional()
     .describe(
-      'Paint for the face on the right when looking from start to end, same forms as color; over color.',
+      'Paint for the face on the right when looking from start to end, same forms as color; over colorInside, colorOutside and color.',
     ),
   openings: z.array(authorSceneOpening).optional(),
   skirting: z
@@ -242,7 +257,7 @@ export const authorSceneItem = z.object({
     .min(1)
     .max(48_000)
     .describe("The piece's own three.js module (see the description)."),
-  position: xyz('bottom centre'),
+  position: xyz("bottom centre (a ceiling item's top centre, y not read)"),
   rotation: measurement('angle', 'deg', {
     default: 0,
     description: 'Turn about the vertical axis (default 0).',
@@ -253,6 +268,31 @@ export const authorSceneItem = z.object({
     .describe(
       'The id of the item this one rests on or hangs from (a lamp on a nightstand), or of the wall it is fixed to (a baseboard, a casing, a mirror, art), so moving the host moves it. On a wall, position is still the world bottom centre: the item faces the room on the nearest face, keeping its outward distance from that face; a point inside the wall moves to the face and is reported. Rotation is ignored.',
     ),
+})
+
+export const authorSceneStair = z.object({
+  name: z.string().max(80).optional(),
+  start: plan("the middle of the bottom step's front edge, where the climb starts"),
+  rotation: measurement('angle', 'deg', {
+    default: 0,
+    description:
+      'Which way the first flight climbs: 0 toward +z, 90 toward +x, 180 toward −z, 270 toward −x (default 0).',
+  }),
+  width: length('Width across the climb (default 1.0 m).', { default: 1, positive: true }),
+  layout: z
+    .enum(['straight', 'l', 'u'])
+    .default('straight')
+    .describe(
+      'straight (default); l: a flight, a landing as deep as the stair is wide, a flight turned 90°; u: a flight, a landing across, a flight back beside the first.',
+    ),
+  turn: z
+    .enum(['left', 'right'])
+    .optional()
+    .describe("Which way an L or U turns, to the climber's left or right (default left)."),
+  length: length(
+    "The flights' run along the climb, landings aside (default: 0.28 m of going per riser, risers of at most 0.18 m).",
+    { positive: true },
+  ).optional(),
 })
 
 export const authorSceneLight = z.object({
@@ -273,13 +313,20 @@ export const authorSceneLight = z.object({
 
 export const authorSceneLevel = z.object({
   name: z.string().min(1).max(80),
-  elevation: length("The level's floor height above the ground floor's (default 0).", {
-    default: 0,
-  }),
+  elevation: length(
+    "The level's floor height above the ground floor's (default 0). It sets the storey below: a storey is as tall as the climb to the next level's floor (its walls, its stairs, its ceiling follow), the top one as its tallest wall.",
+    { default: 0 },
+  ),
   walls: z.array(authorSceneWall).optional(),
   rooms: z.array(authorSceneRoom).default([]).describe('Room seeds and finishes (default []).'),
   slabs: z.array(authorSceneSlab).optional(),
   columns: z.array(authorSceneColumn).optional(),
+  stairs: z
+    .array(authorSceneStair)
+    .optional()
+    .describe(
+      "Stairs rising from this level to the next one in levels, as Pascal's stair tool builds them: the risers follow the storey height and each stair opens the floor above over its flights. Never a stair as an item.",
+    ),
   items: z.array(authorSceneItem).optional(),
   lights: z.array(authorSceneLight).default([]),
 })

@@ -92,6 +92,42 @@ describe('material sides', () => {
     expect(material.side).toBe(FrontSide)
   })
 
+  test('every mesh sharing a double-sided material gets its back face', async () => {
+    const { glb, manifest } = await compileGeometryScript({
+      code: `
+import * as THREE from 'three'
+export default function build() {
+  const g = new THREE.Group()
+  const fabric = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide })
+  for (const x of [-0.6, 0.6]) {
+    const curtain = new THREE.Mesh(new THREE.PlaneGeometry(1, 2), fabric)
+    curtain.position.set(x, 1, 0)
+    g.add(curtain)
+  }
+  return g
+}
+`,
+    })
+    expect(manifest.triangles).toBe(8)
+    const gltf = await new GLTFLoader().parseAsync(glb, '')
+    const meshes: Mesh[] = []
+    gltf.scene.traverse((object) => {
+      if ((object as Mesh).isMesh) meshes.push(object as Mesh)
+    })
+    expect(meshes.reduce((sum, mesh) => sum + triangles(mesh), 0)).toBe(8)
+    // Seen from behind, each curtain still has a face pointing at the eye.
+    for (const x of [-0.6, 0.6]) {
+      const behind = meshes.some((mesh) => {
+        const position = mesh.geometry.getAttribute('position')
+        const normal = mesh.geometry.getAttribute('normal')
+        for (let i = 0; i < position.count; i++)
+          if (Math.abs(position.getX(i) - x) <= 0.5 && normal.getZ(i) < -0.99) return true
+        return false
+      })
+      expect(behind).toBe(true)
+    }
+  })
+
   test('a back-side plane becomes the flipped copy only', async () => {
     const { mesh, manifest, material } = await build('BackSide')
     expect(triangles(mesh)).toBe(2)

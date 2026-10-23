@@ -1404,4 +1404,175 @@ describe('author_scene', () => {
       ['middle', 'b', east],
     ])
   })
+
+  test('a ceiling item hangs from the ceiling of the room its plan point is in, and holds its light', () => {
+    const pendant: CompiledGeometryScript = {
+      ...bed,
+      mount: 'ceiling',
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-0.2, -0.6, -0.2], max: [0.2, 0, 0.2] },
+      } as unknown as CompiledGeometryScript['manifest'],
+    }
+    const hanging = (id: string, position: number[]) => ({
+      id,
+      name: 'Pendant',
+      category: 'lamp',
+      code: '// pendant',
+      position,
+    })
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [hanging('pendant', [0.5, 2.7, -0.75]), hanging('porch', [10, 2.7, 0])],
+          lights: [{ position: [0.5, 2.3, -0.75], fixture: 'pendant' }],
+        },
+      ],
+    })
+    const outcome = run(payload, { pendant, porch: pendant }, {})
+    expect(outcome.result.defects).toEqual([
+      {
+        id: 'porch',
+        code: 'no_ceiling',
+        message:
+          '"Pendant" hangs from a ceiling, and no room on "Ground floor" contains (10, 0): move it into a room, or build it with mount \'floor\'.',
+      },
+    ])
+    const node = byAuthorId(outcome, 'pendant')
+    const ceiling = nodesOf(outcome).find((n) => n.id === node.parentId)!
+    expect(ceiling.type).toBe('ceiling')
+    expect((ceiling as { zoneId?: string }).zoneId).toBe(outcome.result.ids['room/0/0'])
+    expect((ceiling as { children?: string[] }).children).toContain(node.id)
+    expect(node.position).toEqual([0.5, 0, -0.75])
+    expect(node.asset.attachTo).toBe('ceiling')
+    const height = resolveCeilingHeight(ceiling as never, sceneOf(outcome)) - CEILING_DRAW_OFFSET
+    expect(outcome.result.defaults).toContain(
+      `pendant: hung from the ceiling of Bedroom, ${height.toFixed(2)} m up`,
+    )
+    expect(node.asset.interactive.effects[0].offset[1]).toBeCloseTo(2.3 - height, 9)
+    expect(outcome.result.lights).toBe(1)
+  })
+
+  test('a rug lying on a room floor is furniture; the same plate outside the floors is still a slab', () => {
+    const rug: CompiledGeometryScript = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-1.3, 0, -1], max: [1.3, 0.01, 1] },
+      } as unknown as CompiledGeometryScript['manifest'],
+    }
+    const lying = (id: string, x: number) => ({
+      id,
+      name: 'Wool rug',
+      category: 'rug',
+      code: '// rug',
+      position: [x, 0, 0],
+    })
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [{ ...bedroom.levels[0], items: [lying('rug', 0), lying('yard', 10)], lights: [] }],
+    })
+    const outcome = run(payload, { rug, yard: rug }, {})
+    expect(byAuthorId(outcome, 'rug').type).toBe('item')
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([['yard', 'use_slab']])
+  })
+
+  test('colorInside and colorOutside paint the faces by what they look onto; colorLeft and colorRight win', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) => ({
+            ...w,
+            color: undefined,
+            colorInside: 'library:preset-white',
+            colorOutside: 'library:siding-lap-nearblack',
+            ...(w.id === 'east' ? { colorRight: 'library:concrete-plaster' } : {}),
+          })),
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    // The walls run clockwise round the room: each one's left face looks into it.
+    expect(byAuthorId(outcome, 'north').slots).toMatchObject({
+      a: 'library:preset-white',
+      b: 'library:siding-lap-nearblack',
+    })
+    expect(byAuthorId(outcome, 'east').slots).toMatchObject({
+      a: 'library:preset-white',
+      b: 'library:concrete-plaster',
+    })
+    expect(outcome.result.defaults).toContain(
+      `colorInside / colorOutside on "Ground floor", left and right as seen from each wall's start to its end: inside is the left face of north, east, south, west`,
+    )
+  })
+
+  test('a stair rises to the next level and owns the opening in its floor; on the top level it is refused', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Hall', seed: [0, 0] }],
+          stairs: [{ start: [-1.2, -2.3], width: 1 }],
+        },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Landing', seed: [0, 0] }],
+          stairs: [{ start: [0, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.stairs).toBe(1)
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['stair/1/0', 'no_level_above'],
+    ])
+    const stair = byAuthorId(outcome, 'stair/0/0')
+    expect(stair.type).toBe('stair')
+    expect(stair.fromLevelId).toBe(outcome.result.ids['level/0'])
+    expect(stair.toLevelId).toBe(outcome.result.ids['level/1'])
+    // Each storey reaches the next level's floor, the top one its walls, and the stair climbs it.
+    expect(byAuthorId(outcome, 'level/0').height).toBe(3)
+    expect(byAuthorId(outcome, 'level/1').height).toBe(2.7)
+    // The ground floor's 2.7 m walls reach the floor above; the top floor's keep their height.
+    expect(byAuthorId(outcome, 'north').height).toBeUndefined()
+    expect(byAuthorId(outcome, 'up-north').height).toBe(2.7)
+    expect(outcome.result.defaults).toContain(
+      'walls of "Ground floor" given 2.70 m follow the storey to the floor above, 3.00 m: Pascal draws no floor structure between storeys',
+    )
+    const rise = nodesOf(outcome)
+      .filter((n) => n.parentId === stair.id)
+      .reduce((sum, n) => sum + (n as AnyNode & { height: number }).height, 0)
+    expect(rise).toBeCloseTo(3, 6)
+    expect(outcome.result.defaults.find((d) => d.startsWith('stair/0/0: '))).toMatch(
+      /up to First floor, its floor opening cut\.$/,
+    )
+    // The floor above has a hole over the flight, and its plate is cut by it.
+    const upper = nodesOf(outcome).filter((n) => n.parentId === outcome.result.ids['level/1'])
+    expect(upper.some((n) => n.type === 'floor-opening')).toBe(true)
+    const plate = upper.find((n) => n.type === 'slab') as AnyNode & { holes: unknown[] }
+    expect(plate.holes.length).toBe(1)
+    // Its ids are the conversion's own: the same payload writes the same stair.
+    const again = run(payload, {}, {})
+    expect(
+      nodesOf(again)
+        .filter((n) => n.parentId === stair.id)
+        .map((n) => n.id),
+    ).toEqual(
+      nodesOf(outcome)
+        .filter((n) => n.parentId === stair.id)
+        .map((n) => n.id),
+    )
+  })
 })

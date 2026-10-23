@@ -1291,6 +1291,85 @@ describe('a look from inside a room', () => {
     expect(standsIn(west, polygon) && standsIn(east, polygon)).toBe(true)
   })
 
+  test('the eye never stands inside a tall piece; a low one under it does not move it', () => {
+    const polygon = rect(1, 1, 5, 5)
+    const empty = withRooms([room('zone_a', polygon)])
+    const before = sceneViewPlan(empty, { interior: { zoneId: 'zone_a' } }).pose
+    const piece = (id: string, height: number) =>
+      ItemNode.parse({
+        id,
+        parentId: 'level_0',
+        name: id,
+        position: [before.position[0], 0, before.position[2]],
+        asset: {
+          id,
+          category: 'furniture',
+          name: id,
+          thumbnail: '',
+          src: `/items/${id}/model.glb`,
+          dimensions: [1.2, height, 0.6],
+        },
+      })
+    const furnished = (item: ItemNode) =>
+      ({
+        ...empty,
+        [item.id]: item,
+        level_0: {
+          ...(empty.level_0 as LevelNode),
+          children: [...(empty.level_0 as LevelNode).children, item.id],
+        },
+      }) as Record<string, AnyNode>
+    const wardrobe = sceneViewPlan(furnished(piece('item_wardrobe', 2.1)), {
+      interior: { zoneId: 'zone_a' },
+    }).pose
+    expect(standsIn(wardrobe, polygon)).toBe(true)
+    const [dx, dz] = [
+      wardrobe.position[0] - before.position[0],
+      wardrobe.position[2] - before.position[2],
+    ]
+    // Out of the wardrobe's 1.2 × 0.6 m footprint and a step clear of its faces.
+    expect(Math.abs(dx) > 0.6 + 0.3 - 1e-9 || Math.abs(dz) > 0.3 + 0.3 - 1e-9).toBe(true)
+    const bed = sceneViewPlan(furnished(piece('item_bed', 0.5)), {
+      interior: { zoneId: 'zone_a' },
+    }).pose
+    expect(bed.position).toEqual(before.position)
+  })
+
+  test('the eye does not stand just behind a tall piece that hides the room', () => {
+    const polygon = rect(1, 1, 5, 5)
+    const empty = withRooms([room('zone_a', polygon)])
+    const before = sceneViewPlan(empty, { interior: { zoneId: 'zone_a' } }).pose
+    // A wardrobe a step ahead of where the eye stood, between it and the room's middle.
+    const ahead = (v: number) => v + (3 - v) * 0.45
+    const wardrobe = ItemNode.parse({
+      id: 'item_wardrobe',
+      parentId: 'level_0',
+      name: 'Wardrobe',
+      position: [ahead(before.position[0]), 0, ahead(before.position[2])],
+      asset: {
+        id: 'wardrobe',
+        category: 'furniture',
+        name: 'Wardrobe',
+        thumbnail: '',
+        src: '/items/wardrobe/model.glb',
+        dimensions: [1.2, 2.1, 0.6],
+      },
+    })
+    const nodes = {
+      ...empty,
+      item_wardrobe: wardrobe,
+      level_0: {
+        ...(empty.level_0 as LevelNode),
+        children: [...(empty.level_0 as LevelNode).children, wardrobe.id],
+      },
+    } as Record<string, AnyNode>
+    const { pose } = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' } })
+    expect(standsIn(pose, polygon)).toBe(true)
+    expect(
+      Math.hypot(pose.position[0] - before.position[0], pose.position[2] - before.position[2]),
+    ).toBeGreaterThan(1.5)
+  })
+
   test('a target in the room is what the eye looks at', () => {
     const polygon = rect(1, 1, 9, 5)
     const sofa = ItemNode.parse({

@@ -126,14 +126,22 @@ export async function compileAndStore(
   const { glb, ...compiled } = await host.compile({ code, language, params, inputs })
   metadata.mount = compiled.mount
   const [sha256] = await Promise.all([
-    host.storeArtifact({
-      sceneId,
-      nodeId,
-      metadata,
-      sha256: compiled.sha256,
-      bytes: glb,
-      mimeType: 'model/gltf-binary',
-    }),
+    host
+      .storeArtifact({
+        sceneId,
+        nodeId,
+        metadata,
+        sha256: compiled.sha256,
+        bytes: glb,
+        mimeType: 'model/gltf-binary',
+      })
+      .catch((error: unknown) => {
+        // 413, Payload Too Large: the host's store refuses a build this size.
+        if ((error as { status?: number }).status !== 413) throw error
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}: the build is ${(glb.byteLength / 1048576).toFixed(1)} MB for ${compiled.manifest.triangles.toLocaleString('en')} triangles. Build it with fewer triangles: fewer segments on curves, spheres and tubes, fewer repeated tufts, slats or links, a flat back where it stands against a wall.`,
+        )
+      }),
     host.storeArtifact({
       sceneId,
       nodeId,

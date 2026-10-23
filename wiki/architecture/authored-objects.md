@@ -76,6 +76,8 @@ The compiler also derives upward surfaces (where things rest) and undersides (wh
 
 An `InstancedMesh` in a build is expanded first, into a group of plain meshes, one per drawn instance (`count`), each at its `instanceMatrix` under the instanced mesh's own transform, with its `instanceColor` as a vertex colour. Everything after reads plain meshes: the bounds, the cut to a host's floor or face, coverage, the triangle count and the merge by part and material, so a floor of instanced planks is measured and cut like one of meshes. Every instance counts toward the 300k triangle limit: instancing does not buy a larger budget.
 
+The viewer draws every material front side only, so a double-sided or back-side mesh gets its back face baked into its geometry (the triangles again, wound the other way, normals negated) before the triangle count, which counts them; the materials turn front-side only once every mesh is baked, so meshes sharing one double-sided material (a pair of curtains) all keep their back. After the merge by part and material, vertices equal in every attribute are welded back into indexed geometry: the bake and the merge leave three vertices per triangle (an 82k-triangle bed was a 6.0 MB GLB; welded, with every back face baked, it is 97k triangles and 2.0 MB).
+
 ### Saved ceiling objects
 
 Previously compiled ceiling objects keep their saved GLB, manifest and placement on load,

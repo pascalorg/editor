@@ -635,21 +635,40 @@ function flipWinding(source: THREE.BufferGeometry): THREE.BufferGeometry {
  * so a double-sided plane shows nothing from behind. The back face is baked into
  * the geometry instead: the triangles again, wound the other way with their
  * normals negated; a back-side material keeps only that copy. Runs before the
- * triangle count and the merge, so both see what is exported.
+ * triangle count and the merge, so both see what is exported. Materials turn
+ * front-side only once every mesh is baked: a material shared by several
+ * meshes (a pair of curtains) must still read as double-sided on the last one.
  */
 function bakeBackFaces(root: THREE.Object3D) {
+  const sided: THREE.Mesh<THREE.BufferGeometry, THREE.Material>[] = []
   root.traverse((object) => {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh || isHelper(mesh) || Array.isArray(mesh.material)) return
-    const { side } = mesh.material
-    if (side === THREE.FrontSide) return
+    if (mesh.material.side !== THREE.FrontSide)
+      sided.push(mesh as THREE.Mesh<THREE.BufferGeometry, THREE.Material>)
+  })
+  for (const mesh of sided) {
     const back = flipWinding(mesh.geometry)
     mesh.geometry =
-      side === THREE.BackSide
+      mesh.material.side === THREE.BackSide
         ? back
         : (BufferGeometryUtils.mergeGeometries([mesh.geometry.toNonIndexed(), back]) ??
           mesh.geometry)
-    mesh.material.side = THREE.FrontSide
+  }
+  for (const mesh of sided) mesh.material.side = THREE.FrontSide
+}
+
+/**
+ * The bake and the merge leave every triangle with its own three vertices, three
+ * times what a smooth surface needs: an 82k-triangle bed was a 6 MB GLB.
+ * Vertices equal in every attribute are shared again, so hard edges (their
+ * normals differ) stay split and the exported shape is the same.
+ */
+function weldVertices(root: THREE.Object3D) {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (mesh.isMesh && !isHelper(mesh) && !mesh.geometry.index)
+      mesh.geometry = BufferGeometryUtils.mergeVertices(mesh.geometry)
   })
 }
 
@@ -1012,6 +1031,7 @@ export async function finishBuild({
 
   const { surfaces, undersides } = analyseGeometry(root, conventions.parts)
   mergeByPartAndMaterial(root, animated)
+  weldVertices(root)
   const bounds = visibleBounds(root)
   const glb = await exportGlb(root, clips)
   return {
