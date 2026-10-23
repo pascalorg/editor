@@ -50,8 +50,8 @@
     "zustand": "^5"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.3.1",
-    "@modelcontextprotocol/server": "^2.3.1",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@pascal-app/core": "^1.0.6",
     "@pascal-app/editor": "^1.0.6",
     "@pascal-app/mcp": "^1.0.6",

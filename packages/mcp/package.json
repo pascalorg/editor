@@ -66,14 +66,14 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.15",
-    "@modelcontextprotocol/node": "^2.1.1",
-    "@modelcontextprotocol/server": "^2.3.1",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@pascal-app/geometry-script": "^1.0.6",
     "@pascal-app/lingo": "^0.5.0",
     "zod": ">=4.6.7 <4.7"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/client": "^2.4.0",
     "@pascal-app/core": "^1.0.6",
     "@pascal/typescript-config": "*",
     "@types/node": "^26.6.5",
