@@ -1,5 +1,7 @@
 # Pascal Editor
 
+[![AgentShield Security](https://merx.help/badge/A+.svg)](https://merx.help/shield)
+
 An open-source, local-first 3D building editor built with React Three Fiber and
 WebGPU. Run it in the browser or from the CLI, and connect AI agents through MCP.
 
