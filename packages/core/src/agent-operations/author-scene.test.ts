@@ -1559,6 +1559,35 @@ describe('author_scene', () => {
     )
   })
 
+  test('the floor between storeys wears the cladding of the walls under it', () => {
+    const storey = (prefix: string, colorOutside?: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({
+        ...w,
+        id: `${prefix}${w.id}`,
+        openings: [],
+        ...(colorOutside ? { colorOutside } : {}),
+      }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey('', 'library:siding-lap-nearblack'),
+          rooms: [{ name: 'Living room', seed: [0, 0] }],
+        },
+        { name: 'First floor', elevation: 2.9, walls: storey('up-'), rooms: [] },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    const first = outcome.result.ids['level/1']!
+    const plate = Object.values(sceneOf(outcome)).find(
+      (n) => n.type === 'slab' && n.parentId === first && n.plateRole === 'base',
+    ) as AnyNode & { slots?: Record<string, string> }
+    expect(plate.slots).toMatchObject({
+      edge: 'library:siding-lap-nearblack',
+      side: 'library:siding-lap-nearblack',
+    })
+  })
+
   test('a wall reaching into the floor above stops under it', () => {
     const walls = bedroom.levels[0]!.walls!.map((w) => ({ ...w, openings: [], height: 3 }))
     const payload = authorScenePayload.parse({

@@ -124,7 +124,7 @@ export const authorSceneWall = z.object({
     .string()
     .optional()
     .describe(
-      "Paint for a face no room of this level looks into (an outside wall's cladding or render), same forms as color; over color. Say an outside wall's two finishes this way, not by left and right.",
+      "Paint for a face no room of this level looks into (an outside wall's cladding or render), same forms as color; over color. Say an outside wall's two finishes this way, not by left and right. The floor between this level and the one above wears the colour most of this level's walls give here, so the facade reads as one.",
     ),
   colorLeft: z
     .string()

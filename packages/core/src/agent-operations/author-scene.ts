@@ -174,6 +174,15 @@ const dist = (a: readonly number[], b: readonly number[]) =>
 
 const metres = (value: number) => `${value.toFixed(2)} m`
 
+/** The value given most often, the first one on a tie; undefined for none. */
+const mostCommon = (values: readonly string[]): string | undefined => {
+  const counts = new Map<string, number>()
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1)
+  let best: string | undefined
+  for (const [value, count] of counts) if (!best || count > counts.get(best)!) best = value
+  return best
+}
+
 /**
  * Where a wall end meets another wall's centerline: the projection onto that line, as long as it
  * lands on the wall or within reach past its ends. The line, not the segment, so a partition
@@ -1116,10 +1125,21 @@ export function authorScene(
     // The carrying walls stand on the floor below; their tops, in this level's frame, are its underside.
     const lower = plates(levelNodes[index - 1]!.id)
     const underside = (lower.length ? Math.max(...lower.map((p) => p.elevation)) : 0) + wallHeight
+    // Seen from outside, the band continues the cladding under it: the colour most of those walls
+    // wear outside paints the plate's edge and sides.
+    const outsides = (payload.levels[index - 1]!.walls ?? []).flatMap((w) =>
+      w.colorOutside ? [w.colorOutside] : [],
+    )
+    const cladding = mostCommon(outsides)
+    const bandRef = cladding && finishRef(cladding, `level/${index}/floor`)
     const depths = new Set<number>()
     for (const plate of plates(levelNodes[index]!.id)) {
       const thickness = roundFloorElevation(plate.elevation - (underside - storey))
-      written[plate.id] = { ...plate, thickness }
+      written[plate.id] = {
+        ...plate,
+        thickness,
+        ...(bandRef ? { slots: { ...plate.slots, edge: bandRef, side: bandRef } } : {}),
+      }
       depths.add(thickness)
     }
     if (depths.size)
