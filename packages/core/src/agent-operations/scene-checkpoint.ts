@@ -138,6 +138,7 @@ const nameOf = (node: AnyNode) =>
 /** The scene as a checkpoint remembers it: every node's fingerprint and the registered families' places. */
 export function takeCheckpoint(nodes: SceneNodes, name: string, madeAt: number): SessionCheckpoint {
   const remembered: Record<string, CheckpointNode> = {}
+  // biome-ignore lint/plugin: a checkpoint remembers every node
   for (const node of Object.values(nodes))
     remembered[node.id] = {
       type: node.type,
@@ -191,6 +192,7 @@ export function createdBetween(before: SceneNodes, after: SceneNodes): MadeEntry
  * the session has one, or the scene is too large to remember.
  */
 export function startOfSession(session: SessionRecord, nodes: SceneNodes): SessionKeep | undefined {
+  // biome-ignore lint/plugin: a checkpoint remembers every node, so its size is the scene's
   if (session.checkpoints.start || Object.keys(nodes).length > MAX_CHECKPOINT_NODES)
     return undefined
   return { checkpoint: takeCheckpoint(nodes, 'start', session.made.length) }
@@ -214,6 +216,7 @@ const Checkpoint = z.object({
   measure: Measure,
   nodes: z
     .record(z.string(), Remembered)
+    // biome-ignore lint/plugin: a stored checkpoint's own record, not the scene
     .refine((nodes) => Object.keys(nodes).length <= MAX_CHECKPOINT_NODES),
   issues: z.array(z.string()),
   madeAt: z.number().int().min(0),

@@ -1,4 +1,5 @@
 import { containsPoint } from '../../lib/polygon-boolean'
+import { queryNodes } from '../../runtime/node-queries'
 import type { AnyNode, AnyNodeId, LevelNode, StairNode, StairSegmentNode } from '../../schema'
 import { StairDesignTargets } from '../../schema/nodes/stair-design-targets'
 import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
@@ -120,8 +121,8 @@ export function syncStairRises(
 ): Array<{ id: AnyNodeId; data: Partial<AnyNode> }> {
   const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
 
-  for (const node of Object.values(nodes)) {
-    if (node.type !== 'stair' || (node.stairType ?? 'straight') !== 'straight') continue
+  for (const node of queryNodes<StairNode>(nodes, { type: 'stair' })) {
+    if ((node.stairType ?? 'straight') !== 'straight') continue
     const deck = node.deckSlabId ? nodes[node.deckSlabId] : undefined
     if (node.totalRise !== undefined && deck?.type !== 'slab' && !node.uniformRisers) continue
 

@@ -7,7 +7,13 @@ import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { siteBrief } from '../lib/site-placement'
 import { nodeRegistry } from '../registry'
-import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, type LevelNode } from '../schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  AnyNode as AnyNodeSchema,
+  type BuildingNode,
+  type LevelNode,
+} from '../schema'
 import { nodeSchemaForKind } from '../schema/compiled-node-parsers'
 import { isCeilingGeometry } from '../services/roof-level'
 import { isRoofOnStoreyWalls } from '../services/roof-move'
@@ -38,6 +44,7 @@ import {
   levelRole,
   levelsOf,
   nodesOnLevel,
+  queryNodes,
 } from './scene-queries'
 import { reviewSince } from './scene-review'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
@@ -327,6 +334,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     unreadOn.size === 0
       ? nodes
       : Object.fromEntries(
+          // biome-ignore lint/plugin: verify_scene reads the whole scene
           Object.entries(nodes).filter(([id]) => !unreadOn.has(levelIdOf(scene, id) ?? '')),
         )
 
@@ -649,8 +657,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
 
   // Where each building stands on its lot: past the lot line or into the required yards is a
   // problem, off-centre is not.
-  for (const building of Object.values(nodes)) {
-    if (building.type !== 'building') continue
+  for (const building of queryNodes<BuildingNode>(nodes, { type: 'building' })) {
     const brief = siteBrief(nodes, { buildingId: building.id })
     if (!brief) continue
     const name = building.name ?? 'The building'
@@ -748,6 +755,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
 
 /** Objects built by add_object, with what each stands in for: each is a gap in what Pascal builds. */
 function authoredObjects(nodes: SceneNodes) {
+  // biome-ignore lint/plugin: verify_scene reads the whole scene
   const objects = Object.values(nodes)
     .flatMap((node) =>
       node.type === 'item' && node.source

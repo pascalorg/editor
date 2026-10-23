@@ -1,9 +1,8 @@
 import { refuse } from '../agent-tools/refusal'
 import { getLevelDisplayName } from '../lib/level-name'
-import type { AnyNode } from '../schema'
 import { hashNode as hashOf, type SessionRecord } from './scene-checkpoint'
 import { changesSince, type LostSinceCheckpointIssue, type MeasureChange } from './scene-measure'
-import { levelIdOf, levelsOf } from './scene-queries'
+import { levelIdOf, levelsOf, queryNodes } from './scene-queries'
 import type { SceneNodes } from './types'
 
 /** A node of these kinds can be the target of a view_scene; the others are seen through their level. */
@@ -84,6 +83,7 @@ export function reviewSince(session: SessionRecord, name: string, nodes: SceneNo
     return checkpoint.nodes[levelId]?.name ?? levelId
   }
 
+  // biome-ignore lint/plugin: a review compares every node with the checkpoint
   for (const node of Object.values(nodes)) {
     const was = checkpoint.nodes[node.id]
     const levelId = levelIdOf(nodes, node.id)
@@ -154,4 +154,4 @@ export function reviewSince(session: SessionRecord, name: string, nodes: SceneNo
 }
 
 const firstBuilding = (nodes: SceneNodes): string | undefined =>
-  Object.values(nodes).find((node: AnyNode) => node.type === 'building')?.id
+  queryNodes(nodes, { type: 'building' })[0]?.id

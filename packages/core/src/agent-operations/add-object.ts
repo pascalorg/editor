@@ -28,6 +28,7 @@ import {
 import { achievedChanges } from './achieved'
 import { targetLevel } from './level-target'
 import { roofLevelRefusal } from './roof-writes'
+import { queryNodes } from './scene-queries'
 import type { AgentOperation, BatchedObject, SceneNodes } from './types'
 
 type Vec3 = [number, number, number]
@@ -156,9 +157,7 @@ function shareOverFloor(
   compiled: CompiledGeometryScript,
   input: AddObjectInput,
 ) {
-  const slabs = Object.values(nodes).filter(
-    (node): node is SlabNode => node.type === 'slab' && node.parentId === levelId,
-  )
+  const slabs = queryNodes<SlabNode>(nodes, { type: 'slab', parentId: levelId })
   const { min, max } = compiled.manifest.bounds
   const footprintArea = (max[0] - min[0]) * (max[2] - min[2])
   if (slabs.length === 0 || !(footprintArea > 0)) return 0

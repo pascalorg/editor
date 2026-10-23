@@ -11,6 +11,7 @@ import {
   recordMade,
   type SceneNodes,
 } from '@pascal-app/core/agent-operations'
+import { untracked } from '@pascal-app/core/runtime'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
@@ -81,6 +82,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
   const executeTool = recordingWhatToolsMake(operations, opts.executeTool)
   if (executeTool) installToolExecutor(server, executeTool)
+  installSceneScope(server, operations)
   const catalog = opts.catalog ? cachedCatalog(opts.catalog) : undefined
   registerTools(server, operations, {
     catalog,
@@ -140,13 +142,34 @@ function recordingWhatToolsMake(
   const recording: PascalMcpToolExecutor = (input) =>
     recordMade(
       {
-        getNodes: () => operations.getNodes() as SceneNodes,
+        // What the tool made is bookkeeping, not what it read: the scene as stored.
+        getNodes: () => untracked(operations.getNodes()) as SceneNodes,
         readSession: () => session.read(),
         keep: (keep) => session.keep(keep),
       },
       input.execute,
     )
   return outer ? (input) => outer({ ...input, execute: () => recording(input) }) : recording
+}
+
+/**
+ * Every handler starts in the scene's scope (`SceneOperations.runInScene`): ids it mints and
+ * schema defaults it fills before its first await come from the scene's allocator, so a detached
+ * scene recomputed from the same snapshot and effect mints the same ones. Work after an await
+ * re-enters the scope itself (add_object, add_column).
+ */
+function installSceneScope(server: McpServer, operations: SceneOperations): void {
+  const runInScene = operations.runInScene?.bind(operations)
+  if (!runInScene) return
+  const registerTool = server.registerTool.bind(server) as (
+    name: string,
+    config: unknown,
+    callback: RuntimeToolCallback,
+  ) => RegisteredTool
+  server.registerTool = ((name: string, config: unknown, callback: RuntimeToolCallback) =>
+    registerTool(name, config, (...args: unknown[]) =>
+      runInScene(() => Reflect.apply(callback, undefined, args)),
+    )) as McpServer['registerTool']
 }
 
 function installToolExecutor(server: McpServer, executeTool: PascalMcpToolExecutor): void {

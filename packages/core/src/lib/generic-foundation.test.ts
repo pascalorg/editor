@@ -19,6 +19,7 @@ import { FOUNDATION_STANDARD } from './foundation-standard'
 import { type FoundationMember, genericFoundation } from './generic-foundation'
 import { FLAT_GROUND_Y } from './site-ground-height'
 import { encodeTerrainField } from './terrain-codec'
+
 import { createTerrainField } from './terrain-field'
 
 const IN = 0.0254

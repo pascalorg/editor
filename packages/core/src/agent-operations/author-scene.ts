@@ -49,6 +49,7 @@ import { authoredSceneChanges } from './authored-scene-merge'
 import { paint } from './paint'
 import { pointInPolygon, projectWorldPointToWallLocalX, type Vec2 } from './plan-geometry'
 import { resolveInlinePaintMaterial } from './scene-materials'
+import { queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperationOutcome, SceneNodes } from './types'
 import { setWallSkirting } from './wall-skirting'
 
@@ -386,10 +387,10 @@ function resolveFaceScripts(
       const roomId = `room/${index}/${i}`
       const zone = nodes[ids[roomId] ?? '']
       if (!room.wallCode || zone?.type !== 'zone') continue
-      const boundaries = Object.values(nodes).filter(
-        (n): n is BoundaryNode =>
-          n.parentId === zone.parentId && (n.type === 'wall' || n.type === 'separator'),
-      )
+      const boundaries = queryNodes<BoundaryNode>(nodes, {
+        type: ['wall', 'separator'],
+        parentId: zone.parentId ?? null,
+      })
       const zoneWalls = [...zone.boundaryWallIds].sort().join()
       const derived = floorRoomFaces(boundaries).find(
         (r) =>

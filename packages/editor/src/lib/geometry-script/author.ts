@@ -1,5 +1,7 @@
 import {
+  type AnyNode,
   type AnyNodeId,
+  type ArtifactStore,
   type CompiledGeometryScript,
   GEOMETRY_SCRIPT_MIME_TYPES,
   GeometryArtifactMetadata,
@@ -42,27 +44,45 @@ export function configureBlenderScriptBuilder(next: BlenderScriptBuilder | null)
 }
 
 /**
+ * What a compile reads from the scene and the artifact service it stores to. By default the
+ * editor's own; a detached scene passes its tracked nodes, so the reads are recorded there.
+ */
+export type GeometryScriptScene = {
+  nodes?: Readonly<Record<string, AnyNode>>
+  artifacts?: ArtifactStore
+}
+
+/**
  * The editor's compile step for `add_object`: runs the module (a three.js one
  * in the worker, a bpy one through the host's Blender builder) and stores the
  * GLB and the module text, so the core operation can reference both by hash.
  * Without `code`, the node's stored script is rebuilt; either way an edit keeps
  * the node's param values it does not override.
+ *
+ * Everything it reads from the scene, and the id of a new object, are taken
+ * synchronously, before the first await: a detached scene records reads and
+ * mints ids only inside its synchronous scope, and is disposed by the time a
+ * late compile resolves.
  */
-export async function compileAndStoreGeometryScript(input: {
-  code?: string
-  language?: GeometryScriptLanguage
-  nodeId?: string
-  params?: Record<string, GeometryScriptParamValue>
-  kind?: 'item' | 'door' | 'window' | 'column'
-  inputs?: Record<string, unknown>
-  name?: string
-  description?: string
-  category?: string
-  tags?: string[]
-  provenance?: GeometryArtifactMetadata
-}): Promise<CompiledGeometryScript> {
-  const code = input.code ?? (await storedScript(input.nodeId))
-  const node = input.nodeId ? useScene.getState().nodes[input.nodeId as AnyNodeId] : undefined
+export async function compileAndStoreGeometryScript(
+  input: {
+    code?: string
+    language?: GeometryScriptLanguage
+    nodeId?: string
+    params?: Record<string, GeometryScriptParamValue>
+    kind?: 'item' | 'door' | 'window' | 'column'
+    inputs?: Record<string, unknown>
+    name?: string
+    description?: string
+    category?: string
+    tags?: string[]
+    provenance?: GeometryArtifactMetadata
+  },
+  scene: GeometryScriptScene = {},
+): Promise<CompiledGeometryScript> {
+  const nodes = scene.nodes ?? useScene.getState().nodes
+  const artifacts = scene.artifacts ?? getArtifactStore()
+  const node = input.nodeId ? nodes[input.nodeId as AnyNodeId] : undefined
   const language = editedScriptLanguage(node, input)
   const params = editedScriptParams(node, input.params)
   const kind =
@@ -71,12 +91,16 @@ export async function compileAndStoreGeometryScript(input: {
       ? node.type
       : 'item')
   const nodeId = input.nodeId ?? generateId(kind)
+  const authored = isScriptedNode(node) ? scriptedObjectMeta(node) : {}
+  const script = input.code === undefined ? authoredScript(nodes, input.nodeId) : null
   const metadata = GeometryArtifactMetadata.parse({
-    ...(isScriptedNode(node) ? scriptedObjectMeta(node) : {}),
+    ...authored,
     ...input.provenance,
     ...GeometryReuseFields.parse(input),
     kind,
   })
+
+  const code = input.code ?? (await readScript(artifacts, script!, input.nodeId!))
   if (language === 'bpy') {
     if (!blenderBuilder) throw new Error('This editor cannot run Blender (bpy) scripts')
     return { ...(await blenderBuilder({ code, params, nodeId, metadata })), nodeId }
@@ -87,10 +111,9 @@ export async function compileAndStoreGeometryScript(input: {
     inputs: input.inputs,
   })
   const context = { nodeId, metadata: { ...metadata, mount: compiled.mount } }
-  const store = getArtifactStore()
   const [sha256] = await Promise.all([
-    store.put(compiled.sha256, glb, 'model/gltf-binary', context),
-    store.put(
+    artifacts.put(compiled.sha256, glb, 'model/gltf-binary', context),
+    artifacts.put(
       compiled.script,
       new TextEncoder().encode(code),
       GEOMETRY_SCRIPT_MIME_TYPES.three,
@@ -100,13 +123,22 @@ export async function compileAndStoreGeometryScript(input: {
   return { ...compiled, sha256, nodeId }
 }
 
-/** The module text of an authored object, read back from the artifact store. */
-export async function storedScript(nodeId: string | undefined): Promise<string> {
+/** The hash of an authored object's script, read from the scene. */
+function authoredScript(nodes: Readonly<Record<string, AnyNode>>, nodeId: string | undefined) {
   if (!nodeId) throw new Error('Pass the code to build a new object')
-  const node = authoredObject(useScene.getState().nodes, nodeId)
-  const code = await getArtifactStore().text(node.source.script)
+  return authoredObject(nodes as Record<string, AnyNode>, nodeId).source.script
+}
+
+async function readScript(artifacts: ArtifactStore, script: string, nodeId: string) {
+  const code = await artifacts.text(script)
   if (code === null) throw new Error(`The script of ${nodeId} could not be read`)
   return code
+}
+
+/** The module text of an authored object, read back from the artifact store. */
+export async function storedScript(nodeId: string | undefined): Promise<string> {
+  const script = authoredScript(useScene.getState().nodes, nodeId)
+  return readScript(getArtifactStore(), script, nodeId!)
 }
 
 const rebuildGeneration = new Map<string, number>()

@@ -45,6 +45,8 @@ export {
   resolveNodeLevelId,
 } from './door-clearance'
 
+import { queryNodes } from './scene-queries'
+
 /** Minimum free space (m) required between item footprints. */
 export const DEFAULT_ITEM_GAP = 0.08
 
@@ -140,7 +142,7 @@ function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
     levelBaseElevationAt(nodes, levelId, node.position[0], node.position[2]) +
     floorConstructionLift(nodes, node)
   if (node.supportSlabId === 'ground') return ground()
-  const list = Object.values(nodes)
+  const list = queryNodes(nodes, { type: ['slab', 'wall'] })
   const slabs = list
     .filter(
       (other): other is Extract<AnyNode, { type: 'slab' }> =>

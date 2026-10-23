@@ -21,6 +21,7 @@ import {
   isAgentRefusal,
   refuse,
 } from '@pascal-app/core/agent-tools'
+import { untracked } from '@pascal-app/core/runtime'
 import {
   type AnyNode,
   type CompiledGeometryScript,
@@ -36,6 +37,7 @@ import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
 import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 import { briefInForce, toPatches } from './shared-tools'
 
 /**
@@ -170,28 +172,28 @@ export function readScript(
 /**
  * One object's module compiled and stored by the host: a new one from its code, an edit from its
  * code or its stored script, with the params it keeps. The step a lone add_object and each
- * add_object of a run_batch share.
+ * add_object of a run_batch share. What it reads from the scene it reads before its first await;
+ * `nodeId` is a new object's id, minted by the caller in the scene's scope.
  */
 export async function compileObject(
   host: GeometryScriptHost,
   sceneId: string,
   bridge: SceneOperations,
   args: Omit<AddObjectInput, 'compiled'>,
+  nodeId = args.nodeId,
 ): Promise<CompiledGeometryScript> {
-  const code =
-    args.code ??
-    (args.nodeId ? await readScript(host, sceneId, bridge, args.nodeId) : refuseMissingCode())
   const nodes = bridge.getNodes() as Record<string, AnyNode>
   const previous = args.nodeId ? nodes[args.nodeId] : undefined
   const language = editedScriptLanguage(previous, args)
   const params = editedScriptParams(previous, args.params)
-  return compileAndStore(host, sceneId, { code, language, params }, 'object', {
-    nodeId: args.nodeId,
-    metadata: {
-      ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
-      ...GeometryReuseFields.parse(args),
-    },
-  })
+  const metadata = {
+    ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
+    ...GeometryReuseFields.parse(args),
+  }
+  const code =
+    args.code ??
+    (args.nodeId ? await readScript(host, sceneId, bridge, args.nodeId) : refuseMissingCode())
+  return compileAndStore(host, sceneId, { code, language, params }, 'object', { nodeId, metadata })
 }
 
 /** What a batch's add_object builds with: the host's compile, on the scene open now. */
@@ -207,7 +209,8 @@ export async function compileObjectOnHost(
       'no_active_scene',
       'Open or save a scene first: authored objects are stored with a scene.',
     )
-  return compileObject(host, scene.id, bridge, args)
+  const nodeId = args.nodeId ?? inScene(bridge, () => generateId('item'))
+  return compileObject(host, scene.id, bridge, args, nodeId)
 }
 
 /** `add_object` on the MCP: the shared contract and operation, with the host's compile in front. */
@@ -242,10 +245,12 @@ export function registerAddObject(
         })
       }
       const args = input as Omit<AddObjectInput, 'compiled'>
+      // A new object's id is the scene's, minted before anything is awaited.
+      const nodeId = args.nodeId ?? inScene(bridge, () => generateId('item'))
       let compiled: CompiledGeometryScript
       try {
         requireAddObjectReason(args)
-        compiled = await compileObject(host, scene.id, bridge, args)
+        compiled = await compileObject(host, scene.id, bridge, args, nodeId)
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
         return toolError(
@@ -255,13 +260,17 @@ export function registerAddObject(
       }
       // A copy: the hosted bridge writes its map in place, and a "before" that grows with the call
       // reads every creation as unchanged.
-      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      // Copying is not a read: on a detached scene the operation records what it selects.
+      const nodes = bridge.getNodes() as Record<string, AnyNode>
+      const before = { ...untracked(nodes) }
       let outcome: ReturnType<typeof addObject>
       try {
-        outcome = addObject(
-          before,
-          { ...args, compiled },
-          { activeLevelId: bridge.activeLevelId?.() ?? null },
+        outcome = inScene(bridge, () =>
+          addObject(
+            nodes,
+            { ...args, compiled },
+            { activeLevelId: bridge.activeLevelId?.() ?? null },
+          ),
         )
       } catch (error) {
         return refusalResult(error)

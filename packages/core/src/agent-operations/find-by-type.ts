@@ -264,6 +264,7 @@ function namesAnything(
   const known = (name: string) =>
     CORE_KINDS.has(name) || registered.includes(name) || Boolean(nodeSchema?.(name))
   if ([...names].some(known)) return true
+  // biome-ignore lint/plugin: a type word may name any node's kind, category or part
   return Object.values(nodes).some(
     (node) =>
       names.has(kindOf(node)) ||
@@ -297,6 +298,7 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input, contex
       ? undefined
       : new Set([kind, kind.includes(':') ? kind : kind.replace(/s$/, '')])
   const results: Found[] = []
+  // biome-ignore lint/plugin: any node, or any typed part of an authored object, may match
   for (const node of Object.values(nodes)) {
     if (parentId && node.parentId !== parentId) continue
     if (fromSource && !fromSource(node)) continue
@@ -353,6 +355,7 @@ export const findByType: AgentOperation<FindByTypeInput> = (nodes, input, contex
       results.push(...(inZone ? inZone(node, level, matched) : matched).map(({ found }) => found))
   }
   if (names && results.length === 0 && !namesAnything(nodes, names, context)) {
+    // biome-ignore lint/plugin: the refusal lists every kind the scene holds
     const kinds = [...new Set(Object.values(nodes).map(kindOf))].sort()
     refuse(
       'unknown_type',

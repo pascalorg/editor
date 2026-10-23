@@ -1,3 +1,4 @@
+import { orderedChildIds } from '../../runtime/node-queries'
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
 import { StairDesignTargets } from '../../schema/nodes/stair'
 import { measureStairHeadroom } from './stair-clearance'
@@ -113,7 +114,8 @@ export function measureStair(stair: StairNode, nodes: Record<string, AnyNode>) {
       stair.id,
       'Landing depth exceeds a full circle at the walking line; the visible landing is limited to one circle.',
     )
-  const segments = stair.children
+  // Riser counts are shared out in flight order: the order is read, not only the members.
+  const segments = orderedChildIds(nodes, stair.id)
     .map((id) => nodes[id])
     .filter((node): node is StairSegmentNode => node?.type === 'stair-segment')
   const segmentsById = new Map(segments.map((segment) => [segment.id as string, segment]))

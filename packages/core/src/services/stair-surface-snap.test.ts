@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
@@ -8,9 +8,6 @@ import {
   StairNode,
 } from '@pascal-app/core'
 import { z } from 'zod'
-
-const restoreRegistry = nodeRegistry._snapshot()
-afterAll(() => restoreRegistry())
 
 const stair = StairNode.parse({ parentId: 'level_1', position: [0, 0, -2], width: 1 })
 type FixtureSurface = {

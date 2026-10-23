@@ -17,6 +17,7 @@ import {
 import type { AnyNode, ItemNode, WallNode } from '../schema'
 import { getLevelElevations, getWallTop } from '../services/storey'
 import { getWallBodyCenterOffset, getWallLocalFaceZ } from '../systems/wall/wall-frame'
+import { queryNodes } from './scene-queries'
 
 type Vec3 = [number, number, number]
 export type WallObjectFace = { normal: Vec3; depth: number; polygon: Ring }
@@ -130,8 +131,7 @@ function wallSolid(
   )
     return
   const holes: Ring[] = []
-  for (const child of Object.values(nodes)) {
-    if (child.parentId !== wall.id) continue
+  for (const child of queryNodes(nodes, { parentId: wall.id })) {
     // Wall cutters have no persisted XY outline: their bounds cannot prove solid contact.
     if (
       (child.type === 'item' || child.type === 'door' || child.type === 'window') &&
@@ -185,9 +185,8 @@ export function wallObjectObservations(
   const elevations = getLevelElevations(nodes)
   const solids = new Map<string, MultiPolygon | undefined>()
   const peers: { evidence: Evidence; patches: ReturnType<typeof facePatches> }[] = []
-  for (const item of Object.values(nodes)) {
+  for (const item of queryNodes<ItemNode>(nodes, { type: 'item' })) {
     if (
-      item.type !== 'item' ||
       !item.visible ||
       item.roofSegmentId ||
       item.blockFaceId ||

@@ -2,6 +2,7 @@ import { footprintLift } from '../lib/floor-foundation-datum'
 import { levelConstructionDisplacements } from '../lib/floor-foundation-stack'
 import { area, intersection } from '../lib/polygon-boolean'
 import { isSiteFlatwork } from '../lib/site-flatwork'
+import { queryNodes } from '../runtime/node-queries'
 import type { BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -75,7 +76,11 @@ export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<strin
   const hit = elevationMemo.get(nodes)
   if (hit) return hit
   const elevations = new Map(getAuthoredLevelElevations(nodes))
-  if (Object.values(nodes).some((node) => node.type === 'slab' && node.plateRole === 'base'))
+  if (
+    queryNodes(nodes, { type: 'slab' }).some(
+      (node) => node.type === 'slab' && node.plateRole === 'base',
+    )
+  )
     for (const [id, lift] of levelConstructionDisplacements(nodes)) {
       const entry = elevations.get(id)!
       if (lift) elevations.set(id, { ...entry, baseY: entry.baseY + lift })
@@ -90,14 +95,10 @@ export function getAuthoredLevelElevations(
   const memoized = authoredElevationMemo.get(nodes)
   if (memoized) return memoized
 
-  const buildings = Object.values(nodes).filter(
-    (node): node is BuildingNode => node?.type === 'building',
-  )
+  const buildings = queryNodes<BuildingNode>(nodes, { type: 'building' })
 
   const entries: Array<{ baseElevation: number; levelId: string } & LevelElevation> = []
-  for (const node of Object.values(nodes)) {
-    if (node?.type !== 'level') continue
-    const level = node as LevelNode
+  for (const level of queryNodes<LevelNode>(nodes, { type: 'level' })) {
     entries.push({
       levelId: level.id,
       baseElevation: level.baseElevation ?? 0,

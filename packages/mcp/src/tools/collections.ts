@@ -8,12 +8,14 @@ import {
   writeCollections,
 } from '@pascal-app/core/agent-operations'
 import { editCollectionTool, listCollectionsTool } from '@pascal-app/core/agent-tools'
+import { untracked } from '@pascal-app/core/runtime'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult } from './errors'
 import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 
 // The collection tools share contracts and operations with the chat; they read the scene's
 // collections beside its nodes, which the node-only shared operations never see.
@@ -55,7 +57,7 @@ export function registerCollectionTools(server: McpServer, bridge: SceneOperatio
     async (input: EditCollectionInput) => {
       let outcome: AgentOperationOutcome
       try {
-        outcome = editCollection(sceneOf(bridge), input)
+        outcome = inScene(bridge, () => editCollection(sceneOf(bridge), input))
       } catch (error) {
         return refusalResult(error)
       }
@@ -65,7 +67,8 @@ export function registerCollectionTools(server: McpServer, bridge: SceneOperatio
           bridge.applyPatch(
             update.map(({ id, data }) => ({ op: 'update' as const, id: id as AnyNodeId, data })),
           )
-        bridge.setCollections(writeCollections(bridge.getCollections(), collections))
+        // Writing the other collections back is a copy, not a read of them.
+        bridge.setCollections(writeCollections(untracked(bridge.getCollections()), collections))
       })
       return reply({
         ...outcome.result,
