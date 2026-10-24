@@ -12,8 +12,30 @@ on:
       - server.json
       - packages/mcp/package.json
       - .github/workflows/mcp-registry.yml
-  # Run before publishing: the hosted deployment must already serve this version.
+  # Release calls this after npm has the version; dispatch it by hand to recover a missed one.
+  workflow_call:
+    inputs:
+      version:
+        description: Released @pascal-app/mcp version; checks out its release tag
+        required: true
+        type: string
+      publish:
+        required: true
+        type: boolean
   workflow_dispatch:
+    inputs:
+      version:
+        description: Released @pascal-app/mcp version to check out by tag (default the dispatched ref)
+        required: false
+        type: string
+      publish:
+        description: Publish server.json to the MCP Registry
+        type: boolean
+        default: false
+      check-hosted:
+        description: Check that the hosted API catalog and server card report this version
+        type: boolean
+        default: true
 
 env:
   MCP_PUBLISHER_VERSION: 1.8.1
@@ -27,6 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          ref: ${{ inputs.version && format('refs/tags/@pascal-app/mcp@{0}', inputs.version) || '' }}
           persist-credentials: false
 
       - name: Install MCP Registry publisher
@@ -81,16 +104,103 @@ jobs:
             'resource_metadata="https://editor.pascal.app/.well-known/oauth-protected-resource"' \
             "$RUNNER_TEMP/mcp-response.headers"
 
+  # The registry reads mcpName from the npm tarball, so this waits until npm serves the
+  # version, and it fails unless the registry lists the version afterwards.
+  publish:
+    if: inputs.publish
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ inputs.version && format('refs/tags/@pascal-app/mcp@{0}', inputs.version) || '' }}
+          persist-credentials: false
+
+      - name: Read manifest
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+        run: |
+          NAME=$(jq --raw-output '.name' server.json)
+          VERSION=$(jq --raw-output '.version' server.json)
+          PACKAGE=$(jq --raw-output '.packages[0].identifier' server.json)
+          if [ -n "$EXPECTED_VERSION" ] && [ "$VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "::error::server.json is at $VERSION, expected $EXPECTED_VERSION"
+            exit 1
+          fi
+          {
+            echo "NAME=$NAME"
+            echo "VERSION=$VERSION"
+            echo "PACKAGE=$PACKAGE"
+            echo "VERSIONS_URL=https://registry.modelcontextprotocol.io/v0/servers/$(jq --raw-output --null-input --arg n "$NAME" '$n | @uri')/versions"
+          } >> "$GITHUB_ENV"
+
+      # A fresh publish can take a few minutes to show up in `npm view`.
+      - name: Wait for npm to serve the version
+        run: |
+          for attempt in $(seq 1 30); do
+            if [ "$(npm view "$PACKAGE@$VERSION" mcpName 2>/dev/null)" = "$NAME" ]; then
+              echo "$PACKAGE@$VERSION is on npm with mcpName $NAME"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::$PACKAGE@$VERSION with mcpName $NAME is not on npm after 10 minutes"
+          exit 1
+
+      - name: Install MCP Registry publisher
+        run: |
+          curl --fail --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          echo "${MCP_PUBLISHER_LINUX_AMD64_SHA256}  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+
+      # The app.pascal namespace is verified through the pascal.app DNS TXT record, whose
+      # Ed25519 private key is the MCP_REGISTRY_PRIVATE_KEY secret.
+      - name: Publish to the MCP Registry
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          if curl --silent --fail "$VERSIONS_URL" \
+            | jq --exit-status --arg v "$VERSION" 'any(.servers[]; .server.version == $v)' >/dev/null; then
+            echo "$NAME@$VERSION is already in the MCP Registry"
+            exit 0
+          fi
+          if [ -z "$MCP_REGISTRY_PRIVATE_KEY" ]; then
+            echo "::error::MCP_REGISTRY_PRIVATE_KEY is not set, so $NAME@$VERSION cannot be published. See wiki/npm-release.md#mcp-registry."
+            exit 1
+          fi
+          "$RUNNER_TEMP/mcp-publisher" login dns --domain pascal.app --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+          "$RUNNER_TEMP/mcp-publisher" publish
+
+      - name: Registry lists the version
+        run: |
+          for attempt in $(seq 1 10); do
+            if curl --silent --fail "$VERSIONS_URL" \
+              | jq --exit-status --arg v "$VERSION" 'any(.servers[]; .server.version == $v)' >/dev/null; then
+              echo "$NAME@$VERSION is in the MCP Registry"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::$NAME@$VERSION is not in the MCP Registry: $VERSIONS_URL"
+          exit 1
+
   # The hosted API catalog and server card are served by the hosted deployment, not
   # this repository, so they only match after that deployment picks up this version.
+  # It does not gate the registry publish.
   hosted-matches-manifest:
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.check-hosted
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          ref: ${{ inputs.version && format('refs/tags/@pascal-app/mcp@{0}', inputs.version) || '' }}
           persist-credentials: false
 
       - name: Verify live API catalog matches manifest

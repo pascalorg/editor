@@ -211,8 +211,7 @@ jobs:
           # leaves them on the last stable release.
           bun scripts/sync-agent-versions.ts
 
-      # Publishing server.json to the MCP Registry stays a manual owner step after
-      # this release lands; see wiki/npm-release.md.
+      # The mcp-registry job publishes server.json once this job has pushed the tag.
       - name: Validate MCP Registry manifest
         env:
           MCP_PUBLISHER_VERSION: 1.8.1
@@ -432,6 +431,18 @@ jobs:
           fi
           gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
           echo "🌐 Uploaded $(basename "$ARCHIVE") to $TAG"
+
+  # A beta leaves server.json on the last stable version, which is already listed.
+  mcp-registry:
+    needs: release
+    if: inputs.dry-run == false && needs.release.outputs.channel == 'latest'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mcp-registry.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+      publish: true
+    secrets: inherit
 
   # The self-host image, built from the release tag on native runners (a Next
   # build under QEMU takes most of an hour) and stitched into one multi-arch
