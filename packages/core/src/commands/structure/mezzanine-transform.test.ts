@@ -438,3 +438,95 @@ test('move and duplicate canonicalize signed zero in content poses', () => {
     expect(hasNegativeZero(plan.changes)).toBe(false)
   }
 })
+
+function insidePlan(polygon: [number, number][], extra: Record<string, unknown> = {}) {
+  const f = mezzanineFixture()
+  const mezzanine = createMezzanine(f.before, { hostZoneId: f.host.id, polygon, mintId: f.mintId })
+  const nodes = { ...f.apply(f.before, mezzanine), ...extra } as typeof f.nodes
+  const plan = planMezzanineStair(nodes, mezzanine.zoneId, 'inside')
+  const created = (type: string) =>
+    plan.changes.flatMap((c) => (c.op === 'create' && c.node.type === type ? [c.node] : []))[0]
+  return {
+    nodes,
+    plan,
+    stair: created('stair') as StairNode | undefined,
+    segment: created('stair-segment') as StairSegmentNode | undefined,
+    deck: Object.values(nodes).find(
+      (n): n is SlabNode => n.type === 'slab' && !!n.zoneIds?.includes(mezzanine.zoneId),
+    )!,
+  }
+}
+
+/** Where the flight's top step ends, and the point one stair width further on. */
+function topAndBeyond(stair: StairNode, segment: StairSegmentNode) {
+  const dir = [Math.sin(stair.rotation), Math.cos(stair.rotation)] as const
+  const at = (d: number) => [stair.position[0] + dir[0] * d, stair.position[2] + dir[1] * d]
+  return { top: at(segment.length), beyond: at(segment.length + stair.width) }
+}
+
+const inBox = (polygon: [number, number][], [x, z]: number[]) => {
+  const xs = polygon.map(([px]) => px)
+  const zs = polygon.map(([, pz]) => pz)
+  return (
+    x! >= Math.min(...xs) - 1e-6 &&
+    x! <= Math.max(...xs) + 1e-6 &&
+    z! >= Math.min(...zs) - 1e-6 &&
+    z! <= Math.max(...zs) + 1e-6
+  )
+}
+
+test('inside stair climbs from an open edge through its own deck and leaves a top landing', () => {
+  const { plan, stair, segment, deck } = insidePlan([
+    [1.5, 0.1],
+    [7.9, 0.1],
+    [7.9, 3],
+    [1.5, 3],
+  ])
+  expect(plan.conflicts).toBeUndefined()
+  // The west edge is the only one with free host floor in front of it.
+  expect(plan.edgeIndex).toBe(3)
+  expect(stair).toMatchObject({ deckSlabId: deck.id, slabOpeningMode: 'destination' })
+  expect(stair!.rotation).toBeCloseTo(Math.PI / 2)
+  expect(stair!.position[0]).toBeCloseTo(1.5)
+  expect(segment!.length / segment!.stepCount).toBeGreaterThanOrEqual(0.25)
+  const { top, beyond } = topAndBeyond(stair!, segment!)
+  expect(inBox(deck.polygon, top)).toBe(true)
+  expect(inBox(deck.polygon, beyond)).toBe(true)
+})
+
+test('inside stair shortens its run to keep a landing on a shallow deck', () => {
+  const { plan, stair, segment, deck } = insidePlan([
+    [1.5, 0.1],
+    [6.2, 0.1],
+    [6.2, 3],
+    [1.5, 3],
+  ])
+  expect(plan.conflicts).toBeUndefined()
+  expect(segment!.length).toBeLessThan(4.7 - stair!.width + 1e-3)
+  expect(segment!.length / segment!.stepCount).toBeGreaterThanOrEqual(0.25)
+  expect(inBox(deck.polygon, topAndBeyond(stair!, segment!).beyond)).toBe(true)
+})
+
+test('inside stair respects walls under the deck and refuses without writes', () => {
+  const f = mezzanineFixture()
+  const wall = { ...f.walls[0]!, id: 'wall_under_deck' as const, start: [3, 0], end: [3, 3.5] }
+  const polygon: [number, number][] = [
+    [1.5, 0.1],
+    [7.9, 0.1],
+    [7.9, 3],
+    [1.5, 3],
+  ]
+  expect(insidePlan(polygon).plan.conflicts).toBeUndefined()
+  const { nodes, plan } = insidePlan(polygon, { [wall.id]: wall })
+  expect(plan).toMatchObject({ changes: [], conflicts: [{ code: 'no-room-for-stair' }] })
+  expect(nodes[wall.id]).toBe(wall)
+})
+
+test('outside placement is the default and leaves the deck uncut', () => {
+  const f = mezzanineFixture()
+  const byDefault = planMezzanineStair(f.nodes, f.zone.id)
+  const outside = planMezzanineStair(f.nodes, f.zone.id, 'outside')
+  expect(outside.edgeIndex).toBe(byDefault.edgeIndex)
+  const stair = outside.changes.find((c) => c.op === 'create' && c.node.type === 'stair')
+  expect(stair).toMatchObject({ node: { slabOpeningMode: 'none', rotation: -Math.PI / 2 } })
+})

@@ -157,9 +157,9 @@ export function RoomActionMenu({ room }: { room: RoomSelectionRecord }) {
   // A mezzanine moves, turns and copies inside its host (core refuses what
   // leaves it); it has no walls to divide, and it gets its own stairs.
   const mezzanine = !!room.mezzanine
-  const addStairs = (event: MouseEvent) => {
+  const addStairs = (placement: 'outside' | 'inside') => (event: MouseEvent) => {
     event.stopPropagation()
-    const result = addMezzanineStairs(zoneId)
+    const result = addMezzanineStairs(zoneId, placement)
     if (!result.ok) showRoomNotice({ zoneId, message: result.message })
   }
   return (
@@ -178,19 +178,24 @@ export function RoomActionMenu({ room }: { room: RoomSelectionRecord }) {
         onRotateLeft={turn('left')}
         onRotateRight={turn('right')}
       >
-        {mezzanine && (
-          <ActionMenuButton label="Add stairs" onClick={addStairs}>
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-              <Image
-                alt=""
-                className="h-4 w-4 object-contain"
-                height={16}
-                src="/icons/stairs.webp"
-                width={16}
-              />
-            </span>
-          </ActionMenuButton>
-        )}
+        {mezzanine &&
+          (['outside', 'inside'] as const).map((placement) => (
+            <ActionMenuButton
+              key={placement}
+              label={`Add stairs ${placement}`}
+              onClick={addStairs(placement)}
+            >
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                <Image
+                  alt=""
+                  className="h-4 w-4 object-contain"
+                  height={16}
+                  src="/icons/stairs.webp"
+                  width={16}
+                />
+              </span>
+            </ActionMenuButton>
+          ))}
         {!mezzanine && (
           <ActionMenuButton
             label="Divide room"
