@@ -4,6 +4,7 @@ import { authorScenePayload } from '../agent-tools/author-scene'
 import { cloneNodesInto } from '../registry/subtree'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
+import { roofsOver, servesAsRoofLevel } from '../services/roof-level'
 import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-curve'
 import {
   applySceneChanges,
@@ -97,6 +98,18 @@ const baseboard: CompiledGeometryScript = {
   } as unknown as CompiledGeometryScript['manifest'],
 }
 
+/** A host's compile of the flush ceiling point author_scene hangs a light from. */
+const ceilingPoint = {
+  ...bed,
+  mount: 'ceiling',
+  manifest: {
+    ...bed.manifest,
+    bounds: { min: [-0.03, -0.008, -0.03], max: [0.03, 0, 0.03] },
+    slots: [],
+  },
+} as CompiledGeometryScript
+
+/** As a host runs it: every candidate ceiling point compiled, then the payload's own modules. */
 const run = (
   payload: AuthorScenePayload,
   compiled: Record<string, CompiledGeometryScript>,
@@ -104,7 +117,15 @@ const run = (
 ) =>
   authorScene(
     scaffold(),
-    { payload, compiled },
+    {
+      payload,
+      compiled: {
+        ...Object.fromEntries(
+          authorSceneCeilingPoints(payload).map(({ id }) => [id, ceilingPoint]),
+        ),
+        ...compiled,
+      },
+    },
     { activeLevelId: 'level_0', ...(materials ? { materials } : {}) },
   )
 
@@ -365,7 +386,7 @@ describe('author_scene', () => {
       ],
     })
     const points = authorSceneCeilingPoints(payload)
-    expect(points.map((point) => point.id)).toEqual(['light/0/0'])
+    expect(points.map((point) => point.id)).toEqual(['light/0/0', 'light/0/room/0'])
     const compiled = {
       ...bed,
       mount: 'ceiling',
@@ -408,7 +429,8 @@ describe('author_scene', () => {
         CEILING_DRAW_OFFSET,
       9,
     )
-    expect(authorSceneCeilingPoints(bedroom)).toEqual([])
+    // Fixtures hold their lights: the only candidate is the room's own, in case it has none.
+    expect(authorSceneCeilingPoints(bedroom).map((point) => point.id)).toEqual(['light/0/room/0'])
   })
 
   test('a light outside any room falls back to the nearest item on its own level and says why', () => {
@@ -623,7 +645,11 @@ describe('author_scene', () => {
     })
     const outcome = authorScene(
       scaffold(),
-      { payload, compiled: { 'south/0': arch }, compileErrors: { 'south/1': 'Syntax error' } },
+      {
+        payload,
+        compiled: { 'south/0': arch, 'light/0/room/0': ceilingPoint },
+        compileErrors: { 'south/1': 'Syntax error' },
+      },
       { activeLevelId: 'level_0', materials: {} },
     )
     const door = byAuthorId(outcome, 'south/0')
@@ -1728,6 +1754,194 @@ describe('author_scene', () => {
         .map((n) => n.id),
     )
   })
+  test('seeds sharing one enclosure name one open-plan room, joined in the order given', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0]!,
+          items: [],
+          lights: [],
+          rooms: [
+            { name: 'Living room', seed: [0, 0], floor: '#a07850' },
+            { name: 'Kitchen', seed: [1, 1], floor: '#dddddd' },
+            { name: 'WC', seed: [-1, -1] },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const zone = byAuthorId(outcome, 'room/0/0')
+    expect(zone.name).toBe('Living room, kitchen and WC')
+    expect(outcome.result.rooms).toBe(1)
+    expect(outcome.result.roomsNamed).toBe(3)
+    expect(outcome.result.defaults).toContain(
+      '"Living room", "Kitchen", "WC" are one enclosure, no wall between them: one open-plan room, "Living room, kitchen and WC", with the floor of "Living room"',
+    )
+  })
+
+  test('a named room with no light of its own gets one plain ceiling light, once per room', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0]!,
+          items: [],
+          lights: [],
+          rooms: [
+            { name: 'Living room', seed: [0, 0] },
+            { name: 'Kitchen', seed: [1, 1] },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.lights).toBe(1)
+    expect(outcome.result.defaults).toContain(
+      'Living room and kitchen had no light: a ceiling light at its centre',
+    )
+    const point = byAuthorId(outcome, 'light/0/room/0')
+    expect(nodesOf(outcome).find((n) => n.id === point.parentId)?.type).toBe('ceiling')
+    expect(point.asset.interactive.effects).toHaveLength(1)
+
+    // A lamp that carries its own light lights its room: nothing is added.
+    const lamp = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        lights: [{ id: 'bulb', position: [0, 1.5, 0], color: '#ffe2b8', intensity: 1 }],
+      },
+    } as unknown as CompiledGeometryScript
+    const lit = run(
+      authorScenePayload.parse({
+        ...payload,
+        levels: [
+          {
+            ...payload.levels[0]!,
+            items: [
+              {
+                id: 'lamp',
+                name: 'Floor lamp',
+                category: 'lamp',
+                code: 'export default function build() {}',
+                position: [0.5, 0, 0.5],
+              },
+            ],
+          },
+        ],
+      }),
+      { lamp },
+      {},
+    )
+    expect(lit.result.defects).toEqual([])
+    expect(lit.result.lights).toBe(0)
+    expect(lit.result.ids['light/0/room/0']).toBeUndefined()
+  })
+
+  test("the roof stands on the building's roof level above the top storey: segments native, the rest roof items", () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        { name: 'Ground floor', walls: storey(''), rooms: [{ name: 'Hall', seed: [0, 0] }] },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Landing', seed: [0, 0] }],
+        },
+      ],
+      roof: {
+        segments: [{ center: [0, 0], rotation: 90, width: 5, depth: 4, pitch: 35, overhang: 0.4 }],
+        color: '#3a4044',
+        wallColor: '#e8e2d6',
+        items: [
+          {
+            id: 'chimney',
+            name: 'Chimney',
+            category: 'chimney',
+            code: 'export default function build() {}',
+            position: [1, 2.5, -1],
+          },
+        ],
+      },
+    })
+    const outcome = run(payload, { chimney: bed }, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.roofSegments).toBe(1)
+    const scene = sceneOf(outcome) as Record<string, AnyNode>
+    const roofLevel = byAuthorId(outcome, 'level/roof')
+    expect(roofLevel).toMatchObject({
+      type: 'level',
+      name: 'Roof',
+      level: 2,
+      metadata: { role: 'roof' },
+    })
+    expect(servesAsRoofLevel(scene, roofLevel as never)).toBe(true)
+    // It caps the top storey, standing on its walls, as create_roof's roof does.
+    const roof = byAuthorId(outcome, 'roof')
+    expect(roof).toMatchObject({ type: 'roof', parentId: roofLevel.id, support: { kind: 'walls' } })
+    expect(roofsOver(scene, outcome.result.ids['level/1']!).map((r) => r.id)).toEqual([roof.id])
+    const segment = nodesOf(outcome).find((n) => n.parentId === roof.id) as AnyNode &
+      Record<string, any>
+    expect(segment).toMatchObject({ type: 'roof-segment', roofType: 'gable', width: 5, depth: 4 })
+    expect(segment.rotation).toBeCloseTo(Math.PI / 2, 6)
+    expect(segment.overhang).toBeCloseTo(0.4 / Math.cos((35 * Math.PI) / 180), 6)
+    expect(roofLevel.height).toBeGreaterThan(1)
+    // Its covering and its gable ends each wear their own exact colour.
+    const names = new Map((outcome.changes!.materials ?? []).map((m) => [m.id, m.name]))
+    expect(
+      [roof.topMaterialPreset, roof.wallMaterialPreset].map((ref) =>
+        names.get(ref?.replace(/^scene:/, '')),
+      ),
+    ).toEqual(['#3a4044', '#e8e2d6'])
+    // The chimney goes up with the roof: on the roof level, as high as it stood on the top storey.
+    const chimney = byAuthorId(outcome, 'chimney')
+    expect(chimney).toMatchObject({ parentId: roofLevel.id, metadata: { role: 'roof' } })
+    const storeyHeight = byAuthorId(outcome, 'level/1').height as number
+    expect(chimney.position[1]).toBeCloseTo(2.5 - storeyHeight, 1)
+    // The same payload writes the same roof.
+    const again = run(payload, { chimney: bed }, {})
+    expect(again.result.ids.roof).toBe(roof.id)
+    expect(again.result.ids['level/roof']).toBe(roofLevel.id)
+  })
+
+  test('a roof of its own shape is roof items, a flat one too, never refused as a slab', () => {
+    const slab: CompiledGeometryScript = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-2.5, 0, -3], max: [2.5, 0.2, 3] },
+      } as unknown as CompiledGeometryScript['manifest'],
+    }
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [{ ...bedroom.levels[0]!, items: [], lights: [] }],
+      roof: {
+        items: [
+          {
+            id: 'flat-roof',
+            name: 'Flat roof',
+            category: 'roof',
+            code: 'export default function build() {}',
+            position: [0, 2.7, 0],
+          },
+        ],
+      },
+    })
+    const outcome = run(payload, { 'flat-roof': slab }, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.roofSegments).toBe(0)
+    const roofLevel = byAuthorId(outcome, 'level/roof')
+    expect(byAuthorId(outcome, 'flat-roof')).toMatchObject({
+      parentId: roofLevel.id,
+      metadata: { role: 'roof' },
+    })
+    expect(roofLevel.height).toBeCloseTo(0.2, 1)
+  })
+
   test('an L stair turns where its risers say; a straight one is refused a landing', () => {
     const storey = (prefix: string) =>
       bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))

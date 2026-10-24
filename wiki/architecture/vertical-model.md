@@ -220,7 +220,8 @@ the roof level to reuse, declare or create), `roofsOver` (the roofs over a store
 other level), `roofLevelOrderBreach` (a reorder putting a roof level under a storey it stood over),
 `servesAsRoofLevel` (the one test of a level's role, which `list_levels`, `verify_scene`, the
 agents' refusals and the editor's tools read) and `isRoofLevel` (declared). The agents'
-`create_roof` and the editor's roof tool (a room's footprint, a rectangle or cone drawn over a
+`create_roof`, `author_scene`'s `roof` (its segments, and its roof items classified
+`role: 'roof'`) and the editor's roof tool (a room's footprint, a rectangle or cone drawn over a
 walled storey, a cone over a curved wall) place roofs by it; `add_level`, the editor's "add a
 floor" and the stair tool's new upper floor insert under the roof level; the level selector, the
 chat's `reorder_level`, the capture app's REST reorder and `apply_patch` refuse an order

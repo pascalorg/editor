@@ -667,6 +667,7 @@ export {
   type DerivedWriteOperation,
   derivedDeletionIntent,
   derivedFieldViolations,
+  filterDerivedNodeWrites,
   isDerivedNode,
 } from './store/derived-node-guard'
 export {

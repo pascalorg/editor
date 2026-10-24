@@ -43,7 +43,11 @@ import {
   FenceNode,
   type FloorOpeningNode,
   type GeometryArtifactManifest,
+  getActiveRoofHeight,
+  getSegmentSlopeFrame,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
   type SceneMaterial,
   type SceneMaterialId,
   SlabNode,
@@ -56,7 +60,9 @@ import {
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
 import { DEFAULT_LEVEL_HEIGHT, resolveCeilingHeight } from '../services/level-height'
+import { planRoofLevel } from '../services/roof-level'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
+import { resolveRoofElevation } from '../systems/roof/roof-elevation'
 import { stairArrivalOpening } from '../systems/stair/stair-footprint'
 import {
   getMaxWallCurveOffset,
@@ -134,6 +140,8 @@ export type AuthorSceneReport = {
   stairs: number
   /** Voids cut through a level's floor and the ceiling under it. */
   voids: number
+  /** Pascal's own roof segments, on the building's roof level. */
+  roofSegments: number
   lights: number
   /** Rooms whose floor finish is their module, counted by the host that compiles them after the write. */
   floorScripts: number
@@ -165,6 +173,7 @@ const GLASS = 'library:preset-glass'
 
 type Vec3 = [number, number, number]
 type AuthorSceneWall = NonNullable<AuthorScenePayload['levels'][number]['walls']>[number]
+type AuthorSceneRoom = AuthorScenePayload['levels'][number]['rooms'][number]
 /** A payload wall with its ends after the join rule. */
 type JoinedWall = {
   spec: AuthorSceneWall
@@ -391,12 +400,16 @@ export default function build({ THREE }) {
 export function authorSceneCeilingPoints(
   payload: AuthorScenePayload,
 ): { id: string; code: string }[] {
-  return payload.levels.flatMap((level, index) =>
-    level.lights.flatMap((light, i) =>
+  return payload.levels.flatMap((level, index) => [
+    ...level.lights.flatMap((light, i) =>
       light.fixture ? [] : [{ id: `light/${index}/${i}`, code: CEILING_POINT_CODE }],
     ),
-  )
+    // A room left with no light gets one at its seed.
+    ...level.rooms.map((_, i) => ({ id: roomLightId(index, i), code: CEILING_POINT_CODE })),
+  ])
 }
+
+const roomLightId = (level: number, room: number) => `light/${level}/room/${room}`
 
 /**
  * The rooms whose floor finish is a module, by their zone once the write made it: the host reads
@@ -677,6 +690,7 @@ export function authorScene(
     }
     for (const item of level.items ?? []) claimSourceKey(item.id)
   })
+  for (const item of payload.roof?.items ?? []) claimSourceKey(item.id)
   const buildings = Object.values(scene).filter((n) => n.type === 'building')
   const selected =
     input.buildingId ?? (context.activeLevelId ? scene[context.activeLevelId]?.parentId : undefined)
@@ -732,6 +746,7 @@ export function authorScene(
     items: 0,
     stairs: 0,
     voids: 0,
+    roofSegments: 0,
     lights: 0,
     floorScripts: 0,
     faceScripts: 0,
@@ -1203,7 +1218,7 @@ export function authorScene(
     draft[zone.parentId!] = { ...level, children: [...level.children, zone.id] } as AnyNode
     report.rooms++
   }
-  const claimed = new Map<string, string>()
+  const joined = new Map<string, AuthorSceneRoom[]>()
   payload.levels.forEach((level, index) => {
     const levelNode = levelNodes[index]!
     for (const [i, room] of level.rooms.entries()) {
@@ -1211,13 +1226,10 @@ export function authorScene(
       const zone = zones.find(
         (z) => z.parentId === levelNode.id && pointInPolygon(room.seed as Vec2, z.polygon),
       )
-      // Two seeds in one enclosure: the walls do not separate the rooms the payload names.
-      if (zone && claimed.has(zone.id)) {
-        defect(
-          id,
-          'room_shares_enclosure',
-          `"${room.name}" and "${claimed.get(zone.id)}" are one enclosure: no wall separates them.`,
-        )
+      // Several seeds in one enclosure name one open-plan room, in the order given.
+      const sharing = zone && joined.get(zone.id)
+      if (sharing) {
+        sharing.push(room)
         continue
       }
       if (!zone) {
@@ -1255,16 +1267,52 @@ export function authorScene(
           : {}),
         metadata: { ...zone.metadata, authorScene: { seed: room.seed } },
       })
-      claimed.set(zone.id, room.name)
+      joined.set(zone.id, [room])
       report.ids[id] = zone.id
       report.roomsNamed++
     }
   })
+  for (const [zoneId, rooms] of joined) {
+    if (rooms.length < 2) continue
+    const [first, ...rest] = rooms.map((room) => room.name)
+    // "Kitchen" joins as "kitchen"; a name that is not a capitalised word ("WC") stays as given.
+    const names = [
+      first!,
+      ...rest.map((name) => name.replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase())),
+    ]
+    const name = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+    draft[zoneId] = { ...draft[zoneId], name } as AnyNode
+    report.roomsNamed += rest.length
+    const floors = rooms
+      .slice(1)
+      .filter((room) => room.floor || room.floorCode || room.floorRegions.length)
+    say(
+      `${rooms.map((room) => `"${room.name}"`).join(', ')} are one enclosure, no wall between them: one open-plan room, "${name}"${floors.length ? `, with the floor of "${first}"` : ''}`,
+    )
+  }
 
   // ---------- floors and ceilings, as the editor derives them on load ----------
   const levelIds = levelNodes.map((l) => l.id as `level_${string}`)
   let written: Record<string, AnyNode> = {
     ...reconcileSceneStructure({ nodes: draft, levelIds, mintId: (kind) => mint(kind) }).nodes,
+  }
+  // A room's plate and ceiling are named by its room, whose id follows its walls: a revision keeps
+  // an unchanged room's, and a room it adds brings its own with it (never another room's renamed).
+  const derivedIds = new Map<string, string>()
+  for (const node of Object.values(written)) {
+    const zones =
+      node.type === 'ceiling' && node.zoneId
+        ? [node.zoneId]
+        : node.type === 'slab' && node.plateRole === 'base'
+          ? [...(node.zoneIds ?? [])].sort()
+          : []
+    if (zones.length && !scaffoldIds.has(node.id))
+      derivedIds.set(node.id, mint(node.type, `${node.type}/${zones.join('+')}`))
+  }
+  if (derivedIds.size) {
+    let json = JSON.stringify(written)
+    for (const [from, to] of derivedIds) json = json.replaceAll(`"${from}"`, `"${to}"`)
+    written = JSON.parse(json)
   }
 
   // ---------- the floor between storeys: each upper plate keeps its top and reaches down to the walls ----------
@@ -1873,8 +1921,40 @@ export function authorScene(
   // Ceilings exist only after structure reconciliation; lights can now use their room's host.
   payload.levels.forEach((level, index) => {
     const levelNode = levelNodes[index]!
-    for (const [i, light] of level.lights.entries()) {
-      const id = `light/${index}/${i}`
+    const entries: { id: string; light: (typeof level.lights)[number]; room?: string }[] =
+      level.lights.map((light, i) => ({ id: `light/${index}/${i}`, light }))
+    // A named room with no light of its own (none whose plan point is in it, given or built into
+    // an item) gets a plain ceiling light at its seed.
+    const lit: Vec2[] = [
+      ...level.lights.map((light): Vec2 => [light.position[0]!, light.position[2]!]),
+      ...(level.items ?? []).flatMap((item): Vec2[] => {
+        const frame = itemFrames.get(item.id)
+        return frame && input.compiled[item.id]?.manifest.lights?.length
+          ? [[frame.position[0], frame.position[2]]]
+          : []
+      }),
+    ]
+    const seen = new Set<string>()
+    level.rooms.forEach((room, i) => {
+      const zone = written[report.ids[`room/${index}/${i}`] ?? ''] as ZoneNode | undefined
+      if (!zone || seen.has(zone.id)) return
+      seen.add(zone.id)
+      const inside = (p: Vec2) =>
+        pointInPolygon(p, zone.polygon) && !zone.holes.some((hole) => pointInPolygon(p, hole))
+      if (lit.some(inside)) return
+      const over = ceilingAt(index, room.seed[0]!, room.seed[1]!)
+      if (!over) return
+      entries.push({
+        id: roomLightId(index, i),
+        light: {
+          position: [room.seed[0]!, over.height - 0.1, room.seed[1]!],
+          color: '#ffffff',
+          intensity: 1,
+        },
+        room: zone.name ?? room.name,
+      })
+    })
+    for (const { id, light, room: unlit } of entries) {
       const at: Vec3 = [light.position[0]!, light.position[1]!, light.position[2]!]
       let hostId = light.fixture ? itemNodeIds.get(light.fixture) : undefined
       let hostFrame = light.fixture ? itemFrames.get(light.fixture) : undefined
@@ -1914,7 +1994,11 @@ export function authorScene(
           }
           report.ids[id] = node.id
           report.items++
-          say(`light at [${at.join(', ')}] has no fixture: a ceiling point in ${room.name}`)
+          say(
+            unlit
+              ? `${unlit} had no light: a ceiling light at its centre`
+              : `light at [${at.join(', ')}] has no fixture: a ceiling point in ${room.name}`,
+          )
         } catch (error) {
           const e = error as { code?: string; message?: string }
           defect(id, e.code ?? 'item_refused', e.message ?? String(error))
@@ -1966,6 +2050,138 @@ export function authorScene(
       report.lights++
     }
   })
+
+  // ---------- the roof: on the building's roof level above the top storey, as create_roof puts it ----------
+  const roof = payload.roof
+  if (roof && (roof.segments.length || roof.items?.length)) {
+    const top = levelNodes.at(-1)!
+    const segments = roof.segments.map((spec, i) => {
+      const segment = RoofSegmentNode.parse({
+        roofType: spec.roofType,
+        width: spec.width,
+        depth: spec.depth,
+        wallHeight: 0,
+        rotation: (spec.rotation * Math.PI) / 180,
+        position: [spec.center[0], 0, spec.center[1]],
+        ...(spec.pitch !== undefined && { pitch: spec.pitch }),
+        ...(spec.gableOverhang !== undefined && { gableOverhang: spec.gableOverhang }),
+      })
+      // The overhang is asked in plan; the segment stores it along its slope (a barrel's, at its ends).
+      const overhang =
+        spec.roofType === 'barrel'
+          ? spec.overhang
+          : spec.overhang / getSegmentSlopeFrame(segment).cosTheta
+      return { ...segment, id: mint('rseg', `roof/segment/${i}`), overhang }
+    })
+    const peak = Math.max(0, ...segments.map((segment) => getActiveRoofHeight(segment)))
+    // Nothing stands above the payload's top level in its candidate: the plan is a roof level.
+    const plan = planRoofLevel(written, top.id, peak)
+    const created = plan.kind === 'roof' ? plan.create : null
+    const levelId = created ? mint('level', 'level/roof') : plan.levelId
+    if (created)
+      written = applySceneChanges(written, {
+        create: [{ node: { ...created, id: levelId } as AnyNode, parentId: building!.id }],
+      })
+    report.ids['level/roof'] = levelId
+    // A roof measured from the top storey's floor stands this much lower on the roof level.
+    const offset = plan.storeyOffset
+    let rises = peak
+    if (segments.length) {
+      const cx = segments.reduce((sum, s) => sum + s.position[0], 0) / segments.length
+      const cz = segments.reduce((sum, s) => sum + s.position[2], 0) / segments.length
+      const node = RoofNode.parse({
+        id: mint('roof', 'roof'),
+        name: roof.name ?? 'Roof',
+        parentId: levelId,
+        position: [cx, 0, cz],
+        rotation: 0,
+        support: { kind: 'walls' },
+        children: segments.map((segment) => segment.id),
+        metadata: { authorScene: { id: 'roof' } },
+      })
+      written = applySceneChanges(written, {
+        create: [
+          { node, parentId: levelId },
+          ...segments.map((segment) => ({
+            node: {
+              ...segment,
+              parentId: node.id,
+              position: [segment.position[0] - cx, 0, segment.position[2] - cz],
+            } as AnyNode,
+            parentId: node.id,
+          })),
+        ],
+      })
+      const elevation = resolveRoofElevation(written[node.id] as RoofNode, written)
+      written[node.id] = { ...node, position: [cx, elevation, cz] } as AnyNode
+      rises = elevation + peak
+      report.ids.roof = node.id
+      report.roofSegments = segments.length
+      for (const [role, color] of [
+        ['top', roof.color],
+        ['wall', roof.wallColor],
+      ] as const) {
+        const finish = finishRef(color, 'roof')
+        if (finish)
+          try {
+            const { changes } = paint(
+              written,
+              { targets: [node.id], material: finish, role },
+              paintContext(levelId),
+            )
+            for (const u of changes?.update ?? [])
+              written[u.id] = { ...written[u.id], ...u.data } as AnyNode
+          } catch (error) {
+            defect('roof', 'paint_refused', (error as Error).message)
+          }
+      }
+    }
+    for (const item of roof.items ?? []) {
+      const compiled = input.compiled[item.id]
+      if (!compiled) {
+        defect(
+          item.id,
+          'compile_failed',
+          input.compileErrors?.[item.id] ?? 'The module did not compile.',
+        )
+        continue
+      }
+      try {
+        const outcome = addObject(
+          written,
+          {
+            compiled: { ...compiled, nodeId: mint('item', item.id) },
+            name: item.name,
+            category: item.category,
+            reason: `author_scene: ${item.name}`,
+            position: [item.position[0]!, item.position[1]! + offset, item.position[2]!],
+            rotation: item.rotation,
+            parentId: levelId,
+            role: 'roof',
+          },
+          { ...context, activeLevelId: levelId },
+        )
+        for (const { node } of outcome.changes?.create ?? []) {
+          written = applySceneChanges(written, {
+            create: [
+              {
+                node: { ...node, slots: exactSlots(compiled, item.id) } as AnyNode,
+                parentId: levelId,
+              },
+            ],
+          })
+          report.ids[item.id] = node.id
+          report.items++
+          rises = Math.max(rises, item.position[1]! + offset + scriptedSize(compiled.manifest)[1])
+        }
+      } catch (error) {
+        const e = error as { code?: string; message?: string }
+        defect(item.id, e.code ?? 'item_refused', e.message ?? String(error))
+      }
+    }
+    // A roof level made for it is as tall as the roof rises over it.
+    if (created) written[levelId] = { ...written[levelId], height: Math.max(rises, 0.2) } as AnyNode
+  }
 
   const nodes = Object.fromEntries(Object.entries(written).filter(([id]) => !scaffoldIds.has(id)))
   const candidate: AuthorSceneState = {

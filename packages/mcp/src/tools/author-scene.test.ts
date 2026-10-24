@@ -302,7 +302,8 @@ describe('author_scene (MCP)', () => {
     expect(report.rooms).toBe(1)
     expect(report.items).toBe(3)
     expect(report.lights).toBe(1)
-    expect(report.itemsCompiled).toBe(4)
+    // The room's own ceiling point is compiled in case it had no light: it has one, so it is unused.
+    expect(report.itemsCompiled).toBe(5)
     expect(report.defects).toEqual([
       { id: 'bad', code: 'compile_failed', message: expect.stringContaining('Unsupported import') },
     ])
@@ -311,10 +312,11 @@ describe('author_scene (MCP)', () => {
     expect(report.defaults).toContain('door s/0: handle set opposite the hinge (left)')
     expect(report.snapped).toEqual([{ id: 'w', end: 'end', movedM: 0.1 }])
     expect(report.notes).toContain('The rug was left out.')
-    // Two artifacts per module (GLB + code): three items and the round window, plus the design's
-    // module and the adapter.
-    expect(stored.filter((s) => s.startsWith('model/gltf-binary'))).toHaveLength(4)
-    expect(stored.filter((s) => s.startsWith('text/javascript'))).toHaveLength(6)
+    // Two artifacts per module (GLB + code): three items, the round window and the ceiling point
+    // a room with no light would hang from (one, however many rooms), plus the design's module and
+    // the adapter.
+    expect(stored.filter((s) => s.startsWith('model/gltf-binary'))).toHaveLength(5)
+    expect(stored.filter((s) => s.startsWith('text/javascript'))).toHaveLength(7)
     // The light rides on its fixture through the bridge, not only in the operation's draft.
     const lamp = await client.callTool({ name: 'find_by_type', arguments: { type: 'item' } })
     expect(JSON.stringify(lamp.structuredContent ?? lamp.content)).toContain('Lamp')
@@ -459,7 +461,7 @@ export default function build({ THREE }) {
     expect(report.defects).toEqual([])
     expect(report.items).toBe(1)
     expect(report.lights).toBe(1)
-    expect(report.itemsCompiled).toBe(2)
+    expect(report.itemsCompiled).toBe(3)
     expect(report.defaults).toContain(
       'light at [0, 2.4, 0] has no fixture: a ceiling point in Bedroom',
     )
@@ -499,6 +501,61 @@ export default function build({ THREE }) {
       arguments: { payload, replace: true },
     })
     expect((replaced.structuredContent as { walls: number }).walls).toBe(4)
+  })
+
+  test('a revision that divides a room writes the new rooms with their own floors and ceilings', async () => {
+    const first = await client.callTool({ name: 'author_scene', arguments: { payload } })
+    expect(first.isError).not.toBe(true)
+    const [level] = payload.levels
+    const divided = {
+      ...payload,
+      levels: [
+        {
+          ...level,
+          walls: [
+            ...level!.walls,
+            { id: 'mid', start: [-2, 0], end: [2, 0], height: 2.7, thickness: 0.1 },
+          ],
+          rooms: [
+            { name: 'Bedroom', seed: [0, -1] },
+            { name: 'Study', seed: [0, 1] },
+          ],
+        },
+      ],
+    }
+    const replaced = await client.callTool({
+      name: 'author_scene',
+      arguments: { payload: divided, replace: true },
+    })
+    expect(replaced.isError, JSON.stringify(replaced.content)).not.toBe(true)
+    const report = replaced.structuredContent as { rooms: number; roomsNamed: number }
+    expect([report.rooms, report.roomsNamed]).toEqual([2, 2])
+    const ceilingIds = async () =>
+      (
+        (await client.callTool({ name: 'find_by_type', arguments: { type: 'ceiling' } }))
+          .structuredContent as { results: { id: string }[] }
+      ).results.map((r) => r.id)
+    const ceilings = await ceilingIds()
+    expect(ceilings).toHaveLength(2)
+    // The same rooms, the wall between them moved: their ceilings follow it, as the editor's do.
+    const moved = structuredClone(divided)
+    moved.levels[0]!.walls.at(-1)!.start = [-2, 0.5]
+    moved.levels[0]!.walls.at(-1)!.end = [2, 0.5]
+    const revised = await client.callTool({
+      name: 'author_scene',
+      arguments: { payload: moved, replace: true },
+    })
+    expect(revised.isError, JSON.stringify(revised.content)).not.toBe(true)
+    expect((await ceilingIds()).sort()).toEqual([...ceilings].sort())
+    const zs = await Promise.all(
+      ceilings.map(async (id) => {
+        const got = await client.callTool({ name: 'get_node', arguments: { id } })
+        const { node } = JSON.parse((got.content as { text: string }[])[0]!.text)
+        return (node.polygon as [number, number][]).map(([, z]) => z)
+      }),
+    )
+    // Both meet on the moved wall's centerline, half a metre on.
+    expect(zs.map((z) => z.filter((v) => v === 0.5).length)).toEqual([2, 2])
   })
 
   test("writes a wall's skirting and a room's floor script, readable with get_source", async () => {

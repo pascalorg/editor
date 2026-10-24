@@ -77,13 +77,14 @@ describe('runDesign', async () => {
     })
   })
 
-  test('gives world matrices and bounds, and the vertices of what a wall is made of', () => {
+  test('gives world matrices and bounds, and the vertices of what a wall is made of and of small meshes', () => {
     const body = graph.objects.find(
       (o) => o.type === 'mesh' && o.parent === named('wall:north').id,
     )!
     expect(body.bounds).toEqual([-3, 0, -3.1, 3, 2.7, -2.9])
     expect(body.vertices).toBeString()
-    expect(named('crate').vertices).toBeUndefined()
+    // A box is small: measured though it is nothing of a wall's.
+    expect(named('crate').vertices).toBeString()
   })
 
   test('records each piece where the design put it, nested or never added', () => {
@@ -129,5 +130,75 @@ describe('runDesign', async () => {
         code: "export default function build({ THREE, piece }) { piece('x', {}); return new THREE.Group() }",
       }),
     ).rejects.toThrow(/size must be/)
+  })
+})
+
+// Pascal Arena's raw contract: a named build that adds to the scene it is given, nothing named.
+const SHELL = `export function build({ THREE, scene, addons }) {
+  const root = new THREE.Group()
+  scene.add(root)
+  const mat = new THREE.MeshStandardMaterial({ color: '#eeeeee' })
+  function box(w, h, d, x, y, z, parent = root) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
+    mesh.position.set(x, y, z)
+    parent.add(mesh)
+    return mesh
+  }
+  function tree(x, z) {
+    box(0.2, 2, 0.2, x, 1, z)
+    box(1.5, 1.5, 1.5, x, 2.5, z)
+  }
+  // Main volume, two storeys.
+  box(8, 6, 6, 0, 3, 0)
+  for (const x of [-6, 6]) tree(x, 4)
+  const merged = addons.mergeGeometries([new THREE.BoxGeometry(1, 1, 1)])
+  root.add(new THREE.Mesh(merged, mat))
+  root.add(new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), mat))
+  addons.TextGeometry
+}`
+
+const INTERIOR = `export function build({ THREE, scene, piece }) {
+  const room = new THREE.Group()
+  room.name = 'room:Living room'
+  room.add(piece('sofa', { position: [0, 0, 0], size: [2, 0.8, 0.9] }))
+  scene.add(room)
+}`
+
+describe('runDesign: a shell and an interior', () => {
+  test("runs Arena's build({ THREE, scene, addons }) and names each part by what made it", async () => {
+    const graph = await runDesign({ code: SHELL })
+    const meshes = graph.objects.filter((o) => o.type === 'mesh')
+    expect(meshes.map((m) => m.made)).toEqual([
+      'Main volume, two storeys',
+      'tree',
+      'tree',
+      'tree',
+      'tree',
+      'Main volume, two storeys',
+      'Main volume, two storeys',
+    ])
+    // A mesh past 64 vertices that is no wall's, window's or door's is not measured.
+    expect(meshes.at(-1)!.vertices).toBeUndefined()
+    expect(graph.skipped).toEqual({
+      "uses of addons.TextGeometry, which Pascal's compiler does not carry": 1,
+    })
+  })
+
+  test("builds the interior into the shell's scene, its objects marked as the second stage", async () => {
+    const graph = await runDesign({ code: SHELL, interior: INTERIOR })
+    const room = graph.objects.find((o) => o.name === 'room:Living room')!
+    expect(room.stage).toBe(1)
+    expect(graph.pieces).toHaveLength(1)
+    expect(graph.objects[graph.pieces[0]!.object]!.stage).toBe(1)
+    expect(graph.objects.filter((o) => o.type === 'mesh').every((o) => !o.stage)).toBe(true)
+  })
+
+  test('refuses a module with no build, and one that builds nothing', async () => {
+    await expect(runDesign({ code: 'export const x = 1' })).rejects.toThrow(
+      'export a function named build',
+    )
+    await expect(runDesign({ code: 'export function build() {}' })).rejects.toThrow(
+      'added nothing to the scene',
+    )
   })
 })

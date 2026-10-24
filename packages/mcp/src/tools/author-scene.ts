@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server'
+import { type DerivedNodeChanges, filterDerivedNodeWrites } from '@pascal-app/core'
 import {
   type AgentContext,
   achievedChanges,
@@ -132,7 +133,15 @@ export function registerAuthorScene(
           at: new Date().toISOString(),
         },
       }
-      const patches = toPatches(outcome.changes)
+      // A revision's plates and ceilings follow its walls: what only the reconciler may change on
+      // one that stays (its outline, its room) is left to the bridge's reconciliation after the
+      // write, as in the editor; a new room's arrive with it.
+      const patches = toPatches(
+        filterDerivedNodeWrites(
+          bridge.getNodes(),
+          outcome.changes as unknown as DerivedNodeChanges,
+        ) as unknown as typeof outcome.changes,
+      )
       if (patches.length) bridge.applyPatch(patches)
       const checks = verifyScene(bridge.getNodes() as SceneNodes, undefined, {
         activeLevelId: null,
@@ -178,6 +187,14 @@ function withoutCode(payload: AuthorScenePayload) {
       items: (level.items ?? []).map(({ code: _, ...item }) => item),
       rooms: level.rooms.map(({ floorCode: _, wallCode: _w, ...room }) => room),
     })),
+    ...(payload.roof
+      ? {
+          roof: {
+            ...payload.roof,
+            items: (payload.roof.items ?? []).map(({ code: _, ...item }) => item),
+          },
+        }
+      : {}),
   }
 }
 

@@ -1,12 +1,13 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
-import { measurement } from './measurement'
+import { RoofType } from '../schema/nodes/roof-types'
+import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
 
 const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene, in one call. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls (straight, curved or glass) with their openings, rooms, slabs, voids, columns, railings, stairs, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
 
-Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands, except a ceiling item's (mount 'ceiling': a pendant, a ceiling light): it hangs from the ceiling of the room containing its plan position, its top on that ceiling, and its y is not read. A rug, a mat or a runner is an item lying on the room's floor. What stands on a floor stands on its finish: on a room with a floorCode, on the top of its planks or tiles, so its y stays 0. Its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode, tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode), cladding, brick or battens outside its faceOutside; a slab is a terrace, a platform, a balcony; a stair is its level's stairs, which open the floor above. Pascal draws what bold architecture needs natively: a curved wall is one wall with the point its arc passes through, through (never a run of short straight ones), a glass front a curtain wall, a double-height room a void in the floor of the level above it (its ceiling opens with it, a railing along its edges), an archway a passage with an arch shape. Paint a wall by what its faces look onto, colorInside and colorOutside: which face is inside is Pascal's to find. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
+Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands, except a ceiling item's (mount 'ceiling': a pendant, a ceiling light): it hangs from the ceiling of the room containing its plan position, its top on that ceiling, and its y is not read. A rug, a mat or a runner is an item lying on the room's floor. What stands on a floor stands on its finish: on a room with a floorCode, on the top of its planks or tiles, so its y stays 0. Its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode, tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode), cladding, brick or battens outside its faceOutside; a slab is a terrace, a platform, a balcony; a stair is its level's stairs, which open the floor above; the roof over the top level is roof, Pascal's own segments when its shape is one of theirs, else your geometry as roof items, both on the building's roof level above the top storey. Pascal draws what bold architecture needs natively: a curved wall is one wall with the point its arc passes through, through (never a run of short straight ones), a glass front a curtain wall, a double-height room a void in the floor of the level above it (its ceiling opens with it, a railing along its edges), an archway a passage with an arch shape. Paint a wall by what its faces look onto, colorInside and colorOutside: which face is inside is Pascal's to find. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
 
 The report says what was written, what Pascal defaulted (defaults: a window with no type is fixed and cannot open), what it warns about but wrote (warnings: thin slabs, too many slabs or regions) and what it refused (defects, by your ids).
 
@@ -388,6 +389,59 @@ export const authorSceneVoid = z.object({
     ),
 })
 
+export const authorSceneRoofSegment = z.object({
+  center: plan('its centre, between the walls it covers'),
+  rotation: measurement('angle', 'deg', {
+    default: 0,
+    description: 'Turn about the vertical axis, as an item turns: at 0 its width runs along x.',
+  }),
+  width: length(
+    "Along its ridge, between the centerlines of the walls under it (a gable's rakes are its ends).",
+    { positive: true },
+  ),
+  depth: length(
+    "Across its ridge, between the centerlines of the walls under it (its eaves' sides).",
+    {
+      positive: true,
+    },
+  ),
+  roofType: RoofType.default('gable').describe(
+    'gable (default), hip, shed (one slope, its low eave toward its local +z), flat, or any of the roof shapes create_roof takes.',
+  ),
+  pitch: roofPitch('deg', {
+    min: 0,
+    max: 85,
+    description: 'Slope of its planes (default 40°).',
+  }).optional(),
+  overhang: length("How far its eaves reach past the walls' faces, in plan (default 0.3 m).", {
+    default: 0.3,
+  }),
+  gableOverhang: length(
+    "How far a gable's or shed's rakes reach past its end walls, in plan.",
+  ).optional(),
+})
+
+export const authorSceneRoof = z.object({
+  name: z.string().max(80).optional(),
+  segments: z
+    .array(authorSceneRoofSegment)
+    .default([])
+    .describe(
+      "Pascal's own roof over the top level, one segment per rectangle: it stands on the walls' tops and draws its own gable ends, eaves and fascia (default []).",
+    ),
+  color: z.string().optional().describe("#rrggbb of the segments' covering."),
+  wallColor: z
+    .string()
+    .optional()
+    .describe('#rrggbb of the walls the segments raise: their gable ends.'),
+  items: z
+    .array(authorSceneItem)
+    .optional()
+    .describe(
+      "Roof geometry the segments cannot draw (a roof of another shape, a chimney, a dormer), as items on the roof level. position's y is measured from the top level's floor, as that level's items are.",
+    ),
+})
+
 export const authorSceneLevel = z.object({
   name: z.string().min(1).max(80),
   elevation: length(
@@ -414,6 +468,11 @@ export const authorSceneLevel = z.object({
 
 export const authorScenePayload = z.object({
   levels: z.array(authorSceneLevel).min(1),
+  roof: authorSceneRoof
+    .optional()
+    .describe(
+      "The roof over the top level, on the building's roof level above it, so exploded and solo level views lift it off the plan.",
+    ),
   notes: z
     .array(z.string().max(1200))
     .default([])

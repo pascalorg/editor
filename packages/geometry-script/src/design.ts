@@ -1,6 +1,7 @@
 // Runs a whole design written as free three.js (a house: walls, windows, rooms, a roof, the
 // furniture it delegates with `piece()`) and reads its final graph as plain data, so a host can
-// convert it into a Pascal scene by code. Called where every other three.js module runs: in the
+// convert it into a Pascal scene by code. A design is one module, or a shell and a second module
+// that adds the interior to the same scene. Called where every other three.js module runs: in the
 // isolated compiler, never in a host process. Nothing is compiled to a GLB here.
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
@@ -32,9 +33,13 @@ export function designTag(name: string): { kind: DesignTagKind; id: string } | n
   return { kind: match[1]!.toLowerCase() as DesignTagKind, id: (match[2] ?? '').trim() }
 }
 
-/** Tags whose meshes come with their world vertices: the converter measures them. */
+/**
+ * Tags whose meshes come with their world vertices: the converter measures them. Any mesh this
+ * small does too (a gable's triangle, a box): an unnamed design is measured by its parts.
+ */
 const MEASURED = new Set<DesignTagKind>(['wall', 'window', 'door'])
 const MEASURED_VERTICES_MAX = 20_000
+const SMALL_VERTICES = 64
 
 export type DesignGeometry =
   /** A three.js geometry rebuilt from its constructor arguments (JSON: shapes as Shape JSON). */
@@ -79,12 +84,19 @@ export type DesignObject = {
   bounds?: number[]
   /** The geometry's own bounds, before the matrix. */
   local?: number[]
-  /** World vertex positions (base64 Float32 xyz), for meshes of walls, windows and doors. */
+  /** World vertex positions (base64 Float32 xyz): meshes of walls, windows and doors, and small ones. */
   vertices?: string
   light?: { kind: string; color: string; intensity: number; distance?: number }
   piece?: number
   /** `AnimationClip.toJSON` of the clips the object carries. */
   animations?: unknown[]
+  /**
+   * What made it, read from the module: the helper function it was added in (`tree`, `fenceRun`),
+   * else the comment above the line of `build` that added it. An unnamed design's only names.
+   */
+  made?: string
+  /** 1: added by the second module (the interior), 0 or absent: by the first. */
+  stage?: number
 }
 
 export type DesignPiece = {
@@ -318,21 +330,74 @@ const vec3 = (value: unknown, what: string): [number, number, number] => {
   return value as [number, number, number]
 }
 
+/** What `addons` holds: three's addons Pascal's compiler carries (Arena's contract names them all). */
+const ADDONS: Record<string, unknown> = {
+  ...(LIB.BufferGeometryUtils as Record<string, unknown>),
+  ...(LIB.ParametricFunctions as Record<string, unknown>),
+  ConvexGeometry: LIB.ConvexGeometry,
+  ParametricGeometry: LIB.ParametricGeometry,
+  RoundedBoxGeometry: LIB.RoundedBoxGeometry,
+}
+
+/** Helpers that make one shape anywhere (`box`, `cylinder`): they say how, not what. */
+const PRIMITIVE =
+  /^(box|cube|cyl(inder)?|sphere|ball|cone|torus|beam|rod|bar|post|plank|panel|slab|plate|prism|mesh|part|shape|add|make|create|place|put|mat(erial)?)$/i
+
+const FRAME = /^\s*at (?:(\S+) )?\(?pascal-design-(\d)\.js:(\d+):\d+\)?$/
+
+/** `windowUnit` → `window unit`. */
+const words = (name: string) =>
+  name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_$]+/g, ' ')
+    .trim()
+    .toLowerCase()
+
 /**
- * Runs the design module and reads its final graph: every object with its world matrix, every
- * mesh's geometry (its constructor arguments when it is unchanged since it was made, else its
- * buffers), its materials, the lights, and each `piece(description, { position, rotation, size,
- * mount })` the design delegated (an empty group where the piece goes). Instanced meshes come out
- * as one mesh per instance. Hidden objects, lines and points are counted, not kept.
+ * What made an object, from the stack of its `add`: the innermost helper on the way that is not a
+ * maker of shapes (`box(…)`), or, when there is none, the comment above the line of `build` that
+ * led to it, within 60 lines. The Function header puts a module's line n at stack
+ * line n + 2.
  */
-export async function runDesign(input: { code: string }): Promise<DesignGraph> {
-  if (input.code.length > DESIGN_MODULE_MAX_BYTES)
+function madeBy(stack: string, bodies: readonly string[][]): string | undefined {
+  const frames = stack
+    .split('\n')
+    .map((line) => line.match(FRAME))
+    .filter((m): m is RegExpMatchArray => m !== null)
+  if (!frames.length) return undefined
+  const outer = frames.at(-1)!
+  const lines = bodies[Number(outer[2])]!
+  // The innermost helper that says what it makes (`windowUnit`, `tree`), past anonymous callbacks
+  // and shape makers (`box`).
+  const helper = frames
+    .slice(0, -1)
+    .map((frame) => frame[1])
+    .find((name) => name && name !== '<anonymous>' && !PRIMITIVE.test(name))
+  if (helper) return words(helper)
+  const from = Number(outer[3]) - 3
+  for (let i = from; i >= 0 && i > from - 60; i--) {
+    const line = lines[i]!.trim()
+    if (line.startsWith('//')) {
+      const comment = line
+        .replace(/^\/\/+\s*/, '')
+        .split(/[.;:]\s/)[0]!
+        .replace(/[.;:]$/, '')
+      if (comment)
+        return comment.length <= 60 ? comment : comment.slice(0, 60).replace(/\s+\S*$/, '')
+    }
+    if (/^(export\s+)?(default\s+)?(async\s+)?function\b|=> \{$/.test(line)) break
+  }
+  return undefined
+}
+
+function loadModule(code: string, stage: number) {
+  if (code.length > DESIGN_MODULE_MAX_BYTES)
     throw new Error(`The design module exceeds ${DESIGN_MODULE_MAX_BYTES / 1024} KB`)
-  if (SOURCE_GUARD.test(input.code))
+  if (SOURCE_GUARD.test(code))
     throw new Error(
       'Design modules cannot use dynamic import, eval, Function constructors, process or require',
     )
-  const body = transformModule(input.code, MODULES)
+  const body = `${transformModule(code, MODULES)}\n//# sourceURL=pascal-design-${stage}.js`
   // Evaluating the model's module is this function's job; callers run it in a locked-down process.
   const factory = new Function('__modules', 'THREE', 'lib', body) as (
     modules: typeof MODULES,
@@ -341,7 +406,23 @@ export async function runDesign(input: { code: string }): Promise<DesignGraph> {
   ) => { build?: unknown }
   const exported = factory(MODULES, THREE, LIB)
   if (typeof exported.build !== 'function')
-    throw new Error('The design must `export default function build({ THREE, piece })`')
+    throw new Error('The module must export a function named build')
+  return { build: exported.build as (ctx: unknown) => unknown, lines: body.split('\n') }
+}
+
+/**
+ * Runs the design and reads its final graph: every object with its world matrix, every mesh's
+ * geometry (its constructor arguments when it is unchanged since it was made, else its buffers),
+ * its materials, the lights, and each `piece(description, { position, rotation, size, mount })`
+ * the design delegated (an empty group where the piece goes). A module exports `build`, by name
+ * or as its default, and is called with `{ THREE, scene, addons, piece }`: it adds to the scene, or
+ * returns a group, which is added. `interior`, a second module, then builds into that same scene.
+ * Instanced meshes come out as one mesh per instance. Hidden objects, lines and points are counted,
+ * not kept.
+ */
+export async function runDesign(input: { code: string; interior?: string }): Promise<DesignGraph> {
+  const modules = [loadModule(input.code, 0)]
+  if (input.interior !== undefined) modules.push(loadModule(input.interior, 1))
 
   const placed: Array<{
     group: THREE.Group
@@ -363,16 +444,37 @@ export async function runDesign(input: { code: string }): Promise<DesignGraph> {
     placed.push({ group, description: description.trim().slice(0, 1200), size, mount })
     return group
   }
-
-  const built = await (exported.build as (ctx: unknown) => unknown)({
-    THREE,
-    lib: LIB,
-    params: {},
-    piece,
+  const missing = new Set<string>()
+  const addons = new Proxy(ADDONS, {
+    get(target, name) {
+      if (typeof name === 'string' && name !== 'then' && !(name in target)) missing.add(name)
+      return typeof name === 'string' ? target[name] : undefined
+    },
   })
-  if (!(built instanceof THREE.Object3D))
-    throw new Error('build() must return a THREE.Object3D (usually a THREE.Group)')
-  built.updateMatrixWorld(true)
+
+  // Every `add` is heard while the modules run: its stack says what made the object.
+  const origin = new WeakMap<THREE.Object3D, { made?: string; stage: number }>()
+  const bodies = modules.map((m) => m.lines)
+  let stage = 0
+  const add = THREE.Object3D.prototype.add
+  THREE.Object3D.prototype.add = function (this: THREE.Object3D, ...objects: THREE.Object3D[]) {
+    const made = madeBy(new Error().stack ?? '', bodies)
+    for (const object of objects) if (!origin.has(object)) origin.set(object, { made, stage })
+    return add.apply(this, objects)
+  }
+  const scene = new THREE.Scene()
+  try {
+    for (const [index, module] of modules.entries()) {
+      stage = index
+      const built = await module.build({ THREE, scene, addons, piece, lib: LIB, params: {} })
+      if (built instanceof THREE.Object3D && built !== scene && !built.parent) scene.add(built)
+    }
+  } finally {
+    THREE.Object3D.prototype.add = add
+  }
+  if (!scene.children.length)
+    throw new Error('build() added nothing to the scene and returned nothing')
+  scene.updateMatrixWorld(true)
 
   const graph: DesignGraph = {
     objects: [],
@@ -385,6 +487,7 @@ export async function runDesign(input: { code: string }): Promise<DesignGraph> {
   const skip = (kind: string) => {
     graph.skipped[kind] = (graph.skipped[kind] ?? 0) + 1
   }
+  for (const name of missing) skip(`uses of addons.${name}, which Pascal's compiler does not carry`)
   const geometryIds = new Map<THREE.BufferGeometry, number>()
   const materialIds = new Map<string, number>()
   const pieceOf = new Map(placed.map((entry, index) => [entry.group, index]))
@@ -446,7 +549,7 @@ export async function runDesign(input: { code: string }): Promise<DesignGraph> {
         (v) => round(v),
       ),
     }
-    if (measured) {
+    if (measured || geometry.getAttribute('position').count <= SMALL_VERTICES) {
       const position = geometry.getAttribute('position')
       const step = Math.max(1, Math.ceil(position.count / MEASURED_VERTICES_MAX))
       const v = new THREE.Vector3()
@@ -462,8 +565,17 @@ export async function runDesign(input: { code: string }): Promise<DesignGraph> {
     graph.stats.triangles += triangles
   }
 
-  const visit = (object: THREE.Object3D, parent: number, measured: boolean) => {
+  const visit = (
+    object: THREE.Object3D,
+    parent: number,
+    measured: boolean,
+    from: { made?: string; stage: number } = { stage: 0 },
+  ) => {
     if (!object.visible) return skip('hidden objects')
+    // A stage holds for what an object holds; what made a container says nothing of its parts.
+    const own = origin.get(object)
+    const made = own ?? { stage: from.stage }
+    const first = graph.objects.length
     const anyObject = object as unknown as Record<string, boolean>
     if (anyObject.isLine || anyObject.isPoints || anyObject.isSprite)
       return skip('lines and points')
@@ -526,18 +638,22 @@ export async function runDesign(input: { code: string }): Promise<DesignGraph> {
         })
       }
     }
+    for (const o of graph.objects.slice(first)) {
+      if (made.made) o.made = made.made
+      if (made.stage) o.stage = made.stage
+    }
     const self = graph.objects[id]?.id === id ? id : parent
     if (object.animations.length && graph.objects[id]?.id === id)
       graph.objects[id]!.animations = object.animations.map((clip) =>
         THREE.AnimationClip.toJSON(clip),
       )
-    for (const child of object.children) visit(child, self, measuredHere)
+    for (const child of object.children) visit(child, self, measuredHere, made)
   }
 
-  visit(built, -1, false)
+  for (const child of scene.children) visit(child, -1, false)
   // A piece the design never added to its graph stands where its options put it.
   for (const entry of placed)
-    if (!entry.group.parent && entry.group !== built) {
+    if (!entry.group.parent) {
       entry.group.updateMatrixWorld(true)
       visit(entry.group, -1, false)
     }

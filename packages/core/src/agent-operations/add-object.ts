@@ -49,6 +49,11 @@ export type AddObjectInput = {
   category?: string
   /** What the object stands in for; kept in `metadata.reason`, listed by verify_scene. */
   reason?: string
+  /**
+   * Roof geometry (`metadata.role: 'roof'`) for a roof level: not storey content, so the storey's
+   * wall and slab shape refusals do not apply. Set by author_scene, not by the tool's contract.
+   */
+  role?: 'roof'
   /** What the surface's compile produced from `code` (compiled before the operation runs). */
   compiled: CompiledGeometryScript
 }
@@ -336,7 +341,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       { mount: compiled.mount, parentType: parent.type },
     )
   }
-  if (compiled.mount === 'floor' && parent.type === 'level') {
+  if (compiled.mount === 'floor' && parent.type === 'level' && input.role !== 'roof') {
     // Given no host while the roof level is in view (a roof just placed selects it), the object
     // belongs on the storey it covers; one named onto the roof level goes up with the roof (a
     // chimney cap, a gable louvre).
@@ -364,7 +369,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     source: scriptSource(compiled, itemSourceMeta(input)),
     slots: matchScriptSlotsToLibrary(compiled.manifest),
     asset,
-    metadata: { reason: input.reason },
+    metadata: { reason: input.reason, ...(input.role ? { role: input.role } : {}) },
   })
   const hint = [
     typeHint(input),
