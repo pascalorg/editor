@@ -107,7 +107,7 @@ export function buildColumnFloorplan(
     const { min, max } = node.source.manifest.bounds
     const [cx, cz] = base
       .reduce((sum, [x, z]) => [sum[0] + x, sum[1] + z], [0, 0])
-      .map((total) => total / points.length) as [number, number]
+      .map((total) => total / base.length) as [number, number]
     children.push({
       kind: 'image',
       url: floorPlanUrl,
