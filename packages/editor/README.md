@@ -34,6 +34,27 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
 `apps/editor/components/scene-loader.tsx` is a complete host: navbar, sidebar tabs, toolbars and persistence.
 
+## Snapshot completion
+
+Hosts provide `onThumbnailCapture(blob, cameraData)` to store or download captures.
+The snapshot shutter now supplies a `cameraData.requestId`. Process manual captures
+(`cameraData.captureMode` is set) before any filter that skips background requests
+with a `requestId`. After the image has been stored or its download started, emit
+`snapshot:saved` from `@pascal-app/core`'s `emitter`, echoing that exact `requestId`
+and the editor's `projectId`, with the image `id`, `url`, `width`, and `height`.
+The overlay only completes for its own shutter request. Hosts that omit the ID or
+skip every capture carrying an ID must update their handlers to avoid a stuck shutter.
+
+Return a promise from the callback and reject it when saving or downloading fails.
+The capture pipeline emits the correlated `snapshot:capture-failed` event; the
+overlay displays the error and enables retry. Ephemeral captures return directly
+to their caller and do not pass through host storage.
+
+The standalone app downloads manual snapshots without replacing the project
+thumbnail; background thumbnail captures continue to upload. Its saved event URL
+is a temporary blob URL valid for 60 seconds. Consumers needing a persistent image
+must save their own copy rather than retain that URL.
+
 ## Host props
 
 | Prop                  | What it does                                                                                                                                                                                                                                                                                     |
