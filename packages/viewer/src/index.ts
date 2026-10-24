@@ -463,6 +463,7 @@ export {
   type WallGeometryAdapterContext,
   WallSystem,
 } from './systems/wall/wall-system'
+export { wallTiltShear } from './systems/wall/wall-tilt'
 export {
   poseWindowMovingParts,
   WindowAnimationSystem,
