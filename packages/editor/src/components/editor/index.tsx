@@ -1223,6 +1223,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
   // canvas keeps its WebGL context and the plan its session through a swap.
   const paneStyle = (pane: ViewPaneIndex | null): CSSProperties =>
     pane === null ? { display: 'none' } : { gridColumn: pane + 1, gridRow: 1 }
+  // A hidden 3D pane keeps its size: the canvas mounts the scene and its tools
+  // only once it has one, and 2D placement drives those tools.
+  const viewer3dStyle: CSSProperties =
+    pane3d === null
+      ? { gridColumn: 1, gridRow: 1, visibility: 'hidden', pointerEvents: 'none' }
+      : paneStyle(pane3d)
   const hostPanes = ([0, 1] as const).filter(
     (pane) => (pane === 0 || layout.split) && !isSceneView(layout.panes[pane]),
   )
@@ -1269,8 +1275,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
             data-pascal-viewer-3d
             data-view-pane={pane3d ?? undefined}
             onPointerDownCapture={pane3d === null ? undefined : focusPane(pane3d)}
+            aria-hidden={pane3d === null || undefined}
             ref={viewer3dRef}
-            style={paneStyle(pane3d)}
+            style={viewer3dStyle}
           >
             <div className="relative isolate h-full">
               <DeleteCursorLayer
