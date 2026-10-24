@@ -345,9 +345,8 @@ export default function WallPanel() {
             value={Math.round(displayHeight * 100) / 100}
           />
         )}
-
-        <div className="px-1 mt-2 mb-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Tilt (Eğim)
+        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+          Tilt
         </div>
         <SliderControl
           onCommit={handleCommit}
@@ -363,8 +362,7 @@ export default function WallPanel() {
           unit="°"
           value={Math.round((node.tilt ?? 0) * (180 / Math.PI))}
         />
-
-        <div className="px-1 mt-2 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
           Bottom
         </div>
         <SegmentedControl

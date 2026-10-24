@@ -77,6 +77,7 @@ import {
 } from './wall-finish-data'
 import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 import { notifyWallRebuilt } from './wall-rebuild-notifications'
+import { wallTiltShear } from './wall-tilt'
 
 export { isWallInitialBuildActive } from './wall-build-lifecycle'
 export { drainRebuiltWalls } from './wall-rebuild-notifications'
@@ -1194,6 +1195,9 @@ function updateWallGeometry(
   )
   const renderedGeo =
     geometryAdapter?.buildGeometry?.(node, builtGeo, prepared.renderChildren) ?? builtGeo
+  // A tilted wall is built upright (cutouts included) and leaned afterwards.
+  const tiltShear = wallTiltShear(node.tilt)
+  if (tiltShear) renderedGeo.applyMatrix4(tiltShear)
   const newGeo = applyWorldPlanarWallUVs(renderedGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
@@ -1216,6 +1220,7 @@ function updateWallGeometry(
       terrainBottomAt,
       slabSupport.faceDatum,
     )
+    if (tiltShear) collisionGeo.applyMatrix4(tiltShear)
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
   }
@@ -1963,9 +1968,9 @@ function collectCutoutBrushes(
   wallMesh.updateMatrixWorld()
   const wallMatrixInverse = wallMesh.matrixWorld.clone().invert()
 
-  const inverseShear = wallNode.tilt
-    ? new THREE.Matrix4().makeShear(0, 0, 0, 0, 0, -Math.tan(wallNode.tilt))
-    : null
+  // Hosted children render inside the wall's tilt shear; take their cutouts
+  // back to the upright wall frame the CSG runs in.
+  const inverseShear = wallTiltShear(wallNode.tilt, true)
 
   // A wall child can only bind to its parent, so the wall alone resolves every cutter.
   const hostNodes = { [wallNode.id]: wallNode }
