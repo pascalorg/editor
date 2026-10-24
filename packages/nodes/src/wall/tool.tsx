@@ -172,7 +172,6 @@ function buildDraftWall(start: WallPlanPoint, end: WallPlanPoint): WallNode {
     visible: true,
     metadata: {},
     children: [],
-    tilt: 0,
     start,
     end,
     thickness: DRAFT_WALL_THICKNESS,

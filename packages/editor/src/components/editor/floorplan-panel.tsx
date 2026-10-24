@@ -2291,7 +2291,6 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
     visible: true,
     metadata: {},
     children: [],
-    tilt: 0,
     start,
     end,
     frontSide: 'unknown',
