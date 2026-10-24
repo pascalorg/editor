@@ -29,6 +29,7 @@ import { compileAndStore, type GeometryScriptHost, readScript } from './add-obje
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 import { toPatches } from './shared-tools'
 
 /** The contract's one result (core `addWallOpening`), and the live sync's note. */
@@ -81,10 +82,12 @@ async function rebuildOpening(
         ...GeometryReuseFields.parse(input),
       },
     })
-    outcome = rescriptOpening(
-      nodes,
-      { ...input, compiled },
-      { activeLevelId: bridge.activeLevelId?.() ?? null },
+    outcome = inScene(bridge, () =>
+      rescriptOpening(
+        nodes,
+        { ...input, compiled },
+        { activeLevelId: bridge.activeLevelId?.() ?? null },
+      ),
     )
   } catch (error) {
     if (isAgentRefusal(error)) return refusalResult(error)
@@ -174,11 +177,14 @@ export function registerAddDoor(
       if ('error' in compiled) return compiled.error
       let opening: ReturnType<typeof addWallOpening>
       try {
-        opening = addWallOpening(bridge.getNodes() as SceneNodes, {
-          kind: 'door',
-          ...input,
-          compiled: compiled.script,
-        })
+        // Planned after the compile was awaited: back in the scene's scope for its ids.
+        opening = inScene(bridge, () =>
+          addWallOpening(bridge.getNodes() as SceneNodes, {
+            kind: 'door',
+            ...input,
+            compiled: compiled.script,
+          }),
+        )
       } catch (error) {
         return refusalResult(error)
       }
@@ -210,11 +216,14 @@ export function registerAddWindow(
       if ('error' in compiled) return compiled.error
       let opening: ReturnType<typeof addWallOpening>
       try {
-        opening = addWallOpening(bridge.getNodes() as SceneNodes, {
-          kind: 'window',
-          ...input,
-          compiled: compiled.script,
-        })
+        // Planned after the compile was awaited: back in the scene's scope for its ids.
+        opening = inScene(bridge, () =>
+          addWallOpening(bridge.getNodes() as SceneNodes, {
+            kind: 'window',
+            ...input,
+            compiled: compiled.script,
+          }),
+        )
       } catch (error) {
         return refusalResult(error)
       }

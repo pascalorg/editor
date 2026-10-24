@@ -1,5 +1,6 @@
 import { canonicalOpeningRing } from '../lib/canonical-opening-ring'
 import type { NodePatch } from '../lib/structure-kernel'
+import { queryNodes } from '../runtime/node-queries'
 import type { AnyNode, AnyNodeId, FloorOpeningNode, SurfaceHoleMetadata } from '../schema'
 import { FloorOpeningNode as FloorOpeningSchema } from '../schema/nodes/floor-opening'
 import { resolveCeilingHeight } from '../services/level-height'
@@ -135,9 +136,10 @@ export function planOwnedFloorOpenings(
     materializedNodes?: Record<string, AnyNode>
   } = {},
 ): NodePatch[] {
-  const values = Object.values(nodes)
+  // Owners and their openings first: a scene with none has nothing to plan.
+  const owned = queryNodes(nodes, { type: ['stair', 'elevator', 'floor-opening'] })
   if (
-    !values.some(
+    !owned.some(
       (node) =>
         node.type === 'stair' ||
         node.type === 'elevator' ||
@@ -145,6 +147,7 @@ export function planOwnedFloorOpenings(
     )
   )
     return []
+  const values = Object.values(nodes)
   const existing = values.filter(
     (node): node is FloorOpeningNode =>
       node.type === 'floor-opening' &&

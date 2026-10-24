@@ -33,7 +33,7 @@
     "fast-xml-parser": "^5.11.2",
     "turbo": "^2.11.10",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "ultracite": "^8.0.1"
+    "ultracite": "^8.0.2"
   },
   "engines": {
     "node": ">=22.18"
@@ -45,7 +45,7 @@
     "@types/three": "0.186.0",
     "@hono/node-server": "^1.19.15",
     "hono": "^4.13.11",
-    "next": "16.4.2",
+    "next": "16.4.3",
     "react-grab": "0.2.0",
     "three": "0.186.1",
     "react": "19.3.1",

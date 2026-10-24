@@ -63,6 +63,7 @@ import {
   viewAssetsTool,
 } from '@pascal-app/core/agent-tools'
 import { DesignValidationSchema } from '@pascal-app/core/procedural-items'
+import { untracked } from '@pascal-app/core/runtime'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -82,6 +83,7 @@ import { type AssetCatalog, builtInCatalog } from './asset-catalog'
 import { registerCollectionTools } from './collections'
 import { refusalResult } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 import { ROOM_TOOL_ANNOTATIONS, type RoomToolName, structureOutput } from './structure-tools'
 
 // Tools the MCP and the hosted chat share whole: one contract, one core operation. The MCP only
@@ -564,7 +566,10 @@ export function agentRuntime(bridge: SceneOperations): AgentHostRuntime {
       const next = toPatches(changes)
       if (next.length) bridge.applyPatch(next)
       if (changes.collections && Object.keys(changes.collections).length)
-        bridge.setCollections(writeCollections(bridge.getCollections(), changes.collections))
+        // Copying the others is not a read: the operation recorded what it read of them.
+        bridge.setCollections(
+          writeCollections(untracked(bridge.getCollections()), changes.collections),
+        )
     },
     reconcile: () => {
       bridge.deriveStructure()
@@ -621,9 +626,11 @@ export function registerOperationTool(
     },
     async (input: Record<string, unknown>) => {
       let outcome: ReturnType<AgentOperation>
+      const nodes = bridge.getNodes() as Record<string, AnyNode>
       // A copy of the map: a host may write its own in place (the hosted bridge does), and a
-      // "before" that grows with the call reads every creation as unchanged.
-      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      // "before" that grows with the call reads every creation as unchanged. Copying is not a
+      // read: on a detached scene, the operation records what it selects.
+      const before = { ...untracked(nodes) }
       // The agent's session begins with its first call, before anything is written.
       const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
       if (first) bridge.agentSession?.keep(first)
@@ -678,7 +685,7 @@ export function registerOperationTool(
           pictures: needs.pictures,
         })
       try {
-        outcome = tool.operation(before, input as never, context)
+        outcome = inScene(bridge, () => tool.operation(nodes, input as never, context))
       } catch (error) {
         return refusalResult(error)
       }

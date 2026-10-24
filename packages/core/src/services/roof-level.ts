@@ -1,5 +1,7 @@
+import type { SceneNodes } from '../agent-operations/types'
 import { getDefaultLevelName, getLevelDisplayName } from '../lib/level-name'
 import { nodeRegistry } from '../registry'
+import { queryNodes } from '../runtime/node-queries'
 import { type AnyNode, LevelNode, type RoofNode } from '../schema'
 import { getLevelElevations } from './storey'
 
@@ -68,9 +70,8 @@ const holdsOnlyRoofs = (nodes: Nodes, level: LevelNode) => {
 function levelsOf(nodes: Nodes, buildingId: string | null | undefined): LevelNode[] {
   const building = buildingId ? nodes[buildingId] : undefined
   const listed = new Set<string>(building?.type === 'building' ? building.children : [])
-  return Object.values(nodes).filter(
-    (node): node is LevelNode =>
-      node.type === 'level' && (node.parentId === (buildingId ?? null) || listed.has(node.id)),
+  return queryNodes<LevelNode>(nodes as SceneNodes, { type: 'level' }).filter(
+    (node) => node.parentId === (buildingId ?? null) || listed.has(node.id),
   )
 }
 
@@ -85,11 +86,12 @@ function levelsOf(nodes: Nodes, buildingId: string | null | undefined): LevelNod
  */
 export function servesAsRoofLevel(nodes: Nodes, level: LevelNode): boolean {
   if (isRoofLevel(level)) return true
-  if (!holdsOnlyRoofs(nodes, level)) return false
+  // What a level holds is read last: a storey's children are what concurrent edits add to.
   const stack = levelsOf(nodes, level.parentId)
   return (
     !stack.some(isRoofLevel) &&
     stack.some((other) => other.level < level.level) &&
+    holdsOnlyRoofs(nodes, level) &&
     stack.every((other) => other.level <= level.level || holdsOnlyRoofs(nodes, other))
   )
 }

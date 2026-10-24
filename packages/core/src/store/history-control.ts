@@ -2,23 +2,67 @@ import type { Collection, CollectionId } from '../schema/collections'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { withSceneHistoryDraftSuspended } from './history-drafts'
+import {
+  currentSceneEnvironment,
+  type SceneEnvironment,
+  sceneEnvironmentOf,
+} from './scene-environment'
 
-let sceneHistoryRestoreDepth = 0
+type GesturePauseHolder = { release: (() => void) | null; ended: boolean }
+
+/** This module's state, one per scene environment (scene-environment.ts). */
+type HistoryControlState = {
+  restoreDepth: number
+  remoteOperationDepth: number
+  pauseDepth: number
+  pauseLeases: Set<symbol>
+  commitListeners: Set<SceneCommitListener>
+  commitTransactionDepth: number
+  pendingCommit: SceneCommit | null
+  commitNodeIdScopes: Set<AnyNodeId>[]
+  gesturePauseHolders: Map<string, Set<GesturePauseHolder>>
+  livePauseHolders: Set<GesturePauseHolder>
+  writeGuards: Set<() => void>
+  derivedWrites: Map<AnyNodeId, Set<string> | 'all'>
+}
+
+const HISTORY_CONTROL = Symbol('scene-history-control')
+
+function controlOf(environment: SceneEnvironment): HistoryControlState {
+  return environment.slot(HISTORY_CONTROL, () => ({
+    restoreDepth: 0,
+    remoteOperationDepth: 0,
+    pauseDepth: 0,
+    pauseLeases: new Set(),
+    commitListeners: new Set(),
+    commitTransactionDepth: 0,
+    pendingCommit: null,
+    commitNodeIdScopes: [],
+    gesturePauseHolders: new Map(),
+    livePauseHolders: new Set(),
+    writeGuards: new Set(),
+    derivedWrites: new Map(),
+  }))
+}
+
+/** The state of the environment whose store is acting, or the live one. */
+const current = () => controlOf(currentSceneEnvironment())
+/** The state of `store`'s own environment. */
+const of = (store: object) => controlOf(sceneEnvironmentOf(store))
 
 export function isRestoringSceneHistory(): boolean {
-  return sceneHistoryRestoreDepth > 0
+  return current().restoreDepth > 0
 }
 
 export function runAsSceneHistoryRestore<T>(run: () => T): T {
-  sceneHistoryRestoreDepth += 1
+  const control = current()
+  control.restoreDepth += 1
   try {
     return run()
   } finally {
-    sceneHistoryRestoreDepth -= 1
+    control.restoreDepth -= 1
   }
 }
-
-let remoteSceneOperationDepth = 0
 
 /**
  * Whether the scene is being written by a collaborator's change (a shared
@@ -26,20 +70,18 @@ let remoteSceneOperationDepth = 0
  * live session that takes back its own writes must leave alone.
  */
 export function isApplyingRemoteSceneChange(): boolean {
-  return remoteSceneOperationDepth > 0
+  return current().remoteOperationDepth > 0
 }
 
 export function runAsRemoteSceneChange<T>(run: () => T): T {
-  remoteSceneOperationDepth += 1
+  const control = current()
+  control.remoteOperationDepth += 1
   try {
     return run()
   } finally {
-    remoteSceneOperationDepth -= 1
+    control.remoteOperationDepth -= 1
   }
 }
-
-let sceneHistoryPauseDepth = 0
-const sceneHistoryPauseLeases = new Set<symbol>()
 
 export type SceneSnapshot = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -94,11 +136,6 @@ type TemporalHistoryStoreLike<TPastState> = {
   }
 }
 
-const sceneCommitListeners = new Set<SceneCommitListener>()
-let sceneCommitTransactionDepth = 0
-let pendingSceneCommit: SceneCommit | null = null
-const sceneCommitNodeIdScopes: Set<AnyNodeId>[] = []
-
 function mergedNodeIds(
   left: ReadonlySet<AnyNodeId> | undefined,
   right: ReadonlySet<AnyNodeId> | undefined,
@@ -108,16 +145,17 @@ function mergedNodeIds(
 }
 
 export function activeSceneCommitNodeIds(): ReadonlySet<AnyNodeId> | undefined {
-  if (sceneCommitNodeIdScopes.length === 0) return undefined
+  const scopes = current().commitNodeIdScopes
+  if (scopes.length === 0) return undefined
   const ids = new Set<AnyNodeId>()
-  for (const scope of sceneCommitNodeIdScopes) {
+  for (const scope of scopes) {
     for (const id of scope) ids.add(id)
   }
   return ids
 }
 
 export function addActiveSceneCommitNodeIds(nodeIds: Iterable<AnyNodeId>): void {
-  const scope = sceneCommitNodeIdScopes.at(-1)
+  const scope = current().commitNodeIdScopes.at(-1)
   if (!scope) return
   for (const id of nodeIds) scope.add(id)
 }
@@ -126,34 +164,81 @@ export function runWithSceneCommitNodeIds<TResult>(
   nodeIds: Iterable<AnyNodeId>,
   run: () => TResult,
 ): TResult {
+  const scopes = current().commitNodeIdScopes
   const scope = new Set(nodeIds)
-  sceneCommitNodeIdScopes.push(scope)
+  scopes.push(scope)
   try {
     return run()
   } finally {
-    sceneCommitNodeIdScopes.pop()
-    const parentScope = sceneCommitNodeIdScopes.at(-1)
+    scopes.pop()
+    const parentScope = scopes.at(-1)
     if (parentScope) {
       for (const id of scope) parentScope.add(id)
     }
   }
 }
-const sceneWriteGuards = new Set<() => void>()
 
-/**
- * Registers something that must let go of the scene before anything writes it: a preview that
- * shows another state (`scene-preview.ts`) would otherwise swallow the write or have it land on
- * the wrong state. Returns the unregister.
- */
-export function registerSceneWriteGuard(guard: () => void): () => void {
-  sceneWriteGuards.add(guard)
+function areSemanticValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (typeof left !== typeof right || left === null || right === null) return false
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!(Array.isArray(left) && Array.isArray(right)) || left.length !== right.length) return false
+    return left.every((value, index) => areSemanticValuesEqual(value, right[index]))
+  }
+
+  if (typeof left !== 'object' || typeof right !== 'object') return false
+
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const leftKeys = Object.keys(leftRecord)
+  const rightKeys = Object.keys(rightRecord)
+  if (leftKeys.length !== rightKeys.length) return false
+
+  for (const key of leftKeys) {
+    if (!(key in rightRecord) || !areSemanticValuesEqual(leftRecord[key], rightRecord[key])) {
+      return false
+    }
+  }
+  return true
+}
+
+export function areSceneSnapshotsEqual(left: SceneSnapshot, right: SceneSnapshot): boolean {
+  return (
+    areSemanticValuesEqual(left.nodes, right.nodes) &&
+    areSemanticValuesEqual(left.rootNodeIds, right.rootNodeIds) &&
+    areSemanticValuesEqual(left.collections, right.collections) &&
+    areSemanticValuesEqual(left.materials, right.materials) &&
+    areSemanticValuesEqual(left.installedPlugins, right.installedPlugins) &&
+    (left.hasExplicitPluginInstallState ?? false) === (right.hasExplicitPluginInstallState ?? false)
+  )
+}
+
+/** Listens to the commits of the current environment's store: the live editor's, by default. */
+export function subscribeSceneCommits(listener: SceneCommitListener): () => void {
+  const listeners = current().commitListeners
+  listeners.add(listener)
   return () => {
-    sceneWriteGuards.delete(guard)
+    listeners.delete(listener)
   }
 }
 
-export function runSceneWriteGuards(): void {
-  for (const guard of [...sceneWriteGuards]) guard()
+/**
+ * Registers something that must let go of the current environment's scene before anything writes
+ * it: a preview that shows another state (`scene-preview.ts`) would otherwise swallow the write or
+ * have it land on the wrong state. Returns the unregister.
+ */
+export function registerSceneWriteGuard(guard: () => void): () => void {
+  const guards = current().writeGuards
+  guards.add(guard)
+  return () => {
+    guards.delete(guard)
+  }
+}
+
+/** Runs the guards of `sceneStore`'s environment, or of the current one. */
+export function runSceneWriteGuards(sceneStore?: object): void {
+  for (const guard of [...(sceneStore ? of(sceneStore) : current()).writeGuards]) guard()
 }
 
 const sceneCommitAuthorScopes: SceneCommitAuthor[] = []
@@ -195,58 +280,14 @@ export function acquireSceneCommitAuthor(author: SceneCommitAuthor): () => void 
   }
 }
 
-function areSemanticValuesEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true
-  if (typeof left !== typeof right || left === null || right === null) return false
-
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!(Array.isArray(left) && Array.isArray(right)) || left.length !== right.length) return false
-    return left.every((value, index) => areSemanticValuesEqual(value, right[index]))
-  }
-
-  if (typeof left !== 'object' || typeof right !== 'object') return false
-
-  const leftRecord = left as Record<string, unknown>
-  const rightRecord = right as Record<string, unknown>
-  const leftKeys = Object.keys(leftRecord)
-  const rightKeys = Object.keys(rightRecord)
-  if (leftKeys.length !== rightKeys.length) return false
-
-  for (const key of leftKeys) {
-    if (!(key in rightRecord) || !areSemanticValuesEqual(leftRecord[key], rightRecord[key])) {
-      return false
-    }
-  }
-  return true
-}
-
-export function areSceneSnapshotsEqual(left: SceneSnapshot, right: SceneSnapshot): boolean {
-  return (
-    areSemanticValuesEqual(left.nodes, right.nodes) &&
-    areSemanticValuesEqual(left.rootNodeIds, right.rootNodeIds) &&
-    areSemanticValuesEqual(left.collections, right.collections) &&
-    areSemanticValuesEqual(left.materials, right.materials) &&
-    areSemanticValuesEqual(left.installedPlugins, right.installedPlugins) &&
-    (left.hasExplicitPluginInstallState ?? false) === (right.hasExplicitPluginInstallState ?? false)
-  )
-}
-
-export function subscribeSceneCommits(listener: SceneCommitListener): () => void {
-  sceneCommitListeners.add(listener)
-  return () => {
-    sceneCommitListeners.delete(listener)
-  }
-}
-
-let derivedWrites = new Map<AnyNodeId, Set<string> | 'all'>()
-
 /**
- * Records what the derived-writer capability writes, for the commit that follows: each node, and the
- * fields written (none given: the node as a whole).
+ * Records what the derived-writer capability writes, for the current environment's commit that
+ * follows: each node, and the fields written (none given: the node as a whole).
  */
 export function noteDerivedNodeWrites(
   writes: Iterable<{ id: AnyNodeId; fields?: Iterable<string> }>,
 ): void {
+  const derivedWrites = current().derivedWrites
   for (const { id, fields } of writes) {
     const noted = derivedWrites.get(id)
     if (noted === 'all') continue
@@ -255,11 +296,11 @@ export function noteDerivedNodeWrites(
   }
 }
 
-function emitSceneCommit(authored: SceneCommit): void {
-  const derived = derivedWrites
-  derivedWrites = new Map()
+function emitSceneCommit(control: HistoryControlState, authored: SceneCommit): void {
+  const derived = control.derivedWrites
+  control.derivedWrites = new Map()
   const commit = derived.size > 0 ? { ...authored, derivedWrites: derived } : authored
-  for (const listener of [...sceneCommitListeners]) {
+  for (const listener of [...control.commitListeners]) {
     try {
       listener(commit)
     } catch (error) {
@@ -269,8 +310,9 @@ function emitSceneCommit(authored: SceneCommit): void {
 }
 
 export function notifySceneCommit(commit: SceneCommit): void {
+  const control = current()
   if (areSceneSnapshotsEqual(commit.before, commit.current)) {
-    if (sceneCommitTransactionDepth === 0) derivedWrites = new Map()
+    if (control.commitTransactionDepth === 0) control.derivedWrites = new Map()
     return
   }
   const author = commit.author ?? activeSceneCommitAuthor()
@@ -280,81 +322,100 @@ export function notifySceneCommit(commit: SceneCommit): void {
     changedNodeIds: mergedNodeIds(commit.changedNodeIds, activeSceneCommitNodeIds()),
   }
 
-  if (sceneCommitTransactionDepth > 0) {
-    if (pendingSceneCommit) {
-      const pendingAuthor = pendingSceneCommit.author ?? contextualCommit.author
-      pendingSceneCommit = {
-        origin: pendingSceneCommit.origin,
+  if (control.commitTransactionDepth > 0) {
+    const pending = control.pendingCommit
+    if (pending) {
+      const pendingAuthor = pending.author ?? contextualCommit.author
+      control.pendingCommit = {
+        origin: pending.origin,
         ...(pendingAuthor ? { author: pendingAuthor } : {}),
-        before: pendingSceneCommit.before,
+        before: pending.before,
         current: contextualCommit.current,
-        changedNodeIds: mergedNodeIds(
-          pendingSceneCommit.changedNodeIds,
-          contextualCommit.changedNodeIds,
-        ),
+        changedNodeIds: mergedNodeIds(pending.changedNodeIds, contextualCommit.changedNodeIds),
       }
     } else {
-      pendingSceneCommit = contextualCommit
+      control.pendingCommit = contextualCommit
     }
     return
   }
 
-  emitSceneCommit(contextualCommit)
+  emitSceneCommit(control, contextualCommit)
 }
 
-function beginSceneCommitTransaction(): void {
-  sceneCommitTransactionDepth += 1
+/**
+ * Makes `commit` the one `store`'s open transaction (`runAsSingleSceneHistoryStep`) emits: the
+ * pending commit, if any, keeps its origin, author and `before` and takes `commit`'s `current`,
+ * with both sets of changed ids. Outside a transaction, `commit` is emitted.
+ */
+export function settlePendingSceneCommit(store: object, commit: SceneCommit): void {
+  const control = of(store)
+  if (control.commitTransactionDepth === 0) {
+    sceneEnvironmentOf(store).run(() => notifySceneCommit(commit))
+    return
+  }
+  const pending = control.pendingCommit
+  const author = pending?.author ?? commit.author ?? activeSceneCommitAuthor()
+  control.pendingCommit = {
+    origin: pending?.origin ?? commit.origin,
+    ...(author ? { author } : {}),
+    before: pending?.before ?? commit.before,
+    current: commit.current,
+    changedNodeIds: mergedNodeIds(pending?.changedNodeIds, commit.changedNodeIds),
+  }
 }
 
-function pendingSceneCommitIsNoOp(): boolean {
-  return Boolean(
-    pendingSceneCommit &&
-      areSceneSnapshotsEqual(pendingSceneCommit.before, pendingSceneCommit.current),
-  )
+function pendingSceneCommitIsNoOp(control: HistoryControlState): boolean {
+  const pending = control.pendingCommit
+  return Boolean(pending && areSceneSnapshotsEqual(pending.before, pending.current))
 }
 
-function endSceneCommitTransaction(): void {
-  if (sceneCommitTransactionDepth === 0) return
-  sceneCommitTransactionDepth -= 1
-  if (sceneCommitTransactionDepth > 0) return
+function endSceneCommitTransaction(control: HistoryControlState): void {
+  if (control.commitTransactionDepth === 0) return
+  control.commitTransactionDepth -= 1
+  if (control.commitTransactionDepth > 0) return
 
-  const commit = pendingSceneCommit
-  pendingSceneCommit = null
+  const commit = control.pendingCommit
+  control.pendingCommit = null
   if (!commit) return
-  if (areSceneSnapshotsEqual(commit.before, commit.current)) derivedWrites = new Map()
-  else emitSceneCommit(commit)
+  if (areSceneSnapshotsEqual(commit.before, commit.current)) control.derivedWrites = new Map()
+  else emitSceneCommit(control, commit)
 }
+
+const pauseDepthOf = (control: HistoryControlState) => control.pauseDepth + control.pauseLeases.size
 
 export function pauseSceneHistory(sceneStore: TemporalStoreLike): void {
-  if (getSceneHistoryPauseDepth() === 0) {
+  const control = of(sceneStore)
+  if (pauseDepthOf(control) === 0) {
     sceneStore.temporal.getState().pause()
   }
-  sceneHistoryPauseDepth += 1
+  control.pauseDepth += 1
 }
 
 export function resumeSceneHistory(sceneStore: TemporalStoreLike): void {
-  if (sceneHistoryPauseDepth === 0) {
+  const control = of(sceneStore)
+  if (control.pauseDepth === 0) {
     return
   }
 
-  sceneHistoryPauseDepth -= 1
-  if (getSceneHistoryPauseDepth() === 0) {
+  control.pauseDepth -= 1
+  if (pauseDepthOf(control) === 0) {
     sceneStore.temporal.getState().resume()
   }
 }
 
 export function acquireSceneHistoryPause(sceneStore: TemporalStoreLike): () => void {
-  if (getSceneHistoryPauseDepth() === 0) {
+  const control = of(sceneStore)
+  if (pauseDepthOf(control) === 0) {
     sceneStore.temporal.getState().pause()
   }
   const lease = Symbol('scene-history-pause')
-  sceneHistoryPauseLeases.add(lease)
+  control.pauseLeases.add(lease)
   let released = false
   return () => {
     if (released) return
     released = true
-    sceneHistoryPauseLeases.delete(lease)
-    if (getSceneHistoryPauseDepth() === 0) {
+    control.pauseLeases.delete(lease)
+    if (pauseDepthOf(control) === 0) {
       sceneStore.temporal.getState().resume()
     }
   }
@@ -374,10 +435,6 @@ export type SceneHistoryPauseSessionOptions = {
   /** Sessions with the same key co-own one gesture; see `beginSceneHistoryPauseSession`. */
   gesture?: string
 }
-
-type GesturePauseHolder = { release: (() => void) | null; ended: boolean }
-const gesturePauseHolders = new Map<string, Set<GesturePauseHolder>>()
-const livePauseHolders = new Set<GesturePauseHolder>()
 
 /** Lifts `holders`' pauses for `write`, then takes back those that have not ended. */
 function runWithHoldersLifted<T>(
@@ -415,21 +472,25 @@ export function beginSceneHistoryPauseSession(
   options: SceneHistoryPauseSessionOptions = {},
 ): SceneHistoryPauseSession {
   const { gesture } = options
+  const environment = sceneEnvironmentOf(sceneStore)
+  const control = controlOf(environment)
   const holder: GesturePauseHolder = {
     release: acquireSceneHistoryPause(sceneStore),
     ended: false,
   }
-  livePauseHolders.add(holder)
+  control.livePauseHolders.add(holder)
   let coOwners = new Set([holder])
   if (gesture) {
-    coOwners = gesturePauseHolders.get(gesture) ?? new Set()
+    coOwners = control.gesturePauseHolders.get(gesture) ?? new Set()
     coOwners.add(holder)
-    gesturePauseHolders.set(gesture, coOwners)
+    control.gesturePauseHolders.set(gesture, coOwners)
   }
   return {
     commitStep(write) {
-      return runWithHoldersLifted(sceneStore, coOwners, () =>
-        withSceneHistoryDraftSuspended(gesture, write),
+      return environment.run(() =>
+        runWithHoldersLifted(sceneStore, coOwners, () =>
+          withSceneHistoryDraftSuspended(gesture, write),
+        ),
       )
     },
     end() {
@@ -437,24 +498,26 @@ export function beginSceneHistoryPauseSession(
       holder.ended = true
       holder.release?.()
       holder.release = null
-      livePauseHolders.delete(holder)
+      control.livePauseHolders.delete(holder)
       coOwners.delete(holder)
-      if (gesture && coOwners.size === 0) gesturePauseHolders.delete(gesture)
+      if (gesture && coOwners.size === 0) control.gesturePauseHolders.delete(gesture)
     },
   }
 }
 
-export function getSceneHistoryPauseDepth(): number {
-  return sceneHistoryPauseDepth + sceneHistoryPauseLeases.size
+/** Pauses held on `sceneStore`'s history, or on the current environment's store's. */
+export function getSceneHistoryPauseDepth(sceneStore?: object): number {
+  return pauseDepthOf(sceneStore ? of(sceneStore) : current())
 }
 
-export function resetSceneHistoryPauseDepth(): void {
-  sceneHistoryPauseDepth = 0
-  sceneHistoryPauseLeases.clear()
+export function resetSceneHistoryPauseDepth(sceneStore?: object): void {
+  const control = sceneStore ? of(sceneStore) : current()
+  control.pauseDepth = 0
+  control.pauseLeases.clear()
   // Open sessions no longer hold anything; a later commitStep must not re-take their pause.
-  for (const holder of livePauseHolders) holder.release = null
-  livePauseHolders.clear()
-  gesturePauseHolders.clear()
+  for (const holder of control.livePauseHolders) holder.release = null
+  control.livePauseHolders.clear()
+  control.gesturePauseHolders.clear()
 }
 
 function retainedPastStateCount<TPastState>(before: TPastState[], after: TPastState[]): number {
@@ -477,15 +540,17 @@ export function runAsSingleSceneHistoryStep<TPastState, TResult>(
   sceneStore: TemporalHistoryStoreLike<TPastState>,
   run: () => TResult,
 ): TResult {
+  const environment = sceneEnvironmentOf(sceneStore)
+  const control = controlOf(environment)
   const beforePastStates = sceneStore.temporal.getState().pastStates
-  beginSceneCommitTransaction()
+  control.commitTransactionDepth += 1
   try {
-    const result = run()
+    const result = environment.run(run)
     const afterPastStates = sceneStore.temporal.getState().pastStates
     const retainedCount = retainedPastStateCount(beforePastStates, afterPastStates)
     const addedCount = afterPastStates.length - retainedCount
 
-    if (addedCount > 0 && pendingSceneCommitIsNoOp()) {
+    if (addedCount > 0 && pendingSceneCommitIsNoOp(control)) {
       sceneStore.temporal.setState({ pastStates: afterPastStates.slice(0, retainedCount) })
     } else if (addedCount > 1) {
       const firstAddedState = afterPastStates[retainedCount]
@@ -497,6 +562,6 @@ export function runAsSingleSceneHistoryStep<TPastState, TResult>(
     }
     return result
   } finally {
-    endSceneCommitTransaction()
+    endSceneCommitTransaction(control)
   }
 }

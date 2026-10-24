@@ -1057,6 +1057,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ]),
   ...described('Print-export artifact metadata, not scene-node metadata.', ['status']),
   ...described('Script build provenance metadata, not scene-node metadata.', ['mount']),
+  ...described(
+    'Architect run request metadata the CLI sends to and reads back from the Responses API (hosted project id, credit cap), not scene-node metadata.',
+    ['pascal_max_credits', 'project_id'],
+  ),
   ...described('Derived floorplan drawing metadata, not scene-node metadata.', [
     'at',
     'buildingId',

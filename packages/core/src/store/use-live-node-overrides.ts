@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { livePreviewsVisible } from './live-previews'
 
 export type LiveNodeOverrides = Record<string, unknown>
 
@@ -68,6 +69,7 @@ const useLiveNodeOverrides = create<LiveNodeOverrideState>((set, get) => ({
  * without an extra "did anything change" check.
  */
 export function getEffectiveNode<T extends { id: string }>(node: T): T {
+  if (!livePreviewsVisible()) return node
   const override = useLiveNodeOverrides.getState().overrides.get(node.id)
   if (!override || Object.keys(override).length === 0) return node
   return { ...node, ...override } as T

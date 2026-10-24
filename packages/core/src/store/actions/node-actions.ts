@@ -59,6 +59,7 @@ import {
   noteDerivedNodeWrites,
   runWithSceneCommitNodeIds,
 } from '../history-control'
+import { currentSceneEnvironment } from '../scene-environment'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
@@ -680,7 +681,7 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   return mergeNodeUpdate(currentNode, sanitized.value as Partial<AnyNode>)
 }
 
-function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_RIDGE_VENT_REFRESH_FIELDS.has(key))
 }
 
@@ -718,7 +719,7 @@ function refreshDefaultRidgeVentsForSegment(
   return nextVents.map((vent) => vent.id as AnyNodeId)
 }
 
-function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_GUTTER_REFRESH_FIELDS.has(key))
 }
 
@@ -1090,13 +1091,19 @@ function refreshDefaultGuttersForRoofIds(
   }
 }
 
-// Track pending RAF for updateNodesAction to prevent multiple queued callbacks
-let pendingRafId: number | null = null
-let pendingUpdates: Set<AnyNodeId> = new Set()
+// One frame's pending dirty marks per scene environment, so a detached scene's update never
+// cancels (or receives) the editor's.
+type PendingDirtyMarks = { frame: number | null; ids: Set<AnyNodeId> }
+const PENDING_DIRTY_MARKS = Symbol('pending-dirty-marks')
+const pendingDirtyMarks = () =>
+  currentSceneEnvironment().slot<PendingDirtyMarks>(PENDING_DIRTY_MARKS, () => ({
+    frame: null,
+    ids: new Set(),
+  }))
 
-/** Authored updates whose deferred dirty intent has not reached render systems yet. */
+/** The current environment's authored updates whose deferred dirty intent has not reached render systems yet. */
 export function getPendingNodeUpdateCount(): number {
-  return pendingUpdates.size
+  return pendingDirtyMarks().ids.size
 }
 
 function buildWallMergePlans(
@@ -1625,6 +1632,9 @@ const updateNodesActionImpl = (
     return
   }
   // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
+  const environment = currentSceneEnvironment()
+  const pending = pendingDirtyMarks()
+  const pendingUpdates = pending.ids
   for (const u of updates) {
     // Visibility is applied by React before the deferred dirty callback. Mark
     // it now so render systems can release collective geometry in that same
@@ -1642,17 +1652,23 @@ const updateNodesActionImpl = (
     get().clearDirty(id)
   }
 
-  if (pendingRafId !== null) {
-    cancelAnimationFrame(pendingRafId)
-  }
-
-  pendingRafId = requestAnimationFrame(() => {
+  const flush = () => {
+    pending.frame = null
+    // A disposed scene's frame reaches nothing.
+    if (environment.disposed) return
     pendingUpdates.forEach((id) => {
       get().markDirty(id)
     })
     pendingUpdates.clear()
-    pendingRafId = null
-  })
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    if (pending.frame !== null) cancelAnimationFrame(pending.frame)
+    pending.frame = requestAnimationFrame(flush)
+  } else if (pending.frame === null) {
+    // Headless (a worker, a server) there is no frame: the marks land after the current task.
+    pending.frame = -1
+    queueMicrotask(flush)
+  }
 }
 
 /** The scene record a node deletion reads and rewrites. */

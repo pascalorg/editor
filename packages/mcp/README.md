@@ -234,6 +234,9 @@ import { createPascalMcpServer, SceneBridge } from '@pascal-app/mcp'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 
 const bridge = new SceneBridge()
+// Or over a detached scene a host opened (`@pascal-app/core/runtime`): every tool then reads and
+// writes that scene, with its ids, and the host turns it into a patch.
+// const bridge = new SceneBridge({ runtime: openDetachedScene(snapshot, options) })
 bridge.loadDefault()
 const server = createPascalMcpServer({ bridge })
 
@@ -247,6 +250,14 @@ console.log('available tools:', tools.tools.map((t) => t.name))
 const scene = await client.callTool({ name: 'get_scene', arguments: {} })
 console.log(scene)
 ```
+
+A host that passes its own `operations` (`createPascalMcpServer({ operations })`) may implement
+`runInScene(run)`: every tool handler starts inside it, and tools re-enter it after their awaits,
+so the ids a tool mints and the operations it plans run in the scene's synchronous scope. It is
+optional; without it handlers run as they always have, with random ids. An implementation that
+computes on a detached scene must provide it, delegating to `SceneBridge.runInScene`, or its tools'
+ids will not be the scene's and a recomputed effect will not match.
+
 
 See [`examples/embed-in-agent.ts`](./examples/embed-in-agent.ts) for a
 compilable version.

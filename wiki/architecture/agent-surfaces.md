@@ -36,7 +36,7 @@ A tool has three layers, and only the last one may differ between surfaces:
 A tool is written once and registered twice; never build the same tool separately for the chat and the MCP.
 
 1. **Contract** in `packages/core/src/agent-tools/<area>.ts`: `{ name, title, description, input }`, zod only, and added to `AGENT_TOOL_CONTRACTS` (`agent-tools/index.ts`). The description is what both agents read: say what it does, its defaults, and its refusal codes. Every length and angle is `measurement(kind, unit)` in the unit the field states, and a roof pitch is `roofPitch('deg')` (or `'twelfths'`): a bare number keeps that unit, text in any unit is converted. A default goes in their `default` option, which states it in the description (a field that converts loses its JSON Schema `default`). Coordinates (x, z, points, rectangles), fractions and counts stay numbers; `agent-tools/notation.test.ts` fails on any other bare number and on a default the model is not shown, through `bareNumberPaths()` and `unshownDefaultPaths()` (`notation-inventory.ts`), which a plugin's notation test runs over its own contracts.
-2. **Operation** in `packages/core/src/agent-operations/`: a pure function over the scene's nodes that returns `{ result, changes }` and refuses with `refuse(code, message, details)`; registered by tool name in `AGENT_OPERATIONS`.
+2. **Operation** in `packages/core/src/agent-operations/`: a pure function over the scene's nodes that returns `{ result, changes }` and refuses with `refuse(code, message, details)`; registered by tool name in `AGENT_OPERATIONS`. It selects what it reads (`queryNodes`, `orderedChildIds`) rather than enumerating `nodes`, so it runs precisely on a detached scene ([Computing off the live scene](#computing-off-the-live-scene)).
 3. **Cases** in the shared fixture table, written failing first; the core and MCP runners pick them up.
 4. **MCP**: an entry in `SHARED_TOOLS` (`packages/mcp/src/tools/shared-tools.ts`) with its annotations and output schema; the annotation policy (`scripts/openai-tool-annotation-policy.ts`) and `plugin-evals/tool-annotation-justifications.json` list it.
 5. **Hosted chat**: the hosted repo defines its chat tool from the same contract and runs the same operation through its shared-tool executor; its `agent-surface-parity.test.ts` checks that the two surfaces' name, description and input schema match.
@@ -60,6 +60,15 @@ Beyond the rules above:
 - **Exceptions are recorded.** `chatOnly` is a request, honoured only as a reviewed exception to capability parity, written down like any other.
 - **One name each.** A plugin tool's name collides with no core tool and no other plugin's; prefix it with the plugin.
 - **Tests follow the layers.** The plugin's edge cases as one table, run against its operation and through `registerOperationTool` with a real client; `shared-tools.test.ts` does this for a synthetic plugin.
+
+## Computing off the live scene
+
+A host may run any shared operation, or a whole MCP bridge, on a **detached scene** instead of the live store (`@pascal-app/core/runtime`, [scene runtime](scene-runtime.md)): the same contract and operation, computed on a copy opened from a canonical snapshot, with deterministic ids (`effectIds`) and a record of what it read. The result is a complete field-level patch, applied to the live scene with `applyPatchWithDependencies` only if nothing it read has changed, or refused with what changed. Both surfaces keep one implementation:
+
+- **Hosted chat**: `scene.execute(operation, input, context)`, or `applyAgentOutcome(op(scene.reader().nodes, …), scene.host())`.
+- **MCP**: `new SceneBridge({ runtime: scene })`; every registered tool then reads and writes the detached scene. The shared-tool runner plans each operation inside the scene's scope (`runInScene`), so its ids are the scene's.
+
+Derived construction settles inside the computation (`reconcileDocument`: rooms, stair rises and openings, roof elevation), so the patch is complete and applying it gives the editor's systems nothing more to write. The comparison contract (`runtime/fixture-parity.test.ts`) runs every shared fixture detached and live and requires identical patches.
 
 ## What stays surface-specific
 

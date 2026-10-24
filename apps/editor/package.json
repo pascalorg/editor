@@ -36,7 +36,7 @@
     "clsx": "^2.1.1",
     "geist": "^1.8.2",
     "lucide-react": "^1.61.0",
-    "next": "16.4.2",
+    "next": "16.4.3",
     "postcss": "^8.5.31",
     "react": "19.3.1",
     "react-colorful": "^5.8.1",

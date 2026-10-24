@@ -13,6 +13,7 @@ import { WALL_MIN_LENGTH } from '../systems/wall/wall-topology'
 import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { refuseRoofLevel } from './roof-writes'
+import { queryNodes } from './scene-queries'
 import type { AgentOperation } from './types'
 
 type Pt = [number, number]
@@ -40,7 +41,7 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
   const curveOffset = input.curveOffset
     ? normalizeWallCurveOffset({ start, end }, input.curveOffset)
     : 0
-  const walls = Object.values(nodes).filter((node) => node.type === 'wall').length
+  const walls = queryNodes(nodes, { type: 'wall' }).length
   const drawn = WallNode.parse({
     name: `Wall ${walls + 1}`,
     parentId: level.id,
@@ -53,12 +54,7 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
   const [wall] = withFoundationConstruction(
     nodes,
     level.id,
-    [
-      ...Object.values(nodes).filter(
-        (node): node is WallNode => node.type === 'wall' && node.parentId === level.id,
-      ),
-      drawn,
-    ],
+    [...queryNodes<WallNode>(nodes, { type: 'wall', parentId: level.id }), drawn],
     [drawn],
     { thickness: input.thickness },
   ) as [WallNode]

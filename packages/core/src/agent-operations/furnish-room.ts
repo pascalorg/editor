@@ -1,7 +1,7 @@
 import type { FURNISHED_ROOM_TYPES } from '../agent-tools/furnish-room'
 import { refuse } from '../agent-tools/refusal'
 import { OTHER_SOURCES } from '../agent-tools/sources'
-import { type AssetInput, ItemNode } from '../schema'
+import { type AssetInput, ItemNode, type WallNode } from '../schema'
 import { edgeProjection } from './create-room'
 import {
   collectDoorKeepouts,
@@ -22,7 +22,7 @@ import {
 } from './layout-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, polygonBounds, type Vec2 } from './plan-geometry'
-import { levelIdOf, levelRole } from './scene-queries'
+import { levelIdOf, levelRole, queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
 type RoomType = (typeof FURNISHED_ROOM_TYPES)[number]
@@ -77,8 +77,7 @@ export function roomToFurnish(
 /** The doors of the level that stand on an edge of the room, by where they stand. */
 function doorsOfRoom(nodes: SceneNodes, levelId: string, polygon: Vec2[]) {
   const found: { doorId: string; edge: number }[] = []
-  for (const wall of Object.values(nodes)) {
-    if (wall.type !== 'wall' || wall.parentId !== levelId) continue
+  for (const wall of queryNodes<WallNode>(nodes, { type: 'wall', parentId: levelId })) {
     const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
     if (length < 1e-9) continue
     for (const childId of wall.children) {
@@ -301,6 +300,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
 
   const doors = doorsOfRoom(nodes, levelId, polygon)
   const doorWall = input.doorWallIndex ?? doors[0]?.edge ?? 0
+  // biome-ignore lint/plugin: door keep-outs and occupied footprints resolve each item through its parents
   const all = Object.values(nodes)
   const doorKeepouts = collectDoorKeepouts(all, { levelId })
   const keepouts: PlanAabb[] = doorKeepouts.map((door) => door.aabb)

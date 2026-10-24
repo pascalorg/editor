@@ -50,15 +50,15 @@
     "zustand": "^5"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.3.1",
-    "@modelcontextprotocol/server": "^2.3.1",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@pascal-app/core": "^1.0.6",
     "@pascal-app/editor": "^1.0.6",
     "@pascal-app/mcp": "^1.0.6",
     "@pascal-app/viewer": "^1.0.6",
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.1",
-    "@types/bun": "^1.4.3",
+    "@types/bun": "^1.4.4",
     "@types/node": "^26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

@@ -27,6 +27,7 @@ import { isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
 import { EXPLODED_GAP, getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { pointInPolygon } from './plan-geometry'
+import { queryNodes } from './scene-queries'
 
 /**
  * Where `view_scene` looks from, the same on every surface; the picture is the host's: the chat's
@@ -160,6 +161,7 @@ export function sceneViewInterior(
         target: node.id,
       })
   }
+  // biome-ignore lint/plugin: a view hides every level but its own, and what covers it
   const hiddenIds = Object.values(nodes)
     .filter((node) =>
       node.type === 'level'
@@ -298,7 +300,7 @@ function streetDirection(
  */
 function framedBuilding(nodes: Readonly<Record<string, AnyNode>>, lookedAt: AnyNode | undefined) {
   if (lookedAt) return ancestry(nodes, lookedAt).find((node) => node.type === 'building') ?? null
-  const buildings = Object.values(nodes).filter((node) => node.type === 'building')
+  const buildings = queryNodes(nodes, { type: 'building' })
   const sites = new Set(buildings.map((building) => building.parentId ?? null))
   if (sites.size > 1)
     refuse(
@@ -673,6 +675,7 @@ export function sceneViewBounds(
   const held: SceneViewBox[] = []
   const roofs: SceneViewBox[] = []
   let pluginTop = Number.NEGATIVE_INFINITY
+  // biome-ignore lint/plugin: a view frames whatever the level holds
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
     if (level?.type !== 'level') continue

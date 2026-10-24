@@ -25,6 +25,8 @@ Plain data: no Three.js, no `useFrame` (DECISIONS.md E-001). Pure helpers, plus 
 
 `owned-floor-openings.ts` / `reconcile-owned-floor-openings.ts` at the top level reconcile floor openings owned by other nodes.
 
+`document-reconcile.ts` is the one synchronous pass of every derived write a saved document owes (room structure, stair rises, owned openings, roof elevation): hosts that edit outside the editor (the MCP bridge, a detached scene) settle with it. The stair, elevator and roof systems plan with the same functions on a microtask for edits made in the editor, and stand down while a host settles (`isSettlingDocument`). A new system that writes saved fields adds its pass there, or a host's patch misses it ([scene-runtime](scene-runtime.md)).
+
 ### Viewer — `packages/viewer/src/systems/`
 
 Three.js side-effects on registered objects (`sceneRegistry`). `<Viewer>` mounts the framework systems directly: `FloorElevationSystem`, `GeometrySystem`, core's `StairOpeningSystem` and `RoofElevationSystem`, and `<RegisteredSystems>`, which mounts every registered kind's `def.system`. The per-kind implementations below are exported by `@pascal-app/viewer` and wrapped by the kinds' `def.system` modules in `packages/nodes`.

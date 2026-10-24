@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import type { AnyNode, AnyNodeId } from '../../schema'
 import { roofsKeptOverStorey } from '../../services/roof-move'
+import { isSettlingDocument } from '../../store/document-settling'
 import {
   getSceneHistoryPauseDepth,
   notifySceneCommit,
@@ -11,24 +12,11 @@ import {
   type SceneSnapshot,
 } from '../../store/history-control'
 import useScene from '../../store/use-scene'
-import { resolveRoofElevation } from './roof-elevation'
-
-const ROOF_ELEVATION_EPSILON = 1e-4
+import { isRoofElevationInput, planRoofElevationUpdates } from './roof-elevation'
 
 function sceneSnapshot(): SceneSnapshot {
   const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
   return { nodes, rootNodeIds, collections, materials, installedPlugins }
-}
-
-function isElevationRelevant(node: AnyNode | undefined): boolean {
-  return (
-    node?.type === 'roof' ||
-    node?.type === 'wall' ||
-    node?.type === 'slab' ||
-    node?.type === 'level' ||
-    node?.type === 'building' ||
-    node?.type === 'site'
-  )
 }
 
 export function initializeRoofElevationSync(): () => void {
@@ -48,18 +36,10 @@ export function initializeRoofElevationSync(): () => void {
       if (disposed) return
       const { nodes, updateNodes, readOnly } = useScene.getState()
       if (readOnly) return
-      const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = changedFrom
-        ? roofsKeptOverStorey(changedFrom, nodes)
-        : []
-      for (const node of Object.values(nodes)) {
-        if (node.type !== 'roof' || node.support?.kind !== 'walls') continue
-        const elevation = resolveRoofElevation(node, nodes)
-        if (Math.abs(node.position[1] - elevation) <= ROOF_ELEVATION_EPSILON) continue
-        updates.push({
-          id: node.id,
-          data: { position: [node.position[0], elevation, node.position[2]] },
-        })
-      }
+      const updates = [
+        ...(changedFrom ? roofsKeptOverStorey(changedFrom, nodes) : []),
+        ...planRoofElevationUpdates(nodes),
+      ]
       if (updates.length === 0) return
       const before = sceneSnapshot()
       const publishCommit =
@@ -86,12 +66,12 @@ export function initializeRoofElevationSync(): () => void {
   }
 
   const unsubscribe = useScene.subscribe((state, previous) => {
-    if (syncing || state.nodes === previous.nodes) return
+    if (syncing || state.nodes === previous.nodes || isSettlingDocument(useScene)) return
     const ids = new Set([...Object.keys(state.nodes), ...Object.keys(previous.nodes)])
     for (const id of ids) {
       const next = state.nodes[id as AnyNodeId]
       const prev = previous.nodes[id as AnyNodeId]
-      if (next !== prev && (isElevationRelevant(next) || isElevationRelevant(prev))) {
+      if (next !== prev && (isRoofElevationInput(next) || isRoofElevationInput(prev))) {
         schedule(previous.nodes)
         return
       }

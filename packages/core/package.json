@@ -125,6 +125,11 @@
       "types": "./dist/agent-operations/index.d.ts",
       "import": "./dist/agent-operations/index.js",
       "default": "./dist/agent-operations/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js",
+      "default": "./dist/runtime/index.js"
     }
   },
   "files": [
@@ -160,7 +165,7 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.4.3",
+    "@types/bun": "^1.4.4",
     "@types/react": "19.3.0",
     "@types/three": "^0.186.0",
     "@typescript/typescript6": "6.0.2",
