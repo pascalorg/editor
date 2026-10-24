@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { designTag, runDesign } from './design'
+import { Vector3 } from 'three'
+import { buildDesign, runDesign } from './design'
 
 const HOUSE = `
 import * as THREE from 'three'
@@ -47,81 +48,30 @@ export default function build({ THREE, piece }) {
   return house
 }`
 
-describe('designTag', () => {
-  test('reads a kind and an id, any case, with or without one', () => {
-    expect(designTag('wall:north')).toEqual({ kind: 'wall', id: 'north' })
-    expect(designTag('Door: front')).toEqual({ kind: 'door', id: 'front' })
-    expect(designTag('roof')).toEqual({ kind: 'roof', id: '' })
-    expect(designTag('room:Living + kitchen')).toEqual({ kind: 'room', id: 'Living + kitchen' })
-    expect(designTag('wall lamp')).toBeNull()
-    expect(designTag('Walls')).toBeNull()
-  })
-})
-
-describe('runDesign', async () => {
-  const graph = await runDesign({ code: HOUSE })
-  const named = (name: string) => graph.objects.find((o) => o.name === name)!
-
-  test('keeps an unchanged geometry as its constructor arguments, an edited one as buffers', () => {
-    const body = graph.objects.find(
-      (o) => o.type === 'mesh' && o.parent === named('wall:north').id,
-    )!
-    expect(graph.geometries[body.geometry!]).toMatchObject({
-      kind: 'params',
-      type: 'BoxGeometry',
-      args: [6, 2.7, 0.2, 1, 1, 1],
-    })
-    expect(graph.geometries[named('crate').geometry!]).toMatchObject({
-      kind: 'buffer',
-      vertices: 24,
-    })
-  })
-
-  test('gives world matrices and bounds, and the vertices of what a wall is made of and of small meshes', () => {
-    const body = graph.objects.find(
-      (o) => o.type === 'mesh' && o.parent === named('wall:north').id,
-    )!
-    expect(body.bounds).toEqual([-3, 0, -3.1, 3, 2.7, -2.9])
-    expect(body.vertices).toBeString()
-    // A box is small: measured though it is nothing of a wall's.
-    expect(named('crate').vertices).toBeString()
-  })
-
-  test('records each piece where the design put it, nested or never added', () => {
-    expect(
-      graph.pieces.map(({ description, size, mount }) => ({ description, size, mount })),
-    ).toEqual([
+describe('runDesign', () => {
+  test('answers each piece the design delegated, nested or never added, and what it built', async () => {
+    const summary = await runDesign({ code: HOUSE })
+    expect(summary.pieces).toEqual([
       { description: 'oak table, round, one pedestal', size: [1.2, 0.75, 1.2], mount: 'floor' },
       { description: 'wall clock, brass', size: [0.4, 0.4, 0.05], mount: 'wall-side' },
     ])
-    const table = graph.objects[graph.pieces[0]!.object]!
-    expect(table.type).toBe('piece')
-    expect(table.matrix.slice(12, 15)).toEqual([2, 0, 1])
-    const clock = graph.objects[graph.pieces[1]!.object]!
-    expect(clock.parent).toBe(-1)
-    expect(clock.matrix.slice(12, 15)).toEqual([0, 2, -2.9])
+    // The wall, the crate, the leaf and two instanced tiles; the hidden box is counted, not kept.
+    expect(summary.stats).toEqual({ meshes: 5, triangles: 60 })
+    expect(summary.skipped).toEqual({ 'hidden objects': 1 })
   })
 
-  test('expands instances with their colours, keeps lights and clips, counts the hidden', () => {
-    const tiles = graph.objects.filter(
-      (o) => o.type === 'mesh' && o.name === '' && o.triangles === 12 && o.bounds![1] === -0.01,
-    )
-    expect(tiles).toHaveLength(2)
-    expect(tiles.map((t) => graph.materials[t.material as number]!.color)).toEqual([
-      '#ee0000',
-      '#00ee00',
-    ])
-    expect(graph.objects.find((o) => o.type === 'light')?.light).toEqual({
-      kind: 'point',
-      color: '#ffe2b8',
-      intensity: 2,
-      distance: 6,
+  test("runs Pascal Arena's build({ THREE, scene, addons }) and counts the addons Pascal lacks", async () => {
+    const code = `export function build({ THREE, scene, addons }) {
+      const merged = addons.mergeGeometries([new THREE.BoxGeometry(1, 1, 1)])
+      scene.add(new THREE.Mesh(merged, new THREE.MeshStandardMaterial()))
+      addons.TextGeometry
+    }`
+    expect((await runDesign({ code })).skipped).toEqual({
+      "uses of addons.TextGeometry, which Pascal's compiler does not carry": 1,
     })
-    expect(named('Door: front').animations).toHaveLength(1)
-    expect(graph.skipped).toEqual({ 'hidden objects': 1 })
   })
 
-  test('refuses what a module may not do', async () => {
+  test('refuses what a module may not do, a module with no build, and one that builds nothing', async () => {
     await expect(
       runDesign({ code: 'export default function build() { return eval("1") }' }),
     ).rejects.toThrow(/dynamic import, eval/)
@@ -130,75 +80,18 @@ describe('runDesign', async () => {
         code: "export default function build({ THREE, piece }) { piece('x', {}); return new THREE.Group() }",
       }),
     ).rejects.toThrow(/size must be/)
-  })
-})
-
-// Pascal Arena's raw contract: a named build that adds to the scene it is given, nothing named.
-const SHELL = `export function build({ THREE, scene, addons }) {
-  const root = new THREE.Group()
-  scene.add(root)
-  const mat = new THREE.MeshStandardMaterial({ color: '#eeeeee' })
-  function box(w, h, d, x, y, z, parent = root) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
-    mesh.position.set(x, y, z)
-    parent.add(mesh)
-    return mesh
-  }
-  function tree(x, z) {
-    box(0.2, 2, 0.2, x, 1, z)
-    box(1.5, 1.5, 1.5, x, 2.5, z)
-  }
-  // Main volume, two storeys.
-  box(8, 6, 6, 0, 3, 0)
-  for (const x of [-6, 6]) tree(x, 4)
-  const merged = addons.mergeGeometries([new THREE.BoxGeometry(1, 1, 1)])
-  root.add(new THREE.Mesh(merged, mat))
-  root.add(new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), mat))
-  addons.TextGeometry
-}`
-
-const INTERIOR = `export function build({ THREE, scene, piece }) {
-  const room = new THREE.Group()
-  room.name = 'room:Living room'
-  room.add(piece('sofa', { position: [0, 0, 0], size: [2, 0.8, 0.9] }))
-  scene.add(room)
-}`
-
-describe('runDesign: a shell and an interior', () => {
-  test("runs Arena's build({ THREE, scene, addons }) and names each part by what made it", async () => {
-    const graph = await runDesign({ code: SHELL })
-    const meshes = graph.objects.filter((o) => o.type === 'mesh')
-    expect(meshes.map((m) => m.made)).toEqual([
-      'Main volume, two storeys',
-      'tree',
-      'tree',
-      'tree',
-      'tree',
-      'Main volume, two storeys',
-      'Main volume, two storeys',
-    ])
-    // A mesh past 64 vertices that is no wall's, window's or door's is not measured.
-    expect(meshes.at(-1)!.vertices).toBeUndefined()
-    expect(graph.skipped).toEqual({
-      "uses of addons.TextGeometry, which Pascal's compiler does not carry": 1,
-    })
-  })
-
-  test("builds the interior into the shell's scene, its objects marked as the second stage", async () => {
-    const graph = await runDesign({ code: SHELL, interior: INTERIOR })
-    const room = graph.objects.find((o) => o.name === 'room:Living room')!
-    expect(room.stage).toBe(1)
-    expect(graph.pieces).toHaveLength(1)
-    expect(graph.objects[graph.pieces[0]!.object]!.stage).toBe(1)
-    expect(graph.objects.filter((o) => o.type === 'mesh').every((o) => !o.stage)).toBe(true)
-  })
-
-  test('refuses a module with no build, and one that builds nothing', async () => {
-    await expect(runDesign({ code: 'export const x = 1' })).rejects.toThrow(
-      'export a function named build',
-    )
+    await expect(runDesign({ code: 'export const x = 1' })).rejects.toThrow('must export')
     await expect(runDesign({ code: 'export function build() {}' })).rejects.toThrow(
       'added nothing to the scene',
     )
+  })
+})
+
+describe('buildDesign', () => {
+  test('stands each piece where the design put it, in the scene it built', async () => {
+    const { scene, pieces } = await buildDesign(HOUSE)
+    const [table, clock] = pieces
+    expect(table!.object.getWorldPosition(new Vector3()).toArray()).toEqual([2, 0, 1])
+    expect(clock!.object.parent).toBe(scene)
   })
 })

@@ -100,7 +100,7 @@ export const authorSceneOpening = z.object({
 })
 
 const WALL_FACE_MODULE =
-  "a three.js module that builds this face's finish (tiles with joints, panelling, boards) for exactly the face: it receives params.outline, params.holes (its doors and windows), params.base and params.thickness in wall-local metres (x along the wall from its start, y up from the face's base, z out of the face) and lays the finish out: Pascal cuts the build to the outline and its openings, so tiles and boards may run past the edges and over the doors and windows (the holes are there for a layout that wants them, tiles centred on a window); Pascal rebuilds it when the wall or its openings change"
+  "a three.js module that builds this face's finish (tiles with joints, panelling, boards) for exactly the face: it receives, in wall-local metres (x along the wall from its start, y up from the face's base, z out of the face), params.outline ({ x0, y0, x1, y1 }: the face), params.holes (its doors and windows, each { x0, y0, x1, y1 }), params.base (the floor along the face, [[x, y], …]) and params.thickness, and lays the finish out: Pascal cuts the build to the outline and its openings, so tiles and boards may run past the edges and over the doors and windows (the holes are there for a layout that wants them, tiles centred on a window); Pascal rebuilds it when the wall or its openings change"
 
 const faceToHeight = (whose: string) =>
   length(`Where ${whose} stops, metres up from the face's base (default: the full face).`, {
@@ -241,7 +241,7 @@ export const authorSceneRoom = z.object({
     .max(48_000)
     .optional()
     .describe(
-      "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon and params.holes (plan x/z in level coordinates, metres) and lays out the planks, tiles or boards. y = 0 is the floor's surface: lay the finish from there up, and Pascal stands the build on the room's floor plate and what stands on the floor (a rug, a sofa) on the build's top. Pascal cuts the build to the polygon and its holes, so a row may run past the edges (the holes are there for a layout that wants them). Pascal rebuilds it when the room changes; floor stays the fallback finish. The report warns when the build leaves part of the floor uncovered.",
+      "A three.js module that builds the floor finish for the room's polygon: it receives params.polygon ([[x, z], …]) and params.holes ([[[x, z], …], …]), plan x/z in level coordinates, metres, and lays out the planks, tiles or boards. y = 0 is the floor's surface: lay the finish from there up, and Pascal stands the build on the room's floor plate and what stands on the floor (a rug, a sofa) on the build's top. Pascal cuts the build to the polygon and its holes, so a row may run past the edges (the holes are there for a layout that wants them). Pascal rebuilds it when the room changes; floor stays the fallback finish. The report warns when the build leaves part of the floor uncovered.",
     ),
   wallCode: z
     .string()
