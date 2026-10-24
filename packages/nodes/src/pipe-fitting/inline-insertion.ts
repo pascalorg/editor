@@ -1,6 +1,6 @@
 import { PipeFittingNode, PipeSegmentNode } from '@pascal-app/core'
+import type { RunBodyHit } from '@pascal-app/editor/distribution'
 import { Euler, Quaternion, Vector3 } from 'three'
-import type { RunBodyHit } from '../shared/ports'
 import { pipeFittingLegLength } from './ports'
 
 type Point = [number, number, number]

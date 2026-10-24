@@ -5,14 +5,19 @@ import {
   generateId,
   generateSceneMaterialId,
   getArtifactStore,
+  isDerivedNode,
+  isStoreyContent,
   type LevelNode,
   nodeRegistry,
   type ParsedBuildJson,
   remapMeasurementReferences,
+  runAsSingleSceneHistoryStep,
   SceneMaterial,
   type SceneMaterialId,
   type StairNode,
   scriptedSize,
+  seatRoofs,
+  storeyOf,
   useScene,
 } from '@pascal-app/core'
 import { clampDoorToWall, clampWindowToWall } from '@pascal-app/core/building'
@@ -106,7 +111,7 @@ function collectSubtreeIds(
 ) {
   if (ids.has(rootId)) return
   const node = nodes[rootId]
-  if (!node) return
+  if (!node || isDerivedNode(node)) return
   ids.add(rootId)
 
   if ('children' in node && Array.isArray(node.children)) {
@@ -151,6 +156,7 @@ function isClipboardRoot(
 }
 
 function isCopyableRootType(node: AnyNode) {
+  if (isDerivedNode(node)) return false
   if (COPYABLE_ROOT_TYPES.has(node.type)) return true
   const definition = nodeRegistry.get(node.type)
   return !!definition && definition.capabilities?.duplicable !== false
@@ -254,6 +260,13 @@ function remapNodeReferences(
     } else {
       delete (clone as Record<string, unknown>).wallId
     }
+  }
+
+  // A corner window pasted with its partner joins the partner's copy; pasted alone, it is plain.
+  if (clone.type === 'window' && clone.corner) {
+    const partnerId = idMap.get(clone.corner.partnerId as AnyNodeId)
+    if (partnerId) clone.corner = { ...clone.corner, partnerId }
+    else delete clone.corner
   }
 
   if (clone.type === 'stair') {
@@ -475,11 +488,17 @@ export async function pasteSystemEditorClipboardToLevel(
   return applyClipboardPayloadToLevel(payload, targetLevel.id, refused)
 }
 
+/** The script and GLB a scripted node, a room's floor script or a wall's face scripts reference. */
 function artifactHashes(node: AnyNode): string[] {
-  const source = 'source' in node ? node.source : undefined
-  return typeof source === 'object' && source.kind === 'script'
-    ? [source.script, source.artifact]
-    : []
+  const sources =
+    node.type === 'zone'
+      ? [node.floor?.script]
+      : node.type === 'wall'
+        ? [node.finishScripts?.a, node.finishScripts?.b]
+        : ['source' in node ? node.source : undefined]
+  return sources.flatMap((source) =>
+    typeof source === 'object' && source?.kind === 'script' ? [source.script, source.artifact] : [],
+  )
 }
 
 /**
@@ -580,16 +599,27 @@ function applyClipboardPayloadToLevel(
   targetLevelId?: AnyNodeId,
   { ids: refused, reason: refusal }: Refused = NONE_REFUSED,
 ): PasteResult | null {
-  const targetLevel = getPasteTargetLevel(targetLevelId)
-  if (!targetLevel) return null
+  const aimedLevel = getPasteTargetLevel(targetLevelId)
+  if (!aimedLevel) return null
   const payload = refused.size > 0 ? withoutRefusedSubtrees(copied, refused) : copied
 
   const scene = useScene.getState()
+  // A paste lands on one level. On a roof level, one carrying anything a storey holds (walls,
+  // rooms, items, cabinets, …) goes to the storey it covers, whole: the row in view was the roof's,
+  // the plan is the storey's, and a roof in it that bears there is seated back up.
+  const rootIdSet = new Set(payload.rootIds)
+  const targetLevel = payload.nodes.some(
+    (node) => rootIdSet.has(node.id as AnyNodeId) && isStoreyContent(node.type, node.metadata),
+  )
+    ? ((scene.nodes[storeyOf(scene.nodes, aimedLevel.id) as AnyNodeId] as LevelNode | undefined) ??
+      aimedLevel)
+    : aimedLevel
   const idMap = new Map<AnyNodeId, AnyNodeId>()
   const materialIdMap = new Map<SceneMaterialId, SceneMaterialId>()
   const materialsToCreate: SceneMaterial[] = []
 
   for (const node of payload.nodes) {
+    if (isDerivedNode(node)) continue
     idMap.set(node.id as AnyNodeId, generateId(extractIdPrefix(node.id)) as AnyNodeId)
   }
   for (const material of payload.materials) {
@@ -604,11 +634,14 @@ function applyClipboardPayloadToLevel(
     materialsToCreate.push({ ...material, id: nextId })
   }
 
-  const rootIdSet = new Set(payload.rootIds)
   const pastedNodes: AnyNode[] = []
   const skippedIds: AnyNodeId[] = []
 
   for (const node of payload.nodes) {
+    if (isDerivedNode(node)) {
+      skippedIds.push(node.id as AnyNodeId)
+      continue
+    }
     try {
       pastedNodes.push(
         remapNodeReferences(
@@ -639,12 +672,10 @@ function applyClipboardPayloadToLevel(
     }
   }
 
-  for (const material of materialsToCreate) {
-    scene.addSceneMaterial(material)
-  }
   const sourceIds = new Map([...idMap].map(([source, copy]) => [copy, source]))
-  scene.createNodes(
-    pastedNodes.map((node) => ({
+  // A roof pasted onto the walls that carry it goes to the level above them, in the paste itself.
+  const { changes } = seatRoofs(scene.nodes, {
+    create: pastedNodes.map((node) => ({
       node,
       parentId: (node.parentId as AnyNodeId | null) ?? undefined,
       // A copy is in its source's collections; an item brings them in its own `collectionIds`.
@@ -652,15 +683,21 @@ function applyClipboardPayloadToLevel(
         collectionIds: collectionIdsOf(scene.collections, sourceIds.get(node.id as AnyNodeId)!),
       }),
     })),
-  )
+  })
+  runAsSingleSceneHistoryStep(useScene, () => {
+    for (const material of materialsToCreate) scene.addSceneMaterial(material)
+    scene.applyNodeChanges(changes)
+  })
 
+  const nodes = useScene.getState().nodes
   const pastedNodeIds = new Set(pastedNodes.map((node) => node.id as AnyNodeId))
   const pastedRootIds = payload.rootIds
     .map((rootId) => idMap.get(rootId))
     .filter((id): id is AnyNodeId => !!id && pastedNodeIds.has(id))
+  const rootLevel = nodes[(nodes[pastedRootIds[0]!]?.parentId ?? '') as AnyNodeId]
 
   useViewer.getState().setSelection({
-    levelId: targetLevel.id,
+    levelId: rootLevel?.type === 'level' ? rootLevel.id : targetLevel.id,
     selectedIds: pastedRootIds,
   })
 

@@ -12,7 +12,6 @@ tools to propose a renovation plan grounded in real photos.
 ## The brief
 
 The user drops four photos into the chat:
-
 1. A floorplan PDF page (exported as PNG).
 2. A photo of the current living room.
 3. A photo of the current kitchen.
@@ -129,16 +128,15 @@ Bedroom polygons from the floorplan rooms.
 
 ### 4. Cut the identified openings
 
-For each window the vision tool reported, the agent calls `cut_opening`
+For each window the vision tool reported, the agent calls `add_window`
 against the corresponding perimeter wall:
 
 ```jsonc
 {
-  "name": "cut_opening",
+  "name": "add_window",
   "arguments": {
     "wallId": "wall-south",
-    "type": "window",
-    "position": 0.5,
+    "t": 0.5,
     "width": 1.4,
     "height": 1.5
   }
@@ -149,7 +147,6 @@ against the corresponding perimeter wall:
 
 Guided by the reference photo's analysis (bright neutrals, open plan,
 minimal furnishing), the agent proposes a single logical patch:
-
 - Remove the partition wall between Living and Kitchen.
 - Relocate the kitchen island further west.
 - Delete the bulky TV unit item; leave the sofa and coffee table.
@@ -178,9 +175,9 @@ The user can walk back with `undo`; `redo` returns them to the proposal.
 ### 6. Sanity-check
 
 ```jsonc
-// tool: validate_scene
-{ "name": "validate_scene", "arguments": {} }
-// → { "valid": true, "errors": [] }
+// tool: verify_scene
+{ "name": "verify_scene", "arguments": {} }
+// → { "valid": true, "issues": [], "hasIssues": false, … }
 
 // tool: check_collisions
 { "name": "check_collisions", "arguments": { "levelId": "level-1" } }

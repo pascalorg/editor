@@ -1,16 +1,20 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
+import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   type AddColumnInput,
   addColumn,
   columnScriptParams,
+  editedScriptLanguage,
 } from '@pascal-app/core/agent-operations'
 import { addColumnTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
-import type { AnyNode } from '@pascal-app/core/schema'
+import { type AnyNode, GeometryReuseFields, generateId } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
 import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 import { toPatches } from './shared-tools'
 
 export function registerAddColumn(
@@ -23,7 +27,7 @@ export function registerAddColumn(
     {
       title: addColumnTool.title,
       description: addColumnTool.description,
-      inputSchema: addColumnTool.input,
+      inputSchema: z.object(addColumnTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async (input: AddColumnInput) => {
@@ -37,10 +41,25 @@ export function registerAddColumn(
             refuse('scripts_unavailable', 'This Pascal server cannot run geometry scripts.')
           const scene = bridge.getActiveScene()
           if (!scene) refuse('no_active_scene', 'Open or save a scene first.')
+          // A new column's id is the scene's, minted before anything is awaited.
+          const nodeId = input.nodeId ?? inScene(bridge, () => generateId('column'))
+          const language = editedScriptLanguage(previous, input)
           const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId!))
-          compiled = await compileAndStore(host, scene.id, code, params, 'column')
+          compiled = await compileAndStore(host, scene.id, { code, language, params }, 'column', {
+            nodeId,
+            metadata: {
+              ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
+              ...GeometryReuseFields.parse(input),
+            },
+          })
         }
-        const outcome = addColumn(nodes, { ...input, compiled }, { activeLevelId: null })
+        const outcome = inScene(bridge, () =>
+          addColumn(
+            nodes,
+            { ...input, compiled },
+            { activeLevelId: bridge.activeLevelId?.() ?? null },
+          ),
+        )
         if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))
         const payload = {
           ...outcome.result,

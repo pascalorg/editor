@@ -10,8 +10,7 @@
  *   bun run packages/mcp/examples/embed-in-agent.ts
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { createPascalMcpServer, SceneBridge } from '@pascal-app/mcp'
 
 async function main(): Promise<void> {
@@ -40,14 +39,14 @@ async function main(): Promise<void> {
 
   // 5. Find the default level, create a 5 m wall, and undo it.
   const levels = await client.callTool({
-    name: 'find_nodes',
+    name: 'find_by_type',
     arguments: { type: 'level' },
   })
-  const levelId = (levels.structuredContent as { nodes: Array<{ id: string }> }).nodes[0]?.id
+  const levelId = (levels.structuredContent as { results: Array<{ id: string }> }).results[0]?.id
 
   if (levelId) {
     const created = await client.callTool({
-      name: 'create_wall',
+      name: 'add_wall',
       arguments: {
         levelId,
         start: [0, 0],
@@ -63,8 +62,8 @@ async function main(): Promise<void> {
   }
 
   // 6. Validate and export.
-  const validation = await client.callTool({ name: 'validate_scene', arguments: {} })
-  console.log('validation:', validation.structuredContent)
+  const verification = await client.callTool({ name: 'verify_scene', arguments: {} })
+  console.log('verification:', verification.structuredContent)
 
   const exported = await client.callTool({
     name: 'export_json',

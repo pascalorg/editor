@@ -1,12 +1,13 @@
 'use client'
 
-import { emitter, useScene } from '@pascal-app/core'
+import { emitter, getProjectFileSink, type ProjectFileSink } from '@pascal-app/core'
 import { disposeObject3DResources, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import { downloadProjectFile } from '../../lib/download-project-file'
 import {
   exportSceneToGlb,
   prepareSceneForExport,
@@ -25,6 +26,7 @@ import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scop
 import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
 import { applySemanticPrintFeatureThickness } from '../../lib/print-feature-thickness'
 import { compileSemanticPrintShellWithManifold } from '../../lib/print-shell-compiler-manifold-worker'
+import { getSavedSceneDocument } from '../../lib/scene'
 import { exportSceneToUsdz } from '../../lib/usdz-export'
 import useEditor from '../../store/use-editor'
 
@@ -57,6 +59,7 @@ export function ExportManager() {
 
   useEffect(() => {
     const exportFn: ModelExport = async (format = 'glb', requested = {}) => {
+      const finishArtifact = artifactFinisher(getProjectFileSink())
       // Resolve once: scene preparation prunes hidden nodes by default, and the
       // IFC writer must drop the same nodes it rebuilds parametrically.
       const options = { ...requested, onlyVisible: requested.onlyVisible ?? true }
@@ -75,11 +78,12 @@ export function ExportManager() {
       // without it every plant exports as its raycast collider, a white box).
       useViewer.getState().setExporting(true)
       try {
-        await waitForExportGeometry(useScene.getState().nodes, options)
+        await waitForExportGeometry(getSavedSceneDocument().nodes, options)
+        const { nodes, collections } = getSavedSceneDocument()
 
         if (format === 'glb') {
           const warnings: string[] = []
-          const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes, {
+          const buffer = await exportSceneToGlb(sceneGroup, nodes, {
             ...options,
             onWarning: (warning) => warnings.push(warning),
           })
@@ -89,7 +93,7 @@ export function ExportManager() {
 
         if (format === 'usdz') {
           const warnings: string[] = []
-          const data = await exportSceneToUsdz(sceneGroup, useScene.getState().nodes, {
+          const data = await exportSceneToUsdz(sceneGroup, nodes, {
             ...options,
             onWarning: (warning) => warnings.push(warning),
           })
@@ -103,7 +107,6 @@ export function ExportManager() {
         // window, so the export snapshots the clean building, then restore.
         emitter.emit('thumbnail:before-capture', undefined)
         const restoreLevels = snapLevelsToTruePositions()
-        const nodes = useScene.getState().nodes
         let prepared: ReturnType<typeof prepareSceneForExport>
         try {
           prepared = prepareSceneForExport(sceneGroup, nodes, {
@@ -216,7 +219,7 @@ export function ExportManager() {
 
           if (format === 'ifc') {
             const { data, warnings } = exportPreparedSceneToIfc(exportScene, nodes, {
-              collections: useScene.getState().collections,
+              collections,
               projectName: options.projectName,
               onlyVisible: options.onlyVisible,
               excludedNodeTypes: options.excludedNodeTypes,
@@ -261,22 +264,15 @@ export function ExportManager() {
   return null
 }
 
-function finishArtifact(
-  blob: Blob,
-  filename: string,
-  download: boolean | undefined,
-  metadata?: unknown,
-  warnings?: readonly string[],
-): ModelExportArtifact {
-  if (download !== false) downloadBlob(blob, filename)
-  return { blob, filename, metadata, warnings: warnings?.length ? warnings : undefined }
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+function artifactFinisher(sink: ProjectFileSink | null) {
+  return async (
+    blob: Blob,
+    filename: string,
+    download: boolean | undefined,
+    metadata?: unknown,
+    warnings?: readonly string[],
+  ): Promise<ModelExportArtifact> => {
+    if (download !== false) await downloadProjectFile(blob, filename, sink)
+    return { blob, filename, metadata, warnings: warnings?.length ? warnings : undefined }
+  }
 }

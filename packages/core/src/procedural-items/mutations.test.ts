@@ -1,5 +1,5 @@
-import { beforeAll, expect, test } from 'bun:test'
-import { registerNode } from '../registry/registry'
+import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { nodeRegistry, registerNode } from '../registry/registry'
 import { ItemNode } from '../schema/nodes/item'
 import useScene from '../store/use-scene'
 import { shelfRecipe } from './fixtures'
@@ -11,7 +11,9 @@ globalThis.requestAnimationFrame ??= (cb: FrameRequestCallback) => {
   return 0
 }
 globalThis.cancelAnimationFrame ??= () => {}
-beforeAll(() =>
+let restoreRegistry = () => {}
+beforeAll(() => {
+  restoreRegistry = nodeRegistry._snapshot()
   registerNode({
     kind: 'procedural-item',
     schemaVersion: 1,
@@ -19,8 +21,9 @@ beforeAll(() =>
     category: 'furnish',
     defaults: () => ({}),
     capabilities: {},
-  } as never),
-)
+  } as never)
+})
+afterAll(() => restoreRegistry())
 test('invalid direct and atomic mutations preserve the previous scene', () => {
   const node = ProceduralItemNode.parse({ recipe: shelfRecipe })
   useScene.setState({ nodes: { [node.id]: node } as never, rootNodeIds: [], readOnly: false })

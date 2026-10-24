@@ -157,36 +157,34 @@ them by name:
 
 ### 5. Cut doors and windows
 
-The agent uses `cut_opening` to add entry doors on each interior partition
-and windows on the south and east façades:
+The agent uses `add_door` for the entry doors on each interior partition and
+`add_window` for the windows on the south and east façades:
 
 ```jsonc
-// tool: cut_opening  (called once per opening)
+// tool: add_window  (called once per window)
 {
-  "name": "cut_opening",
+  "name": "add_window",
   "arguments": {
     "wallId": "wall-south",       // perimeter wall [0,0] → [10,0]
-    "type": "window",
-    "position": 0.25,             // 25% along centerline
+    "t": 0.25,                    // 25% along centerline
     "width": 1.2,
     "height": 1.2
   }
 }
-// → { "openingId": "window-south-1" }
+// → { "windowId": "window-south-1", ... }
 ```
 
 ```jsonc
 {
-  "name": "cut_opening",
+  "name": "add_door",
   "arguments": {
     "wallId": "wall-bed1",        // partition wall to Bedroom 1
-    "type": "door",
-    "position": 0.4,
+    "t": 0.4,
     "width": 0.9,
     "height": 2.1
   }
 }
-// → { "openingId": "door-bed1" }
+// → { "doorId": "door-bed1", ... }
 ```
 
 The agent repeats this for Bedroom 2's door, the bathroom door, and two
@@ -195,14 +193,14 @@ more windows on the east façade.
 ### 6. Validate and report
 
 ```jsonc
-// tool: validate_scene
-{ "name": "validate_scene", "arguments": {} }
+// tool: verify_scene
+{ "name": "verify_scene", "arguments": {} }
 ```
 
 Response:
 
 ```jsonc
-{ "valid": true, "errors": [] }
+{ "valid": true, "issues": [], "hasIssues": false, … }
 ```
 
 The agent then reads the scene summary for its response to the user:
@@ -237,6 +235,6 @@ Zustand store, the user can `undo` the change if they dislike it:
 - Mutations batch inside a single `apply_patch` so that `undo` rolls back
   the whole logical change.
 - Zones are not walls — they're polygon annotations that make later queries
-  (`find_nodes({ zoneId })`) and planning steps much easier for the agent.
+  (`find_by_type({ zoneId })`) and planning steps much easier for the agent.
 - The agent never needs to speak to `@pascal-app/viewer`: everything the
   host sees flows through tools + resources + prompts.

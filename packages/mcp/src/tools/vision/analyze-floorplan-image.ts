@@ -1,5 +1,5 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
+import type { McpServer } from '@modelcontextprotocol/server'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { READ_ONLY_OPEN_WORLD_TOOL_ANNOTATIONS } from '../annotations'
@@ -126,14 +126,14 @@ export function registerAnalyzeFloorplanImage(server: McpServer, _bridge: SceneO
       title: 'Analyze floor-plan image',
       description:
         'Defer to the MCP host (via sampling) to extract walls, rooms, and approximate dimensions from a floor-plan image. Requires host support for sampling.',
-      inputSchema: analyzeFloorplanImageInput,
-      outputSchema: analyzeFloorplanImageOutput,
+      inputSchema: z.object(analyzeFloorplanImageInput),
+      outputSchema: z.object(analyzeFloorplanImageOutput),
       annotations: READ_ONLY_OPEN_WORLD_TOOL_ANNOTATIONS,
     },
     async ({ image, scaleHint }) => {
       const caps = server.server.getClientCapabilities()
       if (!caps?.sampling) {
-        throw new McpError(ErrorCode.InvalidRequest, 'sampling_unavailable')
+        throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'sampling_unavailable')
       }
 
       const imageBlock = await resolveImageBlock(image)
@@ -155,7 +155,7 @@ export function registerAnalyzeFloorplanImage(server: McpServer, _bridge: SceneO
 
       const text = extractText(response.content as Parameters<typeof extractText>[0])
       if (!text) {
-        throw new McpError(ErrorCode.InternalError, 'sampling_response_unparseable', {
+        throw new ProtocolError(ProtocolErrorCode.InternalError, 'sampling_response_unparseable', {
           reason: 'no text content returned by host',
         })
       }
@@ -164,7 +164,7 @@ export function registerAnalyzeFloorplanImage(server: McpServer, _bridge: SceneO
       try {
         parsed = JSON.parse(text)
       } catch (err) {
-        throw new McpError(ErrorCode.InternalError, 'sampling_response_unparseable', {
+        throw new ProtocolError(ProtocolErrorCode.InternalError, 'sampling_response_unparseable', {
           raw: text,
           reason: err instanceof Error ? err.message : String(err),
         })
@@ -172,7 +172,7 @@ export function registerAnalyzeFloorplanImage(server: McpServer, _bridge: SceneO
 
       const validation = OutputSchema.safeParse(parsed)
       if (!validation.success) {
-        throw new McpError(ErrorCode.InternalError, 'sampling_response_invalid', {
+        throw new ProtocolError(ProtocolErrorCode.InternalError, 'sampling_response_invalid', {
           raw: text,
           errors: validation.error.issues,
         })

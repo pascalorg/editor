@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   type FloorplanAffordance,
   type FloorplanMoveTarget,
+  getRoofSegmentResizePatch,
   type RoofNode,
   type RoofSegmentNode,
   snapScalar,
@@ -9,6 +10,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { getSegmentGridStep, isAngleSnapActive, isGridSnapActive } from '@pascal-app/editor'
+import { commitSeatedRoofEdit } from '../roof/roof-level-target'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
@@ -87,17 +89,17 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
         commit() {
           useLiveNodeOverrides.getState().clear(segmentId)
           const diameter = lastRadius * 2
-          useScene.getState().updateNode(segmentId, { width: diameter, depth: diameter })
+          // Grown onto the walls that carry it, its roof goes to the level above them.
+          commitSeatedRoofEdit(
+            [{ id: segmentId, data: { width: diameter, depth: diameter } }],
+            segmentId,
+          )
         },
       }
     }
 
     const { axis, side } = resize
     const initialValue = axis === 'x' ? node.width : node.depth
-    const initialPosition = node.position
-    const segmentRotation = node.rotation ?? 0
-    const armX = axis === 'x' ? Math.cos(segmentRotation) : Math.sin(segmentRotation)
-    const armZ = axis === 'x' ? -Math.sin(segmentRotation) : Math.cos(segmentRotation)
     const { effRot } = resolveSegmentFrame(node, nodes)
     const cosEff = Math.cos(effRot)
     const sinEff = Math.sin(effRot)
@@ -124,20 +126,10 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
         const step = isGridSnapActive() ? getSegmentGridStep() : 0
         const snappedValue = step > 0 ? snapScalar(rawValue, step) : rawValue
         const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
-        const centerOffset = (side * (newValue - initialValue)) / 2
-        const position: [number, number, number] = [
-          initialPosition[0] + centerOffset * armX,
-          initialPosition[1],
-          initialPosition[2] + centerOffset * armZ,
-        ]
         lastValue = newValue
-        const dimensions =
-          node.roofType === 'conical'
-            ? { width: newValue, depth: newValue }
-            : axis === 'x'
-              ? { width: newValue }
-              : { depth: newValue }
-        useLiveNodeOverrides.getState().set(segmentId, { ...dimensions, position })
+        useLiveNodeOverrides
+          .getState()
+          .set(segmentId, getRoofSegmentResizePatch(node, axis, side, newValue))
         useScene.getState().markDirty(segmentId)
       },
       canCommit() {
@@ -145,19 +137,10 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
       },
       commit() {
         useLiveNodeOverrides.getState().clear(segmentId)
-        const centerOffset = (side * (lastValue - initialValue)) / 2
-        const position: [number, number, number] = [
-          initialPosition[0] + centerOffset * armX,
-          initialPosition[1],
-          initialPosition[2] + centerOffset * armZ,
-        ]
-        const dimensions =
-          node.roofType === 'conical'
-            ? { width: lastValue, depth: lastValue }
-            : axis === 'x'
-              ? { width: lastValue }
-              : { depth: lastValue }
-        useScene.getState().updateNode(segmentId, { ...dimensions, position })
+        commitSeatedRoofEdit(
+          [{ id: segmentId, data: getRoofSegmentResizePatch(node, axis, side, lastValue) }],
+          segmentId,
+        )
       },
     }
   },
@@ -197,7 +180,7 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
       },
       commit() {
         useLiveNodeOverrides.getState().clear(segmentId)
-        useScene.getState().updateNode(segmentId, { rotation: lastRotation })
+        commitSeatedRoofEdit([{ id: segmentId, data: { rotation: lastRotation } }], segmentId)
       },
     }
   },
@@ -252,7 +235,8 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
     },
     commit() {
       useLiveNodeOverrides.getState().clear(segmentId)
-      useScene.getState().updateNode(segmentId, { position: lastLocal })
+      // Dragged onto the walls that carry it, its roof goes to the level above them.
+      commitSeatedRoofEdit([{ id: segmentId, data: { position: lastLocal } }], segmentId)
     },
   }
 }

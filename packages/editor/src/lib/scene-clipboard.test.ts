@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  BuildingNode,
   CabinetModuleNode,
   type CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode,
@@ -11,13 +12,17 @@ import {
   configureArtifactStore,
   getArtifactStore,
   ItemNode,
-  type LevelNode,
+  LevelNode,
   MeasurementNode,
+  RoofNode,
+  RoofSegmentNode,
   SceneMaterial,
   type SceneMaterialId,
+  SlabNode,
   useScene,
   WallNode,
   WindowNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
@@ -142,6 +147,47 @@ describe('scene clipboard', () => {
   beforeEach(() => {
     seedCabinetRun()
     useScene.temporal.getState().clear()
+  })
+
+  test('leaves derived room surfaces out of a group copy while retaining authored slabs', () => {
+    const derived = SlabNode.parse({
+      parentId: sourceLevelId,
+      boundary: 'auto',
+      autoFromWalls: true,
+      plateRole: 'base',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+    })
+    const manual = SlabNode.parse({
+      parentId: sourceLevelId,
+      polygon: [
+        [5, 0],
+        [7, 0],
+        [7, 2],
+        [5, 2],
+      ],
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [derived.id]: derived,
+        [manual.id]: manual,
+      },
+    }))
+    expect(copySelectedNodesToEditorClipboard([runId, derived.id, manual.id])).toBe(true)
+    expect(getEditorClipboardSnapshot()?.rootIds).toEqual([runId, manual.id])
+    expect(getEditorClipboardSnapshot()?.nodes.some((node) => node.id === derived.id)).toBe(false)
+    const result = pasteEditorClipboardToLevel(targetLevelId)
+    expect(result?.pastedIds).toHaveLength(2)
+    expect(
+      Object.values(useScene.getState().nodes).filter(
+        (node) => node.type === 'slab' && node.parentId === targetLevelId,
+      ),
+    ).toHaveLength(1)
   })
 
   test('copies a selected cabinet run as one subtree instead of independent modules', () => {
@@ -324,6 +370,194 @@ describe('scene clipboard', () => {
     expect(scriptedY).toBeCloseTo(3 / 2)
   })
 
+  // A roof lives on the level above the walls that carry it: a paste puts it there, and walls
+  // pasted on the roof level's row go to the storey it covers.
+  function roofedRoomOn(levelId: LevelNode['id']) {
+    const corners: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ]
+    const walls = corners.map((start, i) =>
+      WallNode.parse({ parentId: levelId, start, end: corners[(i + 1) % 4], height: 2.5 }),
+    )
+    const segment = RoofSegmentNode.parse({ width: 8, depth: 6, wallHeight: 0 })
+    const roof = RoofNode.parse({
+      parentId: levelId,
+      position: [4, 2.5, 3],
+      children: [segment.id],
+    })
+    return { walls, roof, segment: { ...segment, parentId: roof.id } }
+  }
+
+  function seedHouse(...levels: LevelNode[]) {
+    const building = BuildingNode.parse({ children: levels.map((level) => level.id) })
+    const { walls, roof, segment } = roofedRoomOn(sourceLevelId)
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [sourceLevelId]: makeLevel(sourceLevelId, [...walls.map((wall) => wall.id), roof.id]),
+        ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+        [roof.id]: roof,
+        [segment.id]: segment,
+        [building.id]: building,
+        ...Object.fromEntries(
+          levels.map((level) => [level.id, { ...level, parentId: building.id }]),
+        ),
+      },
+    }))
+    return { walls, roof }
+  }
+
+  test('walls pasted with the roof they carry: the roof lands on a new Roof level, in one undo step', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const { walls, roof } = seedHouse(storey)
+    const before = Object.keys(useScene.getState().nodes).length
+    expect(copySelectedNodesToEditorClipboard([...walls.map((wall) => wall.id), roof.id])).toBe(
+      true,
+    )
+    const { pastedIds } = pasteEditorClipboardToLevel(storey.id)!
+    const nodes = useScene.getState().nodes
+    const pastedRoof = pastedIds.map((id) => nodes[id]!).find((node) => node.type === 'roof')!
+    const roofLevel = nodes[pastedRoof.parentId as AnyNodeId] as LevelNode
+    expect(roofLevel).toMatchObject({ type: 'level', level: 1, metadata: { role: 'roof' } })
+    expect(roofLevel.children).toEqual([pastedRoof.id])
+    expect((nodes[storey.id] as LevelNode).children).toHaveLength(4)
+    useScene.temporal.getState().undo()
+    expect(Object.keys(useScene.getState().nodes)).toHaveLength(before)
+  })
+
+  test('walls pasted on the roof level go to the storey it covers, the selection with them', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const roofLevel = LevelNode.parse({ level: 1, metadata: { role: 'roof' } })
+    const { walls } = seedHouse(storey, roofLevel)
+    expect(copySelectedNodesToEditorClipboard([walls[0]!.id])).toBe(true)
+    const [pastedId] = pasteEditorClipboardToLevel(roofLevel.id)!.pastedIds
+    expect(useScene.getState().nodes[pastedId!]?.parentId).toBe(storey.id)
+    expect(useViewer.getState().selection.levelId).toBe(storey.id)
+  })
+
+  test('a retained roof pasted onto a roof level keeps its roof ownership and can be undone', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const roofLevel = LevelNode.parse({ level: 1, metadata: { role: 'roof' } })
+    seedHouse(storey, roofLevel)
+    const retained = ItemNode.parse({
+      parentId: sourceLevelId,
+      position: [1, 0.25, 2],
+      metadata: { role: 'roof' },
+      asset: {
+        id: 'retained',
+        name: 'Authored roof',
+        category: 'custom',
+        thumbnail: '',
+        src: '/roof.glb',
+      },
+      provenance: { refs: [{ ns: 'source', id: 'building/roof' }] },
+    })
+    useScene.getState().createNode(retained, sourceLevelId)
+    expect(copySelectedNodesToEditorClipboard([retained.id])).toBe(true)
+    const [pastedId] = pasteEditorClipboardToLevel(roofLevel.id)!.pastedIds
+    const pasted = useScene.getState().nodes[pastedId!] as typeof retained
+    expect(pasted.parentId).toBe(roofLevel.id)
+    expect(pasted.metadata.role).toBe('roof')
+    expect(pasted.asset).toEqual(retained.asset)
+    expect(pasted.provenance).toEqual(retained.provenance)
+    expect(useViewer.getState().selection.levelId).toBe(roofLevel.id)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[pastedId!]).toBeUndefined()
+    expect(useScene.getState().nodes[retained.id]).toBeDefined()
+  })
+
+  // Measurements, cabinets and the like stayed on the roof level at its floor while the walls
+  // copied with them went down: a paste lands on one level.
+  test('a paste carrying walls lands whole on the storey a roof level covers', () => {
+    const storey = LevelNode.parse({ level: 0 })
+    const roofLevel = LevelNode.parse({ level: 1, metadata: { role: 'roof' } })
+    const { walls } = seedHouse(storey, roofLevel)
+    const measurement = MeasurementNode.parse({
+      parentId: sourceLevelId,
+      measurement: {
+        kind: 'distance',
+        points: [
+          [0, 0, 0],
+          [8, 0, 0],
+        ],
+      },
+    })
+    useScene.setState((state) => {
+      const source = state.nodes[sourceLevelId] as LevelNode
+      return {
+        nodes: {
+          ...state.nodes,
+          [measurement.id]: measurement,
+          [sourceLevelId]: { ...source, children: [...source.children, measurement.id] },
+        },
+      }
+    })
+    expect(copySelectedNodesToEditorClipboard([walls[0]!.id, measurement.id])).toBe(true)
+    const { pastedIds } = pasteEditorClipboardToLevel(roofLevel.id)!
+    const nodes = useScene.getState().nodes
+    expect(pastedIds.map((id) => nodes[id]?.parentId)).toEqual([storey.id, storey.id])
+    expect((nodes[roofLevel.id] as LevelNode).children).toEqual([])
+  })
+
+  // Pasted corner windows kept naming the originals, so the copies drew as plain windows that
+  // could not be joined while the originals stood.
+  test('a corner window pasted with both its walls joins its own copies; one side alone is plain', () => {
+    const south = WallNode.parse({
+      id: 'wall_clipboard-south',
+      parentId: sourceLevelId,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const east = WallNode.parse({
+      id: 'wall_clipboard-east',
+      parentId: sourceLevelId,
+      start: [4, 0],
+      end: [4, 3],
+    })
+    const onSouth = WindowNode.parse({
+      id: 'window_clipboard-south',
+      parentId: south.id,
+      wallId: south.id,
+      position: [3.4, 1.2, 0],
+      corner: { end: 'end', partnerId: 'window_clipboard-east', post: 'none' },
+    })
+    const onEast = WindowNode.parse({
+      id: 'window_clipboard-east',
+      parentId: east.id,
+      wallId: east.id,
+      position: [0.6, 1.2, 0],
+      corner: { end: 'start', partnerId: onSouth.id, post: 'none' },
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [sourceLevelId]: makeLevel(sourceLevelId, [south.id, east.id]),
+        [south.id]: { ...south, children: [onSouth.id] },
+        [east.id]: { ...east, children: [onEast.id] },
+        [onSouth.id]: onSouth,
+        [onEast.id]: onEast,
+      },
+    }))
+    const windowsOf = (wallIds: readonly AnyNodeId[]) =>
+      wallIds.flatMap((id) =>
+        (useScene.getState().nodes[id] as WallNode).children.map(
+          (child) => useScene.getState().nodes[child as AnyNodeId] as WindowNode,
+        ),
+      )
+
+    expect(copySelectedNodesToEditorClipboard([south.id, east.id])).toBe(true)
+    const [a, b] = windowsOf(pasteEditorClipboardToLevel(targetLevelId)!.pastedIds)
+    expect(a?.corner?.partnerId).toBe(b?.id)
+    expect(b?.corner?.partnerId).toBe(a?.id)
+
+    expect(copySelectedNodesToEditorClipboard([south.id])).toBe(true)
+    const [alone] = windowsOf(pasteEditorClipboardToLevel(targetLevelId)!.pastedIds)
+    expect(alone?.corner).toBeUndefined()
+  })
+
   test('a paste keeps collection membership on both sides in one undo step, or drops collections the scene lacks', () => {
     const collectionId = 'collection_clipboard-lighting' as CollectionId
     const lamp = ItemNode.parse({
@@ -504,6 +738,59 @@ describe('scene clipboard', () => {
       expect(result?.pastedIds).toHaveLength(1)
       const pasted = useScene.getState().nodes[result!.pastedIds[0]!]
       expect(pasted?.type === 'window' && pasted.source?.artifact).toBe(readable.source!.artifact)
+    } finally {
+      configureArtifactStore(previousStore)
+      useViewer.getState().setProjectId(null)
+    }
+  })
+
+  test("a room copied to another project brings its floor script's artifacts", async () => {
+    let systemClipboardText = ''
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText: async () => systemClipboardText,
+        writeText: async (text: string) => {
+          systemClipboardText = text
+        },
+      },
+    })
+    const room = ZoneNode.parse({
+      id: 'zone_clipboard-floor-script',
+      parentId: sourceLevelId,
+      name: 'Hall',
+      polygon: [
+        [0, 0],
+        [3, 0],
+        [3, 3],
+        [0, 3],
+      ],
+      floor: {
+        script: {
+          kind: 'script',
+          script: 'e'.repeat(64),
+          artifact: 'f'.repeat(64),
+          inputs: 'key',
+          manifest: { bounds: { min: [0, 0, 0], max: [3, 0.01, 3] }, triangles: 2 },
+        },
+      },
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [sourceLevelId]: makeLevel(sourceLevelId, [room.id]),
+        [room.id]: room,
+      },
+    }))
+    useViewer.getState().setProjectId('project_clipboard-source')
+    expect(copySelectedNodesToEditorClipboard([room.id])).toBe(true)
+    useViewer.getState().setProjectId('project_clipboard-target')
+    const copyFrom = mock(async (_projectId: string, _sha256s: string[]) => [] as string[])
+    const previousStore = getArtifactStore()
+    configureArtifactStore({ ...previousStore, copyFrom })
+    try {
+      await pasteSystemEditorClipboardToLevel(targetLevelId)
+      expect(new Set(copyFrom.mock.calls[0]![1])).toEqual(new Set(['e'.repeat(64), 'f'.repeat(64)]))
     } finally {
       configureArtifactStore(previousStore)
       useViewer.getState().setProjectId(null)

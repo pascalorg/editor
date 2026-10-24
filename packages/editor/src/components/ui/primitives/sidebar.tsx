@@ -24,6 +24,7 @@ import {
   TooltipTrigger,
 } from './../../../components/ui/primitives/tooltip'
 import { useIsMobile } from './../../../hooks/use-mobile'
+import { hydrationGatedStorage } from './../../../lib/hydration-gated-storage'
 import { cn } from './../../../lib/utils'
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state'
@@ -47,7 +48,7 @@ type SidebarStore = {
 export const useSidebarStore = create<SidebarStore>()(
   persist(
     (set) => ({
-      width: 288, // 18rem = 288px
+      width: 360,
       setWidth: (width) => {
         if (width < SIDEBAR_COLLAPSE_THRESHOLD) {
           set({ isCollapsed: true })
@@ -62,6 +63,7 @@ export const useSidebarStore = create<SidebarStore>()(
     }),
     {
       name: 'sidebar-preferences',
+      storage: hydrationGatedStorage((): boolean => useSidebarStore.persist.hasHydrated()),
       partialize: (state) => ({ width: state.width, isCollapsed: state.isCollapsed }),
       skipHydration: true,
     },

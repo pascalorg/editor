@@ -337,6 +337,7 @@ function boundaryPointKey(point: readonly [number, number]): string {
 function boundarySegmentKey(boundary: WallBoundaryFace): string {
   const forward = boundary.points.map(boundaryPointKey).join('|')
   const reverse = [...boundary.points].reverse().map(boundaryPointKey).join('|')
+  // biome-ignore lint/complexity/useMathMinMax: lexicographic string comparison
   return `${boundary.wallId}:${forward < reverse ? forward : reverse}`
 }
 

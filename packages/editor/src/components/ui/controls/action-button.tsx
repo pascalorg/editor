@@ -12,12 +12,15 @@ export function ActionButton({ icon, label, className, ...props }: ActionButtonP
     <button
       {...props}
       className={cn(
-        'flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 font-medium text-foreground text-xs transition-colors hover:bg-[#3e3e3e] active:bg-[#3e3e3e]',
+        // The fill runs through custom properties so a caller's `bg-*` or
+        // `hover:bg-*` replaces it in both themes; tailwind-merge would keep a
+        // `dark:bg-*` fill alive under the caller's class.
+        'flex min-h-9 min-w-0 flex-1 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/50 bg-(--action-fill) px-3 py-2 font-medium text-foreground text-xs leading-4 transition-colors [&>svg]:shrink-0 [--action-fill-hover:rgb(0_0_0/0.08)] [--action-fill:rgb(0_0_0/0.04)] hover:bg-(--action-fill-hover) active:bg-(--action-fill-hover) dark:[--action-fill-hover:#3e3e3e] dark:[--action-fill:#2C2C2E]',
         className,
       )}
     >
       {icon}
-      <span>{label}</span>
+      <span className="min-w-0 whitespace-normal text-center">{label}</span>
     </button>
   )
 }

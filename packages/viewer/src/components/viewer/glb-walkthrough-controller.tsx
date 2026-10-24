@@ -26,6 +26,7 @@ import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { SCENE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
+import { applyWalkthroughCameraClipping } from './viewer-camera'
 
 // First-person FOV. The orbit camera is 50° (set on the Canvas), which feels
 // cramped on foot; ~60° vertical (~90° horizontal at 16:9) restores peripheral
@@ -208,7 +209,7 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
   }
   ;(merged as any).computeBoundsTree = computeBoundsTree
   ;(merged as any).disposeBoundsTree = disposeBoundsTree
-  ;(merged as any).computeBoundsTree({ maxLeafSize: 12, strategy: 0 })
+  ;(merged as any).computeBoundsTree({ targetLeafSize: 12, strategy: 0 })
   merged.computeBoundingBox()
 
   const mesh = new Mesh(merged, colliderMaterial)
@@ -311,6 +312,11 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       cam.fov = prevFov
       cam.updateProjectionMatrix()
     }
+  }, [camera])
+
+  useEffect(() => {
+    if (!(camera as PerspectiveCamera).isPerspectiveCamera) return
+    return applyWalkthroughCameraClipping(camera as PerspectiveCamera)
   }, [camera])
 
   useEffect(() => {

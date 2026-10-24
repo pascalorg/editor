@@ -53,7 +53,7 @@ beforeEach(() => {
   useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
   zoneId = plan.zoneId
   useViewer.getState().setSelection({ buildingId: building.id, levelId: LEVEL, selectedIds: [] })
-  useEditor.setState({ phase: 'structure', mode: 'select', room: { levelId: LEVEL, zoneId } })
+  useEditor.setState({ phase: 'building', mode: 'select', room: { levelId: LEVEL, zoneId } })
   clearSceneHistory()
 })
 afterEach(() => {

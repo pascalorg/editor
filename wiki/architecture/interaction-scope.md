@@ -30,6 +30,7 @@ scope is exactly one interaction at a time, and `idle` carries no payload.
 | `reshaping`    | `nodeId`, `reshape`, `driver`, `holeIndex?`, `endpoint?`, `index?`, `side?` | Reshaping a selected node's geometry. `driver` identifies the interaction body that owns preview and commit.                                                        |
 | `box-select`   | —                                                                           | Marquee selection drag.                                                                                                                                             |
 | `painting`     | —                                                                           | Material paint application.                                                                                                                                         |
+| `pointing`     | —                                                                           | Point and ask: the pointer names things for the agent. Held for the whole mode, like a brush; selection, handles and the floating menu step back. See [point-and-ask](point-and-ask.md). |
 
 `reshaping` groups endpoint/curve/hole/boundary/control-point/tangent edits as
 sub-states of one scope — there is one node and one in-flight reshape, so

@@ -33,7 +33,6 @@ The agent reads the attachment as a data URI and issues a single tool call:
 ```
 
 Optional knobs:
-
 - `save` (default `true`) — if `false`, the response includes `graph`
   inline instead of persisting to the `SceneStore`.
 - `defaultWallThickness` (default `0.2` m) — used when the vision model
@@ -56,7 +55,7 @@ Optional knobs:
    re-parsed with `AnyNode.safeParse`; invalid ones are dropped with a
    warning appended to `notes`.
 4. `bridge.setScene(...)` swaps the live scene so any follow-up MCP call
-   (`find_nodes`, `measure`, `apply_patch`, ...) operates on the new
+   (`find_by_type`, `measure`, `apply_patch`, ...) operates on the new
    geometry.
 5. If `save: true`, the graph is persisted via `SceneStore.save` and the
    response carries `sceneId` + `url: /scene/<id>`.
@@ -109,8 +108,8 @@ operate on it without reloading:
 
 > **User:** add a door on the south wall between Living and Kitchen.
 
-The agent calls `find_nodes({ type: "wall" })`, picks the appropriate
-wall, and issues `cut_opening` — no extra wiring needed.
+The agent calls `find_by_type({ type: "wall" })`, picks the appropriate
+wall, and issues `add_door` — no extra wiring needed.
 
 ## Takeaways
 

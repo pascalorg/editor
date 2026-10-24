@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   nodeRegistry,
   RoofElevationSystem,
+  type SitePresentation,
   StairOpeningSystem,
   sceneRegistry,
   useInteractive,
@@ -25,7 +26,7 @@ import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
-import { choosePointerEvents } from '../../lib/pointer-events'
+import { choosePointerEvents, type ViewerBreadcrumbHandler } from '../../lib/pointer-events'
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
@@ -33,6 +34,7 @@ import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
+import { getPendingRoofMergeCount } from '../../systems/roof/roof-system'
 import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
 import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { SceneRenderer } from '../renderers/scene-renderer'
@@ -256,16 +258,16 @@ function GPUDeviceWatcher({ intentionalWebGL = false }: { intentionalWebGL?: boo
 }
 
 function ToneMappingExposure() {
-  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const appearance = useViewer((state) => state.sceneAppearance)
   const atmosphere = useSceneAtmosphere()
   const gl = useThree((state) => state.gl)
   const invalidate = useThree((state) => state.invalidate)
 
   useEffect(() => {
     if (atmosphere) return
-    gl.toneMappingExposure = getSceneTheme(sceneTheme).toneMappingExposure
+    gl.toneMappingExposure = appearance.toneMappingExposure
     invalidate()
-  }, [atmosphere, gl, invalidate, sceneTheme])
+  }, [atmosphere, gl, invalidate, appearance])
 
   useFrame(() => {
     if (!atmosphere) return
@@ -276,7 +278,7 @@ function ToneMappingExposure() {
 }
 
 function ImmersiveXRBackground() {
-  const background = useViewer((state) => getSceneTheme(state.sceneTheme).background)
+  const background = useViewer((state) => state.sceneAppearance.background)
   return <color args={[background]} attach="background" />
 }
 
@@ -320,7 +322,8 @@ function hasPendingSceneBuildWork() {
 export function pendingSceneBuildCount(): number {
   if (!hasCommittedSceneRoot()) return 1
   const state = useScene.getState()
-  let count = 0
+  // A roof's dirty mark clears when its merged shell is queued, frames before it is built.
+  let count = getPendingRoofMergeCount()
   for (const id of state.dirtyNodes) {
     if (isPendingSceneBuild(id, state)) count++
   }
@@ -414,6 +417,8 @@ interface ViewerProps {
     textures?: boolean
     colorPreset?: ColorPreset
   }
+  /** Saved site appearance when rendering a baked asset without its graph. Null ignores it. */
+  presentation?: SitePresentation | null
   /**
    * Visibility filter on the live canvas. When non-null, every registered
    * node group whose id is not in `isolate` (or in the isolated set's
@@ -438,6 +443,12 @@ interface ViewerProps {
    * that must not carry on silently (a bake) fail with its own error.
    */
   onRenderError?: (cause: unknown) => void
+  /**
+   * Called with diagnostics worth keeping on a host's error-reporter trail,
+   * such as `raycast_invalid_material` when a pointer raycast skips a mesh
+   * whose geometry groups point past its material array.
+   */
+  onBreadcrumb?: ViewerBreadcrumbHandler
   /**
    * Wall-clock give-up cap for scene readiness, replacing the default
    * frame-count cap. Set it on hosts whose frame cadence is decoupled from
@@ -493,10 +504,12 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     renderContext = 'editor',
     transparent,
     defaultRender,
+    presentation: suppliedPresentation,
     isolate,
     sceneReadyKey,
     onSceneReadyChange,
     onRenderError,
+    onBreadcrumb,
     sceneReadyMaxWaitMs,
     maxFps = 50,
     disablePostFx = false,
@@ -535,11 +548,15 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [isolate])
 
-  const [pointerEvents] = useState(() => choosePointerEvents())
+  const onBreadcrumbRef = useRef(onBreadcrumb)
+  onBreadcrumbRef.current = onBreadcrumb
+  const [pointerEvents] = useState(() =>
+    choosePointerEvents(undefined, (breadcrumb) => onBreadcrumbRef.current?.(breadcrumb)),
+  )
 
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
 
-  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const isDark = useViewer((state) => state.sceneAppearance.appearance === 'dark')
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const previousLampTheme = useRef(sceneTheme)
   useEffect(() => {
@@ -569,15 +586,29 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [transparent])
 
+  const scenePresentation = useScene((state) => {
+    for (const id of state.rootNodeIds) {
+      const node = state.nodes[id]
+      if (node?.type === 'site') return node.presentation
+    }
+    return undefined
+  })
+  const presentation =
+    suppliedPresentation === undefined ? scenePresentation : (suppliedPresentation ?? undefined)
+  const projectId = useViewer((state) => state.projectId)
+  useLayoutEffect(() => {
+    // Project selection clears the previous look even when both graphs share a preset.
+    if (useViewer.getState().projectId === projectId)
+      useViewer.getState().setProjectPresentation(presentation)
+  }, [presentation, projectId])
+
   const defaultShading = defaultRender?.shading
   const defaultTextures = defaultRender?.textures
   const defaultColorPreset = defaultRender?.colorPreset
   const hasDefaultRender = defaultRender != null
   useEffect(() => {
     const ctx = renderContext
-    useViewer.getState().setRenderContext(ctx)
-    const { shading, shadingByContext, setShading } = useViewer.getState()
-    setShading(shadingByContext[ctx] ?? defaultShading ?? shading)
+    useViewer.getState().setRenderContext(ctx, defaultShading)
 
     if (!hasDefaultRender || typeof window === 'undefined') return
 
@@ -668,9 +699,8 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                     trackTimestamp: PERF_OVERLAY_ENABLED,
                   })
                   renderer.toneMapping = THREE.ACESFilmicToneMapping
-                  renderer.toneMappingExposure = getSceneTheme(
-                    useViewer.getState().sceneTheme,
-                  ).toneMappingExposure
+                  renderer.toneMappingExposure =
+                    useViewer.getState().sceneAppearance.toneMappingExposure
                   return renderer
                 },
               })

@@ -3,9 +3,11 @@ import {
   BuildingNode,
   CeilingNode,
   DoorNode,
+  FloorOpeningNode,
   ItemNode,
   LevelNode,
   RoofNode,
+  RoofSegmentNode,
   SlabNode,
   StairNode,
   StairSegmentNode,
@@ -13,6 +15,7 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import { authoredItem } from './add-object-cases'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -21,7 +24,7 @@ import type { AgentToolCase, SceneGraph } from './cases'
  */
 
 type Pt = [number, number]
-const ROOM: Pt[] = [
+export const ROOM: Pt[] = [
   [0, 0],
   [4, 0],
   [4, 3],
@@ -29,7 +32,7 @@ const ROOM: Pt[] = [
 ]
 
 /** Links parents' children and returns the graph, buildings as roots. */
-function scene(...nodes: AnyNode[]): SceneGraph {
+export function scene(...nodes: AnyNode[]): SceneGraph {
   const byId = Object.fromEntries(nodes.map((node) => [node.id, { ...node }])) as Record<
     string,
     AnyNode & { children?: string[] }
@@ -45,8 +48,8 @@ function scene(...nodes: AnyNode[]): SceneGraph {
   }
 }
 
-const building = (id = 'building_main') => BuildingNode.parse({ id })
-const level = (id: string, index: number, extra: Record<string, unknown> = {}) =>
+export const building = (id = 'building_main') => BuildingNode.parse({ id })
+export const level = (id: string, index: number, extra: Record<string, unknown> = {}) =>
   LevelNode.parse({
     id,
     parentId: 'building_main',
@@ -56,31 +59,52 @@ const level = (id: string, index: number, extra: Record<string, unknown> = {}) =
     ...extra,
   })
 
-/** A finished room on a level: a 4 m wall with a centred door, its zone, slab and ceiling. */
-function room(levelId: string, tag: string): AnyNode[] {
-  const wall = WallNode.parse({
-    id: `wall_${tag}`,
-    parentId: levelId,
-    start: [0, 0],
-    end: [4, 0],
-    height: 2.5,
-  })
+/** A finished room on a level: four closed walls, a centred door, its zone, slab and ceiling. */
+export function room(levelId: string, tag: string): AnyNode[] {
+  const [wall, ...walls] = ROOM.map((start, i) =>
+    WallNode.parse({
+      id: i === 0 ? `wall_${tag}` : `wall_${tag}_${i}`,
+      parentId: levelId,
+      start,
+      end: ROOM[(i + 1) % ROOM.length],
+      height: 2.5,
+    }),
+  )
   const door = DoorNode.parse({
     id: `door_${tag}`,
-    parentId: wall.id,
-    wallId: wall.id,
+    parentId: wall!.id,
+    wallId: wall!.id,
     position: [2, 1.05, 0],
   })
   return [
-    wall,
+    wall!,
+    ...walls,
     door,
-    ZoneNode.parse({ id: `zone_${tag}`, parentId: levelId, name: 'Room', polygon: ROOM }),
+    ZoneNode.parse({ id: `zone_${tag}`, parentId: levelId, name: 'Living', polygon: ROOM }),
     SlabNode.parse({ id: `slab_${tag}`, parentId: levelId, polygon: ROOM }),
     CeilingNode.parse({ id: `ceiling_${tag}`, parentId: levelId, polygon: ROOM }),
   ]
 }
 
-const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
+/** A roof over the 4 × 3 m room, held by `levelId`, its segment bearing `y` above that floor. */
+const roofOver = (levelId: string, y: number): AnyNode[] => [
+  RoofNode.parse({
+    id: 'roof_low',
+    parentId: levelId,
+    position: [2, y, 1.5],
+    children: ['rseg_low'],
+  }),
+  RoofSegmentNode.parse({ id: 'rseg_low', parentId: 'roof_low', width: 4, depth: 3, wallHeight: 0 }),
+]
+
+const STAIR_HOLE: [number, number][] = [
+  [1.5, 0.2],
+  [2.5, 0.2],
+  [2.5, 2.2],
+  [1.5, 2.2],
+]
+
+export const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
   const flight = StairSegmentNode.parse({
     id: `sseg_${levelId}`,
     parentId: `stair_${levelId}`,
@@ -161,7 +185,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     'the viewed floor is marked',
     oneStorey,
     { result: { activeLevelId: 'level_0', levels: [{ levelId: 'level_0', isActive: true }] } },
-    { context: { activeLevelId: 'level_0' }, surfaces: ['core', 'chat'] },
+    { context: { activeLevelId: 'level_0' } },
   ),
   verify(
     'walls with no room and no door are reported',
@@ -173,6 +197,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
       ),
     {
       contains: ['walls_no_zones', 'walls_no_doors'],
+      lacks: ['wall_open_end'],
       mentions: ['walls but no zones'],
     },
   ),
@@ -208,6 +233,38 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
   verify('a stair on a storey connects them', () => twoStoreys(...stairOn('level_0')), {
     lacks: ['missing_stair'],
   }),
+  // A flight to no level names the level it rises from and none it arrives on (create_stair's
+  // toLevelId null): porch or deck steps, whatever their rise.
+  verify(
+    'porch steps to no level connect no storeys',
+    () => twoStoreys(...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 0.54 })),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    'a flight to no level as tall as the storey connects no storeys',
+    () => twoStoreys(...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 2.8 })),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    "an older stair naming no level at its storey's rise connects them",
+    () => twoStoreys(...stairOn('level_0', { totalRise: 2.8 })),
+    { lacks: ['missing_stair'] },
+  ),
+  verify(
+    'an older stair on the top storey, at its rise, climbs to the roof level and no storey',
+    () =>
+      twoStoreys(
+        level('level_roof', 2, { name: 'Roof', metadata: { role: 'roof' } }),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+        ...stairOn('level_1', { totalRise: 2.8 }),
+      ),
+    { contains: ['missing_stair'] },
+  ),
+  verify(
+    'an older stair naming no level, twice as tall as its storey, does not',
+    () => twoStoreys(...stairOn('level_0', { totalRise: 5.6 })),
+    { contains: ['missing_stair'] },
+  ),
   verify(
     'a roof-only level is neither a storey nor empty: one storey needs no stair',
     () =>
@@ -261,7 +318,81 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { contains: ['roof_level_no_roof'] },
   ),
   verify(
-    'a roof on a storey is reported',
+    "a roof level holding a plugin's roof planes has its roof",
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_roof', 1, { metadata: { role: 'roof' } }),
+        ...room('level_0', 'ground'),
+        {
+          object: 'node',
+          id: 'roofplane_south',
+          type: 'procedural:roof-plane',
+          parentId: 'level_roof',
+          visible: true,
+        } as unknown as AnyNode,
+      ),
+    { lacks: ['roof_level_no_roof'] },
+  ),
+  verify(
+    'a roof level below a storey of its building is reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_roof', 1, { metadata: { role: 'roof' } }),
+        level('level_2', 2),
+        ...room('level_0', 'ground'),
+        ...room('level_2', 'upper'),
+        ...stairOn('level_0'),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+      ),
+    { contains: ['roof_level_not_on_top'], mentions: ['level_2'] },
+  ),
+  verify(
+    'a roof level below an empty storey, a floor still to be built, is reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_roof', 1, { metadata: { role: 'roof' } }),
+        level('level_2', 2),
+        ...room('level_0', 'ground'),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+      ),
+    { contains: ['roof_level_not_on_top'], mentions: ['level_2'] },
+  ),
+  verify(
+    'a roof level on top of its storeys is quiet',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_roof', 1, { metadata: { role: 'roof' } }),
+        ...room('level_0', 'ground'),
+        RoofNode.parse({ id: 'roof_main', parentId: 'level_roof' }),
+      ),
+    { lacks: ['roof_level_not_on_top'] },
+  ),
+  verify(
+    'a basement the stack stands at grade is reported, with the tool that seats the building',
+    () => scene(building(), level('level_b', -1), level('level_0', 0), ...room('level_0', 'ground')),
+    { contains: ['basement_at_grade'], mentions: ['set_ground_level'] },
+  ),
+  verify(
+    'a basement standing under the ground is quiet',
+    () =>
+      scene(
+        building(),
+        level('level_b', -1, { baseElevation: -2.8 }),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+      ),
+    { lacks: ['basement_at_grade', 'ground_level_unseated'] },
+  ),
+  verify(
+    'a roof with no segments on a storey stands on no walls, so nothing is reported to move',
     () =>
       scene(
         building(),
@@ -269,10 +400,53 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
         ...room('level_0', 'ground'),
         RoofNode.parse({ id: 'roof_low', parentId: 'level_0' }),
       ),
+    { lacks: ['roof_mixed_in_storey'] },
+  ),
+  verify(
+    'a roof on the walls of the storey holding it is reported, naming the move',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ...roofOver('level_0', 2.5),
+      ),
     {
       contains: ['roof_mixed_in_storey'],
-      mentions: ['dedicated roof level'],
+      mentions: ['dedicated roof level', 'move_roofs_to_roof_level', 'Move to the roof level'],
     },
+  ),
+  verify(
+    "a lower wing's roof at the upper storey's floor, where the Roof tool puts it, is quiet",
+    () =>
+      twoStoreys(...stairOn('level_0'), RoofNode.parse({ id: 'roof_porch', parentId: 'level_1' })),
+    { lacks: ['roof_mixed_in_storey'] },
+  ),
+  verify(
+    "a lower storey's roof on the storey above it, bearing on the lower walls, is quiet",
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_1', 1),
+        ...room('level_0', 'ground'),
+        ...room('level_1', 'upper'),
+        ...stairOn('level_0'),
+        // the upper storey's floor is 2.8 m up; the ground floor's walls top out at 2.5 m
+        ...roofOver('level_1', -0.3),
+      ),
+    { lacks: ['roof_mixed_in_storey'] },
+  ),
+  verify(
+    'a porch roof on its beam, under the walls’ tops, stays on its storey unreported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ...roofOver('level_0', 2.1),
+      ),
+    { lacks: ['roof_mixed_in_storey'] },
   ),
   verify(
     'a wall taller than its storey in a multi-storey building is reported',
@@ -355,6 +529,17 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     },
   ),
   verify(
+    'porch steps off the floor slab are not reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ...stairOn('level_0', { fromLevelId: 'level_0', totalRise: 0.54, position: [2, 0, 4] }),
+      ),
+    { lacks: ['stair_outside_slab'] },
+  ),
+  verify(
     'a wall across a stair is reported',
     () =>
       twoStoreys(
@@ -381,6 +566,72 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
       ),
     { contains: ['stair_no_opening'], mentions: ['no destination slab opening'] },
     // Only core: a live store cuts the opening itself when the scene loads, as the editor does.
+    { surfaces: ['core'] },
+  ),
+  // Since owned floor openings (#976) a stair's opening is a floor-opening node on the floor
+  // above, owned by the stair; the slab hole it cuts carries the opening, not the stair.
+  verify(
+    "a stair whose owned floor opening sits on the floor above has its opening",
+    () =>
+      twoStoreys(
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        FloorOpeningNode.parse({
+          id: 'floor-opening_stair',
+          parentId: 'level_1',
+          polygon: STAIR_HOLE,
+          source: 'stair',
+          ownerId: 'stair_level_0',
+          surfaceId: 'slab_upper',
+          drawnOn: 'floor',
+        }),
+      ),
+    { lacks: ['stair_no_opening'] },
+    { surfaces: ['core'] },
+  ),
+  verify(
+    'a stair whose only owned opening is drawn on its own ceiling still misses the floor above',
+    () =>
+      twoStoreys(
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        FloorOpeningNode.parse({
+          id: 'floor-opening_ceiling',
+          parentId: 'level_0',
+          polygon: STAIR_HOLE,
+          source: 'stair',
+          ownerId: 'stair_level_0',
+          drawnOn: 'ceiling',
+        }),
+      ),
+    { contains: ['stair_no_opening'] },
+    { surfaces: ['core'] },
+  ),
+  verify(
+    'a stair whose only owned opening is drawn on its own ceiling still misses the floor above',
+    () =>
+      twoStoreys(
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        FloorOpeningNode.parse({
+          id: 'floor-opening_ceiling',
+          parentId: 'level_0',
+          polygon: STAIR_HOLE,
+          source: 'stair',
+          ownerId: 'stair_level_0',
+          drawnOn: 'ceiling',
+        }),
+      ),
+    { contains: ['stair_no_opening'] },
     { surfaces: ['core'] },
   ),
   verify(
@@ -459,6 +710,38 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { contains: ['item_overlap'] },
   ),
   verify(
+    'a fridge standing in the middle of a room is reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ItemNode.parse({
+          id: 'item_fridge',
+          parentId: 'level_0',
+          position: [3, 0, 1.6],
+          asset: asset('fridge', [0.7, 1.8, 0.72]),
+        }),
+      ),
+    { contains: ['item_mid_room'], mentions: ['item_fridge'] },
+  ),
+  verify(
+    'a fridge against a wall is not reported',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        ItemNode.parse({
+          id: 'item_fridge',
+          parentId: 'level_0',
+          position: [3.6, 0, 1.5],
+          asset: asset('fridge', [0.7, 1.8, 0.72]),
+        }),
+      ),
+    { lacks: ['item_mid_room'] },
+  ),
+  verify(
     'a node its schema rejects fails validation',
     () =>
       scene(building(), level('level_0', 0), ...room('level_0', 'ground'), {
@@ -468,5 +751,45 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { result: { valid: false }, contains: ['schema_invalid'] },
     // Only core: a live store and a bridge would not hold a node that fails its schema.
     { surfaces: ['core'] },
+  ),
+  // Each authored object stands in for something Pascal has no type for: the list names the gaps.
+  verify(
+    'authored objects are listed with what they stand in for',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        authoredItem('item_lantern', 'level_0', {
+          name: 'Porch lantern',
+          category: 'light',
+          size: [0.2, 0.4, 0.2],
+        }),
+        authoredItem('item_cornice', 'level_0', {
+          name: 'Cornice',
+          category: 'trim',
+          reason: 'Pascal has no cornice type.',
+          size: [4, 0.3, 0.4],
+        }),
+        ItemNode.parse({
+          id: 'item_sofa',
+          parentId: 'level_0',
+          position: [2, 0, 2],
+          asset: asset('sofa', [2, 0.8, 0.9]),
+        }),
+      ),
+    {
+      result: {
+        authoredObjects: [
+          {
+            id: 'item_cornice',
+            name: 'Cornice',
+            category: 'trim',
+            reason: 'Pascal has no cornice type.',
+          },
+          { id: 'item_lantern', name: 'Porch lantern', category: 'light', reason: null },
+        ],
+      },
+    },
   ),
 ]

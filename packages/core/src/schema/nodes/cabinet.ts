@@ -154,7 +154,7 @@ export const CabinetModuleNode = BaseNode.extend({
   // Discriminator for specialty units (corner L-shape, sink base, appliance
   // gap, open shelving). 'standard' modules use the compartment stack as-is;
   // new kinds extend this enum instead of overloading the stack.
-  moduleKind: z.enum(['standard', 'corner-filler']).default('standard'),
+  moduleKind: z.enum(['standard', 'corner-filler', 'wall-filler']).default('standard'),
   // Shared-boundary opening for inside-corner pockets: drops the side panel on
   // that side and lets interior shelves / decks run through to the neighbour.
   openSide: z.enum(['left', 'right']).optional(),

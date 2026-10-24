@@ -1,6 +1,8 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
+import type { PointAskPin, PointAskStatus } from '../agent-operations/point-context'
+import type { SceneViewInterior, SceneViewPresentation } from '../agent-operations/scene-view'
 import type {
   BlockNode,
   BoxVentNode,
@@ -218,6 +220,15 @@ export interface SnapshotCaptureFailedEvent {
   error: string
 }
 
+/** An ephemeral capture's frame, handed back to the caller that asked for it. */
+export interface SnapshotCapturedEvent {
+  requestId: string
+  blob: Blob
+  width: number
+  height: number
+  presentation?: SceneViewPresentation
+}
+
 export interface ThumbnailGenerateEvent {
   projectId: string
   requestId?: string
@@ -263,8 +274,17 @@ export interface ThumbnailGenerateEvent {
   }
   /** Re-aim the sun at the face the pose looks at, for this frame. */
   lightFace?: boolean
+  /**
+   * The frame is the caller's alone: it comes back on `snapshot:captured` (matched by `requestId`)
+   * and the host stores nothing — no snapshot, no thumbnail. An agent looking at the scene.
+   */
+  ephemeral?: boolean
   /** World clipping planes for this frame (a section's cut). */
   clip?: readonly { normal: [number, number, number]; constant: number }[]
+  /** Look inside this floor for the frame: the rest of the house left out, its walls cut (view_scene). */
+  interior?: SceneViewInterior
+  /** The actual Solo/Exploded/Stacked presentation, without interior clipping. */
+  presentation?: SceneViewPresentation
   /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
   supersample?: number
 }
@@ -284,6 +304,16 @@ export interface CameraControlFitSceneEvent {
   }
 }
 
+/**
+ * Frames something for the viewer surfaces' navigation (a floor, a room, a
+ * unit): the camera owner sets the distance and keeps its heading. A view
+ * saved on the node wins over the box.
+ */
+export interface CameraControlFrameEvent {
+  bounds: { min: [number, number, number]; max: [number, number, number] } | null
+  pose?: { position: [number, number, number]; target: [number, number, number] }
+}
+
 export interface CameraPose {
   position: [number, number, number]
   target: [number, number, number]
@@ -301,7 +331,14 @@ type CameraControlEvents = {
   'camera-controls:orbit-cw': undefined
   'camera-controls:orbit-ccw': undefined
   'camera-controls:fit-scene': CameraControlFitSceneEvent
+  'camera-controls:frame': CameraControlFrameEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
+  /**
+   * A run of captures as one session (a sheet's pictures, an agent's view): while `active`, the
+   * editor presents the finished house (full-height walls, the storeys stacked, the materials' own
+   * look) and the viewport keeps its last frame, so the person never sees the switch.
+   */
+  'camera-controls:capture-session': { owner: string; active: boolean }
   'camera-controls:apply-pose': CameraPose
   'camera-controls:cancel-pose': undefined
   'camera-controls:interaction-start': undefined
@@ -332,13 +369,15 @@ type WindowAnimationEvents = {
 }
 
 type ThumbnailEvents = {
-  'thumbnail:before-capture': undefined
+  /** `wholeWalls`: every wall drawn whole for the frame, whatever the wall mode (an authored pose, an interior view). */
+  'thumbnail:before-capture': { wholeWalls?: boolean } | undefined
   'thumbnail:after-capture': undefined
 }
 
 type SnapshotEvents = {
   'snapshot:saved': undefined | SnapshotSavedEvent
   'snapshot:capture-failed': SnapshotCaptureFailedEvent
+  'snapshot:captured': SnapshotCapturedEvent
   'camera:go-to-position': { position: [number, number, number]; target: [number, number, number] }
 }
 
@@ -352,15 +391,23 @@ export interface RoomPresetCreateEvent {
   zoneId: ZoneNode['id']
 }
 
+type PointAskEvents = {
+  /** The chat's word on an ask's turn, for its pin. */
+  'point-ask:status': PointAskStatus
+  /** The pin tells the chat to light or open the ask's turn. */
+  'point-ask:pin': PointAskPin
+}
+
 type RoomPresetEvents = {
   'room-preset:create': RoomPresetCreateEvent
 }
 
 type SelectionEvents = {
   /**
-   * A node click accepted by an editor canvas selection path after proxy and
-   * phase routing. Hosts can react to the user's 2D/3D selection intent
-   * without treating programmatic selection changes as canvas clicks.
+   * A node click accepted by an editor canvas selection path (2D or 3D) after
+   * proxy routing. Hosts can react to the user's selection intent without
+   * treating programmatic selection changes as canvas clicks. Part of the
+   * plugin-facing bus: the WebXR plugin listens for it.
    */
   'selection:canvas-node-click': AnyNode
   /**
@@ -382,6 +429,7 @@ type EditorEvents = GridEvents &
   ThumbnailEvents &
   SnapshotEvents &
   AIChatEvents &
+  PointAskEvents &
   RoomPresetEvents &
   SelectionEvents
 

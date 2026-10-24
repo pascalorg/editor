@@ -31,12 +31,12 @@ import { ActionMenuButton } from './action-menu-button'
 import { formatMeasurement } from './measurement-pill'
 
 /**
- * The selected room while its controls may show: structure select, nothing
- * in progress, no element drilled into, the scene editable.
+ * The selected room while its controls may show: select mode, nothing in
+ * progress, no element drilled into, the scene editable.
  */
 export function useRoomControls() {
   const room = useSelectedRoom()
-  const enabled = useEditor((s) => s.phase === 'structure' && s.mode === 'select')
+  const enabled = useEditor((s) => s.phase !== 'site' && s.mode === 'select')
   const idle = useInteractionScope((s) => s.scope.kind === 'idle')
   const readOnly = useScene((s) => s.readOnly)
   const sole = useViewer((s) => s.selection.selectedIds.length === 0)

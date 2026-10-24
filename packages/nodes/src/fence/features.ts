@@ -5,8 +5,7 @@ import { useViewer } from '@pascal-app/viewer'
 export function beginFenceFeaturePlacement(kind: 'gate' | 'opening') {
   emitter.emit('tool:cancel')
   const editor = useEditor.getState()
-  editor.setPhase('structure')
-  editor.setStructureLayer('elements')
+  editor.setPhase('building')
   editor.setMode('build')
   editor.setTool('fence')
   editor.setToolDefaults('fence', { featurePlacement: kind })

@@ -1,10 +1,14 @@
+import { refuse } from '../agent-tools/refusal'
+import { matchPascalMaterial } from '../procedural-items/library-colors'
 import type { CompiledGeometryScript } from '../schema'
+import { GeometrySourceMeta } from '../schema/geometry-metadata'
 import type { ColumnNode } from '../schema/nodes/column'
 import type { DoorNode } from '../schema/nodes/door'
 import type { ItemNode } from '../schema/nodes/item'
 import type { WindowNode } from '../schema/nodes/window'
+import { artifactUrl } from './artifact-store'
 
-/** A node built from a three.js script: an authored item, or a window or door with a script source. */
+/** A node built from a script: an authored item, or a window, door or column with a script source. */
 export type ScriptedNode = (ItemNode | WindowNode | DoorNode | ColumnNode) & {
   source: NonNullable<ItemNode['source']>
 }
@@ -18,15 +22,103 @@ export const isScriptedNode = (
     node!.type === 'door' ||
     node!.type === 'column')
 
+/**
+ * Merges reuse metadata into a source's, dropping `meta` when nothing is left:
+ * the scene carries no empty object.
+ */
+export function withSourceMeta<S extends { meta?: GeometrySourceMeta }>(
+  source: S,
+  next: object,
+  parent?: string,
+): S {
+  const { meta: previous, ...rest } = source
+  const meta = GeometrySourceMeta.parse({
+    ...previous,
+    ...Object.fromEntries(
+      Object.entries(GeometrySourceMeta.parse(next)).filter(([, value]) => value !== undefined),
+    ),
+    ...(parent ? { parent } : {}),
+  })
+  return (Object.keys(meta).length > 0 ? { ...rest, meta } : rest) as S
+}
+
 /** The `source` a compile produces, the same on every kind. */
-export const scriptSource = (compiled: CompiledGeometryScript) => ({
-  kind: 'script' as const,
-  language: 'three' as const,
-  script: compiled.script,
-  params: compiled.params,
-  artifact: compiled.sha256,
-  manifest: compiled.manifest,
-})
+export const scriptSource = (
+  compiled: CompiledGeometryScript,
+  meta: object = {},
+  previous?: ScriptedNode['source'],
+) =>
+  withSourceMeta(
+    {
+      kind: 'script' as const,
+      meta: previous?.meta,
+      language: compiled.language,
+      script: compiled.script,
+      params: compiled.params,
+      artifact: compiled.sha256,
+      // Worker structured clones retain optional undefined fields; durable scene writes are JSON.
+      manifest: JSON.parse(JSON.stringify(compiled.manifest)),
+    },
+    meta,
+    // A params-only rebuild runs the same script: its lineage stays where it was.
+    previous && previous.script !== compiled.script ? previous.script : undefined,
+  )
+
+/**
+ * What a scripted object is, for reuse, whatever its kind: the name from the
+ * node, an item's category from its asset, the rest from `source.meta`.
+ */
+export function scriptedObjectMeta(node: ScriptedNode) {
+  const { description, category, tags, parent } = node.source.meta ?? {}
+  return {
+    name: node.name,
+    description,
+    category: node.type === 'item' ? node.asset.category : category,
+    tags,
+    parent,
+  }
+}
+
+/**
+ * A scripted node's thumbnail and floor-plan image as `artifact://` URLs, or
+ * null until an editor has taken them of the GLB the node shows now.
+ */
+export function scriptImages(
+  node: { type: string; source?: unknown } | undefined,
+): { thumbnail: string; floorPlan: string } | null {
+  if (!isScriptedNode(node)) return null
+  const { images, artifact } = node.source
+  if (images?.artifact !== artifact) return null
+  return { thumbnail: artifactUrl(images.thumbnail), floorPlan: artifactUrl(images.floorPlan) }
+}
+
+type Manifest = CompiledGeometryScript['manifest']
+
+const matchSlot = (slot: Manifest['slots'][number]) =>
+  matchPascalMaterial({ ...slot, name: `${slot.id} ${slot.label ?? ''}` })
+
+/**
+ * Paint and automatic matching write the same overrides. A rebuild keeps every
+ * pick, but a slot still holding what the previous build matched is matched
+ * again, so a script edit to that finish shows.
+ */
+export function matchScriptSlotsToLibrary(
+  manifest: Manifest,
+  overrides: Record<string, string> = {},
+  previous?: Manifest,
+): Record<string, string> {
+  const slots = { ...overrides }
+  for (const slot of manifest.slots) {
+    if (Object.hasOwn(overrides, slot.id)) {
+      const before = previous?.slots.find((candidate) => candidate.id === slot.id)
+      if (!before || overrides[slot.id] !== matchSlot(before)) continue
+      delete slots[slot.id]
+    }
+    const ref = matchSlot(slot)
+    if (ref) slots[slot.id] = ref
+  }
+  return slots
+}
 
 /** Width, height and depth of what the script built. */
 export function scriptedSize(
@@ -37,12 +129,50 @@ export function scriptedSize(
 }
 
 /**
+ * A compile whose bounds are not finite numbers cannot be sized or placed, and what is built from
+ * it would fail its schema with a raw validation array or carry a non-finite size: refused before
+ * anything is built, whichever scripted tool it came to. A mesh at a position that is not a number
+ * leaves NaN bounds (null once they crossed a JSON hop).
+ */
+export function requireMeasured(
+  compiled: CompiledGeometryScript,
+  subject: { label?: string; nodeId?: string; tool: string },
+) {
+  const { min, max } = compiled.manifest.bounds
+  if ([...min, ...max].every(Number.isFinite)) return
+  const label = subject.label ? `"${subject.label}"` : (subject.nodeId ?? 'The object')
+  refuse(
+    'unmeasurable_object',
+    `${label} cannot be measured: its bounds are not finite numbers (min [${min.map(String).join(', ')}], max [${max.map(String).join(', ')}]) with params ${JSON.stringify(compiled.params)}. A mesh in the script has a position, rotation or scale that is not a number (a helper called one argument short passes the next value in its place). Fix the script and call ${subject.tool} again; nothing was ${subject.nodeId ? 'changed' : 'added'}.`,
+    { label: subject.label ?? subject.nodeId },
+  )
+}
+
+/**
  * Where the script's origin (the bottom centre of what it built) sits in the
  * node's own frame: a window or door is placed by its centre.
  */
 export function scriptedOrigin(node: ScriptedNode): [number, number, number] {
   if (node.type !== 'window' && node.type !== 'door') return [0, 0, 0]
   return [0, -scriptedSize(node.source.manifest)[1] / 2, 0]
+}
+
+/**
+ * Where a ceiling item's origin sits in the ceiling's frame (y = 0 is the ceiling plane): a recessed
+ * fixture seats flush; a scripted object is origined at its top (the compiler's ceiling mount), so
+ * it hangs from its bounds' top; a catalog model is origined at its bottom and hangs its full height.
+ */
+export function ceilingSeatY(
+  item: {
+    asset: { recessed?: boolean }
+    source?: { manifest: { bounds: { max: readonly number[] } } }
+    scale?: readonly number[]
+  },
+  height: number,
+): number {
+  if (item.asset.recessed) return 0
+  if (item.source) return -(item.source.manifest.bounds.max[1] ?? 0) * (item.scale?.[1] ?? 1)
+  return -height
 }
 
 /**

@@ -54,6 +54,7 @@ import {
   useSegmentDraftChain,
   useWallDrawVariant,
   useWallSnapIndicator,
+  visibleScene,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
@@ -638,7 +639,7 @@ const LineWallTool: React.FC = () => {
     // In 2D-only view the plan owns wall drafting; this tool stays mounted
     // behind the hidden canvas and still hears the plan's grid events, so it
     // must not also draft (it would add every corner twice).
-    const planOwnsInput = () => useEditor.getState().viewMode === '2d'
+    const planOwnsInput = () => visibleScene(useEditor.getState()) === '2d'
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current) || planOwnsInput()) return
@@ -1046,7 +1047,14 @@ function PolygonDraftGhosts({
 export const WallTool: React.FC = () => {
   // Clear preset-seeded defaults on deactivation so a later manual wall draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
+  useEffect(
+    () => () => {
+      const editor = useEditor.getState()
+      // Remounts keep the active preset; leaving the wall tool releases it.
+      if (editor.tool !== 'wall') editor.setToolDefaults('wall', null)
+    },
+    [],
+  )
 
   // The drawing variant is picked in the Build panel's Rooms group.
   const variant = useWallDrawVariant()

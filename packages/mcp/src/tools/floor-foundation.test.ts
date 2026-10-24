@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import {
   floorFootprintSupportClass,
   getLevelElevations,
@@ -133,18 +132,27 @@ test('set_floor_foundation sets one footprint in one call and one undo; raw upda
     expect(bridge.getHistory().pastCount).toBe(1)
     bridge.undo()
     expect(bridge.getNodes()).toEqual(unchanged)
-    const refused = await call('create_room', {
-      levelId,
-      name: 'Overlapping terrace',
-      polygon: [
-        [1, 1],
-        [3, 1],
-        [3, 3],
-        [1, 3],
-      ],
-      outdoor: true,
+    const refused = await client.callTool({
+      name: 'create_room',
+      arguments: {
+        levelId,
+        name: 'Overlapping terrace',
+        polygon: [
+          [1, 1],
+          [3, 1],
+          [3, 3],
+          [1, 3],
+        ],
+        outdoor: true,
+      },
     })
-    expect(refused.conflicts?.[0]).toMatchObject({ code: 'outdoor-room-overlap' })
+    expect(refused.isError).toBe(true)
+    expect(
+      JSON.parse((refused.content as Array<{ type: string; text: string }>)[0]!.text),
+    ).toMatchObject({
+      code: 'outdoor_room_overlap',
+      conflicts: [{ code: 'outdoor-room-overlap' }],
+    })
     expect(bridge.getNodes()).toEqual(unchanged)
   } finally {
     await client.close()
@@ -154,6 +162,8 @@ test('set_floor_foundation sets one footprint in one call and one undo; raw upda
 
 test('set_floor_foundation and raw thickness edits lift a supported upper plate without a foundation', async () => {
   const bridge = new SceneBridge()
+  // The store is shared with the test before, which built a room named House on this polygon.
+  bridge.setScene({}, [])
   bridge.loadDefault()
   const server = createPascalMcpServer({ bridge })
   const [st, ct] = InMemoryTransport.createLinkedPair()

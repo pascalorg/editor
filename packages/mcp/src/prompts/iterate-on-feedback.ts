@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
@@ -10,7 +10,7 @@ const PREAMBLE = [
   '  - Prefer updates over create+delete pairs when a field change will do.',
   '  - Do not re-create nodes that already exist.',
   '  - Do not touch nodes that are unrelated to the feedback.',
-  '  - Prefer semantic tools such as create_room, add_door, add_window, furnish_room, and place_item when they match the request.',
+  '  - Prefer semantic tools such as create_room, add_door, add_window, furnish_room, and place_items when they match the request.',
   '  - Bundle related mutations into a single `apply_patch` call so they share one undo step.',
   '  - For multi-room changes, call verify_scene after the mutation and fix reported issues.',
   SCENE_DESIGN_GUIDANCE,
@@ -32,9 +32,9 @@ export function registerIterateOnFeedback(server: McpServer, _bridge: SceneOpera
       title: 'Iterate on a scene from user feedback',
       description:
         'Produces a minimal-diff plan of apply_patch calls in response to user feedback on the current scene.',
-      argsSchema: {
+      argsSchema: z.object({
         feedback: z.string(),
-      },
+      }),
     },
     async ({ feedback }) => ({
       messages: [

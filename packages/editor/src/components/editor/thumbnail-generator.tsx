@@ -1,20 +1,23 @@
 'use client'
 
 import {
-  type AnyNodeId,
   emitter,
+  isCaptureSessionOn,
+  levelGradeStanding,
   sceneRegistry,
+  subscribeCaptureSessions,
   type ThumbnailGenerateEvent,
   useScene,
 } from '@pascal-app/core'
+import { sceneViewInterior } from '@pascal-app/core/agent-operations'
 import {
   computeHeroFraming,
   createSnapshotPipeline,
   GRID_LAYER,
-  getVisibleWallMaterials,
   heroCameraPose,
   holdLiveFrame,
   pendingSceneBuildCount,
+  presentLevelsForCapture,
   refreshIsolation,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
@@ -23,8 +26,12 @@ import {
   snapLevelsToTruePositions,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
+  temporarilyGroundWindowForCapture,
   temporarilyHideNodeTypes,
+  temporarilyShowPresentation,
   temporarilyShowShadowOnly,
+  temporarilyVeilGround,
+  temporarilyWithoutAmbiance,
   useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
@@ -38,6 +45,7 @@ import {
   applySnapshotCapturePose,
   captureSnapshotScene,
   createSnapshotQueue,
+  deliverSnapshot,
   enqueueSnapshotCapture,
   runSnapshotCapture,
 } from './snapshot-capture'
@@ -52,6 +60,7 @@ export interface SnapshotCameraData {
   zoom?: number
   captureMode?: 'standard' | 'viewport' | 'area'
   resolution?: { w: number; h: number }
+  presentation?: ThumbnailGenerateEvent['presentation']
 }
 
 interface ThumbnailGeneratorProps {
@@ -72,6 +81,25 @@ const MAX_SOFTWARE_CAPTURE_PIXELS = 16_000_000
 const TILE_OVERLAP = 96
 
 type CaptureLimits = { passEdge: number; maxPixels: number; software: boolean }
+
+export function captureDimensions(
+  canvasSize: readonly [number, number],
+  event: Pick<ThumbnailGenerateEvent, 'ortho' | 'perspective' | 'standardSize' | 'supersample'>,
+  maxPixels: number,
+): [number, number] {
+  const supersample = event.supersample ?? 1
+  // A requested camera must not inherit the editor pane's aspect or be upscaled from its crop.
+  const size =
+    (event.ortho || event.perspective) && event.standardSize && supersample === 1
+      ? [event.standardSize.w, event.standardSize.h]
+      : canvasSize
+  const scale = Math.min(
+    Math.max(1, supersample),
+    MAX_CAPTURE_EDGE / Math.max(size[0], size[1]),
+    Math.sqrt(maxPixels / (size[0] * size[1])),
+  )
+  return [Math.round(size[0] * scale), Math.round(size[1] * scale)]
+}
 
 /**
  * What one capture may ask of this GPU: a pass no larger than its biggest
@@ -447,6 +475,29 @@ export function presentFinished(): () => void {
   }
 }
 
+/**
+ * The pictures' scene while a capture session is on (core's `isCaptureSessionOn`, runs that overlap
+ * counted once): `present` when the first starts, and what it returns, which puts the user's view
+ * back, when the last ends. Returns the stop, which puts the view back if a session is still on.
+ */
+export function presentWhileCapturing(present: () => () => void): () => void {
+  let restore: (() => void) | null = null
+  const follow = () => {
+    if (isCaptureSessionOn() && !restore) restore = present()
+    else if (!isCaptureSessionOn() && restore) {
+      restore()
+      restore = null
+    }
+  }
+  follow()
+  const unsubscribe = subscribeCaptureSessions(follow)
+  return () => {
+    unsubscribe()
+    restore?.()
+    restore = null
+  }
+}
+
 /** A yield to the next macrotask through a MessageChannel — unlike a timer, never throttled in a hidden tab. */
 function macrotask(): Promise<void> {
   return new Promise((resolve) => {
@@ -460,15 +511,17 @@ function macrotask(): Promise<void> {
 }
 
 /**
- * The scene's children gathered under one ClippingGroup carrying `planes`
- * (world space) for the length of a render; the returned function puts
- * them back on the scene. The WebGPU renderer clips only through such
- * groups (there is no renderer-level plane list), and a group added and
- * removed inside one synchronous render never reaches the React tree.
+ * The children of `root` (the scene, or one floor) gathered under one
+ * ClippingGroup carrying `planes` (world space) for the length of a render;
+ * the returned function puts them back. The WebGPU renderer clips only
+ * through such groups (there is no renderer-level plane list), and a group
+ * added and removed inside one synchronous render never reaches the React
+ * tree. `clipShadows` cuts the shadows too, so light reaches past the cut.
  */
 function clipSceneFor(
-  scene: THREE.Scene,
+  root: THREE.Object3D,
   planes: readonly { normal: [number, number, number]; constant: number }[],
+  clipShadows = false,
 ): () => void {
   const group = new ClippingGroup()
   group.clippingPlanes = planes.map(
@@ -479,13 +532,83 @@ function clipSceneFor(
       ),
   )
   group.enabled = true
-  const children = [...scene.children]
+  group.clipShadows = clipShadows
+  const children = [...root.children]
   for (const child of children) group.add(child)
-  scene.add(group)
+  root.add(group)
   return () => {
-    for (const child of children) scene.add(child)
-    scene.remove(group)
+    for (const child of children) root.add(child)
+    root.remove(group)
   }
+}
+
+/**
+ * An interior view of one floor, for one render (view_scene): the other
+ * floors and this floor's roofs and ceilings out of the picture, everything
+ * on it cut where core says (sceneViewInterior, from the scene as this editor
+ * has it) and its shadows with it, and whatever the user's solo or isolation
+ * holds back on it shown. The site's ground follows this floor, not the
+ * user's: veiled wholesale over a floor below grade; over one only partly
+ * below grade, or at grade behind a hillside, veiled only where it stands
+ * between this frame's camera and the floor (the ground window).
+ */
+export function interiorCutaway(
+  levelId: string,
+  restore: (callback: () => void) => void,
+  camera?: THREE.Camera,
+) {
+  const { nodes } = useScene.getState()
+  const { cutHeight, hiddenIds } = sceneViewInterior(nodes, levelId)
+  const floor = sceneRegistry.nodes.get(levelId)
+  if (!floor) throw new Error('The floor to look inside is not built yet. Try again.')
+  for (const id of hiddenIds) {
+    const object = sceneRegistry.nodes.get(id)
+    if (!object?.visible) continue
+    object.visible = false
+    restore(() => {
+      object.visible = true
+    })
+  }
+  restore(temporarilyShowPresentation(floor))
+  restore(clipSceneFor(floor, [{ normal: [0, -1, 0], constant: cutHeight }], true))
+  const standing = levelGradeStanding(nodes, levelId)
+  if (standing === 'below-grade' || !camera) {
+    restore(temporarilyVeilGround(standing !== 'at-grade'))
+  } else {
+    restore(temporarilyVeilGround(false))
+    restore(temporarilyGroundWindowForCapture(camera, nodes, levelId))
+  }
+}
+
+/**
+ * The ground of an exterior picture, for one render: solid, whatever level the person is
+ * on — but a posed frame (an authored snapshot pose, or the caller's own perspective or
+ * orthographic view, which is how both agent lanes ask) decides its own ground window from
+ * its own camera, never inheriting the person's. An unposed frame (the person's viewport,
+ * the hero shot) makes no such decision: the window is the person's to hold.
+ */
+export function exteriorGroundForCapture(
+  restore: (callback: () => void) => void,
+  posed: boolean,
+  camera: THREE.Camera,
+) {
+  restore(temporarilyVeilGround(false))
+  if (posed) restore(temporarilyGroundWindowForCapture(camera, useScene.getState().nodes))
+}
+
+/**
+ * A caller's own orthographic view, or with no view of its own an
+ * orthographic main camera, captures orthographically; a caller's perspective
+ * view (view_scene's), the auto-save hero shot and an authored snapshot pose
+ * stay perspective.
+ */
+export function capturesOrthographically(
+  event: Pick<ThumbnailGenerateEvent, 'snapLevels' | 'cameraPose' | 'ortho' | 'perspective'>,
+  mainCamera: THREE.Camera,
+): boolean {
+  if (event.snapLevels || event.cameraPose) return false
+  if (event.ortho) return true
+  return !event.perspective && mainCamera instanceof THREE.OrthographicCamera
 }
 
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
@@ -581,7 +704,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
   const generate = useCallback(
     async (event: ThumbnailGenerateEvent) => {
-      const { captureMode, cropRegion, standardSize, cameraPose, requestId } = event
+      const { captureMode, cropRegion, standardSize, cameraPose, requestId, interior } = event
       const snapLevels = event.snapLevels === true
       const transparent = event.transparent === true
       // A SHEET's capture asks for more than a
@@ -633,21 +756,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           // a supersampled frame renders at a multiple of the canvas' size into
           // the capture's own targets; the live canvas is never resized
           const canvasSize: [number, number] = [gl.domElement.width, gl.domElement.height]
+          const pose = ortho ?? perspective
           const limits = captureLimits(gl)
-          const scale = Math.max(
-            1,
-            Math.min(
-              supersample,
-              MAX_CAPTURE_EDGE / Math.max(canvasSize[0], canvasSize[1]),
-              Math.sqrt(limits.maxPixels / (canvasSize[0] * canvasSize[1])),
-            ),
-          )
-          const width = Math.round(canvasSize[0] * scale)
-          const height = Math.round(canvasSize[1] * scale)
+          const [width, height] = captureDimensions(canvasSize, event, limits.maxPixels)
           // a supersampled picture is encoded at the size it could render (the
           // caller asked for canvas × supersample, maybe past this GPU's limits)
           const encodeSize = supersample > 1 ? { w: width, h: height } : standardSize
-          const pose = ortho ?? perspective
           // a background tab draws no frames and (on the WebGL backend) never
           // finishes a readback: a sheet's capture says so at once
           if (pose && isTabHidden()) throw new Error(HIDDEN_TAB)
@@ -658,13 +772,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           try {
             const edges = edgesOverride ?? (transparent ? 'off' : useViewer.getState().edges)
 
-            // A caller's own orthographic view, or an orthographic main camera,
-            // captures orthographically; the auto-save hero shot and an authored
-            // snapshot pose stay perspective.
-            const wantOrtho =
-              !snapLevels &&
-              !cameraPose &&
-              (ortho !== undefined || mainCamera instanceof THREE.OrthographicCamera)
+            const wantOrtho = capturesOrthographically(event, mainCamera)
             let thumbnailCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera =
               perspectiveCamera
             let pipeline: SnapshotPipeline | null = pipelineRef.current
@@ -752,7 +860,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             }
 
             pipeline?.applyEnvironment({
-              theme: useViewer.getState().sceneTheme,
+              theme: useViewer.getState().sceneAppearance,
               transparent,
               grade: useViewer.getState().shading === 'rendered',
               edges,
@@ -805,6 +913,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             // the scene as the picture wants it, for one render; `restore` puts
             // every change back right after it
             const setUp = (restore: (callback: () => void) => void) => {
+              // A picture is read for its rooms, taken in the world's own light: the earth the
+              // person's view turns to under the ground (sky, fog, vignette, the sky's lights)
+              // is not in it.
+              restore(temporarilyWithoutAmbiance())
               if (snapLevels) {
                 const prevMode = useViewer.getState().levelMode
                 if (prevMode !== 'stacked') {
@@ -845,7 +957,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                   thumbnailCamera.lookAt(hero.target[0], hero.target[1], hero.target[2])
                   thumbnailCamera.updateMatrixWorld()
                   pipeline?.applyEnvironment({
-                    theme: useViewer.getState().sceneTheme,
+                    theme: useViewer.getState().sceneAppearance,
                     transparent,
                     grade: useViewer.getState().shading === 'rendered',
                     edges,
@@ -857,30 +969,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
 
               restore(() => emitter.emit('thumbnail:after-capture', undefined))
-              emitter.emit('thumbnail:before-capture', undefined)
+              // Walls whole, as built, whatever the user's wall mode: an
+              // authored pose is not the user's view, an interior is cut below.
+              emitter.emit(
+                'thumbnail:before-capture',
+                cameraPose || interior ? { wholeWalls: true } : undefined,
+              )
               if (cameraPose) {
                 restore(snapLevelsToTruePositions())
                 restore(temporarilyShowShadowOnly(scene))
-                const wallMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>()
-                restore(() => {
-                  for (const [mesh, material] of wallMaterials) mesh.material = material
-                })
-                const state = useScene.getState()
-                const viewer = useViewer.getState()
-                for (const id of sceneRegistry.byType.wall ?? []) {
-                  const node = state.nodes[id as AnyNodeId]
-                  const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh | undefined
-                  if (node?.type !== 'wall' || !mesh?.isMesh) continue
-                  wallMaterials.set(mesh, mesh.material)
-                  mesh.material = getVisibleWallMaterials(
-                    node,
-                    viewer.shading,
-                    viewer.textures,
-                    viewer.colorPreset,
-                    viewer.sceneTheme,
-                    state.materials,
-                  )
-                }
               }
 
               // Geometry and presentation systems may have mounted new meshes
@@ -888,6 +985,16 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // those meshes before either snapshot render path submits them,
               // and restore fog afterwards so the atmosphere never leaks in.
               restore(refreshIsolation(scene))
+              if (event.presentation) {
+                restore(presentLevelsForCapture(event.presentation))
+                cameraData.presentation = event.presentation
+              }
+              if (interior) {
+                interiorCutaway(interior.levelId, restore, thumbnailCamera)
+                restore(lightInterior(scene, thumbnailCamera))
+              } else if (snapLevels || pose || cameraPose) {
+                exteriorGroundForCapture(restore, Boolean(cameraPose || pose), thumbnailCamera)
+              }
             }
             // The scene pass is a FRAME-updated node: it renders once per node
             // frame, and only the animation loop advances that frame. With the
@@ -923,7 +1030,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                   restore(() => thumbnailCamera.clearViewOffset())
                   thumbnailCamera.updateMatrixWorld()
                   pipeline.applyEnvironment({
-                    theme: useViewer.getState().sceneTheme,
+                    theme: useViewer.getState().sceneAppearance,
                     transparent,
                     grade: useViewer.getState().shading === 'rendered',
                     edges,
@@ -970,7 +1077,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
               trace('callback', { bytes: blob.size })
               await within(
-                Promise.resolve(onCapture(blob, cameraData)),
+                Promise.resolve(deliverSnapshot(event, blob, cameraData, onCapture)),
                 CAPTURE_SETTLE_MS,
                 'The snapshot host never took the frame.',
               )
@@ -988,7 +1095,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
               // a sheet's picture (or a supersampled one) is never drawn into
               // the live canvas the viewport shows
-              if (pose || scale > 1) throw new Error('Snapshot renderer is not ready. Try again.')
+              if (pose || width !== canvasSize[0] || height !== canvasSize[1])
+                throw new Error('Snapshot renderer is not ready. Try again.')
               // Fallback: plain render directly to the canvas
               if (transparent) {
                 const clearColor = (
@@ -1107,7 +1215,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             }
             trace('callback', { bytes: blob.size })
             await within(
-              Promise.resolve(onCapture(blob, cameraData)),
+              Promise.resolve(deliverSnapshot(event, blob, cameraData, onCapture)),
               CAPTURE_SETTLE_MS,
               'The snapshot host never took the frame.',
             )
@@ -1120,7 +1228,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             if (transparent || edgesOverride !== undefined || ortho !== undefined) {
               try {
                 pipelineRef.current?.applyEnvironment({
-                  theme: useViewer.getState().sceneTheme,
+                  theme: useViewer.getState().sceneAppearance,
                   transparent: false,
                   grade: useViewer.getState().shading === 'rendered',
                   edges: useViewer.getState().edges,
@@ -1138,39 +1246,25 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     [gl, scene, getThree, orthoPipeline, advance, clock],
   )
 
-  // A sheet's run of captures sets the shared scene
-  // up for its pictures — the finished presentation, the ground hidden — so
-  // for the run the viewport keeps its last frame and the viewer shows the
-  // finished house whatever view the user was in; `active: false` puts the
-  // user's view back, then (a few commits later) the viewport resumes.
-  // `camera-controls:capture-session` `{ owner, active }`.
-  useEffect(() => {
-    const sessions = new Map<string, () => void>()
-    const end = (owner: string) => {
-      sessions.get(owner)?.()
-      sessions.delete(owner)
-    }
-    const onSession = (event: { owner?: string; active?: boolean }) => {
-      if (!event?.owner) return
-      end(event.owner)
-      if (!event.active) return
-      const releaseLiveFrame = holdLiveFrame(HOLD_MAX_MS)
-      const restorePresentation = presentFinished()
-      sessions.set(event.owner, () => {
-        restorePresentation()
-        setTimeout(releaseLiveFrame, SESSION_RESUME_MS)
-      })
-    }
-    const bus = emitter as unknown as {
-      on: (name: string, handler: typeof onSession) => void
-      off: (name: string, handler: typeof onSession) => void
-    }
-    bus.on('camera-controls:capture-session', onSession)
-    return () => {
-      bus.off('camera-controls:capture-session', onSession)
-      for (const owner of [...sessions.keys()]) end(owner)
-    }
-  }, [])
+  // A run of captures (a sheet's pictures, an agent's view) sets the shared
+  // scene up for its pictures — the finished presentation, the ground hidden —
+  // so while any run is on the viewport keeps its last frame and the viewer
+  // shows the finished house whatever view the user was in; the last run's
+  // end puts the user's view back, then (a few commits later) the viewport
+  // resumes. Runs overlap (a sheet and an agent's view): the user's view is
+  // the one before the first, never a run's finished presentation.
+  useEffect(
+    () =>
+      presentWhileCapturing(() => {
+        const releaseLiveFrame = holdLiveFrame(HOLD_MAX_MS)
+        const restorePresentation = presentFinished()
+        return () => {
+          restorePresentation()
+          setTimeout(releaseLiveFrame, SESSION_RESUME_MS)
+        }
+      }),
+    [],
+  )
 
   // Thumbnail request via emitter. Two call shapes:
   //  - user-driven capture: `{ projectId, captureMode, cropRegion }` — captures

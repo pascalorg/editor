@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { AGENT_TOOL_CONTRACTS } from '@pascal-app/core/agent-tools'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { WallNode } from '@pascal-app/core/schema'
@@ -10,9 +9,7 @@ import { createSceneOperations } from '../operations'
 import { type SceneMeta, type SceneStore, SceneWipeBlockedError } from '../storage/types'
 import { registerApplyPatch } from './apply-patch'
 import { registerClearScene } from './clear-scene'
-import { registerCreateWall } from './create-wall'
-import { registerCreateRoom } from './room-tools'
-import { registerStructureTools } from './structure-tools'
+import { registerSharedTools } from './shared-tools'
 import { registerUndo } from './undo'
 
 // An agent that starts over clears the project on purpose; a write that would empty it by
@@ -105,7 +102,7 @@ async function houseSession() {
   const server = new McpServer({ name: 'clear', version: '0.0.0' })
   registerClearScene(server, operations)
   registerApplyPatch(server, operations)
-  registerCreateWall(server, operations)
+  registerSharedTools(server, operations)
   registerUndo(server, operations)
   const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'clear-client', version: '0.0.0' })
@@ -136,7 +133,7 @@ describe('clear_scene', () => {
 
     const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
     expect((level as { height?: number }).height).toBe(2.5)
-    const wall = await call('create_wall', { levelId: level.id, start: [0, 0], end: [3, 0] })
+    const wall = await call('add_wall', { levelId: level.id, start: [0, 0], end: [3, 0] })
     expect(wall.isError).toBe(false)
 
     // A fresh session loads what was stored: the scaffold and the one new wall.
@@ -207,9 +204,7 @@ describe('deleting the only room', () => {
     const operations = createSceneOperations({ bridge, store: guarded.store })
     operations.setActiveScene(meta)
     const server = new McpServer({ name: 'room', version: '0.0.0' })
-    registerCreateRoom(server, operations)
-    registerStructureTools(server, operations)
-    registerCreateWall(server, operations)
+    registerSharedTools(server, operations)
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: 'room-client', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -246,7 +241,7 @@ describe('deleting the only room', () => {
     expect(guarded.saves.length).toBe(saves)
     expect(Object.keys(bridge.getNodes()).sort()).toEqual(before)
 
-    const wall = await call('create_wall', { levelId, start: [6, 0], end: [8, 0] })
+    const wall = await call('add_wall', { levelId, start: [6, 0], end: [8, 0] })
     expect(wall.isError).toBe(false)
     const stored = await guarded.store.load(meta.id)
     expect(Object.keys(stored!.graph.nodes).sort()).toEqual(Object.keys(bridge.getNodes()).sort())

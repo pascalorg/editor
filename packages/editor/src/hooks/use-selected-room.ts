@@ -111,10 +111,11 @@ export function resolveEditorRoomHit(
   return room?.key ?? null
 }
 
+/** Rooms pick inside the building; from site a click picks the whole building. */
 export function roomPickingEnabled() {
   const editor = useEditor.getState()
   return (
-    editor.phase === 'structure' &&
+    editor.phase !== 'site' &&
     editor.mode === 'select' &&
     !useViewer.getState().focusedUnitId &&
     selectionEnabled(useInteractionScope.getState().scope)

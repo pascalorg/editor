@@ -3,10 +3,29 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  cornerPair,
+  fusesAtCorner,
+  runAsSingleSceneHistoryStep,
+  scriptImages,
   useInteractive,
   useScene,
   type WindowNode,
 } from '@pascal-app/core'
+import { isAgentRefusal } from '@pascal-app/core/agent-tools'
+import {
+  cornerPartnerUpdates,
+  cornerSideWidth,
+  getWindowStyleOverrides,
+  SHAPED_WINDOW_TYPES,
+  SILLLESS_WINDOW_TYPES,
+  unwrapCorner,
+  WINDOW_STYLE_CHOICES,
+  WINDOW_STYLE_LABELS,
+  windowStylesOf,
+  windowTakesStyle,
+  windowTypeChange,
+  wrapCorner,
+} from '@pascal-app/core/building'
 import {
   ActionButton,
   ActionGroup,
@@ -19,6 +38,7 @@ import {
   ToggleControl,
   triggerSFX,
   useEditor,
+  writeWindowChanges,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
@@ -27,6 +47,7 @@ import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
+import { windowTypeOptions } from './placement'
 
 function isSameWindowValue(current: unknown, next: unknown): boolean {
   if (typeof current === 'number' && typeof next === 'number') {
@@ -66,27 +87,22 @@ function normalizeWindowCornerRadii(
   return next.map((radius) => radius * scale) as [number, number, number, number]
 }
 
-const windowTypeOptions: Array<{ label: string; value: WindowNode['windowType'] }> = [
-  { label: 'Fixed', value: 'fixed' },
-  { label: 'Sliding', value: 'sliding' },
-  { label: 'Casement', value: 'casement' },
-  { label: 'Awning', value: 'awning' },
-  { label: 'Single Hung', value: 'single-hung' },
-  { label: 'Double Hung', value: 'double-hung' },
-  { label: 'Bay', value: 'bay' },
-  { label: 'Bow', value: 'bow' },
-  { label: 'Louvered', value: 'louvered' },
-]
+/** The Corner section's pill buttons: a token hover, the press, the keyboard focus ring. */
+const CORNER_BUTTON =
+  'outline-hidden transition-[background-color,scale] duration-150 hover:bg-foreground/[0.06] focus-visible:outline-2 focus-visible:outline-foreground/50 focus-visible:outline-offset-2 motion-safe:active:scale-[0.96]'
 
-const shapedWindowTypes = new Set<WindowNode['windowType']>([
-  'fixed',
-  'casement',
-  'awning',
-  'hopper',
-  'louvered',
-])
-
-const silllessWindowTypes = new Set<WindowNode['windowType']>(['bay', 'bow'])
+/** A change to one side of a corner window that both share, made on its partner too. */
+function syncCornerPartner(windowId: string, updates: Partial<WindowNode>) {
+  const scene = useScene.getState()
+  const partnerUpdate = cornerPartnerUpdates(scene.nodes, windowId, updates)
+  const partnerId = (scene.nodes[windowId as AnyNodeId] as WindowNode | undefined)?.corner
+    ?.partnerId
+  if (!partnerUpdate || !partnerId) return
+  scene.updateNode(partnerId as AnyNodeId, partnerUpdate)
+  scene.dirtyNodes.add(partnerId as AnyNodeId)
+  const parentId = scene.nodes[partnerId as AnyNodeId]?.parentId
+  if (parentId) scene.dirtyNodes.add(parentId as AnyNodeId)
+}
 
 export default function WindowPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -124,18 +140,84 @@ export default function WindowPanel() {
       })
       if (!hasChange) return
 
-      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
-      const scene = useScene.getState()
-      scene.dirtyNodes.add(selectedId as AnyNodeId)
-      if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
+      // A corner window's partner follows in the same undo step, so undo never splits the pair.
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
+        const scene = useScene.getState()
+        scene.dirtyNodes.add(selectedId as AnyNodeId)
+        if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
+        syncCornerPartner(selectedId, updates)
+      })
     },
     [selectedId],
   )
 
+  // A corner window's sides: its partner, and whether this window can wrap its corner. Planned
+  // when the window, its wall or its partner changes, not on every scene update.
+  const hostWall = useScene((s) =>
+    node?.parentId ? s.nodes[node.parentId as AnyNodeId] : undefined,
+  )
+  const cornerPartner = useScene((s) => {
+    const partner = node?.corner ? s.nodes[node.corner.partnerId as AnyNodeId] : undefined
+    return partner?.type === 'window' ? (partner as WindowNode) : undefined
+  })
+  const cornerState = useMemo(() => {
+    // Read from the scene below; these only say when to plan again.
+    void hostWall
+    void cornerPartner
+    if (node?.type !== 'window') return 'none'
+    const nodes = useScene.getState().nodes
+    if (cornerPair(nodes, node)) return 'paired'
+    // Within 0.30 m of a corner, not only at it: the window waiting there is adopted, or a partner made.
+    try {
+      wrapCorner(nodes, node.id)
+      return 'wrappable'
+    } catch (error) {
+      if (isAgentRefusal(error)) return 'none'
+      throw error
+    }
+  }, [node, hostWall, cornerPartner])
+  const corner =
+    cornerState === 'paired' && cornerPartner
+      ? { paired: true as const, partner: cornerPartner }
+      : cornerState === 'wrappable'
+        ? { paired: false as const }
+        : null
+  const writeWindows = (updates: Record<string, Partial<WindowNode>>) =>
+    writeWindowChanges({ create: null, updates, remove: [] })
+  const wrapTheCorner = () => {
+    if (!selectedId) return
+    try {
+      const { create, updates } = wrapCorner(useScene.getState().nodes, selectedId)
+      writeWindowChanges({ create, updates, remove: [] })
+    } catch (error) {
+      // The scene changed since the panel offered it: the window stays as it is.
+      if (!isAgentRefusal(error)) throw error
+    }
+  }
+  const setCornerWidth = (windowId: string, width: number) => {
+    const update = cornerSideWidth(useScene.getState().nodes, windowId, width)
+    if (update) writeWindows({ [windowId]: update })
+  }
+  const setCornerPost = (post: 'none' | 'post') => {
+    if (!(selectedId && corner?.paired && node?.corner)) return
+    writeWindows({
+      [selectedId]: { corner: { ...node.corner, post } },
+      [corner.partner.id]: { corner: { ...corner.partner.corner!, post } },
+    })
+  }
+
   const previewWindowUpdate = <K extends keyof WindowNode>(key: K, value: WindowNode[K]) =>
     preview?.preview({ [key]: value } as Partial<WindowNode>)
+  // A committed change a corner window shares with its partner (its height, frame, sill) takes the
+  // partner along, in the same undo step.
+  const commitPreview = (updates: Partial<WindowNode>) =>
+    runAsSingleSceneHistoryStep(useScene, () => {
+      preview?.commit(updates)
+      if (selectedId) syncCornerPartner(selectedId, updates)
+    })
   const commitWindowPreview = <K extends keyof WindowNode>(key: K, value: WindowNode[K]) =>
-    preview?.commit({ [key]: value } as Partial<WindowNode>)
+    commitPreview({ [key]: value } as Partial<WindowNode>)
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -202,14 +284,16 @@ export default function WindowPanel() {
     windowType === 'hopper' ||
     windowType === 'louvered'
   const isOperableWindow = isTrackSashWindow || isOperableSashWindow
-  const supportsWindowShape = shapedWindowTypes.has(node.windowType ?? 'fixed')
+  const supportsWindowShape = SHAPED_WINDOW_TYPES.has(node.windowType ?? 'fixed')
   const supportsGrid = isFixedWindow
-  const supportsSill = !silllessWindowTypes.has(node.windowType)
+  const supportsSill = !SILLLESS_WINDOW_TYPES.has(node.windowType)
   const showWindowTypeSection = !scripted && !isOpening
+  const windowStyles = windowStylesOf(node)
   const showWindowShapeSection = !scripted && !isOpening && supportsWindowShape
   const showOpeningShapeSection = !scripted && isOpening
   const showFrameSection = !scripted && !isOpening
   const showGridSection = !scripted && !isOpening && supportsGrid
+  const showStyleSection = !scripted && !isOpening && windowTakesStyle(node.windowType)
   const showSillSection = !scripted && !isOpening && supportsSill
   const showOperationSection = !scripted && !isOpening && isOperableWindow
   const showAwningDirectionSection = !scripted && !isOpening && displayedWindowType === 'awning'
@@ -299,7 +383,7 @@ export default function WindowPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/window.webp"
+      icon={scriptImages(node)?.thumbnail ?? '/icons/window.webp'}
       onClose={handleClose}
       title={node.name || 'Window'}
       width={320}
@@ -342,17 +426,13 @@ export default function WindowPanel() {
                     'flex min-h-12 items-center rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                     isSelected
                       ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                      : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                      : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                   )}
                   key={option.value}
                   onClick={() =>
                     handleUpdate({
-                      windowType: option.value,
+                      ...windowTypeChange(node, option.value),
                       ...(option.value === 'awning' ? { awningDirection } : {}),
-                      ...(!shapedWindowTypes.has(option.value)
-                        ? { openingShape: 'rectangle' }
-                        : {}),
-                      ...(silllessWindowTypes.has(option.value) ? { sill: false } : {}),
                     })
                   }
                   type="button"
@@ -422,19 +502,117 @@ export default function WindowPanel() {
         </PanelSection>
       )}
 
+      {showStyleSection && (
+        <PanelSection title="Style">
+          <div className="grid grid-cols-2 gap-2 px-1 pt-1">
+            {WINDOW_STYLE_CHOICES.map((style) => (
+              <button
+                aria-pressed={windowStyles.includes(style)}
+                className={cn(
+                  'flex min-h-10 items-center rounded-lg border px-3 py-2 text-left text-xs transition-colors',
+                  windowStyles.includes(style)
+                    ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                    : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
+                )}
+                key={style}
+                onClick={() => handleUpdate(getWindowStyleOverrides(style))}
+                type="button"
+              >
+                <span className="truncate font-medium">{WINDOW_STYLE_LABELS[style]}</span>
+              </button>
+            ))}
+          </div>
+          {!windowStyles.length && (
+            <p className="px-1 pt-2 text-muted-foreground text-xs">
+              Custom: the panes match no style.
+            </p>
+          )}
+        </PanelSection>
+      )}
+
+      {corner && (
+        <PanelSection title="Corner">
+          {corner.paired ? (
+            <div className="flex flex-col gap-2 px-1 pb-1">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">
+                  Wraps the corner with {corner.partner.name || 'its partner'}
+                </span>
+                <button
+                  className={cn(
+                    'rounded-full border border-border/50 px-3 py-1 text-xs',
+                    CORNER_BUTTON,
+                  )}
+                  onClick={() =>
+                    selectedId && writeWindows(unwrapCorner(useScene.getState().nodes, selectedId))
+                  }
+                  type="button"
+                >
+                  Unwrap
+                </button>
+              </div>
+              <SliderControl
+                label="This side"
+                min={0.1}
+                onChange={(v) => selectedId && setCornerWidth(selectedId, v)}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={node.width}
+              />
+              <SliderControl
+                label="Other side"
+                min={0.1}
+                onChange={(v) => setCornerWidth(corner.partner.id, v)}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={corner.partner.width}
+              />
+              {/* Only a fixed window's glass fuses; the other types' frames meet at the corner. */}
+              {fusesAtCorner(node) && (
+                <SegmentedControl
+                  onChange={setCornerPost}
+                  options={[
+                    { label: 'Fused glass', value: 'none' },
+                    { label: 'Corner post', value: 'post' },
+                  ]}
+                  value={node.corner?.post ?? 'none'}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="px-1 pb-1">
+              <button
+                className={cn(
+                  'w-full rounded-full border border-border/50 px-3 py-2 text-xs',
+                  CORNER_BUTTON,
+                )}
+                onClick={wrapTheCorner}
+                type="button"
+              >
+                Wrap the corner
+              </button>
+            </div>
+          )}
+        </PanelSection>
+      )}
+
       <PanelSection title="Position">
-        <SliderControl
-          label={
-            <>
-              X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
-            </>
-          }
-          onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
-          precision={2}
-          step={0.1}
-          unit="m"
-          value={node.position[0]}
-        />
+        {!corner?.paired && (
+          <SliderControl
+            label={
+              <>
+                X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              </>
+            }
+            onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
+            precision={2}
+            step={0.1}
+            unit="m"
+            value={node.position[0]}
+          />
+        )}
         <SliderControl
           label={
             <>
@@ -468,26 +646,28 @@ export default function WindowPanel() {
               Size is limited to the wall, including clearance for the opening frame.
             </p>
           )}
-          <SliderControl
-            label="Width"
-            max={limits?.width}
-            min={0.01}
-            onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
-            onCommit={(v) => preview?.commit(getDimensionUpdates({ width: v }))}
-            onCancel={() => preview?.cancel()}
-            previewWhileTyping
-            precision={2}
-            restoreOnCommit={false}
-            step={0.01}
-            unit="m"
-            value={node.width}
-          />
+          {!corner?.paired && (
+            <SliderControl
+              label="Width"
+              max={limits?.width}
+              min={0.01}
+              onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
+              onCommit={(v) => preview?.commit(getDimensionUpdates({ width: v }))}
+              onCancel={() => preview?.cancel()}
+              previewWhileTyping
+              precision={2}
+              restoreOnCommit={false}
+              step={0.01}
+              unit="m"
+              value={node.width}
+            />
+          )}
           <SliderControl
             label="Height"
             max={limits?.height}
             min={0.01}
             onChange={(v) => preview?.preview(getDimensionUpdates({ height: v }))}
-            onCommit={(v) => preview?.commit(getDimensionUpdates({ height: v }))}
+            onCommit={(v) => commitPreview(getDimensionUpdates({ height: v }))}
             onCancel={() => preview?.cancel()}
             previewWhileTyping
             precision={2}
@@ -889,7 +1069,7 @@ export default function WindowPanel() {
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={handleDelete}
           />

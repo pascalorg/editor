@@ -1,5 +1,5 @@
 import type { AnyNode, GridEvent } from '@pascal-app/core'
-import type { RunWallAttachment } from './distribution-run-contract'
+import type { RunWallAttachment } from '@pascal-app/editor/distribution'
 
 type Point = [number, number, number]
 

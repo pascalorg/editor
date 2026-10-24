@@ -128,11 +128,12 @@ type BuildToolTileProps = Omit<ComponentPropsWithoutRef<'button'>, 'children' | 
   iconSrc: string
   label: string
   size?: 'lg' | 'sm'
+  tone?: 'primary' | 'neutral'
 }
 
 /**
  * One tool tile: the isometric icon over its name. Inactive icons stay grey and
- * take their colour on hover; the armed tool keeps it, on the primary tint.
+ * take their colour on hover. Neutral tiles keep that behavior when armed.
  */
 export function BuildToolTile({
   active,
@@ -141,6 +142,7 @@ export function BuildToolTile({
   iconSrc,
   label,
   size = 'sm',
+  tone = 'primary',
   ...buttonProps
 }: BuildToolTileProps) {
   return (
@@ -151,7 +153,11 @@ export function BuildToolTile({
         // Small tiles grow to two label lines ("Spawn point"); a grid row's
         // tiles stretch together, so a row keeps one height.
         size === 'lg' ? 'h-[104px] gap-1.5 px-1.5 pt-2 pb-2.5' : 'min-h-[74px] gap-1 px-1 pt-1.5 pb-2',
-        active ? 'bg-primary/10 ring-1 ring-primary/50' : 'bg-muted/40 hover:bg-muted',
+        active
+          ? tone === 'neutral'
+            ? 'bg-black/8 ring-1 ring-foreground/30 dark:bg-muted'
+            : 'bg-primary/10 ring-1 ring-primary/50'
+          : 'bg-black/4 hover:bg-black/8 dark:bg-muted/40 dark:hover:bg-muted',
         className,
       )}
       type="button"
@@ -162,7 +168,8 @@ export function BuildToolTile({
         className={cn(
           'min-h-0 object-contain transition duration-200 group-hover:scale-110',
           size === 'lg' ? 'size-14' : 'size-9',
-          !active && 'opacity-70 grayscale group-hover:opacity-100 group-hover:grayscale-0',
+          (!active || tone === 'neutral') &&
+            'opacity-70 grayscale group-hover:opacity-100 group-hover:grayscale-0',
         )}
         draggable={false}
         src={iconSrc}

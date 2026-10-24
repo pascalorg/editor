@@ -2,6 +2,16 @@
 import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
 import { agentClaimHandoffUrl, getAgentStatus, startAgentClaim } from '../agent-account.js'
+import {
+  ARCHITECT_EFFORTS,
+  type ArchitectRun,
+  architectModel,
+  cancelArchitectRun,
+  getArchitectRun,
+  isArchitectEffort,
+  startArchitectRun,
+  streamArchitectRun,
+} from '../architect.js'
 import { openBrowser } from '../browser.js'
 import { installGlobalPascalCommand, isNpxInvocation } from '../command-install.js'
 import { collectInfo, runDoctor } from '../diagnostics.js'
@@ -54,6 +64,9 @@ USAGE:
   pascal project resume [id-or-name]
   pascal agent claim [--no-open] [--json]
   pascal agent status [--json]
+  pascal architect run "<brief>" [--effort <level>] [--project <id>] [--max-credits <n>] [--detach] [--json]
+  pascal architect status <id> [--json]
+  pascal architect cancel <id> [--json]
   pascal mcp connect | status | config | setup <client>
   pascal plugin list [--json]
 
@@ -106,6 +119,30 @@ account's private projects.
 Documentation: https://editor.pascal.app/docs/developers/mcp
 `
 
+const ARCHITECT_HELP = `Pascal architect — design a building from a brief on hosted Pascal
+
+USAGE:
+  pascal architect run "<brief>" [options]   Start a run and stream its output
+  pascal architect status <id> [--json]      Show a run's status and output
+  pascal architect cancel <id> [--json]      Cancel a queued or running run
+
+RUN OPTIONS:
+  --effort low|medium|high|pro   Model architect-<effort> (default: architect)
+  --project <id>                 Hosted project the run works in
+  --max-credits <n>              Stop the run before it spends more than n credits
+  --detach                       Print the run ID and return without streaming
+  --json                         Print the run as JSON (waits unless --detach)
+
+Set PASCAL_API_KEY to the agent's hosted Pascal API key; the CLI never stores
+it. Runs execute in the background on Pascal: pressing Ctrl+C while streaming
+detaches without cancelling, and "pascal architect status <id>" picks it up.
+
+Exit codes: 0 completed, 1 failed or error, 2 invalid usage, 75 temporarily
+unavailable (no executor, rate limited) and safe to retry, 130 detached.
+
+Documentation: https://editor.pascal.app/docs/developers/mcp
+`
+
 const paths = resolvePascalPaths()
 const agentApiKey = process.env.PASCAL_API_KEY
 Reflect.deleteProperty(process.env, 'PASCAL_API_KEY')
@@ -115,7 +152,15 @@ async function main(): Promise<void> {
   if (command === '--version' || command === '-v') return print(version)
   if (command === '--help' || command === '-h' || command === 'help') return print(HELP)
   if (args.includes('--help') || args.includes('-h')) {
-    return print(command === 'mcp' ? MCP_HELP : command === 'agent' ? AGENT_HELP : HELP)
+    return print(
+      command === 'mcp'
+        ? MCP_HELP
+        : command === 'agent'
+          ? AGENT_HELP
+          : command === 'architect'
+            ? ARCHITECT_HELP
+            : HELP,
+    )
   }
 
   switch (command) {
@@ -147,6 +192,8 @@ async function main(): Promise<void> {
       return runProject(args)
     case 'agent':
       return runAgent(args, agentApiKey)
+    case 'architect':
+      return runArchitect(args, agentApiKey)
     case 'plugin':
       return runPlugin(args)
     case 'mcp':
@@ -728,6 +775,137 @@ async function runAgent(args: string[], apiKey: string | undefined): Promise<voi
       'Claiming links accountability. It does not transfer project ownership or grant access to private projects.',
     ].join('\n'),
   )
+}
+
+async function runArchitect(args: string[], apiKey: string | undefined): Promise<void> {
+  const [subcommand, ...rest] = args
+  if (subcommand === 'status' || subcommand === 'cancel') {
+    const { values, positionals } = parseArgs({
+      args: rest,
+      strict: true,
+      allowPositionals: true,
+      options: { json: { type: 'boolean', default: false } },
+    })
+    if (positionals.length !== 1) {
+      throw new CliError(
+        'invalid_option',
+        `Use "pascal architect ${subcommand} <id>".`,
+        undefined,
+        2,
+      )
+    }
+    const id = positionals[0] ?? ''
+    const run =
+      subcommand === 'status'
+        ? await getArchitectRun(apiKey, id)
+        : await cancelArchitectRun(apiKey, id)
+    output(values.json, run, describeArchitectRun(run, subcommand === 'status'))
+    return
+  }
+  if (subcommand !== 'run') {
+    throw new CliError(
+      'unknown_command',
+      'Use "pascal architect run", "pascal architect status <id>", or "pascal architect cancel <id>".',
+      undefined,
+      2,
+    )
+  }
+
+  const { values, positionals } = parseArgs({
+    args: rest,
+    strict: true,
+    allowPositionals: true,
+    options: {
+      effort: { type: 'string' },
+      project: { type: 'string' },
+      'max-credits': { type: 'string' },
+      detach: { type: 'boolean', default: false },
+      json: { type: 'boolean', default: false },
+    },
+  })
+  if (values.effort !== undefined && !isArchitectEffort(values.effort)) {
+    throw new CliError(
+      'invalid_option',
+      `--effort must be one of ${ARCHITECT_EFFORTS.join(', ')}.`,
+      undefined,
+      2,
+    )
+  }
+  const request = {
+    brief: positionals.join(' '),
+    effort: values.effort,
+    projectId: values.project,
+    maxCredits: parseIntegerOption(values['max-credits'], 'max-credits'),
+  }
+
+  if (values.detach) {
+    const run = await startArchitectRun(apiKey, request)
+    output(
+      values.json,
+      run,
+      [
+        `Architect run ${run.id} is ${formatRunStatus(run.status)} on ${run.model ?? architectModel(request.effort)}.`,
+        `Follow it: pascal architect status ${run.id}`,
+        `Cancel it: pascal architect cancel ${run.id}`,
+      ].join('\n'),
+    )
+    return
+  }
+
+  const detach = new AbortController()
+  const onInterrupt = () => detach.abort()
+  process.once('SIGINT', onInterrupt)
+  let streamedText = false
+  let endsWithNewline = true
+  let run: ArchitectRun
+  try {
+    run = await streamArchitectRun(apiKey, request, {
+      signal: detach.signal,
+      onStarted: (started) => {
+        if (values.json) return
+        process.stderr.write(
+          `Architect run ${started.id} started on ${started.model ?? architectModel(request.effort)}. Ctrl+C detaches; the run keeps going.\n`,
+        )
+      },
+      onText: (delta) => {
+        if (values.json || !delta) return
+        process.stdout.write(delta)
+        streamedText = true
+        endsWithNewline = delta.endsWith('\n')
+      },
+    })
+  } finally {
+    process.off('SIGINT', onInterrupt)
+    if (!endsWithNewline) process.stdout.write('\n')
+  }
+
+  if (values.json) {
+    print(JSON.stringify(run, null, 2))
+  } else {
+    if (!streamedText && run.outputText) print(run.outputText)
+    process.stderr.write(`${describeArchitectRun(run, false)}\n`)
+  }
+  if (run.status !== 'completed') process.exitCode = 1
+}
+
+function describeArchitectRun(run: ArchitectRun, includeOutput: boolean): string {
+  const lines = [
+    `Run: ${run.id}`,
+    `Status: ${formatRunStatus(run.status)}`,
+    ...(run.model ? [`Model: ${run.model}`] : []),
+    ...(run.projectId ? [`Project: ${run.projectId}`] : []),
+    ...(run.maxCredits ? [`Max credits: ${run.maxCredits}`] : []),
+    ...(run.createdAt ? [`Created: ${run.createdAt}`] : []),
+    ...(run.error
+      ? [`Error: ${[run.error.code, run.error.message].filter(Boolean).join(': ') || 'unknown'}`]
+      : []),
+  ]
+  if (includeOutput && run.outputText) lines.push('', run.outputText)
+  return lines.join('\n')
+}
+
+function formatRunStatus(status: ArchitectRun['status']): string {
+  return status.replace('_', ' ')
 }
 
 async function runPlugin(args: string[]): Promise<void> {

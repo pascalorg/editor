@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
+import { geometryMetaFields } from '../schema/geometry-metadata'
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
-import { scriptParams } from './add-object'
+import { achievedOutput } from './achieved'
+import { scriptLanguage, scriptParams } from './add-object'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
@@ -28,9 +30,11 @@ const script = (kind: string) => ({
     .max(48_000)
     .optional()
     .describe(
-      `A three.js module for a ${kind} the fields cannot express (a fan grille, tracery, carved trim): the same module and conventions as add_object, with mount 'wall'. Its size is what it builds (name params width and height so the ${kind}'s size controls edit them), and its cutout mesh cuts the wall. Make it open like a real ${kind}: add an \`open\` clip (${kind === 'door' ? 'the leaves swinging or sliding' : 'the sash sliding or swinging'}; \`close\` is optional, \`open\` reversed by default) unless it is fixed. Fields first; code only beyond them.`,
+      `An optional module (three.js, or bpy with language) for a ${kind} (a fan grille, tracery, carved trim): the same module and conventions as add_object, with mount 'wall'. Its size is what it builds (name params width and height so the ${kind}'s size controls edit them), and its cutout mesh cuts the wall. Make it open like a real ${kind}: add an \`open\` clip (${kind === 'door' ? 'the leaves swinging or sliding' : 'the sash sliding or swinging'}; \`close\` is optional, \`open\` reversed by default) unless it is fixed. Native fields and code are available to express the requested shape.`,
     ),
+  language: scriptLanguage,
   params: scriptParams,
+  ...geometryMetaFields,
 })
 
 const outline = (archDefault: string) => ({
@@ -54,11 +58,11 @@ export const addDoorTool = {
   name: 'add_door',
   title: 'Add door',
   description:
-    'Add a door to an existing straight wall at t (0..1 along it). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), doorType and style.',
+    'Add a door to an existing straight wall at t (0..1 along it), or a passage with no leaf (openingKind opening: a cased opening, an arch). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), doorType and style; what they cannot express (glass strips, a pattern of lites, carved panels) is written as a script in code, never left as not possible.',
   input: {
     wallId: NodeId.optional().describe('The wall to add the door to.'),
     nodeId: NodeId.optional().describe(
-      'Rebuild this door instead of adding one: new code and/or params (get_source first to change its code). Its native fields change with update_node.',
+      'Rebuild this door instead of adding one: new code and/or params (get_source provides current code when needed). Its native fields change with update_node.',
     ),
     ...placement,
     width: measurement('length', 'm', {
@@ -69,7 +73,17 @@ export const addDoorTool = {
       positive: true,
       description: 'Door height (default 2.1 m).',
     }).optional(),
+    openingKind: z
+      .enum(['door', 'opening'])
+      .optional()
+      .describe(
+        "door (default), or opening: a passage with no leaf, framed or arched by the outline, as the editor's door panel offers.",
+      ),
     hingesSide: z.enum(['left', 'right']).optional().describe('Hinge side (default left).'),
+    handleSide: z
+      .enum(['left', 'right'])
+      .optional()
+      .describe('Handle side (default: opposite the hinges).'),
     swingDirection: z
       .enum(['inward', 'outward'])
       .optional()
@@ -92,11 +106,11 @@ export const addWindowTool = {
   name: 'add_window',
   title: 'Add window',
   description:
-    "Add a window to an existing straight wall at t (0..1 along it), on sillHeight above the floor. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), windowType and panes (columns × rows, or a style).",
+    "Add a window to an existing straight wall at t (0..1 along it), centred vertically on the wall, or on sillHeight above the floor when given. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, overlapping another door, window or wall item unless force is set, and a style on a window that is not Fixed (style_needs_fixed_window). Match the reference with the outline (rectangle, rounded, arch), windowType and panes (columns × rows, or a style); what they cannot express (glass strips, leaded lites, a feature frame) is written as a script in code, never left as not possible.",
   input: {
     wallId: NodeId.optional().describe('The wall to add the window to.'),
     nodeId: NodeId.optional().describe(
-      'Rebuild this window instead of adding one: new code and/or params (get_source first to change its code). Its native fields change with update_node.',
+      'Rebuild this window instead of adding one: new code and/or params (get_source provides current code when needed). Its native fields change with update_node.',
     ),
     ...placement,
     width: measurement('length', 'm', {
@@ -109,7 +123,8 @@ export const addWindowTool = {
     }).optional(),
     sillHeight: measurement('length', 'm', {
       min: 0,
-      description: 'Height from the floor to the bottom of the window (default 0.9 m).',
+      description:
+        'Height from the floor to the bottom of the window (default: centred vertically on the wall).',
     }).optional(),
     ...outline('0.35 m'),
     ...script('window'),
@@ -132,7 +147,31 @@ export const addWindowTool = {
       .enum(WINDOW_STYLES)
       .optional()
       .describe(
-        'Visual preset (panes only, never the size); same presets as create_room windows[].',
+        "Visual preset of a Fixed window's panes (never the size); same presets as create_room windows[]. Fixed windows only: an operable window draws its own sashes.",
       ),
   },
+}
+
+/**
+ * What add_door and add_window answer, on every surface: one result from the core operation, which
+ * the MCP and the chat pass through as it is. `localX` is metres along the wall from its start.
+ */
+const openingOutput = {
+  ok: z.literal(true),
+  wallId: z.string(),
+  localX: z.number(),
+  t: z.number(),
+  wallLength: z.number(),
+  clamped: z.boolean(),
+  coordinateSystem: z.literal('wall-local-meters'),
+  message: z.string(),
+  achieved: achievedOutput,
+}
+
+export const addDoorOutput = { doorId: z.string(), ...openingOutput }
+
+export const addWindowOutput = {
+  windowId: z.string(),
+  ...openingOutput,
+  sillHeight: z.number().optional(),
 }

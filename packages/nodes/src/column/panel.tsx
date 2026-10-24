@@ -1,10 +1,11 @@
-﻿'use client'
+'use client'
 
 import {
   type AnyNode,
   COLUMN_PRESETS,
   type ColumnNode,
   type ColumnPresetId,
+  scriptImages,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -21,12 +22,12 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
-import { AuthoredParams } from '../item/authored-params'
 
+import { AuthoredParams } from '../item/authored-params'
 import { planColumnEdit } from './hosted-resize'
 
 const SELECT_CLASS =
-  'h-10 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
+  'h-10 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
 
 const MANAGED_LEAN_TO_LAYOUT_FIELDS = new Set<keyof ColumnNode>([
   'position',
@@ -349,7 +350,7 @@ export default function ColumnPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/column.webp"
+      icon={scriptImages(node)?.thumbnail ?? '/icons/column.webp'}
       onClose={handleClose}
       title={node.name || 'Column'}
       width={300}
@@ -386,7 +387,7 @@ export default function ColumnPanel() {
                       'flex min-h-12 items-center rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                       isSelected
                         ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                        : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                        : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                     )}
                     key={option.value}
                     onClick={() => {
@@ -442,7 +443,7 @@ export default function ColumnPanel() {
               </>
             ) : (
               <>
-                <div className="grid grid-cols-4 gap-2 px-1 pt-1">
+                <div className="grid grid-cols-3 gap-2 px-1 pt-1">
                   {(
                     [
                       {
@@ -491,7 +492,7 @@ export default function ColumnPanel() {
                       },
                       {
                         value: 'rectangular',
-                        label: 'Rect.',
+                        label: 'Rectangular',
                         icon: (
                           <svg
                             aria-hidden="true"
@@ -512,21 +513,6 @@ export default function ColumnPanel() {
                           </svg>
                         ),
                       },
-                      {
-                        value: 'i-beam',
-                        label: 'I-Beam',
-                        icon: (
-                          <svg
-                            aria-hidden="true"
-                            fill="none"
-                            height="22"
-                            viewBox="0 0 22 22"
-                            width="22"
-                          >
-                            <path d="M5 4h12v2h-4.5v10h4.5v2H5v-2h4.5V6H5V4z" fill="currentColor" />
-                          </svg>
-                        ),
-                      },
                     ] as {
                       value: ColumnNode['crossSection']
                       label: string
@@ -540,7 +526,7 @@ export default function ColumnPanel() {
                           'group flex flex-col items-center justify-center gap-1.5 rounded-lg border py-2.5 transition-all',
                           isSelected
                             ? 'border-orange-400/60 bg-orange-400/10 text-foreground shadow-[0_0_0_1px_rgba(251,146,60,0.25)_inset]'
-                            : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:border-border hover:bg-[#3e3e3e] hover:text-foreground',
+                            : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:border-border hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                         )}
                         key={option.value}
                         onClick={() => handleUpdate({ crossSection: option.value })}
@@ -549,7 +535,9 @@ export default function ColumnPanel() {
                         <span
                           className={cn(
                             'flex h-7 w-7 items-center justify-center',
-                            isSelected ? 'text-orange-300' : 'text-muted-foreground/80',
+                            isSelected
+                              ? 'text-orange-700 dark:text-orange-300'
+                              : 'text-muted-foreground/80',
                           )}
                         >
                           {option.icon}
@@ -585,29 +573,6 @@ export default function ColumnPanel() {
                 )}
               </>
             )}
-          </PanelSection>
-
-          <PanelSection title="Tilt (Eğim)">
-            <SliderControl
-              label="Tilt X"
-              max={Math.PI / 4}
-              min={-Math.PI / 4}
-              onChange={(value) => handleUpdate({ tiltX: value })}
-              precision={3}
-              step={0.01}
-              unit="rad"
-              value={node.tiltX ?? 0}
-            />
-            <SliderControl
-              label="Tilt Z"
-              max={Math.PI / 4}
-              min={-Math.PI / 4}
-              onChange={(value) => handleUpdate({ tiltZ: value })}
-              precision={3}
-              step={0.01}
-              unit="rad"
-              value={node.tiltZ ?? 0}
-            />
           </PanelSection>
 
           <PanelSection title="Dimensions">
@@ -1175,33 +1140,32 @@ export default function ColumnPanel() {
               )}
             </PanelSection>
           )}
-
-          <PanelSection title="Transform">
-            <SliderControl
-              label="Yaw"
-              max={180}
-              min={-180}
-              onChange={(value) => handleUpdate({ rotation: (value * Math.PI) / 180 })}
-              precision={0}
-              step={1}
-              unit="°"
-              value={Math.round((node.rotation * 180) / Math.PI)}
-            />
-          </PanelSection>
-
-          <PanelSection title="Actions">
-            <ActionGroup>
-              <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
-              <ActionButton
-                className="border-red-500/40 text-red-200 hover:bg-red-500/15"
-                icon={<Trash2 className="h-4 w-4" />}
-                label="Delete"
-                onClick={handleDelete}
-              />
-            </ActionGroup>
-          </PanelSection>
         </>
       )}
+      <PanelSection title="Transform">
+        <SliderControl
+          label="Yaw"
+          max={180}
+          min={-180}
+          onChange={(value) => handleUpdate({ rotation: (value * Math.PI) / 180 })}
+          precision={0}
+          step={1}
+          unit="°"
+          value={Math.round((node.rotation * 180) / Math.PI)}
+        />
+      </PanelSection>
+
+      <PanelSection title="Actions">
+        <ActionGroup>
+          <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            className="border-red-500/40 text-red-700 dark:text-red-200 hover:bg-red-500/15"
+            icon={<Trash2 className="h-4 w-4" />}
+            label="Delete"
+            onClick={handleDelete}
+          />
+        </ActionGroup>
+      </PanelSection>
     </PanelWrapper>
   )
 }

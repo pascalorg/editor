@@ -33,11 +33,10 @@ export {
   buildGlbReplaceNodes,
 } from './components/viewer/glb-reference-nodes'
 export {
-  type GlbHover,
-  type GlbIdentity,
-  type GlbLevel,
+  type GlbPickEvent,
   GlbScene,
   type GlbWalkthrough,
+  resolveGlbPick,
 } from './components/viewer/glb-scene'
 export {
   CROUCH_CAPSULE,
@@ -64,9 +63,11 @@ export {
 } from './components/viewer/scene-atmosphere'
 export { SceneEnvironment } from './components/viewer/scene-environment'
 export {
+  claimSceneGround,
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
+export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
 export {
   isViewerPresentationTextureBorrowed,
   markViewerPresentationTextureBorrowed,
@@ -83,7 +84,7 @@ export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useLibraryMaterialsVersion } from './hooks/use-library-materials-version'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
-export { backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
+export { backdropColors, backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
 export { applyWorldScaleBoxUVs } from './lib/box-uv'
 // CSG primitives — used by chimney's roof-trim and other kinds whose
 // geometry subtracts pieces against their host. Lives in viewer
@@ -104,7 +105,24 @@ export {
 export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
 export type { EdgeMode } from './lib/edge-style'
+export {
+  BLOCK_MASONRY,
+  concreteMaterial,
+  type Masonry,
+  masonryMaterial,
+  STRUCTURE_COLORS,
+} from './lib/foundation-materials'
+export { preserveGltfUnlit } from './lib/gltf-unlit'
 export { PERF_OVERLAY_ENABLED } from './lib/gpu-perf'
+export {
+  groundWindowBoxNow,
+  groundWindowContains,
+  groundWindowEnabledNode,
+  groundWindowMaskNode,
+  inGroundWindowNode,
+  setGroundWindow,
+  temporarilyGroundWindowForCapture,
+} from './lib/ground-window'
 export {
   computeHeroFraming,
   DEFAULT_FRAMING_EXCLUDED_TYPES,
@@ -121,7 +139,7 @@ export {
   refreshIsolation,
 } from './lib/isolation'
 export { setKeyLightDirectionOverride } from './lib/key-light-override'
-export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
+export { configureKtx2Support, ensureKtx2Support, ktx2TextureLoadState } from './lib/ktx2-loader'
 export { LayerPassIndex } from './lib/layer-pass'
 export {
   BATCHED_LAYER,
@@ -142,6 +160,7 @@ export {
   clearMaterialCache,
   createDefaultMaterial,
   createMaterial,
+  createMaterialFromPreset,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
   DEFAULT_CEILING_MATERIAL,
@@ -153,8 +172,11 @@ export {
   DEFAULT_WALL_MATERIAL,
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
+  getMaterialTextureVersion,
   glassMaterial,
   MONO_PALETTE,
+  materialCastsShadow,
+  materialTextureLoadState,
   PRESET_PALETTES,
   type RenderShading,
   registerMaterialCacheCleanup,
@@ -169,7 +191,12 @@ export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
-export { hasMaterialsForGroups, markPureRaycast } from './lib/pointer-events'
+export {
+  hasMaterialsForGroups,
+  markPureRaycast,
+  type ViewerBreadcrumb,
+  type ViewerBreadcrumbHandler,
+} from './lib/pointer-events'
 export {
   cloneWithProceduralEmission,
   decorateProceduralEmission,
@@ -185,6 +212,25 @@ export {
   type RendererInitializationResult,
   type RendererPowerPreference,
 } from './lib/renderer-capability'
+export { commitEditCandidates, commitRevealCandidates } from './lib/reveal-candidates'
+export {
+  ANIMATION_SPEEDS,
+  type AnimationSpeed,
+  DEFAULT_ANIMATION_SPEED,
+  FRAMING_PACE,
+  LAZY_REVEAL_BASE_TIMING,
+  LAZY_REVEAL_TIMING,
+  type LazyRevealTiming,
+  lazyTimingAt,
+  normalizeAnimationSpeed,
+  type PlannedReveal,
+  pacedLazyTiming,
+  planLazyReveal,
+  type RevealCandidate,
+  retractTimingAt,
+  revealTimingAt,
+} from './lib/reveal-schedule'
+export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,
@@ -196,9 +242,19 @@ export {
   type HiddenReason,
   hideFromScene,
   showInScene,
+  temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
+export {
+  SITE_FOUNDATION,
+  SITE_GROUND,
+  type SiteGroundRole,
+  siteFoundation,
+  siteGround,
+  siteSurfaces,
+  temporarilyVeilGround,
+} from './lib/site-surfaces'
 export {
   createPlainSnapshotPipeline,
   createSnapshotPipeline,
@@ -227,13 +283,36 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
+export {
+  AMBIANCE_SECONDS,
+  ambianceNow,
+  ambianceTarget,
+  easeAmbiance,
+  eyeUnderTheGround,
+  FADE_SECONDS,
+  groundHoleOpenNode,
+  groundHoleOpenNow,
+  stepAmbianceProgress,
+  temporarilyWithoutAmbiance,
+  UNDERGROUND_RIM,
+  UNDERGROUND_RING,
+  undergroundAmbianceNode,
+} from './lib/underground-ambiance'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {
+  anyGroundVeiled,
   applyCountryUnitDefault,
+  DEFAULT_UNDERGROUND_LOOK,
   default as useViewer,
+  type GroundMode,
+  groundVeiled,
   type MetricNotation,
+  siteGroundShown,
+  type UndergroundEdge,
+  type UndergroundLook,
+  type UndergroundTransition,
   type WallMode,
 } from './store/use-viewer'
 export {
@@ -247,6 +326,43 @@ export {
   createColumnSphereGeometry,
   createColumnTorusGeometry,
 } from './systems/column/column-geometry'
+export {
+  ConstructionReveal,
+  type ConstructionRevealDriver,
+  type ConstructionRevealLevel,
+  type ConstructionRevealOptions,
+  emitRevealPuff,
+  getRetractTurn,
+  getRevealPlanSpeed,
+  getRevealPlanState,
+  getRevealTurn,
+  isNodeRevealing,
+  isRevealAssembling,
+  type RetractResult,
+  type RevealCompleteEvent,
+  type RevealEvent,
+  type RevealFinaleEvent,
+  type RevealGroupEvent,
+  type RevealNodeStartEvent,
+  type RevealPhaseEvent,
+  type RevealPlanState,
+  type RevealPreroll,
+  type RevealRetractEvent,
+  retractNodes,
+  revealChangedNodeIds,
+  revealClockMs,
+  revealMotionOff,
+  seatLiftedNow,
+  setRevealPreroll,
+  startConstructionReveal,
+  subscribeRevealAssembling,
+  subscribeRevealEvents,
+  subscribeRevealPhases,
+  subscribeRevealTicks,
+  useRevealPending,
+  useRevealPlanActive,
+  useRevealWaiting,
+} from './systems/construction-reveal/construction-reveal'
 export { DoorAnimationSystem } from './systems/door/door-animation-system'
 export { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './systems/door/door-system'
 export { ElevatorInteractionSystem } from './systems/elevator/elevator-interaction-system'
@@ -271,6 +387,7 @@ export { LevelSystem } from './systems/level/level-system'
 export {
   EXPLODED_GAP,
   getLevelPresentationY,
+  presentLevelsForCapture,
   snapLevelsToTruePositions,
 } from './systems/level/level-utils'
 export { getRoofMaterialArray, levelWallCladdingRef } from './systems/roof/roof-materials'
@@ -279,12 +396,15 @@ export { getRoofMaterialArray, levelWallCladdingRef } from './systems/roof/roof-
 // read these through the public surface. No kind-specific helpers
 // belong here — those live in `@pascal-app/nodes/<kind>/`.
 export {
+  clipDirectRoofGeometryAgainstSiblings,
   clipGeometryBySegmentTrim,
   generateRoofSegmentGeometry,
+  getPendingRoofMergeCount,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
   mapRoofGroupMaterialIndex,
   ROOF_MATERIAL_SLOT_COUNT,
+  type RoofGeometryAdapter,
   RoofSystem,
   remapRoofShellFaces,
   roofCsgDummyMats,

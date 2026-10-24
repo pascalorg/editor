@@ -7,7 +7,10 @@ import {
   useLiveNodeOverrides,
   useRegistry,
   useScene,
+  type WallFace,
+  type WallFaceScript,
   type WallNode,
+  wallFaceScriptPlacement,
 } from '@pascal-app/core'
 import {
   getWallFinishRefs,
@@ -20,6 +23,7 @@ import {
 import { type ComponentProps, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { FinishScriptModel } from '../shared/finish-script-model'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 import {
@@ -35,6 +39,34 @@ import {
   WallTreatments,
   wallTreatmentProudOffsets,
 } from './treatments'
+
+/**
+ * A face's finish its script built, under the wall like the wall's other face geometry: the
+ * build's frame at the face's base, 1 mm proud of the face, mirrored through the wall for face b.
+ */
+function WallFaceScriptModel({
+  node,
+  face,
+  script,
+}: {
+  node: WallNode
+  face: WallFace
+  script: WallFaceScript
+}) {
+  const placement = useScene(
+    useShallow((state) => {
+      const at = wallFaceScriptPlacement(state.nodes, node.id, face)
+      return at ? [...at.position, at.scale[2]] : []
+    }),
+  )
+  if (placement.length === 0) return null
+  const [x, y, z, out] = placement as [number, number, number, number]
+  return (
+    <group position={[x, y, z]} scale={[1, 1, out]}>
+      <FinishScriptModel ownerId={node.id} parentId={node.parentId} script={script} />
+    </group>
+  )
+}
 
 function WallTreatmentSubscription(
   props: Omit<ComponentProps<typeof WallTreatments>, 'levelData'>,
@@ -210,39 +242,25 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         {...handlers}
       />
 
-      {treatmentNode.tilt ? (
-        <group
-          matrixAutoUpdate={false}
-          onUpdate={(self) => {
-            self.matrix.makeShear(0, 0, 0, 0, 0, Math.tan(treatmentNode.tilt!))
-            self.matrixWorldNeedsUpdate = true
-          }}
-        >
-          {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
-            <WallTreatmentSubscription
-              childrenNodes={childNodes}
-              materials={extraMaterials}
-              node={treatmentNode}
-            />
-          )}
-          {(node.children ?? []).map((childId) => (
-            <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
-          ))}
-        </group>
-      ) : (
-        <>
-          {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
-            <WallTreatmentSubscription
-              childrenNodes={childNodes}
-              materials={extraMaterials}
-              node={treatmentNode}
-            />
-          )}
-          {(node.children ?? []).map((childId) => (
-            <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
-          ))}
-        </>
+      {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
+        <WallTreatmentSubscription
+          childrenNodes={childNodes}
+          materials={extraMaterials}
+          node={treatmentNode}
+        />
       )}
+
+      {node.wallType !== 'curtain' &&
+        (['a', 'b'] as const).map((face) => {
+          const script = node.finishScripts?.[face]
+          return script ? (
+            <WallFaceScriptModel face={face} key={face} node={node} script={script} />
+          ) : null
+        })}
+
+      {(node.children ?? []).map((childId) => (
+        <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
+      ))}
     </mesh>
   )
 }

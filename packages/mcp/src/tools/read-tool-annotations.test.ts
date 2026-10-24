@@ -2,8 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
@@ -18,14 +17,13 @@ const TOOL_POLICIES = [
     },
     tools: [
       'check_collisions',
-      'describe_node',
       'export_glb',
       'export_json',
-      'find_nodes',
       'find_by_type',
       'get_level_summary',
       'get_node',
       'get_scene',
+      'get_site',
       'get_walls',
       'get_zones',
       'list_levels',
@@ -37,9 +35,11 @@ const TOOL_POLICIES = [
       'get_source',
       'list_collections',
       'search_assets',
+      'search_materials',
       'validate_design',
-      'validate_scene',
       'verify_scene',
+      'view_assets',
+      'view_scene',
     ],
   },
   {
@@ -58,23 +58,28 @@ const TOOL_POLICIES = [
       openWorldHint: false,
     },
     tools: [
+      'add_corner_window',
       'add_door',
+      'add_fence',
+      'add_level',
+      'add_wall',
       'add_window',
-      'create_level',
       'create_mezzanine',
       'create_project',
       'create_roof',
       'create_room',
+      'create_stair',
+      'design_brief',
+      'set_checkpoint',
       'create_story_shell',
       'create_unit',
-      'create_wall',
-      'cut_opening',
       'cut_floor_opening',
       'duplicate_level',
       'furnish_room',
+      'place_in_room',
       'generate_variants',
       'place_design',
-      'place_item',
+      'place_items',
       'set_zone',
       'set_zone_intent',
       'set_floor_foundation',
@@ -91,11 +96,11 @@ const TOOL_POLICIES = [
       'apply_patch',
       'clear_scene',
       'add_object',
+      'author_scene',
       'add_column',
       'edit_collection',
       'create_from_template',
       'create_house_from_brief',
-      'create_stair_between_levels',
       'delete_node',
       'fit_stair',
       'remove_floor_opening',
@@ -104,14 +109,20 @@ const TOOL_POLICIES = [
       'divide_zone',
       'duplicate_zone',
       'move_zone',
+      'place_building',
       'rotate_zone',
       'lock_outside_faces',
+      'merge_windows',
       'merge_zones',
+      'move_roofs_to_roof_level',
+      'paint',
       'delete_scene',
       'get_project_status',
       'load_scene',
       'redo',
+      'set_ground_level',
       'rename_scene',
+      'run_batch',
       'save_scene',
       'undo',
     ],
@@ -185,6 +196,45 @@ describe('MCP tool annotations', () => {
       await client.close()
       await server.close()
       store.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+})
+
+// 2026-10-03, a Claude Code run on the hosted MCP: the client left out 9 tools (divide_zone,
+// merge_zones, create_mezzanine…) whose input schemas held tuples, `items: [...]`. A pair is one
+// `items` schema with minItems and maxItems, as Vec2Schema writes it.
+describe('MCP tool input schemas', () => {
+  test('hold no tuple, so every client can call every tool', async () => {
+    const bridge = new SceneBridge()
+    bridge.setScene({}, [])
+    bridge.loadDefault()
+    const directory = mkdtempSync(join(tmpdir(), 'pascal-mcp-schemas-'))
+    const store = new SqliteSceneStore({ databasePath: join(directory, 'pascal.db') })
+    const server = createPascalMcpServer({ bridge, store })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'schema-test-client', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    try {
+      const tuples = (schema: unknown, path: string): string[] => {
+        if (!schema || typeof schema !== 'object') return []
+        const record = schema as Record<string, unknown>
+        const own = Array.isArray(record.items) || 'prefixItems' in record ? [path] : []
+        return [
+          ...own,
+          ...Object.entries(record).flatMap(([key, value]) =>
+            Array.isArray(value)
+              ? value.flatMap((entry, index) => tuples(entry, `${path}.${key}[${index}]`))
+              : tuples(value, `${path}.${key}`),
+          ),
+        ]
+      }
+      const listed = await client.listTools()
+      const found = listed.tools.flatMap((tool) => tuples(tool.inputSchema, tool.name))
+      expect(found).toEqual([])
+    } finally {
+      await client.close()
+      await server.close()
       rmSync(directory, { recursive: true, force: true })
     }
   })

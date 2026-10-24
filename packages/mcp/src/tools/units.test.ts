@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import {
   type AnyNodeId,
   BuildingNode,
@@ -216,7 +215,11 @@ describe('unit tools', () => {
     bridge.setActiveScene(meta)
     const result = await call('set_unit_members', { unitId, memberZoneIds: [zoneId, upperZoneId] })
     expect(result.isError).toBeFalsy()
-    expect(result.structuredContent).toEqual({ unitId, memberCount: 2 })
+    expect(result.structuredContent).toEqual({
+      unitId,
+      memberCount: 2,
+      project: expect.any(String),
+    })
     expect((await store.load(meta.id))?.graph.nodes[unitId]).toMatchObject({
       members: [zoneId, upperZoneId],
     })

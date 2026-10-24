@@ -5,14 +5,17 @@ import {
   type AnyNodeId,
   area,
   getLevelDisplayName,
+  runAsSingleSceneHistoryStep,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
+import { setRoomFloorScript } from '@pascal-app/core/agent-operations'
 import { useViewer } from '@pascal-app/viewer'
 import { Check, ChevronDown, Plus } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { startCeilingEdit } from '../../../lib/ceiling-edit-session'
 import { resolveOverlayPolicy } from '../../../lib/interaction/overlay-policy'
+import { finishScriptCode } from '../../../lib/geometry-script/finish-scripts'
 import { formatAreaLabel, formatLinearMeasurement } from '../../../lib/measurements'
 import { addMezzanineStairs } from '../../../lib/mezzanine-stairs'
 import { roomFloorBase, roomRelativeFloorHeight } from '../../../lib/room-construction-commands'
@@ -111,6 +114,7 @@ export function RoomPanel({
         ) : (
           <RoomConstructionRows key={room.zoneId} room={room} />
         )}
+        <RoomFloorScriptRow key={`floor-script-${room.zoneId}`} zoneId={room.zoneId} />
       </div>
     </PanelWrapper>
   )
@@ -218,6 +222,67 @@ export function RoomUnitRow({ zoneId }: { zoneId: string }) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+  )
+}
+
+/**
+ * "Scripted finish": a floor a script builds (it owns the floor's colours, so Paint leaves it),
+ * with its code to read and a way to take it off, back to the floor's own finish.
+ */
+function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
+  const sha = useScene((scene) => {
+    const zone = scene.nodes[zoneId as AnyNodeId]
+    return zone?.type === 'zone' ? zone.floor?.script?.script : undefined
+  })
+  const [code, setCode] = useState<{ sha: string; text: string } | null>(null)
+  const [open, setOpen] = useState(false)
+  if (!sha) return null
+  const toggleCode = () => {
+    setOpen((shown) => !shown)
+    if (code?.sha === sha) return
+    finishScriptCode(sha).then(
+      (text) => setCode({ sha, text: text ?? 'The script could not be read.' }),
+      () => setCode({ sha, text: 'The script could not be read.' }),
+    )
+  }
+  const remove = () => {
+    const { changes } = setRoomFloorScript(
+      useScene.getState().nodes,
+      { zoneId, remove: true },
+      { activeLevelId: null },
+    )
+    runAsSingleSceneHistoryStep(useScene, () => {
+      for (const { id, data } of changes?.update ?? [])
+        useScene.getState().updateNode(id as AnyNodeId, data)
+    })
+  }
+  return (
+    <div className="mt-3 flex flex-col gap-2" data-room-floor-script={zoneId}>
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        <span className="text-muted-foreground text-xs">Scripted finish</span>
+        <div className="flex items-center gap-1.5">
+          <button
+            className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
+            onClick={toggleCode}
+            type="button"
+          >
+            {open ? 'Hide code' : 'View code'}
+          </button>
+          <button
+            className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
+            onClick={remove}
+            type="button"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+      {open && (
+        <pre className="max-h-60 overflow-auto whitespace-pre rounded-lg border border-border/50 p-2 font-mono text-[11px] text-foreground">
+          {code?.sha === sha ? code.text : 'Loading…'}
+        </pre>
+      )}
     </div>
   )
 }

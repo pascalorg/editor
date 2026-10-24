@@ -443,67 +443,66 @@ describe('registry item-surface move session', () => {
     expect((useScene.getState().nodes[host.id] as ItemNode).children as string[]).toEqual([])
   })
 
-  test.each([
-    'floor',
-    'same host',
-    'floor then host',
-  ])('a hosted move to %s commits once and undo restores the original parent and pose', (destination) => {
-    const initial = createRegistryItemSurfaceMove(original)!
-    const hostedPose = initial.enter(eventFor().event, dimensions, 0.3)!
-    const hosted = useScene.getState().nodes[original.id]!
-    const session = createRegistryItemSurfaceMove(hosted)!
-    let pose: { position: [number, number, number]; rotationY: number } = session.enter(
-      eventFor().event,
-      dimensions,
-      hostedPose.rotationY,
-    )!
-    if (destination !== 'same host') {
-      const world = sceneRegistry.nodes
-        .get('level_surface-move')!
-        .localToWorld(new Vector3(8, 0, 9))
-      pose = session.detach(world.toArray(), pose.rotationY)!
-      const detached = useScene.getState().nodes[original.id]!
-      expect(
-        getFloorPlacedElevation({
-          node: detached,
-          nodes: useScene.getState().nodes,
-          position: pose.position,
-          maxElevation: 0,
-        }),
-      ).toBe(0)
-      const footprints = getFloorPlacedFootprints(
-        nodeRegistry.get(original.type)!.capabilities.floorPlaced!,
-        detached,
-        { nodes: useScene.getState().nodes },
-      ).map((footprint) => ({ ...footprint, position: footprint.position ?? pose.position }))
-      expect(
-        spatialGridManager.canPlaceOnFloorFootprints('level_surface-move', footprints, [
-          original.id,
-        ]).valid,
-      ).toBe(true)
-    }
-    if (destination !== 'floor') {
-      pose = session.enter(eventFor(host, [0.6, 1, -0.4]).event, dimensions, pose.rotationY)!
-    }
-    const final = useScene.getState().nodes[original.id]!
-    const patch = {
-      ...final,
-      ...resolveSupportSlabPatch(final, useScene.getState().nodes, { maxElevation: 0 }),
-    }
-    session.restore()
-    useScene.temporal.getState().resume()
-    useScene.getState().updateNodes([{ id: original.id, data: patch }])
-    useScene.temporal.getState().pause()
-    expect(useScene.getState().nodes[original.id]?.parentId).toBe(
-      destination === 'floor' ? 'level_surface-move' : host.id,
-    )
-    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-    useScene.temporal.getState().undo()
-    expect(useScene.getState().nodes[original.id]).toEqual(hosted)
-    expect((useScene.getState().nodes[host.id] as ItemNode).children as string[]).toContain(
-      original.id,
-    )
-    useScene.temporal.getState().redo()
-    expect(useScene.getState().nodes[original.id]).toEqual(patch)
-  })
+  test.each(['floor', 'same host', 'floor then host'])(
+    'a hosted move to %s commits once and undo restores the original parent and pose',
+    (destination) => {
+      const initial = createRegistryItemSurfaceMove(original)!
+      const hostedPose = initial.enter(eventFor().event, dimensions, 0.3)!
+      const hosted = useScene.getState().nodes[original.id]!
+      const session = createRegistryItemSurfaceMove(hosted)!
+      let pose: { position: [number, number, number]; rotationY: number } = session.enter(
+        eventFor().event,
+        dimensions,
+        hostedPose.rotationY,
+      )!
+      if (destination !== 'same host') {
+        const world = sceneRegistry.nodes
+          .get('level_surface-move')!
+          .localToWorld(new Vector3(8, 0, 9))
+        pose = session.detach(world.toArray(), pose.rotationY)!
+        const detached = useScene.getState().nodes[original.id]!
+        expect(
+          getFloorPlacedElevation({
+            node: detached,
+            nodes: useScene.getState().nodes,
+            position: pose.position,
+            maxElevation: 0,
+          }),
+        ).toBe(0)
+        const footprints = getFloorPlacedFootprints(
+          nodeRegistry.get(original.type)!.capabilities.floorPlaced!,
+          detached,
+          { nodes: useScene.getState().nodes },
+        ).map((footprint) => ({ ...footprint, position: footprint.position ?? pose.position }))
+        expect(
+          spatialGridManager.canPlaceOnFloorFootprints('level_surface-move', footprints, [
+            original.id,
+          ]).valid,
+        ).toBe(true)
+      }
+      if (destination !== 'floor') {
+        pose = session.enter(eventFor(host, [0.6, 1, -0.4]).event, dimensions, pose.rotationY)!
+      }
+      const final = useScene.getState().nodes[original.id]!
+      const patch = {
+        ...final,
+        ...resolveSupportSlabPatch(final, useScene.getState().nodes, { maxElevation: 0 }),
+      }
+      session.restore()
+      useScene.temporal.getState().resume()
+      useScene.getState().updateNodes([{ id: original.id, data: patch }])
+      useScene.temporal.getState().pause()
+      expect(useScene.getState().nodes[original.id]?.parentId).toBe(
+        destination === 'floor' ? 'level_surface-move' : host.id,
+      )
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes[original.id]).toEqual(hosted)
+      expect((useScene.getState().nodes[host.id] as ItemNode).children as string[]).toContain(
+        original.id,
+      )
+      useScene.temporal.getState().redo()
+      expect(useScene.getState().nodes[original.id]).toEqual(patch)
+    },
+  )
 })

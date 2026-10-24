@@ -7,11 +7,16 @@ export const STAIR_TREADS_SLOT_DEFAULT = 'library:wood-woodplank48'
 export const STAIR_BODY_SLOT_DEFAULT = 'library:preset-lightgrey'
 export const STAIR_RAILING_SLOT_DEFAULT = 'library:metal-steel'
 
-export function stairSlots(node: StairNode): SlotDeclaration[] {
-  const slots: SlotDeclaration[] = [
+/** A flight's own treads and body, over the stair's. */
+export function stairSegmentSlots(): SlotDeclaration[] {
+  return [
     { slotId: 'treads', label: 'Treads', default: STAIR_TREADS_SLOT_DEFAULT },
     { slotId: 'body', label: 'Body', default: STAIR_BODY_SLOT_DEFAULT },
   ]
+}
+
+export function stairSlots(node: StairNode): SlotDeclaration[] {
+  const slots: SlotDeclaration[] = stairSegmentSlots()
 
   if (node.railingMode && node.railingMode !== 'none') {
     slots.push({ slotId: 'railing', label: 'Railing', default: STAIR_RAILING_SLOT_DEFAULT })

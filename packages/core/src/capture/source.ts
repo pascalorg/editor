@@ -299,7 +299,7 @@ class EventIterator implements AsyncIterableIterator<CaptureSourceEvent> {
   #trimQueue(): void {
     while (this.#queue.length > this.#maxQueuedEvents) {
       const packetIndex = this.#queue.findIndex((event) => event.type === 'packet')
-      this.#queue.splice(packetIndex >= 0 ? packetIndex : 0, 1)
+      this.#queue.splice(Math.max(packetIndex, 0), 1)
     }
   }
 }

@@ -13,11 +13,20 @@ import {
   EDITOR_LAYER,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   triggerSFX,
   useEditor,
   useInteractionScope,
   useRegistryToolContext,
 } from '@pascal-app/editor'
+import {
+  alignDrawPoint,
+  clearDrawAlignment,
+  collectScenePorts,
+  findNearestRunBody3D,
+  findNearestRunBodyXZ,
+  type ScenePort,
+} from '@pascal-app/editor/distribution'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, type Material, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three'
@@ -29,7 +38,6 @@ import {
   subscribeAccessorySnapping,
 } from '../shared/accessory-snapping'
 import { ConnectionFeedback } from '../shared/connection-feedback'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import {
   AXIS_VECTORS,
   cycleRotationAxis,
@@ -38,13 +46,7 @@ import {
 } from '../shared/fitting-rotation'
 import { createFittingSurfaceSupport } from '../shared/fitting-surface-support'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import {
-  collectScenePorts,
-  DWV_PORT_SYSTEMS,
-  findNearestRunBody3D,
-  findNearestRunBodyXZ,
-  type ScenePort,
-} from '../shared/ports'
+import { DWV_PORT_SYSTEMS } from '../shared/port-systems'
 import { pipeFittingDefinition } from './definition'
 import { buildPipeFittingGeometry } from './geometry'
 import {
@@ -357,8 +359,7 @@ const PipeFittingTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       const key = e.key
       if (key === 'r' || key === 'R' || key === 't' || key === 'T') {
         // Capture-phase + stopPropagation so the editor's selection-rotate

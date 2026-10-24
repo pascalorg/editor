@@ -78,11 +78,11 @@ describe('freestanding canopy joint framing', () => {
     expect(exposedCornerFraming('mono', -4)).toEqual([])
   })
 
-  test.each([
-    'gable',
-    'butterfly',
-  ] as const)('keeps both %s roof-half framings below either internal turn', (canopyForm) => {
-    expect(exposedCornerFraming(canopyForm, -4)).toEqual([])
-    expect(exposedCornerFraming(canopyForm, 4)).toEqual([])
-  })
+  test.each(['gable', 'butterfly'] as const)(
+    'keeps both %s roof-half framings below either internal turn',
+    (canopyForm) => {
+      expect(exposedCornerFraming(canopyForm, -4)).toEqual([])
+      expect(exposedCornerFraming(canopyForm, 4)).toEqual([])
+    },
+  )
 })

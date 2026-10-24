@@ -125,6 +125,7 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   },
 
   capabilities: {
+    exterior: true,
     slots: cupolaSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

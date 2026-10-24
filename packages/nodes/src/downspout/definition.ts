@@ -178,6 +178,7 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   },
 
   capabilities: {
+    exterior: true,
     slots: downspoutSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

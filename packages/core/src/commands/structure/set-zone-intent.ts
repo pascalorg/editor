@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { floorIntentConflicts } from '../../lib/floor-intent-changes'
+import { floorScriptPaintRefusal } from '../../lib/floor-plate-paint'
 import { ownFloorIntentChanges } from '../../lib/own-floor-intent'
 import { drawnFloorElevationConflict } from '../../lib/room-drawn-floor'
 import { roundFloorElevation } from '../../lib/room-floor-feasibility'
@@ -33,6 +34,13 @@ export const ZoneIntentPatch = z.strictObject({
   wallMaterial: z.string().nullable().optional(),
   hasFloor: z.boolean().nullable().optional(),
   hasCeiling: z.boolean().nullable().optional(),
+  // The room's declaration of artificial light and mechanical ventilation (the IRC R303.1
+  // exceptions to daylight), kept in its metadata under `daylight`: what a check of the room's
+  // daylight reads, beside a window to outside.
+  daylight: z
+    .strictObject({ artificialLight: z.boolean(), mechanicalVentilation: z.boolean() })
+    .nullable()
+    .optional(),
 })
 export type ZoneIntentPatch = z.infer<typeof ZoneIntentPatch>
 
@@ -42,6 +50,13 @@ export function setZoneIntent(
 ): StructurePlan {
   const zone = requireZone(nodes, input.zoneId)
   const patch = ZoneIntentPatch.parse(input.patch)
+  const painted = zone.floor?.script && (patch.floor?.finish ?? patch.floor?.regions)
+  const scripted = painted ? floorScriptPaintRefusal(zone) : undefined
+  if (scripted)
+    return {
+      changes: [],
+      conflicts: [{ code: scripted.code, nodeIds: [zone.id], message: scripted.message }],
+    }
   const requestedKey = patch.floor?.footprint
   if (
     requestedKey &&
@@ -75,6 +90,10 @@ export function setZoneIntent(
   if (patch.wallMaterial !== undefined) data.wallMaterial = patch.wallMaterial ?? undefined
   for (const key of ['hasFloor', 'hasCeiling'] as const)
     if (patch[key] !== undefined) data[key] = patch[key] === false ? false : undefined
+  if (patch.daylight !== undefined) {
+    const { daylight: _declared, ...metadata } = zone.metadata ?? {}
+    data.metadata = patch.daylight === null ? metadata : { ...metadata, daylight: patch.daylight }
+  }
   if (patch.floor !== undefined) {
     data.floor = patch.floor === null ? undefined : { ...zone.floor }
     if (patch.floor)

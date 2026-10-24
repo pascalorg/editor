@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import {
   openingScene,
@@ -52,6 +51,7 @@ describe('add_door / add_window over MCP', () => {
       }
       expect(node.position[1]).toBeCloseTo(c.expect.centerY, 6)
       if (c.expect.glassPanels) expect(JSON.stringify(node)).toContain('"glass"')
+      if (c.expect.node) expect(node).toMatchObject(c.expect.node)
     })
   }
 })

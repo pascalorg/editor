@@ -78,7 +78,7 @@ beforeEach(() => {
     }),
   )
   useViewer.getState().setSelection({ buildingId: building.id, levelId: LEVEL, selectedIds: [] })
-  useEditor.setState({ phase: 'structure', mode: 'select', room: null })
+  useEditor.setState({ phase: 'building', mode: 'select', room: null })
   useFloorRegionDraft.setState({ draft: null, hover: null })
   clearSceneHistory()
 })

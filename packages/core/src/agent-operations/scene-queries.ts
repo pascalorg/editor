@@ -1,5 +1,9 @@
+import { queryNodes } from '../runtime/node-queries'
 import type { AnyNode } from '../schema'
+import { isCeilingGeometry, isRoofGeometry, servesAsRoofLevel } from '../services/roof-level'
 import type { SceneNodes } from './types'
+
+export { orderedChildIds, queryNodes } from '../runtime/node-queries'
 
 export type LevelRole = 'occupied' | 'roof' | 'support'
 export type ContentCounts = {
@@ -21,9 +25,9 @@ const metadataString = (node: AnyNode, key: string) => {
 
 /** Every level, in floor order (ties by id). */
 export function levelsOf(nodes: SceneNodes): (AnyNode & { type: 'level' })[] {
-  return Object.values(nodes)
-    .filter((node): node is AnyNode & { type: 'level' } => node.type === 'level')
-    .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id))
+  return queryNodes<AnyNode & { type: 'level' }>(nodes, { type: 'level' }).sort(
+    (a, b) => a.level - b.level || a.id.localeCompare(b.id),
+  )
 }
 
 /** The level a node sits on, walking up its parents (a level resolves to itself). */
@@ -66,34 +70,27 @@ export function contentCounts(content: readonly AnyNode[]): ContentCounts {
     zones: count('zone'),
     doors: count('door'),
     windows: count('window'),
-    items: count('item'),
+    items: content.filter(
+      (node) => node.type === 'item' && !isRoofGeometry(node) && !isCeilingGeometry(node),
+    ).length,
     slabs: count('slab'),
-    ceilings: count('ceiling'),
-    roofs: count('roof'),
+    ceilings: content.filter(isCeilingGeometry).length,
+    roofs: content.filter(isRoofGeometry).length,
     stairs: count('stair'),
   }
 }
 
-/** A level is a storey unless it is declared (or found to be) only a roof or a support. */
-export function classifyLevel(level: AnyNode, counts: ContentCounts): LevelRole {
-  const declared = metadataString(level, 'role')
-  if (declared === 'roof') return 'roof'
-  if (declared === 'support') return 'support'
-  const occupied =
-    counts.walls +
-    counts.zones +
-    counts.doors +
-    counts.windows +
-    counts.items +
-    counts.slabs +
-    counts.ceilings +
-    counts.stairs
-  if (counts.roofs > 0 && occupied === 0) return 'roof'
-  return 'occupied'
-}
-
+/**
+ * A level is a storey unless it serves as its building's roof level (`servesAsRoofLevel`, the one
+ * rule) or is declared a support.
+ */
 export function levelRole(nodes: SceneNodes, level: AnyNode) {
-  const role = classifyLevel(level, contentCounts(nodesOnLevel(nodes, level.id)))
+  const role: LevelRole =
+    level.type === 'level' && servesAsRoofLevel(nodes, level)
+      ? 'roof'
+      : metadataString(level, 'role') === 'support'
+        ? 'support'
+        : 'occupied'
   return {
     role,
     metadataRole: metadataString(level, 'role') ?? null,

@@ -120,6 +120,12 @@ export const SFX: Record<string, SFXConfig> = {
     src: '/audios/sfx/success.mp3',
     minIntervalMs: 3_000,
   },
+  // An agent's turn, heard from another tab or another app: it ended with its work done, it failed,
+  // or it waits on the person. Two-note chimes (`scripts/synth-turn-cues.ts`), so no jitter, as for
+  // `success`. The host plays each once per turn; no gap here could tell two turns from one.
+  turnDone: { src: '/audios/sfx/turn_done.mp3' },
+  turnFailed: { src: '/audios/sfx/turn_failed.mp3' },
+  turnNeedsInput: { src: '/audios/sfx/turn_needs_input.mp3' },
 } as const
 
 export type SFXName = keyof typeof SFX

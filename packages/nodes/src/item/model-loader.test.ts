@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, mock, spyOn, test } from 'bun:test'
-import { DefaultLoadingManager, LoadingManager } from 'three'
+import { DefaultLoadingManager, LoadingManager, type Mesh, MeshBasicMaterial } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {
   cancelItemModelLoad,
@@ -63,6 +63,47 @@ describe('classifyItemModelLoadFailure', () => {
 })
 
 describe('ItemGLTFLoader', () => {
+  test('preserves imported unlit lighting without changing native basic materials', async () => {
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
+    const gltf = await new ItemGLTFLoader().parseAsync(
+      JSON.stringify({
+        asset: { version: '2.0' },
+        extensionsUsed: ['KHR_materials_unlit'],
+        buffers: [
+          {
+            byteLength: positions.byteLength,
+            uri: `data:application/octet-stream;base64,${Buffer.from(positions.buffer).toString('base64')}`,
+          },
+        ],
+        bufferViews: [{ buffer: 0, byteLength: positions.byteLength }],
+        accessors: [
+          {
+            bufferView: 0,
+            componentType: 5126,
+            count: 3,
+            type: 'VEC3',
+            min: [0, 0, 0],
+            max: [1, 1, 0],
+          },
+        ],
+        materials: [{ extensions: { KHR_materials_unlit: {} } }, {}],
+        meshes: [0, 1].map((material) => ({
+          primitives: [{ attributes: { POSITION: 0 }, material }],
+        })),
+        nodes: [{ mesh: 0 }, { mesh: 1 }],
+        scene: 0,
+        scenes: [{ nodes: [0, 1] }],
+      }),
+      '',
+    )
+    const imported = (gltf.scene.children[0] as Mesh).material as MeshBasicMaterial
+    const lit = (gltf.scene.children[1] as Mesh).material as MeshBasicMaterial
+    expect(imported.userData.pascalImportedUnlit).toBe(true)
+    expect(imported.clone().userData.pascalImportedUnlit).toBe(true)
+    expect(lit.userData.pascalImportedUnlit).toBeUndefined()
+    expect(new MeshBasicMaterial().userData.pascalImportedUnlit).toBeUndefined()
+  })
+
   test('resolves missing responses as an unavailable item instead of rejecting', async () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {})
     try {
@@ -303,4 +344,53 @@ describe('ItemGLTFLoader', () => {
       }
     }
   })
+})
+
+test('ItemGLTFLoader decodes required meshopt data without renderer configuration', async () => {
+  const encoded =
+    'oAAAATwAAAD//wE8AAAAfn0AAAEMAAAA/wEMAAAAfgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=='
+  const json = {
+    asset: { version: '2.0' },
+    extensionsUsed: ['EXT_meshopt_compression'],
+    extensionsRequired: ['EXT_meshopt_compression'],
+    buffers: [
+      { uri: `data:application/octet-stream;base64,${encoded}`, byteLength: 67 },
+      { byteLength: 36, extensions: { EXT_meshopt_compression: { fallback: true } } },
+    ],
+    bufferViews: [
+      {
+        buffer: 1,
+        byteLength: 36,
+        extensions: {
+          EXT_meshopt_compression: {
+            buffer: 0,
+            byteLength: 67,
+            byteStride: 12,
+            count: 3,
+            mode: 'ATTRIBUTES',
+          },
+        },
+      },
+    ],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: 'VEC3',
+        min: [0, 0, 0],
+        max: [1, 1, 0],
+      },
+    ],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    nodes: [{ name: 'part_panel', mesh: 0, extras: { anchor: 'top' } }],
+    scenes: [{ nodes: [0] }],
+    scene: 0,
+  }
+  const gltf = await new ItemGLTFLoader().parseAsync(JSON.stringify(json), '')
+  const panel = gltf.scene.getObjectByName('part_panel') as import('three').Mesh
+  expect(Array.from(panel.geometry.getAttribute('position').array)).toEqual([
+    0, 0, 0, 1, 0, 0, 0, 1, 0,
+  ])
+  expect(panel.userData.anchor).toBe('top')
 })

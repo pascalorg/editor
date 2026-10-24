@@ -21,6 +21,7 @@ import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-open
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { openingSeenFromOutside } from '../wall/exterior'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildDoorContextualDimensions } from './contextual-dimensions'
 import { scaleHandleHeight } from './door-math'
@@ -30,6 +31,7 @@ import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorMechanism } from './mechanism'
 import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
+import { DOOR_PLACEMENT_HINTS } from './placement'
 import { DoorNode } from './schema'
 
 const SIDE_HANDLE_OFFSET = 0.24
@@ -235,6 +237,9 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   },
 
   capabilities: {
+    reveal: { phase: 'openings', style: 'cut' },
+    exterior: openingSeenFromOutside,
+    revealOnEdit: ['position', 'width', 'height', 'openingShape', 'openingKind', 'doorType'],
     batchable: doorBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
@@ -317,6 +322,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
+    ...DOOR_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

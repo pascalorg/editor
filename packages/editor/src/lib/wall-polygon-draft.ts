@@ -19,6 +19,7 @@ import {
 } from '../components/tools/wall/wall-snap-geometry'
 import useEditor, { isMagneticSnapActive } from '../store/use-editor'
 import { useFloorplanDraftPreview } from '../store/use-floorplan-draft-preview'
+import { visibleScene } from '../store/view-layout'
 import { sfxEmitter } from './sfx-bus'
 
 /**
@@ -65,13 +66,13 @@ export function startWallPolygonDraft(
   // polygon owns its clicks (the 3D tool, or the plan in 2D-only view — a
   // hidden canvas keeps listening). A level or view switch abandons it and
   // tells the drafting tools to reset their chain, so ownership starts over.
-  const viewMode = useEditor.getState().viewMode
+  const scene = visibleScene(useEditor.getState())
   const stops = [
     useViewer.subscribe((state) => {
       if (state.selection.levelId !== levelId) abandon()
     }),
     useEditor.subscribe((state) => {
-      if (state.viewMode !== viewMode) abandon()
+      if (visibleScene(state) !== scene) abandon()
     }),
   ]
   draft = {

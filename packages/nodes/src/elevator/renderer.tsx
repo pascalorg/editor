@@ -32,6 +32,7 @@ import {
   type ColorPreset,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
+  materialCastsShadow,
   type RenderShading,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
@@ -522,7 +523,7 @@ function BoxPrimitive({
 }) {
   return (
     <mesh
-      castShadow={castShadow}
+      castShadow={castShadow && materialCastsShadow(material)}
       dispose={null}
       geometry={UNIT_BOX_GEOMETRY}
       material={material}

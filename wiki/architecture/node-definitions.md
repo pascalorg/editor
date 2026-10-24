@@ -354,6 +354,8 @@ cut-count chip lives there). Select
 mode is not owned by a node definition, so its helper is derived separately from
 selection state, selected-node move/rotate capabilities, and held modifiers.
 
+`placementNotice?(node, { nodes, live })` is a kind's warning about where the node stands, such as an item in a door's way, shown in the same HUD row and in the node's panel through the editor's generic `usePlacementNotice`. It is pure; `live` is the in-flight drag pose, merged in the kind's own frame. See `tools.md` § "Placement notices".
+
 ## Pitfalls
 
 ### `<GeometrySystem>` must not mutate `group.position` / `group.rotation`
@@ -604,6 +606,36 @@ mechanism: {
 ```
 
 `item` and `procedural-item` declare it over their own interactive state (`nodes/src/shared/item-interactions.ts`). Its GLB clips come from `exportAnimation`: every node that bakes clips lists them in `extras.clips`, and the baked viewer runs `: loop` clips no other controller owns on click and E, stopped at start. Lights are not part of it yet.
+
+---
+
+### `capabilities.exterior`
+
+Whether a change to a node is seen from outside the building. Hosts that follow a change with a camera (Follow Pascal) frame it from outdoors, with the walls up, instead of through a cutaway, and ask the registry; the editor names no kind.
+
+```ts
+exterior?: boolean | ((node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => boolean | undefined)
+```
+
+- `true` — the kind always stands outdoors: the roof, roof segments and everything mounted on them (dormer, skylight, chimney, vents, gutters, solar panels), a fence and its gates, the site.
+- `false` — the kind never does and holds what is looked at through a cutaway (level, building, zone). The walk up a node's parents stops at it.
+- a function — decided from the node's fields and its surroundings: a wall with an exterior face; a door or window in such a wall or in a roof segment (`nodes/src/wall/exterior.ts`). Return `undefined` to say nothing.
+- omitted, or `undefined` — what holds the node decides: a node under a `true` kind is outdoors, and so is one that stands in no storey (outdoor furnishing, plants). A sofa in a room is not.
+
+A plugin kind sets it in its own `definition.ts` and is treated as a built-in is (a pool deck sets `exterior: true`).
+
+### `capabilities.revealLayout`
+
+What a kind is in its floor's plan, so a build is revealed room by room instead of in one pulse (see [construction-animation](construction-animation.md)). Both fields are pure functions of the node, in metres on the level's plan.
+
+```ts
+revealLayout?: {
+  room?: (node: AnyNode) => readonly [x: number, z: number][] | null                   // an outline of a room (zone)
+  line?: (node: AnyNode) => readonly [[x: number, z: number], [x: number, z: number]] | null  // bounds rooms along a line (wall)
+}
+```
+
+What stands in a `room` (walls along it, furniture in it) is revealed together around its centre, and the rooms of a floor sweep across it. A `line` stands at its middle: the room on either side of it is its room, and lines in no room run along the lines they meet end to end. The derived plates and ceilings of a level also go out, in a deletion, with the `room` and `line` nodes a commit takes off it. A kind that declares neither is still placed by its own `position`, `polygon` or `start`/`end`.
 
 ---
 

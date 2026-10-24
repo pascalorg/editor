@@ -5,7 +5,7 @@ import { temporal } from 'zundo'
 import { create, type StateCreator, type StoreApi, type UseBoundStore } from 'zustand'
 import { toSceneMaterialRef } from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
-import { BuildingNode } from '../schema'
+import { BuildingNode, type GeometryScriptSource } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { compiledNodeSchema } from '../schema/compiled-node-parsers'
@@ -17,6 +17,7 @@ import {
 } from '../schema/nodes/dormer'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
 import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
+import { RoofGlazing } from '../schema/nodes/roof-glazing'
 import {
   getPitchFromActiveRoofHeight,
   type RoofSegmentNode,
@@ -33,6 +34,7 @@ import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stai
 import { WindowNode as WindowNodeSchema } from '../schema/nodes/window'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
+import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { ensureSceneOpenings } from '../utils/ensure-scene-openings'
 import { migrateFloorPlates, migrateSlabSlots } from '../utils/floor-plate-migration'
 import { healSceneNodes } from '../utils/heal-scene-graph'
@@ -63,9 +65,12 @@ import {
   resumeSceneHistory,
   runAsRemoteSceneChange,
   runAsSceneHistoryRestore,
+  runAsSingleSceneHistoryStep,
+  runSceneWriteGuards,
   runWithSceneCommitNodeIds,
   type SceneCommitOrigin,
   type SceneSnapshot,
+  settlePendingSceneCommit,
 } from './history-control'
 import {
   beginSceneHistoryDraft as beginSceneHistoryDraftIn,
@@ -79,6 +84,18 @@ import {
   withDraftsRestored,
 } from './history-drafts'
 import { getHistoryDirtyNodeIds } from './history-invalidation'
+import {
+  retainSceneAnnotations,
+  withoutSceneAnnotations,
+  withoutSceneNodeAnnotations,
+  writeSceneNodeField,
+} from './scene-annotations'
+import {
+  bindSceneEnvironment,
+  liveSceneEnvironment,
+  type SceneEnvironment,
+  sceneEnvironmentOf,
+} from './scene-environment'
 import {
   invalidatePendingHydration,
   isHydrationNormalization,
@@ -198,6 +215,22 @@ function normalizeDoorNode(node: Record<string, unknown>) {
 function normalizeWindowNode(node: Record<string, unknown>) {
   const parsed = compiledNodeSchema(WindowNodeSchema).safeParse(node)
   return parsed.success ? { ...node, ...parsed.data } : null
+}
+
+// Slabs and ceilings written by third-party exporters (scanning apps, IFC
+// hand-offs) can legitimately omit `holes` / `holeMetadata` / `autoFromWalls`:
+// the schema gives them defaults. The opening sync and the public viewer read
+// those fields on the raw node, so a missing `holes` throws
+// "Cannot read properties of undefined (reading 'map')" and the scene never
+// renders. Only the hole fields are filled here — a full zod parse would also
+// default `thickness`, which the vertical-model migration below must still see
+// as absent on legacy solids.
+function normalizeSurfaceHoleFields(node: Record<string, unknown>) {
+  const holes = Array.isArray(node.holes) ? node.holes : []
+  const holeMetadata = Array.isArray(node.holeMetadata) ? node.holeMetadata : []
+  const autoFromWalls =
+    node.type === 'slab' && node.autoFromWalls === undefined ? { autoFromWalls: false } : {}
+  return { ...node, holes, holeMetadata, ...autoFromWalls }
 }
 
 function normalizeShelfNode(node: Record<string, unknown>) {
@@ -691,10 +724,16 @@ function migrateNodes(nodes: Record<string, any>): {
     // The migration result is cast, not zod-parsed, so the schema default never
     // applies on its own — this branch is the only place it lands.
     if (node.type === 'roof-segment') {
+      if (node.glazing !== undefined) {
+        const glazing = RoofGlazing.safeParse(node.glazing)
+        if (glazing.success) patchedNodes[id] = { ...patchedNodes[id], glazing: glazing.data }
+      }
       const currentPitch = (node as { pitch?: unknown }).pitch
       const hasValidPitch = typeof currentPitch === 'number' && currentPitch > 0
       if (!hasValidPitch) {
-        const { roofHeight, ...rest } = node as RoofSegmentNode & { roofHeight?: unknown }
+        const { roofHeight, ...rest } = patchedNodes[id] as RoofSegmentNode & {
+          roofHeight?: unknown
+        }
         const width = typeof node.width === 'number' ? node.width : 8
         const depth = typeof node.depth === 'number' ? node.depth : 6
         const roofType = (typeof node.roofType === 'string' ? node.roofType : 'gable') as RoofType
@@ -719,6 +758,10 @@ function migrateNodes(nodes: Record<string, any>): {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+    }
+
+    if (node.type === 'slab' || node.type === 'ceiling') {
+      patchedNodes[id] = normalizeSurfaceHoleFields(patchedNodes[id] ?? node) as AnyNode
     }
 
     // Dormers originally rendered one inline parametric window. Promote that
@@ -1208,53 +1251,19 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<TemporalState<SceneSnapshot>>
 }
 
-function sceneHistorySnapshotFromState(
-  state: Pick<
-    SceneState,
-    | 'nodes'
-    | 'rootNodeIds'
-    | 'collections'
-    | 'materials'
-    | 'installedPlugins'
-    | 'hasExplicitPluginInstallState'
-  >,
-): SceneSnapshot {
-  const {
-    nodes,
-    rootNodeIds,
-    collections,
-    materials,
-    installedPlugins,
-    hasExplicitPluginInstallState,
-  } = state
-  // Fresh placement nodes are renderable drafts, not document history. Excluding their
-  // entire subtree here protects both local undo and external commit subscribers. Carried
-  // drafts (history-drafts.ts) are kept out the same way.
-  const transientNodeIds = new Set<AnyNodeId>(
-    createdSceneHistoryDraftIds().filter((id) => Boolean(nodes[id])),
-  )
-  for (const node of Object.values(nodes)) {
-    const metadata = node.metadata
-    if (
-      metadata &&
-      typeof metadata === 'object' &&
-      !Array.isArray(metadata) &&
-      (metadata as Record<string, unknown>).isNew === true
-    ) {
-      transientNodeIds.add(node.id)
-    }
-  }
+type SceneDocumentParts = Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>
 
-  if (transientNodeIds.size === 0) {
-    return {
-      nodes: withAdoptedDraftsAsOriginal(nodes, nodes),
-      rootNodeIds,
-      collections,
-      materials,
-      installedPlugins,
-      hasExplicitPluginInstallState,
-    }
-  }
+/**
+ * `parts` without the subtrees of `draftIds`, and without the references to them (children,
+ * procedural attachments, collections, roots). Returns `parts` itself when there is nothing to drop.
+ */
+function withoutDraftSubtrees(
+  parts: SceneDocumentParts,
+  draftIds: Iterable<AnyNodeId>,
+): SceneDocumentParts {
+  const { nodes, rootNodeIds, collections } = parts
+  const transientNodeIds = new Set<AnyNodeId>([...draftIds].filter((id) => Boolean(nodes[id])))
+  if (transientNodeIds.size === 0) return parts
 
   const childIdsByParentId = new Map<AnyNodeId, Set<AnyNodeId>>()
   const addChild = (parentId: AnyNodeId, childId: AnyNodeId) => {
@@ -1278,7 +1287,7 @@ function sceneHistorySnapshotFromState(
     }
   }
 
-  const historyNodes = {} as Record<AnyNodeId, AnyNode>
+  const documentNodes = {} as Record<AnyNodeId, AnyNode>
   for (const [id, sourceNode] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
     if (transientNodeIds.has(id)) continue
     let node = sourceNode
@@ -1292,36 +1301,105 @@ function sceneHistorySnapshotFromState(
       if (attachments) node = { ...node, attachments }
     }
     if (!('children' in node && Array.isArray(node.children))) {
-      historyNodes[id] = node
+      documentNodes[id] = node
       continue
     }
     const children = (node.children as AnyNodeId[]).filter(
       (childId) => !transientNodeIds.has(childId as AnyNodeId),
     )
-    historyNodes[id] =
+    documentNodes[id] =
       children.length === node.children.length ? node : ({ ...node, children } as AnyNode)
   }
 
-  const historyCollections = {} as Record<CollectionId, Collection>
+  const documentCollections = {} as Record<CollectionId, Collection>
   for (const [id, collection] of Object.entries(collections) as [CollectionId, Collection][]) {
     const nodeIds = collection.nodeIds.filter((nodeId) => !transientNodeIds.has(nodeId))
     if (collection.controlNodeId && transientNodeIds.has(collection.controlNodeId)) {
       const { controlNodeId: _controlNodeId, ...rest } = collection
-      historyCollections[id] = { ...rest, nodeIds }
+      documentCollections[id] = { ...rest, nodeIds }
     } else {
-      historyCollections[id] =
+      documentCollections[id] =
         nodeIds.length === collection.nodeIds.length ? collection : { ...collection, nodeIds }
     }
   }
 
   return {
-    nodes: withAdoptedDraftsAsOriginal(nodes, historyNodes),
+    nodes: documentNodes,
     rootNodeIds: rootNodeIds.filter((id) => !transientNodeIds.has(id)),
-    collections: historyCollections,
+    collections: documentCollections,
+  }
+}
+
+function isFreshPlacementNode(node: AnyNode): boolean {
+  const metadata = node.metadata
+  return (
+    !!metadata &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>).isNew === true
+  )
+}
+
+/**
+ * Fresh placement nodes are renderable drafts, not document history. Excluding their entire
+ * subtree here protects both local undo and external commit subscribers. Carried drafts
+ * (history-drafts.ts) are kept out the same way.
+ */
+function sceneHistorySnapshotFromState(
+  state: Pick<
+    SceneState,
+    | 'nodes'
+    | 'rootNodeIds'
+    | 'collections'
+    | 'materials'
+    | 'installedPlugins'
+    | 'hasExplicitPluginInstallState'
+  >,
+): SceneSnapshot {
+  const { nodes, materials, installedPlugins, hasExplicitPluginInstallState } = state
+  const kept = withoutDraftSubtrees(state, [
+    ...createdSceneHistoryDraftIds(),
+    ...Object.values(nodes)
+      .filter(isFreshPlacementNode)
+      .map((node) => node.id),
+  ])
+  return {
+    nodes: withAdoptedDraftsAsOriginal(nodes, kept.nodes),
+    rootNodeIds: kept.rootNodeIds,
+    collections: kept.collections,
     materials,
     installedPlugins,
     hasExplicitPluginInstallState,
   }
+}
+
+/**
+ * The current scene as every save writes it: without the drafts an interaction is carrying —
+ * created carry drafts (history-drafts.ts) and the `drafts` the caller owns — and with adopted
+ * carry drafts as they were before the carry. Never inferred from metadata: committed nodes can
+ * still carry `metadata.isNew`, so only explicitly owned drafts are left out.
+ */
+export function getSceneDocument(drafts: Iterable<AnyNodeId> = []): SceneSnapshot {
+  return sceneDocumentOf(useScene, drafts)
+}
+
+/** `getSceneDocument` for any scene store: its document as a save writes it. */
+export function sceneDocumentOf(
+  store: SceneStore,
+  drafts: Iterable<AnyNodeId> = [],
+): SceneSnapshot {
+  const state = store.getState()
+  return sceneEnvironmentOf(store).run(() => {
+    const kept = withoutDraftSubtrees(state, [...createdSceneHistoryDraftIds(), ...drafts])
+    return {
+      nodes: withAdoptedDraftsAsOriginal(state.nodes, kept.nodes),
+      rootNodeIds: kept.rootNodeIds,
+      collections: kept.collections,
+      materials: state.materials,
+      installedPlugins: state.installedPlugins,
+      hasExplicitPluginInstallState: state.hasExplicitPluginInstallState,
+    }
+  })
 }
 
 /**
@@ -1367,50 +1445,44 @@ class GuardedDirtySet extends Set<AnyNodeId> {
 
 type TemporalSceneCreator = StateCreator<SceneState, [], [['temporal', UseSceneStore['temporal']]]>
 
-function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
-  const hydratedConfig: TemporalSceneCreator = (set, get, store) => {
-    const setWithHydration: typeof set = (partial, replace) => {
-      const state = get()
-      let next = typeof partial === 'function' ? partial(state) : partial
-      const documentChanged = (
-        ['nodes', 'rootNodeIds', 'materials', 'collections', 'installedPlugins'] as const
-      ).some((key) => (replace || key in next) && next[key] !== state[key])
-      if (documentChanged && !isHydrationNormalization()) {
-        invalidatePendingHydration()
-        if (state.hydrationToken) next = { ...next, hydrationToken: null }
-      }
-      if (replace) set(next as SceneState, true)
-      else set(next)
-    }
-    store.setState = setWithHydration
-    return config(setWithHydration, get, store)
-  }
-  return create<SceneState>()(hydratedConfig)
-}
+/** A scene store: the document state and its own undo history. */
+export type SceneStore = UseSceneStore
 
-function runTemporalJump(target: Partial<SceneSnapshot> | undefined, restore: () => void): void {
-  const draftsBefore = useScene.getState().nodes
+function runTemporalJump(
+  store: UseSceneStore,
+  target: Partial<SceneSnapshot> | undefined,
+  restore: () => void,
+): void {
+  const draftsBefore = store.getState().nodes
   const restoreDrafts = () => {
-    const nodes = withDraftsRestored(draftsBefore, useScene.getState().nodes)
-    if (!nodes) return
+    const current = store.getState().nodes
+    const nodes = retainSceneAnnotations(
+      draftsBefore,
+      withDraftsRestored(draftsBefore, current) ?? current,
+    )
+    if (nodes === current) return
     // The carry's own state, not a new step: a tracked write here would clear redo.
-    const pause = beginSceneHistoryPauseSession(useScene)
+    const pause = beginSceneHistoryPauseSession(store)
     try {
-      useScene.setState({ nodes })
+      store.setState({ nodes })
     } finally {
       pause.end()
     }
   }
-  runTemporalJumpOnly(target, () => runAsSceneHistoryRestore(restore))
+  runTemporalJumpOnly(store, target, () => runAsSceneHistoryRestore(restore))
   restoreDrafts()
 }
 
-function runTemporalJumpOnly(target: Partial<SceneSnapshot> | undefined, jump: () => void): void {
+function runTemporalJumpOnly(
+  store: UseSceneStore,
+  target: Partial<SceneSnapshot> | undefined,
+  jump: () => void,
+): void {
   if (!target?.nodes) {
     jump()
     return
   }
-  const before = useScene.getState().nodes
+  const before = store.getState().nodes
   const changed = new Set<AnyNodeId>()
   for (const id of new Set([...Object.keys(before), ...Object.keys(target.nodes)])) {
     const nodeId = id as AnyNodeId
@@ -1428,8 +1500,60 @@ function runTemporalJumpOnly(target: Partial<SceneSnapshot> | undefined, jump: (
   runWithSceneCommitNodeIds(changed, jump)
 }
 
-const useScene: UseSceneStore = createSceneStore(
-  temporal(
+/** Every function field of `state` runs inside `environment` (scene-environment.ts). */
+function inEnvironment<T extends object>(environment: SceneEnvironment, state: T): T {
+  const wrapped = { ...state } as Record<string, unknown>
+  for (const [key, value] of Object.entries(state)) {
+    if (typeof value !== 'function') continue
+    const action = value as (...args: unknown[]) => unknown
+    wrapped[key] = (...args: unknown[]) => environment.run(() => action(...args))
+  }
+  return wrapped as T
+}
+
+/**
+ * A scene store bound to `environment`: its writes, actions, history and commits run in that
+ * environment, so a second store (a detached scene, `@pascal-app/core/runtime`) never pauses,
+ * commits to or drafts in the editor's. Once the environment is disposed, every read and write
+ * of the store throws.
+ */
+export function createSceneStore(environment: SceneEnvironment): SceneStore {
+  const store = create<SceneState>()((set, get, api) => {
+    const setWithHydration: typeof set = (partial, replace) => {
+      const state = get()
+      let next = typeof partial === 'function' ? partial(state) : partial
+      const documentChanged = (
+        ['nodes', 'rootNodeIds', 'materials', 'collections', 'installedPlugins'] as const
+      ).some((key) => (replace || key in next) && next[key] !== state[key])
+      if (documentChanged && !isHydrationNormalization()) {
+        invalidatePendingHydration()
+        if (state.hydrationToken) next = { ...next, hydrationToken: null }
+      }
+      if (replace) set(next as SceneState, true)
+      else set(next)
+    }
+    api.setState = setWithHydration
+    const temporalApi = api as typeof api & { temporal: UseSceneStore['temporal'] }
+    return inEnvironment(
+      environment,
+      sceneStoreConfig(() => temporalApi as UseSceneStore)(setWithHydration, get, temporalApi),
+    )
+  }) as UseSceneStore
+  bindSceneEnvironment(store, environment)
+  const { getState, setState } = store
+  store.getState = () => {
+    environment.assertActive()
+    return getState()
+  }
+  store.setState = ((partial, replace) =>
+    environment.run(() => setState(partial as SceneState, replace as true))) as typeof setState
+  const temporalState = store.temporal.getState()
+  store.temporal.setState(inEnvironment(environment, temporalState))
+  return store
+}
+
+function sceneStoreConfig(storeOf: () => UseSceneStore): TemporalSceneCreator {
+  return temporal(
     (set, get) => ({
       // 1. Flat dictionary of all nodes
       nodes: {},
@@ -1458,6 +1582,7 @@ const useScene: UseSceneStore = createSceneStore(
       setReadOnly: (readOnly: boolean) => set({ readOnly }),
 
       unloadScene: () => {
+        runSceneWriteGuards()
         invalidatePendingHydration()
         set({
           hydrationToken: null,
@@ -1481,6 +1606,7 @@ const useScene: UseSceneStore = createSceneStore(
       },
 
       setScene: (nodes, rootNodeIds, extra) => {
+        runSceneWriteGuards()
         // Apply backward compatibility migrations
         const { nodes: patchedNodes, mintedMaterials } = migrateNodes(nodes)
         // Scene materials minted by the legacy→slots migrations join the
@@ -1539,11 +1665,11 @@ const useScene: UseSceneStore = createSceneStore(
                 if (get().hydrationId !== hydrationId) return
                 const { updates } = ensureSceneOpenings(get().nodes)
                 if (!updates.length) return
-                pauseSceneHistory(useScene)
+                pauseSceneHistory(storeOf())
                 try {
                   get().updateNodes(updates)
                 } finally {
-                  resumeSceneHistory(useScene)
+                  resumeSceneHistory(storeOf())
                 }
               })
             }
@@ -1602,7 +1728,7 @@ const useScene: UseSceneStore = createSceneStore(
           parentId: building.id,
           level: 0,
           children: [],
-          height: 2.5,
+          height: DEFAULT_LEVEL_HEIGHT,
         })
 
         // Define all nodes flat
@@ -1742,7 +1868,11 @@ const useScene: UseSceneStore = createSceneStore(
     }),
     {
       partialize: (state: SceneState) => sceneHistorySnapshotFromState(state),
-      equality: (pastState, currentState) => areSceneSnapshotsEqual(pastState, currentState),
+      equality: (pastState, currentState) =>
+        areSceneSnapshotsEqual(
+          { ...pastState, nodes: withoutSceneAnnotations(pastState.nodes) },
+          { ...currentState, nodes: withoutSceneAnnotations(currentState.nodes) },
+        ),
       onSave: (pastState, currentState) => {
         notifySceneCommit({
           origin: 'local',
@@ -1754,20 +1884,30 @@ const useScene: UseSceneStore = createSceneStore(
         const state = config(set, get, store)
         return {
           ...state,
-          undo: (steps = 1) =>
-            runTemporalJump(get().pastStates.slice().splice(-steps, steps)[0], () =>
-              state.undo(steps),
-            ),
-          redo: (steps = 1) =>
-            runTemporalJump(get().futureStates.slice().splice(-steps, steps)[0], () =>
-              state.redo(steps),
-            ),
+          undo: (steps = 1) => {
+            runSceneWriteGuards(storeOf())
+            return runTemporalJump(
+              storeOf(),
+              get().pastStates.slice().splice(-steps, steps)[0],
+              () => state.undo(steps),
+            )
+          },
+          redo: (steps = 1) => {
+            runSceneWriteGuards(storeOf())
+            return runTemporalJump(
+              storeOf(),
+              get().futureStates.slice().splice(-steps, steps)[0],
+              () => state.redo(steps),
+            )
+          },
         }
       },
       limit: 50, // Limit to last 50 actions
     },
-  ),
-)
+  )
+}
+
+const useScene: UseSceneStore = createSceneStore(liveSceneEnvironment)
 
 // Live state belongs to the hydration owner so even a lazy consumer cannot
 // miss an override that was set and cleared before its first frame.
@@ -1823,7 +1963,7 @@ export function acquireSceneReadOnlyLease(): () => void {
 
 export type SceneNodePatch = {
   id: AnyNodeId
-  data: Partial<AnyNode>
+  data: Partial<AnyNode> & { 'source.images'?: NonNullable<GeometryScriptSource['images']> }
   removeFields: string[]
 }
 
@@ -1970,8 +2110,16 @@ function insertSceneStructuralPlacements(
   return result as AnyNodeId[]
 }
 
-function sceneOperationPatchNextState(
-  beforeState: SceneState,
+/**
+ * The document a patch makes of `beforeState`, without a store, or null when the patch does not
+ * apply to it (a delete of a node that changed, a create at a taken position, a node that fails
+ * its schema). `applySceneOperationPatch` writes exactly this.
+ */
+export function nextSceneOperationState(
+  beforeState: Pick<
+    SceneState,
+    'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'
+  >,
   changes: SceneOperationPatch,
 ):
   | (Pick<SceneState, 'collections' | 'materials' | 'nodes' | 'rootNodeIds'> &
@@ -2010,7 +2158,10 @@ function sceneOperationPatchNextState(
       !Number.isSafeInteger(change.position) ||
       change.position < 0 ||
       siblings?.[change.position] !== id ||
-      !areScenePatchValuesEqual(current, change.node)
+      !areScenePatchValuesEqual(
+        withoutSceneNodeAnnotations(current as Record<string, unknown>),
+        withoutSceneNodeAnnotations(change.node as Record<string, unknown>),
+      )
     ) {
       return null
     }
@@ -2083,8 +2234,17 @@ function sceneOperationPatchNextState(
       return null
     }
     updateIds.add(id)
-    const candidate = { ...node, ...data } as Record<string, unknown>
-    for (const field of removeFields) delete candidate[field]
+    let candidate = { ...node } as Record<string, unknown>
+    for (const [field, value] of Object.entries(data)) {
+      const written = writeSceneNodeField(candidate, field, value, true)
+      if (!written) return null
+      candidate = written
+    }
+    for (const field of removeFields) {
+      const written = writeSceneNodeField(candidate, field, undefined, false)
+      if (!written) return null
+      candidate = written
+    }
     const validated = parseSceneOperationPatchNode(candidate)
     if (
       !validated ||
@@ -2207,12 +2367,15 @@ export type ApplySceneOperationPatchOptions = {
    * reaches this tab as a saved scene. Refused (false) mid-interaction; retry once it ends.
    */
   undoable?: boolean
+  /** Local annotation commits use the same durable host journal as authored commits. */
+  annotation?: boolean
 }
 
 export function applySceneOperationPatch(
   changes: SceneOperationPatch,
   options: ApplySceneOperationPatchOptions = {},
 ): boolean {
+  runSceneWriteGuards(useScene)
   const beforeState = useScene.getState()
   if (
     changes.nodeUpdates.length === 0 &&
@@ -2235,8 +2398,31 @@ export function applySceneOperationPatch(
   ) {
     return false
   }
+  if (
+    options.annotation &&
+    (options.undoable ||
+      beforeState.readOnly ||
+      !useScene.temporal.getState().isTracking ||
+      getSceneHistoryPauseDepth() > 0 ||
+      hasSceneHistoryDrafts())
+  )
+    return false
+  if (
+    options.annotation &&
+    (changes.nodeCreates.length ||
+      changes.nodeDeletes.length ||
+      changes.materialChanges.length ||
+      changes.pluginChanges?.length ||
+      changes.collectionChanges?.length ||
+      changes.pluginInstallState ||
+      changes.nodeUpdates.some(
+        ({ data, removeFields }) =>
+          removeFields.length || Object.keys(data).some((field) => field !== 'source.images'),
+      ))
+  )
+    return false
   if (sceneOperationPatchHasLiveConflict(beforeState, changes)) return false
-  const next = sceneOperationPatchNextState(beforeState, changes)
+  const next = nextSceneOperationState(beforeState, changes)
   if (!next) return false
 
   const before = sceneHistorySnapshotFromState(beforeState)
@@ -2310,11 +2496,43 @@ export function applySceneOperationPatch(
   for (const { node } of changes.nodeDeletes) currentState.clearDirty(node.id)
 
   notifySceneCommit({
-    origin: 'host',
+    origin: options.annotation ? 'local' : 'host',
     before,
     current,
   })
   return true
+}
+
+/**
+ * Runs `run` on `store` as one undo step and one commit that carries everything it changed: its
+ * own writes and the history-paused derived writes it settles after them (`reconcileDocument`),
+ * which a commit captured when the first write landed would miss. Collaboration then receives the
+ * derived construction, with its ids, in the same commit as the edit that caused it.
+ */
+export function runAsSettledSceneStep<T>(store: SceneStore, run: () => T): T {
+  const environment = sceneEnvironmentOf(store)
+  const snapshot = () => environment.run(() => sceneHistorySnapshotFromState(store.getState()))
+  const before = snapshot()
+  const pastBefore = store.temporal.getState().pastStates.length
+  return runAsSingleSceneHistoryStep(store, () => {
+    const result = run()
+    const current = snapshot()
+    if (areSceneSnapshotsEqual(before, current)) return result
+    const temporal = store.temporal.getState()
+    // Only paused (derived) writes landed: they still make one step of their own.
+    if (
+      temporal.pastStates.length === pastBefore &&
+      temporal.isTracking &&
+      getSceneHistoryPauseDepth(store) === 0
+    )
+      store.temporal.setState({ pastStates: [...temporal.pastStates, before], futureStates: [] })
+    const changedNodeIds = new Set<AnyNodeId>()
+    for (const id of new Set([...Object.keys(before.nodes), ...Object.keys(current.nodes)]))
+      if (before.nodes[id as AnyNodeId] !== current.nodes[id as AnyNodeId])
+        changedNodeIds.add(id as AnyNodeId)
+    settlePendingSceneCommit(store, { origin: 'local', before, current, changedNodeIds })
+    return result
+  })
 }
 
 export function applyScenePatch(changes: ScenePatch): boolean {
@@ -2335,6 +2553,7 @@ export function applySceneSnapshot(
   snapshot: SceneSnapshot,
   options: ApplySceneSnapshotOptions,
 ): boolean {
+  runSceneWriteGuards(useScene)
   const before = sceneHistorySnapshotFromState(useScene.getState())
   const temporalState = useScene.temporal.getState()
   if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0 || hasSceneHistoryDrafts()) {

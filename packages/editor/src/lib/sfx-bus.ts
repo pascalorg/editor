@@ -28,6 +28,9 @@ type SFXEvents = {
   'sfx:menu-click': undefined
   'sfx:paint-apply': undefined
   'sfx:success': undefined
+  'sfx:turn-done': undefined
+  'sfx:turn-failed': undefined
+  'sfx:turn-needs-input': undefined
   'sfx:terrain-sculpt-start': TerrainVerb
   'sfx:terrain-sculpt-stop': undefined
 }
@@ -58,6 +61,9 @@ const handleMenuHover = () => playSFX('menuHover')
 const handleMenuClick = () => playSFX('menuClick')
 const handlePaintApply = () => playSFX('paintApply')
 const handleSuccess = () => playSFX('success')
+const handleTurnDone = () => playSFX('turnDone')
+const handleTurnFailed = () => playSFX('turnFailed')
+const handleTurnNeedsInput = () => playSFX('turnNeedsInput')
 const TERRAIN_LOOP_BY_VERB = {
   raise: 'terrainRaise',
   lower: 'terrainLower',
@@ -89,9 +95,13 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:menu-click', handleMenuClick)
   sfxEmitter.on('sfx:paint-apply', handlePaintApply)
   sfxEmitter.on('sfx:success', handleSuccess)
+  sfxEmitter.on('sfx:turn-done', handleTurnDone)
+  sfxEmitter.on('sfx:turn-failed', handleTurnFailed)
+  sfxEmitter.on('sfx:turn-needs-input', handleTurnNeedsInput)
   sfxEmitter.on('sfx:terrain-sculpt-start', handleTerrainSculptStart)
   sfxEmitter.on('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
   unsubscribeAudio = useAudio.subscribe(updateSFXVolumes)
+  updateSFXVolumes()
 }
 
 export function disposeSFXBus() {
@@ -110,6 +120,9 @@ export function disposeSFXBus() {
     sfxEmitter.off('sfx:menu-click', handleMenuClick)
     sfxEmitter.off('sfx:paint-apply', handlePaintApply)
     sfxEmitter.off('sfx:success', handleSuccess)
+    sfxEmitter.off('sfx:turn-done', handleTurnDone)
+    sfxEmitter.off('sfx:turn-failed', handleTurnFailed)
+    sfxEmitter.off('sfx:turn-needs-input', handleTurnNeedsInput)
     sfxEmitter.off('sfx:terrain-sculpt-start', handleTerrainSculptStart)
     sfxEmitter.off('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
     unsubscribeAudio?.()

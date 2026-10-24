@@ -273,7 +273,7 @@ function seed(shape = 'box', mover: Mover = 'registry', hosted = true) {
     tool: 'item',
     movingNodeOrigin: '3d',
     placementDragMode: false,
-    viewMode: '3d',
+    viewLayouts: {},
   })
   useEditor.getState().setSnappingMode('item', 'off')
   useViewer.setState({

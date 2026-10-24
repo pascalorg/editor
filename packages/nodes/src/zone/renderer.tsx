@@ -5,6 +5,7 @@ import {
   useLiveNodeOverrides,
   useRegistry,
   useScene,
+  type ZoneFloorScript,
   type ZoneNode,
 } from '@pascal-app/core'
 import {
@@ -19,6 +20,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Color, DoubleSide, type Group } from 'three'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { FinishScriptModel } from '../shared/finish-script-model'
 import { owningUnitForZone } from './unit-membership'
 
 const Y_OFFSET = 0.01
@@ -71,9 +73,23 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   const ref = useRef<Group>(null!)
   useRegistry(node.id, 'zone', ref)
   const showZones = useViewer((state) => state.showZones)
+  const script = node.floor?.script
   return (
     <group ref={ref} visible={node.visible !== false}>
       {showZones ? <ZoneVisuals node={node} /> : null}
+      {script ? <FloorScriptModel node={node} script={script} /> : null}
+    </group>
+  )
+}
+
+/** Over the floor plate's top, so the plate's own finish never shows through the boards. */
+const FLOOR_SCRIPT_LIFT = 0.001
+
+/** The room's floor finish its script built, in the level's frame, just over the plate. */
+function FloorScriptModel({ node, script }: { node: ZoneNode; script: ZoneFloorScript }) {
+  return (
+    <group position-y={FLOOR_SCRIPT_LIFT}>
+      <FinishScriptModel ownerId={node.id} parentId={node.parentId} script={script} />
     </group>
   )
 }

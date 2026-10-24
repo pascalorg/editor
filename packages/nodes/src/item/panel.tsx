@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, getScaledDimensions, type ItemNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  getScaledDimensions,
+  type ItemNode,
+  scriptImages,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -10,6 +16,7 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
+  usePlacementNotice,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Link, Link2Off, Move, Trash2 } from 'lucide-react'
@@ -38,6 +45,7 @@ export default function ItemPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as ItemNode | undefined) : undefined,
   )
 
+  const fitWarning = usePlacementNotice(selectedId)
   const [uniformScale, setUniformScale] = useState(true)
   const nodeRef = useRef(node)
   nodeRef.current = node
@@ -87,11 +95,22 @@ export default function ItemPanel() {
 
   return (
     <PanelWrapper
-      icon={node.asset.thumbnail || '/icons/item.webp'}
+      icon={scriptImages(node)?.thumbnail ?? (node.asset.thumbnail || '/icons/item.webp')}
       onClose={handleClose}
       title={node.name || node.asset.name}
       width={300}
     >
+      {fitWarning && (
+        <div className="mx-1 mb-1 flex gap-2 rounded-lg bg-amber-400/10 px-3 py-2 text-xs">
+          <span className="font-semibold text-amber-700 dark:text-amber-400">!</span>
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium text-foreground">{fitWarning.line}</span>
+            {fitWarning.detail && (
+              <span className="text-muted-foreground">{fitWarning.detail}</span>
+            )}
+          </div>
+        </div>
+      )}
       <AuthoredParams node={node} />
 
       <PanelSection title="Position">
@@ -195,8 +214,8 @@ export default function ItemPanel() {
           <button
             className={
               uniformScale
-                ? 'flex h-6 w-6 items-center justify-center rounded-md bg-[#3e3e3e] text-muted-foreground transition-colors hover:text-foreground'
-                : 'flex h-6 w-6 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground'
+                ? 'flex h-6 w-6 items-center justify-center rounded-md bg-black/8 dark:bg-[#3e3e3e] text-muted-foreground transition-colors hover:text-foreground'
+                : 'flex h-6 w-6 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground'
             }
             onClick={() => setUniformScale((v) => !v)}
             type="button"
@@ -279,7 +298,7 @@ export default function ItemPanel() {
           {(() => {
             const [w, h, d] = getScaledDimensions(node)
             return (
-              <span className="font-mono text-white">
+              <span className="font-mono text-foreground dark:text-white">
                 {Math.round(w * 100) / 100}×{Math.round(h * 100) / 100}×{Math.round(d * 100) / 100}
               </span>
             )
@@ -297,7 +316,7 @@ export default function ItemPanel() {
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={handleDelete}
           />

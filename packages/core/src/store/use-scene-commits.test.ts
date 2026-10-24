@@ -9,13 +9,16 @@ import { ItemNode } from '../schema/nodes/item'
 import { LevelNode } from '../schema/nodes/level'
 import { SlabNode } from '../schema/nodes/slab'
 import { WallNode } from '../schema/nodes/wall'
+import { WindowNode } from '../schema/nodes/window'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { migrateCeilingRoomLinks, migrateRoomZones } from '../utils/room-zone-migration'
 import {
+  acquireSceneCommitAuthor,
   areSceneSnapshotsEqual,
   pauseSceneHistory,
   resumeSceneHistory,
+  runAsSceneCommitAuthor,
   runAsSingleSceneHistoryStep,
   type SceneCommit,
   type SceneSnapshot,
@@ -28,7 +31,9 @@ import useScene, {
   applySceneOperationPatch,
   applyScenePatch,
   applySceneSnapshot,
+  beginSceneHistoryDraft,
   clearSceneHistory,
+  getSceneDocument,
   type SceneOperationPatch,
 } from './use-scene'
 
@@ -179,8 +184,8 @@ describe('scene commit boundary', () => {
     useScene.getState().updateNode(LEVEL_ID, { level: 1 } as Partial<AnyNode>)
     expect(commits).toHaveLength(1)
     expect(commits[0]?.origin).toBe('local')
-    expect((commits[0]?.before.nodes[LEVEL_ID] as { level: number }).level).toBe(0)
-    expect((commits[0]?.current.nodes[LEVEL_ID] as { level: number }).level).toBe(1)
+    expect((commits[0]!.before.nodes[LEVEL_ID] as { level: number }).level).toBe(0)
+    expect((commits[0]!.current.nodes[LEVEL_ID] as { level: number }).level).toBe(1)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
 
     useScene.getState().updateNode(LEVEL_ID, { level: 1 } as Partial<AnyNode>)
@@ -234,6 +239,52 @@ describe('scene commit boundary', () => {
     expect(useScene.getState().nodes[draftWall.id]).toBeDefined()
   })
 
+  test('saves leave out only the drafts an interaction owns, never a node by its metadata', () => {
+    expect(getSceneDocument().nodes).toBe(useScene.getState().nodes)
+    // A preset tile clones its subtree into the level before any click (place-preset).
+    const presetDraft = WindowNode.parse({
+      id: 'window_preset_draft',
+      parentId: LEVEL_ID,
+      metadata: { isNew: true, presetId: 'item_window_preset' },
+    })
+    // A draw tool's draft is registered as a created carry draft instead.
+    const toolDraft = ItemNode.parse({
+      id: 'item_tool_draft',
+      parentId: LEVEL_ID,
+      metadata: { isTransient: true },
+      asset: { id: 'chair', name: 'Chair', category: 'seating', thumbnail: '', src: '/chair.glb' },
+    })
+    // Some movers commit a duplicate in place and leave its `isNew` flag on: it is the user's.
+    const placedDuplicate = WallNode.parse({
+      id: 'wall_placed_duplicate',
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+      metadata: { isNew: true },
+    })
+    useScene.getState().createNode(placedDuplicate, LEVEL_ID)
+    useScene.getState().createNode(presetDraft, LEVEL_ID)
+    pauseSceneHistory(useScene)
+    useScene.getState().createNode(toolDraft, LEVEL_ID)
+    const endToolDraft = beginSceneHistoryDraft(toolDraft.id, null)
+
+    const armed = getSceneDocument([presetDraft.id])
+    expect(armed.nodes[presetDraft.id]).toBeUndefined()
+    expect(armed.nodes[toolDraft.id]).toBeUndefined()
+    expect(armed.nodes[placedDuplicate.id]).toBeDefined()
+    expect((armed.nodes[LEVEL_ID] as { children: string[] }).children).toEqual([placedDuplicate.id])
+    expect(useScene.getState().nodes[presetDraft.id]).toBeDefined()
+
+    useScene.getState().deleteNode(toolDraft.id)
+    endToolDraft()
+    resumeSceneHistory(useScene)
+    useScene.getState().updateNode(presetDraft.id, { metadata: { presetId: 'item_window_preset' } })
+
+    const placed = Object.values(getSceneDocument().nodes).filter((node) => node.type === 'window')
+    expect(placed.map((node) => node.id)).toEqual([presetDraft.id])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  })
+
   test('coalesces a compound transaction into one commit and one undo step', () => {
     const commits: SceneCommit[] = []
     unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
@@ -244,8 +295,8 @@ describe('scene commit boundary', () => {
     })
 
     expect(commits).toHaveLength(1)
-    expect((commits[0]?.before.nodes[LEVEL_ID] as { level: number }).level).toBe(0)
-    expect((commits[0]?.current.nodes[LEVEL_ID] as { level: number }).level).toBe(2)
+    expect((commits[0]!.before.nodes[LEVEL_ID] as { level: number }).level).toBe(0)
+    expect((commits[0]!.current.nodes[LEVEL_ID] as { level: number }).level).toBe(2)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
 
     useScene.temporal.getState().undo()
@@ -1348,5 +1399,88 @@ describe('scene commit boundary', () => {
     }
 
     expect(areSceneSnapshotsEqual(left, right)).toBe(true)
+  })
+})
+
+describe('commit author', () => {
+  beforeEach(() => {
+    unsubscribe()
+    resetScene()
+  })
+
+  afterEach(() => {
+    unsubscribe()
+    unsubscribe = () => {}
+  })
+
+  function wall(id: string) {
+    return WallNode.parse({ id, parentId: LEVEL_ID, start: [0, 0], end: [4, 0] })
+  }
+
+  test("an agent scope tags its commits; the person's edits stay untagged", () => {
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    runAsSceneCommitAuthor('agent', () =>
+      useScene.getState().createNode(wall('wall_agent'), LEVEL_ID),
+    )
+    useScene.getState().createNode(wall('wall_person'), LEVEL_ID)
+
+    expect(commits.map((commit) => commit.author)).toEqual(['agent', undefined])
+    expect(commits[1]).not.toHaveProperty('author')
+  })
+
+  test('one undo step written by an agent is one tagged commit', () => {
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    runAsSceneCommitAuthor('agent', () =>
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().createNode(wall('wall_a'), LEVEL_ID)
+        useScene.getState().createNode(wall('wall_b'), LEVEL_ID)
+      }),
+    )
+
+    expect(commits).toHaveLength(1)
+    expect(commits[0]?.author).toBe('agent')
+    expect(commits[0]?.origin).toBe('local')
+  })
+
+  test('a held author tags every commit until released', () => {
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    const release = acquireSceneCommitAuthor('agent')
+    useScene.getState().createNode(wall('wall_held_a'), LEVEL_ID)
+    useScene.getState().createNode(wall('wall_held_b'), LEVEL_ID)
+    release()
+    release()
+    useScene.getState().createNode(wall('wall_after'), LEVEL_ID)
+
+    expect(commits.map((commit) => commit.author)).toEqual(['agent', 'agent', undefined])
+  })
+
+  test('a load keeps its origin under an agent scope', () => {
+    const commits: SceneCommit[] = []
+    const snapshot = currentSnapshot()
+    const loaded = wall('wall_loaded')
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    runAsSceneCommitAuthor('agent', () =>
+      applySceneSnapshot(
+        {
+          ...snapshot,
+          nodes: {
+            ...snapshot.nodes,
+            [loaded.id]: loaded,
+            [LEVEL_ID]: { ...snapshot.nodes[LEVEL_ID], children: [loaded.id] } as AnyNode,
+          },
+        },
+        { origin: 'load' },
+      ),
+    )
+
+    expect(commits).toHaveLength(1)
+    expect(commits[0]?.origin).toBe('load')
   })
 })

@@ -11,7 +11,7 @@ import { getFloorPlacedFootprints } from './floor-placed-footprints'
 
 export { getFloorPlacedFootprints } from './floor-placed-footprints'
 
-import { spatialGridManager } from './spatial-grid-manager'
+import { activeSpatialGrid } from './spatial-grid-manager'
 
 export { GROUND_SUPPORT_ID } from './support-host-id'
 
@@ -118,7 +118,7 @@ export function getFloorPlacedElevation({
     const host = nodes[supportSlabId]
     for (const footprint of footprints) {
       if (host?.type === 'slab' && host.plateRole === 'base') {
-        const coverings = spatialGridManager
+        const coverings = activeSpatialGrid()
           .getSupportCandidatesForFootprint(
             resolvedLevelId,
             footprint.position ?? position,
@@ -134,7 +134,7 @@ export function getFloorPlacedElevation({
         const covering = coverings[0]
         if (covering) return finiteSlabElevation(covering.elevation)
       }
-      const hosted = spatialGridManager.getHostSlabElevationForFootprint(
+      const hosted = activeSpatialGrid().getHostSlabElevationForFootprint(
         resolvedLevelId,
         supportSlabId,
         footprint.position ?? position,
@@ -157,7 +157,7 @@ export function getFloorPlacedElevation({
   // sinking into the recess.
   let elected = Number.NEGATIVE_INFINITY
   for (const footprint of footprints) {
-    const support = spatialGridManager.getSlabSupportForItem(
+    const support = activeSpatialGrid().getSlabSupportForItem(
       resolvedLevelId,
       footprint.position ?? position,
       footprint.dimensions,

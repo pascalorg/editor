@@ -28,6 +28,7 @@ import {
   createSurfaceRoleMaterial,
   ErrorBoundary,
   glassMaterial,
+  materialCastsShadow,
   NodeRenderer,
   type RenderShading,
   resolveCdnUrl,
@@ -54,14 +55,18 @@ import {
 } from 'react'
 import type { AnimationAction, AnimationClip, Group, Material, Mesh, Object3D } from 'three'
 import { MathUtils, Texture } from 'three'
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { BlockFaceHostFrame } from '../shared/block-face-host'
 import { canRegisterItemLight } from '../shared/item-light-placement'
 import { RoofFaceHostFrame } from '../shared/roof-face-host'
-import { cancelItemModelLoad, getUnavailableItemAsset, ItemGLTFLoader } from './model-loader'
+import {
+  cancelItemModelLoad,
+  getItemResourceFailures,
+  getUnavailableItemAsset,
+  ItemGLTFLoader,
+} from './model-loader'
 
 type MutableMaterial = Material & {
   depthTest?: boolean
@@ -146,7 +151,7 @@ const isCapturedMaterialArray = (
   captured: CapturedItemMaterialData,
 ): captured is CapturedMultiItemMaterialData => Array.isArray(captured.authoredMaterials)
 
-const isGlassMaterial = (material: Material): boolean =>
+const isLegacyGlassMaterial = (material: Material): boolean =>
   material === glassMaterial || material.name.toLowerCase() === 'glass'
 
 const clampGeometryGroups = (mesh: Mesh, matCount: number): void => {
@@ -185,7 +190,7 @@ const resolveItemMaterial = (
 ): Material => {
   // Monochrome (textures off): collapse to the themed furnishing clay colour.
   if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
-  if (authoredMaterial.name.toLowerCase() === 'glass') return glassMaterial
+  // Authored material names do not opt an asset into a Pascal preset.
   if (slotId != null) {
     const override = resolveMaterialRef(nodeSlots?.[slotId], sceneMaterials, shading)
     if (override) return override
@@ -234,7 +239,6 @@ const configureItemModelLoader = (loader: ItemGLTFLoader, renderer: unknown) => 
     itemDracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/')
   }
   loader.setDRACOLoader(itemDracoLoader)
-  loader.setMeshoptDecoder(MeshoptDecoder)
 }
 
 type LoadedItemGltf = GLTF & {
@@ -396,9 +400,9 @@ const UnavailableItemModel = ({
 }
 
 /**
- * Expected network failures resolve through ItemGLTFLoader as an unavailable
- * scene so they never become React render errors. Parse and renderer failures
- * still reach this boundary and remain visible to developers.
+ * Expected network and malformed nonbinary JSON failures resolve through
+ * ItemGLTFLoader as an unavailable scene so they never become React render
+ * errors. Other parser and renderer failures still reach this boundary.
  */
 const ModelWithRetry = ({
   node,
@@ -613,7 +617,7 @@ const ModelRenderer = ({
 }
 
 const LoadedModelRenderer = ({
-  gltf: { scene, nodes, animations },
+  gltf: { scene, nodes, animations, userData },
   node,
   markSettled,
   events,
@@ -633,8 +637,12 @@ const LoadedModelRenderer = ({
     // keep such items out of static batches (shared/node-batch/candidates).
     const group = sceneRegistry.nodes.get(node.id)
     if (group) group.userData.itemHasAnimations = animations.length > 0
+    const failedResources = getItemResourceFailures({ userData })
+    if (failedResources.length)
+      useViewer.getState().reportItemLoadFailure(node.id, failedResources[0]!)
     markSettled()
-  }, [markSettled, node.id, animations])
+    if (failedResources.length) return () => useViewer.getState().clearItemLoadFailure(node.id)
+  }, [markSettled, node.id, animations, userData])
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
@@ -688,7 +696,7 @@ const LoadedModelRenderer = ({
     }
 
     for (const { mesh, captured } of meshEntries) {
-      let hasGlass = false
+      let hasLegacyGlass = false
 
       if (isCapturedMaterialArray(captured)) {
         const nextMaterials = captured.authoredMaterials.map((authoredMaterial, index) =>
@@ -700,7 +708,7 @@ const LoadedModelRenderer = ({
           ),
         )
         mesh.material = nextMaterials
-        hasGlass = nextMaterials.some(isGlassMaterial)
+        hasLegacyGlass = nextMaterials.some(isLegacyGlassMaterial)
         clampGeometryGroups(mesh, nextMaterials.length)
       } else {
         const nextMaterial = resolveItemMaterial(
@@ -710,11 +718,11 @@ const LoadedModelRenderer = ({
           materialOptions,
         )
         mesh.material = nextMaterial
-        hasGlass = isGlassMaterial(nextMaterial)
+        hasLegacyGlass = isLegacyGlassMaterial(nextMaterial)
       }
 
-      mesh.castShadow = !hasGlass
-      mesh.receiveShadow = !hasGlass
+      mesh.castShadow = materialCastsShadow(mesh.material)
+      mesh.receiveShadow = !hasLegacyGlass
     }
   }, [shading, textures, colorPreset, node.slots, sceneMaterials])
 

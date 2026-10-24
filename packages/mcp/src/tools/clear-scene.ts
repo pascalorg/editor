@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { clearSceneTool } from '@pascal-app/core/agent-tools'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -17,13 +17,13 @@ export function registerClearScene(server: McpServer, operations: SceneOperation
     {
       title: clearSceneTool.title,
       description: clearSceneTool.description,
-      inputSchema: clearSceneTool.input,
-      outputSchema: {
+      inputSchema: z.object(clearSceneTool.input),
+      outputSchema: z.object({
         cleared: z.object({ removed: z.number() }),
         version: z.number().nullable(),
         graphHash: z.string().nullable(),
         ...liveSyncOutput,
-      },
+      }),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async () => {

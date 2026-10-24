@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
+import { z } from 'zod'
 import { SceneBridge } from './bridge/scene-bridge'
 import { createPascalMcpServer } from './server'
 
@@ -62,7 +62,7 @@ describe('Pascal MCP tool execution', () => {
         }
       },
     })
-    server.registerTool('cancel_probe', { inputSchema: {} }, async () => {
+    server.registerTool('cancel_probe', { inputSchema: z.object({}) }, async () => {
       callbackCalls++
       return { content: [{ type: 'text', text: 'mutated' }] }
     })
@@ -72,9 +72,12 @@ describe('Pascal MCP tool execution', () => {
 
     try {
       const controller = new AbortController()
-      const call = client.callTool({ name: 'cancel_probe', arguments: {} }, undefined, {
-        signal: controller.signal,
-      })
+      const call = client.callTool(
+        { name: 'cancel_probe', arguments: {} },
+        {
+          signal: controller.signal,
+        },
+      )
       await executorStarted
       controller.abort()
       await expect(call).rejects.toThrow()
@@ -97,7 +100,7 @@ describe('Pascal MCP tool execution', () => {
         return execute()
       },
     })
-    server.tool('legacy_probe', async () => ({
+    server.registerTool('legacy_probe', {}, async () => ({
       content: [{ type: 'text', text: 'legacy result' }],
     }))
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
@@ -125,9 +128,13 @@ describe('Pascal MCP tool execution', () => {
         return execute()
       },
     })
-    const registration = server.registerTool('update_probe', { inputSchema: {} }, async () => ({
-      content: [{ type: 'text', text: 'initial' }],
-    }))
+    const registration = server.registerTool(
+      'update_probe',
+      { inputSchema: z.object({}) },
+      async () => ({
+        content: [{ type: 'text', text: 'initial' }],
+      }),
+    )
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: 'registered-tool-update-test', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -167,7 +174,7 @@ describe('Pascal MCP tool execution', () => {
         return execute()
       },
     })
-    const registration = server.tool('legacy_update_probe', async () => ({
+    const registration = server.registerTool('legacy_update_probe', {}, async () => ({
       content: [{ type: 'text', text: 'initial' }],
     }))
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
@@ -208,3 +215,23 @@ async function toolText(client: Client, name: string): Promise<string | undefine
   const content = result.content[0]
   return content?.type === 'text' ? content.text : undefined
 }
+
+describe('what a client reads at connect', () => {
+  // L64 (the user, 18:07): whether the agent may open the editor is the person's setting, which
+  // the host says at connect.
+  test('a host adds its own lines', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const line = 'When a tool needs the editor tab in front: ask the user to bring it forward.'
+    const server = createPascalMcpServer({ bridge, instructions: line })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'instructions-test', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    try {
+      expect(client.getInstructions()).toEndWith(`\n${line}`)
+    } finally {
+      await client.close()
+      await server.close()
+    }
+  })
+})

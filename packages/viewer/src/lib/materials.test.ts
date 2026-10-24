@@ -2,7 +2,13 @@
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
+import { MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import {
+  createMaterial as createSceneMaterial,
+  materialCastsShadow,
+  resolveMaterialRef as resolveSceneMaterialRef,
+} from '../index'
 import {
   createMaterial,
   getTextureKey,
@@ -53,6 +59,64 @@ describe('shared flat slot defaults', () => {
     expect(solid).toBeInstanceOf(MeshLambertNodeMaterial)
     expect(solid).toBe(resolveSlotDefaultMaterial('#abcdef', 'solid', 0.75))
     expect(solid.userData.__pascalCachedMaterial).toBe(true)
+  })
+})
+
+describe('material shadow policy', () => {
+  test('library glass does not cast in either shading mode, independent of its name', () => {
+    for (const shading of ['solid', 'rendered'] as const) {
+      const glass = resolveMaterialRef('library:preset-glass', undefined, shading)!
+      expect(glass.name).not.toBe('glass')
+      expect(materialCastsShadow(glass)).toBe(false)
+      const opaque = resolveSlotDefaultMaterial('#cccccc', shading)
+      expect(materialCastsShadow(opaque)).toBe(true)
+      expect(materialCastsShadow([opaque, glass])).toBe(false)
+    }
+  })
+
+  test('transmission and glass opacity suppress casting, while tinted and opaque materials cast', () => {
+    const transmitting = new MeshPhysicalMaterial({ transmission: 0.9 })
+    const transparent = new MeshStandardMaterial({ transparent: true, opacity: 0.3 })
+    const tinted = new MeshStandardMaterial({ transparent: true, opacity: 0.8 })
+    const opaque = new MeshStandardMaterial()
+    opaque.name = 'glass'
+    expect(materialCastsShadow(transmitting)).toBe(false)
+    expect(materialCastsShadow(transparent)).toBe(false)
+    expect(materialCastsShadow(tinted)).toBe(true)
+    expect(materialCastsShadow(opaque)).toBe(true)
+  })
+})
+
+describe('authored transparency', () => {
+  test('a scene material keeps its opacity and reflection intensity independently of glass styling', () => {
+    const properties = MaterialProperties.parse({
+      color: '#789ca2',
+      roughness: 0.14,
+      opacity: 0.38,
+      transparent: true,
+    })
+    const preset = createSceneMaterial({ preset: 'glass', properties }) as MeshStandardNodeMaterial
+    const materials = {
+      mat_authored: {
+        id: 'mat_authored' as const,
+        name: 'Authored glass',
+        material: { preset: 'custom' as const, properties },
+      },
+    }
+    const authored = resolveSceneMaterialRef(
+      'scene:mat_authored',
+      materials,
+    ) as MeshStandardNodeMaterial
+    expect(authored.opacity).toBe(0.38)
+    expect(authored.opacityNode).toBeNull()
+    expect(authored.envMapIntensity).toBe(1)
+    expect(authored.color.getHexString()).toBe('789ca2')
+    expect(authored.roughness).toBe(0.14)
+    expect(materialCastsShadow(authored)).toBe(false)
+    expect(preset.opacityNode).not.toBeNull()
+    expect(preset.envMapIntensity).toBe(1.4)
+    expect(preset).not.toBe(authored)
+    expect(resolveSceneMaterialRef('scene:mat_authored', materials)).toBe(authored)
   })
 })
 

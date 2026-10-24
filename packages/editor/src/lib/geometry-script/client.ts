@@ -80,7 +80,7 @@ async function sha256(bytes: ArrayBuffer | Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** The artifact and script hashes, computed here: nothing the sandboxed code reports about itself is trusted. */
+/** The artifact and script hashes and the language, set here: nothing the sandboxed code reports about itself is trusted. */
 async function withOwnHashes(
   output: GeometryScriptCompileOutput,
   code: string,
@@ -89,7 +89,7 @@ async function withOwnHashes(
     sha256(output.glb),
     sha256(new TextEncoder().encode(code)),
   ])
-  return { ...output, sha256: artifact, script }
+  return { ...output, sha256: artifact, script, language: 'three' }
 }
 
 /** Starts the sandbox frame and its compile worker once; a crash or timeout starts a fresh one. */
@@ -138,10 +138,17 @@ function startSandbox(): Promise<Window> {
 export async function compileGeometryScriptInWorker(input: {
   code: string
   params?: Record<string, GeometryScriptParamValue>
+  /** What the host builds it for (a room's floor), in the host's frame. */
+  inputs?: Record<string, unknown>
 }): Promise<GeometryScriptCompileOutput> {
   const target = await startSandbox()
   const id = nextId++
-  const request: GeometryScriptWorkerRequest = { id, code: input.code, params: input.params }
+  const request: GeometryScriptWorkerRequest = {
+    id,
+    code: input.code,
+    params: input.params,
+    inputs: input.inputs,
+  }
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reset(new Error(`The script ran longer than ${COMPILE_TIMEOUT_MS / 1000} s and was stopped`))
