@@ -365,8 +365,6 @@ export function ReferencePanel() {
               X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={50}
-          min={-50}
           onChange={(value) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = value
@@ -383,8 +381,6 @@ export function ReferencePanel() {
               Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={50}
-          min={-50}
           onChange={(value) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = value
@@ -401,8 +397,6 @@ export function ReferencePanel() {
               Z<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={50}
-          min={-50}
           onChange={(value) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = value
@@ -462,7 +456,7 @@ export function ReferencePanel() {
               XYZ<sub className="ml-[1px] text-[11px] opacity-70">scale</sub>
             </>
           }
-          max={10}
+          max={1000}
           min={0.01}
           onChange={(value) => {
             if (value > 0) {
