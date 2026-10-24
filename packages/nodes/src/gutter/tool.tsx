@@ -8,7 +8,7 @@ import {
   type RoofNode,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { isGridSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
@@ -19,13 +19,13 @@ import {
   roofSurfaceFootprintFromNode,
 } from '../shared/roof-surface-placement-guides'
 import { gutterDefinition } from './definition'
-import { type EaveSnap, resolveEaveSnap } from './eave-snap'
+import { type EaveSnap, resolveGutterPlacement } from './eave-snap'
 import GutterPreview from './preview'
 
 type PreviewTarget = {
   roof: { position: [number, number, number]; rotation: number }
   segment: { position: [number, number, number]; rotation: number }
-  snap: EaveSnap
+  snap: EaveSnap & { length: number }
 }
 
 /**
@@ -81,15 +81,26 @@ const GutterTool = () => {
       )
       if (!hit) return
 
-      const snap = resolveEaveSnap(hit.segment, hit.localX, hit.localZ)
+      const snap = resolveGutterPlacement(
+        hit.segment,
+        hit.localX,
+        hit.localZ,
+        previewNode.length,
+        !event.nativeEvent?.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        event.nativeEvent?.altKey === true,
+      )
 
       // Grid-snap chime fires when the segment-local snap moves to a
       // new 5 cm cell along the eave — keeps SFX in lockstep with what
       // the commit will actually store.
-      const sx = Math.round(snap.eaveX * 20) / 20
-      const sz = Math.round(snap.eaveZ * 20) / 20
+      const sx = snap.eaveX
+      const sz = snap.eaveZ
       const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
+      if (
+        !event.nativeEvent?.altKey &&
+        isGridSnapActive() &&
+        (!prev || prev[0] !== sx || prev[1] !== sz)
+      ) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
@@ -109,7 +120,11 @@ const GutterTool = () => {
         roof,
         segment: hit.segment,
         center: [snap.eaveX, snap.eaveY, snap.eaveZ],
-        footprint: roofSurfaceFootprintFromNode({ ...previewNode, rotation: snap.rotation }),
+        footprint: roofSurfaceFootprintFromNode({
+          ...previewNode,
+          length: snap.length,
+          rotation: snap.rotation,
+        }),
         mode: 'linear-edge',
       })
       event.stopPropagation()
@@ -124,7 +139,14 @@ const GutterTool = () => {
       )
       if (!hit) return
       const state = useScene.getState()
-      const snap = resolveEaveSnap(hit.segment, hit.localX, hit.localZ)
+      const snap = resolveGutterPlacement(
+        hit.segment,
+        hit.localX,
+        hit.localZ,
+        previewNode.length,
+        !event.nativeEvent?.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        event.nativeEvent?.altKey === true,
+      )
 
       const gutter = GutterNode.parse({
         ...gutterDefinition.defaults(),
@@ -136,6 +158,7 @@ const GutterTool = () => {
         // building on whichever side the click landed.
         position: [snap.eaveX, snap.eaveY, snap.eaveZ],
         rotation: snap.rotation,
+        length: snap.length,
       })
       state.createNode(gutter, hit.segment.id as AnyNodeId)
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
@@ -145,11 +168,19 @@ const GutterTool = () => {
       event.stopPropagation()
     }
 
+    const clearTarget = () => {
+      setTarget(null)
+      clearRoofSurfacePlacementGuides()
+    }
+    emitter.on('roof:leave', clearTarget)
+    emitter.on('tool:cancel', clearTarget)
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onClick)
 
     return () => {
+      emitter.off('roof:leave', clearTarget)
+      emitter.off('tool:cancel', clearTarget)
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
@@ -174,7 +205,7 @@ const GutterTool = () => {
               position={[target.snap.eaveX, target.snap.eaveY, target.snap.eaveZ]}
               rotation-y={target.snap.rotation}
             >
-              <GutterPreview node={previewNode} />
+              <GutterPreview node={{ ...previewNode, length: target.snap.length }} />
             </group>
           </group>
         </group>

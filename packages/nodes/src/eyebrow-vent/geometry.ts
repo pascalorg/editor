@@ -1,5 +1,6 @@
 import type { EyebrowVentNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import {
   copyUvToSecondaryChannel,
   cumulativeProfileDistances,
@@ -33,7 +34,7 @@ export const EYEBROW_VENT_MATERIAL_INDEX = {
  * Pure: no React, no scene access, no store mutation. Safe for unit tests, the
  * placement preview, and the move-tool ghost.
  */
-export function buildEyebrowVentGeometry(node: EyebrowVentNode): THREE.BufferGeometry {
+function buildUnsmoothedEyebrowVentGeometry(node: EyebrowVentNode): THREE.BufferGeometry {
   const w = Math.max(0.15, node.width)
   const d = Math.max(0.15, node.depth)
   const h = Math.max(0.06, node.height)
@@ -97,8 +98,8 @@ function addScoop(
   const a = w / 2
   const b = h
   const zF = d / 2
-  const NZ = 20
-  const NF = 18
+  const NZ = 24
+  const NF = 32
 
   // Lofted half-ellipse, full at the front (z = zF) tapering to a rounded
   // nose at the back. `cos(v·π/2)` gives a smooth falloff to zero.
@@ -135,9 +136,7 @@ function addScoop(
   }
 
   // Horizontal louvers filling the front half-ellipse opening.
-  const frontStart = p.length / 3
-  addArchLouvers(p, n, uv, a, b, yB, zF - d * 0.04, slats)
-  return frontStart
+  return addArchOpening(p, n, uv, a, b, yB, zF, d, slats)
 }
 
 // ─── Style: half-round (D-shaped louver vent) ─────────────────────────────
@@ -153,12 +152,10 @@ function addHalfRound(
   slats: number,
 ): number {
   const a = w / 2
-  // Cap the crown at a true half-round — never bulge past a semicircle, so the
-  // top reads as a clean, smaller-radius arch. `height` flattens it further.
-  const b = Math.min(h, a)
+  const b = h
   const zF = d / 2
   const zB = -d / 2
-  const NF = 20
+  const NF = 32
 
   const ringF = halfRing(a, b, yB, zF, 1, NF)
   const ringB = halfRing(a, b, yB, zB, 1, NF)
@@ -189,10 +186,8 @@ function addHalfRound(
     pushTri(p, n, uv, backCenter, ringB[j + 1]!, ringB[j]!, [0, 0, -1])
   }
 
-  // Louvered front face (a slat count bumped up — the D-vent reads denser).
-  const frontStart = p.length / 3
-  addArchLouvers(p, n, uv, a, b, yB, zF - d * 0.04, slats > 0 ? Math.max(slats, 4) : 0)
-  return frontStart
+  // Louvered front face.
+  return addArchOpening(p, n, uv, a, b, yB, zF, d, slats)
 }
 
 // ─── Style: slant-box (low hooded box) ────────────────────────────────────
@@ -244,9 +239,13 @@ function addSlantBox(
   pushQuad(p, n, uv, [-hw, oB, zF], [oL, oB, zF], [oL, oT, zF], [-hw, oT, zF], [0, 0, 1]) // left
   pushQuad(p, n, uv, [oR, oB, zF], [hw, oB, zF], [hw, oT, zF], [oR, oT, zF], [0, 0, 1]) // right
 
-  // Recessed screen panel at the back of the pocket (blocks see-through).
-  const frontStart = p.length / 3
   const screenZ = zF - d * 0.2
+  pushQuad(p, n, uv, [oL, oT, zF], [oR, oT, zF], [oR, oT, screenZ], [oL, oT, screenZ], [0, -1, 0])
+  pushQuad(p, n, uv, [oL, oB, zF], [oR, oB, zF], [oR, oB, screenZ], [oL, oB, screenZ], [0, 1, 0])
+  pushQuad(p, n, uv, [oL, oB, zF], [oL, oT, zF], [oL, oT, screenZ], [oL, oB, screenZ], [1, 0, 0])
+  pushQuad(p, n, uv, [oR, oB, zF], [oR, oT, zF], [oR, oT, screenZ], [oR, oB, screenZ], [-1, 0, 0])
+  // The backing remains visible when louvers are disabled.
+  const frontStart = p.length / 3
   pushQuad(
     p,
     n,
@@ -260,7 +259,54 @@ function addSlantBox(
 
   // Horizontal louvers inside the pocket — bounded by the opening in height
   // and recessed in depth between the frame face and the screen.
-  addRectLouvers(p, n, uv, oR, oB, oT, zF - d * 0.07, slats)
+  addRectLouvers(p, n, uv, oR, oB, oT, zF - d * 0.07, slats, d * 0.1)
+  return frontStart
+}
+
+function addArchOpening(
+  p: number[],
+  n: number[],
+  uv: number[],
+  a: number,
+  b: number,
+  yB: number,
+  zF: number,
+  depth: number,
+  slats: number,
+): number {
+  const rim = Math.min(a, b) * 0.08
+  const innerA = (a - rim) * 0.98,
+    innerB = b - 2 * rim
+  const recess = depth * 0.1
+  const outer = halfRing(a, b, yB, zF, 1, 32)
+  const inner = halfRing(innerA, innerB, yB + rim, zF, 1, 32)
+  const back = halfRing(innerA, innerB, yB + rim, zF - recess, 1, 32)
+  addBand(p, n, uv, outer, inner, 32, () => [0, 0, 1])
+  addBand(p, n, uv, inner, back, 32, (a, _, c) => [-(a[0]! + c[0]!), -(a[1]! + c[1]! - 2 * yB), 0])
+  pushQuad(
+    p,
+    n,
+    uv,
+    [-a, yB, zF],
+    [a, yB, zF],
+    [innerA, yB + rim, zF],
+    [-innerA, yB + rim, zF],
+    [0, 0, 1],
+  )
+  pushQuad(
+    p,
+    n,
+    uv,
+    [-innerA, yB + rim, zF],
+    [innerA, yB + rim, zF],
+    [innerA, yB + rim, zF - recess],
+    [-innerA, yB + rim, zF - recess],
+    [0, 1, 0],
+  )
+  const frontStart = p.length / 3
+  const center = [0, yB + rim, zF - recess]
+  for (let i = 0; i < 32; i++) pushTri(p, n, uv, center, back[i]!, back[i + 1]!, [0, 0, 1])
+  addArchLouvers(p, n, uv, innerA, innerB, yB + rim, zF - recess * 0.25, slats, recess * 0.6)
   return frontStart
 }
 
@@ -277,11 +323,12 @@ function addArchLouvers(
   yB: number,
   z: number,
   slats: number,
+  maxBack: number,
 ): void {
   if (slats <= 0) return
   const drop = (b / (slats + 1)) * 0.55
-  const back = Math.max(0.012, b * 0.12)
-  const thick = Math.max(0.004, drop * 0.32)
+  const back = Math.min(maxBack, Math.max(0.012, b * 0.12))
+  const thick = Math.min(maxBack * 0.2, Math.max(0.004, drop * 0.32))
   for (let k = 1; k <= slats; k++) {
     const s = k / (slats + 1) // height fraction up the semicircle (sin φ)
     const y = yB + b * s
@@ -311,12 +358,13 @@ function addRectLouvers(
   yTop: number,
   z: number,
   slats: number,
+  maxBack: number,
 ): void {
   if (slats <= 0) return
   const span = yTop - yB
   const drop = (span / (slats + 1)) * 0.55
-  const back = Math.max(0.012, span * 0.18)
-  const thick = Math.max(0.004, drop * 0.32)
+  const back = Math.min(maxBack, Math.max(0.012, span * 0.18))
+  const thick = Math.min(maxBack * 0.2, Math.max(0.004, drop * 0.32))
   for (let k = 1; k <= slats; k++) {
     const y = yB + (span * k) / (slats + 1)
     addSlab(
@@ -557,4 +605,8 @@ function pushTri(
     uvs.push(...uvA, ...uvB, ...uvC)
   }
   for (let i = 0; i < 3; i++) normals.push(nx, ny, nz)
+}
+
+export function buildEyebrowVentGeometry(node: EyebrowVentNode): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedEyebrowVentGeometry(node))
 }

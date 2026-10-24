@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { mechanicalPaint } from '../shared/mechanical-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { buildLiquidLineFloorplan } from './floorplan'
 import { buildLiquidLineGeometry } from './geometry'
@@ -42,6 +43,8 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
   }),
 
   capabilities: {
+    paint: mechanicalPaint,
+    slots: () => [{ slotId: 'copper', label: 'Copper' }],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -50,7 +53,7 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
   parametrics: liquidLineParametrics,
 
   geometry: buildLiquidLineGeometry,
-  geometryKey: (n) => JSON.stringify([n.path, n.diameter]),
+  geometryKey: (n) => JSON.stringify([n.slots, n.path, n.diameter]),
 
   // Open run ends as typed refrigerant ports — directions point outward along
   // the path tangent so they mate flush onto a service valve. Path coords are
@@ -77,6 +80,7 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
         direction: unit(first, second),
         diameter,
         system: 'refrigerant',
+        connectionType: 'liquid',
       },
       {
         id: 'end',
@@ -84,6 +88,7 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
         direction: unit(last, prev),
         diameter,
         system: 'refrigerant',
+        connectionType: 'liquid',
       },
     ]
   },

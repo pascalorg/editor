@@ -14,6 +14,7 @@ import { BaseNode, nodeType, objectId } from '../base'
 export const LiquidLineNode = BaseNode.extend({
   id: objectId('liquid-line'),
   type: nodeType('liquid-line'),
+  slots: z.record(z.string(), z.string()).optional(),
   // Polyline path in level-local meters. Minimum two points (start, end).
   path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
   // Nominal copper OD in inches. Common residential sizes are 1/4"–3/8".

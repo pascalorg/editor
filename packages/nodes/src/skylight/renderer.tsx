@@ -15,13 +15,13 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   getRoofOuterSurfaceFrameAtPoint,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import { TrimClippedMesh, useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildFrameGeometry } from './frame-csg'
@@ -210,7 +210,7 @@ function PaneFrame({
   )
 }
 
-function LanternGlass({
+export function LanternGlass({
   curbHeight,
   frameMaterial,
   glassMaterial,
@@ -399,7 +399,7 @@ function ElectricMotorHousing({
   )
 }
 
-function HingedGlass({
+export function HingedGlass({
   curbHeight,
   frameMaterial,
   glassMaterial,
@@ -518,7 +518,7 @@ function HingedGlass({
   )
 }
 
-function SlidingGlass({
+export function SlidingGlass({
   curbHeight,
   frameMaterial,
   glassMaterial,
@@ -711,7 +711,7 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
     // Untextured frame (and everything in textures-off mode) takes the
     // themed 'joinery' role colour; explicit paint shows when textures on.
     if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('joinery', colorPreset, undefined, sceneTheme)
+      return accessoryFinish('joinery', colorPreset, undefined, sceneTheme, shading)
     }
     if (node.material) return createMaterial(node.material, shading)
     return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultFrameMaterial
@@ -729,7 +729,7 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
     // Untextured glass (and textures-off mode) takes the themed 'glazing'
     // role material from the shared cache, so it must not be mutated.
     if (!textures || (!node.glassMaterial && !node.glassMaterialPreset)) {
-      return createSurfaceRoleMaterial('glazing', colorPreset, undefined, sceneTheme)
+      return accessoryFinish('glazing', colorPreset, undefined, sceneTheme, shading)
     }
     const mat = node.glassMaterial
       ? createMaterial(node.glassMaterial, shading)

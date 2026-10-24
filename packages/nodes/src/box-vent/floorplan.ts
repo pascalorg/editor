@@ -89,6 +89,19 @@ export function buildBoxVentFloorplan(
   }
 
   const children: FloorplanGeometry[] = []
+  if ((node.flashingWidth ?? 0) > 0) {
+    const extra =
+      (node.flashingWidth ?? 0) + (style === 'box' ? 0 : Math.max(0, node.hoodOverhang ?? 0.04))
+    children.push({
+      kind: 'polygon',
+      points: rect(hw + extra, hd + extra),
+      fill,
+      fillOpacity: fillOpacity * 0.5,
+      stroke,
+      strokeWidth: lineWidth,
+      pointerEvents: 'all',
+    })
+  }
 
   if (style === 'dome') {
     // Outer = the round flange plate (dome radius + flange overhang).

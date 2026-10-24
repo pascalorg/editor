@@ -11,44 +11,50 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  commitFreshPlacementSubtree,
   consumePlacementDragRelease,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { getRoofOuterSurfaceFrameAtPoint } from '@pascal-app/viewer'
+import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
-  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
   snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
+import { resolveSkylightPlacement } from './placement'
 import SkylightPreview from './preview'
 
+/**
+ * Skylight move tool. Mirrors the placement tool's cursor behaviour
+ * (ghost follows the roof surface; click on a roof commits) but for an
+ * already-existing skylight: the original mesh is hidden during the drag,
+ * the ghost tracks the cursor with the correct slope tilt + segment yaw,
+ * and the click updates the node's position + parent segment in one
+ * undoable step. Cancel restores the original transform; if the node was
+ * freshly cloned (`metadata.isNew`), cancel deletes it instead.
+ */
 export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
   }, [])
 
-  const previewRef = useRef<THREE.Group>(null!)
-  const [previewPos, setPreviewPos] = useState<[number, number, number]>([0, 0, 0])
-  // Mirror the placement tool's transform stack so the ghost reads the
-  // same in both flows: outer rotation-y aligns the segment's world yaw
-  // (roof + segment), inner quaternion tilts to the segment surface in
-  // segment-local space (analytical, not raycast — raycast normals can
-  // be flipped or in the wrong frame depending on hit-object state).
-  // The skylight's own `rotation` is applied on a deeper group so it
-  // stays editable on top of the surface alignment.
-  const [previewYaw, setPreviewYaw] = useState(0)
+  const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
-  const [hasHit, setHasHit] = useState(false)
+  const [previewValid, setPreviewValid] = useState(true)
+  const [previewYaw, setPreviewYaw] = useState(0)
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -60,58 +66,87 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       parentId: node.parentId,
       metadata: node.metadata,
     }
-
     const meta =
       typeof node.metadata === 'object' && node.metadata !== null
         ? (node.metadata as Record<string, unknown>)
         : {}
     const isNew = !!meta.isNew
-    useScene.getState().updateNode(node.id as AnyNodeId, {
-      metadata: { ...meta, isTransient: true },
-    })
 
-    const skylightObj = sceneRegistry.nodes.get(node.id)
-    if (skylightObj) skylightObj.visible = false
+    const ventObj = sceneRegistry.nodes.get(node.id)
+    if (ventObj) ventObj.visible = false
 
-    let lastSnapX = 0
-    let lastSnapZ = 0
+    let lastSnap: [number, number] | null = null
     let lastTarget: RelativeRoofDragTarget | null = null
     let committed = false
+    let forcePlacement = false
+    const roofOffset = 0
     const roofDrag = createRelativeRoofDrag(original)
 
     const clearTarget = () => {
       lastTarget = null
-      setHasHit(false)
+      lastSnap = null
+      setPreviewPos(null)
+      setPreviewSurfaceQuat(null)
       clearRoofSurfacePlacementGuides()
     }
 
     const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+      forcePlacement = event.nativeEvent?.altKey === true
+      let placement = resolveSkylightPlacement(
+        rawTarget.segment,
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
-      })
+        rawTarget.localX,
+        rawTarget.localZ,
+        {
+          roofOffset,
+          gridStep: !forcePlacement && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        },
+      )
+      let target = {
+        ...rawTarget,
+        localX: placement.position[0],
+        localY: placement.position[1],
+        localZ: placement.position[2],
+      }
+      if (!forcePlacement && isMagneticSnapActive()) {
+        target = snapRoofSurfaceNodeTarget({ target, node })
+        placement = resolveSkylightPlacement(target.segment, node, target.localX, target.localZ, {
+          roofOffset,
+        })
+        target = { ...target, localY: placement.position[1] }
+      }
+      setPreviewValid(placement.valid || forcePlacement)
+      return target
     }
 
-    // Resolve which segment the cursor is over, then derive the same
-    // preview transform stack the placement tool uses (`skylight/tool.tsx`):
-    // analytical surface normal in segment-local frame → outer yaw =
-    // roof + segment rotation. Falls back to leaving the preview hidden
-    // if the cursor is between segments — the placement tool does the
-    // same via its `if (!hit) return` guard.
-    const updateFromHit = (event: RoofEvent) => {
-      const roof = event.node as RoofNode
+    const updatePreview = (event: RoofEvent) => {
       const target = resolveSnappedTarget(event)
       if (!target) {
         clearTarget()
-        return false
+        return
       }
       lastTarget = target
-      const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
+
+      const sx = Math.round(target.localX * 20) / 20
+      const sz = Math.round(target.localZ * 20) / 20
+      if (
+        !forcePlacement &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
+        (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
+      ) {
+        triggerSFX('sfx:grid-snap')
+        lastSnap = [sx, sz]
+      }
+
+      const normal = getRoofOuterSurfaceFrameAtPoint(
+        target.segment,
+        target.localX,
+        target.localZ,
+      ).normal
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
-      setPreviewYaw((roof.rotation ?? 0) + (target.segment.rotation ?? 0))
+      setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
       setPreviewPos(
         roofSegmentLocalToBuildingLocal(target.segment.id, [
           target.localX,
@@ -119,81 +154,48 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
           target.localZ,
         ]),
       )
-      setHasHit(true)
       publishRoofSurfaceNodePlacementGuides({
-        roof,
+        roof: event.node as RoofNode,
         segment: target.segment,
         center: [target.localX, target.localY, target.localZ],
         node,
       })
-      return true
-    }
-
-    const onRoofMove = (event: RoofEvent) => {
-      const sx = Math.round(event.position[0] * 20) / 20
-      const sz = Math.round(event.position[2] * 20) / 20
-      if (event.nativeEvent?.shiftKey !== true && (sx !== lastSnapX || sz !== lastSnapZ)) {
-        triggerSFX('sfx:grid-snap')
-        lastSnapX = sx
-        lastSnapZ = sz
-      }
-      updateFromHit(event)
-      event.stopPropagation()
-    }
-
-    const onRoofEnter = (event: RoofEvent) => {
-      updateFromHit(event)
       event.stopPropagation()
     }
 
     const onRoofClick = (event: RoofEvent) => {
       if (committed) return
+      const target = event.node ? resolveSnappedTarget(event) : lastTarget
+      if (!target) return
+      if (
+        !forcePlacement &&
+        !resolveSkylightPlacement(target.segment, node, target.localX, target.localZ, {
+          roofOffset,
+        }).valid
+      )
+        return
+      committed = true
+      const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
-      const target = lastTarget ?? resolveSnappedTarget(event)
-      if (!target) return
-      committed = true
-
-      const targetSegmentId = target.segment.id as AnyNodeId
-      const finalRotation = original.rotation
-
-      st.updateNode(node.id as AnyNodeId, {
-        position: original.position,
-        rotation: original.rotation,
-        roofSegmentId: original.roofSegmentId as AnyNodeId | undefined,
-        parentId: original.parentId as AnyNodeId | undefined,
-        metadata: original.metadata,
-      })
-      useScene.temporal.getState().resume()
-
-      st.updateNode(node.id as AnyNodeId, {
+      const patch = {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [target.localX, target.localY, target.localZ],
-        rotation: finalRotation,
+        position: [target.localX, target.localY, target.localZ] as [number, number, number],
+        rotation: original.rotation,
         visible: true,
-        metadata: {},
-      })
-
-      if (original.roofSegmentId && original.roofSegmentId !== (targetSegmentId as string)) {
-        const oldSeg = st.nodes[original.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined
-        if (oldSeg) {
-          st.updateNode(original.roofSegmentId as AnyNodeId, {
-            children: (oldSeg.children ?? []).filter((id) => id !== node.id),
-          })
-        }
-        const newSeg = st.nodes[targetSegmentId] as RoofSegmentNode | undefined
-        if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-          st.updateNode(targetSegmentId, {
-            children: [...(newSeg.children ?? []), node.id],
-          })
-        }
-        st.dirtyNodes.add(original.roofSegmentId as AnyNodeId)
+        metadata: stripPlacementMetadataFlags(original.metadata) as SkylightNode['metadata'],
       }
+      if (isNew) {
+        commitFreshPlacementSubtree(node.id as AnyNodeId, patch)
+      } else {
+        useScene.temporal.getState().resume()
+        st.updateNode(node.id as AnyNodeId, patch)
+        useScene.temporal.getState().pause()
+      }
+
       st.dirtyNodes.add(targetSegmentId)
       st.dirtyNodes.add(node.id as AnyNodeId)
-
-      useScene.temporal.getState().pause()
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
@@ -206,19 +208,19 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
 
     const onCancel = () => {
       if (isNew) {
-        useScene.temporal.getState().resume()
-        const parentId = original.roofSegmentId
+        // Freshly-cloned skylight — undo the clone entirely on cancel so the
+        // user doesn't end up with an orphan they didn't intend to place.
+        const parentId = original.roofSegmentId as AnyNodeId | undefined
         if (parentId) {
-          const parent = useScene.getState().nodes[parentId as AnyNodeId] as
-            | RoofSegmentNode
-            | undefined
+          const parent = useScene.getState().nodes[parentId] as RoofSegmentNode | undefined
           if (parent) {
-            useScene.getState().updateNode(parentId as AnyNodeId, {
+            useScene.getState().updateNode(parentId, {
               children: (parent.children ?? []).filter((id) => id !== node.id),
             })
           }
         }
         useScene.getState().deleteNode(node.id as AnyNodeId)
+        useScene.temporal.getState().resume()
         markToolCancelConsumed()
         clearRoofSurfacePlacementGuides()
         exitMoveMode()
@@ -235,7 +237,6 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       if (original.roofSegmentId) {
         useScene.getState().dirtyNodes.add(original.roofSegmentId as AnyNodeId)
       }
-
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
 
@@ -254,21 +255,24 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       } as unknown as RoofEvent)
     }
 
-    emitter.on('roof:move', onRoofMove)
-    emitter.on('roof:enter', onRoofEnter)
+    emitter.on('roof:move', updatePreview)
+    emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
-      emitter.off('roof:move', onRoofMove)
-      emitter.off('roof:enter', onRoofEnter)
+      emitter.off('roof:move', updatePreview)
+      emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
+      // Safety restore — if the tool is unmounted by something other than
+      // a commit / cancel path (e.g. tool change, selection wipe), leave
+      // the original mesh visible rather than stranded invisible.
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
       clearRoofSurfacePlacementGuides()
@@ -276,15 +280,13 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     }
   }, [exitMoveMode, node])
 
-  if (!previewSurfaceQuat) return null
+  if (!(previewPos && previewSurfaceQuat)) return null
 
   return (
-    <group position={previewPos} ref={previewRef} visible={hasHit}>
+    <group position={previewPos}>
       <group rotation-y={previewYaw}>
         <group quaternion={previewSurfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <SkylightPreview node={node} />
-          </group>
+          <SkylightPreview node={node} invalid={!previewValid} />
         </group>
       </group>
     </group>

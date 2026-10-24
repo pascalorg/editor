@@ -7,12 +7,12 @@ import {
   type GutterNode,
   generateId,
   type RoofSegmentNode,
+  resolveAutomaticDownspoutLength,
   useScene,
 } from '@pascal-app/core'
 import { ActionButton, ActionGroup, PanelSection, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useShallow } from 'zustand/react/shallow'
-import { computeEaveY } from './eave-snap'
 import { resolveGutterOutletById } from './outlet-lookup'
 
 const DEFAULT_OUTLET_DIAMETER = 0.07
@@ -94,20 +94,28 @@ export default function DownspoutsPanel() {
       { id: outletId, offset: nextOutletOffset(gutter), diameter: DEFAULT_OUTLET_DIAMETER },
     ]
     const state = useScene.getState()
-    state.updateNode(gutter.id as AnyNodeId, { outlets })
-    state.dirtyNodes.add(gutter.id as AnyNodeId)
 
     const outlet = resolveGutterOutletById({ ...gutter, outlets }, outletId)
-    const dropLength = Math.max(0.1, computeEaveY(segment) + (outlet?.y ?? -gutter.size))
+    if (!outlet) return
+    const dropLength = resolveAutomaticDownspoutLength(
+      state.nodes,
+      segment,
+      gutter,
+      outlets.at(-1)!.offset,
+    )
 
     const downspout = DownspoutNode.parse({
       name: 'Downspout',
       gutterId: gutter.id,
       outletId,
       length: dropLength,
+      lengthMode: 'to-ground',
       diameter: (outlet?.bore ?? DEFAULT_OUTLET_DIAMETER / 2) * 2,
     })
-    state.createNode(downspout, segmentId)
+    state.applyNodeChanges({
+      update: [{ id: gutter.id, data: { outlets } }],
+      create: [{ node: downspout, parentId: segmentId }],
+    })
     state.dirtyNodes.add(segmentId)
     setSelection({ selectedIds: [downspout.id] })
     triggerSFX('sfx:item-place')

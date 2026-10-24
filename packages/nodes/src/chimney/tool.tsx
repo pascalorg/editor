@@ -8,9 +8,15 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
-  useScene,
 } from '@pascal-app/core'
-import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
+import {
+  isGridSnapActive,
+  isMagneticSnapActive,
+  triggerSFX,
+  useEditor,
+  usePlacementPreview,
+  useRegistryToolContext,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -20,8 +26,10 @@ import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfacePlacementGuides,
   roofSurfaceFootprintFromNode,
+  snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
 import { chimneyDefinition } from './definition'
+import { resolveChimneyPlacement } from './placement'
 import ChimneyPreview from './preview'
 
 /**
@@ -43,6 +51,7 @@ type SegmentTransform = {
 }
 
 const ChimneyTool = () => {
+  const { sceneApi } = useRegistryToolContext()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const setSelection = useViewer((s) => s.setSelection)
 
@@ -55,6 +64,7 @@ const ChimneyTool = () => {
   // segment's footprint.
   const [hitLocal, setHitLocal] = useState<[number, number, number] | null>(null)
   const [previewSegment, setPreviewSegment] = useState<RoofSegmentNode | null>(null)
+  const [valid, setValid] = useState(true)
   const lastSnapRef = useRef<[number, number] | null>(null)
 
   const previewNode = useMemo(
@@ -94,13 +104,35 @@ const ChimneyTool = () => {
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
       const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
+      if (event.nativeEvent?.altKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
 
       const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
       if (!hit) return
+      const placement = resolveChimneyPlacement(
+        hit.segment,
+        previewNode,
+        hit.localX,
+        hit.localZ,
+        event.nativeEvent?.altKey !== true && isGridSnapActive()
+          ? useEditor.getState().gridSnapStep
+          : 0,
+      )
+      if (event.nativeEvent?.altKey !== true && isMagneticSnapActive()) {
+        const snapped = snapRoofSurfaceNodeTarget({
+          target: { ...hit, hit, localX: placement.position[0], localZ: placement.position[2] },
+          node: previewNode,
+        })
+        Object.assign(
+          placement,
+          resolveChimneyPlacement(hit.segment, previewNode, snapped.localX, snapped.localZ),
+        )
+      }
+      hit.localX = placement.position[0]
+      hit.localZ = placement.position[2]
+      setValid(placement.valid || event.nativeEvent?.altKey === true)
 
       const xform = computeSegmentXform(hit.segment.id)
       if (!xform) return
@@ -133,7 +165,29 @@ const ChimneyTool = () => {
         event.position[2],
       )
       if (!hit) return
-      const state = useScene.getState()
+      const placement = resolveChimneyPlacement(
+        hit.segment,
+        previewNode,
+        hit.localX,
+        hit.localZ,
+        event.nativeEvent?.altKey !== true && isGridSnapActive()
+          ? useEditor.getState().gridSnapStep
+          : 0,
+      )
+      if (event.nativeEvent?.altKey !== true && isMagneticSnapActive()) {
+        const snapped = snapRoofSurfaceNodeTarget({
+          target: { ...hit, hit, localX: placement.position[0], localZ: placement.position[2] },
+          node: previewNode,
+        })
+        Object.assign(
+          placement,
+          resolveChimneyPlacement(hit.segment, previewNode, snapped.localX, snapped.localZ),
+        )
+      }
+      hit.localX = placement.position[0]
+      hit.localZ = placement.position[2]
+      setValid(placement.valid || event.nativeEvent?.altKey === true)
+      if (!placement.valid && event.nativeEvent?.altKey !== true) return
 
       const chimney = ChimneyNode.parse({
         ...chimneyDefinition.defaults(),
@@ -142,8 +196,8 @@ const ChimneyTool = () => {
         position: [hit.localX, hit.localY, hit.localZ],
         rotation: 0,
       })
-      state.createNode(chimney, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      sceneApi.upsert(chimney, hit.segment.id as AnyNodeId)
+      sceneApi.markDirty(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [chimney.id] })
       triggerSFX('sfx:item-place')
       const placementPreview = usePlacementPreview.getState()
@@ -152,11 +206,21 @@ const ChimneyTool = () => {
       event.stopPropagation()
     }
 
+    const clear = () => {
+      setHitLocal(null)
+      setPreviewSegment(null)
+      usePlacementPreview.getState().clear()
+      clearRoofSurfacePlacementGuides()
+    }
+    emitter.on('roof:leave', clear)
+    emitter.on('tool:cancel', clear)
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onClick)
 
     return () => {
+      emitter.off('roof:leave', clear)
+      emitter.off('tool:cancel', clear)
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
@@ -164,7 +228,7 @@ const ChimneyTool = () => {
       if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
       clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+  }, [activeBuildingId, setSelection, previewNode, sceneApi])
 
   return (
     <>
@@ -188,7 +252,11 @@ const ChimneyTool = () => {
         // geometry (built with `position[0,2] = 0`) lands under the cursor.
         <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
           <group position={[hitLocal[0], 0, hitLocal[2]]}>
-            <ChimneyPreview node={previewNode} segment={previewSegment} />
+            <ChimneyPreview
+              node={{ ...previewNode, position: hitLocal }}
+              segment={previewSegment}
+              invalid={!valid}
+            />
           </group>
         </group>
       )}

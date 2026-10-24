@@ -8,9 +8,12 @@ import {
   WindowNode,
 } from '@pascal-app/core'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
-import { buildDormerRoofCut, generateDormerGeometry } from '../csg-geometry'
-import { buildDormerGhostGeometry } from '../geometry'
-import { DormerNode } from '../schema'
+import {
+  buildDormerGhostGeometry,
+  buildDormerRoofCut,
+  DormerNode,
+  generateDormerGeometry,
+} from '../index'
 
 describe('buildDormerGhostGeometry (placement preview)', () => {
   test('returns a buffer geometry with position attribute', () => {
@@ -288,4 +291,22 @@ describe('getDormerExposedFaces', () => {
     const seg = hostSegment({ pitch: 10 })
     expect(getDormerDefaultWindowFace(dormerAt(seg, 0, 1.5), seg)).toBe('front')
   })
+})
+
+test('small Dutch dormer retains a continuous roof across its upper gablet and hip', () => {
+  const dormer = DormerNode.parse({
+    roofType: 'dutch',
+    height: 0.8,
+    wallSkirtHeight: 1.5,
+    position: [0, 10, 0],
+  })
+  const geometry = generateDormerGeometry(dormer, hostSegment())
+  const material = new MeshBasicMaterial({ side: DoubleSide })
+  const mesh = new Mesh(geometry, material)
+  for (const z of [0.3, 0.4, 0.5, 0.6, 0.7]) {
+    const hit = new Raycaster(new Vector3(0, 5, z), new Vector3(0, -1, 0)).intersectObject(mesh)[0]
+    expect(hit?.point.y).toBeGreaterThan(dormer.height + 0.1)
+  }
+  geometry.dispose()
+  material.dispose()
 })

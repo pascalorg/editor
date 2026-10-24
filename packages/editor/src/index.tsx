@@ -154,7 +154,11 @@ export {
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
 export { MoveRegistryNodeTool } from './components/tools/registry/move-registry-node-tool'
-export { useRegistryToolContext } from './components/tools/registry-tool-context'
+export {
+  type RegistryToolContextValue,
+  RegistryToolProvider,
+  useRegistryToolContext,
+} from './components/tools/registry-tool-context'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export {
   DRAFT_LABEL_Y_OFFSET,
@@ -870,6 +874,7 @@ export {
   getWallDrawVariant,
   selectWallDrawVariant,
   useWallDrawVariant,
+  WALL_DRAW_VARIANTS,
   type WallDrawVariant,
 } from './lib/wall-draw-variant'
 export {

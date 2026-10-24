@@ -12,7 +12,6 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   getRoofOuterSurfaceFrameAtPoint,
   useNodeEvents,
   useViewer,
@@ -20,6 +19,7 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildSolarPanelGeometry, getDefaultPanelMaterial } from './geometry'
@@ -112,6 +112,8 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
       node.frameThickness,
       node.frameDepth,
       node.standoffHeight,
+      node.mountingType,
+      node.tiltAngle,
     ],
   )
 
@@ -122,7 +124,7 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
   // left untouched in both texture modes.
   const frameMaterial = useMemo(() => {
     if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
+      return accessoryFinish('roof', colorPreset, undefined, sceneTheme, shading)
     }
     if (node.material) return createMaterial(node.material, shading)
     return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultFrameMaterial

@@ -189,6 +189,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   },
   toolHints: [
     { key: 'Left click', label: 'Place gutter on roof eave' },
+    { key: 'Alt', label: 'Free along eave' },
     { key: 'Esc', label: 'Cancel' },
   ],
 

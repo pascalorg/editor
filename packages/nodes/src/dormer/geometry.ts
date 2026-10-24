@@ -8,11 +8,13 @@ import {
 import * as THREE from 'three'
 
 /**
- * Grid-snap step (metres) applied to the world cursor position while a
- * dormer placement / move ghost is in flight. Shared by both tools so
- * the audible snap and the committed position step stay in lockstep.
+ * Dormer-sized rake details keep the Dutch gablet clear of its lower hip.
  */
-export const DORMER_PLACEMENT_SNAP_M = 0.05
+export const DORMER_ROOF_SHAPE = {
+  ...ROOF_SHAPE_DEFAULTS,
+  dutchGabletRake: 0.06,
+  dutchTopRakeThickness: 0.04,
+}
 
 /**
  * Rotation step (radians) used by the keyboard rotate shortcuts (R /
@@ -57,7 +59,7 @@ export function buildDormerShellGeometry(node: DormerNode): THREE.BufferGeometry
     baseW: segW,
     baseD: segD,
     tanTheta: Math.tan((pitch * Math.PI) / 180),
-    shapeRatios: getRoofShapeRatios(ROOF_SHAPE_DEFAULTS),
+    shapeRatios: getRoofShapeRatios(DORMER_ROOF_SHAPE),
   })
   const positions: number[] = []
   const materialGroups: Array<{ start: number; count: number; materialIndex: number }> = []

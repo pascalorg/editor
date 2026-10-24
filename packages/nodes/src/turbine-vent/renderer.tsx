@@ -12,7 +12,7 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
+  getRoofOuterSurfaceFrameAtPoint,
   resolveMaterialRef,
   useNodeEvents,
   useViewer,
@@ -20,7 +20,8 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { accessoryFinish } from '../shared/accessory-finish'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildTurbineVentBase, buildTurbineVentHead } from './geometry'
 
@@ -88,7 +89,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
   const spin = node.spinSpeed ?? 0
   useFrame((_, delta) => {
     if (headRef.current && spin !== 0) {
-      headRef.current.rotation.y += spin * delta
+      headRef.current.rotation.y = (headRef.current.rotation.y + spin * delta) % (Math.PI * 2)
     }
   })
 
@@ -96,12 +97,23 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
   // normal the box-vent / solar-panel / skylight share.
   const surfaceQuat = useMemo(() => {
     if (!segment) return new THREE.Quaternion()
-    const normal = getAnalyticalNormal(node.position[0] ?? 0, node.position[2] ?? 0, segment)
+    const normal = getRoofOuterSurfaceFrameAtPoint(
+      segment,
+      node.position[0],
+      node.position[2],
+    ).normal
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 
   const material = useMemo(() => {
-    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = accessoryFinish(
+      'roof',
+      colorPreset,
+      THREE.FrontSide,
+      sceneTheme,
+      shading,
+      'metal',
+    )
     const resolve = (role: 'base' | 'head') => {
       if (!textures) return roleDefault
       const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)

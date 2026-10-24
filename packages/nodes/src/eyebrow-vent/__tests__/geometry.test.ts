@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildEyebrowVentGeometry } from '../geometry'
-import { EyebrowVentNode } from '../schema'
+import { buildEyebrowVentGeometry, EyebrowVentNode } from '../index'
 
 function allFinite(geo: { getAttribute: (n: string) => { array: ArrayLike<number> } }): boolean {
   const arr = geo.getAttribute('position').array
@@ -64,3 +63,51 @@ describe('buildEyebrowVentGeometry', () => {
     }
   })
 })
+
+test('half-round vents render the requested number of separate louver blades', () => {
+  for (const count of [0, 1, 2, 3, 4, 8]) {
+    const geometry = buildEyebrowVentGeometry(
+      EyebrowVentNode.parse({ style: 'half-round', louverCount: count }),
+    )
+    const positions = geometry.getAttribute('position')
+    // Blades are disconnected solids in the front material group. Counting
+    // their disjoint vertical ranges checks the visible result, not tessellation.
+    const ranges: [number, number][] = []
+    for (const group of geometry.groups.filter((group) => group.materialIndex === 1)) {
+      for (let i = group.start; i < group.start + group.count; i += 3) {
+        // Ignore the recessed backing so only the separate blades are counted.
+        if (Math.max(positions.getZ(i), positions.getZ(i + 1), positions.getZ(i + 2)) < 0.241)
+          continue
+        const ys = [positions.getY(i), positions.getY(i + 1), positions.getY(i + 2)]
+        ranges.push([Math.min(...ys), Math.max(...ys)])
+      }
+    }
+    ranges.sort((a, b) => a[0] - b[0])
+    let components = 0
+    let high = -Infinity
+    for (const [low, top] of ranges) {
+      if (low > high + 1e-6) components++
+      high = Math.max(high, top)
+    }
+    expect(components).toBe(count)
+    geometry.dispose()
+  }
+})
+
+for (const style of ['scoop', 'half-round', 'slant-box'] as const) {
+  test(`${style} respects requested height and contains louvers in a shallow hood`, () => {
+    for (const louverCount of [0, 1, 8]) {
+      const node = EyebrowVentNode.parse({ style, width: 0.2, depth: 0.15, height: 2, louverCount })
+      const geometry = buildEyebrowVentGeometry(node)
+      geometry.computeBoundingBox()
+      const bounds = geometry.boundingBox!
+      expect(bounds.max.y).toBeCloseTo(node.height, 6)
+      expect(bounds.min.y).toBeGreaterThanOrEqual(-1e-6)
+      expect(bounds.max.z).toBeLessThanOrEqual(node.depth / 2 + 1e-6)
+      expect(bounds.min.z).toBeGreaterThanOrEqual(-node.depth / 2 - 1e-6)
+      expect(bounds.max.x).toBeLessThanOrEqual(node.width / 2 + 1e-6)
+      expect(geometry.groups.some((g) => g.materialIndex === 1 && g.count > 0)).toBe(true)
+      geometry.dispose()
+    }
+  })
+}

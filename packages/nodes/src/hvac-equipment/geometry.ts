@@ -1,3 +1,5 @@
+import type { GeometryContext } from '@pascal-app/core'
+import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import {
   BoxGeometry,
   type BufferGeometry,
@@ -17,6 +19,7 @@ import {
   INCHES_TO_METERS,
   rectSectionAxes,
 } from '../duct-segment/geometry'
+import { finishMechanicalGeometry } from '../shared/mechanical-finish'
 import { localEquipmentPorts, localRefrigerantPorts } from './ports'
 import type { HvacEquipmentNode } from './schema'
 
@@ -29,7 +32,6 @@ const EQUIPMENT_WHITE = '#eef0f2'
 const EQUIPMENT_TRIM = '#cfd3d8'
 
 const CABINET_COLOR = EQUIPMENT_WHITE
-const INTERIOR_COLOR = '#9aa1a8'
 const PANEL_COLOR = EQUIPMENT_TRIM
 const CONTROL_COLOR = '#3f4549'
 const CONDENSER_COLOR = EQUIPMENT_WHITE
@@ -41,7 +43,6 @@ const BLOWER_BLADE_COLOR = '#274f7d'
 const BURNER_COLOR = '#d9772e'
 const GAS_PIPE_COLOR = '#d2691e'
 const AIR_HANDLER_COLOR = EQUIPMENT_WHITE
-const AIR_HANDLER_TRIM = EQUIPMENT_TRIM
 const FAN_GRILLE_COLOR = '#3a3f44'
 const FAN_BLADE_COLOR = '#d7dade'
 const COIL_FIN_COLOR = '#9aa1a8'
@@ -66,7 +67,7 @@ const UP = new Vector3(0, 1, 0)
  * the front and finned coil bands down the sides (vertical fan-coil look).
  * Condenser: squat cabinet with a fan ring and hub on top.
  */
-export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
+function buildUnpaintedGeometry(node: HvacEquipmentNode): Group {
   const group = new Group()
   if (node.equipmentType === 'condenser') return buildCondenser(node, group)
   if (node.equipmentType === 'air-handler') return buildAirHandler(node, group)
@@ -86,11 +87,6 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
     metalness: 0.55,
     roughness: 0.45,
   })
-  const interior = new MeshStandardMaterial({
-    color: INTERIOR_COLOR,
-    metalness: 0.4,
-    roughness: 0.6,
-  })
 
   const addBox = (
     w: number,
@@ -109,40 +105,8 @@ export function buildHvacEquipmentGeometry(node: HvacEquipmentNode): Group {
     return mesh
   }
 
-  const ports = localEquipmentPorts(node)
-  const supplyPort = ports.find((p) => p.id === 'supply')
-  const returnPort = ports.find((p) => p.id === 'return')
-
-  // ── Cabinet shell as butt-jointed sheet-metal plates. Top + bottom span
-  // the full footprint; the four walls sit *between* them (height innerH),
-  // and back / front pieces sit *between* the side walls (width W - 2t). No
-  // two same-facing surfaces are ever coplanar, which is what was z-fighting
-  // when these were full-size overlapping boxes; single-sided materials
-  // (above) finish the job. Left wall carries the return hole, top the supply.
-  const innerH = H - 2 * t
-  const midY = H / 2
   const frontZ = hd - t / 2
-
-  addBox(W, t, D, cabinet, 0, t / 2, 0, 'equipment-bottom')
-  addBox(t, innerH, D, interior, hw - t / 2, midY, 0, 'equipment-right')
-  addBox(W - 2 * t, innerH, t, interior, 0, midY, -hd + t / 2, 'equipment-back')
-
-  // Top plate, flat, with the supply hole at the cabinet center. Built
-  // centered in its own XY plane (x→W, y→D); rotate.x = -90° lays it flat.
-  const top = buildHolePlate(W, D, t, supplyPort, 0, 0, cabinet)
-  top.name = 'equipment-top'
-  top.rotation.x = -Math.PI / 2
-  top.position.set(0, H - t / 2, 0)
-  group.add(top)
-
-  // Left wall with the return hole. After rotate.y = -90° the plate's x→world
-  // -z and y→world height; centered at midY with the return port at world
-  // y = H*0.35, so the hole sits at plate-y (H*0.35 - midY).
-  const left = buildHolePlate(D, innerH, t, returnPort, 0, H * 0.35 - midY, interior)
-  left.name = 'equipment-left'
-  left.rotation.y = -Math.PI / 2
-  left.position.set(-hw + t / 2, midY, 0)
-  group.add(left)
+  buildCabinetShell(node, group, cabinet, false)
 
   // Front opening: framed sill, jambs and an upper control panel, all inset
   // to (W - 2t) so they tuck between the side walls. The gap between sill
@@ -452,9 +416,7 @@ function buildHolePlate(
   width: number,
   height: number,
   thickness: number,
-  port: LocalPort | undefined,
-  hx: number,
-  hy: number,
+  holes: { port: LocalPort; x: number; y: number }[],
   material: MeshStandardMaterial,
 ): Mesh {
   const hw = width / 2
@@ -466,13 +428,68 @@ function buildHolePlate(
     .lineTo(-hw, hh)
     .lineTo(-hw, -hh)
 
-  const hole = port ? collarHolePath(collarSection(port), hx, hy, hw * 0.95, hh * 0.95) : null
-  if (hole) shape.holes.push(hole)
+  for (const { port, x, y } of holes) {
+    const hole = collarHolePath(
+      collarSection(port),
+      x,
+      y,
+      Math.max(0, hw - Math.abs(x)) * 0.95,
+      Math.max(0, hh - Math.abs(y)) * 0.95,
+    )
+    if (hole) shape.holes.push(hole)
+  }
 
   const geom = new ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false })
   geom.translate(0, 0, -thickness / 2)
   geom.computeVertexNormals()
   return new Mesh(geom, material)
+}
+
+function buildCabinetShell(
+  node: HvacEquipmentNode,
+  group: Group,
+  material: MeshStandardMaterial,
+  front: boolean,
+) {
+  const { width: w, height: h, depth: d } = node
+  const t = Math.min(0.02, w * 0.04, d * 0.04)
+  const ports = localEquipmentPorts(node)
+  const top = buildHolePlate(
+    w,
+    d,
+    t,
+    ports
+      .filter((port) => port.direction.y > 0)
+      .map((port) => ({ port, x: port.position.x, y: -port.position.z })),
+    material,
+  )
+  top.name = 'equipment-top'
+  top.rotation.x = -Math.PI / 2
+  top.position.y = h - t / 2
+  group.add(top)
+  for (const side of [-1, 1]) {
+    const wall = buildHolePlate(
+      d,
+      h - 2 * t,
+      t,
+      ports
+        .filter((port) => port.direction.x === side)
+        .map((port) => ({ port, x: -side * port.position.z, y: port.position.y - h / 2 })),
+      material,
+    )
+    wall.name = side < 0 ? 'equipment-left' : 'equipment-right'
+    wall.rotation.y = (side * Math.PI) / 2
+    wall.position.set(side * (w / 2 - t / 2), h / 2, 0)
+    group.add(wall)
+  }
+  const bottom = new Mesh(new BoxGeometry(w, t, d), material)
+  bottom.position.y = t / 2
+  group.add(bottom)
+  for (const side of front ? [-1, 1] : [-1]) {
+    const wall = new Mesh(new BoxGeometry(w - 2 * t, h - 2 * t, t), material)
+    wall.position.set(0, h / 2, side * (d / 2 - t / 2))
+    group.add(wall)
+  }
 }
 
 /**
@@ -503,27 +520,7 @@ function buildCollars(node: HvacEquipmentNode, group: Group): void {
   }
 }
 
-// Default lineset line radii (meters) — must mirror the lineset kind's
-// defaults so the two service stubs sit exactly where its suction/liquid
-// pipes run. See `lineset/geometry.ts` (suction 7/8", liquid 3/8", 3/8"
-// foam jacket) and its symmetric ±offset about the path centerline.
-const LINESET_SUCTION_R = (0.875 * INCHES_TO_METERS) / 2
-const LINESET_LIQUID_R = (0.375 * INCHES_TO_METERS) / 2
-const LINESET_JACKET_R = LINESET_SUCTION_R + 0.01
-const LINESET_PAIR_OFFSET = LINESET_JACKET_R + LINESET_LIQUID_R
-
-/**
- * Refrigerant service valves at the lineset port — a brass-grey valve body
- * with two copper stubs the lineset run mates onto. Built on every
- * equipment type so a split system can be piped from condenser to coil.
- *
- * A lineset is a parallel pair (insulated suction + bare liquid) offset
- * symmetrically about its path centerline. The snap point is that
- * centerline, so a single stub would sit in the empty gap between the two
- * pipes. Instead we emit two stubs at exactly the lineset's ±offset along
- * the port's horizontal perpendicular: the suction pipe lands on the wide
- * stub, the liquid pipe on the narrow one, when the run leaves the face.
- */
+/** Sleeves wrap the outgoing lines at the cabinet face, preserving legacy port positions. */
 function buildServiceValves(node: HvacEquipmentNode, group: Group): void {
   const valveMat = new MeshStandardMaterial({
     color: SERVICE_VALVE_COLOR,
@@ -537,35 +534,20 @@ function buildServiceValves(node: HvacEquipmentNode, group: Group): void {
   })
   for (const port of localRefrigerantPorts(node)) {
     const dir = port.direction.clone().normalize()
-    // Horizontal perpendicular to the port — matches the lineset geometry's
-    // `horizontal.cross(UP)`, so the stub offsets track its pipe offsets.
-    const perp = dir.clone().cross(UP).normalize()
-
-    // Brass-grey valve body bolted to the cabinet face, spanning the pair.
-    const bodyWidth = 2 * LINESET_PAIR_OFFSET + 2 * LINESET_JACKET_R
-    const body = new Mesh(new BoxGeometry(0.05, 0.08, bodyWidth), valveMat)
-    body.name = 'service-valve-body'
+    const radius = (port.diameter * INCHES_TO_METERS) / 2
+    const body = new Mesh(new BoxGeometry(0.05, 0.06, Math.max(0.04, radius * 2.5)), valveMat)
+    body.name = `service-valve-body-${port.id}`
     body.position.copy(port.position).addScaledVector(dir, 0.025)
-    body.quaternion.setFromUnitVectors(UP, dir)
     group.add(body)
-
     const stubLen = 0.07
-    const addStub = (sign: number, radius: number, id: string) => {
-      const stub = new Mesh(
-        new CylinderGeometry(radius, radius, stubLen, SMALL_SEGMENTS),
-        copperMat,
-      )
-      stub.name = `service-valve-stub-${id}`
-      stub.position
-        .copy(port.position)
-        .addScaledVector(perp, sign * LINESET_PAIR_OFFSET)
-        .addScaledVector(dir, 0.05 + stubLen / 2)
-      stub.quaternion.setFromUnitVectors(UP, dir)
-      group.add(stub)
-    }
-    // Suction pipe is the lineset's -offset line; liquid is +offset.
-    addStub(-1, LINESET_SUCTION_R, 'suction')
-    addStub(1, LINESET_LIQUID_R, 'liquid')
+    const stub = new Mesh(
+      new CylinderGeometry(radius + 0.002, radius + 0.002, stubLen, SMALL_SEGMENTS, 1, true),
+      copperMat,
+    )
+    stub.name = `service-valve-stub-${port.id}`
+    stub.position.copy(port.position).addScaledVector(dir, stubLen / 2)
+    stub.quaternion.setFromUnitVectors(UP, dir)
+    group.add(stub)
   }
 }
 
@@ -776,7 +758,7 @@ function buildAxialFan(
 
   // Concentric wire grille (rings) over the front of the fan.
   const ringMat = new MeshStandardMaterial({
-    color: AIR_HANDLER_TRIM,
+    color: EQUIPMENT_TRIM,
     metalness: 0.5,
     roughness: 0.4,
   })
@@ -807,35 +789,14 @@ function buildAirHandler(node: HvacEquipmentNode, group: Group): Group {
     metalness: 0.3,
     roughness: 0.55,
   })
-  const trimMat = new MeshStandardMaterial({
-    color: AIR_HANDLER_TRIM,
-    metalness: 0.4,
-    roughness: 0.5,
-  })
   const finMat = new MeshStandardMaterial({
     color: COIL_FIN_COLOR,
     metalness: 0.6,
     roughness: 0.45,
   })
 
-  // Cabinet body + top/bottom trim caps.
-  const body = new Mesh(new BoxGeometry(W, H, D), cabinetMat)
-  body.name = 'equipment-body'
-  body.position.set(0, H / 2, 0)
-  group.add(body)
-  // Trim caps straddle the cabinet's top / bottom edges (centered on
-  // y = H and y = 0) so the body's end faces fall inside the cap volume.
-  // Sitting them flush instead (top face at y = H) leaves two coplanar
-  // full-footprint faces that z-fight.
+  buildCabinetShell(node, group, cabinetMat, true)
   const capH = Math.min(0.05, H * 0.06)
-  const topCap = new Mesh(new BoxGeometry(W * 1.04, capH, D * 1.04), trimMat)
-  topCap.name = 'air-handler-top-cap'
-  topCap.position.set(0, H, 0)
-  group.add(topCap)
-  const botCap = new Mesh(new BoxGeometry(W * 1.04, capH, D * 1.04), trimMat)
-  botCap.name = 'air-handler-bottom-cap'
-  botCap.position.set(0, 0, 0)
-  group.add(botCap)
 
   // Two stacked axial fans on the front face, sized to the cabinet width.
   const frontZ = hd + 0.001
@@ -859,4 +820,29 @@ function buildAirHandler(node: HvacEquipmentNode, group: Group): Group {
   buildCollars(node, group)
   buildServiceValves(node, group)
   return group
+}
+
+export function buildHvacEquipmentGeometry(
+  node: HvacEquipmentNode,
+  ctx?: GeometryContext,
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): Group {
+  return finishMechanicalGeometry(
+    buildUnpaintedGeometry(node),
+    node.slots,
+    (name) =>
+      name.startsWith('service-') || name.startsWith('gas-')
+        ? 'service'
+        : name.startsWith('equipment-') && !name.includes('collar') && !name.includes('control')
+          ? 'cabinet'
+          : 'mechanical',
+    ctx,
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+  )
 }

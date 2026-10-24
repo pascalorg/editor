@@ -3,7 +3,6 @@ import {
   dormerWallFacePointToDormer,
   getDormerWallFaceFrame,
   getPitchFromActiveRoofHeight,
-  ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
   type WindowNode,
 } from '@pascal-app/core'
@@ -23,7 +22,7 @@ import {
   SUBTRACTION,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import { buildDormerShellGeometry, getDormerBodyYaw } from './geometry'
+import { buildDormerShellGeometry, DORMER_ROOF_SHAPE, getDormerBodyYaw } from './geometry'
 
 // Legacy default for the hung-wall (skirt) height. Used as a fallback
 // when `dormer.wallSkirtHeight` is undefined (e.g. old saved scenes).
@@ -130,7 +129,7 @@ export function generateDormerGeometry(
     }),
     // Dormers don't expose multi-slope shape tuning; bake the schema
     // defaults so the virtualSegment renders the canonical kink positions.
-    ...ROOF_SHAPE_DEFAULTS,
+    ...DORMER_ROOF_SHAPE,
     wallThickness: 0.05,
     deckThickness: 0.04,
     overhang: 0.08,
@@ -138,11 +137,13 @@ export function generateDormerGeometry(
     managedByParent: false,
     wallShell: 'auto',
     shedInsetEndPanels: false,
-    fascia: false,
-    fasciaHighEdge: false,
+    fascia: true,
+    fasciaHighEdge: true,
+    fasciaHeight: 0.1,
+    fasciaDepth: 0.018,
   }
 
-  const dormerBrushes = getRoofSegmentBrushes(virtualSegment)
+  const dormerBrushes = getRoofSegmentBrushes(virtualSegment, { fascia: true })
   if (!dormerBrushes) {
     console.warn('[dormer] getRoofSegmentBrushes returned null; using fallback silhouette.')
     return buildDormerFallbackGeometry(dormer)

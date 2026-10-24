@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildDuctTerminalFloorplan } from './floorplan'
 import { buildDuctTerminalGeometry } from './geometry'
+import { ductTerminalToolOptions } from './options'
 import { ductTerminalParametrics } from './parametrics'
 import { getDuctTerminalPorts } from './ports'
 import { DuctTerminalNode } from './schema'
@@ -59,6 +60,7 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
   },
 
   parametrics: ductTerminalParametrics,
+  toolOptions: ductTerminalToolOptions,
 
   geometry: buildDuctTerminalGeometry,
   geometryKey: (n) =>

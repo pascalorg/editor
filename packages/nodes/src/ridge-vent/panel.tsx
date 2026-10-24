@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, type RoofSegmentNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type RoofSegmentNode,
+  useLiveNodeOverrides,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -15,6 +21,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { resolveRidgeVentPlacement } from './placement'
 import type { RidgeVentNode } from './schema'
 
 /**
@@ -29,9 +36,17 @@ export default function RidgeVentPanel() {
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const node = useScene((s) =>
+  const storeNode = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RidgeVentNode | undefined) : undefined,
   )
+
+  const overrides = useLiveNodeOverrides((s) =>
+    selectedId ? s.get(selectedId as AnyNodeId) : undefined,
+  )
+  const node = storeNode ? ({ ...storeNode, ...overrides } as RidgeVentNode) : undefined
+  const previewProp = (patch: Partial<RidgeVentNode>) => {
+    if (selectedId) useLiveNodeOverrides.getState().set(selectedId as AnyNodeId, patch)
+  }
 
   const segment = useScene((s) =>
     node?.roofSegmentId
@@ -43,6 +58,7 @@ export default function RidgeVentPanel() {
     (updates: Partial<RidgeVentNode>) => {
       if (!selectedId) return
       updateNode(selectedId as AnyNode['id'], updates)
+      useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
     },
     [selectedId, updateNode],
   )
@@ -73,15 +89,6 @@ export default function RidgeVentPanel() {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
     const segmentId = node.roofSegmentId
-    if (segmentId) {
-      const state = useScene.getState()
-      const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-      if (seg) {
-        state.updateNode(segmentId as AnyNode['id'], {
-          children: (seg.children ?? []).filter((id) => id !== selectedId),
-        })
-      }
-    }
     deleteNode(selectedId as AnyNodeId)
     if (segmentId) {
       useScene.getState().dirtyNodes.add(segmentId as AnyNodeId)
@@ -93,32 +100,52 @@ export default function RidgeVentPanel() {
 
   if (!(node && node.type === 'ridge-vent' && selectedId)) return null
 
-  // Ridge runs along segment-X axis, so the length slider's max ties to
-  // segment.width and the across-ridge X-position to the same span. Z
-  // is the across-slope position — for ridge vents this should stay
-  // near zero (the ridge line), so clamp it to a narrow window around
-  // the segment's center.
-  const halfW = Math.round(((segment?.width ?? 10) / 2) * 100) / 100
-  const halfD = Math.round(((segment?.depth ?? 10) / 2) * 100) / 100
+  const fit = segment
+    ? resolveRidgeVentPlacement(segment, node, node.position[0], node.position[2], { fit: true })
+    : null
+  const align = segment
+    ? resolveRidgeVentPlacement(segment, node, node.position[0], node.position[2])
+    : null
 
   return (
     <PanelWrapper
-      icon="/icons/roof.webp"
+      icon="/icons/ridge-vent.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Ridge Vent'}
       width={300}
     >
       <PanelSection title="Style">
-        <SegmentedControl
-          onChange={(v) => handleUpdate({ style: v as RidgeVentNode['style'] })}
-          options={[
-            { label: 'Standard', value: 'standard' },
-            { label: 'Shingled', value: 'shingled' },
-            { label: 'Flanged', value: 'metal' },
-          ]}
-          value={node.style ?? 'standard'}
-        />
+        <div className="grid grid-cols-3 gap-2 px-1">
+          {(['standard', 'shingled', 'metal'] as const).map((style) => (
+            <button
+              key={style}
+              type="button"
+              aria-pressed={node.style === style}
+              onClick={() => handleUpdate({ style })}
+              className={`flex flex-col items-center gap-2 rounded-lg border p-2 text-xs capitalize ${node.style === style ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-accent'}`}
+            >
+              <img
+                src={`/icons/ridge-vent/${style}.webp`}
+                alt=""
+                width={64}
+                height={64}
+                className="size-16 object-contain"
+                draggable={false}
+              />
+              {style}
+            </button>
+          ))}
+        </div>
+        <p className="px-1 text-xs text-muted-foreground">
+          {node.style === 'standard'
+            ? 'Rounded continuous cap.'
+            : node.style === 'shingled'
+              ? 'Peaked cap with raised shingle seams.'
+              : 'Folded cap with a broad crown and edge hems.'}
+        </p>
+      </PanelSection>
+      <PanelSection title="Installation">
         <SegmentedControl
           onChange={(v) => handleUpdate({ endCaps: v === 'yes' })}
           options={[
@@ -129,12 +156,42 @@ export default function RidgeVentPanel() {
         />
       </PanelSection>
 
+      <PanelSection title="Ridge placement">
+        <div className="flex gap-2 px-1">
+          <button
+            type="button"
+            className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+            disabled={!align?.valid}
+            onClick={() =>
+              align && handleUpdate({ position: align.position, rotation: align.rotation })
+            }
+          >
+            Align to ridge
+          </button>
+          <button
+            type="button"
+            className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+            disabled={!fit}
+            onClick={() =>
+              fit &&
+              handleUpdate({ position: fit.position, rotation: fit.rotation, length: fit.length })
+            }
+          >
+            Fit ridge
+          </button>
+        </div>
+        <p className="px-1 text-xs text-muted-foreground">
+          {fit
+            ? `Available ridge run: ${fit.availableLength.toFixed(2)} m`
+            : 'This roof has no supported ridge run.'}
+        </p>
+      </PanelSection>
+
       <PanelSection title="Dimensions">
         <SliderControl
           label="Length"
-          max={1000}
-          min={0.5}
-          onChange={(v) => handleUpdate({ length: v })}
+          min={0.2}
+          onChange={(v) => previewProp({ length: v })}
           onCommit={(v) => handleUpdate({ length: v })}
           precision={2}
           restoreOnCommit={false}
@@ -144,9 +201,8 @@ export default function RidgeVentPanel() {
         />
         <SliderControl
           label="Width"
-          max={0.6}
           min={0.1}
-          onChange={(v) => handleUpdate({ width: v })}
+          onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => handleUpdate({ width: v })}
           precision={2}
           restoreOnCommit={false}
@@ -156,9 +212,8 @@ export default function RidgeVentPanel() {
         />
         <SliderControl
           label="Height"
-          max={0.2}
-          min={0.03}
-          onChange={(v) => handleUpdate({ height: v })}
+          min={0.02}
+          onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => handleUpdate({ height: v })}
           precision={3}
           restoreOnCommit={false}
@@ -168,13 +223,11 @@ export default function RidgeVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title="Position" defaultExpanded={false}>
         <SliderControl
           label="X"
-          max={halfW}
-          min={-halfW}
           onChange={(v) =>
-            handleUpdate({
+            previewProp({
               position: [v, node.position[1] ?? 0, node.position[2] ?? 0],
             })
           }
@@ -190,9 +243,9 @@ export default function RidgeVentPanel() {
           value={node.position[0] ?? 0}
         />
         <SliderControl
-          label="Y"
+          label="Roof offset"
           onChange={(v) =>
-            handleUpdate({
+            previewProp({
               position: [node.position[0] ?? 0, v, node.position[2] ?? 0],
             })
           }
@@ -209,10 +262,8 @@ export default function RidgeVentPanel() {
         />
         <SliderControl
           label="Z"
-          max={halfD}
-          min={-halfD}
           onChange={(v) =>
-            handleUpdate({
+            previewProp({
               position: [node.position[0] ?? 0, node.position[1] ?? 0, v],
             })
           }
@@ -231,7 +282,7 @@ export default function RidgeVentPanel() {
           label="Rotation"
           max={180}
           min={-180}
-          onChange={(deg) => handleUpdate({ rotation: (deg * Math.PI) / 180 })}
+          onChange={(deg) => previewProp({ rotation: (deg * Math.PI) / 180 })}
           onCommit={(deg) => handleUpdate({ rotation: (deg * Math.PI) / 180 })}
           precision={0}
           restoreOnCommit={false}

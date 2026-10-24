@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import {
   applyCylinderWorldUvs,
   applyPlanarWorldUvs,
@@ -58,7 +59,7 @@ import {
  *
  * Pure: no React, no scene access, no store mutation.
  */
-export function buildGutterGeometry(
+function buildUnsmoothedGutterGeometry(
   node: GutterNode,
   mitres: GutterMitres = NO_MITRES,
 ): THREE.BufferGeometry {
@@ -434,7 +435,9 @@ function buildKStyleCross(size: number, t: number): THREE.Shape {
   shape.lineTo(wBot, -size)
   shape.bezierCurveTo(wBot + size * 0.15, ogeeY, wTop - size * 0.15, ogeeY * 0.4, wTop, 0)
   // Front rim (thin top of the front wall): step inward by `t`.
-  shape.lineTo(wTop - t, 0)
+  shape.lineTo(wTop - Math.max(t, size * 0.09), 0)
+  shape.lineTo(wTop - Math.max(t, size * 0.09), -t)
+  shape.lineTo(wTop - t, -t)
   // Inner trace — back down the ogee, across the inner bottom, up the
   // inner back wall. Same bezier control points pushed inward by `t`.
   shape.bezierCurveTo(
@@ -472,7 +475,9 @@ function buildHalfRoundCross(size: number, t: number): THREE.Shape {
     shape.lineTo(r + r * Math.cos(angle), r * Math.sin(angle))
   }
   // Front rim — step inward by `t` to start the inner trace.
-  shape.lineTo(2 * r - t, 0)
+  const bead = Math.max(t / 2, size * 0.025)
+  shape.absarc(2 * r - bead, 0, bead, 0, Math.PI, false)
+  shape.lineTo(2 * r - t, -t)
   // Inner semicircle, traced BACK toward the back wall (angle 2π → π).
   for (let i = 1; i <= segs; i++) {
     const angle = 2 * Math.PI - (Math.PI * i) / segs
@@ -495,7 +500,9 @@ function buildBoxCross(size: number, t: number): THREE.Shape {
   shape.lineTo(w, -size)
   shape.lineTo(w, 0)
   // Front rim.
-  shape.lineTo(w - t, 0)
+  shape.lineTo(w - Math.max(t, size * 0.09), 0)
+  shape.lineTo(w - Math.max(t, size * 0.09), -t)
+  shape.lineTo(w - t, -t)
   // Inner rect, reversed so the polygon doesn't self-intersect.
   shape.lineTo(w - t, -size + t)
   shape.lineTo(t, -size + t)
@@ -605,7 +612,7 @@ function buildHangers(
   // Span the usable run with straps at `spacing` between centers, plus
   // one at each end. Symmetric layout for any length, including very
   // short gutters where two straps land at the bounds.
-  const count = Math.max(1, Math.floor(usable / spacing) + 1)
+  const count = Math.max(1, Math.ceil(usable / spacing) + 1)
   const stride = count > 1 ? usable / (count - 1) : 0
 
   const pieces: THREE.BufferGeometry[] = []
@@ -760,4 +767,11 @@ function buildOutletDrill(p: OutletPlacement, size: number): THREE.BufferGeometr
   const drill = outletSolid(p.inner, height)
   drill.translate(p.x, centerY, p.z)
   return drill
+}
+
+export function buildGutterGeometry(
+  node: GutterNode,
+  mitres: GutterMitres = NO_MITRES,
+): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedGutterGeometry(node, mitres))
 }

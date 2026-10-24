@@ -48,7 +48,19 @@ test('frozen pre-slice corpus covers every kind predating separators', () => {
 test.each(baseline)(
   'pre-slice $type parses, saves and loads without changing existing fields',
   (saved) => {
-    const expected = saved.type === 'column' ? { ...saved, children: [] } : saved
+    const expected =
+      saved.type === 'column'
+        ? { ...saved, children: [] }
+        : saved.type === 'hvac-equipment'
+          ? {
+              ...saved,
+              supplyFace: 'top',
+              returnFace: 'left',
+              serviceFace: 'right',
+              suctionDiameter: 0.875,
+              liquidDiameter: 0.375,
+            }
+          : saved
     const parsedExpected =
       saved.type === 'zone'
         ? { ...expected, boundarySeparatorIds: [], holes: [] }

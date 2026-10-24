@@ -13,6 +13,8 @@ import {
 import {
   consumePlacementDragRelease,
   copyCollectionIds,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -20,16 +22,13 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import {
-  createRelativeRoofDrag,
-  type RelativeRoofDragTarget,
-  snapRelativeRoofDragTarget,
-} from '../shared/relative-roof-drag'
+import { createRelativeRoofDrag, type RelativeRoofDragTarget } from '../shared/relative-roof-drag'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
   snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
+import { resolveChimneyPlacement } from './placement'
 import ChimneyPreview from './preview'
 
 const tmpMatrix = new THREE.Matrix4()
@@ -75,7 +74,7 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
         ...node,
         id: 'chimney_preview' as never,
         position: [0, 0, 0],
-        rotation: 0,
+        rotation: node.rotation,
       }),
     [node],
   )
@@ -127,11 +126,18 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
     const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+      const bypass = event.nativeEvent?.altKey === true
+      const placement = resolveChimneyPlacement(
+        rawTarget.segment,
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
-      })
+        rawTarget.localX,
+        rawTarget.localZ,
+        !bypass && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+      )
+      const target = { ...rawTarget, localX: placement.position[0], localZ: placement.position[2] }
+      return !bypass && isMagneticSnapActive()
+        ? snapRoofSurfaceNodeTarget({ target, node })
+        : target
     }
 
     const clearTarget = () => {
@@ -149,7 +155,7 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
       const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
+      if (event.nativeEvent?.altKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
@@ -173,6 +179,11 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       if (committed) return
       const target = lastTarget ?? resolveSnappedTarget(event)
       if (!target) return
+      if (
+        !resolveChimneyPlacement(target.segment, node, target.localX, target.localZ).valid &&
+        event.nativeEvent?.altKey !== true
+      )
+        return
       committed = true
       const state = useScene.getState()
 
@@ -218,21 +229,7 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
         // one tracked transaction. Otherwise undo reverts the chimney but
         // leaves the children arrays inconsistent with its parentId.
         useScene.temporal.getState().resume()
-        if (reparenting) {
-          const oldSeg = state.nodes[prevSegmentId!] as RoofSegmentNode | undefined
-          if (oldSeg) {
-            state.updateNode(prevSegmentId!, {
-              children: (oldSeg.children ?? []).filter((id) => id !== node.id),
-            })
-          }
-          const newSeg = state.nodes[targetSegmentId] as RoofSegmentNode | undefined
-          if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-            state.updateNode(targetSegmentId, {
-              children: [...(newSeg.children ?? []), node.id],
-            })
-          }
-          state.dirtyNodes.add(prevSegmentId!)
-        }
+        if (reparenting) state.dirtyNodes.add(prevSegmentId!)
         state.updateNode(node.id as AnyNodeId, {
           roofSegmentId: target.segment.id,
           parentId: target.segment.id,
@@ -334,7 +331,11 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
   return (
     <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
       <group position={[hitLocal[0], 0, hitLocal[2]]}>
-        <ChimneyPreview node={previewNode} segment={previewSegment} />
+        <ChimneyPreview
+          node={{ ...previewNode, position: hitLocal }}
+          segment={previewSegment}
+          invalid={!resolveChimneyPlacement(previewSegment, node, hitLocal[0], hitLocal[2]).valid}
+        />
       </group>
     </group>
   )

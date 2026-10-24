@@ -1,5 +1,7 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
+
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
@@ -42,7 +44,7 @@ const DormerPreview = ({ node, invalid }: { node: DormerNode; invalid?: boolean 
 
   useEffect(() => () => geo.dispose(), [geo])
 
-  return <mesh geometry={geo} material={material} raycast={() => {}} />
+  return <mesh layers={EDITOR_LAYER} geometry={geo} material={material} raycast={() => {}} />
 }
 
 export default DormerPreview

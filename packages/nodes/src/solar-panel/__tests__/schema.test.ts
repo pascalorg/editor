@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { Group, Mesh, MeshBasicMaterial } from 'three'
+import { solarPanelDefinition } from '../../index'
 import { SolarPanelNode } from '../schema'
 
 describe('SolarPanelNode schema', () => {
@@ -41,4 +43,47 @@ describe('SolarPanelNode schema', () => {
     const parsed = SolarPanelNode.parse({ surfaceNormal: [0.2, 0.95, -0.18] })
     expect(parsed.surfaceNormal).toEqual([0.2, 0.95, -0.18])
   })
+})
+
+test('painting the panel preserves the frame and survives serialization', () => {
+  const node = SolarPanelNode.parse({ materialPreset: 'library:preset-white' })
+  const paint = solarPanelDefinition.capabilities!.paint!
+  const patch = paint.buildPatch({
+    node,
+    role: 'panel',
+    material: undefined,
+    materialPreset: 'library:preset-glass',
+  })
+  const restored = SolarPanelNode.parse(JSON.parse(JSON.stringify({ ...node, ...patch })))
+  expect(restored.materialPreset).toBe('library:preset-white')
+  expect(restored.panelMaterialPreset).toBe('library:preset-glass')
+  expect(
+    paint.getEffectiveMaterial!({ node: restored, role: 'panel', nodes: {} }).materialPreset,
+  ).toBe('library:preset-glass')
+})
+
+test('paint preview restores the panel and leaves its frame untouched', () => {
+  const frame = new MeshBasicMaterial()
+  const face = new MeshBasicMaterial()
+  const root = new Group()
+  const mesh = new Mesh(undefined, [frame, face])
+  mesh.name = 'solar-panel-surface'
+  root.add(mesh)
+  const frameMesh = new Mesh(undefined, frame)
+  frameMesh.name = 'skylight-surface'
+  root.add(frameMesh)
+  const paint = solarPanelDefinition.capabilities!.paint!
+  const node = solarPanelDefinition.schema.parse({})
+  expect(paint.resolveRole({ node, hitObject: mesh, materialIndex: 1 } as never)).toBe('panel')
+  const restore = paint.applyPreview({
+    node,
+    role: 'panel',
+    root,
+    material: undefined,
+    materialPreset: 'library:preset-white',
+  })
+  expect((mesh.material as import('three').Material[])[1]).not.toBe(face)
+  expect(frameMesh.material).toBe(frame)
+  restore?.()
+  expect(mesh.material).toEqual([frame, face])
 })

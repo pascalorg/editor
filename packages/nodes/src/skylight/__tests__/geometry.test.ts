@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { buildLanternGlassGeometry, clamp01, paneSize } from '../geometry'
+import { Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
+import {
+  buildFrameGeometry,
+  buildLanternGlassGeometry,
+  clamp01,
+  paneSize,
+  SkylightNode,
+} from '../index'
 
 describe('buildLanternGlassGeometry', () => {
   test('returns non-empty geometry across topScale variants', () => {
@@ -27,4 +34,59 @@ describe('paneSize / clamp01 helpers', () => {
     expect(clamp01(1.5)).toBe(1)
     expect(clamp01(0.4)).toBe(0.4)
   })
+})
+
+test('flat-top lantern has glass over the center of its top opening', () => {
+  const geometry = buildLanternGlassGeometry(1, 1.2, 0.4, 0.5)
+  const material = new MeshBasicMaterial()
+  const mesh = new Mesh(geometry, material)
+  const hits = new Raycaster(new Vector3(0.05, 1, 0.05), new Vector3(0, -1, 0)).intersectObject(
+    mesh,
+  )
+  expect(hits.length).toBeGreaterThan(0)
+  expect(hits[0]!.point.y).toBeCloseTo(0.4)
+  geometry.dispose()
+  material.dispose()
+})
+
+test('frame leaves the glass opening clear and covers the cut edge with flashing', () => {
+  const node = SkylightNode.parse({ width: 1, height: 1.2, frameThickness: 0.05 })
+  const geometry = buildFrameGeometry(node)!
+  const material = new MeshBasicMaterial()
+  const mesh = new Mesh(geometry, material)
+  const ray = (x: number) =>
+    new Raycaster(new Vector3(x, 1, 0), new Vector3(0, -1, 0)).intersectObject(mesh)
+  expect(ray(0)).toHaveLength(0)
+  expect(ray(0.58).length).toBeGreaterThan(0)
+  expect(ray(0.62)).toHaveLength(0)
+  geometry.dispose()
+  material.dispose()
+})
+
+test('every skylight preview style stays off the scene camera layer after style changes', async () => {
+  const { create } = await import('@react-three/test-renderer')
+  const { createElement } = await import('react')
+  const { EDITOR_LAYER } = await import('@pascal-app/editor')
+  const { skylightDefinition } = await import('../index')
+  const { default: Preview } = await skylightDefinition.preview!()
+  const renderer = await create(createElement(Preview, { node: SkylightNode.parse({}) }))
+  try {
+    for (const skylightType of ['flat', 'opening', 'sliding', 'lantern', 'walk-on'] as const) {
+      await renderer.update(
+        createElement(Preview, {
+          node: SkylightNode.parse({ skylightType, operationState: 0.5, motorHousing: true }),
+        }),
+      )
+      let meshes = 0
+      renderer.scene.instance.traverse((object) => {
+        if (!(object instanceof Mesh)) return
+        meshes++
+        expect(object.layers.isEnabled(0)).toBe(false)
+        expect(object.layers.isEnabled(EDITOR_LAYER)).toBe(true)
+      })
+      expect(meshes).toBeGreaterThan(0)
+    }
+  } finally {
+    await renderer.unmount()
+  }
 })

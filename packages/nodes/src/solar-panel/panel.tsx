@@ -21,9 +21,10 @@ import {
   triggerSFX,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { LayoutGrid, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { computeAutoFit, flippedPanelDims } from './geometry'
+import { computeAutoFit, solarPanelObstacles } from './auto-fit'
+import { flippedPanelDims } from './geometry'
 
 const cn = (...classes: Array<string | false | undefined | null>): string =>
   classes.filter(Boolean).join(' ')
@@ -143,9 +144,12 @@ export default function SolarPanelPanel() {
 
   const handleAutoFit = useCallback(() => {
     if (!(selectedId && node && segment)) return
-    const fit = computeAutoFit(segment, node)
+    const obstacles = solarPanelObstacles(segment, node, Object.values(useScene.getState().nodes))
+    const fit = computeAutoFit(segment, node, obstacles)
     if (!fit) {
-      setAutoFitMessage('Setbacks too large to fit a panel.')
+      setAutoFitMessage(
+        'No panel fits here. Move or rotate the array, or reduce the panel dimensions.',
+      )
       return
     }
     updateNode(selectedId as AnyNode['id'], { rows: fit.rows, columns: fit.columns })
@@ -156,15 +160,6 @@ export default function SolarPanelPanel() {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
     const segmentId = node.roofSegmentId
-    if (segmentId) {
-      const state = useScene.getState()
-      const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-      if (seg) {
-        state.updateNode(segmentId as AnyNode['id'], {
-          children: (seg.children ?? []).filter((id) => id !== selectedId),
-        })
-      }
-    }
     deleteNode(selectedId as AnyNodeId)
     if (segmentId) {
       useScene.getState().dirtyNodes.add(segmentId as AnyNodeId)
@@ -181,13 +176,13 @@ export default function SolarPanelPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/roof.webp"
+      icon="/icons/solar-panel.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Solar Panel'}
       width={300}
     >
-      <PanelSection title="Preset">
+      <PanelSection title="Style">
         <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
           {PRESET_CARDS.map((card) => {
             const dims = SOLAR_PANEL_PRESETS[card.key]
@@ -200,15 +195,20 @@ export default function SolarPanelPanel() {
                     ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
                     : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                 )}
+                aria-pressed={isSelected}
                 key={card.key}
                 onClick={() => handlePresetChange(card.key)}
                 type="button"
               >
+                <img
+                  alt=""
+                  className="h-16 w-full object-contain"
+                  src={`/icons/solar-panel/${card.key}.webp`}
+                />
                 <span className="flex items-center gap-1.5 font-medium">
-                  <LayoutGrid className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{card.label}</span>
                 </span>
-                <span className="pl-[20px] text-[10px] tabular-nums opacity-70">
+                <span className="text-[10px] tabular-nums opacity-70">
                   {formatDims(dims.panelWidth, dims.panelHeight)}
                 </span>
               </button>
@@ -223,6 +223,13 @@ export default function SolarPanelPanel() {
       </PanelSection>
 
       <PanelSection title="Array">
+        <p className="px-1 text-xs text-muted-foreground">
+          {node.rows * node.columns} panels ·{' '}
+          {formatDims(
+            node.columns * node.panelWidth + (node.columns - 1) * node.gapX,
+            node.rows * node.panelHeight + (node.rows - 1) * node.gapY,
+          )}
+        </p>
         <SliderControl
           label="Rows"
           max={20}
@@ -246,7 +253,7 @@ export default function SolarPanelPanel() {
           value={num(node.columns, 5)}
         />
         <SliderControl
-          label="Gap X"
+          label="Column gap"
           max={0.2}
           min={0}
           onChange={(v) => previewProp({ gapX: v })}
@@ -258,7 +265,7 @@ export default function SolarPanelPanel() {
           value={num(node.gapX, 0.02)}
         />
         <SliderControl
-          label="Gap Y"
+          label="Row gap"
           max={0.2}
           min={0}
           onChange={(v) => previewProp({ gapY: v })}
@@ -280,7 +287,6 @@ export default function SolarPanelPanel() {
       <PanelSection title="Panel">
         <SliderControl
           label="Width"
-          max={1000}
           min={0.3}
           onChange={(v) => previewProp({ panelWidth: v })}
           onCommit={(v) => commitProp({ panelWidth: v })}
@@ -291,8 +297,7 @@ export default function SolarPanelPanel() {
           value={num(node.panelWidth, 1)}
         />
         <SliderControl
-          label="Height"
-          max={1000}
+          label="Length"
           min={0.3}
           onChange={(v) => previewProp({ panelHeight: v })}
           onCommit={(v) => commitProp({ panelHeight: v })}
@@ -306,7 +311,7 @@ export default function SolarPanelPanel() {
           <ActionButton label="Flip orientation" onClick={handleFlip} />
         </ActionGroup>
         <SliderControl
-          label="Frame thickness"
+          label="Frame border"
           max={0.1}
           min={0.005}
           onChange={(v) => previewProp({ frameThickness: v })}
@@ -368,6 +373,20 @@ export default function SolarPanelPanel() {
         />
       </PanelSection>
 
+      <PanelSection title="Position" defaultExpanded={false}>
+        <SliderControl
+          label="Rotation"
+          min={-180}
+          max={180}
+          unit="°"
+          step={1}
+          precision={0}
+          restoreOnCommit={false}
+          value={(node.rotation * 180) / Math.PI}
+          onChange={(v) => previewProp({ rotation: (v * Math.PI) / 180 })}
+          onCommit={(v) => commitProp({ rotation: (v * Math.PI) / 180 })}
+        />
+      </PanelSection>
       <PanelSection title="Actions">
         <ActionGroup>
           <ActionButton

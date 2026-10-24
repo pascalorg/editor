@@ -1,38 +1,51 @@
 import { type BoxVentNode, getActiveRoofHeight, type RoofType } from '@pascal-app/core'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import { copyUvToSecondaryChannel } from '../shared/primitive-uv'
+import { boxVentDimensions } from './dimensions'
 
 export const BOX_VENT_MATERIAL_INDEX = {
   base: 0,
   top: 1,
 } as const
 
-/**
- * Pure builder for the box-vent mesh. Models a real attic box vent:
- *
- *   ┌──────────────────────┐        ← rounded dome cap (closed)
- *   │        ───           │
- *   │  ◜─────────────◝    │
- *  ─┘─────────────────────└─       ← flange flashing
- *
- * - **Body**: short rectangular walls + a sealed bottom.
- * - **Dome cap**: smooth half-ellipsoid that fully closes the top — no
- *   flat plateau (the old pyramid hood left one). Used for every style;
- *   `style` just tunes how much of the total height is body vs cap.
- * - **Skirt / flange**: the dome's base ring extends past the body by
- *   `hoodOverhang`, doubling as the mounting flashing tab.
- *
- * Louvered slats were removed — real box vents read smooth from typical
- * camera distances; the slat pile only made the ghost preview noisy and
- * the texture wrap unpredictable.
- *
- * Pure: no React, no scene access, no store mutation. Safe to call from
- * unit tests, the placement preview, and the move-tool ghost.
- */
-export function buildBoxVentGeometry(node: BoxVentNode): THREE.BufferGeometry {
-  if (node.style === 'box') return buildBoxShape(node)
-  if (node.style === 'cap') return buildCapShape(node)
-  return buildDomeStyleShape(node)
+/** Shared housing and flashing geometry for the renderer, preview and exports. */
+function buildUnsmoothedBoxVentGeometry(input: BoxVentNode): THREE.BufferGeometry {
+  const node = { ...input, ...boxVentDimensions(input) }
+  const housing =
+    node.style === 'box'
+      ? buildBoxShape(node)
+      : node.style === 'cap'
+        ? buildCapShape(node)
+        : buildDomeStyleShape(node)
+  const flashing = Math.max(0, node.flashingWidth ?? 0)
+  if (flashing === 0) return housing
+  const overhang = node.style === 'box' ? 0 : Math.max(0, node.hoodOverhang ?? 0.04)
+  const positions: number[] = []
+  const normals: number[] = []
+  const uvs: number[] = []
+  buildRoundedExtrusion(
+    positions,
+    normals,
+    uvs,
+    node.width + 2 * (overhang + flashing),
+    node.depth + 2 * (overhang + flashing),
+    0,
+    0.003,
+    0.008,
+  )
+  const plate = buildBufferGeometry(positions, normals, uvs, positions.length / 3)
+  housing.translate(0, 0.003, 0)
+  const geometry = mergeGeometries([plate, housing], false)!
+  geometry.clearGroups()
+  const plateCount = plate.getAttribute('position').count
+  for (const group of housing.groups)
+    geometry.addGroup(plateCount + group.start, group.count, group.materialIndex)
+  geometry.addGroup(0, plateCount, BOX_VENT_MATERIAL_INDEX.base)
+  plate.dispose()
+  housing.dispose()
+  return geometry
 }
 
 // ─── Box style ───────────────────────────────────────────────────────
@@ -282,7 +295,7 @@ function buildCapShape(node: BoxVentNode): THREE.BufferGeometry {
     [0, -1, 0],
   )
 
-  // ── Body top (only when there's a visible gap to look through)
+  // A recessed throat connects the hood across the ventilation slot.
   if (capGap > 0) {
     pushQuad(
       positions,
@@ -296,6 +309,18 @@ function buildCapShape(node: BoxVentNode): THREE.BufferGeometry {
     )
   }
 
+  if (capGap > 0) {
+    buildRoundedExtrusion(
+      positions,
+      normals,
+      uvs,
+      w * 0.78,
+      d * 0.78,
+      bodyH,
+      y0,
+      Math.min(w, d) * 0.02,
+    )
+  }
   const topStartVertex = positions.length / 3
 
   // ── Flange underside (the bit of the cap base that overhangs the body)
@@ -681,4 +706,8 @@ export function computeBoxVentSlopeTilt(
   const rh = getActiveRoofHeight(segment)
   const slopeAngle = Math.atan2(rh, segment.depth / 2)
   return localZ > 0 ? slopeAngle : -slopeAngle
+}
+
+export function buildBoxVentGeometry(input: BoxVentNode): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedBoxVentGeometry(input))
 }

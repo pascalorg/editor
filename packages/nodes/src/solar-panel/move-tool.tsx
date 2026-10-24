@@ -11,72 +11,51 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  commitFreshPlacementSubtree,
   consumePlacementDragRelease,
-  EDITOR_LAYER,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getRoofOuterSurfaceFrameAtPoint } from '@pascal-app/viewer'
+import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
-  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
   snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
+import { solarPanelObstacles } from './auto-fit'
+import { resolveSolarPanelPlacement } from './placement'
+import SolarPanelPreview from './preview'
 
-// MeshBasicMaterial: avoids the WebGPU "Color target has no corresponding
-// fragment stage output / writeMask not zero" error that fires when
-// MeshStandardMaterial (which writes to the MRT normal/roughness targets)
-// is rendered in a pass whose render target lacks those attachments.
-// Same fix as skylight's glass material. Visually identical for a ghost.
-const previewMaterial = new THREE.MeshBasicMaterial({
-  color: 0x22_44_88,
-  transparent: true,
-  opacity: 0.5,
-  depthWrite: false,
-})
-
+/**
+ * Solar-panel move tool. Mirrors the placement tool's cursor behaviour
+ * (ghost follows the roof surface; click on a roof commits) but for an
+ * already-existing vent: the original mesh is hidden during the drag,
+ * the ghost tracks the cursor with the correct slope tilt + segment yaw,
+ * and the click updates the node's position + parent segment in one
+ * undoable step. Cancel restores the original transform; if the node was
+ * freshly cloned (`metadata.isNew`), cancel deletes it instead.
+ */
 export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
   }, [])
 
-  const previewRef = useRef<THREE.Group>(null!)
-  const [previewPos, setPreviewPos] = useState<[number, number, number]>([0, 0, 0])
-  // Yaw = roof.rotation + segment.rotation; applied as outer rotation-y
-  // so the surface quat (segment-local) composes correctly — same pattern
-  // as the placement tool ghost.
+  const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
+  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
+  const [previewValid, setPreviewValid] = useState(true)
   const [previewYaw, setPreviewYaw] = useState(0)
-  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion>(
-    new THREE.Quaternion(),
-  )
-  const [hasHit, setHasHit] = useState(false)
-
-  // Compact 2×3 ghost — same size as the placement tool ghost.
-  const previewGeo = useMemo(() => {
-    const ghostRows = 2
-    const ghostCols = 3
-    const totalW = ghostCols * node.panelWidth + (ghostCols - 1) * node.gapX
-    const totalH = ghostRows * node.panelHeight + (ghostRows - 1) * node.gapY
-    const geo = new THREE.BoxGeometry(totalW, node.frameDepth, totalH)
-    geo.translate(0, node.standoffHeight + node.frameDepth / 2, 0)
-    return geo
-  }, [
-    node.panelWidth,
-    node.panelHeight,
-    node.gapX,
-    node.gapY,
-    node.frameDepth,
-    node.standoffHeight,
-  ])
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -88,42 +67,69 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       parentId: node.parentId,
       metadata: node.metadata,
     }
-
     const meta =
       typeof node.metadata === 'object' && node.metadata !== null
         ? (node.metadata as Record<string, unknown>)
         : {}
     const isNew = !!meta.isNew
-    useScene.getState().updateNode(node.id as AnyNodeId, {
-      metadata: { ...meta, isTransient: true },
-    })
 
-    const panelObj = sceneRegistry.nodes.get(node.id)
-    if (panelObj) panelObj.visible = false
+    const ventObj = sceneRegistry.nodes.get(node.id)
+    if (ventObj) ventObj.visible = false
 
-    let lastSnapX = 0
-    let lastSnapZ = 0
+    let lastSnap: [number, number] | null = null
     let lastTarget: RelativeRoofDragTarget | null = null
     let committed = false
+    let forcePlacement = false
     const roofDrag = createRelativeRoofDrag(original)
 
     const clearTarget = () => {
       lastTarget = null
-      setHasHit(false)
+      lastSnap = null
+      setPreviewPos(null)
+      setPreviewSurfaceQuat(null)
       clearRoofSurfacePlacementGuides()
     }
 
     const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+      forcePlacement = event.nativeEvent?.altKey === true
+      let placement = resolveSolarPanelPlacement(
+        rawTarget.segment,
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
-      })
+        rawTarget.localX,
+        rawTarget.localZ,
+        {
+          obstacles: solarPanelObstacles(
+            rawTarget.segment,
+            node,
+            Object.values(useScene.getState().nodes),
+          ),
+          gridStep: !forcePlacement && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        },
+      )
+      let target = {
+        ...rawTarget,
+        localX: placement.position[0],
+        localY: placement.position[1],
+        localZ: placement.position[2],
+      }
+      if (!forcePlacement && isMagneticSnapActive()) {
+        target = snapRoofSurfaceNodeTarget({ target, node })
+        placement = resolveSolarPanelPlacement(target.segment, node, target.localX, target.localZ, {
+          obstacles: solarPanelObstacles(
+            target.segment,
+            node,
+            Object.values(useScene.getState().nodes),
+          ),
+        })
+        target = { ...target, localY: placement.position[1] }
+      }
+      setPreviewValid(placement.valid || forcePlacement)
+      return target
     }
 
-    const updateGhost = (event: RoofEvent) => {
+    const updatePreview = (event: RoofEvent) => {
       const target = resolveSnappedTarget(event)
       if (!target) {
         clearTarget()
@@ -133,20 +139,21 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
-      if (event.nativeEvent?.shiftKey !== true && (sx !== lastSnapX || sz !== lastSnapZ)) {
+      if (
+        !forcePlacement &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
+        (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
+      ) {
         triggerSFX('sfx:grid-snap')
-        lastSnapX = sx
-        lastSnapZ = sz
+        lastSnap = [sx, sz]
       }
 
-      // Use the same analytical approach as the placement tool so the
-      // ghost orientation matches the committed panel exactly regardless
-      // of segment rotation. The placement tool's ghost is always correct
-      // because analytical normals are computed in segment-local space
-      // and the yaw is applied explicitly, avoiding any world-vs-local
-      // normal mismatch.
-      const segLocalNormal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
-      setPreviewSurfaceQuat(surfaceQuatFromNormal(segLocalNormal, new THREE.Quaternion()))
+      const normal = getRoofOuterSurfaceFrameAtPoint(
+        target.segment,
+        target.localX,
+        target.localZ,
+      ).normal
+      setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
       setPreviewPos(
         roofSegmentLocalToBuildingLocal(target.segment.id, [
@@ -155,7 +162,6 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
           target.localZ,
         ]),
       )
-      setHasHit(true)
       publishRoofSurfaceNodePlacementGuides({
         roof: event.node as RoofNode,
         segment: target.segment,
@@ -167,59 +173,41 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
 
     const onRoofClick = (event: RoofEvent) => {
       if (committed) return
+      const target = event.node ? resolveSnappedTarget(event) : lastTarget
+      if (!target) return
+      if (
+        !forcePlacement &&
+        !resolveSolarPanelPlacement(target.segment, node, target.localX, target.localZ, {
+          obstacles: solarPanelObstacles(
+            target.segment,
+            node,
+            Object.values(useScene.getState().nodes),
+          ),
+        }).valid
+      )
+        return
+      committed = true
+      const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
-      const target = lastTarget ?? resolveSnappedTarget(event)
-      if (!target) return
-      committed = true
-
-      const targetSegmentId = target.segment.id as AnyNodeId
-
-      // Compute segment-local normal for the committed node so the
-      // renderer's surfaceQuat + outer segment.rotation compose to
-      // the same world orientation the ghost showed.
-      const segLocalNormal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
-
-      st.updateNode(node.id as AnyNodeId, {
-        position: original.position,
-        rotation: original.rotation,
-        roofSegmentId: original.roofSegmentId as AnyNodeId | undefined,
-        parentId: original.parentId as AnyNodeId | undefined,
-        metadata: original.metadata,
-      })
-      useScene.temporal.getState().resume()
-
-      st.updateNode(node.id as AnyNodeId, {
+      const patch = {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [target.localX, target.localY, target.localZ],
+        position: [target.localX, target.localY, target.localZ] as [number, number, number],
         rotation: original.rotation,
-        // Segment-local normal — must stay consistent with getAnalyticalNormal
-        // semantics so the renderer's surfaceQuat is in the correct frame.
-        surfaceNormal: [segLocalNormal.x, segLocalNormal.y, segLocalNormal.z],
         visible: true,
-        metadata: {},
-      })
-
-      if (original.roofSegmentId && original.roofSegmentId !== (targetSegmentId as string)) {
-        const oldSeg = st.nodes[original.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined
-        if (oldSeg) {
-          st.updateNode(original.roofSegmentId as AnyNodeId, {
-            children: (oldSeg.children ?? []).filter((id) => id !== node.id),
-          })
-        }
-        const newSeg = st.nodes[targetSegmentId] as RoofSegmentNode | undefined
-        if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-          st.updateNode(targetSegmentId, {
-            children: [...(newSeg.children ?? []), node.id],
-          })
-        }
-        st.dirtyNodes.add(original.roofSegmentId as AnyNodeId)
+        metadata: stripPlacementMetadataFlags(original.metadata) as SolarPanelNode['metadata'],
       }
+      if (isNew) {
+        commitFreshPlacementSubtree(node.id as AnyNodeId, patch)
+      } else {
+        useScene.temporal.getState().resume()
+        st.updateNode(node.id as AnyNodeId, patch)
+        useScene.temporal.getState().pause()
+      }
+
       st.dirtyNodes.add(targetSegmentId)
       st.dirtyNodes.add(node.id as AnyNodeId)
-
-      useScene.temporal.getState().pause()
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
@@ -232,19 +220,19 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
 
     const onCancel = () => {
       if (isNew) {
-        useScene.temporal.getState().resume()
-        const parentId = original.roofSegmentId
+        // Freshly-cloned vent — undo the clone entirely on cancel so the
+        // user doesn't end up with an orphan they didn't intend to place.
+        const parentId = original.roofSegmentId as AnyNodeId | undefined
         if (parentId) {
-          const parent = useScene.getState().nodes[parentId as AnyNodeId] as
-            | RoofSegmentNode
-            | undefined
+          const parent = useScene.getState().nodes[parentId] as RoofSegmentNode | undefined
           if (parent) {
-            useScene.getState().updateNode(parentId as AnyNodeId, {
+            useScene.getState().updateNode(parentId, {
               children: (parent.children ?? []).filter((id) => id !== node.id),
             })
           }
         }
         useScene.getState().deleteNode(node.id as AnyNodeId)
+        useScene.temporal.getState().resume()
         markToolCancelConsumed()
         clearRoofSurfacePlacementGuides()
         exitMoveMode()
@@ -261,7 +249,6 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       if (original.roofSegmentId) {
         useScene.getState().dirtyNodes.add(original.roofSegmentId as AnyNodeId)
       }
-
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
 
@@ -280,21 +267,24 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       } as unknown as RoofEvent)
     }
 
-    emitter.on('roof:move', updateGhost)
-    emitter.on('roof:enter', updateGhost)
+    emitter.on('roof:move', updatePreview)
+    emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onRoofClick)
     emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
-      emitter.off('roof:move', updateGhost)
-      emitter.off('roof:enter', updateGhost)
+      emitter.off('roof:move', updatePreview)
+      emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onRoofClick)
       emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
+      // Safety restore — if the tool is unmounted by something other than
+      // a commit / cancel path (e.g. tool change, selection wipe), leave
+      // the original mesh visible rather than stranded invisible.
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
       clearRoofSurfacePlacementGuides()
@@ -302,17 +292,13 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
     }
   }, [exitMoveMode, node])
 
-  // Ghost layout mirrors the placement tool exactly:
-  //   position (building-local hit point)
-  //   → rotation-y (roof.rotation + segment.rotation — explicit yaw)
-  //   → quaternion (segment-local surface tilt)
-  // This is identical to the placement ghost so drag and commit always
-  // show the same orientation.
+  if (!(previewPos && previewSurfaceQuat)) return null
+
   return (
-    <group position={previewPos} ref={previewRef} visible={hasHit}>
+    <group position={previewPos}>
       <group rotation-y={previewYaw}>
         <group quaternion={previewSurfaceQuat}>
-          <mesh geometry={previewGeo} layers={EDITOR_LAYER} material={previewMaterial} />
+          <SolarPanelPreview node={node} invalid={!previewValid} />
         </group>
       </group>
     </group>

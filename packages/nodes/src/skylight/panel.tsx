@@ -89,15 +89,6 @@ export default function SkylightPanel() {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
     const segmentId = node.roofSegmentId
-    if (segmentId) {
-      const state = useScene.getState()
-      const segment = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-      if (segment) {
-        state.updateNode(segmentId as AnyNode['id'], {
-          children: (segment.children ?? []).filter((id) => id !== selectedId),
-        })
-      }
-    }
     deleteNode(selectedId as AnyNodeId)
     if (segmentId) {
       useScene.getState().dirtyNodes.add(segmentId as AnyNodeId)
@@ -122,13 +113,15 @@ export default function SkylightPanel() {
 
   const computeWorldPos = () => {
     if (!skylightObj) return { x: 0, z: 0 }
-    const localPt = new Vector3(node.position[0] ?? 0, 0, node.position[2] ?? 0)
+    const localPt = new Vector3()
     const worldPt = localPt.applyMatrix4(skylightObj.matrixWorld)
     return { x: worldPt.x, z: worldPt.z }
   }
   const computeWorldRotation = () => {
     if (!skylightObj) return node.rotation ?? 0
-    const m = skylightObj.matrixWorld.elements
+    const host = segment && sceneRegistry.nodes.get(segment.id)
+    host?.updateWorldMatrix(true, false)
+    const m = (host ?? skylightObj).matrixWorld.elements
     const ancestorWorldY = Math.atan2(-(m[2] ?? 0), m[0] ?? 1)
     return ancestorWorldY + (node.rotation ?? 0)
   }
@@ -142,7 +135,7 @@ export default function SkylightPanel() {
     const state = useScene.getState()
     const worldPt = new Vector3(wx, 0, wz)
     for (const candidate of Object.values(state.nodes)) {
-      if (candidate?.type !== 'roof-segment') continue
+      if (candidate?.type !== 'roof-segment' || candidate.parentId !== segment?.parentId) continue
       const seg = candidate as RoofSegmentNode
       const segObj = sceneRegistry.nodes.get(seg.id)
       if (!segObj) continue
@@ -224,7 +217,9 @@ export default function SkylightPanel() {
 
   const commitWorldRotation = (newWorldRot: number) => {
     if (!skylightObj) return
-    const m = skylightObj.matrixWorld.elements
+    const host = segment && sceneRegistry.nodes.get(segment.id)
+    host?.updateWorldMatrix(true, false)
+    const m = (host ?? skylightObj).matrixWorld.elements
     const ancestorWorldY = Math.atan2(-(m[2] ?? 0), m[0] ?? 1)
     commitProp({ rotation: newWorldRot - ancestorWorldY })
   }
@@ -235,8 +230,6 @@ export default function SkylightPanel() {
     const preset = SKYLIGHT_TYPE_PRESETS[skylightType]
     commitProp({
       skylightType,
-      width: preset.width,
-      height: preset.height,
       frameThickness: preset.frameThickness,
       frameDepth: preset.frameDepth,
       glassThickness: preset.glassThickness,
@@ -258,28 +251,34 @@ export default function SkylightPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/roof.webp"
+      icon="/icons/skylight.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Skylight'}
       width={300}
     >
-      <PanelSection title="Type">
+      <PanelSection title="Style">
         <div className="grid grid-cols-2 gap-2 px-1 pt-1">
           {SKYLIGHT_TYPE_ORDER.map((skylightType) => {
             const isSelected = activeSkylightType === skylightType
             return (
               <button
                 className={cn(
-                  'flex min-h-12 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
+                  'flex min-h-12 flex-col items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                   isSelected
                     ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
                     : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                 )}
+                aria-pressed={isSelected}
                 key={skylightType}
                 onClick={() => handleTypeChange(skylightType)}
                 type="button"
               >
+                <img
+                  alt=""
+                  className="h-16 w-full object-contain"
+                  src={`/icons/skylight/${skylightType}.webp`}
+                />
                 <span className="min-w-0 truncate font-medium">
                   {SKYLIGHT_TYPE_PRESETS[skylightType].label}
                 </span>
@@ -289,7 +288,6 @@ export default function SkylightPanel() {
         </div>
         <SliderControl
           label="Glass Thickness"
-          max={0.05}
           min={0.002}
           onChange={(v) => previewProp({ glassThickness: v })}
           onCommit={(v) => commitProp({ glassThickness: v })}
@@ -303,7 +301,6 @@ export default function SkylightPanel() {
           <>
             <SliderControl
               label="Lantern Height"
-              max={1.0}
               min={0.05}
               onChange={(v) => previewProp({ lanternHeight: v })}
               onCommit={(v) => commitProp({ lanternHeight: v })}
@@ -331,15 +328,15 @@ export default function SkylightPanel() {
           <>
             <SliderControl
               label="Open"
-              max={1}
+              max={100}
               min={0}
-              onChange={(v) => previewProp({ operationState: v })}
-              onCommit={(v) => commitProp({ operationState: v })}
-              precision={2}
+              onChange={(v) => previewProp({ operationState: v / 100 })}
+              onCommit={(v) => commitProp({ operationState: v / 100 })}
+              precision={0}
               restoreOnCommit={false}
-              step={0.01}
-              unit=""
-              value={Math.round((node.operationState ?? 0) * 100) / 100}
+              step={1}
+              unit="%"
+              value={Math.round((node.operationState ?? 0) * 100)}
             />
             <SliderControl
               label="Opening Angle"
@@ -374,7 +371,6 @@ export default function SkylightPanel() {
             {(node.motorHousing ?? false) && (
               <SliderControl
                 label="Motor Housing"
-                max={0.2}
                 min={0.03}
                 onChange={(v) => previewProp({ motorHousingSize: v })}
                 onCommit={(v) => commitProp({ motorHousingSize: v })}
@@ -391,15 +387,15 @@ export default function SkylightPanel() {
           <>
             <SliderControl
               label="Open"
-              max={1}
+              max={100}
               min={0}
-              onChange={(v) => previewProp({ operationState: v })}
-              onCommit={(v) => commitProp({ operationState: v })}
-              precision={2}
+              onChange={(v) => previewProp({ operationState: v / 100 })}
+              onCommit={(v) => commitProp({ operationState: v / 100 })}
+              precision={0}
               restoreOnCommit={false}
-              step={0.01}
-              unit=""
-              value={Math.round((node.operationState ?? 0) * 100) / 100}
+              step={1}
+              unit="%"
+              value={Math.round((node.operationState ?? 0) * 100)}
             />
             <SegmentedControl
               onChange={(v) => commitProp({ slideDirection: v as SkylightNode['slideDirection'] })}
@@ -411,7 +407,6 @@ export default function SkylightPanel() {
             />
             <SliderControl
               label="Track Width"
-              max={0.12}
               min={0.02}
               onChange={(v) => previewProp({ trackWidth: v })}
               onCommit={(v) => commitProp({ trackWidth: v })}
@@ -428,7 +423,6 @@ export default function SkylightPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={1000}
           min={0.3}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => commitProp({ width: v })}
@@ -439,8 +433,7 @@ export default function SkylightPanel() {
           value={node.width}
         />
         <SliderControl
-          label="Height"
-          max={1000}
+          label="Length"
           min={0.3}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => commitProp({ height: v })}
@@ -455,7 +448,6 @@ export default function SkylightPanel() {
       <PanelSection title="Frame">
         <SliderControl
           label="Thickness"
-          max={0.2}
           min={0.02}
           onChange={(v) => previewProp({ frameThickness: v })}
           onCommit={(v) => commitProp({ frameThickness: v })}
@@ -467,7 +459,6 @@ export default function SkylightPanel() {
         />
         <SliderControl
           label="Depth"
-          max={0.3}
           min={0.02}
           onChange={(v) => previewProp({ frameDepth: v })}
           onCommit={(v) => commitProp({ frameDepth: v })}
@@ -479,7 +470,6 @@ export default function SkylightPanel() {
         />
         <SliderControl
           label="Cutout Offset"
-          max={0.2}
           min={0}
           onChange={(v) => previewProp({ cutoutOffset: v })}
           onCommit={(v) => commitProp({ cutoutOffset: v })}
@@ -503,7 +493,6 @@ export default function SkylightPanel() {
         {(node.curb ?? false) && (
           <SliderControl
             label="Height"
-            max={0.3}
             min={0.02}
             onChange={(v) => previewProp({ curbHeight: v })}
             onCommit={(v) => commitProp({ curbHeight: v })}
@@ -516,7 +505,7 @@ export default function SkylightPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title="Position" defaultExpanded={false}>
         <SliderControl
           label="X"
           max={Math.round(worldMaxX * 10) / 10}
@@ -556,7 +545,9 @@ export default function SkylightPanel() {
           onChange={(degrees) => {
             const newWorldRot = (degrees * Math.PI) / 180
             if (!skylightObj) return
-            const m = skylightObj.matrixWorld.elements
+            const host = segment && sceneRegistry.nodes.get(segment.id)
+            host?.updateWorldMatrix(true, false)
+            const m = (host ?? skylightObj).matrixWorld.elements
             const ancestorWorldY = Math.atan2(-(m[2] ?? 0), m[0] ?? 1)
             previewProp({ rotation: newWorldRot - ancestorWorldY })
           }}

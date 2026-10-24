@@ -160,3 +160,34 @@ export function resolveEaveSnap(
       }
   }
 }
+
+/** Keep the complete run on the eave; optional grid only affects its along-eave axis. */
+export function resolveGutterPlacement(
+  segment: RoofSegmentNode,
+  localX: number,
+  localZ: number,
+  length: number,
+  gridStep = 0,
+  force = false,
+): EaveSnap & { length: number } {
+  const snap = resolveEaveSnap(segment, localX, localZ)
+  const alongX = snap.side.endsWith('Z')
+  const overhang = getRoofShapeEaveOverhang(segment)
+  const halfSpan = Math.max(
+    0.025,
+    (alongX ? segment.width : segment.depth) / 2 + overhang - EAVE_TUCK_INWARD,
+  )
+  const fittedLength = force
+    ? Math.max(0.05, length)
+    : Math.min(Math.max(0.05, length), halfSpan * 2)
+  const limit = Math.max(0, halfSpan - fittedLength / 2)
+  const raw = alongX ? localX : localZ
+  const snapped = gridStep > 0 ? Math.round(raw / gridStep) * gridStep : raw
+  const center = force ? raw : Math.max(-limit, Math.min(limit, snapped))
+  return {
+    ...snap,
+    eaveX: alongX ? center : snap.eaveX,
+    eaveZ: alongX ? snap.eaveZ : center,
+    length: fittedLength,
+  }
+}

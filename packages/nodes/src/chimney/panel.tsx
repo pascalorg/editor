@@ -114,16 +114,6 @@ export default function ChimneyPanel() {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
     const segmentId = node.roofSegmentId
-    // Unlist from host segment's children before deleting the node.
-    if (segmentId) {
-      const state = useScene.getState()
-      const segment = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-      if (segment) {
-        state.updateNode(segmentId as AnyNode['id'], {
-          children: (segment.children ?? []).filter((id) => id !== selectedId),
-        })
-      }
-    }
     deleteNode(selectedId as AnyNodeId)
     if (segmentId) {
       useScene.getState().dirtyNodes.add(segmentId as AnyNodeId)
@@ -177,7 +167,7 @@ export default function ChimneyPanel() {
     // already; chimney.position is applied inside the geometry. To get the
     // world position of the chimney's center we transform its local center
     // (chimney.position[0], 0, chimney.position[2]) through the outer group.
-    const localPt = new Vector3(node.position[0] ?? 0, 0, node.position[2] ?? 0)
+    const localPt = new Vector3()
     const worldPt = localPt.applyMatrix4(chimneyObj.matrixWorld)
     return { x: worldPt.x, z: worldPt.z }
   }
@@ -189,7 +179,7 @@ export default function ChimneyPanel() {
     const m = chimneyObj.matrixWorld.elements
     // 3x3 rotation portion (column-major): m[0]=cos, m[2]=-sin for pure Y rot.
     const ancestorWorldY = Math.atan2(-(m[2] ?? 0), m[0] ?? 1)
-    return ancestorWorldY + (node.rotation ?? 0)
+    return ancestorWorldY
   }
   const { x: worldX_now, z: worldZ_now } = computeChimneyWorldPos()
   const worldRotation_now = computeChimneyWorldRotation()
@@ -202,7 +192,7 @@ export default function ChimneyPanel() {
     const state = useScene.getState()
     const worldPt = new Vector3(wx, 0, wz)
     for (const candidate of Object.values(state.nodes)) {
-      if (candidate?.type !== 'roof-segment') continue
+      if (candidate?.type !== 'roof-segment' || candidate.parentId !== segment?.parentId) continue
       const seg = candidate as RoofSegmentNode
       const segObj = sceneRegistry.nodes.get(seg.id)
       if (!segObj) continue
@@ -339,23 +329,39 @@ export default function ChimneyPanel() {
   // Match the current store node against the preset table so the
   return (
     <PanelWrapper
-      icon="/icons/roof.webp"
+      icon="/icons/chimney.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Chimney'}
       width={300}
     >
       <PanelSection title="Style">
-        <SegmentedControl
-          onChange={(v) => applyPreset(v as ChimneyPresetKey)}
-          options={CHIMNEY_PRESET_KEYS.map((k) => ({
-            label: CHIMNEY_PRESET_LABELS[k],
-            value: k,
-          }))}
-          // Empty string when no preset matches — nothing highlighted,
-          // which reads correctly as "custom".
-          value={activePreset ?? ''}
-        />
+        <div className="grid grid-cols-3 gap-1.5">
+          {CHIMNEY_PRESET_KEYS.map((key) => (
+            <button
+              aria-pressed={activePreset === key}
+              className={cn(
+                'rounded-xl border p-2 text-xs',
+                activePreset === key
+                  ? 'border-foreground bg-foreground/10'
+                  : 'border-border hover:bg-foreground/5',
+              )}
+              key={key}
+              onClick={() => applyPreset(key)}
+              type="button"
+            >
+              <img
+                alt=""
+                className="h-16 w-full object-contain"
+                src={`/icons/chimney/${key}.webp`}
+              />
+              {CHIMNEY_PRESET_LABELS[key]}
+            </button>
+          ))}
+        </div>
+        <p className="px-1 pt-2 text-xs text-muted-foreground">
+          Styles preserve dimensions and finishes.
+        </p>
       </PanelSection>
 
       <PanelSection title="Footprint">
@@ -369,7 +375,6 @@ export default function ChimneyPanel() {
         />
         <SliderControl
           label={(node.bodyShape ?? 'square') === 'round' ? 'Diameter' : 'Width'}
-          max={1000}
           min={0.2}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => commitProp({ width: v })}
@@ -382,7 +387,6 @@ export default function ChimneyPanel() {
         {(node.bodyShape ?? 'square') !== 'round' && (
           <SliderControl
             label="Depth"
-            max={1000}
             min={0.2}
             onChange={(v) => previewProp({ depth: v })}
             onCommit={(v) => commitProp({ depth: v })}
@@ -436,7 +440,6 @@ export default function ChimneyPanel() {
       <PanelSection title="Height">
         <SliderControl
           label="Above Ridge"
-          max={1000}
           min={0.1}
           onChange={(v) => previewProp({ heightAboveRidge: v })}
           onCommit={(v) => commitProp({ heightAboveRidge: v })}
@@ -460,7 +463,7 @@ export default function ChimneyPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection defaultExpanded={false} title="Position">
         <SliderControl
           label="X"
           max={Math.round(worldMaxX * 10) / 10}
@@ -523,7 +526,7 @@ export default function ChimneyPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Chimney Type">
+      <PanelSection title="Details">
         <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
           {CHIMNEY_TYPE_OPTIONS.filter((option) => {
             // Cricket and Panels both rely on a flat face — hide them for
@@ -563,9 +566,9 @@ export default function ChimneyPanel() {
                 { label: 'Flat', value: 'flat' },
                 { label: 'Stepped', value: 'stepped' },
               ]}
-              value={node.capShape ?? 'sloped'}
+              value={node.cap ? node.capShape : 'none'}
             />
-            {(node.capShape ?? 'sloped') !== 'none' && (
+            {node.cap && node.capShape !== 'none' && (
               <>
                 <SliderControl
                   label="Overhang"

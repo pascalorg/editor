@@ -137,6 +137,13 @@ export function buildRidgeVentFloorplan(
   // Ridge crest line down the centre.
   seg([-halfLen, 0], [halfLen, 0], lineWidth * 0.8, 0.7)
 
+  if (node.style === 'metal') {
+    for (const side of [-1, 1]) {
+      seg([-halfLen, side * halfW * 0.5], [halfLen, side * halfW * 0.5], lineWidth * 0.6, 0.7)
+      seg([-halfLen, side * halfW * 0.94], [halfLen, side * halfW * 0.94], lineWidth * 0.6, 0.7)
+    }
+  }
+
   // Shingled style: tab dividers across the width at the cap pitch.
   if (node.style === 'shingled') {
     const total = halfLen * 2

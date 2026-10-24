@@ -56,33 +56,45 @@ const DormerTool = () => {
     [],
   )
 
-  const { activeBuildingId, clearPreview, segmentXform, hitSegment, hitLocal, ghostRotation } =
-    useDormerPlacement({
-      onCommit: (hit, rotation) => {
-        const state = useScene.getState()
-        const dormer = DormerNode.parse({
-          ...dormerDefinition.defaults(),
-          name: `Dormer ${nextDormerNumber(state.nodes)}`,
-          roofSegmentId: hit.segment.id,
-          parentId: hit.segment.id,
-          // Anchor at the slope height so the renderer matches the ghost.
-          // The CSG still carves cleanly because it inverts T(position)
-          // when bringing the host into dormer-local.
-          position: [hit.localX, hit.localY, hit.localZ],
-          rotation,
-        })
-        state.createNode(dormer, hit.segment.id as AnyNodeId)
-        const defaultWindow = createDormerDefaultWindow(
-          dormer,
-          `window_${dormer.id.replace(/^dormer_/, '')}_default`,
-          getDormerDefaultWindowFace(dormer, hit.segment),
-        )
-        state.createNode(defaultWindow, dormer.id as AnyNodeId)
-        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
-        setSelection({ selectedIds: [dormer.id] })
-        usePlacementPreview.getState().clear()
-      },
-    })
+  const {
+    activeBuildingId,
+    clearPreview,
+    segmentXform,
+    hitSegment,
+    hitLocal,
+    ghostRotation,
+    valid,
+  } = useDormerPlacement({
+    node: previewNode,
+    onCommit: (hit, rotation) => {
+      const state = useScene.getState()
+      const dormer = DormerNode.parse({
+        ...dormerDefinition.defaults(),
+        name: `Dormer ${nextDormerNumber(state.nodes)}`,
+        roofSegmentId: hit.segment.id,
+        parentId: hit.segment.id,
+        // Anchor at the slope height so the renderer matches the ghost.
+        // The CSG still carves cleanly because it inverts T(position)
+        // when bringing the host into dormer-local.
+        position: [hit.localX, hit.localY, hit.localZ],
+        rotation,
+      })
+      const defaultWindow = createDormerDefaultWindow(
+        dormer,
+        `window_${dormer.id.replace(/^dormer_/, '')}_default`,
+        getDormerDefaultWindowFace(dormer, hit.segment),
+      )
+      state.applyNodeChanges({
+        create: [
+          { node: dormer, parentId: hit.segment.id as AnyNodeId },
+          { node: defaultWindow, parentId: dormer.id as AnyNodeId },
+        ],
+      })
+      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      setSelection({ selectedIds: [dormer.id] })
+      usePlacementPreview.getState().clear()
+    },
+  })
 
   useEffect(() => {
     const placementPreview = usePlacementPreview.getState()
@@ -130,7 +142,7 @@ const DormerTool = () => {
           )}
           <group position={hitLocal}>
             <group rotation-y={ghostRotation}>
-              <DormerPreview node={previewNode} />
+              <DormerPreview node={previewNode} invalid={!valid} />
             </group>
           </group>
         </group>

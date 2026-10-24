@@ -156,3 +156,40 @@ describe('computeBoxVentSlopeTilt', () => {
     expect(computeBoxVentSlopeTilt(undefined, 1)).toBe(0)
   })
 })
+
+test.each(['box', 'cap', 'dome'] as const)(
+  'flashing extends the %s footprint and retains paintable surfaces',
+  (style) => {
+    const node = BoxVentNode.parse({ style, flashingWidth: 0.06 })
+    const geometry = buildBoxVentGeometry(node)
+    geometry.computeBoundingBox()
+    const extra = 0.06 + (style === 'box' ? 0 : node.hoodOverhang)
+    expect(geometry.boundingBox!.max.x).toBeCloseTo(node.width / 2 + extra)
+    expect(geometry.boundingBox!.max.z).toBeCloseTo(node.depth / 2 + extra)
+    expect(geometry.boundingBox!.min.y).toBeCloseTo(0)
+    expect(geometry.boundingBox!.max.y).toBeCloseTo(node.height + 0.003)
+    expect(new Set(geometry.groups.map((group) => group.materialIndex))).toEqual(new Set([0, 1]))
+    expect(geometry.getAttribute('uv2').count).toBe(geometry.getAttribute('position').count)
+    geometry.dispose()
+  },
+)
+
+test('a cap opening has a recessed throat between the body and hood', () => {
+  const node = BoxVentNode.parse({ style: 'cap', capGap: 0.03 })
+  const geometry = buildBoxVentGeometry(node)
+  const positions = geometry.getAttribute('position')
+  const bodyTop = node.height - node.capHeight - node.capGap
+  const hoodBottom = node.height - node.capHeight
+  let reachesBody = false
+  let reachesHood = false
+  for (let i = 0; i < positions.count; i++) {
+    const x = Math.abs(positions.getX(i))
+    const z = Math.abs(positions.getZ(i))
+    if (x < node.width / 2 - 0.01 && z < node.depth / 2 - 0.01 && x > 0.01) {
+      reachesBody ||= Math.abs(positions.getY(i) - bodyTop) < 1e-6
+      reachesHood ||= Math.abs(positions.getY(i) - hoodBottom) < 1e-6
+    }
+  }
+  expect(reachesBody && reachesHood).toBe(true)
+  geometry.dispose()
+})

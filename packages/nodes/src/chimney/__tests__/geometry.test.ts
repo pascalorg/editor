@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { RoofSegmentNode } from '@pascal-app/core'
-import { buildChimneyGeometry, flueXPositions } from '../geometry'
-import { ChimneyNode } from '../schema'
+import { buildChimneyGeometry, ChimneyNode, flueXPositions } from '../index'
 
 const fixtureSegment = (): RoofSegmentNode =>
   ({

@@ -1,5 +1,7 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
+
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
@@ -70,8 +72,8 @@ const DownspoutPreview = ({
 
   return (
     <>
-      <mesh geometry={geometry} material={material} raycast={() => {}} />
-      <lineSegments geometry={edgesGeometry} renderOrder={1000}>
+      <mesh layers={EDITOR_LAYER} geometry={geometry} material={material} raycast={() => {}} />
+      <lineSegments layers={EDITOR_LAYER} geometry={edgesGeometry} renderOrder={1000}>
         <lineBasicMaterial color={0x6c_a3_ff} depthTest={false} opacity={0.9} transparent />
       </lineSegments>
     </>

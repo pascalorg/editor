@@ -9,9 +9,9 @@ import {
   getWallEffectiveHeightForNodes,
   getWallFaceOffsets,
   nodeRegistry,
+  portConnection,
   validateDwv,
 } from '@pascal-app/core'
-import { connectionCompatibility } from '@pascal-app/editor/distribution'
 import { Box3, Ray, Vector3 } from 'three'
 import { planRunHangerSlots } from './run-hangers'
 
@@ -32,16 +32,12 @@ export function checkDistributionSystems(nodes: Record<AnyNodeId, AnyNode>): Sys
     for (let j = i + 1; j < ports.length; j++) {
       const b = ports[j]!
       if (a.nodeId === b.nodeId || Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) > 0.05) continue
-      joined.add(i)
-      joined.add(j)
-      connectedPairs.add([a.nodeId, b.nodeId].sort().join('|'))
-      const profile = (entry: typeof a) => {
-        const node = nodes[entry.nodeId]
-        return node?.type === 'duct-segment'
-          ? { ...entry.port, shape: node.shape, width: node.width, height: node.height }
-          : entry.port
+      const compatibility = portConnection(a.port, b.port)
+      if (compatibility.status === 'match') {
+        joined.add(i)
+        joined.add(j)
+        connectedPairs.add([a.nodeId, b.nodeId].sort().join('|'))
       }
-      const compatibility = connectionCompatibility(profile(a), profile(b))
       if (compatibility.status !== 'match')
         findings.push({
           code: 'connection-mismatch',

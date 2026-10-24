@@ -1,4 +1,5 @@
-import type { RoofSegmentNode, SolarPanelNode } from '@pascal-app/core'
+import type { SolarPanelNode } from '@pascal-app/core'
+import { applyWorldScaleBoxUVs } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
@@ -6,8 +7,8 @@ import { MeshStandardNodeMaterial } from 'three/webgpu'
 const SOLAR_CELL_SIZE_M = 0.16
 
 // Procedurally generated cell texture used by the default panel material.
-// Drawn once into an offscreen canvas, wrapped, and tiled per cell by the
-// stretched UVs assigned in `buildSolarPanelGeometry`.
+// Drawn once into an offscreen canvas and repeated at cell scale. Geometry
+// keeps metre UVs so painted materials use the same scale as other surfaces.
 export function createSolarPanelTexture(): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null
 
@@ -18,10 +19,10 @@ export function createSolarPanelTexture(): THREE.CanvasTexture | null {
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
-  ctx.fillStyle = '#dde3ec'
+  ctx.fillStyle = '#18202b'
   ctx.fillRect(0, 0, size, size)
 
-  const pad = size * 0.04
+  const pad = size * 0.018
   const x = pad
   const y = pad
   const cellW = size - pad * 2
@@ -40,8 +41,8 @@ export function createSolarPanelTexture(): THREE.CanvasTexture | null {
   ctx.closePath()
 
   const grad = ctx.createLinearGradient(x, y, x + cellW, y + cellH)
-  grad.addColorStop(0, '#0f1b3a')
-  grad.addColorStop(1, '#162546')
+  grad.addColorStop(0, '#101b29')
+  grad.addColorStop(1, '#1b2c3e')
   ctx.fillStyle = grad
   ctx.fill()
 
@@ -73,6 +74,7 @@ export function createSolarPanelTexture(): THREE.CanvasTexture | null {
   tex.colorSpace = THREE.SRGBColorSpace
   tex.wrapS = THREE.RepeatWrapping
   tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(1 / SOLAR_CELL_SIZE_M, 1 / SOLAR_CELL_SIZE_M)
   tex.anisotropy = 8
   tex.needsUpdate = true
   return tex
@@ -86,8 +88,8 @@ export function getDefaultPanelMaterial(): THREE.Material {
   // MRT error that fires when MeshStandardMaterial is used in the WebGPU pass.
   const mat = new MeshStandardNodeMaterial({
     color: new THREE.Color(map ? 0xffffff : 0x0c0c1f),
-    roughness: 0.22,
-    metalness: 0.35,
+    roughness: 0.16,
+    metalness: 0.08,
   })
   if (map) mat.map = map
   _defaultPanelMaterial = mat
@@ -104,6 +106,12 @@ export function getDefaultPanelMaterial(): THREE.Material {
  * places this geometry in segment-local space with the surface tilt
  * applied as an outer JSX rotation.
  */
+export function solarPanelMountLift(node: SolarPanelNode): number {
+  const angle = node.mountingType === 'tilted' ? (node.tiltAngle * Math.PI) / 180 : 0
+  const depth = node.rows * node.panelHeight + (node.rows - 1) * node.gapY
+  return (depth / 2) * Math.abs(Math.tan(angle))
+}
+
 export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeometry | null {
   const {
     rows,
@@ -122,6 +130,8 @@ export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeome
 
   const totalW = columns * panelWidth + (columns - 1) * gapX
   const totalH = rows * panelHeight + (rows - 1) * gapY
+  const lift = solarPanelMountLift(node)
+  const angle = node.mountingType === 'tilted' ? (node.tiltAngle * Math.PI) / 180 : 0
   const originX = -totalW / 2
   const originZ = -totalH / 2
 
@@ -129,27 +139,49 @@ export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeome
     for (let c = 0; c < columns; c++) {
       const cx = originX + c * (panelWidth + gapX) + panelWidth / 2
       const cz = originZ + r * (panelHeight + gapY) + panelHeight / 2
-      const y = standoffHeight + frameDepth / 2
+      const y = standoffHeight + lift + frameDepth / 2
 
-      const glassW = panelWidth - 2 * frameThickness
-      const glassH = panelHeight - 2 * frameThickness
+      const ft = Math.min(Math.max(0, frameThickness), Math.min(panelWidth, panelHeight) * 0.45)
+      const glassW = panelWidth - 2 * ft
+      const glassH = panelHeight - 2 * ft
       if (glassW > 0 && glassH > 0) {
         const glass = new THREE.BoxGeometry(glassW, frameDepth * 0.6, glassH)
-        glass.translate(cx, y + frameDepth * 0.2, cz)
-        // Stretch the cell UVs so a tiled cell texture reads correctly
-        // regardless of the panel's aspect ratio.
-        const cellsU = Math.max(1, Math.round(glassW / SOLAR_CELL_SIZE_M))
-        const cellsV = Math.max(1, Math.round(glassH / SOLAR_CELL_SIZE_M))
-        const uv = glass.getAttribute('uv') as THREE.BufferAttribute
-        for (let i = 0; i < uv.count; i++) {
-          uv.setXY(i, uv.getX(i) * cellsU, uv.getY(i) * cellsV)
-        }
-        uv.needsUpdate = true
+        glass.translate(cx, y + frameDepth * 0.1, cz)
+        applyWorldScaleBoxUVs(glass, glassW, frameDepth * 0.6, glassH)
         panelGeos.push(glass)
       }
 
-      const ft = frameThickness
       const fd = frameDepth
+
+      const backsheet = new THREE.BoxGeometry(glassW, Math.min(0.008, fd * 0.2), glassH)
+      backsheet.translate(cx, y - fd * 0.4, cz)
+      frameGeos.push(backsheet)
+      for (const offset of [-panelHeight * 0.3, panelHeight * 0.3]) {
+        const rail = new THREE.BoxGeometry(panelWidth, 0.018, 0.035)
+        const railY = standoffHeight + lift - 0.009
+        rail.translate(cx, railY, cz + offset)
+        frameGeos.push(rail)
+        for (const side of [-1, 1]) {
+          const top = new THREE.Vector3(cx + side * panelWidth * 0.35, railY, cz + offset)
+          const rotated = top.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), angle)
+          const bottom = new THREE.Vector3(rotated.x, 0, rotated.z).applyAxisAngle(
+            new THREE.Vector3(1, 0, 0),
+            -angle,
+          )
+          const length = top.distanceTo(bottom)
+          if (length > 0.001) {
+            const leg = new THREE.BoxGeometry(0.025, length, 0.025)
+            leg.applyQuaternion(
+              new THREE.Quaternion().setFromUnitVectors(
+                new THREE.Vector3(0, 1, 0),
+                top.clone().sub(bottom).normalize(),
+              ),
+            )
+            leg.translate(...top.clone().add(bottom).multiplyScalar(0.5).toArray())
+            frameGeos.push(leg)
+          }
+        }
+      }
 
       const left = new THREE.BoxGeometry(ft, fd, panelHeight)
       left.translate(cx - panelWidth / 2 + ft / 2, y, cz)
@@ -171,6 +203,12 @@ export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeome
 
   if (frameGeos.length === 0) return null
 
+  for (const geometry of frameGeos) {
+    if (geometry instanceof THREE.BoxGeometry) {
+      const { width, height, depth } = geometry.parameters
+      applyWorldScaleBoxUVs(geometry, width, height, depth)
+    }
+  }
   const frameMerged = mergeGeometries(frameGeos, false)
   const panelMerged = panelGeos.length > 0 ? mergeGeometries(panelGeos, false) : null
   for (const g of frameGeos) g.dispose()
@@ -191,44 +229,6 @@ export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeome
 }
 
 // ─── Layout helpers (used by the inspector / placement tool) ─────────
-
-function getSlopeDepthBounds(
-  segment: RoofSegmentNode,
-  panelLocalZ: number,
-): { minZ: number; maxZ: number } {
-  const halfD = segment.depth / 2
-  switch (segment.roofType) {
-    case 'gable':
-    case 'gambrel':
-    case 'dutch':
-    case 'mansard':
-    case 'hip':
-      return panelLocalZ >= 0 ? { minZ: 0, maxZ: halfD } : { minZ: -halfD, maxZ: 0 }
-    default:
-      return { minZ: -halfD, maxZ: halfD }
-  }
-}
-
-/**
- * Return the rows/columns that fit the array edge-to-edge on the slope
- * the panel is sitting on. Returns null when nothing fits. Capped at
- * the schema's hard limit of 20.
- */
-export function computeAutoFit(
-  segment: RoofSegmentNode,
-  panel: SolarPanelNode,
-): { rows: number; columns: number } | null {
-  const { minZ, maxZ } = getSlopeDepthBounds(segment, panel.position[2] ?? 0)
-  const usableW = segment.width
-  const usableD = maxZ - minZ
-  if (usableW <= 0 || usableD <= 0) return null
-
-  const columns = Math.floor((usableW + panel.gapX) / (panel.panelWidth + panel.gapX))
-  const rows = Math.floor((usableD + panel.gapY) / (panel.panelHeight + panel.gapY))
-  if (columns < 1 || rows < 1) return null
-
-  return { rows: Math.min(rows, 20), columns: Math.min(columns, 20) }
-}
 
 export function flippedPanelDims(panel: SolarPanelNode): {
   panelWidth: number

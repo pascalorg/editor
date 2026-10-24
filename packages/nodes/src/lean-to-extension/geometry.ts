@@ -205,7 +205,7 @@ function resolveLeanToSlotMaterial(
   return (
     (ref ? resolveMaterialRef(ref, ctx?.materials, shading) : null) ??
     (slotDefault
-      ? resolveSlotDefaultMaterial(slotDefault, shading)
+      ? resolveSlotDefaultMaterial(slotDefault, shading, slotId === 'footings' ? 0.9 : 0.48)
       : createSurfaceRoleMaterial(role, colorPreset, FrontSide, sceneTheme))
   )
 }
@@ -634,31 +634,45 @@ export function buildLeanToExtensionGeometry(
   }
 
   if (node.postBracing === 'knee') {
-    for (const [index, x] of layout.postXs.entries()) {
-      if (!isRetainedLowPostX(x)) continue
-      addBentBox({
-        name: `lean-to-knee-brace-${index}`,
-        size: [node.rafterWidth, node.rafterHeight, Math.min(0.8, layout.projection / 2)],
-        localX: x,
-        localZ: Math.max(0, layout.beamZ - 0.22),
-        y: layout.beamCenterY - 0.22,
-        rotationX: Math.PI / 4,
+    const reach = Math.min(0.55, layout.span / 4, layout.postHeight / 3)
+    const addBrace = (name: string, x: number, z: number, inward: number, top: number) => {
+      const start = bend(x, z)
+      const end = bend(x + inward * reach, z)
+      addBoxBetween(group, {
+        name,
+        start: [start[0], top - reach, start[1]],
+        end: [end[0], top, end[1]],
+        width: node.rafterWidth,
+        height: node.rafterHeight,
         role: 'joinery',
+        colorPreset,
+        sceneTheme,
         material: framingMaterial,
         slotId: 'framing',
       })
+    }
+    for (const [index, x] of layout.postXs.entries()) {
+      if (!isRetainedLowPostX(x)) continue
+      addBrace(`lean-to-knee-brace-${index}`, x, layout.beamZ, x <= 0 ? 1 : -1, layout.beamCenterY)
       if (dualSlope) {
-        addBentBox({
-          name: `lean-to-opposite-knee-brace-${index}`,
-          size: [node.rafterWidth, node.rafterHeight, Math.min(0.8, layout.projection / 2)],
-          localX: x,
-          localZ: Math.min(0, layout.oppositeBeamZ + 0.22),
-          y: layout.beamCenterY - 0.22,
-          rotationX: -Math.PI / 4,
-          role: 'joinery',
-          material: framingMaterial,
-          slotId: 'framing',
-        })
+        addBrace(
+          `lean-to-opposite-knee-brace-${index}`,
+          x,
+          layout.oppositeBeamZ,
+          x <= 0 ? 1 : -1,
+          layout.beamCenterY,
+        )
+      } else if (node.highSideMode === 'independent-high-beam') {
+        addBrace(
+          `lean-to-high-knee-brace-${index}`,
+          x,
+          0,
+          x <= 0 ? 1 : -1,
+          layout.highEdgeHeight -
+            node.roofThickness / 2 -
+            node.ledgerHeight / 2 +
+            node.ledgerVerticalOffset,
+        )
       }
     }
   }

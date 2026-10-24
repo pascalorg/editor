@@ -34,11 +34,17 @@ const runPorts = (node: AnyNode): NodePort[] => {
   const path = (node as unknown as { path: Point[] }).path
   const system = (node as unknown as { system: string }).system
   return [
-    { id: 'start', position: path[0]!, direction: [-1, 0, 0], diameter: 6, system },
+    {
+      id: 'start',
+      position: path[0]!,
+      direction: path[0]!.map((v, i) => v - path[1]![i]!) as Point,
+      diameter: 6,
+      system,
+    },
     {
       id: 'end',
       position: path[path.length - 1]!,
-      direction: [1, 0, 0],
+      direction: path.at(-1)!.map((v, i) => v - path.at(-2)![i]!) as Point,
       diameter: 6,
       system,
     },
@@ -48,11 +54,11 @@ stubDef('duct-segment', 'run', runPorts)
 stubDef('pipe-segment', 'run', runPorts)
 stubDef('hvac-equipment', 'equipment', (node) => {
   const position = (node as unknown as { position: Point }).position
-  return [{ id: 'supply', position, direction: [0, 1, 0], diameter: 12, system: 'supply' }]
+  return [{ id: 'supply', position, direction: [1, 0, 0], diameter: 6, system: 'supply' }]
 })
 stubDef('duct-terminal', 'terminal', (node) => {
   const position = (node as unknown as { position: Point }).position
-  return [{ id: 'collar', position, direction: [0, -1, 0], diameter: 6, system: 'supply' }]
+  return [{ id: 'collar', position, direction: [-1, 0, 0], diameter: 6, system: 'supply' }]
 })
 
 let nextId = 0
@@ -77,7 +83,7 @@ describe('buildPortComponents', () => {
     ])
     const b = run([
       [3, 0, 0],
-      [3, 0, 4],
+      [7, 0, 0],
     ]) // shares a's end
     const c = run([
       [20, 0, 0],
@@ -210,10 +216,10 @@ describe('summarizeSystemFor', () => {
     ])
     const branch = run([
       [4, 0, 0],
-      [4, 0, 3],
+      [7, 0, 0],
     ])
     const register = makeNode('duct-terminal', {
-      position: [4, 0, 3] as Point,
+      position: [7, 0, 0] as Point,
       terminalType: 'supply-register',
     })
     const scene = sceneOf(furnace, trunk, branch, register)

@@ -485,3 +485,26 @@ describe('lean-to extension geometry', () => {
     expect(group.getObjectByName('lean-to-opposite-rafter-0')?.rotation.x).toBeGreaterThan(0)
   })
 })
+
+test('freestanding mono knee braces connect both post rows to their beams', async () => {
+  const {
+    buildLeanToExtensionGeometry: build,
+    resolveLeanToFreestandingPlacement,
+    resolveLeanToLayout: layoutFor,
+  } = await import('./index')
+  const node = resolveLeanToFreestandingPlacement('level_test', [0, 0])
+  expect(node.postBracing).toBe('knee')
+  expect(LeanToExtensionNode.parse({}).postBracing).toBe('none')
+  const layout = layoutFor(node)
+  const group = build(node)
+  const low = group.children.filter((child) => child.name.startsWith('lean-to-knee-brace-'))
+  const high = group.children.filter((child) => child.name.startsWith('lean-to-high-knee-brace-'))
+  expect(low).toHaveLength(layout.postXs.length)
+  expect(high).toHaveLength(layout.postXs.length)
+  for (const mesh of low) {
+    const bounds = new Box3().setFromObject(mesh)
+    expect(bounds.max.y).toBeGreaterThanOrEqual(layout.beamCenterY)
+    expect(bounds.min.y).toBeLessThan(layout.beamCenterY - 0.3)
+    expect(mesh.position.z).toBeCloseTo(layout.beamZ)
+  }
+})

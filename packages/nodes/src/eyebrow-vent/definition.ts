@@ -152,11 +152,13 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),
+  snapProfile: 'item',
   affordanceTools: {
     move: () => import('./move-tool'),
   },
   toolHints: [
     { key: 'Left click', label: 'Place eyebrow vent on roof' },
+    { key: 'Alt', label: 'Place freely' },
     { key: 'Esc', label: 'Cancel' },
   ],
 
@@ -170,6 +172,6 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
 
   mcp: {
     description:
-      'A low curved eyebrow vent on a roof segment — a lens-shaped hood with an optional louvered front. Parametric width (span) / depth / height.',
+      'A low curved eyebrow vent on a roof segment — styles scoop, half-round and slant-box, with framed recessed screens and 0–8 louvers. Parametric width/depth/height; backRatio sets the slant-box rear height fraction.',
   },
 }

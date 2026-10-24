@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { EDITOR_LAYER } from '@pascal-app/editor'
+
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildFrameGeometry } from './frame-csg'
+import { HingedGlass, LanternGlass, SlidingGlass } from './renderer'
 import type { SkylightNode } from './schema'
 
 const ghostMaterial = new THREE.MeshStandardMaterial({
@@ -27,6 +30,11 @@ const invalidGhostMaterial = new THREE.MeshStandardMaterial({
 })
 
 const SkylightPreview = ({ node, invalid }: { node: SkylightNode; invalid?: boolean }) => {
+  const root = useRef<THREE.Group>(null)
+  // Glass subcomponents are shared with the scene renderer, so tag their descendants here.
+  useLayoutEffect(() => {
+    root.current?.traverse((object) => object.layers.set(EDITOR_LAYER))
+  })
   const material = invalid ? invalidGhostMaterial : ghostMaterial
 
   const frame = useMemo(
@@ -49,20 +57,43 @@ const SkylightPreview = ({ node, invalid }: { node: SkylightNode; invalid?: bool
     return g
   }, [node.width, node.height, node.glassThickness, node.curb, node.curbHeight])
 
-  useEffect(
-    () => () => {
-      frame?.dispose()
-      glass.dispose()
-    },
-    [frame, glass],
-  )
+  useEffect(() => () => frame?.dispose(), [frame])
+  useEffect(() => () => glass.dispose(), [glass])
 
   if (!frame) return null
 
   return (
-    <group>
-      <mesh geometry={frame} material={material} raycast={() => {}} />
-      <mesh geometry={glass} material={material} raycast={() => {}} />
+    <group ref={root} rotation-y={node.rotation}>
+      <mesh layers={EDITOR_LAYER} geometry={frame} material={material} raycast={() => {}} />
+      {node.skylightType === 'lantern' ? (
+        <LanternGlass
+          node={node}
+          curbHeight={node.curb ? node.curbHeight : 0}
+          frameMaterial={material}
+          glassMaterial={material}
+        />
+      ) : node.skylightType === 'opening' ? (
+        <HingedGlass
+          node={node}
+          curbHeight={node.curb ? node.curbHeight : 0}
+          frameMaterial={material}
+          glassMaterial={material}
+          glassThickness={node.glassThickness}
+          hasMotorHousing={node.motorHousing}
+          openAmount={node.operationState}
+        />
+      ) : node.skylightType === 'sliding' ? (
+        <SlidingGlass
+          node={node}
+          curbHeight={node.curb ? node.curbHeight : 0}
+          frameMaterial={material}
+          glassMaterial={material}
+          glassThickness={node.glassThickness}
+          openAmount={node.operationState}
+        />
+      ) : (
+        <mesh layers={EDITOR_LAYER} geometry={glass} material={material} raycast={() => {}} />
+      )}
     </group>
   )
 }

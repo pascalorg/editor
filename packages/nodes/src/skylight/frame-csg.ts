@@ -1,71 +1,46 @@
 import type { SkylightNode } from '@pascal-app/core'
-import {
-  Brush,
-  csgEvaluator,
-  csgGeometry,
-  prepareBrushForCSG,
-  SUBTRACTION,
-} from '@pascal-app/viewer'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
-const visibleDummyMat = new THREE.MeshBasicMaterial()
-
-export function buildFrameGeometry({
-  curb,
-  curbHeight,
-  frameDepth,
-  frameThickness,
-  height,
-  width,
-}: Pick<
-  SkylightNode,
-  'curb' | 'curbHeight' | 'frameDepth' | 'frameThickness' | 'height' | 'width'
->): THREE.BufferGeometry | null {
-  const w = width
-  const h = height
-  const ft = frameThickness
-  const fd = frameDepth
-  const hasCurb = curb ?? false
-  const curbH = hasCurb ? Math.max(0, curbHeight ?? 0.1) : 0
-
-  const outerW = w + 2 * ft
-  const outerH = h + 2 * ft
-  const totalDepth = fd + curbH
-
-  const outerBox = new THREE.BoxGeometry(outerW, totalDepth, outerH)
-  const innerBox = new THREE.BoxGeometry(w, totalDepth + 0.02, h)
-
-  const setupGeo = (geo: THREE.BufferGeometry) => {
-    const ic = geo.getIndex()?.count ?? 0
-    geo.clearGroups()
-    if (ic > 0) geo.addGroup(0, ic, 0)
+export function buildFrameGeometry(
+  node: Pick<
+    SkylightNode,
+    'curb' | 'curbHeight' | 'frameDepth' | 'frameThickness' | 'height' | 'width'
+  >,
+): THREE.BufferGeometry | null {
+  const w = Math.max(0.02, node.width),
+    d = Math.max(0.02, node.height)
+  const ft = Math.max(0.005, node.frameThickness),
+    fd = Math.max(0.005, node.frameDepth)
+  const curb = node.curb ? Math.max(0, node.curbHeight) : 0
+  const parts: THREE.BufferGeometry[] = []
+  const box = (x: number, y: number, z: number, px: number, py: number, pz: number) => {
+    const g = new THREE.BoxGeometry(x, y, z)
+    g.translate(px, py, pz)
+    parts.push(g)
   }
-  setupGeo(outerBox)
-  setupGeo(innerBox)
-
-  let frameGeo: THREE.BufferGeometry
-  try {
-    const outerBrush = new Brush(outerBox, visibleDummyMat as unknown as THREE.MeshStandardMaterial)
-    prepareBrushForCSG(outerBrush)
-    const innerBrush = new Brush(innerBox, visibleDummyMat as unknown as THREE.MeshStandardMaterial)
-    prepareBrushForCSG(innerBrush)
-    const result = csgEvaluator.evaluate(outerBrush, innerBrush, SUBTRACTION) as Brush
-    frameGeo = csgGeometry(result).clone()
-    const ic = frameGeo.getIndex()?.count ?? 0
-    frameGeo.clearGroups()
-    if (ic > 0) frameGeo.addGroup(0, ic, 0)
-    outerBox.dispose()
-    innerBox.dispose()
-    result.geometry.dispose()
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('Skylight frame CSG failed:', e)
-    outerBox.dispose()
-    innerBox.dispose()
-    return null
+  const ring = (border: number, height: number, y: number) => {
+    box(border, height, d + 2 * border, -w / 2 - border / 2, y, 0)
+    box(border, height, d + 2 * border, w / 2 + border / 2, y, 0)
+    box(w, height, border, 0, y, -d / 2 - border / 2)
+    box(w, height, border, 0, y, d / 2 + border / 2)
   }
-
-  frameGeo.translate(0, -totalDepth / 2 + curbH, 0)
-
-  return frameGeo
+  ring(ft, fd + curb, (curb - fd) / 2)
+  // A thin apron covers the roof cut edge; the raised bead catches light.
+  ring(ft + 0.06, 0.008, 0.004)
+  ring(ft + 0.008, 0.012, curb + 0.006)
+  const geometry = mergeGeometries(parts, false)
+  for (const part of parts) part.dispose()
+  if (geometry) {
+    const pos = geometry.getAttribute('position'),
+      normal = geometry.getAttribute('normal'),
+      uv = geometry.getAttribute('uv')
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(normal.getY(i)) > 0.5) uv.setXY(i, pos.getX(i), pos.getZ(i))
+      else if (Math.abs(normal.getX(i)) > 0.5) uv.setXY(i, pos.getZ(i), pos.getY(i))
+      else uv.setXY(i, pos.getX(i), pos.getY(i))
+    }
+    geometry.setAttribute('uv2', uv.clone())
+  }
+  return geometry
 }

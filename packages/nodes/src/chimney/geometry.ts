@@ -1,4 +1,5 @@
 import { type ChimneyNode, getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
+import { getRoofOuterSurfaceFrameAtPoint } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
@@ -6,14 +7,6 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * Pure chimney geometry builder. Returns body, cap, flues, and cricket
  * as separate BufferGeometries so each can carry its own material
  * (body/top split mirrors the schema's `material` vs `topMaterial`).
- *
- * **Option C scope** (see commit message): no CSG. The chimney body
- * intersects the roof at the deck line; the cap is solid (no flue
- * holes carved); the body has no hollow shaft cavity; flues are solid
- * cylinders/boxes protruding from the cap. Decorative bands and inset
- * panels are no-op on this builder until roof-segment migrates to
- * Stage B and a `roofCutout` capability lets the parent segment own
- * its own boolean operations.
  *
  * Pure: no React, no scene access, no store mutation. Takes the
  * segment as a second argument so the body height can be derived from
@@ -46,7 +39,7 @@ function buildSmoothCylinder(
   yTop: number,
   rBot: number,
   rTop: number,
-  segments = 24,
+  segments = 48,
 ): THREE.BufferGeometry {
   const h = Math.max(1e-4, yTop - yBot)
   const cy = (yTop + yBot) / 2
@@ -91,7 +84,7 @@ export function buildChimneyGeometry(node: ChimneyNode, segment: RoofSegmentNode
 
   let cricket: THREE.BufferGeometry | null = null
   if (node.cricketStyle !== 'none' && node.bodyShape !== 'round') {
-    cricket = buildCricketGeometry(node, baseY)
+    cricket = buildCricketGeometry(node, segment)
   }
 
   let bands: THREE.BufferGeometry | null = null
@@ -324,7 +317,7 @@ function buildFluesGeometry(node: ChimneyNode, capTopY: number): THREE.BufferGeo
 // ─── Cricket ─────────────────────────────────────────────────────────
 // Water-shedding wedge on the up-slope side of the chimney.
 
-function buildCricketGeometry(node: ChimneyNode, baseY: number): THREE.BufferGeometry {
+function buildCricketGeometry(node: ChimneyNode, segment: RoofSegmentNode): THREE.BufferGeometry {
   const w = node.width
   const d = node.depth
   const cL = Math.max(0.1, node.cricketLength)
@@ -332,7 +325,8 @@ function buildCricketGeometry(node: ChimneyNode, baseY: number): THREE.BufferGeo
   const slopeSign = node.cricketSide === 'back' ? -1 : 1
   const sZ = slopeSign * (d / 2)
   const sZFar = sZ + slopeSign * cL
-  const peakY = baseY + cH
+  const baseY = 0
+  const peakY = cH
   const slopeLen = Math.hypot(cL, cH)
 
   const positions: number[] = []
@@ -412,6 +406,20 @@ function buildCricketGeometry(node: ChimneyNode, baseY: number): THREE.BufferGeo
   // Right side triangle
   pushTri(v1, v5, v2, uvRight.v1, uvRight.v5, uvRight.v2)
 
+  // Fit the cricket bottom to the finished roof at every vertex.
+  const c = Math.cos(node.rotation),
+    sn = Math.sin(node.rotation)
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i]!,
+      z = positions[i + 2]!
+    positions[i + 1] =
+      positions[i + 1]! +
+      getRoofOuterSurfaceFrameAtPoint(
+        segment,
+        node.position[0] + x * c + z * sn,
+        node.position[2] - x * sn + z * c,
+      ).point.y
+  }
   const geo = buildBufferGeometry(positions, uvs)
   applyNodeTransform(geo, node)
   geo.computeVertexNormals()
