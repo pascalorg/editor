@@ -511,6 +511,7 @@ function segmentShapeKey(segment: RoofSegmentNode): string {
     segment.wallThickness,
     segment.deckThickness,
     segment.overhang,
+    segment.gableOverhang,
     segment.shingleThickness,
     segment.gambrelLowerWidthRatio,
     segment.gambrelLowerHeightRatio,

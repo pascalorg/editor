@@ -12,7 +12,7 @@ import {
 } from '../lib/room-selection'
 import { shouldInterceptRoom } from '../lib/room-selection-commands'
 import { type SelectionModifierKeys, selectionModifiersFromEvent } from '../lib/selection-routing'
-import useEditor, { type Phase } from '../store/use-editor'
+import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 
 const indexes = new Map<string, RoomSelectionIndex>()
@@ -111,14 +111,11 @@ export function resolveEditorRoomHit(
   return room?.key ?? null
 }
 
-/**
- * Rooms pick in the structure and furnish phases alike; site has no rooms.
- * `phase` is the phase the pick lands in, when the pick itself switches phase.
- */
-export function roomPickingEnabled(phase: Phase = useEditor.getState().phase) {
+/** Rooms pick inside the building; from site a click picks the whole building. */
+export function roomPickingEnabled() {
   const editor = useEditor.getState()
   return (
-    phase !== 'site' &&
+    editor.phase !== 'site' &&
     editor.mode === 'select' &&
     !useViewer.getState().focusedUnitId &&
     selectionEnabled(useInteractionScope.getState().scope)

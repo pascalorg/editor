@@ -9,6 +9,7 @@ import {
   DoorNode,
   extractRooms,
   resolveWallFinish,
+  SceneMaterial,
   sceneRegistry,
   useScene,
   WallNode,
@@ -261,6 +262,108 @@ describe('wall finish geometry', () => {
     expect(first.visible[1]).toBe(second.visible[2]!)
     const untextured = getMaterialsForWall(host, 'rendered', false, 'clay', undefined, {}, refs)
     expect(untextured.visible).toHaveLength(5)
+  })
+
+  function paintedOpeningFixture() {
+    const colors = {
+      base: '#123456',
+      back: '#654321',
+      room: '#2468ac',
+      override: '#ac6824',
+      region: '#358721',
+    }
+    const materials = Object.fromEntries(
+      Object.entries(colors).map(([name, color]) => {
+        const material = SceneMaterial.parse({
+          id: `smat_finish_${name}`,
+          name,
+          material: { properties: { color, roughness: 0.43, metalness: 0.17 } },
+        })
+        return [material.id, material]
+      }),
+    )
+    const { walls, host, zone } = fixture({
+      slots: { a: 'scene:smat_finish_base', b: 'scene:smat_finish_back' },
+      faceRegions: [
+        { id: 'wainscot', face: 'a', u0: 1, u1: 5, v1: 0.9, finish: 'scene:smat_finish_region' },
+      ],
+    })
+    const zones = [
+      zone('A', { wallMaterial: 'scene:smat_finish_room' }),
+      zone('B', {
+        wallMaterial: 'scene:smat_finish_room',
+        wallOverrides: [{ wallId: host.id, face: 'a', finish: 'scene:smat_finish_override' }],
+      }),
+    ]
+    const children = [
+      DoorNode.parse({
+        id: 'door_finish_color',
+        wallId: host.id,
+        position: [6.5, 1.05, 0],
+        width: 0.9,
+        height: 2.1,
+      }),
+      WindowNode.parse({
+        id: 'window_finish_color',
+        wallId: host.id,
+        position: [2.5, 1.7, 0],
+        width: 1.2,
+        height: 1,
+      }),
+    ]
+    return { colors, materials, host, walls, zones, children }
+  }
+
+  test('drawn finishes respect room overrides and face paint on both sides of door and window cuts', () => {
+    const { colors, materials, host, walls, zones, children } = paintedOpeningFixture()
+    const geometry = build(host, walls, zones, children)
+    const palette = getMaterialsForWall(
+      host,
+      'rendered',
+      true,
+      'clay',
+      'studio',
+      materials,
+      getWallFinishRefs(geometry),
+    ).visible
+    const mesh = new THREE.Mesh(geometry, palette)
+    const hit = (x: number, y: number, face: 'a' | 'b' = 'a') => {
+      const sign = face === 'a' ? 1 : -1
+      return new THREE.Raycaster(
+        new THREE.Vector3(x, y, sign),
+        new THREE.Vector3(0, 0, -sign),
+        0,
+        2,
+      ).intersectObject(mesh)[0]
+    }
+    try {
+      // These points and colors are authored independently of layout/material-index helpers:
+      // a room replaces the wall slot, its local override replaces the room, a region wins.
+      for (const [x, y, face, color] of [
+        [0.5, 1.4, 'a', colors.room],
+        [2, 0.5, 'a', colors.region],
+        [4.5, 0.5, 'a', colors.region],
+        [5.5, 1.4, 'a', colors.override],
+        [7.5, 1.4, 'a', colors.override],
+        [0.5, 1.4, 'b', colors.back],
+        [5.5, 1.4, 'b', colors.back],
+      ] as const) {
+        const intersection = hit(x, y, face)
+        expect(intersection).toBeDefined()
+        if (!intersection?.face) throw new Error(`Missing wall face at ${x}, ${y}, ${face}`)
+        const material = palette[intersection.face.materialIndex] as THREE.MeshStandardMaterial
+        expect(material.color.getHexString()).toBe(color.slice(1))
+        expect(material.roughness).toBe(0.43)
+        expect(material.metalness).toBe(0.17)
+        expect(material.transparent).toBe(false)
+      }
+      for (const face of ['a', 'b'] as const) {
+        expect(hit(6.5, 1, face)).toBeUndefined()
+        expect(hit(2.5, 1.7, face)).toBeUndefined()
+      }
+    } finally {
+      geometry.dispose()
+    }
   })
 })
 

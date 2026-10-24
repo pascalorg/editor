@@ -1,4 +1,38 @@
-import { abs, exp, mix, smoothstep } from 'three/tsl'
+import { NoToneMapping, type ToneMapping } from 'three'
+import { abs, exp, mix, renderOutput, smoothstep, vec4 } from 'three/tsl'
+import type { SceneTheme } from './scene-themes'
+
+/** Null explicitly removes the gradient; an omitted sky keeps the theme's derived atmosphere. */
+export function backdropColors(
+  theme: Pick<SceneTheme, 'background' | 'backgroundSky' | 'appearance'>,
+) {
+  const sky = theme.backgroundSky ?? theme.background
+  return {
+    background: theme.background,
+    sky,
+    haze: theme.backgroundSky === null ? theme.background : horizonHazeColor(sky, theme.appearance),
+    skyDeep: theme.backgroundSky === null ? theme.background : deepSkyColor(sky),
+  }
+}
+
+/** Flat authored colours are display colours; only the foreground is exposed and tone mapped. */
+export function flatBackdropOutput({
+  background,
+  foreground,
+  alpha,
+  toneMapping,
+  outputColorSpace,
+}: {
+  background: any
+  foreground: any
+  alpha: any
+  toneMapping: ToneMapping
+  outputColorSpace: string
+}): any {
+  const backdrop = renderOutput(vec4(background, 1), NoToneMapping, outputColorSpace).rgb
+  const scene = renderOutput(vec4(foreground, 1), toneMapping, outputColorSpace).rgb
+  return vec4(mix(backdrop, scene, alpha), 1)
+}
 
 /**
  * Shared backdrop gradient: flat background looking down, a warm haze band

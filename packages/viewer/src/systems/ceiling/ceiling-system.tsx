@@ -181,6 +181,8 @@ function syncCeilingRegionMeshes(mesh: THREE.Mesh, cells: readonly CeilingSurfac
     if (!region) {
       region = new THREE.Mesh()
       region.name = CEILING_REGION_MESH
+      region.castShadow = true
+      region.receiveShadow = true
       mesh.add(region)
     } else region.geometry.dispose()
     region.geometry = flatCeilingGeometry(cell.polygons)

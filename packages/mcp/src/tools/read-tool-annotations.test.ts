@@ -2,8 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
@@ -18,14 +17,13 @@ const TOOL_POLICIES = [
     },
     tools: [
       'check_collisions',
-      'describe_node',
       'export_glb',
       'export_json',
-      'find_nodes',
       'find_by_type',
       'get_level_summary',
       'get_node',
       'get_scene',
+      'get_site',
       'get_walls',
       'get_zones',
       'list_levels',
@@ -37,9 +35,10 @@ const TOOL_POLICIES = [
       'get_source',
       'list_collections',
       'search_assets',
+      'search_materials',
       'validate_design',
-      'validate_scene',
       'verify_scene',
+      'view_assets',
       'view_scene',
     ],
   },
@@ -59,7 +58,9 @@ const TOOL_POLICIES = [
       openWorldHint: false,
     },
     tools: [
+      'add_corner_window',
       'add_door',
+      'add_fence',
       'add_level',
       'add_wall',
       'add_window',
@@ -68,11 +69,14 @@ const TOOL_POLICIES = [
       'create_roof',
       'create_room',
       'create_stair',
+      'design_brief',
+      'set_checkpoint',
       'create_story_shell',
       'create_unit',
       'cut_floor_opening',
       'duplicate_level',
       'furnish_room',
+      'place_in_room',
       'generate_variants',
       'place_design',
       'place_items',
@@ -92,6 +96,7 @@ const TOOL_POLICIES = [
       'apply_patch',
       'clear_scene',
       'add_object',
+      'author_scene',
       'add_column',
       'edit_collection',
       'create_from_template',
@@ -104,14 +109,20 @@ const TOOL_POLICIES = [
       'divide_zone',
       'duplicate_zone',
       'move_zone',
+      'place_building',
       'rotate_zone',
       'lock_outside_faces',
+      'merge_windows',
       'merge_zones',
+      'move_roofs_to_roof_level',
+      'paint',
       'delete_scene',
       'get_project_status',
       'load_scene',
       'redo',
+      'set_ground_level',
       'rename_scene',
+      'run_batch',
       'save_scene',
       'undo',
     ],

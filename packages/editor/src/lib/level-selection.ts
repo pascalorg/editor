@@ -1,5 +1,5 @@
 import type { AnyNodeId, BuildingNode, LevelNode } from '@pascal-app/core'
-import { useScene } from '@pascal-app/core'
+import { findLevelAncestorId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 
 function getAdjacentLevelIdForDeletion(levelId: AnyNodeId): LevelNode['id'] | null {
@@ -28,4 +28,19 @@ export function deleteLevelWithFallbackSelection(levelId: AnyNodeId) {
   if (isSelectedLevel) {
     useViewer.getState().setSelection({ levelId: nextLevelId })
   }
+}
+
+/**
+ * Selects a node a tool just made, on its own level when that is not the one in view: a roof drawn
+ * over a storey's walls lands on the level above, which the editor hides while the storey is
+ * selected, so selecting it there alone would leave it out of sight.
+ */
+export function selectPlacedNode(nodeId: AnyNodeId) {
+  const levelId = findLevelAncestorId(nodeId, useScene.getState().nodes)
+  const { selection, setSelection } = useViewer.getState()
+  setSelection(
+    levelId && levelId !== selection.levelId
+      ? { levelId: levelId as LevelNode['id'], selectedIds: [nodeId] }
+      : { selectedIds: [nodeId] },
+  )
 }

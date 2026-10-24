@@ -186,6 +186,57 @@ describe('structure primitives', () => {
       end: { x: wall.end[0], y: wall.end[1] },
     })
   })
+  test('pushing a room edge keeps each wall, its direction, its finishes and its children; sides follow the room', () => {
+    // Walls written like an importer's: all read +x or +z, so the back wall has the room on its b face.
+    const walls = [
+      WallNode.parse({ id: 'wall_south', parentId: 'level_test', start: [0, 0], end: [8, 0] }),
+      WallNode.parse({ id: 'wall_east', parentId: 'level_test', start: [8, 0], end: [8, 4] }),
+      WallNode.parse({
+        id: 'wall_back',
+        parentId: 'level_test',
+        start: [0, 4],
+        end: [8, 4],
+        slots: { a: 'scene:mat_x', b: 'library:preset-softwhite' },
+        children: ['door_back'],
+        frontSide: 'interior',
+        backSide: 'exterior',
+      }),
+      WallNode.parse({ id: 'wall_west', parentId: 'level_test', start: [0, 0], end: [0, 4] }),
+    ]
+    const door = DoorNode.parse({
+      id: 'door_back',
+      parentId: 'wall_back',
+      wallId: 'wall_back',
+      position: [4, 1.05, 0],
+    })
+    const initial = { ...fixture(), ...Object.fromEntries([...walls, door].map((n) => [n.id, n])) }
+    const nodes = apply(
+      initial,
+      createZone(initial, {
+        levelId: 'level_test',
+        boundaryIds: walls.map((n) => n.id),
+        mintId: mint(),
+      }),
+    )
+    const pushed = apply(
+      nodes,
+      setWallGeometry(nodes, { wallId: 'wall_east', start: [9, 0], end: [9, 4], mintId: mint() }),
+    )
+    expect(
+      Object.values(pushed)
+        .filter((n) => n.type === 'wall')
+        .map((n) => n.id),
+    ).toEqual(walls.map((n) => n.id))
+    expect(pushed.wall_back).toMatchObject({
+      start: [0, 4],
+      end: [9, 4],
+      slots: { a: 'scene:mat_x', b: 'library:preset-softwhite' },
+      children: ['door_back'],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    expect(pushed.door_back).toMatchObject({ parentId: 'wall_back', wallId: 'wall_back' })
+  })
   test('create accepts a boundary set and closes explicit curved wall edges without a chord', () => {
     const existing = enclosed()
     const walls = Object.values(existing.nodes).filter((n) => n.type === 'wall')

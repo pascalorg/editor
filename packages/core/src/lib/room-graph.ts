@@ -73,6 +73,7 @@ export function polygonSignature(points: Point2D[]) {
   const keys = points.map(pointKey)
   const forward = minRotationSignature(keys)
   const reversed = minRotationSignature([...keys].reverse())
+  // biome-ignore lint/complexity/useMathMinMax: lexicographic string comparison
   return forward < reversed ? forward : reversed
 }
 
@@ -988,6 +989,7 @@ export function extractRooms(
   boundaries: BoundaryNode[],
   options: { includeHoles?: boolean } = {},
 ): ExtractedRoom[] {
+  boundaries = boundaries.filter((boundary) => boundary.metadata?.roomBoundary !== false)
   const joined = extractRoomGraph(boundaries, options, true)
   if (!joined.bodyJoints) return joined.rooms
   const plain = extractRoomGraph(boundaries, options, false).rooms

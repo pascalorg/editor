@@ -12,6 +12,7 @@ const decide = (
     index: 0,
     selectedIndex: undefined,
     nodeVisible: true,
+    revealing: false,
     ...overrides,
   })
 
@@ -80,5 +81,27 @@ describe('resolveLevelVisibility', () => {
         nodeVisible: false,
       }),
     ).toEqual({ visible: false, shadowOnly: false })
+  })
+
+  test('a level a construction reveal is playing on shows whatever the display hides', () => {
+    const above = { hideAbove: true, hasSelectedLevel: true, selectedIndex: 0, index: 1 }
+    expect(decide(above)).toEqual({ visible: true, shadowOnly: true })
+    expect(decide({ ...above, revealing: true })).toEqual({ visible: true, shadowOnly: false })
+    expect(
+      decide({
+        levelMode: 'solo',
+        hasSelectedLevel: true,
+        index: 0,
+        selectedIndex: 1,
+        revealing: true,
+      }),
+    ).toEqual({ visible: true, shadowOnly: false })
+  })
+
+  test('the reveal does not show a level the author hid', () => {
+    expect(decide({ nodeVisible: false, revealing: true })).toEqual({
+      visible: false,
+      shadowOnly: false,
+    })
   })
 })

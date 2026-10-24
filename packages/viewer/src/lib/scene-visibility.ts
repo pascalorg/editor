@@ -7,8 +7,10 @@ import { BATCHED_LAYER, SCENE_LAYER, SHADOW_ONLY_LAYER } from './layers'
  * - `isolated` — outside the focused subtree of the viewer's isolation filter.
  * - `shadow-only` — solo mode: out of the color passes, still casting shadows.
  * - `batched` — a level's merged wall mesh draws this wall now.
+ * - `ground-aside` — the site's ground while a level below grade is active: the floor is seen,
+ *   and clicked, where the ground was.
  */
-export type HiddenReason = 'isolated' | 'shadow-only' | 'batched' | 'wall-batched'
+export type HiddenReason = 'isolated' | 'shadow-only' | 'batched' | 'wall-batched' | 'ground-aside'
 
 /**
  * Single owner of `Object3D.layers` for every feature that hides an object.
@@ -53,15 +55,67 @@ export function showInScene(obj: Object3D, reason: HiddenReason): void {
 }
 
 export function temporarilyShowShadowOnly(root: Object3D): () => void {
+  return temporarilyShowHeld(root, ['shadow-only'])
+}
+
+/**
+ * Lifts what the user's view holds back under `root` — solo's shadow-only
+ * levels and isolation — for one capture: an interior view shows its floor
+ * whole, whatever the user isolated.
+ */
+export function temporarilyShowPresentation(root: Object3D): () => void {
+  return temporarilyShowHeld(root, ['shadow-only', 'isolated'])
+}
+
+/**
+ * The site's ground surfaces set aside, or stood back on, for one capture, whatever the person's
+ * view holds: a picture of a floor below grade sees through the ground, one of the whole building
+ * stands on it. The returned function gives the person's view back.
+ */
+export function temporarilySetGroundAside(
+  surfaces: readonly Object3D[],
+  aside: boolean,
+): () => void {
+  if (!aside) {
+    const restores = surfaces.map((surface) => temporarilyShowHeld(surface, ['ground-aside']))
+    return () => {
+      for (const restore of restores) restore()
+    }
+  }
+  const held = surfaces.filter((surface) => !(surface as Holder)[HOLD]?.reasons.has('ground-aside'))
+  for (const surface of held) hideFromScene(surface, 'ground-aside')
+  return () => {
+    for (const surface of held) showInScene(surface, 'ground-aside')
+  }
+}
+
+/** Add a capture-only mask without changing the live visibility reasons or batching. */
+export function temporarilyHideFromScene(root: Object3D, reason: HiddenReason): () => void {
+  const masks = new Map<Object3D, number>()
+  root.traverse((obj) => {
+    masks.set(obj, obj.layers.mask)
+    const hold = (obj as Holder)[HOLD]
+    const reasons = new Set(hold?.reasons)
+    // Changing level presentation must not reveal isolated geometry or duplicate batch shadows.
+    reasons.delete('shadow-only')
+    reasons.add(reason)
+    applyHold(obj, { original: hold?.original ?? obj.layers.mask, reasons })
+  })
+  return () => {
+    for (const [obj, mask] of masks) obj.layers.mask = mask
+  }
+}
+
+function temporarilyShowHeld(root: Object3D, lifted: readonly HiddenReason[]): () => void {
   const masks = new Map<Object3D, number>()
   root.traverse((obj) => {
     const hold = (obj as Holder)[HOLD]
-    if (!hold?.reasons.has('shadow-only')) return
+    if (!hold || !lifted.some((reason) => hold.reasons.has(reason))) return
     masks.set(obj, obj.layers.mask)
     const reasons = new Set(hold.reasons)
-    reasons.delete('shadow-only')
+    for (const reason of lifted) reasons.delete(reason)
     // A capture needs the original scene geometry, while editor overlays and
-    // objects hidden by isolation or batching must retain their own masks.
+    // the reasons not lifted (batching) must retain their own masks.
     if (reasons.size === 0) obj.layers.mask = hold.original
     else applyHold(obj, { original: hold.original, reasons })
   })

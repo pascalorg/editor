@@ -4,10 +4,10 @@ import {
   PipeSegmentNode,
   type PortConnection,
 } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { pipeFittingLegLength } from '../pipe-fitting/ports'
 import type { PipeFittingNode } from '../pipe-fitting/schema'
 import { planPipeElbowAtPort, planPipeElbowRealign } from './auto-fitting'
-import type { ScenePort } from './ports'
 
 type Point = [number, number, number]
 type PipeProfile = {

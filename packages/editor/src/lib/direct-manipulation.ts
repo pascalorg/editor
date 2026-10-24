@@ -107,6 +107,7 @@ export function resolveDirectManipulationNode(
 ): AnyNode {
   const target = nodes[resolveSelectionProxyId(node, nodes)] ?? node
   const parentFrame = nodeRegistry.get(target.type)?.capabilities?.movable?.parentFrame
+  if (parentFrame?.independent) return target
   const parent = parentFrame?.resolveParent(target, nodes as Readonly<Record<string, AnyNode>>)
   return parent && canDirectRotateNode(parent) ? parent : target
 }
@@ -116,6 +117,7 @@ export function resolveMoveActionNode(
   nodes: Readonly<Record<string, AnyNode | undefined>>,
 ): AnyNode {
   const parentFrame = nodeRegistry.get(node.type)?.capabilities?.movable?.parentFrame
+  if (parentFrame?.independent) return node
   const parent = parentFrame?.resolveParent(node, nodes as Readonly<Record<string, AnyNode>>)
   return parent && (parent.type === node.type || canDirectRotateNode(parent)) ? parent : node
 }

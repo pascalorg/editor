@@ -10,7 +10,8 @@ import {
   StaticDrawUsage,
   Vector3,
 } from 'three'
-import Attributes from 'three/src/renderers/common/Attributes.js'
+// @ts-expect-error -- @types/three 0.186 no longer declares this renderer internal
+import UntypedAttributes from 'three/src/renderers/common/Attributes.js'
 import { AttributeType } from 'three/src/renderers/common/Constants.js'
 import Info from 'three/src/renderers/common/Info.js'
 import {
@@ -24,6 +25,15 @@ import {
   getBracketMatrix,
   growBracketCapacity,
 } from './ceiling-bracket-batch'
+
+type AttributesBackend = {
+  createAttribute(): void
+  updateAttribute(attribute: BufferAttribute): void
+}
+const Attributes = UntypedAttributes as new (
+  backend: AttributesBackend,
+  info: Info,
+) => { update(attribute: BufferAttribute, type: AttributeType): void }
 
 const polygon: Array<[number, number]> = [
   [0, 0],
@@ -365,7 +375,7 @@ test('WebGPU attribute updates skip resting frames and upload only written slots
         uploads.push({ attribute, ranges: attribute.updateRanges.map((range) => ({ ...range })) })
         attribute.clearUpdateRanges()
       },
-    } as unknown as ConstructorParameters<typeof Attributes>[0],
+    },
     new Info(),
   )
   const render = () => {

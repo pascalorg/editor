@@ -1,11 +1,10 @@
 import type { AnyNode, CeilingNode, SlabNode, WallNode, ZoneNode } from '../schema'
 import type { AnyNodeId } from '../schema/types'
-import { DEFAULT_LEVEL_HEIGHT, resolveCeilingHeight } from '../services/level-height'
-import { getWallPlaneTop } from '../services/storey'
+import { resolveCeilingHeight } from '../services/level-height'
+import { getWallTop } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { sampleWallCenterline } from '../systems/wall/wall-curve'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
-import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { levelWallCover } from './plate-surface'
 import {
   area,
@@ -169,6 +168,7 @@ function boundaryFaceKey(boundary: Space['boundaryFaces'][number]): string {
   const pointKey = (point: Point2D) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`
   const forward = boundary.points.map(pointKey).join('|')
   const reverse = [...boundary.points].reverse().map(pointKey).join('|')
+  // biome-ignore lint/complexity/useMathMinMax: lexicographic string comparison
   return `${boundary.wallId}:${boundary.face}:${forward < reverse ? forward : reverse}`
 }
 
@@ -329,8 +329,7 @@ export function deriveZoneQuantityReport(
       0,
       sceneNodes,
     )
-    const planeTop = levelId ? getWallPlaneTop(wall, levelId, sceneNodes) : DEFAULT_LEVEL_HEIGHT
-    return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
+    return getWallTop(wall, levelId ?? '', sceneNodes, support.elevation) - support.elevation
   }
   const edgeLengths = [zone.polygon, ...(zone.holes ?? [])].flatMap((ring) =>
     ring.map((start, index) => {

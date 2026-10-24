@@ -1,9 +1,9 @@
 'use client'
 
 import { useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import * as THREE from 'three/webgpu'
-import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
@@ -68,32 +68,48 @@ function buildGradientSky(): THREE.DataTexture {
 
 export function SceneEnvironment() {
   const scene = useThree((state) => state.scene)
-  const texture = useMemo(buildGradientSky, [])
-  const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
+  const renderer = useThree((state) => state.gl)
+  const appearance = useViewer((state) => state.sceneAppearance.appearance)
+  const environment = useViewer((state) => state.sceneAppearance.environment)
+  const source = environment?.source ?? 'gradient'
   const atmosphere = useSceneAtmosphere()
   const atmosphereRef = useRef(atmosphere)
   atmosphereRef.current = atmosphere
 
   useEffect(() => {
     const prevEnvironment = scene.environment
-    const prevIntensity = scene.environmentIntensity
+    let target: THREE.RenderTarget | undefined
+    let texture: THREE.Texture | null = null
+    if (source === 'room') {
+      const room = new RoomEnvironment()
+      const generator = new THREE.PMREMGenerator(renderer as unknown as THREE.WebGPURenderer)
+      target = generator.fromScene(room, 0.04)
+      texture = target.texture
+      room.dispose()
+      generator.dispose()
+    } else if (source === 'gradient') texture = buildGradientSky()
     scene.environment = texture
     return () => {
       if (scene.environment === texture) {
         scene.environment = prevEnvironment
-        if (!atmosphereRef.current) scene.environmentIntensity = prevIntensity
       }
-      texture.dispose()
+      if (target) target.dispose()
+      else texture?.dispose()
     }
-  }, [scene, texture])
+  }, [renderer, scene, source])
 
   useEffect(() => {
     // An atmosphere owns environmentIntensity while its environmentNode is
     // active. The gradient remains installed as the fallback texture and takes
     // over immediately when the atmosphere restores scene ownership.
     if (atmosphere) return
-    scene.environmentIntensity = appearance === 'dark' ? ENV_INTENSITY_DARK : ENV_INTENSITY
-  }, [appearance, atmosphere, scene])
+    const previous = scene.environmentIntensity
+    scene.environmentIntensity =
+      environment?.intensity ?? (appearance === 'dark' ? ENV_INTENSITY_DARK : ENV_INTENSITY)
+    return () => {
+      if (!atmosphereRef.current) scene.environmentIntensity = previous
+    }
+  }, [appearance, atmosphere, scene, environment?.intensity])
 
   return null
 }

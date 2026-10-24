@@ -43,6 +43,21 @@ describe('what a call achieved', () => {
     })
   })
 
+  test('counts a node updated twice once, and an update to what it holds as no change', () => {
+    const nodes = scene()
+    expect(
+      achievedChanges(nodes, {
+        update: [
+          { id: 'wall_a', data: { height: 3 } },
+          { id: 'wall_a', data: { thickness: 0.3 } },
+        ],
+      }).updated,
+    ).toBe(1)
+    expect(
+      achievedChanges(nodes, { update: [{ id: 'wall_a', data: { end: [4, 0] } }] }),
+    ).toMatchObject({ updated: 0, unchanged: true })
+  })
+
   test('says when a call changed nothing', () => {
     expect(achievedChanges(scene(), { update: [{ id: 'wall_missing', data: {} }] })).toEqual({
       created: {},

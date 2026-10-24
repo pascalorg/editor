@@ -2,6 +2,7 @@ import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
 import type { StructurePlan } from '../../commands/structure/shared'
 import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
 import { isSpaceDetectionPaused } from '../../lib/space-detection'
+import { deletedSurfaceSupportPatch } from '../../lib/surface-support-references'
 import { nodeRegistry } from '../../registry/registry'
 import { validateNodeRelations } from '../../registry/validate-relations'
 import {
@@ -42,6 +43,7 @@ import {
   resolveMergedWallEndpoints,
   type WallAttachmentUpdate,
 } from '../../systems/wall/wall-merge'
+import { areSemanticValuesEqual } from '../../utils/semantic-equal'
 import {
   convertDerivedPlateHoleWrites,
   DERIVED_WRITER_TOKEN,
@@ -54,8 +56,10 @@ import {
 import {
   activeSceneCommitNodeIds,
   addActiveSceneCommitNodeIds,
+  noteDerivedNodeWrites,
   runWithSceneCommitNodeIds,
 } from '../history-control'
+import { currentSceneEnvironment } from '../scene-environment'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
@@ -67,6 +71,25 @@ type NodeCreateOp = {
 }
 type NodeUpdateOp = { id: AnyNodeId; data: Partial<AnyNode> }
 type NodeDeleteOp = AnyNodeId
+
+/**
+ * What a derived write of `updates` changes, for the commit that carries it: a node, and the fields whose
+ * value differs from the node's own. A write that sets what is already there changes nothing, so it is
+ * not noted and cannot mark a later authored edit of that field as derived.
+ */
+function changedDerivedFields(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  updates: NodeUpdateOp[],
+) {
+  return updates.flatMap(({ id, data }) => {
+    const node = nodes[id] as Record<string, unknown> | undefined
+    if (!node) return []
+    const fields = Object.keys(data).filter(
+      (field) => !areSemanticValuesEqual(node[field], (data as Record<string, unknown>)[field]),
+    )
+    return fields.length ? [{ id, fields }] : []
+  })
+}
 type WallMergePlan = {
   primaryWallId: AnyNodeId
   secondaryWallId: AnyNodeId
@@ -79,11 +102,13 @@ type WallMergePlan = {
 }
 
 const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
+  'roofSystem',
   'roofType',
   'width',
   'depth',
   'pitch',
   'overhang',
+  'gableOverhang',
   'wallThickness',
   'shingleThickness',
   'gambrelLowerWidthRatio',
@@ -103,6 +128,8 @@ const DEFAULT_GUTTER_REFRESH_FIELDS = new Set<string>([
   'wallHeight',
   'pitch',
   'overhang',
+  'gableOverhang',
+  'wallThickness',
   'trim',
 ])
 
@@ -654,7 +681,7 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   return mergeNodeUpdate(currentNode, sanitized.value as Partial<AnyNode>)
 }
 
-function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_RIDGE_VENT_REFRESH_FIELDS.has(key))
 }
 
@@ -692,7 +719,7 @@ function refreshDefaultRidgeVentsForSegment(
   return nextVents.map((vent) => vent.id as AnyNodeId)
 }
 
-function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_GUTTER_REFRESH_FIELDS.has(key))
 }
 
@@ -1064,9 +1091,20 @@ function refreshDefaultGuttersForRoofIds(
   }
 }
 
-// Track pending RAF for updateNodesAction to prevent multiple queued callbacks
-let pendingRafId: number | null = null
-let pendingUpdates: Set<AnyNodeId> = new Set()
+// One frame's pending dirty marks per scene environment, so a detached scene's update never
+// cancels (or receives) the editor's.
+type PendingDirtyMarks = { frame: number | null; ids: Set<AnyNodeId> }
+const PENDING_DIRTY_MARKS = Symbol('pending-dirty-marks')
+const pendingDirtyMarks = () =>
+  currentSceneEnvironment().slot<PendingDirtyMarks>(PENDING_DIRTY_MARKS, () => ({
+    frame: null,
+    ids: new Set(),
+  }))
+
+/** The current environment's authored updates whose deferred dirty intent has not reached render systems yet. */
+export function getPendingNodeUpdateCount(): number {
+  return pendingDirtyMarks().ids.size
+}
 
 function buildWallMergePlans(
   nodes: Record<AnyNodeId, AnyNode>,
@@ -1157,6 +1195,8 @@ const createNodesActionImpl = (
   if (get().readOnly) return
   ops = filterDerivedNodeWrites(get().nodes, { create: ops }, options).create
   if (!ops.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(ops.map((op) => ({ id: op.node.id })))
   const extraNodesToMarkDirty = new Set<AnyNodeId>()
   const extraNodesToClearDirty = new Set<AnyNodeId>()
   set((state) => {
@@ -1299,6 +1339,12 @@ const applyNodeChangesActionImpl = (
   changes = convertDerivedPlateHoleWrites(get().nodes, changes, options)
   changes = filterDerivedNodeWrites(get().nodes, changes, options)
   if (!changes.create?.length && !changes.update?.length && !changes.delete?.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites([
+      ...(changes.create ?? []).map((op) => ({ id: op.node.id })),
+      ...changedDerivedFields(get().nodes, changes.update ?? []),
+      ...(changes.delete ?? []).filter((id) => get().nodes[id]).map((id) => ({ id })),
+    ])
 
   const createOps = changes.create ?? []
   const deletionIntent =
@@ -1480,6 +1526,8 @@ const updateNodesActionImpl = (
   }
   updates = filterDerivedNodeWrites(get().nodes, { update: converted.update ?? [] }, options).update
   if (!updates.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(changedDerivedFields(get().nodes, updates))
   const parentsToUpdate = new Set<AnyNodeId>()
   const extraNodesToUpdate = new Set<AnyNodeId>()
   const extraNodesToDelete = new Set<AnyNodeId>()
@@ -1584,6 +1632,9 @@ const updateNodesActionImpl = (
     return
   }
   // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
+  const environment = currentSceneEnvironment()
+  const pending = pendingDirtyMarks()
+  const pendingUpdates = pending.ids
   for (const u of updates) {
     // Visibility is applied by React before the deferred dirty callback. Mark
     // it now so render systems can release collective geometry in that same
@@ -1601,17 +1652,23 @@ const updateNodesActionImpl = (
     get().clearDirty(id)
   }
 
-  if (pendingRafId !== null) {
-    cancelAnimationFrame(pendingRafId)
-  }
-
-  pendingRafId = requestAnimationFrame(() => {
+  const flush = () => {
+    pending.frame = null
+    // A disposed scene's frame reaches nothing.
+    if (environment.disposed) return
     pendingUpdates.forEach((id) => {
       get().markDirty(id)
     })
     pendingUpdates.clear()
-    pendingRafId = null
-  })
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    if (pending.frame !== null) cancelAnimationFrame(pending.frame)
+    pending.frame = requestAnimationFrame(flush)
+  } else if (pending.frame === null) {
+    // Headless (a worker, a server) there is no frame: the marks land after the current task.
+    pending.frame = -1
+    queueMicrotask(flush)
+  }
 }
 
 /** The scene record a node deletion reads and rewrites. */
@@ -1815,6 +1872,14 @@ export function planNodeDeletion(
     }
   }
 
+  for (const node of Object.values(nextNodes)) {
+    if (allIds.has(node.id)) continue
+    const patch = deletedSurfaceSupportPatch(node, allIds)
+    if (!patch) continue
+    nextNodes[node.id] = { ...node, ...patch } as AnyNode
+    nodesToMarkDirty.add(node.id)
+  }
+
   // A deleted door takes its step paint with it, in the same undo step; every
   // other doorway keeps its own.
   for (const node of Object.values(nextNodes)) {
@@ -1940,6 +2005,8 @@ const deleteNodesActionImpl = (
   wallDeletionPlan?: StructurePlan,
 ) => {
   if (get().readOnly) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(ids.filter((id) => get().nodes[id]).map((id) => ({ id })))
   let deletedIds = new Set<AnyNodeId>()
   let parentsToMarkDirty = new Set<AnyNodeId>()
   let nodesToMarkDirty = new Set<AnyNodeId>()

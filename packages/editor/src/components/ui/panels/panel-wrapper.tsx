@@ -138,7 +138,7 @@ export function PanelWrapper({
   ) as AnyNodeId | undefined
   // Subscribe to the selected node's *type* only — a string primitive that
   // doesn't change as fields are edited (same trick as ParametricInspector).
-  const selectedType = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
+  const selectedType = useScene((s) => (selectedId ? s.nodes[selectedId]?.type ?? null : null))
   const installedPlugins = useScene((s) => s.installedPlugins)
   const extensions = useMemo(() => {
     // re-derive when plugin extensions register after mount (async plugin load)
@@ -155,7 +155,12 @@ export function PanelWrapper({
   // See `lib/inspector-card-mode.ts` for the transition table.
   const [activeExtensionId, setActiveExtensionId] = useState<string | null>(null)
   // Stale ids (kind changed, plugin gated off) fall back to regular mode.
-  const activeExtension = resolveActiveExtension(activeExtensionId, extensions)
+  const primaryExtensionId = useScene((state) => {
+    const node = selectedId ? state.nodes[selectedId] : undefined
+    return node ? extensions.find((extension) => extension.primaryWhen?.(node))?.id : undefined
+  })
+  const primaryExtension = extensions.find((extension) => extension.id === primaryExtensionId)
+  const activeExtension = primaryExtension ?? resolveActiveExtension(activeExtensionId, extensions)
 
   // The panel is collapsed to just its header until the user expands it. The
   // choice is one editor preference for every inspector (room, wall, item…),
@@ -164,6 +169,10 @@ export function PanelWrapper({
   const setCollapsed = useCallback((next: boolean) => {
     useInspectorExpanded.getState().setExpanded(!next)
   }, [])
+
+  useEffect(() => {
+    if (primaryExtension) setCollapsed(false)
+  }, [primaryExtension, selectedId, setCollapsed])
 
   const applyMode = useCallback(
     (next: { collapsed: boolean; activeExtensionId: string | null }) => {
@@ -176,8 +185,12 @@ export function PanelWrapper({
   // Chevron / header press — collapsed → regular, regular → collapsed,
   // extension mode → regular (exit the extension first, stay expanded).
   const handleCardToggle = useCallback(() => {
+    if (primaryExtension) {
+      setCollapsed(!collapsed)
+      return
+    }
     applyMode(toggleCard({ collapsed, activeExtensionId }))
-  }, [applyMode, collapsed, activeExtensionId])
+  }, [applyMode, collapsed, activeExtensionId, primaryExtension, setCollapsed])
 
   // Folding the card forgets the active extension — extension mode is a
   // one-shot affordance of the header icon, not sticky panel state.
@@ -282,6 +295,7 @@ export function PanelWrapper({
 
   return (
     <div
+      data-editor-inspector
       className={cn(
         isMobile
           ? 'flex h-full w-full flex-col overflow-hidden bg-transparent dark:text-foreground'
@@ -327,14 +341,14 @@ export function PanelWrapper({
           <div className={cn('flex min-w-0 items-center gap-2', titleContent && 'flex-1 pr-2')}>
             {onBack && (
               <button
-                className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onBack}
                 type="button"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
             )}
-            {icon &&
+            {primaryExtension ? renderExtensionIcon(primaryExtension.icon) : icon &&
               (typeof icon === 'string' ? (
                 <NodeIconImage
                   alt=""
@@ -355,13 +369,13 @@ export function PanelWrapper({
                 )}
                 {titleContent ?? (
                   <h2 className="truncate font-semibold text-foreground text-sm tracking-tight">
-                    {title}
+                    {primaryExtension?.title ?? title}
                   </h2>
                 )}
               </div>
             ) : (
               <h2 className="truncate font-semibold text-foreground text-sm tracking-tight">
-                {title}
+                {primaryExtension?.title ?? title}
               </h2>
             )}
           </div>
@@ -374,7 +388,7 @@ export function PanelWrapper({
           <div className="flex items-center gap-1">
             {onReset && (
               <button
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onReset}
                 type="button"
               >
@@ -386,7 +400,7 @@ export function PanelWrapper({
                 ONLY that extension's content (either/or with the regular
                 controls); the active icon (highlighted) or the chevron
                 returns to the regular controls. */}
-            {extensions.map((extension) => {
+            {extensions.filter((extension) => extension !== primaryExtension).map((extension) => {
               const isActive = !collapsed && activeExtensionId === extension.id
               return (
                 <button
@@ -395,8 +409,8 @@ export function PanelWrapper({
                   className={cn(
                     'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
                     isActive
-                      ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
-                      : 'bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                      ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/30'
+                      : 'bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                   )}
                   key={extension.id}
                   onClick={() =>
@@ -412,7 +426,7 @@ export function PanelWrapper({
             <button
               aria-expanded={!collapsed}
               aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
-              className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
               onClick={handleCardToggle}
               type="button"
             >
@@ -422,7 +436,7 @@ export function PanelWrapper({
             </button>
             {onClose && (
               <button
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onClose}
                 type="button"
               >
@@ -440,7 +454,9 @@ export function PanelWrapper({
           via `resolveActiveExtension`. */}
       {!(collapsed && !isMobile) && (
         <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto" data-panel-scroll>
-          {!isMobile && selectedId && activeExtension ? (
+          {selectedId && primaryExtension ? (
+            <InspectorExtensionContent extension={primaryExtension} nodeId={selectedId} />
+          ) : !isMobile && selectedId && activeExtension ? (
             <InspectorExtensionSection
               extension={activeExtension}
               key={activeExtension.id}
@@ -552,22 +568,32 @@ function InspectorExtensionSection({
   extension: InspectorExtension
   nodeId: AnyNodeId
 }) {
+  return (
+    <PanelSection defaultExpanded={defaultExpanded} title={extension.title}>
+      <InspectorExtensionContent extension={extension} nodeId={nodeId} />
+    </PanelSection>
+  )
+}
+
+function InspectorExtensionContent({
+  extension,
+  nodeId,
+}: {
+  extension: InspectorExtension
+  nodeId: AnyNodeId
+}) {
   const node = useScene((s) => s.nodes[nodeId])
   if (!node) return null
   const Extension = resolveExtensionComponent(extension)
   return (
-    <PanelSection defaultExpanded={defaultExpanded} title={extension.title}>
-      <ErrorBoundary
-        fallback={
-          <p className="p-1 text-muted-foreground text-xs">
-            “{extension.title}” hit an error and was unloaded for this session.
-          </p>
-        }
-      >
-        <Suspense fallback={null}>
-          <Extension node={node} />
-        </Suspense>
-      </ErrorBoundary>
-    </PanelSection>
+    <ErrorBoundary fallback={
+      <p className="p-1 text-muted-foreground text-xs">
+        “{extension.title}” hit an error and was unloaded for this session.
+      </p>
+    }>
+      <Suspense fallback={null}>
+        <Extension node={node} />
+      </Suspense>
+    </ErrorBoundary>
   )
 }

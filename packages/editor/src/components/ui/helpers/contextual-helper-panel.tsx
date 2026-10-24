@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react'
 import type { ToolHint } from '@pascal-app/core'
-import { Fragment, useEffect, useSyncExternalStore } from 'react'
+import { Fragment, useEffect, useId, useState, useSyncExternalStore } from 'react'
 import {
   CONTINUATION_PROFILES,
   type ContinuationContext,
@@ -73,14 +73,16 @@ function ShortcutSequence({
                   <span className="text-[9px] text-muted-foreground/70">/</span>
                 ) : null}
                 <ShortcutToken
-                  className={cn(TOKEN_CLASS, active && 'border-white bg-white text-black shadow-sm')}
+                  className={cn(TOKEN_CLASS, active &&
+                      'border-foreground bg-foreground text-background shadow-sm dark:border-white dark:bg-white dark:text-black')}
                   value={alternative}
                 />
               </Fragment>
             ))
           ) : (
             <ShortcutToken
-              className={cn(TOKEN_CLASS, active && 'border-white bg-white text-black shadow-sm')}
+              className={cn(TOKEN_CLASS, active &&
+                      'border-foreground bg-foreground text-background shadow-sm dark:border-white dark:bg-white dark:text-black')}
               value={entry}
             />
           )}
@@ -423,6 +425,10 @@ function HudHeader({ title }: { title: HudTitle }) {
 const isEscHint = (hint: ContextualShortcutHint) =>
   hint.keys.length === 1 && hint.keys[0] === 'Esc'
 
+// A "!" row says why something won't happen here (a wall end a window can't wrap), not a key to
+// press, so it is never folded under More shortcuts.
+const isNoteHint = (hint: ContextualShortcutHint) => hint.keys.length === 1 && hint.keys[0] === '!'
+
 function HintRow({ hint }: { hint: ContextualShortcutHint }) {
   return (
     <div className={cn(ROW_CLASS, 'items-start')}>
@@ -431,7 +437,7 @@ function HintRow({ hint }: { hint: ContextualShortcutHint }) {
         <div
           className={cn(
             'text-xs leading-5',
-            hint.active ? 'font-medium text-white' : 'text-muted-foreground',
+            hint.active ? 'font-medium text-foreground dark:text-white' : 'text-muted-foreground',
           )}
         >
           {hint.label}
@@ -470,6 +476,8 @@ export function ContextualHelperPanel({
   notice?: string | null
 }) {
   const inStack = useInRightStack()
+  const [showAllHints, setShowAllHints] = useState(false)
+  const hintsId = useId()
   const modeChips = chipHints.filter((hint) => hint.chip)
   const hasChips = !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope
   const fenceFeature = useEditor((state) =>
@@ -486,6 +494,10 @@ export function ContextualHelperPanel({
 
   const actionHints = hints.filter((hint) => !isEscHint(hint))
   const escHints = hints.filter(isEscHint)
+  const collapsedHints = actionHints.filter(
+    (hint, index) => index === 0 || hint.active || isNoteHint(hint),
+  )
+  const visibleHints = showAllHints ? actionHints : collapsedHints
 
   return (
     <div
@@ -493,9 +505,22 @@ export function ContextualHelperPanel({
       data-hud-card
     >
       {title ? <HudHeader title={title} /> : null}
-      {actionHints.map((hint) => (
-        <HintRow hint={hint} key={hintKey(hint)} />
-      ))}
+      <div id={hintsId} className="col-span-2 grid grid-cols-subgrid gap-y-1.5">
+        {visibleHints.map((hint) => (
+          <HintRow hint={hint} key={hintKey(hint)} />
+        ))}
+      </div>
+      {collapsedHints.length < actionHints.length ? (
+        <button
+          aria-controls={hintsId}
+          aria-expanded={showAllHints}
+          className="pointer-events-auto col-span-2 min-h-7 rounded-md px-1 text-left text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          onClick={() => setShowAllHints((value) => !value)}
+          type="button"
+        >
+          {showAllHints ? 'Fewer shortcuts' : 'More shortcuts'}
+        </button>
+      ) : null}
       {notice ? <HintRow hint={{ keys: ['!'], label: notice, active: true }} /> : null}
       {actionHints.length > 0 && (hasChips || escHints.length > 0) ? (
         <div className="col-span-2 my-0.5 h-px bg-border" />

@@ -19,6 +19,7 @@ import {
 } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
+import { wallSeenFromOutside } from './exterior'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import {
   wallCurveAffordance,
@@ -137,6 +138,10 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   }),
 
   capabilities: {
+    reveal: { phase: 'structure', style: 'rise' },
+    exterior: wallSeenFromOutside,
+    revealLayout: { line: (node) => (node.type === 'wall' ? [node.start, node.end] : null) },
+    revealOnEdit: ['start', 'end', 'curveOffset', 'height', 'thickness', 'wallType', 'curtainWall'],
     // Wall move is bespoke (endpoint drag, linked-wall corner cascade,
     // ALT-detach). Omitting `movable` keeps the legacy MoveWallTool via
     // capability-driven dispatch.

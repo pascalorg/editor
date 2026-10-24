@@ -21,9 +21,16 @@ import {
   getSpatialPointerId,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import {
+  alignDrawPoint,
+  clearDrawAlignment,
+  collectScenePorts,
+  findNearestPort3D,
+} from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -31,9 +38,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, Matrix3, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
 import { ConnectionFeedback } from '../shared/connection-feedback'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPort3D } from '../shared/ports'
+import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { ductTerminalDefinition } from './definition'
 import { buildDuctTerminalGeometry } from './geometry'
 import { COLLAR_LENGTH, getDuctTerminalPorts, mountQuaternion } from './ports'
@@ -424,8 +430,7 @@ const DuctTerminalTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       const key = e.key
       if (key === 'm' || key === 'M') {
         e.preventDefault()

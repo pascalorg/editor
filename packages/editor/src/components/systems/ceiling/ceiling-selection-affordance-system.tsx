@@ -96,7 +96,6 @@ function clearCornerDragPreview(drag: CornerDragState) {
 }
 
 export const CeilingSelectionAffordanceSystem = () => {
-  const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   // ANY active interaction (moving/placing a node, reshaping a boundary or
   // curve, dragging a handle) unmounts the brackets: their ceiling-height hit
@@ -123,11 +122,7 @@ export const CeilingSelectionAffordanceSystem = () => {
   )
 
   const shouldRender =
-    phase === 'structure' &&
-    mode === 'select' &&
-    scopeIdle &&
-    currentLevelId !== null &&
-    ceilings.length > 0
+    mode === 'select' && scopeIdle && currentLevelId !== null && ceilings.length > 0
 
   if (!shouldRender) return null
 

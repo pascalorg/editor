@@ -11,7 +11,6 @@ Integrator review required. Each entry documents:
 ### What
 
 Added these subpath entries to the `"exports"` map of `@pascal-app/core`:
-
 - `./schema` → `./dist/schema/index.js`
 - `./store` → `./dist/store/use-scene.js`
 - `./material-library` → `./dist/material-library.js`
@@ -127,7 +126,6 @@ Remove the `./storage`/`./operations` entries from `exports` and update `apps/ed
 
 Introduced a shared `AssetUrl` Zod validator and replaced the bare `z.string()`
 on every URL-bearing field in core's schemas:
-
 - `scan.url` (`packages/core/src/schema/nodes/scan.ts`)
 - `guide.url` (`packages/core/src/schema/nodes/guide.ts`)
 - `item.asset.src` (`packages/core/src/schema/nodes/item.ts`)
@@ -154,7 +152,7 @@ schema boundary.
 
 - **Existing scenes**: localStorage-resident scenes bypass strict validation on
   load (the store's `setScene` only runs `safeParse` on stair-type via
-  `migrateNodes`), so this is *not* a breakage for returning users. Legacy
+  `migrateNodes`), so this is _not_ a breakage for returning users. Legacy
   URLs will keep loading; only explicit MCP-bridge `safeParse` calls reject.
 - **MCP consumers**: one existing test
   (`packages/mcp/src/bridge/scene-bridge.test.ts`, previously using
@@ -205,7 +203,6 @@ scene-bridge test update is self-contained.
 
 The PR still touches the editor app and editor package, but the remaining files
 are tied to the MCP scene workflow:
-
 - `apps/editor/app/api/scenes/**`, `apps/editor/components/save-button.tsx`,
   and `apps/editor/components/scene-loader.tsx` expose saved MCP scenes in the
   web editor.

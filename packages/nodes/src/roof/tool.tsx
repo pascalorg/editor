@@ -4,9 +4,8 @@ import {
   type AnyNodeId,
   collectAlignmentAnchors,
   emitter,
-  findLevelAboveId,
   type GridEvent,
-  getLevelElevations,
+  getActiveRoofHeight,
   getWallArcData,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
@@ -63,22 +62,20 @@ import {
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
 import useRoofFootprintSource from './roof-footprint-source'
+import {
+  drawnRoofLevelTarget,
+  drawnRoofSupport,
+  roofLevelTarget,
+  roofLevelTargetOffset,
+  seatedRoofElevation,
+  writeRoofNodes,
+  writeSeatedRoofEdit,
+} from './roof-level-target'
 import useRoofPlacementMode, { type RoofPlacementMode } from './roof-placement-mode'
 
 const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
-
-function createRoofNodes(
-  sceneApi: SceneApi,
-  ops: Parameters<NonNullable<SceneApi['createMany']>>[0],
-): void {
-  if (sceneApi.createMany) {
-    sceneApi.createMany(ops)
-    return
-  }
-  for (const op of ops) sceneApi.upsert(op.node, op.parentId)
-}
 
 function placementOptions(mode: RoofPlacementMode) {
   return {
@@ -216,9 +213,22 @@ export const commitRoofPlacement = (
     const diameter = Math.max(footprintWidth, footprintDepth)
     const curbHeight =
       typeof defaults.wallHeight === 'number' ? defaults.wallHeight : DEFAULT_WALL_HEIGHT
+    const cone = RoofSegmentNode.parse({
+      pitch: DEFAULT_PITCH_DEG,
+      ...defaults,
+      roofType,
+      width: diameter,
+      depth: diameter,
+    })
+    const target = drawnRoofLevelTarget(nodes, levelId, curbHeight + getActiveRoofHeight(cone), {
+      center: [centerX, centerZ],
+      width: diameter,
+      depth: diameter,
+      roofType,
+    })
     const resolved = resolveConicalRoofPlacement({
-      nodes,
-      levelId,
+      nodes: target.nodes,
+      levelId: target.levelId,
       center: [centerX, centerZ],
       radius: diameter / 2,
       curbHeight,
@@ -245,8 +255,8 @@ export const commitRoofPlacement = (
       children: [segment.id],
     })
 
-    createRoofNodes(sceneApi, [
-      { node: roof, parentId: levelId },
+    writeRoofNodes(sceneApi, target, [
+      { node: roof, parentId: target.levelId },
       { node: segment, parentId: roof.id },
     ])
     triggerSFX('sfx:structure-build')
@@ -294,7 +304,14 @@ export const commitRoofPlacement = (
       roofType,
     )
 
+    const sibling = targetRoof.children
+      .map((id) => nodes[id])
+      .find((node) => node?.type === 'roof-segment')
     const segment = RoofSegmentNode.parse({
+      roofSystem: sibling?.type === 'roof-segment' ? sibling.roofSystem : undefined,
+      glazing: sibling?.type === 'roof-segment' ? sibling.glazing : undefined,
+      barrelRise: sibling?.type === 'roof-segment' ? sibling.barrelRise : undefined,
+      barrelSegments: sibling?.type === 'roof-segment' ? sibling.barrelSegments : undefined,
       wallHeight: DEFAULT_WALL_HEIGHT,
       pitch: DEFAULT_PITCH_DEG,
       roofType: 'gable',
@@ -305,7 +322,9 @@ export const commitRoofPlacement = (
       rotation: placement.rotation,
     })
 
-    sceneApi.upsert(segment, targetRoofId as AnyNode['id'])
+    writeSeatedRoofEdit(sceneApi, {
+      create: [{ node: segment, parentId: targetRoofId as AnyNode['id'] }],
+    })
     triggerSFX('sfx:structure-build')
     return segment.id // Returns segment ID so it can be selected immediately
   }
@@ -334,19 +353,33 @@ export const commitRoofPlacement = (
     rotation: placement.rotation,
   })
 
+  // Drawn over a storey's walls, the roof goes on the level above them.
+  const target = drawnRoofLevelTarget(
+    nodes,
+    levelId,
+    segment.wallHeight + getActiveRoofHeight(segment),
+    { center: [centerX, centerZ], width: footprintWidth, depth: footprintDepth, roofType },
+  )
+  const support = drawnRoofSupport(target, levelId)
   // Create the roof container. Segment-shaped params (roofType, pitch, …) are
   // dropped by the RoofNode schema; surface materials in `defaults` carry over.
-  const roof = RoofNode.parse({
+  const placed = RoofNode.parse({
     ...defaults,
     name,
     position: [centerX, 0, centerZ],
-    support: { kind: 'level' },
+    support,
     children: [segment.id],
   })
-
+  const roof =
+    support.kind === 'walls'
+      ? RoofNode.parse({
+          ...placed,
+          position: [centerX, seatedRoofElevation(target, placed, [segment]), centerZ],
+        })
+      : placed
   // Create roof first (so segment can be parented to it), then segment
-  createRoofNodes(sceneApi, [
-    { node: roof, parentId: levelId },
+  writeRoofNodes(sceneApi, target, [
+    { node: roof, parentId: target.levelId },
     { node: segment, parentId: roof.id },
   ])
 
@@ -377,26 +410,25 @@ export const commitRoofFootprint = (
     position: [0, 0, 0],
     rotation: quarterTurn ? Math.PI / 2 : 0,
   })
-  // A roof belongs to the storey above the walls it covers, whichever level the
-  // tool was armed on; the top floor keeps it on the walls' own level.
+  // A roof belongs to the level above the walls it covers, whichever level the tool was armed
+  // on: over the top floor, the building's roof level.
   const firstWall = target.wallIds.map((id) => nodes[id]).find((node) => node?.type === 'wall')
-  const wallsLevelId = firstWall ? resolveLevelId(firstWall, nodes) : levelId
-  const parentLevelId = (findLevelAboveId(wallsLevelId, getLevelElevations(nodes)) ??
-    wallsLevelId) as LevelNode['id']
+  const wallsLevelId = (firstWall ? resolveLevelId(firstWall, nodes) : levelId) as LevelNode['id']
+  const level = roofLevelTarget(nodes, wallsLevelId, getActiveRoofHeight(segment))
   const roof = RoofNode.parse({
     ...defaults,
     name: `Roof ${roofCount + 1}`,
     position: [
       target.center[0],
-      resolveRoofFootprintElevation(parentLevelId, target, nodes),
+      resolveRoofFootprintElevation(level.levelId, target, level.nodes),
       target.center[1],
     ],
     rotation: target.rotation,
     support: { kind: 'walls' },
     children: [segment.id],
   })
-  createRoofNodes(sceneApi, [
-    { node: roof, parentId: parentLevelId },
+  writeRoofNodes(sceneApi, level, [
+    { node: roof, parentId: level.levelId },
     { node: segment, parentId: roof.id },
   ])
   triggerSFX('sfx:structure-build')
@@ -734,9 +766,15 @@ export const RoofTool: React.FC = () => {
         const defaults = useEditor.getState().toolDefaults.roof
         const curbHeight =
           typeof defaults?.wallHeight === 'number' ? defaults.wallHeight : DEFAULT_WALL_HEIGHT
+        const target = drawnRoofLevelTarget(sceneApi.nodes(), currentLevelId, 0, {
+          center: [centerX, centerZ],
+          width: diameter,
+          depth: diameter,
+          roofType,
+        })
         const placement = resolveConicalRoofPlacement({
-          nodes: sceneApi.nodes(),
-          levelId: currentLevelId,
+          nodes: target.nodes,
+          levelId: target.levelId,
           center: [centerX, centerZ],
           radius: diameter / 2,
           curbHeight,
@@ -744,6 +782,8 @@ export const RoofTool: React.FC = () => {
         })
         if (placement.valid) {
           gridY =
+            corner1[1] +
+            roofLevelTargetOffset(target, currentLevelId) +
             placement.position[1] +
             (placement.kind === 'roof' ? placement.wallHeight - curbHeight : 0) +
             GRID_OFFSET
@@ -1040,17 +1080,33 @@ export const RoofTool: React.FC = () => {
           }
         : null
 
+  // A roof drawn over the armed level's walls lands on the level above them; its ghost does too.
+  const drawTarget = useMemo(
+    () =>
+      currentLevelId && footprintSource === 'draw' && previewDimensions
+        ? drawnRoofLevelTarget(nodes, currentLevelId, 0, {
+            center: [previewDimensions.centerX, previewDimensions.centerZ],
+            width: previewDimensions.length,
+            depth: previewDimensions.width,
+            roofType,
+          })
+        : null,
+    [currentLevelId, footprintSource, nodes, previewDimensions, roofType],
+  )
+  const drawLift =
+    drawTarget && currentLevelId ? roofLevelTargetOffset(drawTarget, currentLevelId) : 0
+
   const conicalPlacement = useMemo(() => {
-    if (!(currentLevelId && previewDimensions && roofType === 'conical')) return null
+    if (!(drawTarget && previewDimensions && roofType === 'conical')) return null
     return resolveConicalRoofPlacement({
-      nodes,
-      levelId: currentLevelId,
+      nodes: drawTarget.nodes,
+      levelId: drawTarget.levelId,
       center: [previewDimensions.centerX, previewDimensions.centerZ],
       radius: Math.max(previewDimensions.length, previewDimensions.width) / 2,
       curbHeight: previewWallHeight,
       ...placementOptions(placementMode),
     })
-  }, [currentLevelId, nodes, placementMode, previewDimensions, previewWallHeight, roofType])
+  }, [drawTarget, placementMode, previewDimensions, previewWallHeight, roofType])
 
   const conicalWallGhost = useMemo(() => {
     if (!(roofType === 'conical' && footprintSource === 'walls' && previewedConicalWallId))
@@ -1092,9 +1148,7 @@ export const RoofTool: React.FC = () => {
   const ghostBaseY =
     footprintSource !== 'draw' && footprintTarget && currentLevelId
       ? resolveRoofFootprintWorldElevation(currentLevelId, footprintTarget, nodes)
-      : conicalPlacement?.valid === true
-        ? conicalPlacement.position[1]
-        : levelY
+      : levelY + drawLift + (conicalPlacement?.valid === true ? conicalPlacement.position[1] : 0)
   const ghostColor =
     footprintSource !== 'draw' &&
     footprintTarget &&

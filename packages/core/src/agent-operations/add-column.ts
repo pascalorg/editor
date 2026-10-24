@@ -3,6 +3,7 @@ import type { addColumnTool } from '../agent-tools/columns'
 import { refuse } from '../agent-tools/refusal'
 import {
   matchScriptSlotsToLibrary,
+  requireMeasured,
   scriptedSize,
   scriptSource,
   withSourceMeta,
@@ -11,6 +12,7 @@ import { resettledPosition } from '../lib/geometry-surfaces'
 import { ColumnNode, type CompiledGeometryScript, type GeometryScriptParamValue } from '../schema'
 import { editedScriptParams, refuseParamsWithoutScript } from './add-object'
 import { targetLevel } from './level-target'
+import { queryNodes } from './scene-queries'
 import type { AgentOperation } from './types'
 
 export type AddColumnInput = z.infer<z.ZodObject<typeof addColumnTool.input>> & {
@@ -62,6 +64,8 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
   const { compiled } = input
   if (compiled && compiled.mount !== 'floor')
     refuse('wrong_mount', "A column's script uses mount 'floor'.")
+  if (compiled)
+    requireMeasured(compiled, { label: input.name, nodeId: input.nodeId, tool: 'add_column' })
   const dimensions = compiled ? scriptedSize(compiled.manifest) : undefined
   const {
     nodeId: _,
@@ -82,9 +86,7 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
     ...fields,
     ...(compiled?.nodeId ? { id: compiled.nodeId } : {}),
     name:
-      input.name ??
-      previous?.name ??
-      `Column ${Object.values(nodes).filter((node) => node.type === 'column').length + 1}`,
+      input.name ?? previous?.name ?? `Column ${queryNodes(nodes, { type: 'column' }).length + 1}`,
     parentId: parent.id,
     position: [
       x ?? previous?.position[0] ?? 0,

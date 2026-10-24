@@ -86,6 +86,11 @@
       }
     }
   },
+  "markdown": {
+    "formatter": {
+      "formatEmbeds": false
+    }
+  },
   "files": {
     "ignoreUnknown": true,
     "includes": [
@@ -273,6 +278,11 @@
           }
         }
       }
+    },
+    // E-018: shared operations select what they read, so a detached scene records a selection.
+    {
+      "includes": ["packages/core/src/agent-operations/**/*.ts", "!**/*.test.ts"],
+      "plugins": ["./scripts/biome/raw-scene-enumeration.grit"]
     },
     // T-001: tests go through package exports. `warn` while ~50 existing tests still reach into
     // another package's src/ (mostly nodes tests driving editor internals, and shared core

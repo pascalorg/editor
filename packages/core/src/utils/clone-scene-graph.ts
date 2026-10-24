@@ -5,6 +5,7 @@ import {
   remapConstructionDimensionReferences,
   remapMeasurementReferences,
 } from '../lib/measurement-geometry'
+import { remapSurfaceSupportReferences } from '../lib/surface-support-references'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -433,7 +434,15 @@ export function cloneLevelSubtree(
       ;(cloned as Record<string, unknown>).deckSlabId =
         idMap.get(cloned.deckSlabId) ?? cloned.deckSlabId
     }
+    remapSurfaceSupportReferences(cloned, idMap)
     remapFloorOpeningReferences(cloned, idMap)
+
+    // A corner window's sides are copied together, so the copies join each other; a side copied
+    // alone is a plain window.
+    if (cloned.type === 'window' && cloned.corner) {
+      const partnerId = idMap.get(cloned.corner.partnerId)
+      cloned.corner = partnerId ? { ...cloned.corner, partnerId } : undefined
+    }
 
     // A copied plate or ceiling stands for the copied rooms, so the guard
     // accepts it as derived and the reconciler adopts it on the new level.

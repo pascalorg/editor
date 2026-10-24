@@ -1,11 +1,15 @@
 import {
   type AnyNode,
+  type AnyNodeId,
+  findLevelBelowId,
   getEffectiveRoofSurfaceMaterial,
+  getLevelElevations,
   parseMaterialRef,
   type RoofNode,
   type RoofSegmentNode,
   type SceneMaterial,
   type SceneMaterialId,
+  type WallNode,
   wallAssemblyFinishRef,
 } from '@pascal-app/core'
 import type * as THREE from 'three'
@@ -72,8 +76,10 @@ function createResolvedMaterial(
  * The cladding the walls under a roof declare through their ASSEMBLIES
  * (`wall.assembly.exterior.finish` → catalog ref), so the roof's gable band —
  * the triangle of wall above the plate that the roof kind builds — is skinned
- * like the walls it sits on instead of the bare drywall default. The most
- * common ref among the level's walls wins; null when none declares one.
+ * like the walls it sits on instead of the bare drywall default. The walls are
+ * the roof's level's, or for a roof on a level of its own (a building's roof
+ * level), the storey's directly below. The most common ref among them wins;
+ * null when none declares one.
  */
 export function levelWallCladdingRef(
   nodes: Readonly<Record<string, AnyNode | undefined>>,
@@ -81,10 +87,17 @@ export function levelWallCladdingRef(
 ): string | null {
   const levelId = roof.parentId
   if (!levelId) return null
+  const wallsOn = (id: string | null) =>
+    Object.values(nodes).filter(
+      (node): node is WallNode => node?.type === 'wall' && node.parentId === id,
+    )
+  const own = wallsOn(levelId)
+  const walls = own.length
+    ? own
+    : wallsOn(findLevelBelowId(levelId, getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)))
   const counts = new Map<string, number>()
-  for (const node of Object.values(nodes)) {
-    if (node?.type !== 'wall' || node.parentId !== levelId) continue
-    const ref = wallAssemblyFinishRef(node)
+  for (const wall of walls) {
+    const ref = wallAssemblyFinishRef(wall)
     if (ref) counts.set(ref, (counts.get(ref) ?? 0) + 1)
   }
   let best: string | null = null
@@ -145,37 +158,24 @@ export function getRoofMaterialArray(
     return roleArray
   }
 
-  // Textures-on default appearance: catalog finishes per slot (terracotta
-  // shingle, soft-white deck/soffit, wall-coloured trim). Used both when the
-  // roof is unpainted and to fill any individual unpainted slot below.
-  const defaultArray: RoofMaterialArray = [
-    resolveSlotDefaultMaterial(wallCladdingRef ?? ROOF_DEFAULT_REFS[0], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[1], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[2], shading),
-    resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[3], shading),
-  ]
-
   const resolve = (spec: typeof top) =>
     createResolvedMaterial(spec.material, spec.materialPreset, sceneMaterials, shading)
   const topMaterial = resolve(top)
   const edgeMaterial = resolve(edge)
   const wallMaterial = resolve(wall)
 
-  if (!(topMaterial || edgeMaterial || wallMaterial)) {
-    roofMaterialArrayCache.set(cacheKey, defaultArray)
-    return defaultArray
-  }
-
   // Each slot resolves to its own role only, then the declared default — never
   // another role. Cross-role fallback here used to splatter a single painted
   // surface (e.g. the edge) across the shingle and soffit slots. The legacy
   // catch-all still fills every role because `getEffectiveRoofSurfaceMaterial`
   // returns it for top/edge/wall alike.
+  // Resolve an unpainted slot's catalog default lazily: painted roofs must
+  // not load unused finish assets (or make capture readiness depend on them).
   const materialArray: RoofMaterialArray = [
-    edgeMaterial ?? defaultArray[0],
-    wallMaterial ?? defaultArray[1],
-    wallMaterial ?? defaultArray[2],
-    topMaterial ?? defaultArray[3],
+    edgeMaterial ?? resolveSlotDefaultMaterial(wallCladdingRef ?? ROOF_DEFAULT_REFS[0], shading),
+    wallMaterial ?? resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[1], shading),
+    wallMaterial ?? resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[2], shading),
+    topMaterial ?? resolveSlotDefaultMaterial(ROOF_DEFAULT_REFS[3], shading),
   ]
 
   roofMaterialArrayCache.set(cacheKey, materialArray)

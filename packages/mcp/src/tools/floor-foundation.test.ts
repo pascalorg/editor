@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import {
   floorFootprintSupportClass,
   getLevelElevations,
@@ -163,6 +162,8 @@ test('set_floor_foundation sets one footprint in one call and one undo; raw upda
 
 test('set_floor_foundation and raw thickness edits lift a supported upper plate without a foundation', async () => {
   const bridge = new SceneBridge()
+  // The store is shared with the test before, which built a room named House on this polygon.
+  bridge.setScene({}, [])
   bridge.loadDefault()
   const server = createPascalMcpServer({ bridge })
   const [st, ct] = InMemoryTransport.createLinkedPair()

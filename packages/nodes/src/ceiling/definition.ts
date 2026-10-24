@@ -156,6 +156,8 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   }),
 
   capabilities: {
+    reveal: { phase: 'roof', style: 'settle', height: 0.08 },
+    revealOnEdit: ['polygon', 'holes', 'height'],
     batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {

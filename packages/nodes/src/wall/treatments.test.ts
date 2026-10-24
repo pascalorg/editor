@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   calculateLevelMiters,
   getWallThickness,
+  WallFaceScript,
   type WallNode,
   type WallTrimConfig,
 } from '@pascal-app/core'
@@ -89,69 +90,68 @@ describe('wall treatment miters', () => {
     }
   })
 
-  test.each([
-    'skirting',
-    'crown',
-    'chairRail',
-  ] as const)('preserves %s position bytes with cached per-wall endpoint data', (kind) => {
-    const cases = [
-      [wall('A', [0, 0], [3, 0])],
-      [wall('A', [0, 0], [3, 0]), wall('B', [3, 0], [3, 3])],
-      [wall('A', [0, 0], [3, 0]), wall('B', [0, 0], [1, 3])],
-      [wall('A', [0, 0], [0, 3]), wall('B', [-3, 0], [3, 0])],
-      [{ ...wall('A', [0, 0], [3, 0]), curveOffset: 0.4 }],
-    ]
-    for (const walls of cases) {
-      const node = { ...walls[0]!, [kind]: trim }
-      const proudOffsets = wallTreatmentProudOffsets(node)
-      const prouds = new Set([0, ...proudOffsets.map((proud) => Math.round(proud * 1e6) / 1e6)])
-      const reference: WallTreatmentLevelData = {
-        walls,
-        miterDataByProud: new Map(
-          [...prouds].map((proud) => [
-            proud,
-            calculateLevelMiters(
-              proud === 0
-                ? [...walls]
-                : walls.map((entry) => ({
-                    ...entry,
-                    thickness: getWallThickness(entry) + proud * 2,
-                  })),
-            ),
-          ]),
-        ),
+  test.each(['skirting', 'crown', 'chairRail'] as const)(
+    'preserves %s position bytes with cached per-wall endpoint data',
+    (kind) => {
+      const cases = [
+        [wall('A', [0, 0], [3, 0])],
+        [wall('A', [0, 0], [3, 0]), wall('B', [3, 0], [3, 3])],
+        [wall('A', [0, 0], [3, 0]), wall('B', [0, 0], [1, 3])],
+        [wall('A', [0, 0], [0, 3]), wall('B', [-3, 0], [3, 0])],
+        [{ ...wall('A', [0, 0], [3, 0]), curveOffset: 0.4 }],
+      ]
+      for (const walls of cases) {
+        const node = { ...walls[0]!, [kind]: trim }
+        const proudOffsets = wallTreatmentProudOffsets(node)
+        const prouds = new Set([0, ...proudOffsets.map((proud) => Math.round(proud * 1e6) / 1e6)])
+        const reference: WallTreatmentLevelData = {
+          walls,
+          miterDataByProud: new Map(
+            [...prouds].map((proud) => [
+              proud,
+              calculateLevelMiters(
+                proud === 0
+                  ? [...walls]
+                  : walls.map((entry) => ({
+                      ...entry,
+                      thickness: getWallThickness(entry) + proud * 2,
+                    })),
+              ),
+            ]),
+          ),
+        }
+        const data = buildWallTreatmentLevelData('level_test', walls, proudOffsets)
+        const select = createWallTreatmentSelector(node, proudOffsets)
+        const slice = select({
+          ...useWallTreatmentLevelData.getState(),
+          byLevelId: new Map([['level_test', data]]),
+        })!
+        for (const side of ['a', 'b'] as const) {
+          const openings = [
+            {
+              type: 'door',
+              width: 0.8,
+              height: 2,
+              position: [1.5, 1, 0] as [number, number, number],
+            },
+          ]
+          const before = buildTrimGeometry(node, side, trim, kind, openings, reference)!
+          const after = buildTrimGeometry(node, side, trim, kind, openings, slice)!
+          expect(before).not.toBeNull()
+          expect(after).not.toBeNull()
+          const beforeArray = before.getAttribute('position').array
+          const afterArray = after.getAttribute('position').array
+          expect(
+            new Uint8Array(afterArray.buffer, afterArray.byteOffset, afterArray.byteLength),
+          ).toEqual(
+            new Uint8Array(beforeArray.buffer, beforeArray.byteOffset, beforeArray.byteLength),
+          )
+          before.dispose()
+          after.dispose()
+        }
       }
-      const data = buildWallTreatmentLevelData('level_test', walls, proudOffsets)
-      const select = createWallTreatmentSelector(node, proudOffsets)
-      const slice = select({
-        ...useWallTreatmentLevelData.getState(),
-        byLevelId: new Map([['level_test', data]]),
-      })!
-      for (const side of ['a', 'b'] as const) {
-        const openings = [
-          {
-            type: 'door',
-            width: 0.8,
-            height: 2,
-            position: [1.5, 1, 0] as [number, number, number],
-          },
-        ]
-        const before = buildTrimGeometry(node, side, trim, kind, openings, reference)!
-        const after = buildTrimGeometry(node, side, trim, kind, openings, slice)!
-        expect(before).not.toBeNull()
-        expect(after).not.toBeNull()
-        const beforeArray = before.getAttribute('position').array
-        const afterArray = after.getAttribute('position').array
-        expect(
-          new Uint8Array(afterArray.buffer, afterArray.byteOffset, afterArray.byteLength),
-        ).toEqual(
-          new Uint8Array(beforeArray.buffer, beforeArray.byteOffset, beforeArray.byteLength),
-        )
-        before.dispose()
-        after.dispose()
-      }
-    }
-  })
+    },
+  )
 
   test.each([
     ['skirting', 0.0624],
@@ -220,5 +220,57 @@ describe('wall treatment miters', () => {
     expect(xs.some((x) => Math.abs(x - 2) < 1e-6)).toBe(true)
     expect(xs.every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
     geometry.dispose()
+  })
+
+  test('runs on under a window and breaks only under one that reaches the floor', () => {
+    const node = wall('A', [0, 0], [3, 0])
+    const xsUnder = (sill: number) => {
+      const geometry = buildTrimGeometry(
+        node,
+        'a',
+        trim,
+        'skirting',
+        [{ type: 'window', width: 1, height: 1.2, position: [1.5, sill + 0.6, 0] }],
+        treatmentLevelData([node]),
+      )
+      if (!geometry) throw new Error('expected trim geometry')
+      const xs = allPositions(geometry).map((point) => point.x)
+      geometry.dispose()
+      return xs
+    }
+    expect(xsUnder(0.9).some((x) => Math.abs(x - 1) < 1e-6 || Math.abs(x - 2) < 1e-6)).toBe(false)
+    expect(xsUnder(0).every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
+  })
+
+  test("gives way to its face's script where the build covers it, and runs whole under a splashback", () => {
+    const scriptOver = (bottom: number) =>
+      WallFaceScript.parse({
+        kind: 'script',
+        script: 'a'.repeat(64),
+        artifact: 'b'.repeat(64),
+        inputs: 'key',
+        manifest: { bounds: { min: [1, bottom, 0], max: [2, 1.2, 0.01] }, triangles: 2 },
+      })
+    const xsOn = (side: 'a' | 'b', bottom: number) => {
+      const node = { ...wall('A', [0, 0], [3, 0]), finishScripts: { a: scriptOver(bottom) } }
+      const geometry = buildTrimGeometry(
+        node,
+        side,
+        trim,
+        'skirting',
+        [],
+        treatmentLevelData([node]),
+      )
+      if (!geometry) throw new Error('expected trim geometry')
+      const xs = allPositions(geometry).map((point) => point.x)
+      geometry.dispose()
+      return xs
+    }
+    // Panelling from the floor: the skirting stops at its ends on its face, as at a door.
+    expect(xsOn('a', 0).every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
+    expect(xsOn('a', 0).some((x) => Math.abs(x - 1) < 1e-6)).toBe(true)
+    // The other face keeps its skirting; a splashback from 0.9 m leaves the skirting whole.
+    for (const xs of [xsOn('b', 0), xsOn('a', 0.9)])
+      expect(xs.some((x) => Math.abs(x - 1) < 1e-6 || Math.abs(x - 2) < 1e-6)).toBe(false)
   })
 })

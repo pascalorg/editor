@@ -25,6 +25,7 @@ import {
   useEditor,
   useInteractionScope,
   useRegistryToolContext,
+  visibleScene,
 } from '@pascal-app/editor'
 import { useEffect, useState } from 'react'
 import { Euler, Quaternion, Vector3 } from 'three'
@@ -67,13 +68,13 @@ type PlacementCommitTarget = {
 
 const LeanToExtensionTool = () => {
   const { activeLevelId, sceneApi, selectNode } = useRegistryToolContext()
-  const viewMode = useEditor((state) => state.viewMode)
+  const scene = useEditor(visibleScene)
   const [preview, setPreview] = useState<PreviewPose | null>(null)
   const [chainCursor, setChainCursor] = useState<[number, number, number] | null>(null)
   const [runSnap, setRunSnap] = useState<[number, number, number] | null>(null)
 
   useEffect(() => {
-    if (!(activeLevelId && viewMode === '3d')) return
+    if (!(activeLevelId && scene === '3d')) return
     useInteractionScope.getState().begin({ kind: 'drafting', tool: 'lean-to-extension' })
     let lastMeshEventTime = -1
     let freestandingRotationY = 0
@@ -663,9 +664,9 @@ const LeanToExtensionTool = () => {
         .getState()
         .endIf((scope) => scope.kind === 'drafting' && scope.tool === 'lean-to-extension')
     }
-  }, [activeLevelId, sceneApi, selectNode, viewMode])
+  }, [activeLevelId, sceneApi, selectNode, scene])
 
-  if (viewMode !== '3d') return null
+  if (scene !== '3d') return null
   return (
     <>
       {chainCursor ? (

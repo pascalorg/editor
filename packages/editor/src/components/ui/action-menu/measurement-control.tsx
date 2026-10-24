@@ -22,9 +22,11 @@ import { useState } from 'react'
 import type { CreatableMeasurementKind } from '../../../lib/measurement-kind'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import { VIEW_2D } from '../../../store/view-layout'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
+import { useActionMenuPopupSide } from './placement'
 
 const measurementOptions = [
   { kind: 'distance', label: 'Distance', icon: Ruler },
@@ -61,6 +63,7 @@ const constructionDimensionOptions = [
 }[]
 
 export function MeasurementControl() {
+  const popupSide = useActionMenuPopupSide()
   const [isOpen, setIsOpen] = useState(false)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
@@ -74,12 +77,10 @@ export function MeasurementControl() {
     (state) => state.toolDefaults['construction-dimension']?.mode,
   )
   const setMode = useEditor((state) => state.setMode)
-  const setPhase = useEditor((state) => state.setPhase)
   const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
-  const setViewMode = useEditor((state) => state.setViewMode)
+  const showView = useEditor((state) => state.showView)
 
   const selectedOption =
     measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
@@ -104,8 +105,6 @@ export function MeasurementControl() {
       : selectedOption.label
 
   const activateMeasurement = (kind: CreatableMeasurementKind) => {
-    setPhase('structure')
-    setStructureLayer('elements')
     setLastMeasurementKind(kind)
     setToolDefaults('measurement', { kind })
     setMode('build')
@@ -121,8 +120,6 @@ export function MeasurementControl() {
   }
 
   const activateSmartMeasurement = () => {
-    setPhase('structure')
-    setStructureLayer('elements')
     setToolDefaults('measurement', { kind: 'smart' })
     setMode('build')
     setTool('measurement')
@@ -136,9 +133,7 @@ export function MeasurementControl() {
       useFloorplanMode.getState().showExpertModeNotice('Construction Dimension')
       return
     }
-    setPhase('structure')
-    setStructureLayer('elements')
-    setViewMode('2d')
+    showView(VIEW_2D)
     setToolDefaults('construction-dimension', { chainMode, mode: dimensionMode })
     setMode('build')
     setTool('construction-dimension')
@@ -153,8 +148,8 @@ export function MeasurementControl() {
           className={cn(
             'rounded-r-none p-0 text-muted-foreground',
             isControlActive
-              ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
-              : 'hover:bg-cyan-500/15 hover:text-cyan-400',
+              ? 'bg-cyan-500/20 text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-400 dark:hover:text-accent-foreground'
+              : 'hover:bg-cyan-500/15 hover:text-cyan-700 dark:hover:text-cyan-400',
           )}
           label={`Measure: ${selectedLabel}`}
           onClick={handlePrimaryClick}
@@ -173,8 +168,8 @@ export function MeasurementControl() {
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
               isOpen
-                ? 'bg-cyan-500/15 text-cyan-400'
-                : 'hover:bg-cyan-500/10 hover:text-cyan-400',
+                ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400'
+                : 'hover:bg-cyan-500/10 hover:text-cyan-700 dark:hover:text-cyan-400',
             )}
             type="button"
           >
@@ -189,7 +184,7 @@ export function MeasurementControl() {
       <PopoverContent
         align="center"
         className="max-h-[70vh] w-64 overflow-y-auto rounded-lg border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div aria-label="Measurement type" className="space-y-1" role="menu">
@@ -205,8 +200,8 @@ export function MeasurementControl() {
                 className={cn(
                   'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
                   isSelected
-                    ? 'bg-white/10 text-foreground'
-                    : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                    ? 'bg-black/6 dark:bg-white/10 text-foreground'
+                    : 'text-muted-foreground hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground',
                 )}
                 key={option.kind}
                 onClick={() => {
@@ -241,8 +236,8 @@ export function MeasurementControl() {
                     className={cn(
                       'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
                       isSelected
-                        ? 'bg-white/10 text-foreground'
-                        : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                        ? 'bg-black/6 dark:bg-white/10 text-foreground'
+                        : 'text-muted-foreground hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground',
                     )}
                     key={`${option.mode}-${option.chainMode}`}
                     onClick={() => {

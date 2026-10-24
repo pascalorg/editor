@@ -23,33 +23,31 @@ function meshNames(fittingType: PipeFittingNode['fittingType']) {
 }
 
 describe('DWV fitting geometry', () => {
-  test.each([
-    'elbow',
-    'wye',
-    'sanitary-tee',
-    'cross',
-  ] as const)('builds socket and rim details for every %s port', (fittingType) => {
-    const node = fitting(fittingType)
-    const names = meshNames(fittingType)
-    for (const port of localPipeFittingPorts(node)) {
-      expect(names).toContain(`pipe-fitting-socket-${port.id}`)
-      expect(names).toContain(`pipe-fitting-shoulder-${port.id}`)
-      expect(names).toContain(`pipe-fitting-rim-${port.id}`)
-    }
-  })
+  test.each(['elbow', 'wye', 'sanitary-tee', 'cross'] as const)(
+    'builds socket and rim details for every %s port',
+    (fittingType) => {
+      const node = fitting(fittingType)
+      const names = meshNames(fittingType)
+      for (const port of localPipeFittingPorts(node)) {
+        expect(names).toContain(`pipe-fitting-socket-${port.id}`)
+        expect(names).toContain(`pipe-fitting-shoulder-${port.id}`)
+        expect(names).toContain(`pipe-fitting-rim-${port.id}`)
+      }
+    },
+  )
 
   test('models an elbow as a continuous sweep', () => {
     expect(meshNames('elbow')).toContain('pipe-fitting-elbow-sweep')
   })
 
-  test.each([
-    'wye',
-    'sanitary-tee',
-  ] as const)('models %s with a straight run and swept branch', (fittingType) => {
-    const names = meshNames(fittingType)
-    expect(names).toContain(`pipe-fitting-${fittingType}-run`)
-    expect(names).toContain(`pipe-fitting-${fittingType}-branch-sweep`)
-  })
+  test.each(['wye', 'sanitary-tee'] as const)(
+    'models %s with a straight run and swept branch',
+    (fittingType) => {
+      const names = meshNames(fittingType)
+      expect(names).toContain(`pipe-fitting-${fittingType}-run`)
+      expect(names).toContain(`pipe-fitting-${fittingType}-branch-sweep`)
+    },
+  )
 
   test('models a cross with two independently swept branches', () => {
     const names = meshNames('cross')

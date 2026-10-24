@@ -1,4 +1,10 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
+import {
+  applySceneWrites,
+  type NodeWrite,
+  seatWrittenRoofs,
+} from '@pascal-app/core/agent-operations'
+import { isAgentRefusal } from '@pascal-app/core/agent-tools'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { migrateLegacyWallAssemblies } from '@pascal-app/core/scene-migrations'
 import { AnyNode } from '@pascal-app/core/schema'
@@ -6,7 +12,7 @@ import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { SceneVersionConflictError } from '../../storage/types'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
-import { ErrorCode, throwMcpError } from '../errors'
+import { ProtocolErrorCode, throwMcpError, toolError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
 import { currentLevelContext, sceneMetaPayload } from './metadata'
 
@@ -42,7 +48,7 @@ export const saveSceneInput = {
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      'Full SceneGraph { nodes, rootNodeIds, collections? } to save instead of the bridge state.',
+      "Full SceneGraph { nodes, rootNodeIds, collections? } to save instead of the bridge state. Judged against the scene it is saved over (the session's scene when the save goes to it, else the stored scene `id` names) as apply_patch is: a roof it puts on the walls of the storey holding it goes to the level above them, said in notes, and storey content on a roof level is refused. A graph with no scene under it is saved as it is.",
     ),
 }
 
@@ -65,6 +71,56 @@ export const saveSceneOutput = {
   graphHash: z.string().optional(),
   levelIds: z.array(z.string()),
   defaultLevelId: z.string().nullable(),
+  /** What the server changed in a provided graph before saving it, one line each. */
+  notes: z.array(z.string()).optional(),
+}
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+
+/** A graph as writes over the scene in hand, so a rule on writes judges only what it changes. */
+function writesOver(
+  scene: Readonly<Record<string, AnyNode>>,
+  nodes: Readonly<Record<string, AnyNode>>,
+): NodeWrite[] {
+  const writes: NodeWrite[] = []
+  for (const node of Object.values(nodes)) {
+    const prior = scene[node.id] as Record<string, unknown> | undefined
+    if (!prior) {
+      writes.push({ op: 'create', node })
+      continue
+    }
+    const next = node as Record<string, unknown>
+    const data = Object.fromEntries(
+      [...new Set([...Object.keys(prior), ...Object.keys(next)])]
+        .filter((key) => !same(prior[key], next[key]))
+        .map((key) => [key, next[key]]),
+    )
+    if (Object.keys(data).length) writes.push({ op: 'update', id: node.id, data })
+  }
+  for (const id of Object.keys(scene)) if (!nodes[id]) writes.push({ op: 'delete', id })
+  return writes
+}
+
+/**
+ * The scene a provided graph is saved over, as it stands: the session's when the save goes to the
+ * scene in hand, else the stored one. Null for a new scene: a graph with nothing under it is saved
+ * as it is, its roofs never judged against an unrelated scene (a legacy project saved from a fresh
+ * session would otherwise read as all new writes, and be migrated or refused).
+ */
+async function savedOver(
+  bridge: SceneOperations,
+  target: { id?: string; projectId?: string },
+): Promise<Readonly<Record<string, AnyNode>> | null> {
+  const active = bridge.getActiveScene()
+  const inHand =
+    active &&
+    (target.id !== undefined
+      ? active.id === target.id
+      : target.projectId !== undefined && active.projectId === target.projectId)
+  if (inHand) return bridge.getNodes() as Record<string, AnyNode>
+  if (target.id === undefined) return null
+  const stored = await bridge.loadStoredScene(target.id).catch(() => null)
+  return (stored?.graph.nodes as Record<string, AnyNode> | undefined) ?? null
 }
 
 /** A saved scene that is more than the default site, building and level. */
@@ -91,7 +147,7 @@ async function requireSceneLoadedFrom(
         : 0
   if (nodeCount <= HOLDS_CONTENT) return
   throwMcpError(
-    ErrorCode.InvalidRequest,
+    ProtocolErrorCode.InvalidRequest,
     `scene_not_loaded: this session's scene was not loaded from ${target.projectId ?? target.id}, which holds ${nodeCount} nodes — the server may have reloaded and this session started over. Call load_scene with it first, or pass replace: true to write this scene over it.`,
     { ...target, nodeCount },
   )
@@ -104,8 +160,8 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
       title: 'Save scene',
       description:
         'Save the current scene (or a provided graph) to the SceneStore. Without id or projectId it saves to the project this session is bound to (create_project or load_scene). Defaults to a browser-visible draft save so agents can iterate without creating many project versions. Use saveMode: "checkpoint" for meaningful version history.',
-      inputSchema: saveSceneInput,
-      outputSchema: saveSceneOutput,
+      inputSchema: z.object(saveSceneInput),
+      outputSchema: z.object(saveSceneOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({
@@ -132,17 +188,20 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         projectId = bound.projectId ?? undefined
       }
       let sceneGraph: SceneGraph
+      let notes: string[] = []
       if (includeCurrentScene && !replace) await requireSceneLoadedFrom(bridge, { id, projectId })
       if (includeCurrentScene) {
         const validation = bridge.validateScene()
         if (!validation.valid) {
-          throwMcpError(ErrorCode.InvalidRequest, 'scene_invalid', { errors: validation.errors })
+          throwMcpError(ProtocolErrorCode.InvalidRequest, 'scene_invalid', {
+            errors: validation.errors,
+          })
         }
         sceneGraph = bridge.exportSceneGraph()
       } else {
         if (!graph) {
           throwMcpError(
-            ErrorCode.InvalidParams,
+            ProtocolErrorCode.InvalidParams,
             'graph_required: pass `graph` when includeCurrentScene is false',
           )
         }
@@ -151,7 +210,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         // graph arg is a bypass for the URL hardening in A7. See P4 report.
         const rawNodes = (graph as { nodes?: unknown }).nodes
         if (!rawNodes || typeof rawNodes !== 'object') {
-          throwMcpError(ErrorCode.InvalidParams, 'graph.nodes must be an object')
+          throwMcpError(ProtocolErrorCode.InvalidParams, 'graph.nodes must be an object')
         }
         const migration = migrateLegacyWallAssemblies(rawNodes as Record<string, unknown>)
         const errors: { nodeId: string; path: string; message: string }[] = []
@@ -168,9 +227,26 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
           }
         }
         if (errors.length > 0) {
-          throwMcpError(ErrorCode.InvalidParams, 'graph_invalid', { errors })
+          throwMcpError(ProtocolErrorCode.InvalidParams, 'graph_invalid', { errors })
         }
-        sceneGraph = { ...graph, nodes: migration.nodes } as unknown as SceneGraph
+        // The roof-level rule, as apply_patch holds it: what the graph changes in the scene it
+        // replaces.
+        const scene = await savedOver(bridge, { id, projectId })
+        let nodes = migration.nodes as Record<string, AnyNode>
+        if (scene) {
+          const writes = writesOver(scene, nodes)
+          const written = writes.length
+          try {
+            notes = seatWrittenRoofs(writes, scene)
+          } catch (error) {
+            if (!isAgentRefusal(error)) throw error
+            // An index into the graph's writes means nothing to the caller; the ids do.
+            const { index: _index, ...details } = error.details
+            return toolError(error.message, { code: error.code, ...details })
+          }
+          nodes = applySceneWrites(nodes, writes.slice(written))
+        }
+        sceneGraph = { ...graph, nodes } as unknown as SceneGraph
       }
 
       try {
@@ -192,6 +268,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         const payload = {
           ...sceneMetaPayload(meta, sceneGraph),
           ...currentLevelContext(bridge),
+          ...(notes.length ? { notes } : {}),
         }
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
@@ -199,13 +276,13 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         }
       } catch (err) {
         if (err instanceof SceneVersionConflictError) {
-          throwMcpError(ErrorCode.InvalidRequest, 'version_conflict', {
+          throwMcpError(ProtocolErrorCode.InvalidRequest, 'version_conflict', {
             expectedVersion,
             id,
           })
         }
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InvalidRequest, msg)
+        throwMcpError(ProtocolErrorCode.InvalidRequest, msg)
       }
     },
   )

@@ -1,9 +1,9 @@
 import { DuctFittingNode } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Matrix4, Vector3 } from 'three'
 import { fittingLegLength } from '../duct-fitting/ports'
 import { rectSectionAxes } from '../duct-segment/geometry'
 import { type DuctProfile, profileDiameterIn } from './auto-fitting'
-import type { ScenePort } from './ports'
 
 export function ductProfilesMatch(a: DuctProfile, b: DuctProfile): boolean {
   return (

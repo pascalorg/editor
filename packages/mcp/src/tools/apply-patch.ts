@@ -1,12 +1,14 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { isAgentRefusal } from '@pascal-app/core/agent-tools'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
-import { ErrorCode, McpError, refusalResult, throwMcpError } from './errors'
+import { ProtocolError, ProtocolErrorCode, refusalResult, throwMcpError } from './errors'
 import './honest-patch-guard'
+import './level-height-guard'
+import './roof-level-guard'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { assertPatchKeepsIdentity, PatchRefusedError, runPatchGuards } from './patch-guards'
 import { PatchSchema } from './schemas'
@@ -19,6 +21,8 @@ export const applyPatchOutput = {
   appliedOps: z.number(),
   deletedIds: z.array(z.string()),
   createdIds: z.array(z.string()),
+  /** What the server changed in the patch before writing it, one line each. */
+  notes: z.array(z.string()).optional(),
   ...liveSyncOutput,
 }
 
@@ -28,9 +32,9 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
     {
       title: 'Apply patch',
       description:
-        "Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls. A create whose id already exists fails the whole patch with node_exists; to replace a node, delete it earlier in the same patch. An update cannot change id or type (identity_change) or object or children (immutable_field); restating the current value is fine. A parentId change must name an existing node that holds children (invalid_parent). An update cannot add schema issues to a node (invalid_update). After a delete or a roof update that regenerates a roof's default gutters, those gutters and their downspouts are addressable only in a later call (regenerated_default). Refusals come back as a tool error whose text is JSON {code, patchIndex, id, message}.",
-      inputSchema: applyPatchInput,
-      outputSchema: applyPatchOutput,
+        "Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls. A create whose id already exists fails the whole patch with node_exists; to replace a node, delete it earlier in the same patch. An update cannot change id or type (identity_change) or object or children (immutable_field); restating the current value is fine. A parentId change must name an existing node that holds children (invalid_parent). An update cannot add schema issues to a node (invalid_update). After a delete or a roof update that regenerates a roof's default gutters, those gutters and their downspouts are addressable only in a later call (regenerated_default). A roof created or moved onto the storey whose walls carry it goes to the level above them (the roof level over a top storey), said in notes; storey content (walls, zones, slabs, ceilings, items, stairs) on a roof level (roof_level), a walled level declared the roof level (roof_level_holds_storey) and floor indexes putting a roof level under a storey (roof_level_on_top) are refused. Refusals come back as a tool error whose text is JSON {code, patchIndex, id, message}.",
+      inputSchema: z.object(applyPatchInput),
+      outputSchema: z.object(applyPatchOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ patches }) => {
@@ -57,7 +61,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
       })
 
       try {
-        runPatchGuards(bridgePatches, bridge.getNodes() as Record<string, AnyNode>)
+        const notes = runPatchGuards(bridgePatches, bridge.getNodes() as Record<string, AnyNode>)
         const planDeletion = (bridge as { planDeletion?: SceneOperations['planDeletion'] })
           .planDeletion
         assertPatchKeepsIdentity(
@@ -72,6 +76,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
           appliedOps: result.appliedOps,
           deletedIds: result.deletedIds as unknown as string[],
           createdIds: result.createdIds as unknown as string[],
+          ...(notes.length ? { notes } : {}),
           ...persistencePayload(persistence),
         }
         return {
@@ -80,7 +85,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
         }
       } catch (err) {
         if (err instanceof PatchRefusedError) {
-          // A tool error, not an McpError: the SDK keeps only an McpError's
+          // A tool error, not an ProtocolError: the SDK keeps only an ProtocolError's
           // message, and clients need the code, index and id to act on it.
           const refusal = {
             code: err.code,
@@ -95,9 +100,9 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
         }
         // A refusal the store made (an accidental wipe) answers with its code, as the shared tools'.
         if (isAgentRefusal(err)) return refusalResult(err)
-        if (err instanceof McpError) throw err
+        if (err instanceof ProtocolError) throw err
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InvalidParams, msg)
+        throwMcpError(ProtocolErrorCode.InvalidParams, msg)
       }
     },
   )

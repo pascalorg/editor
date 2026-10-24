@@ -94,6 +94,7 @@ export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
   },
 
   capabilities: {
+    exterior: true,
     slots: turbineVentSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

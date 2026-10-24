@@ -188,6 +188,7 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   },
 
   capabilities: {
+    exterior: true,
     slots: boxVentSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

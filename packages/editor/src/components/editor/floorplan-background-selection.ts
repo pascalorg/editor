@@ -21,7 +21,6 @@ type ResolveFloorplanBackgroundSelectionArgs = {
   isWallBuildActive: boolean
   modifierKeys: ModifierKeys
   planPoint: WallPlanPoint
-  structureLayer: string
 }
 
 function hasToggleModifier(modifierKeys: ModifierKeys): boolean {
@@ -77,7 +76,6 @@ export function resolveFloorplanBackgroundSelection({
   isWallBuildActive,
   modifierKeys,
   planPoint,
-  structureLayer,
 }: ResolveFloorplanBackgroundSelectionArgs): FloorplanBackgroundSelectionResult {
   if (canSelectFloorplanZones) {
     const zoneId = getFloorplanHitIdAtPoint(planPoint)
@@ -102,7 +100,7 @@ export function resolveFloorplanBackgroundSelection({
   }
 
   if (!isWallBuildActive) {
-    if (structureLayer === 'zones' && canSelectFloorplanZones) {
+    if (canSelectFloorplanZones) {
       return {
         handled: true,
         kind: 'clear-zones',

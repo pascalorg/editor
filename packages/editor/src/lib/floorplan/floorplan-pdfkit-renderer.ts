@@ -217,6 +217,10 @@ function paintStyledGeometry(
   if (fill && stroke) raw.fillAndStroke(fill, stroke, fillRule)
   else if (fill) raw.fill(fill, fillRule)
   else if (stroke) raw.stroke(stroke)
+  // Unpainted shape (fill and stroke both none, e.g. zone hit areas): end the
+  // path without painting ('n'). Otherwise the open path is carried into the
+  // next fill and printed in that shape's colour.
+  else raw.addContent('n')
 }
 
 function isPaint(value: unknown): boolean {

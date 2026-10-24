@@ -81,6 +81,19 @@ describe('roof fascia', () => {
     }
   })
 
+  test('a gable overhang stands the rake boards out at it, the eave boards where they were', () => {
+    const node = segment({ gableOverhang: 1.2 })
+    const rake = node.width / 2 + node.wallThickness / 2 + 1.2
+    for (const side of [1, -1] as const) {
+      const xs = boardPoints(node, 'x', side).map((v) => v.x * side)
+      expect(xs.length).toBeGreaterThan(0)
+      expect(Math.min(...xs)).toBeGreaterThan(rake - 0.01)
+      expect(Math.max(...xs)).toBeLessThan(rake + 0.03)
+    }
+    const ys = boardPoints(node, 'z', 1).map((v) => v.y)
+    expect(Math.max(...ys)).toBeCloseTo(eaveTopY(node), 3)
+  })
+
   test('a hip has boards on all four sides, level', () => {
     const node = segment({ roofType: 'hip' })
     for (const [axis, side] of [
@@ -101,6 +114,31 @@ describe('roof fascia', () => {
     expect(boardPoints(on, 'z', -1).length).toBeGreaterThan(0)
     expect(boardPoints(off, 'z', -1)).toHaveLength(0)
     expect(boardPoints(off, 'z', 1).length).toBeGreaterThan(0)
+  })
+
+  // Hawkesbury's flat roofs wear a black band ~0.3 m tall over their edge (2026-10-03).
+  test('a flat roof sized on purpose wears a band to its top, over the membrane edge', () => {
+    const node = segment({ roofType: 'flat', pitch: 0, fasciaHeight: 0.3, fasciaDepth: 0.03 })
+    const top = eaveTopY(node) + node.shingleThickness
+    for (const [axis, side] of [
+      ['z', 1],
+      ['x', -1],
+    ] as const) {
+      const points = boardPoints(node, axis, side)
+      const ys = points.map((v) => v.y)
+      expect(Math.max(...ys)).toBeCloseTo(top, 3)
+      expect(Math.min(...ys)).toBeCloseTo(top - 0.3, 3)
+      const out = points.map((v) => Math.abs(axis === 'x' ? v.x : v.z))
+      const deckEdge = (axis === 'x' ? node.width : node.depth) / 2 + 0.09 + 0.55
+      expect(Math.max(...out) - deckEdge).toBeCloseTo(0.03 - 0.002, 3)
+    }
+  })
+
+  test('a flat roof not sized keeps the 1x8 on its deck edge', () => {
+    const node = segment({ roofType: 'flat', pitch: 0 })
+    const ys = boardPoints(node, 'z', 1).map((v) => v.y)
+    expect(Math.max(...ys)).toBeCloseTo(eaveTopY(node), 3)
+    expect(Math.min(...ys)).toBeCloseTo(eaveTopY(node) - BOARD, 3)
   })
 
   test('fascia off leaves the bare deck edge', () => {

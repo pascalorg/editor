@@ -11,8 +11,8 @@
 import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -56,11 +56,11 @@ async function main(): Promise<void> {
     })
     console.log('[smoke] add_level:', addLevel.isError ? 'structured error (ok)' : 'OK')
 
-    const validate = await client.callTool({
-      name: 'validate_scene',
+    const verify = await client.callTool({
+      name: 'verify_scene',
       arguments: {},
     })
-    console.log('[smoke] validate_scene:', validate.isError ? 'ERROR' : 'OK')
+    console.log('[smoke] verify_scene:', verify.isError ? 'ERROR' : 'OK')
 
     const undone = await client.callTool({ name: 'undo', arguments: {} })
     console.log('[smoke] undo:', undone.isError ? 'ERROR' : 'OK')

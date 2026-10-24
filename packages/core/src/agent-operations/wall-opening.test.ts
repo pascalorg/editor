@@ -34,14 +34,14 @@ describe('add_door and add_window answer once, for every surface', () => {
     expect(after[result.doorId!]).toMatchObject({ type: 'door', parentId: OPENING_SCENE.main })
   })
 
-  test('a window says its sill height, in the same shape', () => {
+  test('a window says its sill height, centred on the wall by default, in the same shape', () => {
     const { result } = addWallOpening(scene(), {
       kind: 'window',
       wallId: OPENING_SCENE.main,
       t: 0.5,
     })
     expect(z.object(addWindowOutput).strict().parse(result)).toEqual(result)
-    expect(result.sillHeight).toBeCloseTo(0.9, 6)
+    expect(result.sillHeight).toBeCloseTo(0.5, 6)
     expect(result.achieved.created).toEqual({ window: 1 })
   })
 })

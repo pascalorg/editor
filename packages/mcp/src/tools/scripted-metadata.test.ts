@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import {
   type AnyNodeId,
   GeometryArtifactManifest,
@@ -16,7 +15,7 @@ import {
 import { InMemorySceneStore } from './scene-lifecycle/test-utils'
 
 for (const kind of ['object', 'door', 'window', 'column'] as const) {
-  test(`${kind} uploads both artifacts for the created node and retains reuse fields on edits`, async () => {
+  test(`${kind} uploads both artifacts for the created node and retains reuse fields and language on edits`, async () => {
     const bridge = new SceneBridge()
     const level = LevelNode.parse({ id: 'level_script_meta' })
     const wall = WallNode.parse({
@@ -26,6 +25,15 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
       end: [5, 0],
     })
     bridge.setScene({ [level.id]: level, [wall.id]: wall }, [level.id])
+    bridge.agentSession.keep({
+      designBrief: {
+        fixed: ['the test’s object'],
+        open: [],
+        source: 'open',
+        vision: 'Carved oak.',
+        beyond: 'none: the test places what the request names.',
+      },
+    })
     const store = new InMemorySceneStore()
     const operations = createSceneOperations({ bridge, store })
     operations.setActiveScene(
@@ -34,9 +42,10 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
     const uploads: Parameters<GeometryScriptHost['storeArtifact']>[0][] = []
     const wallMount = kind === 'door' || kind === 'window'
     const host: GeometryScriptHost = {
-      compile: async ({ code }) => ({
+      compile: async ({ code, language }) => ({
         sha256: 'a'.repeat(64),
         script: (code === 'edit' ? 'c' : 'b').repeat(64),
+        language,
         mount: wallMount ? 'wall' : 'floor',
         params: {},
         glb: new Uint8Array(),
@@ -58,6 +67,7 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
     try {
       const input = {
         code: 'original',
+        language: 'bpy',
         name: 'Carved oak',
         description: 'x'.repeat(220),
         category: 'carved',
@@ -76,10 +86,16 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
       const node = bridge.getNode(nodeId) as {
         source?: {
           artifact: string
+          language: string
           meta?: { description?: string; tags?: string[]; parent?: string }
         }
       }
       expect(node.source?.artifact).toBe('d'.repeat(64))
+      expect(node.source?.language).toBe('bpy')
+      expect(uploads.map((upload) => upload.mimeType).sort()).toEqual([
+        'model/gltf-binary',
+        'text/x-python',
+      ])
       expect(node.source?.meta?.description).toHaveLength(200)
       expect(node.source?.meta?.tags).toEqual(Array(5).fill('oak'))
       expect(uploads).toHaveLength(2)
@@ -98,6 +114,8 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
         arguments: { nodeId, code: 'edit' },
       })
       expect(edit.isError).toBeFalsy()
+      // New code without a language keeps the object's.
+      expect((bridge.getNode(nodeId) as typeof node).source?.language).toBe('bpy')
       // The name lives on the node and an item's category on its asset.
       expect((bridge.getNode(nodeId) as typeof node).source?.meta).toEqual({
         description: 'x'.repeat(200),

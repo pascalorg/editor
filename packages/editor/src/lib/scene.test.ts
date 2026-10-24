@@ -58,7 +58,7 @@ describe('scene selection synchronization', () => {
       buildingId: building.id,
       levelId: level.id,
     })
-    expect(useEditor.getState().phase).toBe('structure')
+    expect(useEditor.getState().phase).toBe('building')
   })
 
   test('opening another project disarms the tool the last one left armed', () => {
@@ -73,7 +73,7 @@ describe('scene selection synchronization', () => {
       },
       rootNodeIds: [building.id],
     } as never)
-    useEditor.getState().setPhase('structure')
+    useEditor.getState().setPhase('building')
     useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
 
     syncEditorSelectionFromCurrentScene()
@@ -82,6 +82,6 @@ describe('scene selection synchronization', () => {
     expect(useEditor.getState().mode).toBe('select')
     expect(useEditor.getState().tool).toBeNull()
     // The phase is a preference and stays put.
-    expect(useEditor.getState().phase).toBe('structure')
+    expect(useEditor.getState().phase).toBe('building')
   })
 })

@@ -19,6 +19,15 @@ cuts overlapping room ceilings, and keeps wall support unchanged. See
 Deleting an auto plate explicitly writes `hasFloor: false` on its linked zones; removing a
 manual cover allows an eligible room to join a generated plate again.
 
+A room drawn where walls already enclose one (every polygon edge on a wall) names that room
+instead of stacking a second zone on it (`walledRoomAt`, by the reconciler's adoption
+rule), as long as it still has the "Room N" name the reconciler gave it. `create_room` does the
+same, and so does an outdoor room drawn there (the terrace tool, `create_room` with `outdoor`): the
+walls round a courtyard make it the outdoor room. Over a room a person named, `create_room` refuses
+(`room_named_by_person`) unless `rename: true`, so a name is never changed silently. `set_zone`
+over such walls is that room: it names a numbered one, is a no-op on one already named its label
+(a retry), and refuses a room a person named otherwise.
+
 User wall deletion goes through `planWallDeletion` at `deleteNodes` and the MCP bridges.
 An unshared room boundary becomes a separator over the same reference-line span in the
 deleting operation, preserving room identity, finishes, plate and ceiling. Shared spans
@@ -48,6 +57,13 @@ Derived construction is a slab or ceiling marked `boundary: 'auto'` (legacy:
 `autoFromWalls: true`). Everything else states *intent* — walls, separators, and
 zones with `spaceRole: 'room'` plus `floor`, `hasFloor` and `hasCeiling` — and the
 reconciler derives the construction from it.
+
+A room's **daylight declaration** is intent of the same kind, kept in the zone's
+`metadata.daylight = { artificialLight, mechanicalVentilation }` (no schema field): the IRC R303.1
+exceptions to daylight, both true when a habitable room (bedroom, living, kitchen) is lit and aired
+by artificial means instead of a window to outside. It is written by the shared `set_zone_intent`
+tool's `daylight` patch (`null` clears it), so the chat and the hosted MCP have it from one
+contract; a check of a room's daylight reads it beside the windows. Nothing derives from it.
 
 `store/derived-node-guard.ts` is the one state-aware validator. It runs at every
 public mutation boundary: the scene store's `createNodes` / `updateNodes` /

@@ -35,28 +35,29 @@ describe('wall split marker', () => {
     expect([preview.frames[0]!.point.x, preview.frames[0]!.point.y]).toEqual(plan.point)
     expect(preview.frames).toEqual(wallSplitPreview(nodes, wall, [5]).frames)
   })
-  test.each([
-    1, -1,
-  ])('curved wall mouse target agrees with arc-length widget, offset %p', (offset) => {
-    const wall = WallNode.parse({
-      parentId: level.id,
-      start: [2, 3],
-      end: [10, 5],
-      curveOffset: offset,
-    })
-    for (const t of [0.1, 0.37, 0.9]) {
-      const frame = getWallCurveFrameAt(wall, t)
-      const distance = wallSplitDistance(wall, [
-        frame.point.x + frame.normal.x * 0.15,
-        frame.point.y + frame.normal.y * 0.15,
-      ])
-      expect(distance).toBeCloseTo(t * getWallCurveLength(wall), 7)
-      const preview = wallSplitPreview(graph(wall), wall, [distance])
-      expect(preview.valid).toBe(true)
-      expect(preview.frames[0]!.point.x).toBeCloseTo(frame.point.x)
-      expect(preview.frames[0]!.point.y).toBeCloseTo(frame.point.y)
-    }
-  })
+  test.each([1, -1])(
+    'curved wall mouse target agrees with arc-length widget, offset %p',
+    (offset) => {
+      const wall = WallNode.parse({
+        parentId: level.id,
+        start: [2, 3],
+        end: [10, 5],
+        curveOffset: offset,
+      })
+      for (const t of [0.1, 0.37, 0.9]) {
+        const frame = getWallCurveFrameAt(wall, t)
+        const distance = wallSplitDistance(wall, [
+          frame.point.x + frame.normal.x * 0.15,
+          frame.point.y + frame.normal.y * 0.15,
+        ])
+        expect(distance).toBeCloseTo(t * getWallCurveLength(wall), 7)
+        const preview = wallSplitPreview(graph(wall), wall, [distance])
+        expect(preview.valid).toBe(true)
+        expect(preview.frames[0]!.point.x).toBeCloseTo(frame.point.x)
+        expect(preview.frames[0]!.point.y).toBeCloseTo(frame.point.y)
+      }
+    },
+  )
   test('invalid cut stays where the pointer is and does not silently snap past an opening', () => {
     const wall = WallNode.parse({ parentId: level.id, start: [0, 0], end: [8, 0] })
     const window = WindowNode.parse({

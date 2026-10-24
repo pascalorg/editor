@@ -5,6 +5,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  type CameraControlFrameEvent,
   type CeilingNode,
   CeilingNode as CeilingNodeSchema,
   type ColumnNode,
@@ -20,7 +21,6 @@ import {
   type FenceNode,
   type FloorplanGeometry,
   type GeometryContext,
-  type GridEvent,
   type GuideNode,
   getRenderableSlabPolygon,
   getWallChordFrame,
@@ -30,6 +30,7 @@ import {
   isCurvedWall,
   type LevelNode,
   loadAssetUrl,
+  newZone,
   nodeRegistry,
   normalizeWallCurveOffset,
   type Point2D,
@@ -59,13 +60,13 @@ import {
   WindowNode as WindowNodeSchema,
   wallClosesRoom,
   wallRectangleCorners,
-  ZoneNode as ZoneNodeSchema,
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Command, Ruler } from 'lucide-react'
 import {
   type ComponentProps,
+  type CSSProperties,
   memo,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -125,6 +126,7 @@ import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { selectRoomFromHit } from '../../lib/room-selection-commands'
+import { enterBuildingFromPlanHit } from '../../lib/selection-routing'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
@@ -135,6 +137,7 @@ import {
   zoneAtLevelPoint,
 } from '../../lib/units'
 import { cn } from '../../lib/utils'
+import { framingAnimates } from '../../lib/viewer-selection'
 import { getWallDrawVariant } from '../../lib/wall-draw-variant'
 import {
   addWallPolygonDraftCorner,
@@ -166,6 +169,13 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
+import {
+  activeViewLayout,
+  isViewVisible,
+  VIEW_2D,
+  VIEW_3D,
+  visibleScene,
+} from '../../store/view-layout'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -191,7 +201,7 @@ import {
   RotationAngleOverlay,
 } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
-import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
+import { buildSvgPolylinePath, formatPolygonPath } from '../editor-2d/svg-paths'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
@@ -232,8 +242,6 @@ import {
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
-
-import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { FloorplanCompassButton } from '../viewer/floorplan-compass-button'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import {
@@ -256,6 +264,7 @@ import {
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
 import { useFloorplanSceneData } from './use-floorplan-scene-data'
+import { sceneSpan } from './views/scene-region'
 
 const FALLBACK_VIEW_SIZE = 12
 const FLOORPLAN_PADDING = 2
@@ -4207,13 +4216,14 @@ function FloorplanStairBuildPreviewLayer({
 }: {
   palette: FloorplanRenderContextValue['palette']
 }) {
-  const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const point = useStairBuildPreview((s) => s.point)
   const rotation = useStairBuildPreview((s) => s.rotation)
   const rise = useStairBuildPreview((s) => s.rise)
-  const isActive = phase === 'structure' && mode === 'build' && tool === 'stair'
+  const length = useStairBuildPreview((s) => s.length)
+  const stepCount = useStairBuildPreview((s) => s.stepCount)
+  const isActive = mode === 'build' && tool === 'stair'
 
   const previewGeometry = useMemo(() => {
     if (!(isActive && point && rise && rise > 0)) {
@@ -4221,6 +4231,8 @@ function FloorplanStairBuildPreviewLayer({
     }
     const previewSegment = {
       ...createSizedStairFlight(rise),
+      ...(length !== null ? { length } : {}),
+      ...(stepCount !== null ? { stepCount } : {}),
       id: 'sseg_floorplan_preview' as const,
       parentId: 'stair_floorplan_preview' as const,
     }
@@ -4246,7 +4258,7 @@ function FloorplanStairBuildPreviewLayer({
         }),
       ) ?? null
     )
-  }, [isActive, point, rotation, rise, palette])
+  }, [isActive, point, rotation, rise, length, stepCount, palette])
 
   if (!previewGeometry) return null
   return <FloorplanGeometryRenderer geometry={previewGeometry} pointerEventsOverride="none" />
@@ -4931,8 +4943,21 @@ export function FloorplanPanel({
   // editor/index.tsx — subscribing here lets us re-fit the viewport when
   // the user closes and re-opens the 2D editor instead of restoring the
   // stale viewport from before they closed it.
-  const isFloorplanOpen = useEditor((state) => state.isFloorplanOpen)
-  const viewMode = useEditor((state) => state.viewMode)
+  const isFloorplanOpen = useEditor((state) => isViewVisible(state, VIEW_2D))
+  // The compass sits at the scene's bottom-left corner, the drawing switch
+  // beside it. With the plan in the right pane both move to its bottom-right
+  // corner (compass outermost), clear of the dock centred over the scene.
+  const planOnRight = useEditor((state) => {
+    const layout = activeViewLayout(state)
+    return layout.split && layout.panes[1] === VIEW_2D
+  })
+  // `null` while no scene view is on screen: the compass has nothing to orient.
+  const sceneLeft = useEditor((state) => sceneSpan(activeViewLayout(state))?.left ?? null)
+  // Mirrored, the pair stays left of the helper toggle in the stage's corner.
+  const compassStyle: CSSProperties = planOnRight
+    ? { right: 56 }
+    : { left: `calc(${(sceneLeft ?? 0) * 100}% + 12px)` }
+  const shownScene = useEditor(visibleScene)
   // Mirror for callbacks that fire outside React's render (the per-frame
   // navigation-pose subscriber): when the 2D panel is hidden (`display:none` in
   // 3D mode) it must NOT re-render on every camera-zoom frame.
@@ -4950,8 +4975,6 @@ export function FloorplanPanel({
   const activeHandleDrag = useActiveHandleDrag()
   const setPhase = useEditor((state) => state.setPhase)
   const setMovingNode = useEditor((state) => state.setMovingNode)
-  const structureLayer = useEditor((state) => state.structureLayer)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const tool = useEditor((state) => state.tool)
   const deleteNode = useScene((state) => state.deleteNode)
@@ -5749,21 +5772,21 @@ export function FloorplanPanel({
   )
 
   const isSiteEditActive = phase === 'site'
-  const isWallBuildActive = phase === 'structure' && mode === 'build' && tool === 'wall'
-  const isSlabBuildActive = phase === 'structure' && mode === 'build' && tool === 'slab'
-  const isCeilingBuildActive = phase === 'structure' && mode === 'build' && tool === 'ceiling'
-  const isZoneBuildActive = phase === 'structure' && mode === 'build' && tool === 'zone'
-  const isDoorBuildActive = phase === 'structure' && mode === 'build' && tool === 'door'
-  const isWindowBuildActive = phase === 'structure' && mode === 'build' && tool === 'window'
+  const isWallBuildActive = mode === 'build' && tool === 'wall'
+  const isSlabBuildActive = mode === 'build' && tool === 'slab'
+  const isCeilingBuildActive = mode === 'build' && tool === 'ceiling'
+  const isZoneBuildActive = mode === 'build' && tool === 'zone'
+  const isDoorBuildActive = mode === 'build' && tool === 'door'
+  const isWindowBuildActive = mode === 'build' && tool === 'window'
   const isPolygonBuildActive = isSlabBuildActive || isZoneBuildActive
   const isPolygonDraftBuildActive = isPolygonBuildActive || isCeilingBuildActive
   const isOpeningBuildActive = isDoorBuildActive || isWindowBuildActive
   const isOpeningMoveActive = movingOpeningType !== null
   const isOpeningPlacementActive = isOpeningBuildActive || isOpeningMoveActive
-  const isFenceBuildActive = phase === 'structure' && mode === 'build' && tool === 'fence'
+  const isFenceBuildActive = mode === 'build' && tool === 'fence'
   const fenceContinuation = useEditor((state) => state.continuationByContext.fence)
-  const isRoofBuildActive = phase === 'structure' && mode === 'build' && tool === 'roof'
-  const isStairBuildActive = phase === 'structure' && mode === 'build' && tool === 'stair'
+  const isRoofBuildActive = mode === 'build' && tool === 'roof'
+  const isStairBuildActive = mode === 'build' && tool === 'stair'
   const isStairMoveActive = movingNode?.type === 'stair'
   const isRoofMoveActive = movingNode?.type === 'roof' || movingNode?.type === 'roof-segment'
   const isSlabMoveActive = movingNode?.type === 'slab'
@@ -5893,7 +5916,7 @@ export function FloorplanPanel({
   const isScreenSelectionToolActive =
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
-    (phase === 'structure' || phase === 'furnish') &&
+    phase === 'building' &&
     !movingNode &&
     !isFenceEndpointMoveActive &&
     !referenceScaleDraft &&
@@ -5915,42 +5938,7 @@ export function FloorplanPanel({
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
     !movingNode &&
-    !isFenceEndpointMoveActive &&
-    structureLayer === 'zones'
-  const canInteractFloorplanZones = isDeleteMode || canSelectFloorplanZones
-  const isFloorplanStructureContextActive = phase === 'structure'
-  const isFloorplanFurnishContextActive = phase === 'furnish'
-  const isFloorplanItemContextActive =
-    isFloorplanFurnishContextActive || isFloorplanStructureContextActive
-  const canSelectFloorplanStairs =
-    (mode === 'select' &&
-      floorplanSelectionTool === 'click' &&
-      !movingNode &&
-      !isFenceEndpointMoveActive &&
-      isFloorplanStructureContextActive) ||
-    isDeleteMode
-  const canSelectFloorplanElevators = canSelectFloorplanStairs
-  const canSelectFloorplanSpawns = canSelectFloorplanStairs
-  const canSelectFloorplanItems =
-    (mode === 'select' &&
-      floorplanSelectionTool === 'click' &&
-      !movingNode &&
-      !isFenceEndpointMoveActive &&
-      isFloorplanItemContextActive) ||
-    isDeleteMode
-  const canFocusFloorplanStairs =
-    mode === 'select' &&
-    floorplanSelectionTool === 'click' &&
-    !movingNode &&
-    !isFenceEndpointMoveActive &&
-    isFloorplanStructureContextActive
-  const canFocusFloorplanSpawns = canFocusFloorplanStairs
-  const canFocusFloorplanItems =
-    mode === 'select' &&
-    floorplanSelectionTool === 'click' &&
-    !movingNode &&
-    !isFenceEndpointMoveActive &&
-    isFloorplanItemContextActive
+    !isFenceEndpointMoveActive
   const visibleSitePolygon = displaySitePolygon
   const canUseSiteBoundaryVertexHandles =
     visibleSitePolygon !== null && siteBoundaryHandlesEnabled({ mode, phase })
@@ -6725,6 +6713,58 @@ export function FloorplanPanel({
     movingNode,
     siteVertexDragState,
     stopFloorplanViewAnimation,
+  ])
+
+  // A frame request ("show me this node") moves the 3D camera and the plan follows its pose; with no
+  // 3D view on screen no pose reaches the plan, so it frames the node itself. The request waits for
+  // the selection it came with to render: a node on another floor or in another building is placed
+  // with that building's transform, after the floor change has reset the view.
+  const [pendingFrame, setPendingFrame] = useState<CameraControlFrameEvent | null>(null)
+  useEffect(() => {
+    const frame = (event: CameraControlFrameEvent) => {
+      if (isFloorplanOpenRef.current && !isViewVisible(useEditor.getState(), VIEW_3D))
+        setPendingFrame(event)
+    }
+    emitter.on('camera-controls:frame', frame)
+    return () => emitter.off('camera-controls:frame', frame)
+  }, [])
+
+  useEffect(() => {
+    if (!pendingFrame) return
+    setPendingFrame(null)
+    const userRotationDeg = latestFloorplanUserRotationDegRef.current
+    const toLocal = (x: number, z: number) =>
+      worldToFloorplanLocalPoint(x, z, buildingPosition, buildingRotationY)
+    const { bounds, pose } = pendingFrame
+    let centre: SvgPoint
+    let width: number | undefined
+    if (bounds) {
+      // The box's corners as the plan shows them now, so it fits the pane at any turn and aspect.
+      const sceneRotationDeg = FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
+      const shown = [bounds.min[0], bounds.max[0]].flatMap((x) =>
+        [bounds.min[2], bounds.max[2]].map((z) => rotateSvgPoint(toLocal(x, z), sceneRotationDeg)),
+      )
+      const xs = shown.map((point) => point.x)
+      const ys = shown.map((point) => point.y)
+      centre = toLocal((bounds.min[0] + bounds.max[0]) / 2, (bounds.min[2] + bounds.max[2]) / 2)
+      width = Math.max(
+        Math.max(...xs) - Math.min(...xs) + FLOORPLAN_PADDING * 2,
+        (Math.max(...ys) - Math.min(...ys) + FLOORPLAN_PADDING * 2) * svgAspectRatio,
+      )
+    } else if (pose) {
+      // A saved view with nothing to measure: its target, at the zoom the person has.
+      centre = toLocal(pose.target[0], pose.target[2])
+    } else return
+    // A floor change has just reset the view to the whole floor: glide from there, not from nothing.
+    latestViewportRef.current ??= latestFittedViewportRef.current
+    applyFloorplanNavigationView(centre, userRotationDeg, width, { smooth: framingAnimates() })
+  }, [
+    applyFloorplanNavigationView,
+    buildingPosition,
+    buildingRotationDeg,
+    buildingRotationY,
+    pendingFrame,
+    svgAspectRatio,
   ])
 
   const viewBox = useMemo(() => {
@@ -7603,7 +7643,7 @@ export function FloorplanPanel({
       scheduleFloorplanZoomCommit()
       const userRotationDeg = latestFloorplanUserRotationDegRef.current
       floorplanZoomPoseRef.current = { localCenter, userRotationDeg, viewWidth: nextWidth }
-      if (useEditor.getState().viewMode === 'split') {
+      if (visibleScene(useEditor.getState()) === 'split') {
         publishFloorplanNavigationPose(localCenter, userRotationDeg, nextWidth)
       }
     },
@@ -7686,7 +7726,7 @@ export function FloorplanPanel({
     right: false,
   })
   useEffect(() => {
-    if (viewMode !== '2d') return
+    if (shownScene !== '2d') return
     const keys = keyboardPanKeysRef.current
     const motion = createKeyboardPanMotion()
     let frame: number | null = null
@@ -7782,7 +7822,7 @@ export function FloorplanPanel({
     commitFloorplanPan,
     publishFloorplanNavigationPose,
     smoothFloorplanNavigationView,
-    viewMode,
+    shownScene,
   ])
 
   useLayoutEffect(() => {
@@ -7894,10 +7934,9 @@ export function FloorplanPanel({
     setHoveredSiteHandleId(null)
   }, [clearSiteBoundaryLivePreview])
   const exitSiteEditingToSelect = useCallback(() => {
-    setPhase('structure')
-    setStructureLayer('elements')
+    setPhase('building')
     setMode('select')
-  }, [setMode, setPhase, setStructureLayer])
+  }, [setMode, setPhase])
 
   const clearDraft = useCallback(() => {
     clearWallPlacementDraft()
@@ -7959,9 +7998,7 @@ export function FloorplanPanel({
       }
 
       const { createNode, updateNode, nodes } = useScene.getState()
-      const zoneCount = Object.values(nodes).filter((node) => node.type === 'zone').length
-      const zone = ZoneNodeSchema.parse({
-        color: PALETTE_COLORS[zoneCount % PALETTE_COLORS.length],
+      const zone = newZone({
         name: nextZoneName(nodes),
         polygon: points.map(([x, z]) => [x, z] as [number, number]),
       })
@@ -8036,22 +8073,6 @@ export function FloorplanPanel({
     if (!isStairBuildActive) {
       useStairBuildPreview.getState().reset()
       return
-    }
-
-    const handleGridMove = (event: GridEvent) => {
-      // Publish to the dedicated store (deduped on the snapped point), NOT panel
-      // state: the stair preview lives in `FloorplanStairBuildPreviewLayer`, so a
-      // per-move update re-renders only that tiny leaf instead of this entire
-      // (~200ms) panel — the same pattern that keeps column/elevator smooth.
-      useStairBuildPreview
-        .getState()
-        .setPoint(getSnappedFloorplanPoint([event.localPosition[0], event.localPosition[2]]))
-    }
-
-    emitter.on('grid:move', handleGridMove)
-
-    return () => {
-      emitter.off('grid:move', handleGridMove)
     }
   }, [isStairBuildActive])
 
@@ -8244,13 +8265,13 @@ export function FloorplanPanel({
 
       if (
         isStairBuildActive &&
-        useEditor.getState().viewMode === '2d' &&
+        visibleScene(useEditor.getState()) === '2d' &&
         (event.key === 'r' || event.key === 'R')
       ) {
         useStairBuildPreview.getState().rotateBy(Math.PI / 4)
       } else if (
         isStairBuildActive &&
-        useEditor.getState().viewMode === '2d' &&
+        visibleScene(useEditor.getState()) === '2d' &&
         (event.key === 't' || event.key === 'T')
       ) {
         useStairBuildPreview.getState().rotateBy(-Math.PI / 4)
@@ -9162,7 +9183,7 @@ export function FloorplanPanel({
         const nextUserRotationDeg = rotationState.initialUserRotationDeg + angleDeltaDeg
 
         applyFloorplanRotationImperatively(rotationState, nextUserRotationDeg)
-        if (useEditor.getState().viewMode === 'split') {
+        if (visibleScene(useEditor.getState()) === 'split') {
           publishFloorplanNavigationPose(
             rotationState.viewportCenterLocal,
             nextUserRotationDeg,
@@ -9204,7 +9225,7 @@ export function FloorplanPanel({
           userRotationDeg: currentUserRotationDeg,
           viewWidth: currentViewport.width,
         }
-        if (useEditor.getState().viewMode === 'split') {
+        if (visibleScene(useEditor.getState()) === 'split') {
           publishFloorplanNavigationPose(localCenter, currentUserRotationDeg, currentViewport.width)
         }
 
@@ -9325,7 +9346,9 @@ export function FloorplanPanel({
         )
         const fenceGridBase = snapWallPointToGrid(planPoint)
         const fenceLocked =
-          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
+          event.altKey ||
+          fenceSnapped[0] !== fenceGridBase[0] ||
+          fenceSnapped[1] !== fenceGridBase[1]
         let snappedPoint = fenceSnapped
         if (fenceLocked) useAlignmentGuides.getState().clear()
         // Alignment lines show in every mode; the pull applies only when
@@ -9618,7 +9641,7 @@ export function FloorplanPanel({
       const firstPoint = slabDraftPoints[0]
       if (firstPoint && slabDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
         // 2D-only view: the 3D tool can't commit, so close the polygon here.
-        if (useEditor.getState().viewMode === '2d') {
+        if (visibleScene(useEditor.getState()) === '2d') {
           createSlabOnCurrentLevel(slabDraftPoints, slabPlacementBaseRef.current)
         }
         clearDraft()
@@ -9668,7 +9691,7 @@ export function FloorplanPanel({
       }
 
       // 2D-only view: the 3D tool can't commit, so create the slab here.
-      if (useEditor.getState().viewMode === '2d') {
+      if (visibleScene(useEditor.getState()) === '2d') {
         createSlabOnCurrentLevel(nextPoints, slabPlacementBaseRef.current)
       }
       clearDraft()
@@ -9684,7 +9707,7 @@ export function FloorplanPanel({
 
       const firstPoint = ceilingDraftPoints[0]
       if (firstPoint && ceilingDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
-        if (useEditor.getState().viewMode === '2d') {
+        if (visibleScene(useEditor.getState()) === '2d') {
           createCeilingOnCurrentLevel(ceilingDraftPoints)
         }
         clearCeilingPlacementDraft()
@@ -9717,7 +9740,7 @@ export function FloorplanPanel({
         return
       }
 
-      if (useEditor.getState().viewMode === '2d') {
+      if (visibleScene(useEditor.getState()) === '2d') {
         createCeilingOnCurrentLevel(nextPoints)
       }
       clearCeilingPlacementDraft()
@@ -9787,7 +9810,7 @@ export function FloorplanPanel({
         // 2D-only owns a Polygon room's draft; split view leaves it to the 3D tool.
         if (
           levelId &&
-          useEditor.getState().viewMode === '2d' &&
+          visibleScene(useEditor.getState()) === '2d' &&
           getWallDrawVariant() === 'polygon'
         ) {
           startWallPolygonDraft(levelId as AnyNodeId, point, wallConstructionOptionsRef.current)
@@ -9817,7 +9840,7 @@ export function FloorplanPanel({
       // `display:none`, so the tool never commits. Mirror the slab /
       // ceiling 2D-only committers: create locally here, gated on the
       // view, so split / 3D keep their single-owner tool commit.
-      const viewIs2DOnly = useEditor.getState().viewMode === '2d'
+      const viewIs2DOnly = visibleScene(useEditor.getState()) === '2d'
       let createdWall: WallNode | null = null
       // 2D-only Polygon room: the corner joins the draft; nothing is written
       // until it closes, seals or tees (then every wall at once).
@@ -10039,6 +10062,7 @@ export function FloorplanPanel({
       if (useInteractionScope.getState().scope.kind !== 'idle') return
       const modifierKeys = getSelectionModifierKeys(event)
 
+      if (enterBuildingFromPlanHit(getFloorplanHitIdAtPoint(planPoint))) return
       if (roomPickingEnabled()) {
         const hitId = getFloorplanHitIdAtPoint(planPoint)
         if (selectRoomFromHit(resolvePlanRoomHit(hitId, planPoint), modifierKeys, hitId)) return
@@ -10054,7 +10078,6 @@ export function FloorplanPanel({
         isWallBuildActive,
         modifierKeys,
         planPoint,
-        structureLayer,
       })
 
       if (backgroundSelection.handled) {
@@ -10127,7 +10150,6 @@ export function FloorplanPanel({
       referenceScaleDraft,
       setSelectedReferenceId,
       setSelection,
-      structureLayer,
       getFloorplanHitIdAtPoint,
       unit,
       emitFloorplanGridEvent,
@@ -11167,8 +11189,7 @@ export function FloorplanPanel({
             )
           })()
 
-    setPhase('structure')
-    setStructureLayer('elements')
+    setPhase('building')
     setMode('select')
 
     const nextSelection: Parameters<typeof setSelection>[0] = {
@@ -11185,16 +11206,7 @@ export function FloorplanPanel({
     }
 
     setSelection(nextSelection)
-  }, [
-    currentBuildingId,
-    floorplanLevels,
-    levelNode,
-    setMode,
-    setPhase,
-    setSelection,
-    setStructureLayer,
-    site,
-  ])
+  }, [currentBuildingId, floorplanLevels, levelNode, setMode, setPhase, setSelection, site])
   const activeDraftAnchorPoint =
     referenceScaleDraft?.start ??
     draftStart ??
@@ -11274,9 +11286,10 @@ export function FloorplanPanel({
             pill, plus the group pill for multi-selections. */}
         <FloorplanRegistryActionMenu />
         <FloorplanGroupActionMenu />
-        <FloorplanDrawingTypeSwitch />
+        <FloorplanDrawingTypeSwitch className={planOnRight ? 'right-24 left-auto' : undefined} />
 
         {!isStudioWorkspace &&
+          sceneLeft !== null &&
           (levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
           (compassHost ? (
             createPortal(
@@ -11284,6 +11297,7 @@ export function FloorplanPanel({
                 needleRef={compassNeedleRef}
                 northRotationDeg={floorplanUserRotationDeg}
                 onAlignNorth={alignFloorplanViewToNorth}
+                style={compassStyle}
               />,
               compassHost,
             )
@@ -11321,7 +11335,7 @@ export function FloorplanPanel({
             }}
           >
             <div className="mb-3 flex items-start gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-white/5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-black/4 dark:bg-white/5">
                 <Ruler className="h-4 w-4 text-foreground/80" />
               </div>
               <div className="min-w-0">
@@ -11333,7 +11347,7 @@ export function FloorplanPanel({
               </div>
             </div>
 
-            <div className="mb-3 rounded-xl border border-border/70 bg-white/5 px-3 py-2">
+            <div className="mb-3 rounded-xl border border-border/70 bg-black/4 dark:bg-white/5 px-3 py-2">
               <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
                 Drawn line
               </div>
@@ -11396,7 +11410,7 @@ export function FloorplanPanel({
 
             <div className="mt-4 flex justify-end gap-2">
               <button
-                className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-white/8 hover:text-foreground"
+                className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground"
                 onClick={() => setPendingReferenceScale(null)}
                 type="button"
               >
@@ -11424,7 +11438,7 @@ export function FloorplanPanel({
           // renderer, handle layers) must NOT render/reconcile while hidden —
           // otherwise every scene/selection change in pure 3D re-rendered the
           // whole floorplan tree (profiler: 150–200ms on a wall-endpoint drag).
-          // `isFloorplanOpen` is `viewMode !== '3d'`, so this still renders fully
+          // `isFloorplanOpen` is "the plan is in a pane", so this still renders fully
           // in both 2D and split. Viewport state lives on the still-mounted
           // panel, so pan/zoom is preserved across the toggle.
           <svg

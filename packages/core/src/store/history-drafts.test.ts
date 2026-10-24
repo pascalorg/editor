@@ -13,6 +13,7 @@ import useScene, {
   applySceneSnapshot,
   beginSceneHistoryDraft,
   clearSceneHistory,
+  getSceneDocument,
   runSceneHistoryDraftWrite,
   sceneHistoryDraftRevertUpdates,
 } from './use-scene'
@@ -71,6 +72,36 @@ const wallStart = () => (node(wallId) as WallNode).start
 const levelChildren = () => (node(levelId) as LevelNode).children
 
 describe('scene history drafts', () => {
+  test('saving during a move keeps its original pose and host, then saves the committed drop', () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    try {
+      runSceneHistoryDraftWrite(() =>
+        useScene.getState().updateNode(itemId, {
+          position: [3, 0, 3],
+          parentId: wallId,
+          visible: false,
+          metadata: { isTransient: true },
+        }),
+      )
+      useScene.getState().updateNode(itemId, { name: 'Renamed while moving' })
+      const document = getSceneDocument()
+      expect(document.nodes[itemId]).toMatchObject({
+        position: [1, 0, 1],
+        parentId: levelId,
+        visible: true,
+        name: 'Renamed while moving',
+      })
+      expect(document.nodes[itemId]!.metadata?.isTransient).toBeUndefined()
+      expect((document.nodes[levelId] as LevelNode).children).toContain(itemId)
+      expect((document.nodes[wallId] as WallNode).children).not.toContain(itemId)
+      expect((node(itemId) as ItemNode).position).toEqual([3, 0, 3])
+    } finally {
+      end()
+    }
+    expect(getSceneDocument().nodes[itemId]).toBe(node(itemId)!)
+    expect((getSceneDocument().nodes[itemId] as ItemNode).position).toEqual([3, 0, 3])
+  })
+
   test.each([
     [true, false],
     [true, true],
@@ -116,35 +147,35 @@ describe('scene history drafts', () => {
     expect(useScene.temporal.getState().isTracking).toBe(true)
   })
 
-  test.each([
-    true,
-    false,
-  ])('a co-holder never re-records carry metadata after restoration (metadata present=%s)', (present) => {
-    if (!present) {
-      const { metadata: _metadata, ...withoutMetadata } = node(itemId)!
-      useScene.setState({
-        nodes: { ...useScene.getState().nodes, [itemId]: withoutMetadata },
-      } as never)
-      clearSceneHistory()
-    }
-    const endMover = beginSceneHistoryDraft(itemId, node(itemId)!)
-    const endOverlay = beginSceneHistoryDraft(itemId, node(itemId)!)
-    runSceneHistoryDraftWrite(() =>
-      useScene.getState().updateNode(itemId, { metadata: { isTransient: true } }),
-    )
-    useScene.getState().updateNode(itemId, { metadata: { isTransient: true, tag: 'agent' } })
-    runSceneHistoryDraftWrite(() =>
-      useScene.getState().updateNodes(sceneHistoryDraftRevertUpdates([itemId]) as never),
-    )
-    endMover()
-    useScene.getState().updateNode(wallId, { name: 'Foreign wall edit' })
-    expect(useScene.temporal.getState().pastStates.at(-1)!.nodes![itemId]?.metadata).toEqual({
-      tag: 'agent',
-    })
-    endOverlay()
-    useScene.temporal.getState().undo()
-    expect(node(itemId)?.metadata).toEqual({ tag: 'agent' })
-  })
+  test.each([true, false])(
+    'a co-holder never re-records carry metadata after restoration (metadata present=%s)',
+    (present) => {
+      if (!present) {
+        const { metadata: _metadata, ...withoutMetadata } = node(itemId)!
+        useScene.setState({
+          nodes: { ...useScene.getState().nodes, [itemId]: withoutMetadata },
+        } as never)
+        clearSceneHistory()
+      }
+      const endMover = beginSceneHistoryDraft(itemId, node(itemId)!)
+      const endOverlay = beginSceneHistoryDraft(itemId, node(itemId)!)
+      runSceneHistoryDraftWrite(() =>
+        useScene.getState().updateNode(itemId, { metadata: { isTransient: true } }),
+      )
+      useScene.getState().updateNode(itemId, { metadata: { isTransient: true, tag: 'agent' } })
+      runSceneHistoryDraftWrite(() =>
+        useScene.getState().updateNodes(sceneHistoryDraftRevertUpdates([itemId]) as never),
+      )
+      endMover()
+      useScene.getState().updateNode(wallId, { name: 'Foreign wall edit' })
+      expect(useScene.temporal.getState().pastStates.at(-1)!.nodes![itemId]?.metadata).toEqual({
+        tag: 'agent',
+      })
+      endOverlay()
+      useScene.temporal.getState().undo()
+      expect(node(itemId)?.metadata).toEqual({ tag: 'agent' })
+    },
+  )
 
   test('foreign metadata remains undoable while carry metadata stays out of history', () => {
     const end = beginSceneHistoryDraft(itemId, node(itemId)!)
@@ -161,27 +192,27 @@ describe('scene history drafts', () => {
     end()
   })
 
-  test.each([
-    false,
-    true,
-  ])('undoing a new host keeps the carried draft attached (created=%s)', (created) => {
-    const host = WallNode.parse({ parentId: levelId, start: [0, 2], end: [4, 2] })
-    useScene.getState().createNode(host, levelId)
-    const carried = created ? ItemNode.parse({ parentId: levelId, asset: item.asset }) : item
-    const end = beginSceneHistoryDraft(carried.id as AnyNodeId, created ? null : node(itemId)!)
-    runSceneHistoryDraftWrite(() => {
-      if (created) useScene.getState().createNode(carried, levelId)
-      useScene.getState().updateNode(carried.id as AnyNodeId, { parentId: host.id })
-    })
+  test.each([false, true])(
+    'undoing a new host keeps the carried draft attached (created=%s)',
+    (created) => {
+      const host = WallNode.parse({ parentId: levelId, start: [0, 2], end: [4, 2] })
+      useScene.getState().createNode(host, levelId)
+      const carried = created ? ItemNode.parse({ parentId: levelId, asset: item.asset }) : item
+      const end = beginSceneHistoryDraft(carried.id as AnyNodeId, created ? null : node(itemId)!)
+      runSceneHistoryDraftWrite(() => {
+        if (created) useScene.getState().createNode(carried, levelId)
+        useScene.getState().updateNode(carried.id as AnyNodeId, { parentId: host.id })
+      })
 
-    useScene.temporal.getState().undo()
+      useScene.temporal.getState().undo()
 
-    expect(node(host.id as AnyNodeId)).toBeUndefined()
-    expect(node(carried.id as AnyNodeId)?.parentId).toBe(levelId)
-    expect(levelChildren()).toContain(carried.id)
-    expect(useScene.temporal.getState().futureStates).toHaveLength(1)
-    end()
-  })
+      expect(node(host.id as AnyNodeId)).toBeUndefined()
+      expect(node(carried.id as AnyNodeId)?.parentId).toBe(levelId)
+      expect(levelChildren()).toContain(carried.id)
+      expect(useScene.temporal.getState().futureStates).toHaveLength(1)
+      end()
+    },
+  )
 
   test("an adopted draft's own writes record nothing; a foreign write records it as it was", () => {
     const end = beginSceneHistoryDraft(itemId, node(itemId)!)

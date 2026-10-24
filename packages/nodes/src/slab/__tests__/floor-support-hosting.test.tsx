@@ -74,7 +74,7 @@ let savedEditor: ReturnType<typeof useEditor.getState>
 let savedViewer: ReturnType<typeof useViewer.getState>
 let savedScope: ReturnType<typeof useInteractionScope.getState>
 let savedWindow: PropertyDescriptor | undefined
-let savedDocument: typeof document
+let savedDocument: PropertyDescriptor | undefined
 let savedRaf: typeof requestAnimationFrame
 let savedCancelRaf: typeof cancelAnimationFrame
 
@@ -84,7 +84,7 @@ beforeEach(() => {
   savedViewer = useViewer.getState()
   savedScope = useInteractionScope.getState()
   savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  savedDocument = globalThis.document
+  savedDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   savedRaf = globalThis.requestAnimationFrame
   savedCancelRaf = globalThis.cancelAnimationFrame
   globalThis.window = new EventTarget() as Window & typeof globalThis
@@ -141,7 +141,8 @@ afterEach(() => {
   restoreRegistry()
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else Reflect.deleteProperty(globalThis, 'window')
-  globalThis.document = savedDocument
+  if (savedDocument) Object.defineProperty(globalThis, 'document', savedDocument)
+  else Reflect.deleteProperty(globalThis, 'document')
   globalThis.requestAnimationFrame = savedRaf
   globalThis.cancelAnimationFrame = savedCancelRaf
 })
@@ -158,24 +159,23 @@ function CatalogMover() {
   return withoutLabels(MoveItemTool({ node }))
 }
 
-test.each([
-  'item',
-  'procedural-item',
-  'cabinet',
-])('slabs defer %s to floor support without a surface refusal', (childKind) => {
-  const refusals: string[] = []
-  expect(
-    resolveSurfacePlacement({
-      host: slab,
-      childKind,
-      childFootprint: { size: [0.4, 0.6, 0.4], rotationY: 0 },
-      hit: { point: [0, slab.elevation, 0], normalWorldY: 1 },
-      scene: createSceneApi(useScene),
-      onReject: (reason) => refusals.push(reason),
-    }),
-  ).toBeNull()
-  expect(refusals).toEqual([])
-})
+test.each(['item', 'procedural-item', 'cabinet'])(
+  'slabs defer %s to floor support without a surface refusal',
+  (childKind) => {
+    const refusals: string[] = []
+    expect(
+      resolveSurfacePlacement({
+        host: slab,
+        childKind,
+        childFootprint: { size: [0.4, 0.6, 0.4], rotationY: 0 },
+        hit: { point: [0, slab.elevation, 0], normalWorldY: 1 },
+        scene: createSceneApi(useScene),
+        onReject: (reason) => refusals.push(reason),
+      }),
+    ).toBeNull()
+    expect(refusals).toEqual([])
+  },
+)
 
 for (const mover of [
   'catalog',

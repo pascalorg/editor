@@ -8,18 +8,24 @@ import {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
   usePathDraftPreview,
 } from '@pascal-app/editor'
+import {
+  alignDrawPoint,
+  clearDrawAlignment,
+  collectScenePorts,
+  findNearestPortXZ,
+} from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { collectScenePorts, findNearestPortXZ, REFRIGERANT_PORT_SYSTEMS } from '../shared/ports'
+import { REFRIGERANT_PORT_SYSTEMS } from '../shared/port-systems'
 import { linesetDefinition } from './definition'
 
 /**
@@ -246,8 +252,7 @@ const LinesetTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       if (e.key === 'Alt') {
         e.preventDefault()
         enterAltMode()
