@@ -31,8 +31,9 @@ cp .env.example .env
 | `PORT` | No | Dev server port (default: 3002) |
 | `PASCAL_PUBLIC_URL` | No | The address people use to reach the editor. Read per request; set it when Pascal is hosted outside localhost (Mint sign-in and agent links use it). |
 | `PASCAL_ADMIN_PASSWORD` | On a network host | The one password that unlocks a self-hosted editor. See "Self-hosting". |
-| `PASCAL_AUTH` | No | `proxy` lets a reverse proxy that already authenticates every request replace the password. |
-| `PASCAL_SCENE_API_TOKEN` | No | Bearer token for agents and scripts calling `/api/scenes`. |
+| `PASCAL_AUTH` | No | `proxy` lets a reverse proxy that already authenticates every request replace the password. Ignored when `PASCAL_ADMIN_PASSWORD` is set. |
+| `PASCAL_SCENE_API_TOKEN` | No | Bearer token for agents, scripts, or reverse-proxy deployments calling `/api/scenes`. |
+| `PASCAL_SCENE_API_ORIGINS` | No | Comma-separated allowed origins for cross-origin scene API requests. |
 | `PASCAL_DATA_DIR` | No | Directory holding `pascal.db` and artifacts (default: `~/.pascal/data`). |
 
 Local development and the official hosted editor work without any environment variables.
@@ -61,7 +62,12 @@ How it is protected, by `apps/editor/lib/self-host-auth.ts`:
   endpoint under "Connect an agent".
 - **Fail closed.** A host that is not loopback with no password set serves a setup page
   listing the variables and nothing else. `PASCAL_AUTH=proxy` opts out when a reverse proxy
-  (basic auth, SSO) already authenticates every request.
+  (basic auth, SSO) already authenticates every request; in that mode `/api/scenes` accepts
+  every request that reaches Pascal, so make sure the app is only reachable through the proxy.
+  `PASCAL_AUTH=proxy` is ignored when `PASCAL_ADMIN_PASSWORD` is set.
+  If you protect the scene API with `PASCAL_SCENE_API_TOKEN` behind a proxy, configure your
+  reverse proxy to inject `Authorization: Bearer <token>` or `X-Pascal-Scene-Token: <token>`
+  on forwarded requests to `/api/scenes`.
 - **Loopback stays open.** `bun dev`, the CLI's managed editor and `docker run` reached at
   `localhost` need no password. Opening a dev server to another device on your LAN counts
   as a network host: set `PASCAL_ADMIN_PASSWORD` in `.env.local` for that.
