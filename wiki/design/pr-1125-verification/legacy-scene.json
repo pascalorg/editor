@@ -1,0 +1,232 @@
+{
+  "nodes": {
+    "site_mlo10yprppfq84s0": {
+      "object": "node",
+      "id": "site_mlo10yprppfq84s0",
+      "type": "site",
+      "name": "Legacy compatibility fixture",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "polygon": {
+        "type": "polygon",
+        "points": [
+          [
+            -15,
+            -15
+          ],
+          [
+            15,
+            -15
+          ],
+          [
+            15,
+            15
+          ],
+          [
+            -15,
+            15
+          ]
+        ]
+      },
+      "children": [
+        "building_fg4szvh7ijroahww"
+      ]
+    },
+    "building_fg4szvh7ijroahww": {
+      "object": "node",
+      "id": "building_fg4szvh7ijroahww",
+      "type": "building",
+      "parentId": "site_mlo10yprppfq84s0",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_op0gl45ewj0o28ez"
+      ],
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "level_op0gl45ewj0o28ez": {
+      "object": "node",
+      "id": "level_op0gl45ewj0o28ez",
+      "type": "level",
+      "parentId": "building_fg4szvh7ijroahww",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "roof_ozdeo42ynncziyni",
+        "hvac-equipment_32xpwvt213owkpw2",
+        "lineset_lffb9m5lq7iedt63"
+      ],
+      "level": 0,
+      "baseElevation": 0
+    },
+    "roof_ozdeo42ynncziyni": {
+      "object": "node",
+      "id": "roof_ozdeo42ynncziyni",
+      "type": "roof",
+      "parentId": "level_op0gl45ewj0o28ez",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        -4,
+        0,
+        0
+      ],
+      "rotation": 0,
+      "support": {
+        "kind": "level"
+      },
+      "children": [
+        "rseg_m0ysxl4fi5ou8qxt"
+      ]
+    },
+    "rseg_m0ysxl4fi5ou8qxt": {
+      "object": "node",
+      "id": "rseg_m0ysxl4fi5ou8qxt",
+      "type": "roof-segment",
+      "parentId": "roof_ozdeo42ynncziyni",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": 0,
+      "roofType": "flat",
+      "width": 4,
+      "depth": 4,
+      "trim": {
+        "left": 0,
+        "right": 0,
+        "front": 0,
+        "back": 0,
+        "frontLeft": 0,
+        "frontRight": 0,
+        "backLeft": 0,
+        "backRight": 0,
+        "frontLeftX": 0,
+        "frontLeftZ": 0,
+        "frontRightX": 0,
+        "frontRightZ": 0,
+        "backLeftX": 0,
+        "backLeftZ": 0,
+        "backRightX": 0,
+        "backRightZ": 0
+      },
+      "wallHeight": 0,
+      "pitch": 40,
+      "wallThickness": 0.1,
+      "deckThickness": 0.1,
+      "overhang": 0.3,
+      "shingleThickness": 0.05,
+      "managedByParent": false,
+      "wallShell": "auto",
+      "shedInsetEndPanels": false,
+      "gambrelLowerWidthRatio": 0.5,
+      "gambrelLowerHeightRatio": 0.6,
+      "mansardSteepWidthRatio": 0.15,
+      "mansardSteepHeightRatio": 0.7,
+      "dutchHipWidthRatio": 0.25,
+      "dutchHipHeightRatio": 0.5,
+      "dutchWaistLengthRatio": 0.98,
+      "dutchGabletRake": 0.48,
+      "dutchTopRakeThickness": 0.21,
+      "children": [
+        "bvent_at2zwu47le8ts3vy"
+      ]
+    },
+    "bvent_at2zwu47le8ts3vy": {
+      "object": "node",
+      "id": "bvent_at2zwu47le8ts3vy",
+      "type": "box-vent",
+      "name": "Legacy box vent",
+      "parentId": "rseg_m0ysxl4fi5ou8qxt",
+      "visible": true,
+      "metadata": {},
+      "materialPreset": "preset-white",
+      "roofSegmentId": "rseg_m0ysxl4fi5ou8qxt",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": 0,
+      "width": 0.4,
+      "depth": 0.4,
+      "height": 0.15,
+      "hoodOverhang": 0.04,
+      "topTaper": 0.4,
+      "capHeight": 0.07,
+      "capGap": 0,
+      "domeCurvature": 1,
+      "baseInset": 0.06,
+      "baseHeight": 0.04,
+      "cornerBevel": 0.012,
+      "style": "cap"
+    },
+    "hvac-equipment_32xpwvt213owkpw2": {
+      "object": "node",
+      "id": "hvac-equipment_32xpwvt213owkpw2",
+      "type": "hvac-equipment",
+      "name": "Legacy furnace",
+      "parentId": "level_op0gl45ewj0o28ez",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        1,
+        0,
+        0
+      ],
+      "rotation": 0,
+      "equipmentType": "furnace",
+      "width": 0.56,
+      "depth": 0.71,
+      "height": 1.1,
+      "supplyShape": "round",
+      "returnShape": "round",
+      "supplyDiameter": 8,
+      "returnDiameter": 8,
+      "supplyWidth": 12,
+      "supplyHeight": 8,
+      "returnWidth": 14,
+      "returnHeight": 8
+    },
+    "lineset_lffb9m5lq7iedt63": {
+      "object": "node",
+      "id": "lineset_lffb9m5lq7iedt63",
+      "type": "lineset",
+      "name": "Legacy suction route",
+      "parentId": "level_op0gl45ewj0o28ez",
+      "visible": true,
+      "metadata": {},
+      "path": [
+        [
+          1.28,
+          0.88,
+          0
+        ],
+        [
+          3,
+          0.88,
+          0
+        ]
+      ],
+      "suctionDiameter": 0.875,
+      "liquidDiameter": 0.75,
+      "insulated": true
+    }
+  },
+  "rootNodeIds": [
+    "site_mlo10yprppfq84s0"
+  ]
+}

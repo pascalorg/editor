@@ -1,7 +1,30 @@
 import { describe, expect, test } from 'bun:test'
-import { getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
-import { getAnalyticalNormal, getSurfaceY } from '../../shared/roof-surface'
-import { buildSolarPanelGeometry, computeAutoFit, flippedPanelDims } from '../geometry'
+import {
+  BoxVentNode,
+  difference,
+  getActiveRoofHeight,
+  intersection,
+  nodeRegistry,
+  type RoofSegmentNode,
+  registerNode,
+  SkylightNode,
+} from '@pascal-app/core'
+import { boxVentDefinition } from '../../box-vent'
+import {
+  getAnalyticalNormal,
+  getRoofSurfaceFaceBoundsAt,
+  getSurfaceY,
+} from '../../shared/roof-surface'
+import { skylightDefinition } from '../../skylight'
+import {
+  buildSolarPanelGeometry,
+  computeAutoFit,
+  flippedPanelDims,
+  resolveSolarPanelPlacement,
+  solarPanelDefinition,
+  solarPanelFootprint,
+  solarPanelObstacles,
+} from '../index'
 import { SolarPanelNode } from '../schema'
 
 // atan(2 / 3) in degrees — gives `getActiveRoofHeight` ≈ 2.0 on the
@@ -165,7 +188,7 @@ describe('getAnalyticalNormal', () => {
 
 describe('computeAutoFit', () => {
   test('default panel + 8m × 6m gable fits a sensible grid', () => {
-    const fit = computeAutoFit(fixtureSegment(), SolarPanelNode.parse({}))!
+    const fit = computeAutoFit(fixtureSegment(), SolarPanelNode.parse({ position: [0, 0, 1.5] }))!
     expect(fit.rows).toBeGreaterThanOrEqual(1)
     expect(fit.columns).toBeGreaterThanOrEqual(1)
     expect(fit.rows).toBeLessThanOrEqual(20)
@@ -187,4 +210,177 @@ describe('flippedPanelDims', () => {
       panelHeight: 1,
     })
   })
+})
+
+describe('solar auto-fit placement constraints', () => {
+  const panelAt = (position: [number, number, number], rotation = 0) =>
+    SolarPanelNode.parse({
+      position,
+      rotation,
+      panelWidth: 1,
+      panelHeight: 1,
+      gapX: 0,
+      gapY: 0,
+      standoffHeight: 0,
+      frameDepth: 0.02,
+    })
+
+  test('fits at the current offset rather than using the entire roof width', () => {
+    const segment = fixtureSegment({
+      roofType: 'flat',
+      width: 8,
+      depth: 6,
+      overhang: 0,
+      wallThickness: 0,
+    })
+    const centered = computeAutoFit(segment, panelAt([0, 0, 0]))!
+    const offset = computeAutoFit(segment, panelAt([3, 0, 0]))!
+    expect(offset.columns).toBeLessThan(centered.columns)
+    expect(offset.columns).toBe(2)
+    expect(computeAutoFit(segment, panelAt([10, 0, 0]))).toBeNull()
+  })
+
+  test('rotation changes how many rectangular modules fit', () => {
+    const segment = fixtureSegment({
+      roofType: 'flat',
+      width: 8,
+      depth: 3,
+      overhang: 0,
+      wallThickness: 0,
+    })
+    const panel = SolarPanelNode.parse({ ...panelAt([0, 0, 0]), panelWidth: 2, panelHeight: 1 })
+    expect(computeAutoFit(segment, panel)).toEqual({ rows: 3, columns: 4 })
+    expect(computeAutoFit(segment, { ...panel, rotation: Math.PI / 2 })).toEqual({
+      rows: 8,
+      columns: 1,
+    })
+  })
+
+  test('uses slope length on both gable faces and refuses to straddle the ridge', () => {
+    const segment = fixtureSegment({ pitch: 60, overhang: 0, wallThickness: 0 })
+    for (const z of [-1.5, 1.5]) {
+      const panel = panelAt([0, 0, z])
+      const fit = computeAutoFit(segment, panel)!
+      expect(fit.rows).toBeGreaterThan(3)
+      const footprint = solarPanelFootprint(segment, { ...panel, ...fit })
+      expect(footprint.every((point) => Math.sign(point[1]) === Math.sign(z))).toBe(true)
+    }
+    expect(computeAutoFit(segment, panelAt([0, 0, 0]))).toBeNull()
+  })
+
+  test('a rotated array stays within the triangular hip face', () => {
+    const segment = fixtureSegment({ roofType: 'hip' })
+    const panel = panelAt([3, 0, 0], Math.PI / 5)
+    const fit = computeAutoFit(segment, panel)!
+    expect(fit).not.toBeNull()
+    const footprint = solarPanelFootprint(segment, { ...panel, ...fit })
+    const face = getRoofSurfaceFaceBoundsAt(segment, 3, 0).polygon
+    expect(difference(footprint, face)).toEqual([])
+  })
+
+  test('avoids occupied space and reports when the current center is blocked', () => {
+    const segment = fixtureSegment({ roofType: 'flat', width: 8, depth: 6 })
+    const panel = panelAt([0, 0, 0])
+    const obstacle: [number, number][] = [
+      [1.2, -4],
+      [3, -4],
+      [3, 4],
+      [1.2, 4],
+    ]
+    const fit = computeAutoFit(segment, panel, [obstacle])!
+    expect(fit.columns).toBe(2)
+    expect(intersection(solarPanelFootprint(segment, { ...panel, ...fit }), obstacle)).toEqual([])
+    expect(computeAutoFit(segment, panelAt([2, 0, 0]), [obstacle])).toBeNull()
+  })
+
+  test('respects trimmed edges and diagonal corner cuts', () => {
+    const segment = fixtureSegment({ roofType: 'flat', width: 8, depth: 6 })
+    const trimmed = {
+      ...segment,
+      trim: { left: 0, right: 3, front: 0, back: 0 },
+    } as RoofSegmentNode
+    expect(computeAutoFit(trimmed, panelAt([0, 0, 0]))!.columns).toBe(2)
+    const corner = { ...segment, trim: { frontRightX: 3, frontRightZ: 3 } } as RoofSegmentNode
+    expect(computeAutoFit(segment, panelAt([3, 0, 2]))).not.toBeNull()
+    expect(computeAutoFit(corner, panelAt([3, 0, 2]))).toBeNull()
+  })
+
+  test('keeps the schema row and column limit on a large roof', () => {
+    const fit = computeAutoFit(
+      fixtureSegment({ roofType: 'flat', width: 100, depth: 100 }),
+      panelAt([0, 0, 0]),
+    )
+    expect(fit).toEqual({ rows: 20, columns: 20 })
+  })
+})
+
+test('auto-fit collects occupied accessory envelopes from the current roof segment', () => {
+  const restoreRegistry = nodeRegistry._snapshot()
+  try {
+    for (const definition of [solarPanelDefinition, boxVentDefinition, skylightDefinition]) {
+      if (!nodeRegistry.get(definition.kind)) registerNode(definition)
+    }
+    const segment = fixtureSegment({ roofType: 'flat' })
+    const panel = SolarPanelNode.parse({ roofSegmentId: segment.id })
+    const vent = BoxVentNode.parse({ roofSegmentId: segment.id, position: [2, 0, 0] })
+    const skylight = SkylightNode.parse({ roofSegmentId: segment.id, position: [-2, 0, 0] })
+    const otherPanel = SolarPanelNode.parse({ roofSegmentId: segment.id, position: [0, 0, 2] })
+    const elsewhere = BoxVentNode.parse({ roofSegmentId: 'rseg_elsewhere' })
+    const obstacles = solarPanelObstacles(segment, panel, [
+      panel,
+      vent,
+      skylight,
+      otherPanel,
+      elsewhere,
+    ])
+    expect(obstacles).toHaveLength(3)
+    for (const [x, z] of [
+      [2, 0],
+      [-2, 0],
+      [0, 2],
+    ]) {
+      expect(computeAutoFit(segment, { ...panel, position: [x!, 0, z!] }, obstacles)).toBeNull()
+    }
+  } finally {
+    restoreRegistry()
+  }
+})
+
+test('tilted glass stays above its mounting plane across the entire array', () => {
+  for (const tiltAngle of [0, 15, 45]) {
+    const panel = SolarPanelNode.parse({ rows: 3, columns: 2, mountingType: 'tilted', tiltAngle })
+    const geo = buildSolarPanelGeometry(panel)!
+    geo.rotateX((tiltAngle * Math.PI) / 180)
+    const group = geo.groups.find((g) => g.materialIndex === 1)!
+    const positions = geo.getAttribute('position')
+    for (let i = group.start; i < group.start + group.count; i++) {
+      const vertex = geo.index ? geo.index.getX(i) : i
+      expect(positions.getY(vertex)).toBeGreaterThan(0)
+    }
+    geo.dispose()
+  }
+})
+
+test('placement rejects roof-edge and obstacle overlap and uses the selected grid', () => {
+  const segment = fixtureSegment({ roofType: 'flat' })
+  const panel = SolarPanelNode.parse({ rows: 1, columns: 1 })
+  expect(
+    resolveSolarPanelPlacement(segment, panel, 0.26, 0.74, { gridStep: 0.5 }).position.filter(
+      (_, i) => i !== 1,
+    ),
+  ).toEqual([0.5, 0.5])
+  expect(resolveSolarPanelPlacement(segment, panel, 0, 0).valid).toBe(true)
+  expect(resolveSolarPanelPlacement(segment, panel, 4, 3).valid).toBe(false)
+  expect(
+    resolveSolarPanelPlacement(segment, panel, 0, 0, {
+      obstacles: [
+        [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ],
+      ],
+    }).valid,
+  ).toBe(false)
 })

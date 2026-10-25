@@ -144,6 +144,7 @@ export function resolveLeanToFreestandingPlacement(
     parentId: levelId,
     canopyForm,
     hostKind: 'freestanding',
+    postBracing: 'knee',
     highSideMode: 'independent-high-beam',
     connectionMode: 'manual',
     autoSpan: false,

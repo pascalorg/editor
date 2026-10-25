@@ -17,7 +17,7 @@ import { isClosedLoopLeanTo } from './conical-host'
 
 export const MIN_LEAN_TO_POST_HEIGHT = 0.2
 export const MIN_LEAN_TO_WALL_LENGTH = 0.6
-export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 8
+export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 9
 export const LEAN_TO_EDGE_SNAP_TOLERANCE = 0.25
 export const LEAN_TO_HEIGHT_SNAP_TOLERANCE = 0.15
 const CURVED_INNER_EDGE_CLEARANCE = 0.15

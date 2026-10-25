@@ -104,7 +104,7 @@ const cupolaHandles: HandleDescriptor<CupolaNodeType>[] = [
 /**
  * Cupola — a louvered roof lantern. Parented to a `roof-segment`; position
  * is segment-local; rotation rotates it around the segment's vertical axis
- * after the slope tilt is applied. Same composition as the box vent (custom
+ * while the body stays upright. Same composition as the box vent (custom
  * renderer, pure geometry builder, no system) — see box-vent's definition
  * for the rationale on why roof accessories need a custom renderer.
  */
@@ -149,11 +149,13 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),
+  snapProfile: 'item',
   affordanceTools: {
     move: () => import('./move-tool'),
   },
   toolHints: [
     { key: 'Left click', label: 'Place cupola on roof' },
+    { key: 'Alt', label: 'Place freely' },
     { key: 'Esc', label: 'Cancel' },
   ],
 
@@ -167,6 +169,6 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
 
   mcp: {
     description:
-      'A louvered cupola (roof lantern) on a roof segment. Roof style: dome / pyramid, optional finial. Parametric width/depth/height.',
+      'A louvered cupola (roof lantern) on a roof segment. Roof style: dome / pyramid, optional finial. Upright body with a roof-fitting base. Parametric width/depth/height.',
   },
 }

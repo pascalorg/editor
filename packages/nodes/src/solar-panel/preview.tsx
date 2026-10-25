@@ -1,5 +1,7 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
+
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
@@ -42,6 +44,8 @@ const SolarPanelPreview = ({ node, invalid }: { node: SolarPanelNode; invalid?: 
       node.frameThickness,
       node.frameDepth,
       node.standoffHeight,
+      node.mountingType,
+      node.tiltAngle,
     ],
   )
 
@@ -50,13 +54,18 @@ const SolarPanelPreview = ({ node, invalid }: { node: SolarPanelNode; invalid?: 
   if (!geometry) return null
 
   return (
-    <mesh
-      geometry={geometry}
-      material={material}
-      raycast={() => {
-        /* preview should not intercept the cursor */
-      }}
-    />
+    <group rotation-y={node.rotation}>
+      <group rotation-x={node.mountingType === 'tilted' ? (node.tiltAngle * Math.PI) / 180 : 0}>
+        <mesh
+          layers={EDITOR_LAYER}
+          geometry={geometry}
+          material={material}
+          raycast={() => {
+            /* preview should not intercept the cursor */
+          }}
+        />
+      </group>
+    </group>
   )
 }
 

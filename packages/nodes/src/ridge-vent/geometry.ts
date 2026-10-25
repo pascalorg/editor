@@ -6,6 +6,7 @@ import {
   type RoofSegmentNode,
 } from '@pascal-app/core'
 import * as THREE from 'three'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 
 const ARC_SEGS = 16
@@ -60,7 +61,7 @@ type RidgeVentEndTaper = {
  *
  * `endCaps` closes both ends. Pure: no React, no scene access, no mutation.
  */
-export function buildRidgeVentGeometry(
+function buildUnsmoothedRidgeVentGeometry(
   node: RidgeVentNode,
   segment?: RoofSegmentNode,
 ): THREE.BufferGeometry {
@@ -71,7 +72,7 @@ export function buildRidgeVentGeometry(
   const halfW = width / 2
   // Band thickness. Generous enough to read as a solid cap; the eave faces
   // are `t` tall, which is the depth the user actually sees from the side.
-  const t = Math.max(0.02, h * 0.4)
+  const t = Math.min(h * 0.8, Math.max(0.005, h * 0.4))
 
   const centerX = finiteNumber(node.position?.[0], 0)
   const centerZ = finiteNumber(node.position?.[2], 0)
@@ -225,10 +226,14 @@ function metalTop(halfW: number, h: number, t: number): ProfilePoint[] {
   const shoulderY = t + (h - t) * 0.5
   return [
     [-halfW, t],
+    [-halfW * 0.94, t],
+    [-halfW * 0.94, t * 1.2],
     [-halfW * 0.82, shoulderY],
     [-seamHalf, h],
     [seamHalf, h],
     [halfW * 0.82, shoulderY],
+    [halfW * 0.94, t * 1.2],
+    [halfW * 0.94, t],
     [halfW, t],
   ]
 }
@@ -419,6 +424,31 @@ function addShingledTabs(
       const by1 = seatYAt(backX, z1) + capY1
       const br0y = by0 + ny * ridgeH
       const br1y = by1 + ny * ridgeH
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [backX, br0y, r0z],
+        [x, r0y, r0z],
+        [x, r1y, r1z],
+        [backX, br1y, r1z],
+        [0, ny, nz],
+      )
+      for (const [z, y, by, rz, ry, bry, sign] of [
+        [z0, y0, by0, r0z, r0y, br0y, -1],
+        [z1, y1, by1, r1z, r1y, br1y, 1],
+      ]) {
+        pushQuad(
+          positions,
+          normals,
+          uvs,
+          [backX, by!, z!],
+          [x, y!, z!],
+          [x, ry!, rz!],
+          [backX, bry!, rz!],
+          [0, 0, sign!],
+        )
+      }
       pushQuad(
         positions,
         normals,
@@ -788,4 +818,11 @@ function pushQuad(
     uvs.push(0, 0, 0, v, u, v)
   }
   for (let i = 0; i < 6; i++) normals.push(nx, ny, nz)
+}
+
+export function buildRidgeVentGeometry(
+  node: RidgeVentNode,
+  segment?: RoofSegmentNode,
+): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedRidgeVentGeometry(node, segment))
 }

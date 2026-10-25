@@ -182,7 +182,11 @@ export { dormerDefinition } from './dormer'
 export { downspoutDefinition } from './downspout'
 export { ductFittingDefinition } from './duct-fitting'
 export { ductSegmentDefinition } from './duct-segment'
-export { ductTerminalDefinition } from './duct-terminal'
+export {
+  ductTerminalDefinition,
+  resolveTerminalPortPlacement,
+  terminalProfileForPort,
+} from './duct-terminal'
 export { elevatorDefinition } from './elevator'
 export { eyebrowVentDefinition } from './eyebrow-vent'
 export { beginFenceFeaturePlacement, fenceDefinition } from './fence'

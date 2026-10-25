@@ -22,6 +22,7 @@ import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { hvacEquipmentDefinition } from './definition'
 import { buildHvacEquipmentGeometry } from './geometry'
+import { HVAC_PRESETS } from './presets'
 
 const PREVIEW_OPACITY = 0.55
 /** R/T yaw step — 45°, matching the editor's default rotate. */
@@ -52,7 +53,9 @@ const HvacEquipmentTool = () => {
       HvacEquipmentNode.parse({
         ...hvacEquipmentDefinition.defaults(),
         ...toolDefaults,
-        name: 'Furnace',
+        name: HVAC_PRESETS[
+          (toolDefaults?.equipmentType as HvacEquipmentNode['equipmentType']) ?? 'furnace'
+        ].name,
       }),
     [toolDefaults],
   )
@@ -94,10 +97,13 @@ const HvacEquipmentTool = () => {
 
     const onClick = (event: GridEvent) => {
       const position = resolveAligned(event)
+      const placementDefaults = useEditor.getState().toolDefaults['hvac-equipment']
       const unit = HvacEquipmentNode.parse({
         ...hvacEquipmentDefinition.defaults(),
-        ...toolDefaults,
-        name: 'Furnace',
+        ...placementDefaults,
+        name: HVAC_PRESETS[
+          (placementDefaults?.equipmentType as HvacEquipmentNode['equipmentType']) ?? 'furnace'
+        ].name,
         position,
         rotation: yawRef.current,
         parentId: activeLevelId,

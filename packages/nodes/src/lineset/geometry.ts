@@ -1,5 +1,8 @@
+import type { GeometryContext } from '@pascal-app/core'
+import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import { CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3 } from 'three'
 import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { finishMechanicalGeometry } from '../shared/mechanical-finish'
 import type { LinesetNode } from './schema'
 
 const RADIAL_SEGMENTS = 16
@@ -56,7 +59,7 @@ function buildRun(
  * Children are level-local meters; `<ParametricNodeRenderer>` owns the
  * node transform (identity today — the path is absolute within the level).
  */
-export function buildLinesetGeometry(node: LinesetNode): Group {
+function buildUnpaintedGeometry(node: LinesetNode): Group {
   const group = new Group()
   if (node.path.length < 2) return group
 
@@ -108,4 +111,24 @@ export function buildLinesetGeometry(node: LinesetNode): Group {
   }
 
   return group
+}
+
+export function buildLinesetGeometry(
+  node: LinesetNode,
+  ctx?: GeometryContext,
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): Group {
+  return finishMechanicalGeometry(
+    buildUnpaintedGeometry(node),
+    node.slots,
+    (name) => (name.includes('jacket') ? 'insulation' : 'copper'),
+    ctx,
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+  )
 }

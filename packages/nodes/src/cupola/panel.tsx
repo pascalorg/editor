@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getActiveRoofHeight,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   useScene,
@@ -19,9 +18,10 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { resolveCupolaPlacement } from './placement'
 import type { CupolaNode } from './schema'
 
 /**
@@ -95,15 +95,6 @@ export default function CupolaPanel() {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
     const segmentId = node.roofSegmentId
-    if (segmentId) {
-      const state = useScene.getState()
-      const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-      if (seg) {
-        state.updateNode(segmentId as AnyNode['id'], {
-          children: (seg.children ?? []).filter((id) => id !== selectedId),
-        })
-      }
-    }
     deleteNode(selectedId as AnyNodeId)
     if (segmentId) {
       useScene.getState().dirtyNodes.add(segmentId as AnyNodeId)
@@ -115,23 +106,44 @@ export default function CupolaPanel() {
 
   if (!(node && node.type === 'cupola' && selectedId)) return null
 
+  const surfaceY = (x: number, z: number) =>
+    segment ? getRoofOuterSurfaceFrameAtPoint(segment, x, z).point.y : 0
+  const offset = node.position[1] - surfaceY(node.position[0], node.position[2])
+  const at = (x: number, z: number): [number, number, number] => [x, surfaceY(x, z) + offset, z]
+  const ridge =
+    segment && !['flat', 'shed', 'conical', 'barrel', 'glazed'].includes(segment.roofType)
+      ? resolveCupolaPlacement(segment, node, node.position[0], node.position[2], {
+          alignRidge: true,
+        })
+      : null
+
   return (
     <PanelWrapper
-      icon="/icons/roof.webp"
+      icon="/icons/cupola.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Cupola'}
       width={300}
     >
       <PanelSection title="Style">
-        <SegmentedControl
-          onChange={(v) => handleUpdate({ roofStyle: v as CupolaNode['roofStyle'] })}
-          options={[
-            { label: 'Dome', value: 'dome' },
-            { label: 'Pyramid', value: 'pyramid' },
-          ]}
-          value={node.roofStyle ?? 'dome'}
-        />
+        <div className="grid grid-cols-2 gap-2">
+          {(['dome', 'pyramid'] as const).map((roofStyle) => (
+            <button
+              key={roofStyle}
+              type="button"
+              aria-pressed={node.roofStyle === roofStyle}
+              className={`rounded-lg border p-2 text-xs transition-colors ${node.roofStyle === roofStyle ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'}`}
+              onClick={() => handleUpdate({ roofStyle })}
+            >
+              <img
+                src={`/icons/cupola/${roofStyle}.webp`}
+                alt=""
+                className="mx-auto h-16 w-16 object-contain"
+              />
+              {roofStyle === 'dome' ? 'Dome' : 'Pyramid'}
+            </button>
+          ))}
+        </div>
         <SegmentedControl
           onChange={(v) => handleUpdate({ finial: v === 'on' })}
           options={[
@@ -145,8 +157,7 @@ export default function CupolaPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={1000}
-          min={0.3}
+          min={0.2}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => handleUpdate({ width: v })}
           precision={2}
@@ -157,8 +168,7 @@ export default function CupolaPanel() {
         />
         <SliderControl
           label="Depth"
-          max={1000}
-          min={0.3}
+          min={0.2}
           onChange={(v) => previewProp({ depth: v })}
           onCommit={(v) => handleUpdate({ depth: v })}
           precision={2}
@@ -168,9 +178,8 @@ export default function CupolaPanel() {
           value={node.depth}
         />
         <SliderControl
-          label="Height"
-          max={1000}
-          min={0.4}
+          label="Lantern height"
+          min={0.3}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => handleUpdate({ height: v })}
           precision={2}
@@ -181,17 +190,44 @@ export default function CupolaPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title="Placement">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={!segment}
+            className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+            onClick={() =>
+              segment &&
+              handleUpdate({
+                position: resolveCupolaPlacement(segment, node, node.position[0], node.position[2])
+                  .position,
+              })
+            }
+          >
+            Seat on roof
+          </button>
+          <button
+            type="button"
+            disabled={!ridge?.valid}
+            className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+            onClick={() =>
+              ridge && handleUpdate({ position: ridge.position, rotation: ridge.rotation })
+            }
+          >
+            Align to ridge
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Upright body with a base fitted to the roof. Lantern height excludes the fitted base.
+        </p>
+      </PanelSection>
+      <PanelSection title="Position" defaultExpanded={false}>
         <SliderControl
           label="X"
           max={Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
-          onChange={(v) =>
-            previewProp({ position: [v, node.position[1] ?? 0, node.position[2] ?? 0] })
-          }
-          onCommit={(v) =>
-            handleUpdate({ position: [v, node.position[1] ?? 0, node.position[2] ?? 0] })
-          }
+          onChange={(v) => previewProp({ position: at(v, node.position[2]) })}
+          onCommit={(v) => handleUpdate({ position: at(v, node.position[2]) })}
           precision={2}
           restoreOnCommit={false}
           step={0.05}
@@ -199,34 +235,37 @@ export default function CupolaPanel() {
           value={node.position[0] ?? 0}
         />
         <SliderControl
-          label="Y"
-          max={Math.max(
-            (segment?.wallHeight ?? 3) + (segment ? getActiveRoofHeight(segment) : 3) + 2,
-            (node.position[1] ?? 0) + 0.1,
-          )}
-          min={Math.min(0, (node.position[1] ?? 0) - 0.5)}
+          label="Roof offset"
           onChange={(v) =>
-            previewProp({ position: [node.position[0] ?? 0, v, node.position[2] ?? 0] })
+            previewProp({
+              position: [
+                node.position[0],
+                surfaceY(node.position[0], node.position[2]) + v,
+                node.position[2],
+              ],
+            })
           }
           onCommit={(v) =>
-            handleUpdate({ position: [node.position[0] ?? 0, v, node.position[2] ?? 0] })
+            handleUpdate({
+              position: [
+                node.position[0],
+                surfaceY(node.position[0], node.position[2]) + v,
+                node.position[2],
+              ],
+            })
           }
           precision={2}
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={node.position[1] ?? 0}
+          value={offset}
         />
         <SliderControl
           label="Z"
           max={Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
-          onChange={(v) =>
-            previewProp({ position: [node.position[0] ?? 0, node.position[1] ?? 0, v] })
-          }
-          onCommit={(v) =>
-            handleUpdate({ position: [node.position[0] ?? 0, node.position[1] ?? 0, v] })
-          }
+          onChange={(v) => previewProp({ position: at(node.position[0], v) })}
+          onCommit={(v) => handleUpdate({ position: at(node.position[0], v) })}
           precision={2}
           restoreOnCommit={false}
           step={0.05}

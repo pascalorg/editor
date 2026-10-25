@@ -11,34 +11,40 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  commitFreshPlacementSubtree,
   consumePlacementDragRelease,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import { getRoofOuterSurfaceFrameAtPoint } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
-  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
   snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
+import { resolveEyebrowVentPlacement } from './placement'
 import EyebrowVentPreview from './preview'
 
 /**
- * Eyebrow-vent move tool. Mirrors the box-vent / cupola move flow: the
- * original mesh hides during the drag, a ghost tracks the cursor with the
- * correct slope tilt + segment yaw, and the click updates the node's position
- * + parent segment in one undoable step (reparenting between segments when
- * needed). Cancel restores the original transform, or deletes a freshly-cloned
- * vent.
+ * Eyebrow-vent move tool. Mirrors the placement tool's cursor behaviour
+ * (ghost follows the roof surface; click on a roof commits) but for an
+ * already-existing vent: the original mesh is hidden during the drag,
+ * the ghost tracks the cursor with the correct slope tilt + segment yaw,
+ * and the click updates the node's position + parent segment in one
+ * undoable step. Cancel restores the original transform; if the node was
+ * freshly cloned (`metadata.isNew`), cancel deletes it instead.
  */
 export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode }) {
   const exitMoveMode = useCallback(() => {
@@ -47,6 +53,7 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
 
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
+  const [previewValid, setPreviewValid] = useState(true)
   const [previewYaw, setPreviewYaw] = useState(0)
 
   useEffect(() => {
@@ -71,6 +78,15 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
     let lastSnap: [number, number] | null = null
     let lastTarget: RelativeRoofDragTarget | null = null
     let committed = false
+    let forcePlacement = false
+    const originalSegment = original.roofSegmentId
+      ? (useScene.getState().nodes[original.roofSegmentId as AnyNodeId] as RoofSegmentNode)
+      : undefined
+    const roofOffset = originalSegment
+      ? original.position[1] -
+        getRoofOuterSurfaceFrameAtPoint(originalSegment, original.position[0], original.position[2])
+          .point.y
+      : 0
     const roofDrag = createRelativeRoofDrag(original)
 
     const clearTarget = () => {
@@ -84,11 +100,38 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
     const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+      forcePlacement = event.nativeEvent?.altKey === true
+      let placement = resolveEyebrowVentPlacement(
+        rawTarget.segment,
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
-      })
+        rawTarget.localX,
+        rawTarget.localZ,
+        {
+          roofOffset,
+          gridStep: !forcePlacement && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        },
+      )
+      let target = {
+        ...rawTarget,
+        localX: placement.position[0],
+        localY: placement.position[1],
+        localZ: placement.position[2],
+      }
+      if (!forcePlacement && isMagneticSnapActive()) {
+        target = snapRoofSurfaceNodeTarget({ target, node })
+        placement = resolveEyebrowVentPlacement(
+          target.segment,
+          node,
+          target.localX,
+          target.localZ,
+          {
+            roofOffset,
+          },
+        )
+        target = { ...target, localY: placement.position[1] }
+      }
+      setPreviewValid(placement.valid || forcePlacement)
+      return target
     }
 
     const updatePreview = (event: RoofEvent) => {
@@ -102,14 +145,19 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        !forcePlacement &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 
-      const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
+      const normal = getRoofOuterSurfaceFrameAtPoint(
+        target.segment,
+        target.localX,
+        target.localZ,
+      ).normal
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
       setPreviewPos(
@@ -130,39 +178,34 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
 
     const onRoofClick = (event: RoofEvent) => {
       if (committed) return
-      const target = lastTarget ?? resolveSnappedTarget(event)
+      const target = event.node ? resolveSnappedTarget(event) : lastTarget
       if (!target) return
+      if (
+        !forcePlacement &&
+        !resolveEyebrowVentPlacement(target.segment, node, target.localX, target.localZ, {
+          roofOffset,
+        }).valid
+      )
+        return
       committed = true
       const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
-      const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined
-      if (prevSegmentId && prevSegmentId !== targetSegmentId) {
-        const oldSeg = st.nodes[prevSegmentId] as RoofSegmentNode | undefined
-        if (oldSeg) {
-          st.updateNode(prevSegmentId, {
-            children: (oldSeg.children ?? []).filter((id) => id !== node.id),
-          })
-        }
-        const newSeg = st.nodes[targetSegmentId] as RoofSegmentNode | undefined
-        if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-          st.updateNode(targetSegmentId, {
-            children: [...(newSeg.children ?? []), node.id],
-          })
-        }
-        st.dirtyNodes.add(prevSegmentId)
-      }
-
-      useScene.temporal.getState().resume()
-      st.updateNode(node.id as AnyNodeId, {
+      const patch = {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [target.localX, target.localY, target.localZ],
+        position: [target.localX, target.localY, target.localZ] as [number, number, number],
         rotation: original.rotation,
         visible: true,
-        metadata: {},
-      })
-      useScene.temporal.getState().pause()
+        metadata: stripPlacementMetadataFlags(original.metadata) as EyebrowVentNode['metadata'],
+      }
+      if (isNew) {
+        commitFreshPlacementSubtree(node.id as AnyNodeId, patch)
+      } else {
+        useScene.temporal.getState().resume()
+        st.updateNode(node.id as AnyNodeId, patch)
+        useScene.temporal.getState().pause()
+      }
 
       st.dirtyNodes.add(targetSegmentId)
       st.dirtyNodes.add(node.id as AnyNodeId)
@@ -178,6 +221,8 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
 
     const onCancel = () => {
       if (isNew) {
+        // Freshly-cloned vent — undo the clone entirely on cancel so the
+        // user doesn't end up with an orphan they didn't intend to place.
         const parentId = original.roofSegmentId as AnyNodeId | undefined
         if (parentId) {
           const parent = useScene.getState().nodes[parentId] as RoofSegmentNode | undefined
@@ -238,6 +283,9 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
+      // Safety restore — if the tool is unmounted by something other than
+      // a commit / cancel path (e.g. tool change, selection wipe), leave
+      // the original mesh visible rather than stranded invisible.
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
       clearRoofSurfacePlacementGuides()
@@ -251,7 +299,7 @@ export default function MoveEyebrowVentTool({ node }: { node: EyebrowVentNode })
     <group position={previewPos}>
       <group rotation-y={previewYaw}>
         <group quaternion={previewSurfaceQuat}>
-          <EyebrowVentPreview node={node} />
+          <EyebrowVentPreview node={node} invalid={!previewValid} />
         </group>
       </group>
     </group>

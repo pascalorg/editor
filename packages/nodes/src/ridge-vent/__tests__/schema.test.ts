@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { ridgeVentDefinition } from '../../index'
 import { RidgeVentNode } from '../schema'
 
 describe('RidgeVentNode schema', () => {
@@ -46,4 +47,18 @@ describe('RidgeVentNode schema', () => {
   test('unique IDs across calls', () => {
     expect(RidgeVentNode.parse({}).id).not.toBe(RidgeVentNode.parse({}).id)
   })
+})
+
+test('ridge vent paint uses a persisted surface slot', () => {
+  const node = RidgeVentNode.parse({})
+  const patch = ridgeVentDefinition.capabilities!.paint!.buildPatch({
+    node,
+    role: 'surface',
+    material: undefined,
+    materialPreset: 'library:preset-white',
+  })
+  expect(
+    RidgeVentNode.parse(JSON.parse(JSON.stringify({ ...node, ...patch }))).slots?.surface,
+  ).toBe('library:preset-white')
+  expect(node.slots).toBeUndefined()
 })

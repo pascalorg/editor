@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getActiveRoofHeight,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   useScene,
@@ -14,14 +13,15 @@ import {
   duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
-  SegmentedControl,
   SliderControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { getRoofOuterSurfaceFrameAtPoint, useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
+import { getDownSlopeYaw } from '../shared/roof-surface'
+import { boxVentDimensionPatch, boxVentDimensions } from './dimensions'
 import type { BoxVentNode } from './schema'
 
 /**
@@ -52,8 +52,13 @@ export default function BoxVentPanel() {
   const overrides = useLiveNodeOverrides((s) =>
     selectedId ? (s.get(selectedId as AnyNodeId) as Partial<BoxVentNode> | undefined) : undefined,
   )
-  const node: BoxVentNode | undefined =
+  const effectiveNode: BoxVentNode | undefined =
     storeNode && overrides ? ({ ...storeNode, ...overrides } as BoxVentNode) : storeNode
+
+  const node = effectiveNode ? { ...effectiveNode, ...boxVentDimensions(effectiveNode) } : undefined
+
+  const nodeRef = useRef(node)
+  nodeRef.current = node
 
   // Pull the parent segment so the Position sliders can clamp to the
   // segment's footprint (no point letting the user drag the vent off
@@ -70,7 +75,11 @@ export default function BoxVentPanel() {
   const previewProp = useCallback(
     (updates: Partial<BoxVentNode>) => {
       if (!selectedId) return
-      useLiveNodeOverrides.getState().set(selectedId as AnyNodeId, updates)
+      const node = nodeRef.current
+      useLiveNodeOverrides.getState().set(selectedId as AnyNodeId, {
+        ...updates,
+        ...(node ? boxVentDimensionPatch({ ...node, ...updates }, updates) : {}),
+      })
     },
     [selectedId],
   )
@@ -80,7 +89,11 @@ export default function BoxVentPanel() {
   const commitProp = useCallback(
     (updates: Partial<BoxVentNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
+      const node = nodeRef.current
+      updateNode(selectedId as AnyNode['id'], {
+        ...updates,
+        ...(node ? boxVentDimensionPatch({ ...node, ...updates }, updates) : {}),
+      })
       useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
     },
     [selectedId, updateNode],
@@ -137,6 +150,10 @@ export default function BoxVentPanel() {
 
   if (!(node && node.type === 'box-vent' && selectedId)) return null
 
+  const roofY = (x: number, z: number) =>
+    segment ? getRoofOuterSurfaceFrameAtPoint(segment, x, z).point.y : 0
+  const roofOffset = node.position[1] - roofY(node.position[0], node.position[2])
+
   return (
     <PanelWrapper
       icon="/icons/roof.webp"
@@ -146,21 +163,32 @@ export default function BoxVentPanel() {
       width={300}
     >
       <PanelSection title="Style">
-        <SegmentedControl
-          onChange={(v) => handleUpdate({ style: v as BoxVentNode['style'] })}
-          options={[
-            { label: 'Box', value: 'box' },
-            { label: 'Cap', value: 'cap' },
-            { label: 'Dome', value: 'dome' },
-          ]}
-          value={node.style ?? 'cap'}
-        />
+        <div className="grid grid-cols-3 gap-2 px-1">
+          {(['box', 'cap', 'dome'] as const).map((style) => (
+            <button
+              key={style}
+              type="button"
+              aria-pressed={node.style === style}
+              onClick={() => handleUpdate({ style })}
+              className={`flex flex-col items-center gap-2 rounded-lg border p-2 text-xs capitalize ${node.style === style ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-accent'}`}
+            >
+              <img
+                src={`/icons/box-vent/${style}.webp`}
+                alt=""
+                width={64}
+                height={64}
+                className="size-16 object-contain"
+                draggable={false}
+              />
+              {style}
+            </button>
+          ))}
+        </div>
       </PanelSection>
 
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={1000}
           min={0.15}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => handleUpdate({ width: v })}
@@ -172,7 +200,6 @@ export default function BoxVentPanel() {
         />
         <SliderControl
           label="Depth"
-          max={1000}
           min={0.15}
           onChange={(v) => previewProp({ depth: v })}
           onCommit={(v) => handleUpdate({ depth: v })}
@@ -183,8 +210,7 @@ export default function BoxVentPanel() {
           value={node.depth}
         />
         <SliderControl
-          label="Height"
-          max={1000}
+          label="Housing height"
           min={0.05}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => handleUpdate({ height: v })}
@@ -194,6 +220,11 @@ export default function BoxVentPanel() {
           unit="m"
           value={node.height}
         />
+      </PanelSection>
+
+      <PanelSection
+        title={`${node.style === 'box' ? 'Box' : node.style === 'cap' ? 'Cap' : 'Dome'} details`}
+      >
         {/* Hood Overhang is `cap`-only — the dome shape rolls down to
             the body footprint without a flange skirt, and `box` doesn't
             have a hood at all. Max scales with width so wider vents can
@@ -201,7 +232,6 @@ export default function BoxVentPanel() {
         {node.style === 'cap' && (
           <SliderControl
             label="Hood Overhang"
-            max={Math.max(0.02, node.width)}
             min={0}
             onChange={(v) => previewProp({ hoodOverhang: v })}
             onCommit={(v) => handleUpdate({ hoodOverhang: v })}
@@ -270,7 +300,7 @@ export default function BoxVentPanel() {
               value={node.capHeight ?? 0.07}
             />
             <SliderControl
-              label="Gap Height"
+              label="Vent opening"
               max={Math.max(0, node.height - Math.max(0.01, node.capHeight ?? 0.07) - 0.005)}
               min={0}
               onChange={(v) => previewProp({ capGap: v })}
@@ -311,7 +341,6 @@ export default function BoxVentPanel() {
             />
             <SliderControl
               label="Base Flange"
-              max={0.2}
               min={0}
               onChange={(v) => previewProp({ hoodOverhang: v })}
               onCommit={(v) => handleUpdate({ hoodOverhang: v })}
@@ -323,21 +352,64 @@ export default function BoxVentPanel() {
             />
           </>
         )}
+        <p className="px-2 pb-2 text-xs text-muted-foreground">
+          Detail dimensions stay within the housing height and width.
+        </p>
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title="Installation">
+        <SliderControl
+          label="Flashing extension"
+          min={0}
+          step={0.01}
+          unit="m"
+          precision={2}
+          value={node.flashingWidth ?? 0}
+          restoreOnCommit={false}
+          onChange={(v) => previewProp({ flashingWidth: v })}
+          onCommit={(v) => handleUpdate({ flashingWidth: v })}
+        />
+        <p className="px-2 pb-2 text-xs text-muted-foreground">
+          Flashing extends beyond the housing on every side. Set to zero to omit it.
+        </p>
+        {segment && (
+          <ActionGroup>
+            <ActionButton
+              label="Seat on roof"
+              onClick={() =>
+                handleUpdate({
+                  position: [
+                    node.position[0],
+                    roofY(node.position[0], node.position[2]),
+                    node.position[2],
+                  ],
+                })
+              }
+            />
+            <ActionButton
+              label="Face downslope"
+              onClick={() =>
+                handleUpdate({
+                  rotation: getDownSlopeYaw(node.position[0], node.position[2], segment),
+                })
+              }
+            />
+          </ActionGroup>
+        )}
+      </PanelSection>
+      <PanelSection title="Position" defaultExpanded={false}>
         <SliderControl
           label="X"
           max={Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
           onChange={(v) =>
             previewProp({
-              position: [v, node.position[1] ?? 0, node.position[2] ?? 0],
+              position: [v, roofY(v, node.position[2]) + roofOffset, node.position[2]],
             })
           }
           onCommit={(v) =>
             handleUpdate({
-              position: [v, node.position[1] ?? 0, node.position[2] ?? 0],
+              position: [v, roofY(v, node.position[2]) + roofOffset, node.position[2]],
             })
           }
           precision={2}
@@ -347,27 +419,30 @@ export default function BoxVentPanel() {
           value={node.position[0] ?? 0}
         />
         <SliderControl
-          label="Y"
-          max={Math.max(
-            (segment?.wallHeight ?? 3) + (segment ? getActiveRoofHeight(segment) : 3) + 2,
-            (node.position[1] ?? 0) + 0.1,
-          )}
-          min={Math.min(0, (node.position[1] ?? 0) - 0.5)}
+          label="Roof offset"
           onChange={(v) =>
             previewProp({
-              position: [node.position[0] ?? 0, v, node.position[2] ?? 0],
+              position: [
+                node.position[0],
+                roofY(node.position[0], node.position[2]) + v,
+                node.position[2],
+              ],
             })
           }
           onCommit={(v) =>
             handleUpdate({
-              position: [node.position[0] ?? 0, v, node.position[2] ?? 0],
+              position: [
+                node.position[0],
+                roofY(node.position[0], node.position[2]) + v,
+                node.position[2],
+              ],
             })
           }
           precision={2}
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={node.position[1] ?? 0}
+          value={roofOffset}
         />
         <SliderControl
           label="Z"
@@ -375,12 +450,12 @@ export default function BoxVentPanel() {
           min={-Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
           onChange={(v) =>
             previewProp({
-              position: [node.position[0] ?? 0, node.position[1] ?? 0, v],
+              position: [node.position[0], roofY(node.position[0], v) + roofOffset, v],
             })
           }
           onCommit={(v) =>
             handleUpdate({
-              position: [node.position[0] ?? 0, node.position[1] ?? 0, v],
+              position: [node.position[0], roofY(node.position[0], v) + roofOffset, v],
             })
           }
           precision={2}

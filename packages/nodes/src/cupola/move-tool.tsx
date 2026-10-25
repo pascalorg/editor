@@ -11,8 +11,12 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  commitFreshPlacementSubtree,
   consumePlacementDragRelease,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -22,22 +26,23 @@ import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
-  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
   snapRoofSurfaceNodeTarget,
 } from '../shared/roof-surface-placement-guides'
+import { cupolaMount, resolveCupolaPlacement } from './placement'
 import CupolaPreview from './preview'
 
 /**
- * Cupola move tool. Mirrors the box-vent move flow: the original mesh hides
- * during the drag, a ghost tracks the cursor with the correct slope tilt +
- * segment yaw, and the click updates the node's position + parent segment in
- * one undoable step (reparenting between segments when needed). Cancel
- * restores the original transform, or deletes a freshly-cloned cupola.
+ * Cupola move tool. Mirrors the placement tool's cursor behaviour
+ * (ghost follows the roof surface; click on a roof commits) but for an
+ * already-existing vent: the original mesh is hidden during the drag,
+ * the ghost tracks the cursor with the correct slope tilt + segment yaw,
+ * and the click updates the node's position + parent segment in one
+ * undoable step. Cancel restores the original transform; if the node was
+ * freshly cloned (`metadata.isNew`), cancel deletes it instead.
  */
 export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
   const exitMoveMode = useCallback(() => {
@@ -46,6 +51,8 @@ export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
 
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
+  const [previewValid, setPreviewValid] = useState(true)
+  const [previewNode, setPreviewNode] = useState(node)
   const [previewYaw, setPreviewYaw] = useState(0)
 
   useEffect(() => {
@@ -64,12 +71,19 @@ export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
         : {}
     const isNew = !!meta.isNew
 
-    const cupolaObj = sceneRegistry.nodes.get(node.id)
-    if (cupolaObj) cupolaObj.visible = false
+    const ventObj = sceneRegistry.nodes.get(node.id)
+    if (ventObj) ventObj.visible = false
 
     let lastSnap: [number, number] | null = null
     let lastTarget: RelativeRoofDragTarget | null = null
     let committed = false
+    let forcePlacement = false
+    const originalSegment = original.roofSegmentId
+      ? (useScene.getState().nodes[original.roofSegmentId as AnyNodeId] as RoofSegmentNode)
+      : undefined
+    const roofOffset = originalSegment
+      ? original.position[1] - cupolaMount(originalSegment, node).centerY
+      : 0
     const roofDrag = createRelativeRoofDrag(original)
 
     const clearTarget = () => {
@@ -83,11 +97,32 @@ export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
     const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+      forcePlacement = event.nativeEvent?.altKey === true
+      let placement = resolveCupolaPlacement(
+        rawTarget.segment,
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
-      })
+        rawTarget.localX,
+        rawTarget.localZ,
+        {
+          roofOffset,
+          gridStep: !forcePlacement && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        },
+      )
+      let target = {
+        ...rawTarget,
+        localX: placement.position[0],
+        localY: placement.position[1],
+        localZ: placement.position[2],
+      }
+      if (!forcePlacement && isMagneticSnapActive()) {
+        target = snapRoofSurfaceNodeTarget({ target, node })
+        placement = resolveCupolaPlacement(target.segment, node, target.localX, target.localZ, {
+          roofOffset,
+        })
+        target = { ...target, localY: placement.position[1] }
+      }
+      setPreviewValid(placement.valid || forcePlacement)
+      return target
     }
 
     const updatePreview = (event: RoofEvent) => {
@@ -97,19 +132,24 @@ export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
         return
       }
       lastTarget = target
+      setPreviewNode({
+        ...node,
+        position: [target.localX, target.localY, target.localZ],
+        roofSegmentId: target.segment.id,
+      })
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        !forcePlacement &&
+        (isGridSnapActive() || isMagneticSnapActive()) &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 
-      const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
-      setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
+      setPreviewSurfaceQuat(new THREE.Quaternion())
       setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
       setPreviewPos(
         roofSegmentLocalToBuildingLocal(target.segment.id, [
@@ -129,39 +169,34 @@ export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
 
     const onRoofClick = (event: RoofEvent) => {
       if (committed) return
-      const target = lastTarget ?? resolveSnappedTarget(event)
+      const target = event.node ? resolveSnappedTarget(event) : lastTarget
       if (!target) return
+      if (
+        !forcePlacement &&
+        !resolveCupolaPlacement(target.segment, node, target.localX, target.localZ, {
+          roofOffset,
+        }).valid
+      )
+        return
       committed = true
       const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
-      const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined
-      if (prevSegmentId && prevSegmentId !== targetSegmentId) {
-        const oldSeg = st.nodes[prevSegmentId] as RoofSegmentNode | undefined
-        if (oldSeg) {
-          st.updateNode(prevSegmentId, {
-            children: (oldSeg.children ?? []).filter((id) => id !== node.id),
-          })
-        }
-        const newSeg = st.nodes[targetSegmentId] as RoofSegmentNode | undefined
-        if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-          st.updateNode(targetSegmentId, {
-            children: [...(newSeg.children ?? []), node.id],
-          })
-        }
-        st.dirtyNodes.add(prevSegmentId)
-      }
-
-      useScene.temporal.getState().resume()
-      st.updateNode(node.id as AnyNodeId, {
+      const patch = {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [target.localX, target.localY, target.localZ],
+        position: [target.localX, target.localY, target.localZ] as [number, number, number],
         rotation: original.rotation,
         visible: true,
-        metadata: {},
-      })
-      useScene.temporal.getState().pause()
+        metadata: stripPlacementMetadataFlags(original.metadata) as CupolaNode['metadata'],
+      }
+      if (isNew) {
+        commitFreshPlacementSubtree(node.id as AnyNodeId, patch)
+      } else {
+        useScene.temporal.getState().resume()
+        st.updateNode(node.id as AnyNodeId, patch)
+        useScene.temporal.getState().pause()
+      }
 
       st.dirtyNodes.add(targetSegmentId)
       st.dirtyNodes.add(node.id as AnyNodeId)
@@ -177,6 +212,8 @@ export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
 
     const onCancel = () => {
       if (isNew) {
+        // Freshly-cloned vent — undo the clone entirely on cancel so the
+        // user doesn't end up with an orphan they didn't intend to place.
         const parentId = original.roofSegmentId as AnyNodeId | undefined
         if (parentId) {
           const parent = useScene.getState().nodes[parentId] as RoofSegmentNode | undefined
@@ -237,6 +274,9 @@ export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
+      // Safety restore — if the tool is unmounted by something other than
+      // a commit / cancel path (e.g. tool change, selection wipe), leave
+      // the original mesh visible rather than stranded invisible.
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
       clearRoofSurfacePlacementGuides()
@@ -250,7 +290,7 @@ export default function MoveCupolaTool({ node }: { node: CupolaNode }) {
     <group position={previewPos}>
       <group rotation-y={previewYaw}>
         <group quaternion={previewSurfaceQuat}>
-          <CupolaPreview node={node} />
+          <CupolaPreview node={previewNode} invalid={!previewValid} />
         </group>
       </group>
     </group>

@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { Group, Mesh, MeshBasicMaterial } from 'three'
+import { skylightDefinition } from '../../index'
 import { SkylightNode } from '../schema'
 
 describe('SkylightNode schema', () => {
@@ -30,4 +32,47 @@ describe('SkylightNode schema', () => {
     expect(() => SkylightNode.parse({ openingSide: 'middle' })).toThrow()
     expect(() => SkylightNode.parse({ slideDirection: 'y' })).toThrow()
   })
+})
+
+test('painting the glass preserves the frame and survives serialization', () => {
+  const node = SkylightNode.parse({ materialPreset: 'library:preset-white' })
+  const paint = skylightDefinition.capabilities!.paint!
+  const patch = paint.buildPatch({
+    node,
+    role: 'glass',
+    material: undefined,
+    materialPreset: 'library:preset-glass',
+  })
+  const restored = SkylightNode.parse(JSON.parse(JSON.stringify({ ...node, ...patch })))
+  expect(restored.materialPreset).toBe('library:preset-white')
+  expect(restored.glassMaterialPreset).toBe('library:preset-glass')
+  expect(
+    paint.getEffectiveMaterial!({ node: restored, role: 'glass', nodes: {} }).materialPreset,
+  ).toBe('library:preset-glass')
+})
+
+test('paint preview restores the glass and leaves its frame untouched', () => {
+  const frame = new MeshBasicMaterial()
+  const face = new MeshBasicMaterial()
+  const root = new Group()
+  const mesh = new Mesh(undefined, face)
+  mesh.name = 'skylight-glass'
+  root.add(mesh)
+  const frameMesh = new Mesh(undefined, frame)
+  frameMesh.name = 'skylight-surface'
+  root.add(frameMesh)
+  const paint = skylightDefinition.capabilities!.paint!
+  const node = skylightDefinition.schema.parse({})
+  expect(paint.resolveRole({ node, hitObject: mesh, materialIndex: 1 } as never)).toBe('glass')
+  const restore = paint.applyPreview({
+    node,
+    role: 'glass',
+    root,
+    material: undefined,
+    materialPreset: 'library:preset-white',
+  })
+  expect(mesh.material).not.toBe(face)
+  expect(frameMesh.material).toBe(frame)
+  restore?.()
+  expect(mesh.material).toEqual(face)
 })

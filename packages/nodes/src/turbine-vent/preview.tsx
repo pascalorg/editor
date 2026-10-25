@@ -1,5 +1,7 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
+
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
@@ -38,26 +40,27 @@ const TurbineVentPreview = ({ node, invalid }: { node: TurbineVentNode; invalid?
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])
 
-  useEffect(
-    () => () => {
-      geometry.dispose()
-      edgesGeometry.dispose()
-      material.dispose()
-    },
-    [geometry, edgesGeometry, material],
-  )
+  useEffect(() => () => geometry.dispose(), [geometry])
+  useEffect(() => () => edgesGeometry.dispose(), [edgesGeometry])
+  useEffect(() => () => material.dispose(), [material])
 
   return (
     <group rotation-y={node.rotation ?? 0}>
       <mesh
+        layers={EDITOR_LAYER}
         geometry={geometry}
         material={material}
         raycast={() => {
           /* disabled — see component-level note */
         }}
       />
-      <lineSegments geometry={edgesGeometry} renderOrder={1000}>
-        <lineBasicMaterial color={0x6c_a3_ff} depthTest={false} opacity={0.95} transparent />
+      <lineSegments layers={EDITOR_LAYER} geometry={edgesGeometry} renderOrder={1000}>
+        <lineBasicMaterial
+          color={invalid ? INVALID_GHOST_COLOR : 0x6c_a3_ff}
+          depthTest={false}
+          opacity={0.95}
+          transparent
+        />
       </lineSegments>
     </group>
   )

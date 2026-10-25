@@ -22,6 +22,7 @@ import {
   useFloorplanMode,
   useTerraceDraft,
   useWallDrawVariant,
+  WALL_DRAW_VARIANTS,
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
@@ -42,11 +43,13 @@ import {
   BASE_BUILD_TYPES,
   type BuildType,
   collectBuildTypes,
+  collectMepSearchTools,
   collectRoofFeatures,
   MEP_ITEMS,
   MEP_TOOL_KINDS,
   type MepItem,
 } from '@/lib/build-palette'
+import { searchBuildTools } from '@/lib/build-search'
 import { getActiveRoofFeatureId, ROOF_TYPE_OPTIONS } from '@/lib/build-tab-state'
 import { cn } from '@/lib/utils'
 import { KitchenBrowser } from './kitchen-browser'
@@ -194,6 +197,54 @@ export function BuildTab() {
     buildTypes.filter((type) => type.section === section)
   const advancedTypes = typesIn('advanced')
 
+  const searchResults = searchBuildTools(
+    [
+      ...buildTypes
+        .filter((type) => type.id !== 'wall')
+        .map((type) => ({
+          ...type,
+          active: isTypeActive(type),
+          activate: () => handleTypeClick(type),
+        })),
+      ...WALL_DRAW_VARIANTS.map((variant) => ({
+        id: variant.id === 'walls' ? 'wall' : `room-${variant.id}`,
+        label: variant.title,
+        iconSrc: variant.iconSrc,
+        active: mode === 'build' && activeTool === 'wall' && wallVariant === variant.id,
+        activate: () => {
+          selectWallDrawVariant(variant.id)
+          const editor = useEditor.getState()
+          if (!(editor.mode === 'build' && editor.tool === 'wall')) activateBuildTool('wall')
+        },
+      })),
+      ...(registryReady ? collectMepSearchTools() : MEP_ITEMS).map((item) => ({
+        ...item,
+        active: isMepItemActive(item),
+        activate: () => activateBuildTool(item.kind),
+      })),
+      ...ROOF_TYPE_OPTIONS.map((roofType) => ({
+        id: `roof-${roofType.value}`,
+        label: `${roofType.label} roof`,
+        iconSrc: '/icons/roof.webp',
+        active: mode === 'build' && activeTool === 'roof' && activeRoofType === roofType.value,
+        activate: () => activateRoofType(roofType.value),
+      })),
+      ...(['gate', 'opening'] as const).map((kind) => ({
+        id: `fence-${kind}`,
+        label: kind === 'gate' ? 'Fence gate' : 'Fence opening',
+        iconSrc: kind === 'gate' ? '/icons/gate.webp' : '/icons/open-passage.webp',
+        active: placingFenceFeature === kind,
+        activate: () => activateFenceFeaturePlacement(kind),
+      })),
+      ...roofFeatures.map((feature) => ({
+        ...feature,
+        active: mode === 'build' && feature.id === activeRoofFeatureId,
+        activate: () => activateRoofFeatureTool(feature),
+      })),
+    ],
+    buildSearch,
+  )
+
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
       <label className="sr-only" htmlFor="build-search">
@@ -210,9 +261,24 @@ export function BuildTab() {
       {buildSearch.trim() ? (
         <>
           <BuildToolGrid columns={4}>
-            {buildTypes
-              .filter((type) => type.label.toLowerCase().includes(buildSearch.toLowerCase()))
-              .map(renderTile)}
+            {searchResults.map((result) => (
+              <BuildToolTile
+                key={result.id}
+                data-build-tool={result.id}
+                active={result.active}
+                iconSrc={result.iconSrc}
+                label={result.label}
+                title={result.label}
+                onClick={() => {
+                  triggerSFX('sfx:menu-click')
+                  setBuildSearch('')
+                  setKitchenOpen(false)
+                  setMepOpen(false)
+                  result.activate()
+                }}
+                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+              />
+            ))}
           </BuildToolGrid>
           <KitchenBrowser query={buildSearch} />
         </>
@@ -538,6 +604,10 @@ export function BuildTab() {
                   })}
                 </div>
               </TooltipProvider>
+
+              {(activeTool === 'hvac-equipment' || activeTool === 'duct-terminal') && (
+                <ToolOptionsPanel kind={activeTool} />
+              )}
 
               {(['duct-fitting', 'pipe-fitting'] as const)
                 .filter((kind) => (kind === 'duct-fitting' ? ductContext : pipeContext))

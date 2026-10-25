@@ -7,8 +7,9 @@ import {
   type GutterOutlet,
   useLiveNodeOverrides,
   useScene,
+  usesAutomaticDownspoutLength,
 } from '@pascal-app/core'
-import { SliderControl } from '@pascal-app/editor'
+import { SegmentedControl, SliderControl } from '@pascal-app/editor'
 
 /**
  * Position-along-the-eave editor for a downspout. The downspout's spot
@@ -97,5 +98,97 @@ export function DownspoutPositionEditor({ node }: { node: DownspoutNode }) {
       unit="m"
       value={Math.max(-bound, Math.min(bound, outlet.offset ?? 0))}
     />
+  )
+}
+
+export function DownspoutLengthModeEditor({
+  node,
+  onUpdate,
+}: {
+  node: DownspoutNode
+  onUpdate: (patch: Partial<DownspoutNode>) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">Length mode</p>
+      <SegmentedControl
+        value={usesAutomaticDownspoutLength(node) ? 'to-ground' : 'manual'}
+        options={[
+          { label: 'To ground', value: 'to-ground' },
+          { label: 'Manual', value: 'manual' },
+        ]}
+        onChange={(value) =>
+          onUpdate({ lengthMode: value === 'to-ground' ? 'to-ground' : 'manual' })
+        }
+      />
+    </div>
+  )
+}
+
+export function DownspoutShapeEditor({
+  node,
+  onUpdate,
+}: {
+  node: DownspoutNode
+  onUpdate: (patch: Partial<DownspoutNode>) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        aria-pressed={node.shape === 'auto'}
+        className="w-full rounded-lg border p-2 text-xs"
+        onClick={() => onUpdate({ shape: 'auto' })}
+      >
+        Match gutter profile
+      </button>
+      <div className="grid grid-cols-2 gap-2">
+        {(['round', 'rect'] as const).map((shape) => (
+          <button
+            type="button"
+            key={shape}
+            aria-pressed={node.shape === shape}
+            onClick={() => onUpdate({ shape })}
+            className={`rounded-lg border p-2 text-xs ${node.shape === shape ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'}`}
+          >
+            <img
+              src={`/icons/downspout/${shape}.webp`}
+              alt=""
+              className="mx-auto h-16 w-16 object-contain"
+            />
+            {shape === 'round' ? 'Round' : 'Rectangular'}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function DownspoutTerminalEditor({
+  node,
+  onUpdate,
+}: {
+  node: DownspoutNode
+  onUpdate: (patch: Partial<DownspoutNode>) => void
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {(['splash', 'kickout', 'straight'] as const).map((terminal) => (
+        <button
+          type="button"
+          key={terminal}
+          aria-pressed={node.terminal === terminal}
+          onClick={() => onUpdate({ terminal })}
+          className={`rounded-lg border p-2 text-xs ${node.terminal === terminal ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'}`}
+        >
+          <img
+            src={`/icons/downspout/${terminal}.webp`}
+            alt=""
+            className="mx-auto h-16 w-16 object-contain"
+          />
+          {terminal === 'splash' ? 'Splash block' : terminal === 'kickout' ? 'Kickout' : 'Straight'}
+        </button>
+      ))}
+    </div>
   )
 }

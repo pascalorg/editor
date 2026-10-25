@@ -61,8 +61,8 @@ export function buildCupolaFloorplan(
   const fillOpacity = showSelectedChrome ? 0.55 : 0.7
   const lineWidth = showSelectedChrome ? 0.03 : 0.02
 
-  const hw = Math.max(node.width, 0.1) / 2
-  const hd = Math.max(node.depth, 0.1) / 2
+  const hw = Math.max(node.width, 0.2) / 2
+  const hd = Math.max(node.depth, 0.2) / 2
   const cornOvh = Math.min(hw, hd) * 0.22
 
   const rect = (halfX: number, halfZ: number): FloorplanPoint[] => [
@@ -107,5 +107,28 @@ export function buildCupolaFloorplan(
     pointerEvents: 'none',
   })
 
+  if (node.roofStyle === 'pyramid') {
+    for (const corner of outer)
+      children.push({
+        kind: 'polyline',
+        points: [corner, toPlan(0, 0)],
+        stroke,
+        strokeWidth: lineWidth * 0.7,
+        pointerEvents: 'none',
+      })
+  } else {
+    children.push({
+      kind: 'polyline',
+      points: Array.from({ length: 49 }, (_, i) =>
+        toPlan(
+          (hw + cornOvh) * Math.cos((i * Math.PI) / 24),
+          (hd + cornOvh) * Math.sin((i * Math.PI) / 24),
+        ),
+      ),
+      stroke,
+      strokeWidth: lineWidth * 0.7,
+      pointerEvents: 'none',
+    })
+  }
   return { kind: 'group', children }
 }

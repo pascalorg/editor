@@ -64,3 +64,16 @@ describe('turbine vent geometry', () => {
     expect(allFinite(geo)).toBe(true)
   })
 })
+
+for (const style of ['globe', 'cylinder'] as const) {
+  test(`${style} stays within the configured total height, including its spindle`, () => {
+    for (const diameter of [0.1, 0.32, 2]) {
+      const node = TurbineVentNode.parse({ style, diameter, height: 0.12, neckHeight: 2 })
+      const geometry = buildTurbineVentGeometry(node)
+      geometry.computeBoundingBox()
+      expect(geometry.boundingBox!.min.y).toBeCloseTo(0, 6)
+      expect(geometry.boundingBox!.max.y).toBeCloseTo(node.height, 6)
+      geometry.dispose()
+    }
+  })
+}

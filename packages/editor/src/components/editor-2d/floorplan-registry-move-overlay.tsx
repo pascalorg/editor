@@ -4,6 +4,7 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  analyzePortConnectivity,
   bboxAnchors,
   bboxCornerAnchors,
   beginSceneHistoryDraft,
@@ -17,10 +18,12 @@ import {
   getEffectiveNode,
   type MovableConfig,
   nodeRegistry,
+  resolveConnectivityUpdates,
   runAsSingleSceneHistoryStep,
   runSceneHistoryDraftWrite,
   sceneHistoryDraftRevertUpdates,
   settleSceneHistoryDrafts,
+  snapPlanarPortPosition,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -660,6 +663,24 @@ export function FloorplanRegistryMoveOverlay() {
       (movingNode as { metadata?: unknown }).metadata,
     )
 
+    const connectivity = isFreshPlacement ? null : analyzePortConnectivity(movingNode, sceneNodes)
+    let connectedUpdates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
+    const clearConnectedPreview = () => {
+      for (const update of connectedUpdates)
+        useLiveNodeOverrides.getState().clearFields(update.id, Object.keys(update.data))
+      connectedUpdates = []
+    }
+    const updateConnectedPreview = (preview: AnyNode) => {
+      if (!connectivity) return
+      const next = resolveConnectivityUpdates(connectivity, preview)
+      for (const update of connectedUpdates) {
+        if (!next.some((candidate) => candidate.id === update.id))
+          useLiveNodeOverrides.getState().clearFields(update.id, Object.keys(update.data))
+      }
+      connectedUpdates = next
+      useLiveNodeOverrides.getState().setMany(next.map((update) => [update.id, update.data]))
+    }
+
     // SVG units in this floorplan map 1:1 to world meters, and the
     // `<g data-node-id>` entry has no transform of its own when at rest,
     // so its untransformed bbox IS the world-space footprint. Cache the
@@ -833,6 +854,29 @@ export function FloorplanRegistryMoveOverlay() {
         useAlignmentGuides.getState().clear()
       }
 
+      const portSnap = def?.capabilities?.movable?.portSnap
+      if (isMagneticSnapActive() && portSnap) {
+        const snapped = snapPlanarPortPosition(
+          { ...movingNode, rotation: currentRotation } as AnyNode,
+          [finalX, finalZ],
+          sceneNodes,
+          portSnap,
+        )
+        if (snapped) [finalX, finalZ] = snapped
+      }
+      updateConnectedPreview({
+        ...movingNode,
+        ...(originalPath
+          ? {
+              path: originalPath.map(([x, y, z]) => [
+                x + finalX - originalPosition[0],
+                y,
+                z + finalZ - originalPosition[2],
+              ]),
+            }
+          : { position: [finalX, originalPosition[1], finalZ], rotation: currentRotation }),
+      } as AnyNode)
+
       const transform = rigidPlanSvgTransform({
         from: [originalPosition[0], originalPosition[2]],
         fromRotation: originalRotation,
@@ -906,18 +950,21 @@ export function FloorplanRegistryMoveOverlay() {
         const nextPath = originalPath.map(
           ([x, y, z]) => [x + dx, y, z + dz] as [number, number, number],
         )
-        useScene.getState().updateNode(
-          movingNode.id as AnyNodeId,
-          (isFreshPlacement
-            ? {
-                path: nextPath,
-                metadata: stripPlacementMetadataFlags(
-                  (movingNode as { metadata?: unknown }).metadata,
-                ),
-                visible: true,
-              }
-            : { path: nextPath }) as Partial<AnyNode>,
-        )
+        runAsSingleSceneHistoryStep(useScene, () => {
+          useScene.getState().updateNodes(connectedUpdates)
+          useScene.getState().updateNode(
+            movingNode.id as AnyNodeId,
+            (isFreshPlacement
+              ? {
+                  path: nextPath,
+                  metadata: stripPlacementMetadataFlags(
+                    (movingNode as { metadata?: unknown }).metadata,
+                  ),
+                  visible: true,
+                }
+              : { path: nextPath }) as Partial<AnyNode>,
+          )
+        })
         useViewer.getState().setSelection({ selectedIds: [movingNode.id as AnyNodeId] })
         for (const relatedEntry of relatedEntries) {
           relatedEntry.removeAttribute('transform')
@@ -944,13 +991,16 @@ export function FloorplanRegistryMoveOverlay() {
         if (atomicPreview) setMovingNodeOrigin('2d')
         selectedId = committedId ?? selectedId
       } else {
-        useScene.getState().updateNode(
-          movingNode.id as AnyNodeId,
-          {
-            position: [sx, oldY, sz],
-            ...rotationPatch,
-          } as Partial<AnyNode>,
-        )
+        runAsSingleSceneHistoryStep(useScene, () => {
+          useScene.getState().updateNodes(connectedUpdates)
+          useScene.getState().updateNode(
+            movingNode.id as AnyNodeId,
+            {
+              position: [sx, oldY, sz],
+              ...rotationPatch,
+            } as Partial<AnyNode>,
+          )
+        })
       }
       useViewer.getState().setSelection({ selectedIds: [selectedId] })
       for (const relatedEntry of relatedEntries) {
@@ -988,6 +1038,7 @@ export function FloorplanRegistryMoveOverlay() {
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('keydown', onKey, true)
     return () => {
+      clearConnectedPreview()
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKey, true)

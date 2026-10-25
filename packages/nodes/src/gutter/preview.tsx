@@ -1,5 +1,7 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
+
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
@@ -68,13 +70,14 @@ const GutterPreview = ({ node, invalid }: { node: GutterNode; invalid?: boolean 
   return (
     <>
       <mesh
+        layers={EDITOR_LAYER}
         geometry={geometry}
         material={material}
         // See box-vent preview note — never let the preview swallow
         // roof events meant for the placement tool's hit-tester.
         raycast={() => {}}
       />
-      <lineSegments geometry={edgesGeometry} renderOrder={1000}>
+      <lineSegments layers={EDITOR_LAYER} geometry={edgesGeometry} renderOrder={1000}>
         <lineBasicMaterial color={0x6c_a3_ff} depthTest={false} opacity={0.9} transparent />
       </lineSegments>
     </>

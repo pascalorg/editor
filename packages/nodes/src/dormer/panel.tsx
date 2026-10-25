@@ -136,15 +136,6 @@ export default function DormerPanel() {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
     const segmentId = node.roofSegmentId
-    if (segmentId) {
-      const state = useScene.getState()
-      const segment = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-      if (segment) {
-        state.updateNode(segmentId as AnyNode['id'], {
-          children: (segment.children ?? []).filter((id) => id !== selectedId),
-        })
-      }
-    }
     deleteNode(selectedId as AnyNodeId)
     if (segmentId) {
       useScene.getState().dirtyNodes.add(segmentId as AnyNodeId)
@@ -241,23 +232,14 @@ export default function DormerPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/roof.webp"
+      icon="/icons/dormer.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
       title={node.name || 'Dormer'}
       width={300}
     >
-      <DormerPositionSection
-        commitProp={commitProp}
-        node={node}
-        previewProp={previewProp}
-        roof={roof}
-        segment={segment}
-        selectedId={selectedId}
-      />
-
       <PanelSection title="Section">
-        <div className="grid grid-cols-3 gap-1.5 px-1 pt-1">
+        <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
           {SECTION_OPTIONS.map((option) => {
             const isSelected = section === option.value
             return (
@@ -268,6 +250,7 @@ export default function DormerPanel() {
                     ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
                     : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                 )}
+                aria-pressed={isSelected}
                 key={option.value}
                 onClick={() => setSection(option.value)}
                 type="button"
@@ -281,10 +264,38 @@ export default function DormerPanel() {
 
       {section === 'dormer' && (
         <>
+          <PanelSection title="Style">
+            <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
+              {ROOF_TYPE_OPTIONS.map((option) => {
+                const isSelected = node.roofType === option.value
+                return (
+                  <button
+                    className={cn(
+                      'flex min-h-10 flex-col gap-1 items-center justify-center rounded-lg border px-2 py-2 text-xs transition-colors',
+                      isSelected
+                        ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                        : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
+                    )}
+                    aria-pressed={isSelected}
+                    key={option.value}
+                    onClick={() => handleUpdate({ roofType: option.value })}
+                    type="button"
+                  >
+                    <img
+                      alt=""
+                      className="h-14 w-full object-contain"
+                      src={`/icons/dormer/${option.value}.webp`}
+                    />
+                    <span className="truncate font-medium">{option.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </PanelSection>
+
           <PanelSection title="Dimensions">
             <SliderControl
               label="Width"
-              max={1000}
               min={0.5}
               onChange={(v) => previewProp({ width: v })}
               onCommit={(v) => commitProp({ width: v })}
@@ -296,7 +307,6 @@ export default function DormerPanel() {
             />
             <SliderControl
               label="Depth"
-              max={1000}
               min={0.5}
               onChange={(v) => previewProp({ depth: v })}
               onCommit={(v) => commitProp({ depth: v })}
@@ -308,7 +318,6 @@ export default function DormerPanel() {
             />
             <SliderControl
               label="Wall Height"
-              max={1000}
               min={0}
               onChange={(v) => previewProp({ height: v })}
               onCommit={(v) => commitProp({ height: v })}
@@ -320,7 +329,6 @@ export default function DormerPanel() {
             />
             <SliderControl
               label={node.roofType === 'shed' ? 'Pitch Rise' : 'Roof Height'}
-              max={3}
               min={0}
               onChange={(v) => previewProp({ roofHeight: v })}
               onCommit={(v) => commitProp({ roofHeight: v })}
@@ -330,29 +338,6 @@ export default function DormerPanel() {
               unit="m"
               value={node.roofHeight}
             />
-          </PanelSection>
-
-          <PanelSection title="Roof Type">
-            <div className="grid grid-cols-3 gap-1.5 px-1 pt-1">
-              {ROOF_TYPE_OPTIONS.map((option) => {
-                const isSelected = node.roofType === option.value
-                return (
-                  <button
-                    className={cn(
-                      'flex min-h-10 items-center justify-center rounded-lg border px-2 py-2 text-xs transition-colors',
-                      isSelected
-                        ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                        : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
-                    )}
-                    key={option.value}
-                    onClick={() => handleUpdate({ roofType: option.value })}
-                    type="button"
-                  >
-                    <span className="truncate font-medium">{option.label}</span>
-                  </button>
-                )
-              })}
-            </div>
           </PanelSection>
 
           {node.roofType === 'shed' && (
@@ -391,6 +376,15 @@ export default function DormerPanel() {
           windows={hostedWindows}
         />
       )}
+
+      <DormerPositionSection
+        commitProp={commitProp}
+        node={node}
+        previewProp={previewProp}
+        roof={roof}
+        segment={segment}
+        selectedId={selectedId}
+      />
 
       <DormerActionsSection
         onDelete={handleDelete}

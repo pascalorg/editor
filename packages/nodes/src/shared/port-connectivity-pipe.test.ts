@@ -132,7 +132,7 @@ describe('port connectivity — DWV pipe family', () => {
       armLengthM: 0,
     })
     const outlet = portsOf('pipe-trap', trap as AnyNode).find((p) => p.id === 'outlet')!
-    const run = pipeRunFrom(outlet.position)
+    const run = { ...pipeRunFrom(outlet.position), diameter: trap.diameter }
 
     const nodes: Record<string, AnyNode> = {
       [trap.id]: trap as AnyNode,

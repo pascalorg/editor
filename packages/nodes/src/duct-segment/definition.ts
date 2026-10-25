@@ -136,6 +136,9 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
         direction: unit(first, second),
         diameter: ductPortDiameterIn(n),
         system: n.system,
+        shape: n.shape,
+        width: n.width,
+        height: n.height,
       },
       {
         id: 'end',
@@ -143,6 +146,9 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
         direction: unit(last, prev),
         diameter: ductPortDiameterIn(n),
         system: n.system,
+        shape: n.shape,
+        width: n.width,
+        height: n.height,
       },
     ]
   },

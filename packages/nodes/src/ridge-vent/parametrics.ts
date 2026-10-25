@@ -22,9 +22,9 @@ export const ridgeVentParametrics: ParametricDescriptor<RidgeVentNode> = {
     {
       label: 'Dimensions',
       fields: [
-        { key: 'length', kind: 'number', unit: 'm', min: 0.5, max: 1000, step: 0.05 },
-        { key: 'width', kind: 'number', unit: 'm', min: 0.1, max: 0.6, step: 0.01 },
-        { key: 'height', kind: 'number', unit: 'm', min: 0.03, max: 0.2, step: 0.005 },
+        { key: 'length', kind: 'number', unit: 'm', min: 0.2, step: 0.05 },
+        { key: 'width', kind: 'number', unit: 'm', min: 0.1, step: 0.01 },
+        { key: 'height', kind: 'number', unit: 'm', min: 0.02, step: 0.005 },
       ],
     },
   ],

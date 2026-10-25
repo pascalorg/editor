@@ -11,8 +11,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  commitFreshPlacementSubtree,
   consumePlacementDragRelease,
+  isGridSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -21,20 +24,19 @@ import {
   createRelativeRoofDrag,
   type RelativeRoofDragTarget,
   roofSegmentLocalToBuildingLocal,
-  snapRelativeRoofDragTarget,
 } from '../shared/relative-roof-drag'
-import { resolveRidgeSnap } from '../shared/ridge-snap'
-import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
 } from '../shared/roof-surface-placement-guides'
+import { resolveRidgeVentPlacement } from './placement'
 import RidgeVentPreview from './preview'
 
 type RidgeVentDragTarget = Pick<RelativeRoofDragTarget, 'segment' | 'localX'> & {
   localY: number
   localZ: number
   rotation: number
+  valid: boolean
 }
 
 /**
@@ -51,6 +53,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
 
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewYaw, setPreviewYaw] = useState(0)
+  const [previewTarget, setPreviewTarget] = useState<RidgeVentDragTarget | null>(null)
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -80,22 +83,34 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       lastTarget = null
       lastSnap = null
       setPreviewPos(null)
+      setPreviewTarget(null)
       clearRoofSurfacePlacementGuides()
     }
 
     const resolveTarget = (event: RoofEvent): RidgeVentDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true)
-      const snap = resolveRidgeSnap(target.segment, target.localX, target.localZ)
+      const snap = resolveRidgeVentPlacement(
+        rawTarget.segment,
+        node,
+        rawTarget.localX,
+        rawTarget.localZ,
+        {
+          gridStep:
+            event.nativeEvent?.altKey !== true && isGridSnapActive()
+              ? useEditor.getState().gridSnapStep
+              : 0,
+          free: event.nativeEvent?.altKey === true,
+        },
+      )
       if (!snap) return null
-      const yOffset = original.position[1] ?? 0
       return {
-        segment: target.segment,
-        localX: snap.localX,
-        localY: getRoofTopSurfaceY(snap.localX, snap.localZ, target.segment) + yOffset,
-        localZ: snap.localZ,
+        segment: rawTarget.segment,
+        localX: snap.position[0],
+        localZ: snap.position[2],
+        localY: snap.surfaceY,
         rotation: snap.rotation,
+        valid: snap.valid,
       }
     }
 
@@ -106,18 +121,20 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
         return
       }
       lastTarget = target
+      setPreviewTarget(target)
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        event.nativeEvent?.altKey !== true &&
+        isGridSnapActive() &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 
-      setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0) + target.rotation)
+      setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
       setPreviewPos(
         roofSegmentLocalToBuildingLocal(target.segment.id, [
           target.localX,
@@ -137,39 +154,30 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
 
     const onRoofClick = (event: RoofEvent) => {
       if (committed) return
-      const target = lastTarget ?? resolveTarget(event)
-      if (!target) return
+      const target = event.node ? resolveTarget(event) : lastTarget
+      if (!target?.valid) return
       committed = true
       const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
-      const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined
-      if (prevSegmentId && prevSegmentId !== targetSegmentId) {
-        const oldSeg = st.nodes[prevSegmentId] as RoofSegmentNode | undefined
-        if (oldSeg) {
-          st.updateNode(prevSegmentId, {
-            children: (oldSeg.children ?? []).filter((id) => id !== node.id),
-          })
-        }
-        const newSeg = st.nodes[targetSegmentId] as RoofSegmentNode | undefined
-        if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-          st.updateNode(targetSegmentId, {
-            children: [...(newSeg.children ?? []), node.id],
-          })
-        }
-        st.dirtyNodes.add(prevSegmentId)
-      }
-
-      useScene.temporal.getState().resume()
-      st.updateNode(node.id as AnyNodeId, {
+      const patch = {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [target.localX, original.position[1] ?? 0, target.localZ],
+        position: [target.localX, original.position[1] ?? 0, target.localZ] as [
+          number,
+          number,
+          number,
+        ],
         rotation: target.rotation,
         visible: true,
-        metadata: {},
-      })
-      useScene.temporal.getState().pause()
+        metadata: stripPlacementMetadataFlags(original.metadata) as RidgeVentNode['metadata'],
+      }
+      if (isNew) commitFreshPlacementSubtree(node.id, patch)
+      else {
+        useScene.temporal.getState().resume()
+        st.updateNode(node.id, patch)
+        useScene.temporal.getState().pause()
+      }
 
       st.dirtyNodes.add(targetSegmentId)
       st.dirtyNodes.add(node.id as AnyNodeId)
@@ -252,12 +260,20 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
     }
   }, [exitMoveMode, node])
 
-  if (!previewPos) return null
+  if (!previewPos || !previewTarget) return null
 
   return (
     <group position={previewPos}>
       <group rotation-y={previewYaw}>
-        <RidgeVentPreview node={node} />
+        <RidgeVentPreview
+          node={{
+            ...node,
+            position: [previewTarget.localX, node.position[1], previewTarget.localZ],
+            rotation: previewTarget.rotation,
+          }}
+          segment={previewTarget.segment}
+          invalid={!previewTarget.valid}
+        />
       </group>
     </group>
   )

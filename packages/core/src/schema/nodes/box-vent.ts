@@ -23,6 +23,8 @@ export const BoxVentNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
 
+  // Missing on old scenes: preserve their original unflashed footprint.
+  flashingWidth: z.number().min(0).optional(),
   width: z.number().default(0.4),
   depth: z.number().default(0.4),
   height: z.number().default(0.15),

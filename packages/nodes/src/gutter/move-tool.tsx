@@ -12,28 +12,29 @@ import {
 } from '@pascal-app/core'
 import {
   consumePlacementDragRelease,
+  isGridSnapActive,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
-import { createRelativeRoofDrag, snapRelativeRoofDragTarget } from '../shared/relative-roof-drag'
+import { createRelativeRoofDrag } from '../shared/relative-roof-drag'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfaceNodePlacementGuides,
 } from '../shared/roof-surface-placement-guides'
-import { type EaveSnap, resolveEaveSnap } from './eave-snap'
+import { type EaveSnap, resolveGutterPlacement } from './eave-snap'
 import GutterPreview from './preview'
 
 type PreviewTarget = {
   roof: { position: [number, number, number]; rotation: number }
   segment: { position: [number, number, number]; rotation: number }
-  snap: EaveSnap
+  snap: EaveSnap & { length: number }
 }
 
 type GutterDragTarget = {
   segment: RoofSegmentNode
-  snap: EaveSnap
+  snap: EaveSnap & { length: number }
 }
 
 /**
@@ -60,8 +61,6 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
   const [target, setTarget] = useState<PreviewTarget | null>(null)
 
   useEffect(() => {
-    useScene.temporal.getState().pause()
-
     const original = {
       position: [...node.position] as [number, number, number],
       rotation: node.rotation ?? 0,
@@ -93,10 +92,17 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     const resolveTarget = (event: RoofEvent): GutterDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true)
+      const target = rawTarget
       return {
         segment: target.segment,
-        snap: resolveEaveSnap(target.segment, target.localX, target.localZ),
+        snap: resolveGutterPlacement(
+          target.segment,
+          target.localX,
+          target.localZ,
+          node.length,
+          !event.nativeEvent?.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+          event.nativeEvent?.altKey === true,
+        ),
       }
     }
 
@@ -116,10 +122,11 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       // stay on ±Z.
       const { snap } = target
 
-      const sx = Math.round(snap.eaveX * 20) / 20
-      const sz = Math.round(snap.eaveZ * 20) / 20
+      const sx = snap.eaveX
+      const sz = snap.eaveZ
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        !event.nativeEvent?.altKey &&
+        isGridSnapActive() &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
         triggerSFX('sfx:grid-snap')
@@ -141,7 +148,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
         roof,
         segment: target.segment,
         center: [snap.eaveX, snap.eaveY, snap.eaveZ],
-        node: { ...node, rotation: snap.rotation },
+        node: { ...node, length: snap.length, rotation: snap.rotation },
         mode: 'linear-edge',
       })
       event.stopPropagation()
@@ -156,33 +163,15 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       const { snap } = target
       const st = useScene.getState()
 
-      const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined
-      if (prevSegmentId && prevSegmentId !== targetSegmentId) {
-        const oldSeg = st.nodes[prevSegmentId] as RoofSegmentNode | undefined
-        if (oldSeg) {
-          st.updateNode(prevSegmentId, {
-            children: (oldSeg.children ?? []).filter((id) => id !== node.id),
-          })
-        }
-        const newSeg = st.nodes[targetSegmentId] as RoofSegmentNode | undefined
-        if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-          st.updateNode(targetSegmentId, {
-            children: [...(newSeg.children ?? []), node.id],
-          })
-        }
-        st.dirtyNodes.add(prevSegmentId)
-      }
-
-      useScene.temporal.getState().resume()
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
         position: [snap.eaveX, snap.eaveY, snap.eaveZ],
         rotation: snap.rotation,
         visible: true,
-        metadata: {},
+        length: snap.length,
+        metadata: { ...meta, isNew: undefined },
       })
-      useScene.temporal.getState().pause()
 
       st.dirtyNodes.add(targetSegmentId)
       st.dirtyNodes.add(node.id as AnyNodeId)
@@ -198,37 +187,16 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
 
     const onCancel = () => {
       if (isNew) {
-        const parentId = original.roofSegmentId as AnyNodeId | undefined
-        if (parentId) {
-          const parent = useScene.getState().nodes[parentId] as RoofSegmentNode | undefined
-          if (parent) {
-            useScene.getState().updateNode(parentId, {
-              children: (parent.children ?? []).filter((id) => id !== node.id),
-            })
-          }
-        }
         useScene.getState().deleteNode(node.id as AnyNodeId)
-        useScene.temporal.getState().resume()
         markToolCancelConsumed()
         clearRoofSurfacePlacementGuides()
         exitMoveMode()
         return
       }
 
-      useScene.getState().updateNode(node.id as AnyNodeId, {
-        position: original.position,
-        rotation: original.rotation,
-        roofSegmentId: original.roofSegmentId as AnyNodeId | undefined,
-        parentId: original.parentId as AnyNodeId | undefined,
-        metadata: original.metadata,
-      })
-      if (original.roofSegmentId) {
-        useScene.getState().dirtyNodes.add(original.roofSegmentId as AnyNodeId)
-      }
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
 
-      useScene.temporal.getState().resume()
       markToolCancelConsumed()
       clearRoofSurfacePlacementGuides()
       exitMoveMode()
@@ -261,7 +229,6 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
       clearRoofSurfacePlacementGuides()
-      useScene.temporal.getState().resume()
     }
   }, [exitMoveMode, node])
 
@@ -274,7 +241,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
           position={[target.snap.eaveX, target.snap.eaveY, target.snap.eaveZ]}
           rotation-y={target.snap.rotation}
         >
-          <GutterPreview node={node} />
+          <GutterPreview node={{ ...node, length: target.snap.length }} />
         </group>
       </group>
     </group>

@@ -13,8 +13,9 @@ type LocalPort = {
   system: 'supply' | 'return' | 'refrigerant'
   // Duct collars only — the cross-section the collar mesh and wall hole
   // take. `diameter` above is the area-equivalent round size the port
-  // advertises so round runs mate at a sensible size. Refrigerant ports
+  // advertises for sizing summaries; physical mating also checks the shape. Refrigerant ports
   // are always round and omit these.
+  connectionType?: string
   shape?: CollarShape
   width?: number
   height?: number
@@ -26,11 +27,6 @@ function collarDiameterIn(shape: CollarShape, diameter: number, width: number, h
   if (shape === 'oval') return ovalEquivalentDiameterIn(width, height)
   return diameter
 }
-
-/** Nominal suction-line OD (inches) the refrigerant service connection
- * advertises — matches the lineset kind's default suction diameter so a
- * lineset run mates cleanly onto the valve. */
-const REFRIGERANT_PORT_DIAMETER_IN = 0.875
 
 /**
  * Duct ports in the cabinet's LOCAL frame (origin at the base center,
@@ -44,8 +40,18 @@ export function localEquipmentPorts(node: HvacEquipmentNode): LocalPort[] {
   return [
     {
       id: 'supply',
-      position: new Vector3(0, node.height, 0),
-      direction: new Vector3(0, 1, 0),
+      position:
+        node.supplyFace === 'left' || node.supplyFace === 'right'
+          ? new Vector3(
+              ((node.supplyFace === 'left' ? -1 : 1) * node.width) / 2,
+              node.height * 0.8,
+              0,
+            )
+          : new Vector3(0, node.height, 0),
+      direction:
+        node.supplyFace === 'left' || node.supplyFace === 'right'
+          ? new Vector3(node.supplyFace === 'left' ? -1 : 1, 0, 0)
+          : new Vector3(0, 1, 0),
       diameter: collarDiameterIn(
         node.supplyShape,
         node.supplyDiameter,
@@ -59,8 +65,12 @@ export function localEquipmentPorts(node: HvacEquipmentNode): LocalPort[] {
     },
     {
       id: 'return',
-      position: new Vector3(-node.width / 2, node.height * 0.35, 0),
-      direction: new Vector3(-1, 0, 0),
+      position: new Vector3(
+        ((node.returnFace === 'right' ? 1 : -1) * node.width) / 2,
+        node.height * 0.35,
+        0,
+      ),
+      direction: new Vector3(node.returnFace === 'right' ? 1 : -1, 0, 0),
       diameter: collarDiameterIn(
         node.returnShape,
         node.returnDiameter,
@@ -78,20 +88,32 @@ export function localEquipmentPorts(node: HvacEquipmentNode): LocalPort[] {
 /**
  * Refrigerant service connection in the cabinet's LOCAL frame — the point
  * a lineset run leaves from (condenser) or arrives at (indoor coil on a
- * furnace / air handler). Every equipment type exposes exactly one, on the
+ * furnace / air handler). Every equipment type exposes separate suction and liquid ports, on the
  * +X service-valve face: a condenser/air-handler near the bottom third, a
  * furnace near the top where the cased A-coil sits above the heat
  * exchanger.
  */
 export function localRefrigerantPorts(node: HvacEquipmentNode): LocalPort[] {
   const y = node.equipmentType === 'furnace' ? node.height * 0.8 : node.height * 0.3
+  const side = node.serviceFace === 'left' ? -1 : 1
+  const spacing =
+    (((node.suctionDiameter ?? 0.875) + (node.liquidDiameter ?? 0.375)) * 0.0254) / 2 + 0.03
   return [
     {
       id: 'lineset',
-      position: new Vector3(node.width / 2, y, 0),
-      direction: new Vector3(1, 0, 0),
-      diameter: REFRIGERANT_PORT_DIAMETER_IN,
+      position: new Vector3((side * node.width) / 2, y, 0),
+      direction: new Vector3(side, 0, 0),
+      diameter: node.suctionDiameter ?? 0.875,
       system: 'refrigerant',
+      connectionType: 'suction',
+    },
+    {
+      id: 'liquid',
+      position: new Vector3((side * node.width) / 2, y, spacing),
+      direction: new Vector3(side, 0, 0),
+      diameter: node.liquidDiameter ?? 0.375,
+      system: 'refrigerant',
+      connectionType: 'liquid',
     },
   ]
 }
@@ -114,6 +136,7 @@ export function getHvacEquipmentPorts(node: HvacEquipmentNode): NodePort[] {
       direction: [direction.x, direction.y, direction.z] as const,
       diameter: port.diameter,
       system: port.system,
+      connectionType: port.connectionType,
       shape: port.shape,
       width: port.width,
       height: port.height,

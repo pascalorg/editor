@@ -1,11 +1,14 @@
-import type { CupolaNode } from '@pascal-app/core'
+import type { CupolaNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import { finishAccessoryNormals } from '../shared/accessory-normals'
 import {
   copyUvToSecondaryChannel,
   cumulativeProfileDistances,
   type MetricUv,
   planarMetricUvs,
 } from '../shared/primitive-uv'
+
+import { cupolaMount } from './placement'
 
 export const CUPOLA_MATERIAL_INDEX = {
   base: 0,
@@ -33,7 +36,10 @@ export const CUPOLA_MATERIAL_INDEX = {
  * Pure: no React, no scene access, no store mutation. Safe for unit tests,
  * the placement preview, and the move-tool ghost.
  */
-export function buildCupolaGeometry(node: CupolaNode): THREE.BufferGeometry {
+function buildUnsmoothedCupolaGeometry(
+  node: CupolaNode,
+  segment?: RoofSegmentNode,
+): THREE.BufferGeometry {
   const w = Math.max(0.2, node.width)
   const d = Math.max(0.2, node.depth)
   const h = Math.max(0.3, node.height)
@@ -44,7 +50,7 @@ export function buildCupolaGeometry(node: CupolaNode): THREE.BufferGeometry {
   const baseH = h * 0.05
   const bodyH = h * 0.42
   const corniceH = h * 0.06
-  const roofH = h * 0.32
+  const roofH = h * (node.finial ? 0.32 : 0.47)
   const baseTop = baseH
   const bodyTop = baseTop + bodyH
   const corniceTop = bodyTop + corniceH
@@ -59,13 +65,36 @@ export function buildCupolaGeometry(node: CupolaNode): THREE.BufferGeometry {
   const uv: number[] = []
 
   // Base plinth (slightly wider than the body) — closed box.
-  addBox(p, n, uv, hw + baseOvh, hd + baseOvh, 0, baseTop)
+  if (segment) {
+    const { perimeter } = cupolaMount(segment, node)
+    for (let i = 0; i < perimeter.length; i++) {
+      const a = perimeter[i]!,
+        b = perimeter[(i + 1) % perimeter.length]!
+      pushQuad(p, n, uv, a, b, [b[0], 0, b[2]], [a[0], 0, a[2]], [a[0] + b[0], 0, a[2] + b[2]])
+    }
+  }
+  addBox(p, n, uv, hw + baseOvh, hd + baseOvh, 0, baseTop * 0.45)
+  addBox(p, n, uv, hw + baseOvh * 0.55, hd + baseOvh * 0.55, baseTop * 0.45, baseTop)
   const baseEnd = p.length / 3
-  // Body — closed box; the louvers are applied as relief on its walls.
-  addBox(p, n, uv, hw, hd, baseTop, bodyTop)
+  // Recessed backing, corner posts and rails frame the louver openings.
+  addBox(p, n, uv, hw * 0.91, hd * 0.91, baseTop, bodyTop)
+  const post = Math.min(w, d) * 0.07
+  for (const x of [-hw + post / 2, hw - post / 2]) {
+    for (const z of [-hd + post / 2, hd - post / 2]) {
+      const start = p.length
+      addBox(p, n, uv, post / 2, post / 2, baseTop, bodyTop)
+      for (let i = start; i < p.length; i += 3) {
+        p[i]! += x
+        p[i + 2]! += z
+      }
+    }
+  }
+  addBox(p, n, uv, hw, hd, baseTop, baseTop + bodyH * 0.08)
+  addBox(p, n, uv, hw, hd, bodyTop - bodyH * 0.08, bodyTop)
   const bodyEnd = p.length / 3
   // Cornice — overhanging slab the roof sits on.
-  addBox(p, n, uv, hw + cornOvh, hd + cornOvh, bodyTop, corniceTop)
+  addBox(p, n, uv, hw + cornOvh * 0.55, hd + cornOvh * 0.55, bodyTop, bodyTop + corniceH * 0.45)
+  addBox(p, n, uv, hw + cornOvh, hd + cornOvh, bodyTop + corniceH * 0.45, corniceTop)
   const corniceEnd = p.length / 3
 
   // Louvered slats on all four body faces.
@@ -83,13 +112,18 @@ export function buildCupolaGeometry(node: CupolaNode): THREE.BufferGeometry {
 
   // Finial: a short post topped by a ball.
   if (node.finial) {
-    const ballR = Math.min(w, d) * 0.05
+    const ballR = Math.min(Math.min(w, d) * 0.05, h * 0.035)
     const postR = ballR * 0.45
-    const postTop = apexY + roofH * 0.18
+    const postTop = h - ballR * 1.7
     addCylinder(p, n, uv, postR, apexY, postTop)
     addSphere(p, n, uv, ballR, postTop + ballR * 0.7)
   }
 
+  if (segment) {
+    const mount = cupolaMount(segment, node)
+    const rise = mount.seatY - mount.centerY
+    for (let i = 1; i < p.length; i += 3) p[i]! += rise
+  }
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3))
@@ -127,9 +161,7 @@ function addBox(
 }
 
 // ─── Louvers ─────────────────────────────────────────────────────────
-// Angled slats standing proud of each body face. Each slat is a double-
-// sided angled quad (emitted twice with opposite hints) so it reads from
-// both above and below. The solid body wall behind them blocks see-through.
+// Closed angled slats sit in front of recessed backing on each face.
 
 const SLAT_COUNT = 5
 
@@ -155,12 +187,13 @@ function addLouvers(
   const bottom = y0 + margin
   const span = top - bottom
   const drop = span / (SLAT_COUNT + 1)
-  const proj = drop * 0.9
+  const proj = Math.min(drop * 0.9, Math.min(hw, hd) * 0.08)
+  const thickness = Math.min(drop * 0.12, 0.008)
 
   for (const { map, halfU } of faces) {
     const outDir = sub(map(0, 0, 1), map(0, 0, 0))
     const upOut: number[] = [outDir[0]!, 1, outDir[2]!]
-    const downOut: number[] = [outDir[0]!, -1, outDir[2]!]
+    const downOut: number[] = [-upOut[0]!, -1, -upOut[2]!]
     for (let k = 1; k <= SLAT_COUNT; k++) {
       const yTop = bottom + (span * k) / SLAT_COUNT
       const a = map(-halfU, yTop, 0)
@@ -169,7 +202,19 @@ function addLouvers(
       const dd = map(-halfU, yTop - drop, proj)
       // Top + underside of the slat.
       pushQuad(p, n, uv, a, b, c, dd, upOut)
-      pushQuad(p, n, uv, a, b, c, dd, downOut)
+      const lower = [a, b, c, dd].map((q) => [q[0]!, q[1]! - thickness, q[2]!])
+      pushQuad(p, n, uv, lower[0]!, lower[1]!, lower[2]!, lower[3]!, downOut)
+      const upper = [a, b, c, dd]
+      for (let j = 0; j < 4; j++) {
+        const k = (j + 1) % 4
+        const hint =
+          j === 0
+            ? [-outDir[0]!, 0, -outDir[2]!]
+            : j === 2
+              ? outDir
+              : sub(map(j === 1 ? 1 : -1, 0, 0), map(0, 0, 0))
+        pushQuad(p, n, uv, upper[j]!, upper[k]!, lower[k]!, lower[j]!, hint)
+      }
     }
   }
 }
@@ -211,8 +256,8 @@ function addDomeRoof(
   y0: number,
   domeH: number,
 ): void {
-  const lng = 20
-  const lat = 6
+  const lng = 48
+  const lat = 12
   let prev = ringAt(rx, rz, y0, lng)
   let prevU = cumulativeProfileDistances(prev)
   let domeV = 0
@@ -450,4 +495,11 @@ function pushTri(
     uvs.push(...uvA, ...uvB, ...uvC)
   }
   for (let i = 0; i < 3; i++) normals.push(nx, ny, nz)
+}
+
+export function buildCupolaGeometry(
+  node: CupolaNode,
+  segment?: RoofSegmentNode,
+): THREE.BufferGeometry {
+  return finishAccessoryNormals(buildUnsmoothedCupolaGeometry(node, segment))
 }

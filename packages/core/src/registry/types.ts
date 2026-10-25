@@ -330,6 +330,8 @@ export type NodePort = {
    *  face at roll 0, height the vertical one. */
   width?: number
   height?: number
+  /** Physical connection subtype, such as suction or liquid refrigerant. */
+  connectionType?: string
   /** Ports sharing a group are one flow path of one system (F6). Unread until F6. */
   group?: string
   /** Membership label of this port's group; labels, never connects (F6). Unread until F6. */

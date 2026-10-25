@@ -1,22 +1,27 @@
 import type { ParametricDescriptor } from '@pascal-app/core'
-import { DownspoutPositionEditor } from './inspector-editors'
+import {
+  DownspoutLengthModeEditor,
+  DownspoutPositionEditor,
+  DownspoutShapeEditor,
+  DownspoutTerminalEditor,
+} from './inspector-editors'
 import type { DownspoutNode } from './schema'
 
 export const downspoutParametrics: ParametricDescriptor<DownspoutNode> = {
-  derive: (_next, patch) => ('length' in patch ? { lengthMode: 'manual' } : {}),
+  derive: (_next, patch) =>
+    'length' in patch && !('lengthMode' in patch) ? { lengthMode: 'manual' } : {},
   groups: [
+    { label: 'Style', fields: [{ key: 'shape', kind: 'custom', component: DownspoutShapeEditor }] },
+    {
+      label: 'Bottom treatment',
+      fields: [{ key: 'terminal', kind: 'custom', component: DownspoutTerminalEditor }],
+    },
     {
       label: 'Dimensions',
       fields: [
-        { key: 'length', kind: 'number', unit: 'm', min: 0.1, max: 1000, step: 0.05 },
-        { key: 'diameter', kind: 'number', unit: 'm', min: 0.02, max: 0.15, step: 0.005 },
-        // Cross-section: follow the gutter profile, or force round / rect.
-        {
-          key: 'shape',
-          kind: 'enum',
-          options: ['auto', 'round', 'rect'],
-          display: 'segmented',
-        },
+        { key: 'lengthMode', kind: 'custom', component: DownspoutLengthModeEditor },
+        { key: 'length', kind: 'number', unit: 'm', min: 0.1, step: 0.05 },
+        { key: 'diameter', kind: 'number', unit: 'm', min: 0.02, step: 0.005 },
       ],
     },
     {
@@ -34,16 +39,8 @@ export const downspoutParametrics: ParametricDescriptor<DownspoutNode> = {
           kind: 'number',
           unit: 'm',
           min: 0.3,
-          max: 3,
           step: 0.1,
           visibleIf: (n) => (n.strapStyle ?? 'band') !== 'none',
-        },
-        // Bottom treatment: splash block, kickout only, or straight to grade.
-        {
-          key: 'terminal',
-          kind: 'enum',
-          options: ['splash', 'kickout', 'straight'],
-          display: 'segmented',
         },
       ],
     },
@@ -63,7 +60,7 @@ export const downspoutParametrics: ParametricDescriptor<DownspoutNode> = {
         // auto-routed run buries into the wall (the wall isn't where the
         // roof overhang implies); 0 puts the pipe surface on the wall
         // face; large values pull the run back out toward the eave.
-        { key: 'standoff', kind: 'number', unit: 'm', min: 0, max: 0.6, step: 0.01 },
+        { key: 'standoff', kind: 'number', unit: 'm', min: 0, step: 0.01 },
       ],
     },
   ],

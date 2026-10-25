@@ -24,10 +24,6 @@ import {
  *   - flat: no ridge at all → return null.
  */
 
-// Ridge vents seat directly onto the analytical roof surface; any visible
-// thickness belongs in the vent geometry itself, not in a renderer lift.
-export const RIDGE_LIFT = 0.09
-
 export type RidgeSnap = {
   /** Segment-local X of the snapped ridge position. */
   localX: number

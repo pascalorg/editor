@@ -66,7 +66,7 @@ export function buildTurbineVentFloorplan(
   const fillOpacity = showSelectedChrome ? 0.55 : 0.7
   const lineWidth = showSelectedChrome ? 0.03 : 0.02
 
-  const ro = Math.max(node.diameter, 0.05) / 2
+  const ro = Math.max(node.diameter, 0.1) / 2
   const flangeR = ro + Math.max(0, node.baseOverhang ?? 0.05)
 
   const circle = (r: number): FloorplanPoint[] => {

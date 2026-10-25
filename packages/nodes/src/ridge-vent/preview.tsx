@@ -1,16 +1,36 @@
 'use client'
 
+import type { RoofSegmentNode } from '@pascal-app/core'
+import { EDITOR_LAYER } from '@pascal-app/editor'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildRidgeVentGeometry } from './geometry'
 import type { RidgeVentNode } from './schema'
 
-const RidgeVentPreview = ({ node, invalid }: { node: RidgeVentNode; invalid?: boolean }) => {
+const RidgeVentPreview = ({
+  node,
+  invalid,
+  segment,
+}: {
+  node: RidgeVentNode
+  invalid?: boolean
+  segment?: RoofSegmentNode
+}) => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
-    () => buildRidgeVentGeometry(node),
-    [node.length, node.width, node.height, node.style, node.endCaps],
+    () => buildRidgeVentGeometry(node, segment),
+    [
+      node.length,
+      node.width,
+      node.height,
+      node.style,
+      node.endCaps,
+      node.rotation,
+      node.position[0],
+      node.position[2],
+      segment,
+    ],
   )
 
   const material = useMemo(
@@ -31,26 +51,27 @@ const RidgeVentPreview = ({ node, invalid }: { node: RidgeVentNode; invalid?: bo
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])
 
-  useEffect(
-    () => () => {
-      geometry.dispose()
-      edgesGeometry.dispose()
-      material.dispose()
-    },
-    [geometry, edgesGeometry, material],
-  )
+  useEffect(() => () => geometry.dispose(), [geometry])
+  useEffect(() => () => edgesGeometry.dispose(), [edgesGeometry])
+  useEffect(() => () => material.dispose(), [material])
 
   return (
     <group rotation-y={node.rotation ?? 0}>
       <mesh
+        layers={EDITOR_LAYER}
         geometry={geometry}
         material={material}
         raycast={() => {
           /* see box-vent preview note */
         }}
       />
-      <lineSegments geometry={edgesGeometry} renderOrder={1000}>
-        <lineBasicMaterial color={0x6c_a3_ff} depthTest={false} opacity={0.9} transparent />
+      <lineSegments layers={EDITOR_LAYER} geometry={edgesGeometry} renderOrder={1000}>
+        <lineBasicMaterial
+          color={invalid ? INVALID_GHOST_COLOR : 0x6c_a3_ff}
+          depthTest={false}
+          opacity={0.9}
+          transparent
+        />
       </lineSegments>
     </group>
   )

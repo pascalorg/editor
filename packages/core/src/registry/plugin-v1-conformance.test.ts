@@ -118,7 +118,18 @@ const pipeDef: NodeDefinition<typeof Pipe> = {
   ports: ({ path }) => {
     const start = path[0]
     const end = path.at(-1)
-    return start && end && path.length > 1 ? [water('start', start), water('end', end)] : []
+    return start && end && path.length > 1
+      ? [
+          {
+            ...water('start', start),
+            direction: start.map((value, i) => value - path[1]![i]!) as [number, number, number],
+          },
+          {
+            ...water('end', end),
+            direction: end.map((value, i) => value - path.at(-2)![i]!) as [number, number, number],
+          },
+        ]
+      : []
   },
 }
 const benchDef: NodeDefinition<typeof Bench> = {

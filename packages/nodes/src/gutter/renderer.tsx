@@ -12,7 +12,6 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   resolveMaterialRef,
   useNodeEvents,
   useViewer,
@@ -20,6 +19,7 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { computeGutterMitres, type GutterWithSegment, NO_MITRES } from './corner-mitre'
 import { computeSharedEaveY } from './eave-align'
@@ -235,12 +235,12 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
   // needed.
   const material = useMemo(() => {
     if (!textures) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+      return accessoryFinish('roof', colorPreset, THREE.FrontSide, sceneTheme, shading, 'metal')
     }
     const slotMaterial = resolveMaterialRef(node.slots?.gutter, sceneMaterials, shading)
     if (slotMaterial) return slotMaterial
     if (!node.material && !node.materialPreset) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+      return accessoryFinish('roof', colorPreset, THREE.FrontSide, sceneTheme, shading, 'metal')
     }
     return node.material
       ? createMaterial(node.material, shading)

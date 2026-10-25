@@ -17,7 +17,6 @@ import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
   NodeRenderer,
   useNodeEvents,
   useViewer,
@@ -25,6 +24,7 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { accessoryFinish } from '../shared/accessory-finish'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import {
   buildDormerFallbackGeometry,
@@ -95,8 +95,8 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // role colour regardless of explicit paint (the render-modes invariant).
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const material = useMemo(() => {
-    const wallRole = () => createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
-    const roofRole = () => createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
+    const wallRole = () => accessoryFinish('wall', colorPreset, undefined, sceneTheme, shading)
+    const roofRole = () => accessoryFinish('roof', colorPreset, undefined, sceneTheme, shading)
 
     const top = getEffectiveDormerSurfaceMaterial(node, 'top')
     const side = getEffectiveDormerSurfaceMaterial(node, 'side')

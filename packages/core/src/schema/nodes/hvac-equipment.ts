@@ -19,6 +19,7 @@ import { BaseNode, nodeType, objectId } from '../base'
 export const HvacEquipmentNode = BaseNode.extend({
   id: objectId('hvac-equipment'),
   type: nodeType('hvac-equipment'),
+  slots: z.record(z.string(), z.string()).optional(),
   // Level-local meters, y at the unit's base.
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Yaw in radians.
@@ -31,6 +32,11 @@ export const HvacEquipmentNode = BaseNode.extend({
   width: z.number().min(0.3).max(2).default(0.56),
   depth: z.number().min(0.3).max(2).default(0.71),
   height: z.number().min(0.4).max(2.5).default(1.1),
+  supplyFace: z.enum(['top', 'left', 'right']).default('top'),
+  returnFace: z.enum(['left', 'right']).default('left'),
+  serviceFace: z.enum(['left', 'right']).default('right'),
+  suctionDiameter: z.number().min(0.25).max(2).default(0.875),
+  liquidDiameter: z.number().min(0.125).max(1).default(0.375),
   // Duct collar cross-section on the supply / return connections. Round is
   // the default; rect and oval (flat-oval) match the duct shapes a run
   // might mate with. Condensers carry no duct collars (ignored).
@@ -53,6 +59,8 @@ export const HvacEquipmentNode = BaseNode.extend({
   - rotation: yaw radians
   - equipmentType: furnace | air-handler | condenser
   - width / depth / height: cabinet size in meters
+  - supplyFace: top | left | right; returnFace / serviceFace: left | right
+  - suctionDiameter / liquidDiameter: separate refrigerant connection sizes in inches
   - supplyShape / returnShape: round | rect | oval duct collar cross-section (ignored by condenser)
   - supplyDiameter / returnDiameter: round collar sizes in inches
   - supplyWidth / supplyHeight / returnWidth / returnHeight: rect / oval collar cross-section in inches

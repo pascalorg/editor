@@ -36,7 +36,6 @@ import { leanToExtensionGeometryKey } from './geometry'
 import { leanToWallLocalPose, resolveLeanToWallSurfaceHit } from './layout'
 import {
   findLeanToSlabEdgePlacement,
-  LEAN_TO_RUN_CONNECT_SNAP_RADIUS,
   LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS,
   type LeanToPlanPlacementTarget,
   nextLeanToCanopyForm,
@@ -196,19 +195,18 @@ const LeanToExtensionTool = () => {
     const updateContinuousTarget = (point: [number, number], altKey = false) => {
       if (!chainStart) return null
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
-      const snap = altKey
-        ? null
-        : resolveLeanToFreestandingRunEndpointSnap({
-            activeLevelId,
-            canopyForm: freestandingCanopyForm,
-            flipProjection: chainFlipProjection,
-            maxDistance: isMagneticSnapActive()
-              ? LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS
-              : LEAN_TO_RUN_CONNECT_SNAP_RADIUS,
-            nodes,
-            proposedEnd: point,
-            start: chainStart,
-          })
+      const snap =
+        altKey || !isMagneticSnapActive()
+          ? null
+          : resolveLeanToFreestandingRunEndpointSnap({
+              activeLevelId,
+              canopyForm: freestandingCanopyForm,
+              flipProjection: chainFlipProjection,
+              maxDistance: LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS,
+              nodes,
+              proposedEnd: point,
+              start: chainStart,
+            })
       const end = snap?.point ?? point
       setChainCursorPreview(end)
       const target = resolveLeanToFreestandingRunTarget({

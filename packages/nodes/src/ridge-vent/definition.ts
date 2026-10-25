@@ -161,6 +161,7 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
   schema: RidgeVentNode,
   category: 'structure',
   surfaceRole: 'roof',
+  snapProfile: 'item',
 
   defaults: () => {
     const stub = RidgeVentNodeSchema.parse({
@@ -201,6 +202,7 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
   },
   toolHints: [
     { key: 'Left click', label: 'Place ridge vent on roof' },
+    { key: 'Alt', label: 'Place freely' },
     { key: 'Esc', label: 'Cancel' },
   ],
 
