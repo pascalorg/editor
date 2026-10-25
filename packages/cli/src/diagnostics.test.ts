@@ -15,6 +15,21 @@ test('node check follows the engines range', () => {
   }
 })
 
+test('doctor accepts Bun regardless of its reported Node version', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'pascal-cli-doctor-'))
+  try {
+    const checks = await runDoctor(resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') }))
+
+    expect(checks).toContainEqual({
+      id: 'node',
+      status: 'pass',
+      message: `Bun ${process.versions.bun}`,
+    })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('doctor reports corrupt managed state instead of crashing', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'pascal-cli-doctor-'))
   try {

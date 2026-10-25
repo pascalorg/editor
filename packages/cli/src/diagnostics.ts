@@ -29,12 +29,16 @@ export async function runDoctor(
   options: { runtimeSourceFile?: string } = {},
 ): Promise<DiagnosticCheck[]> {
   const checks: DiagnosticCheck[] = []
-  const nodeSupported = isSupportedNodeVersion(process.versions.node)
+  // Bun reports a Node compatibility version that does not track Node security releases.
+  const bun = process.versions.bun
+  const nodeSupported = bun !== undefined || isSupportedNodeVersion(process.versions.node)
   checks.push({
     id: 'node',
     status: nodeSupported ? 'pass' : 'fail',
     message: nodeSupported
-      ? `Node ${process.versions.node}`
+      ? bun
+        ? `Bun ${bun}`
+        : `Node ${process.versions.node}`
       : 'Node 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+ is required.',
   })
   try {
