@@ -43,7 +43,7 @@ and note your edits; no separate permission is needed.
 
 ## Run the Editor Locally
 
-Node.js 22.13 or newer can create a persistent local Pascal installation without
+Node.js 22.23.4 or newer can create a persistent local Pascal installation without
 cloning this repository:
 
 ```bash
