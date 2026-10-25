@@ -1,7 +1,7 @@
 ---
 name: pascal-3d
 description: Connect to Pascal and use its MCP tools to create, inspect, edit, validate, save, or hand off editable 3D building scenes. Use this skill whenever a user asks an agent to work in Pascal, make a room or building model, inspect a Pascal project, perform spatial edits, connect Pascal MCP, or return a verified Pascal editor link. It also governs safe local, existing-account, and explicitly authorized autonomous setup.
-compatibility: Requires an MCP-capable host and either the local Pascal CLI or access to the hosted Pascal MCP endpoint. Local CLI requires Node.js 22.13 or newer.
+compatibility: Requires an MCP-capable host and either the local Pascal CLI or access to the hosted Pascal MCP endpoint. Local CLI requires Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+.
 metadata:
   version: "0.1.0"
   source-reviewed: "2026-09-08"

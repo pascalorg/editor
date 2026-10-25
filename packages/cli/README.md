@@ -33,7 +33,7 @@ separately from the runtime, so updating the CLI does not replace your work.
 
 ## Requirements
 
-- Node.js 22.13 or newer
+- Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+
 - npm, including when the CLI itself is launched with pnpm or Bun
 - A browser, unless you pass `--no-open`
 - Network access the first time you start the editor, or a local copy of the web runtime

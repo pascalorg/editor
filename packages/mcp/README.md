@@ -8,7 +8,7 @@ Cursor, and OpenClaw, read [Connect an AI agent](https://editor.pascal.app/docs/
 The hosted endpoint edits projects in a Pascal account; this package is the
 open-source, local server for custom hosts and local scene storage.
 
-The server runs headlessly in Node.js 22.13 or newer or Bun, with no browser,
+The server runs headlessly in Node.js (22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+) or Bun, with no browser,
 WebGPU, React, or external database service. It exposes the same scene mutations used
 by the editor UI (create walls, place items, cut openings, undo, etc.) as MCP tools,
 resources, and prompts.
