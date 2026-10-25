@@ -65,6 +65,10 @@ jobs:
         with:
           bun-version-file: package.json
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
       # Turbo remote cache backed by the Actions cache: packages whose inputs
       # did not change replay check-types/test/build instead of rerunning.
       - name: Turbo cache
