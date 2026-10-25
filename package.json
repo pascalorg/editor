@@ -36,7 +36,7 @@
     "ultracite": "^8.0.2"
   },
   "engines": {
-    "node": ">=22.23.4"
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
   },
   "packageManager": "bun@1.4.4",
   "overrides": {
