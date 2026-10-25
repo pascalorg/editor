@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) 1.3+ and Node.js 22.18+
+- [Bun](https://bun.sh/) 1.3+ and Node.js 22.23.4+
 
 ## Quick Start
 
