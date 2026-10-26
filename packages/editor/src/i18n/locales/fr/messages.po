@@ -160,180 +160,180 @@ msgstr "Murs"
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human
 # English: "Orbit left"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:511
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:519
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:508
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:516
 msgid "viewer.camera.orbitLeft"
 msgstr "Pivoter à gauche"
 
 # Source-Hash: b9cc64c1d1bb0d46
 # Review: human
 # English: "Orbit right"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:527
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:535
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:524
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:532
 msgid "viewer.camera.orbitRight"
 msgstr "Pivoter à droite"
 
 # Source-Hash: 1ab1eb3a14f4b0e0
 # Review: human
 # English: "Top view"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:543
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:551
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:540
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:548
 msgid "viewer.camera.topView"
 msgstr "Vue de dessus"
 
 # Source-Hash: 50accd740fa2e736
 # Review: human
 # English: "Off"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:233
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:491
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:230
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:488
 msgid "viewer.common.off"
 msgstr "Désactivé"
 
 # Source-Hash: 9cc01faad79c28da
 # Review: human
 # English: "On"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:232
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:490
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:229
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:487
 msgid "viewer.common.on"
 msgstr "Activé"
 
 # Source-Hash: 14622745dbf93f4c
 # Review: human
 # English: "Camera"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:246
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:243
 msgid "viewer.display.camera"
 msgstr "Caméra"
 
 # Source-Hash: d3d478fa6c6d7ddc
 # Review: human
 # English: "Colored"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:260
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:257
 msgid "viewer.display.colored"
 msgstr "En couleur"
 
 # Source-Hash: 82b74c4f5ef43336
 # Review: human
 # English: "Colors"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:257
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:254
 msgid "viewer.display.colors"
 msgstr "Couleurs"
 
 # Source-Hash: 50accd740fa2e736
 # Review: human
 # English: "Off"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:187
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:184
 msgid "viewer.display.edges.off"
 msgstr "Désactivées"
 
 # Source-Hash: 4ff58913a4492199
 # Review: human
 # English: "No edge lines"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:188
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:185
 msgid "viewer.display.edges.offDetail"
 msgstr "Aucune ligne d’arête"
 
 # Source-Hash: d266d83ec490df4e
 # Review: human
 # English: "Soft"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:192
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:189
 msgid "viewer.display.edges.soft"
 msgstr "Douces"
 
 # Source-Hash: 0c583f1d4201293b
 # Review: human
 # English: "Faint outline of major creases"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:193
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:190
 msgid "viewer.display.edges.softDetail"
 msgstr "Contour léger des plis principaux"
 
 # Source-Hash: f82927a01d4c5e45
 # Review: human
 # English: "Strong"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:200
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:197
 msgid "viewer.display.edges.strong"
 msgstr "Marquées"
 
 # Source-Hash: 2416a48df28d6205
 # Review: human
 # English: "Crisp, opaque edge lines"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:201
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:198
 msgid "viewer.display.edges.strongDetail"
 msgstr "Lignes d’arête nettes et opaques"
 
 # Source-Hash: 027bbc8b7287c06a
 # Review: human
 # English: "Edges"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:333
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:330
 msgid "viewer.display.edges.title"
 msgstr "Arêtes"
 
 # Source-Hash: ecde2f7c26914be3
 # Review: human
 # English: "Monochrome"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:261
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:258
 msgid "viewer.display.monochrome"
 msgstr "Monochrome"
 
 # Source-Hash: ed59dd8ce7797a66
 # Review: human
 # English: "Orthographic"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:250
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:247
 msgid "viewer.display.orthographic"
 msgstr "Orthographique"
 
 # Source-Hash: 316e25993ff72b88
 # Review: human
 # English: "Perspective"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:249
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:246
 msgid "viewer.display.perspective"
 msgstr "Perspective"
 
 # Source-Hash: f363702a10aedaeb
 # Review: human
 # English: "Rendered"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:176
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:173
 msgid "viewer.display.render.rendered"
 msgstr "Réaliste"
 
 # Source-Hash: 8bb9e54fc786ca77
 # Review: human
 # English: "Full ambient occlusion"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:177
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:174
 msgid "viewer.display.render.renderedDetail"
 msgstr "Occlusion ambiante complète"
 
 # Source-Hash: ef3e765e692faf4c
 # Review: human
 # English: "Solid"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:167
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:164
 msgid "viewer.display.render.solid"
 msgstr "Solide"
 
 # Source-Hash: 8827df1cdeb02ed9
 # Review: human
 # English: "Flat and fast — no ambient occlusion"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:168
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:165
 msgid "viewer.display.render.solidDetail"
 msgstr "Rapide et uniforme, sans occlusion ambiante"
 
 # Source-Hash: 5e58af99d6d4fa6a
 # Review: human
 # English: "Render"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:270
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:267
 msgid "viewer.display.render.title"
 msgstr "Rendu"
 
 # Source-Hash: 4c6bcb30b40047fc
 # Review: human
 # English: "Shadows"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:229
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:226
 msgid "viewer.display.shadows"
 msgstr "Ombres"
 
 # Source-Hash: d0db46f206a88e2e
 # Review: human
 # English: "Display settings"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:215
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:212
 msgid "viewer.display.title"
 msgstr "Paramètres d’affichage"
 
@@ -450,35 +450,35 @@ msgstr "Zones"
 # Source-Hash: be12f8788f1f0a05
 # Review: human
 # English: "Exploded"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:63
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:61
 msgid "viewer.levels.exploded"
 msgstr "Éclatés"
 
 # Source-Hash: 4bf4a6861d7d633e
 # Review: human
 # English: "Levels: {mode}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:418
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:415
 msgid "viewer.levels.label"
 msgstr "Niveaux : {mode}"
 
 # Source-Hash: 387082cd5f118bed
 # Review: human
 # English: "Manual"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:65
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:63
 msgid "viewer.levels.manual"
 msgstr "Manuel"
 
 # Source-Hash: e9f59b513f2f45ac
 # Review: human
 # English: "Solo"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:64
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:62
 msgid "viewer.levels.solo"
 msgstr "Isolé"
 
 # Source-Hash: c203c84eee18c0f6
 # Review: human
 # English: "Stacked"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:61
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:60
 msgid "viewer.levels.stacked"
 msgstr "Superposés"
 
@@ -499,125 +499,125 @@ msgstr "Partagé"
 # Source-Hash: f14b89d713d2528a
 # Review: human
 # English: "Blueprint"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:80
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:77
 msgid "viewer.theme.blueprint"
 msgstr "Plan"
 
 # Source-Hash: 142bcb2841f423c5
 # Review: human
 # English: "Mediterranean"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:82
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:79
 msgid "viewer.theme.mediterranean"
 msgstr "Méditerranéen"
 
 # Source-Hash: b399942ec5d7e1ba
 # Review: human
 # English: "Night"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:84
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:81
 msgid "viewer.theme.night"
 msgstr "Nuit"
 
 # Source-Hash: f512d1b947b8ae5a
 # Review: human
 # English: "Overcast"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:79
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:76
 msgid "viewer.theme.overcast"
 msgstr "Ciel couvert"
 
 # Source-Hash: 583542b3bc837192
 # Review: human
 # English: "Paper"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:77
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:74
 msgid "viewer.theme.paper"
 msgstr "Papier"
 
 # Source-Hash: 7abc2dc6e39b1747
 # Review: human
 # English: "Studio"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:76
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:73
 msgid "viewer.theme.studio"
 msgstr "Studio"
 
 # Source-Hash: efe94d3ec8d8c44e
 # Review: human
 # English: "Sunset"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:78
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:75
 msgid "viewer.theme.sunset"
 msgstr "Coucher de soleil"
 
 # Source-Hash: 82720864e5034398
 # Review: human
 # English: "Scene theme"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:298
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:295
 msgid "viewer.theme.title"
 msgstr "Ambiance"
 
 # Source-Hash: 4c10ea0aa0e2ea41
 # Review: human
 # English: "Twilight"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:83
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:80
 msgid "viewer.theme.twilight"
 msgstr "Crépuscule"
 
 # Source-Hash: f9592fb0672740c0
 # Review: human
 # English: "Verdant"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:85
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:82
 msgid "viewer.theme.verdant"
 msgstr "Verdoyant"
 
 # Source-Hash: 892d5dd34372028b
 # Review: human
 # English: "Guides"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:141
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:138
 msgid "viewer.visibility.guides"
 msgstr "Repères"
 
 # Source-Hash: 3260bfa69cca50e5
 # Review: human
 # English: "Scans"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:128
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:125
 msgid "viewer.visibility.scans"
 msgstr "Relevés 3D"
 
 # Source-Hash: 2cefbb554eadbb6e
 # Review: human
 # English: "Visibility"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:113
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:110
 msgid "viewer.visibility.title"
 msgstr "Visibilité"
 
 # Source-Hash: 31afd9dee47ba943
 # Review: human
 # English: "Walkthrough: {state}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:485
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:482
 msgid "viewer.walkthrough.label"
 msgstr "Visite : {state}"
 
 # Source-Hash: 4da8b3678ed77b45
 # Review: human
 # English: "Cutaway"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:72
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:69
 msgid "viewer.walls.cutaway"
 msgstr "Vue en coupe"
 
 # Source-Hash: 131bac2467f4fdf6
 # Review: human
 # English: "Full height"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:70
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:67
 msgid "viewer.walls.fullHeight"
 msgstr "Pleine hauteur"
 
 # Source-Hash: 32f3d058cf2526d2
 # Review: human
 # English: "Walls: {mode}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:447
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:444
 msgid "viewer.walls.label"
 msgstr "Murs : {mode}"
 
 # Source-Hash: 803532407fb5962b
 # Review: human
 # English: "Low"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:71
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx:68
 msgid "viewer.walls.low"
 msgstr "Bas"

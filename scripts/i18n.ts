@@ -203,7 +203,7 @@ function validateGlossary(
     const normalizedTerm = english.toLocaleLowerCase('en')
     if (
       typeof expected === 'string' &&
-      (normalizedSource === normalizedTerm || normalizedSource === `${normalizedTerm}s`) &&
+      normalizedSource === normalizedTerm &&
       !normalizedTranslation.includes(expected.toLocaleLowerCase(locale))
     ) {
       errors.push(`expected glossary term "${expected}" for "${english}"`)
