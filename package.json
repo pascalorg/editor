@@ -17,7 +17,7 @@
     "i18n:compile": "bun scripts/i18n.ts compile",
     "i18n:extract": "bun scripts/i18n.ts extract",
     "i18n:translate": "bun scripts/i18n.ts translate",
-    "test": "turbo run test",
+    "test": "turbo run test && bun test scripts/i18n.test.ts apps/editor/proxy.test.ts",
     "ci": "bun run check && bun run i18n:check && bun run skills:validate && bun run check-types && bun run test && bun run build",
     "postinstall": "([ -n \"$CI\" ] || [ ! -e .git ] || git config core.hooksPath .githooks)",
     "skills:validate": "bun scripts/validate-skills.ts && bun scripts/sync-agent-versions.ts --check && bun test scripts/sync-agent-versions.test.ts scripts/cursor-plugin-policy.test.ts scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/openai-tool-annotation-policy.test.ts scripts/path-containment.test.ts scripts/public-skill-discovery-policy.test.ts",

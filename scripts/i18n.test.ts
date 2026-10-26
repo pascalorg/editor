@@ -4,6 +4,7 @@ import type { CatalogType } from '@lingui/conf'
 import linguiConfig from '../lingui.config'
 import {
   checkCatalogs,
+  escapePoCommentValue,
   hashSource,
   refreshTranslations,
   type SourceMessage,
@@ -11,6 +12,14 @@ import {
   type TranslationProvider,
   validateTranslation,
 } from './i18n'
+
+test('AI review notes cannot inject physical PO lines', () => {
+  const escaped = escapePoCommentValue('Check wording.\nmsgid "injected"\r\nmsgstr "value"')
+
+  expect(escaped).toBe('Check wording.\\nmsgid "injected"\\nmsgstr "value"')
+  expect(escaped).not.toContain('\n')
+  expect(escaped).not.toContain('\r')
+})
 
 test('PO output is stable when an unrelated source line is added', async () => {
   const format = linguiConfig.format

@@ -84,6 +84,10 @@ export function hashSource(message: string): string {
   return createHash('sha256').update(JSON.stringify(message)).digest('hex').slice(0, 16)
 }
 
+export function escapePoCommentValue(value: string): string {
+  return value.replaceAll('\r\n', '\\n').replaceAll('\r', '\\r').replaceAll('\n', '\\n')
+}
+
 function commentValue(item: PoItem, prefix: string): string | undefined {
   return item.comments.find((comment) => comment.startsWith(prefix))?.slice(prefix.length)
 }
@@ -457,7 +461,11 @@ function applyTranslations(
     replaceComment(item, ENGLISH_PREFIX, JSON.stringify(source.message))
     replaceComment(item, SOURCE_HASH_PREFIX, entry.sourceHash)
     replaceComment(item, REVIEW_PREFIX, entry.review)
-    replaceComment(item, REVIEW_NOTES_PREFIX, entry.reviewNotes || undefined)
+    replaceComment(
+      item,
+      REVIEW_NOTES_PREFIX,
+      entry.reviewNotes ? escapePoCommentValue(entry.reviewNotes) : undefined,
+    )
     replaceComment(
       item,
       AI_PROVIDER_PREFIX,
