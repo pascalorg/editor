@@ -127,6 +127,8 @@ These workflows require a connected Pascal MCP server for their tool-backed acti
 
 ### MCP Registry
 
+[![smithery badge](https://smithery.ai/badge/pascalapp/editor)](https://smithery.ai/servers/pascalapp/editor)
+
 [`server.json`](server.json) is Pascal's manifest for the official MCP Registry, named
 `app.pascal/editor`. It lists the `@pascal-app/mcp` npm package and the hosted Streamable HTTP
 endpoint, which signs in with OAuth. Its version is the `@pascal-app/mcp` package version:
