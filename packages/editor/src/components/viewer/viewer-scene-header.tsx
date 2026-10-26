@@ -1,9 +1,7 @@
 'use client'
 
 import {
-  getLevelDisplayName,
   type LevelNode,
-  levelDisplayNumber,
   type PascalI18n,
   sceneRegistry,
   useLocale,
@@ -14,6 +12,7 @@ import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { ArrowLeft, ChevronRight, Layers } from 'lucide-react'
 import Link from 'next/link'
 import { type ReactNode, useMemo } from 'react'
+import { localizedLevelName } from '../../i18n/level-name'
 import { cn } from '../../lib/utils'
 import {
   applyViewerClick,
@@ -49,31 +48,6 @@ function sectionTitle(kind: ViewerSidebarSection['kind'], i18n: PascalI18n): str
   if (kind === 'units') return i18n._({ id: 'viewer.header.units', message: 'Units' })
   if (kind === 'rooms') return i18n._({ id: 'viewer.header.rooms', message: 'Rooms' })
   return i18n._({ id: 'viewer.header.zones', message: 'Zones' })
-}
-
-function translatedLevelName(level: LevelNode, i18n: PascalI18n, locale: string): string {
-  const english = getLevelDisplayName(level)
-  const authoredName = level.name?.trim()
-  if (authoredName && authoredName !== `Level ${level.level}`) return authoredName
-  if (level.level === 0) {
-    return i18n._({ id: 'core.level.groundFloor', message: 'Ground floor' })
-  }
-  if (level.level === -1) return i18n._({ id: 'core.level.basement', message: 'Basement' })
-  if (level.level < -1) {
-    return i18n._({
-      id: 'core.level.basementNumber',
-      message: 'Basement {number}',
-      values: { number: -level.level },
-    })
-  }
-  if (level.level > 0) {
-    return i18n._({
-      id: 'core.level.floorNumber',
-      message: 'Floor {number}',
-      values: { number: levelDisplayNumber(level.level, locale) },
-    })
-  }
-  return english
 }
 
 const parametricObject = (id: string) => sceneRegistry.nodes.get(id)
@@ -252,7 +226,7 @@ export const ViewerSceneHeader = ({
                         <Layers className="h-3.5 w-3.5" />
                       </span>
                       <div className="min-w-0 flex-1 truncate text-left">
-                        {translatedLevelName(lvl, i18n, locale)}
+                        {localizedLevelName(lvl, i18n, locale)}
                       </div>
                     </div>
                   </button>

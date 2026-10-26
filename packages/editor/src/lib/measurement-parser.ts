@@ -57,6 +57,8 @@ export interface ParseMeasurementOptions {
   bareUnit?: string
   /** Disambiguates gal/ton/cup families; harmless for length/angle. */
   system?: 'metric' | 'us' | 'imperial'
+  /** Locale whose decimal separator is accepted in bare values and quantities. */
+  locale?: string
 }
 
 /**
@@ -69,7 +71,7 @@ export function parseMeasurement(
   spec: LingoUnitSpec,
   options: ParseMeasurementOptions = {},
 ): number | null {
-  const result = parseQuantity(normalizeDecimalInput(raw), {
+  const result = parseQuantity(normalizeDecimalInput(raw, options.locale), {
     kind: spec.kind,
     unit: options.bareUnit ?? spec.unitId,
     system: options.system,
@@ -106,7 +108,7 @@ export function measurementHint(
   options: MeasurementHintOptions = {},
 ): string | null {
   const trimmed = raw.trim()
-  const normalized = normalizeDecimalInput(trimmed)
+  const normalized = normalizeDecimalInput(trimmed, options.locale)
   if (!normalized || PLAIN_NUMBER.test(normalized)) return null
 
   const parsed = parseMeasurement(normalized, spec, options)

@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
-import { setLocale } from '@pascal-app/core'
+import { describe, expect, test } from 'bun:test'
 import { measurementHint, parseMeasurement } from '../index'
 import {
   buildMeasurementAngleArcPoints,
@@ -194,8 +193,6 @@ describe('volume measurements', () => {
 })
 
 describe('typed measurement fields', () => {
-  afterEach(() => setLocale('en'))
-
   test('canonicalizes explicit, compound, and scientific dimensions', () => {
     const length = { kind: 'length', unitId: 'm' } as const
     expect(parseMeasurement('180cm', length)).toBeCloseTo(1.8)
@@ -219,12 +216,11 @@ describe('typed measurement fields', () => {
   test('only treats the active locale decimal separator as a plain decimal', () => {
     const length = { kind: 'length', unitId: 'm' } as const
 
-    setLocale('en')
-    expect(measurementHint('1,000', length)).not.toBeNull()
-    expect(measurementHint('-1,000', length)).not.toBeNull()
-    expect(measurementHint('1,5', length)).not.toBeNull()
+    expect(measurementHint('1,000', length, { locale: 'en' })).not.toBeNull()
+    expect(measurementHint('-1,000', length, { locale: 'en' })).not.toBeNull()
+    expect(measurementHint('1,5', length, { locale: 'en' })).not.toBeNull()
 
-    setLocale('fr')
-    expect(measurementHint('1,5', length)).toBeNull()
+    expect(measurementHint('1,5', length, { locale: 'fr' })).toBeNull()
+    expect(parseMeasurement('2,75 m', length, { locale: 'fr' })).toBe(2.75)
   })
 })

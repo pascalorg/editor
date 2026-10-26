@@ -6,11 +6,8 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
-  getLevelDisplayName,
   isNodeKindEnabled,
-  levelDisplayNumber,
   nodeRegistry,
-  type PascalI18n,
   useLocale,
   usePascalI18n,
   useScene,
@@ -31,6 +28,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { localizedLevelName } from '../../i18n/level-name'
 import {
   FLOORPLAN_VIEW_ROTATION_DEG,
   floorplanLocalToWorldPoint,
@@ -145,36 +143,6 @@ function boundsToViewBox(bounds: FloorplanBounds): FloorplanViewBox {
     width: Math.max(bounds.maxX - bounds.minX, 1),
     height: Math.max(bounds.maxY - bounds.minY, 1),
   }
-}
-
-function levelLabel(level: AnyNode, i18n: PascalI18n, locale: string): string {
-  const levelNumber = (level as { level?: number }).level ?? 0
-  const levelName = (level as { name?: string }).name
-  const english = getLevelDisplayName({
-    name: levelName,
-    level: levelNumber,
-  })
-  const authoredName = levelName?.trim()
-  if (authoredName && authoredName !== `Level ${levelNumber}`) return authoredName
-  if (levelNumber === 0) {
-    return i18n._({ id: 'core.level.groundFloor', message: 'Ground floor' })
-  }
-  if (levelNumber === -1) return i18n._({ id: 'core.level.basement', message: 'Basement' })
-  if (levelNumber < -1) {
-    return i18n._({
-      id: 'core.level.basementNumber',
-      message: 'Basement {number}',
-      values: { number: -levelNumber },
-    })
-  }
-  if (levelNumber > 0) {
-    return i18n._({
-      id: 'core.level.floorNumber',
-      message: 'Floor {number}',
-      values: { number: levelDisplayNumber(levelNumber, locale) },
-    })
-  }
-  return english
 }
 
 function collectLevelTree(root: AnyNode, nodes: Record<string, AnyNode>): AnyNode[] {
@@ -919,7 +887,7 @@ export function FloorplanPreview({
           message: '{floor} 2D view',
           values: {
             floor: activeLevel
-              ? levelLabel(activeLevel, i18n, locale)
+              ? localizedLevelName(activeLevel, i18n, locale)
               : i18n._({ id: 'viewer.floorplan.floorPlan', message: 'Floor plan' }),
           },
         })}
@@ -1025,7 +993,7 @@ export function FloorplanPreview({
           >
             {levels.map((level) => (
               <option key={level.id} value={level.id}>
-                {levelLabel(level, i18n, locale)}
+                {localizedLevelName(level, i18n, locale)}
               </option>
             ))}
           </select>

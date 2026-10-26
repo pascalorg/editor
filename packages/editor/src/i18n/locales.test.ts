@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
-import { setLocale, translate } from '@pascal-app/core'
+import { createI18n, setLocale, translate } from '@pascal-app/core'
+import { localizedLevelName } from './level-name'
 import { registerBundledLocales } from './locales'
 
 afterEach(() => setLocale('en'))
@@ -35,4 +36,21 @@ test('Simplified Chinese aliases use zh-CN without affecting Traditional Chinese
 
   setLocale('zh-TW')
   expect(translate('viewer.display.title', 'Display settings')).toBe('Display settings')
+})
+
+test('generated stored level names localize while authored names remain unchanged', () => {
+  registerBundledLocales()
+  const french = createI18n({ locale: 'fr' })
+  const japanese = createI18n({ locale: 'ja' })
+  try {
+    expect(localizedLevelName({ level: 0, name: 'Ground floor' }, french, 'fr')).toBe(
+      'Rez-de-chaussée',
+    )
+    expect(localizedLevelName({ level: 1, name: 'Floor 1' }, french, 'fr')).toBe('Étage 1')
+    expect(localizedLevelName({ level: 1, name: 'Floor 1' }, japanese, 'ja')).toBe('2階')
+    expect(localizedLevelName({ level: 1, name: 'Mezzanine' }, french, 'fr')).toBe('Mezzanine')
+  } finally {
+    french.destroy()
+    japanese.destroy()
+  }
 })
