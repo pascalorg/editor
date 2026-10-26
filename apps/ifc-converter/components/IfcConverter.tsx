@@ -1,6 +1,10 @@
 'use client'
 
-import { convertIfcToPascal, type PascalSceneGraph } from '@pascal-app/ifc-converter'
+import {
+  conversionReportHasIssues,
+  convertIfcToPascalWithReport,
+  type PascalSceneGraph,
+} from '@pascal-app/ifc-converter'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { availableTestFiles, exampleFileUrl, testFiles } from '@/lib/test-files'
@@ -47,6 +51,7 @@ export default function IfcConverter() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [conversionProgress, setConversionProgress] = useState<number>(0)
   const [conversionMessage, setConversionMessage] = useState<string>('')
+  const [geometrySkipped, setGeometrySkipped] = useState(false)
 
   const levels = useMemo(() => {
     if (!pascalData) return []
@@ -134,13 +139,18 @@ export default function IfcConverter() {
     setSelectedNodeId(null)
     setConversionProgress(0)
     setConversionMessage('Starting conversion...')
+    setGeometrySkipped(false)
 
     try {
-      const result = await convertIfcToPascal(data, (message, percent) => {
-        setConversionMessage(message)
-        setConversionProgress(percent)
-      })
+      const { scene: result, report } = await convertIfcToPascalWithReport(
+        data,
+        (message, percent) => {
+          setConversionMessage(message)
+          setConversionProgress(percent)
+        },
+      )
       setPascalData(result)
+      setGeometrySkipped(conversionReportHasIssues(report))
       setStatus('ready')
       setConversionProgress(100)
       setConversionMessage('Conversion complete!')
@@ -516,6 +526,13 @@ export default function IfcConverter() {
                 )}
               </div>
             </>
+          )}
+
+          {status === 'ready' && geometrySkipped && (
+            <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 text-sm">
+              Some geometry couldn't be read: parts of this file had invalid coordinates and were
+              left out.
+            </p>
           )}
 
           {/* Pascal 3D Viewer */}
