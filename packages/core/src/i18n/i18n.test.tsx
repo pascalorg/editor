@@ -192,7 +192,9 @@ test('server rendering uses the selected locale for text and numbers', async () 
     </PascalI18nProvider>,
   )
 
-  expect(serverHtml).toContain('Bonjour:2,75')
+  expect(serverHtml).toContain('Bonjour')
+  expect(serverHtml).toContain('2,75')
+  expect(serverHtml).not.toContain('Hello')
   scope.destroy()
 })
 
