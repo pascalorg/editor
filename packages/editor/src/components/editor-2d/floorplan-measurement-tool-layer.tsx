@@ -16,6 +16,7 @@ import {
   measurementPerimeter,
   measurementPrismVolume,
   nodeRegistry,
+  useLocale,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -27,9 +28,9 @@ import {
   formatLinearMeasurement,
   formatVolumeLabel,
   getLinearUnitLabel,
-  linearUnitToMeters,
   MEASUREMENT_ACTIVE_COLOR,
   metersToLinearUnit,
+  parseLinearMeasurementInput,
 } from '../../lib/measurements'
 import {
   clearSurfacePlanSnapFeedback,
@@ -636,6 +637,7 @@ function FloorplanExtrusionControl({
   unitsPerPixel: number
 }) {
   const unit = useViewer((state) => state.unit)
+  const locale = useLocale()
   const extrusionHeight = useMeasurementDraft((state) => state.extrusionHeight)
   const points = useMeasurementDraft((state) => state.points)
   const baseNormal = useMeasurementDraft((state) => state.baseNormal)
@@ -654,12 +656,12 @@ function FloorplanExtrusionControl({
   const y = center[2] - height / 2
 
   const commit = () => {
-    const numericValue = Number.parseFloat(value)
-    if (!Number.isFinite(numericValue)) {
+    const meters = parseLinearMeasurementInput(value, unit, locale)
+    if (meters === null) {
       useMeasurementDraft.getState().setExtrusionHeight('2d', 0)
       return
     }
-    useMeasurementDraft.getState().setExtrusionHeight('2d', linearUnitToMeters(numericValue, unit))
+    useMeasurementDraft.getState().setExtrusionHeight('2d', meters)
     const draft = useMeasurementDraft.getState()
     if (draft.finishExtrusion('2d')) commitMeasurementDraft('2d')
   }
@@ -710,11 +712,9 @@ function FloorplanExtrusionControl({
               onChange={(event) => {
                 const next = event.target.value
                 setValue(next)
-                const numericValue = Number.parseFloat(next)
-                if (Number.isFinite(numericValue)) {
-                  useMeasurementDraft
-                    .getState()
-                    .setExtrusionHeight('2d', linearUnitToMeters(numericValue, unit))
+                const meters = parseLinearMeasurementInput(next, unit, locale)
+                if (meters !== null) {
+                  useMeasurementDraft.getState().setExtrusionHeight('2d', meters)
                 } else {
                   useMeasurementDraft.getState().setExtrusionHeight('2d', 0)
                 }
@@ -728,7 +728,7 @@ function FloorplanExtrusionControl({
               }}
               placeholder="0"
               step="0.1"
-              type="number"
+              type="text"
               value={value}
             />
             <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-muted-foreground text-xs">

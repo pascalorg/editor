@@ -40,11 +40,8 @@ export function ClientBootstrap({
   }, [i18n])
 
   useEffect(() => {
-    const syncDefaultLocale = () => i18n.setLocale(defaultI18n.getLocale())
-    return defaultI18n.subscribe(syncDefaultLocale)
+    return defaultI18n.subscribeLocale((nextLocale) => i18n.setLocale(nextLocale))
   }, [i18n])
-
-  useEffect(() => () => i18n.destroy(), [i18n])
 
   return <PascalI18nProvider i18n={i18n}>{children}</PascalI18nProvider>
 }

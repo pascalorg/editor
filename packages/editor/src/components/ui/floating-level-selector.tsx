@@ -55,11 +55,15 @@ import {
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
 import {
+  formatNumber,
   getDefaultLevelName,
   getLevelDisplayName,
   roofLevelOrderBreach,
   servesAsRoofLevel,
+  useLocale,
+  usePascalI18n,
 } from '@pascal-app/core'
+import { localizedLevelName } from '../../i18n/level-name'
 import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
@@ -173,14 +177,19 @@ function LevelRow({
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((s) => s.updateNode)
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const { isImperial, toDisplay, displayUnit, precision: displayPrecision } = useLinearDisplay('m', 2)
 
   const storeyHeight = getStoredLevelHeight(level)
   // Decimal units keep the compact readout; integer millimeters must retain trailing zeroes.
-  const formattedStoreyHeight = toDisplay(storeyHeight).toFixed(displayPrecision)
-  const storeyHeightLabel = `${
-    displayPrecision > 0 ? formattedStoreyHeight.replace(/0$/, '') : formattedStoreyHeight
-  } ${displayUnit}`
+  const formattedStoreyHeight = formatNumber(toDisplay(storeyHeight), {
+    locale,
+    min: Math.max(0, displayPrecision - 1),
+    max: displayPrecision,
+  })
+  const storeyHeightLabel = `${formattedStoreyHeight} ${displayUnit}`
+  const levelName = localizedLevelName(level, i18n, locale)
   // Same rule as the site panel and command palette: the ordinal-0 ground
   // floor is the vertical model's zero anchor and must never be deletable.
   const canDeleteLevel = level.level !== 0
@@ -219,7 +228,7 @@ function LevelRow({
         >
           <button
             {...dragHandleProps}
-            aria-label={`Reorder ${getLevelDisplayName(level)}`}
+            aria-label={`Reorder ${levelName}`}
             className={cn(
               'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-black/4 dark:hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
@@ -242,10 +251,10 @@ function LevelRow({
               e.stopPropagation()
               setIsEditing(true)
             }}
-            title={getLevelDisplayName(level)}
+            title={levelName}
             type="button"
           >
-            <span className="truncate">{getLevelDisplayName(level)}</span>
+            <span className="truncate">{levelName}</span>
             {unitDotColor && (
               <span
                 className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full"

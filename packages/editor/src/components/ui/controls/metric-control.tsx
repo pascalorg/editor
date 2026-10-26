@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { parseLocalizedNumber, useLocale, useScene } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { lingoUnitSpec, measurementHint, parseMeasurement } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
@@ -20,6 +20,21 @@ interface MetricControlProps {
   restoreOnCommit?: boolean
 }
 
+export function parseMetricInput(
+  text: string,
+  unit: string,
+  options: { isImperial: boolean; locale: string; parseUnit?: string },
+): number | null {
+  const spec = lingoUnitSpec(unit)
+  return spec
+    ? parseMeasurement(text, spec, {
+        bareUnit: options.parseUnit ?? spec.unitId,
+        locale: options.locale,
+        system: options.isImperial ? 'us' : 'metric',
+      })
+    : parseLocalizedNumber(text, options.locale)
+}
+
 export function MetricControl({
   label,
   value,
@@ -33,6 +48,7 @@ export function MetricControl({
   unit = '',
   restoreOnCommit = true,
 }: MetricControlProps) {
+  const locale = useLocale()
   const {
     isImperial,
     displayUnit,
@@ -230,16 +246,8 @@ export function MetricControl({
 
   const submitValue = useCallback(() => {
     const spec = lingoUnitSpec(unit)
-    let stored = spec
-      ? parseMeasurement(inputValue, spec, {
-          bareUnit: parseUnit ?? spec.unitId,
-          system: isImperial ? 'us' : 'metric',
-        })
-      : null
-    if (stored === null) {
-      const numValue = Number.parseFloat(inputValue)
-      stored = Number.isFinite(numValue) ? toStoredValue(numValue) : null
-    }
+    const parsed = parseMetricInput(inputValue, unit, { isImperial, locale, parseUnit })
+    const stored = parsed === null ? null : spec ? parsed : toStoredValue(parsed)
     if (stored === null) {
       setInputValue(toDisplayValue(value).toFixed(precision))
     } else {
@@ -249,6 +257,7 @@ export function MetricControl({
   }, [
     inputValue,
     unit,
+    locale,
     isImperial,
     parseUnit,
     applyCommittedValue,
@@ -265,6 +274,7 @@ export function MetricControl({
       ? measurementHint(inputValue, spec, {
           bareUnit: parseUnit ?? spec.unitId,
           system: isImperial ? 'us' : 'metric',
+          locale,
           displayUnit: parseUnit ?? spec.unitId,
           precision,
           clamp,

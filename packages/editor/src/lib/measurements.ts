@@ -1,4 +1,4 @@
-import { formatNumber, type MeasurementPoint } from '@pascal-app/core'
+import { formatNumber, type MeasurementPoint, parseLocalizedNumber } from '@pascal-app/core'
 
 export type LinearUnit = 'metric' | 'imperial'
 export type MetricNotation = 'meters' | 'millimeters'
@@ -117,6 +117,15 @@ export function metersToLinearUnit(meters: number, unit: LinearUnit): number {
 
 export function linearUnitToMeters(value: number, unit: LinearUnit): number {
   return unit === 'imperial' ? value * METERS_PER_FOOT : value
+}
+
+export function parseLinearMeasurementInput(
+  value: string,
+  unit: LinearUnit,
+  locale: string,
+): number | null {
+  const parsed = parseLocalizedNumber(value, locale)
+  return parsed === null ? null : linearUnitToMeters(parsed, unit)
 }
 
 export function linearControlValueToMeters(

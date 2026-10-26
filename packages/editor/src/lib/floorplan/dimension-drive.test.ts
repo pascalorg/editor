@@ -26,6 +26,11 @@ describe('parseDimensionInput', () => {
     expect(parseDimensionInput('12.5', 'imperial')).toBeCloseTo(12.5 * FOOT, 9)
   })
 
+  test('decimal commas follow the scoped locale', () => {
+    expect(parseDimensionInput('2,75', 'metric', 'fr')).toBe(2.75)
+    expect(parseDimensionInput('2,75', 'metric', 'en')).toBeNull()
+  })
+
   test('rejects garbage and non-positive values', () => {
     expect(parseDimensionInput('')).toBeNull()
     expect(parseDimensionInput('abc')).toBeNull()

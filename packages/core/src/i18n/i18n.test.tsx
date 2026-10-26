@@ -3,6 +3,7 @@ import { renderToString } from 'react-dom/server'
 import {
   BuildingNode,
   createI18n,
+  defaultI18n,
   formatLength,
   formatNumber,
   LevelNode,
@@ -102,16 +103,39 @@ describe('message registry', () => {
 
   test('notifies subscribers for locale and active-catalog changes', async () => {
     let changes = 0
+    let localeChanges = 0
     const unsubscribe = subscribe(() => {
       changes += 1
+    })
+    const unsubscribeLocale = defaultI18n.subscribeLocale(() => {
+      localeChanges += 1
     })
 
     setLocale('ja')
     await registerMessages('ja', 'viewer', { test: 'テスト' })
     unsubscribe()
+    unsubscribeLocale()
     setLocale('es')
 
     expect(changes).toBe(2)
+    expect(localeChanges).toBe(1)
+  })
+
+  test('keeps a scoped locale across catalog refreshes and accepts repeated global locale intent', async () => {
+    const scope = createI18n({ locale: 'fr' })
+    const release = scope.retain()
+    const unsubscribe = defaultI18n.subscribeLocale((locale) => scope.setLocale(locale))
+
+    await registerMessages('fr', 'viewer', { 'test.catalog-refresh': 'Actualisé' })
+    expect(scope.getLocale()).toBe('fr')
+    expect(scope._({ id: 'viewer.test.catalog-refresh', message: 'Refreshed' })).toBe('Actualisé')
+
+    setLocale('en')
+    expect(scope.getLocale()).toBe('en')
+
+    unsubscribe()
+    release()
+    scope.destroy()
   })
 
   test('keeps request-local scopes isolated', async () => {
@@ -127,6 +151,45 @@ describe('message registry', () => {
 
     french.destroy()
     japanese.destroy()
+  })
+
+  test('does not retain server scopes and can reattach after Strict Mode effect replay', async () => {
+    const serverScope = createI18n({ locale: 'fr' })
+    let serverRefreshes = 0
+    serverScope.subscribe(() => {
+      serverRefreshes += 1
+    })
+    renderToString(
+      <PascalI18nProvider i18n={serverScope}>
+        <span>server</span>
+      </PascalI18nProvider>,
+    )
+
+    await registerMessages('fr', 'viewer', { 'test.after-server-render': 'Après' })
+    expect(serverRefreshes).toBe(0)
+    expect(
+      serverScope._({ id: 'viewer.test.after-server-render', message: 'After server render' }),
+    ).toBe('After server render')
+
+    const clientScope = createI18n({ locale: 'fr' })
+    let clientRefreshes = 0
+    clientScope.subscribe(() => {
+      clientRefreshes += 1
+    })
+    const firstCleanup = clientScope.retain()
+    firstCleanup()
+    firstCleanup()
+    const secondCleanup = clientScope.retain()
+
+    await registerMessages('fr', 'viewer', { 'test.after-effect-replay': 'Rattaché' })
+    expect(clientRefreshes).toBe(1)
+    expect(clientScope._({ id: 'viewer.test.after-effect-replay', message: 'Reattached' })).toBe(
+      'Rattaché',
+    )
+
+    secondCleanup()
+    serverScope.destroy()
+    clientScope.destroy()
   })
 
   test('warns once in development and never exposes the missing key', () => {
@@ -151,6 +214,11 @@ describe('locale formatting', () => {
     expect(formatLength(2.75, 'm', { locale: 'fr' })).toBe('2,75\u00a0m')
     expect(formatLength(2.75, 'mm', { locale: 'fr' })).toBe('2750\u00a0mm')
     expect(formatLength(2.75, 'm', { locale: 'en' })).toBe('2.75\u00a0m')
+  })
+
+  test('falls back to English formatting for an unsupported locale', () => {
+    expect(formatNumber(2.75, { locale: 'zz', max: 2 })).toBe('2.75')
+    expect(formatLength(2.75, 'm', { locale: 'zz' })).toBe('2.75\u00a0m')
   })
 
   test('accepts the locale decimal separator as well as a dot', () => {

@@ -2,6 +2,14 @@
 // own shells on top of `@pascal-app/editor` (community-app, embedders)
 // don't have to learn three separate package imports. The canonical
 // definitions still live in `@pascal-app/core` / `@pascal-app/viewer`.
+import { registerCompiledMessages as registerEditorMessages } from '@pascal-app/core'
+import { messages as editorEnglishMessages } from './i18n/locales/en/messages'
+
+// Published-package consumers need compiled English too: Lingui cannot
+// interpolate a raw fallback literal in production. Other bundled locales
+// remain explicitly host-registered through `@pascal-app/editor/locales`.
+registerEditorMessages('en', '', editorEnglishMessages)
+
 export {
   type ApplySceneSnapshotOptions,
   acquireSceneReadOnlyLease,
@@ -715,6 +723,7 @@ export {
   measurementFloorplanPresentationColor,
   measurementPresentationColor,
   metersToLinearUnit,
+  parseLinearMeasurementInput,
   squareMetersToAreaUnit,
 } from './lib/measurements'
 export type {

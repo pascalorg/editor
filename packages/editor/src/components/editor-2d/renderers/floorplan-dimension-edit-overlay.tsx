@@ -1,7 +1,7 @@
 'use client'
 
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
-import { useScene } from '@pascal-app/core'
+import { useLocale, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -78,6 +78,7 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const unit = useViewer((state) => state.unit)
+  const locale = useLocale()
 
   useEffect(() => {
     let down: { x: number; y: number } | null = null
@@ -154,7 +155,7 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
 
   const commit = useCallback(() => {
     if (!target) return
-    const nextLength = parseDimensionInput(draft, unit)
+    const nextLength = parseDimensionInput(draft, unit, locale)
     if (nextLength === null) {
       setError(`Cannot read "${draft.trim()}"`)
       return
@@ -166,7 +167,7 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
     }
     setTarget(null)
     setError(null)
-  }, [draft, target, unit])
+  }, [draft, locale, target, unit])
 
   if (!target) return null
   if (typeof document === 'undefined') return null

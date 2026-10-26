@@ -18,6 +18,7 @@ import {
   measurementFloorplanPresentationColor,
   measurementPresentationColor,
   metersToLinearUnit,
+  parseLinearMeasurementInput,
   squareMetersToAreaUnit,
 } from './measurements'
 
@@ -127,6 +128,11 @@ describe('linear measurements', () => {
     expect(linearControlValueToMeters(0.5, 'imperial')).toBeCloseTo(0.1524)
     expect(linearControlValueToMeters(-1, 'imperial')).toBeCloseTo(-0.3048)
     expect(linearControlValueToMeters(3.5, 'metric')).toBe(3.5)
+  })
+
+  test('parses floor-plan measurement input with the scoped locale', () => {
+    expect(parseLinearMeasurementInput('2,75', 'metric', 'fr')).toBe(2.75)
+    expect(parseLinearMeasurementInput('2,75', 'metric', 'en')).toBeNull()
   })
 
   test('clamps numeric control input after converting to meters', () => {

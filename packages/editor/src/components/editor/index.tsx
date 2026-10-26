@@ -1975,7 +1975,6 @@ function EditorFrame(props: EditorProps) {
 
 function LocalizedEditor(props: EditorProps & { locale: string }) {
   const i18n = useMemo(() => createI18n({ locale: props.locale }), [props.locale])
-  useEffect(() => () => i18n.destroy(), [i18n])
 
   return (
     <PascalI18nProvider i18n={i18n}>

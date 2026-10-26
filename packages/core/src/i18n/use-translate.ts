@@ -5,6 +5,7 @@ import {
   createElement,
   type ReactNode,
   useContext,
+  useEffect,
   useSyncExternalStore,
 } from 'react'
 import { defaultI18n, type PascalI18n } from './registry'
@@ -17,6 +18,7 @@ const PascalI18nContext = createContext(defaultI18n)
  * @experimental Unreleased API; signatures may change before the first i18n release.
  */
 export function PascalI18nProvider({ children, i18n }: { children: ReactNode; i18n: PascalI18n }) {
+  useEffect(() => i18n.retain(), [i18n])
   return createElement(PascalI18nContext.Provider, { value: i18n }, children)
 }
 

@@ -95,6 +95,8 @@ export class PascalI18n {
   readonly i18n: LinguiI18n
   private readonly englishI18n: LinguiI18n
   private readonly listeners = new Set<() => void>()
+  private readonly localeListeners = new Set<(locale: string) => void>()
+  private retentionCount = 0
   private locale: string
   private version = 0
 
@@ -102,7 +104,6 @@ export class PascalI18n {
     this.locale = canonicalLocale(initialLocale)
     this.i18n = setupI18n()
     this.englishI18n = setupI18n()
-    scopes.add(this)
     this.refresh(false)
   }
 
@@ -116,9 +117,11 @@ export class PascalI18n {
 
   setLocale(nextLocale: string): void {
     const normalized = canonicalLocale(nextLocale)
-    if (normalized === this.locale) return
-    this.locale = normalized
-    this.refresh()
+    if (normalized !== this.locale) {
+      this.locale = normalized
+      this.refresh()
+    }
+    for (const listener of [...this.localeListeners]) listener(normalized)
   }
 
   subscribe(listener: () => void): () => void {
@@ -128,9 +131,37 @@ export class PascalI18n {
     }
   }
 
+  /** Subscribe only to locale selection, excluding catalog refreshes. */
+  subscribeLocale(listener: (locale: string) => void): () => void {
+    this.localeListeners.add(listener)
+    return () => {
+      this.localeListeners.delete(listener)
+    }
+  }
+
+  /**
+   * Retain this scope for shared catalog updates while a client provider is
+   * mounted. Server rendering never calls effects, so request scopes are not
+   * held by the module registry.
+   */
+  retain(): () => void {
+    this.retentionCount += 1
+    if (this.retentionCount === 1) scopes.add(this)
+    let retained = true
+    return () => {
+      if (!retained) return
+      retained = false
+      if (this.retentionCount === 0) return
+      this.retentionCount -= 1
+      if (this.retentionCount === 0) scopes.delete(this)
+    }
+  }
+
   destroy(): void {
+    this.retentionCount = 0
     scopes.delete(this)
     this.listeners.clear()
+    this.localeListeners.clear()
   }
 
   _(descriptor: MessageDescriptor): string
@@ -172,6 +203,7 @@ export function createI18n(options: { locale?: string } = {}): PascalI18n {
 
 /** @experimental Unreleased API; signatures may change before the first i18n release. */
 export const defaultI18n = createI18n()
+defaultI18n.retain()
 
 /**
  * Register a raw ICU MessageFormat pack. The Lingui compiler is loaded only
