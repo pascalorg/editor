@@ -4,6 +4,7 @@ import { planHostedEdit } from '../shared/hosted-resize'
 export const columnHostedPolicy = {
   host: (node: AnyNode) => node.type === 'column',
   child: (_node: AnyNode) => true,
+  followsSurfacePlan: true,
 }
 
 export function planColumnEdit(id: AnyNodeId, patch: Partial<AnyNode>) {

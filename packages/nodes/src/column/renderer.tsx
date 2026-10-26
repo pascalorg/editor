@@ -9,6 +9,8 @@ import {
   type ColumnNode,
   type ColumnSlotId,
   collectDescendants,
+  columnIBeamSection,
+  columnLean,
   createSceneApi,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -33,7 +35,7 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
+import { BufferGeometry, Float32BufferAttribute, type Group, type Material, Matrix4 } from 'three'
 import { ScriptedOpeningModel } from '../shared/scripted-opening'
 import {
   columnCapitalBlocks,
@@ -42,6 +44,7 @@ import {
   getShaftScaleAt,
   getShaftSegmentCount,
   getShaftTwistRadians,
+  hasBoxSection,
 } from './shape'
 
 type ColumnSlotMaterials = Record<ColumnSlotId, Material>
@@ -1029,6 +1032,39 @@ function SquareBlock({
   )
 }
 
+function IBeamBlock({
+  y,
+  height,
+  width,
+  depth,
+}: {
+  y: number
+  height: number
+  width: number
+  depth: number
+}) {
+  const { flangeThickness, webThickness } = columnIBeamSection(width, depth)
+  const webDepth = Math.max(0, depth - flangeThickness * 2)
+
+  return (
+    <group position={[0, y + height / 2, 0]}>
+      <MappedBox
+        depth={flangeThickness}
+        height={height}
+        position={[0, 0, depth / 2 - flangeThickness / 2]}
+        width={width}
+      />
+      <MappedBox
+        depth={flangeThickness}
+        height={height}
+        position={[0, 0, -depth / 2 + flangeThickness / 2]}
+        width={width}
+      />
+      <MappedBox depth={webDepth} height={height} position={[0, 0, 0]} width={webThickness} />
+    </group>
+  )
+}
+
 function RoundBlock({
   x = 0,
   y,
@@ -1143,7 +1179,7 @@ function ColumnBlock({
   const depth = node.depth * scale
   const radius = node.radius * scale
 
-  if (node.crossSection === 'square' || node.crossSection === 'rectangular') {
+  if (hasBoxSection(node)) {
     return <SquareBlock depth={depth} height={height} width={width} y={y} />
   }
 
@@ -1236,6 +1272,10 @@ function Shaft({ node, y, height }: { node: ColumnNode; y: number; height: numbe
     node.crossSection === 'sixteen-sided'
   ) {
     return <TaperedRoundShaft height={height} node={node} y={y} />
+  }
+
+  if (node.crossSection === 'i-beam') {
+    return <IBeamBlock depth={node.depth} height={height} width={node.width} y={y} />
   }
 
   return <TaperedSquareShaft height={height} node={node} y={y} />
@@ -1836,7 +1876,7 @@ function CapitalCarvings({
     return capitalY + capitalHeight * t - bandHeight / 2
   })
 
-  if (node.crossSection === 'square' || node.crossSection === 'rectangular') {
+  if (hasBoxSection(node)) {
     const dentilCount = Math.max(node.dentilCount ?? 0, level * 4, 4)
     const dentilHeight = Math.min(0.08, capitalHeight * 0.28)
     const dentilDepth = Math.min(0.08, Math.min(node.width, node.depth) * 0.16)
@@ -2181,6 +2221,28 @@ function ColumnBody({ node }: { node: ColumnNode }) {
   )
 }
 
+/** A leaning column's shear in its local frame, or null for an upright one. */
+export function columnLeanMatrix(node: Pick<ColumnNode, 'tiltX' | 'tiltZ'>): Matrix4 | null {
+  const [x, z] = columnLean(node)
+  if (x === 0 && z === 0) return null
+  // makeShear's `yx` / `yz` slots: x and z move with height, y stays put.
+  return new Matrix4().makeShear(0, 0, x, z, 0, 0)
+}
+
+/**
+ * The column body under its lean. The renderer and the placement ghost share
+ * it, and hosted children stay outside it: they sit level on the leaned top.
+ */
+function ColumnLean({ node, children }: { node: ColumnNode; children: ReactNode }) {
+  const matrix = useMemo(() => columnLeanMatrix(node), [node])
+  if (!matrix) return children
+  return (
+    <group matrix={matrix} matrixAutoUpdate={false}>
+      {children}
+    </group>
+  )
+}
+
 /**
  * Translucent, non-interactive ghost of a column — the placement tool's
  * cursor preview, mirroring `ShelfPreview`. Builds the same geometry tree
@@ -2190,7 +2252,8 @@ function ColumnBody({ node }: { node: ColumnNode }) {
  *     mutating it would turn every committed column see-through);
  *   - disables raycast on every mesh so the ghost doesn't intercept the
  *     placement cursor ray (which would stall `grid:move`);
- *   - renders at the local origin so the caller's cursor group positions it.
+ *   - renders at the local origin, turned by the node's yaw, so the caller's
+ *     cursor group only positions it.
  */
 export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
   const shading = useViewer((state) => state.shading)
@@ -2231,8 +2294,10 @@ export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
   return (
     <ColumnMaterialContext.Provider value={materials}>
       <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
-        <group ref={groupRef}>
-          {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}
+        <group ref={groupRef} rotation={[0, node.rotation, 0]}>
+          <ColumnLean node={node}>
+            {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}
+          </ColumnLean>
         </group>
       </ColumnEdgeSoftnessContext.Provider>
     </ColumnMaterialContext.Provider>
@@ -2298,7 +2363,9 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
           userData={modelData}
           {...handlers}
         >
-          {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}
+          <ColumnLean node={node}>
+            {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}
+          </ColumnLean>
           {node.children.map((id) => (
             <NodeRenderer key={id} nodeId={id as AnyNodeId} />
           ))}

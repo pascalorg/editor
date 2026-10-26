@@ -157,6 +157,13 @@ export {
   computeCeilingSurfaceCells,
   parseCeilingRegionRole,
 } from './lib/ceiling-surface'
+export {
+  columnIBeamOutline,
+  columnIBeamSection,
+  columnLean,
+  columnPlanLeanOffset,
+  sweptPlanFootprint,
+} from './lib/column-geometry'
 export { cornerPair, fusesAtCorner } from './lib/corner-pair'
 export {
   type CornerBlock,
