@@ -75,6 +75,22 @@ const PROTECTED_FIELDS: Record<'slab' | 'ceiling', readonly string[]> = {
   ceiling: ['polygon', 'zoneId', 'boundary', 'autoFromWalls', 'parentId'],
 }
 
+/**
+ * What the reconciler rebuilds on a derived surface: its protected fields, the openings it records,
+ * and its holes but for the ones a person cut (`manualSurfaceHoles`).
+ */
+export function reconcilerOwnedFields(node: DerivedSurfaceNode): readonly string[] {
+  return [...PROTECTED_FIELDS[node.type], 'openingIds', 'holes', 'holeMetadata']
+}
+
+/** The holes a person cut into a surface, as against those Pascal cuts for rooms, openings and stairs. */
+export function manualSurfaceHoles(node: AnyNode) {
+  const surface = node as { holes?: unknown; holeMetadata?: unknown }
+  const holes = (surface.holes ?? []) as unknown[]
+  const metadata = (surface.holeMetadata ?? []) as (SurfaceHoleMetadata | undefined)[]
+  return holes.filter((_, index) => (metadata[index]?.source ?? 'manual') === 'manual')
+}
+
 function equal(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b)
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
+import { floorScriptInputs } from '../lib/floor-script'
 import { cloneNodesInto } from '../registry/subtree'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
@@ -13,6 +14,8 @@ import {
   authorSceneCeilingPoints,
   authorSceneFaceScripts,
   authorSceneFloorScripts,
+  finalizeAuthorScene,
+  setRoomFloorScript,
   verifyScene,
 } from './index'
 
@@ -324,6 +327,161 @@ describe('author_scene', () => {
         { activeLevelId: null },
       ),
     ).toThrow()
+  })
+
+  describe('a revision after Pascal rebuilt what it derives', () => {
+    const floor = (script: string, artifact: string): CompiledGeometryScript => ({
+      ...bed,
+      sha256: artifact.repeat(64),
+      script: script.repeat(64),
+      manifest: { ...bed.manifest, bounds: { min: [-2, 0, -2.5], max: [2, 0.01, 2.5] } },
+    })
+    /** As a host converts: the candidate's room floor compiled, then one commit. */
+    const convert = (
+      scene: Record<string, AnyNode>,
+      payload: AuthorScenePayload,
+      floorScript?: CompiledGeometryScript,
+    ) => {
+      const outcome = authorScene(
+        scene,
+        { payload, compiled: { bed, lamp: bed }, replace: true, prepareOnly: true },
+        { activeLevelId: 'level_0' },
+      )
+      let candidate = { ...scene, ...outcome.candidate.nodes }
+      const zoneId = outcome.result.ids['room/0/0']
+      if (floorScript && zoneId)
+        candidate = applySceneChanges(
+          candidate,
+          setRoomFloorScript(
+            candidate,
+            { zoneId, compiled: floorScript, inputs: floorScriptInputs(candidate, zoneId)! },
+            { activeLevelId: null },
+          ).changes,
+        )
+      outcome.candidate.nodes = Object.fromEntries(
+        Object.keys(outcome.candidate.nodes).map((id) => [id, candidate[id]!]),
+      )
+      return applySceneChanges(scene, finalizeAuthorScene(scene, outcome).changes)
+    }
+    const typed = (scene: Record<string, AnyNode>, type: string) =>
+      Object.values(scene).find((node) => node.type === type) as AnyNode & Record<string, any>
+    /** What the structure reconcile and the finish refresh write between conversions. */
+    const rebuilt = (scene: Record<string, AnyNode>) => {
+      const ceiling = typed(scene, 'ceiling')
+      const zone = typed(scene, 'zone')
+      return applySceneChanges(scene, {
+        update: [
+          {
+            id: ceiling.id,
+            data: {
+              polygon: ceiling.polygon.map(([x, z]: [number, number]) => [x * 0.99, z * 0.99]),
+              holes: [
+                [
+                  [0, 0],
+                  [0.5, 0],
+                  [0.5, 0.5],
+                ],
+              ],
+              holeMetadata: [{ source: 'floor-opening', openingId: 'floor-opening_1' }],
+              openingIds: ['floor-opening_1'],
+              children: [...ceiling.children].reverse(),
+            } as Partial<AnyNode>,
+          },
+          {
+            id: zone.id,
+            data: {
+              floor: {
+                ...zone.floor,
+                script: { ...zone.floor.script, inputs: 'rebuilt', artifact: 'c'.repeat(64) },
+              },
+            } as Partial<AnyNode>,
+          },
+        ],
+      })
+    }
+    const withFloorCode = (payload: AuthorScenePayload) => {
+      const next = structuredClone(payload)
+      next.levels[0]!.rooms[0]!.floorCode = 'export default function build() {}'
+      return next
+    }
+    const reshaped = () => {
+      const next = withFloorCode(bedroom)
+      const [north, east, , west] = next.levels[0]!.walls!
+      north!.start = [-2, -2.8]
+      north!.end = [2, -2.8]
+      east!.start = [2, -2.8]
+      west!.end = [-2, -2.7]
+      return next
+    }
+
+    /** The design with its west wall gone: no room, so no floor and no ceiling. */
+    const opened = () => {
+      const next = structuredClone(bedroom)
+      next.levels[0]!.walls!.pop()
+      next.levels[0]!.rooms = []
+      next.levels[0]!.lights = []
+      return next
+    }
+
+    test('writes the design over the rebuilt outline, holes, children order and floor compile', () => {
+      const scene = rebuilt(convert(scaffold(), withFloorCode(bedroom), floor('b', 'a')))
+      const revised = convert(scene, reshaped(), floor('d', 'e'))
+      const zone = typed(revised, 'zone')
+      expect(zone.floor.script).toMatchObject({ script: 'd'.repeat(64), artifact: 'e'.repeat(64) })
+      expect(zone.floor.script.inputs).not.toBe('rebuilt')
+      expect(typed(revised, 'ceiling').polygon).not.toEqual(typed(scene, 'ceiling').polygon)
+    })
+
+    test('removes a room whose ceiling and floor Pascal rebuilt', () => {
+      const scene = rebuilt(convert(scaffold(), withFloorCode(bedroom), floor('b', 'a')))
+      const revised = convert(scene, opened())
+      expect(typed(revised, 'zone')).toBeUndefined()
+      expect(typed(revised, 'ceiling')).toBeUndefined()
+    })
+
+    test("a person's edit still wins and still refuses an overlapping change", () => {
+      const scene = rebuilt(convert(scaffold(), withFloorCode(bedroom), floor('b', 'a')))
+      const zone = typed(scene, 'zone')
+      const ceiling = typed(scene, 'ceiling')
+      const cut = [
+        [1, 1],
+        [1.4, 1],
+        [1.4, 1.4],
+      ]
+      const edited = applySceneChanges(scene, {
+        update: [
+          {
+            id: zone.id,
+            data: {
+              floor: {
+                ...zone.floor,
+                script: { ...zone.floor.script, params: { grain: 2 } },
+              },
+            } as Partial<AnyNode>,
+          },
+          {
+            id: ceiling.id,
+            data: {
+              slots: { surface: 'library:preset-glass' },
+              holes: [...ceiling.holes, cut],
+              holeMetadata: [...ceiling.holeMetadata, { source: 'manual' }],
+            } as Partial<AnyNode>,
+          },
+        ],
+      })
+      // The floor's params against the design's new floor code.
+      expect(() => convert(edited, reshaped(), floor('d', 'e'))).toThrow('changed the script')
+      // The ceiling a person painted cannot go with its room.
+      expect(() => convert(edited, opened())).toThrow('was edited after conversion')
+      // A design that leaves the floor alone keeps the person's floor params and their cut-out.
+      const kept = convert(
+        edited,
+        { ...withFloorCode(bedroom), notes: ['Revised.'] },
+        floor('b', 'a'),
+      )
+      expect(typed(kept, 'zone').floor.script.params).toEqual({ grain: 2 })
+      expect(typed(kept, 'ceiling').holes).toContainEqual(cut)
+    })
   })
 
   test('writes the design as native nodes and reports what it did', () => {
