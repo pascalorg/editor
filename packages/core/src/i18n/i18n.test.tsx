@@ -5,12 +5,14 @@ import {
   formatLength,
   formatNumber,
   LevelNode,
+  levelDisplayNumber,
   parseLocalizedNumber,
   registerMessages,
   SiteNode,
   setLocale,
   subscribe,
   translate,
+  useLocale,
   useTranslate,
 } from '../index'
 
@@ -40,6 +42,21 @@ describe('message registry', () => {
     setLocale('zh-Hant-HK')
 
     expect(translate('viewer.greeting', 'Hello')).toBe('您好')
+  })
+
+  test('maps explicit Simplified Chinese scripts to zh-CN without crossing into Traditional', () => {
+    registerMessages('zh-CN', 'viewer', { 'test.simplified-alias': '简体中文' })
+
+    expect(translate('viewer.test.simplified-alias', 'English', undefined, 'zh-Hans')).toBe(
+      '简体中文',
+    )
+    expect(translate('viewer.test.simplified-alias', 'English', undefined, 'zh-Hans-CN')).toBe(
+      '简体中文',
+    )
+    expect(translate('viewer.test.simplified-alias', 'English', undefined, 'zh-Hant')).toBe(
+      'English',
+    )
+    expect(translate('viewer.test.simplified-alias', 'English', undefined, 'zh-TW')).toBe('English')
   })
 
   test('keeps canonical English in code', () => {
@@ -113,12 +130,12 @@ describe('message registry', () => {
 describe('locale formatting', () => {
   test('formats numbers and lengths without coupling locale to the unit', () => {
     setLocale('fr')
-    expect(formatNumber(2.75, { max: 2 })).toBe('2,75')
-    expect(formatLength(2.75, 'm')).toBe('2,75\u00a0m')
-    expect(formatLength(2.75, 'mm')).toBe('2750\u00a0mm')
+    expect(formatNumber(2.75, { locale: 'fr', max: 2 })).toBe('2,75')
+    expect(formatLength(2.75, 'm', { locale: 'fr' })).toBe('2,75\u00a0m')
+    expect(formatLength(2.75, 'mm', { locale: 'fr' })).toBe('2750\u00a0mm')
 
     setLocale('en')
-    expect(formatLength(2.75, 'm')).toBe('2.75\u00a0m')
+    expect(formatLength(2.75, 'm', { locale: 'en' })).toBe('2.75\u00a0m')
   })
 
   test('accepts the locale decimal separator as well as a dot', () => {
@@ -126,6 +143,16 @@ describe('locale formatting', () => {
     expect(parseLocalizedNumber('2.75', 'fr')).toBe(2.75)
     expect(parseLocalizedNumber('1,25e2', 'fr')).toBe(125)
     expect(parseLocalizedNumber('2,75', 'en')).toBeNull()
+  })
+
+  test('uses local floor numbering without changing persisted level indices', () => {
+    expect(levelDisplayNumber(1, 'en')).toBe(1)
+    expect(levelDisplayNumber(1, 'ja')).toBe(2)
+    expect(levelDisplayNumber(1, 'zh-CN')).toBe(2)
+    expect(levelDisplayNumber(1, 'zh-Hans')).toBe(2)
+    expect(levelDisplayNumber(1, 'zh-Hant')).toBe(1)
+    expect(levelDisplayNumber(1, 'zh-TW')).toBe(1)
+    expect(levelDisplayNumber(0, 'ja')).toBe(0)
   })
 })
 
@@ -139,6 +166,22 @@ test('useTranslate renders the English snapshot on the server', () => {
   }
 
   expect(renderToString(<Greeting />)).toContain('Hello')
+})
+
+test('rendered number formatting defaults to English and can use the hydration-safe snapshot', () => {
+  setLocale('fr')
+
+  function Measurement() {
+    const locale = useLocale()
+    return (
+      <>
+        <span>{formatNumber(2.75, { max: 2 })}</span>
+        <span>{formatNumber(2.75, { locale, max: 2 })}</span>
+      </>
+    )
+  }
+
+  expect(renderToString(<Measurement />)).not.toContain('2,75')
 })
 
 test('building and serializing a scene is locale-neutral', () => {

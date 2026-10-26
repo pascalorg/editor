@@ -191,12 +191,23 @@ export function BuildToolTile({
   )
 }
 
+const CAPTION_LEAD_MARKER = '__PASCAL_CAPTION_LEAD__'
+
 /** The line under the Rooms tiles: what the armed shape does, lead in bold. */
-export function BuildPanelCaption({ lead, rest }: { lead?: string; rest: string }) {
+export function BuildPanelCaption({ caption, lead }: { caption: string; lead?: string }) {
+  const markerIndex = caption.indexOf(CAPTION_LEAD_MARKER)
+  const hasMarkedLead = lead && markerIndex >= 0
   return (
     <p className="mt-2 min-h-[2lh] px-0.5 text-[11px] text-muted-foreground leading-relaxed">
-      {lead ? <span className="font-medium text-foreground">{lead} </span> : null}
-      {rest}
+      {hasMarkedLead ? (
+        <>
+          {caption.slice(0, markerIndex)}
+          <span className="font-medium text-foreground">{lead}</span>
+          {caption.slice(markerIndex + CAPTION_LEAD_MARKER.length)}
+        </>
+      ) : (
+        caption
+      )}
     </p>
   )
 }
@@ -246,14 +257,14 @@ export function BuildPanelRoomsSection({
         })}
       </BuildToolGrid>
       <BuildPanelCaption
-        lead={activeMessages?.lead}
-        rest={
-          activeMessages?.rest ??
+        caption={
+          activeMessages?.caption ??
           t(
             'editor.buildPanel.rooms.idle',
             'Pick a shape to start. Every room brings its own walls, floor and ceiling.',
           )
         }
+        lead={activeMessages?.lead}
       />
     </BuildPanelSection>
   )
@@ -265,9 +276,10 @@ function roomVariantMessages(variant: WallDrawVariant, t: Translate) {
       label: t('editor.buildPanel.rooms.rectangle.label', 'Rectangle'),
       title: t('editor.buildPanel.rooms.rectangle.title', 'Rectangle room'),
       lead: t('editor.buildPanel.rooms.rectangle.lead', 'Click two corners'),
-      rest: t(
-        'editor.buildPanel.rooms.rectangle.rest',
-        'on the grid. Walls, floor and ceiling are created together.',
+      caption: t(
+        'editor.buildPanel.rooms.rectangle.caption',
+        '{lead} on the grid. Walls, floor and ceiling are created together.',
+        { lead: CAPTION_LEAD_MARKER },
       ),
     }
   }
@@ -276,9 +288,10 @@ function roomVariantMessages(variant: WallDrawVariant, t: Translate) {
       label: t('editor.buildPanel.rooms.walls.label', 'Walls'),
       title: t('editor.buildPanel.rooms.walls.title', 'Walls'),
       lead: t('editor.buildPanel.rooms.walls.lead', 'Draw one wall at a time.'),
-      rest: t(
-        'editor.buildPanel.rooms.walls.rest',
-        'Close a loop and it becomes a room; leave it open for partitions.',
+      caption: t(
+        'editor.buildPanel.rooms.walls.caption',
+        '{lead} Close a loop and it becomes a room; leave it open for partitions.',
+        { lead: CAPTION_LEAD_MARKER },
       ),
     }
   }
@@ -286,9 +299,10 @@ function roomVariantMessages(variant: WallDrawVariant, t: Translate) {
     label: t('editor.buildPanel.rooms.polygon.label', 'Polygon'),
     title: t('editor.buildPanel.rooms.polygon.title', 'Polygon room'),
     lead: t('editor.buildPanel.rooms.polygon.lead', 'Click each corner,'),
-    rest: t(
-      'editor.buildPanel.rooms.polygon.rest',
-      'then the first one again to close. For L-shapes and angled rooms.',
+    caption: t(
+      'editor.buildPanel.rooms.polygon.caption',
+      '{lead} then the first one again to close. For L-shapes and angled rooms.',
+      { lead: CAPTION_LEAD_MARKER },
     ),
   }
 }

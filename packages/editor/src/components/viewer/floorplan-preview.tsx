@@ -8,8 +8,10 @@ import {
   type GeometryContext,
   getLevelDisplayName,
   isNodeKindEnabled,
+  levelDisplayNumber,
   nodeRegistry,
   type Translate,
+  useLocale,
   useScene,
   useTranslate,
 } from '@pascal-app/core'
@@ -145,7 +147,7 @@ function boundsToViewBox(bounds: FloorplanBounds): FloorplanViewBox {
   }
 }
 
-function levelLabel(level: AnyNode, t: Translate): string {
+function levelLabel(level: AnyNode, t: Translate, locale: string): string {
   const levelNumber = (level as { level?: number }).level ?? 0
   const levelName = (level as { name?: string }).name
   const english = getLevelDisplayName({
@@ -159,7 +161,11 @@ function levelLabel(level: AnyNode, t: Translate): string {
   if (levelNumber < -1) {
     return t('core.level.basementNumber', 'Basement {number}', { number: -levelNumber })
   }
-  if (levelNumber > 0) return t('core.level.floorNumber', 'Floor {number}', { number: levelNumber })
+  if (levelNumber > 0) {
+    return t('core.level.floorNumber', 'Floor {number}', {
+      number: levelDisplayNumber(levelNumber, locale),
+    })
+  }
   return english
 }
 
@@ -323,6 +329,7 @@ export function FloorplanPreview({
   synchronizeNavigation = false,
 }: FloorplanPreviewProps) {
   const t = useTranslate()
+  const locale = useLocale()
   const storeNodes = useScene((state) => (scene ? EMPTY_PREVIEW_NODES : state.nodes))
   const storeInstalledPlugins = useScene((state) =>
     scene ? EMPTY_INSTALLED_PLUGINS : state.installedPlugins,
@@ -898,7 +905,7 @@ export function FloorplanPreview({
         aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0 F"
         aria-label={t('viewer.floorplan.viewLabel', '{floor} 2D view', {
           floor: activeLevel
-            ? levelLabel(activeLevel, t)
+            ? levelLabel(activeLevel, t, locale)
             : t('viewer.floorplan.floorPlan', 'Floor plan'),
         })}
         onKeyDown={onKeyDown}
@@ -1003,7 +1010,7 @@ export function FloorplanPreview({
           >
             {levels.map((level) => (
               <option key={level.id} value={level.id}>
-                {levelLabel(level, t)}
+                {levelLabel(level, t, locale)}
               </option>
             ))}
           </select>

@@ -92,7 +92,7 @@ export interface MeasurementHintOptions extends ParseMeasurementOptions {
   clamp?: (stored: number) => number
 }
 
-const PLAIN_NUMBER = /^[+-]?\d*(?:[.,]\d*)?$/
+const PLAIN_NUMBER = /^[+-]?\d*\.?\d*$/
 
 /**
  * A faint "= 1.83 m" preview of the value currently being typed, shown only
@@ -106,9 +106,10 @@ export function measurementHint(
   options: MeasurementHintOptions = {},
 ): string | null {
   const trimmed = raw.trim()
-  if (!trimmed || PLAIN_NUMBER.test(trimmed)) return null
+  const normalized = normalizeDecimalInput(trimmed)
+  if (!normalized || PLAIN_NUMBER.test(normalized)) return null
 
-  const parsed = parseMeasurement(trimmed, spec, options)
+  const parsed = parseMeasurement(normalized, spec, options)
   if (parsed === null) return null
   const stored = options.clamp ? options.clamp(parsed) : parsed
 

@@ -20,3 +20,19 @@ test('bundled locale packs cover the converted viewer and editor surfaces', () =
     expect(translate('editor.buildPanel.rooms.title', 'Rooms')).toBe(rooms)
   }
 })
+
+test('Simplified Chinese aliases use zh-CN without affecting Traditional Chinese', () => {
+  registerBundledLocales()
+
+  setLocale('zh-Hans')
+  expect(translate('viewer.display.title', 'Display settings')).toBe('显示设置')
+
+  setLocale('zh-Hans-CN')
+  expect(translate('viewer.display.title', 'Display settings')).toBe('显示设置')
+
+  setLocale('zh-Hant')
+  expect(translate('viewer.display.title', 'Display settings')).toBe('Display settings')
+
+  setLocale('zh-TW')
+  expect(translate('viewer.display.title', 'Display settings')).toBe('Display settings')
+})

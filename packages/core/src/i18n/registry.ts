@@ -36,6 +36,7 @@ function localeFallbacks(value: string): string[] {
     const candidates = [exact]
     if (parsed.baseName !== exact) candidates.push(parsed.baseName)
     if (parsed.script) candidates.push(`${parsed.language}-${parsed.script}`)
+    if (parsed.language === 'zh' && parsed.script === 'Hans') candidates.push('zh-CN')
     candidates.push(parsed.language)
     return [...new Set(candidates)]
   } catch {

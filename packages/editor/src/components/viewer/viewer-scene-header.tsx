@@ -3,8 +3,10 @@
 import {
   getLevelDisplayName,
   type LevelNode,
+  levelDisplayNumber,
   sceneRegistry,
   type Translate,
+  useLocale,
   useScene,
   useTranslate,
 } from '@pascal-app/core'
@@ -49,7 +51,7 @@ function sectionTitle(kind: ViewerSidebarSection['kind'], t: Translate): string 
   return t('viewer.header.zones', 'Zones')
 }
 
-function translatedLevelName(level: LevelNode, t: Translate): string {
+function translatedLevelName(level: LevelNode, t: Translate, locale: string): string {
   const english = getLevelDisplayName(level)
   const authoredName = level.name?.trim()
   if (authoredName && authoredName !== `Level ${level.level}`) return authoredName
@@ -58,7 +60,11 @@ function translatedLevelName(level: LevelNode, t: Translate): string {
   if (level.level < -1) {
     return t('core.level.basementNumber', 'Basement {number}', { number: -level.level })
   }
-  if (level.level > 0) return t('core.level.floorNumber', 'Floor {number}', { number: level.level })
+  if (level.level > 0) {
+    return t('core.level.floorNumber', 'Floor {number}', {
+      number: levelDisplayNumber(level.level, locale),
+    })
+  }
   return english
 }
 
@@ -79,6 +85,7 @@ export const ViewerSceneHeader = ({
   source: sourceProp,
 }: ViewerSceneHeaderProps) => {
   const t = useTranslate()
+  const locale = useLocale()
   const sceneNodes = useScene((s) => s.nodes)
   const source = useMemo<ViewerSource>(
     () => sourceProp ?? { nodes: sceneNodes, objectFor: parametricObject },
@@ -237,7 +244,7 @@ export const ViewerSceneHeader = ({
                         <Layers className="h-3.5 w-3.5" />
                       </span>
                       <div className="min-w-0 flex-1 truncate text-left">
-                        {translatedLevelName(lvl, t)}
+                        {translatedLevelName(lvl, t, locale)}
                       </div>
                     </div>
                   </button>
@@ -278,7 +285,7 @@ export const ViewerSceneHeader = ({
                               />
                               <span className="min-w-0 flex-1 truncate">{row.label}</span>
                               <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
-                                {formatRoomArea(row.areaM2, unit)}
+                                {formatRoomArea(row.areaM2, unit, locale)}
                               </span>
                             </button>
                           )

@@ -6,6 +6,10 @@ export interface NumberFormatOptions {
   /** Maximum fraction digits. */
   max?: number
   useGrouping?: boolean
+  /**
+   * Locale used for formatting. React renderers must pass useLocale() so the
+   * server and hydration snapshots use the same locale.
+   */
   locale?: string
 }
 
@@ -43,6 +47,27 @@ function decimalSeparator(locale: string): string {
   }
 }
 
+/**
+ * The persisted level is zero-based at grade. Japanese and Simplified Chinese
+ * label that same storey as floor 1, so floors above it display one higher.
+ */
+export function levelDisplayNumber(level: number, locale = getLocale()): number {
+  if (level <= 0) return level
+  try {
+    const parsed = new Intl.Locale(locale)
+    if (parsed.language === 'ja') return level + 1
+    if (
+      parsed.language === 'zh' &&
+      (parsed.script === 'Hans' || (!parsed.script && parsed.region === 'CN'))
+    ) {
+      return level + 1
+    }
+  } catch {
+    // Invalid locales use the stored English numbering.
+  }
+  return level
+}
+
 export function formatNumber(value: number, options: NumberFormatOptions = {}): string {
   if (!Number.isFinite(value)) return '--'
   const minimumFractionDigits = fractionDigits(options.min, 0)
@@ -52,7 +77,7 @@ export function formatNumber(value: number, options: NumberFormatOptions = {}): 
   )
 
   try {
-    return new Intl.NumberFormat(options.locale ?? getLocale(), {
+    return new Intl.NumberFormat(options.locale ?? 'en', {
       minimumFractionDigits,
       maximumFractionDigits,
       useGrouping: options.useGrouping ?? false,

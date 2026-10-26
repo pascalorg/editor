@@ -3,32 +3,32 @@
     "default": "Basement",
     "hash": "8caa959c0ae800c3",
     "context": [
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:158",
-      "packages/editor/src/components/viewer/viewer-scene-header.tsx:57"
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:160",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:59"
     ]
   },
   "core.level.basementNumber": {
     "default": "Basement {number}",
     "hash": "14927085ee91ba05",
     "context": [
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:160",
-      "packages/editor/src/components/viewer/viewer-scene-header.tsx:59"
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:162",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:61"
     ]
   },
   "core.level.floorNumber": {
     "default": "Floor {number}",
     "hash": "e59074a7b9b3f56e",
     "context": [
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:162",
-      "packages/editor/src/components/viewer/viewer-scene-header.tsx:61"
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:165",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:64"
     ]
   },
   "core.level.groundFloor": {
     "default": "Ground floor",
     "hash": "cde3efc9b7ddfa41",
     "context": [
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:157",
-      "packages/editor/src/components/viewer/viewer-scene-header.tsx:56"
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:159",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:58"
     ]
   },
   "editor.buildPanel.advanced": {
@@ -39,77 +39,77 @@
   "editor.buildPanel.rooms.hint": {
     "default": "walls · floor · ceiling",
     "hash": "fb40866c2d6db5fb",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:225"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:236"]
   },
   "editor.buildPanel.rooms.idle": {
     "default": "Pick a shape to start. Every room brings its own walls, floor and ceiling.",
     "hash": "271039bd919dc4c1",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:252"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:262"]
+  },
+  "editor.buildPanel.rooms.polygon.caption": {
+    "default": "{lead} then the first one again to close. For L-shapes and angled rooms.",
+    "hash": "ae2800b6c9e2b6ed",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:302"]
   },
   "editor.buildPanel.rooms.polygon.label": {
     "default": "Polygon",
     "hash": "4e186fc057733162",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:286"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:299"]
   },
   "editor.buildPanel.rooms.polygon.lead": {
     "default": "Click each corner,",
     "hash": "345e3aca3879b5c5",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:288"]
-  },
-  "editor.buildPanel.rooms.polygon.rest": {
-    "default": "then the first one again to close. For L-shapes and angled rooms.",
-    "hash": "4b869bde0632749b",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:289"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:301"]
   },
   "editor.buildPanel.rooms.polygon.title": {
     "default": "Polygon room",
     "hash": "8ec6152e139b0e3f",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:287"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:300"]
+  },
+  "editor.buildPanel.rooms.rectangle.caption": {
+    "default": "{lead} on the grid. Walls, floor and ceiling are created together.",
+    "hash": "9b46295eedcbedae",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:279"]
   },
   "editor.buildPanel.rooms.rectangle.label": {
     "default": "Rectangle",
     "hash": "2c2c20272b0370cc",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:265"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:276"]
   },
   "editor.buildPanel.rooms.rectangle.lead": {
     "default": "Click two corners",
     "hash": "060faa48e299d7c9",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:267"]
-  },
-  "editor.buildPanel.rooms.rectangle.rest": {
-    "default": "on the grid. Walls, floor and ceiling are created together.",
-    "hash": "5c868318eb6e0952",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:268"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:278"]
   },
   "editor.buildPanel.rooms.rectangle.title": {
     "default": "Rectangle room",
     "hash": "83a45603ac7f41e8",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:266"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:277"]
   },
   "editor.buildPanel.rooms.title": {
     "default": "Rooms",
     "hash": "3e7408ed44676176",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:227"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:238"]
+  },
+  "editor.buildPanel.rooms.walls.caption": {
+    "default": "{lead} Close a loop and it becomes a room; leave it open for partitions.",
+    "hash": "8a21a03c4acf396b",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:291"]
   },
   "editor.buildPanel.rooms.walls.label": {
     "default": "Walls",
     "hash": "aac9a732d2159ccc",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:276"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:288"]
   },
   "editor.buildPanel.rooms.walls.lead": {
     "default": "Draw one wall at a time.",
     "hash": "9843edd68426fa2d",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:278"]
-  },
-  "editor.buildPanel.rooms.walls.rest": {
-    "default": "Close a loop and it becomes a room; leave it open for partitions.",
-    "hash": "e3c4f3c4a5a9d8a6",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:279"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:290"]
   },
   "editor.buildPanel.rooms.walls.title": {
     "default": "Walls",
     "hash": "aac9a732d2159ccc",
-    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:277"]
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:289"]
   },
   "viewer.camera.orbitLeft": {
     "default": "Orbit left",
@@ -259,87 +259,87 @@
   "viewer.floorplan.empty": {
     "default": "No floor plans are available for this scene.",
     "hash": "286a757d8b52bb02",
-    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:886"]
+    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:893"]
   },
   "viewer.floorplan.fit": {
     "default": "Fit floor plan",
     "hash": "bf63c679ab94dbcd",
     "context": [
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:1043",
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:1046"
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1050",
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1053"
     ]
   },
   "viewer.floorplan.floor": {
     "default": "Floor",
     "hash": "d7148fa065bc709b",
     "context": [
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:990",
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:992"
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:997",
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:999"
     ]
   },
   "viewer.floorplan.floorPlan": {
     "default": "Floor plan",
     "hash": "fee6203bb9046929",
-    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:902"]
+    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:909"]
   },
   "viewer.floorplan.viewLabel": {
     "default": "{floor} 2D view",
     "hash": "28b255b7bf5f1084",
-    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:899"]
+    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:906"]
   },
   "viewer.floorplan.zoomIn": {
     "default": "Zoom in",
     "hash": "d17804412f8dd081",
     "context": [
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:1052",
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:1055"
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1059",
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1062"
     ]
   },
   "viewer.floorplan.zoomOut": {
     "default": "Zoom out",
     "hash": "23b012a283b2c14a",
     "context": [
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:1034",
-      "packages/editor/src/components/viewer/floorplan-preview.tsx:1037"
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1041",
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1044"
     ]
   },
   "viewer.header.back": {
     "default": "Back",
     "hash": "7ceade8f25b58fe9",
     "context": [
-      "packages/editor/src/components/viewer/viewer-scene-header.tsx:137",
-      "packages/editor/src/components/viewer/viewer-scene-header.tsx:146"
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:144",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:153"
     ]
   },
   "viewer.header.levels": {
     "default": "Levels",
     "hash": "cc3d601d59e2e26c",
-    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:210"]
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:217"]
   },
   "viewer.header.rooms": {
     "default": "Rooms",
     "hash": "3e7408ed44676176",
-    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:48"]
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:50"]
   },
   "viewer.header.selection": {
     "default": "Selection",
     "hash": "170b2049ef0f9131",
-    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:175"]
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:182"]
   },
   "viewer.header.units": {
     "default": "Units",
     "hash": "b404dded35241274",
-    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:47"]
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:49"]
   },
   "viewer.header.untitled": {
     "default": "Untitled",
     "hash": "6547a4c0c368042a",
-    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:156"]
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:163"]
   },
   "viewer.header.zones": {
     "default": "Zones",
     "hash": "665db49a26f81425",
-    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:49"]
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:51"]
   },
   "viewer.levels.exploded": {
     "default": "Exploded",

@@ -1,10 +1,20 @@
 import { expect, test } from 'bun:test'
 import {
+  hasRequiredPluralForms,
   type LocaleCatalog,
   refreshLocaleCatalog,
   type SourceCatalog,
   type TranslationProvider,
 } from './i18n'
+
+test('plural validation follows the target locale categories', () => {
+  const english = { one: '{count} item', other: '{count} items' }
+
+  expect(hasRequiredPluralForms(english, { other: '{count} 個' }, 'ja')).toBeTrue()
+  expect(hasRequiredPluralForms(english, { other: '{count} 个' }, 'zh-CN')).toBeTrue()
+  expect(hasRequiredPluralForms(english, { other: '{count} items' }, 'en')).toBeFalse()
+  expect(hasRequiredPluralForms(english, english, 'en')).toBeTrue()
+})
 
 test('AI translation refreshes only missing and stale entries through a mocked provider', async () => {
   const source: SourceCatalog = {

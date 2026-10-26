@@ -1,6 +1,13 @@
 {
   "productContext": "Pascal is an architecture and building-design editor. Use concise professional UI language familiar to architects, CAD users, builders, and interior designers.",
   "terms": {
+    "ceiling": {
+      "zh-CN": "天花板",
+      "fr": "plafond",
+      "es": "techo",
+      "ja": "天井",
+      "note": "A generic overhead room surface, not necessarily a suspended ceiling."
+    },
     "floor plan": {
       "zh-CN": "平面图",
       "fr": "plan d’étage",

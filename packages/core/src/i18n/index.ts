@@ -2,6 +2,7 @@ export {
   formatLength,
   formatNumber,
   type LengthUnit,
+  levelDisplayNumber,
   type NumberFormatOptions,
   normalizeDecimalInput,
   parseLocalizedNumber,

@@ -29,6 +29,10 @@
       "message": "Choisissez une forme pour commencer. Chaque pièce crée ses murs, son sol et son plafond.",
       "sourceHash": "271039bd919dc4c1"
     },
+    "editor.buildPanel.rooms.polygon.caption": {
+      "message": "{lead} puis de nouveau sur le premier pour fermer. Pour les pièces en L et les angles obliques.",
+      "sourceHash": "ae2800b6c9e2b6ed"
+    },
     "editor.buildPanel.rooms.polygon.label": {
       "message": "Polygone",
       "sourceHash": "4e186fc057733162"
@@ -37,13 +41,13 @@
       "message": "Cliquez sur chaque angle,",
       "sourceHash": "345e3aca3879b5c5"
     },
-    "editor.buildPanel.rooms.polygon.rest": {
-      "message": "puis de nouveau sur le premier pour fermer. Pour les pièces en L et les angles obliques.",
-      "sourceHash": "4b869bde0632749b"
-    },
     "editor.buildPanel.rooms.polygon.title": {
       "message": "Pièce polygonale",
       "sourceHash": "8ec6152e139b0e3f"
+    },
+    "editor.buildPanel.rooms.rectangle.caption": {
+      "message": "{lead} sur la grille. Les murs, le sol et le plafond sont créés ensemble.",
+      "sourceHash": "9b46295eedcbedae"
     },
     "editor.buildPanel.rooms.rectangle.label": {
       "message": "Rectangle",
@@ -53,10 +57,6 @@
       "message": "Cliquez sur deux angles",
       "sourceHash": "060faa48e299d7c9"
     },
-    "editor.buildPanel.rooms.rectangle.rest": {
-      "message": "de la grille. Les murs, le sol et le plafond sont créés ensemble.",
-      "sourceHash": "5c868318eb6e0952"
-    },
     "editor.buildPanel.rooms.rectangle.title": {
       "message": "Pièce rectangulaire",
       "sourceHash": "83a45603ac7f41e8"
@@ -65,6 +65,10 @@
       "message": "Pièces",
       "sourceHash": "3e7408ed44676176"
     },
+    "editor.buildPanel.rooms.walls.caption": {
+      "message": "{lead} Fermez la boucle pour créer une pièce, ou laissez-la ouverte pour une cloison.",
+      "sourceHash": "8a21a03c4acf396b"
+    },
     "editor.buildPanel.rooms.walls.label": {
       "message": "Murs",
       "sourceHash": "aac9a732d2159ccc"
@@ -72,10 +76,6 @@
     "editor.buildPanel.rooms.walls.lead": {
       "message": "Tracez un mur à la fois.",
       "sourceHash": "9843edd68426fa2d"
-    },
-    "editor.buildPanel.rooms.walls.rest": {
-      "message": "Fermez la boucle pour créer une pièce, ou laissez-la ouverte pour une cloison.",
-      "sourceHash": "e3c4f3c4a5a9d8a6"
     },
     "editor.buildPanel.rooms.walls.title": {
       "message": "Murs",

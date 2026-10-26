@@ -209,6 +209,24 @@ function samePlaceholders(source: Message, translated: Message): boolean {
   })
 }
 
+function pluralCategories(locale: string): Intl.LDMLPluralRule[] {
+  try {
+    return new Intl.PluralRules(locale).resolvedOptions().pluralCategories
+  } catch {
+    return new Intl.PluralRules('en').resolvedOptions().pluralCategories
+  }
+}
+
+export function hasRequiredPluralForms(
+  source: Message,
+  translated: Message,
+  locale: string,
+): boolean {
+  if (typeof source === 'string') return typeof translated === 'string'
+  if (typeof translated === 'string') return false
+  return pluralCategories(locale).every((category) => category in translated)
+}
+
 function isMessage(value: unknown): value is Message {
   if (typeof value === 'string') return true
   if (!(value && typeof value === 'object' && !Array.isArray(value))) return false
@@ -298,11 +316,7 @@ export function checkCatalogs(root = ROOT): string[] {
       if (!samePlaceholders(source.default, translation.message)) {
         errors.push(`${locale}: broken placeholders in "${key}"`)
       }
-      if (
-        typeof source.default === 'object' &&
-        (typeof translation.message !== 'object' ||
-          !Object.keys(source.default).every((category) => category in translation.message))
-      ) {
+      if (!hasRequiredPluralForms(source.default, translation.message, locale)) {
         errors.push(`${locale}: missing plural forms in "${key}"`)
       }
     }
@@ -315,6 +329,7 @@ function promptFor(request: TranslationRequest): string {
     `Translate these Pascal architecture/CAD interface messages into ${request.locale}.`,
     'Return one JSON object mapping every input key to its translated string or plural-form object.',
     'Preserve {placeholders} exactly. Keep labels concise and use a consistent professional CAD glossary.',
+    `For plural objects, include every cardinal category required by Intl.PluralRules: ${pluralCategories(request.locale).join(', ')}.`,
     'Do not add commentary or markdown. Human reviewers will approve the resulting diff.',
     `Glossary: ${JSON.stringify(request.glossary)}`,
     `Messages: ${JSON.stringify(request.items)}`,
@@ -332,6 +347,9 @@ function parseProviderResponse(text: string, request: TranslationRequest): Recor
     if (!isMessage(message)) throw new Error(`Translation provider omitted "${item.key}"`)
     if (!samePlaceholders(item.source, message)) {
       throw new Error(`Translation provider changed placeholders in "${item.key}"`)
+    }
+    if (!hasRequiredPluralForms(item.source, message, request.locale)) {
+      throw new Error(`Translation provider omitted plural forms in "${item.key}"`)
     }
     messages[item.key] = message
   }
@@ -427,6 +445,9 @@ export async function refreshLocaleCatalog(
         throw new Error(`Translation provider returned an invalid message for "${item.key}"`)
       if (!samePlaceholders(item.source, message)) {
         throw new Error(`Translation provider changed placeholders in "${item.key}"`)
+      }
+      if (!hasRequiredPluralForms(item.source, message, catalog.locale)) {
+        throw new Error(`Translation provider omitted plural forms in "${item.key}"`)
       }
       messages[item.key] = { message, sourceHash: source[item.key]!.hash }
     }

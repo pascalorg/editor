@@ -12,6 +12,7 @@ import {
   polygonInteriorPoint,
   type Ring,
   sceneRegistry,
+  useLocale,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -93,10 +94,11 @@ export function roomLabelsVisible(state: RoomLabelVisibilityState): boolean {
   )
 }
 
-export function formatRoomArea(squareMeters: number, unit: LinearUnit): string {
+export function formatRoomArea(squareMeters: number, unit: LinearUnit, locale?: string): string {
   return `${formatNumber(squareMetersToAreaUnit(squareMeters, unit), {
     min: 1,
     max: 1,
+    locale,
   })} ${getAreaUnitLabel(unit)}`
 }
 
@@ -1173,11 +1175,12 @@ export function RoomPillChip({
   onLeave: () => void
 }) {
   const unit = useViewer((s) => s.unit)
-  const areaLabel = formatRoomArea(areaM2, unit)
+  const locale = useLocale()
+  const areaLabel = formatRoomArea(areaM2, unit, locale)
   // biome-ignore lint/correctness/useExhaustiveDependencies: A dot's border box does not resize when its hidden text changes.
   useLayoutEffect(() => {
     if (elements instanceof PillElements) elements.measure(zoneId)
-  }, [areaM2, elements, name, unit, zoneId])
+  }, [areaM2, elements, locale, name, unit, zoneId])
   const register = useCallback(
     (element: HTMLElement | null) => {
       if (element) elements.set(zoneId, element)
@@ -1231,6 +1234,7 @@ export function RoomPillDetail({
   areaM2: number
 }) {
   const unit = useViewer((s) => s.unit)
+  const locale = useLocale()
   return (
     <div
       aria-hidden
@@ -1238,7 +1242,7 @@ export function RoomPillDetail({
       data-room-label-detail={zoneId}
       data-room-label-view={view}
     >
-      <LabelParts areaLabel={formatRoomArea(areaM2, unit)} color={color} full name={name} />
+      <LabelParts areaLabel={formatRoomArea(areaM2, unit, locale)} color={color} full name={name} />
     </div>
   )
 }
