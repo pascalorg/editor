@@ -42,6 +42,13 @@ describe('message registry', () => {
     expect(translate('viewer.greeting', 'Hello')).toBe('您好')
   })
 
+  test('allows host overrides for English while keeping in-code English as the fallback', () => {
+    registerMessages('en', 'viewer', { greeting: 'Welcome' })
+
+    expect(translate('viewer.greeting', 'Hello')).toBe('Welcome')
+    expect(translate('viewer.unregistered', 'In-code fallback')).toBe('In-code fallback')
+  })
+
   test('interpolates values and selects plurals with Intl.PluralRules', () => {
     registerMessages('fr', 'editor', {
       selection: {
@@ -59,6 +66,18 @@ describe('message registry', () => {
       translate('editor.selection', { one: '{count} item', other: '{count} items' }, { count: 3 }),
     ).toBe('3 éléments sélectionnés')
     expect(translate('editor.welcome', 'Hello {name}', { name: 'Ada' })).toBe('Bonjour Ada')
+  })
+
+  test('uses English plural rules when a translation is missing', () => {
+    setLocale('ru')
+
+    expect(
+      translate(
+        'viewer.test.english-plural-fallback',
+        { one: '{count} item', other: '{count} items' },
+        { count: 21 },
+      ),
+    ).toBe('21 items')
   })
 
   test('notifies subscribers for locale and active-catalog changes', () => {

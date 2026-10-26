@@ -117,7 +117,6 @@ function warnMissing(key: string, requestedLocale: string): void {
 
 function selectPlural(
   message: TranslationMessage,
-  fallback: TranslationMessage,
   count: number | undefined,
   requestedLocale: string,
 ): string {
@@ -132,9 +131,7 @@ function selectPlural(
   }
 
   const translated = message[category] ?? message.other
-  if (translated !== undefined) return translated
-  if (typeof fallback === 'string') return fallback
-  return fallback[category] ?? fallback.other
+  return translated
 }
 
 function interpolate(message: string, params: TranslationParams | undefined): string {
@@ -152,9 +149,10 @@ export function translate(
   requestedLocale = locale,
 ): string {
   const normalizedLocale = canonicalLocale(requestedLocale)
-  const translated = normalizedLocale === 'en' ? undefined : messageFor(key, normalizedLocale)
+  const translated = messageFor(key, normalizedLocale)
   if (translated === undefined) warnMissing(key, normalizedLocale)
   const message = translated ?? englishDefault
   const count = typeof params?.count === 'number' ? params.count : undefined
-  return interpolate(selectPlural(message, englishDefault, count, normalizedLocale), params)
+  const pluralLocale = translated === undefined ? 'en' : normalizedLocale
+  return interpolate(selectPlural(message, count, pluralLocale), params)
 }

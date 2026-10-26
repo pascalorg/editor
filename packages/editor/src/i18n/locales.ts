@@ -32,7 +32,9 @@ export function registerBundledLocales(): void {
     const namespaces = new Map<string, TranslationMessages>()
     for (const [fullKey, entry] of Object.entries(catalog.messages)) {
       const separator = fullKey.indexOf('.')
-      if (separator < 1) continue
+      if (separator < 1) {
+        throw new Error(`Invalid translation key "${fullKey}" in ${catalog.locale}`)
+      }
       const namespace = fullKey.slice(0, separator)
       const key = fullKey.slice(separator + 1)
       const messages = namespaces.get(namespace) ?? {}
