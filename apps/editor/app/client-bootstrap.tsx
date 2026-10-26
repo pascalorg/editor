@@ -10,7 +10,10 @@
 // idempotent under HMR.
 import '../lib/bootstrap'
 import { getLocale, setLocale, subscribe } from '@pascal-app/core'
+import { registerBundledLocales } from '@pascal-app/editor/locales'
 import { type ReactNode, useEffect } from 'react'
+
+registerBundledLocales()
 
 if (typeof window !== 'undefined') {
   const queryLocale = new URLSearchParams(window.location.search).get('lang')

@@ -1,6 +1,13 @@
 'use client'
 
-import { getLevelDisplayName, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  getLevelDisplayName,
+  type LevelNode,
+  sceneRegistry,
+  type Translate,
+  useScene,
+  useTranslate,
+} from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { ArrowLeft, ChevronRight, Layers } from 'lucide-react'
 import Link from 'next/link'
@@ -36,10 +43,23 @@ export type ViewerSceneHeaderProps = {
   source?: ViewerSource
 }
 
-const SECTION_TITLES: Record<ViewerSidebarSection['kind'], string> = {
-  units: 'Units',
-  rooms: 'Rooms',
-  zones: 'Zones',
+function sectionTitle(kind: ViewerSidebarSection['kind'], t: Translate): string {
+  if (kind === 'units') return t('viewer.header.units', 'Units')
+  if (kind === 'rooms') return t('viewer.header.rooms', 'Rooms')
+  return t('viewer.header.zones', 'Zones')
+}
+
+function translatedLevelName(level: LevelNode, t: Translate): string {
+  const english = getLevelDisplayName(level)
+  const authoredName = level.name?.trim()
+  if (authoredName && authoredName !== `Level ${level.level}`) return authoredName
+  if (level.level === 0) return t('core.level.groundFloor', 'Ground floor')
+  if (level.level === -1) return t('core.level.basement', 'Basement')
+  if (level.level < -1) {
+    return t('core.level.basementNumber', 'Basement {number}', { number: -level.level })
+  }
+  if (level.level > 0) return t('core.level.floorNumber', 'Floor {number}', { number: level.level })
+  return english
 }
 
 const parametricObject = (id: string) => sceneRegistry.nodes.get(id)
@@ -58,6 +78,7 @@ export const ViewerSceneHeader = ({
   stats,
   source: sourceProp,
 }: ViewerSceneHeaderProps) => {
+  const t = useTranslate()
   const sceneNodes = useScene((s) => s.nodes)
   const source = useMemo<ViewerSource>(
     () => sourceProp ?? { nodes: sceneNodes, objectFor: parametricObject },
@@ -113,7 +134,7 @@ export const ViewerSceneHeader = ({
         <div className="flex items-center gap-3 px-3 py-2.5">
           {onBack ? (
             <button
-              aria-label="Back"
+              aria-label={t('viewer.header.back', 'Back')}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               onClick={onBack}
               type="button"
@@ -122,7 +143,7 @@ export const ViewerSceneHeader = ({
             </button>
           ) : backHref === null ? null : (
             <Link
-              aria-label="Back"
+              aria-label={t('viewer.header.back', 'Back')}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               href={backHref}
               prefetch={false}
@@ -132,7 +153,7 @@ export const ViewerSceneHeader = ({
           )}
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium text-foreground text-sm">
-              {projectName || 'Untitled'}
+              {projectName || t('viewer.header.untitled', 'Untitled')}
             </div>
             {owner?.username && (
               <Link
@@ -151,7 +172,7 @@ export const ViewerSceneHeader = ({
 
         {crumbs.length > 0 && (
           <nav
-            aria-label="Selection"
+            aria-label={t('viewer.header.selection', 'Selection')}
             className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-border/40 border-t px-3 py-2 text-xs"
             data-testid="viewer-breadcrumb"
           >
@@ -186,7 +207,7 @@ export const ViewerSceneHeader = ({
       {levels.length > 0 && (
         <div className="corner-smooth pointer-events-auto flex min-h-0 w-56 flex-col overflow-hidden rounded-2xl border border-border/40 bg-background/95 py-1 shadow-elevation-4 backdrop-blur-xl transition-colors duration-200 ease-out">
           <span className="px-3 py-2 font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-            Levels
+            {t('viewer.header.levels', 'Levels')}
           </span>
           <div className="flex min-h-0 flex-col overflow-y-auto">
             {levels.map((lvl) => {
@@ -216,7 +237,7 @@ export const ViewerSceneHeader = ({
                         <Layers className="h-3.5 w-3.5" />
                       </span>
                       <div className="min-w-0 flex-1 truncate text-left">
-                        {getLevelDisplayName(lvl)}
+                        {translatedLevelName(lvl, t)}
                       </div>
                     </div>
                   </button>
@@ -228,7 +249,7 @@ export const ViewerSceneHeader = ({
                         key={section.kind}
                       >
                         <span className="block px-3 pt-2 pb-1 pl-9 font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-                          {SECTION_TITLES[section.kind]}
+                          {sectionTitle(section.kind, t)}
                         </span>
                         {section.rows.map((row) => {
                           const active =

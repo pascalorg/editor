@@ -9,7 +9,9 @@ import {
   getLevelDisplayName,
   isNodeKindEnabled,
   nodeRegistry,
+  type Translate,
   useScene,
+  useTranslate,
 } from '@pascal-app/core'
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { useViewer } from '@pascal-app/viewer'
@@ -143,11 +145,22 @@ function boundsToViewBox(bounds: FloorplanBounds): FloorplanViewBox {
   }
 }
 
-function levelLabel(level: AnyNode): string {
-  return getLevelDisplayName({
-    name: (level as { name?: string }).name,
-    level: (level as { level?: number }).level ?? 0,
+function levelLabel(level: AnyNode, t: Translate): string {
+  const levelNumber = (level as { level?: number }).level ?? 0
+  const levelName = (level as { name?: string }).name
+  const english = getLevelDisplayName({
+    name: levelName,
+    level: levelNumber,
   })
+  const authoredName = levelName?.trim()
+  if (authoredName && authoredName !== `Level ${levelNumber}`) return authoredName
+  if (levelNumber === 0) return t('core.level.groundFloor', 'Ground floor')
+  if (levelNumber === -1) return t('core.level.basement', 'Basement')
+  if (levelNumber < -1) {
+    return t('core.level.basementNumber', 'Basement {number}', { number: -levelNumber })
+  }
+  if (levelNumber > 0) return t('core.level.floorNumber', 'Floor {number}', { number: levelNumber })
+  return english
 }
 
 function collectLevelTree(root: AnyNode, nodes: Record<string, AnyNode>): AnyNode[] {
@@ -309,6 +322,7 @@ export function FloorplanPreview({
   showLevelSelector = true,
   synchronizeNavigation = false,
 }: FloorplanPreviewProps) {
+  const t = useTranslate()
   const storeNodes = useScene((state) => (scene ? EMPTY_PREVIEW_NODES : state.nodes))
   const storeInstalledPlugins = useScene((state) =>
     scene ? EMPTY_INSTALLED_PLUGINS : state.installedPlugins,
@@ -869,7 +883,7 @@ export function FloorplanPreview({
         className={className}
         style={{ display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}
       >
-        No floor plans are available for this scene.
+        {t('viewer.floorplan.empty', 'No floor plans are available for this scene.')}
       </div>
     )
   }
@@ -882,7 +896,11 @@ export function FloorplanPreview({
       {synchronizeNavigation ? <FloorplanCameraSyncMount /> : null}
       <div
         aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0 F"
-        aria-label={`${activeLevel ? levelLabel(activeLevel) : 'Floor plan'} 2D view`}
+        aria-label={t('viewer.floorplan.viewLabel', '{floor} 2D view', {
+          floor: activeLevel
+            ? levelLabel(activeLevel, t)
+            : t('viewer.floorplan.floorPlan', 'Floor plan'),
+        })}
         onKeyDown={onKeyDown}
         role="application"
         ref={interactionRef}
@@ -969,9 +987,9 @@ export function FloorplanPreview({
             fontWeight: 600,
           }}
         >
-          Floor
+          {t('viewer.floorplan.floor', 'Floor')}
           <select
-            aria-label="Floor"
+            aria-label={t('viewer.floorplan.floor', 'Floor')}
             onChange={(event) => chooseLevel(event.target.value)}
             style={{
               border: '1px solid rgba(148,163,184,.55)',
@@ -985,7 +1003,7 @@ export function FloorplanPreview({
           >
             {levels.map((level) => (
               <option key={level.id} value={level.id}>
-                {levelLabel(level)}
+                {levelLabel(level, t)}
               </option>
             ))}
           </select>
@@ -1013,28 +1031,28 @@ export function FloorplanPreview({
         }}
       >
         <button
-          aria-label="Zoom out"
+          aria-label={t('viewer.floorplan.zoomOut', 'Zoom out')}
           onClick={() => zoom(1.2)}
           style={controlStyle}
-          title="Zoom out"
+          title={t('viewer.floorplan.zoomOut', 'Zoom out')}
           type="button"
         >
           <Minus size={16} />
         </button>
         <button
-          aria-label="Fit floor plan"
+          aria-label={t('viewer.floorplan.fit', 'Fit floor plan')}
           onClick={() => updateLocalViewBox(fittedViewBox)}
           style={controlStyle}
-          title="Fit floor plan"
+          title={t('viewer.floorplan.fit', 'Fit floor plan')}
           type="button"
         >
           <Maximize2 size={15} />
         </button>
         <button
-          aria-label="Zoom in"
+          aria-label={t('viewer.floorplan.zoomIn', 'Zoom in')}
           onClick={() => zoom(0.8)}
           style={controlStyle}
-          title="Zoom in"
+          title={t('viewer.floorplan.zoomIn', 'Zoom in')}
           type="button"
         >
           <Plus size={16} />

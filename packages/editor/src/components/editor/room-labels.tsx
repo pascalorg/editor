@@ -7,6 +7,7 @@ import {
   containsPoint,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
+  formatNumber,
   type Polygon,
   polygonInteriorPoint,
   type Ring,
@@ -93,7 +94,7 @@ export function roomLabelsVisible(state: RoomLabelVisibilityState): boolean {
 }
 
 export function formatRoomArea(squareMeters: number, unit: LinearUnit): string {
-  return `${squareMetersToAreaUnit(squareMeters, unit).toFixed(1)} ${getAreaUnitLabel(unit)}`
+  return `${formatNumber(squareMetersToAreaUnit(squareMeters, unit), { max: 1 })} ${getAreaUnitLabel(unit)}`
 }
 
 function useRoomLabelsVisible() {

@@ -1,5 +1,6 @@
 'use client'
 
+import { type Translate, useTranslate } from '@pascal-app/core'
 import { ChevronRight } from 'lucide-react'
 import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useState } from 'react'
 import { cn } from '../../../lib/utils'
@@ -70,6 +71,7 @@ export function BuildPanelAdvancedSection({
   description?: string
   hint?: string
 }) {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   useEffect(() => setOpen(readAdvancedOpen()), [])
   useEffect(() => {
@@ -94,7 +96,9 @@ export function BuildPanelAdvancedSection({
             open && 'rotate-90',
           )}
         />
-        <h3 className="font-medium text-foreground text-xs">Advanced</h3>
+        <h3 className="font-medium text-foreground text-xs">
+          {t('editor.buildPanel.advanced', 'Advanced')}
+        </h3>
         {hint ? (
           <span className="ml-auto truncate text-[11px] text-muted-foreground">{hint}</span>
         ) : null}
@@ -214,29 +218,75 @@ export function BuildPanelRoomsSection({
   /** Extra attributes per tile (e.g. a host's guide-target hook). */
   tileProps?: (variant: WallDrawVariant) => Record<string, string | undefined>
 }) {
+  const t = useTranslate()
   const active = WALL_DRAW_VARIANTS.find((variant) => variant.id === activeVariant)
+  const activeMessages = active ? roomVariantMessages(active.id, t) : null
   return (
-    <BuildPanelSection hint="walls · floor · ceiling" id="rooms" title="Rooms">
+    <BuildPanelSection
+      hint={t('editor.buildPanel.rooms.hint', 'walls · floor · ceiling')}
+      id="rooms"
+      title={t('editor.buildPanel.rooms.title', 'Rooms')}
+    >
       <BuildToolGrid columns={3}>
-        {WALL_DRAW_VARIANTS.map((variant) => (
-          <BuildToolTile
-            active={variant.id === activeVariant}
-            data-build-tool={`room-${variant.id}`}
-            iconSrc={variant.iconSrc}
-            key={variant.id}
-            label={variant.label}
-            onClick={() => onSelect(variant.id)}
-            onMouseEnter={() => onHover?.(variant.id)}
-            size="lg"
-            title={variant.title}
-            {...tileProps?.(variant.id)}
-          />
-        ))}
+        {WALL_DRAW_VARIANTS.map((variant) => {
+          const messages = roomVariantMessages(variant.id, t)
+          return (
+            <BuildToolTile
+              active={variant.id === activeVariant}
+              data-build-tool={`room-${variant.id}`}
+              iconSrc={variant.iconSrc}
+              key={variant.id}
+              label={messages.label}
+              onClick={() => onSelect(variant.id)}
+              onMouseEnter={() => onHover?.(variant.id)}
+              size="lg"
+              title={messages.title}
+              {...tileProps?.(variant.id)}
+            />
+          )
+        })}
       </BuildToolGrid>
       <BuildPanelCaption
-        lead={active?.caption.lead}
-        rest={active ? active.caption.rest : WALL_DRAW_IDLE_CAPTION}
+        lead={activeMessages?.lead}
+        rest={
+          activeMessages?.rest ??
+          t('editor.buildPanel.rooms.idle', WALL_DRAW_IDLE_CAPTION)
+        }
       />
     </BuildPanelSection>
   )
+}
+
+function roomVariantMessages(variant: WallDrawVariant, t: Translate) {
+  if (variant === 'rectangle') {
+    return {
+      label: t('editor.buildPanel.rooms.rectangle.label', 'Rectangle'),
+      title: t('editor.buildPanel.rooms.rectangle.title', 'Rectangle room'),
+      lead: t('editor.buildPanel.rooms.rectangle.lead', 'Click two corners'),
+      rest: t(
+        'editor.buildPanel.rooms.rectangle.rest',
+        'on the grid. Walls, floor and ceiling are created together.',
+      ),
+    }
+  }
+  if (variant === 'walls') {
+    return {
+      label: t('editor.buildPanel.rooms.walls.label', 'Walls'),
+      title: t('editor.buildPanel.rooms.walls.title', 'Walls'),
+      lead: t('editor.buildPanel.rooms.walls.lead', 'Draw one wall at a time.'),
+      rest: t(
+        'editor.buildPanel.rooms.walls.rest',
+        'Close a loop and it becomes a room; leave it open for partitions.',
+      ),
+    }
+  }
+  return {
+    label: t('editor.buildPanel.rooms.polygon.label', 'Polygon'),
+    title: t('editor.buildPanel.rooms.polygon.title', 'Polygon room'),
+    lead: t('editor.buildPanel.rooms.polygon.lead', 'Click each corner,'),
+    rest: t(
+      'editor.buildPanel.rooms.polygon.rest',
+      'then the first one again to close. For L-shapes and angled rooms.',
+    ),
+  }
 }
