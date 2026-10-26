@@ -51,6 +51,14 @@ export async function createLocalGuideImage({
   return guide
 }
 
+/** Logs a failed {@link createLocalGuideImage} and returns the message to show for it. */
+export function guideImageErrorMessage(error: unknown): string {
+  console.error('[guide-image]', error)
+  return error instanceof Error && error.message
+    ? `Could not add that guide image: ${error.message}`
+    : 'Could not add that guide image.'
+}
+
 export async function createLocalScan({
   createNode,
   file,
