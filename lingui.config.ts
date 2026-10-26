@@ -19,7 +19,7 @@ const config: LinguiConfig = {
   fallbackLocales: false,
   format: formatter({
     explicitIdAsDefault: true,
-    lineNumbers: true,
+    lineNumbers: false,
     origins: true,
   }),
   locales: ['en', 'zh-CN', 'fr', 'es', 'ja'],

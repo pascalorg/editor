@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import type { CatalogType } from '@lingui/conf'
+import linguiConfig from '../lingui.config'
 import {
+  checkCatalogs,
   hashSource,
   refreshTranslations,
   type SourceMessage,
@@ -7,6 +11,42 @@ import {
   type TranslationProvider,
   validateTranslation,
 } from './i18n'
+
+test('PO output is stable when an unrelated source line is added', async () => {
+  const format = linguiConfig.format
+  if (!format) throw new Error('Lingui PO formatter is not configured')
+  const serialize = (line: number) =>
+    format.serialize(
+      {
+        'viewer.example': {
+          message: 'Example',
+          translation: 'Exemple',
+          origin: [['packages/editor/src/example.tsx', line]],
+        },
+      } satisfies CatalogType,
+      {
+        existing: undefined,
+        filename: 'messages.po',
+        locale: 'fr',
+        sourceLocale: 'en',
+      },
+    )
+
+  expect(await serialize(10)).toBe(await serialize(11))
+})
+
+test('catalog checking does not rewrite PO or compiled catalogs', async () => {
+  const paths = [
+    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.po').scanSync(),
+    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.ts').scanSync(),
+  ]
+  const before = new Map(paths.map((path) => [path, readFileSync(path, 'utf8')]))
+
+  expect(await checkCatalogs()).toEqual([])
+  expect(paths.map((path) => readFileSync(path, 'utf8'))).toEqual(
+    paths.map((path) => before.get(path)),
+  )
+})
 
 test('ICU plural validation follows the target locale categories', () => {
   const english = '{count, plural, one {# item} other {# items}}'

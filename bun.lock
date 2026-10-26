@@ -8,9 +8,9 @@
         "@ai-sdk/anthropic": "^4.0.89",
         "@ai-sdk/openai": "^4.0.103",
         "@biomejs/biome": "^2.6.3",
-        "@lingui/cli": "^6.10.1",
+        "@lingui/cli": "6.10.1",
         "@lingui/conf": "6.10.1",
-        "@lingui/format-po": "^6.10.1",
+        "@lingui/format-po": "6.10.1",
         "@lingui/message-utils": "6.10.1",
         "@typescript/native-preview": "7.0.0-dev.20260707.2",
         "@typescript/typescript6": "6.0.2",
@@ -136,9 +136,8 @@
       "name": "@pascal-app/core",
       "version": "1.0.6",
       "dependencies": {
-        "@lingui/core": "^6.10.1",
-        "@lingui/message-utils": "^6.10.1",
-        "@lingui/react": "^6.10.1",
+        "@lingui/core": "6.10.1",
+        "@lingui/message-utils": "6.10.1",
         "@pascal-app/lingo": "^0.5.0",
         "dedent": "^1.7.2",
         "idb-keyval": "^6.3.0",
@@ -684,8 +683,6 @@
     "@lingui/native-tools-win32-arm64-msvc": ["@lingui/native-tools-win32-arm64-msvc@0.1.6", "", { "os": "win32", "cpu": "arm64" }, "sha512-M2TZP4gKgLaLbiboXIrY5+8GsaQLHvZ8E6cUFgAuSaBa8AMa73+pZO1eay/St9t8yDh6EL6hOlqN0HedUHMwyQ=="],
 
     "@lingui/native-tools-win32-x64-msvc": ["@lingui/native-tools-win32-x64-msvc@0.1.6", "", { "os": "win32", "cpu": "x64" }, "sha512-5KvuSTFtDB8UGHS3Rxd+juYZgc51isQSx0hPukDObre6UxZGuUVCBmJ9YwoGVzXedViiNGmsQvrnCTBbVqI75g=="],
-
-    "@lingui/react": ["@lingui/react@6.10.1", "", { "dependencies": { "@lingui/babel-plugin-lingui-macro": "6.10.1", "@lingui/core": "6.10.1", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "babel-plugin-macros": "2 || 3", "react": "^16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" }, "optionalPeers": ["babel-plugin-macros"] }, "sha512-r0e4T7WpkeKeVxT+qt56u7i8z1ykRIotpsCXaA6Vm2K0iVkE0SebcWpBaEFpBX8FyHEzXSA5nshSH6dm50pL1Q=="],
 
     "@mapbox/jsonlint-lines-primitives": ["@mapbox/jsonlint-lines-primitives@2.0.3", "", {}, "sha512-0SElaV0uMxEnxzBhhX9WTuPyUeMsAN/SS0i16tjuba4/mio63MG9khjC1a0JAiPGXAwvwm4UfHJURCN7nyudQg=="],
 

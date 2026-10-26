@@ -29,7 +29,7 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,nodes,mcp,cli,ifc-c
 
 ## Commands
 
-`bun run ci` is exactly what CI runs (check, skills:validate, check-types, test, build). The git hooks (installed by `bun install`) are fast feedback: Biome on staged files, typecheck of the packages you changed.
+`bun run ci` is exactly what CI runs (check, i18n:check, skills:validate, check-types, test, build). Localization catalog and language-pack guidance lives in `i18n/README.md`. The git hooks (installed by `bun install`) are fast feedback: Biome on staged files, typecheck of the packages you changed.
 
 ## Working agreements
 

@@ -44,8 +44,9 @@ After adding or changing a runtime message:
 `i18n:check` needs no API key. It fails for extraction/compiled-catalog drift,
 missing or stale translations, unreviewed entries, malformed ICU, changed
 placeholders or tags, invalid target-locale plural branches, and glossary
-violations. It only warns when a new literal bypasses Lingui on the converted
-viewer/build-panel surfaces.
+violations. It is read-only: use `i18n:extract` or `i18n:compile` when catalogs
+need to be written. It only warns when a new literal bypasses Lingui on the
+converted viewer/build-panel surfaces.
 
 `bun run i18n:compile` runs Lingui’s strict compiler directly when only the
 generated runtime catalogs need refreshing.

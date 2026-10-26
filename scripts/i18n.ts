@@ -2,13 +2,10 @@ import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { createOpenAI } from '@ai-sdk/openai'
+import { createCompiledCatalog } from '@lingui/cli/api'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
-import { generateText, Output } from 'ai'
 import { type PoFile, type PoItem, parsePo, stringifyPo } from 'pofile-ts'
 import ts from 'typescript'
-import { z } from 'zod'
 
 export type SourceMessage = {
   id: string
@@ -328,17 +325,6 @@ export async function refreshTranslations(
   return updated
 }
 
-const translationOutputSchema = z.object({
-  locale: z.string(),
-  entries: z.array(
-    z.object({
-      id: z.string(),
-      translation: z.string(),
-      reviewNotes: z.string(),
-    }),
-  ),
-})
-
 function promptFor(request: TranslationRequest): string {
   return [
     `Translate these Pascal architecture/CAD interface messages into ${request.locale}.`,
@@ -351,25 +337,12 @@ function promptFor(request: TranslationRequest): string {
   ].join('\n\n')
 }
 
-function configuredProvider(): TranslationProvider {
+async function configuredProvider(): Promise<TranslationProvider> {
   const name =
     process.env.I18N_PROVIDER ??
     (process.env.OPENAI_API_KEY ? 'openai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : '')
   const modelName = process.env.I18N_MODEL
   if (!modelName) throw new Error('Set I18N_MODEL to the translation model')
-
-  const model =
-    name === 'openai'
-      ? createOpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
-          baseURL: process.env.OPENAI_BASE_URL,
-        })(modelName)
-      : name === 'anthropic'
-        ? createAnthropic({
-            apiKey: process.env.ANTHROPIC_API_KEY,
-            baseURL: process.env.ANTHROPIC_BASE_URL,
-          })(modelName)
-        : null
 
   if (name === 'openai' && !process.env.OPENAI_API_KEY) {
     throw new Error('Set OPENAI_API_KEY for the OpenAI translation provider')
@@ -377,9 +350,31 @@ function configuredProvider(): TranslationProvider {
   if (name === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
     throw new Error('Set ANTHROPIC_API_KEY for the Anthropic translation provider')
   }
-  if (!model) {
+  if (name !== 'openai' && name !== 'anthropic') {
     throw new Error('Set I18N_PROVIDER to "openai" or "anthropic" and provide its API key')
   }
+
+  const [{ generateText, Output }, { z }] = await Promise.all([import('ai'), import('zod')])
+  const model =
+    name === 'openai'
+      ? (await import('@ai-sdk/openai')).createOpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+          baseURL: process.env.OPENAI_BASE_URL,
+        })(modelName)
+      : (await import('@ai-sdk/anthropic')).createAnthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY,
+          baseURL: process.env.ANTHROPIC_BASE_URL,
+        })(modelName)
+  const translationOutputSchema = z.object({
+    locale: z.string(),
+    entries: z.array(
+      z.object({
+        id: z.string(),
+        translation: z.string(),
+        reviewNotes: z.string(),
+      }),
+    ),
+  })
 
   return {
     name,
@@ -409,6 +404,18 @@ function runLingui(command: 'extract' | 'compile', strict = false): void {
     stderr: 'inherit',
   })
   if (result.exitCode !== 0) throw new Error(`Lingui ${command} failed`)
+}
+
+function checkLinguiCatalogSync(): string[] {
+  const result = Bun.spawnSync(
+    [process.execPath, 'x', 'lingui', 'check', 'sync', '--clean', '--workers', '1'],
+    {
+      cwd: ROOT,
+      stdout: 'inherit',
+      stderr: 'inherit',
+    },
+  )
+  return result.exitCode === 0 ? [] : ['PO catalogs are not synchronized; run bun run i18n:extract']
 }
 
 function writePo(path: string, po: PoFile): void {
@@ -519,20 +526,6 @@ function bypassedLiterals(): string[] {
   return warnings
 }
 
-function catalogFiles(): string[] {
-  return ALL_LOCALES.flatMap((locale) => [catalogPath(locale), compiledCatalogPath(locale)])
-}
-
-function snapshot(paths: string[]): Map<string, string> {
-  return new Map(paths.map((path) => [path, readFileSync(path, 'utf8')]))
-}
-
-function changedSince(before: Map<string, string>): string[] {
-  return [...before].flatMap(([path, contents]) =>
-    readFileSync(path, 'utf8') === contents ? [] : [relative(ROOT, path)],
-  )
-}
-
 function checkCatalogMessages(sources: SourceMessage[], glossary: Glossary): string[] {
   const errors: string[] = []
   const sourceById = new Map(sources.map((source) => [source.id, source]))
@@ -571,17 +564,36 @@ function checkCatalogMessages(sources: SourceMessage[], glossary: Glossary): str
   return errors
 }
 
+function checkCompiledCatalogs(): string[] {
+  return ALL_LOCALES.flatMap((locale) => {
+    const po = parsePo(readFileSync(catalogPath(locale), 'utf8'))
+    const messages = Object.fromEntries(
+      po.items.filter((item) => !item.obsolete).map((item) => [item.msgid, item.msgstr[0] ?? '']),
+    )
+    const compiled = createCompiledCatalog(locale, messages, {
+      namespace: 'ts',
+      outputPrefix: '/*eslint-disable*/',
+      strict: true,
+    })
+    const errors = compiled.errors.map(
+      ({ id, error }) => `${locale}: failed to compile "${id}": ${error.message}`,
+    )
+    if (compiled.source !== readFileSync(compiledCatalogPath(locale), 'utf8')) {
+      errors.push(
+        `${relative(ROOT, compiledCatalogPath(locale))} is not synchronized; run bun run i18n:compile`,
+      )
+    }
+    return errors
+  })
+}
+
 export async function checkCatalogs(): Promise<string[]> {
-  const before = snapshot(catalogFiles())
-  runLingui('extract')
-  annotateCatalogs()
-  runLingui('compile', true)
-  const changed = changedSince(before)
   const sources = readSourceMessages()
   const glossary = readJson<Glossary>(GLOSSARY_PATH)
   return [
-    ...changed.map((path) => `${path} is not synchronized; run bun run i18n:extract`),
+    ...checkLinguiCatalogSync(),
     ...checkCatalogMessages(sources, glossary),
+    ...checkCompiledCatalogs(),
   ]
 }
 
@@ -622,7 +634,7 @@ async function main(): Promise<void> {
     const locales = requested.length > 0 ? requested : [...TARGET_LOCALES]
     const sources = readSourceMessages()
     const glossary = readJson<Glossary>(GLOSSARY_PATH)
-    const provider = configuredProvider()
+    const provider = await configuredProvider()
     for (const locale of locales) {
       if (!TARGET_LOCALES.includes(locale as (typeof TARGET_LOCALES)[number])) {
         throw new Error(`Unknown bundled locale "${locale}"`)

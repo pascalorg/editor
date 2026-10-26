@@ -1,6 +1,5 @@
 'use client'
 
-import { I18nProvider as LinguiI18nProvider } from '@lingui/react'
 import {
   createContext,
   createElement,
@@ -18,11 +17,7 @@ const PascalI18nContext = createContext(defaultI18n)
  * @experimental Unreleased API; signatures may change before the first i18n release.
  */
 export function PascalI18nProvider({ children, i18n }: { children: ReactNode; i18n: PascalI18n }) {
-  return createElement(
-    PascalI18nContext.Provider,
-    { value: i18n },
-    createElement(LinguiI18nProvider, { i18n: i18n.i18n }, children),
-  )
+  return createElement(PascalI18nContext.Provider, { value: i18n }, children)
 }
 
 /** @experimental Unreleased API; signatures may change before the first i18n release. */
