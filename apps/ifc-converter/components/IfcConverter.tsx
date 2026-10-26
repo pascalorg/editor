@@ -1,8 +1,8 @@
 'use client'
 
 import {
-  conversionReportHasIssues,
   convertIfcToPascalWithReport,
+  type IfcConversionReport,
   type PascalSceneGraph,
 } from '@pascal-app/ifc-converter'
 import dynamic from 'next/dynamic'
@@ -51,7 +51,7 @@ export default function IfcConverter() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [conversionProgress, setConversionProgress] = useState<number>(0)
   const [conversionMessage, setConversionMessage] = useState<string>('')
-  const [geometrySkipped, setGeometrySkipped] = useState(false)
+  const [conversionWarnings, setConversionWarnings] = useState<string[]>([])
 
   const levels = useMemo(() => {
     if (!pascalData) return []
@@ -139,7 +139,7 @@ export default function IfcConverter() {
     setSelectedNodeId(null)
     setConversionProgress(0)
     setConversionMessage('Starting conversion...')
-    setGeometrySkipped(false)
+    setConversionWarnings([])
 
     try {
       const { scene: result, report } = await convertIfcToPascalWithReport(
@@ -150,7 +150,7 @@ export default function IfcConverter() {
         },
       )
       setPascalData(result)
-      setGeometrySkipped(conversionReportHasIssues(report))
+      setConversionWarnings(conversionWarningsFor(report))
       setStatus('ready')
       setConversionProgress(100)
       setConversionMessage('Conversion complete!')
@@ -528,10 +528,9 @@ export default function IfcConverter() {
             </>
           )}
 
-          {status === 'ready' && geometrySkipped && (
+          {status === 'ready' && conversionWarnings.length > 0 && (
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 text-sm">
-              Some geometry couldn't be read: parts of this file had invalid coordinates and were
-              left out.
+              {conversionWarnings.join(' ')}
             </p>
           )}
 
@@ -758,4 +757,20 @@ export default function IfcConverter() {
       )}
     </div>
   )
+}
+
+function conversionWarningsFor(report: IfcConversionReport): string[] {
+  const { skippedGeometry, replaced } = report
+  const skipped =
+    skippedGeometry.transforms +
+    skippedGeometry.vertices +
+    skippedGeometry.triangles +
+    skippedGeometry.primitives +
+    skippedGeometry.elements
+  return [
+    skipped > 0 &&
+      "Some geometry couldn't be read: parts of this file had invalid coordinates and were left out.",
+    (replaced.unitFactor || replaced.originOffset || replaced.levelElevations > 0) &&
+      'Some invalid placement values were reset to defaults, so positions or storey heights may be off.',
+  ].filter((warning): warning is string => Boolean(warning))
 }
