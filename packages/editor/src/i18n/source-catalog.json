@@ -1,0 +1,469 @@
+{
+  "core.level.basement": {
+    "default": "Basement",
+    "hash": "8caa959c0ae800c3",
+    "context": [
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:158",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:57"
+    ]
+  },
+  "core.level.basementNumber": {
+    "default": "Basement {number}",
+    "hash": "14927085ee91ba05",
+    "context": [
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:160",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:59"
+    ]
+  },
+  "core.level.floorNumber": {
+    "default": "Floor {number}",
+    "hash": "e59074a7b9b3f56e",
+    "context": [
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:162",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:61"
+    ]
+  },
+  "core.level.groundFloor": {
+    "default": "Ground floor",
+    "hash": "cde3efc9b7ddfa41",
+    "context": [
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:157",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:56"
+    ]
+  },
+  "editor.buildPanel.advanced": {
+    "default": "Advanced",
+    "hash": "f571cb2d06ae01ae",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:99"]
+  },
+  "editor.buildPanel.rooms.hint": {
+    "default": "walls · floor · ceiling",
+    "hash": "fb40866c2d6db5fb",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:225"]
+  },
+  "editor.buildPanel.rooms.idle": {
+    "default": "Pick a shape to start. Every room brings its own walls, floor and ceiling.",
+    "hash": "271039bd919dc4c1",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:252"]
+  },
+  "editor.buildPanel.rooms.polygon.label": {
+    "default": "Polygon",
+    "hash": "4e186fc057733162",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:286"]
+  },
+  "editor.buildPanel.rooms.polygon.lead": {
+    "default": "Click each corner,",
+    "hash": "345e3aca3879b5c5",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:288"]
+  },
+  "editor.buildPanel.rooms.polygon.rest": {
+    "default": "then the first one again to close. For L-shapes and angled rooms.",
+    "hash": "4b869bde0632749b",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:289"]
+  },
+  "editor.buildPanel.rooms.polygon.title": {
+    "default": "Polygon room",
+    "hash": "8ec6152e139b0e3f",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:287"]
+  },
+  "editor.buildPanel.rooms.rectangle.label": {
+    "default": "Rectangle",
+    "hash": "2c2c20272b0370cc",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:265"]
+  },
+  "editor.buildPanel.rooms.rectangle.lead": {
+    "default": "Click two corners",
+    "hash": "060faa48e299d7c9",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:267"]
+  },
+  "editor.buildPanel.rooms.rectangle.rest": {
+    "default": "on the grid. Walls, floor and ceiling are created together.",
+    "hash": "5c868318eb6e0952",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:268"]
+  },
+  "editor.buildPanel.rooms.rectangle.title": {
+    "default": "Rectangle room",
+    "hash": "83a45603ac7f41e8",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:266"]
+  },
+  "editor.buildPanel.rooms.title": {
+    "default": "Rooms",
+    "hash": "3e7408ed44676176",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:227"]
+  },
+  "editor.buildPanel.rooms.walls.label": {
+    "default": "Walls",
+    "hash": "aac9a732d2159ccc",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:276"]
+  },
+  "editor.buildPanel.rooms.walls.lead": {
+    "default": "Draw one wall at a time.",
+    "hash": "9843edd68426fa2d",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:278"]
+  },
+  "editor.buildPanel.rooms.walls.rest": {
+    "default": "Close a loop and it becomes a room; leave it open for partitions.",
+    "hash": "e3c4f3c4a5a9d8a6",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:279"]
+  },
+  "editor.buildPanel.rooms.walls.title": {
+    "default": "Walls",
+    "hash": "aac9a732d2159ccc",
+    "context": ["packages/editor/src/components/ui/build-panel/build-panel.tsx:277"]
+  },
+  "viewer.camera.orbitLeft": {
+    "default": "Orbit left",
+    "hash": "8bf25afa3cb8baea",
+    "context": [
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:482",
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:490"
+    ]
+  },
+  "viewer.camera.orbitRight": {
+    "default": "Orbit right",
+    "hash": "b9cc64c1d1bb0d46",
+    "context": [
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:498",
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:506"
+    ]
+  },
+  "viewer.camera.topView": {
+    "default": "Top view",
+    "hash": "1ab1eb3a14f4b0e0",
+    "context": [
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:514",
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:522"
+    ]
+  },
+  "viewer.common.off": {
+    "default": "Off",
+    "hash": "50accd740fa2e736",
+    "context": [
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:212",
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:463"
+    ]
+  },
+  "viewer.common.on": {
+    "default": "On",
+    "hash": "9cc01faad79c28da",
+    "context": [
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:212",
+      "packages/editor/src/components/viewer/viewer-controls-bar.tsx:462"
+    ]
+  },
+  "viewer.display.camera": {
+    "default": "Camera",
+    "hash": "14622745dbf93f4c",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:225"]
+  },
+  "viewer.display.colored": {
+    "default": "Colored",
+    "hash": "d3d478fa6c6d7ddc",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:239"]
+  },
+  "viewer.display.colors": {
+    "default": "Colors",
+    "hash": "82b74c4f5ef43336",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:236"]
+  },
+  "viewer.display.edges.off": {
+    "default": "Off",
+    "hash": "50accd740fa2e736",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:174"]
+  },
+  "viewer.display.edges.offDetail": {
+    "default": "No edge lines",
+    "hash": "4ff58913a4492199",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:175"]
+  },
+  "viewer.display.edges.soft": {
+    "default": "Soft",
+    "hash": "d266d83ec490df4e",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:179"]
+  },
+  "viewer.display.edges.softDetail": {
+    "default": "Faint outline of major creases",
+    "hash": "0c583f1d4201293b",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:180"]
+  },
+  "viewer.display.edges.strong": {
+    "default": "Strong",
+    "hash": "f82927a01d4c5e45",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:184"]
+  },
+  "viewer.display.edges.strongDetail": {
+    "default": "Crisp, opaque edge lines",
+    "hash": "2416a48df28d6205",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:185"]
+  },
+  "viewer.display.edges.title": {
+    "default": "Edges",
+    "hash": "027bbc8b7287c06a",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:312"]
+  },
+  "viewer.display.monochrome": {
+    "default": "Monochrome",
+    "hash": "ecde2f7c26914be3",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:240"]
+  },
+  "viewer.display.orthographic": {
+    "default": "Orthographic",
+    "hash": "ed59dd8ce7797a66",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:229"]
+  },
+  "viewer.display.perspective": {
+    "default": "Perspective",
+    "hash": "316e25993ff72b88",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:228"]
+  },
+  "viewer.display.render.rendered": {
+    "default": "Rendered",
+    "hash": "f363702a10aedaeb",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:166"]
+  },
+  "viewer.display.render.renderedDetail": {
+    "default": "Full ambient occlusion",
+    "hash": "8bb9e54fc786ca77",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:167"]
+  },
+  "viewer.display.render.solid": {
+    "default": "Solid",
+    "hash": "ef3e765e692faf4c",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:160"]
+  },
+  "viewer.display.render.solidDetail": {
+    "default": "Flat and fast — no ambient occlusion",
+    "hash": "8827df1cdeb02ed9",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:161"]
+  },
+  "viewer.display.render.title": {
+    "default": "Render",
+    "hash": "5e58af99d6d4fa6a",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:249"]
+  },
+  "viewer.display.shadows": {
+    "default": "Shadows",
+    "hash": "4c6bcb30b40047fc",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:210"]
+  },
+  "viewer.display.title": {
+    "default": "Display settings",
+    "hash": "d0db46f206a88e2e",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:196"]
+  },
+  "viewer.floorplan.alignNorth": {
+    "default": "Align view to north",
+    "hash": "2bdf83801d4a40af",
+    "context": ["packages/editor/src/components/viewer/floorplan-compass-button.tsx:23"]
+  },
+  "viewer.floorplan.empty": {
+    "default": "No floor plans are available for this scene.",
+    "hash": "286a757d8b52bb02",
+    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:886"]
+  },
+  "viewer.floorplan.fit": {
+    "default": "Fit floor plan",
+    "hash": "bf63c679ab94dbcd",
+    "context": [
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1043",
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1046"
+    ]
+  },
+  "viewer.floorplan.floor": {
+    "default": "Floor",
+    "hash": "d7148fa065bc709b",
+    "context": [
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:990",
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:992"
+    ]
+  },
+  "viewer.floorplan.floorPlan": {
+    "default": "Floor plan",
+    "hash": "fee6203bb9046929",
+    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:902"]
+  },
+  "viewer.floorplan.viewLabel": {
+    "default": "{floor} 2D view",
+    "hash": "28b255b7bf5f1084",
+    "context": ["packages/editor/src/components/viewer/floorplan-preview.tsx:899"]
+  },
+  "viewer.floorplan.zoomIn": {
+    "default": "Zoom in",
+    "hash": "d17804412f8dd081",
+    "context": [
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1052",
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1055"
+    ]
+  },
+  "viewer.floorplan.zoomOut": {
+    "default": "Zoom out",
+    "hash": "23b012a283b2c14a",
+    "context": [
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1034",
+      "packages/editor/src/components/viewer/floorplan-preview.tsx:1037"
+    ]
+  },
+  "viewer.header.back": {
+    "default": "Back",
+    "hash": "7ceade8f25b58fe9",
+    "context": [
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:137",
+      "packages/editor/src/components/viewer/viewer-scene-header.tsx:146"
+    ]
+  },
+  "viewer.header.levels": {
+    "default": "Levels",
+    "hash": "cc3d601d59e2e26c",
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:210"]
+  },
+  "viewer.header.rooms": {
+    "default": "Rooms",
+    "hash": "3e7408ed44676176",
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:48"]
+  },
+  "viewer.header.selection": {
+    "default": "Selection",
+    "hash": "170b2049ef0f9131",
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:175"]
+  },
+  "viewer.header.units": {
+    "default": "Units",
+    "hash": "b404dded35241274",
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:47"]
+  },
+  "viewer.header.untitled": {
+    "default": "Untitled",
+    "hash": "6547a4c0c368042a",
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:156"]
+  },
+  "viewer.header.zones": {
+    "default": "Zones",
+    "hash": "665db49a26f81425",
+    "context": ["packages/editor/src/components/viewer/viewer-scene-header.tsx:49"]
+  },
+  "viewer.levels.exploded": {
+    "default": "Exploded",
+    "hash": "be12f8788f1f0a05",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:58"]
+  },
+  "viewer.levels.label": {
+    "default": "Levels: {mode}",
+    "hash": "4bf4a6861d7d633e",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:397"]
+  },
+  "viewer.levels.manual": {
+    "default": "Manual",
+    "hash": "387082cd5f118bed",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:60"]
+  },
+  "viewer.levels.solo": {
+    "default": "Solo",
+    "hash": "e9f59b513f2f45ac",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:59"]
+  },
+  "viewer.levels.stacked": {
+    "default": "Stacked",
+    "hash": "c203c84eee18c0f6",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:57"]
+  },
+  "viewer.stage.layout": {
+    "default": "Viewer layout",
+    "hash": "9dd21ca47cffa3b8",
+    "context": ["packages/editor/src/components/viewer/viewer-stage-switcher.tsx:31"]
+  },
+  "viewer.stage.split": {
+    "default": "Split",
+    "hash": "e4cd64b1680ac0d2",
+    "context": ["packages/editor/src/components/viewer/viewer-stage-switcher.tsx:59"]
+  },
+  "viewer.theme.blueprint": {
+    "default": "Blueprint",
+    "hash": "f14b89d713d2528a",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:74"]
+  },
+  "viewer.theme.mediterranean": {
+    "default": "Mediterranean",
+    "hash": "142bcb2841f423c5",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:75"]
+  },
+  "viewer.theme.night": {
+    "default": "Night",
+    "hash": "b399942ec5d7e1ba",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:77"]
+  },
+  "viewer.theme.overcast": {
+    "default": "Overcast",
+    "hash": "f512d1b947b8ae5a",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:73"]
+  },
+  "viewer.theme.paper": {
+    "default": "Paper",
+    "hash": "583542b3bc837192",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:71"]
+  },
+  "viewer.theme.studio": {
+    "default": "Studio",
+    "hash": "7abc2dc6e39b1747",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:70"]
+  },
+  "viewer.theme.sunset": {
+    "default": "Sunset",
+    "hash": "efe94d3ec8d8c44e",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:72"]
+  },
+  "viewer.theme.title": {
+    "default": "Scene theme",
+    "hash": "82720864e5034398",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:277"]
+  },
+  "viewer.theme.twilight": {
+    "default": "Twilight",
+    "hash": "4c10ea0aa0e2ea41",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:76"]
+  },
+  "viewer.theme.verdant": {
+    "default": "Verdant",
+    "hash": "f9592fb0672740c0",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:78"]
+  },
+  "viewer.visibility.guides": {
+    "default": "Guides",
+    "hash": "892d5dd34372028b",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:134"]
+  },
+  "viewer.visibility.scans": {
+    "default": "Scans",
+    "hash": "3260bfa69cca50e5",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:121"]
+  },
+  "viewer.visibility.title": {
+    "default": "Visibility",
+    "hash": "2cefbb554eadbb6e",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:106"]
+  },
+  "viewer.walkthrough.label": {
+    "default": "Walkthrough: {state}",
+    "hash": "31afd9dee47ba943",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:460"]
+  },
+  "viewer.walls.cutaway": {
+    "default": "Cutaway",
+    "hash": "4da8b3678ed77b45",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:66"]
+  },
+  "viewer.walls.fullHeight": {
+    "default": "Full height",
+    "hash": "131bac2467f4fdf6",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:64"]
+  },
+  "viewer.walls.label": {
+    "default": "Walls: {mode}",
+    "hash": "32f3d058cf2526d2",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:424"]
+  },
+  "viewer.walls.low": {
+    "default": "Low",
+    "hash": "803532407fb5962b",
+    "context": ["packages/editor/src/components/viewer/viewer-controls-bar.tsx:65"]
+  }
+}

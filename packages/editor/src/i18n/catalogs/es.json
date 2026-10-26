@@ -1,0 +1,345 @@
+{
+  "locale": "es",
+  "messages": {
+    "core.level.basement": {
+      "message": "Sótano",
+      "sourceHash": "8caa959c0ae800c3"
+    },
+    "core.level.basementNumber": {
+      "message": "Sótano {number}",
+      "sourceHash": "14927085ee91ba05"
+    },
+    "core.level.floorNumber": {
+      "message": "Planta {number}",
+      "sourceHash": "e59074a7b9b3f56e"
+    },
+    "core.level.groundFloor": {
+      "message": "Planta baja",
+      "sourceHash": "cde3efc9b7ddfa41"
+    },
+    "editor.buildPanel.advanced": {
+      "message": "Avanzado",
+      "sourceHash": "f571cb2d06ae01ae"
+    },
+    "editor.buildPanel.rooms.hint": {
+      "message": "muros · suelo · techo",
+      "sourceHash": "fb40866c2d6db5fb"
+    },
+    "editor.buildPanel.rooms.idle": {
+      "message": "Elige una forma para empezar. Cada estancia incluye sus muros, suelo y techo.",
+      "sourceHash": "271039bd919dc4c1"
+    },
+    "editor.buildPanel.rooms.polygon.label": {
+      "message": "Polígono",
+      "sourceHash": "4e186fc057733162"
+    },
+    "editor.buildPanel.rooms.polygon.lead": {
+      "message": "Haz clic en cada esquina",
+      "sourceHash": "345e3aca3879b5c5"
+    },
+    "editor.buildPanel.rooms.polygon.rest": {
+      "message": "y vuelve a pulsar la primera para cerrar. Para estancias en L o con ángulos.",
+      "sourceHash": "4b869bde0632749b"
+    },
+    "editor.buildPanel.rooms.polygon.title": {
+      "message": "Estancia poligonal",
+      "sourceHash": "8ec6152e139b0e3f"
+    },
+    "editor.buildPanel.rooms.rectangle.label": {
+      "message": "Rectángulo",
+      "sourceHash": "2c2c20272b0370cc"
+    },
+    "editor.buildPanel.rooms.rectangle.lead": {
+      "message": "Haz clic en dos esquinas",
+      "sourceHash": "060faa48e299d7c9"
+    },
+    "editor.buildPanel.rooms.rectangle.rest": {
+      "message": "de la cuadrícula. Los muros, el suelo y el techo se crean a la vez.",
+      "sourceHash": "5c868318eb6e0952"
+    },
+    "editor.buildPanel.rooms.rectangle.title": {
+      "message": "Estancia rectangular",
+      "sourceHash": "83a45603ac7f41e8"
+    },
+    "editor.buildPanel.rooms.title": {
+      "message": "Estancias",
+      "sourceHash": "3e7408ed44676176"
+    },
+    "editor.buildPanel.rooms.walls.label": {
+      "message": "Muros",
+      "sourceHash": "aac9a732d2159ccc"
+    },
+    "editor.buildPanel.rooms.walls.lead": {
+      "message": "Dibuja un muro cada vez.",
+      "sourceHash": "9843edd68426fa2d"
+    },
+    "editor.buildPanel.rooms.walls.rest": {
+      "message": "Cierra el contorno para crear una estancia o déjalo abierto para tabiques.",
+      "sourceHash": "e3c4f3c4a5a9d8a6"
+    },
+    "editor.buildPanel.rooms.walls.title": {
+      "message": "Muros",
+      "sourceHash": "aac9a732d2159ccc"
+    },
+    "viewer.camera.orbitLeft": {
+      "message": "Orbitar a la izquierda",
+      "sourceHash": "8bf25afa3cb8baea"
+    },
+    "viewer.camera.orbitRight": {
+      "message": "Orbitar a la derecha",
+      "sourceHash": "b9cc64c1d1bb0d46"
+    },
+    "viewer.camera.topView": {
+      "message": "Vista superior",
+      "sourceHash": "1ab1eb3a14f4b0e0"
+    },
+    "viewer.common.off": {
+      "message": "Desactivado",
+      "sourceHash": "50accd740fa2e736"
+    },
+    "viewer.common.on": {
+      "message": "Activado",
+      "sourceHash": "9cc01faad79c28da"
+    },
+    "viewer.display.camera": {
+      "message": "Cámara",
+      "sourceHash": "14622745dbf93f4c"
+    },
+    "viewer.display.colored": {
+      "message": "A color",
+      "sourceHash": "d3d478fa6c6d7ddc"
+    },
+    "viewer.display.colors": {
+      "message": "Colores",
+      "sourceHash": "82b74c4f5ef43336"
+    },
+    "viewer.display.edges.off": {
+      "message": "Desactivadas",
+      "sourceHash": "50accd740fa2e736"
+    },
+    "viewer.display.edges.offDetail": {
+      "message": "Sin líneas de arista",
+      "sourceHash": "4ff58913a4492199"
+    },
+    "viewer.display.edges.soft": {
+      "message": "Suaves",
+      "sourceHash": "d266d83ec490df4e"
+    },
+    "viewer.display.edges.softDetail": {
+      "message": "Contorno tenue de los pliegues principales",
+      "sourceHash": "0c583f1d4201293b"
+    },
+    "viewer.display.edges.strong": {
+      "message": "Marcadas",
+      "sourceHash": "f82927a01d4c5e45"
+    },
+    "viewer.display.edges.strongDetail": {
+      "message": "Líneas de arista nítidas y opacas",
+      "sourceHash": "2416a48df28d6205"
+    },
+    "viewer.display.edges.title": {
+      "message": "Aristas",
+      "sourceHash": "027bbc8b7287c06a"
+    },
+    "viewer.display.monochrome": {
+      "message": "Monocromo",
+      "sourceHash": "ecde2f7c26914be3"
+    },
+    "viewer.display.orthographic": {
+      "message": "Ortográfica",
+      "sourceHash": "ed59dd8ce7797a66"
+    },
+    "viewer.display.perspective": {
+      "message": "Perspectiva",
+      "sourceHash": "316e25993ff72b88"
+    },
+    "viewer.display.render.rendered": {
+      "message": "Realista",
+      "sourceHash": "f363702a10aedaeb"
+    },
+    "viewer.display.render.renderedDetail": {
+      "message": "Oclusión ambiental completa",
+      "sourceHash": "8bb9e54fc786ca77"
+    },
+    "viewer.display.render.solid": {
+      "message": "Sólido",
+      "sourceHash": "ef3e765e692faf4c"
+    },
+    "viewer.display.render.solidDetail": {
+      "message": "Plano y rápido, sin oclusión ambiental",
+      "sourceHash": "8827df1cdeb02ed9"
+    },
+    "viewer.display.render.title": {
+      "message": "Renderizado",
+      "sourceHash": "5e58af99d6d4fa6a"
+    },
+    "viewer.display.shadows": {
+      "message": "Sombras",
+      "sourceHash": "4c6bcb30b40047fc"
+    },
+    "viewer.display.title": {
+      "message": "Ajustes de visualización",
+      "sourceHash": "d0db46f206a88e2e"
+    },
+    "viewer.floorplan.alignNorth": {
+      "message": "Orientar la vista al norte",
+      "sourceHash": "2bdf83801d4a40af"
+    },
+    "viewer.floorplan.empty": {
+      "message": "No hay planos de planta disponibles para esta escena.",
+      "sourceHash": "286a757d8b52bb02"
+    },
+    "viewer.floorplan.fit": {
+      "message": "Ajustar plano",
+      "sourceHash": "bf63c679ab94dbcd"
+    },
+    "viewer.floorplan.floor": {
+      "message": "Planta",
+      "sourceHash": "d7148fa065bc709b"
+    },
+    "viewer.floorplan.floorPlan": {
+      "message": "Plano de planta",
+      "sourceHash": "fee6203bb9046929"
+    },
+    "viewer.floorplan.viewLabel": {
+      "message": "Vista 2D de {floor}",
+      "sourceHash": "28b255b7bf5f1084"
+    },
+    "viewer.floorplan.zoomIn": {
+      "message": "Acercar",
+      "sourceHash": "d17804412f8dd081"
+    },
+    "viewer.floorplan.zoomOut": {
+      "message": "Alejar",
+      "sourceHash": "23b012a283b2c14a"
+    },
+    "viewer.header.back": {
+      "message": "Volver",
+      "sourceHash": "7ceade8f25b58fe9"
+    },
+    "viewer.header.levels": {
+      "message": "Plantas",
+      "sourceHash": "cc3d601d59e2e26c"
+    },
+    "viewer.header.rooms": {
+      "message": "Estancias",
+      "sourceHash": "3e7408ed44676176"
+    },
+    "viewer.header.selection": {
+      "message": "Selección",
+      "sourceHash": "170b2049ef0f9131"
+    },
+    "viewer.header.units": {
+      "message": "Unidades",
+      "sourceHash": "b404dded35241274"
+    },
+    "viewer.header.untitled": {
+      "message": "Sin título",
+      "sourceHash": "6547a4c0c368042a"
+    },
+    "viewer.header.zones": {
+      "message": "Zonas",
+      "sourceHash": "665db49a26f81425"
+    },
+    "viewer.levels.exploded": {
+      "message": "Separadas",
+      "sourceHash": "be12f8788f1f0a05"
+    },
+    "viewer.levels.label": {
+      "message": "Plantas: {mode}",
+      "sourceHash": "4bf4a6861d7d633e"
+    },
+    "viewer.levels.manual": {
+      "message": "Manual",
+      "sourceHash": "387082cd5f118bed"
+    },
+    "viewer.levels.solo": {
+      "message": "Aislada",
+      "sourceHash": "e9f59b513f2f45ac"
+    },
+    "viewer.levels.stacked": {
+      "message": "Apiladas",
+      "sourceHash": "c203c84eee18c0f6"
+    },
+    "viewer.stage.layout": {
+      "message": "Disposición de vistas",
+      "sourceHash": "9dd21ca47cffa3b8"
+    },
+    "viewer.stage.split": {
+      "message": "Dividida",
+      "sourceHash": "e4cd64b1680ac0d2"
+    },
+    "viewer.theme.blueprint": {
+      "message": "Plano técnico",
+      "sourceHash": "f14b89d713d2528a"
+    },
+    "viewer.theme.mediterranean": {
+      "message": "Mediterráneo",
+      "sourceHash": "142bcb2841f423c5"
+    },
+    "viewer.theme.night": {
+      "message": "Noche",
+      "sourceHash": "b399942ec5d7e1ba"
+    },
+    "viewer.theme.overcast": {
+      "message": "Nublado",
+      "sourceHash": "f512d1b947b8ae5a"
+    },
+    "viewer.theme.paper": {
+      "message": "Papel",
+      "sourceHash": "583542b3bc837192"
+    },
+    "viewer.theme.studio": {
+      "message": "Estudio",
+      "sourceHash": "7abc2dc6e39b1747"
+    },
+    "viewer.theme.sunset": {
+      "message": "Atardecer",
+      "sourceHash": "efe94d3ec8d8c44e"
+    },
+    "viewer.theme.title": {
+      "message": "Ambiente",
+      "sourceHash": "82720864e5034398"
+    },
+    "viewer.theme.twilight": {
+      "message": "Crepúsculo",
+      "sourceHash": "4c10ea0aa0e2ea41"
+    },
+    "viewer.theme.verdant": {
+      "message": "Verde",
+      "sourceHash": "f9592fb0672740c0"
+    },
+    "viewer.visibility.guides": {
+      "message": "Guías",
+      "sourceHash": "892d5dd34372028b"
+    },
+    "viewer.visibility.scans": {
+      "message": "Escaneos 3D",
+      "sourceHash": "3260bfa69cca50e5"
+    },
+    "viewer.visibility.title": {
+      "message": "Visibilidad",
+      "sourceHash": "2cefbb554eadbb6e"
+    },
+    "viewer.walkthrough.label": {
+      "message": "Recorrido: {state}",
+      "sourceHash": "31afd9dee47ba943"
+    },
+    "viewer.walls.cutaway": {
+      "message": "Vista seccionada",
+      "sourceHash": "4da8b3678ed77b45"
+    },
+    "viewer.walls.fullHeight": {
+      "message": "Altura completa",
+      "sourceHash": "131bac2467f4fdf6"
+    },
+    "viewer.walls.label": {
+      "message": "Muros: {mode}",
+      "sourceHash": "32f3d058cf2526d2"
+    },
+    "viewer.walls.low": {
+      "message": "Bajos",
+      "sourceHash": "803532407fb5962b"
+    }
+  }
+}

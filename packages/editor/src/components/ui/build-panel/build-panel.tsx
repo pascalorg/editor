@@ -5,7 +5,6 @@ import { ChevronRight } from 'lucide-react'
 import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useState } from 'react'
 import { cn } from '../../../lib/utils'
 import {
-  WALL_DRAW_IDLE_CAPTION,
   WALL_DRAW_VARIANTS,
   type WallDrawVariant,
 } from '../../../lib/wall-draw-variant'
@@ -250,7 +249,10 @@ export function BuildPanelRoomsSection({
         lead={activeMessages?.lead}
         rest={
           activeMessages?.rest ??
-          t('editor.buildPanel.rooms.idle', WALL_DRAW_IDLE_CAPTION)
+          t(
+            'editor.buildPanel.rooms.idle',
+            'Pick a shape to start. Every room brings its own walls, floor and ceiling.',
+          )
         }
       />
     </BuildPanelSection>

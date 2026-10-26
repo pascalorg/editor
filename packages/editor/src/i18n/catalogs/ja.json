@@ -1,0 +1,345 @@
+{
+  "locale": "ja",
+  "messages": {
+    "core.level.basement": {
+      "message": "地下1階",
+      "sourceHash": "8caa959c0ae800c3"
+    },
+    "core.level.basementNumber": {
+      "message": "地下{number}階",
+      "sourceHash": "14927085ee91ba05"
+    },
+    "core.level.floorNumber": {
+      "message": "{number}階",
+      "sourceHash": "e59074a7b9b3f56e"
+    },
+    "core.level.groundFloor": {
+      "message": "1階",
+      "sourceHash": "cde3efc9b7ddfa41"
+    },
+    "editor.buildPanel.advanced": {
+      "message": "詳細",
+      "sourceHash": "f571cb2d06ae01ae"
+    },
+    "editor.buildPanel.rooms.hint": {
+      "message": "壁 · 床 · 天井",
+      "sourceHash": "fb40866c2d6db5fb"
+    },
+    "editor.buildPanel.rooms.idle": {
+      "message": "形状を選んで開始します。部屋ごとに壁・床・天井が作成されます。",
+      "sourceHash": "271039bd919dc4c1"
+    },
+    "editor.buildPanel.rooms.polygon.label": {
+      "message": "多角形",
+      "sourceHash": "4e186fc057733162"
+    },
+    "editor.buildPanel.rooms.polygon.lead": {
+      "message": "各頂点をクリックし、",
+      "sourceHash": "345e3aca3879b5c5"
+    },
+    "editor.buildPanel.rooms.polygon.rest": {
+      "message": "最後に始点をクリックして閉じます。L字型や斜めの部屋に使用します。",
+      "sourceHash": "4b869bde0632749b"
+    },
+    "editor.buildPanel.rooms.polygon.title": {
+      "message": "多角形の部屋",
+      "sourceHash": "8ec6152e139b0e3f"
+    },
+    "editor.buildPanel.rooms.rectangle.label": {
+      "message": "長方形",
+      "sourceHash": "2c2c20272b0370cc"
+    },
+    "editor.buildPanel.rooms.rectangle.lead": {
+      "message": "対角の2点をクリック",
+      "sourceHash": "060faa48e299d7c9"
+    },
+    "editor.buildPanel.rooms.rectangle.rest": {
+      "message": "グリッド上で指定します。壁・床・天井をまとめて作成します。",
+      "sourceHash": "5c868318eb6e0952"
+    },
+    "editor.buildPanel.rooms.rectangle.title": {
+      "message": "長方形の部屋",
+      "sourceHash": "83a45603ac7f41e8"
+    },
+    "editor.buildPanel.rooms.title": {
+      "message": "部屋",
+      "sourceHash": "3e7408ed44676176"
+    },
+    "editor.buildPanel.rooms.walls.label": {
+      "message": "壁",
+      "sourceHash": "aac9a732d2159ccc"
+    },
+    "editor.buildPanel.rooms.walls.lead": {
+      "message": "壁を1面ずつ描画します。",
+      "sourceHash": "9843edd68426fa2d"
+    },
+    "editor.buildPanel.rooms.walls.rest": {
+      "message": "輪郭を閉じると部屋になり、開いたままにすると間仕切りになります。",
+      "sourceHash": "e3c4f3c4a5a9d8a6"
+    },
+    "editor.buildPanel.rooms.walls.title": {
+      "message": "壁",
+      "sourceHash": "aac9a732d2159ccc"
+    },
+    "viewer.camera.orbitLeft": {
+      "message": "左に回転",
+      "sourceHash": "8bf25afa3cb8baea"
+    },
+    "viewer.camera.orbitRight": {
+      "message": "右に回転",
+      "sourceHash": "b9cc64c1d1bb0d46"
+    },
+    "viewer.camera.topView": {
+      "message": "上面図",
+      "sourceHash": "1ab1eb3a14f4b0e0"
+    },
+    "viewer.common.off": {
+      "message": "オフ",
+      "sourceHash": "50accd740fa2e736"
+    },
+    "viewer.common.on": {
+      "message": "オン",
+      "sourceHash": "9cc01faad79c28da"
+    },
+    "viewer.display.camera": {
+      "message": "カメラ",
+      "sourceHash": "14622745dbf93f4c"
+    },
+    "viewer.display.colored": {
+      "message": "カラー表示",
+      "sourceHash": "d3d478fa6c6d7ddc"
+    },
+    "viewer.display.colors": {
+      "message": "カラー",
+      "sourceHash": "82b74c4f5ef43336"
+    },
+    "viewer.display.edges.off": {
+      "message": "オフ",
+      "sourceHash": "50accd740fa2e736"
+    },
+    "viewer.display.edges.offDetail": {
+      "message": "エッジ線を表示しない",
+      "sourceHash": "4ff58913a4492199"
+    },
+    "viewer.display.edges.soft": {
+      "message": "ソフト",
+      "sourceHash": "d266d83ec490df4e"
+    },
+    "viewer.display.edges.softDetail": {
+      "message": "主要な稜線を薄く表示",
+      "sourceHash": "0c583f1d4201293b"
+    },
+    "viewer.display.edges.strong": {
+      "message": "強調",
+      "sourceHash": "f82927a01d4c5e45"
+    },
+    "viewer.display.edges.strongDetail": {
+      "message": "エッジ線をくっきり表示",
+      "sourceHash": "2416a48df28d6205"
+    },
+    "viewer.display.edges.title": {
+      "message": "エッジ",
+      "sourceHash": "027bbc8b7287c06a"
+    },
+    "viewer.display.monochrome": {
+      "message": "モノクロ",
+      "sourceHash": "ecde2f7c26914be3"
+    },
+    "viewer.display.orthographic": {
+      "message": "平行投影",
+      "sourceHash": "ed59dd8ce7797a66"
+    },
+    "viewer.display.perspective": {
+      "message": "透視投影",
+      "sourceHash": "316e25993ff72b88"
+    },
+    "viewer.display.render.rendered": {
+      "message": "レンダリング",
+      "sourceHash": "f363702a10aedaeb"
+    },
+    "viewer.display.render.renderedDetail": {
+      "message": "アンビエントオクルージョンを完全表示",
+      "sourceHash": "8bb9e54fc786ca77"
+    },
+    "viewer.display.render.solid": {
+      "message": "ソリッド",
+      "sourceHash": "ef3e765e692faf4c"
+    },
+    "viewer.display.render.solidDetail": {
+      "message": "軽量表示（アンビエントオクルージョンなし）",
+      "sourceHash": "8827df1cdeb02ed9"
+    },
+    "viewer.display.render.title": {
+      "message": "レンダリング",
+      "sourceHash": "5e58af99d6d4fa6a"
+    },
+    "viewer.display.shadows": {
+      "message": "影",
+      "sourceHash": "4c6bcb30b40047fc"
+    },
+    "viewer.display.title": {
+      "message": "表示設定",
+      "sourceHash": "d0db46f206a88e2e"
+    },
+    "viewer.floorplan.alignNorth": {
+      "message": "北を上に表示",
+      "sourceHash": "2bdf83801d4a40af"
+    },
+    "viewer.floorplan.empty": {
+      "message": "このシーンには表示できる平面図がありません。",
+      "sourceHash": "286a757d8b52bb02"
+    },
+    "viewer.floorplan.fit": {
+      "message": "全体を表示",
+      "sourceHash": "bf63c679ab94dbcd"
+    },
+    "viewer.floorplan.floor": {
+      "message": "階",
+      "sourceHash": "d7148fa065bc709b"
+    },
+    "viewer.floorplan.floorPlan": {
+      "message": "平面図",
+      "sourceHash": "fee6203bb9046929"
+    },
+    "viewer.floorplan.viewLabel": {
+      "message": "{floor}の2Dビュー",
+      "sourceHash": "28b255b7bf5f1084"
+    },
+    "viewer.floorplan.zoomIn": {
+      "message": "拡大",
+      "sourceHash": "d17804412f8dd081"
+    },
+    "viewer.floorplan.zoomOut": {
+      "message": "縮小",
+      "sourceHash": "23b012a283b2c14a"
+    },
+    "viewer.header.back": {
+      "message": "戻る",
+      "sourceHash": "7ceade8f25b58fe9"
+    },
+    "viewer.header.levels": {
+      "message": "階層",
+      "sourceHash": "cc3d601d59e2e26c"
+    },
+    "viewer.header.rooms": {
+      "message": "部屋",
+      "sourceHash": "3e7408ed44676176"
+    },
+    "viewer.header.selection": {
+      "message": "選択",
+      "sourceHash": "170b2049ef0f9131"
+    },
+    "viewer.header.units": {
+      "message": "住戸",
+      "sourceHash": "b404dded35241274"
+    },
+    "viewer.header.untitled": {
+      "message": "名称未設定",
+      "sourceHash": "6547a4c0c368042a"
+    },
+    "viewer.header.zones": {
+      "message": "ゾーン",
+      "sourceHash": "665db49a26f81425"
+    },
+    "viewer.levels.exploded": {
+      "message": "分解",
+      "sourceHash": "be12f8788f1f0a05"
+    },
+    "viewer.levels.label": {
+      "message": "階層：{mode}",
+      "sourceHash": "4bf4a6861d7d633e"
+    },
+    "viewer.levels.manual": {
+      "message": "手動",
+      "sourceHash": "387082cd5f118bed"
+    },
+    "viewer.levels.solo": {
+      "message": "単独",
+      "sourceHash": "e9f59b513f2f45ac"
+    },
+    "viewer.levels.stacked": {
+      "message": "積層",
+      "sourceHash": "c203c84eee18c0f6"
+    },
+    "viewer.stage.layout": {
+      "message": "ビュー配置",
+      "sourceHash": "9dd21ca47cffa3b8"
+    },
+    "viewer.stage.split": {
+      "message": "分割",
+      "sourceHash": "e4cd64b1680ac0d2"
+    },
+    "viewer.theme.blueprint": {
+      "message": "青図",
+      "sourceHash": "f14b89d713d2528a"
+    },
+    "viewer.theme.mediterranean": {
+      "message": "地中海",
+      "sourceHash": "142bcb2841f423c5"
+    },
+    "viewer.theme.night": {
+      "message": "夜景",
+      "sourceHash": "b399942ec5d7e1ba"
+    },
+    "viewer.theme.overcast": {
+      "message": "曇天",
+      "sourceHash": "f512d1b947b8ae5a"
+    },
+    "viewer.theme.paper": {
+      "message": "ペーパー",
+      "sourceHash": "583542b3bc837192"
+    },
+    "viewer.theme.studio": {
+      "message": "スタジオ",
+      "sourceHash": "7abc2dc6e39b1747"
+    },
+    "viewer.theme.sunset": {
+      "message": "夕景",
+      "sourceHash": "efe94d3ec8d8c44e"
+    },
+    "viewer.theme.title": {
+      "message": "シーンテーマ",
+      "sourceHash": "82720864e5034398"
+    },
+    "viewer.theme.twilight": {
+      "message": "薄暮",
+      "sourceHash": "4c10ea0aa0e2ea41"
+    },
+    "viewer.theme.verdant": {
+      "message": "緑景",
+      "sourceHash": "f9592fb0672740c0"
+    },
+    "viewer.visibility.guides": {
+      "message": "ガイド",
+      "sourceHash": "892d5dd34372028b"
+    },
+    "viewer.visibility.scans": {
+      "message": "3Dスキャン",
+      "sourceHash": "3260bfa69cca50e5"
+    },
+    "viewer.visibility.title": {
+      "message": "表示",
+      "sourceHash": "2cefbb554eadbb6e"
+    },
+    "viewer.walkthrough.label": {
+      "message": "ウォークスルー：{state}",
+      "sourceHash": "31afd9dee47ba943"
+    },
+    "viewer.walls.cutaway": {
+      "message": "カット表示",
+      "sourceHash": "4da8b3678ed77b45"
+    },
+    "viewer.walls.fullHeight": {
+      "message": "全高",
+      "sourceHash": "131bac2467f4fdf6"
+    },
+    "viewer.walls.label": {
+      "message": "壁：{mode}",
+      "sourceHash": "32f3d058cf2526d2"
+    },
+    "viewer.walls.low": {
+      "message": "低く表示",
+      "sourceHash": "803532407fb5962b"
+    }
+  }
+}

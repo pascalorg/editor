@@ -80,6 +80,9 @@ jobs:
       - name: Lint & format check
         run: bun run check
 
+      - name: Check localization catalogs
+        run: bun run i18n:check
+
       - name: Validate agent skills and plugin packages
         if: needs.changes.outputs.skills == 'true' || github.event_name == 'push'
         run: bun run skills:validate
