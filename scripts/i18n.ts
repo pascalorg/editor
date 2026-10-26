@@ -171,6 +171,11 @@ function readJson<T>(path: string): T {
 function writeJson(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
+  const formatted = Bun.spawnSync(
+    [process.execPath, 'x', 'biome', 'format', '--write', relative(ROOT, path)],
+    { cwd: ROOT, stdout: 'ignore', stderr: 'inherit' },
+  )
+  if (formatted.exitCode !== 0) throw new Error(`Could not format ${relative(ROOT, path)}`)
 }
 
 function localeCatalogPath(locale: string): string {
