@@ -19,6 +19,7 @@ import {
   useLibraryMaterialsVersion,
   useNodeEvents,
   useViewer,
+  wallTiltShear,
 } from '@pascal-app/viewer'
 import { type ComponentProps, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
@@ -181,6 +182,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     () => (treatmentOverride ? ({ ...node, ...treatmentOverride } as WallNode) : node),
     [node, treatmentOverride],
   )
+  const tiltShear = useMemo(() => wallTiltShear(treatmentNode.tilt), [treatmentNode.tilt])
   // Subscribe to the scene-material palette so editing a `scene:` material a
   // wall slot references re-renders the wall live (the wall-system geometry
   // dirty loop never fires for a material-only edit). `getMaterialsForWall`'s
@@ -215,6 +217,32 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     [baseMaterials, extraMaterials],
   )
 
+  // What the wall hosts. The wall system leans the wall's own geometry; a
+  // tilted wall leans these with it through the same shear.
+  const hosted = (
+    <>
+      {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
+        <WallTreatmentSubscription
+          childrenNodes={childNodes}
+          materials={extraMaterials}
+          node={treatmentNode}
+        />
+      )}
+
+      {node.wallType !== 'curtain' &&
+        (['a', 'b'] as const).map((face) => {
+          const script = node.finishScripts?.[face]
+          return script ? (
+            <WallFaceScriptModel face={face} key={face} node={node} script={script} />
+          ) : null
+        })}
+
+      {(node.children ?? []).map((childId) => (
+        <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
+      ))}
+    </>
+  )
+
   return (
     <mesh
       castShadow={node.wallType !== 'curtain'}
@@ -242,25 +270,13 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         {...handlers}
       />
 
-      {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
-        <WallTreatmentSubscription
-          childrenNodes={childNodes}
-          materials={extraMaterials}
-          node={treatmentNode}
-        />
+      {tiltShear ? (
+        <group matrix={tiltShear} matrixAutoUpdate={false}>
+          {hosted}
+        </group>
+      ) : (
+        hosted
       )}
-
-      {node.wallType !== 'curtain' &&
-        (['a', 'b'] as const).map((face) => {
-          const script = node.finishScripts?.[face]
-          return script ? (
-            <WallFaceScriptModel face={face} key={face} node={node} script={script} />
-          ) : null
-        })}
-
-      {(node.children ?? []).map((childId) => (
-        <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
-      ))}
     </mesh>
   )
 }
