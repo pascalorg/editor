@@ -32,8 +32,12 @@ function canonicalLocale(value: string): string {
 function localeFallbacks(value: string): string[] {
   const exact = canonicalLocale(value)
   try {
-    const language = new Intl.Locale(exact).language
-    return language === exact ? [exact] : [exact, language]
+    const parsed = new Intl.Locale(exact)
+    const candidates = [exact]
+    if (parsed.baseName !== exact) candidates.push(parsed.baseName)
+    if (parsed.script) candidates.push(`${parsed.language}-${parsed.script}`)
+    candidates.push(parsed.language)
+    return [...new Set(candidates)]
   } catch {
     return [exact]
   }

@@ -91,7 +91,7 @@ export function normalizeDecimalInput(input: string, locale = getLocale()): stri
 
 export function parseLocalizedNumber(input: string, locale = getLocale()): number | null {
   const normalized = normalizeDecimalInput(input.trim(), locale).replace('−', '-')
-  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) return null
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized)) return null
   const value = Number(normalized)
   return Number.isFinite(value) ? value : null
 }

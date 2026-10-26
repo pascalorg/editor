@@ -34,6 +34,14 @@ describe('message registry', () => {
     expect(translate('viewer.controls.unknown', 'Unknown')).toBe('Unknown')
   })
 
+  test('falls back through script before the base language', () => {
+    registerMessages('zh', 'viewer', { greeting: '你好' })
+    registerMessages('zh-Hant', 'viewer', { greeting: '您好' })
+    setLocale('zh-Hant-HK')
+
+    expect(translate('viewer.greeting', 'Hello')).toBe('您好')
+  })
+
   test('interpolates values and selects plurals with Intl.PluralRules', () => {
     registerMessages('fr', 'editor', {
       selection: {
@@ -97,6 +105,7 @@ describe('locale formatting', () => {
   test('accepts the locale decimal separator as well as a dot', () => {
     expect(parseLocalizedNumber('2,75', 'fr')).toBe(2.75)
     expect(parseLocalizedNumber('2.75', 'fr')).toBe(2.75)
+    expect(parseLocalizedNumber('1,25e2', 'fr')).toBe(125)
     expect(parseLocalizedNumber('2,75', 'en')).toBeNull()
   })
 })
