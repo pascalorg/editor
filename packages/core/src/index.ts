@@ -67,7 +67,6 @@ export {
   hiddenWallPointerEventsHeld,
   holdHiddenWallPointerEvents,
 } from './events/hidden-wall-pointer-hold'
-export * from './i18n'
 export { type ItemClipEntry, itemClipRegistry } from './hooks/scene-registry/item-clip-registry'
 export {
   sceneRegistry,
@@ -114,6 +113,7 @@ export {
   type WallConstructionResolution,
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
+export * from './i18n'
 export { createAngleAccumulator } from './lib/angle-accumulator'
 export {
   ARTIFACT_URL_PREFIX,

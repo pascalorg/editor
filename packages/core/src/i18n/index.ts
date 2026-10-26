@@ -12,9 +12,9 @@ export {
   registerMessages,
   setLocale,
   subscribe,
-  translate,
   type TranslationMessage,
   type TranslationMessages,
   type TranslationParams,
+  translate,
 } from './registry'
 export { type Translate, useTranslate } from './use-translate'

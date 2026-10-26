@@ -35,9 +35,8 @@ function fractionDigits(value: number | undefined, fallback: number): number {
 function decimalSeparator(locale: string): string {
   try {
     return (
-      new Intl.NumberFormat(locale)
-        .formatToParts(1.1)
-        .find((part) => part.type === 'decimal')?.value ?? '.'
+      new Intl.NumberFormat(locale).formatToParts(1.1).find((part) => part.type === 'decimal')
+        ?.value ?? '.'
     )
   } catch {
     return '.'

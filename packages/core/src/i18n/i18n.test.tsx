@@ -7,8 +7,8 @@ import {
   LevelNode,
   parseLocalizedNumber,
   registerMessages,
-  setLocale,
   SiteNode,
+  setLocale,
   subscribe,
   translate,
   useTranslate,
@@ -44,10 +44,12 @@ describe('message registry', () => {
     })
     setLocale('fr')
 
-    expect(translate('editor.selection', { one: '{count} item', other: '{count} items' }, { count: 1 }))
-      .toBe('1 élément sélectionné')
-    expect(translate('editor.selection', { one: '{count} item', other: '{count} items' }, { count: 3 }))
-      .toBe('3 éléments sélectionnés')
+    expect(
+      translate('editor.selection', { one: '{count} item', other: '{count} items' }, { count: 1 }),
+    ).toBe('1 élément sélectionné')
+    expect(
+      translate('editor.selection', { one: '{count} item', other: '{count} items' }, { count: 3 }),
+    ).toBe('3 éléments sélectionnés')
     expect(translate('editor.welcome', 'Hello {name}', { name: 'Ada' })).toBe('Bonjour Ada')
   })
 

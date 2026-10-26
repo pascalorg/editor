@@ -4,9 +4,9 @@ import { useCallback, useSyncExternalStore } from 'react'
 import {
   getI18nVersion,
   subscribe,
-  translate,
   type TranslationMessage,
   type TranslationParams,
+  translate,
 } from './registry'
 
 const SERVER_SNAPSHOT = -1
