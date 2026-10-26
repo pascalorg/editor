@@ -1,6 +1,6 @@
 'use client'
 
-import { useTranslate } from '@pascal-app/core'
+import { usePascalI18n } from '@pascal-app/core'
 import { Box, Columns2, Map as MapIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
@@ -23,12 +23,12 @@ export function ViewerStageSwitcher({
   modes,
   onChange,
 }: ViewerStageSwitcherProps) {
-  const t = useTranslate()
+  const i18n = usePascalI18n()
   const enabledModes = normalizeViewerStageModes(modes)
 
   return (
     <div
-      aria-label={t('viewer.stage.layout', 'Viewer layout')}
+      aria-label={i18n._({ id: 'viewer.stage.layout', message: 'Viewer layout' })}
       className={cn(
         'dark absolute top-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-neutral-950/82 p-1 text-white shadow-elevation-4 backdrop-blur-xl',
         className,
@@ -56,7 +56,7 @@ export function ViewerStageSwitcher({
           active={mode === 'split'}
           className={hideSplitOnMobile && enabledModes.length > 1 ? 'hidden md:flex' : undefined}
           icon={<Columns2 />}
-          label={t('viewer.stage.split', 'Split')}
+          label={i18n._({ id: 'viewer.stage.split', message: 'Split' })}
           onClick={() => onChange('split')}
         />
       ) : null}

@@ -1,53 +1,62 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createAnthropic } from '@ai-sdk/anthropic'
+import { createOpenAI } from '@ai-sdk/openai'
+import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
+import { generateText, Output } from 'ai'
+import { type PoFile, type PoItem, parsePo, stringifyPo } from 'pofile-ts'
 import ts from 'typescript'
+import { z } from 'zod'
 
-export type Message =
-  | string
-  | {
-      zero?: string
-      one?: string
-      two?: string
-      few?: string
-      many?: string
-      other: string
-    }
-
-export type SourceEntry = {
-  default: Message
-  hash: string
+export type SourceMessage = {
+  id: string
+  message: string
   context: string[]
 }
 
-export type SourceCatalog = Record<string, SourceEntry>
-
-export type LocaleEntry = {
-  message: Message
-  sourceHash: string
-}
-
-export type LocaleCatalog = {
-  locale: string
-  messages: Record<string, LocaleEntry>
+export type TranslationEntry = {
+  translation: string
+  sourceHash?: string
+  review: 'human' | 'required' | 'missing'
+  fuzzy: boolean
+  reviewNotes?: string
 }
 
 export type TranslationRequest = {
   locale: string
-  items: Array<{ key: string; source: Message; context: string[] }>
-  glossary: Record<string, unknown>
+  items: SourceMessage[]
+  glossary: Glossary
+}
+
+export type TranslationResponse = {
+  locale: string
+  entries: Array<{ id: string; translation: string; reviewNotes: string }>
 }
 
 export interface TranslationProvider {
-  translate(request: TranslationRequest): Promise<Record<string, Message>>
+  name: string
+  model: string
+  translate(request: TranslationRequest): Promise<TranslationResponse>
 }
 
+type Glossary = {
+  productContext?: string
+  terms?: Record<string, Record<string, string | undefined>>
+}
+
+type CompiledToken = string | [name: string, type?: string, choices?: unknown]
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const SOURCE_CATALOG_PATH = join(ROOT, 'packages/editor/src/i18n/source-catalog.json')
-const LOCALE_CATALOG_DIR = join(ROOT, 'packages/editor/src/i18n/catalogs')
+const CATALOG_ROOT = join(ROOT, 'packages/editor/src/i18n/locales')
 const GLOSSARY_PATH = join(ROOT, 'i18n/glossary.json')
-const BUNDLED_LOCALES = ['zh-CN', 'fr', 'es', 'ja'] as const
+const TARGET_LOCALES = ['zh-CN', 'fr', 'es', 'ja'] as const
+const ALL_LOCALES = ['en', ...TARGET_LOCALES] as const
+const CONVERTED_SURFACES = [
+  'packages/editor/src/components/viewer',
+  'packages/editor/src/components/ui/build-panel/build-panel.tsx',
+]
 const SOURCE_GLOBS = [
   'packages/core/src/**/*.{ts,tsx}',
   'packages/viewer/src/**/*.{ts,tsx}',
@@ -55,32 +64,402 @@ const SOURCE_GLOBS = [
   'packages/nodes/src/**/*.{ts,tsx}',
   'apps/editor/**/*.{ts,tsx}',
 ]
-const CONVERTED_SURFACES = [
-  'packages/editor/src/components/viewer',
-  'packages/editor/src/components/ui/build-panel/build-panel.tsx',
-]
-const PLURAL_KEYS = ['zero', 'one', 'two', 'few', 'many', 'other'] as const
+const SOURCE_HASH_PREFIX = 'Source-Hash: '
+const REVIEW_PREFIX = 'Review: '
+const ENGLISH_PREFIX = 'English: '
+const AI_PROVIDER_PREFIX = 'AI-Provider: '
+const AI_MODEL_PREFIX = 'AI-Model: '
+const REVIEW_NOTES_PREFIX = 'Review-Notes: '
 
-function hashMessage(message: Message): string {
+function catalogPath(locale: string): string {
+  return join(CATALOG_ROOT, locale, 'messages.po')
+}
+
+function compiledCatalogPath(locale: string): string {
+  return join(CATALOG_ROOT, locale, 'messages.ts')
+}
+
+function readJson<T>(path: string): T {
+  return JSON.parse(readFileSync(path, 'utf8')) as T
+}
+
+export function hashSource(message: string): string {
   return createHash('sha256').update(JSON.stringify(message)).digest('hex').slice(0, 16)
 }
 
-function messageFromNode(node: ts.Expression): Message | null {
-  if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text
-  if (!ts.isObjectLiteralExpression(node)) return null
+function commentValue(item: PoItem, prefix: string): string | undefined {
+  return item.comments.find((comment) => comment.startsWith(prefix))?.slice(prefix.length)
+}
 
-  const message: Partial<Record<(typeof PLURAL_KEYS)[number], string>> = {}
-  for (const property of node.properties) {
-    if (!ts.isPropertyAssignment(property)) return null
-    const name =
-      ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)
-        ? property.name.text
-        : null
-    if (!(name && PLURAL_KEYS.includes(name as (typeof PLURAL_KEYS)[number]))) return null
-    if (!ts.isStringLiteralLike(property.initializer)) return null
-    message[name as (typeof PLURAL_KEYS)[number]] = property.initializer.text
+function replaceComment(item: PoItem, prefix: string, value?: string): void {
+  item.comments = item.comments.filter((comment) => !comment.startsWith(prefix))
+  if (value !== undefined) item.comments.push(`${prefix}${value}`)
+}
+
+function sourceMessagesFromPo(po: PoFile): SourceMessage[] {
+  return po.items
+    .filter((item) => !item.obsolete)
+    .map((item) => ({
+      id: item.msgid,
+      message: item.msgstr[0] ?? '',
+      context: [...item.references],
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id))
+}
+
+function readSourceMessages(): SourceMessage[] {
+  return sourceMessagesFromPo(parsePo(readFileSync(catalogPath('en'), 'utf8')))
+}
+
+function readTranslationState(po: PoFile): Record<string, TranslationEntry> {
+  return Object.fromEntries(
+    po.items
+      .filter((item) => !item.obsolete)
+      .map((item) => {
+        const review = commentValue(item, REVIEW_PREFIX)
+        return [
+          item.msgid,
+          {
+            translation: item.msgstr[0] ?? '',
+            sourceHash: commentValue(item, SOURCE_HASH_PREFIX),
+            review: review === 'human' || review === 'required' ? review : 'missing',
+            fuzzy: Boolean(item.flags.fuzzy),
+            reviewNotes: commentValue(item, REVIEW_NOTES_PREFIX),
+          } satisfies TranslationEntry,
+        ]
+      }),
+  )
+}
+
+function variableNames(tokens: CompiledToken[]): string[] {
+  const names = new Set<string>()
+  const visit = (entries: CompiledToken[]) => {
+    for (const token of entries) {
+      if (typeof token === 'string') continue
+      names.add(token[0])
+      const choices = token[2]
+      if (!(choices && typeof choices === 'object')) continue
+      for (const branch of Object.values(choices)) {
+        if (Array.isArray(branch)) visit(branch as CompiledToken[])
+      }
+    }
   }
-  return typeof message.other === 'string' ? (message as Message) : null
+  visit(tokens)
+  return [...names].sort()
+}
+
+function tags(message: string): string[] {
+  return [...message.matchAll(/<\/?([A-Za-z][\w-]*)>/g)].map((match) => match[0]).sort()
+}
+
+function plurals(tokens: CompiledToken[]): Map<string, { type: string; categories: Set<string> }> {
+  const found = new Map<string, { type: string; categories: Set<string> }>()
+  const visit = (entries: CompiledToken[]) => {
+    for (const token of entries) {
+      if (typeof token === 'string') continue
+      const type = token[1]
+      const choices = token[2]
+      if (
+        (type === 'plural' || type === 'selectordinal') &&
+        choices &&
+        typeof choices === 'object'
+      ) {
+        found.set(token[0], {
+          type,
+          categories: new Set(Object.keys(choices).filter((category) => category !== 'offset')),
+        })
+      }
+      if (!(choices && typeof choices === 'object')) continue
+      for (const branch of Object.values(choices)) {
+        if (Array.isArray(branch)) visit(branch as CompiledToken[])
+      }
+    }
+  }
+  visit(tokens)
+  return found
+}
+
+function requiredPluralCategories(locale: string, type: string): Intl.LDMLPluralRule[] {
+  return new Intl.PluralRules(locale, {
+    type: type === 'selectordinal' ? 'ordinal' : 'cardinal',
+  }).resolvedOptions().pluralCategories
+}
+
+function validateGlossary(
+  source: string,
+  translation: string,
+  locale: string,
+  glossary: Glossary,
+): string[] {
+  const errors: string[] = []
+  const normalizedSource = source
+    .replaceAll(/\{[^}]+\}/g, '')
+    .replaceAll(/[^\p{L}\p{N}\s-]/gu, '')
+    .trim()
+    .toLocaleLowerCase('en')
+  const normalizedTranslation = translation.toLocaleLowerCase(locale)
+  for (const [english, localized] of Object.entries(glossary.terms ?? {})) {
+    const expected = localized[locale]
+    const normalizedTerm = english.toLocaleLowerCase('en')
+    if (
+      typeof expected === 'string' &&
+      (normalizedSource === normalizedTerm || normalizedSource === `${normalizedTerm}s`) &&
+      !normalizedTranslation.includes(expected.toLocaleLowerCase(locale))
+    ) {
+      errors.push(`expected glossary term "${expected}" for "${english}"`)
+    }
+  }
+  return errors
+}
+
+export function validateTranslation(
+  source: string,
+  translation: string,
+  locale: string,
+  glossary: Glossary = {},
+): string[] {
+  const errors: string[] = []
+  let sourceTokens: CompiledToken[]
+  let translatedTokens: CompiledToken[]
+  try {
+    sourceTokens = compileMessageOrThrow(source) as CompiledToken[]
+  } catch (error) {
+    return [`invalid English ICU: ${error instanceof Error ? error.message : String(error)}`]
+  }
+  try {
+    translatedTokens = compileMessageOrThrow(translation) as CompiledToken[]
+  } catch (error) {
+    return [`invalid translated ICU: ${error instanceof Error ? error.message : String(error)}`]
+  }
+
+  if (
+    JSON.stringify(variableNames(sourceTokens)) !== JSON.stringify(variableNames(translatedTokens))
+  ) {
+    errors.push('placeholder names differ from English')
+  }
+  if (JSON.stringify(tags(source)) !== JSON.stringify(tags(translation))) {
+    errors.push('rich-text tags differ from English')
+  }
+
+  const sourcePlurals = plurals(sourceTokens)
+  const translatedPlurals = plurals(translatedTokens)
+  for (const [name, sourcePlural] of sourcePlurals) {
+    const translatedPlural = translatedPlurals.get(name)
+    if (!translatedPlural || translatedPlural.type !== sourcePlural.type) {
+      errors.push(`plural selector "${name}" is missing or changed`)
+      continue
+    }
+    for (const category of requiredPluralCategories(locale, sourcePlural.type)) {
+      if (!translatedPlural.categories.has(category)) {
+        errors.push(`plural selector "${name}" is missing "${category}"`)
+      }
+    }
+  }
+  errors.push(...validateGlossary(source, translation, locale, glossary))
+  return errors
+}
+
+function assertProviderResponse(
+  request: TranslationRequest,
+  response: TranslationResponse,
+  currentBatch: SourceMessage[],
+): Map<string, { translation: string; reviewNotes: string }> {
+  if (response.locale !== request.locale) {
+    throw new Error(
+      `Translation provider returned locale "${response.locale}" for "${request.locale}"`,
+    )
+  }
+  const expectedIds = currentBatch.map((item) => item.id).sort()
+  const actualIds = response.entries.map((entry) => entry.id).sort()
+  if (
+    new Set(actualIds).size !== actualIds.length ||
+    JSON.stringify(actualIds) !== JSON.stringify(expectedIds)
+  ) {
+    throw new Error('Translation provider returned missing, duplicate, or unexpected message IDs')
+  }
+
+  const byId = new Map(response.entries.map((entry) => [entry.id, entry]))
+  for (const source of currentBatch) {
+    const result = byId.get(source.id)
+    if (!result) throw new Error(`Translation provider omitted "${source.id}"`)
+    const errors = validateTranslation(
+      source.message,
+      result.translation,
+      request.locale,
+      request.glossary,
+    )
+    if (errors.length > 0) {
+      throw new Error(`Translation provider returned invalid "${source.id}": ${errors.join('; ')}`)
+    }
+  }
+  return byId
+}
+
+export async function refreshTranslations(
+  locale: string,
+  sources: SourceMessage[],
+  current: Record<string, TranslationEntry>,
+  provider: TranslationProvider,
+  glossary: Glossary = {},
+): Promise<Record<string, TranslationEntry>> {
+  const stale = sources.filter((source) => {
+    const existing = current[source.id]
+    return !existing?.translation || existing.sourceHash !== hashSource(source.message)
+  })
+  if (stale.length === 0) return current
+
+  const updated = { ...current }
+  for (let offset = 0; offset < stale.length; offset += 40) {
+    const items = stale.slice(offset, offset + 40)
+    const request = { locale, items, glossary }
+    const response = await provider.translate(request)
+    const translated = assertProviderResponse(request, response, items)
+    for (const source of items) {
+      const result = translated.get(source.id)!
+      updated[source.id] = {
+        translation: result.translation,
+        sourceHash: hashSource(source.message),
+        review: 'required',
+        fuzzy: true,
+        reviewNotes: result.reviewNotes,
+      }
+    }
+  }
+  return updated
+}
+
+const translationOutputSchema = z.object({
+  locale: z.string(),
+  entries: z.array(
+    z.object({
+      id: z.string(),
+      translation: z.string(),
+      reviewNotes: z.string(),
+    }),
+  ),
+})
+
+function promptFor(request: TranslationRequest): string {
+  return [
+    `Translate these Pascal architecture/CAD interface messages into ${request.locale}.`,
+    'Return every input ID exactly once. Preserve ICU placeholders and rich-text tags exactly.',
+    `For ICU plurals, include the categories used by ${request.locale}: ${requiredPluralCategories(request.locale, 'plural').join(', ')}.`,
+    'Use natural, concise professional UI language. Do not translate IDs.',
+    'reviewNotes should briefly flag ambiguity or be an empty string.',
+    `Product and glossary: ${JSON.stringify(request.glossary)}`,
+    `Messages: ${JSON.stringify(request.items)}`,
+  ].join('\n\n')
+}
+
+function configuredProvider(): TranslationProvider {
+  const name =
+    process.env.I18N_PROVIDER ??
+    (process.env.OPENAI_API_KEY ? 'openai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : '')
+  const modelName = process.env.I18N_MODEL
+  if (!modelName) throw new Error('Set I18N_MODEL to the translation model')
+
+  const model =
+    name === 'openai'
+      ? createOpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+          baseURL: process.env.OPENAI_BASE_URL,
+        })(modelName)
+      : name === 'anthropic'
+        ? createAnthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY,
+            baseURL: process.env.ANTHROPIC_BASE_URL,
+          })(modelName)
+        : null
+
+  if (name === 'openai' && !process.env.OPENAI_API_KEY) {
+    throw new Error('Set OPENAI_API_KEY for the OpenAI translation provider')
+  }
+  if (name === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
+    throw new Error('Set ANTHROPIC_API_KEY for the Anthropic translation provider')
+  }
+  if (!model) {
+    throw new Error('Set I18N_PROVIDER to "openai" or "anthropic" and provide its API key')
+  }
+
+  return {
+    name,
+    model: modelName,
+    async translate(request) {
+      const result = await generateText({
+        model,
+        output: Output.object({ schema: translationOutputSchema }),
+        prompt: promptFor(request),
+      })
+      return result.output
+    },
+  }
+}
+
+function runLingui(command: 'extract' | 'compile', strict = false): void {
+  const args = [process.execPath, 'x', 'lingui', command]
+  if (command === 'extract') args.push('--clean')
+  if (command === 'compile') {
+    if (strict) args.push('--strict')
+    args.push('--typescript', '--namespace', 'es')
+  }
+  args.push('--workers', '1')
+  const result = Bun.spawnSync(args, {
+    cwd: ROOT,
+    stdout: 'inherit',
+    stderr: 'inherit',
+  })
+  if (result.exitCode !== 0) throw new Error(`Lingui ${command} failed`)
+}
+
+function writePo(path: string, po: PoFile): void {
+  writeFileSync(path, stringifyPo(po, { foldLength: 0 }))
+}
+
+function annotateCatalogs(): void {
+  const sources = readSourceMessages()
+  const byId = new Map(sources.map((source) => [source.id, source]))
+  for (const locale of TARGET_LOCALES) {
+    const path = catalogPath(locale)
+    const po = parsePo(readFileSync(path, 'utf8'))
+    for (const item of po.items) {
+      if (item.obsolete) continue
+      const source = byId.get(item.msgid)
+      if (!source) continue
+      replaceComment(item, ENGLISH_PREFIX, JSON.stringify(source.message))
+      if (item.msgstr[0] && !commentValue(item, REVIEW_PREFIX)) {
+        replaceComment(item, SOURCE_HASH_PREFIX, hashSource(source.message))
+        replaceComment(item, REVIEW_PREFIX, 'human')
+      }
+    }
+    writePo(path, po)
+  }
+}
+
+function applyTranslations(
+  po: PoFile,
+  sources: SourceMessage[],
+  entries: Record<string, TranslationEntry>,
+  provider: TranslationProvider,
+): void {
+  const byId = new Map(sources.map((source) => [source.id, source]))
+  for (const item of po.items) {
+    const source = byId.get(item.msgid)
+    const entry = entries[item.msgid]
+    if (!(source && entry)) continue
+    item.msgstr = [entry.translation]
+    replaceComment(item, ENGLISH_PREFIX, JSON.stringify(source.message))
+    replaceComment(item, SOURCE_HASH_PREFIX, entry.sourceHash)
+    replaceComment(item, REVIEW_PREFIX, entry.review)
+    replaceComment(item, REVIEW_NOTES_PREFIX, entry.reviewNotes || undefined)
+    replaceComment(
+      item,
+      AI_PROVIDER_PREFIX,
+      entry.review === 'required' ? provider.name : undefined,
+    )
+    replaceComment(item, AI_MODEL_PREFIX, entry.review === 'required' ? provider.model : undefined)
+    if (entry.fuzzy) item.flags.fuzzy = true
+    else delete item.flags.fuzzy
+  }
 }
 
 function sourceFiles(): string[] {
@@ -101,163 +480,6 @@ function sourceFiles(): string[] {
   return [...files].sort()
 }
 
-export function extractSourceCatalog(root = ROOT): SourceCatalog {
-  const found = new Map<string, { default: Message; context: Set<string> }>()
-
-  for (const path of sourceFiles()) {
-    const sourceText = readFileSync(path, 'utf8')
-    const source = ts.createSourceFile(
-      path,
-      sourceText,
-      ts.ScriptTarget.Latest,
-      true,
-      path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    )
-
-    function visit(node: ts.Node): void {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === 't' &&
-        node.arguments.length >= 2
-      ) {
-        const keyNode = node.arguments[0]
-        const defaultNode = node.arguments[1]
-        if (!(keyNode && defaultNode && ts.isStringLiteralLike(keyNode))) {
-          const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1
-          throw new Error(
-            `${relative(root, path)}:${line}: t() keys and English defaults must be static literals`,
-          )
-        }
-        const message = messageFromNode(defaultNode)
-        if (message === null) {
-          const line = source.getLineAndCharacterOfPosition(defaultNode.getStart()).line + 1
-          throw new Error(
-            `${relative(root, path)}:${line}: unsupported English message in t("${keyNode.text}")`,
-          )
-        }
-        const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1
-        const context = `${relative(root, path)}:${line}`
-        const existing = found.get(keyNode.text)
-        if (existing && JSON.stringify(existing.default) !== JSON.stringify(message)) {
-          throw new Error(`Conflicting English defaults for "${keyNode.text}"`)
-        }
-        if (existing) existing.context.add(context)
-        else found.set(keyNode.text, { default: message, context: new Set([context]) })
-      }
-      ts.forEachChild(node, visit)
-    }
-    visit(source)
-  }
-
-  return Object.fromEntries(
-    [...found.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => [
-        key,
-        {
-          default: entry.default,
-          hash: hashMessage(entry.default),
-          context: [...entry.context].sort(),
-        },
-      ]),
-  )
-}
-
-function readJson<T>(path: string): T {
-  return JSON.parse(readFileSync(path, 'utf8')) as T
-}
-
-function writeJson(path: string, value: unknown): void {
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
-  const formatted = Bun.spawnSync(
-    [process.execPath, 'x', 'biome', 'format', '--write', relative(ROOT, path)],
-    { cwd: ROOT, stdout: 'ignore', stderr: 'inherit' },
-  )
-  if (formatted.exitCode !== 0) throw new Error(`Could not format ${relative(ROOT, path)}`)
-}
-
-function localeCatalogPath(locale: string): string {
-  return join(LOCALE_CATALOG_DIR, `${locale}.json`)
-}
-
-function messageStrings(message: Message): string[] {
-  return typeof message === 'string' ? [message] : Object.values(message).filter(Boolean)
-}
-
-function placeholders(message: Message): string[] {
-  const names = new Set<string>()
-  for (const value of messageStrings(message)) {
-    for (const match of value.matchAll(/\{([A-Za-z_][\w.-]*)\}/g)) names.add(match[1]!)
-  }
-  return [...names].sort()
-}
-
-function samePlaceholders(source: Message, translated: Message): boolean {
-  if (typeof source === 'string' || typeof translated === 'string') {
-    return (
-      typeof source === 'string' &&
-      typeof translated === 'string' &&
-      JSON.stringify(placeholders(source)) === JSON.stringify(placeholders(translated))
-    )
-  }
-
-  return Object.entries(translated).every(([category, value]) => {
-    const sourceValue = source[category as keyof typeof source] ?? source.other
-    return JSON.stringify(placeholders(sourceValue)) === JSON.stringify(placeholders(value))
-  })
-}
-
-function pluralCategories(locale: string): Intl.LDMLPluralRule[] {
-  try {
-    return new Intl.PluralRules(locale).resolvedOptions().pluralCategories
-  } catch {
-    return new Intl.PluralRules('en').resolvedOptions().pluralCategories
-  }
-}
-
-export function hasRequiredPluralForms(
-  source: Message,
-  translated: Message,
-  locale: string,
-): boolean {
-  if (typeof source === 'string') return typeof translated === 'string'
-  if (typeof translated === 'string') return false
-  return pluralCategories(locale).every((category) => category in translated)
-}
-
-function isMessage(value: unknown): value is Message {
-  if (typeof value === 'string') return true
-  if (!(value && typeof value === 'object' && !Array.isArray(value))) return false
-  const record = value as Record<string, unknown>
-  return (
-    typeof record.other === 'string' &&
-    Object.entries(record).every(
-      ([key, entry]) =>
-        PLURAL_KEYS.includes(key as (typeof PLURAL_KEYS)[number]) && typeof entry === 'string',
-    )
-  )
-}
-
-function currentSourceMatches(expected: SourceCatalog, actual: SourceCatalog): string[] {
-  const errors: string[] = []
-  for (const [key, entry] of Object.entries(actual)) {
-    const stored = expected[key]
-    if (!stored) errors.push(`source catalog is missing "${key}"`)
-    else if (
-      stored.hash !== entry.hash ||
-      JSON.stringify(stored.default) !== JSON.stringify(entry.default)
-    ) {
-      errors.push(`source catalog is stale for "${key}"`)
-    }
-  }
-  for (const key of Object.keys(expected)) {
-    if (!actual[key]) errors.push(`source catalog has removed key "${key}"`)
-  }
-  return errors
-}
-
 function bypassedLiterals(): string[] {
   const warnings: string[] = []
   const paths = sourceFiles().filter((path) =>
@@ -268,20 +490,19 @@ function bypassedLiterals(): string[] {
   )
 
   for (const path of paths) {
-    const sourceText = readFileSync(path, 'utf8')
     const source = ts.createSourceFile(
       path,
-      sourceText,
+      readFileSync(path, 'utf8'),
       ts.ScriptTarget.Latest,
       true,
       ts.ScriptKind.TSX,
     )
-    function warning(node: ts.Node, text: string): void {
+    const warning = (node: ts.Node, text: string) => {
       if (!/[A-Za-z]{2}/.test(text)) return
       const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1
       warnings.push(`${relative(ROOT, path)}:${line}: "${text.trim()}"`)
     }
-    function visit(node: ts.Node): void {
+    const visit = (node: ts.Node): void => {
       if (ts.isJsxText(node)) warning(node, node.text)
       if (
         ts.isJsxAttribute(node) &&
@@ -298,208 +519,131 @@ function bypassedLiterals(): string[] {
   return warnings
 }
 
-export function checkCatalogs(root = ROOT): string[] {
-  const errors: string[] = []
-  const actual = extractSourceCatalog(root)
-  const stored = readJson<SourceCatalog>(SOURCE_CATALOG_PATH)
-  errors.push(...currentSourceMatches(stored, actual))
+function catalogFiles(): string[] {
+  return ALL_LOCALES.flatMap((locale) => [catalogPath(locale), compiledCatalogPath(locale)])
+}
 
-  for (const locale of BUNDLED_LOCALES) {
-    const catalog = readJson<LocaleCatalog>(localeCatalogPath(locale))
-    for (const [key, source] of Object.entries(actual)) {
-      const translation = catalog.messages[key]
-      if (!translation) {
-        errors.push(`${locale}: missing "${key}"`)
+function snapshot(paths: string[]): Map<string, string> {
+  return new Map(paths.map((path) => [path, readFileSync(path, 'utf8')]))
+}
+
+function changedSince(before: Map<string, string>): string[] {
+  return [...before].flatMap(([path, contents]) =>
+    readFileSync(path, 'utf8') === contents ? [] : [relative(ROOT, path)],
+  )
+}
+
+function checkCatalogMessages(sources: SourceMessage[], glossary: Glossary): string[] {
+  const errors: string[] = []
+  const sourceById = new Map(sources.map((source) => [source.id, source]))
+  for (const source of sources) {
+    if (!source.message) errors.push(`en: missing source for "${source.id}"`)
+  }
+
+  for (const locale of TARGET_LOCALES) {
+    const po = parsePo(readFileSync(catalogPath(locale), 'utf8'))
+    const entries = readTranslationState(po)
+    for (const source of sources) {
+      const entry = entries[source.id]
+      if (!entry?.translation) {
+        errors.push(`${locale}: missing "${source.id}"`)
         continue
       }
-      if (translation.sourceHash !== source.hash) errors.push(`${locale}: stale "${key}"`)
-      if (!samePlaceholders(source.default, translation.message)) {
-        errors.push(`${locale}: broken placeholders in "${key}"`)
+      if (entry.sourceHash !== hashSource(source.message)) {
+        errors.push(`${locale}: stale "${source.id}"`)
       }
-      if (!hasRequiredPluralForms(source.default, translation.message, locale)) {
-        errors.push(`${locale}: missing plural forms in "${key}"`)
+      if (entry.fuzzy || entry.review !== 'human') {
+        errors.push(`${locale}: "${source.id}" still requires human review`)
       }
+      for (const error of validateTranslation(
+        source.message,
+        entry.translation,
+        locale,
+        glossary,
+      )) {
+        errors.push(`${locale}: invalid "${source.id}": ${error}`)
+      }
+    }
+    for (const id of Object.keys(entries)) {
+      if (!sourceById.has(id)) errors.push(`${locale}: obsolete "${id}"`)
     }
   }
   return errors
 }
 
-function promptFor(request: TranslationRequest): string {
+export async function checkCatalogs(): Promise<string[]> {
+  const before = snapshot(catalogFiles())
+  runLingui('extract')
+  annotateCatalogs()
+  runLingui('compile', true)
+  const changed = changedSince(before)
+  const sources = readSourceMessages()
+  const glossary = readJson<Glossary>(GLOSSARY_PATH)
   return [
-    `Translate these Pascal architecture/CAD interface messages into ${request.locale}.`,
-    'Return one JSON object mapping every input key to its translated string or plural-form object.',
-    'Preserve {placeholders} exactly. Keep labels concise and use a consistent professional CAD glossary.',
-    `For plural objects, include every cardinal category required by Intl.PluralRules: ${pluralCategories(request.locale).join(', ')}.`,
-    'Do not add commentary or markdown. Human reviewers will approve the resulting diff.',
-    `Glossary: ${JSON.stringify(request.glossary)}`,
-    `Messages: ${JSON.stringify(request.items)}`,
-  ].join('\n\n')
-}
-
-function parseProviderResponse(text: string, request: TranslationRequest): Record<string, Message> {
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start < 0 || end < start) throw new Error('Translation provider did not return JSON')
-  const parsed = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>
-  const messages: Record<string, Message> = {}
-  for (const item of request.items) {
-    const message = parsed[item.key]
-    if (!isMessage(message)) throw new Error(`Translation provider omitted "${item.key}"`)
-    if (!samePlaceholders(item.source, message)) {
-      throw new Error(`Translation provider changed placeholders in "${item.key}"`)
-    }
-    if (!hasRequiredPluralForms(item.source, message, request.locale)) {
-      throw new Error(`Translation provider omitted plural forms in "${item.key}"`)
-    }
-    messages[item.key] = message
-  }
-  return messages
-}
-
-function configuredProvider(): TranslationProvider {
-  const provider =
-    process.env.I18N_PROVIDER ??
-    (process.env.OPENAI_API_KEY ? 'openai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : '')
-  const model = process.env.I18N_MODEL
-  if (!model) throw new Error('Set I18N_MODEL to the translation model')
-
-  if (provider === 'openai') {
-    const key = process.env.OPENAI_API_KEY
-    if (!key) throw new Error('Set OPENAI_API_KEY for the OpenAI translation provider')
-    return {
-      async translate(request) {
-        const response = await fetch(
-          `${process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'}/chat/completions`,
-          {
-            method: 'POST',
-            headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-            body: JSON.stringify({
-              model,
-              response_format: { type: 'json_object' },
-              messages: [{ role: 'user', content: promptFor(request) }],
-            }),
-          },
-        )
-        if (!response.ok) throw new Error(`OpenAI translation failed (${response.status})`)
-        const body = (await response.json()) as {
-          choices?: Array<{ message?: { content?: string } }>
-        }
-        return parseProviderResponse(body.choices?.[0]?.message?.content ?? '', request)
-      },
-    }
-  }
-
-  if (provider === 'anthropic') {
-    const key = process.env.ANTHROPIC_API_KEY
-    if (!key) throw new Error('Set ANTHROPIC_API_KEY for the Anthropic translation provider')
-    return {
-      async translate(request) {
-        const response = await fetch(
-          `${process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com'}/v1/messages`,
-          {
-            method: 'POST',
-            headers: {
-              'anthropic-version': '2023-06-01',
-              'content-type': 'application/json',
-              'x-api-key': key,
-            },
-            body: JSON.stringify({
-              model,
-              max_tokens: 8192,
-              messages: [{ role: 'user', content: promptFor(request) }],
-            }),
-          },
-        )
-        if (!response.ok) throw new Error(`Anthropic translation failed (${response.status})`)
-        const body = (await response.json()) as {
-          content?: Array<{ type?: string; text?: string }>
-        }
-        const text = body.content?.find((block) => block.type === 'text')?.text ?? ''
-        return parseProviderResponse(text, request)
-      },
-    }
-  }
-
-  throw new Error('Set I18N_PROVIDER to "openai" or "anthropic" and provide its API key')
-}
-
-export async function refreshLocaleCatalog(
-  source: SourceCatalog,
-  catalog: LocaleCatalog,
-  provider: TranslationProvider,
-  glossary: Record<string, unknown>,
-): Promise<LocaleCatalog> {
-  const stale = Object.entries(source)
-    .filter(([key, entry]) => catalog.messages[key]?.sourceHash !== entry.hash)
-    .map(([key, entry]) => ({ key, source: entry.default, context: entry.context }))
-  if (stale.length === 0) return catalog
-
-  const messages = { ...catalog.messages }
-  for (let offset = 0; offset < stale.length; offset += 40) {
-    const items = stale.slice(offset, offset + 40)
-    const translated = await provider.translate({ locale: catalog.locale, items, glossary })
-    for (const item of items) {
-      const message = translated[item.key]
-      if (!message) throw new Error(`Translation provider omitted "${item.key}"`)
-      if (!isMessage(message))
-        throw new Error(`Translation provider returned an invalid message for "${item.key}"`)
-      if (!samePlaceholders(item.source, message)) {
-        throw new Error(`Translation provider changed placeholders in "${item.key}"`)
-      }
-      if (!hasRequiredPluralForms(item.source, message, catalog.locale)) {
-        throw new Error(`Translation provider omitted plural forms in "${item.key}"`)
-      }
-      messages[item.key] = { message, sourceHash: source[item.key]!.hash }
-    }
-  }
-  return { ...catalog, messages: Object.fromEntries(Object.entries(messages).sort()) }
+    ...changed.map((path) => `${path} is not synchronized; run bun run i18n:extract`),
+    ...checkCatalogMessages(sources, glossary),
+  ]
 }
 
 async function main(): Promise<void> {
   const command = process.argv[2]
   if (command === 'extract') {
-    const catalog = extractSourceCatalog()
-    writeJson(SOURCE_CATALOG_PATH, catalog)
-    console.log(
-      `Extracted ${Object.keys(catalog).length} messages to ${relative(ROOT, SOURCE_CATALOG_PATH)}`,
-    )
+    runLingui('extract')
+    annotateCatalogs()
+    runLingui('compile')
+    console.log(`Extracted and compiled ${readSourceMessages().length} Lingui messages`)
+    return
+  }
+
+  if (command === 'compile') {
+    runLingui('compile', true)
+    console.log(`Compiled ${ALL_LOCALES.length} Lingui catalogs`)
     return
   }
 
   if (command === 'check') {
-    const errors = checkCatalogs()
+    const errors = await checkCatalogs()
     for (const literal of bypassedLiterals()) {
-      console.warn(`[i18n warning] user-facing literal bypasses t(): ${literal}`)
+      console.warn(`[i18n warning] user-facing literal bypasses Lingui: ${literal}`)
     }
     if (errors.length > 0) {
       console.error(errors.map((error) => `[i18n] ${error}`).join('\n'))
       process.exitCode = 1
     } else {
-      console.log(`Checked ${BUNDLED_LOCALES.length} bundled locale catalogs`)
+      console.log(`Checked ${TARGET_LOCALES.length} complete bundled PO catalogs`)
     }
     return
   }
 
   if (command === 'translate') {
+    runLingui('extract')
+    annotateCatalogs()
     const requested = process.argv.slice(3)
-    const locales = requested.length > 0 ? requested : [...BUNDLED_LOCALES]
-    const source = readJson<SourceCatalog>(SOURCE_CATALOG_PATH)
-    const glossary = readJson<Record<string, unknown>>(GLOSSARY_PATH)
+    const locales = requested.length > 0 ? requested : [...TARGET_LOCALES]
+    const sources = readSourceMessages()
+    const glossary = readJson<Glossary>(GLOSSARY_PATH)
     const provider = configuredProvider()
     for (const locale of locales) {
-      if (!BUNDLED_LOCALES.includes(locale as (typeof BUNDLED_LOCALES)[number])) {
+      if (!TARGET_LOCALES.includes(locale as (typeof TARGET_LOCALES)[number])) {
         throw new Error(`Unknown bundled locale "${locale}"`)
       }
-      const path = localeCatalogPath(locale)
-      const catalog = readJson<LocaleCatalog>(path)
-      const refreshed = await refreshLocaleCatalog(source, catalog, provider, glossary)
-      writeJson(path, refreshed)
-      console.log(`Updated ${relative(ROOT, path)}`)
+      const path = catalogPath(locale)
+      const po = parsePo(readFileSync(path, 'utf8'))
+      const refreshed = await refreshTranslations(
+        locale,
+        sources,
+        readTranslationState(po),
+        provider,
+        glossary,
+      )
+      applyTranslations(po, sources, refreshed, provider)
+      writePo(path, po)
+      console.log(`Updated ${relative(ROOT, path)}; AI entries are fuzzy and require human review`)
     }
     return
   }
 
-  throw new Error('Usage: bun scripts/i18n.ts <extract|check|translate> [locale...]')
+  throw new Error('Usage: bun scripts/i18n.ts <extract|compile|check|translate> [locale...]')
 }
 
 if (import.meta.main) await main()

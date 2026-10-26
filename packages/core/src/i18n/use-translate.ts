@@ -1,38 +1,42 @@
 'use client'
 
-import { useCallback, useSyncExternalStore } from 'react'
+import { I18nProvider as LinguiI18nProvider } from '@lingui/react'
 import {
-  getI18nVersion,
-  getLocale,
-  subscribe,
-  type TranslationMessage,
-  type TranslationParams,
-  translate,
-} from './registry'
+  createContext,
+  createElement,
+  type ReactNode,
+  useContext,
+  useSyncExternalStore,
+} from 'react'
+import { defaultI18n, type PascalI18n } from './registry'
 
-const SERVER_SNAPSHOT = -1
-
-export type Translate = (
-  key: string,
-  englishDefault: TranslationMessage,
-  params?: TranslationParams,
-) => string
-
-export function useLocale(): string {
-  const version = useSyncExternalStore(subscribe, getI18nVersion, () => SERVER_SNAPSHOT)
-  return version === SERVER_SNAPSHOT ? 'en' : getLocale()
-}
+const PascalI18nContext = createContext(defaultI18n)
 
 /**
- * The server and hydration snapshot always uses the in-code English message.
- * Once the client subscribes, the active locale is read from the registry and
- * locale or message registrations re-render the component.
+ * Bind a request- or editor-local Pascal scope to React and Lingui.
+ *
+ * @experimental Unreleased API; signatures may change before the first i18n release.
  */
-export function useTranslate(): Translate {
-  const locale = useLocale()
-
-  return useCallback(
-    (key, englishDefault, params) => translate(key, englishDefault, params, locale),
-    [locale],
+export function PascalI18nProvider({ children, i18n }: { children: ReactNode; i18n: PascalI18n }) {
+  return createElement(
+    PascalI18nContext.Provider,
+    { value: i18n },
+    createElement(LinguiI18nProvider, { i18n: i18n.i18n }, children),
   )
+}
+
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export function usePascalI18n(): PascalI18n {
+  const i18n = useContext(PascalI18nContext)
+  useSyncExternalStore(
+    i18n.subscribe.bind(i18n),
+    i18n.getVersion.bind(i18n),
+    i18n.getVersion.bind(i18n),
+  )
+  return i18n
+}
+
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export function useLocale(): string {
+  return usePascalI18n().getLocale()
 }

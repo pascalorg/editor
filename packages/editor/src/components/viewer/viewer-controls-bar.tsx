@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter, type Translate, useTranslate } from '@pascal-app/core'
+import { emitter, type PascalI18n, usePascalI18n } from '@pascal-app/core'
 import {
   CLAY_PALETTE,
   type EdgeMode,
@@ -53,29 +53,33 @@ const wallModeConfig = {
   },
 } as const
 
-function levelModeLabel(mode: 'stacked' | 'exploded' | 'solo' | 'manual', t: Translate): string {
-  if (mode === 'stacked') return t('viewer.levels.stacked', 'Stacked')
-  if (mode === 'exploded') return t('viewer.levels.exploded', 'Exploded')
-  if (mode === 'solo') return t('viewer.levels.solo', 'Solo')
-  return t('viewer.levels.manual', 'Manual')
+function levelModeLabel(
+  mode: 'stacked' | 'exploded' | 'solo' | 'manual',
+  i18n: PascalI18n,
+): string {
+  if (mode === 'stacked') return i18n._({ id: 'viewer.levels.stacked', message: 'Stacked' })
+  if (mode === 'exploded') return i18n._({ id: 'viewer.levels.exploded', message: 'Exploded' })
+  if (mode === 'solo') return i18n._({ id: 'viewer.levels.solo', message: 'Solo' })
+  return i18n._({ id: 'viewer.levels.manual', message: 'Manual' })
 }
 
-function wallModeLabel(mode: keyof typeof wallModeConfig, t: Translate): string {
-  if (mode === 'up') return t('viewer.walls.fullHeight', 'Full height')
-  if (mode === 'down') return t('viewer.walls.low', 'Low')
-  return t('viewer.walls.cutaway', 'Cutaway')
+function wallModeLabel(mode: keyof typeof wallModeConfig, i18n: PascalI18n): string {
+  if (mode === 'up') return i18n._({ id: 'viewer.walls.fullHeight', message: 'Full height' })
+  if (mode === 'down') return i18n._({ id: 'viewer.walls.low', message: 'Low' })
+  return i18n._({ id: 'viewer.walls.cutaway', message: 'Cutaway' })
 }
 
-function sceneThemeName(id: string, fallback: string, t: Translate): string {
-  if (id === 'studio') return t('viewer.theme.studio', 'Studio')
-  if (id === 'paper') return t('viewer.theme.paper', 'Paper')
-  if (id === 'sunset') return t('viewer.theme.sunset', 'Sunset')
-  if (id === 'overcast') return t('viewer.theme.overcast', 'Overcast')
-  if (id === 'blueprint') return t('viewer.theme.blueprint', 'Blueprint')
-  if (id === 'mediterranean') return t('viewer.theme.mediterranean', 'Mediterranean')
-  if (id === 'twilight') return t('viewer.theme.twilight', 'Twilight')
-  if (id === 'night') return t('viewer.theme.night', 'Night')
-  if (id === 'verdant') return t('viewer.theme.verdant', 'Verdant')
+function sceneThemeName(id: string, fallback: string, i18n: PascalI18n): string {
+  if (id === 'studio') return i18n._({ id: 'viewer.theme.studio', message: 'Studio' })
+  if (id === 'paper') return i18n._({ id: 'viewer.theme.paper', message: 'Paper' })
+  if (id === 'sunset') return i18n._({ id: 'viewer.theme.sunset', message: 'Sunset' })
+  if (id === 'overcast') return i18n._({ id: 'viewer.theme.overcast', message: 'Overcast' })
+  if (id === 'blueprint') return i18n._({ id: 'viewer.theme.blueprint', message: 'Blueprint' })
+  if (id === 'mediterranean')
+    return i18n._({ id: 'viewer.theme.mediterranean', message: 'Mediterranean' })
+  if (id === 'twilight') return i18n._({ id: 'viewer.theme.twilight', message: 'Twilight' })
+  if (id === 'night') return i18n._({ id: 'viewer.theme.night', message: 'Night' })
+  if (id === 'verdant') return i18n._({ id: 'viewer.theme.verdant', message: 'Verdant' })
   return fallback
 }
 
@@ -95,7 +99,7 @@ function VisibilityMenu({
   canShowScans: boolean
   canShowGuides: boolean
 }) {
-  const t = useTranslate()
+  const i18n = usePascalI18n()
   const showScans = useViewer((s) => s.showScans)
   const showGuides = useViewer((s) => s.showGuides)
   return (
@@ -103,7 +107,7 @@ function VisibilityMenu({
       <DropdownMenuTrigger asChild>
         <ActionButton
           className="hover:bg-white/5 hover:text-foreground"
-          label={t('viewer.visibility.title', 'Visibility')}
+          label={i18n._({ id: 'viewer.visibility.title', message: 'Visibility' })}
           size="icon"
           tooltipClassName="dark"
           tooltipSide="top"
@@ -118,7 +122,7 @@ function VisibilityMenu({
             onSelect={(e) => keepOpen(e, () => useViewer.getState().setShowScans(!showScans))}
           >
             <img alt="" className="h-4 w-4 object-contain" src="/icons/mesh.webp" />
-            <span>{t('viewer.visibility.scans', 'Scans')}</span>
+            <span>{i18n._({ id: 'viewer.visibility.scans', message: 'Scans' })}</span>
             {showScans ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
             ) : (
@@ -131,7 +135,7 @@ function VisibilityMenu({
             onSelect={(e) => keepOpen(e, () => useViewer.getState().setShowGuides(!showGuides))}
           >
             <img alt="" className="h-4 w-4 object-contain" src="/icons/floorplan.webp" />
-            <span>{t('viewer.visibility.guides', 'Guides')}</span>
+            <span>{i18n._({ id: 'viewer.visibility.guides', message: 'Guides' })}</span>
             {showGuides ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
             ) : (
@@ -147,7 +151,7 @@ function VisibilityMenu({
 // One "Display" button gathering shadows, camera projection, colors, render
 // mode, scene theme and edges.
 function DisplayMenu() {
-  const t = useTranslate()
+  const i18n = usePascalI18n()
   const cameraMode = useViewer((s) => s.cameraMode)
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
@@ -157,32 +161,44 @@ function DisplayMenu() {
   const shadingOptions = [
     {
       id: 'solid',
-      name: t('viewer.display.render.solid', 'Solid'),
-      detail: t('viewer.display.render.solidDetail', 'Flat and fast — no ambient occlusion'),
+      name: i18n._({ id: 'viewer.display.render.solid', message: 'Solid' }),
+      detail: i18n._({
+        id: 'viewer.display.render.solidDetail',
+        message: 'Flat and fast — no ambient occlusion',
+      }),
       icon: Box,
     },
     {
       id: 'rendered',
-      name: t('viewer.display.render.rendered', 'Rendered'),
-      detail: t('viewer.display.render.renderedDetail', 'Full ambient occlusion'),
+      name: i18n._({ id: 'viewer.display.render.rendered', message: 'Rendered' }),
+      detail: i18n._({
+        id: 'viewer.display.render.renderedDetail',
+        message: 'Full ambient occlusion',
+      }),
       icon: Sparkles,
     },
   ] as const
   const edgeOptions = [
     {
       id: 'off',
-      name: t('viewer.display.edges.off', 'Off'),
-      detail: t('viewer.display.edges.offDetail', 'No edge lines'),
+      name: i18n._({ id: 'viewer.display.edges.off', message: 'Off' }),
+      detail: i18n._({ id: 'viewer.display.edges.offDetail', message: 'No edge lines' }),
     },
     {
       id: 'soft',
-      name: t('viewer.display.edges.soft', 'Soft'),
-      detail: t('viewer.display.edges.softDetail', 'Faint outline of major creases'),
+      name: i18n._({ id: 'viewer.display.edges.soft', message: 'Soft' }),
+      detail: i18n._({
+        id: 'viewer.display.edges.softDetail',
+        message: 'Faint outline of major creases',
+      }),
     },
     {
       id: 'strong',
-      name: t('viewer.display.edges.strong', 'Strong'),
-      detail: t('viewer.display.edges.strongDetail', 'Crisp, opaque edge lines'),
+      name: i18n._({ id: 'viewer.display.edges.strong', message: 'Strong' }),
+      detail: i18n._({
+        id: 'viewer.display.edges.strongDetail',
+        message: 'Crisp, opaque edge lines',
+      }),
     },
   ] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
   const activeShading = shadingOptions.find((o) => o.id === shading) ?? shadingOptions[0]
@@ -193,7 +209,7 @@ function DisplayMenu() {
       <DropdownMenuTrigger asChild>
         <ActionButton
           className="hover:bg-white/5 hover:text-foreground"
-          label={t('viewer.display.title', 'Display settings')}
+          label={i18n._({ id: 'viewer.display.title', message: 'Display settings' })}
           size="icon"
           tooltipClassName="dark"
           tooltipSide="top"
@@ -207,9 +223,11 @@ function DisplayMenu() {
           onSelect={(e) => keepOpen(e, () => useViewer.getState().setShadows(!shadows))}
         >
           <Contrast className="h-4 w-4" />
-          <span>{t('viewer.display.shadows', 'Shadows')}</span>
+          <span>{i18n._({ id: 'viewer.display.shadows', message: 'Shadows' })}</span>
           <span className="ml-auto text-muted-foreground text-xs">
-            {shadows ? t('viewer.common.on', 'On') : t('viewer.common.off', 'Off')}
+            {shadows
+              ? i18n._({ id: 'viewer.common.on', message: 'On' })
+              : i18n._({ id: 'viewer.common.off', message: 'Off' })}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -222,22 +240,22 @@ function DisplayMenu() {
           }
         >
           <Camera className="h-4 w-4" />
-          <span>{t('viewer.display.camera', 'Camera')}</span>
+          <span>{i18n._({ id: 'viewer.display.camera', message: 'Camera' })}</span>
           <span className="ml-auto text-muted-foreground text-xs">
             {cameraMode === 'perspective'
-              ? t('viewer.display.perspective', 'Perspective')
-              : t('viewer.display.orthographic', 'Orthographic')}
+              ? i18n._({ id: 'viewer.display.perspective', message: 'Perspective' })
+              : i18n._({ id: 'viewer.display.orthographic', message: 'Orthographic' })}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(e) => keepOpen(e, () => useViewer.getState().setTextures(!textures))}
         >
           {textures ? <Palette className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-          <span>{t('viewer.display.colors', 'Colors')}</span>
+          <span>{i18n._({ id: 'viewer.display.colors', message: 'Colors' })}</span>
           <span className="ml-auto text-muted-foreground text-xs">
             {textures
-              ? t('viewer.display.colored', 'Colored')
-              : t('viewer.display.monochrome', 'Monochrome')}
+              ? i18n._({ id: 'viewer.display.colored', message: 'Colored' })
+              : i18n._({ id: 'viewer.display.monochrome', message: 'Monochrome' })}
           </span>
         </DropdownMenuItem>
 
@@ -246,7 +264,7 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <activeShading.icon className="h-4 w-4" />
-            <span>{t('viewer.display.render.title', 'Render')}</span>
+            <span>{i18n._({ id: 'viewer.display.render.title', message: 'Render' })}</span>
             <span className="ml-auto text-muted-foreground text-xs">{activeShading.name}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="dark min-w-56">
@@ -274,9 +292,9 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SwatchBook className="h-4 w-4" />
-            <span>{t('viewer.theme.title', 'Scene theme')}</span>
+            <span>{i18n._({ id: 'viewer.theme.title', message: 'Scene theme' })}</span>
             <span className="ml-auto truncate text-muted-foreground text-xs">
-              {sceneThemeName(activeTheme.id, activeTheme.name, t)}
+              {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
             </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="dark min-w-48">
@@ -298,7 +316,7 @@ function DisplayMenu() {
                       <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
                     ))}
                   </span>
-                  <span>{sceneThemeName(theme.id, theme.name, t)}</span>
+                  <span>{sceneThemeName(theme.id, theme.name, i18n)}</span>
                   {sceneTheme === theme.id ? <Check className="ml-auto h-4 w-4" /> : null}
                 </DropdownMenuItem>
               )
@@ -309,7 +327,7 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <PenLine className="h-4 w-4" />
-            <span>{t('viewer.display.edges.title', 'Edges')}</span>
+            <span>{i18n._({ id: 'viewer.display.edges.title', message: 'Edges' })}</span>
             <span className="ml-auto text-muted-foreground text-xs">{activeEdges.name}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="dark min-w-56">
@@ -358,7 +376,7 @@ export const ViewerControlsBar = ({
   onWalkthroughToggle,
   className,
 }: ViewerControlsBarProps) => {
-  const t = useTranslate()
+  const i18n = usePascalI18n()
   const levelMode = useViewer((s) => s.levelMode)
   const wallMode = useViewer((s) => s.wallMode)
   // Sessions may carry a stale mode outside the cycle (e.g. the retired
@@ -394,8 +412,10 @@ export const ViewerControlsBar = ({
                 ? 'hover:bg-white/5 hover:text-amber-400'
                 : 'bg-amber-500/20 text-amber-400'
             }
-            label={t('viewer.levels.label', 'Levels: {mode}', {
-              mode: levelModeLabel(levelMode, t),
+            label={i18n._({
+              id: 'viewer.levels.label',
+              message: 'Levels: {mode}',
+              values: { mode: levelModeLabel(levelMode, i18n) },
             })}
             onClick={() => {
               if (levelMode === 'manual') return useViewer.getState().setLevelMode('stacked')
@@ -421,8 +441,10 @@ export const ViewerControlsBar = ({
                   ? 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0'
                   : 'bg-white/10'
               }
-              label={t('viewer.walls.label', 'Walls: {mode}', {
-                mode: wallModeLabel(safeWallMode, t),
+              label={i18n._({
+                id: 'viewer.walls.label',
+                message: 'Walls: {mode}',
+                values: { mode: wallModeLabel(safeWallMode, i18n) },
               })}
               onClick={() => {
                 const modes: ('cutaway' | 'up' | 'down')[] = ['cutaway', 'up', 'down']
@@ -435,7 +457,7 @@ export const ViewerControlsBar = ({
               variant="ghost"
             >
               <img
-                alt={wallModeLabel(safeWallMode, t)}
+                alt={wallModeLabel(safeWallMode, i18n)}
                 className="h-[28px] w-[28px]"
                 height={28}
                 src={wallModeConfig[safeWallMode].icon}
@@ -457,10 +479,14 @@ export const ViewerControlsBar = ({
                 ? 'bg-emerald-500/20 text-emerald-400'
                 : 'hover:bg-white/5 hover:text-emerald-400'
             }
-            label={t('viewer.walkthrough.label', 'Walkthrough: {state}', {
-              state: walkthroughActive
-                ? t('viewer.common.on', 'On')
-                : t('viewer.common.off', 'Off'),
+            label={i18n._({
+              id: 'viewer.walkthrough.label',
+              message: 'Walkthrough: {state}',
+              values: {
+                state: walkthroughActive
+                  ? i18n._({ id: 'viewer.common.on', message: 'On' })
+                  : i18n._({ id: 'viewer.common.off', message: 'Off' }),
+              },
             })}
             onClick={onWalkthroughToggle}
             size="icon"
@@ -479,7 +505,7 @@ export const ViewerControlsBar = ({
           {/* Camera actions */}
           <ActionButton
             className="group hidden hover:bg-white/5 sm:inline-flex"
-            label={t('viewer.camera.orbitLeft', 'Orbit left')}
+            label={i18n._({ id: 'viewer.camera.orbitLeft', message: 'Orbit left' })}
             onClick={() => emitter.emit('camera-controls:orbit-ccw')}
             size="icon"
             tooltipClassName="dark"
@@ -487,7 +513,7 @@ export const ViewerControlsBar = ({
             variant="ghost"
           >
             <img
-              alt={t('viewer.camera.orbitLeft', 'Orbit left')}
+              alt={i18n._({ id: 'viewer.camera.orbitLeft', message: 'Orbit left' })}
               className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
               src="/icons/rotate.webp"
             />
@@ -495,7 +521,7 @@ export const ViewerControlsBar = ({
 
           <ActionButton
             className="group hidden hover:bg-white/5 sm:inline-flex"
-            label={t('viewer.camera.orbitRight', 'Orbit right')}
+            label={i18n._({ id: 'viewer.camera.orbitRight', message: 'Orbit right' })}
             onClick={() => emitter.emit('camera-controls:orbit-cw')}
             size="icon"
             tooltipClassName="dark"
@@ -503,7 +529,7 @@ export const ViewerControlsBar = ({
             variant="ghost"
           >
             <img
-              alt={t('viewer.camera.orbitRight', 'Orbit right')}
+              alt={i18n._({ id: 'viewer.camera.orbitRight', message: 'Orbit right' })}
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               src="/icons/rotate.webp"
             />
@@ -511,7 +537,7 @@ export const ViewerControlsBar = ({
 
           <ActionButton
             className="group hover:bg-white/5"
-            label={t('viewer.camera.topView', 'Top view')}
+            label={i18n._({ id: 'viewer.camera.topView', message: 'Top view' })}
             onClick={() => emitter.emit('camera-controls:top-view')}
             size="icon"
             tooltipClassName="dark"
@@ -519,7 +545,7 @@ export const ViewerControlsBar = ({
             variant="ghost"
           >
             <img
-              alt={t('viewer.camera.topView', 'Top view')}
+              alt={i18n._({ id: 'viewer.camera.topView', message: 'Top view' })}
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               src="/icons/topview.webp"
             />

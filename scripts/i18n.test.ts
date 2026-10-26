@@ -1,87 +1,108 @@
 import { expect, test } from 'bun:test'
 import {
-  hasRequiredPluralForms,
-  type LocaleCatalog,
-  refreshLocaleCatalog,
-  type SourceCatalog,
+  hashSource,
+  refreshTranslations,
+  type SourceMessage,
+  type TranslationEntry,
   type TranslationProvider,
+  validateTranslation,
 } from './i18n'
 
-test('plural validation follows the target locale categories', () => {
-  const english = { one: '{count} item', other: '{count} items' }
+test('ICU plural validation follows the target locale categories', () => {
+  const english = '{count, plural, one {# item} other {# items}}'
 
-  expect(hasRequiredPluralForms(english, { other: '{count} 個' }, 'ja')).toBeTrue()
-  expect(hasRequiredPluralForms(english, { other: '{count} 个' }, 'zh-CN')).toBeTrue()
-  expect(hasRequiredPluralForms(english, { other: '{count} items' }, 'en')).toBeFalse()
-  expect(hasRequiredPluralForms(english, english, 'en')).toBeTrue()
+  expect(validateTranslation(english, '{count, plural, other {# 個}}', 'ja')).toEqual([])
+  expect(validateTranslation(english, '{count, plural, other {# 个}}', 'zh-CN')).toEqual([])
+  expect(validateTranslation(english, '{count, plural, other {# items}}', 'en')).toContain(
+    'plural selector "count" is missing "one"',
+  )
+  expect(validateTranslation(english, english, 'en')).toEqual([])
 })
 
 test('AI translation refreshes only missing and stale entries through a mocked provider', async () => {
-  const source: SourceCatalog = {
+  const sources: SourceMessage[] = [
+    { id: 'viewer.current', message: 'Current', context: ['current.tsx:1'] },
+    { id: 'viewer.missing', message: 'Hello {name}', context: ['missing.tsx:2'] },
+    { id: 'viewer.stale', message: 'Changed', context: ['stale.tsx:3'] },
+  ]
+  const current: Record<string, TranslationEntry> = {
     'viewer.current': {
-      default: 'Current',
-      hash: 'hash-current',
-      context: ['current.tsx:1'],
-    },
-    'viewer.missing': {
-      default: 'Hello {name}',
-      hash: 'hash-missing',
-      context: ['missing.tsx:2'],
+      translation: 'Actuel',
+      sourceHash: hashSource('Current'),
+      review: 'human',
+      fuzzy: false,
     },
     'viewer.stale': {
-      default: 'Changed',
-      hash: 'hash-new',
-      context: ['stale.tsx:3'],
-    },
-  }
-  const catalog: LocaleCatalog = {
-    locale: 'fr',
-    messages: {
-      'viewer.current': { message: 'Actuel', sourceHash: 'hash-current' },
-      'viewer.stale': { message: 'Ancien', sourceHash: 'hash-old' },
+      translation: 'Ancien',
+      sourceHash: hashSource('Old'),
+      review: 'human',
+      fuzzy: false,
     },
   }
   const requests: string[][] = []
   const provider: TranslationProvider = {
+    name: 'mock',
+    model: 'mock-model',
     async translate(request) {
-      requests.push(request.items.map((item) => item.key))
+      requests.push(request.items.map((item) => item.id))
       return {
-        'viewer.missing': 'Bonjour {name}',
-        'viewer.stale': 'Modifié',
+        locale: request.locale,
+        entries: [
+          {
+            id: 'viewer.missing',
+            translation: 'Bonjour {name}',
+            reviewNotes: '',
+          },
+          { id: 'viewer.stale', translation: 'Modifié', reviewNotes: 'Check toolbar width.' },
+        ],
       }
     },
   }
 
-  const refreshed = await refreshLocaleCatalog(source, catalog, provider, {})
+  const refreshed = await refreshTranslations('fr', sources, current, provider)
 
   expect(requests).toEqual([['viewer.missing', 'viewer.stale']])
-  expect(refreshed.messages['viewer.current']).toEqual(catalog.messages['viewer.current'])
-  expect(refreshed.messages['viewer.missing']).toEqual({
-    message: 'Bonjour {name}',
-    sourceHash: 'hash-missing',
+  expect(refreshed['viewer.current']).toEqual(current['viewer.current'])
+  expect(refreshed['viewer.missing']).toEqual({
+    translation: 'Bonjour {name}',
+    sourceHash: hashSource('Hello {name}'),
+    review: 'required',
+    fuzzy: true,
+    reviewNotes: '',
   })
-  expect(refreshed.messages['viewer.stale']).toEqual({
-    message: 'Modifié',
-    sourceHash: 'hash-new',
+  expect(refreshed['viewer.stale']).toEqual({
+    translation: 'Modifié',
+    sourceHash: hashSource('Changed'),
+    review: 'required',
+    fuzzy: true,
+    reviewNotes: 'Check toolbar width.',
   })
 })
 
 test('AI translation rejects broken placeholders from a provider', async () => {
-  const source: SourceCatalog = {
-    'viewer.greeting': {
-      default: 'Hello {name}',
-      hash: 'hash-greeting',
-      context: ['greeting.tsx:1'],
-    },
-  }
-  const catalog: LocaleCatalog = { locale: 'fr', messages: {} }
+  const sources: SourceMessage[] = [
+    { id: 'viewer.greeting', message: 'Hello {name}', context: ['greeting.tsx:1'] },
+  ]
   const provider: TranslationProvider = {
-    async translate() {
-      return { 'viewer.greeting': 'Bonjour' }
+    name: 'mock',
+    model: 'mock-model',
+    async translate(request) {
+      return {
+        locale: request.locale,
+        entries: [{ id: 'viewer.greeting', translation: 'Bonjour', reviewNotes: '' }],
+      }
     },
   }
 
-  expect(refreshLocaleCatalog(source, catalog, provider, {})).rejects.toThrow(
-    'Translation provider changed placeholders in "viewer.greeting"',
+  expect(refreshTranslations('fr', sources, {}, provider)).rejects.toThrow(
+    'placeholder names differ from English',
   )
+})
+
+test('translation validation applies the checked-in glossary', () => {
+  expect(
+    validateTranslation('Ceiling', '吊顶', 'zh-CN', {
+      terms: { ceiling: { 'zh-CN': '天花板' } },
+    }),
+  ).toContain('expected glossary term "天花板" for "ceiling"')
 })

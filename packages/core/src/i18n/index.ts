@@ -8,8 +8,12 @@ export {
   parseLocalizedNumber,
 } from './format'
 export {
+  type CompiledTranslationMessages,
+  createI18n,
+  defaultI18n,
   getLocale,
-  type PluralMessage,
+  type PascalI18n,
+  registerCompiledMessages,
   registerMessages,
   setLocale,
   subscribe,
@@ -18,4 +22,4 @@ export {
   type TranslationParams,
   translate,
 } from './registry'
-export { type Translate, useLocale, useTranslate } from './use-translate'
+export { PascalI18nProvider, useLocale, usePascalI18n } from './use-translate'

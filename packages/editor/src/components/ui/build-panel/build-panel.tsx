@@ -1,6 +1,6 @@
 'use client'
 
-import { type Translate, useTranslate } from '@pascal-app/core'
+import { type PascalI18n, usePascalI18n } from '@pascal-app/core'
 import { ChevronRight } from 'lucide-react'
 import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useState } from 'react'
 import { cn } from '../../../lib/utils'
@@ -70,7 +70,7 @@ export function BuildPanelAdvancedSection({
   description?: string
   hint?: string
 }) {
-  const t = useTranslate()
+  const i18n = usePascalI18n()
   const [open, setOpen] = useState(false)
   useEffect(() => setOpen(readAdvancedOpen()), [])
   useEffect(() => {
@@ -96,7 +96,7 @@ export function BuildPanelAdvancedSection({
           )}
         />
         <h3 className="font-medium text-foreground text-xs">
-          {t('editor.buildPanel.advanced', 'Advanced')}
+          {i18n._({ id: 'editor.buildPanel.advanced', message: 'Advanced' })}
         </h3>
         {hint ? (
           <span className="ml-auto truncate text-[11px] text-muted-foreground">{hint}</span>
@@ -228,18 +228,21 @@ export function BuildPanelRoomsSection({
   /** Extra attributes per tile (e.g. a host's guide-target hook). */
   tileProps?: (variant: WallDrawVariant) => Record<string, string | undefined>
 }) {
-  const t = useTranslate()
+  const i18n = usePascalI18n()
   const active = WALL_DRAW_VARIANTS.find((variant) => variant.id === activeVariant)
-  const activeMessages = active ? roomVariantMessages(active.id, t) : null
+  const activeMessages = active ? roomVariantMessages(active.id, i18n) : null
   return (
     <BuildPanelSection
-      hint={t('editor.buildPanel.rooms.hint', 'walls · floor · ceiling')}
+      hint={i18n._({
+        id: 'editor.buildPanel.rooms.hint',
+        message: 'walls · floor · ceiling',
+      })}
       id="rooms"
-      title={t('editor.buildPanel.rooms.title', 'Rooms')}
+      title={i18n._({ id: 'editor.buildPanel.rooms.title', message: 'Rooms' })}
     >
       <BuildToolGrid columns={3}>
         {WALL_DRAW_VARIANTS.map((variant) => {
-          const messages = roomVariantMessages(variant.id, t)
+          const messages = roomVariantMessages(variant.id, i18n)
           return (
             <BuildToolTile
               active={variant.id === activeVariant}
@@ -259,10 +262,11 @@ export function BuildPanelRoomsSection({
       <BuildPanelCaption
         caption={
           activeMessages?.caption ??
-          t(
-            'editor.buildPanel.rooms.idle',
-            'Pick a shape to start. Every room brings its own walls, floor and ceiling.',
-          )
+          i18n._({
+            id: 'editor.buildPanel.rooms.idle',
+            message:
+              'Pick a shape to start. Every room brings its own walls, floor and ceiling.',
+          })
         }
         lead={activeMessages?.lead}
       />
@@ -270,39 +274,57 @@ export function BuildPanelRoomsSection({
   )
 }
 
-function roomVariantMessages(variant: WallDrawVariant, t: Translate) {
+function roomVariantMessages(variant: WallDrawVariant, i18n: PascalI18n) {
   if (variant === 'rectangle') {
     return {
-      label: t('editor.buildPanel.rooms.rectangle.label', 'Rectangle'),
-      title: t('editor.buildPanel.rooms.rectangle.title', 'Rectangle room'),
-      lead: t('editor.buildPanel.rooms.rectangle.lead', 'Click two corners'),
-      caption: t(
-        'editor.buildPanel.rooms.rectangle.caption',
-        '{lead} on the grid. Walls, floor and ceiling are created together.',
-        { lead: CAPTION_LEAD_MARKER },
-      ),
+      label: i18n._({
+        id: 'editor.buildPanel.rooms.rectangle.label',
+        message: 'Rectangle',
+      }),
+      title: i18n._({
+        id: 'editor.buildPanel.rooms.rectangle.title',
+        message: 'Rectangle room',
+      }),
+      lead: i18n._({
+        id: 'editor.buildPanel.rooms.rectangle.lead',
+        message: 'Click two corners',
+      }),
+      caption: i18n._({
+        id: 'editor.buildPanel.rooms.rectangle.caption',
+        message: '{lead} on the grid. Walls, floor and ceiling are created together.',
+        values: { lead: CAPTION_LEAD_MARKER },
+      }),
     }
   }
   if (variant === 'walls') {
     return {
-      label: t('editor.buildPanel.rooms.walls.label', 'Walls'),
-      title: t('editor.buildPanel.rooms.walls.title', 'Walls'),
-      lead: t('editor.buildPanel.rooms.walls.lead', 'Draw one wall at a time.'),
-      caption: t(
-        'editor.buildPanel.rooms.walls.caption',
-        '{lead} Close a loop and it becomes a room; leave it open for partitions.',
-        { lead: CAPTION_LEAD_MARKER },
-      ),
+      label: i18n._({ id: 'editor.buildPanel.rooms.walls.label', message: 'Walls' }),
+      title: i18n._({ id: 'editor.buildPanel.rooms.walls.title', message: 'Walls' }),
+      lead: i18n._({
+        id: 'editor.buildPanel.rooms.walls.lead',
+        message: 'Draw one wall at a time.',
+      }),
+      caption: i18n._({
+        id: 'editor.buildPanel.rooms.walls.caption',
+        message: '{lead} Close a loop and it becomes a room; leave it open for partitions.',
+        values: { lead: CAPTION_LEAD_MARKER },
+      }),
     }
   }
   return {
-    label: t('editor.buildPanel.rooms.polygon.label', 'Polygon'),
-    title: t('editor.buildPanel.rooms.polygon.title', 'Polygon room'),
-    lead: t('editor.buildPanel.rooms.polygon.lead', 'Click each corner,'),
-    caption: t(
-      'editor.buildPanel.rooms.polygon.caption',
-      '{lead} then the first one again to close. For L-shapes and angled rooms.',
-      { lead: CAPTION_LEAD_MARKER },
-    ),
+    label: i18n._({ id: 'editor.buildPanel.rooms.polygon.label', message: 'Polygon' }),
+    title: i18n._({
+      id: 'editor.buildPanel.rooms.polygon.title',
+      message: 'Polygon room',
+    }),
+    lead: i18n._({
+      id: 'editor.buildPanel.rooms.polygon.lead',
+      message: 'Click each corner,',
+    }),
+    caption: i18n._({
+      id: 'editor.buildPanel.rooms.polygon.caption',
+      message: '{lead} then the first one again to close. For L-shapes and angled rooms.',
+      values: { lead: CAPTION_LEAD_MARKER },
+    }),
   }
 }

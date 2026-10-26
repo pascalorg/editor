@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
 import { issueSession, SESSION_COOKIE } from './lib/self-host-auth'
+import { resolveUiLocale } from './lib/ui-locale'
 import { gateRequest } from './proxy'
 
 const OLD_ENV = { ...process.env }
@@ -74,4 +75,11 @@ test('loopback and an upstream proxy are open', () => {
   expect(gateRequest(loopback)).toBeNull()
   process.env.PASCAL_AUTH = 'proxy'
   expect(gateRequest(request('/'))).toBeNull()
+})
+
+test('UI locale canonicalization is deterministic for server rendering', () => {
+  expect(resolveUiLocale('fr')).toBe('fr')
+  expect(resolveUiLocale('zh-hans-cn')).toBe('zh-Hans-CN')
+  expect(resolveUiLocale('')).toBe('en')
+  expect(resolveUiLocale('not_a_locale')).toBe('en')
 })

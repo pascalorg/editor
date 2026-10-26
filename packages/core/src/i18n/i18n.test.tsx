@@ -2,10 +2,12 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { renderToString } from 'react-dom/server'
 import {
   BuildingNode,
+  createI18n,
   formatLength,
   formatNumber,
   LevelNode,
   levelDisplayNumber,
+  PascalI18nProvider,
   parseLocalizedNumber,
   registerMessages,
   SiteNode,
@@ -13,7 +15,7 @@ import {
   subscribe,
   translate,
   useLocale,
-  useTranslate,
+  usePascalI18n,
 } from '../index'
 
 afterEach(() => {
@@ -21,13 +23,13 @@ afterEach(() => {
 })
 
 describe('message registry', () => {
-  test('merges host overrides and falls back from a regional locale to its language', () => {
-    registerMessages('pt', 'viewer', {
+  test('merges host overrides and falls back from a regional locale to its language', async () => {
+    await registerMessages('pt', 'viewer', {
       'controls.open': 'Abrir',
       'controls.close': 'Fechar',
     })
-    registerMessages('pt-BR', 'viewer', { 'controls.close': 'Encerrar' })
-    registerMessages('pt-BR', 'viewer', { 'controls.close': 'Fechar agora' })
+    await registerMessages('pt-BR', 'viewer', { 'controls.close': 'Encerrar' })
+    await registerMessages('pt-BR', 'viewer', { 'controls.close': 'Fechar agora' })
 
     setLocale('pt-BR')
 
@@ -36,16 +38,16 @@ describe('message registry', () => {
     expect(translate('viewer.controls.unknown', 'Unknown')).toBe('Unknown')
   })
 
-  test('falls back through script before the base language', () => {
-    registerMessages('zh', 'viewer', { greeting: '你好' })
-    registerMessages('zh-Hant', 'viewer', { greeting: '您好' })
+  test('falls back through script before the base language', async () => {
+    await registerMessages('zh', 'viewer', { greeting: '你好' })
+    await registerMessages('zh-Hant', 'viewer', { greeting: '您好' })
     setLocale('zh-Hant-HK')
 
     expect(translate('viewer.greeting', 'Hello')).toBe('您好')
   })
 
-  test('maps explicit Simplified Chinese scripts to zh-CN without crossing into Traditional', () => {
-    registerMessages('zh-CN', 'viewer', { 'test.simplified-alias': '简体中文' })
+  test('maps explicit Simplified Chinese scripts to zh-CN without crossing into Traditional', async () => {
+    await registerMessages('zh-CN', 'viewer', { 'test.simplified-alias': '简体中文' })
 
     expect(translate('viewer.test.simplified-alias', 'English', undefined, 'zh-Hans')).toBe(
       '简体中文',
@@ -59,56 +61,72 @@ describe('message registry', () => {
     expect(translate('viewer.test.simplified-alias', 'English', undefined, 'zh-TW')).toBe('English')
   })
 
-  test('keeps canonical English in code', () => {
-    registerMessages('en', 'viewer', { hostGreeting: 'Welcome' })
+  test('allows later English registrations to override the in-code default', async () => {
+    await registerMessages('en', 'viewer', { hostGreeting: 'Welcome' })
 
-    expect(translate('viewer.hostGreeting', 'Hello')).toBe('Hello')
+    expect(translate('viewer.hostGreeting', 'Hello')).toBe('Welcome')
     expect(translate('viewer.unregistered', 'In-code fallback')).toBe('In-code fallback')
   })
 
-  test('interpolates values and selects plurals with Intl.PluralRules', () => {
-    registerMessages('fr', 'editor', {
-      selection: {
-        one: '{count} élément sélectionné',
-        other: '{count} éléments sélectionnés',
-      },
+  test('interpolates values and selects ICU plurals', async () => {
+    await registerMessages('fr', 'editor', {
+      selection: '{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}',
       welcome: 'Bonjour {name}',
     })
     setLocale('fr')
 
     expect(
-      translate('editor.selection', { one: '{count} item', other: '{count} items' }, { count: 1 }),
+      translate('editor.selection', '{count, plural, one {# item} other {# items}}', { count: 1 }),
     ).toBe('1 élément sélectionné')
     expect(
-      translate('editor.selection', { one: '{count} item', other: '{count} items' }, { count: 3 }),
+      translate('editor.selection', '{count, plural, one {# item} other {# items}}', { count: 3 }),
     ).toBe('3 éléments sélectionnés')
     expect(translate('editor.welcome', 'Hello {name}', { name: 'Ada' })).toBe('Bonjour Ada')
   })
 
-  test('uses English plural rules when a translation is missing', () => {
+  test('uses English plural rules when a translation is missing', async () => {
+    await registerMessages('en', 'viewer', {
+      'test.english-plural-fallback':
+        '{count, plural, one {# fallback item} other {# fallback items}}',
+    })
     setLocale('ru')
 
     expect(
       translate(
         'viewer.test.english-plural-fallback',
-        { one: '{count} item', other: '{count} items' },
+        '{count, plural, one {# item} other {# items}}',
         { count: 21 },
       ),
-    ).toBe('21 items')
+    ).toBe('21 fallback items')
   })
 
-  test('notifies subscribers for locale and active-catalog changes', () => {
+  test('notifies subscribers for locale and active-catalog changes', async () => {
     let changes = 0
     const unsubscribe = subscribe(() => {
       changes += 1
     })
 
     setLocale('ja')
-    registerMessages('ja', 'viewer', { test: 'テスト' })
+    await registerMessages('ja', 'viewer', { test: 'テスト' })
     unsubscribe()
     setLocale('es')
 
     expect(changes).toBe(2)
+  })
+
+  test('keeps request-local scopes isolated', async () => {
+    await registerMessages('fr', 'viewer', { isolated: 'Français' })
+    await registerMessages('ja', 'viewer', { isolated: '日本語' })
+    const french = createI18n({ locale: 'fr' })
+    const japanese = createI18n({ locale: 'ja' })
+
+    expect(french._({ id: 'viewer.isolated', message: 'English' })).toBe('Français')
+    expect(japanese._({ id: 'viewer.isolated', message: 'English' })).toBe('日本語')
+    french.setLocale('en')
+    expect(japanese.getLocale()).toBe('ja')
+
+    french.destroy()
+    japanese.destroy()
   })
 
   test('warns once in development and never exposes the missing key', () => {
@@ -129,12 +147,9 @@ describe('message registry', () => {
 
 describe('locale formatting', () => {
   test('formats numbers and lengths without coupling locale to the unit', () => {
-    setLocale('fr')
     expect(formatNumber(2.75, { locale: 'fr', max: 2 })).toBe('2,75')
     expect(formatLength(2.75, 'm', { locale: 'fr' })).toBe('2,75\u00a0m')
     expect(formatLength(2.75, 'mm', { locale: 'fr' })).toBe('2750\u00a0mm')
-
-    setLocale('en')
     expect(formatLength(2.75, 'm', { locale: 'en' })).toBe('2.75\u00a0m')
   })
 
@@ -156,32 +171,29 @@ describe('locale formatting', () => {
   })
 })
 
-test('useTranslate renders the English snapshot on the server', () => {
-  registerMessages('ja', 'viewer', { greeting: 'こんにちは' })
-  setLocale('ja')
+test('server rendering uses the selected locale for text and numbers', async () => {
+  await registerMessages('fr', 'viewer', { greeting: 'Bonjour' })
+  const scope = createI18n({ locale: 'fr' })
 
   function Greeting() {
-    const t = useTranslate()
-    return <span>{t('viewer.greeting', 'Hello')}</span>
-  }
-
-  expect(renderToString(<Greeting />)).toContain('Hello')
-})
-
-test('rendered number formatting defaults to English and can use the hydration-safe snapshot', () => {
-  setLocale('fr')
-
-  function Measurement() {
+    const i18n = usePascalI18n()
     const locale = useLocale()
     return (
-      <>
-        <span>{formatNumber(2.75, { max: 2 })}</span>
-        <span>{formatNumber(2.75, { locale, max: 2 })}</span>
-      </>
+      <span>
+        {i18n._({ id: 'viewer.greeting', message: 'Hello' })}:
+        {formatNumber(2.75, { locale, max: 2 })}
+      </span>
     )
   }
 
-  expect(renderToString(<Measurement />)).not.toContain('2,75')
+  const serverHtml = renderToString(
+    <PascalI18nProvider i18n={scope}>
+      <Greeting />
+    </PascalI18nProvider>,
+  )
+
+  expect(serverHtml).toContain('Bonjour:2,75')
+  scope.destroy()
 })
 
 test('building and serializing a scene is locale-neutral', () => {

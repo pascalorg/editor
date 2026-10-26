@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { resolveAuthMode, sessionPrincipal } from '@/lib/self-host-auth'
+import { PASCAL_LOCALE_HEADER, resolveUiLocale } from '@/lib/ui-locale'
 
 /**
  * Self-host gate. Pages redirect to `/login` (or `/setup` when nothing is
@@ -17,7 +18,12 @@ const OPEN_PREFIXES = ['/embed/']
 const SELF_GUARDED_API_PREFIXES = ['/api/scenes', '/api/artifacts']
 
 export function proxy(request: NextRequest) {
-  return gateRequest(request) ?? NextResponse.next()
+  const gated = gateRequest(request)
+  if (gated) return gated
+
+  const headers = new Headers(request.headers)
+  headers.set(PASCAL_LOCALE_HEADER, resolveUiLocale(request.nextUrl.searchParams.get('lang')))
+  return NextResponse.next({ request: { headers } })
 }
 
 export function gateRequest(request: Request): NextResponse | null {

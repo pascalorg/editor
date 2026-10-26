@@ -1,23 +1,24 @@
+import {
+  type I18n as LinguiI18n,
+  type MessageDescriptor,
+  type MessageOptions,
+  type Messages,
+  setupI18n,
+  type Values,
+} from '@lingui/core'
+
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
 export type TranslationParams = Record<string, string | number>
-
-export type PluralMessage = {
-  zero?: string
-  one?: string
-  two?: string
-  few?: string
-  many?: string
-  other: string
-}
-
-export type TranslationMessage = string | PluralMessage
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export type TranslationMessage = string
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
 export type TranslationMessages = Record<string, TranslationMessage>
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export type CompiledTranslationMessages = Messages
 
-const catalogs = new Map<string, Map<string, TranslationMessage>>()
-const listeners = new Set<() => void>()
+const catalogs = new Map<string, Messages>()
+const scopes = new Set<PascalI18n>()
 const warnedMissingKeys = new Set<string>()
-
-let locale = 'en'
-let version = 0
 
 function canonicalLocale(value: string): string {
   const trimmed = value.trim()
@@ -54,58 +55,25 @@ function isDevelopment(): boolean {
   return typeof process !== 'undefined' && process.env?.NODE_ENV === 'development'
 }
 
-function emitChange(): void {
-  version += 1
-  for (const listener of [...listeners]) listener()
-}
-
-export function registerMessages(
-  messageLocale: string,
-  namespace: string,
-  messages: TranslationMessages,
-): void {
-  const normalizedLocale = canonicalLocale(messageLocale)
+function namespacedMessages(namespace: string, messages: Messages): Messages {
   const normalizedNamespace = namespace.replace(/^\.+|\.+$/g, '')
-  const catalog = catalogs.get(normalizedLocale) ?? new Map<string, TranslationMessage>()
+  return Object.fromEntries(
+    Object.entries(messages).map(([key, message]) => {
+      const normalizedKey = key.replace(/^\.+/g, '')
+      return [
+        normalizedNamespace ? `${normalizedNamespace}.${normalizedKey}` : normalizedKey,
+        message,
+      ]
+    }),
+  )
+}
 
-  for (const [key, message] of Object.entries(messages)) {
-    const normalizedKey = key.replace(/^\.+/g, '')
-    const fullKey = normalizedNamespace ? `${normalizedNamespace}.${normalizedKey}` : normalizedKey
-    catalog.set(fullKey, message)
+function mergedMessages(requestedLocale: string): Messages {
+  const messages: Messages = {}
+  for (const candidate of localeFallbacks(requestedLocale).reverse()) {
+    Object.assign(messages, catalogs.get(candidate))
   }
-
-  catalogs.set(normalizedLocale, catalog)
-  emitChange()
-}
-
-export function setLocale(nextLocale: string): void {
-  const normalized = canonicalLocale(nextLocale)
-  if (normalized === locale) return
-  locale = normalized
-  emitChange()
-}
-
-export function getLocale(): string {
-  return locale
-}
-
-export function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-export function getI18nVersion(): number {
-  return version
-}
-
-function messageFor(key: string, requestedLocale: string): TranslationMessage | undefined {
-  for (const candidate of localeFallbacks(requestedLocale)) {
-    const message = catalogs.get(candidate)?.get(key)
-    if (message !== undefined) return message
-  }
-  return undefined
+  return messages
 }
 
 function warnMissing(key: string, requestedLocale: string): void {
@@ -116,44 +84,166 @@ function warnMissing(key: string, requestedLocale: string): void {
   console.warn(`[i18n] Missing "${key}" for locale "${requestedLocale}"; using English.`)
 }
 
-function selectPlural(
-  message: TranslationMessage,
-  count: number | undefined,
-  requestedLocale: string,
-): string {
-  if (typeof message === 'string') return message
-  if (count === undefined) return message.other
+/**
+ * A request- or editor-local locale selection over Pascal's shared message
+ * registry. Message parsing, interpolation, and ICU selection are delegated to
+ * private Lingui instances.
+ *
+ * @experimental Unreleased API; signatures may change before the first i18n release.
+ */
+export class PascalI18n {
+  readonly i18n: LinguiI18n
+  private readonly englishI18n: LinguiI18n
+  private readonly listeners = new Set<() => void>()
+  private locale: string
+  private version = 0
 
-  let category: Intl.LDMLPluralRule = 'other'
-  try {
-    category = new Intl.PluralRules(requestedLocale).select(count)
-  } catch {
-    category = new Intl.PluralRules('en').select(count)
+  constructor(initialLocale = 'en') {
+    this.locale = canonicalLocale(initialLocale)
+    this.i18n = setupI18n()
+    this.englishI18n = setupI18n()
+    scopes.add(this)
+    this.refresh(false)
   }
 
-  const translated = message[category] ?? message.other
-  return translated
+  getLocale(): string {
+    return this.locale
+  }
+
+  getVersion(): number {
+    return this.version
+  }
+
+  setLocale(nextLocale: string): void {
+    const normalized = canonicalLocale(nextLocale)
+    if (normalized === this.locale) return
+    this.locale = normalized
+    this.refresh()
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  destroy(): void {
+    scopes.delete(this)
+    this.listeners.clear()
+  }
+
+  _(descriptor: MessageDescriptor): string
+  _(id: string, values?: Values, options?: MessageOptions): string
+  _(idOrDescriptor: string | MessageDescriptor, values?: Values, options?: MessageOptions): string {
+    const id = typeof idOrDescriptor === 'string' ? idOrDescriptor : idOrDescriptor.id
+    const translated =
+      this.locale === 'en' || Object.prototype.hasOwnProperty.call(this.i18n.messages, id)
+    const runtime = translated ? this.i18n : this.englishI18n
+    if (!translated) warnMissing(id, this.locale)
+    return typeof idOrDescriptor === 'string'
+      ? runtime._(idOrDescriptor, values, options)
+      : runtime._(idOrDescriptor)
+  }
+
+  refresh(notify = true): void {
+    this.i18n.loadAndActivate({
+      locale: this.locale,
+      messages: mergedMessages(this.locale),
+    })
+    this.englishI18n.loadAndActivate({
+      locale: 'en',
+      messages: mergedMessages('en'),
+    })
+    if (!notify) return
+    this.version += 1
+    for (const listener of [...this.listeners]) listener()
+  }
 }
 
-function interpolate(message: string, params: TranslationParams | undefined): string {
-  if (!params) return message
-  return message.replace(/\{([A-Za-z_][\w.-]*)\}/g, (placeholder, name: string) => {
-    const value = params[name]
-    return value === undefined ? placeholder : String(value)
-  })
+/**
+ * Create an isolated locale scope backed by the shared Pascal message packs.
+ *
+ * @experimental Unreleased API; signatures may change before the first i18n release.
+ */
+export function createI18n(options: { locale?: string } = {}): PascalI18n {
+  return new PascalI18n(options.locale)
 }
 
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export const defaultI18n = createI18n()
+
+/**
+ * Register a raw ICU MessageFormat pack. The Lingui compiler is loaded only
+ * for this authoring/host path; bundled packs use registerCompiledMessages.
+ * The whole pack is validated before it becomes visible.
+ *
+ * @experimental Unreleased API; signatures may change before the first i18n release.
+ */
+export async function registerMessages(
+  messageLocale: string,
+  namespace: string,
+  messages: TranslationMessages,
+): Promise<void> {
+  const { compileMessageOrThrow } = await import('@lingui/message-utils/compileMessage')
+  const compiled = Object.fromEntries(
+    Object.entries(messages).map(([key, message]) => [key, compileMessageOrThrow(message)]),
+  )
+  registerCompiledMessages(messageLocale, namespace, compiled)
+}
+
+/**
+ * Register a catalog produced by `lingui compile`. Later registrations replace
+ * earlier messages with the same fully namespaced ID.
+ *
+ * @experimental Unreleased API; signatures may change before the first i18n release.
+ */
+export function registerCompiledMessages(
+  messageLocale: string,
+  namespace: string,
+  messages: CompiledTranslationMessages,
+): void {
+  const normalizedLocale = canonicalLocale(messageLocale)
+  const catalog = catalogs.get(normalizedLocale) ?? {}
+  Object.assign(catalog, namespacedMessages(namespace, messages))
+  catalogs.set(normalizedLocale, catalog)
+  for (const scope of [...scopes]) scope.refresh()
+}
+
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export function setLocale(nextLocale: string): void {
+  defaultI18n.setLocale(nextLocale)
+}
+
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export function getLocale(): string {
+  return defaultI18n.getLocale()
+}
+
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export function subscribe(listener: () => void): () => void {
+  return defaultI18n.subscribe(listener)
+}
+
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
+export function getI18nVersion(): number {
+  return defaultI18n.getVersion()
+}
+
+/** @experimental Unreleased API; signatures may change before the first i18n release. */
 export function translate(
   key: string,
   englishDefault: TranslationMessage,
   params?: TranslationParams,
-  requestedLocale = locale,
+  requestedLocale = getLocale(),
 ): string {
-  const normalizedLocale = canonicalLocale(requestedLocale)
-  const translated = normalizedLocale === 'en' ? undefined : messageFor(key, normalizedLocale)
-  if (translated === undefined) warnMissing(key, normalizedLocale)
-  const message = translated ?? englishDefault
-  const count = typeof params?.count === 'number' ? params.count : undefined
-  const pluralLocale = translated === undefined ? 'en' : normalizedLocale
-  return interpolate(selectPlural(message, count, pluralLocale), params)
+  const scope =
+    canonicalLocale(requestedLocale) === defaultI18n.getLocale()
+      ? defaultI18n
+      : createI18n({ locale: requestedLocale })
+  try {
+    return scope._({ id: key, message: englishDefault, values: params })
+  } finally {
+    if (scope !== defaultI18n) scope.destroy()
+  }
 }

@@ -31,6 +31,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@iconify/react": "^6.0.3",
+    "@lingui/core": "6.10.1",
     "@number-flow/react": "^0.6.2",
     "@pascal-app/geometry-script": "^1.0.6",
     "@pascal-app/ifc-converter": "^1.0.6",

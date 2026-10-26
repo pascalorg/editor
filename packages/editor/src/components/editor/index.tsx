@@ -3,14 +3,14 @@
 import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
+  createI18n,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getSceneMaterialIdFromRef,
   initSpaceDetectionSync,
   initSpatialGridSync,
-  setLocale,
+  PascalI18nProvider,
   spatialGridManager,
-  useLocale,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -34,6 +34,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -1964,16 +1965,29 @@ function EditorContent({
   )
 }
 
-export default function Editor(props: EditorProps) {
-  useLocale()
-
-  useClientLayoutEffect(() => {
-    if (props.locale) setLocale(props.locale)
-  }, [props.locale])
-
+function EditorFrame(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
       <EditorContent {...props} />
     </Profiler>
+  )
+}
+
+function LocalizedEditor(props: EditorProps & { locale: string }) {
+  const i18n = useMemo(() => createI18n({ locale: props.locale }), [props.locale])
+  useEffect(() => () => i18n.destroy(), [i18n])
+
+  return (
+    <PascalI18nProvider i18n={i18n}>
+      <EditorFrame {...props} />
+    </PascalI18nProvider>
+  )
+}
+
+export default function Editor(props: EditorProps) {
+  return props.locale ? (
+    <LocalizedEditor {...props} locale={props.locale} />
+  ) : (
+    <EditorFrame {...props} />
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useTranslate } from '@pascal-app/core'
+import { usePascalI18n } from '@pascal-app/core'
 import type React from 'react'
 import { cn } from '../../lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
@@ -19,8 +19,11 @@ export function FloorplanCompassButton({
   needleRef,
   style,
 }: FloorplanCompassButtonProps) {
-  const t = useTranslate()
-  const label = t('viewer.floorplan.alignNorth', 'Align view to north')
+  const i18n = usePascalI18n()
+  const label = i18n._({
+    id: 'viewer.floorplan.alignNorth',
+    message: 'Align view to north',
+  })
   return (
     <Tooltip>
       <TooltipTrigger asChild>
