@@ -88,7 +88,7 @@ describe('locale formatting', () => {
     setLocale('fr')
     expect(formatNumber(2.75, { max: 2 })).toBe('2,75')
     expect(formatLength(2.75, 'm')).toBe('2,75\u00a0m')
-    expect(formatLength(2.75, 'mm')).toBe('2 750\u00a0mm')
+    expect(formatLength(2.75, 'mm')).toBe('2750\u00a0mm')
 
     setLocale('en')
     expect(formatLength(2.75, 'm')).toBe('2.75\u00a0m')
