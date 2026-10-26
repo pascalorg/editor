@@ -25,6 +25,22 @@ function response(
   return res
 }
 
+/** A 16 MB response body that records how many bytes anyone pulled from it. */
+function largeResponse(status: number, headers: Record<string, string> = {}) {
+  const chunk = Buffer.alloc(64 * 1024)
+  let remaining = 256
+  const state = { bytesRead: 0, res: null as unknown as IncomingMessage }
+  state.res = new Readable({
+    read() {
+      if (remaining-- <= 0) return this.push(null)
+      state.bytesRead += chunk.byteLength
+      this.push(chunk)
+    },
+  }) as unknown as IncomingMessage
+  Object.assign(state.res, { statusCode: status, statusMessage: '', headers })
+  return state
+}
+
 /** Fake network: `dns` maps hostnames to answers, `routes` maps URLs to responses. */
 function fakeNetwork(
   dns: Record<string, string[] | (() => string[])>,
@@ -318,6 +334,28 @@ describe('safeFetch — SSRF protection', () => {
       }
     }
   })
+
+  test('never reads redirect or error bodies', async () => {
+    const redirect = largeResponse(302, { location: 'http://b.example/final' })
+    const failure = largeResponse(500)
+    const { deps } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4], 'b.example': [PUBLIC_V4] },
+      {
+        'http://a.example/redirect': () => redirect.res,
+        'http://b.example/final': () => response(200, {}, 'ok'),
+        'http://a.example/error': () => failure.res,
+      },
+    )
+    const result = await safeFetch('http://a.example/redirect', {}, deps)
+    expect(result.buffer.toString()).toBe('ok')
+    await expectBlocked(safeFetch('http://a.example/error', {}, deps), 'fetch_failed')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(redirect.res.destroyed).toBe(true)
+    expect(failure.res.destroyed).toBe(true)
+    expect(redirect.bytesRead).toBe(0)
+    expect(failure.bytesRead).toBe(0)
+  })
+
   test('rejects malformed URL', async () => {
     await expectBlocked(safeFetch('not a url'), 'invalid_url')
   })

@@ -318,8 +318,10 @@ export async function safeFetch(
         signal: controller.signal,
       })
       const status = res.statusCode ?? 0
+      // Redirect and error bodies are never read: destroying the response
+      // (no keep-alive, `agent: false`) bounds them at zero bytes.
       if (status >= 300 && status < 400) {
-        res.resume()
+        res.destroy()
         const location = header(res, 'location')
         if (!location) {
           protocolError('redirect_without_location', { url: parsed.toString(), status })
@@ -328,7 +330,7 @@ export async function safeFetch(
         continue
       }
       if (status < 200 || status >= 300) {
-        res.resume()
+        res.destroy()
         protocolError('fetch_failed', {
           url: parsed.toString(),
           status,
