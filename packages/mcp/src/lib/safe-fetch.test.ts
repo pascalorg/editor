@@ -290,6 +290,34 @@ describe('safeFetch — SSRF protection', () => {
     expect(lines[1]).toContain('"reason":"url_scheme_not_allowed"')
   })
 
+  test('logs blocked URLs without query, fragment or userinfo', async () => {
+    const { deps } = fakeNetwork({ 'a.example': ['10.0.0.7'] })
+    const secretUrl = (scheme: string) =>
+      `${scheme}://user:hunter2@a.example/img.png?X-Amz-Signature=s3cr3t&token=t0k3n#frag`
+    await expectBlocked(safeFetch(secretUrl('http'), {}, deps))
+    await expectBlocked(safeFetch(secretUrl('ftp')), 'url_scheme_not_allowed')
+    const prev = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+    process.env.PASCAL_ALLOWED_ASSET_ORIGINS = 'https://cdn.example.com'
+    try {
+      await expectBlocked(safeFetch(secretUrl('https')), 'url_origin_not_allowlisted')
+    } finally {
+      if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+      else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
+    }
+    const lines = errorLog.mock.calls.map((args) => String(args[0]))
+    expect(lines).toHaveLength(3)
+    const logged = lines.map((line) => JSON.parse(line.slice(line.indexOf('{'))).url)
+    expect(logged).toEqual([
+      'http://a.example/img.png',
+      'ftp://a.example/img.png',
+      'https://a.example/img.png',
+    ])
+    for (const line of lines) {
+      for (const secret of ['s3cr3t', 't0k3n', 'frag', 'hunter2', 'user', '?']) {
+        expect(line).not.toContain(secret)
+      }
+    }
+  })
   test('rejects malformed URL', async () => {
     await expectBlocked(safeFetch('not a url'), 'invalid_url')
   })

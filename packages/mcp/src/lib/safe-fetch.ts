@@ -148,13 +148,21 @@ function isLocalHostname(hostname: string): boolean {
   )
 }
 
+/** Scheme, host and path only: query strings can carry presigned tokens, userinfo carries credentials. */
+export function loggableUrl(url: URL): string {
+  return `${url.protocol}//${url.host}${url.pathname}`
+}
+
 function blocked(
   reason: string,
-  details: Record<string, unknown>,
+  url: URL,
+  details: Record<string, unknown> = {},
   log: Record<string, unknown> = {},
 ): never {
-  console.error(`[pascal-mcp] safe_fetch_blocked ${JSON.stringify({ reason, ...details, ...log })}`)
-  return protocolError(reason, details)
+  console.error(
+    `[pascal-mcp] safe_fetch_blocked ${JSON.stringify({ reason, url: loggableUrl(url), ...details, ...log })}`,
+  )
+  return protocolError(reason, { url: url.toString(), ...details })
 }
 
 function protocolError(reason: string, details: Record<string, unknown>): never {
@@ -169,7 +177,7 @@ function assertAllowedUrl(url: string): URL {
     return protocolError('invalid_url', { url })
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    blocked('url_scheme_not_allowed', { url, protocol: parsed.protocol })
+    blocked('url_scheme_not_allowed', parsed, { protocol: parsed.protocol })
   }
   const allowEnv = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
   if (allowEnv) {
@@ -178,7 +186,7 @@ function assertAllowedUrl(url: string): URL {
       .map((s) => s.trim())
       .filter(Boolean)
     if (!origins.includes(parsed.origin)) {
-      blocked('url_origin_not_allowlisted', { url, origin: parsed.origin })
+      blocked('url_origin_not_allowlisted', parsed, { origin: parsed.origin })
     }
   }
   return parsed
@@ -189,25 +197,27 @@ export type Resolver = (hostname: string) => Promise<LookupAddress[]>
 /** Resolves `url`'s host and returns its addresses only if every one of them is public. */
 async function resolveCheckedAddresses(url: URL, resolve: Resolver): Promise<LookupAddress[]> {
   const host = url.hostname.replace(/^\[|\]$/g, '')
-  const details = { url: url.toString(), hostname: url.hostname }
+  const details = { hostname: url.hostname }
   const literalFamily = isIP(host)
   let addresses: LookupAddress[]
   if (literalFamily) {
     addresses = [{ address: host, family: literalFamily }]
   } else {
-    if (isLocalHostname(host)) blocked('url_host_blocked', details)
+    if (isLocalHostname(host)) blocked('url_host_blocked', url, details)
     try {
       addresses = await resolve(host)
     } catch (err) {
       return protocolError('dns_lookup_failed', {
+        url: url.toString(),
         ...details,
         message: err instanceof Error ? err.message : String(err),
       })
     }
   }
-  if (addresses.length === 0) protocolError('dns_lookup_failed', details)
+  if (addresses.length === 0)
+    protocolError('dns_lookup_failed', { url: url.toString(), ...details })
   const unsafe = addresses.find((a) => isBlockedAddress(a.address))
-  if (unsafe) blocked('url_host_blocked', details, { address: unsafe.address })
+  if (unsafe) blocked('url_host_blocked', url, details, { address: unsafe.address })
   return addresses
 }
 
