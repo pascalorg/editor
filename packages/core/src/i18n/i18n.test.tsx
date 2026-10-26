@@ -42,10 +42,10 @@ describe('message registry', () => {
     expect(translate('viewer.greeting', 'Hello')).toBe('您好')
   })
 
-  test('allows host overrides for English while keeping in-code English as the fallback', () => {
+  test('keeps canonical English in code', () => {
     registerMessages('en', 'viewer', { hostGreeting: 'Welcome' })
 
-    expect(translate('viewer.hostGreeting', 'Hello')).toBe('Welcome')
+    expect(translate('viewer.hostGreeting', 'Hello')).toBe('Hello')
     expect(translate('viewer.unregistered', 'In-code fallback')).toBe('In-code fallback')
   })
 

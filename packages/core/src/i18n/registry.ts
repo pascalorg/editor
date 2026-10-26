@@ -149,7 +149,7 @@ export function translate(
   requestedLocale = locale,
 ): string {
   const normalizedLocale = canonicalLocale(requestedLocale)
-  const translated = messageFor(key, normalizedLocale)
+  const translated = normalizedLocale === 'en' ? undefined : messageFor(key, normalizedLocale)
   if (translated === undefined) warnMissing(key, normalizedLocale)
   const message = translated ?? englishDefault
   const count = typeof params?.count === 'number' ? params.count : undefined
