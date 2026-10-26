@@ -10,6 +10,7 @@ import {
   initSpatialGridSync,
   setLocale,
   spatialGridManager,
+  useLocale,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -1964,6 +1965,8 @@ function EditorContent({
 }
 
 export default function Editor(props: EditorProps) {
+  useLocale()
+
   useClientLayoutEffect(() => {
     if (props.locale) setLocale(props.locale)
   }, [props.locale])

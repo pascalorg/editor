@@ -17,4 +17,4 @@ export {
   type TranslationParams,
   translate,
 } from './registry'
-export { type Translate, useTranslate } from './use-translate'
+export { type Translate, useLocale, useTranslate } from './use-translate'

@@ -43,6 +43,7 @@ export {
   type TranslationMessages,
   type TranslationParams,
   translate,
+  useLocale,
   useScene,
   useTranslate,
 } from '@pascal-app/core'

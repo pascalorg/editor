@@ -154,6 +154,7 @@ export function formatAreaLabel(
   if (!Number.isFinite(squareMeters)) return '--'
 
   return `${formatNumber(squareMetersToAreaUnit(squareMeters, unit), {
+    min: fractionDigits,
     max: fractionDigits,
   })}${getAreaUnitLabel(unit)}`
 }
@@ -174,6 +175,7 @@ export function formatVolumeLabel(
   if (!Number.isFinite(cubicMeters)) return '--'
 
   return `${formatNumber(cubicMetersToVolumeUnit(cubicMeters, unit), {
+    min: fractionDigits,
     max: fractionDigits,
   })}${getVolumeUnitLabel(unit)}`
 }

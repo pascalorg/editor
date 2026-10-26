@@ -94,7 +94,10 @@ export function roomLabelsVisible(state: RoomLabelVisibilityState): boolean {
 }
 
 export function formatRoomArea(squareMeters: number, unit: LinearUnit): string {
-  return `${formatNumber(squareMetersToAreaUnit(squareMeters, unit), { max: 1 })} ${getAreaUnitLabel(unit)}`
+  return `${formatNumber(squareMetersToAreaUnit(squareMeters, unit), {
+    min: 1,
+    max: 1,
+  })} ${getAreaUnitLabel(unit)}`
 }
 
 function useRoomLabelsVisible() {

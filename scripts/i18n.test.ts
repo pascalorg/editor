@@ -55,3 +55,23 @@ test('AI translation refreshes only missing and stale entries through a mocked p
     sourceHash: 'hash-new',
   })
 })
+
+test('AI translation rejects broken placeholders from a provider', async () => {
+  const source: SourceCatalog = {
+    'viewer.greeting': {
+      default: 'Hello {name}',
+      hash: 'hash-greeting',
+      context: ['greeting.tsx:1'],
+    },
+  }
+  const catalog: LocaleCatalog = { locale: 'fr', messages: {} }
+  const provider: TranslationProvider = {
+    async translate() {
+      return { 'viewer.greeting': 'Bonjour' }
+    },
+  }
+
+  expect(refreshLocaleCatalog(source, catalog, provider, {})).rejects.toThrow(
+    'Translation provider changed placeholders in "viewer.greeting"',
+  )
+})

@@ -195,7 +195,18 @@ function placeholders(message: Message): string[] {
 }
 
 function samePlaceholders(source: Message, translated: Message): boolean {
-  return JSON.stringify(placeholders(source)) === JSON.stringify(placeholders(translated))
+  if (typeof source === 'string' || typeof translated === 'string') {
+    return (
+      typeof source === 'string' &&
+      typeof translated === 'string' &&
+      JSON.stringify(placeholders(source)) === JSON.stringify(placeholders(translated))
+    )
+  }
+
+  return Object.entries(translated).every(([category, value]) => {
+    const sourceValue = source[category as keyof typeof source] ?? source.other
+    return JSON.stringify(placeholders(sourceValue)) === JSON.stringify(placeholders(value))
+  })
 }
 
 function isMessage(value: unknown): value is Message {
@@ -412,6 +423,11 @@ export async function refreshLocaleCatalog(
     for (const item of items) {
       const message = translated[item.key]
       if (!message) throw new Error(`Translation provider omitted "${item.key}"`)
+      if (!isMessage(message))
+        throw new Error(`Translation provider returned an invalid message for "${item.key}"`)
+      if (!samePlaceholders(item.source, message)) {
+        throw new Error(`Translation provider changed placeholders in "${item.key}"`)
+      }
       messages[item.key] = { message, sourceHash: source[item.key]!.hash }
     }
   }
