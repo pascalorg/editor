@@ -43,9 +43,9 @@ describe('message registry', () => {
   })
 
   test('allows host overrides for English while keeping in-code English as the fallback', () => {
-    registerMessages('en', 'viewer', { greeting: 'Welcome' })
+    registerMessages('en', 'viewer', { hostGreeting: 'Welcome' })
 
-    expect(translate('viewer.greeting', 'Hello')).toBe('Welcome')
+    expect(translate('viewer.hostGreeting', 'Hello')).toBe('Welcome')
     expect(translate('viewer.unregistered', 'In-code fallback')).toBe('In-code fallback')
   })
 
