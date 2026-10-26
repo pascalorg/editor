@@ -37,7 +37,7 @@ export async function compileAuthorScene(
   const modules: { id: string; code: string; kind: 'object' | 'window' | 'door' }[] = []
   for (const level of input.payload.levels) {
     for (const item of level.items ?? [])
-      modules.push({ id: item.id, code: item.code, kind: 'object' })
+      if (item.code) modules.push({ id: item.id, code: item.code, kind: 'object' })
     for (const wall of level.walls ?? [])
       wall.openings?.forEach((opening, index) => {
         if (opening.code && opening.kind !== 'passage')
@@ -45,7 +45,7 @@ export async function compileAuthorScene(
       })
   }
   for (const item of input.payload.roof?.items ?? [])
-    modules.push({ id: item.id, code: item.code, kind: 'object' })
+    if (item.code) modules.push({ id: item.id, code: item.code, kind: 'object' })
   modules.push(
     ...authorSceneCeilingPoints(input.payload).map((point) => ({
       ...point,

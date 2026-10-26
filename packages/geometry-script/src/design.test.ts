@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { Vector3 } from 'three'
-import { buildDesign, runDesign } from './design'
+import { buildDesign } from './design'
 
 const HOUSE = `
 import * as THREE from 'three'
 export const title = 'Test house'
-export default function build({ THREE, piece }) {
+export default function build({ THREE }) {
   const house = new THREE.Group()
   const plaster = new THREE.MeshStandardMaterial({ color: '#eeeeee', roughness: 0.8 })
   plaster.name = 'Plaster'
@@ -31,9 +31,8 @@ export default function build({ THREE, piece }) {
   const table = new THREE.Group()
   table.position.set(2, 0, 1)
   table.rotation.y = Math.PI / 2
-  table.add(piece('oak table, round, one pedestal', { position: [0, 0, 0], size: [1.2, 0.75, 1.2] }))
+  table.name = 'table'
   house.add(table)
-  piece('wall clock, brass', { position: [0, 2, -2.9], size: [0.4, 0.4, 0.05], mount: 'wall-side' })
   const tiles = new THREE.InstancedMesh(new THREE.BoxGeometry(0.3, 0.02, 0.3), plaster, 2)
   tiles.setMatrixAt(1, new THREE.Matrix4().makeTranslation(0.3, 0, 0))
   tiles.setColorAt(0, new THREE.Color('#ff0000'))
@@ -48,50 +47,31 @@ export default function build({ THREE, piece }) {
   return house
 }`
 
-describe('runDesign', () => {
-  test('answers each piece the design delegated, nested or never added, and what it built', async () => {
-    const summary = await runDesign({ code: HOUSE })
-    expect(summary.pieces).toEqual([
-      { description: 'oak table, round, one pedestal', size: [1.2, 0.75, 1.2], mount: 'floor' },
-      { description: 'wall clock, brass', size: [0.4, 0.4, 0.05], mount: 'wall-side' },
+describe('buildDesign', () => {
+  test('builds the scene with its world matrices, a nested group where the design put it', async () => {
+    const { scene, missingAddons } = await buildDesign(HOUSE)
+    expect(scene.getObjectByName('table')!.getWorldPosition(new Vector3()).toArray()).toEqual([
+      2, 0, 1,
     ])
-    // The wall, the crate, the leaf and two instanced tiles; the hidden box is counted, not kept.
-    expect(summary.stats).toEqual({ meshes: 5, triangles: 60 })
-    expect(summary.skipped).toEqual({ 'hidden objects': 1 })
+    expect(missingAddons).toEqual([])
   })
 
-  test("runs Pascal Arena's build({ THREE, scene, addons }) and counts the addons Pascal lacks", async () => {
+  test("runs Pascal Arena's build({ THREE, scene, addons }) and names the addons Pascal lacks", async () => {
     const code = `export function build({ THREE, scene, addons }) {
       const merged = addons.mergeGeometries([new THREE.BoxGeometry(1, 1, 1)])
       scene.add(new THREE.Mesh(merged, new THREE.MeshStandardMaterial()))
       addons.TextGeometry
     }`
-    expect((await runDesign({ code })).skipped).toEqual({
-      "uses of addons.TextGeometry, which Pascal's compiler does not carry": 1,
-    })
+    expect((await buildDesign(code)).missingAddons).toEqual(['TextGeometry'])
   })
 
   test('refuses what a module may not do, a module with no build, and one that builds nothing', async () => {
     await expect(
-      runDesign({ code: 'export default function build() { return eval("1") }' }),
+      buildDesign('export default function build() { return eval("1") }'),
     ).rejects.toThrow(/dynamic import, eval/)
-    await expect(
-      runDesign({
-        code: "export default function build({ THREE, piece }) { piece('x', {}); return new THREE.Group() }",
-      }),
-    ).rejects.toThrow(/size must be/)
-    await expect(runDesign({ code: 'export const x = 1' })).rejects.toThrow('must export')
-    await expect(runDesign({ code: 'export function build() {}' })).rejects.toThrow(
+    await expect(buildDesign('export const x = 1')).rejects.toThrow('must export')
+    await expect(buildDesign('export function build() {}')).rejects.toThrow(
       'added nothing to the scene',
     )
-  })
-})
-
-describe('buildDesign', () => {
-  test('stands each piece where the design put it, in the scene it built', async () => {
-    const { scene, pieces } = await buildDesign(HOUSE)
-    const [table, clock] = pieces
-    expect(table!.object.getWorldPosition(new Vector3()).toArray()).toEqual([2, 0, 1])
-    expect(clock!.object.parent).toBe(scene)
   })
 })

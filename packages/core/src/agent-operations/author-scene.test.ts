@@ -5,6 +5,7 @@ import { cloneNodesInto } from '../registry/subtree'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
 import { roofsOver, servesAsRoofLevel } from '../services/roof-level'
+import { stairArrivalOpening } from '../systems/stair/stair-footprint'
 import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-curve'
 import {
   applySceneChanges,
@@ -12,6 +13,7 @@ import {
   authorSceneCeilingPoints,
   authorSceneFaceScripts,
   authorSceneFloorScripts,
+  verifyScene,
 } from './index'
 
 /** A site, a building and the empty level a new project starts with. */
@@ -1754,6 +1756,77 @@ describe('author_scene', () => {
         .map((n) => n.id),
     )
   })
+  test('verify_scene reports a stair whose top a wall crosses, and one arriving outside every room', () => {
+    // A hall 8 m deep: the stair climbs 3 m from its north end and arrives halfway.
+    const box = (x0: number, x1: number, prefix: string) =>
+      (
+        [
+          ['n', [x0, -4], [x1, -4]],
+          ['e', [x1, -4], [x1, 4]],
+          ['s', [x1, 4], [x0, 4]],
+          ['w', [x0, 4], [x0, -4]],
+        ] as const
+      ).map(([id, start, end]) => ({
+        id: `${prefix}${id}`,
+        start,
+        end,
+        height: 2.7,
+        thickness: 0.12,
+      }))
+    const storey = (prefix: string) => box(-2, 2, prefix)
+    const ground = {
+      name: 'Ground floor',
+      walls: storey(''),
+      rooms: [{ name: 'Hall', seed: [0, 0] }],
+      stairs: [{ start: [-1.2, -3.8], width: 1 }],
+    }
+    const upper = {
+      name: 'First floor',
+      elevation: 3,
+      walls: storey('up-'),
+      rooms: [{ name: 'Landing', seed: [0, 0] }],
+    }
+    const first = run(authorScenePayload.parse({ levels: [ground, upper] }), {}, {})
+    const scene = sceneOf(first)
+    const stairTypes = (nodes: Record<string, AnyNode>) =>
+      (
+        verifyScene(nodes, undefined, { activeLevelId: null }).result as {
+          issues: { type: string }[]
+        }
+      ).issues
+        .map((issue) => issue.type)
+        .filter((type) => type.startsWith('stair_arriv') || type === 'stair_opening_wall')
+    expect(stairTypes(scene)).toEqual([])
+
+    const top = stairArrivalOpening(byAuthorId(first, 'stair/0/0') as never, scene)
+    const [a, b] = [top[0]!, top[1]!]
+    const mid = (i: 0 | 1) => (a[i] + b[i] + top[2]![i] + top[3]![i]) / 4
+    const across = {
+      id: 'up-across',
+      start: [mid(0) + (a[0] - b[0]) * 0.4, mid(1) + (a[1] - b[1]) * 0.4],
+      end: [mid(0) - (a[0] - b[0]) * 0.4, mid(1) - (a[1] - b[1]) * 0.4],
+      height: 2.7,
+      thickness: 0.1,
+    }
+    const blocked = run(
+      authorScenePayload.parse({ levels: [ground, { ...upper, walls: [...upper.walls, across] }] }),
+      {},
+      {},
+    )
+    expect(stairTypes(sceneOf(blocked))).toContain('stair_arrival_blocked')
+
+    // The upper room covers only the east half: the stair arrives in the west.
+    const east = box(0.5, 2, 'up-')
+    const outside = run(
+      authorScenePayload.parse({
+        levels: [ground, { ...upper, walls: east, rooms: [{ name: 'Landing', seed: [1.2, 0] }] }],
+      }),
+      {},
+      {},
+    )
+    expect(stairTypes(sceneOf(outside))).toContain('stair_arrives_outside_room')
+  })
+
   test('seeds sharing one enclosure name one open-plan room, joined in the order given', () => {
     const payload = authorScenePayload.parse({
       ...bedroom,

@@ -4,6 +4,7 @@ import { registerAddColumn } from './add-column'
 import {
   compileObjectOnHost,
   type GeometryScriptHost,
+  type ObjectMakerHost,
   registerAddObject,
   registerGetSource,
 } from './add-object'
@@ -43,13 +44,15 @@ import { registerViewScene, type SceneViewHost } from './view-scene'
 export type ToolHosts = PlanReadingHosts & {
   catalog?: AssetCatalog
   geometryScripts?: GeometryScriptHost
+  /** Makes add_object's pieces from words; without it a piece is refused `pieces_unavailable`. */
+  objectMakers?: ObjectMakerHost
   sceneViews?: SceneViewHost
 }
 
 export function registerTools(
   server: McpServer,
   operations: SceneOperations,
-  { catalog, geometryScripts, sceneViews, assetViews }: ToolHosts = {},
+  { catalog, geometryScripts, objectMakers, sceneViews, assetViews }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
   registerSharedTools(server, operations, catalog, {
@@ -57,8 +60,8 @@ export function registerTools(
     buildObject: (input) => compileObjectOnHost(geometryScripts, operations, input),
   })
   registerAddColumn(server, operations, geometryScripts)
-  registerAddObject(server, operations, geometryScripts)
-  registerAuthorScene(server, operations, geometryScripts)
+  registerAddObject(server, operations, geometryScripts, objectMakers)
+  registerAuthorScene(server, operations, geometryScripts, objectMakers)
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerViewScene(server, operations, sceneViews)

@@ -5,16 +5,14 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { LIB } from './compile'
-import { buildDesign, type DesignPiece, loadModule } from './design'
+import { buildDesign, loadModule } from './design'
 
 /** `author_scene` takes a module of at most 48 000 characters. */
 export const MODULE_MAX_CHARS = 48_000
 
 export type AdapterResult = {
-  /** The `author_scene` payload; an item with `piece` instead of `code` waits for that piece's maker. */
+  /** The `author_scene` payload; an item may name a piece (an add_object piece's id) instead of code. */
   payload: Record<string, unknown>
-  /** The pieces the payload's items place, in the design's words. */
-  pieces: DesignPiece[]
 }
 
 export type ToModuleOptions = {
@@ -352,18 +350,10 @@ ${clips.length ? `  wrap.animations = ${JSON.stringify(clips.map((clip) => THREE
   }
 }
 
-const isPieceRef = (value: unknown): value is DesignPiece =>
-  typeof value === 'object' &&
-  value !== null &&
-  typeof (value as DesignPiece).description === 'string' &&
-  Array.isArray((value as DesignPiece).size)
-
 /**
  * Runs the adapter: `export default async function adapt({ THREE, addons, source, run, toModule })`
  * returns the payload. `run(code = source)` builds a design module (the design, or a copy the
- * adapter changed to mark what it needs) and answers `{ scene, pieces }`. An item placing a
- * delegated piece carries `piece`, one of `pieces` (its description, size and mount), instead of
- * `code`.
+ * adapter changed to mark what it needs) and answers `{ scene }`.
  */
 export async function runAdapter(input: {
   adapter: string
@@ -372,7 +362,8 @@ export async function runAdapter(input: {
   const adapt = loadModule(input.adapter, 'adapter')
   const run = async (code: unknown = input.design) => {
     if (typeof code !== 'string') throw new Error('run(code): code is a design module, as text')
-    return buildDesign(code)
+    const { scene } = await buildDesign(code)
+    return { scene }
   }
   const payload = (await adapt({
     THREE,
@@ -385,21 +376,6 @@ export async function runAdapter(input: {
     throw new Error(
       'adapt() must return the author_scene payload: { levels: [...], roof?, notes? }',
     )
-
-  const pieces = new Map<string, DesignPiece>()
-  const items = [
-    ...(payload.levels as Array<{ items?: unknown[] }>).flatMap((level) => level.items ?? []),
-    ...(((payload.roof as { items?: unknown[] } | undefined)?.items ?? []) as unknown[]),
-  ] as Array<Record<string, unknown>>
-  for (const item of items) {
-    if (item.piece === undefined) continue
-    if (!isPieceRef(item.piece))
-      throw new Error(`Item ${String(item.id)}: piece must be one of run()'s pieces`)
-    const { description, size, mount } = item.piece
-    const ref: DesignPiece = { description, size: [...size] as DesignPiece['size'], mount }
-    item.piece = ref
-    pieces.set(JSON.stringify(ref), ref)
-  }
   // JSON round trip: the payload crosses a process boundary, and nothing of three.js may ride along.
-  return { payload: JSON.parse(JSON.stringify(payload)), pieces: [...pieces.values()] }
+  return { payload: JSON.parse(JSON.stringify(payload)) }
 }

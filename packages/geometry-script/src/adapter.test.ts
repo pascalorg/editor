@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { runAdapter } from './adapter'
 import { compileGeometryScript } from './compile'
 
-/** A design with a window that does not open, its glass opaque, and a delegated sofa. */
-const DESIGN = `export function build({ THREE, scene, piece }) {
+/** A design with a window that does not open, its glass opaque, and a spot for a sofa. */
+const DESIGN = `export function build({ THREE, scene }) {
   const frame = new THREE.MeshStandardMaterial({ color: '#faf5e8' })
   const pane = new THREE.MeshStandardMaterial({ color: '#34505a' })
   const unit = new THREE.Group()
@@ -13,12 +13,15 @@ const DESIGN = `export function build({ THREE, scene, piece }) {
   glass.position.z = 0.06
   unit.add(glass)
   scene.add(unit)
-  scene.add(piece('green sofa', { position: [0, 0, 0], rotation: Math.PI, size: [2, 0.8, 0.9] }))
+  const sofa = new THREE.Group()
+  sofa.name = 'sofa'
+  sofa.position.set(1, 0, 2)
+  scene.add(sofa)
 }`
 
 /** What an author's adapter does with it: the pane made glass and hung on a sash that opens. */
 const ADAPTER = `export default async function adapt({ THREE, run, toModule }) {
-  const { scene, pieces } = await run()
+  const { scene } = await run()
   const unit = scene.children.find((o) => o.isGroup && o.children.length === 2)
   const [, glass] = unit.children
   glass.material.name = 'glass'
@@ -31,13 +34,13 @@ const ADAPTER = `export default async function adapt({ THREE, run, toModule }) {
   sash.attach(glass)
   const open = new THREE.AnimationClip('open', 1, [new THREE.NumberKeyframeTrack('part:sash.rotation[y]', [0, 1], [0, -1.2])])
   const window = toModule(unit, { origin: [2, 0.3, 4], mount: 'wall', animations: [open] })
-  const [sofa] = pieces
+  const sofa = scene.getObjectByName('sofa').getWorldPosition(new THREE.Vector3())
   return {
     levels: [{
       name: 'Ground floor',
       walls: [{ id: 'front', start: [0, 4], end: [6, 4], height: 2.7, thickness: 0.2,
         openings: [{ kind: 'window', along: 2, width: 1.2, height: 1.4, sill: 0.3, type: 'casement', code: window.code }] }],
-      items: [{ id: 'sofa', name: 'Sofa', category: 'sofa', piece: sofa, position: [0, 0, 0], rotation: 180 }],
+      items: [{ id: 'sofa', name: 'Sofa', category: 'sofa', piece: 'green-sofa', position: sofa.toArray(), rotation: 180 }],
     }],
     notes: [JSON.stringify(window.size)],
   }
@@ -45,7 +48,7 @@ const ADAPTER = `export default async function adapt({ THREE, run, toModule }) {
 
 describe('runAdapter', () => {
   test("runs the author's program on the design: its window a module that opens, its glass glass", async () => {
-    const { payload, pieces } = await runAdapter({ adapter: ADAPTER, design: DESIGN })
+    const { payload } = await runAdapter({ adapter: ADAPTER, design: DESIGN })
     const level = (payload.levels as Array<Record<string, any>>)[0]!
     const code = level.walls[0].openings[0].code as string
     const built = await compileGeometryScript({ code })
@@ -54,13 +57,8 @@ describe('runAdapter', () => {
     expect(code).toContain('"name":"glass"')
     // Its bounds in the frame at the origin it was given: the unit as built, the sash included.
     expect(JSON.parse((payload.notes as string[])[0]!)).toEqual([1.2, 1.4, 0.12])
-    // The delegated piece is placed by reference, in the design's words.
-    expect(level.items[0].piece).toEqual({
-      description: 'green sofa',
-      size: [2, 0.8, 0.9],
-      mount: 'floor',
-    })
-    expect(pieces).toEqual([{ description: 'green sofa', size: [2, 0.8, 0.9], mount: 'floor' }])
+    // A piece add_object makes from words is placed by its id, where the design stood it.
+    expect(level.items[0]).toMatchObject({ piece: 'green-sofa', position: [1, 0, 2] })
   })
 
   test('keeps the modules and design source it carries as text exactly as written', async () => {
@@ -71,7 +69,7 @@ export default function build({ params }) { return new THREE.Group() }`
 const quote = /['"]/g
 export default async function adapt({ source, run }) {
   // The design marked by a changed copy of its text: its export is the needle.
-  const marked = source.replace('export function build({ THREE, scene, piece }) {', \`export function build({ THREE, scene, piece }) {
+  const marked = source.replace('export function build({ THREE, scene }) {', \`export function build({ THREE, scene }) {
   scene.userData.marked = true\`)
   const { scene } = await run(marked)
   return { levels: [{ name: 'G', rooms: [{ name: 'Hall', seed: [0, 0], floorCode: FLOOR }] }], notes: [String(scene.userData.marked), 'a "b"'.replace(quote, '')] }
@@ -81,20 +79,13 @@ export default async function adapt({ source, run }) {
     expect(payload.notes).toEqual(['true', 'a b'])
   })
 
-  test('refuses an answer that is no payload, a piece that is not one of the run, and a module past 48 000 characters', async () => {
+  test('refuses an answer that is no payload, and a module past 48 000 characters', async () => {
     await expect(
       runAdapter({
         adapter: 'export default async function adapt() { return { walls: [] } }',
         design: DESIGN,
       }),
     ).rejects.toThrow('must return the author_scene payload')
-    await expect(
-      runAdapter({
-        adapter:
-          "export default async function adapt() { return { levels: [{ name: 'G', items: [{ id: 'x', piece: 'sofa' }] }] } }",
-        design: DESIGN,
-      }),
-    ).rejects.toThrow("Item x: piece must be one of run()'s pieces")
     const huge = `export default async function adapt({ THREE, toModule }) {
       const group = new THREE.Group()
       for (let i = 0; i < 400; i++) group.add(new THREE.Mesh(new THREE.TorusKnotGeometry(1, 0.2, 64 + i, 8)))

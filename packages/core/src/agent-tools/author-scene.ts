@@ -9,9 +9,11 @@ const DESCRIPTION = `Turn a whole design you wrote as free three.js into an edit
 
 Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands, except a ceiling item's (mount 'ceiling': a pendant, a ceiling light): it hangs from the ceiling of the room containing its plan position, its top on that ceiling, and its y is not read. A rug, a mat or a runner is an item lying on the room's floor. What stands on a floor stands on its finish: on a room with a floorCode, on the top of its planks or tiles, so its y stays 0. Its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode, tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode), cladding, brick or battens outside its faceOutside; a slab is a terrace, a platform, a balcony; a stair is its level's stairs, which open the floor above; the roof over the top level is roof, Pascal's own segments when its shape is one of theirs, else your geometry as roof items, both on the building's roof level above the top storey. Pascal draws what bold architecture needs natively: a curved wall is one wall with the point its arc passes through, through (never a run of short straight ones), a glass front a curtain wall, a double-height room a void in the floor of the level above it (its ceiling opens with it, a railing along its edges), an archway a passage with an arch shape. Paint a wall by what its faces look onto, colorInside and colorOutside: which face is inside is Pascal's to find. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
 
-The report says what was written, what Pascal defaulted (defaults: a window with no type is fixed and cannot open), what it warns about but wrote (warnings: thin slabs, too many slabs or regions) and what it refused (defects, by your ids).
+Hand over the payload, or your module and its adapter, the program that reads the module and returns the payload: Pascal runs the adapter (one that throws comes back with its error, and nothing is written). An item names its piece instead of code when add_object makes it from words; one still being made is written when it lands, with no call from you.
 
-Call again with the same scene and a corrected payload to update the previous conversion (replace: true). Stable element identities and manual changes are retained; overlapping changes are refused. An existing building without a conversion baseline is never cleared.`
+The report says what was written, what Pascal defaulted (defaults: a window with no type is fixed and cannot open), what it warns about but wrote (warnings: thin slabs, too many slabs or regions), what it refused (defects, by your ids), the items waiting for their pieces (pending), and Pascal's checks of what stands (checks, each passed or with what failed: doors and windows a person opens move, glazing is glass, every room's floor covered, every placed piece standing, nothing written as loose debris or buried, wall finishes built, stairs arriving inside a room clear of walls, every level holding rooms or walls: the ground, terraces and foundations belong to the ground level, Pascal draws the site and foundations).
+
+Call again with replace: true to revise the previous conversion: the module and adapter you leave out are the stored ones, edits change parts of them, and with neither a payload nor a module, adapter or edits the stored conversion is written again. Stable element identities and manual changes are retained; overlapping changes are refused. An existing building without a conversion baseline is never cleared.`
 
 const plan = (what: string) =>
   z.array(z.number()).length(2).describe(`[x, z] ${what} in plan metres.`)
@@ -302,7 +304,16 @@ export const authorSceneItem = z.object({
     .string()
     .min(1)
     .max(48_000)
-    .describe("The piece's own three.js module (see the description)."),
+    .optional()
+    .describe("The piece's own three.js module (see the description); or piece."),
+  piece: z
+    .string()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe(
+      'Instead of code: the id of a piece add_object makes from words (its piece.id). Placed with its module once made; one still being made is placed when it lands.',
+    ),
   position: xyz("bottom centre (a ceiling item's top centre, y not read)"),
   rotation: measurement('angle', 'deg', {
     default: 0,
@@ -487,20 +498,39 @@ export const authorSceneTool = {
   title: 'Author scene',
   description: DESCRIPTION,
   input: {
-    payload: authorScenePayload,
+    payload: authorScenePayload
+      .optional()
+      .describe(
+        'The conversion payload. Leave it out to have Pascal run the adapter on the module, or, with neither, to write the stored conversion again.',
+      ),
     module: z
       .string()
       .max(400_000)
       .optional()
       .describe(
-        'The three.js module the payload was read from. Stored with the scene as its source.',
+        'The three.js module the payload is read from. Stored with the scene as its source; left out, the stored one is used.',
       ),
     adapter: z
       .string()
       .max(400_000)
       .optional()
       .describe(
-        'The program that produced the payload from the module. Stored with the scene, so a regenerated design starts from it.',
+        "The program that turns the module into the payload: `export default async function adapt({ THREE, addons, source, run, toModule })` returning the payload. Pascal runs it where three.js modules run (no network, files or DOM); source is the module's text, run(code = source) builds a module (its default or named build({ THREE, scene, addons })) and answers { scene }, its world matrices updated; toModule(object, { origin, rotation, mount, animations }) writes an object of the built scene as an item's or an opening's module, answering { code, position, size, triangles }. Stored with the scene; left out, the stored one is used.",
+      ),
+    edits: z
+      .array(
+        z
+          .object({
+            in: z.enum(['module', 'adapter']),
+            find: z.string().min(1).describe('Text that occurs exactly once in it.'),
+            replace: z.string().describe('What replaces it.'),
+          })
+          .strict(),
+      )
+      .max(200)
+      .optional()
+      .describe(
+        'Changes to the module or the adapter as given, or as stored when left out, applied in order; the changed texts are run and stored.',
       ),
     replace: z
       .boolean()
