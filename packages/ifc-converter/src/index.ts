@@ -1182,9 +1182,14 @@ export async function convertIfcToPascalWithReport(
   }
 
   const importedPrimitivesByExpressId = new Map<number, ImportedMeshPrimitiveValue[]>()
+  // Elements whose every piece of geometry was unreadable: omitted, never rebuilt as a native
+  // node from their placement data.
+  const unreadableGeometry = new Set<number>()
   function importedMeshPrimitivesFor(expressId: number): ImportedMeshPrimitiveValue[] {
     const cached = importedPrimitivesByExpressId.get(expressId)
     if (cached) return cached
+    const { transforms, primitives: skippedPrimitives } = report.skippedGeometry
+    const skippedBefore = transforms + skippedPrimitives
     const primitives = extractImportedMeshPrimitives(
       ifcApi,
       modelID,
@@ -1195,6 +1200,11 @@ export async function convertIfcToPascalWithReport(
       opts.swapYZ,
       report.skippedGeometry,
     )
+    const skippedAfter = report.skippedGeometry.transforms + report.skippedGeometry.primitives
+    if (primitives.length === 0 && skippedAfter > skippedBefore) {
+      unreadableGeometry.add(expressId)
+      report.skippedGeometry.elements++
+    }
     importedPrimitivesByExpressId.set(expressId, primitives)
     return primitives
   }
@@ -1384,7 +1394,8 @@ export async function convertIfcToPascalWithReport(
     }
     if (!Number.isFinite(elevation)) {
       report.replaced.levelElevations++
-      elevation = 0
+      const explicit = (storey.Elevation?.value ?? 0) * unitFactor
+      elevation = Number.isFinite(explicit) ? explicit : 0
     }
     storeyElevationByExpressId.set(storeyExpressID, elevation)
 
@@ -2104,13 +2115,10 @@ export async function convertIfcToPascalWithReport(
     // Pascal's storey-wide wall-support calculation. Preserve roofs and stair
     // landings as exact meshes: roofs may be sloped, while a local landing is
     // not a storey floor and must not raise adjacent wall bases.
+    const hasMesh = importedMeshPrimitivesFor(slabExpressID).length > 0
+    if (unreadableGeometry.has(slabExpressID)) continue
     const slabPredefinedType = String(slab.PredefinedType?.value ?? '').toUpperCase()
-    if (
-      (slabPredefinedType === 'ROOF' || slabPredefinedType === 'LANDING') &&
-      importedMeshPrimitivesFor(slabExpressID).length > 0
-    ) {
-      continue
-    }
+    if ((slabPredefinedType === 'ROOF' || slabPredefinedType === 'LANDING') && hasMesh) continue
 
     const levelElevation = elementLevelElevation(slabExpressID)
     let plan: ExtrudedPlan | null = null
@@ -2120,7 +2128,7 @@ export async function convertIfcToPascalWithReport(
       // mesh fallback below
     }
     // A sloped or tilted slab is not a Pascal floor; keep its exact mesh.
-    if (plan?.flat === false && importedMeshPrimitivesFor(slabExpressID).length > 0) continue
+    if (plan?.flat === false && hasMesh) continue
     if (!plan?.polygon) continue
 
     // Revit extrudes floors down from their top, other tools up from their

@@ -13,6 +13,8 @@ export interface IfcConversionReport {
     triangles: number
     /** Mesh pieces left with no valid triangle. */
     primitives: number
+    /** Elements left out because none of their geometry could be read. */
+    elements: number
   }
   /** Values that were not finite and fell back to a neutral default. */
   replaced: {
@@ -24,7 +26,7 @@ export interface IfcConversionReport {
 
 export function emptyConversionReport(): IfcConversionReport {
   return {
-    skippedGeometry: { transforms: 0, vertices: 0, triangles: 0, primitives: 0 },
+    skippedGeometry: { transforms: 0, vertices: 0, triangles: 0, primitives: 0, elements: 0 },
     replaced: { unitFactor: false, originOffset: false, levelElevations: 0 },
   }
 }
@@ -37,6 +39,7 @@ export function conversionReportHasIssues(report: IfcConversionReport): boolean 
       skippedGeometry.vertices +
       skippedGeometry.triangles +
       skippedGeometry.primitives +
+      skippedGeometry.elements +
       replaced.levelElevations >
       0 ||
     replaced.unitFactor ||
