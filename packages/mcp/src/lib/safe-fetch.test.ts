@@ -12,7 +12,7 @@ import {
   safeFetch,
 } from './safe-fetch'
 
-const PUBLIC_V4 = '203.0.113.10'
+const PUBLIC_V4 = '93.184.215.14'
 const PUBLIC_V6 = '2606:4700::1111'
 
 function response(
@@ -87,7 +87,15 @@ describe('isBlockedAddress', () => {
     ['IPv4-compatible and translated', ['::7f00:1', '::127.0.0.1', '::ffff:0:a00:1']],
     ['6to4 and Teredo', ['2002:7f00:1::', '2002:a9fe:a9fe::1', '2001:0:4136:e378::1']],
     ['multicast / reserved / broadcast', ['224.0.0.1', '240.0.0.1', '255.255.255.255', 'ff02::1']],
-    ['other special use', ['192.0.0.1', '198.18.0.1', '100::1', 'fec0::1']],
+    ['other special use', ['192.0.0.1', '192.0.0.255', '198.18.0.1', '100::1', 'fec0::1']],
+    [
+      'documentation and test nets',
+      ['192.0.2.1', '198.51.100.7', '203.0.113.10', '2001:db8::1', '3fff:fff::1'],
+    ],
+    [
+      'other non-global IANA special-purpose',
+      ['192.88.99.1', '100:0:0:1::1', '2001:2::1', '5f00::1', '2002:c000:201::'],
+    ],
     ['zone ids and brackets', ['fe80::1%eth0', '[::1]', '[::ffff:7f00:1]']],
     ['not an address', ['', 'example.com', '1.2.3', '::ffff:1.2.3.4.5']],
   ]
@@ -109,6 +117,16 @@ describe('isBlockedAddress', () => {
       '::ffff:808:808',
       '2002:808:808::1',
       PUBLIC_V6,
+      // Only 192.0.0.0/24 and 192.0.2.0/24 are reserved within 192.0.0.0/16.
+      '192.0.1.1',
+      '192.0.3.1',
+      '192.0.255.1',
+      // Globally reachable entries in the special-purpose registries.
+      '192.31.196.1',
+      '192.52.193.1',
+      '192.175.48.1',
+      '2001:4:112::1',
+      '3fff:1000::1',
     ]) {
       expect([address, isBlockedAddress(address)]).toEqual([address, false])
     }

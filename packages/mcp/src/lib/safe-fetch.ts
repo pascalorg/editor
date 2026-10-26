@@ -63,16 +63,24 @@ function parseIPv6(addr: string): number[] | null {
   return [...head, ...new Array<number>(8 - explicit).fill(0), ...rest, ...tail]
 }
 
-function isBlockedV4([a, b]: number[]): boolean {
+/**
+ * Ranges from the IANA IPv4 special-purpose registry that are not globally
+ * reachable, plus multicast. Globally reachable entries (AS112, AMT) stay allowed.
+ */
+function isBlockedV4([a, b, c]: number[]): boolean {
   if (a === 0) return true // 0.0.0.0/8 "this network"
   if (a === 10) return true // 10.0.0.0/8 private
   if (a === 100 && b! >= 64 && b! <= 127) return true // 100.64.0.0/10 CGNAT (incl. Alibaba metadata)
   if (a === 127) return true // 127.0.0.0/8 loopback
   if (a === 169 && b === 254) return true // 169.254.0.0/16 link-local (cloud metadata)
   if (a === 172 && b! >= 16 && b! <= 31) return true // 172.16.0.0/12 private
-  if (a === 192 && b === 0) return true // 192.0.0.0/24 IETF protocol assignments
+  if (a === 192 && b === 0 && c === 0) return true // 192.0.0.0/24 IETF protocol assignments
+  if (a === 192 && b === 0 && c === 2) return true // 192.0.2.0/24 TEST-NET-1
+  if (a === 192 && b === 88 && c === 99) return true // 192.88.99.0/24 deprecated 6to4 relay anycast
   if (a === 192 && b === 168) return true // 192.168.0.0/16 private
   if (a === 198 && (b === 18 || b === 19)) return true // 198.18.0.0/15 benchmarking
+  if (a === 198 && b === 51 && c === 100) return true // 198.51.100.0/24 TEST-NET-2
+  if (a === 203 && b === 0 && c === 113) return true // 203.0.113.0/24 TEST-NET-3
   if (a! >= 224) return true // multicast, reserved, broadcast
   return false
 }
@@ -99,9 +107,13 @@ function isBlockedV6(g: number[]): boolean {
     return isBlockedV4(embeddedV4(g6, g7))
   }
   if (g0 === 0x64 && g1 === 0xff9b) return true // 64:ff9b::/96 and 64:ff9b:1::/48 NAT64
-  if (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0) return true // 100::/64 discard
+  if (g0 === 0x100 && g1 === 0 && g2 === 0 && (g3 === 0 || g3 === 1)) return true // 100::/64 discard, 100:0:0:1::/64 dummy
   if (g0 === 0x2001 && g1 === 0) return true // 2001::/32 Teredo
+  if (g0 === 0x2001 && g1 === 2 && g2 === 0) return true // 2001:2::/48 benchmarking
+  if (g0 === 0x2001 && g1 === 0xdb8) return true // 2001:db8::/32 documentation
   if (g0 === 0x2002) return isBlockedV4(embeddedV4(g1, g2)) // 2002::/16 6to4
+  if (g0 === 0x3fff && (g1 & 0xf000) === 0) return true // 3fff::/20 documentation
+  if (g0 === 0x5f00) return true // 5f00::/16 SRv6 SIDs
   if ((g0 & 0xfe00) === 0xfc00) return true // fc00::/7 ULA (incl. fd00:ec2::254 metadata)
   if ((g0 & 0xffc0) === 0xfe80) return true // fe80::/10 link-local
   if ((g0 & 0xffc0) === 0xfec0) return true // fec0::/10 site-local
