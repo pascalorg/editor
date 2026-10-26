@@ -539,6 +539,10 @@ export function BuildTab() {
                 </div>
               </TooltipProvider>
 
+              {(activeTool === 'duct-segment' || activeTool === 'pipe-segment') && (
+                <ToolOptionsPanel kind={activeTool} />
+              )}
+
               {(['duct-fitting', 'pipe-fitting'] as const)
                 .filter((kind) => (kind === 'duct-fitting' ? ductContext : pipeContext))
                 .map((kind) => (

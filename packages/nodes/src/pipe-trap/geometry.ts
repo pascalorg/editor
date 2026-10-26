@@ -1,5 +1,6 @@
 import { DoubleSide, Group, Mesh, SphereGeometry, TorusGeometry, Vector3 } from 'three'
-import { buildSection, INCHES_TO_METERS } from '../duct-segment/geometry'
+import { buildSection } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { createPipeMaterial } from '../pipe-segment/geometry'
 import type { PipeTrapNode } from './schema'
 

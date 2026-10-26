@@ -1,6 +1,6 @@
 import type { FloorplanGeometry, GeometryContext } from '@pascal-app/core'
 import { MeshStandardMaterial } from 'three'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { accessoryFloorplan } from '../shared/accessory-floorplan'
 import { buildDuctAccessory } from './accessory-geometry'
 import { buildDuctFittingGeometry } from './geometry'

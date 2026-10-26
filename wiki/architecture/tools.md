@@ -415,3 +415,106 @@ node, parent and context nodes. This supports tools whose ghosts never enter the
 committed scene. The helper merges that preview only for the notice query; moving
 nodes still use their kind's live-transform frame, and selected inspectors call
 `usePlacementNotice(id)` without adopting a tool's preview.
+
+
+## Duct and pipe build settings
+
+Duct and DWV run definitions contribute `toolOptions` for system, profile/size,
+material, routing and crossing intent. `ToolOption.input` lets a host render an
+exact numeric field with the schema's limits instead of a fixed choice list.
+The settings share `useEditor.toolDefaults` with keyboard shortcuts and survive
+switching tools within the session. Continuation context is consumed separately;
+returning to a tool must not resume an old endpoint.
+
+Follow surface keeps the existing floor/wall/ceiling behavior. Horizontal starts
+at a level-local centreline elevation; the pipe fall setting still applies.
+Vertical keeps X/Z fixed and uses an exact target elevation, available in either
+view. Alt retains the existing temporary vertical-drag behavior. Sidebar changes
+refresh the draft without requiring another pointer move.
+
+Connect retains automatic branch/cross fittings. Cross without joining disables
+body snapping and automatic interior crosses while leaving endpoint connections
+available. It creates no clearance or obstacle detour. Preview and commit consume
+the same choice. Connection feedback includes text as well as color, with screen
+coordinates for snapped-port labels in the plan view.
+
+Duct routing adds supply-trunk, round-branch, flex and return-trunk starting
+profiles. These are editable dimensional presets, not airflow sizing calculations.
+Equipment and terminal inspectors can start a run from an unoccupied air collar,
+carrying its section and system. Transition feedback includes both sections and
+the planned fitting length.
+
+Duct profile edits use the `duct_edit` operation in both the inspector and agent
+hosts. Segment scope inserts transitions against fixed neighbours; branch scope
+follows same-profile ducts through elbows, couplings, dampers and caps, stopping
+at junctions, size changes and equipment. Changed fitting collars retarget the
+joined run endpoints. Insufficient space refuses the entire edit. Face alignment
+supports free straight runs; connected routes require center alignment because
+current fittings do not represent eccentric transitions. There is no separate
+node-lock contract for this operation.
+
+The same operation adds a measured vertical obstacle offset to a straight
+horizontal run: four elbows and intervening ducts preserve both original
+endpoints. The inspector previews a side elevation before applying. This is a
+manual routing aid, not collision detection or an automatic obstacle solver.
+Rolled non-round runs are refused because the offset cannot express the required
+twist. Both operations apply one scene change batch and invalidate stale offset
+rewind metadata. The inspector is shared by 2D and 3D.
+
+Pipe grade remains derived from path elevations; existing scenes need no new
+fields. Drawing offers grade percentage and downhill direction, and reports
+start/end centerline elevations above the level. Continuing at either end
+inherits the source leg’s signed grade. Snapped connections that conflict with
+the requested grade are refused, including fitting collar adjustments.
+
+`pipe_grade` provides the inspector and agent operation for applying grade with
+a fixed start/end elevation, translating elevation without changing grades,
+and editing a path point while preserving each leg’s grade. Vertical legs keep
+their rise; a stack cannot become a diagonal by dragging one endpoint. Flow
+arrows describe downhill geometry, not hydraulic simulation; level runs have no
+gravity-flow direction. Plan selection shows downhill chevrons and grade labels.
+
+Plan point drags use live overrides and commit once. The 3D endpoint tools apply
+the same grade constraint before their existing fitting planners. Connected
+collars that cannot turn cleanly, or neighbours whose grade would change, refuse
+the edit. Alt detaches a path-point edit while retaining the edited run’s grade.
+Explicit grade edits may change the selected run’s grade; connected runs retain
+theirs. Profile resizing is unchanged because diameter does not alter the stored
+centerline path.
+
+Pipe size edits use the `pipe_resize` operation from both the inspector (plan and
+3D views) and agent tools. Segment scope carries end caps; branch scope traverses
+same-size, same-material pipes through elbows, couplings and cleanouts. Junctions,
+reducers, size/material changes and fixture or equipment collars form boundaries.
+The operation inserts reducers into the selected run at fixed boundaries, moves
+run endpoints to resized fitting collars, and checks every leg's direction and
+signed grade before returning one atomic batch. Ambiguous collars, incompatible
+angles and insufficient straight length refuse the entire edit. “Check resize”
+reports affected runs, fittings and new reducers without changing the scene.
+
+`pipe_offset` adds a user-controlled four-bend detour to a straight, non-vertical
+pipe. The inspector exposes the same operation in plan and 3D with a side-profile
+schematic. `from` and `to` measure horizontal distance from the start to the first
+and last bend; `offset` is the signed vertical displacement. Each connector uses
+`abs(offset)` horizontal travel. The three parallel sections retain the original
+signed grade; the two connectors have their own grades. Boundary positions and
+collar directions remain fixed. The original node becomes the first section and
+four new runs plus four elbows form the rest, committed in one undo step. The far
+automatic cap transfers ownership to the new tail without moving.
+
+Insufficient fitting space, vertical or polyline source runs, hosted children and
+custom hanger overrides refuse without partial edits. Ordinary automatic hangers
+regenerate on the new sections. Waste offsets report uphill connectors explicitly;
+the operation does not certify continuous downhill drainage or check obstacles.
+
+Fixed waste/vent collars use `planPipeCollarConnection` in both drawing and the
+`pipe_connect` agent operation. Trap and fitting inspectors offer “Draw from
+collar”; plugins can reuse the exported `PipeCollarInspector` for fixtures with
+registered ports. The seed inherits size, material, elevation and direction.
+The first free section follows the collar axis; subsequent turns use ordinary
+pipe continuation. Occupied collars are disabled and rechecked before commit.
+Diameter changes preview and create a reducer entirely outside the fixed collar;
+short, incompatible or stale connections refuse without moving the source.
+`pipe_connect` extends to a free endpoint; interactive drawing can also join an
+existing open collar. Decorative catalog fixtures without authored waste/vent
+ports are not inferred from their mesh.

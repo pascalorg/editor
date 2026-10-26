@@ -2,6 +2,7 @@ import type { ParametricDescriptor } from '@pascal-app/core'
 import type { PipeTrapNode } from './schema'
 
 export const pipeTrapParametrics: ParametricDescriptor<PipeTrapNode> = {
+  trailingSection: () => import('../shared/pipe-collar-inspector'),
   groups: [
     {
       label: 'Trap',

@@ -57,6 +57,7 @@ export const pipeFittingParametrics: ParametricDescriptor<PipeFittingNode> = {
     return updates
   },
 
+  trailingSection: () => import('../shared/pipe-collar-inspector'),
   groups: [
     {
       label: 'Fitting',

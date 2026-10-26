@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type DuctFittingNode, DuctSegmentNode } from '@pascal-app/core'
+import { type AnyNode, type DuctFittingNode, DuctSegmentNode, nodeRegistry } from '@pascal-app/core'
 import {
   EDITOR_LAYER,
   triggerSFX,
@@ -21,7 +21,7 @@ import {
   stepNominalRunSize,
   useDistributionRunTool,
 } from '@pascal-app/editor/distribution'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Euler, type Group, Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import {
@@ -43,9 +43,10 @@ import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import { DUCT_PORT_SYSTEMS, runSectionHalfSizeM } from '../shared/port-systems'
 import { RunHangerPreview } from '../shared/run-hanger-controls'
 import { useRunHangerMode } from '../shared/run-hanger-mode'
+import { clearRunContinuation, updateRunDefaults } from '../shared/run-tool-options'
 import { currentDuctContinuationSeed, ductEndpointPort } from './continuation'
 import { ductSegmentDefinition } from './definition'
-import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
+import { rectSectionAxes, rollToContinueAcrossElbow } from './profile'
 
 /**
  * Continuous placement tool for duct segments.
@@ -343,6 +344,34 @@ export function planDuctDraw(
     updates: [],
     delete: [],
   })
+  const system = toolDefaults.system ?? startPort?.system ?? endPort?.system ?? 'supply'
+  for (const [port, away] of [
+    [startPort, dir],
+    [endPort, [-dir[0], -dir[1], -dir[2]]],
+  ] as const) {
+    if (!port) continue
+    const owner = nodes[port.nodeId]
+    if (!owner || owner.type === 'duct-segment' || owner.type === 'duct-fitting') continue
+    const occupied = Object.values(nodes).some(
+      (node) =>
+        node.id !== owner.id &&
+        node.parentId === owner.parentId &&
+        (nodeRegistry.get(node.type)?.ports?.(node) ?? []).some(
+          (other) =>
+            other.system === port.system &&
+            dist2([...other.position], [...port.position]) < 0.005 ** 2,
+        ),
+    )
+    const message =
+      port.system !== system
+        ? 'Use the same supply or return system as the collar.'
+        : occupied
+          ? 'This collar is already connected.'
+          : new Vector3(...away).dot(new Vector3(...port.direction).normalize()) < 0.9999
+            ? 'Draw the first section straight out of the collar, then add a bend from the new duct endpoint.'
+            : null
+    if (message) return { ...invalidPlan(), validationMessage: message }
+  }
   if (startPlan?.hasClearance === false || endPlan?.hasClearance === false) return invalidPlan()
   const startRealign = startPlan ? null : realignPlanFor(startPort, dir, nodes)
   const endRealign = endPlan ? null : realignPlanFor(endPort, [-dir[0], -dir[1], -dir[2]], nodes)
@@ -413,11 +442,12 @@ export function planDuctDraw(
   if (!endTee && endTeePlan) ductEnd = endRealign?.collarPoint ?? end
   const realigns = [startRealign, endRealign].filter((p) => p !== null)
 
-  const crossHit = surface
-    ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surface, {
-        kinds: ['duct-segment'],
-      })
-    : null
+  const crossHit =
+    surface && (toolDefaults as Record<string, unknown>).crossingMode !== 'cross'
+      ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surface, {
+          kinds: ['duct-segment'],
+        })
+      : null
   const crossOwner = crossHit ? nodes[crossHit.nodeId] : null
   const crossTappedElsewhere =
     crossHit?.nodeId === trunkBody?.nodeId || crossHit?.nodeId === endTrunkBody?.nodeId
@@ -453,6 +483,7 @@ export function planDuctDraw(
     DuctSegmentNode.parse({
       ...defaults,
       ...toolDefaults,
+      system,
       autoHangers,
       hangerStyle,
       name: profile.shape === 'rect' ? 'Trunk' : 'Duct run',
@@ -532,29 +563,55 @@ const DuctSegmentTool = () => {
   const autoHangersRef = useRef(autoHangers)
   autoHangersRef.current = autoHangers
   const pendingPromotionRef = useRef(continuationSeed?.promotedFitting ?? null)
-  const [profile, setProfile] = useState<DraftProfile>(() => {
-    const defaults = ductSegmentDefinition.defaults() as DraftProfile
-    const seeded = useEditor.getState().toolDefaults['duct-segment'] as
-      | Partial<DraftProfile>
-      | undefined
-    return {
-      shape: continuationSeed?.duct.shape ?? seeded?.shape ?? defaults.shape,
-      diameter: continuationSeed?.duct.diameter ?? seeded?.diameter ?? defaults.diameter,
-      width: continuationSeed?.duct.width ?? seeded?.width ?? defaults.width,
-      height: continuationSeed?.duct.height ?? seeded?.height ?? defaults.height,
-    }
-  })
+  const initialProfile = useRef<DraftProfile | null>(null)
+  if (!initialProfile.current)
+    initialProfile.current = (() => {
+      const defaults = ductSegmentDefinition.defaults() as DraftProfile
+      const seeded = useEditor.getState().toolDefaults['duct-segment'] as
+        | Partial<DraftProfile>
+        | undefined
+      return {
+        shape: continuationSeed?.duct.shape ?? seeded?.shape ?? defaults.shape,
+        diameter: continuationSeed?.duct.diameter ?? seeded?.diameter ?? defaults.diameter,
+        width: continuationSeed?.duct.width ?? seeded?.width ?? defaults.width,
+        height: continuationSeed?.duct.height ?? seeded?.height ?? defaults.height,
+      }
+    })()
+  const profile = useMemo<DraftProfile>(
+    () => ({
+      shape: toolDefaults?.shape ?? initialProfile.current!.shape,
+      diameter: toolDefaults?.diameter ?? initialProfile.current!.diameter,
+      width: toolDefaults?.width ?? initialProfile.current!.width,
+      height: toolDefaults?.height ?? initialProfile.current!.height,
+    }),
+    [toolDefaults?.shape, toolDefaults?.diameter, toolDefaults?.width, toolDefaults?.height],
+  )
+  const setProfile = (value: DraftProfile | ((current: DraftProfile) => DraftProfile)) =>
+    updateRunDefaults('duct-segment', typeof value === 'function' ? value(profile) : value)
   const profileRef = useRef(profile)
   profileRef.current = profile
   useEffect(() => {
     const mode = useRunHangerMode.getState()
     mode.setEnabled('duct-segment', initialAutoHangersRef.current)
-    return () => mode.setEnabled('duct-segment', false)
+    return () => {
+      updateRunDefaults('duct-segment', {
+        autoHangers: useRunHangerMode.getState().enabled['duct-segment'],
+      })
+      mode.setEnabled('duct-segment', false)
+    }
   }, [])
   const run = useDistributionRunTool({
     active: !!activeLevelId,
     levelId: activeLevelId,
     toolName: 'duct-segment',
+    routingMode:
+      hangerDefaults?.routingMode === 'horizontal' || hangerDefaults?.routingMode === 'vertical'
+        ? hangerDefaults.routingMode
+        : 'surface',
+    elevation: typeof hangerDefaults?.elevation === 'number' ? hangerDefaults.elevation : 0,
+    targetElevation:
+      typeof hangerDefaults?.targetElevation === 'number' ? hangerDefaults.targetElevation : 3,
+    connectCrossings: hangerDefaults?.crossingMode !== 'cross',
     initialStart: continuationSeed
       ? ([...(continuationSeed.port?.position ?? continuationSeed.body?.point ?? [0, 0, 0])] as [
           number,
@@ -574,6 +631,15 @@ const DuctSegmentTool = () => {
     surfaceClearance: (surface) =>
       surface ? ductSurfaceClearanceM(profileRef.current, surface.kind === 'wall') : 0,
     minimumSegmentLength: 0.08,
+    resolveFreeEnd: (start, end, connection) => {
+      const port = connection.port
+      const owner = port ? sceneApi.get(port.nodeId) : null
+      if (!port || !owner || owner.type === 'duct-segment' || owner.type === 'duct-fitting')
+        return end
+      const axis = new Vector3(...port.direction).normalize()
+      const distance = Math.max(0, new Vector3(...end).sub(new Vector3(...start)).dot(axis))
+      return new Vector3(...start).addScaledVector(axis, distance).toArray()
+    },
     inheritFromConnection: ({ port }) => {
       if (!port) return
       const inherited = inheritProfile(port, sceneApi.nodes())
@@ -682,14 +748,8 @@ const DuctSegmentTool = () => {
   })
 
   useEffect(() => {
-    if (!toolDefaults) return
-    setProfile((current) => ({
-      shape: toolDefaults.shape ?? current.shape,
-      diameter: toolDefaults.diameter ?? current.diameter,
-      width: toolDefaults.width ?? current.width,
-      height: toolDefaults.height ?? current.height,
-    }))
-  }, [toolDefaults])
+    updateRunDefaults('duct-segment', initialProfile.current!)
+  }, [])
 
   const previewPlan = useMemo(() => {
     if (!(activeLevelId && run.start && run.cursor)) return null
@@ -720,6 +780,11 @@ const DuctSegmentTool = () => {
     run.surfaceTarget,
     sceneApi,
   ])
+  // Profile changes alter the centreline clearance even with a stationary pointer.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the resolver reads the profile through a ref
+  useEffect(() => {
+    run.refreshCursor()
+  }, [profile, run.refreshCursor])
   const ghostFittings = useMemo(() => previewPlan?.fittings ?? [], [previewPlan])
 
   useEffect(() => {
@@ -734,7 +799,7 @@ const DuctSegmentTool = () => {
       )
   }, [autoHangers, hangerStyle, ghostFittings, profile, run.cursor, run.start])
   useEffect(() => () => usePathDraftPreview.getState().clear('duct-segment'), [])
-  useEffect(() => () => useEditor.getState().setToolDefaults('duct-segment', null), [])
+  useEffect(() => () => clearRunContinuation('duct-segment'), [])
 
   if (!activeLevelId) return null
   const extraParts =
@@ -748,8 +813,32 @@ const DuctSegmentTool = () => {
   return (
     <LevelOffsetGroup>
       <ConnectionFeedback
+        detail={
+          ghostFittings
+            .filter((fitting) => ['reducer', 'transition'].includes(fitting.fittingType))
+            .map((fitting) => {
+              const size = (outlet: boolean) => {
+                const shape = outlet
+                  ? (fitting.outletShape ?? fitting.shape2)
+                  : (fitting.inletShape ?? fitting.shape)
+                return shape === 'round'
+                  ? `Ø${outlet ? fitting.diameter2 : fitting.diameter} in`
+                  : `${outlet ? fitting.width2 : fitting.width} × ${outlet ? fitting.height2 : fitting.height} in ${shape}`
+              }
+              const ports = getDuctFittingPorts(fitting)
+              const length = new Vector3(...ports[0]!.position).distanceTo(
+                new Vector3(...ports[1]!.position),
+              )
+              return `${size(false)} → ${size(true)} · ${length.toFixed(2)} m long`
+            })
+            .join('; ') || undefined
+        }
         point={run.cursor}
         target={run.endConnection.port}
+        screen={run.snapScreen ?? run.cursorScreen}
+        error={
+          run.cursorScreen ? (previewPlan?.validationMessage ?? run.validationMessage) : undefined
+        }
         levelId={activeLevelId}
         profile={{
           ...profile,
@@ -761,6 +850,7 @@ const DuctSegmentTool = () => {
         cursor={run.cursor}
         cursorRef={cursorRef}
         directionMode={run.directionMode}
+        routingMode={run.routingMode}
         extraParts={extraParts}
         lengthInput={run.lengthInput}
         onLengthInputChange={run.onLengthInputChange}

@@ -46,6 +46,8 @@ import {
   type PipeEndpoint,
   pipeContinuationHandlePlan,
 } from './continuation'
+import { pipeUpdatesPreserveGrades } from './grade-operation'
+import { pipeGradesMatch, preservePipeGrades } from './slope'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
 const PORT_SNAP_RADIUS_M = 0.4
@@ -153,6 +155,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
   })
   const unit = useViewer((s) => s.unit)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const [gradeNotice, setGradeNotice] = useState('')
   const [runMoving, setRunMoving] = useState(false)
   const [verticalGhost, setVerticalGhost] = useState<{
     tint: 'valid' | 'invalid'
@@ -280,6 +283,15 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     next: Point,
     detached: boolean,
   ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+    const constrained = preservePipeGrades(
+      drag.initialPath,
+      drag.initialPath.map((point, index) => (index === drag.index ? next : point)),
+      drag.index,
+    )
+    if (!constrained) return null
+    next = constrained[drag.index]!
+    const checked = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) =>
+      pipeUpdatesPreserveGrades(useScene.getState().nodes, updates) ? updates : null
     const wall = pipe.wallAttachment
       ? useScene.getState().nodes[pipe.wallAttachment.wallId]
       : undefined
@@ -291,14 +303,9 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       path: Point[],
       updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
     ) => {
-      if (drag.index !== 0 && drag.index !== drag.initialPath.length - 1) return updates
-      const endpoint = drag.index === 0 ? 'start' : 'end'
       const nextPipe = { ...pipe, path } as PipeSegmentNode
-      const capUpdates = planRunEndCapFollowUpdates(
-        pipe,
-        nextPipe,
-        endpoint,
-        useScene.getState().nodes,
+      const capUpdates = (['start', 'end'] as const).flatMap((endpoint) =>
+        planRunEndCapFollowUpdates(pipe, nextPipe, endpoint, useScene.getState().nodes),
       )
       const capIds = new Set(capUpdates.map((update) => update.id))
       return [...updates.filter((update) => !capIds.has(update.id)), ...capUpdates]
@@ -306,37 +313,39 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     if (!detached && drag.fittingEndpoint) {
       const plan = planFittingEndpointReaim(drag.fittingEndpoint, drag.index, next)
       // Out of the elbow's buildable turn range — hold this frame.
-      if (!plan) return null
-      return withEndCapFollow(plan.path, [
-        {
-          id: pipe.id as AnyNodeId,
-          data: { path: plan.path, wallAttachment: attachmentFor(plan.path) },
-        },
-        { id: plan.fittingUpdate.id, data: plan.fittingUpdate.data },
-        ...(drag.jointPartner
-          ? [
-              {
-                id: drag.jointPartner!.id,
-                data: {
-                  path: drag.jointPartner!.startPath.map((p, i) =>
-                    i === (drag.index === 0 ? drag.jointPartner!.startPath.length - 1 : 0)
-                      ? drag.index === 0
-                        ? plan.path[plan.path.length - 1]!
-                        : plan.path[0]!
-                      : p,
-                  ),
-                } as Partial<AnyNode>,
-              },
-            ]
-          : []),
-      ])
+      if (!plan || !pipeGradesMatch(drag.initialPath, plan.path)) return null
+      return checked(
+        withEndCapFollow(plan.path, [
+          {
+            id: pipe.id as AnyNodeId,
+            data: { path: plan.path, wallAttachment: attachmentFor(plan.path) },
+          },
+          { id: plan.fittingUpdate.id, data: plan.fittingUpdate.data },
+          ...(drag.jointPartner
+            ? [
+                {
+                  id: drag.jointPartner!.id,
+                  data: {
+                    path: drag.jointPartner!.startPath.map((p, i) =>
+                      i === (drag.index === 0 ? drag.jointPartner!.startPath.length - 1 : 0)
+                        ? drag.index === 0
+                          ? plan.path[plan.path.length - 1]!
+                          : plan.path[0]!
+                        : p,
+                    ),
+                  } as Partial<AnyNode>,
+                },
+              ]
+            : []),
+        ]),
+      )
     }
-    const path = drag.initialPath.map((p, i) => (i === drag.index ? next : p)) as Point[]
+    const path = constrained
     const updates = [
       { id: pipe.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
       ...(detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)),
     ]
-    return detached ? updates : withEndCapFollow(path, updates)
+    return checked(detached ? updates : withEndCapFollow(path, updates))
   }
 
   /** World-space position of a local path point. */
@@ -465,7 +474,13 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       if (next[0] === drag.current[0] && next[1] === drag.current[1] && next[2] === drag.current[2])
         return
       const batch = buildDragBatch(drag, next, detached)
-      if (!batch) return
+      if (!batch) {
+        setGradeNotice(
+          'This edit cannot preserve the pipe grade and connected collars. Adjust the fitting or use Grade and flow.',
+        )
+        return
+      }
+      setGradeNotice('')
       drag.current = next
       drag.detached = detached
       if (step > 0) triggerSFX('sfx:grid-snap')
@@ -556,6 +571,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     }
     const livePreviewIds = new Set<AnyNodeId>()
     const publishLivePreview = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
+      if (!pipeUpdatesPreserveGrades(nodesById, updates)) return
       const scene = useScene.getState()
       const entries = updates
         .filter((update) => scene.nodes[update.id])
@@ -724,6 +740,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
           ...plan.updates.filter((u) => scene.nodes[u.id]),
           ...followUpdates,
         ]
+        if (!pipeUpdatesPreserveGrades(nodesById, updates)) return
         scene.applyNodeChanges({
           create: minted.map((node) => ({ node: node as AnyNode, parentId })),
           delete: (plan.delete ?? []).filter((id) => scene.nodes[id]),
@@ -756,6 +773,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
           },
           ...translationPlan.updates,
         ]
+        if (!pipeUpdatesPreserveGrades(nodesById, updates)) return
         scene.applyNodeChanges({
           create: created.map((node) => ({
             node: node as AnyNode,
@@ -770,6 +788,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
         return
       }
       const updates = batchFor(finalPath)
+      if (!pipeUpdatesPreserveGrades(nodesById, updates)) return
       useScene.getState().updateNodes(updates)
       ensureSceneObjectsVisible(updates.map((update) => update.id))
     }
@@ -844,6 +863,16 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
 
   return (
     <group ref={outerRef}>
+      {gradeNotice && runCenter && (
+        <Html position={runCenter} center>
+          <div
+            role="status"
+            className="pointer-events-none w-64 rounded border bg-background p-2 text-xs"
+          >
+            {gradeNotice}
+          </div>
+        </Html>
+      )}
       {verticalGhost?.fittings.map((f) => (
         <PipeFittingGhost fitting={f} key={`pipe-vghost-fit-${f.id}`} tint={verticalGhost.tint} />
       ))}

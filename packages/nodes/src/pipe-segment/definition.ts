@@ -1,9 +1,10 @@
 import type { NodeDefinition } from '@pascal-app/core'
-import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { createRunHangerToolHint } from '../shared/run-hanger-mode'
+import { pipeRunToolOptions } from '../shared/run-tool-options'
 import { pipeBranchAffordance, pipeContinuationAffordance } from './continuation'
 import { buildPipeSegmentFloorplan } from './floorplan'
 import { buildPipeSegmentGeometry } from './geometry'
+import { pipeGradePointAffordance } from './grade-affordance'
 import { pipeSegmentParametrics } from './parametrics'
 import { PipeSegmentNode } from './schema'
 
@@ -103,7 +104,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   // `affordanceTools.selection` handles. The builder emits an
   // `endpoint-handle` per path vertex; this drags the matching point.
   floorplanAffordances: {
-    'move-path-point': createPathPointMoveAffordance('pipe-segment'),
+    'move-path-point': pipeGradePointAffordance,
     'continue-run': pipeContinuationAffordance,
     'branch-run': pipeBranchAffordance,
   },
@@ -122,6 +123,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   },
 
   tool: () => import('./tool'),
+  toolOptions: pipeRunToolOptions,
   toolHints: [
     { key: 'Click', label: 'Start run' },
     { key: 'Click again', label: 'Place and continue' },
@@ -135,7 +137,8 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
 
   presentation: {
     label: 'DWV Pipe',
-    description: 'Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S.',
+    description:
+      'Drain / waste / vent pipe run — draw level or choose grade and downhill direction.',
     icon: { kind: 'url', src: '/icons/dwv-pipes.webp' },
     paletteSection: 'structure',
     paletteOrder: 95,
