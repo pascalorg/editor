@@ -11,6 +11,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./i18n": {
+      "types": "./dist/i18n/index.d.ts",
+      "import": "./dist/i18n/index.js",
+      "default": "./dist/i18n/index.js"
+    },
     "./clone-scene-graph": {
       "types": "./dist/utils/clone-scene-graph.d.ts",
       "import": "./dist/utils/clone-scene-graph.js",

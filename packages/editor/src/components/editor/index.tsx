@@ -8,6 +8,7 @@ import {
   getSceneMaterialIdFromRef,
   initSpaceDetectionSync,
   initSpatialGridSync,
+  setLocale,
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
@@ -202,6 +203,8 @@ function initializeEditorRuntime(): () => void {
   }
 }
 export interface EditorProps {
+  /** UI locale. Hosts may also call `setLocale` before mounting. */
+  locale?: string
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
   // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
@@ -1961,6 +1964,10 @@ function EditorContent({
 }
 
 export default function Editor(props: EditorProps) {
+  useClientLayoutEffect(() => {
+    if (props.locale) setLocale(props.locale)
+  }, [props.locale])
+
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
       <EditorContent {...props} />

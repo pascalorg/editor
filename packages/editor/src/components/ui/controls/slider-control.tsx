@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { parseLocalizedNumber, useScene } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { lingoUnitSpec, measurementHint, parseMeasurement } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
@@ -270,8 +270,8 @@ export function SliderControl({
             system: isImperial ? 'us' : 'metric',
           })
         : null
-      const bare = Number(text)
-      const stored = parsed ?? (text.trim() && Number.isFinite(bare) ? toStored(bare) : null)
+      const bare = parseLocalizedNumber(text)
+      const stored = parsed ?? (bare === null ? null : toStored(bare))
       return stored === null
         ? null
         : clamp(toStored(Number.parseFloat(toDisplay(stored).toFixed(precision))))

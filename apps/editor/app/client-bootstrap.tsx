@@ -9,7 +9,13 @@
 // `loaded` guard inside `../lib/bootstrap` keeps the side effect
 // idempotent under HMR.
 import '../lib/bootstrap'
+import { getLocale, setLocale, subscribe } from '@pascal-app/core'
 import { type ReactNode, useEffect } from 'react'
+
+if (typeof window !== 'undefined') {
+  const queryLocale = new URLSearchParams(window.location.search).get('lang')
+  if (queryLocale) setLocale(queryLocale)
+}
 
 export function ClientBootstrap({
   children,
@@ -22,5 +28,12 @@ export function ClientBootstrap({
     if (!enableDevDiagnostics) return
     import('react-scan').then(({ scan }) => scan({ enabled: true }))
   }, [enableDevDiagnostics])
+  useEffect(() => {
+    const syncDocumentLocale = () => {
+      document.documentElement.lang = getLocale()
+    }
+    syncDocumentLocale()
+    return subscribe(syncDocumentLocale)
+  }, [])
   return children
 }

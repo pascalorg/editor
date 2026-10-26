@@ -67,6 +67,7 @@ export {
   hiddenWallPointerEventsHeld,
   holdHiddenWallPointerEvents,
 } from './events/hidden-wall-pointer-hold'
+export * from './i18n'
 export { type ItemClipEntry, itemClipRegistry } from './hooks/scene-registry/item-clip-registry'
 export {
   sceneRegistry,
