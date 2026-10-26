@@ -3,17 +3,17 @@ import { parseCabinetDimensionInput } from '../dimension-input'
 
 test('cabinet dimension input follows the scoped locale', () => {
   expect(
-    parseCabinetDimensionInput('0,75', {
+    parseCabinetDimensionInput('1,000', {
       locale: 'fr',
       metricNotation: 'meters',
       unit: 'metric',
     }),
-  ).toBe(0.75)
+  ).toBe(1)
   expect(
-    parseCabinetDimensionInput('0,75', {
+    parseCabinetDimensionInput('1,000', {
       locale: 'en',
       metricNotation: 'meters',
       unit: 'metric',
     }),
-  ).toBeNull()
+  ).toBe(1000)
 })

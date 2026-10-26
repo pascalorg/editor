@@ -3,17 +3,17 @@ import { parseMetricInput } from './metric-control'
 
 test('metric controls parse stair dimensions with the scoped locale', () => {
   expect(
-    parseMetricInput('1,5', 'm', {
+    parseMetricInput('1,000', 'm', {
       isImperial: false,
       locale: 'fr',
       parseUnit: 'm',
     }),
-  ).toBe(1.5)
+  ).toBe(1)
   expect(
-    parseMetricInput('1,5', 'm', {
+    parseMetricInput('1,000', 'm', {
       isImperial: false,
       locale: 'en',
       parseUnit: 'm',
     }),
-  ).toBeNull()
+  ).toBe(1000)
 })

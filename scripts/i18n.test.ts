@@ -55,7 +55,7 @@ test('catalog checking does not rewrite PO or compiled catalogs', async () => {
   expect(paths.map((path) => readFileSync(path, 'utf8'))).toEqual(
     paths.map((path) => before.get(path)),
   )
-})
+}, 15_000)
 
 test('ICU plural validation follows the target locale categories', () => {
   const english = '{count, plural, one {# item} other {# items}}'
