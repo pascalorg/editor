@@ -6,7 +6,14 @@ import { createCompiledCatalog, getCatalogs } from '@lingui/cli/api'
 import { getConfig } from '@lingui/conf'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
 import { type PoFile, type PoItem, parsePo, stringifyPo } from 'pofile-ts'
-import { baseRevision, lastReleaseTag, readAtRevision } from './i18n-git'
+import {
+  baseRevision,
+  firstCommitWith,
+  headRevision,
+  lastReleaseTag,
+  readAtRevision,
+  resolveRevision,
+} from './i18n-git'
 import { checkRepositoryLiterals } from './i18n-literals'
 
 export type SourceMessage = {
@@ -47,7 +54,9 @@ type Glossary = {
 
 type CompiledToken = string | [name: string, type?: string, choices?: unknown]
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = process.env.I18N_ROOT
+  ? resolve(process.env.I18N_ROOT)
+  : resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const CATALOG_ROOT = process.env.I18N_CATALOG_ROOT
   ? resolve(process.env.I18N_CATALOG_ROOT)
   : join(ROOT, 'packages/editor/src/i18n/locales')
@@ -932,7 +941,7 @@ function writeJobSummary(sources: SourceMessage[], current: LocaleEntries, base?
     [
       '### Translations awaiting review',
       '',
-      `Drafts ship as English until reviewed. ${sources.length} messages${base ? `; compared with ${base.slice(0, 12)}` : ''}.`,
+      `Drafts ship as English until reviewed. ${sources.length} messages${base ? `; compared with ${base}` : ''}.`,
       '',
       '| Locale | Drafts |',
       '| --- | --- |',
@@ -959,6 +968,53 @@ export function releaseCheck(sources: SourceMessage[], base: LocaleEntries | und
   ]
 }
 
+/** The package whose release carries the bundled catalogs. */
+const CATALOG_PACKAGE = 'editor'
+
+function hasCatalogs(revision: string): boolean {
+  return TARGET_LOCALES.every(
+    (locale) => readAtRevision(revision, catalogPath(locale)) !== undefined,
+  )
+}
+
+/**
+ * What a release is compared with: the latest `@pascal-app/editor@*` tag
+ * whose tree has the catalogs; else `origin/main` when it is another commit
+ * with catalogs; else the commit that introduced the catalogs, whose reviewed
+ * entries must survive. Never the working tree, and never a base without
+ * catalogs: with none available this throws.
+ */
+export function releaseBase(requested?: string): { revision: string; label: string } {
+  const head = headRevision()
+  if (requested) {
+    const revision = resolveRevision(requested)
+    if (!revision) throw new Error(`release-check: --base ${requested} is not a commit`)
+    if (!hasCatalogs(revision)) {
+      throw new Error(
+        `release-check: --base ${requested} has no bundled PO catalogs to compare with`,
+      )
+    }
+    return { revision, label: requested }
+  }
+  const tag = lastReleaseTag(CATALOG_PACKAGE)
+  if (tag && hasCatalogs(tag.revision)) return { revision: tag.revision, label: tag.tag }
+  const reason = tag ? `${tag.tag} has no catalogs` : 'no release tag'
+  const main = resolveRevision('origin/main')
+  if (main && main !== head && hasCatalogs(main)) {
+    return { revision: main, label: `origin/main (${reason})` }
+  }
+  const introduced = firstCommitWith(catalogPath('fr'))
+  if (introduced && introduced !== head && hasCatalogs(introduced)) {
+    return {
+      revision: introduced,
+      label: `${introduced.slice(0, 12)}, the commit that introduced the catalogs (${reason})`,
+    }
+  }
+  throw new Error(
+    `release-check: no base with bundled PO catalogs (${reason}; origin/main and the catalogs' first commit are unavailable or HEAD); pass --base <rev>`,
+  )
+}
+
 function checkCatalogMessages(
   sources: SourceMessage[],
   glossary: Glossary,
@@ -966,7 +1022,7 @@ function checkCatalogMessages(
 ): string[] {
   const current = currentEntries()
   const base = baseRevision()
-  writeJobSummary(sources, current, base)
+  writeJobSummary(sources, current, base?.slice(0, 12))
   return [
     ...checkTranslationEntries(sources, current, glossary, options),
     ...releaseCheck(
@@ -1047,12 +1103,16 @@ async function main(): Promise<void> {
       return index === -1 ? undefined : process.argv[index + 1]
     }
     const baseDir = flag('base-dir')
-    const revision = baseDir ? undefined : (flag('base') ?? lastReleaseTag() ?? baseRevision())
-    if (!(baseDir || revision)) {
-      throw new Error(
-        'release-check needs a base: the last v* tag, --base <rev> or --base-dir <dir>',
-      )
+    let resolved: { revision: string; label: string } | undefined
+    try {
+      resolved = baseDir ? undefined : releaseBase(flag('base'))
+    } catch (error) {
+      console.error(`[i18n] ${error instanceof Error ? error.message : String(error)}`)
+      process.exitCode = 1
+      return
     }
+    const revision = resolved?.revision
+    if (resolved) console.log(`Comparing with ${resolved.label}`)
     const base = baseDir
       ? readLocaleEntries((path) => {
           const file = join(resolve(baseDir), relative(CATALOG_ROOT, path))
@@ -1060,7 +1120,7 @@ async function main(): Promise<void> {
         })
       : readLocaleEntries((path) => readAtRevision(revision!, path))
     const sources = readSourceMessages()
-    writeJobSummary(sources, currentEntries(), revision)
+    writeJobSummary(sources, currentEntries(), resolved?.label)
     const errors = releaseCheck(sources, base)
     if (errors.length > 0) {
       console.error(errors.map((error) => `[i18n] ${error}`).join('\n'))
@@ -1068,7 +1128,7 @@ async function main(): Promise<void> {
       return
     }
     console.log(
-      `No reviewed translation regressed against ${baseDir ?? revision} and no draft is compiled in`,
+      `No reviewed translation regressed against ${baseDir ?? resolved?.label} and no draft is compiled in`,
     )
     return
   }

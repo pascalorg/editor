@@ -575,3 +575,80 @@ test('the release job fails when a compiled pack ships a draft', () => {
   expect(exitCode).toBe(1)
   expect(output).toMatch(/fr: compiled pack ships unreviewed "[^"]+"/)
 })
+
+/** A throwaway repository with the real catalogs, for the default base lookup. */
+function releaseRepo(steps: (git: (...args: string[]) => void, root: string) => void): string {
+  const root = mkdtempSync(join(tmpdir(), 'pascal-release-'))
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(
+      ['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args],
+      { cwd: root, stdout: 'ignore', stderr: 'pipe' },
+    )
+    if (result.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`)
+  }
+  git('init', '-q', '-b', 'main')
+  steps(git, root)
+  return root
+}
+
+const addCatalogs = (root: string) =>
+  cpSync(LOCALES_DIR, join(root, LOCALES_DIR), { recursive: true })
+
+function defaultReleaseCheck(root: string) {
+  const result = Bun.spawnSync(['bun', 'scripts/i18n.ts', 'release-check'], {
+    env: { ...process.env, I18N_ROOT: root, GITHUB_STEP_SUMMARY: '' },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  return { exitCode: result.exitCode, output: `${result.stdout}${result.stderr}` }
+}
+
+test('the release job compares with the latest editor release tag and fails on a reviewed-to-draft change', () => {
+  const root = releaseRepo((git, root) => {
+    addCatalogs(root)
+    git('add', '.')
+    git('commit', '-q', '-m', 'release')
+    git('tag', '@pascal-app/editor@9.9.9')
+    git('tag', 'v0.0.1')
+    markDraft(join(root, LOCALES_DIR), 'editor.buildPanel.advanced')
+  })
+  const { exitCode, output } = defaultReleaseCheck(root)
+  expect(output).toContain('Comparing with @pascal-app/editor@9.9.9')
+  expect(exitCode).toBe(1)
+  expect(output).toContain(
+    'fr: "editor.buildPanel.advanced" is reviewed on the base branch with the same English and must stay reviewed',
+  )
+})
+
+test('a release tag without catalogs falls back to the commit that introduced them', () => {
+  const root = releaseRepo((git, root) => {
+    writeFileSync(join(root, 'README.md'), 'before i18n\n')
+    git('add', '.')
+    git('commit', '-q', '-m', 'old release')
+    git('tag', '@pascal-app/editor@1.0.0')
+    addCatalogs(root)
+    git('add', '.')
+    git('commit', '-q', '-m', 'catalogs')
+    writeFileSync(join(root, 'README.md'), 'after i18n\n')
+    git('add', '.')
+    git('commit', '-q', '-m', 'later work')
+    markDraft(join(root, LOCALES_DIR), 'editor.buildPanel.advanced')
+  })
+  const { exitCode, output } = defaultReleaseCheck(root)
+  expect(output).toContain(
+    'the commit that introduced the catalogs (@pascal-app/editor@1.0.0 has no catalogs)',
+  )
+  expect(exitCode).toBe(1)
+  expect(output).toContain('fr: "editor.buildPanel.advanced" is reviewed on the base branch')
+})
+
+test('with no base that has catalogs the release job fails loudly', () => {
+  const root = releaseRepo((git, root) => {
+    addCatalogs(root)
+    git('add', '.')
+    git('commit', '-q', '-m', 'catalogs at HEAD only')
+  })
+  const { exitCode, output } = defaultReleaseCheck(root)
+  expect(exitCode).toBe(1)
+  expect(output).toContain('release-check: no base with bundled PO catalogs')
+})
