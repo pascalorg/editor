@@ -1,4 +1,4 @@
-import { type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type ItemNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
@@ -12,6 +12,7 @@ import {
   TreeNodeWrapper,
 } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 const CATEGORY_ICONS: Record<string, string> = {
   door: '/icons/door.webp',
@@ -34,6 +35,7 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   depth,
   isLast,
 }: ItemTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -83,7 +85,7 @@ export const ItemTreeNode = memo(function ItemTreeNode({
 
   const iconSrc = CATEGORY_ICONS[asset?.category ?? ''] || '/icons/couch.webp'
   const snapTarget = resolveNodeSnapTarget(node)
-  const defaultName = asset?.name || 'Item'
+  const defaultName = asset?.name || i18n._(nodeLabelDescriptor('item', 'Item'))
   const hasChildren = children.length > 0
 
   return (

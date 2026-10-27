@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNodeId, type WindowNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type WindowNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
@@ -8,6 +8,7 @@ import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badg
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface WindowTreeNodeProps {
   nodeId: AnyNodeId
@@ -20,6 +21,7 @@ export const WindowTreeNode = memo(function WindowTreeNode({
   depth,
   isLast,
 }: WindowTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
   const node = useScene((s) => s.nodes[nodeId] as WindowNode | undefined)
@@ -62,7 +64,7 @@ export const WindowTreeNode = memo(function WindowTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName="Window"
+          defaultName={i18n._(nodeLabelDescriptor('window', 'Window'))}
           isEditing={isEditing}
           nodeId={nodeId as AnyNodeId}
           onStartEditing={handleStartEditing}

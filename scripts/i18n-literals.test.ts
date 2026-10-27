@@ -72,6 +72,21 @@ test('the codemod wraps visible copy in runtime descriptors owned by the compone
   expect(scanSource('apps/editor/components/share-panel.tsx', output, allowlist)).toEqual([])
 })
 
+test('a hook already imported from a second core import is not imported again', () => {
+  const source = `'use client'
+
+import { useScene } from '@pascal-app/core'
+import { formatNumber, usePascalI18n } from '@pascal-app/core'
+
+export function Count() {
+  return <p>Levels</p>
+}
+`
+  const { output } = convert('packages/editor/src/components/count.tsx', source)
+  expect(output.match(/usePascalI18n\b/g)).toHaveLength(2)
+  expect(output).toContain("import { useScene } from '@pascal-app/core'")
+})
+
 test('the codemod leaves module-level copy for a person and never edits it', () => {
   const source = `const ITEMS = [{ label: 'Delete' }]
 
