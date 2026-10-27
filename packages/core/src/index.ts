@@ -219,10 +219,12 @@ export {
   floorScriptPaintRefusal,
 } from './lib/floor-plate-paint'
 export {
+  FLOOR_SCRIPT_LIFT,
   type FloorScriptInputs,
   floorScriptInputs,
   floorScriptInputsKey,
   floorScriptRecord,
+  floorScriptSurface,
 } from './lib/floor-script'
 export {
   type FloorStepOverride,
@@ -669,6 +671,7 @@ export {
   type DerivedWriteOperation,
   derivedDeletionIntent,
   derivedFieldViolations,
+  filterDerivedNodeWrites,
   isDerivedNode,
 } from './store/derived-node-guard'
 export {

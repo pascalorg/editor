@@ -297,6 +297,43 @@ describe('plate side exposure', () => {
     if (!partition) throw new Error('expected a partition')
     expect(classifyPlateSideAt(partition, [1.5, 1])).toBe('edge')
   })
+  test("a base plate's hole rim belongs to the room around it; its facade edge to none", () => {
+    clearPlateSurfaceCaches()
+    const { plate, context } = twoRoomLevel()
+    const base = SlabNode.parse({
+      ...plate,
+      plateRole: 'base',
+      holes: [
+        [
+          [1, 1],
+          [3, 1],
+          [3, 3],
+          [1, 3],
+        ],
+      ],
+      holeMetadata: [{ source: 'floor-opening', openingId: 'floor-opening_void' }],
+    })
+    const partition = computePlateSurfacePartition(base, {
+      ...context,
+      slabs: [base, ...context.slabs.slice(1)],
+    })
+    if (!partition) throw new Error('expected a partition')
+    const sideAt = ([x, z]: [number, number]) =>
+      partition.sides.find(
+        (side) =>
+          Math.abs(
+            (side.end[0] - side.start[0]) * (z - side.start[1]) -
+              (side.end[1] - side.start[1]) * (x - side.start[0]),
+          ) < 1e-9 &&
+          Math.min(side.start[0], side.end[0]) - 1e-9 <= x &&
+          x <= Math.max(side.start[0], side.end[0]) + 1e-9 &&
+          Math.min(side.start[1], side.end[1]) - 1e-9 <= z &&
+          z <= Math.max(side.start[1], side.end[1]) + 1e-9,
+      )
+    expect(sideAt([2, 1])).toMatchObject({ role: 'edge', zoneId: 'zone_a' })
+    expect(sideAt([1, 2])).toMatchObject({ role: 'edge', zoneId: 'zone_a' })
+    expect(sideAt([2, -0.1])?.zoneId).toBeUndefined()
+  })
 })
 
 describe('room finish roles', () => {

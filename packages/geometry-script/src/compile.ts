@@ -27,11 +27,12 @@ export type GeometryScriptCompileInput = {
   code: string
   params?: Record<string, GeometryScriptParamValue>
   /**
-   * What the host builds the module for (a room floor's `polygon`, `holes` and `elevation`, a wall
-   * face's `outline` and `holes`): the build reads them in `params` beside its declared ones, and
-   * as `inputs`; they are not among the returned params, which the scene keeps. A build given them
-   * is in the host's frame, so it is not re-origined for its mount, and it is cut to the floor's
-   * polygon or the face's outline, less their holes: the module lays out, Pascal clips.
+   * What the host builds the module for (a room floor's `polygon` and `holes` in plan x/z, with
+   * y = 0 the floor's surface; a wall face's `outline` and `holes`): the build reads them in
+   * `params` beside its declared ones, and as `inputs`; they are not among the returned params,
+   * which the scene keeps. A build given them is in the host's frame, so it is not re-origined for
+   * its mount, and it is cut to the floor's polygon or the face's outline, less their holes: the
+   * module lays out, Pascal clips.
    */
   inputs?: Record<string, unknown>
 }
@@ -46,7 +47,7 @@ export const GEOMETRY_SCRIPT_LIMITS = {
 
 const csg = { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION }
 
-const MODULES: ModuleTable = {
+export const MODULES: ModuleTable = {
   three: THREE as unknown as Record<string, unknown>,
   'three-bvh-csg': csg,
   BufferGeometryUtils: BufferGeometryUtils as unknown as Record<string, unknown>,
@@ -57,7 +58,7 @@ const MODULES: ModuleTable = {
   RoundedBoxGeometry: { RoundedBoxGeometry },
 }
 
-const LIB = {
+export const LIB = {
   BufferGeometryUtils,
   ConvexGeometry,
   LoftGeometry,
@@ -212,6 +213,64 @@ function unmeasurable(root: THREE.Object3D): Error {
     }
   }
   return new Error('The object cannot be measured: its size is not a finite number.')
+}
+
+/**
+ * Every InstancedMesh as a group of plain meshes, one per drawn instance: the bounds, the cut to a
+ * host's floor or face, the coverage, the triangle count and the merge read each mesh's own
+ * geometry and matrixWorld, so an instanced mesh would count as one copy at its own origin. The
+ * group takes its place with its uuid, name, transform, userData and children, so part names and
+ * clip targets hold; `instanceColor` becomes a vertex colour, on a vertex-coloured copy of the
+ * material (times the geometry's own vertex colours when the material already drew them).
+ */
+function expandInstances(root: THREE.Object3D) {
+  const instanced: THREE.InstancedMesh[] = []
+  root.traverse((object) => {
+    if ((object as THREE.InstancedMesh).isInstancedMesh)
+      instanced.push(object as THREE.InstancedMesh)
+  })
+  const matrix = new THREE.Matrix4()
+  const color = new THREE.Color()
+  for (const source of instanced) {
+    const group = THREE.Object3D.prototype.copy.call(
+      new THREE.Group(),
+      source,
+      false,
+    ) as THREE.Group
+    group.uuid = source.uuid
+    for (const child of [...source.children]) group.add(child)
+    const authored = Array.isArray(source.material) ? source.material : [source.material]
+    const tint = source.instanceColor
+    const own = authored.some((m) => m.vertexColors) ? source.geometry.getAttribute('color') : null
+    const materials = tint
+      ? authored.map((m) => Object.assign(m.clone(), { vertexColors: true }))
+      : authored
+    const material = materials.length === 1 ? materials[0]! : materials
+    for (let i = 0; i < source.count; i++) {
+      let geometry = source.geometry
+      if (tint) {
+        source.getColorAt(i, color)
+        geometry = source.geometry.clone()
+        const count = geometry.getAttribute('position').count
+        const size = own?.itemSize ?? 3
+        const values = new Float32Array(count * size)
+        for (let v = 0; v < count; v++) {
+          values[v * size] = color.r * (own ? own.getX(v) : 1)
+          values[v * size + 1] = color.g * (own ? own.getY(v) : 1)
+          values[v * size + 2] = color.b * (own ? own.getZ(v) : 1)
+          if (own && size === 4) values[v * 4 + 3] = own.getW(v)
+        }
+        geometry.setAttribute('color', new THREE.BufferAttribute(values, size))
+      }
+      const mesh = new THREE.Mesh(geometry, material)
+      // A helper stays one: each copy of an instanced cutout or collider is one too.
+      if (isHelper(source)) mesh.name = source.name
+      source.getMatrixAt(i, matrix)
+      matrix.decompose(mesh.position, mesh.quaternion, mesh.scale)
+      group.add(mesh)
+    }
+    source.parent?.add(group).remove(source)
+  }
 }
 
 /** The meshes that draw: helpers (cutout, collider), and anything under one, do not. */
@@ -576,21 +635,40 @@ function flipWinding(source: THREE.BufferGeometry): THREE.BufferGeometry {
  * so a double-sided plane shows nothing from behind. The back face is baked into
  * the geometry instead: the triangles again, wound the other way with their
  * normals negated; a back-side material keeps only that copy. Runs before the
- * triangle count and the merge, so both see what is exported.
+ * triangle count and the merge, so both see what is exported. Materials turn
+ * front-side only once every mesh is baked: a material shared by several
+ * meshes (a pair of curtains) must still read as double-sided on the last one.
  */
 function bakeBackFaces(root: THREE.Object3D) {
+  const sided: THREE.Mesh<THREE.BufferGeometry, THREE.Material>[] = []
   root.traverse((object) => {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh || isHelper(mesh) || Array.isArray(mesh.material)) return
-    const { side } = mesh.material
-    if (side === THREE.FrontSide) return
+    if (mesh.material.side !== THREE.FrontSide)
+      sided.push(mesh as THREE.Mesh<THREE.BufferGeometry, THREE.Material>)
+  })
+  for (const mesh of sided) {
     const back = flipWinding(mesh.geometry)
     mesh.geometry =
-      side === THREE.BackSide
+      mesh.material.side === THREE.BackSide
         ? back
         : (BufferGeometryUtils.mergeGeometries([mesh.geometry.toNonIndexed(), back]) ??
           mesh.geometry)
-    mesh.material.side = THREE.FrontSide
+  }
+  for (const mesh of sided) mesh.material.side = THREE.FrontSide
+}
+
+/**
+ * The bake and the merge leave every triangle with its own three vertices, three
+ * times what a smooth surface needs: an 82k-triangle bed was a 6 MB GLB.
+ * Vertices equal in every attribute are shared again, so hard edges (their
+ * normals differ) stay split and the exported shape is the same.
+ */
+function weldVertices(root: THREE.Object3D) {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (mesh.isMesh && !isHelper(mesh) && !mesh.geometry.index)
+      mesh.geometry = BufferGeometryUtils.mergeVertices(mesh.geometry)
   })
 }
 
@@ -907,6 +985,9 @@ export async function finishBuild({
   const root = new THREE.Group()
   root.name = 'pascal_script_root'
   root.add(built)
+  expandInstances(root)
+  // A build that is itself an InstancedMesh has given its place to its group.
+  const model = root.children[0]!
   const box = visibleBounds(root)
   if (box.isEmpty()) throw new Error('build() returned no visible meshes')
   if (![box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z].every(Number.isFinite)) {
@@ -918,10 +999,10 @@ export async function finishBuild({
       `The object is ${vec(size).join(' × ')} m; the limit is ${GEOMETRY_SCRIPT_LIMITS.extent} m per side. Units are metres.`,
     )
   }
-  if (!inputs) built.position.sub(originFor(box, mount))
+  if (!inputs) model.position.sub(originFor(box, mount))
   root.updateWorldMatrix(true, true)
 
-  const read = readAnimations(built, root)
+  const read = readAnimations(model, root)
   const clips = sampleTransformClips(root, read.clips)
   const animated = read.animated
   const region = inputs && hostRegion(inputs)
@@ -950,6 +1031,7 @@ export async function finishBuild({
 
   const { surfaces, undersides } = analyseGeometry(root, conventions.parts)
   mergeByPartAndMaterial(root, animated)
+  weldVertices(root)
   const bounds = visibleBounds(root)
   const glb = await exportGlb(root, clips)
   return {
@@ -982,7 +1064,7 @@ export async function finishBuild({
 }
 
 // A deterrent, not the isolation boundary: hosts run this in a locked-down worker or process.
-const SOURCE_GUARD =
+export const SOURCE_GUARD =
   /\bimport\s*\(|\beval\s*\(|\bFunction\s*\(|\.constructor\s*\(|\bprocess\b|\brequire\s*\(/
 
 export function assertScriptSize(code: string) {

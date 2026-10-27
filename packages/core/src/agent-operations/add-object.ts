@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { addObjectTool } from '../agent-tools/add-object'
+import { addObjectTool, type ObjectPiece } from '../agent-tools/add-object'
 import { isAgentRefusal, refuse } from '../agent-tools/refusal'
 import { CATALOG_SOURCE } from '../agent-tools/sources'
 import { artifactUrl } from '../lib/artifact-store'
@@ -49,6 +49,11 @@ export type AddObjectInput = {
   category?: string
   /** What the object stands in for; kept in `metadata.reason`, listed by verify_scene. */
   reason?: string
+  /**
+   * Roof geometry (`metadata.role: 'roof'`) for a roof level: not storey content, so the storey's
+   * wall and slab shape refusals do not apply. Set by author_scene, not by the tool's contract.
+   */
+  role?: 'roof'
   /** What the surface's compile produced from `code` (compiled before the operation runs). */
   compiled: CompiledGeometryScript
 }
@@ -266,6 +271,38 @@ export function requireAddObjectReason(input: { nodeId?: string; reason?: string
     )
 }
 
+/** A piece to make from words (`add_object`'s `piece`): what a maker reads, and where it lands. */
+export type PlannedPiece = {
+  id: string
+  description: string
+  size: [number, number, number]
+  mount: ObjectPiece['mount']
+  /** The add_object call, without code, that places it once its module lands; null: made only. */
+  place: Omit<AddObjectInput, 'compiled' | 'code'> | null
+}
+
+/** The piece path of add_object, before any host makes it: the same refusals on every surface. */
+export function planPiece(
+  input: Omit<AddObjectInput, 'compiled'> & { piece: ObjectPiece; language?: unknown },
+): PlannedPiece {
+  if (input.code)
+    refuse('piece_with_code', 'Pass code or piece, not both: piece has Pascal write the module.')
+  if (input.nodeId)
+    refuse(
+      'piece_on_edit',
+      'piece makes a new object; to change an object, pass its nodeId with code or params.',
+    )
+  requireAddObjectReason(input)
+  const { piece, params: _params, language: _language, code: _code, ...place } = input
+  return {
+    id: piece.id ?? generateId('piece'),
+    description: piece.description,
+    size: [piece.size.width, piece.size.height, piece.size.depth],
+    mount: piece.mount ?? 'floor',
+    place: place.position || place.parentId ? place : null,
+  }
+}
+
 export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context) => {
   const { compiled } = input
   requireMeasured(compiled, { label: input.name, nodeId: input.nodeId, tool: 'add_object' })
@@ -336,7 +373,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       { mount: compiled.mount, parentType: parent.type },
     )
   }
-  if (compiled.mount === 'floor' && parent.type === 'level') {
+  if (compiled.mount === 'floor' && parent.type === 'level' && input.role !== 'roof') {
     // Given no host while the roof level is in view (a roof just placed selects it), the object
     // belongs on the storey it covers; one named onto the roof level goes up with the roof (a
     // chimney cap, a gable louvre).
@@ -364,7 +401,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     source: scriptSource(compiled, itemSourceMeta(input)),
     slots: matchScriptSlotsToLibrary(compiled.manifest),
     asset,
-    metadata: { reason: input.reason },
+    metadata: { reason: input.reason, ...(input.role ? { role: input.role } : {}) },
   })
   const hint = [
     typeHint(input),

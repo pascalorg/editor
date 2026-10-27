@@ -191,6 +191,71 @@ describe('floor-placed elevation resolver', () => {
     ).toBe(0.05)
   })
 
+  test("what stands on a room's scripted floor stands on the planks' top; beside it, on the plate", () => {
+    registerNode(
+      makeDefinition('item', {
+        floorPlaced: { footprint: () => ({ dimensions: [1, 0.01, 1], rotation: [0, 0, 0] }) },
+      }),
+    )
+    const room: [number, number][] = [
+      [-2, -2],
+      [2, -2],
+      [2, 2],
+      [-2, 2],
+    ]
+    const plate = {
+      id: 'slab_plate',
+      type: 'slab',
+      parentId: LEVEL_ID,
+      boundary: 'auto',
+      plateRole: 'base',
+      polygon: [
+        [-2, -2],
+        [6, -2],
+        [6, 2],
+        [-2, 2],
+      ],
+      holes: [],
+      elevation: 0.05,
+      thickness: 0.05,
+      zoneIds: ['zone_living', 'zone_hall'],
+    } as unknown as SlabNode
+    // 18 mm planks laid from the floor's surface, y = 0.
+    const living = {
+      id: 'zone_living',
+      type: 'zone',
+      parentId: LEVEL_ID,
+      polygon: room,
+      holes: [],
+      floor: { script: { manifest: { bounds: { min: [-2, 0, -2], max: [2, 0.018, 2] } } } },
+    } as unknown as AnyNode
+    const hall = {
+      id: 'zone_hall',
+      type: 'zone',
+      parentId: LEVEL_ID,
+      polygon: room.map(([x, z]) => [x + 4, z]),
+      holes: [],
+    } as unknown as AnyNode
+    const level = { ...makeLevel(), children: [plate.id, living.id, hall.id] } as AnyNode
+    spatialGridManager.handleNodeCreated(plate as AnyNode, LEVEL_ID)
+    const rug = makeFloorNode()
+    const nodes = nodesFor(level, plate as AnyNode, living, hall, rug)
+
+    // The rug lies on the planks (0.05 plate + 1 mm under the build + 18 mm), not in them.
+    expect(getFloorPlacedElevation({ node: rug, nodes, position: [0, 0, 0] })).toBeCloseTo(0.069, 9)
+    // In the hall, which has no floor script, it lies on the plate.
+    expect(getFloorPlacedElevation({ node: rug, nodes, position: [4, 0, 0] })).toBe(0.05)
+    // A support pinned to the plate reads the same surface.
+    const pinned = { ...rug, supportSlabId: plate.id } as AnyNode
+    expect(
+      getFloorPlacedElevation({
+        node: pinned,
+        nodes: { ...nodes, [pinned.id]: pinned },
+        position: [0, 0, 0],
+      }),
+    ).toBeCloseTo(0.069, 9)
+  })
+
   test('canPlaceOnFloorFootprints accepts an L-shaped draft in the open corner gap', () => {
     const baseAsset = (makeFloorNode() as { asset: Record<string, unknown> }).asset
     registerNode(

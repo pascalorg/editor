@@ -953,7 +953,7 @@ const described = (reason: string, paths: readonly string[]) =>
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
   { path: 'metadata.roomBoundary', reason: 'Boolean opt-out from room boundary detection.' },
   ...described(
-    "author_scene's provenance: the payload's own ids on walls and openings, a room's seed, a level's elevation, a slab's finish, a wall's colour, and on the building the stored payload, the report and when it was written; none of it names a node.",
+    "author_scene's provenance: the payload's own ids on walls and openings, a room's seed, a level's elevation, a slab's finish, a wall's colour, and on the building the stored payload, the report, the payload items waiting for an add_object piece (by payload id and piece id) and when it was written; none of it names a node.",
     [
       'authorScene',
       'authorScene.at',
@@ -962,13 +962,19 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
       'authorScene.finish',
       'authorScene.id',
       'authorScene.payload',
+      'authorScene.pending',
       'authorScene.report',
+      'authorScene.report.defects',
       'authorScene.seed',
     ],
   ),
   ...described(
     "An artifact's kind as the MCP host stores it (item, window, door, column): artifact metadata, not a node's.",
     ['kind'],
+  ),
+  ...described(
+    "The CLI's Architect API request metadata (`pascal architect run`): the project the turn targets and its credit cap, sent to the API, never stored on a node.",
+    ['pascal_max_credits', 'project_id'],
   ),
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
