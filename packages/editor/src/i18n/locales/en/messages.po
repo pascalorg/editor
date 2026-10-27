@@ -7121,6 +7121,66 @@ msgstr "Yaw"
 msgid "node.column.panel.ySupport"
 msgstr "Y Support"
 
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.aFrameSupport"
+msgstr "A-Frame Support"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.basicPillar"
+msgstr "Straight Round"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.boxFrameSupport"
+msgstr "Box Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.bulgedPillar"
+msgstr "Soft Bulged"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.hourglassPillar"
+msgstr "Hourglass"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.kBraceSupport"
+msgstr "K Brace"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.portalFrameSupport"
+msgstr "Portal Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.singleStrutSupport"
+msgstr "Single Strut"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.squarePillar"
+msgstr "Square Block"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.taperedPillar"
+msgstr "Tapered Round"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.trestleSupport"
+msgstr "Trestle Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.tripodSupport"
+msgstr "Tripod Support"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.vFrameSupport"
+msgstr "V Support"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.xBraceSupport"
+msgstr "X Brace"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.yFrameSupport"
+msgstr "Y Support"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.constructionDimension.description"
 msgstr "Associative linear, curved, circular, angular, or coordinate plan dimension."

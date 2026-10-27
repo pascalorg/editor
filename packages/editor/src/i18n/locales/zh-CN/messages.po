@@ -17723,6 +17723,156 @@ msgstr "偏航"
 msgid "node.column.panel.ySupport"
 msgstr "Y 形支撑"
 
+# Review: required
+# Source-Hash: bf2baf3d7b55f0df
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "A-Frame Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.aFrameSupport"
+msgstr "A 字支撑"
+
+# Review: required
+# Source-Hash: 51cf77bb359cee43
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Straight Round"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.basicPillar"
+msgstr "直圆柱"
+
+# Review: required
+# Source-Hash: 39d33008c81fc075
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Box Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.boxFrameSupport"
+msgstr "箱形框架"
+
+# Review: required
+# Source-Hash: 4f22058e862d1f81
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Soft Bulged"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.bulgedPillar"
+msgstr "微鼓形"
+
+# Review: required
+# Source-Hash: bb851e93088b73a2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hourglass"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.hourglassPillar"
+msgstr "沙漏形"
+
+# Review: required
+# Source-Hash: 9cc75129edee59ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "K Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.kBraceSupport"
+msgstr "K 形支撑"
+
+# Review: required
+# Source-Hash: 0bf453b4882c663c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Portal Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.portalFrameSupport"
+msgstr "门式框架"
+
+# Review: required
+# Source-Hash: 9099890734ae1238
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single Strut"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.singleStrutSupport"
+msgstr "单撑杆"
+
+# Review: required
+# Source-Hash: 0c13af329b9b57cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square Block"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.squarePillar"
+msgstr "方柱"
+
+# Review: required
+# Source-Hash: 4c294bad84924665
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tapered Round"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.taperedPillar"
+msgstr "收分圆柱"
+
+# Review: required
+# Source-Hash: 360e405bfd74a379
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Trestle Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.trestleSupport"
+msgstr "支架框架"
+
+# Review: required
+# Source-Hash: 4589103259b4fc4d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tripod Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.tripodSupport"
+msgstr "三脚支撑"
+
+# Review: required
+# Source-Hash: f24cc343d79acc10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "V Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.vFrameSupport"
+msgstr "V 形支撑"
+
+# Review: required
+# Source-Hash: 4e6640dfff42cea4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "X Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.xBraceSupport"
+msgstr "X 形支撑"
+
+# Review: required
+# Source-Hash: 86259690e332b66d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Y Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.yFrameSupport"
+msgstr "Y 形支撑"
+
 # Source-Hash: 895766ad1b766c2e
 # Review: required
 # AI-Provider: cursor-agent
