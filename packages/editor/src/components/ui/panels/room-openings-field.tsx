@@ -1,6 +1,6 @@
 'use client'
 
-import { area, useScene } from '@pascal-app/core'
+import { area, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import {
@@ -31,6 +31,7 @@ export function RoomOpeningsField({
   zoneId: string
   surface: OpeningSurface
 }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((scene) => scene.nodes)
   const unit = useViewer((s) => s.unit)
   const readOnly = useScene((scene) => scene.readOnly)
@@ -43,7 +44,7 @@ export function RoomOpeningsField({
     <ShapeChoice
       data={`cut-opening-${surface}`}
       disabled={readOnly}
-      label="Cut opening"
+      label={i18n._({ id: 'editor.panels.roomOpeningsField.cutOpening', message: 'Cut opening' })}
       onPick={(shape) => startOpeningDraft(zoneId, surface, shape)}
     />
   )
@@ -57,21 +58,21 @@ export function RoomOpeningsField({
   if (!editing)
     return (
       <div className="flex min-h-7 items-center justify-between gap-3" data-room-openings={surface}>
-        <span>{openings.length ? count(openings.length) : 'No openings'}</span>
+        <span>{openings.length ? count(openings.length) : i18n._({ id: 'editor.panels.roomOpeningsField.noOpenings', message: 'No openings' })}</span>
         <button
           className={pill}
           data-edit-floor
           onClick={() => startFloorEdit(zoneId)}
           type="button"
         >
-          Edit floor
+          {i18n._({ id: 'editor.panels.roomOpeningsField.editFloor', message: 'Edit floor' })}
         </button>
       </div>
     )
   return (
     <div className="flex flex-col gap-1.5" data-room-openings={surface} data-editing-floor>
       {openings.length === 0 ? (
-        <p>No openings yet. Cut one for a stair void or a hatch.</p>
+        <p>{i18n._({ id: 'editor.panels.roomOpeningsField.noOpeningsYetCutOneFor', message: 'No openings yet. Cut one for a stair void or a hatch.' })}</p>
       ) : (
         openings.map((opening, index) => (
           <button
@@ -83,10 +84,14 @@ export function RoomOpeningsField({
           >
             <span className="text-foreground">
               {opening.source === 'stair'
-                ? 'Stair opening'
+                ? i18n._({ id: 'editor.panels.roomOpeningsField.stairOpening', message: 'Stair opening' })
                 : opening.source === 'elevator'
-                  ? 'Elevator opening'
-                  : `Opening ${index + 1}`}
+                  ? i18n._({ id: 'editor.panels.roomOpeningsField.elevatorOpening', message: 'Elevator opening' })
+                  : i18n._({
+                      id: 'editor.panels.roomOpeningsField.openingNumber',
+                      message: 'Opening {number}',
+                      values: { number: index + 1 },
+                    })}
             </span>
             <span className="font-mono tabular-nums">
               {formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2)}
@@ -102,7 +107,7 @@ export function RoomOpeningsField({
           onClick={() => (finishFloorEdit() ? undefined : endFloorEdit())}
           type="button"
         >
-          Done
+          {i18n._({ id: 'editor.panels.roomOpeningsField.done', message: 'Done' })}
         </button>
       </div>
     </div>

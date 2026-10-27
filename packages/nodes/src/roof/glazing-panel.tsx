@@ -9,6 +9,7 @@ import {
   type RoofSegmentNode,
   supportsRoofGlazing,
   useLiveNodeOverrides,
+  usePascalI18n,
 } from '@pascal-app/core'
 import { PanelSection, SegmentedControl, ToggleControl } from '@pascal-app/editor'
 import { useEffect, useMemo } from 'react'
@@ -23,6 +24,7 @@ import { GlazingPanelEditor } from './glazing-panel-editor'
 import { createRoofGlazingPreview } from './glazing-preview'
 
 export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentNode[] }) {
+  const i18n = usePascalI18n()
   useLiveNodeOverrides(
     useShallow((state) => segments.map((segment) => state.overrides.get(segment.id))),
   )
@@ -49,13 +51,22 @@ export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentN
   }
   return (
     <>
-      <PanelSection title="Roof system">
+      <PanelSection
+        title={i18n._({ id: 'node.roof.glazingPanel.roofSystem', message: 'Roof system' })}
+      >
         <SegmentedControl
           value={glazed ? 'glazed' : 'standard'}
           mixed={mixed}
           options={[
-            { value: 'standard', label: 'Standard' },
-            { value: 'glazed', label: 'Glazed', disabled: !supported },
+            {
+              value: 'standard',
+              label: i18n._({ id: 'node.roof.glazingPanel.standard', message: 'Standard' }),
+            },
+            {
+              value: 'glazed',
+              label: i18n._({ id: 'node.roof.glazingPanel.glazed', message: 'Glazed' }),
+              disabled: !supported,
+            },
           ]}
           onChange={(roofSystem) => {
             if (roofSystem === 'standard' || supported) preview.commit({ roofSystem })
@@ -63,17 +74,27 @@ export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentN
         />
         {!supported && (
           <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Glazing is available for gable, straight shed, and barrel roofs.
+            {i18n._({
+              id: 'node.roof.glazingPanel.glazingIsAvailableForGableStraight',
+              message: 'Glazing is available for gable, straight shed, and barrel roofs.',
+            })}
           </p>
         )}
         {mixed && (
           <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Choose one roof system to edit settings for all selected segments.
+            {i18n._({
+              id: 'node.roof.glazingPanel.chooseOneRoofSystemToEdit',
+              message: 'Choose one roof system to edit settings for all selected segments.',
+            })}
           </p>
         )}
         {segments.length > 1 && (
           <p className="pt-1 text-[11px] text-muted-foreground">
-            Changes apply to all {segments.length} roof segments.
+            {i18n._({
+              id: 'node.roof.glazingPanel.changesApplyToAllLengthRoof',
+              message: 'Changes apply to all {length} roof segments.',
+              values: { length: segments.length },
+            })}
           </p>
         )}
       </PanelSection>
@@ -81,11 +102,27 @@ export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentN
         <>
           <GlazingGridControls
             axis="across"
-            title={allBarrel ? 'Grid along the length' : 'Grid across the roof'}
+            title={
+              allBarrel
+                ? i18n._({
+                    id: 'node.roof.glazingPanel.gridAlongTheLength',
+                    message: 'Grid along the length',
+                  })
+                : i18n._({
+                    id: 'node.roof.glazingPanel.gridAcrossTheRoof',
+                    message: 'Grid across the roof',
+                  })
+            }
             description={
               allBarrel
-                ? 'Divides the length of each arch bay into columns.'
-                : 'Divides each roof face into columns.'
+                ? i18n._({
+                    id: 'node.roof.glazingPanel.dividesTheLengthOfEachArch',
+                    message: 'Divides the length of each arch bay into columns.',
+                  })
+                : i18n._({
+                    id: 'node.roof.glazingPanel.dividesEachRoofFaceIntoColumns',
+                    message: 'Divides each roof face into columns.',
+                  })
             }
             grid={config.across}
             grids={configs.map((value) => value.across)}
@@ -93,57 +130,79 @@ export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentN
           />
           <GlazingGridControls
             axis="along"
-            title={allBarrel ? 'Grid within each arch bay' : 'Grid along the slope'}
+            title={
+              allBarrel
+                ? i18n._({
+                    id: 'node.roof.glazingPanel.gridWithinEachArchBay',
+                    message: 'Grid within each arch bay',
+                  })
+                : i18n._({
+                    id: 'node.roof.glazingPanel.gridAlongTheSlope',
+                    message: 'Grid along the slope',
+                  })
+            }
             description={
               allBarrel
-                ? 'Subdivides each flat arch bay. Arch bays controls the divisions around the curve.'
-                : 'Spacing is measured on the slope, not its horizontal projection.'
+                ? i18n._({
+                    id: 'node.roof.glazingPanel.subdividesEachFlatArchBayArch',
+                    message:
+                      'Subdivides each flat arch bay. Arch bays controls the divisions around the curve.',
+                  })
+                : i18n._({
+                    id: 'node.roof.glazingPanel.spacingIsMeasuredOnTheSlope',
+                    message: 'Spacing is measured on the slope, not its horizontal projection.',
+                  })
             }
             grid={config.along}
             grids={configs.map((value) => value.along)}
             preview={preview}
           />
-          <PanelSection title="Framing">
+          <PanelSection
+            title={i18n._({ id: 'node.roof.glazingPanel.framing', message: 'Framing' })}
+          >
             <GlazingNumber
               field="frameWidth"
-              label="Frame width"
+              label={i18n._({ id: 'node.roof.glazingPanel.frameWidth', message: 'Frame width' })}
               value={config.frameWidth}
               mixed={mixedField('frameWidth')}
               preview={preview}
             />
             <GlazingNumber
               field="frameDepth"
-              label="Frame depth"
+              label={i18n._({ id: 'node.roof.glazingPanel.frameDepth', message: 'Frame depth' })}
               value={config.frameDepth}
               mixed={mixedField('frameDepth')}
               preview={preview}
             />
             <GlazingColor
               field="frameColor"
-              label="Frame color"
+              label={i18n._({ id: 'node.roof.glazingPanel.frameColor', message: 'Frame color' })}
               value={config.frameColor}
               mixed={mixedField('frameColor')}
               preview={preview}
             />
           </PanelSection>
-          <PanelSection title="Glass">
+          <PanelSection title={i18n._({ id: 'node.roof.glazingPanel.glass', message: 'Glass' })}>
             <GlazingNumber
               field="glassThickness"
-              label="Pane thickness"
+              label={i18n._({
+                id: 'node.roof.glazingPanel.paneThickness',
+                message: 'Pane thickness',
+              })}
               value={config.glassThickness}
               mixed={mixedField('glassThickness')}
               preview={preview}
             />
             <GlazingColor
               field="glassColor"
-              label="Glass tint"
+              label={i18n._({ id: 'node.roof.glazingPanel.glassTint', message: 'Glass tint' })}
               value={config.glassColor}
               mixed={mixedField('glassColor')}
               preview={preview}
             />
             <GlazingNumber
               field="glassOpacity"
-              label="Opacity"
+              label={i18n._({ id: 'node.roof.glazingPanel.opacity', message: 'Opacity' })}
               value={config.glassOpacity}
               mixed={mixedField('glassOpacity')}
               preview={preview}
@@ -151,20 +210,28 @@ export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentN
             />
             <GlazingNumber
               field="glassRoughness"
-              label="Roughness"
+              label={i18n._({ id: 'node.roof.glazingPanel.roughness', message: 'Roughness' })}
               value={config.glassRoughness}
               mixed={mixedField('glassRoughness')}
               preview={preview}
               fraction
             />
           </PanelSection>
-          <PanelSection title="Infill">
+          <PanelSection title={i18n._({ id: 'node.roof.glazingPanel.infill', message: 'Infill' })}>
             <div
               className="flex flex-col gap-2 pb-1"
               role="group"
-              aria-label="Default panel infill"
+              aria-label={i18n._({
+                id: 'node.roof.glazingPanel.defaultPanelInfill',
+                message: 'Default panel infill',
+              })}
             >
-              <span className="text-xs text-muted-foreground">Default panel infill</span>
+              <span className="text-xs text-muted-foreground">
+                {i18n._({
+                  id: 'node.roof.glazingPanel.defaultPanelInfill',
+                  message: 'Default panel infill',
+                })}
+              </span>
               <SegmentedControl
                 value={config.panelType}
                 mixed={mixedField('panelType')}
@@ -173,13 +240,20 @@ export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentN
               />
             </div>
             <ToggleControl
-              label="Close the roof ends"
+              label={i18n._({
+                id: 'node.roof.glazingPanel.closeTheRoofEnds',
+                message: 'Close the roof ends',
+              })}
               checked={config.glazedEnds}
               mixed={mixedField('glazedEnds')}
               onChange={(glazedEnds) => update({ glazedEnds })}
             />
             <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
-              End infill fills the space above the walls. Edit room walls and ceilings separately.
+              {i18n._({
+                id: 'node.roof.glazingPanel.endInfillFillsTheSpaceAbove',
+                message:
+                  'End infill fills the space above the walls. Edit room walls and ceilings separately.',
+              })}
             </p>
           </PanelSection>
           {segments.length === 1 && (

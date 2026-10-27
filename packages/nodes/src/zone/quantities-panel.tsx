@@ -5,6 +5,7 @@ import {
   deriveZoneQuantityReport,
   type UnitNode,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
   type ZoneNode,
   type ZoneQuantityValue,
@@ -34,10 +35,14 @@ function ZonePlanSketch({
   polygon: readonly Point2D[]
   unit: 'metric' | 'imperial'
 }) {
+  const i18n = usePascalI18n()
   if (polygon.length < 3) {
     return (
       <div className="flex h-28 items-center justify-center rounded-md border border-border/50 text-muted-foreground text-xs">
-        Zone boundary unavailable
+        {i18n._({
+          id: 'node.zone.quantitiesPanel.zoneBoundaryUnavailable',
+          message: 'Zone boundary unavailable',
+        })}
       </div>
     )
   }
@@ -66,7 +71,10 @@ function ZonePlanSketch({
 
   return (
     <svg
-      aria-label="Top view with zone edge dimensions"
+      aria-label={i18n._({
+        id: 'node.zone.quantitiesPanel.topViewWithZoneEdgeDimensions',
+        message: 'Top view with zone edge dimensions',
+      })}
       className="h-auto w-full rounded-md border border-cyan-950/20 bg-[#f8faf7]"
       role="img"
       viewBox={`0 0 ${viewWidth} ${viewHeight}`}
@@ -140,13 +148,16 @@ function QuantityRow({
   label: string
   quantity: ZoneQuantityValue
 }) {
+  const i18n = usePascalI18n()
   return (
     <div className="rounded-md border border-border/50 bg-background/35 px-2.5 py-2">
       <div className="flex items-baseline gap-2">
         <span className="font-mono font-semibold text-cyan-600 text-[10px]">{abbreviation}</span>
         <span className="text-muted-foreground text-xs">{label}</span>
         <span className="ml-auto font-mono font-medium text-foreground text-xs tabular-nums">
-          {quantity.status === 'available' ? format(quantity.value) : 'Not proven'}
+          {quantity.status === 'available'
+            ? format(quantity.value)
+            : i18n._({ id: 'node.zone.quantitiesPanel.notProven', message: 'Not proven' })}
         </span>
       </div>
       <div className="mt-1 text-[10px] text-muted-foreground leading-snug">
@@ -157,6 +168,7 @@ function QuantityRow({
 }
 
 function ZoneUnitPanel({ zone }: { zone: ZoneNode }) {
+  const i18n = usePascalI18n()
   const units = useScene(useShallow((state) => buildingUnitsForZone(zone, (id) => state.nodes[id])))
   if (units.length === 0) return null
 
@@ -181,13 +193,16 @@ function ZoneUnitPanel({ zone }: { zone: ZoneNode }) {
   }
 
   return (
-    <PanelSection title="Unit">
+    <PanelSection title={i18n._({ id: 'node.zone.quantitiesPanel.unit', message: 'Unit' })}>
       <PanelSelect
-        label="Unit"
+        label={i18n._({ id: 'node.zone.quantitiesPanel.unit', message: 'Unit' })}
         onChange={handleChange}
         options={[
-          { label: 'None', value: '' },
-          ...units.map((unit) => ({ label: unit.name || 'Unit', value: unit.id })),
+          { label: i18n._({ id: 'node.zone.quantitiesPanel.none', message: 'None' }), value: '' },
+          ...units.map((unit) => ({
+            label: unit.name || i18n._({ id: 'node.zone.quantitiesPanel.unit', message: 'Unit' }),
+            value: unit.id,
+          })),
         ]}
         value={current?.id ?? ''}
       />
@@ -196,6 +211,7 @@ function ZoneUnitPanel({ zone }: { zone: ZoneNode }) {
 }
 
 export default function ZoneQuantitiesPanel() {
+  const i18n = usePascalI18n()
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
@@ -230,13 +246,22 @@ export default function ZoneQuantitiesPanel() {
     <>
       <ZoneUnitPanel zone={effectiveZone} />
       <PanelSection
-        title={effectiveZone.spaceRole === 'room' ? 'Room quantities' : 'Zone quantities'}
+        title={
+          effectiveZone.spaceRole === 'room'
+            ? i18n._({ id: 'node.zone.quantitiesPanel.roomQuantities', message: 'Room quantities' })
+            : i18n._({ id: 'node.zone.quantitiesPanel.zoneQuantities', message: 'Zone quantities' })
+        }
       >
         <div className="overflow-hidden rounded-md border border-cyan-950/20 bg-[#f8faf7] text-slate-950">
           <div className="flex items-center border-cyan-950/15 border-b px-2.5 py-2">
             <span className="font-semibold text-[11px]">{effectiveZone.name}</span>
             <span className="ml-auto rounded-full border border-cyan-800/25 bg-cyan-50 px-2 py-0.5 text-cyan-900 text-[9px]">
-              {report.classification === 'enclosed-room' ? 'Enclosed room' : 'Footprint only'}
+              {report.classification === 'enclosed-room'
+                ? i18n._({ id: 'node.zone.quantitiesPanel.enclosedRoom', message: 'Enclosed room' })
+                : i18n._({
+                    id: 'node.zone.quantitiesPanel.footprintOnly',
+                    message: 'Footprint only',
+                  })}
             </span>
           </div>
           <div className="flex items-baseline gap-2 px-2.5 py-2 font-mono text-[10px]">
@@ -258,19 +283,22 @@ export default function ZoneQuantitiesPanel() {
           <QuantityRow
             abbreviation="Aw"
             format={(value) => formatAreaLabel(value, unit, 2)}
-            label="Wall surface"
+            label={i18n._({ id: 'node.zone.quantitiesPanel.wallSurface', message: 'Wall surface' })}
             quantity={report.wallSurface}
           />
           <QuantityRow
             abbreviation="Af"
             format={(value) => formatAreaLabel(value, unit, 2)}
-            label="Floor surface"
+            label={i18n._({
+              id: 'node.zone.quantitiesPanel.floorSurface',
+              message: 'Floor surface',
+            })}
             quantity={report.floorSurface}
           />
           <QuantityRow
             abbreviation="V"
             format={(value) => formatVolumeLabel(value, unit, 2)}
-            label="Volume"
+            label={i18n._({ id: 'node.zone.quantitiesPanel.volume', message: 'Volume' })}
             quantity={report.volume}
           />
         </div>

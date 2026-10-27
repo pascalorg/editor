@@ -9,6 +9,7 @@ import {
   getEffectiveNode,
   getWallCurveLength,
   getWallThickness,
+  usePascalI18n,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -136,15 +137,31 @@ function GridSection({
   onCommit: () => void
   onCancel: () => void
 }) {
+  const i18n = usePascalI18n()
   return (
     <PanelSection title={title}>
       <Choice
-        label="Layout"
+        label={i18n._({ id: 'node.wall.curtainWallPanel.layout', message: 'Layout' })}
         onChange={(layout) => onChange({ ...value, layout })}
         options={[
-          { label: 'Panel count', value: 'count' },
-          { label: 'Maximum spacing', value: 'maximum-spacing' },
-          { label: 'Fixed spacing', value: 'fixed-spacing' },
+          {
+            label: i18n._({ id: 'node.wall.curtainWallPanel.panelCount', message: 'Panel count' }),
+            value: 'count',
+          },
+          {
+            label: i18n._({
+              id: 'node.wall.curtainWallPanel.maximumSpacing',
+              message: 'Maximum spacing',
+            }),
+            value: 'maximum-spacing',
+          },
+          {
+            label: i18n._({
+              id: 'node.wall.curtainWallPanel.fixedSpacing',
+              message: 'Fixed spacing',
+            }),
+            value: 'fixed-spacing',
+          },
         ]}
         value={value.layout}
       />
@@ -154,7 +171,7 @@ function GridSection({
           onCancel={onCancel}
           restoreOnCommit={false}
           previewWhileTyping
-          label="Panels"
+          label={i18n._({ id: 'node.wall.curtainWallPanel.panels', message: 'Panels' })}
           max={32}
           min={1}
           onChange={(count) => onPreview({ ...value, count: Math.round(count) })}
@@ -166,7 +183,7 @@ function GridSection({
         <LengthControl
           onCommit={onCommit}
           onCancel={onCancel}
-          label="Spacing"
+          label={i18n._({ id: 'node.wall.curtainWallPanel.spacing', message: 'Spacing' })}
           max={100}
           min={0.2}
           onChange={(spacing) => onPreview({ ...value, spacing })}
@@ -178,9 +195,22 @@ function GridSection({
         <SegmentedControl
           onChange={(alignment) => onChange({ ...value, alignment })}
           options={[
-            { label: vertical ? 'Bottom' : 'Start', value: 'start' },
-            { label: 'Center', value: 'center' },
-            { label: vertical ? 'Top' : 'End', value: 'end' },
+            {
+              label: vertical
+                ? i18n._({ id: 'node.wall.curtainWallPanel.bottom', message: 'Bottom' })
+                : i18n._({ id: 'node.wall.curtainWallPanel.start', message: 'Start' }),
+              value: 'start',
+            },
+            {
+              label: i18n._({ id: 'node.wall.curtainWallPanel.center', message: 'Center' }),
+              value: 'center',
+            },
+            {
+              label: vertical
+                ? i18n._({ id: 'node.wall.curtainWallPanel.top', message: 'Top' })
+                : i18n._({ id: 'node.wall.curtainWallPanel.end', message: 'End' }),
+              value: 'end',
+            },
           ]}
           value={value.alignment}
         />
@@ -189,10 +219,23 @@ function GridSection({
         {(() => {
           const positions = curtainGridPositions(length, value)
           const spans = positions.slice(1).map((position, i) => position - positions[i]!)
-          if (!spans.length) return 'No panels'
+          if (!spans.length)
+            return i18n._({ id: 'node.wall.curtain.noPanels', message: 'No panels' })
           const min = metersToLinearUnit(Math.min(...spans), unit)
           const max = metersToLinearUnit(Math.max(...spans), unit)
-          return `${spans.length} ${vertical ? 'rows' : 'columns'} · ${min.toFixed(2)}${max - min > 0.005 ? `–${max.toFixed(2)}` : ''} ${getLinearUnitLabel(unit)} grid spacing`
+          const spacing = `${min.toFixed(2)}${max - min > 0.005 ? `–${max.toFixed(2)}` : ''} ${getLinearUnitLabel(unit)}`
+          return vertical
+            ? i18n._({
+                id: 'node.wall.curtain.rowSpacing',
+                message: '{count, plural, one {# row} other {# rows}} · {spacing} grid spacing',
+                values: { count: spans.length, spacing },
+              })
+            : i18n._({
+                id: 'node.wall.curtain.columnSpacing',
+                message:
+                  '{count, plural, one {# column} other {# columns}} · {spacing} grid spacing',
+                values: { count: spans.length, spacing },
+              })
         })()}
       </p>
     </PanelSection>
@@ -200,9 +243,18 @@ function GridSection({
 }
 
 const PANEL_OPTIONS = [
-  { label: 'Glass', value: 'glass' },
-  { label: 'Solid', value: 'solid' },
-  { label: 'Empty', value: 'empty' },
+  {
+    label: /* i18n */ { id: 'node.wall.curtainWallPanel.glass', message: 'Glass' },
+    value: 'glass',
+  },
+  {
+    label: /* i18n */ { id: 'node.wall.curtainWallPanel.solid', message: 'Solid' },
+    value: 'solid',
+  },
+  {
+    label: /* i18n */ { id: 'node.wall.curtainWallPanel.empty', message: 'Empty' },
+    value: 'empty',
+  },
 ] as const
 
 export function getCurtainWallUpdate(
@@ -223,6 +275,7 @@ export function CurtainWallPanel({
   onCommit,
   onCancel,
 }: Props) {
+  const i18n = usePascalI18n()
   const config = getCurtainWallConfig(node)
   const update = (patch: Partial<CurtainWallConfig>, preview = false) => {
     ;(preview ? onPreview : onUpdate)(getCurtainWallUpdate(node, patch))
@@ -271,35 +324,79 @@ export function CurtainWallPanel({
 
   return (
     <>
-      <PanelSection title="Wall system">
+      <PanelSection
+        title={i18n._({ id: 'node.wall.curtainWallPanel.wallSystem', message: 'Wall system' })}
+      >
         <Choice
-          label="Construction"
+          label={i18n._({ id: 'node.wall.curtainWallPanel.construction', message: 'Construction' })}
           onChange={(construction) => update({ construction })}
           options={[
-            { label: 'Stick-built', value: 'stick' },
-            { label: 'Unitized', value: 'unitized' },
+            {
+              label: i18n._({
+                id: 'node.wall.curtainWallPanel.stickBuilt',
+                message: 'Stick-built',
+              }),
+              value: 'stick',
+            },
+            {
+              label: i18n._({ id: 'node.wall.curtainWallPanel.unitized', message: 'Unitized' }),
+              value: 'unitized',
+            },
           ]}
           value={config.construction}
         />
         <Choice
-          label="Framing"
+          label={i18n._({ id: 'node.wall.curtainWallPanel.framing', message: 'Framing' })}
           onChange={(framing) => update({ framing })}
           options={[
-            { label: 'Fully capped', value: 'capped' },
-            { label: 'Vertical caps', value: 'vertical-caps' },
-            { label: 'Horizontal caps', value: 'horizontal-caps' },
-            { label: 'Structural glazing', value: 'structural-glazing' },
+            {
+              label: i18n._({
+                id: 'node.wall.curtainWallPanel.fullyCapped',
+                message: 'Fully capped',
+              }),
+              value: 'capped',
+            },
+            {
+              label: i18n._({
+                id: 'node.wall.curtainWallPanel.verticalCaps',
+                message: 'Vertical caps',
+              }),
+              value: 'vertical-caps',
+            },
+            {
+              label: i18n._({
+                id: 'node.wall.curtainWallPanel.horizontalCaps',
+                message: 'Horizontal caps',
+              }),
+              value: 'horizontal-caps',
+            },
+            {
+              label: i18n._({
+                id: 'node.wall.curtainWallPanel.structuralGlazing',
+                message: 'Structural glazing',
+              }),
+              value: 'structural-glazing',
+            },
           ]}
           value={config.framing}
         />
         <p className="text-[11px] text-muted-foreground">
           {config.construction === 'unitized'
-            ? 'Separate framed modules with joints between units.'
-            : 'Continuous mullions and transoms assembled along the wall.'}
+            ? i18n._({
+                id: 'node.wall.curtainWallPanel.separateFramedModulesWithJointsBetween',
+                message: 'Separate framed modules with joints between units.',
+              })
+            : i18n._({
+                id: 'node.wall.curtainWallPanel.continuousMullionsAndTransomsAssembledAlong',
+                message: 'Continuous mullions and transoms assembled along the wall.',
+              })}
         </p>
         {config.framing !== 'capped' && (
           <p className="text-[11px] text-muted-foreground">
-            Uncapped members sit behind the glazing.
+            {i18n._({
+              id: 'node.wall.curtainWallPanel.uncappedMembersSitBehindTheGlazing',
+              message: 'Uncapped members sit behind the glazing.',
+            })}
           </p>
         )}
       </PanelSection>
@@ -308,7 +405,7 @@ export function CurtainWallPanel({
         onPreview={(columns) => update({ columns }, true)}
         onCommit={onCommit}
         onCancel={onCancel}
-        title="Column layout"
+        title={i18n._({ id: 'node.wall.curtainWallPanel.columnLayout', message: 'Column layout' })}
         length={getWallCurveLength(node)}
         unit={unit}
         value={config.columns}
@@ -318,7 +415,7 @@ export function CurtainWallPanel({
         onPreview={(rows) => update({ rows }, true)}
         onCommit={onCommit}
         onCancel={onCancel}
-        title="Row layout"
+        title={i18n._({ id: 'node.wall.curtainWallPanel.rowLayout', message: 'Row layout' })}
         length={height}
         vertical
         unit={unit}
@@ -328,15 +425,26 @@ export function CurtainWallPanel({
         config.columns.layout !== 'count') ||
         (height / config.rows.spacing > 32 && config.rows.layout !== 'count')) && (
         <p className="px-3 text-[11px] text-muted-foreground">
-          Grid limited to 32 panels per axis. Spacing expands to fit this wall.
+          {i18n._({
+            id: 'node.wall.curtainWallPanel.gridLimitedTo32PanelsPer',
+            message: 'Grid limited to 32 panels per axis. Spacing expands to fit this wall.',
+          })}
         </p>
       )}
-      <PanelSection title="Frame dimensions">
+      <PanelSection
+        title={i18n._({
+          id: 'node.wall.curtainWallPanel.frameDimensions',
+          message: 'Frame dimensions',
+        })}
+      >
         <LengthControl
           profile
           onCommit={onCommit}
           onCancel={onCancel}
-          label="Vertical frame width"
+          label={i18n._({
+            id: 'node.wall.curtainWallPanel.verticalFrameWidth',
+            message: 'Vertical frame width',
+          })}
           max={0.3}
           min={0.01}
           onChange={(mullionWidth) => update({ mullionWidth }, true)}
@@ -347,7 +455,10 @@ export function CurtainWallPanel({
           profile
           onCommit={onCommit}
           onCancel={onCancel}
-          label="Horizontal frame width"
+          label={i18n._({
+            id: 'node.wall.curtainWallPanel.horizontalFrameWidth',
+            message: 'Horizontal frame width',
+          })}
           max={0.3}
           min={0.01}
           onChange={(transomWidth) => update({ transomWidth }, true)}
@@ -358,7 +469,10 @@ export function CurtainWallPanel({
           profile
           onCommit={onCommit}
           onCancel={onCancel}
-          label="Border / opening frame"
+          label={i18n._({
+            id: 'node.wall.curtainWallPanel.borderOpeningFrame',
+            message: 'Border / opening frame',
+          })}
           max={0.3}
           min={0.01}
           onChange={(perimeterWidth) => update({ perimeterWidth }, true)}
@@ -370,7 +484,14 @@ export function CurtainWallPanel({
             profile
             onCommit={onCommit}
             onCancel={onCancel}
-            label={config.construction === 'unitized' ? 'Module joint width' : 'Glazing gap'}
+            label={
+              config.construction === 'unitized'
+                ? i18n._({
+                    id: 'node.wall.curtainWallPanel.moduleJointWidth',
+                    message: 'Module joint width',
+                  })
+                : i18n._({ id: 'node.wall.curtainWallPanel.glazingGap', message: 'Glazing gap' })
+            }
             max={0.05}
             min={0.002}
             onChange={(jointWidth) => update({ jointWidth }, true)}
@@ -379,31 +500,52 @@ export function CurtainWallPanel({
           />
         )}
       </PanelSection>
-      <PanelSection title="Panel infill">
+      <PanelSection
+        title={i18n._({ id: 'node.wall.curtainWallPanel.panelInfill', message: 'Panel infill' })}
+      >
         <Choice
-          label="Default panel"
+          label={i18n._({
+            id: 'node.wall.curtainWallPanel.defaultPanel',
+            message: 'Default panel',
+          })}
           onChange={(panelType) => update({ panelType })}
-          options={PANEL_OPTIONS}
+          options={PANEL_OPTIONS.map((option) => ({ ...option, label: i18n._(option.label) }))}
           value={config.panelType}
         />
         <Choice
-          label="Opaque band"
+          label={i18n._({ id: 'node.wall.curtainWallPanel.opaqueBand', message: 'Opaque band' })}
           onChange={(spandrel) => update({ spandrel })}
           options={[
-            { label: 'None', value: 'none' },
-            { label: 'Bottom row', value: 'bottom' },
-            { label: 'Top row', value: 'top' },
+            {
+              label: i18n._({ id: 'node.wall.curtainWallPanel.none', message: 'None' }),
+              value: 'none',
+            },
+            {
+              label: i18n._({ id: 'node.wall.curtainWallPanel.bottomRow', message: 'Bottom row' }),
+              value: 'bottom',
+            },
+            {
+              label: i18n._({ id: 'node.wall.curtainWallPanel.topRow', message: 'Top row' }),
+              value: 'top',
+            },
           ]}
           value={config.spandrel}
         />
         <p className="text-[11px] text-muted-foreground">
-          Opaque bands replace a full row with solid panels. Apply their finish with the paint tool.
+          {i18n._({
+            id: 'node.wall.curtainWallPanel.opaqueBandsReplaceAFullRow',
+            message:
+              'Opaque bands replace a full row with solid panels. Apply their finish with the paint tool.',
+          })}
         </p>
         <LengthControl
           profile
           onCommit={onCommit}
           onCancel={onCancel}
-          label="Panel thickness"
+          label={i18n._({
+            id: 'node.wall.curtainWallPanel.panelThickness',
+            message: 'Panel thickness',
+          })}
           max={0.08}
           min={0.004}
           onChange={(glassThickness) => update({ glassThickness }, true)}
@@ -412,25 +554,42 @@ export function CurtainWallPanel({
         />
         {effectiveThickness < config.glassThickness - 1e-6 && (
           <p className="text-[11px] text-muted-foreground">
-            Effective thickness:{' '}
+            {i18n._({
+              id: 'node.wall.curtainWallPanel.effectiveThickness',
+              message: 'Effective thickness:',
+            })}{' '}
             {unit === 'metric'
               ? `${(effectiveThickness * 1000).toFixed(1)} mm`
               : `${metersToLinearUnit(effectiveThickness, unit).toFixed(3)} ${getLinearUnitLabel(unit)}`}
-            , limited by frame depth.
+            {i18n._({
+              id: 'node.wall.curtainWallPanel.limitedByFrameDepth',
+              message: ', limited by frame depth.',
+            })}
           </p>
         )}
       </PanelSection>
-      <PanelSection title="Edit individual panels">
+      <PanelSection
+        title={i18n._({
+          id: 'node.wall.curtainWallPanel.editIndividualPanels',
+          message: 'Edit individual panels',
+        })}
+      >
         <ToggleControl
           checked={panelEditing}
-          label="Enable panel editing"
+          label={i18n._({
+            id: 'node.wall.curtainWallPanel.enablePanelEditing',
+            message: 'Enable panel editing',
+          })}
           onChange={setPanelEditing}
         />
         {panelEditing && (
           <>
             <p className="text-[11px] text-muted-foreground">
-              Choose a cell or enter its column and row. Use arrow keys to move between cells.
-              Columns run from the wall start; rows count upward.
+              {i18n._({
+                id: 'node.wall.curtainWallPanel.chooseACellOrEnterIts',
+                message:
+                  'Choose a cell or enter its column and row. Use arrow keys to move between cells. Columns run from the wall start; rows count upward.',
+              })}
             </p>
             <div className="max-h-64 overflow-auto rounded border border-border">
               <svg
@@ -438,7 +597,10 @@ export function CurtainWallPanel({
                 style={{ width: diagramWidth, height: diagramHeight }}
                 className="block"
                 role="group"
-                aria-label="Curtain wall panel selection"
+                aria-label={i18n._({
+                  id: 'node.wall.curtainWallPanel.curtainWallPanelSelection',
+                  message: 'Curtain wall panel selection',
+                })}
               >
                 {xs.slice(1).flatMap((_, c) =>
                   ys.slice(1).map((_, r) => {
@@ -449,7 +611,12 @@ export function CurtainWallPanel({
                         key={`${c}-${r}`}
                         role="button"
                         tabIndex={selected ? 0 : -1}
-                        aria-label={`Column ${c + 1}, row ${r + 1}: ${type}`}
+                        aria-label={i18n._({
+                          id: 'node.wall.curtain.cell',
+                          message:
+                            'Column {column}, row {row}: {type, select, glass {glass} solid {solid} other {empty}}',
+                          values: { column: c + 1, row: r + 1, type },
+                        })}
                         aria-pressed={selected}
                         data-cell={`${c}-${r}`}
                         x={(c / columnCount) * diagramWidth}
@@ -506,8 +673,12 @@ export function CurtainWallPanel({
             {hiddenOverrides.length > 0 && (
               <div className="space-y-2 text-[11px] text-muted-foreground">
                 <p>
-                  {hiddenOverrides.length} custom panels are outside this grid. They return if the
-                  grid expands.
+                  {i18n._({
+                    id: 'node.wall.curtainWallPanel.lengthCustomPanelsAreOutsideThis',
+                    message:
+                      '{length} custom panels are outside this grid. They return if the grid expands.',
+                    values: { length: hiddenOverrides.length },
+                  })}
                 </p>
                 <button
                   type="button"
@@ -520,16 +691,28 @@ export function CurtainWallPanel({
                     })
                   }
                 >
-                  Clear hidden overrides
+                  {i18n._({
+                    id: 'node.wall.curtainWallPanel.clearHiddenOverrides',
+                    message: 'Clear hidden overrides',
+                  })}
                 </button>
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">
-              Column {column + 1}, row {row + 1} ·{' '}
-              {overridden ? 'Custom infill' : 'Following wall defaults'}
+              {i18n._({ id: 'node.wall.curtainWallPanel.column', message: 'Column' })} {column + 1}
+              {i18n._({ id: 'node.wall.curtainWallPanel.row', message: ', row' })} {row + 1} ·{' '}
+              {overridden
+                ? i18n._({
+                    id: 'node.wall.curtainWallPanel.customInfill',
+                    message: 'Custom infill',
+                  })
+                : i18n._({
+                    id: 'node.wall.curtainWallPanel.followingWallDefaults',
+                    message: 'Following wall defaults',
+                  })}
             </p>
             <SliderControl
-              label="Column"
+              label={i18n._({ id: 'node.wall.curtainWallPanel.column', message: 'Column' })}
               max={Math.max(1, columnCount)}
               min={1}
               onChange={(value) => setColumn(Math.round(value) - 1)}
@@ -538,7 +721,7 @@ export function CurtainWallPanel({
               value={column + 1}
             />
             <SliderControl
-              label="Row"
+              label={i18n._({ id: 'node.wall.curtainWallPanel.row2', message: 'Row' })}
               max={Math.max(1, rowCount)}
               min={1}
               onChange={(value) => setRow(Math.round(value) - 1)}
@@ -547,9 +730,12 @@ export function CurtainWallPanel({
               value={row + 1}
             />
             <Choice
-              label="Panel infill"
+              label={i18n._({
+                id: 'node.wall.curtainWallPanel.panelInfill',
+                message: 'Panel infill',
+              })}
               onChange={changePanel}
-              options={PANEL_OPTIONS}
+              options={PANEL_OPTIONS.map((option) => ({ ...option, label: i18n._(option.label) }))}
               value={selectedType}
             />
             <button
@@ -558,19 +744,35 @@ export function CurtainWallPanel({
               onClick={() => changePanel()}
               type="button"
             >
-              Reset this panel
+              {i18n._({
+                id: 'node.wall.curtainWallPanel.resetThisPanel',
+                message: 'Reset this panel',
+              })}
             </button>
             <p className="text-[11px] text-muted-foreground">
-              Use the Door or Window tool to add an opening through the wall.
+              {i18n._({
+                id: 'node.wall.curtainWallPanel.useTheDoorOrWindowTool',
+                message: 'Use the Door or Window tool to add an opening through the wall.',
+              })}
             </p>
           </>
         )}
       </PanelSection>
       {hasGlass && (
-        <PanelSection title="Glass appearance">
+        <PanelSection
+          title={i18n._({
+            id: 'node.wall.curtainWallPanel.glassAppearance',
+            message: 'Glass appearance',
+          })}
+        >
           {paintedGlass && (
             <div className="space-y-2 text-xs text-muted-foreground">
-              <p>Glass appearance is controlled by the paint tool.</p>
+              <p>
+                {i18n._({
+                  id: 'node.wall.curtainWallPanel.glassAppearanceIsControlledByThe',
+                  message: 'Glass appearance is controlled by the paint tool.',
+                })}
+              </p>
               <button
                 type="button"
                 className="rounded border border-border px-2 py-1"
@@ -581,7 +783,10 @@ export function CurtainWallPanel({
                   onUpdate({ slots })
                 }}
               >
-                Use glass settings instead
+                {i18n._({
+                  id: 'node.wall.curtainWallPanel.useGlassSettingsInstead',
+                  message: 'Use glass settings instead',
+                })}
               </button>
             </div>
           )}
@@ -592,7 +797,7 @@ export function CurtainWallPanel({
                 onCancel={onCancel}
                 restoreOnCommit={false}
                 previewWhileTyping
-                label="Opacity"
+                label={i18n._({ id: 'node.wall.curtainWallPanel.opacity', message: 'Opacity' })}
                 max={100}
                 min={5}
                 onChange={(value) => update({ glassOpacity: value / 100 }, true)}
@@ -606,7 +811,10 @@ export function CurtainWallPanel({
                 onCancel={onCancel}
                 restoreOnCommit={false}
                 previewWhileTyping
-                label="Surface roughness"
+                label={i18n._({
+                  id: 'node.wall.curtainWallPanel.surfaceRoughness',
+                  message: 'Surface roughness',
+                })}
                 max={1}
                 min={0}
                 onChange={(glassRoughness) => update({ glassRoughness }, true)}
@@ -615,9 +823,12 @@ export function CurtainWallPanel({
                 value={config.glassRoughness}
               />
               <label className="flex items-center justify-between text-xs text-muted-foreground">
-                Glass tint
+                {i18n._({ id: 'node.wall.curtainWallPanel.glassTint', message: 'Glass tint' })}
                 <input
-                  aria-label="Glass tint"
+                  aria-label={i18n._({
+                    id: 'node.wall.curtainWallPanel.glassTint',
+                    message: 'Glass tint',
+                  })}
                   className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent"
                   onKeyDown={(event) => {
                     if (event.key === 'Escape') {
@@ -653,7 +864,7 @@ export function CurtainWallPanel({
                       setTintEditing(false)
                     }}
                   >
-                    Apply tint
+                    {i18n._({ id: 'node.wall.curtainWallPanel.applyTint', message: 'Apply tint' })}
                   </button>
                   <button
                     type="button"
@@ -663,12 +874,19 @@ export function CurtainWallPanel({
                       setTintEditing(false)
                     }}
                   >
-                    Cancel tint
+                    {i18n._({
+                      id: 'node.wall.curtainWallPanel.cancelTint',
+                      message: 'Cancel tint',
+                    })}
                   </button>
                 </div>
               )}
               <p className="text-[11px] text-muted-foreground">
-                Low roughness is smooth; high roughness gives a matte surface in rendered shading.
+                {i18n._({
+                  id: 'node.wall.curtainWallPanel.lowRoughnessIsSmoothHighRoughness',
+                  message:
+                    'Low roughness is smooth; high roughness gives a matte surface in rendered shading.',
+                })}
               </p>
             </div>
           )}

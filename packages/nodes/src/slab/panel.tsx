@@ -5,6 +5,7 @@ import {
   isDerivedNode,
   MIN_SLAB_THICKNESS,
   type SlabNode,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -50,6 +51,7 @@ import {
  * into `parametrics.groups`.
  */
 export function SlabPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
@@ -280,30 +282,58 @@ export function SlabPanel() {
   const elevationPresets =
     unit === 'imperial'
       ? [
-          { label: 'Sunken (6")', elevation: -0.1524 },
-          { label: 'Thin (1")', elevation: 0.0254 },
-          { label: 'Standard (2")', elevation: 0.0508 },
-          { label: 'Thick (6")', elevation: 0.1524 },
+          {
+            label: i18n._({ id: 'node.slab.panel.sunken6', message: 'Sunken (6")' }),
+            elevation: -0.1524,
+          },
+          {
+            label: i18n._({ id: 'node.slab.panel.thin1', message: 'Thin (1")' }),
+            elevation: 0.0254,
+          },
+          {
+            label: i18n._({ id: 'node.slab.panel.standard2', message: 'Standard (2")' }),
+            elevation: 0.0508,
+          },
+          {
+            label: i18n._({ id: 'node.slab.panel.thick6', message: 'Thick (6")' }),
+            elevation: 0.1524,
+          },
         ]
       : [
-          { label: 'Sunken (15cm)', elevation: -0.15 },
-          { label: 'Thin (2cm)', elevation: 0.02 },
-          { label: 'Standard (5cm)', elevation: 0.05 },
-          { label: 'Thick (15cm)', elevation: 0.15 },
+          {
+            label: i18n._({ id: 'node.slab.panel.sunken15cm', message: 'Sunken (15cm)' }),
+            elevation: -0.15,
+          },
+          {
+            label: i18n._({ id: 'node.slab.panel.thin2cm', message: 'Thin (2cm)' }),
+            elevation: 0.02,
+          },
+          {
+            label: i18n._({ id: 'node.slab.panel.standard5cm', message: 'Standard (5cm)' }),
+            elevation: 0.05,
+          },
+          {
+            label: i18n._({ id: 'node.slab.panel.thick15cm', message: 'Thick (15cm)' }),
+            elevation: 0.15,
+          },
         ]
 
   return (
     <PanelWrapper
       icon="/icons/floor.webp"
       onClose={handleClose}
-      title={node.name || 'Slab'}
+      title={node.name || i18n._({ id: 'node.slab.panel.slab', message: 'Slab' })}
       width={320}
     >
-      <PanelSection title="Elevation">
+      <PanelSection title={i18n._({ id: 'node.slab.panel.elevation', message: 'Elevation' })}>
         {/* Range mirrors the 20 m storey cap; `clampSlabElevation` in the
             write path stays the real bound against the level. */}
         <SliderControl
-          label={node.recessed ? 'Floor' : 'Surface'}
+          label={
+            node.recessed
+              ? i18n._({ id: 'node.slab.panel.floor', message: 'Floor' })
+              : i18n._({ id: 'node.slab.panel.surface', message: 'Surface' })
+          }
           max={20}
           min={-3}
           onChange={handleElevationChange}
@@ -314,7 +344,11 @@ export function SlabPanel() {
         />
 
         <SliderControl
-          label={node.recessed ? 'Rim' : 'Base'}
+          label={
+            node.recessed
+              ? i18n._({ id: 'node.slab.panel.rim', message: 'Rim' })
+              : i18n._({ id: 'node.slab.panel.base', message: 'Base' })
+          }
           max={20}
           min={-3}
           onChange={handleAnchorChange}
@@ -326,7 +360,7 @@ export function SlabPanel() {
 
         {node.recessed ? (
           <SliderControl
-            label="Depth"
+            label={i18n._({ id: 'node.slab.panel.depth', message: 'Depth' })}
             max={1000}
             min={MIN_SLAB_THICKNESS}
             onChange={handleRecessDepthChange}
@@ -337,7 +371,7 @@ export function SlabPanel() {
           />
         ) : (
           <SliderControl
-            label="Thickness"
+            label={i18n._({ id: 'node.slab.panel.thickness', message: 'Thickness' })}
             max={1000}
             min={MIN_SLAB_THICKNESS}
             onChange={handleThicknessChange}
@@ -351,20 +385,32 @@ export function SlabPanel() {
         {!node.recessed && (
           <>
             <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-              Foundation
+              {i18n._({ id: 'node.slab.panel.foundation', message: 'Foundation' })}
             </div>
             <SegmentedControl
               onChange={handleTerrainModeChange}
               options={[
-                { label: 'Fixed', value: 'fixed' },
-                { label: 'Follows terrain', value: 'terrain' },
+                {
+                  label: i18n._({ id: 'node.slab.panel.fixed', message: 'Fixed' }),
+                  value: 'fixed',
+                },
+                {
+                  label: i18n._({
+                    id: 'node.slab.panel.followsTerrain',
+                    message: 'Follows terrain',
+                  }),
+                  value: 'terrain',
+                },
               ]}
               value={node.fillToTerrain ? 'terrain' : 'fixed'}
             />
             {node.fillToTerrain && (
               <div className="px-1 text-[11px] text-muted-foreground">
-                Extends the perimeter down to terrain. The flat surface, base, and thickness stay
-                unchanged.
+                {i18n._({
+                  id: 'node.slab.panel.extendsThePerimeterDownToTerrain',
+                  message:
+                    'Extends the perimeter down to terrain. The flat surface, base, and thickness stay unchanged.',
+                })}
               </div>
             )}
           </>
@@ -381,14 +427,14 @@ export function SlabPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Info">
+      <PanelSection title={i18n._({ id: 'node.slab.panel.info', message: 'Info' })}>
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
-          <span>Area</span>
+          <span>{i18n._({ id: 'node.slab.panel.area', message: 'Area' })}</span>
           <span className="font-mono text-foreground dark:text-white">{area.toFixed(2)} m²</span>
         </div>
       </PanelSection>
 
-      <PanelSection title="Holes">
+      <PanelSection title={i18n._({ id: 'node.slab.panel.holes', message: 'Holes' })}>
         {node.holes && node.holes.length > 0 ? (
           <div className="flex flex-col gap-1 pb-2">
             {node.holes.map((hole, index) => {
@@ -402,12 +448,12 @@ export function SlabPanel() {
               const isAutoHole = source !== 'manual' || derived
               const autoLabel =
                 source === 'elevator'
-                  ? 'Auto elevator cutout'
+                  ? i18n._({ id: 'node.cutout.autoElevator', message: 'Auto elevator cutout' })
                   : source === 'stair'
-                    ? 'Auto stair cutout'
+                    ? i18n._({ id: 'node.cutout.autoStair', message: 'Auto stair cutout' })
                     : source === 'floor-opening'
-                      ? 'Opening'
-                      : 'Room cutout'
+                      ? i18n._({ id: 'node.cutout.opening', message: 'Opening' })
+                      : i18n._({ id: 'node.cutout.room', message: 'Room cutout' })
               return (
                 <div
                   className={`flex items-center justify-between rounded-lg border p-2 transition-colors ${
@@ -421,18 +467,22 @@ export function SlabPanel() {
                     <p
                       className={`font-medium text-xs ${isEditing ? 'text-primary' : 'text-foreground dark:text-white'}`}
                     >
-                      Hole {index + 1} {isEditing && '(Editing)'}
+                      {i18n._({ id: 'node.slab.panel.hole', message: 'Hole' })} {index + 1}{' '}
+                      {isEditing && i18n._({ id: 'node.slab.panel.editing', message: '(Editing)' })}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length} pts ·{' '}
-                      {isAutoHole ? autoLabel : 'Manual'}
+                      {holeArea.toFixed(2)} m² · {hole.length}{' '}
+                      {i18n._({ id: 'node.slab.panel.pts', message: 'pts ·' })}{' '}
+                      {isAutoHole
+                        ? autoLabel
+                        : i18n._({ id: 'node.slab.panel.manual', message: 'Manual' })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
                     {isEditing ? (
                       <ActionButton
                         className="h-7 bg-primary text-primary-foreground hover:bg-primary/90"
-                        label="Done"
+                        label={i18n._({ id: 'node.slab.panel.done', message: 'Done' })}
                         onClick={() =>
                           useInteractionScope
                             .getState()
@@ -452,7 +502,7 @@ export function SlabPanel() {
                       </button>
                     ) : isAutoHole ? (
                       <div className="rounded-md bg-black/4 dark:bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">
-                        Auto
+                        {i18n._({ id: 'node.slab.panel.auto', message: 'Auto' })}
                       </div>
                     ) : (
                       <>
@@ -478,7 +528,9 @@ export function SlabPanel() {
             })}
           </div>
         ) : (
-          <div className="px-2 py-3 text-center text-muted-foreground text-xs">No holes</div>
+          <div className="px-2 py-3 text-center text-muted-foreground text-xs">
+            {i18n._({ id: 'node.slab.panel.noHoles', message: 'No holes' })}
+          </div>
         )}
 
         <div className="px-1 pt-1 pb-1">
@@ -488,7 +540,11 @@ export function SlabPanel() {
             <ShapeChoice
               className="px-1 text-muted-foreground text-xs"
               disabled={!openingZoneId}
-              label={node.support === 'open' ? 'Cut hatch' : 'Cut opening'}
+              label={
+                node.support === 'open'
+                  ? i18n._({ id: 'node.slab.panel.cutHatch', message: 'Cut hatch' })
+                  : i18n._({ id: 'node.slab.panel.cutOpening', message: 'Cut opening' })
+              }
               onPick={(shape) => openingZoneId && startOpeningDraft(openingZoneId, 'floor', shape)}
             />
           ) : (
@@ -496,14 +552,18 @@ export function SlabPanel() {
               className="w-full"
               disabled={editingHole?.nodeId === selectedId}
               icon={<Plus className="h-3.5 w-3.5" />}
-              label="Add Hole"
+              label={i18n._({ id: 'node.slab.panel.addHole', message: 'Add Hole' })}
               onClick={handleAddHole}
             />
           )}
         </div>
       </PanelSection>
       <ActionGroup>
-        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+        <ActionButton
+          icon={<Move className="h-3.5 w-3.5" />}
+          label={i18n._({ id: 'node.slab.panel.move', message: 'Move' })}
+          onClick={handleMove}
+        />
       </ActionGroup>
     </PanelWrapper>
   )

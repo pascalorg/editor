@@ -1,5 +1,6 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { type ReactNode, useEffect, useState } from 'react'
@@ -19,6 +20,7 @@ const HEIGHT_VH = 50
 const DRAG_CLOSE_THRESHOLD_PX = 120
 
 export function MobilePanelSheet({ open, onClose, icon, title, children }: MobilePanelSheetProps) {
+  const i18n = usePascalI18n()
   const [mounted, setMounted] = useState(false)
   const setMobilePanelSheetHeight = useEditor((s) => s.setMobilePanelSheetHeight)
 
@@ -88,7 +90,7 @@ export function MobilePanelSheet({ open, onClose, icon, title, children }: Mobil
               </h2>
             </div>
             <button
-              aria-label="Close"
+              aria-label={i18n._({ id: 'editor.panels.mobilePanelSheet.close', message: 'Close' })}
               className="flex h-8 w-8 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
               onClick={onClose}
               type="button"

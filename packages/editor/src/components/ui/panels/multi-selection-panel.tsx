@@ -6,7 +6,9 @@ import {
   type BuildingNode,
   resolveBuildingForLevel,
   runAsSingleSceneHistoryStep,
-  useScene,
+  useScene, usePascalI18n,
+  nodeRegistry,
+  type PascalI18n,
 } from '@pascal-app/core'
 import { unwrapCorner, windowMergeOffer } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
@@ -29,6 +31,7 @@ import useSessionGroups, {
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelWrapper } from './panel-wrapper'
 import { formatSelectionBreakdown } from './selection-breakdown'
+import { nodeLabel } from '../../../i18n/node-messages'
 
 /** The building holding the level, when the selection is everything selectable on it. */
 function useWholeLevelBuildingId(selectedIds: readonly string[]) {
@@ -57,36 +60,80 @@ function mergeRefusalNote(
   refusal: { code: string; details: Record<string, unknown> },
   nodes: Record<string, AnyNode>,
   length: (meters: number) => string,
+  i18n: PascalI18n,
 ): string {
   const { blockingId, limit } = refusal.details as { blockingId?: string; limit?: number }
   const reach = length(limit ?? 0)
   const blocking = nodes[blockingId ?? '']
-  const blockingKind = !blocking
-    ? 'something'
-    : blocking.type === 'item'
-      ? 'an item'
-      : `a ${blocking.type}`
+  const blockingKind = blocking
+    ? nodeLabel(blocking.type, nodeRegistry.get(blocking.type)?.presentation?.label ?? blocking.type, i18n)
+    : undefined
   switch (refusal.code) {
     case 'window_already_joined':
-      return 'One of them already wraps another corner. Unwrap it first.'
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.alreadyJoined',
+        message: 'One of them already wraps another corner. Unwrap it first.',
+      })
     case 'window_not_on_wall':
-      return 'A roof or dormer window cannot join another window.'
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.notOnWall',
+        message: 'A roof or dormer window cannot join another window.',
+      })
     case 'windows_not_adjacent':
-      return `They are too far apart. Windows merge with at most ${reach} between them.`
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.notAdjacent',
+        message: 'They are too far apart. Windows merge with at most {reach} between them.',
+        values: { reach },
+      })
     case 'opening_between':
-      return `There is ${blockingKind} between them.`
+      return blockingKind
+        ? i18n._({
+            id: 'editor.panels.mergeRefusal.kindBetween',
+            message: 'A {kind} is between them.',
+            values: { kind: blockingKind.toLocaleLowerCase(i18n.getLocale()) },
+          })
+        : i18n._({
+            id: 'editor.panels.mergeRefusal.somethingBetween',
+            message: 'There is something between them.',
+          })
     case 'walls_not_meeting':
-      return 'Their walls do not meet at a corner.'
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.wallsNotMeeting',
+        message: 'Their walls do not meet at a corner.',
+      })
     case 'corner_angle':
-      return 'Their walls meet at too sharp or too flat an angle for a corner window.'
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.cornerAngle',
+        message: 'Their walls meet at too sharp or too flat an angle for a corner window.',
+      })
     case 'window_not_at_corner':
-      return `One of them is too far from the corner. A window joins one within ${reach} of it.`
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.notAtCorner',
+        message: 'One of them is too far from the corner. A window joins one within {reach} of it.',
+        values: { reach },
+      })
     case 'height_exceeds_wall':
-      return 'The window selected first is taller than the other wall. Select the other one first.'
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.heightExceedsWall',
+        message:
+          'The window selected first is taller than the other wall. Select the other one first.',
+      })
     case 'opening_overlap':
-      return `Sliding them to the corner would overlap ${blockingKind}.`
+      return blockingKind
+        ? i18n._({
+            id: 'editor.panels.mergeRefusal.kindOverlap',
+            message: 'Sliding them to the corner would overlap a {kind}.',
+            values: { kind: blockingKind.toLocaleLowerCase(i18n.getLocale()) },
+          })
+        : i18n._({
+            id: 'editor.panels.mergeRefusal.somethingOverlap',
+            message: 'Sliding them to the corner would overlap something.',
+          })
     default:
-      return 'These windows cannot be merged.'
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.cannotMerge',
+        message: 'These windows cannot be merged.',
+      })
   }
 }
 
@@ -97,6 +144,7 @@ function mergeRefusalNote(
  * Unwrap instead; two that cannot join, the reason.
  */
 function MergeWindowsAction() {
+  const i18n = usePascalI18n()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const nodes = useScene((s) => s.nodes)
   const readOnly = useScene((s) => s.readOnly)
@@ -110,7 +158,7 @@ function MergeWindowsAction() {
         className="basis-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
         disabled={readOnly}
         icon={<Split className="h-4 w-4" />}
-        label="Unwrap the corner"
+        label={i18n._({ id: 'editor.panels.multiSelectionPanel.unwrapTheCorner', message: 'Unwrap the corner' })}
         onClick={() => {
           writeWindowChanges({
             create: null,
@@ -119,13 +167,16 @@ function MergeWindowsAction() {
           })
           triggerSFX('sfx:structure-build')
         }}
-        title="Unwrap the corner: both windows stay, each framed at the corner"
+        title={i18n._({ id: 'editor.panels.multiSelectionPanel.unwrapTheCornerBothWindowsStay', message: 'Unwrap the corner: both windows stay, each framed at the corner' })}
       />
     )
   const { merge } = offer
   const note = offer.refusal
-    ? mergeRefusalNote(offer.refusal, nodes, (meters) =>
-        formatLinearMeasurement(meters, unit, metricNotation),
+    ? mergeRefusalNote(
+        offer.refusal,
+        nodes,
+        (meters) => formatLinearMeasurement(meters, unit, metricNotation),
+        i18n,
       )
     : null
   return (
@@ -134,7 +185,7 @@ function MergeWindowsAction() {
         className="basis-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
         disabled={readOnly || !merge}
         icon={<Merge className="h-4 w-4" />}
-        label="Merge windows"
+        label={i18n._({ id: 'editor.panels.multiSelectionPanel.mergeWindows', message: 'Merge windows' })}
         onClick={() => {
           if (!merge) return
           runAsSingleSceneHistoryStep(useScene, () =>
@@ -150,8 +201,8 @@ function MergeWindowsAction() {
         title={
           note ??
           (merge?.kind === 'corner'
-            ? 'Merge windows into a corner window: both take the height, sill and type of the one you selected first'
-            : 'Merge windows into one across both: it keeps the type and style of the one you selected first')
+            ? i18n._({ id: 'editor.panels.multiSelectionPanel.mergeWindowsIntoACornerWindow', message: 'Merge windows into a corner window: both take the height, sill and type of the one you selected first' })
+            : i18n._({ id: 'editor.panels.multiSelectionPanel.mergeWindowsIntoOneAcrossBoth', message: 'Merge windows into one across both: it keeps the type and style of the one you selected first' }))
         }
       />
       {note ? <p className="basis-full px-1 text-muted-foreground text-xs">{note}</p> : null}
@@ -160,6 +211,7 @@ function MergeWindowsAction() {
 }
 
 export function MultiSelectionActions() {
+  const i18n = usePascalI18n()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const sessionGroups = useSessionGroups((s) => s.groups)
   const sceneNodes = useScene((s) => s.nodes)
@@ -182,39 +234,39 @@ export function MultiSelectionActions() {
         <ActionButton
           className="basis-full whitespace-nowrap"
           icon={<Building2 className="h-4 w-4" />}
-          label="Select building"
+          label={i18n._({ id: 'editor.panels.multiSelectionPanel.selectBuilding', message: 'Select building' })}
           onClick={() => selectBuilding(buildingId)}
-          title="Select the whole building to move all its levels"
+          title={i18n._({ id: 'editor.panels.multiSelectionPanel.selectTheWholeBuildingToMove', message: 'Select the whole building to move all its levels' })}
         />
       )}
       {showGroup && (
         <ActionButton
           className="min-w-20 px-2"
           icon={<Group className="h-4 w-4" />}
-          label="Group"
+          label={i18n._({ id: 'editor.panels.multiSelectionPanel.group', message: 'Group' })}
           onClick={() => groupCurrentSelection()}
-          title="Group (Ctrl/Cmd+G)"
+          title={i18n._({ id: 'editor.panels.multiSelectionPanel.groupCtrlCmdG', message: 'Group (Ctrl/Cmd+G)' })}
         />
       )}
       {showUngroup && (
         <ActionButton
           className="min-w-20 px-2"
           icon={<Ungroup className="h-4 w-4" />}
-          label="Ungroup"
+          label={i18n._({ id: 'editor.panels.multiSelectionPanel.ungroup', message: 'Ungroup' })}
           onClick={() => ungroupCurrentSelection()}
-          title="Ungroup (Ctrl/Cmd+Shift+G)"
+          title={i18n._({ id: 'editor.panels.multiSelectionPanel.ungroupCtrlCmdShiftG', message: 'Ungroup (Ctrl/Cmd+Shift+G)' })}
         />
       )}
       <ActionButton
         className="min-w-20 px-2"
         icon={<Copy className="h-4 w-4" />}
-        label="Duplicate"
+        label={i18n._({ id: 'editor.panels.multiSelectionPanel.duplicate', message: 'Duplicate' })}
         onClick={() => duplicateSelectionAndPickUp()}
       />
       <ActionButton
         className="min-w-20 px-2 border-red-500/40 text-red-700 dark:text-red-200 hover:bg-red-500/15"
         icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
-        label="Delete"
+        label={i18n._({ id: 'editor.panels.multiSelectionPanel.delete', message: 'Delete' })}
         onClick={() => deleteSelection()}
       />
     </ActionGroup>
@@ -225,6 +277,7 @@ export function MultiSelectionActions() {
  * Docked multi-selection panel. Includes Group / Ungroup for session selection sets.
  */
 export function MultiSelectionPanel({ footer }: { footer?: React.ReactNode }) {
+  const i18n = usePascalI18n()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
   const sessionGroups = useSessionGroups((s) => s.groups)
@@ -246,16 +299,14 @@ export function MultiSelectionPanel({ footer }: { footer?: React.ReactNode }) {
       title={
         matchedGroup
           ? `${matchedGroup.label} · ${selectedIds.length}`
-          : `${selectedIds.length} selected`
+          : i18n._({ id: 'editor.panels.multiSelectionPanel.lengthSelected', message: '{length} selected', values: { length: selectedIds.length } })
       }
       width={320}
     >
       {breakdown && <div className="px-3 py-3 text-muted-foreground text-xs">{breakdown}</div>}
       {matchedGroup && (
         <div className="border-border/50 border-t px-3 py-2 text-muted-foreground text-xs">
-          {matchedGroup.label} (session only). Plain click reselects all members. Not saved with the
-          project.
-        </div>
+          {i18n._({ id: 'editor.panels.multiSelectionPanel.labelSessionOnlyPlainClickReselects', message: '{label} (session only). Plain click reselects all members. Not saved with the project.', values: { label: matchedGroup.label } })}</div>
       )}
       <div className="border-border/50 border-t p-3">
         <MultiSelectionActions />

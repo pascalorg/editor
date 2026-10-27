@@ -8,6 +8,7 @@ import {
   runAsSingleSceneHistoryStep,
   scriptImages,
   useInteractive,
+  usePascalI18n,
   useScene,
   type WindowNode,
 } from '@pascal-app/core'
@@ -105,6 +106,7 @@ function syncCornerPartner(windowId: string, updates: Partial<WindowNode>) {
 }
 
 export default function WindowPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const deleteNode = useScene((s) => s.deleteNode)
@@ -301,13 +303,13 @@ export default function WindowPanel() {
   const showFlipSide = !isOpening
   const operationLabel = isTrackSashWindow
     ? windowType === 'sliding'
-      ? 'Slide'
-      : 'Raise'
+      ? i18n._({ id: 'node.window.operation.slide', message: 'Slide' })
+      : i18n._({ id: 'node.window.operation.raise', message: 'Raise' })
     : windowType === 'casement'
-      ? 'Swing'
+      ? i18n._({ id: 'node.window.operation.swing', message: 'Swing' })
       : windowType === 'louvered'
-        ? 'Slats'
-        : 'Tilt'
+        ? i18n._({ id: 'node.window.operation.slats', message: 'Slats' })
+        : i18n._({ id: 'node.window.operation.tilt', message: 'Tilt' })
 
   const setOperationState = (value: number) => {
     useInteractive.getState().cancelWindowAnimation(node.id)
@@ -385,11 +387,11 @@ export default function WindowPanel() {
     <PanelWrapper
       icon={scriptImages(node)?.thumbnail ?? '/icons/window.webp'}
       onClose={handleClose}
-      title={node.name || 'Window'}
+      title={node.name || i18n._({ id: 'node.window.panel.window', message: 'Window' })}
       width={320}
     >
       {!scripted && (
-        <PanelSection title="Type">
+        <PanelSection title={i18n._({ id: 'node.window.panel.type', message: 'Type' })}>
           <SegmentedControl
             onChange={(value) =>
               handleUpdate({
@@ -407,8 +409,14 @@ export default function WindowPanel() {
               })
             }
             options={[
-              { value: 'window', label: 'Window' },
-              { value: 'opening', label: 'Opening' },
+              {
+                value: 'window',
+                label: i18n._({ id: 'node.window.panel.window', message: 'Window' }),
+              },
+              {
+                value: 'opening',
+                label: i18n._({ id: 'node.window.panel.opening', message: 'Opening' }),
+              },
             ]}
             value={node.openingKind ?? 'window'}
           />
@@ -416,7 +424,9 @@ export default function WindowPanel() {
       )}
 
       {showWindowTypeSection && (
-        <PanelSection title="Window Type">
+        <PanelSection
+          title={i18n._({ id: 'node.window.panel.windowType', message: 'Window Type' })}
+        >
           <div className="grid grid-cols-2 gap-2 px-1 pt-1">
             {windowTypeOptions.map((option) => {
               const isSelected = displayedWindowType === option.value
@@ -452,8 +462,11 @@ export default function WindowPanel() {
                   })
                 }
                 options={[
-                  { value: 'up', label: 'Up' },
-                  { value: 'down', label: 'Down' },
+                  { value: 'up', label: i18n._({ id: 'node.window.panel.up', message: 'Up' }) },
+                  {
+                    value: 'down',
+                    label: i18n._({ id: 'node.window.panel.down', message: 'Down' }),
+                  },
                 ]}
                 value={awningDirection}
               />
@@ -466,8 +479,14 @@ export default function WindowPanel() {
                   handleUpdate({ casementStyle: value as WindowNode['casementStyle'] })
                 }
                 options={[
-                  { value: 'single', label: 'Single' },
-                  { value: 'french', label: 'French' },
+                  {
+                    value: 'single',
+                    label: i18n._({ id: 'node.window.panel.single', message: 'Single' }),
+                  },
+                  {
+                    value: 'french',
+                    label: i18n._({ id: 'node.window.panel.french', message: 'French' }),
+                  },
                 ]}
                 value={node.casementStyle ?? 'single'}
               />
@@ -477,8 +496,14 @@ export default function WindowPanel() {
                     handleUpdate({ hingesSide: value as WindowNode['hingesSide'] })
                   }
                   options={[
-                    { value: 'left', label: 'Left' },
-                    { value: 'right', label: 'Right' },
+                    {
+                      value: 'left',
+                      label: i18n._({ id: 'node.window.panel.left', message: 'Left' }),
+                    },
+                    {
+                      value: 'right',
+                      label: i18n._({ id: 'node.window.panel.right', message: 'Right' }),
+                    },
                   ]}
                   value={node.hingesSide ?? 'left'}
                 />
@@ -503,7 +528,7 @@ export default function WindowPanel() {
       )}
 
       {showStyleSection && (
-        <PanelSection title="Style">
+        <PanelSection title={i18n._({ id: 'node.window.panel.style', message: 'Style' })}>
           <div className="grid grid-cols-2 gap-2 px-1 pt-1">
             {WINDOW_STYLE_CHOICES.map((style) => (
               <button
@@ -524,19 +549,27 @@ export default function WindowPanel() {
           </div>
           {!windowStyles.length && (
             <p className="px-1 pt-2 text-muted-foreground text-xs">
-              Custom: the panes match no style.
+              {i18n._({
+                id: 'node.window.panel.customThePanesMatchNoStyle',
+                message: 'Custom: the panes match no style.',
+              })}
             </p>
           )}
         </PanelSection>
       )}
 
       {corner && (
-        <PanelSection title="Corner">
+        <PanelSection title={i18n._({ id: 'node.window.panel.corner', message: 'Corner' })}>
           {corner.paired ? (
             <div className="flex flex-col gap-2 px-1 pb-1">
               <div className="flex items-center justify-between gap-2 text-xs">
                 <span className="text-muted-foreground">
-                  Wraps the corner with {corner.partner.name || 'its partner'}
+                  {i18n._({
+                    id: 'node.window.panel.wrapsTheCornerWith',
+                    message: 'Wraps the corner with',
+                  })}{' '}
+                  {corner.partner.name ||
+                    i18n._({ id: 'node.window.panel.itsPartner', message: 'its partner' })}
                 </span>
                 <button
                   className={cn(
@@ -548,11 +581,11 @@ export default function WindowPanel() {
                   }
                   type="button"
                 >
-                  Unwrap
+                  {i18n._({ id: 'node.window.panel.unwrap', message: 'Unwrap' })}
                 </button>
               </div>
               <SliderControl
-                label="This side"
+                label={i18n._({ id: 'node.window.panel.thisSide', message: 'This side' })}
                 min={0.1}
                 onChange={(v) => selectedId && setCornerWidth(selectedId, v)}
                 precision={2}
@@ -561,7 +594,7 @@ export default function WindowPanel() {
                 value={node.width}
               />
               <SliderControl
-                label="Other side"
+                label={i18n._({ id: 'node.window.panel.otherSide', message: 'Other side' })}
                 min={0.1}
                 onChange={(v) => setCornerWidth(corner.partner.id, v)}
                 precision={2}
@@ -574,8 +607,14 @@ export default function WindowPanel() {
                 <SegmentedControl
                   onChange={setCornerPost}
                   options={[
-                    { label: 'Fused glass', value: 'none' },
-                    { label: 'Corner post', value: 'post' },
+                    {
+                      label: i18n._({ id: 'node.window.panel.fusedGlass', message: 'Fused glass' }),
+                      value: 'none',
+                    },
+                    {
+                      label: i18n._({ id: 'node.window.panel.cornerPost', message: 'Corner post' }),
+                      value: 'post',
+                    },
                   ]}
                   value={node.corner?.post ?? 'none'}
                 />
@@ -591,19 +630,22 @@ export default function WindowPanel() {
                 onClick={wrapTheCorner}
                 type="button"
               >
-                Wrap the corner
+                {i18n._({ id: 'node.window.panel.wrapTheCorner', message: 'Wrap the corner' })}
               </button>
             </div>
           )}
         </PanelSection>
       )}
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.window.panel.position', message: 'Position' })}>
         {!corner?.paired && (
           <SliderControl
             label={
               <>
-                X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+                X
+                <sub className="ml-[1px] text-[11px] opacity-70">
+                  {i18n._({ id: 'node.window.panel.pos', message: 'pos' })}
+                </sub>
               </>
             }
             onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
@@ -616,7 +658,10 @@ export default function WindowPanel() {
         <SliderControl
           label={
             <>
-              Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              Y
+              <sub className="ml-[1px] text-[11px] opacity-70">
+                {i18n._({ id: 'node.window.panel.pos', message: 'pos' })}
+              </sub>
             </>
           }
           onChange={(v) => handleUpdate({ position: [node.position[0], v, node.position[2]] })}
@@ -630,7 +675,7 @@ export default function WindowPanel() {
             <ActionButton
               className="w-full"
               icon={<FlipHorizontal2 className="h-4 w-4" />}
-              label="Flip Side"
+              label={i18n._({ id: 'node.window.panel.flipSide', message: 'Flip Side' })}
               onClick={handleFlip}
             />
           </div>
@@ -640,15 +685,18 @@ export default function WindowPanel() {
       {scripted && <AuthoredParams node={node} />}
 
       {!scripted && (
-        <PanelSection title="Dimensions">
+        <PanelSection title={i18n._({ id: 'node.window.panel.dimensions', message: 'Dimensions' })}>
           {limits && (
             <p className="text-[11px] text-muted-foreground">
-              Size is limited to the wall, including clearance for the opening frame.
+              {i18n._({
+                id: 'node.window.panel.sizeIsLimitedToTheWall',
+                message: 'Size is limited to the wall, including clearance for the opening frame.',
+              })}
             </p>
           )}
           {!corner?.paired && (
             <SliderControl
-              label="Width"
+              label={i18n._({ id: 'node.window.panel.width', message: 'Width' })}
               max={limits?.width}
               min={0.01}
               onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
@@ -663,7 +711,7 @@ export default function WindowPanel() {
             />
           )}
           <SliderControl
-            label="Height"
+            label={i18n._({ id: 'node.window.panel.height', message: 'Height' })}
             max={limits?.height}
             min={0.01}
             onChange={(v) => preview?.preview(getDimensionUpdates({ height: v }))}
@@ -680,7 +728,7 @@ export default function WindowPanel() {
       )}
 
       {showWindowShapeSection && (
-        <PanelSection title="Top Shape">
+        <PanelSection title={i18n._({ id: 'node.window.panel.topShape', message: 'Top Shape' })}>
           <SegmentedControl
             onChange={(value) =>
               handleUpdate({
@@ -698,9 +746,15 @@ export default function WindowPanel() {
               })
             }
             options={[
-              { value: 'rectangle', label: 'Rect' },
-              { value: 'rounded', label: 'Rounded' },
-              { value: 'arch', label: 'Arch' },
+              {
+                value: 'rectangle',
+                label: i18n._({ id: 'node.window.panel.rect', message: 'Rect' }),
+              },
+              {
+                value: 'rounded',
+                label: i18n._({ id: 'node.window.panel.rounded', message: 'Rounded' }),
+              },
+              { value: 'arch', label: i18n._({ id: 'node.window.panel.arch', message: 'Arch' }) },
             ]}
             value={windowShape}
           />
@@ -711,14 +765,17 @@ export default function WindowPanel() {
                   handleUpdate({ openingRadiusMode: value as WindowNode['openingRadiusMode'] })
                 }
                 options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'individual', label: 'Individual' },
+                  { value: 'all', label: i18n._({ id: 'node.window.panel.all', message: 'All' }) },
+                  {
+                    value: 'individual',
+                    label: i18n._({ id: 'node.window.panel.individual', message: 'Individual' }),
+                  },
                 ]}
                 value={openingRadiusMode}
               />
               {openingRadiusMode === 'all' ? (
                 <SliderControl
-                  label="Corner Radius"
+                  label={i18n._({ id: 'node.window.panel.cornerRadius', message: 'Corner Radius' })}
                   max={maxRoundedRadius}
                   min={0}
                   onChange={(value) => previewWindowUpdate('cornerRadius', value)}
@@ -734,10 +791,10 @@ export default function WindowPanel() {
               ) : (
                 <>
                   {[
-                    ['Top Left', 0],
-                    ['Top Right', 1],
-                    ['Bottom Right', 2],
-                    ['Bottom Left', 3],
+                    [i18n._({ id: 'node.cornerRadius.topLeft', message: 'Top Left' }), 0],
+                    [i18n._({ id: 'node.cornerRadius.topRight', message: 'Top Right' }), 1],
+                    [i18n._({ id: 'node.cornerRadius.bottomRight', message: 'Bottom Right' }), 2],
+                    [i18n._({ id: 'node.cornerRadius.bottomLeft', message: 'Bottom Left' }), 3],
                   ].map(([label, index]) => (
                     <SliderControl
                       key={label}
@@ -758,7 +815,7 @@ export default function WindowPanel() {
                 </>
               )}
               <SliderControl
-                label="Reveal Radius"
+                label={i18n._({ id: 'node.window.panel.revealRadius', message: 'Reveal Radius' })}
                 max={0.08}
                 min={0}
                 onChange={(value) => previewWindowUpdate('openingRevealRadius', value)}
@@ -776,7 +833,7 @@ export default function WindowPanel() {
           {windowShape === 'arch' && (
             <div className="mt-2 flex flex-col gap-1">
               <SliderControl
-                label="Arch Height"
+                label={i18n._({ id: 'node.window.panel.archHeight', message: 'Arch Height' })}
                 max={Math.max(0.05, node.height)}
                 min={0.05}
                 onChange={(value) => previewWindowUpdate('archHeight', value)}
@@ -795,15 +852,23 @@ export default function WindowPanel() {
       )}
 
       {showOpeningShapeSection && (
-        <PanelSection title="Opening Shape">
+        <PanelSection
+          title={i18n._({ id: 'node.window.panel.openingShape', message: 'Opening Shape' })}
+        >
           <SegmentedControl
             onChange={(value) =>
               handleUpdate({ openingShape: value as WindowNode['openingShape'] })
             }
             options={[
-              { value: 'rectangle', label: 'Rect' },
-              { value: 'rounded', label: 'Rounded' },
-              { value: 'arch', label: 'Arch' },
+              {
+                value: 'rectangle',
+                label: i18n._({ id: 'node.window.panel.rect', message: 'Rect' }),
+              },
+              {
+                value: 'rounded',
+                label: i18n._({ id: 'node.window.panel.rounded', message: 'Rounded' }),
+              },
+              { value: 'arch', label: i18n._({ id: 'node.window.panel.arch', message: 'Arch' }) },
             ]}
             value={openingShape}
           />
@@ -814,14 +879,17 @@ export default function WindowPanel() {
                   handleUpdate({ openingRadiusMode: value as WindowNode['openingRadiusMode'] })
                 }
                 options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'individual', label: 'Individual' },
+                  { value: 'all', label: i18n._({ id: 'node.window.panel.all', message: 'All' }) },
+                  {
+                    value: 'individual',
+                    label: i18n._({ id: 'node.window.panel.individual', message: 'Individual' }),
+                  },
                 ]}
                 value={openingRadiusMode}
               />
               {openingRadiusMode === 'all' ? (
                 <SliderControl
-                  label="Corner Radius"
+                  label={i18n._({ id: 'node.window.panel.cornerRadius', message: 'Corner Radius' })}
                   max={maxRoundedRadius}
                   min={0}
                   onChange={(value) => previewWindowUpdate('cornerRadius', value)}
@@ -837,10 +905,10 @@ export default function WindowPanel() {
               ) : (
                 <>
                   {[
-                    ['Top Left', 0],
-                    ['Top Right', 1],
-                    ['Bottom Right', 2],
-                    ['Bottom Left', 3],
+                    [i18n._({ id: 'node.cornerRadius.topLeft', message: 'Top Left' }), 0],
+                    [i18n._({ id: 'node.cornerRadius.topRight', message: 'Top Right' }), 1],
+                    [i18n._({ id: 'node.cornerRadius.bottomRight', message: 'Bottom Right' }), 2],
+                    [i18n._({ id: 'node.cornerRadius.bottomLeft', message: 'Bottom Left' }), 3],
                   ].map(([label, index]) => (
                     <SliderControl
                       key={label}
@@ -861,7 +929,7 @@ export default function WindowPanel() {
                 </>
               )}
               <SliderControl
-                label="Reveal Radius"
+                label={i18n._({ id: 'node.window.panel.revealRadius', message: 'Reveal Radius' })}
                 max={0.08}
                 min={0}
                 onChange={(value) => previewWindowUpdate('openingRevealRadius', value)}
@@ -879,7 +947,7 @@ export default function WindowPanel() {
           {openingShape === 'arch' && (
             <div className="mt-2 flex flex-col gap-1">
               <SliderControl
-                label="Arch Height"
+                label={i18n._({ id: 'node.window.panel.archHeight', message: 'Arch Height' })}
                 max={Math.max(0.05, node.height)}
                 min={0.05}
                 onChange={(value) => previewWindowUpdate('archHeight', value)}
@@ -900,9 +968,9 @@ export default function WindowPanel() {
       {!isOpening && !scripted && (
         <>
           {showFrameSection && (
-            <PanelSection title="Frame">
+            <PanelSection title={i18n._({ id: 'node.window.panel.frame', message: 'Frame' })}>
               <SliderControl
-                label="Thickness"
+                label={i18n._({ id: 'node.window.panel.thickness', message: 'Thickness' })}
                 min={0}
                 onChange={(v) => previewWindowUpdate('frameThickness', v)}
                 onCommit={(v) => commitWindowPreview('frameThickness', v)}
@@ -915,7 +983,7 @@ export default function WindowPanel() {
                 value={node.frameThickness}
               />
               <SliderControl
-                label="Depth"
+                label={i18n._({ id: 'node.window.panel.depth', message: 'Depth' })}
                 min={0}
                 onChange={(v) => previewWindowUpdate('frameDepth', v)}
                 onCommit={(v) => commitWindowPreview('frameDepth', v)}
@@ -931,9 +999,9 @@ export default function WindowPanel() {
           )}
 
           {showGridSection && (
-            <PanelSection title="Grid">
+            <PanelSection title={i18n._({ id: 'node.window.panel.grid', message: 'Grid' })}>
               <SliderControl
-                label="Columns"
+                label={i18n._({ id: 'node.window.panel.columns', message: 'Columns' })}
                 max={8}
                 min={1}
                 onChange={(v) => {
@@ -945,7 +1013,7 @@ export default function WindowPanel() {
                 value={numCols}
               />
               <SliderControl
-                label="Rows"
+                label={i18n._({ id: 'node.window.panel.rows', message: 'Rows' })}
                 max={8}
                 min={1}
                 onChange={(v) => {
@@ -960,7 +1028,7 @@ export default function WindowPanel() {
               {numCols > 1 && (
                 <div className="mt-2 flex flex-col gap-1">
                   <div className="mb-1 px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                    Col Widths
+                    {i18n._({ id: 'node.window.panel.colWidths', message: 'Col Widths' })}
                   </div>
                   {normCols.map((ratio, i) => (
                     <SliderControl
@@ -977,7 +1045,7 @@ export default function WindowPanel() {
                   ))}
                   <div className="mt-1 border-border/50 border-t pt-1">
                     <SliderControl
-                      label="Divider"
+                      label={i18n._({ id: 'node.window.panel.divider', message: 'Divider' })}
                       max={0.1}
                       min={0.005}
                       onChange={(v) => handleUpdate({ columnDividerThickness: v })}
@@ -993,7 +1061,7 @@ export default function WindowPanel() {
               {numRows > 1 && (
                 <div className="mt-2 flex flex-col gap-1">
                   <div className="mb-1 px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                    Row Heights
+                    {i18n._({ id: 'node.window.panel.rowHeights', message: 'Row Heights' })}
                   </div>
                   {normRows.map((ratio, i) => (
                     <SliderControl
@@ -1010,7 +1078,7 @@ export default function WindowPanel() {
                   ))}
                   <div className="mt-1 border-border/50 border-t pt-1">
                     <SliderControl
-                      label="Divider"
+                      label={i18n._({ id: 'node.window.panel.divider', message: 'Divider' })}
                       max={0.1}
                       min={0.005}
                       onChange={(v) => handleUpdate({ rowDividerThickness: v })}
@@ -1026,16 +1094,16 @@ export default function WindowPanel() {
           )}
 
           {showSillSection && (
-            <PanelSection title="Sill">
+            <PanelSection title={i18n._({ id: 'node.window.panel.sill', message: 'Sill' })}>
               <ToggleControl
                 checked={node.sill}
-                label="Enable Sill"
+                label={i18n._({ id: 'node.window.panel.enableSill', message: 'Enable Sill' })}
                 onChange={(checked) => handleUpdate({ sill: checked })}
               />
               {node.sill && (
                 <div className="mt-1 flex flex-col gap-1">
                   <SliderControl
-                    label="Depth"
+                    label={i18n._({ id: 'node.window.panel.depth', message: 'Depth' })}
                     min={0}
                     onChange={(v) => handleUpdate({ sillDepth: v })}
                     precision={3}
@@ -1044,7 +1112,7 @@ export default function WindowPanel() {
                     value={node.sillDepth}
                   />
                   <SliderControl
-                    label="Thickness"
+                    label={i18n._({ id: 'node.window.panel.thickness', message: 'Thickness' })}
                     min={0}
                     onChange={(v) => handleUpdate({ sillThickness: v })}
                     precision={3}
@@ -1059,18 +1127,22 @@ export default function WindowPanel() {
         </>
       )}
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.window.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.window.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.window.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-            label="Delete"
+            label={i18n._({ id: 'node.window.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

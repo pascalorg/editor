@@ -4,8 +4,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   type DoorNode,
+  type MessageDescriptor,
   scriptImages,
   useInteractive,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -38,12 +40,34 @@ import { openingPropertyPreviewHost } from '../shared/opening-property-preview-h
 import { scaleHandleHeight } from './door-math'
 import { doorTypeOptions } from './placement'
 
+/** The type cards' names; `doorTypeOptions` keeps English for the placement chips. */
+const DOOR_TYPE_LABELS: Record<DoorNode['doorType'], MessageDescriptor> = {
+  hinged: /* i18n */ { id: 'node.door.type.hinged', message: 'Hinged' },
+  double: /* i18n */ { id: 'node.door.type.double', message: 'Double' },
+  french: /* i18n */ { id: 'node.door.type.french', message: 'French' },
+  folding: /* i18n */ { id: 'node.door.type.folding', message: 'Folding' },
+  pocket: /* i18n */ { id: 'node.door.type.pocket', message: 'Pocket' },
+  barn: /* i18n */ { id: 'node.door.type.barn', message: 'Barn' },
+  sliding: /* i18n */ { id: 'node.door.type.sliding', message: 'Sliding' },
+  'garage-sectional': /* i18n */ { id: 'node.door.type.garageSectional', message: 'Sectional' },
+  'garage-rollup': /* i18n */ { id: 'node.door.type.garageRollup', message: 'Roll-up' },
+  'garage-tiltup': /* i18n */ { id: 'node.door.type.garageTiltup', message: 'Tilt-up' },
+}
+
 const garageDoorTypeOptions = [
-  { label: 'Sectional', value: 'garage-sectional', available: true },
-  { label: 'Roll-up', value: 'garage-rollup', available: true },
-  { label: 'Tilt-up', value: 'garage-tiltup', available: true },
+  {
+    value: 'garage-sectional',
+    available: true,
+  },
+  {
+    value: 'garage-rollup',
+    available: true,
+  },
+  {
+    value: 'garage-tiltup',
+    available: true,
+  },
 ] satisfies {
-  label: string
   value: DoorNode['doorType']
   available: boolean
 }[]
@@ -64,6 +88,7 @@ function isSameDoorValue(current: unknown, next: unknown): boolean {
 }
 
 export default function DoorPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const deleteNode = useScene((s) => s.deleteNode)
@@ -259,11 +284,11 @@ export default function DoorPanel() {
     <PanelWrapper
       icon={scriptImages(node)?.thumbnail ?? '/icons/door.webp'}
       onClose={handleClose}
-      title={node.name || 'Door'}
+      title={node.name || i18n._({ id: 'node.door.panel.door', message: 'Door' })}
       width={320}
     >
       {!scripted && (
-        <PanelSection title="Type">
+        <PanelSection title={i18n._({ id: 'node.door.panel.type', message: 'Type' })}>
           <div className="flex flex-col gap-2 px-1 pb-1">
             <SegmentedControl
               onChange={(v) =>
@@ -290,9 +315,15 @@ export default function DoorPanel() {
                 )
               }
               options={[
-                { label: 'Door', value: 'door' },
-                { label: 'Opening', value: 'opening' },
-                { label: 'Garage', value: 'garage' },
+                { label: i18n._({ id: 'node.door.panel.door', message: 'Door' }), value: 'door' },
+                {
+                  label: i18n._({ id: 'node.door.panel.opening', message: 'Opening' }),
+                  value: 'opening',
+                },
+                {
+                  label: i18n._({ id: 'node.door.panel.garage', message: 'Garage' }),
+                  value: 'garage',
+                },
               ]}
               value={typeMode}
             />
@@ -317,7 +348,9 @@ export default function DoorPanel() {
                     type="button"
                   >
                     <DoorOpen className="h-4 w-4 shrink-0" />
-                    <span className="truncate font-medium">{option.label}</span>
+                    <span className="truncate font-medium">
+                      {i18n._(DOOR_TYPE_LABELS[option.value])}
+                    </span>
                   </button>
                 )
               })}
@@ -327,7 +360,7 @@ export default function DoorPanel() {
       )}
 
       {!scripted && !isOpening && !isGarageDoor && (
-        <PanelSection title="Style">
+        <PanelSection title={i18n._({ id: 'node.door.panel.style', message: 'Style' })}>
           <div className="grid grid-cols-2 gap-2 px-1 pt-1">
             {DOOR_STYLES.map((style) => (
               <button
@@ -348,17 +381,23 @@ export default function DoorPanel() {
           </div>
           {!doorStyles.length && (
             <p className="px-1 pt-2 text-muted-foreground text-xs">
-              Custom: the segments match no style.
+              {i18n._({
+                id: 'node.door.panel.customTheSegmentsMatchNoStyle',
+                message: 'Custom: the segments match no style.',
+              })}
             </p>
           )}
         </PanelSection>
       )}
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.door.panel.position', message: 'Position' })}>
         <SliderControl
           label={
             <>
-              X<sub className="ml-[1px] text-[11px] opacity-70">wall</sub>
+              X
+              <sub className="ml-[1px] text-[11px] opacity-70">
+                {i18n._({ id: 'node.door.panel.wall', message: 'wall' })}
+              </sub>
             </>
           }
           max={10}
@@ -374,7 +413,7 @@ export default function DoorPanel() {
             <ActionButton
               className="w-full"
               icon={<FlipHorizontal2 className="h-4 w-4" />}
-              label="Flip Side"
+              label={i18n._({ id: 'node.door.panel.flipSide', message: 'Flip Side' })}
               onClick={handleFlip}
             />
           </div>
@@ -382,11 +421,11 @@ export default function DoorPanel() {
       </PanelSection>
 
       {showFoldSection && (
-        <PanelSection title="Fold">
+        <PanelSection title={i18n._({ id: 'node.door.panel.fold', message: 'Fold' })}>
           <div className="flex flex-col gap-2 px-1 pb-1">
             <div className="space-y-1">
               <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                Panels
+                {i18n._({ id: 'node.door.panel.panels', message: 'Panels' })}
               </span>
               <SegmentedControl
                 onChange={(v) => handleUpdate({ leafCount: v === '2' ? 2 : 4 })}
@@ -399,7 +438,7 @@ export default function DoorPanel() {
             </div>
           </div>
           <SliderControl
-            label="Open"
+            label={i18n._({ id: 'node.door.panel.open', message: 'Open' })}
             max={100}
             min={0}
             onChange={(v) => handleUpdate({ operationState: v / 100 })}
@@ -413,24 +452,31 @@ export default function DoorPanel() {
       )}
 
       {showSlideSection && (
-        <PanelSection title="Slide">
+        <PanelSection title={i18n._({ id: 'node.door.panel.slide', message: 'Slide' })}>
           <div className="flex flex-col gap-2 px-1 pb-1">
             <div className="space-y-1">
               <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                {doorType === 'pocket' ? 'Pocket' : doorType === 'barn' ? 'Rail' : 'Panel'}
+                {doorType === 'pocket'
+                  ? i18n._({ id: 'node.door.panel.pocket', message: 'Pocket' })
+                  : doorType === 'barn'
+                    ? i18n._({ id: 'node.door.panel.rail', message: 'Rail' })
+                    : i18n._({ id: 'node.door.panel.panel', message: 'Panel' })}
               </span>
               <SegmentedControl
                 onChange={(v) => handleUpdate({ slideDirection: v })}
                 options={[
-                  { label: 'Left', value: 'left' },
-                  { label: 'Right', value: 'right' },
+                  { label: i18n._({ id: 'node.door.panel.left', message: 'Left' }), value: 'left' },
+                  {
+                    label: i18n._({ id: 'node.door.panel.right', message: 'Right' }),
+                    value: 'right',
+                  },
                 ]}
                 value={node.slideDirection ?? 'left'}
               />
             </div>
           </div>
           <SliderControl
-            label="Open"
+            label={i18n._({ id: 'node.door.panel.open', message: 'Open' })}
             max={100}
             min={0}
             onChange={(v) => handleUpdate({ operationState: v / 100 })}
@@ -444,9 +490,9 @@ export default function DoorPanel() {
       )}
 
       {showGarageSection && (
-        <PanelSection title="Garage">
+        <PanelSection title={i18n._({ id: 'node.door.panel.garage', message: 'Garage' })}>
           <SliderControl
-            label="Open"
+            label={i18n._({ id: 'node.door.panel.open', message: 'Open' })}
             max={100}
             min={0}
             onChange={(v) => handleUpdate({ operationState: v / 100 })}
@@ -458,7 +504,7 @@ export default function DoorPanel() {
           />
           {isSectionalGarageDoor && (
             <SliderControl
-              label="Panels"
+              label={i18n._({ id: 'node.door.panel.panels', message: 'Panels' })}
               max={8}
               min={3}
               onChange={(v) => handleUpdate({ garagePanelCount: Math.round(v) })}
@@ -474,14 +520,17 @@ export default function DoorPanel() {
       {scripted && <AuthoredParams node={node} />}
 
       {!scripted && (
-        <PanelSection title="Dimensions">
+        <PanelSection title={i18n._({ id: 'node.door.panel.dimensions', message: 'Dimensions' })}>
           {limits && (
             <p className="text-[11px] text-muted-foreground">
-              Size is limited to the wall, including clearance for the opening frame.
+              {i18n._({
+                id: 'node.door.panel.sizeIsLimitedToTheWall',
+                message: 'Size is limited to the wall, including clearance for the opening frame.',
+              })}
             </p>
           )}
           <SliderControl
-            label="Width"
+            label={i18n._({ id: 'node.door.panel.width', message: 'Width' })}
             max={Math.min(maxDoorWidth, limits?.width ?? Infinity)}
             min={Math.min(0.5, limits?.width ?? 0.5)}
             onChange={(v) => previewDoorUpdate('width', v)}
@@ -495,7 +544,7 @@ export default function DoorPanel() {
             value={node.width}
           />
           <SliderControl
-            label="Height"
+            label={i18n._({ id: 'node.door.panel.height', message: 'Height' })}
             max={limits?.height ?? 1000}
             min={Math.min(1, limits?.height ?? 1)}
             onChange={(v) => preview?.preview(heightUpdates(v))}
@@ -512,7 +561,7 @@ export default function DoorPanel() {
       )}
 
       {showDoorShapeSection && (
-        <PanelSection title="Top Shape">
+        <PanelSection title={i18n._({ id: 'node.door.panel.topShape', message: 'Top Shape' })}>
           <div className="flex flex-col gap-2 px-1 pb-1">
             <SegmentedControl
               onChange={(v) =>
@@ -530,9 +579,15 @@ export default function DoorPanel() {
                 })
               }
               options={[
-                { label: 'Rect', value: 'rectangle' },
-                { label: 'Rounded', value: 'rounded' },
-                { label: 'Arch', value: 'arch' },
+                {
+                  label: i18n._({ id: 'node.door.panel.rect', message: 'Rect' }),
+                  value: 'rectangle',
+                },
+                {
+                  label: i18n._({ id: 'node.door.panel.rounded', message: 'Rounded' }),
+                  value: 'rounded',
+                },
+                { label: i18n._({ id: 'node.door.panel.arch', message: 'Arch' }), value: 'arch' },
               ]}
               value={doorShape}
             />
@@ -545,15 +600,18 @@ export default function DoorPanel() {
                     handleUpdate({ openingRadiusMode: v as DoorNode['openingRadiusMode'] })
                   }
                   options={[
-                    { label: 'All', value: 'all' },
-                    { label: 'Individual', value: 'individual' },
+                    { label: i18n._({ id: 'node.door.panel.all', message: 'All' }), value: 'all' },
+                    {
+                      label: i18n._({ id: 'node.door.panel.individual', message: 'Individual' }),
+                      value: 'individual',
+                    },
                   ]}
                   value={openingRadiusMode}
                 />
               </div>
               {openingRadiusMode === 'all' ? (
                 <SliderControl
-                  label="Corner Radius"
+                  label={i18n._({ id: 'node.door.panel.cornerRadius', message: 'Corner Radius' })}
                   max={maxRoundedRadius}
                   min={0}
                   onChange={(v) => previewDoorUpdate('cornerRadius', v)}
@@ -569,8 +627,8 @@ export default function DoorPanel() {
               ) : (
                 <>
                   {[
-                    ['Top Left', 0],
-                    ['Top Right', 1],
+                    [i18n._({ id: 'node.cornerRadius.topLeft', message: 'Top Left' }), 0],
+                    [i18n._({ id: 'node.cornerRadius.topRight', message: 'Top Right' }), 1],
                   ].map(([label, index]) => (
                     <SliderControl
                       key={label}
@@ -591,7 +649,7 @@ export default function DoorPanel() {
                 </>
               )}
               <SliderControl
-                label="Reveal Radius"
+                label={i18n._({ id: 'node.door.panel.revealRadius', message: 'Reveal Radius' })}
                 max={0.08}
                 min={0}
                 onChange={(v) => previewDoorUpdate('openingRevealRadius', v)}
@@ -608,7 +666,7 @@ export default function DoorPanel() {
           )}
           {doorShape === 'arch' && (
             <SliderControl
-              label="Arch Height"
+              label={i18n._({ id: 'node.door.panel.archHeight', message: 'Arch Height' })}
               max={node.height}
               min={0.05}
               onChange={(v) => previewDoorUpdate('archHeight', v)}
@@ -626,7 +684,9 @@ export default function DoorPanel() {
       )}
 
       {showOpeningShapeSection && (
-        <PanelSection title="Opening Shape">
+        <PanelSection
+          title={i18n._({ id: 'node.door.panel.openingShape', message: 'Opening Shape' })}
+        >
           <div className="flex flex-col gap-2 px-1 pb-1">
             <SegmentedControl
               onChange={(v) =>
@@ -639,9 +699,15 @@ export default function DoorPanel() {
                 })
               }
               options={[
-                { label: 'Rect', value: 'rectangle' },
-                { label: 'Rounded', value: 'rounded' },
-                { label: 'Arch', value: 'arch' },
+                {
+                  label: i18n._({ id: 'node.door.panel.rect', message: 'Rect' }),
+                  value: 'rectangle',
+                },
+                {
+                  label: i18n._({ id: 'node.door.panel.rounded', message: 'Rounded' }),
+                  value: 'rounded',
+                },
+                { label: i18n._({ id: 'node.door.panel.arch', message: 'Arch' }), value: 'arch' },
               ]}
               value={openingShape}
             />
@@ -654,15 +720,18 @@ export default function DoorPanel() {
                     handleUpdate({ openingRadiusMode: v as DoorNode['openingRadiusMode'] })
                   }
                   options={[
-                    { label: 'All', value: 'all' },
-                    { label: 'Individual', value: 'individual' },
+                    { label: i18n._({ id: 'node.door.panel.all', message: 'All' }), value: 'all' },
+                    {
+                      label: i18n._({ id: 'node.door.panel.individual', message: 'Individual' }),
+                      value: 'individual',
+                    },
                   ]}
                   value={openingRadiusMode}
                 />
               </div>
               {openingRadiusMode === 'all' ? (
                 <SliderControl
-                  label="Corner Radius"
+                  label={i18n._({ id: 'node.door.panel.cornerRadius', message: 'Corner Radius' })}
                   max={maxRoundedRadius}
                   min={0}
                   onChange={(v) => previewDoorUpdate('cornerRadius', v)}
@@ -678,8 +747,8 @@ export default function DoorPanel() {
               ) : (
                 <>
                   {[
-                    ['Top Left', 0],
-                    ['Top Right', 1],
+                    [i18n._({ id: 'node.cornerRadius.topLeft', message: 'Top Left' }), 0],
+                    [i18n._({ id: 'node.cornerRadius.topRight', message: 'Top Right' }), 1],
                   ].map(([label, index]) => (
                     <SliderControl
                       key={label}
@@ -700,7 +769,7 @@ export default function DoorPanel() {
                 </>
               )}
               <SliderControl
-                label="Reveal Radius"
+                label={i18n._({ id: 'node.door.panel.revealRadius', message: 'Reveal Radius' })}
                 max={0.08}
                 min={0}
                 onChange={(v) => previewDoorUpdate('openingRevealRadius', v)}
@@ -717,7 +786,7 @@ export default function DoorPanel() {
           )}
           {openingShape === 'arch' && (
             <SliderControl
-              label="Arch Height"
+              label={i18n._({ id: 'node.door.panel.archHeight', message: 'Arch Height' })}
               max={node.height}
               min={0.05}
               onChange={(v) => previewDoorUpdate('archHeight', v)}
@@ -737,9 +806,9 @@ export default function DoorPanel() {
       {!isCutoutOnly && !scripted && (
         <>
           {showFrameSection && (
-            <PanelSection title="Frame">
+            <PanelSection title={i18n._({ id: 'node.door.panel.frame', message: 'Frame' })}>
               <SliderControl
-                label="Thickness"
+                label={i18n._({ id: 'node.door.panel.thickness', message: 'Thickness' })}
                 max={0.2}
                 min={0.01}
                 onChange={(v) => handleUpdate({ frameThickness: v })}
@@ -749,7 +818,7 @@ export default function DoorPanel() {
                 value={node.frameThickness}
               />
               <SliderControl
-                label="Depth"
+                label={i18n._({ id: 'node.door.panel.depth', message: 'Depth' })}
                 max={0.3}
                 min={0.01}
                 onChange={(v) => handleUpdate({ frameDepth: v })}
@@ -762,9 +831,11 @@ export default function DoorPanel() {
           )}
 
           {showContentPaddingSection && (
-            <PanelSection title="Content Padding">
+            <PanelSection
+              title={i18n._({ id: 'node.door.panel.contentPadding', message: 'Content Padding' })}
+            >
               <SliderControl
-                label="Horizontal"
+                label={i18n._({ id: 'node.door.panel.horizontal', message: 'Horizontal' })}
                 max={0.2}
                 min={0}
                 onChange={(v) => handleUpdate({ contentPadding: [v, node.contentPadding[1]] })}
@@ -774,7 +845,7 @@ export default function DoorPanel() {
                 value={node.contentPadding[0]}
               />
               <SliderControl
-                label="Vertical"
+                label={i18n._({ id: 'node.door.panel.vertical', message: 'Vertical' })}
                 max={0.2}
                 min={0}
                 onChange={(v) => handleUpdate({ contentPadding: [node.contentPadding[0], v] })}
@@ -787,18 +858,24 @@ export default function DoorPanel() {
           )}
 
           {showSwingSection && (
-            <PanelSection title="Swing">
+            <PanelSection title={i18n._({ id: 'node.door.panel.swing', message: 'Swing' })}>
               <div className="flex flex-col gap-2 px-1 pb-1">
                 {supportsHingeSide && (
                   <div className="space-y-1">
                     <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                      Hinges Side
+                      {i18n._({ id: 'node.door.panel.hingesSide', message: 'Hinges Side' })}
                     </span>
                     <SegmentedControl
                       onChange={(v) => handleUpdate({ hingesSide: v })}
                       options={[
-                        { label: 'Left', value: 'left' },
-                        { label: 'Right', value: 'right' },
+                        {
+                          label: i18n._({ id: 'node.door.panel.left', message: 'Left' }),
+                          value: 'left',
+                        },
+                        {
+                          label: i18n._({ id: 'node.door.panel.right', message: 'Right' }),
+                          value: 'right',
+                        },
                       ]}
                       value={node.hingesSide}
                     />
@@ -806,13 +883,19 @@ export default function DoorPanel() {
                 )}
                 <div className="space-y-1">
                   <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                    Direction
+                    {i18n._({ id: 'node.door.panel.direction', message: 'Direction' })}
                   </span>
                   <SegmentedControl
                     onChange={(v) => handleUpdate({ swingDirection: v })}
                     options={[
-                      { label: 'Inward', value: 'inward' },
-                      { label: 'Outward', value: 'outward' },
+                      {
+                        label: i18n._({ id: 'node.door.panel.inward', message: 'Inward' }),
+                        value: 'inward',
+                      },
+                      {
+                        label: i18n._({ id: 'node.door.panel.outward', message: 'Outward' }),
+                        value: 'outward',
+                      },
                     ]}
                     value={node.swingDirection}
                   />
@@ -822,16 +905,19 @@ export default function DoorPanel() {
           )}
 
           {showThresholdSection && (
-            <PanelSection title="Threshold">
+            <PanelSection title={i18n._({ id: 'node.door.panel.threshold', message: 'Threshold' })}>
               <ToggleControl
                 checked={node.threshold}
-                label="Enable Threshold"
+                label={i18n._({
+                  id: 'node.door.panel.enableThreshold',
+                  message: 'Enable Threshold',
+                })}
                 onChange={(checked) => handleUpdate({ threshold: checked })}
               />
               {node.threshold && (
                 <div className="mt-1 flex flex-col gap-1">
                   <SliderControl
-                    label="Height"
+                    label={i18n._({ id: 'node.door.panel.height', message: 'Height' })}
                     max={0.1}
                     min={0.005}
                     onChange={(v) => handleUpdate({ thresholdHeight: v })}
@@ -846,18 +932,18 @@ export default function DoorPanel() {
           )}
 
           {showHandleSection && (
-            <PanelSection title="Handle">
+            <PanelSection title={i18n._({ id: 'node.door.panel.handle', message: 'Handle' })}>
               {isSwingDoor && (
                 <ToggleControl
                   checked={node.handle}
-                  label="Enable Handle"
+                  label={i18n._({ id: 'node.door.panel.enableHandle', message: 'Enable Handle' })}
                   onChange={(checked) => handleUpdate({ handle: checked })}
                 />
               )}
               {(node.handle || !isSwingDoor) && (
                 <div className="mt-1 flex flex-col gap-1">
                   <SliderControl
-                    label="Height"
+                    label={i18n._({ id: 'node.door.panel.height', message: 'Height' })}
                     max={node.height - 0.1}
                     min={0.5}
                     onChange={(v) => handleUpdate({ handleHeight: v })}
@@ -869,13 +955,19 @@ export default function DoorPanel() {
                   {supportsHandleSide && (
                     <div className="space-y-1">
                       <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                        Handle Side
+                        {i18n._({ id: 'node.door.panel.handleSide', message: 'Handle Side' })}
                       </span>
                       <SegmentedControl
                         onChange={(v) => handleUpdate({ handleSide: v })}
                         options={[
-                          { label: 'Left', value: 'left' },
-                          { label: 'Right', value: 'right' },
+                          {
+                            label: i18n._({ id: 'node.door.panel.left', message: 'Left' }),
+                            value: 'left',
+                          },
+                          {
+                            label: i18n._({ id: 'node.door.panel.right', message: 'Right' }),
+                            value: 'right',
+                          },
                         ]}
                         value={node.handleSide}
                       />
@@ -887,21 +979,21 @@ export default function DoorPanel() {
           )}
 
           {showHardwareSection && (
-            <PanelSection title="Hardware">
+            <PanelSection title={i18n._({ id: 'node.door.panel.hardware', message: 'Hardware' })}>
               <ToggleControl
                 checked={node.doorCloser}
-                label="Door Closer"
+                label={i18n._({ id: 'node.door.panel.doorCloser', message: 'Door Closer' })}
                 onChange={(checked) => handleUpdate({ doorCloser: checked })}
               />
               <ToggleControl
                 checked={node.panicBar}
-                label="Panic Bar"
+                label={i18n._({ id: 'node.door.panel.panicBar', message: 'Panic Bar' })}
                 onChange={(checked) => handleUpdate({ panicBar: checked })}
               />
               {node.panicBar && (
                 <div className="mt-1 flex flex-col gap-1">
                   <SliderControl
-                    label="Bar Height"
+                    label={i18n._({ id: 'node.door.panel.barHeight', message: 'Bar Height' })}
                     max={node.height - 0.1}
                     min={0.5}
                     onChange={(v) => handleUpdate({ panicBarHeight: v })}
@@ -916,7 +1008,7 @@ export default function DoorPanel() {
           )}
 
           {showSegmentsSection && (
-            <PanelSection title="Segments">
+            <PanelSection title={i18n._({ id: 'node.door.panel.segments', message: 'Segments' })}>
               {node.segments.map((seg, i) => {
                 const numCols = seg.columnRatios.length
                 const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
@@ -925,7 +1017,7 @@ export default function DoorPanel() {
                   <div className="mb-2 flex flex-col gap-1" key={i}>
                     <div className="flex items-center justify-between pb-1">
                       <span className="font-medium text-foreground/80 dark:text-white/80 text-xs">
-                        Segment {i + 1}
+                        {i18n._({ id: 'node.door.panel.segment', message: 'Segment' })} {i + 1}
                       </span>
                     </div>
 
@@ -937,15 +1029,24 @@ export default function DoorPanel() {
                         handleUpdate({ segments: updated })
                       }}
                       options={[
-                        { label: 'Panel', value: 'panel' },
-                        { label: 'Glass', value: 'glass' },
-                        { label: 'Empty', value: 'empty' },
+                        {
+                          label: i18n._({ id: 'node.door.panel.panel', message: 'Panel' }),
+                          value: 'panel',
+                        },
+                        {
+                          label: i18n._({ id: 'node.door.panel.glass', message: 'Glass' }),
+                          value: 'glass',
+                        },
+                        {
+                          label: i18n._({ id: 'node.door.panel.empty', message: 'Empty' }),
+                          value: 'empty',
+                        },
                       ]}
                       value={seg.type}
                     />
 
                     <SliderControl
-                      label="Height"
+                      label={i18n._({ id: 'node.door.panel.height', message: 'Height' })}
                       max={95}
                       min={5}
                       onChange={(v) => setSegmentHeightRatio(i, v / 100)}
@@ -956,7 +1057,7 @@ export default function DoorPanel() {
                     />
 
                     <SliderControl
-                      label="Columns"
+                      label={i18n._({ id: 'node.door.panel.columns', message: 'Columns' })}
                       max={8}
                       min={1}
                       onChange={(v) => {
@@ -987,7 +1088,7 @@ export default function DoorPanel() {
                           />
                         ))}
                         <SliderControl
-                          label="Divider"
+                          label={i18n._({ id: 'node.door.panel.divider', message: 'Divider' })}
                           max={0.1}
                           min={0.005}
                           onChange={(v) => {
@@ -1007,7 +1108,7 @@ export default function DoorPanel() {
                     {seg.type === 'panel' && (
                       <div className="mt-1 border-border/50 border-t pt-1">
                         <SliderControl
-                          label="Inset"
+                          label={i18n._({ id: 'node.door.panel.inset', message: 'Inset' })}
                           max={0.1}
                           min={0}
                           onChange={(v) => {
@@ -1022,7 +1123,7 @@ export default function DoorPanel() {
                           value={seg.panelInset}
                         />
                         <SliderControl
-                          label="Depth"
+                          label={i18n._({ id: 'node.door.panel.depth', message: 'Depth' })}
                           max={0.1}
                           min={0}
                           onChange={(v) => {
@@ -1044,7 +1145,7 @@ export default function DoorPanel() {
 
               <div className="flex gap-1.5 px-1 pt-1">
                 <ActionButton
-                  label="+ Add Segment"
+                  label={i18n._({ id: 'node.door.panel.addSegment', message: '+ Add Segment' })}
                   onClick={() => {
                     const updated = [
                       ...node.segments,
@@ -1063,7 +1164,7 @@ export default function DoorPanel() {
                 {node.segments.length > 1 && (
                   <ActionButton
                     className="text-foreground/60 hover:text-foreground dark:text-white/60 dark:hover:text-white"
-                    label="- Remove"
+                    label={i18n._({ id: 'node.door.panel.remove', message: '- Remove' })}
                     onClick={() => handleUpdate({ segments: node.segments.slice(0, -1) })}
                   />
                 )}
@@ -1073,18 +1174,22 @@ export default function DoorPanel() {
         </>
       )}
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.door.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.door.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.door.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-            label="Delete"
+            label={i18n._({ id: 'node.door.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

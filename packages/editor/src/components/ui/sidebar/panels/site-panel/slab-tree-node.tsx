@@ -1,4 +1,4 @@
-import { type AnyNodeId, floorFootprintName, type SlabNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type SlabNode, usePascalI18n, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
@@ -6,6 +6,7 @@ import { formatAreaLabel } from './../../../../../lib/measurements'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { localizedFloorFootprintName } from '../../../../../i18n/floor-footprint-name'
 
 interface SlabTreeNodeProps {
   nodeId: AnyNodeId
@@ -18,6 +19,7 @@ export const SlabTreeNode = memo(function SlabTreeNode({
   depth,
   isLast,
 }: SlabTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const polygon = useScene((s) => (s.nodes[nodeId] as SlabNode | undefined)?.polygon ?? [])
@@ -30,7 +32,9 @@ export const SlabTreeNode = memo(function SlabTreeNode({
   // footprint's name ("Shared floor", "Lanai floor"), opening that panel.
   const footprint = useScene((s) => {
     const node = s.nodes[nodeId]
-    return node?.type === 'slab' && node.plateRole === 'base' ? floorFootprintName(s.nodes, node) : null
+    return node?.type === 'slab' && node.plateRole === 'base'
+      ? localizedFloorFootprintName(s.nodes, node, i18n)
+      : null
   })
 
   const handleClick = useCallback(

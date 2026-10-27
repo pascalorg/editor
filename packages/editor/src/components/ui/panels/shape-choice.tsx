@@ -1,13 +1,14 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { Pentagon, Square } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 
 export type OutlineShape = 'rectangle' | 'polygon'
 
 const SHAPES = [
-  { id: 'rectangle', label: 'Rectangle', Icon: Square },
-  { id: 'polygon', label: 'Polygon', Icon: Pentagon },
+  { id: 'rectangle', label: /* i18n */ { id: 'editor.panels.shapeChoice.rectangle', message: 'Rectangle' }, Icon: Square },
+  { id: 'polygon', label: /* i18n */ { id: 'editor.panels.shapeChoice.polygon', message: 'Polygon' }, Icon: Pentagon },
 ] as const
 
 const pill =
@@ -32,6 +33,7 @@ export function ShapeChoice({
   /** `data-shape-choice` hook for tests and proofs. */
   data?: string
 }) {
+  const i18n = usePascalI18n()
   return (
     <div
       className={cn('flex min-h-7 items-center justify-between gap-2', className)}
@@ -49,7 +51,7 @@ export function ShapeChoice({
             type="button"
           >
             <Icon aria-hidden className="h-3 w-3" />
-            {shapeLabel}
+            {i18n._(shapeLabel)}
           </button>
         ))}
       </div>
