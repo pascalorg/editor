@@ -61,11 +61,11 @@ describe('Rooms variants', () => {
 
   test('name the HUD after the variant in hand', () => {
     expect(toolHudTitle('wall', 'rectangle')).toEqual({
-      label: 'Rectangle room',
+      label: expect.objectContaining({ message: 'Rectangle room' }),
       icon: { kind: 'url', src: '/icons/room.webp' },
       shortcut: 'B',
     })
-    expect(toolHudTitle('wall', 'room')?.label).toBe('Polygon room')
-    expect(toolHudTitle('wall', 'single')?.label).toBe('Walls')
+    expect(toolHudTitle('wall', 'room')?.label.message).toBe('Polygon room')
+    expect(toolHudTitle('wall', 'single')?.label.message).toBe('Walls')
   })
 })

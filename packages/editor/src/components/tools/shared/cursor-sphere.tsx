@@ -1,3 +1,4 @@
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
 import type { ThreeElements } from '@react-three/fiber'
 import { forwardRef } from 'react'
@@ -51,6 +52,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
   },
   ref,
 ) {
+  const i18n = usePascalI18n()
   const tool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
   const catalogCategory = useEditor((s) => s.catalogCategory)
@@ -62,7 +64,8 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
   const wallMode = useEditor((s) => s.continuationByContext.wall)
 
   // Find the icon for the current tool — the wall shows its Rooms variant.
-  let activeToolConfig: { label: string; iconSrc: string } | null | undefined = null
+  let activeToolConfig: { label: string | MessageDescriptor; iconSrc: string } | null | undefined =
+    null
   if (mode === 'build' && tool) {
     if (tool === 'wall') {
       activeToolConfig = wallCursorIcon(wallMode)
@@ -162,7 +165,11 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
           {tooltipContent || (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              alt={activeToolConfig!.label}
+              alt={
+                typeof activeToolConfig!.label === 'string'
+                  ? activeToolConfig!.label
+                  : i18n._(activeToolConfig!.label)
+              }
               src={activeToolConfig!.iconSrc}
               style={{
                 width: '100%',
