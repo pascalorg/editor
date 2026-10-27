@@ -6,6 +6,7 @@ import {
   type GutterNode,
   type GutterOutlet,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { SliderControl } from '@pascal-app/editor'
@@ -31,6 +32,7 @@ import { SliderControl } from '@pascal-app/editor'
  * downspout isn't linked to an outlet.
  */
 export function DownspoutPositionEditor({ node }: { node: DownspoutNode }) {
+  const i18n = usePascalI18n()
   const gutter = useScene((s) =>
     node.gutterId ? (s.nodes[node.gutterId as AnyNodeId] as GutterNode | undefined) : undefined,
   )
@@ -84,7 +86,7 @@ export function DownspoutPositionEditor({ node }: { node: DownspoutNode }) {
 
   return (
     <SliderControl
-      label="Position"
+      label={i18n._({ id: 'node.downspout.inspectorEditors.position', message: 'Position' })}
       max={bound}
       min={-bound}
       onChange={handleChange}

@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter, type GridEvent, PipeTrapNode, useScene } from '@pascal-app/core'
+import { emitter, type GridEvent, PipeTrapNode, usePascalI18n, useScene } from '@pascal-app/core'
 import {
   isGridSnapActive,
   isMagneticSnapActive,
@@ -32,6 +32,7 @@ function snap(value: number, step: number): number {
  * tool then draws the trap arm off the outlet toward the vent.
  */
 const PipeTrapTool = () => {
+  const i18n = usePascalI18n()
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const toolDefaults = useEditor((s) => s.toolDefaults['pipe-trap'])
   const [cursor, setCursor] = useState<[number, number, number] | null>(null)
@@ -137,11 +138,19 @@ const PipeTrapTool = () => {
         zIndexRange={[100, 0]}
       >
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
-          <span className="font-medium text-foreground">{previewNode.diameter}" Trap</span>
+          <span className="font-medium text-foreground">
+            {i18n._({
+              id: 'node.pipeTrap.tool.diameterTrap',
+              message: '{diameter}" Trap',
+              values: { diameter: previewNode.diameter },
+            })}
+          </span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          <span className="text-muted-foreground">R/T rotate</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.pipeTrap.tool.rTRotate', message: 'R/T rotate' })}
+          </span>
         </div>
       </Html>
     </LevelOffsetGroup>

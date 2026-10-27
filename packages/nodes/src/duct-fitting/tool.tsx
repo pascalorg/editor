@@ -1,6 +1,6 @@
 'use client'
 
-import { DuctFittingNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
+import { DuctFittingNode, emitter, type GridEvent, usePascalI18n, useScene } from '@pascal-app/core'
 import {
   CursorSphere,
   EDITOR_LAYER,
@@ -160,6 +160,7 @@ export function resolvePlacement(
  * node happens to be selected.
  */
 const DuctFittingTool = () => {
+  const i18n = usePascalI18n()
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const [placement, setPlacement] = useState<Placement | null>(null)
   const toolDefaults = useEditor((s) => s.toolDefaults['duct-fitting'])
@@ -362,18 +363,32 @@ const DuctFittingTool = () => {
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
           {previewNode.fittingType === 'access-panel' && (
             <span>
-              {placement.valid ? 'Place access door' : 'Hover a duct face that fits the door'}
+              {placement.valid
+                ? i18n._({
+                    id: 'node.ductFitting.tool.placeAccessDoor',
+                    message: 'Place access door',
+                  })
+                : i18n._({
+                    id: 'node.ductFitting.tool.hoverADuctFaceThatFits',
+                    message: 'Hover a duct face that fits the door',
+                  })}
             </span>
           )}
-          <span className="font-medium text-foreground">Axis {axis.toUpperCase()}</span>
+          <span className="font-medium text-foreground">
+            {i18n._({ id: 'node.ductFitting.tool.axis', message: 'Axis' })} {axis.toUpperCase()}
+          </span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          <span className="text-muted-foreground">R/T rotate</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.ductFitting.tool.rTRotate', message: 'R/T rotate' })}
+          </span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          <span className="text-muted-foreground">⌥ axis</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.ductFitting.tool.axis2', message: '⌥ axis' })}
+          </span>
         </div>
       </Html>
       {/* Port-snap halo so the user sees the click will mate, not free-place. */}

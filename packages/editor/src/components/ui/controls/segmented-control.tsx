@@ -54,7 +54,7 @@ export function SegmentedControl<T extends string>({
             }}
             type="button"
           >
-            <span className="relative z-10 flex min-w-0 items-center justify-center gap-1.5 whitespace-normal text-center [&>svg]:shrink-0">
+            <span className="relative z-10 flex min-w-0 items-center justify-center gap-1.5 whitespace-normal text-center [overflow-wrap:anywhere] [&>svg]:shrink-0">
               {option.label}
             </span>
           </button>
