@@ -3,6 +3,7 @@ import type { LookupAddress } from 'node:dns'
 import { createServer, request as httpRequest, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { Readable } from 'node:stream'
+import { finished } from 'node:stream/promises'
 import { ProtocolError } from '@modelcontextprotocol/server'
 import {
   isBlockedAddress,
@@ -349,7 +350,8 @@ describe('safeFetch — SSRF protection', () => {
     const result = await safeFetch('http://a.example/redirect', {}, deps)
     expect(result.buffer.toString()).toBe('ok')
     await expectBlocked(safeFetch('http://a.example/error', {}, deps), 'fetch_failed')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Settles on destroy, or only after a full drain if the body were read.
+    await Promise.all([redirect.res, failure.res].map((res) => finished(res).catch(() => {})))
     expect(redirect.res.destroyed).toBe(true)
     expect(failure.res.destroyed).toBe(true)
     expect(redirect.bytesRead).toBe(0)
