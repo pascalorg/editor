@@ -112,8 +112,9 @@ like the baseline, may not gain entries relative to the base:
 - `i18n/literal-allowlist.json` lists exact strings that are never translated
   (brands, file formats, unit symbols, modifier key names) and developer-only
   paths, each path with its reason.
-- `// i18n-ignore: <reason>` (or `{/* i18n-ignore: <reason> */}` in JSX) on
-  the line before a literal exempts it, e.g. an authored or scene value. A
+- `// i18n-ignore: <reason>` (or `{/* i18n-ignore: <reason> */}` in JSX) on a
+  literal's own line, or alone on the line before it, exempts it, e.g. an
+  authored or scene value. A trailing ignore does not reach the next line. A
   bare `i18n-ignore` without a reason exempts nothing.
 
 `bun run i18n:literals -- report [--files] [path…]` lists the remaining
