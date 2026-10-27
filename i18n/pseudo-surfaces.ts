@@ -76,17 +76,21 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&
 const englishOrPseudo = (english: string) =>
   new RegExp(`^(${escapeRegExp(english)}|${escapeRegExp(pseudo(english))})$`)
 
+/** Opens the Scene panel; the tab state persists across audit pages, and clicking the active tab collapses it. */
+async function openScenePanel(page: Page): Promise<void> {
+  await openEditor(page)
+  const sceneTab = page.getByRole('button', { name: englishOrPseudo('Scene') }).first()
+  if ((await sceneTab.getAttribute('aria-pressed')) !== 'true') await sceneTab.click()
+  await page.waitForTimeout(500)
+}
+
 /** Opens the Scene panel, expands every row and selects the first row named `english`. */
 async function openLayer(
   page: Page,
   english: string | RegExp,
   options: { exact?: boolean } = {},
 ) {
-  await openEditor(page)
-  // The tab state persists across audit pages: clicking the active tab would collapse the panel.
-  const sceneTab = page.getByRole('button', { name: englishOrPseudo('Scene') }).first()
-  if ((await sceneTab.getAttribute('aria-pressed')) !== 'true') await sceneTab.click()
-  await page.waitForTimeout(500)
+  await openScenePanel(page)
   // Expand every row: the tree's chevrons are the small square buttons beside each name.
   for (let pass = 0; pass < 3; pass++) {
     for (const toggle of await page.$$('button.z-10.h-4.w-4:has(svg.lucide-chevron-right)')) {
@@ -288,7 +292,7 @@ export const surfaces: PseudoSurface[] = [
   {
     name: 'roof-panel',
     path: furnishedPath,
-    steps: (page) => openLayer(page, 'Roof (1 segment)'),
+    steps: (page) => openLayer(page, /^\[?(Roof|Ŕööƒ) \(1 /),
     scope: '[data-editor-inspector]',
     data: furnishedData,
   },
@@ -302,7 +306,7 @@ export const surfaces: PseudoSurface[] = [
   {
     name: 'stair-panel',
     path: furnishedPath,
-    steps: (page) => openLayer(page, 'Staircase (1 segment)'),
+    steps: (page) => openLayer(page, /^\[?(Staircase|Šţáîŕçášé) \(1 /),
     scope: '[data-editor-inspector]',
     data: furnishedData,
   },
@@ -328,7 +332,7 @@ export const surfaces: PseudoSurface[] = [
   {
     name: 'layers-panel',
     path: apartmentPath,
-    steps: (page) => openInEditor(page, 'Scene'),
+    steps: openScenePanel,
     scope: '[data-surface="site-panel"]',
     data: apartmentData,
   },
