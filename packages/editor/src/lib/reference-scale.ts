@@ -4,6 +4,13 @@ export type ReferenceScaleUnit = 'meters' | 'centimeters' | 'feet' | 'inches'
 
 const MAX_REFERENCE_SCALE_LABEL_LENGTH = 64
 
+/** Mirrors `GuideScaleReference.displayLength`'s `.max()` in core. */
+export const MAX_REFERENCE_SCALE_DISPLAY_LENGTH = 1_000_000
+
+export function isValidReferenceScaleDisplayLength(value: number): boolean {
+  return Number.isFinite(value) && value > 0 && value <= MAX_REFERENCE_SCALE_DISPLAY_LENGTH
+}
+
 const REFERENCE_SCALE_UNIT_LABELS: Record<ReferenceScaleUnit, string> = {
   meters: 'm',
   centimeters: 'cm',
@@ -21,10 +28,12 @@ function getReferenceScaleUnitLabel(unit: unknown): string | null {
 }
 
 function parseLegacyScaleLabel(label: string): { unit: string; value: number } | null {
-  const match = label.trim().match(/^([+−-]?[\d.,]+(?:[\s\u00a0\u202f][\d.,]+)*)\s*(m|cm|ft|in)$/i)
+  // `\s` covers NBSP and narrow NBSP; the whitespace run and digit group are
+  // disjoint, so each repetition has exactly one way to match.
+  const match = label.trim().match(/^([+−-]?[\d.,]+(?:\s+[\d.,]+)*)\s*(m|cm|ft|in)$/i)
   if (!match) return null
 
-  const compact = match[1]!.replace(/[\s\u00a0\u202f]/g, '').replace('−', '-')
+  const compact = match[1]!.replace(/\s/g, '').replace('−', '-')
   const lastDot = compact.lastIndexOf('.')
   const lastComma = compact.lastIndexOf(',')
   const separatorIndex = Math.max(lastDot, lastComma)
@@ -50,12 +59,9 @@ export function createGuideScaleReference(
   displayUnit: ReferenceScaleUnit,
 ): GuideScaleReference {
   const unitLabel = REFERENCE_SCALE_UNIT_LABELS[displayUnit]
-  return {
-    ...reference,
-    displayLength,
-    displayUnit,
-    label: formatScaleValue(displayLength, unitLabel, 'en'),
-  }
+  const label = formatScaleValue(displayLength, unitLabel, 'en')
+  if (!isValidReferenceScaleDisplayLength(displayLength)) return { ...reference, label }
+  return { ...reference, displayLength, displayUnit, label }
 }
 
 export function formatReferenceScaleLabel(reference: GuideScaleReference, locale: string): string {
@@ -69,7 +75,7 @@ export function formatReferenceScaleLabel(reference: GuideScaleReference, locale
   }
 
   const label: unknown = reference.label
-  if (typeof label !== 'string') return label == null ? '' : String(label)
+  if (typeof label !== 'string') return typeof label === 'number' ? String(label) : ''
   if (label.length > MAX_REFERENCE_SCALE_LABEL_LENGTH) return label
 
   const parsed = parseLegacyScaleLabel(label)

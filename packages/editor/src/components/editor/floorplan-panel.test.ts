@@ -2,7 +2,11 @@ import { expect, test } from 'bun:test'
 import { GuideScaleReference } from '@pascal-app/core'
 import { z } from 'zod'
 import { createGuideScaleReference, formatReferenceScaleLabel } from '../../lib/reference-scale'
-import { formatFloorplanNumber, parseReferenceScaleLength } from './floorplan-panel'
+import {
+  formatFloorplanNumber,
+  getReferenceScaleInputError,
+  parseReferenceScaleLength,
+} from './floorplan-panel'
 
 const Core106GuideScaleReference = z.object({
   start: z.tuple([z.number(), z.number()]),
@@ -105,6 +109,14 @@ test('reference-scale labels tolerate malformed persisted values', () => {
   expect(formatReferenceScaleLabel(runtimeScaleReference({ label: 42 }), 'en')).toBe('42')
   expect(formatReferenceScaleLabel(runtimeScaleReference({ label: null }), 'en')).toBe('')
   expect(
+    formatReferenceScaleLabel(runtimeScaleReference({ label: { toString: null } }), 'en'),
+  ).toBe('')
+  expect(
+    formatReferenceScaleLabel(runtimeScaleReference({ label: Object.create(null) }), 'en'),
+  ).toBe('')
+  expect(formatReferenceScaleLabel(runtimeScaleReference({ label: Symbol('x') }), 'en')).toBe('')
+  expect(formatReferenceScaleLabel(runtimeScaleReference({ label: ['1 m'] }), 'en')).toBe('')
+  expect(
     formatReferenceScaleLabel(
       runtimeScaleReference({
         displayLength: 2.75,
@@ -163,4 +175,46 @@ test('reference-scale schema caps persisted display lengths', () => {
       }),
     ).success,
   ).toBe(false)
+})
+
+test('reference-scale calibration rejects lengths the schema would not accept', () => {
+  expect(getReferenceScaleInputError('1000000', 'meters', 'en')).toBeNull()
+  expect(getReferenceScaleInputError('2.75', 'feet', 'en')).toBeNull()
+  expect(getReferenceScaleInputError('1000001', 'meters', 'en')).toBe(
+    'Length must be at most 1000000 m.',
+  )
+  expect(getReferenceScaleInputError('1e9', 'centimeters', 'en')).toBe(
+    'Length must be at most 1000000 cm.',
+  )
+  expect(getReferenceScaleInputError('0', 'meters', 'en')).toBe('Length must be greater than 0.')
+  expect(getReferenceScaleInputError('', 'meters', 'en')).toBe('Enter the real length of the line.')
+})
+
+test('reference-scale creation drops display fields outside the schema range', () => {
+  const base = {
+    start: [0, 0] as [number, number],
+    end: [1, 0] as [number, number],
+    realLengthMeters: 2_000_000,
+    measuredLengthUnits: 1,
+    metersPerUnit: 2_000_000,
+  }
+  const oversized = createGuideScaleReference(base, 2_000_000, 'meters')
+  expect(oversized.displayLength).toBeUndefined()
+  expect(oversized.displayUnit).toBeUndefined()
+  expect(oversized.label).toBe('2000000 m')
+  expect(GuideScaleReference.safeParse(oversized).success).toBe(true)
+
+  const atCap = createGuideScaleReference(base, 1_000_000, 'meters')
+  expect(atCap.displayLength).toBe(1_000_000)
+  expect(GuideScaleReference.safeParse(atCap).success).toBe(true)
+})
+
+test('legacy reference-scale labels accept whitespace runs between digit groups', () => {
+  const label = (value: string) =>
+    formatReferenceScaleLabel(runtimeScaleReference({ label: value }), 'en')
+  expect(label('1  234,5 m')).toBe('1234.5 m')
+  expect(label('1 \u00a0234 cm')).toBe('1234 cm')
+  expect(label('12\u202f345\t\t678 ft')).toBe('12345678 ft')
+  expect(label('1 234 m')).toBe('1234 m')
+  expect(label('1  234  ')).toBe('1  234  ')
 })
