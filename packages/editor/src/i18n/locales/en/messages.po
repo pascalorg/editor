@@ -1211,6 +1211,14 @@ msgstr "Rotate"
 msgid "editor.cameraHint.zoom"
 msgstr "Zoom"
 
+#: packages/editor/src/components/ui/controls/finish-swatch.tsx
+msgid "editor.controls.finishSwatch.ariaLabel"
+msgstr "{label}: {finish}"
+
+#: packages/editor/src/components/ui/controls/finish-swatch.tsx
+msgid "editor.controls.finishSwatch.default"
+msgstr "Default"
+
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.dismiss"
 msgstr "Dismiss"
@@ -4098,6 +4106,14 @@ msgid "editor.panels.panelManager.selection"
 msgstr "Selection"
 
 #: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.back"
+msgstr "Back"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.close"
+msgstr "Close"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
 msgid "editor.panels.panelWrapper.closeTitle"
 msgstr "Close {title}"
 
@@ -4120,6 +4136,10 @@ msgstr "Manage collections…"
 #: packages/editor/src/components/ui/panels/panel-wrapper.tsx
 msgid "editor.panels.panelWrapper.openTitle"
 msgstr "Open {title}"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.reset"
+msgstr "Reset"
 
 #: packages/editor/src/components/ui/panels/panel-wrapper.tsx
 msgid "editor.panels.panelWrapper.titleHitAnErrorAndWas"
@@ -4584,6 +4604,10 @@ msgstr "None"
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 msgid "editor.panels.roomPanel.notEnoughHeadroom"
 msgstr "Not enough headroom"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.openingCounts"
+msgstr "{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}"
 
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 msgid "editor.panels.roomPanel.openRoomArea"
@@ -6266,6 +6290,46 @@ msgstr "wall"
 msgid "node.door.panel.width"
 msgstr "Width"
 
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.barn"
+msgstr "Barn"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.craftsman"
+msgstr "Craftsman"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.french"
+msgstr "French"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.halfLouvered"
+msgstr "Half-louvered"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.modern"
+msgstr "Modern"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.panel"
+msgstr "Panel"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.paneledGlass"
+msgstr "Paneled glass"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.shaker"
+msgstr "Shaker"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.door.style.sixPanel"
+msgstr "Six-panel"
+
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.type.barn"
 msgstr "Barn"
@@ -6441,6 +6505,34 @@ msgstr "Geometry preserved from an imported model when no native Pascal shape ex
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.importedMesh.label"
 msgstr "Imported Mesh"
+
+#: packages/nodes/src/item/authored-params.tsx
+msgid "node.item.authoredParams.couldnTRebuildWithTheseValues"
+msgstr "Couldn't rebuild with these values."
+
+#: packages/nodes/src/item/authored-params.tsx
+msgid "node.item.authoredParams.parameters"
+msgstr "Parameters"
+
+#: packages/nodes/src/item/authored-params.tsx
+msgid "node.item.authoredParams.rebuilding"
+msgstr "Rebuilding…"
+
+#: packages/nodes/src/item/authored-params.tsx
+msgid "node.item.authoredParams.rebuildingInBlender"
+msgstr "Rebuilding in Blender…"
+
+#: packages/nodes/src/item/authored-params.tsx
+msgid "node.item.authoredParams.resetParam"
+msgstr "Reset {param}"
+
+#: packages/nodes/src/item/authored-params.tsx
+msgid "node.item.authoredParams.resetParameters"
+msgstr "Reset parameters"
+
+#: packages/nodes/src/item/authored-params.tsx
+msgid "node.item.authoredParams.resetToDefault"
+msgstr "Reset to default"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.item.description"
@@ -6640,6 +6732,74 @@ msgstr "Front slope"
 #: packages/nodes/src/roof/glazing-panel-editor.tsx
 msgid "node.roof.glazing.face.slope"
 msgstr "Shed slope"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.alignment"
+msgstr "Alignment"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.center"
+msgstr "Center"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.chooseALayoutToEditThe"
+msgstr "Choose a layout to edit the grid."
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.empty"
+msgstr "Empty"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.end"
+msgstr "End"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.fixedSpacing"
+msgstr "Fixed spacing"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.layout"
+msgstr "Layout"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.maximumSpacing"
+msgstr "Maximum spacing"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.maxSpacing"
+msgstr "Max spacing"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.mixed"
+msgstr "Mixed"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.panelCount"
+msgstr "Panel count"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.panels"
+msgstr "Panels"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.solid"
+msgstr "Solid"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.spacing"
+msgstr "Spacing"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.start"
+msgstr "Start"
+
+#: packages/nodes/src/roof/glazing-controls.tsx
+msgid "node.roof.glazingControls.titleAlignment"
+msgstr "{title} alignment"
 
 #: packages/nodes/src/roof/glazing-panel.tsx
 msgid "node.roof.glazingPanel.changesApplyToAllLengthRoof"
@@ -7187,6 +7347,14 @@ msgstr "Segment {number}"
 msgid "node.separator.label"
 msgstr "Separator"
 
+#: packages/nodes/src/shared/item-interaction-actions.tsx
+msgid "node.shared.itemInteractionActions.turnLightOff"
+msgstr "Turn light off"
+
+#: packages/nodes/src/shared/item-interaction-actions.tsx
+msgid "node.shared.itemInteractionActions.turnLightOn"
+msgstr "Turn light on"
+
 #: packages/nodes/src/shared/system-check-panel.tsx
 msgid "node.shared.systemCheckPanel.aboutTheseChecks"
 msgstr "About these checks"
@@ -7631,9 +7799,121 @@ msgstr "Player or camera origin within a level. One per level."
 msgid "node.spawn.label"
 msgstr "Spawn Point"
 
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.body"
+msgstr "Body"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.centerStringer"
+msgstr "Center stringer"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.closedRisers"
+msgstr "Closed risers"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.inherit"
+msgstr "Inherit"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.nosing"
+msgstr "Nosing"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.open"
+msgstr "Open"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.original"
+msgstr "Original"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.riserThickness"
+msgstr "Riser thickness"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.sideStringers"
+msgstr "Side stringers"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.solid"
+msgstr "Solid"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.stringerDepth"
+msgstr "Stringer depth"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.stringerWidth"
+msgstr "Stringer width"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.treadFinish"
+msgstr "Tread finish"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.treadThickness"
+msgstr "Tread thickness"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.waist"
+msgstr "Waist"
+
+#: packages/nodes/src/stair/construction-controls.tsx
+msgid "node.stair.constructionControls.waistThickness"
+msgstr "Waist thickness"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.stair.description"
 msgstr "A stair composed of one or more flights with configurable treads, risers, railings."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.arrivalMismatch"
+msgstr "The flight chain does not reach the declared destination."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.comfortTarget"
+msgstr "Two risers plus going is outside the 0.60–0.65 m design range."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.goingTarget"
+msgstr "Going is below the design target."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.headroomTarget"
+msgstr "Overhead surfaces leave less than the target headroom."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.headroomUnresolved"
+msgstr "Detailed headroom could not be evaluated: check riser counts and the surface query budget."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.invalidFlight"
+msgstr "Flight dimensions and integer riser count must be positive."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.invalidRise"
+msgstr "The destination must be above the stair base."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.landingOverlap"
+msgstr "Landing depth exceeds a full circle at the walking line; the visible landing is limited to one circle."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.narrowWinderEnd"
+msgstr "The narrow end of a winder tread is below 0.10 m; check the intended stair use."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.nonuniformRisers"
+msgstr "Flight riser heights differ. Use uniform-riser repair only if this is a proposed design."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.raisedLanding"
+msgstr "A landing has a stored rise; inspect its transition before repair."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.diagnostic.riserTarget"
+msgstr "Riser height exceeds the design target."
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.stair.label"
@@ -7983,6 +8263,78 @@ msgstr "Width"
 msgid "node.stair.panel.winder"
 msgstr "Winder"
 
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.both"
+msgstr "Both"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.bottomExtension"
+msgstr "Bottom sloped extension"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.continuous"
+msgstr "Continuous"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.floor"
+msgstr "Floor"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.handrailDiameter"
+msgstr "Handrail diameter"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.handrailHeight"
+msgstr "Handrail height"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.handrailInset"
+msgstr "Handrail inset"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.left"
+msgstr "Left"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.none"
+msgstr "None"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.noReturn"
+msgstr "No return"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.originalLayout"
+msgstr "Original layout"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.postFacing"
+msgstr "Post-facing"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.returnLength"
+msgstr "Return length"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.right"
+msgstr "Right"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.separateHandrail"
+msgstr "Separate handrail"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.setTheLengthToReachThe"
+msgstr "Set the length to reach the wall or post."
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.topExtension"
+msgstr "Top horizontal extension"
+
+#: packages/nodes/src/stair/railing-controls.tsx
+msgid "node.stair.railingControls.wallFacing"
+msgstr "Wall-facing"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.stairSegment.description"
 msgstr "A single flight of a parent stair."
@@ -8222,6 +8574,14 @@ msgstr "Report"
 #: packages/nodes/src/unit/unit-panel.tsx
 msgid "node.unit.unitPanel.unit"
 msgstr "Unit"
+
+#: packages/nodes/src/wall/actions.tsx
+msgid "node.wall.actions.mergeWalls"
+msgstr "Merge walls"
+
+#: packages/nodes/src/wall/actions.tsx
+msgid "node.wall.actions.splitWall"
+msgstr "Split wall"
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtain.cell"
@@ -8804,6 +9164,26 @@ msgid "node.wall.panel.woodStuds"
 msgstr "Wood studs"
 
 #: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.reference.center"
+msgstr "Center"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.reference.inside"
+msgstr "Inside face"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.reference.left"
+msgstr "Left"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.reference.outside"
+msgstr "Outside face"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.reference.right"
+msgstr "Right"
+
+#: packages/nodes/src/wall/panel.tsx
 msgid "node.wall.trim.hide"
 msgstr "{trim, select, skirting {Hide skirting} crown {Hide crown molding} other {Hide chair rail}}"
 
@@ -9050,6 +9430,90 @@ msgstr "Wraps the corner with its partner"
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.wrapTheCorner"
 msgstr "Wrap the corner"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.casement"
+msgstr "Casement"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.doubleHung"
+msgstr "Double-hung"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.grid"
+msgstr "Grid"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.horizontalBands"
+msgstr "Horizontal bands"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.picture"
+msgstr "Picture"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.single"
+msgstr "Single"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.sliding"
+msgstr "Sliding"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.tallGrid"
+msgstr "Tall grid"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.transom"
+msgstr "Transom"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.tripleHung"
+msgstr "Triple-hung"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.style.wideGrid"
+msgstr "Wide grid"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.awning"
+msgstr "Awning"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.bay"
+msgstr "Bay"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.bow"
+msgstr "Bow"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.casement"
+msgstr "Casement"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.doubleHung"
+msgstr "Double Hung"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.fixed"
+msgstr "Fixed"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.hopper"
+msgstr "Hopper"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.louvered"
+msgstr "Louvered"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.singleHung"
+msgstr "Single Hung"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.sliding"
+msgstr "Sliding"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.zone.description"

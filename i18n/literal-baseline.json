@@ -429,10 +429,6 @@
       "navigate",
       "select"
     ],
-    "packages/editor/src/components/ui/controls/finish-swatch.tsx": [
-      "Default",
-      "Default"
-    ],
     "packages/editor/src/components/ui/controls/material-paint-panel.tsx": [
       "Add material",
       "Add material",
@@ -1627,15 +1623,6 @@
     "packages/nodes/src/hvac-equipment/tool.tsx": [
       "R/T rotate"
     ],
-    "packages/nodes/src/item/authored-params.tsx": [
-      "Couldn't rebuild with these values.",
-      "Parameters",
-      "Rebuilding in Blender…",
-      "Rebuilding…",
-      "Reset parameters",
-      "Reset to default",
-      "Reset {?}"
-    ],
     "packages/nodes/src/liquid-line/tool.tsx": [
       "Click to trace this lineset run",
       "Follow: hover a lineset"
@@ -1675,29 +1662,6 @@
       "Standard",
       "Style",
       "Width"
-    ],
-    "packages/nodes/src/roof/glazing-controls.tsx": [
-      "Alignment",
-      "Center",
-      "Choose a layout to edit the grid.",
-      "Empty",
-      "End",
-      "Fixed spacing",
-      "Glass",
-      "Layout",
-      "Max spacing",
-      "Maximum spacing",
-      "Mixed",
-      "Panel count",
-      "Panels",
-      "Solid",
-      "Spacing",
-      "Start",
-      "{title} alignment"
-    ],
-    "packages/nodes/src/shared/item-interaction-actions.tsx": [
-      "Turn light off",
-      "Turn light on"
     ],
     "packages/nodes/src/shared/run-hanger-inspector.tsx": [
       "Automatic support",
@@ -1781,43 +1745,6 @@
       "Spawn Point",
       "Yaw"
     ],
-    "packages/nodes/src/stair/construction-controls.tsx": [
-      "Body",
-      "Center stringer",
-      "Closed risers",
-      "Inherit",
-      "Nosing",
-      "Open",
-      "Original",
-      "Riser thickness",
-      "Side stringers",
-      "Solid",
-      "Stringer depth",
-      "Stringer width",
-      "Tread finish",
-      "Tread thickness",
-      "Waist",
-      "Waist thickness"
-    ],
-    "packages/nodes/src/stair/railing-controls.tsx": [
-      "Both",
-      "Continuous",
-      "Floor",
-      "Handrail diameter",
-      "Handrail height",
-      "Handrail inset",
-      "Left",
-      "No return",
-      "None",
-      "Original layout",
-      "Post-facing",
-      "Return length",
-      "Right",
-      "Separate handrail",
-      "Set the length to reach the wall or post.",
-      "Wall-facing",
-      "{?} extension"
-    ],
     "packages/nodes/src/turbine-vent/panel.tsx": [
       "Actions",
       "Cylinder",
@@ -1838,12 +1765,6 @@
       "Style",
       "Turbine Vent",
       "Vanes"
-    ],
-    "packages/nodes/src/wall/actions.tsx": [
-      "Merge walls",
-      "Merge walls",
-      "Split wall",
-      "Split wall"
     ],
     "packages/nodes/src/wall/move-endpoint-tool.tsx": [
       "Alt to detach",

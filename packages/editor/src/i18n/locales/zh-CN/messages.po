@@ -2963,6 +2963,26 @@ msgstr "旋转"
 msgid "editor.cameraHint.zoom"
 msgstr "缩放"
 
+# Source-Hash: 34b7ca7ff46c44a9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{label}: {finish}"
+#: packages/editor/src/components/ui/controls/finish-swatch.tsx
+#, fuzzy
+msgid "editor.controls.finishSwatch.ariaLabel"
+msgstr "{label}：{finish}"
+
+# Source-Hash: 4ca0e0e73229540c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Default"
+#: packages/editor/src/components/ui/controls/finish-swatch.tsx
+#, fuzzy
+msgid "editor.controls.finishSwatch.default"
+msgstr "默认"
+
 # Source-Hash: a2bd204e93e90598
 # Review: required
 # AI-Provider: cursor-agent
@@ -10175,6 +10195,26 @@ msgstr "解除转角：两扇窗都保留，各自在转角处加框"
 msgid "editor.panels.panelManager.selection"
 msgstr "当前选择"
 
+# Source-Hash: 7ceade8f25b58fe9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back"
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+#, fuzzy
+msgid "editor.panels.panelWrapper.back"
+msgstr "返回"
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close"
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+#, fuzzy
+msgid "editor.panels.panelWrapper.close"
+msgstr "关闭"
+
 # Source-Hash: 2dff25ca30c80559
 # Review: required
 # AI-Provider: cursor-agent
@@ -10234,6 +10274,16 @@ msgstr "管理集合…"
 #, fuzzy
 msgid "editor.panels.panelWrapper.openTitle"
 msgstr "打开{title}"
+
+# Source-Hash: bf91b71a9aa76e94
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset"
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+#, fuzzy
+msgid "editor.panels.panelWrapper.reset"
+msgstr "重置"
 
 # Source-Hash: 04a212d6317f6787
 # Review: required
@@ -11394,6 +11444,16 @@ msgstr "无"
 #, fuzzy
 msgid "editor.panels.roomPanel.notEnoughHeadroom"
 msgstr "净空不足"
+
+# Source-Hash: 92f7bc961d784f6a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}"
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+#, fuzzy
+msgid "editor.panels.roomPanel.openingCounts"
+msgstr "{doors, plural, other {# 扇门}} · {windows, plural, other {# 扇窗}}"
 
 # Source-Hash: a8cd9507ce472a48
 # Review: required
@@ -15595,6 +15655,106 @@ msgstr "宽度"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
 # English: "Barn"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.barn"
+msgstr "谷仓门"
+
+# Source-Hash: f747fbe71717772e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Craftsman"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.craftsman"
+msgstr "工匠风"
+
+# Source-Hash: 092033938ca2debb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "French"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.french"
+msgstr "法式门"
+
+# Source-Hash: 8ab91094cf650204
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.glass"
+msgstr "玻璃"
+
+# Source-Hash: 6ab8b98b38eb2e65
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Half-louvered"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.halfLouvered"
+msgstr "半百叶"
+
+# Source-Hash: f6cbdaa17e989b91
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Modern"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.modern"
+msgstr "现代"
+
+# Source-Hash: 482469f5a0873f73
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panel"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.panel"
+msgstr "面板"
+
+# Source-Hash: ac42c328610a0edd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paneled glass"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.paneledGlass"
+msgstr "镶板玻璃"
+
+# Source-Hash: 5b68e435b7210876
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaker"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.shaker"
+msgstr "夏克风"
+
+# Source-Hash: 9ad6ac42b4152b64
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Six-panel"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.sixPanel"
+msgstr "六镶板"
+
+# Source-Hash: 8421deea35cb5afc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Barn"
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.type.barn"
@@ -16023,6 +16183,76 @@ msgstr "当没有对应的 Pascal 原生形体时，保留自导入模型的几�
 #, fuzzy
 msgid "node.importedMesh.label"
 msgstr "导入网格"
+
+# Source-Hash: 9cce89f94c673821
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Couldn't rebuild with these values."
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.couldnTRebuildWithTheseValues"
+msgstr "无法使用这些值重建。"
+
+# Source-Hash: 373b929318436fe3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Parameters"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.parameters"
+msgstr "参数"
+
+# Source-Hash: 558cb886dbe0babe
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rebuilding…"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.rebuilding"
+msgstr "重建中…"
+
+# Source-Hash: a094c99dc8ad29a3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rebuilding in Blender…"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.rebuildingInBlender"
+msgstr "正在 Blender 中重建…"
+
+# Source-Hash: 1778f93ee143cd95
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset {param}"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.resetParam"
+msgstr "重置{param}"
+
+# Source-Hash: 5a28cf5f2402dd7a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset parameters"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.resetParameters"
+msgstr "重置参数"
+
+# Source-Hash: 6eb8025c60d6d3ca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset to default"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.resetToDefault"
+msgstr "恢复默认"
 
 # Source-Hash: 63f79b3c467177b3
 # Review: required
@@ -16516,6 +16746,176 @@ msgstr "前坡"
 #, fuzzy
 msgid "node.roof.glazing.face.slope"
 msgstr "单坡面"
+
+# Source-Hash: 3bcc542295b4c61e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Alignment"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.alignment"
+msgstr "对齐"
+
+# Source-Hash: 5211341ed18f33f6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.center"
+msgstr "居中"
+
+# Source-Hash: 512e47607a37af46
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose a layout to edit the grid."
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.chooseALayoutToEditThe"
+msgstr "选择一种布局以编辑网格。"
+
+# Source-Hash: 65b1cbba3b92c5b2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Empty"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.empty"
+msgstr "空"
+
+# Source-Hash: 135874d189176d13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "End"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.end"
+msgstr "终点"
+
+# Source-Hash: 4fb65101d0b1a222
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fixed spacing"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.fixedSpacing"
+msgstr "固定间距"
+
+# Source-Hash: 8ab91094cf650204
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.glass"
+msgstr "玻璃"
+
+# Source-Hash: 54800340a0eeab23
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Layout"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.layout"
+msgstr "布局"
+
+# Source-Hash: 321ca5101ab61db7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Maximum spacing"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.maximumSpacing"
+msgstr "最大间距"
+
+# Source-Hash: d10743fce478d9f4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Max spacing"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.maxSpacing"
+msgstr "最大间距"
+
+# Source-Hash: 37d9f63758abdb67
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mixed"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.mixed"
+msgstr "混合"
+
+# Source-Hash: b91302bf741c9fd6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panel count"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.panelCount"
+msgstr "面板数量"
+
+# Source-Hash: 6ce059aee1386f72
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panels"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.panels"
+msgstr "面板"
+
+# Source-Hash: ef3e765e692faf4c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.solid"
+msgstr "实体"
+
+# Source-Hash: e4698e83d02beb6c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Spacing"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.spacing"
+msgstr "间距"
+
+# Source-Hash: 0a26a1e61c825660
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Start"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.start"
+msgstr "起点"
+
+# Source-Hash: 095237e9e2df4d9c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{title} alignment"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.titleAlignment"
+msgstr "{title}对齐"
 
 # Source-Hash: c98a4e6b28f05e0f
 # Review: required
@@ -17879,6 +18279,26 @@ msgstr "分段 {number}"
 msgid "node.separator.label"
 msgstr "分隔线"
 
+# Source-Hash: e7512c891d8da7d8
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Turn light off"
+#: packages/nodes/src/shared/item-interaction-actions.tsx
+#, fuzzy
+msgid "node.shared.itemInteractionActions.turnLightOff"
+msgstr "关灯"
+
+# Source-Hash: d47ec95e14909fe5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Turn light on"
+#: packages/nodes/src/shared/item-interaction-actions.tsx
+#, fuzzy
+msgid "node.shared.itemInteractionActions.turnLightOn"
+msgstr "开灯"
+
 # Source-Hash: b2d703d283baf64a
 # Review: required
 # AI-Provider: cursor-agent
@@ -18989,6 +19409,166 @@ msgstr "楼层内的玩家或相机起点，每层一个。"
 msgid "node.spawn.label"
 msgstr "出生点"
 
+# Source-Hash: faaa4f6b40001667
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Body"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.body"
+msgstr "主体"
+
+# Source-Hash: 29b9fdb127a54435
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center stringer"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.centerStringer"
+msgstr "中间梯梁"
+
+# Source-Hash: b2b2383577835a61
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Closed risers"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.closedRisers"
+msgstr "封闭踢面"
+
+# Source-Hash: 6f6b188bff3c0223
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inherit"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.inherit"
+msgstr "继承"
+
+# Source-Hash: ce25dc4a23f3ae10
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Nosing"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.nosing"
+msgstr "踏步前缘"
+
+# Source-Hash: 3e52f04f92e08070
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.open"
+msgstr "打开"
+
+# Source-Hash: 7717e0464ad1e7df
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Original"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.original"
+msgstr "原始"
+
+# Source-Hash: 8a6f6c6b0cca7460
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Riser thickness"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.riserThickness"
+msgstr "踢面厚度"
+
+# Source-Hash: 2fe058966023b542
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Side stringers"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.sideStringers"
+msgstr "侧梯梁"
+
+# Source-Hash: ef3e765e692faf4c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.solid"
+msgstr "实体"
+
+# Source-Hash: 4c1489839e306865
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stringer depth"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.stringerDepth"
+msgstr "梯梁高度"
+
+# Source-Hash: 17e1a09c422d3660
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stringer width"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.stringerWidth"
+msgstr "梯梁宽度"
+
+# Source-Hash: 146f8e61ff310dc5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tread finish"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.treadFinish"
+msgstr "踏板饰面"
+
+# Source-Hash: 9089f91f3fbbf4cd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tread thickness"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.treadThickness"
+msgstr "踏板厚度"
+
+# Source-Hash: 44dda7136b93c8ee
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waist"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.waist"
+msgstr "板式"
+
+# Source-Hash: dfd6d2ff7a94f22e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waist thickness"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.waistThickness"
+msgstr "梯板厚度"
+
 # Source-Hash: 8535b75637105412
 # Review: required
 # AI-Provider: cursor-agent
@@ -18998,6 +19578,126 @@ msgstr "出生点"
 #, fuzzy
 msgid "node.stair.description"
 msgstr "由一个或多个梯段组成的楼梯，踏板、踢板和栏杆可配置。"
+
+# Source-Hash: c24b098693e1006d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The flight chain does not reach the declared destination."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.arrivalMismatch"
+msgstr "梯段链未到达指定的目标。"
+
+# Source-Hash: 124ad1cd6bb00013
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Two risers plus going is outside the 0.60–0.65 m design range."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.comfortTarget"
+msgstr "两倍踢面高加踏面宽不在 0.60–0.65 m 的设计范围内。"
+
+# Source-Hash: 7452fcd8370bef34
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Going is below the design target."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.goingTarget"
+msgstr "踏面宽低于设计目标。"
+
+# Source-Hash: 449683eb727091d5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Overhead surfaces leave less than the target headroom."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.headroomTarget"
+msgstr "上方表面留出的净空低于目标值。"
+
+# Source-Hash: 9e9357408f6a0d08
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Detailed headroom could not be evaluated: check riser counts and the surface query budget."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.headroomUnresolved"
+msgstr "无法评估详细净空：请检查踢面数量和表面查询预算。"
+
+# Source-Hash: 40fd019d72ff3835
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flight dimensions and integer riser count must be positive."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.invalidFlight"
+msgstr "梯段尺寸和整数踢面数必须为正。"
+
+# Source-Hash: 3d4b6f859bd8de50
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The destination must be above the stair base."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.invalidRise"
+msgstr "目标必须高于楼梯底部。"
+
+# Source-Hash: 5f196b22e2c8296a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Landing depth exceeds a full circle at the walking line; the visible landing is limited to one circle."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.landingOverlap"
+msgstr "平台深度在行走线上超过一整圈；可见平台限制为一圈。"
+
+# Source-Hash: 0122ec92b951a114
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The narrow end of a winder tread is below 0.10 m; check the intended stair use."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.narrowWinderEnd"
+msgstr "扇形踏步窄端小于 0.10 m；请检查楼梯的预期用途。"
+
+# Source-Hash: a664dc7f3b014af8
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flight riser heights differ. Use uniform-riser repair only if this is a proposed design."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.nonuniformRisers"
+msgstr "梯段踢面高度不一致。仅在此为方案设计时使用均匀踢面修复。"
+
+# Source-Hash: cd140b519d37b01e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "A landing has a stored rise; inspect its transition before repair."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.raisedLanding"
+msgstr "平台带有存储的高度；修复前请检查其过渡。"
+
+# Source-Hash: a94cfa7b2a21cf14
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Riser height exceeds the design target."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.riserTarget"
+msgstr "踢面高度超过设计目标。"
 
 # Source-Hash: 53d7084bc41c1ad6
 # Review: required
@@ -19869,6 +20569,186 @@ msgstr "宽度"
 msgid "node.stair.panel.winder"
 msgstr "扇形踏步"
 
+# Source-Hash: 69578b7dd7723fa1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Both"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.both"
+msgstr "两侧"
+
+# Source-Hash: fe633d20f198d7e4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom sloped extension"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.bottomExtension"
+msgstr "底部斜向延伸"
+
+# Source-Hash: 384842ae1e1c6825
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Continuous"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.continuous"
+msgstr "连续"
+
+# Source-Hash: d7148fa065bc709b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Floor"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.floor"
+msgstr "楼层"
+
+# Source-Hash: 644d2d9e9c3dd31f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handrail diameter"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.handrailDiameter"
+msgstr "扶手直径"
+
+# Source-Hash: 5f3f2be1e572a066
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handrail height"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.handrailHeight"
+msgstr "扶手高度"
+
+# Source-Hash: cb3239847f068a1b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handrail inset"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.handrailInset"
+msgstr "扶手内缩"
+
+# Source-Hash: f365c6b6dd9ebab9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.left"
+msgstr "左"
+
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.none"
+msgstr "无"
+
+# Source-Hash: e6ac8d7c9639c351
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No return"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.noReturn"
+msgstr "无回弯"
+
+# Source-Hash: 5688b2003002d03a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Original layout"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.originalLayout"
+msgstr "原始布局"
+
+# Source-Hash: d0d904fbd052d7b2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Post-facing"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.postFacing"
+msgstr "朝向立柱"
+
+# Source-Hash: fc4d8c6f156b0430
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Return length"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.returnLength"
+msgstr "回弯长度"
+
+# Source-Hash: b34d5ee0f218221d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.right"
+msgstr "右"
+
+# Source-Hash: e1f8354a95b5060a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Separate handrail"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.separateHandrail"
+msgstr "独立扶手"
+
+# Source-Hash: 005f0197ec3bc95a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Set the length to reach the wall or post."
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.setTheLengthToReachThe"
+msgstr "设置长度以到达墙体或立柱。"
+
+# Source-Hash: bef713f3ec96f758
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top horizontal extension"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.topExtension"
+msgstr "顶部水平延伸"
+
+# Source-Hash: bdad79929de6b142
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall-facing"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.wallFacing"
+msgstr "朝向墙体"
+
 # Source-Hash: ce0b6361eb77e93c
 # Review: required
 # AI-Provider: cursor-agent
@@ -20468,6 +21348,26 @@ msgstr "报告"
 #, fuzzy
 msgid "node.unit.unitPanel.unit"
 msgstr "单元"
+
+# Source-Hash: d53242481ff46157
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Merge walls"
+#: packages/nodes/src/wall/actions.tsx
+#, fuzzy
+msgid "node.wall.actions.mergeWalls"
+msgstr "合并墙体"
+
+# Source-Hash: d7ead4708d50965f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Split wall"
+#: packages/nodes/src/wall/actions.tsx
+#, fuzzy
+msgid "node.wall.actions.splitWall"
+msgstr "拆分墙体"
 
 # Source-Hash: 96a6f084d095ea36
 # Review: required
@@ -21919,6 +22819,56 @@ msgstr "无法确定哪一面朝外（两侧都未检测到房间）— 外层�
 msgid "node.wall.panel.woodStuds"
 msgstr "木龙骨"
 
+# Source-Hash: 5211341ed18f33f6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.center"
+msgstr "居中"
+
+# Source-Hash: 09576259041494f3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inside face"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.inside"
+msgstr "内侧面"
+
+# Source-Hash: f365c6b6dd9ebab9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.left"
+msgstr "左"
+
+# Source-Hash: 697001376b872e74
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Outside face"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.outside"
+msgstr "外侧面"
+
+# Source-Hash: b34d5ee0f218221d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.right"
+msgstr "右"
+
 # Source-Hash: eac63d14f275db3d
 # Review: required
 # AI-Provider: cursor-agent
@@ -22538,6 +23488,216 @@ msgstr "与其配对窗户包住转角"
 #, fuzzy
 msgid "node.window.panel.wrapTheCorner"
 msgstr "包住转角"
+
+# Source-Hash: 9d63109edd8b22c2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Casement"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.casement"
+msgstr "平开"
+
+# Source-Hash: e06fc5a432b74a5b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double-hung"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.doubleHung"
+msgstr "双悬"
+
+# Source-Hash: 7e4a0a38f694be6b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Grid"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.grid"
+msgstr "网格"
+
+# Source-Hash: fbb293fe8aee84b2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Horizontal bands"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.horizontalBands"
+msgstr "水平条带"
+
+# Source-Hash: 3ee270463954f502
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Picture"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.picture"
+msgstr "画框"
+
+# Source-Hash: 62ab2eb3c775da95
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.single"
+msgstr "单扇"
+
+# Source-Hash: 18cbc73c5e1590aa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sliding"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.sliding"
+msgstr "推拉门"
+
+# Source-Hash: 0c88aea2bd130193
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tall grid"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.tallGrid"
+msgstr "竖长网格"
+
+# Source-Hash: 9628d0cc155e29a3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Transom"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.transom"
+msgstr "气窗"
+
+# Source-Hash: 305f3aba543b1962
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Triple-hung"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.tripleHung"
+msgstr "三悬"
+
+# Source-Hash: 8af77effb76bc6e2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wide grid"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.wideGrid"
+msgstr "横宽网格"
+
+# Source-Hash: 50393830365aaf2b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Awning"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.awning"
+msgstr "上悬窗"
+
+# Source-Hash: 8447ee52258e16e4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bay"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.bay"
+msgstr "凸窗"
+
+# Source-Hash: e828c89bd0ba1ea4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bow"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.bow"
+msgstr "弓形窗"
+
+# Source-Hash: 9d63109edd8b22c2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Casement"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.casement"
+msgstr "平开窗"
+
+# Source-Hash: b0b737fc5cb1d32a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double Hung"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.doubleHung"
+msgstr "双悬窗"
+
+# Source-Hash: 387ce45ca2eb045f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fixed"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.fixed"
+msgstr "固定"
+
+# Source-Hash: 04a40f27911c3192
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hopper"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.hopper"
+msgstr "下悬窗"
+
+# Source-Hash: 5746be19ba2a53be
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Louvered"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.louvered"
+msgstr "百叶窗"
+
+# Source-Hash: de6ffb1cf676f270
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single Hung"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.singleHung"
+msgstr "单悬窗"
+
+# Source-Hash: 18cbc73c5e1590aa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sliding"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.sliding"
+msgstr "推拉门"
 
 # Source-Hash: 4a4d97a4101793b7
 # Review: required

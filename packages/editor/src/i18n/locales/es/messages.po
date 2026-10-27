@@ -2963,6 +2963,26 @@ msgstr "Girar"
 msgid "editor.cameraHint.zoom"
 msgstr "Zoom"
 
+# Source-Hash: 34b7ca7ff46c44a9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{label}: {finish}"
+#: packages/editor/src/components/ui/controls/finish-swatch.tsx
+#, fuzzy
+msgid "editor.controls.finishSwatch.ariaLabel"
+msgstr "{label}: {finish}"
+
+# Source-Hash: 4ca0e0e73229540c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Default"
+#: packages/editor/src/components/ui/controls/finish-swatch.tsx
+#, fuzzy
+msgid "editor.controls.finishSwatch.default"
+msgstr "Predeterminado"
+
 # Source-Hash: a2bd204e93e90598
 # Review: required
 # AI-Provider: cursor-agent
@@ -10175,6 +10195,26 @@ msgstr "Separar la esquina: ambas ventanas se mantienen, cada una con su marco e
 msgid "editor.panels.panelManager.selection"
 msgstr "Selección"
 
+# Source-Hash: 7ceade8f25b58fe9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back"
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+#, fuzzy
+msgid "editor.panels.panelWrapper.back"
+msgstr "Volver"
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close"
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+#, fuzzy
+msgid "editor.panels.panelWrapper.close"
+msgstr "Cerrar"
+
 # Source-Hash: 2dff25ca30c80559
 # Review: required
 # AI-Provider: cursor-agent
@@ -10234,6 +10274,16 @@ msgstr "Gestionar colecciones…"
 #, fuzzy
 msgid "editor.panels.panelWrapper.openTitle"
 msgstr "Abrir {title}"
+
+# Source-Hash: bf91b71a9aa76e94
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset"
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+#, fuzzy
+msgid "editor.panels.panelWrapper.reset"
+msgstr "Restablecer"
 
 # Source-Hash: 04a212d6317f6787
 # Review: required
@@ -11394,6 +11444,16 @@ msgstr "Ninguno"
 #, fuzzy
 msgid "editor.panels.roomPanel.notEnoughHeadroom"
 msgstr "Altura libre insuficiente"
+
+# Source-Hash: 92f7bc961d784f6a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}"
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+#, fuzzy
+msgid "editor.panels.roomPanel.openingCounts"
+msgstr "{doors, plural, one {# puerta} many {# puertas} other {# puertas}} · {windows, plural, one {# ventana} many {# ventanas} other {# ventanas}}"
 
 # Source-Hash: a8cd9507ce472a48
 # Review: required
@@ -15595,6 +15655,106 @@ msgstr "Ancho"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
 # English: "Barn"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.barn"
+msgstr "Granero"
+
+# Source-Hash: f747fbe71717772e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Craftsman"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.craftsman"
+msgstr "Craftsman"
+
+# Source-Hash: 092033938ca2debb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "French"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.french"
+msgstr "Francesa"
+
+# Source-Hash: 8ab91094cf650204
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.glass"
+msgstr "Vidrio"
+
+# Source-Hash: 6ab8b98b38eb2e65
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Half-louvered"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.halfLouvered"
+msgstr "Media persiana"
+
+# Source-Hash: f6cbdaa17e989b91
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Modern"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.modern"
+msgstr "Moderno"
+
+# Source-Hash: 482469f5a0873f73
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panel"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.panel"
+msgstr "Panel"
+
+# Source-Hash: ac42c328610a0edd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paneled glass"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.paneledGlass"
+msgstr "Cuarterones con vidrio"
+
+# Source-Hash: 5b68e435b7210876
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaker"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.shaker"
+msgstr "Shaker"
+
+# Source-Hash: 9ad6ac42b4152b64
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Six-panel"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.door.style.sixPanel"
+msgstr "Seis cuarterones"
+
+# Source-Hash: 8421deea35cb5afc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Barn"
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.type.barn"
@@ -16023,6 +16183,76 @@ msgstr "Geometría conservada de un modelo importado cuando no existe una forma 
 #, fuzzy
 msgid "node.importedMesh.label"
 msgstr "Malla importada"
+
+# Source-Hash: 9cce89f94c673821
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Couldn't rebuild with these values."
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.couldnTRebuildWithTheseValues"
+msgstr "No se ha podido reconstruir con estos valores."
+
+# Source-Hash: 373b929318436fe3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Parameters"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.parameters"
+msgstr "Parámetros"
+
+# Source-Hash: 558cb886dbe0babe
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rebuilding…"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.rebuilding"
+msgstr "Reconstruyendo…"
+
+# Source-Hash: a094c99dc8ad29a3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rebuilding in Blender…"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.rebuildingInBlender"
+msgstr "Reconstruyendo en Blender…"
+
+# Source-Hash: 1778f93ee143cd95
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset {param}"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.resetParam"
+msgstr "Restablecer {param}"
+
+# Source-Hash: 5a28cf5f2402dd7a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset parameters"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.resetParameters"
+msgstr "Restablecer parámetros"
+
+# Source-Hash: 6eb8025c60d6d3ca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset to default"
+#: packages/nodes/src/item/authored-params.tsx
+#, fuzzy
+msgid "node.item.authoredParams.resetToDefault"
+msgstr "Restablecer valores predeterminados"
 
 # Source-Hash: 63f79b3c467177b3
 # Review: required
@@ -16516,6 +16746,176 @@ msgstr "Faldón delantero"
 #, fuzzy
 msgid "node.roof.glazing.face.slope"
 msgstr "Faldón a un agua"
+
+# Source-Hash: 3bcc542295b4c61e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Alignment"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.alignment"
+msgstr "Alineación"
+
+# Source-Hash: 5211341ed18f33f6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.center"
+msgstr "Centro"
+
+# Source-Hash: 512e47607a37af46
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose a layout to edit the grid."
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.chooseALayoutToEditThe"
+msgstr "Elige una distribución para editar la retícula."
+
+# Source-Hash: 65b1cbba3b92c5b2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Empty"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.empty"
+msgstr "Vacío"
+
+# Source-Hash: 135874d189176d13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "End"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.end"
+msgstr "Final"
+
+# Source-Hash: 4fb65101d0b1a222
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fixed spacing"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.fixedSpacing"
+msgstr "Separación fija"
+
+# Source-Hash: 8ab91094cf650204
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.glass"
+msgstr "Vidrio"
+
+# Source-Hash: 54800340a0eeab23
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Layout"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.layout"
+msgstr "Distribución"
+
+# Source-Hash: 321ca5101ab61db7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Maximum spacing"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.maximumSpacing"
+msgstr "Separación máxima"
+
+# Source-Hash: d10743fce478d9f4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Max spacing"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.maxSpacing"
+msgstr "Separación máx."
+
+# Source-Hash: 37d9f63758abdb67
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mixed"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.mixed"
+msgstr "Mixto"
+
+# Source-Hash: b91302bf741c9fd6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panel count"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.panelCount"
+msgstr "Número de paneles"
+
+# Source-Hash: 6ce059aee1386f72
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panels"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.panels"
+msgstr "Paneles"
+
+# Source-Hash: ef3e765e692faf4c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.solid"
+msgstr "Sólido"
+
+# Source-Hash: e4698e83d02beb6c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Spacing"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.spacing"
+msgstr "Separación"
+
+# Source-Hash: 0a26a1e61c825660
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Start"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.start"
+msgstr "Inicio"
+
+# Source-Hash: 095237e9e2df4d9c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{title} alignment"
+#: packages/nodes/src/roof/glazing-controls.tsx
+#, fuzzy
+msgid "node.roof.glazingControls.titleAlignment"
+msgstr "Alineación de {title}"
 
 # Source-Hash: c98a4e6b28f05e0f
 # Review: required
@@ -17879,6 +18279,26 @@ msgstr "Segmento {number}"
 msgid "node.separator.label"
 msgstr "Separador"
 
+# Source-Hash: e7512c891d8da7d8
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Turn light off"
+#: packages/nodes/src/shared/item-interaction-actions.tsx
+#, fuzzy
+msgid "node.shared.itemInteractionActions.turnLightOff"
+msgstr "Apagar la luz"
+
+# Source-Hash: d47ec95e14909fe5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Turn light on"
+#: packages/nodes/src/shared/item-interaction-actions.tsx
+#, fuzzy
+msgid "node.shared.itemInteractionActions.turnLightOn"
+msgstr "Encender la luz"
+
 # Source-Hash: b2d703d283baf64a
 # Review: required
 # AI-Provider: cursor-agent
@@ -18989,6 +19409,166 @@ msgstr "Origen del jugador o la cámara en una planta. Uno por planta."
 msgid "node.spawn.label"
 msgstr "Punto de aparición"
 
+# Source-Hash: faaa4f6b40001667
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Body"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.body"
+msgstr "Cuerpo"
+
+# Source-Hash: 29b9fdb127a54435
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center stringer"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.centerStringer"
+msgstr "Zanca central"
+
+# Source-Hash: b2b2383577835a61
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Closed risers"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.closedRisers"
+msgstr "Contrahuellas cerradas"
+
+# Source-Hash: 6f6b188bff3c0223
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inherit"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.inherit"
+msgstr "Heredar"
+
+# Source-Hash: ce25dc4a23f3ae10
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Nosing"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.nosing"
+msgstr "Mamperlán"
+
+# Source-Hash: 3e52f04f92e08070
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.open"
+msgstr "Abrir"
+
+# Source-Hash: 7717e0464ad1e7df
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Original"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.original"
+msgstr "Original"
+
+# Source-Hash: 8a6f6c6b0cca7460
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Riser thickness"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.riserThickness"
+msgstr "Espesor de la contrahuella"
+
+# Source-Hash: 2fe058966023b542
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Side stringers"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.sideStringers"
+msgstr "Zancas laterales"
+
+# Source-Hash: ef3e765e692faf4c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.solid"
+msgstr "Sólido"
+
+# Source-Hash: 4c1489839e306865
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stringer depth"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.stringerDepth"
+msgstr "Canto de la zanca"
+
+# Source-Hash: 17e1a09c422d3660
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stringer width"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.stringerWidth"
+msgstr "Ancho de la zanca"
+
+# Source-Hash: 146f8e61ff310dc5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tread finish"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.treadFinish"
+msgstr "Acabado de huella"
+
+# Source-Hash: 9089f91f3fbbf4cd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tread thickness"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.treadThickness"
+msgstr "Espesor de la huella"
+
+# Source-Hash: 44dda7136b93c8ee
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waist"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.waist"
+msgstr "Losa"
+
+# Source-Hash: dfd6d2ff7a94f22e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waist thickness"
+#: packages/nodes/src/stair/construction-controls.tsx
+#, fuzzy
+msgid "node.stair.constructionControls.waistThickness"
+msgstr "Espesor de la losa"
+
 # Source-Hash: 8535b75637105412
 # Review: required
 # AI-Provider: cursor-agent
@@ -18998,6 +19578,126 @@ msgstr "Punto de aparición"
 #, fuzzy
 msgid "node.stair.description"
 msgstr "Escalera de uno o varios tramos con huellas, contrahuellas y barandillas configurables."
+
+# Source-Hash: c24b098693e1006d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The flight chain does not reach the declared destination."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.arrivalMismatch"
+msgstr "La cadena de tramos no llega al destino declarado."
+
+# Source-Hash: 124ad1cd6bb00013
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Two risers plus going is outside the 0.60–0.65 m design range."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.comfortTarget"
+msgstr "Dos contrahuellas más una huella quedan fuera del rango de diseño de 0,60–0,65 m."
+
+# Source-Hash: 7452fcd8370bef34
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Going is below the design target."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.goingTarget"
+msgstr "La huella es inferior al objetivo de diseño."
+
+# Source-Hash: 449683eb727091d5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Overhead surfaces leave less than the target headroom."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.headroomTarget"
+msgstr "Las superficies superiores dejan menos altura libre que el objetivo."
+
+# Source-Hash: 9e9357408f6a0d08
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Detailed headroom could not be evaluated: check riser counts and the surface query budget."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.headroomUnresolved"
+msgstr "No se ha podido evaluar la altura libre detallada: revisa el número de contrahuellas y el presupuesto de consultas de superficie."
+
+# Source-Hash: 40fd019d72ff3835
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flight dimensions and integer riser count must be positive."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.invalidFlight"
+msgstr "Las dimensiones del tramo y el número entero de contrahuellas deben ser positivos."
+
+# Source-Hash: 3d4b6f859bd8de50
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The destination must be above the stair base."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.invalidRise"
+msgstr "El destino debe estar por encima de la base de la escalera."
+
+# Source-Hash: 5f196b22e2c8296a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Landing depth exceeds a full circle at the walking line; the visible landing is limited to one circle."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.landingOverlap"
+msgstr "La profundidad del descansillo supera un círculo completo en la línea de huella; el descansillo visible se limita a un círculo."
+
+# Source-Hash: 0122ec92b951a114
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The narrow end of a winder tread is below 0.10 m; check the intended stair use."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.narrowWinderEnd"
+msgstr "El extremo estrecho de una huella compensada es inferior a 0,10 m; revisa el uso previsto de la escalera."
+
+# Source-Hash: a664dc7f3b014af8
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flight riser heights differ. Use uniform-riser repair only if this is a proposed design."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.nonuniformRisers"
+msgstr "Las contrahuellas del tramo difieren. Usa la reparación de contrahuellas uniformes solo si es un diseño propuesto."
+
+# Source-Hash: cd140b519d37b01e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "A landing has a stored rise; inspect its transition before repair."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.raisedLanding"
+msgstr "Un descansillo tiene una altura guardada; revisa su transición antes de reparar."
+
+# Source-Hash: a94cfa7b2a21cf14
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Riser height exceeds the design target."
+#: packages/nodes/src/stair/panel.tsx
+#, fuzzy
+msgid "node.stair.diagnostic.riserTarget"
+msgstr "La contrahuella supera el objetivo de diseño."
 
 # Source-Hash: 53d7084bc41c1ad6
 # Review: required
@@ -19869,6 +20569,186 @@ msgstr "Ancho"
 msgid "node.stair.panel.winder"
 msgstr "Compensada"
 
+# Source-Hash: 69578b7dd7723fa1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Both"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.both"
+msgstr "Ambos"
+
+# Source-Hash: fe633d20f198d7e4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom sloped extension"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.bottomExtension"
+msgstr "Prolongación inclinada inferior"
+
+# Source-Hash: 384842ae1e1c6825
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Continuous"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.continuous"
+msgstr "Continuo"
+
+# Source-Hash: d7148fa065bc709b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Floor"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.floor"
+msgstr "Planta"
+
+# Source-Hash: 644d2d9e9c3dd31f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handrail diameter"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.handrailDiameter"
+msgstr "Diámetro del pasamanos"
+
+# Source-Hash: 5f3f2be1e572a066
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handrail height"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.handrailHeight"
+msgstr "Altura del pasamanos"
+
+# Source-Hash: cb3239847f068a1b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handrail inset"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.handrailInset"
+msgstr "Retranqueo del pasamanos"
+
+# Source-Hash: f365c6b6dd9ebab9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.left"
+msgstr "Izquierda"
+
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.none"
+msgstr "Ninguno"
+
+# Source-Hash: e6ac8d7c9639c351
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No return"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.noReturn"
+msgstr "Sin retorno"
+
+# Source-Hash: 5688b2003002d03a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Original layout"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.originalLayout"
+msgstr "Distribución original"
+
+# Source-Hash: d0d904fbd052d7b2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Post-facing"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.postFacing"
+msgstr "Hacia el poste"
+
+# Source-Hash: fc4d8c6f156b0430
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Return length"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.returnLength"
+msgstr "Longitud del retorno"
+
+# Source-Hash: b34d5ee0f218221d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.right"
+msgstr "Derecha"
+
+# Source-Hash: e1f8354a95b5060a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Separate handrail"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.separateHandrail"
+msgstr "Pasamanos independiente"
+
+# Source-Hash: 005f0197ec3bc95a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Set the length to reach the wall or post."
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.setTheLengthToReachThe"
+msgstr "Ajusta la longitud para llegar al muro o al poste."
+
+# Source-Hash: bef713f3ec96f758
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top horizontal extension"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.topExtension"
+msgstr "Prolongación horizontal superior"
+
+# Source-Hash: bdad79929de6b142
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall-facing"
+#: packages/nodes/src/stair/railing-controls.tsx
+#, fuzzy
+msgid "node.stair.railingControls.wallFacing"
+msgstr "Hacia el muro"
+
 # Source-Hash: ce0b6361eb77e93c
 # Review: required
 # AI-Provider: cursor-agent
@@ -20468,6 +21348,26 @@ msgstr "Informe"
 #, fuzzy
 msgid "node.unit.unitPanel.unit"
 msgstr "Unidad"
+
+# Source-Hash: d53242481ff46157
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Merge walls"
+#: packages/nodes/src/wall/actions.tsx
+#, fuzzy
+msgid "node.wall.actions.mergeWalls"
+msgstr "Unir muros"
+
+# Source-Hash: d7ead4708d50965f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Split wall"
+#: packages/nodes/src/wall/actions.tsx
+#, fuzzy
+msgid "node.wall.actions.splitWall"
+msgstr "Dividir muro"
 
 # Source-Hash: 96a6f084d095ea36
 # Review: required
@@ -21919,6 +22819,56 @@ msgstr "No se sabe qué cara es la exterior (no se detecta ninguna estancia a ni
 msgid "node.wall.panel.woodStuds"
 msgstr "Montantes de madera"
 
+# Source-Hash: 5211341ed18f33f6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.center"
+msgstr "Centro"
+
+# Source-Hash: 09576259041494f3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inside face"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.inside"
+msgstr "Cara interior"
+
+# Source-Hash: f365c6b6dd9ebab9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.left"
+msgstr "Izquierda"
+
+# Source-Hash: 697001376b872e74
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Outside face"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.outside"
+msgstr "Cara exterior"
+
+# Source-Hash: b34d5ee0f218221d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.reference.right"
+msgstr "Derecha"
+
 # Source-Hash: eac63d14f275db3d
 # Review: required
 # AI-Provider: cursor-agent
@@ -22538,6 +23488,216 @@ msgstr "Rodea la esquina con su pareja"
 #, fuzzy
 msgid "node.window.panel.wrapTheCorner"
 msgstr "Rodear la esquina"
+
+# Source-Hash: 9d63109edd8b22c2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Casement"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.casement"
+msgstr "Abatible"
+
+# Source-Hash: e06fc5a432b74a5b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double-hung"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.doubleHung"
+msgstr "Guillotina doble"
+
+# Source-Hash: 7e4a0a38f694be6b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Grid"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.grid"
+msgstr "Cuadrícula"
+
+# Source-Hash: fbb293fe8aee84b2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Horizontal bands"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.horizontalBands"
+msgstr "Bandas horizontales"
+
+# Source-Hash: 3ee270463954f502
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Picture"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.picture"
+msgstr "Marco"
+
+# Source-Hash: 62ab2eb3c775da95
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.single"
+msgstr "Simple"
+
+# Source-Hash: 18cbc73c5e1590aa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sliding"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.sliding"
+msgstr "Corredera"
+
+# Source-Hash: 0c88aea2bd130193
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tall grid"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.tallGrid"
+msgstr "Retícula alta"
+
+# Source-Hash: 9628d0cc155e29a3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Transom"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.transom"
+msgstr "Montante"
+
+# Source-Hash: 305f3aba543b1962
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Triple-hung"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.tripleHung"
+msgstr "Guillotina triple"
+
+# Source-Hash: 8af77effb76bc6e2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wide grid"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.style.wideGrid"
+msgstr "Retícula ancha"
+
+# Source-Hash: 50393830365aaf2b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Awning"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.awning"
+msgstr "Proyectante"
+
+# Source-Hash: 8447ee52258e16e4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bay"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.bay"
+msgstr "Mirador"
+
+# Source-Hash: e828c89bd0ba1ea4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bow"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.bow"
+msgstr "Ventana en arco"
+
+# Source-Hash: 9d63109edd8b22c2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Casement"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.casement"
+msgstr "Ventana abatible"
+
+# Source-Hash: b0b737fc5cb1d32a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double Hung"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.doubleHung"
+msgstr "Guillotina doble"
+
+# Source-Hash: 387ce45ca2eb045f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fixed"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.fixed"
+msgstr "Fijo"
+
+# Source-Hash: 04a40f27911c3192
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hopper"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.hopper"
+msgstr "Abatible inferior"
+
+# Source-Hash: 5746be19ba2a53be
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Louvered"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.louvered"
+msgstr "De lamas"
+
+# Source-Hash: de6ffb1cf676f270
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single Hung"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.singleHung"
+msgstr "Guillotina simple"
+
+# Source-Hash: 18cbc73c5e1590aa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sliding"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.sliding"
+msgstr "Corredera"
 
 # Source-Hash: 4a4d97a4101793b7
 # Review: required
