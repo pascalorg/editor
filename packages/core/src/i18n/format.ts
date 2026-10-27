@@ -92,6 +92,15 @@ export function formatNumber(value: number, options: NumberFormatOptions = {}): 
   }
 }
 
+/** Names in a sentence ("Kitchen, Hall"), with the locale's separators. */
+export function formatList(items: readonly string[], locale = 'en'): string {
+  try {
+    return new Intl.ListFormat([locale, 'en'], { type: 'conjunction' }).format(items)
+  } catch {
+    return items.join(', ')
+  }
+}
+
 export function formatLength(
   meters: number,
   unit: LengthUnit,

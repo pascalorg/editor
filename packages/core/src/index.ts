@@ -186,7 +186,11 @@ export {
   staleFinishScripts,
 } from './lib/finish-script'
 export { floorConstructionLift, liftedManualSlab } from './lib/floor-construction-lift'
-export { floorFootprintName } from './lib/floor-footprint-name'
+export {
+  type FloorFootprintNaming,
+  floorFootprintName,
+  floorFootprintNaming,
+} from './lib/floor-footprint-name'
 export {
   automaticFloorHeight,
   floorFootprintSupportClass,
