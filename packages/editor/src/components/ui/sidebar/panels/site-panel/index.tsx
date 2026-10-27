@@ -87,7 +87,7 @@ import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 import { zoneDefaultName } from './default-names'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
-import { localizedLevelName } from '../../../../../i18n/level-name'
+import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
 
 // ============================================================================
 // PROPERTY LINE SECTION
@@ -873,6 +873,7 @@ const LevelItem = memo(function LevelItem({
           <InlineRenameInput
             defaultName={localizedLevelName({ level: level.level }, i18n, locale)}
             displayName={localizedLevelName(level, i18n, locale)}
+            editableName={(name) => authoredLevelName({ name, level: level.level })}
             isEditing={isEditing}
             nodeId={level.id}
             onStartEditing={() => setIsEditing(true)}

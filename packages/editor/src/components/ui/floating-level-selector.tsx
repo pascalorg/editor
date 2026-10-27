@@ -61,7 +61,7 @@ import {
   useLocale,
   usePascalI18n,
 } from '@pascal-app/core'
-import { localizedLevelName } from '../../i18n/level-name'
+import { authoredLevelName, localizedLevelName } from '../../i18n/level-name'
 import { messageWithSlot } from '../../i18n/message-slot'
 import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
@@ -97,26 +97,27 @@ function LevelInlineRename({
   const locale = useLocale()
   const updateNode = useScene((s) => s.updateNode)
   const defaultName = localizedLevelName({ level: level.level }, i18n, locale)
-  const [value, setValue] = useState(level.name || '')
+  const authoredName = authoredLevelName(level)
+  const [value, setValue] = useState(authoredName ?? '')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isEditing) {
-      setValue(level.name || '')
+      setValue(authoredName ?? '')
       setTimeout(() => {
         inputRef.current?.focus()
         inputRef.current?.select()
       }, 0)
     }
-  }, [isEditing, level.name])
+  }, [isEditing, authoredName])
 
   const handleSave = useCallback(() => {
     const trimmed = value.trim()
-    if (trimmed !== level.name) {
+    if ((trimmed || undefined) !== authoredName) {
       updateNode(level.id, { name: trimmed || undefined })
     }
     onStopEditing()
-  }, [value, level.id, level.name, updateNode, onStopEditing])
+  }, [value, level.id, authoredName, updateNode, onStopEditing])
 
   if (!isEditing) return null
 

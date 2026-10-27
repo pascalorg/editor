@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
-import { localizedLevelName } from '../../../../../i18n/level-name'
+import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
 
 interface LevelTreeNodeProps {
   nodeId: LevelNode['id']
@@ -60,6 +60,7 @@ export const LevelTreeNode = memo(function LevelTreeNode({
         <InlineRenameInput
           defaultName={defaultName}
           displayName={displayName}
+          editableName={(name) => authoredLevelName({ name, level })}
           isEditing={isEditing}
           nodeId={nodeId}
           onStartEditing={handleStartEditing}

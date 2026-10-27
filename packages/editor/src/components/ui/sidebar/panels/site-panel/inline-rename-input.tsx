@@ -18,15 +18,19 @@ interface InlineRenameFieldProps {
 
 type InlineRenameInputProps = Omit<InlineRenameFieldProps, 'name' | 'onRename'> & {
   nodeId: AnyNodeId
+  /** The part of the stored name the user edits; a generated default edits as empty. */
+  editableName?: (name: string | undefined) => string | undefined
 }
 
 /** Renames a scene node through `updateNode`. */
 export const InlineRenameInput = memo(function InlineRenameInput({
   nodeId,
+  editableName,
   ...props
 }: InlineRenameInputProps) {
   const updateNode = useScene((s) => s.updateNode)
-  const name = useScene((s) => s.nodes[nodeId]?.name)
+  const stored = useScene((s) => s.nodes[nodeId]?.name)
+  const name = editableName ? editableName(stored) : stored
   const handleRename = useCallback(
     (next: string | undefined) => updateNode(nodeId, { name: next }),
     [nodeId, updateNode],
@@ -64,7 +68,7 @@ export const InlineRenameField = memo(function InlineRenameField({
 
   const handleSave = useCallback(() => {
     const trimmed = value.trim()
-    if (trimmed !== name) {
+    if ((trimmed || undefined) !== (name || undefined)) {
       onRename(trimmed || undefined)
     }
     onStopEditing()
