@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
 import { createI18n, setLocale, translate } from '@pascal-app/core'
-import { localizedLevelName } from './level-name'
+import { authoredLevelName, localizedLevelName } from './level-name'
 import { registerBundledLocales } from './locales'
 
 afterEach(() => setLocale('en'))
@@ -53,4 +53,11 @@ test('generated stored level names localize while authored names remain unchange
     french.destroy()
     japanese.destroy()
   }
+})
+
+test('a stored default level name is not an authored name, so renaming starts empty', () => {
+  expect(authoredLevelName({ level: 0, name: 'Ground floor' })).toBeUndefined()
+  expect(authoredLevelName({ level: 1, name: 'Level 1' })).toBeUndefined()
+  expect(authoredLevelName({ level: 1 })).toBeUndefined()
+  expect(authoredLevelName({ level: 1, name: ' Mezzanine ' })).toBe('Mezzanine')
 })

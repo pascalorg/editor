@@ -2,7 +2,7 @@ import {
   type AnyNodeId,
   emitter,
   useScene,
-  type ZoneNode,
+  type ZoneNode, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Camera, Hexagon, Save, Trash2 } from 'lucide-react'
@@ -21,6 +21,7 @@ import { ActionButton } from '../../../controls/action-button'
 import { PanelSection } from '../../../controls/panel-section'
 
 function ZoneItem({ zone }: { zone: ZoneNode }) {
+  const i18n = usePascalI18n()
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
@@ -57,7 +58,15 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
       onClick={handleClick}
     >
       <span className="mr-2">
-        <ColorDot color={zone.color} onChange={handleColorChange} />
+        <ColorDot
+          color={zone.color}
+          label={i18n._({
+            id: 'editor.layers.spaceColour',
+            message: '{role, select, room {Room colour} other {Zone colour}}',
+            values: { role: zone.spaceRole ?? 'generic' },
+          })}
+          onChange={handleColorChange}
+        />
       </span>
       <Hexagon className="mr-1.5 h-3.5 w-3.5 shrink-0" />
       <span className="flex-1 truncate">{zone.name}</span>
@@ -67,7 +76,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
           <button
             className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
             onClick={(e) => e.stopPropagation()}
-            title="Camera snapshot"
+            title={i18n._({ id: 'editor.sidebar.panels.zonePanel.cameraSnapshot', message: 'Camera snapshot' })}
           >
             <Camera className="h-3 w-3" />
             {zone.camera && (
@@ -92,7 +101,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                View snapshot
+                {i18n._({ id: 'editor.sidebar.panels.zonePanel.viewSnapshot', message: 'View snapshot' })}
               </button>
             )}
             <button
@@ -104,7 +113,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
               }}
             >
               <Camera className="h-3.5 w-3.5" />
-              {zone.camera ? 'Update snapshot' : 'Take snapshot'}
+              {zone.camera ? i18n._({ id: 'editor.sidebar.panels.zonePanel.updateSnapshot', message: 'Update snapshot' }) : i18n._({ id: 'editor.sidebar.panels.zonePanel.takeSnapshot', message: 'Take snapshot' })}
             </button>
             {zone.camera && (
               <button
@@ -116,7 +125,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Clear snapshot
+                {i18n._({ id: 'editor.sidebar.panels.zonePanel.clearSnapshot', message: 'Clear snapshot' })}
               </button>
             )}
           </div>
@@ -133,6 +142,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
 }
 
 export function ZonePanel() {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
@@ -167,7 +177,7 @@ export function ZonePanel() {
   if (!currentLevelId) {
     return (
       <div className="px-3 py-4 text-muted-foreground text-sm">
-        Select a level to view and create zones
+        {i18n._({ id: 'editor.sidebar.panels.zonePanel.selectALevelToViewAnd', message: 'Select a level to view and create zones' })}
       </div>
     )
   }
@@ -176,34 +186,34 @@ export function ZonePanel() {
     <div className="py-1">
       {levelZones.length === 0 ? (
         <div className="px-3 py-4 text-muted-foreground text-sm">
-          No zones on this level.{' '}
+          {i18n._({ id: 'editor.sidebar.panels.zonePanel.noZonesOnThisLevel', message: 'No zones on this level.' })}{' '}
           <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
-            Add one
+            {i18n._({ id: 'editor.sidebar.panels.zonePanel.addOne', message: 'Add one' })}
           </button>
         </div>
       ) : (
         levelZones.map((zone) => <ZoneItem key={zone.id} zone={zone} />)
       )}
       {selectedZone ? (
-        <PanelSection className="mt-2 border-t" title="Actions">
+        <PanelSection className="mt-2 border-t" title={i18n._({ id: 'editor.sidebar.panels.zonePanel.actions', message: 'Actions' })}>
           <ActionButton
             className="w-full flex-none"
             icon={<Save className="h-4 w-4" />}
-            label="Save to catalog"
+            label={i18n._({ id: 'editor.sidebar.panels.zonePanel.saveToCatalog', message: 'Save to catalog' })}
             onClick={() => emitter.emit('room-preset:create', { zoneId: selectedZone.id })}
             type="button"
           />
           <ActionButton
             className="w-full flex-none"
             icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
-            label="Delete"
+            label={i18n._({ id: 'editor.sidebar.panels.zonePanel.delete', message: 'Delete' })}
             onClick={() => deleteSelectedZone(false)}
             type="button"
           />
           <ActionButton
             className="w-full flex-none"
             icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
-            label="Delete with contents"
+            label={i18n._({ id: 'editor.sidebar.panels.zonePanel.deleteWithContents', message: 'Delete with contents' })}
             onClick={() => deleteSelectedZone(true)}
             type="button"
           />

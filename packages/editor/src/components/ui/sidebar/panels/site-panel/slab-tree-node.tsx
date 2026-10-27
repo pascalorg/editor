@@ -7,6 +7,7 @@ import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 import { localizedFloorFootprintName } from '../../../../../i18n/floor-footprint-name'
+import { slabDefaultName } from './default-names'
 
 interface SlabTreeNodeProps {
   nodeId: AnyNodeId
@@ -53,7 +54,7 @@ export const SlabTreeNode = memo(function SlabTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const defaultName = `Slab (${formatAreaLabel(calculatePolygonArea(polygon), unit)})`
+  const defaultName = slabDefaultName(i18n, formatAreaLabel(calculatePolygonArea(polygon), unit))
 
   return (
     <TreeNodeWrapper

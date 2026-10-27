@@ -1,11 +1,11 @@
 import {
   type AnyNodeId,
-  getLevelDisplayName,
   type LevelNode,
   type UnitNode,
   unitWarnings,
   useScene,
-  type ZoneNode,
+  type ZoneNode, usePascalI18n,
+  useLocale,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { AlertTriangle, Trash2, X } from 'lucide-react'
@@ -15,6 +15,8 @@ import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import { assignZoneToUnit, enterUnitFocus } from './../../../../../lib/units'
 import { InlineRenameInput } from './inline-rename-input'
 import { TreeNodeWrapper } from './tree-node'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
+import { localizedLevelName } from '../../../../../i18n/level-name'
 
 type UnitWarningCode = ReturnType<typeof unitWarnings>[number]['code']
 
@@ -40,10 +42,12 @@ export const UnitZoneRow = memo(function UnitZoneRow({
   isLast,
   onRemove,
 }: UnitZoneRowProps) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const zone = useScene((s) => s.nodes[zoneId] as ZoneNode | undefined)
   const levelLabel = useScene((s) => {
     const level = zone?.parentId ? (s.nodes[zone.parentId as AnyNodeId] as LevelNode | undefined) : undefined
-    return level?.type === 'level' ? getLevelDisplayName(level) : null
+    return level?.type === 'level' ? localizedLevelName(level, i18n, locale) : null
   })
   const isSelected = useViewer((s) => s.selection.zoneId === zoneId)
   const isHovered = useViewer((s) => s.hoveredId === zoneId)
@@ -71,7 +75,7 @@ export const UnitZoneRow = memo(function UnitZoneRow({
               event.stopPropagation()
               onRemove(zoneId)
             }}
-            title="Remove from unit"
+            title={i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.removeFromUnit', message: 'Remove from unit' })}
             type="button"
           >
             <X className="h-3 w-3" />
@@ -93,7 +97,7 @@ export const UnitZoneRow = memo(function UnitZoneRow({
       keepIconColor
       label={
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate">{zone.name || (zone.spaceRole === 'room' ? 'Room' : 'Zone')}</span>
+          <span className="truncate">{zone.name || (zone.spaceRole === 'room' ? i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.room', message: 'Room' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.zone', message: 'Zone' }))}</span>
           {levelLabel && (
             <span className="shrink-0 text-muted-foreground text-xs">{levelLabel}</span>
           )}
@@ -119,6 +123,7 @@ export const UnitTreeNode = memo(function UnitTreeNode({
   depth,
   isLast,
 }: UnitTreeNodeProps) {
+  const i18n = usePascalI18n()
   const unitId = nodeId as UnitNode['id']
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -163,7 +168,7 @@ export const UnitTreeNode = memo(function UnitTreeNode({
             event.stopPropagation()
             deleteNode(unitId)
           }}
-          title="Delete unit"
+          title={i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.deleteUnit', message: 'Delete unit' })}
           type="button"
         >
           <Trash2 className="h-3 w-3" />
@@ -175,6 +180,7 @@ export const UnitTreeNode = memo(function UnitTreeNode({
       icon={
         <ColorDot
           color={color ?? '#f59e0b'}
+          label={i18n._({ id: 'editor.layers.unitColour', message: 'Unit colour' })}
           onChange={(next) => updateNode(unitId, { color: next })}
         />
       }
@@ -185,7 +191,7 @@ export const UnitTreeNode = memo(function UnitTreeNode({
       label={
         <span className="flex min-w-0 items-center gap-1.5">
           <InlineRenameInput
-            defaultName="Unit"
+            defaultName={i18n._(nodeLabelDescriptor('unit', 'Unit'))}
             isEditing={isEditing}
             nodeId={nodeId}
             onStartEditing={() => setIsEditing(true)}
@@ -193,7 +199,7 @@ export const UnitTreeNode = memo(function UnitTreeNode({
           />
           {isFocused && (
             <span className="shrink-0 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary leading-4">
-              Focused
+              {i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.focused', message: 'Focused' })}
             </span>
           )}
           {warningCodes.length > 0 && (

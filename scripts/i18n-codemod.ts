@@ -217,21 +217,28 @@ function hookEdits(source: ts.SourceFile, component: ts.FunctionLikeDeclaration)
 }
 
 function importEdit(source: ts.SourceFile): Edit | undefined {
-  for (const statement of source.statements) {
+  const coreImports = source.statements.flatMap((statement) => {
     if (
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === '@pascal-app/core'
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== '@pascal-app/core'
     ) {
-      const bindings = statement.importClause?.namedBindings
-      if (bindings && ts.isNamedImports(bindings)) {
-        if (bindings.elements.some((element) => element.name.text === HOOK)) return undefined
-        if (!statement.importClause?.isTypeOnly) {
-          const last = bindings.elements[bindings.elements.length - 1]
-          if (last) return { start: last.end, end: last.end, text: `, ${HOOK}` }
-        }
-      }
+      return []
     }
+    const bindings = statement.importClause?.namedBindings
+    return bindings && ts.isNamedImports(bindings) ? [{ statement, bindings }] : []
+  })
+  if (
+    coreImports.some(({ bindings }) =>
+      bindings.elements.some((element) => element.name.text === HOOK),
+    )
+  ) {
+    return undefined
+  }
+  for (const { statement, bindings } of coreImports) {
+    if (statement.importClause?.isTypeOnly) continue
+    const last = bindings.elements[bindings.elements.length - 1]
+    if (last) return { start: last.end, end: last.end, text: `, ${HOOK}` }
   }
   const firstImport = source.statements.find(ts.isImportDeclaration)
   if (firstImport) {

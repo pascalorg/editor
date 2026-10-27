@@ -3,6 +3,7 @@
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   applySceneGraphToEditor,
   Editor,
@@ -51,10 +52,13 @@ function EditorItemsPanel() {
   return <ItemsPanel showSourceFilter={false} showTagFilters={false} />
 }
 
-const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
+const SIDEBAR_TABS: (Omit<SidebarTab, 'label'> & {
+  label: MessageDescriptor
+  component: React.ComponentType
+})[] = [
   {
     id: 'site',
-    label: 'Scene',
+    label: /* i18n */ { id: 'app.sceneLoader.scene', message: 'Scene' },
     component: () => null, // Built-in SitePanel handles this
     mobileDefaultSnap: 0.5,
     mobileIcon: <Layers className="h-5 w-5" />,
@@ -70,7 +74,7 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   },
   {
     id: 'build',
-    label: 'Build',
+    label: /* i18n */ { id: 'app.sceneLoader.build', message: 'Build' },
     component: BuildTab,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Hammer className="h-5 w-5" />,
@@ -86,7 +90,7 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   },
   {
     id: 'paint',
-    label: 'Paint',
+    label: /* i18n */ { id: 'app.sceneLoader.paint', message: 'Paint' },
     component: PaintPanel,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Palette className="h-5 w-5" />,
@@ -102,7 +106,7 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   },
   {
     id: 'items',
-    label: 'Items',
+    label: /* i18n */ { id: 'app.sceneLoader.items', message: 'Items' },
     component: EditorItemsPanel,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Package className="h-5 w-5" />,
@@ -118,7 +122,7 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   },
   {
     id: 'settings',
-    label: 'Settings',
+    label: /* i18n */ { id: 'app.sceneLoader.settings', message: 'Settings' },
     component: () => null,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Settings className="h-5 w-5" />,
@@ -175,6 +179,13 @@ export function SceneLoader(props: SceneLoaderProps) {
 }
 
 function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
+  const i18n = usePascalI18n()
+  const catalogVersion = i18n.getVersion()
+  // biome-ignore lint/correctness/useExhaustiveDependencies: labels re-translate on a locale switch or a late registerMessages
+  const sidebarTabs = useMemo(
+    () => SIDEBAR_TABS.map((tab) => ({ ...tab, label: i18n._(tab.label) })),
+    [i18n, catalogVersion],
+  )
   // A rename must reach the autosave body, which sends `meta.name`.
   const [renamedTo, setRenamedTo] = useState<string | null>(null)
   const meta = useMemo(
@@ -357,9 +368,17 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
     <div className="dark relative h-screen w-screen">
       {conflict && (
         <div className="dark pointer-events-auto absolute top-14 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 text-foreground shadow-xl">
-          <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
+          <h2 className="font-semibold text-sm">
+            {i18n._({
+              id: 'app.sceneLoader.anotherSessionSavedFirstRefresh',
+              message: 'Another session saved first — refresh?',
+            })}
+          </h2>
           <p className="mt-1 text-muted-foreground text-xs">
-            Your changes haven&apos;t been saved. Reload to pick up the latest version.
+            {i18n._({
+              id: 'app.sceneLoader.yourChangesHavenTBeenSaved',
+              message: "Your changes haven't been saved. Reload to pick up the latest version.",
+            })}
           </p>
           <div className="mt-3 flex items-center gap-2">
             <button
@@ -367,14 +386,14 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
               onClick={() => router.refresh()}
               type="button"
             >
-              Reload
+              {i18n._({ id: 'app.sceneLoader.reload', message: 'Reload' })}
             </button>
             <button
               className="rounded-lg border border-border px-3 py-1.5 font-medium text-xs hover:bg-accent"
               onClick={() => setConflict(false)}
               type="button"
             >
-              Dismiss
+              {i18n._({ id: 'app.sceneLoader.dismiss', message: 'Dismiss' })}
             </button>
           </div>
         </div>
@@ -395,7 +414,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
         projectName={meta.name}
-        sidebarTabs={SIDEBAR_TABS}
+        sidebarTabs={sidebarTabs}
         viewerBanner={<PoolSectionBanner />}
         viewerToolbarLeft={<EditorViewerToolbarLeft />}
         viewerToolbarRight={

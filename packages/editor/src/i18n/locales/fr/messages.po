@@ -1083,6 +1083,96 @@ msgstr "Appentis"
 msgid "app.lib.buildTabState.wall"
 msgstr "Mur"
 
+# Source-Hash: 8d17e7556ce142da
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Another session saved first — refresh?"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.anotherSessionSavedFirstRefresh"
+msgstr "Une autre session a enregistré en premier — actualiser ?"
+
+# Source-Hash: 8f4b2028ad75465d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Build"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.build"
+msgstr "Construire"
+
+# Source-Hash: a2bd204e93e90598
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dismiss"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.dismiss"
+msgstr "Fermer"
+
+# Source-Hash: daebc0755d239c99
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Items"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.items"
+msgstr "Objets"
+
+# Source-Hash: cf2e870fce0f2f51
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.paint"
+msgstr "Peindre"
+
+# Source-Hash: 854555777b69a4b1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reload"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.reload"
+msgstr "Recharger"
+
+# Source-Hash: 8dc78e215a97d9fc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Scene"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.scene"
+msgstr "Scène"
+
+# Source-Hash: 83909f82446ee9c3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Settings"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.settings"
+msgstr "Paramètres"
+
+# Source-Hash: ee255fa26d076dcc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Your changes haven't been saved. Reload to pick up the latest version."
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.yourChangesHavenTBeenSaved"
+msgstr "Vos modifications n’ont pas été enregistrées. Rechargez pour récupérer la dernière version."
+
 # Source-Hash: 703e1b4b9b715d3b
 # Review: required
 # AI-Provider: cursor-agent
@@ -3082,6 +3172,256 @@ msgstr "{count, plural, one {# tronçon} many {# tronçons} other {# tronçons}}
 #, fuzzy
 msgid "editor.floatingActionMenu.system"
 msgstr "Système"
+
+# Source-Hash: f0e76aea883d4e48
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add a floor under the roof"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.addAFloorUnderTheRoof"
+msgstr "Ajouter un niveau sous le toit"
+
+# Source-Hash: a982ff9b075af829
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add level above"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.addLevelAbove"
+msgstr "Ajouter un niveau au-dessus"
+
+# Source-Hash: 0db7d221df08fa6b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add level below"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.addLevelBelow"
+msgstr "Ajouter un niveau en dessous"
+
+# Source-Hash: c0774c185060fc13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cancel"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.cancel"
+msgstr "Annuler"
+
+# Source-Hash: b26de372b4b0eaac
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.delete"
+msgstr "Supprimer"
+
+# Source-Hash: 8e29375893d63408
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete level"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.deleteLevel"
+msgstr "Supprimer le niveau"
+
+# Source-Hash: c3bc69ec52022250
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Are you sure you want to delete {levelName}? All walls, floors, and objects on this level will be permanently removed."
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.deleteLevelConfirm"
+msgstr "Voulez-vous vraiment supprimer {levelName} ? Tous les murs, planchers et objets de ce niveau seront définitivement supprimés."
+
+# Source-Hash: 5b2826ddac95cd0c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drag to reorder"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.dragToReorder"
+msgstr "Faire glisser pour réorganiser"
+
+# Source-Hash: 933177338f5a03ed
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate level"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.duplicateLevel"
+msgstr "Dupliquer le niveau"
+
+# Source-Hash: 9614c6825a7c67bf
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate with options..."
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.duplicateWithOptions"
+msgstr "Dupliquer avec options..."
+
+# Source-Hash: 5ec91bb339806413
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Exit unit focus"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.exitUnitFocus"
+msgstr "Quitter le focus sur le logement"
+
+# Source-Hash: a88c3f8bed58b4fa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Focused unit has zones here"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.focusedUnitHasZonesHere"
+msgstr "Le logement ciblé a des zones ici"
+
+# Source-Hash: 655055a310fb5d13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.groundFloorOverGrade"
+msgstr "Le rez-de-chaussée est {distance} au-dessus du sol. Placer le rez-de-chaussée à 8 in au-dessus du sol"
+
+# Source-Hash: 77548faae4869eec
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.groundFloorUnderGrade"
+msgstr "Le rez-de-chaussée est {distance} sous le sol. Placer le rez-de-chaussée à 8 in au-dessus du sol"
+
+# Source-Hash: e3763ae2dc62c03f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ground line: the levels under it are below grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.groundLineTheLevelsUnderIt"
+msgstr "Ligne de sol : les niveaux en dessous sont enterrés"
+
+# Source-Hash: e12035eb47cc61cc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ground · {offset}"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.groundOffset"
+msgstr "Sol · {offset}"
+
+# Source-Hash: 5661c11383217661
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Insert level here"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.insertLevelHere"
+msgstr "Insérer un niveau ici"
+
+# Source-Hash: 0215b36d5a08597a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Level height"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.levelHeight"
+msgstr "Hauteur du niveau"
+
+# Source-Hash: 91af436e81bb0875
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paste copied selection"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.pasteCopiedSelection"
+msgstr "Coller la sélection copiée"
+
+# Source-Hash: 68bc52f53240cbec
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reorder {levelName}"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.reorderLevelname"
+msgstr "Réorganiser {levelName}"
+
+# Source-Hash: 625d53de72ebc2ef
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Seat the building so this floor stands at grade; the floors under it are below grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.seatTheBuildingSoThisFloor"
+msgstr "Placer le bâtiment pour que cet étage soit au niveau du sol ; les étages inférieurs sont enterrés"
+
+# Source-Hash: 7ac9c00895c30d76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Set as ground floor"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.setAsGroundFloor"
+msgstr "Définir comme rez-de-chaussée"
+
+# Source-Hash: d6b381247066a7aa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The ground level cannot be deleted"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.theGroundLevelCannotBeDeleted"
+msgstr "Le niveau du rez-de-chaussée ne peut pas être supprimé"
+
+# Source-Hash: b1122051dce0d7a1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "This floor stands at grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.thisFloorStandsAtGrade"
+msgstr "Cet étage est au niveau du sol"
+
+# Source-Hash: 062cc0f1afef0c52
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unit"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.unit"
+msgstr "Lot"
 
 # Source-Hash: 5871b7c20478f4a1
 # Review: required
@@ -8494,6 +8834,311 @@ msgstr "Eaux usées"
 msgid "editor.inspector.option.wye.14vupc8"
 msgstr "Culotte"
 
+# Source-Hash: 179b025e25f9a091
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collapse"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx
+#, fuzzy
+msgid "editor.layers.collapse"
+msgstr "Réduire"
+
+# Source-Hash: dbeae4c43f49327f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ceiling ({area})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.ceiling"
+msgstr "Plafond ({area})"
+
+# Source-Hash: d29165c9d4bfc3cb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collection"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+#, fuzzy
+msgid "editor.layers.defaultName.collection"
+msgstr "Collection"
+
+# Source-Hash: 8f536b859be662a0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flight ({width}×{length}m)"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.flight"
+msgstr "Volée ({width}×{length}m)"
+
+# Source-Hash: 46dcbf4548374073
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Landing ({width}×{length}m)"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.landing"
+msgstr "Palier ({width}×{length}m)"
+
+# Source-Hash: 3ea44453fcd08a6e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Node"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/registry-tree-node.tsx
+#, fuzzy
+msgid "editor.layers.defaultName.node"
+msgstr "Nœud"
+
+# Source-Hash: 93f3a04e15b6fb49
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof ({count, plural, one {# segment} other {# segments}})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.roof"
+msgstr "Toit ({count, plural, one {# segment} many {# segments} other {# segments}})"
+
+# Source-Hash: a730fab01c172704
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{roofType, select, hip {Hip} gable {Gable} shed {Shed} gambrel {Gambrel} dutch {Dutch} mansard {Mansard} flat {Flat} conical {Conical} barrel {Barrel} other {Roof}} ({width}×{depth}m)"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.roofSegment"
+msgstr "{roofType, select, hip {Croupe} gable {Pignon} shed {Monopente} gambrel {Gambrel} dutch {Demi-croupe} mansard {Mansarde} flat {Plat} conical {Conique} barrel {Voûte} other {Toit}} ({width}×{depth}m)"
+
+# Source-Hash: 54efcb0756c2f2c1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room ({area})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.room"
+msgstr "Pièce ({area})"
+
+# Source-Hash: e38a4b9986a9d21a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slab ({area})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.slab"
+msgstr "Dalle ({area})"
+
+# Source-Hash: 57398365d4b9066f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Staircase ({count, plural, one {# segment} other {# segments}})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.staircase"
+msgstr "Escalier ({count, plural, one {# segment} many {# segments} other {# segments}})"
+
+# Source-Hash: a17f8fc29aae896e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Zone ({area})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.zone"
+msgstr "Zone ({area})"
+
+# Source-Hash: 5cabcabb8bc14809
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Expand"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx
+#, fuzzy
+msgid "editor.layers.expand"
+msgstr "Développer"
+
+# Source-Hash: 6731e9dd94e8b268
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{levelName} options"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.layers.levelOptions"
+msgstr "Options de {levelName}"
+
+# Source-Hash: d6952b4e54d246dd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rename"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/inline-rename-input.tsx
+#, fuzzy
+msgid "editor.layers.rename"
+msgstr "Renommer"
+
+# Source-Hash: 21eafa019ad62fea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{role, select, room {Room colour} other {Zone colour}}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/zone-tree-node.tsx
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.layers.spaceColour"
+msgstr "{role, select, room {Couleur de la pièce} other {Couleur de la zone}}"
+
+# Source-Hash: f5de042416a2c04f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unit colour"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.layers.unitColour"
+msgstr "Couleur du logement"
+
+# Source-Hash: c0774c185060fc13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cancel"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.cancel"
+msgstr "Annuler"
+
+# Source-Hash: 07c11e7e4d4681d6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose what to copy from {levelName}."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.chooseWhatToCopyFromLevel"
+msgstr "Choisissez ce qu’il faut copier depuis {levelName}."
+
+# Source-Hash: 9500d4378a319532
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose what to copy from this level."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.chooseWhatToCopyFromThisLevel"
+msgstr "Choisissez ce qu’il faut copier depuis ce niveau."
+
+# Source-Hash: 34dc96fe77a31e51
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.duplicate"
+msgstr "Dupliquer"
+
+# Source-Hash: a56e3eb43e60b45c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate Level"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.duplicateLevel"
+msgstr "Dupliquer le niveau"
+
+# Source-Hash: e4c6ab1ea473a082
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Everything"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.everything"
+msgstr "Tout"
+
+# Source-Hash: ac3f119e560388ab
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure, finishes, and placed items, without guide references."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureFinishesAndPlacedItemsWithout"
+msgstr "Structure, finitions et éléments placés, sans références de calque."
+
+# Source-Hash: acbdf968391d5273
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure + furniture"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureFurniture"
+msgstr "Structure + mobilier"
+
+# Source-Hash: ce682864a140fe75
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure + materials"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureMaterials"
+msgstr "Structure + matériaux"
+
+# Source-Hash: 5ee44d53847c5ea2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure, materials, furniture, and references."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureMaterialsFurnitureAndReferences"
+msgstr "Structure, matériaux, mobilier et références."
+
+# Source-Hash: 95aa1b43dbdb3f02
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure only"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureOnly"
+msgstr "Structure seule"
+
+# Source-Hash: 2c53b46c9ca9fe2f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure with the current material and finish assignments."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureWithTheCurrentMaterialAnd"
+msgstr "Structure avec les matériaux et finitions actuellement attribués."
+
+# Source-Hash: 3350e9008eaba15d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Walls, slabs, roofs, stairs, windows, and doors without finishes."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.wallsSlabsRoofsStairsWindowsAnd"
+msgstr "Murs, dalles, toits, escaliers, fenêtres et portes, sans finitions."
+
 # Source-Hash: 395fd0821b203517
 # Review: required
 # AI-Provider: cursor-agent
@@ -12475,6 +13120,886 @@ msgstr "Dressing"
 #, fuzzy
 msgid "editor.roomName.workshop"
 msgstr "Atelier"
+
+# Source-Hash: 83909f82446ee9c3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Settings"
+#: packages/editor/src/components/ui/sidebar/icon-rail.tsx
+#, fuzzy
+msgid "editor.sidebar.iconRail.settings"
+msgstr "Paramètres"
+
+# Source-Hash: 91f90818d42a984e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Site"
+#: packages/editor/src/components/ui/sidebar/icon-rail.tsx
+#, fuzzy
+msgid "editor.sidebar.iconRail.site"
+msgstr "Terrain"
+
+# Source-Hash: 663175a9c461a96d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "All"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.all"
+msgstr "Tout"
+
+# Source-Hash: fce9814c289e6b71
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Community"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.community"
+msgstr "Communauté"
+
+# Source-Hash: 663175a9c461a96d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "All"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.all"
+msgstr "Tout"
+
+# Source-Hash: fce9814c289e6b71
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Community"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.community"
+msgstr "Communauté"
+
+# Source-Hash: 8d211c78417ed1b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Library"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.library"
+msgstr "Bibliothèque"
+
+# Source-Hash: a0b7adfdfdec7307
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mine"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.mine"
+msgstr "Les miens"
+
+# Source-Hash: 6024b7778b392ec3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No results for “{search}”"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.noResultsForSearch"
+msgstr "Aucun résultat pour « {search} »"
+
+# Source-Hash: 4ceb6dcb7827db7f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Search..."
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.search"
+msgstr "Rechercher..."
+
+# Source-Hash: 8d211c78417ed1b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Library"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.library"
+msgstr "Bibliothèque"
+
+# Source-Hash: a0b7adfdfdec7307
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mine"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.mine"
+msgstr "Les miens"
+
+# Source-Hash: 6024b7778b392ec3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No results for “{search}”"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.noResultsForSearch"
+msgstr "Aucun résultat pour « {search} »"
+
+# Source-Hash: 4ceb6dcb7827db7f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Search..."
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.search"
+msgstr "Rechercher..."
+
+# Source-Hash: 3c67cde0578ac829
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.addLevel"
+msgstr "Ajouter un niveau"
+
+# Source-Hash: 9a56d90d461b4bca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add point"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.addPoint"
+msgstr "Ajouter un point"
+
+# Source-Hash: fedccec504a9ae33
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Area:"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.area"
+msgstr "Surface :"
+
+# Source-Hash: 87b6880f6de7a45a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base elevation"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.baseElevation"
+msgstr "Altitude de base"
+
+# Source-Hash: d42f7d29e3fc4af7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Building"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.building"
+msgstr "Bâtiment"
+
+# Source-Hash: 7c90f458259d5cd8
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add new level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/building-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.buildingTreeNode.addNewLevel"
+msgstr "Ajouter un nouveau niveau"
+
+# Source-Hash: d42f7d29e3fc4af7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Building"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/building-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.buildingTreeNode.building"
+msgstr "Bâtiment"
+
+# Source-Hash: bbc65c039ae86e11
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Camera snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.cameraSnapshot"
+msgstr "Instantané de caméra"
+
+# Source-Hash: 3a0701ebcb9f26cb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Capture"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.capture"
+msgstr "Capture"
+
+# Source-Hash: 71f2343818c55e0c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Clear selection"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.clearSelection"
+msgstr "Effacer la sélection"
+
+# Source-Hash: 67d29724469fa8d3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Clear snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.clearSnapshot"
+msgstr "Effacer l’instantané"
+
+# Source-Hash: def517c77fda49ea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close walls around a space to make a room."
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.closeWallsAroundASpaceTo"
+msgstr "Fermez des murs autour d’un espace pour créer une pièce."
+
+# Source-Hash: 2b9af8da4b34cbfa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collection colour"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.collectionColour"
+msgstr "Couleur de la collection"
+
+# Source-Hash: 135af27a14a4cda7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collections"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.collections"
+msgstr "Collections"
+
+# Source-Hash: 6f4751c26f12aef9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete collection"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.deleteCollection"
+msgstr "Supprimer la collection"
+
+# Source-Hash: b26de372b4b0eaac
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.delete"
+msgstr "Supprimer"
+
+# Source-Hash: 8e29375893d63408
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.deleteLevel"
+msgstr "Supprimer le niveau"
+
+# Source-Hash: 6552e45eecc0a227
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Draw a zone"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.drawAZone"
+msgstr "Dessiner une zone"
+
+# Source-Hash: 34dc96fe77a31e51
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.duplicate"
+msgstr "Dupliquer"
+
+# Source-Hash: 933177338f5a03ed
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.duplicateLevel"
+msgstr "Dupliquer le niveau"
+
+# Source-Hash: c038947f317cabba
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate level with options"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.duplicateLevelWithOptions"
+msgstr "Dupliquer le niveau avec options"
+
+# Source-Hash: 9614c6825a7c67bf
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate with options..."
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.duplicateWithOptions"
+msgstr "Dupliquer avec options..."
+
+# Source-Hash: 7c4196b9e791c195
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Elements"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.elements"
+msgstr "Éléments"
+
+# Source-Hash: 1344ea2602e3aa9e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Guide"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.guide"
+msgstr "Guide"
+
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hide"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.hide"
+msgstr "Masquer"
+
+# Source-Hash: 0608743fc1736d86
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.level"
+msgstr "Niveau"
+
+# Source-Hash: 13b3e6a6afe319d1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "New unit"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.newUnit"
+msgstr "Nouveau logement"
+
+# Source-Hash: 0192748d50f0e5f7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No buildings yet"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.noBuildingsYet"
+msgstr "Aucun bâtiment pour l’instant"
+
+# Source-Hash: 1be310702a12e433
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No elements on this level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.noElementsOnThisLevel"
+msgstr "Aucun élément sur ce niveau"
+
+# Source-Hash: 0956af88ced36992
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No levels yet"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.noLevelsYet"
+msgstr "Aucun niveau pour l’instant"
+
+# Source-Hash: 45c41bfb2ae19627
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {# object selected} other {# objects selected}}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.objectsSelected"
+msgstr "{count, plural, one {# objet sélectionné} many {# objets sélectionnés} other {# objets sélectionnés}}"
+
+# Source-Hash: a5434e26e5cb1b26
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Other zones"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.otherZones"
+msgstr "Autres zones"
+
+# Source-Hash: 2aa38d84079d4dba
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Perimeter:"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.perimeter"
+msgstr "Périmètre :"
+
+# Source-Hash: 4004b9a8e4f8c9d0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Property Line"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.propertyLine"
+msgstr "Limite de propriété"
+
+# Source-Hash: 3e7408ed44676176
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rooms"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.rooms"
+msgstr "Pièces"
+
+# Source-Hash: ca39c0581c7318e6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Select a level to view content"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.selectALevelToViewContent"
+msgstr "Sélectionnez un niveau pour voir son contenu"
+
+# Source-Hash: 827e0c6ac9936b69
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Show"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.show"
+msgstr "Afficher"
+
+# Source-Hash: 91f90818d42a984e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Site"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.site"
+msgstr "Terrain"
+
+# Source-Hash: c40163620df24a76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Take snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.takeSnapshot"
+msgstr "Prendre un instantané"
+
+# Source-Hash: d6b381247066a7aa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The ground level cannot be deleted"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.theGroundLevelCannotBeDeleted"
+msgstr "Le niveau du rez-de-chaussée ne peut pas être supprimé"
+
+# Source-Hash: bbc65c039ae86e11
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Camera snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.cameraSnapshot"
+msgstr "Instantané de caméra"
+
+# Source-Hash: 67d29724469fa8d3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Clear snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.clearSnapshot"
+msgstr "Effacer l’instantané"
+
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hide"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.hide"
+msgstr "Masquer"
+
+# Source-Hash: 827e0c6ac9936b69
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Show"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.show"
+msgstr "Afficher"
+
+# Source-Hash: c40163620df24a76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Take snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.takeSnapshot"
+msgstr "Prendre un instantané"
+
+# Source-Hash: faecab10b69d4863
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Update snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.updateSnapshot"
+msgstr "Mettre à jour l’instantané"
+
+# Source-Hash: 8a1fd8827a68f236
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "View snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.viewSnapshot"
+msgstr "Voir l’instantané"
+
+# Source-Hash: b404dded35241274
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Units"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.units"
+msgstr "Unités"
+
+# Source-Hash: 149fec3fd1f08042
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete unit"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.deleteUnit"
+msgstr "Supprimer le logement"
+
+# Source-Hash: 930399d3fb247a7c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Focused"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.focused"
+msgstr "Ciblé"
+
+# Source-Hash: 41ac9dd23bb558d7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove from unit"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.removeFromUnit"
+msgstr "Retirer du logement"
+
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.room"
+msgstr "Pièce"
+
+# Source-Hash: a107b4d76d6972e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Zone"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.zone"
+msgstr "Zone"
+
+# Source-Hash: faecab10b69d4863
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Update snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.updateSnapshot"
+msgstr "Mettre à jour l’instantané"
+
+# Source-Hash: 28a12e6806c091b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{assetType, select, guide {Uploading guide... {progress}%} other {Uploading scan... {progress}%}}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.uploadingProgress"
+msgstr "{assetType, select, guide {Import du calque... {progress} %} other {Import du relevé 3D... {progress} %}}"
+
+# Source-Hash: de389a2a46d53384
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Upload scan/floorplan"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.uploadScanFloorplan"
+msgstr "Importer un relevé 3D ou un plan"
+
+# Source-Hash: 8a1fd8827a68f236
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "View snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.viewSnapshot"
+msgstr "Voir l’instantané"
+
+# Source-Hash: ba9f809cb032ee57
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "In {unitName}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/zone-membership-checkbox.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.zoneMembershipCheckbox.inUnitname"
+msgstr "Dans {unitName}"
+
+# Source-Hash: aa6d82bdb3cc1d9a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.actions"
+msgstr "Actions"
+
+# Source-Hash: fcc43f22937d1536
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add one"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.addOne"
+msgstr "En ajouter une"
+
+# Source-Hash: bbc65c039ae86e11
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Camera snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.cameraSnapshot"
+msgstr "Instantané de caméra"
+
+# Source-Hash: 67d29724469fa8d3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Clear snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.clearSnapshot"
+msgstr "Effacer l’instantané"
+
+# Source-Hash: b26de372b4b0eaac
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.delete"
+msgstr "Supprimer"
+
+# Source-Hash: e2411929697b7ed4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete with contents"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.deleteWithContents"
+msgstr "Supprimer avec le contenu"
+
+# Source-Hash: 22ca3935e8754072
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No zones on this level."
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.noZonesOnThisLevel"
+msgstr "Aucune zone sur ce niveau."
+
+# Source-Hash: 941ea30f406dcfa2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Save to catalog"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.saveToCatalog"
+msgstr "Enregistrer dans le catalogue"
+
+# Source-Hash: 98662dfb371cac13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Select a level to view and create zones"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.selectALevelToViewAnd"
+msgstr "Sélectionnez un niveau pour voir et créer des zones"
+
+# Source-Hash: c40163620df24a76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Take snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.takeSnapshot"
+msgstr "Prendre un instantané"
+
+# Source-Hash: faecab10b69d4863
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Update snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.updateSnapshot"
+msgstr "Mettre à jour l’instantané"
+
+# Source-Hash: 8a1fd8827a68f236
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "View snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
+msgstr "Voir l’instantané"
+
+# Source-Hash: 58b05af5b5724efb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "\"{label}\" plugin crashed"
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.usePluginPanels.labelPluginCrashed"
+msgstr "Le plugin « {label} » a planté"
+
+# Source-Hash: 9e84d6d7b9885c4f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Loading…"
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.usePluginPanels.loading"
+msgstr "Chargement…"
+
+# Source-Hash: 9fc7a39bc32f287a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Plugins"
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.usePluginPanels.plugins"
+msgstr "Plugins"
+
+# Source-Hash: c6312309378aaaea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "This panel hit an error and was unloaded for this session. The rest of the editor is unaffected — reload to try again."
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.usePluginPanels.thisPanelHitAnErrorAnd"
+msgstr "Ce panneau a rencontré une erreur et a été déchargé pour cette session. Le reste de l’éditeur n’est pas affecté — rechargez pour réessayer."
 
 # Source-Hash: 834de1a7027c4da1
 # Review: required
