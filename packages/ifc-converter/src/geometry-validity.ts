@@ -7,7 +7,7 @@ export interface IfcConversionReport {
   skippedGeometry: {
     /** Placed geometries whose placement matrix had a non-finite entry. */
     transforms: number
-    /** Vertices with a non-finite position or normal. */
+    /** Vertices with a non-finite position. */
     vertices: number
     /** Triangles that used a skipped or missing vertex. */
     triangles: number
@@ -60,10 +60,11 @@ export interface MeshBuffers {
 }
 
 /**
- * Drops vertices with a non-finite position or normal and every triangle that uses one (or an
- * index past the vertex count), then compacts the vertex buffers to the vertices still used.
- * Returns null when no triangle survives; a source with triangles that all fail counts as a
- * skipped primitive.
+ * Drops vertices with a non-finite position and every triangle that uses one (or an index past
+ * the vertex count), then compacts the vertex buffers to the vertices still used. A non-finite
+ * normal on a kept vertex is shading, not shape: it is recomputed from the kept triangles around
+ * it (zero when they have no area). Returns null when no triangle survives; a source with
+ * triangles that all fail counts as a skipped primitive.
  */
 export function keepValidTriangles(
   mesh: MeshBuffers,
@@ -74,19 +75,7 @@ export function keepValidTriangles(
   const vertexCount = Math.floor(mesh.positions.length / 3)
   const valid = new Uint8Array(vertexCount)
   for (let vertex = 0; vertex < vertexCount; vertex++) {
-    let ok = true
-    for (let axis = 0; axis < 3; axis++) {
-      if (
-        !(
-          Number.isFinite(mesh.positions[vertex * 3 + axis]) &&
-          Number.isFinite(mesh.normals[vertex * 3 + axis])
-        )
-      ) {
-        ok = false
-        break
-      }
-    }
-    if (ok) valid[vertex] = 1
+    if (finiteTriple(mesh.positions, vertex)) valid[vertex] = 1
     else skipped.vertices++
   }
 
@@ -130,5 +119,45 @@ export function keepValidTriangles(
     skipped.primitives++
     return null
   }
+  recomputeNonFiniteNormals(positions, normals, indices)
   return { positions, normals, indices }
+}
+
+function finiteTriple(values: number[], vertex: number): boolean {
+  return (
+    Number.isFinite(values[vertex * 3]) &&
+    Number.isFinite(values[vertex * 3 + 1]) &&
+    Number.isFinite(values[vertex * 3 + 2])
+  )
+}
+
+/** Each non-finite normal becomes the area-weighted normal of the triangles at its vertex. */
+function recomputeNonFiniteNormals(positions: number[], normals: number[], indices: number[]) {
+  const vertexCount = positions.length / 3
+  const broken: number[] = []
+  for (let vertex = 0; vertex < vertexCount; vertex++)
+    if (!finiteTriple(normals, vertex)) broken.push(vertex)
+  if (broken.length === 0) return
+  const sums = new Map(broken.map((vertex) => [vertex, [0, 0, 0]]))
+  for (let t = 0; t + 2 < indices.length; t += 3) {
+    const [a, b, c] = [indices[t]!, indices[t + 1]!, indices[t + 2]!]
+    if (!(sums.has(a) || sums.has(b) || sums.has(c))) continue
+    const ux = positions[b * 3]! - positions[a * 3]!
+    const uy = positions[b * 3 + 1]! - positions[a * 3 + 1]!
+    const uz = positions[b * 3 + 2]! - positions[a * 3 + 2]!
+    const vx = positions[c * 3]! - positions[a * 3]!
+    const vy = positions[c * 3 + 1]! - positions[a * 3 + 1]!
+    const vz = positions[c * 3 + 2]! - positions[a * 3 + 2]!
+    const face = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]
+    for (const corner of [a, b, c]) {
+      const sum = sums.get(corner)
+      if (sum) for (let axis = 0; axis < 3; axis++) sum[axis]! += face[axis]!
+    }
+  }
+  for (const [vertex, sum] of sums) {
+    const length = Math.hypot(sum[0]!, sum[1]!, sum[2]!)
+    for (let axis = 0; axis < 3; axis++)
+      normals[vertex * 3 + axis] =
+        length > 0 ? Math.round((sum[axis]! / length) * 1000) / 1000 || 0 : 0
+  }
 }

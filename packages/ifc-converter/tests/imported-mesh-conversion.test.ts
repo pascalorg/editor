@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AnyNode, ImportedMeshNode, WallNode, ZoneNode } from '@pascal-app/core'
+import * as WebIFC from 'web-ifc'
 import {
   type ConversionOptions,
   conversionReportHasIssues,
@@ -328,6 +329,47 @@ describe('IFC geometry with an unreadable number', () => {
     // 3000 mm, not 0: the storeys stay apart and the ground floor keeps its 3 m height.
     expect(metadata(upper!).elevation).toBeCloseTo(3)
     expect((ground as { height?: number }).height).toBeCloseTo(3)
+  }, 60_000)
+
+  test('a vertex whose normal is NaN keeps its triangles, its normal recomputed', async () => {
+    const source = await readFile(`${fixturesDirectory}04-ifc-open-house.ifc`)
+    const convert = () =>
+      convertIfcToPascalWithReport(source, undefined, { simplify: false, wasmPath })
+    const triangles = (scene: PascalSceneGraph) =>
+      importedMeshes(scene).map((mesh) => [
+        metadata(mesh).expressID,
+        mesh.primitives.reduce((sum, primitive) => sum + primitive.indices.length / 3, 0),
+      ])
+    const clean = await convert()
+
+    // web-ifc hands back a NaN normal for some degenerate faces; give every vertex one.
+    const read = WebIFC.IfcAPI.prototype.GetVertexArray
+    const spy = spyOn(WebIFC.IfcAPI.prototype, 'GetVertexArray').mockImplementation(function (
+      this: WebIFC.IfcAPI,
+      ...args: Parameters<typeof read>
+    ) {
+      const vertices = Float32Array.from(read.apply(this, args))
+      for (let normal = 3; normal < vertices.length; normal += 6) vertices[normal] = Number.NaN
+      return vertices
+    })
+    let broken: Awaited<ReturnType<typeof convert>>
+    try {
+      broken = await convert()
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(broken.report.skippedGeometry.vertices).toBe(0)
+    expect(conversionReportHasIssues(broken.report)).toBe(false)
+    expect(triangles(broken.scene)).toEqual(triangles(clean.scene))
+    for (const mesh of importedMeshes(broken.scene))
+      for (const { normals } of mesh.primitives) {
+        expect(normals.every(Number.isFinite)).toBe(true)
+        for (let n = 0; n < normals.length; n += 3)
+          expect(Math.hypot(normals[n]!, normals[n + 1]!, normals[n + 2]!)).toBeLessThanOrEqual(
+            1.001,
+          )
+      }
   }, 60_000)
 
   test('a clean file reports nothing', async () => {
