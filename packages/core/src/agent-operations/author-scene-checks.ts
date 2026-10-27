@@ -38,8 +38,75 @@ const SAME_MAX = 24
 const BURIED_M = 0.2
 const FACE_CODES = new Set(['face_script_failed', 'no_face', 'face_shared'])
 /** A room in no unit that is plausibly the building's common area, by its name. */
-const COMMON_ROOM =
-  /corridor|hall|lobby|stair|entry|entrance|landing|elevator|utility|mechanical|storage|laundry|parking|garage/i
+/**
+ * A room that is common area by its name alone: every word of it is a common-area word or a
+ * qualifier (Entry hall, Stair landing 2, Rear service corridor), so "Hall bedroom" or "Storage
+ * loft" inside an apartment is still a room the design owes a unit.
+ */
+const COMMON_WORDS = new Set([
+  'corridor',
+  'hall',
+  'hallway',
+  'lobby',
+  'foyer',
+  'vestibule',
+  'stair',
+  'stairs',
+  'staircase',
+  'stairwell',
+  'entry',
+  'entrance',
+  'landing',
+  'elevator',
+  'lift',
+  'utility',
+  'mechanical',
+  'plant',
+  'storage',
+  'store',
+  'laundry',
+  'parking',
+  'garage',
+  'bike',
+  'bin',
+  'refuse',
+  'mail',
+  'reception',
+])
+const COMMON_QUALIFIERS = new Set([
+  'main',
+  'rear',
+  'front',
+  'side',
+  'north',
+  'south',
+  'east',
+  'west',
+  'upper',
+  'lower',
+  'ground',
+  'shared',
+  'common',
+  'service',
+  'fire',
+  'emergency',
+  'room',
+  'area',
+  'level',
+  'floor',
+])
+const isCommonRoomName = (name: string): boolean => {
+  const words = name
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+  return (
+    words.length > 0 &&
+    words.some((w) => COMMON_WORDS.has(w)) &&
+    words.every((w) => COMMON_WORDS.has(w) || COMMON_QUALIFIERS.has(w))
+  )
+}
 const PIECE_CODES = new Set(['piece_failed', 'piece_unknown', 'pieces_unavailable'])
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -99,7 +166,10 @@ export function authorSceneChecks(args: {
   const opaque = windows.filter((o) => o.code && !GLASS.test(o.code))
 
   const gaps = warnings.filter((w) => w.code === 'finish_gaps' && w.id.startsWith('room/'))
-  const roomDefects = take(defects.filter((d) => d.id.startsWith('room/')))
+  // A unit defect on a room is the units check's, not a failed floor.
+  const roomDefects = take(
+    defects.filter((d) => d.id.startsWith('room/') && d.code !== 'unit_split_room'),
+  )
   const rooms = payload.levels.flatMap((level, l) =>
     level.rooms.map((room, i) => ({ ...room, id: `room/${l}/${i}` })),
   )
@@ -165,7 +235,7 @@ export function authorSceneChecks(args: {
               .filter(
                 (room) =>
                   !room.unit &&
-                  !COMMON_ROOM.test(room.name) &&
+                  !isCommonRoomName(room.name) &&
                   !merged.some((m) => m.id === room.id) &&
                   !roomDefects.some((d) => d.id === room.id),
               )

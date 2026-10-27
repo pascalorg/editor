@@ -2841,14 +2841,17 @@ describe('author_scene units', () => {
     expect(outcome.result.warnings).toContainEqual(
       expect.objectContaining({ id: 'unit/Apartment B', code: 'unit_no_rooms' }),
     )
-    const check = authorSceneChecks({
+    const checks = authorSceneChecks({
       payload,
       report: outcome.result,
       pending: [],
       issues: [],
-    }).find((check) => check.id === 'rooms_in_units')
+    })
+    const check = checks.find((check) => check.id === 'rooms_in_units')
     expect(check).toMatchObject({ passed: false })
     expect(check!.detail).toContain('"Living", "Kitchen"')
+    // A unit defect is the units check's alone: the floor of the split room is covered.
+    expect(checks.find((check) => check.id === 'floors')).toMatchObject({ passed: true })
   })
 
   test('the check names rooms in no unit that are not common area, on levels with units only', () => {
@@ -2856,11 +2859,11 @@ describe('author_scene units', () => {
       levels: [
         twoRooms('g', 'Ground floor', 0, [
           { name: 'Living', seed: [-2, 0], unit: 'Apartment 1' },
-          { name: 'Study', seed: [2, 0] },
+          { name: 'Hall bedroom', seed: [2, 0] },
         ]),
         twoRooms('u', 'Upper floor', 2.9, [
-          { name: 'Office', seed: [-2, 0] },
-          { name: 'Corridor', seed: [2, 0] },
+          { name: 'Bedroom', seed: [-2, 0], unit: 'Apartment 1' },
+          { name: 'Stair landing 2', seed: [2, 0] },
         ]),
       ],
     })
@@ -2872,9 +2875,9 @@ describe('author_scene units', () => {
       issues: [],
     }).find((check) => check.id === 'rooms_in_units')
     expect(check).toMatchObject({ passed: false })
-    expect(check!.detail).toContain('"Study"')
-    expect(check!.detail).not.toContain('Office')
-    expect(check!.detail).not.toContain('Corridor')
+    // Common area is named by common-area words alone: a bedroom off the hall is a room.
+    expect(check!.detail).toContain('"Hall bedroom"')
+    expect(check!.detail).not.toContain('Stair landing')
     const house = authorSceneChecks({
       payload: bedroom,
       report: run(bedroom, { bed, lamp: bed }).result,
