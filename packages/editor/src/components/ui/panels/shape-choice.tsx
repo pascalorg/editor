@@ -36,11 +36,11 @@ export function ShapeChoice({
   const i18n = usePascalI18n()
   return (
     <div
-      className={cn('flex min-h-7 items-center justify-between gap-2', className)}
+      className={cn('flex min-h-7 flex-wrap items-center justify-between gap-2', className)}
       data-shape-choice={data}
     >
       <span className="whitespace-nowrap">{label}</span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {SHAPES.map(({ id, label: shapeLabel, Icon }) => (
           <button
             className={pill}

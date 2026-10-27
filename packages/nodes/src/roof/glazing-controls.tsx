@@ -1,6 +1,7 @@
 'use client'
 
 import type { CurtainGrid, RoofGlazing } from '@pascal-app/core'
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   getLinearUnitLabel,
   linearControlValueToMeters,
@@ -86,6 +87,7 @@ export function GlazingGridControls({
   grids: readonly CurtainGrid[]
   preview: Preview
 }) {
+  const i18n = usePascalI18n()
   const unit = useViewer((state) => state.unit)
   const patch = useCallback(
     (data: Partial<CurtainGrid>, commit = false) => {
@@ -98,21 +100,41 @@ export function GlazingGridControls({
   return (
     <PanelSection title={title}>
       <SelectControl
-        label="Layout"
+        label={i18n._({ id: 'node.roof.glazingControls.layout', message: 'Layout' })}
         value={grid.layout}
         mixed={mixedLayout}
         options={[
-          { value: 'maximum-spacing', label: 'Maximum spacing' },
-          { value: 'count', label: 'Panel count' },
-          { value: 'fixed-spacing', label: 'Fixed spacing' },
+          {
+            value: 'maximum-spacing',
+            label: i18n._({
+              id: 'node.roof.glazingControls.maximumSpacing',
+              message: 'Maximum spacing',
+            }),
+          },
+          {
+            value: 'count',
+            label: i18n._({ id: 'node.roof.glazingControls.panelCount', message: 'Panel count' }),
+          },
+          {
+            value: 'fixed-spacing',
+            label: i18n._({
+              id: 'node.roof.glazingControls.fixedSpacing',
+              message: 'Fixed spacing',
+            }),
+          },
         ]}
         onChange={(layout) => patch({ layout }, true)}
       />
       {mixedLayout ? (
-        <p className="pt-1 text-[11px] text-muted-foreground">Choose a layout to edit the grid.</p>
+        <p className="pt-1 text-[11px] text-muted-foreground">
+          {i18n._({
+            id: 'node.roof.glazingControls.chooseALayoutToEditThe',
+            message: 'Choose a layout to edit the grid.',
+          })}
+        </p>
       ) : grid.layout === 'count' ? (
         <SliderControl
-          label="Panels"
+          label={i18n._({ id: 'node.roof.glazingControls.panels', message: 'Panels' })}
           value={grid.count}
           mixed={grids.some((value) => value.count !== grid.count)}
           min={1}
@@ -127,7 +149,11 @@ export function GlazingGridControls({
         />
       ) : (
         <SliderControl
-          label={grid.layout === 'maximum-spacing' ? 'Max spacing' : 'Spacing'}
+          label={
+            grid.layout === 'maximum-spacing'
+              ? i18n._({ id: 'node.roof.glazingControls.maxSpacing', message: 'Max spacing' })
+              : i18n._({ id: 'node.roof.glazingControls.spacing', message: 'Spacing' })
+          }
           value={metersToLinearUnit(grid.spacing, unit)}
           mixed={grids.some((value) => value.spacing !== grid.spacing)}
           min={metersToLinearUnit(0.2, unit)}
@@ -147,15 +173,34 @@ export function GlazingGridControls({
         />
       )}
       {!mixedLayout && grid.layout === 'fixed-spacing' && (
-        <div className="flex flex-col gap-2 pt-1" role="group" aria-label={`${title} alignment`}>
-          <span className="text-xs text-muted-foreground">Alignment</span>
+        <div
+          className="flex flex-col gap-2 pt-1"
+          role="group"
+          aria-label={i18n._({
+            id: 'node.roof.glazingControls.titleAlignment',
+            message: '{title} alignment',
+            values: { title },
+          })}
+        >
+          <span className="text-xs text-muted-foreground">
+            {i18n._({ id: 'node.roof.glazingControls.alignment', message: 'Alignment' })}
+          </span>
           <SegmentedControl
             value={grid.alignment}
             mixed={grids.some((value) => value.alignment !== grid.alignment)}
             options={[
-              { value: 'start', label: 'Start' },
-              { value: 'center', label: 'Center' },
-              { value: 'end', label: 'End' },
+              {
+                value: 'start',
+                label: i18n._({ id: 'node.roof.glazingControls.start', message: 'Start' }),
+              },
+              {
+                value: 'center',
+                label: i18n._({ id: 'node.roof.glazingControls.center', message: 'Center' }),
+              },
+              {
+                value: 'end',
+                label: i18n._({ id: 'node.roof.glazingControls.end', message: 'End' }),
+              },
             ]}
             onChange={(alignment) => patch({ alignment }, true)}
           />
@@ -179,12 +224,15 @@ export function GlazingColor({
   mixed: boolean
   preview: Preview
 }) {
+  const i18n = usePascalI18n()
   return (
     <label className="flex h-10 items-center justify-between gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-xs">
       <span className="text-muted-foreground">{label}</span>
       <span className="flex items-center gap-2">
         <span className="font-mono text-[11px] text-foreground">
-          {mixed ? 'Mixed' : value.toUpperCase()}
+          {mixed
+            ? i18n._({ id: 'node.roof.glazingControls.mixed', message: 'Mixed' })
+            : value.toUpperCase()}
         </span>
         <input
           aria-label={label}
@@ -204,8 +252,11 @@ export function GlazingColor({
   )
 }
 
-export const GLAZING_INFILL_OPTIONS: { value: RoofGlazing['panelType']; label: string }[] = [
-  { value: 'glass', label: 'Glass' },
-  { value: 'solid', label: 'Solid' },
-  { value: 'empty', label: 'Empty' },
+export const GLAZING_INFILL_OPTIONS: {
+  value: RoofGlazing['panelType']
+  label: MessageDescriptor
+}[] = [
+  { value: 'glass', label: /* i18n */ { id: 'node.roof.glazingControls.glass', message: 'Glass' } },
+  { value: 'solid', label: /* i18n */ { id: 'node.roof.glazingControls.solid', message: 'Solid' } },
+  { value: 'empty', label: /* i18n */ { id: 'node.roof.glazingControls.empty', message: 'Empty' } },
 ]

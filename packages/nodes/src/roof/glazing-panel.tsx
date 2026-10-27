@@ -235,7 +235,10 @@ export function RoofGlazingPanel({ segments }: { segments: readonly RoofSegmentN
               <SegmentedControl
                 value={config.panelType}
                 mixed={mixedField('panelType')}
-                options={GLAZING_INFILL_OPTIONS}
+                options={GLAZING_INFILL_OPTIONS.map((option) => ({
+                  ...option,
+                  label: i18n._(option.label),
+                }))}
                 onChange={(panelType) => update({ panelType })}
               />
             </div>

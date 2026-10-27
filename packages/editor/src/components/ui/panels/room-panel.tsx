@@ -335,11 +335,10 @@ function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
   )
 }
 
-const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-
 /** "2 doors · 3 windows" (the level is in the kicker). */
 function RoomSubline({ room }: { room: RoomSelectionRecord }) {
-  const text = useScene((scene) => {
+  const i18n = usePascalI18n()
+  const counts = useScene((scene) => {
     const walls = new Set(room.boundaryWallIds)
     let doors = 0
     let windows = 0
@@ -350,7 +349,14 @@ function RoomSubline({ room }: { room: RoomSelectionRecord }) {
       if (node.type === 'door') doors++
       else windows++
     }
-    return `${count(doors, 'door')} · ${count(windows, 'window')}`
+    return `${doors}:${windows}`
+  })
+  const [doors, windows] = counts.split(':').map(Number)
+  const text = i18n._({
+    id: 'editor.panels.roomPanel.openingCounts',
+    message:
+      '{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}',
+    values: { doors, windows },
   })
   return (
     <p className="text-muted-foreground text-xs" data-room-subline>

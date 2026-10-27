@@ -21,7 +21,6 @@ import {
   SILLLESS_WINDOW_TYPES,
   unwrapCorner,
   WINDOW_STYLE_CHOICES,
-  WINDOW_STYLE_LABELS,
   windowStylesOf,
   windowTakesStyle,
   windowTypeChange,
@@ -46,6 +45,7 @@ import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { WINDOW_STYLE_MESSAGES, WINDOW_TYPE_MESSAGES } from '../shared/opening-labels'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { windowTypeOptions } from './placement'
@@ -447,7 +447,9 @@ export default function WindowPanel() {
                   }
                   type="button"
                 >
-                  <span className="truncate font-medium">{option.label}</span>
+                  <span className="truncate font-medium">
+                    {i18n._(WINDOW_TYPE_MESSAGES[option.value])}
+                  </span>
                 </button>
               )
             })}
@@ -543,7 +545,7 @@ export default function WindowPanel() {
                 onClick={() => handleUpdate(getWindowStyleOverrides(style))}
                 type="button"
               >
-                <span className="truncate font-medium">{WINDOW_STYLE_LABELS[style]}</span>
+                <span className="truncate font-medium">{i18n._(WINDOW_STYLE_MESSAGES[style])}</span>
               </button>
             ))}
           </div>

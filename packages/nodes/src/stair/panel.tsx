@@ -57,6 +57,61 @@ import { getStairDestinationUpdates } from './destination'
 import { StairRailingControls } from './railing-controls'
 import { getStairTypeChange } from './stair-type'
 
+/** Core's stair diagnostics in the UI language; codes without fixed text show core's message. */
+const STAIR_DIAGNOSTIC_MESSAGES: Partial<Record<string, MessageDescriptor>> = {
+  'invalid-rise': /* i18n */ {
+    id: 'node.stair.diagnostic.invalidRise',
+    message: 'The destination must be above the stair base.',
+  },
+  'landing-overlap': /* i18n */ {
+    id: 'node.stair.diagnostic.landingOverlap',
+    message:
+      'Landing depth exceeds a full circle at the walking line; the visible landing is limited to one circle.',
+  },
+  'narrow-winder-end': /* i18n */ {
+    id: 'node.stair.diagnostic.narrowWinderEnd',
+    message: 'The narrow end of a winder tread is below 0.10 m; check the intended stair use.',
+  },
+  'invalid-flight': /* i18n */ {
+    id: 'node.stair.diagnostic.invalidFlight',
+    message: 'Flight dimensions and integer riser count must be positive.',
+  },
+  'riser-target': /* i18n */ {
+    id: 'node.stair.diagnostic.riserTarget',
+    message: 'Riser height exceeds the design target.',
+  },
+  'going-target': /* i18n */ {
+    id: 'node.stair.diagnostic.goingTarget',
+    message: 'Going is below the design target.',
+  },
+  'comfort-target': /* i18n */ {
+    id: 'node.stair.diagnostic.comfortTarget',
+    message: 'Two risers plus going is outside the 0.60–0.65 m design range.',
+  },
+  'nonuniform-risers': /* i18n */ {
+    id: 'node.stair.diagnostic.nonuniformRisers',
+    message:
+      'Flight riser heights differ. Use uniform-riser repair only if this is a proposed design.',
+  },
+  'raised-landing': /* i18n */ {
+    id: 'node.stair.diagnostic.raisedLanding',
+    message: 'A landing has a stored rise; inspect its transition before repair.',
+  },
+  'arrival-mismatch': /* i18n */ {
+    id: 'node.stair.diagnostic.arrivalMismatch',
+    message: 'The flight chain does not reach the declared destination.',
+  },
+  'headroom-unresolved': /* i18n */ {
+    id: 'node.stair.diagnostic.headroomUnresolved',
+    message:
+      'Detailed headroom could not be evaluated: check riser counts and the surface query budget.',
+  },
+  'headroom-target': /* i18n */ {
+    id: 'node.stair.diagnostic.headroomTarget',
+    message: 'Overhead surfaces leave less than the target headroom.',
+  },
+}
+
 const RAILING_MODE_OPTIONS: { label: MessageDescriptor; value: StairRailingMode }[] = [
   { label: /* i18n */ { id: 'node.stair.panel.none', message: 'None' }, value: 'none' },
   { label: /* i18n */ { id: 'node.stair.panel.left', message: 'Left' }, value: 'left' },
@@ -585,17 +640,22 @@ export default function StairPanel() {
             </div>
           </div>
         </details>
-        {[...new Set(measurements.diagnostics.map((diagnostic) => diagnostic.message))].map(
-          (message) => (
-            <div
-              key={message}
-              role="status"
-              className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-            >
-              {message}
-            </div>
+        {[
+          ...new Set(
+            measurements.diagnostics.map((diagnostic) => {
+              const message = STAIR_DIAGNOSTIC_MESSAGES[diagnostic.code]
+              return message ? i18n._(message) : diagnostic.message
+            }),
           ),
-        )}
+        ].map((message) => (
+          <div
+            key={message}
+            role="status"
+            className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+          >
+            {message}
+          </div>
+        ))}
         <details className="space-y-3">
           <summary className="cursor-pointer px-1 py-2 text-xs text-muted-foreground">
             {i18n._({ id: 'node.stair.panel.designTargets', message: 'Design targets' })}

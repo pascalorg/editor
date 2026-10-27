@@ -342,6 +342,7 @@ export function PanelWrapper({
           <div className={cn('flex min-w-0 items-center gap-2', titleContent && 'flex-1 pr-2')}>
             {onBack && (
               <button
+                aria-label={i18n._({ id: 'editor.panels.panelWrapper.back', message: 'Back' })}
                 className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onBack}
                 type="button"
@@ -389,6 +390,7 @@ export function PanelWrapper({
           <div className="flex items-center gap-1">
             {onReset && (
               <button
+                aria-label={i18n._({ id: 'editor.panels.panelWrapper.reset', message: 'Reset' })}
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onReset}
                 type="button"
@@ -437,6 +439,7 @@ export function PanelWrapper({
             </button>
             {onClose && (
               <button
+                aria-label={i18n._({ id: 'editor.panels.panelWrapper.close', message: 'Close' })}
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onClose}
                 type="button"

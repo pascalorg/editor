@@ -10,13 +10,7 @@ import {
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import {
-  DOOR_STYLE_LABELS,
-  DOOR_STYLES,
-  doorStyleLook,
-  doorStylesOf,
-  doorTypeChange,
-} from '@pascal-app/core/building'
+import { DOOR_STYLES, doorStyleLook, doorStylesOf, doorTypeChange } from '@pascal-app/core/building'
 import {
   ActionButton,
   ActionGroup,
@@ -35,6 +29,7 @@ import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { DOOR_STYLE_MESSAGES } from '../shared/opening-labels'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { scaleHandleHeight } from './door-math'
@@ -375,7 +370,7 @@ export default function DoorPanel() {
                 onClick={() => handleUpdate(doorStyleLook(style))}
                 type="button"
               >
-                <span className="truncate font-medium">{DOOR_STYLE_LABELS[style]}</span>
+                <span className="truncate font-medium">{i18n._(DOOR_STYLE_MESSAGES[style])}</span>
               </button>
             ))}
           </div>

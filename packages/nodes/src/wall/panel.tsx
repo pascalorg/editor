@@ -70,7 +70,7 @@ import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 import { CurtainWallPanel } from './curtain-wall-panel'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallLengthPatch } from './length-patch'
-import { wallReferenceModel } from './panel-model'
+import { type WallReferenceValue, wallReferenceModel } from './panel-model'
 import { createWallPropertyPreview } from './property-preview'
 
 /**
@@ -89,6 +89,14 @@ function wallBaseRepairPatch(n: WallNode): Partial<WallNode> {
       ? { supportSlabId: undefined }
       : {}),
   }
+}
+
+const WALL_REFERENCE_LABELS: Record<WallReferenceValue, MessageDescriptor> = {
+  outside: /* i18n */ { id: 'node.wall.reference.outside', message: 'Outside face' },
+  center: /* i18n */ { id: 'node.wall.reference.center', message: 'Center' },
+  inside: /* i18n */ { id: 'node.wall.reference.inside', message: 'Inside face' },
+  left: /* i18n */ { id: 'node.wall.reference.left', message: 'Left' },
+  right: /* i18n */ { id: 'node.wall.reference.right', message: 'Right' },
 }
 
 type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
@@ -448,7 +456,10 @@ export default function WallPanel() {
           <SegmentedControl
             mixed={reference.value === null}
             onChange={(value) => reference.apply(value)}
-            options={reference.options}
+            options={reference.options.map((option) => ({
+              ...option,
+              label: i18n._(WALL_REFERENCE_LABELS[option.value]),
+            }))}
             value={reference.value ?? 'center'}
           />
         )}

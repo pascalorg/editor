@@ -143,7 +143,10 @@ export function GlazingPanelEditor({
         </span>
         <SegmentedControl
           value={getGlazedRoofPanelType(node, layout.face.id, activeColumn, activeRow)}
-          options={GLAZING_INFILL_OPTIONS}
+          options={GLAZING_INFILL_OPTIONS.map((option) => ({
+            ...option,
+            label: i18n._(option.label),
+          }))}
           onChange={(type) => update(type)}
         />
       </div>

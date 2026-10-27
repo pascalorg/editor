@@ -1,12 +1,15 @@
 'use client'
-import { type AnyNodeId, type StairNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type StairNode, usePascalI18n, useScene } from '@pascal-app/core'
 import { MetricControl, SegmentedControl, ToggleControl } from '@pascal-app/editor'
 
 const MODES = [
-  { label: 'None', value: 'none' },
-  { label: 'Left', value: 'left' },
-  { label: 'Right', value: 'right' },
-  { label: 'Both', value: 'both' },
+  { label: /* i18n */ { id: 'node.stair.railingControls.none', message: 'None' }, value: 'none' },
+  { label: /* i18n */ { id: 'node.stair.railingControls.left', message: 'Left' }, value: 'left' },
+  {
+    label: /* i18n */ { id: 'node.stair.railingControls.right', message: 'Right' },
+    value: 'right',
+  },
+  { label: /* i18n */ { id: 'node.stair.railingControls.both', message: 'Both' }, value: 'both' },
 ] as const
 export function StairRailingControls({
   node,
@@ -15,6 +18,7 @@ export function StairRailingControls({
   node: StairNode
   onChange: (patch: Partial<StairNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const config = node.handrail
   return (
     <div className="space-y-3">
@@ -25,8 +29,17 @@ export function StairRailingControls({
             : (node.railingPath ?? 'original')
         }
         options={[
-          { label: 'Original layout', value: 'original' },
-          { label: 'Continuous', value: 'continuous' },
+          {
+            label: i18n._({
+              id: 'node.stair.railingControls.originalLayout',
+              message: 'Original layout',
+            }),
+            value: 'original',
+          },
+          {
+            label: i18n._({ id: 'node.stair.railingControls.continuous', message: 'Continuous' }),
+            value: 'continuous',
+          },
         ]}
         onChange={(value) =>
           onChange({
@@ -39,7 +52,10 @@ export function StairRailingControls({
         }
       />
       <ToggleControl
-        label="Separate handrail"
+        label={i18n._({
+          id: 'node.stair.railingControls.separateHandrail',
+          message: 'Separate handrail',
+        })}
         checked={!!config}
         onChange={(checked) =>
           onChange({
@@ -53,7 +69,7 @@ export function StairRailingControls({
         <>
           <SegmentedControl
             value={config.mode}
-            options={[...MODES]}
+            options={MODES.map((option) => ({ ...option, label: i18n._(option.label) }))}
             onChange={(value) =>
               onChange({ handrail: { ...config, mode: value as StairNode['railingMode'] } })
             }
@@ -63,10 +79,19 @@ export function StairRailingControls({
               key={key}
               label={
                 key === 'height'
-                  ? 'Handrail height'
+                  ? i18n._({
+                      id: 'node.stair.railingControls.handrailHeight',
+                      message: 'Handrail height',
+                    })
                   : key === 'diameter'
-                    ? 'Handrail diameter'
-                    : 'Handrail inset'
+                    ? i18n._({
+                        id: 'node.stair.railingControls.handrailDiameter',
+                        message: 'Handrail diameter',
+                      })
+                    : i18n._({
+                        id: 'node.stair.railingControls.handrailInset',
+                        message: 'Handrail inset',
+                      })
               }
               value={config[key]}
               min={key === 'offset' ? 0 : 0.001}
@@ -87,7 +112,17 @@ export function StairRailingControls({
             return (
               <div key={end} className="space-y-2">
                 <MetricControl
-                  label={`${end === 'bottom' ? 'Bottom sloped' : 'Top horizontal'} extension`}
+                  label={
+                    end === 'bottom'
+                      ? i18n._({
+                          id: 'node.stair.railingControls.bottomExtension',
+                          message: 'Bottom sloped extension',
+                        })
+                      : i18n._({
+                          id: 'node.stair.railingControls.topExtension',
+                          message: 'Top horizontal extension',
+                        })
+                  }
                   value={detail.extension}
                   min={0}
                   step={0.05}
@@ -98,17 +133,41 @@ export function StairRailingControls({
                 <SegmentedControl
                   value={detail.return}
                   options={[
-                    { label: 'No return', value: 'none' },
-                    { label: 'Wall-facing', value: 'wall' },
-                    { label: 'Post-facing', value: 'post' },
-                    { label: 'Floor', value: 'floor' },
+                    {
+                      label: i18n._({
+                        id: 'node.stair.railingControls.noReturn',
+                        message: 'No return',
+                      }),
+                      value: 'none',
+                    },
+                    {
+                      label: i18n._({
+                        id: 'node.stair.railingControls.wallFacing',
+                        message: 'Wall-facing',
+                      }),
+                      value: 'wall',
+                    },
+                    {
+                      label: i18n._({
+                        id: 'node.stair.railingControls.postFacing',
+                        message: 'Post-facing',
+                      }),
+                      value: 'post',
+                    },
+                    {
+                      label: i18n._({ id: 'node.stair.railingControls.floor', message: 'Floor' }),
+                      value: 'floor',
+                    },
                   ]}
                   onChange={(value) => update({ return: value as typeof detail.return })}
                 />
                 {detail.return === 'wall' || detail.return === 'post' ? (
                   <>
                     <MetricControl
-                      label="Return length"
+                      label={i18n._({
+                        id: 'node.stair.railingControls.returnLength',
+                        message: 'Return length',
+                      })}
                       value={detail.returnLength}
                       min={0}
                       step={0.01}
@@ -117,7 +176,10 @@ export function StairRailingControls({
                       onChange={(returnLength) => update({ returnLength })}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Set the length to reach the wall or post.
+                      {i18n._({
+                        id: 'node.stair.railingControls.setTheLengthToReachThe',
+                        message: 'Set the length to reach the wall or post.',
+                      })}
                     </p>
                   </>
                 ) : null}
