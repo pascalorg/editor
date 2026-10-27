@@ -105,6 +105,7 @@ When in doubt, load an old scene (or a fixture) after the change and confirm it 
 
 ## Real Examples
 
+- **Derived-by-default field**: `frameDepth` on `door.ts` / `window.ts` is optional; undefined means *auto*, the host wall's thickness plus a 1 cm lip on each face, resolved at read time by `resolveOpeningFrameDepth` (`packages/core/src/lib/opening-frame-depth.ts`). A stored number stays explicit. Readers never touch the raw field.
 - **Simple geometry node**: `packages/core/src/schema/nodes/wall.ts` — `start`, `end`, `thickness`, `height`
 - **Polygon node**: `packages/core/src/schema/nodes/slab.ts` — `polygon: [number, number][]`, `holes`
 - **Positioned node**: `packages/core/src/schema/nodes/item.ts` — `position`, `rotation`, `scale`, `asset`

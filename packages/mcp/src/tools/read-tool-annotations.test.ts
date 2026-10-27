@@ -121,20 +121,12 @@ const TOOL_POLICIES = [
       'load_scene',
       'redo',
       'set_ground_level',
+      'set_unit_members',
       'rename_scene',
       'run_batch',
       'save_scene',
       'undo',
     ],
-  },
-  {
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    tools: ['set_unit_members'],
   },
   {
     annotations: {

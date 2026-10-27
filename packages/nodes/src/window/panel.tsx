@@ -5,6 +5,8 @@ import {
   type AnyNodeId,
   cornerPair,
   fusesAtCorner,
+  isAutoFrameDepth,
+  resolveHostedOpeningFrameDepth,
   runAsSingleSceneHistoryStep,
   scriptImages,
   useInteractive,
@@ -126,6 +128,8 @@ export default function WindowPanel() {
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WindowNode | undefined) : undefined,
   )
+  // The depth the frame renders at: explicit, or the host wall's thickness plus the lip.
+  const frameDepth = useScene((s) => (node ? resolveHostedOpeningFrameDepth(node, s.nodes) : 0))
 
   // Stable handler refs ("Custom panels" in wiki/architecture/node-definitions.md).
   // Without them, the 15+ SliderControls in this panel would loop on drag.
@@ -989,7 +993,11 @@ export default function WindowPanel() {
                 value={node.frameThickness}
               />
               <SliderControl
-                label={i18n._({ id: 'node.window.panel.depth', message: 'Depth' })}
+                label={
+                  isAutoFrameDepth(node)
+                    ? i18n._({ id: 'node.window.panel.frameDepthAuto', message: 'Depth (auto)' })
+                    : i18n._({ id: 'node.window.panel.depth', message: 'Depth' })
+                }
                 min={0}
                 onChange={(v) => previewWindowUpdate('frameDepth', v)}
                 onCommit={(v) => commitWindowPreview('frameDepth', v)}
@@ -999,8 +1007,25 @@ export default function WindowPanel() {
                 precision={3}
                 step={0.01}
                 unit="m"
-                value={node.frameDepth}
+                value={frameDepth}
               />
+              {!isAutoFrameDepth(node) && (
+                <div className="flex items-center justify-between px-2 text-muted-foreground text-xs">
+                  <span>
+                    {i18n._({
+                      id: 'node.window.panel.autoFollowsTheWall',
+                      message: 'Auto follows the wall',
+                    })}
+                  </span>
+                  <button
+                    className="rounded-full border border-border/50 px-2.5 py-0.5 transition-colors hover:bg-accent"
+                    onClick={() => handleUpdate({ frameDepth: undefined })}
+                    type="button"
+                  >
+                    {i18n._({ id: 'node.window.panel.auto', message: 'Auto' })}
+                  </button>
+                </div>
+              )}
             </PanelSection>
           )}
 

@@ -11,11 +11,14 @@ import {
   evaluateCorner,
   type GridEvent,
   getOpeningWallPlacement,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   prefersReducedMotion,
   type RoofEvent,
   type RoofNode,
+  resolveHostedOpeningFrameDepth,
+  resolveOpeningFrameDepth,
   runSceneHistoryDraftWrite,
   sceneRegistry,
   spatialGridManager,
@@ -617,7 +620,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           ghostWorldPos[2],
         ],
         rotationY: ghostYaw,
-        depth: movingWindowNode.frameDepth ?? 0.07,
+        depth: resolveOpeningFrameDepth(movingWindowNode, getWallThickness(target.wallNode)),
       })
       // Publish the wall surface so the snap grid tilts into the wall plane at
       // the opening (its outward normal is the window's facing, +Z by `ghostYaw`).
@@ -1495,7 +1498,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const boxGeo = new BoxGeometry(
       movingWindowNode.width,
       movingWindowNode.height,
-      movingWindowNode.frameDepth ?? 0.07,
+      resolveHostedOpeningFrameDepth(movingWindowNode, useScene.getState().nodes),
     )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()

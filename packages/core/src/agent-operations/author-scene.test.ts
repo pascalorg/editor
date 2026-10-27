@@ -14,6 +14,7 @@ import {
   applySceneChanges,
   authorScene,
   authorSceneCeilingPoints,
+  authorSceneChecks,
   authorSceneFaceScripts,
   authorSceneFloorScripts,
   finalizeAuthorScene,
@@ -2682,5 +2683,207 @@ describe('author_scene', () => {
       radius: 0.15,
       width: 0.3,
     })
+  })
+})
+
+describe('author_scene units', () => {
+  const box = (prefix: string, openings = true) => [
+    { id: `${prefix}-north`, start: [-4, -2.5], end: [4, -2.5], height: 2.7, thickness: 0.12 },
+    { id: `${prefix}-east`, start: [4, -2.5], end: [4, 2.5], height: 2.7, thickness: 0.12 },
+    {
+      id: `${prefix}-south`,
+      start: [4, 2.5],
+      end: [-4, 2.5],
+      height: 2.7,
+      thickness: 0.12,
+      openings: openings
+        ? [{ kind: 'door', along: 2, width: 0.9, height: 2.1, hinge: 'start', swing: 'front' }]
+        : [],
+    },
+    { id: `${prefix}-west`, start: [-4, 2.5], end: [-4, -2.5], height: 2.7, thickness: 0.12 },
+  ]
+  /** Two rooms side by side, a partition between them at x = 0; `rooms` seeds them. */
+  const twoRooms = (prefix: string, name: string, elevation: number, rooms: unknown[]) => ({
+    name,
+    elevation,
+    walls: [
+      ...box(prefix),
+      { id: `${prefix}-mid`, start: [0, -2.5], end: [0, 2.5], height: 2.7, thickness: 0.12 },
+    ],
+    rooms,
+  })
+  const flats = (units?: unknown[]) =>
+    authorScenePayload.parse({
+      levels: [
+        twoRooms('g', 'Ground floor', 0, [
+          { name: 'Living A', seed: [-2, 0], unit: 'Apartment A' },
+          { name: 'Living B', seed: [2, 0], unit: 'Apartment B' },
+        ]),
+      ],
+      ...(units ? { units } : {}),
+    })
+  const unitOf = (outcome: ReturnType<typeof authorScene>, name: string) =>
+    byAuthorId(outcome, `unit/${name}`) as AnyNode & { type: 'unit' }
+
+  test('one unit per name, under the building, holding the zones of the rooms that name it; the payload types and colours one', () => {
+    const outcome = run(flats([{ name: 'Apartment B', kind: 'hotel-room', color: '#123456' }]), {})
+    expect(outcome.result.units).toBe(2)
+    expect(outcome.result.defects).toEqual([])
+    const a = unitOf(outcome, 'Apartment A')
+    const b = unitOf(outcome, 'Apartment B')
+    expect(a).toMatchObject({
+      type: 'unit',
+      parentId: 'building_1',
+      name: 'Apartment A',
+      kind: 'apartment',
+      members: [outcome.result.ids['room/0/0']],
+    })
+    expect(b).toMatchObject({
+      kind: 'hotel-room',
+      color: '#123456',
+      members: [outcome.result.ids['room/0/1']],
+    })
+    expect(outcome.changes!.create!.find((c) => c.node.id === a.id)?.parentId).toBe('building_1')
+    const applied = applySceneChanges(scaffold(), outcome.changes)
+    expect((applied.building_1 as AnyNode & { children: string[] }).children).toContain(a.id)
+    const checks = authorSceneChecks({
+      payload: flats(),
+      report: outcome.result,
+      pending: [],
+      issues: [],
+    })
+    expect(checks.find((check) => check.id === 'rooms_in_units')).toMatchObject({ passed: true })
+  })
+
+  test('a duplex spans two levels; a landing in no unit is common area and the check passes', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        twoRooms('g', 'Ground floor', 0, [
+          { name: 'Living', seed: [-2, 0], unit: 'Duplex 1' },
+          { name: 'Entrance hall', seed: [2, 0] },
+        ]),
+        twoRooms('u', 'Upper floor', 2.9, [
+          { name: 'Bedroom', seed: [-2, 0], unit: 'Duplex 1' },
+          { name: 'Landing', seed: [2, 0] },
+        ]),
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.units).toBe(1)
+    expect(unitOf(outcome, 'Duplex 1').members).toEqual([
+      outcome.result.ids['room/0/0'],
+      outcome.result.ids['room/1/0'],
+    ])
+    const check = authorSceneChecks({
+      payload,
+      report: outcome.result,
+      pending: [],
+      issues: [],
+    }).find((check) => check.id === 'rooms_in_units')
+    expect(check).toMatchObject({ passed: true })
+    expect(check!.detail).toContain('1 unit')
+  })
+
+  test('a revision keeps an unchanged unit’s id, removes a unit the payload no longer names and makes the new one', () => {
+    const first = run(flats(), {})
+    const saved = applySceneChanges(scaffold(), first.changes)
+    const a = first.result.ids['unit/Apartment A']!
+    const b = first.result.ids['unit/Apartment B']!
+    expect(saved[a]).toBeDefined()
+    const renamed = flats()
+    renamed.levels[0]!.rooms[1]!.unit = 'Apartment C'
+    const second = authorScene(
+      saved,
+      { payload: renamed, compiled: {}, replace: true },
+      { activeLevelId: null },
+    )
+    expect(second.result.ids['unit/Apartment A']).toBe(a)
+    expect(second.result.ids['unit/Apartment B']).toBeUndefined()
+    const c = second.result.ids['unit/Apartment C']!
+    expect(c).not.toBe(b)
+    expect(second.changes!.delete).toContain(b)
+    const after = applySceneChanges(saved, second.changes)
+    expect(after[b]).toBeUndefined()
+    expect(after[c]).toMatchObject({
+      type: 'unit',
+      name: 'Apartment C',
+      members: [second.result.ids['room/0/1']],
+    })
+    expect((after.building_1 as AnyNode & { children: string[] }).children).not.toContain(b)
+  })
+
+  test('seeds of one enclosure naming different units are a defect, and the room is in no unit', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: box('g'),
+          rooms: [
+            { name: 'Living', seed: [-2, 0], unit: 'Apartment A' },
+            { name: 'Kitchen', seed: [2, 0], unit: 'Apartment B' },
+          ],
+        },
+      ],
+      units: [{ name: 'Apartment B' }],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toEqual([
+      {
+        id: 'room/0/0',
+        code: 'unit_split_room',
+        message: expect.stringContaining('"Living", "Kitchen" are one open-plan room'),
+      },
+    ])
+    // The declared unit stands, empty; the one named only by a seed of the split room is not made.
+    expect(outcome.result.units).toBe(1)
+    expect(unitOf(outcome, 'Apartment B').members).toEqual([])
+    expect(outcome.result.ids['unit/Apartment A']).toBeUndefined()
+    expect(outcome.result.warnings).toContainEqual(
+      expect.objectContaining({ id: 'unit/Apartment B', code: 'unit_no_rooms' }),
+    )
+    const checks = authorSceneChecks({
+      payload,
+      report: outcome.result,
+      pending: [],
+      issues: [],
+    })
+    const check = checks.find((check) => check.id === 'rooms_in_units')
+    expect(check).toMatchObject({ passed: false })
+    expect(check!.detail).toContain('"Living", "Kitchen"')
+    // A unit defect is the units check's alone: the floor of the split room is covered.
+    expect(checks.find((check) => check.id === 'floors')).toMatchObject({ passed: true })
+  })
+
+  test('the check names rooms in no unit that are not common area, on levels with units only', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        twoRooms('g', 'Ground floor', 0, [
+          { name: 'Living', seed: [-2, 0], unit: 'Apartment 1' },
+          { name: 'Hall bedroom', seed: [2, 0] },
+        ]),
+        twoRooms('u', 'Upper floor', 2.9, [
+          { name: 'Bedroom', seed: [-2, 0], unit: 'Apartment 1' },
+          { name: 'Stair landing 2', seed: [2, 0] },
+        ]),
+      ],
+    })
+    const outcome = run(payload, {})
+    const check = authorSceneChecks({
+      payload,
+      report: outcome.result,
+      pending: [],
+      issues: [],
+    }).find((check) => check.id === 'rooms_in_units')
+    expect(check).toMatchObject({ passed: false })
+    // Common area is named by common-area words alone: a bedroom off the hall is a room.
+    expect(check!.detail).toContain('"Hall bedroom"')
+    expect(check!.detail).not.toContain('Stair landing')
+    const house = authorSceneChecks({
+      payload: bedroom,
+      report: run(bedroom, { bed, lamp: bed }).result,
+      pending: [],
+      issues: [],
+    }).find((check) => check.id === 'rooms_in_units')
+    expect(house).toMatchObject({ passed: true, detail: 'The design names no units.' })
   })
 })

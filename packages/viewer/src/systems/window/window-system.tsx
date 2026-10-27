@@ -5,6 +5,7 @@ import {
   getEffectiveNode,
   getOpeningWallPlacement,
   getWallThickness,
+  resolveOpeningFrameDepth,
   type SceneMaterial,
   type SceneMaterialId,
   sceneRegistry,
@@ -33,6 +34,9 @@ import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 import { cornerFrameStale, FUSED_CORNER_SIDE } from './corner-frame'
+
+/** A window as the builders see it: its frame depth resolved against its host wall. */
+type RenderWindowNode = WindowNode & { frameDepth: number }
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
@@ -278,7 +282,7 @@ function addBox(
 const SILL_LIFT = 0.001
 
 /** The sill: a board under the opening, a little wider, standing out from the frame's front (+Z). */
-function addSill(parent: THREE.Object3D, node: WindowNode) {
+function addSill(parent: THREE.Object3D, node: RenderWindowNode) {
   const { width, height, frameDepth, sillDepth, sillThickness } = node
   currentWindowSlot = 'frame'
   addBox(
@@ -617,7 +621,7 @@ function getRoundedHorizontalBoundsAtY(
   return { minX, maxX }
 }
 
-function addRoundedWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addRoundedWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const {
     width,
     height,
@@ -718,7 +722,7 @@ function addRoundedWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addArchedWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addArchedWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const {
     width,
     height,
@@ -836,7 +840,7 @@ function isRectangleOnlyWindowType(node: WindowNode) {
   )
 }
 
-function addSlidingWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addSlidingWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
 
   const innerW = width - 2 * frameThickness
@@ -1302,7 +1306,7 @@ function addShapedFrenchCasementSash(
   disableSubtreeRaycastIfSwung(sash, rotationY)
 }
 
-function addFrenchCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addFrenchCasementWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -1381,7 +1385,7 @@ function addFrenchCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addShapedCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addShapedCasementWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -1563,7 +1567,7 @@ function addShapedCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addCasementWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
 
   if (node.openingShape === 'rounded' || node.openingShape === 'arch') {
@@ -1714,7 +1718,7 @@ function addCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addAwningWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addAwningWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
 
   if (node.openingShape === 'rounded' || node.openingShape === 'arch') {
@@ -1847,7 +1851,7 @@ function addAwningWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addShapedAwningWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addShapedAwningWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -1976,7 +1980,7 @@ function addShapedAwningWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addHopperWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addHopperWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
 
   if (node.openingShape === 'rounded' || node.openingShape === 'arch') {
@@ -2098,7 +2102,7 @@ function addHopperWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addShapedHopperWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addShapedHopperWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -2281,7 +2285,7 @@ function addHungSash(
   addBox(parent, glassMaterial, glassW, glassH, glassDepth, 0, 0, 0)
 }
 
-function addSingleHungWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addSingleHungWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
 
   const innerW = width - 2 * frameThickness
@@ -2426,7 +2430,7 @@ function addSingleHungWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addDoubleHungWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addDoubleHungWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
 
   const innerW = width - 2 * frameThickness
@@ -2572,7 +2576,7 @@ function addDoubleHungWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addBayWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addBayWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -2766,7 +2770,7 @@ function addBayWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addBowWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -2920,7 +2924,7 @@ function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addLouveredWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
 
   if (node.openingShape === 'rounded' || node.openingShape === 'arch') {
@@ -3031,7 +3035,7 @@ function addLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   if (sill) addSill(mesh, node)
 }
 
-function addShapedLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
+function addShapedLouveredWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   const { width, height, frameDepth, frameThickness, sill } = node
   const halfWidth = width / 2
   const bottom = -height / 2
@@ -3176,9 +3180,23 @@ function fusedCornerSide(node: WindowNode, rotationY: number): -1 | 0 | 1 {
   return (pair.end === 'end') !== flipped ? 1 : -1
 }
 
-function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
+function updateWindowMesh(rawNode: WindowNode, mesh: THREE.Mesh): boolean {
   currentWindowSlot = undefined
   mesh.userData[FUSED_CORNER_SIDE] = 0
+
+  // The frame runs through its host wall: an auto depth is the wall's thickness
+  // plus a lip, so every builder below reads one resolved number.
+  const parent = rawNode.parentId
+    ? useScene.getState().nodes[rawNode.parentId as AnyNodeId]
+    : undefined
+  const wall = parent?.type === 'wall' ? getEffectiveNode(parent as WallNode) : undefined
+  const node: RenderWindowNode = {
+    ...rawNode,
+    frameDepth: resolveOpeningFrameDepth(
+      rawNode,
+      wall ? getWallThickness(wall) : DEFAULT_WALL_THICKNESS,
+    ),
+  }
 
   // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
@@ -3186,10 +3204,9 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
   mesh.material = hitboxMaterial
 
   // Sync transform from node (React may lag behind the system by a frame during drag)
-  const parent = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : undefined
   const placement =
-    parent?.type === 'wall' && !node.roofSegmentId
-      ? getOpeningWallPlacement(getEffectiveNode(parent), node, useScene.getState().nodes)
+    wall && !node.roofSegmentId
+      ? getOpeningWallPlacement(wall, node, useScene.getState().nodes)
       : node
   mesh.position.set(...placement.position)
   mesh.rotation.set(...placement.rotation)
@@ -3449,7 +3466,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
   return true
 }
 
-function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {
+function syncWindowCutout(node: RenderWindowNode, mesh: THREE.Mesh) {
   // ── Cutout: invisible raycast hit target for the whole opening ──
   let cutout = mesh.getObjectByName('cutout') as THREE.Mesh | undefined
   if (!cutout) {

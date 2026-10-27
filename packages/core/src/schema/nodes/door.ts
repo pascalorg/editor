@@ -126,7 +126,12 @@ export const DoorNode = BaseNode.extend({
 
   // Frame
   frameThickness: z.number().default(0.05),
-  frameDepth: z.number().default(0.07),
+  frameDepth: z
+    .number()
+    .optional()
+    .describe(
+      "Frame depth through the wall; left out, the frame follows its wall: the wall's thickness plus a 1 cm lip on each face.",
+    ),
   threshold: z.boolean().default(true),
   thresholdHeight: z.number().default(0.02),
 

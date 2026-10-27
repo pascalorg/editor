@@ -88,7 +88,12 @@ export const WindowNode = BaseNode.extend({
 
   // Frame
   frameThickness: z.number().default(0.05),
-  frameDepth: z.number().default(0.07),
+  frameDepth: z
+    .number()
+    .optional()
+    .describe(
+      "Frame depth through the wall; left out, the frame follows its wall: the wall's thickness plus a 1 cm lip on each face.",
+    ),
 
   // Divisions — ratios allow non-uniform panes
   // [0.5, 0.5] = two equal panes

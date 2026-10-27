@@ -327,6 +327,12 @@ export {
   wallSupportForNodes,
 } from './lib/opening-floor-datum'
 export {
+  isAutoFrameDepth,
+  OPENING_FRAME_LIP,
+  resolveHostedOpeningFrameDepth,
+  resolveOpeningFrameDepth,
+} from './lib/opening-frame-depth'
+export {
   classifyPlateSideAt,
   clearPlateSurfaceCaches,
   computePlateSurfacePartition,

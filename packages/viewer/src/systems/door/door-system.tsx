@@ -8,6 +8,7 @@ import {
   getEffectiveNode,
   getOpeningWallPlacement,
   getWallThickness,
+  resolveOpeningFrameDepth,
   type SceneMaterial,
   type SceneMaterialId,
   sceneRegistry,
@@ -2314,8 +2315,22 @@ function getEffectiveOpeningShape(node: DoorNode): DoorNode['openingShape'] {
 }
 
 function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
-  const node = normalizeDoorNodeForRender(rawNode)
+  const normalized = normalizeDoorNodeForRender(rawNode)
   currentDoorSlot = undefined
+
+  // The frame runs through its host wall: an auto depth is the wall's thickness
+  // plus a lip, so every builder below reads one resolved number.
+  const parent = normalized.parentId
+    ? useScene.getState().nodes[normalized.parentId as AnyNodeId]
+    : undefined
+  const wall = parent?.type === 'wall' ? getEffectiveNode(parent as WallNode) : undefined
+  const node: DoorNode & { frameDepth: number } = {
+    ...normalized,
+    frameDepth: resolveOpeningFrameDepth(
+      normalized,
+      wall ? getWallThickness(wall) : DEFAULT_WALL_THICKNESS,
+    ),
+  }
 
   // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
@@ -2323,10 +2338,9 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
   mesh.material = hitboxMaterial
 
   // Sync transform from node (React may lag behind the system by a frame during drag)
-  const parent = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : undefined
   const placement =
-    parent?.type === 'wall' && !node.roofSegmentId
-      ? getOpeningWallPlacement(getEffectiveNode(parent), node, useScene.getState().nodes)
+    wall && !node.roofSegmentId
+      ? getOpeningWallPlacement(wall, node, useScene.getState().nodes)
       : node
   mesh.position.set(...placement.position)
   mesh.rotation.set(...placement.rotation)
