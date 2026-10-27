@@ -16133,6 +16133,446 @@ msgstr "Conteneur de bâtiment contenant un ou plusieurs niveaux."
 msgid "node.building.label"
 msgstr "Bâtiment"
 
+# Review: required
+# Source-Hash: 5a8274cbe3034558
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Baskets"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.baskets"
+msgstr "Paniers"
+
+# Review: required
+# Source-Hash: b3a163b453896bef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.bottom"
+msgstr "Bas"
+
+# Review: required
+# Source-Hash: 486501f027037732
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Freezer"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.bottomFreezer"
+msgstr "Congélateur en bas"
+
+# Review: required
+# Source-Hash: 375acc0016b3aa14
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bowls"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.bowls"
+msgstr "Bacs"
+
+# Review: required
+# Source-Hash: 8449b59bf054c27d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Burners on"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.burnersOn"
+msgstr "Feux allumés"
+
+# Review: required
+# Source-Hash: 95169058fec6db14
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Chimney"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.chimney"
+msgstr "Cheminée"
+
+# Review: required
+# Source-Hash: a6b76187db231ae7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Decrease {label}"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.decrease"
+msgstr "Diminuer {label}"
+
+# Review: required
+# Source-Hash: 787e10f5db16904e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.door"
+msgstr "Porte"
+
+# Review: required
+# Source-Hash: 3cd71355956a1821
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.double"
+msgstr "Double"
+
+# Review: required
+# Source-Hash: 63fe49d73892aac8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drawer"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.drawer"
+msgstr "Tiroir"
+
+# Review: required
+# Source-Hash: f98242a5dacd33f3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drawers"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.drawers"
+msgstr "Tiroirs"
+
+# Review: required
+# Source-Hash: 3af5347c94ae6443
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flip hinge"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.flipHinge"
+msgstr "Inverser la charnière"
+
+# Review: required
+# Source-Hash: c930f681e61c029c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flip the door hinge to the opposite side"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.flipTheDoorHingeToThe"
+msgstr "Placer la charnière de la porte du côté opposé"
+
+# Review: required
+# Source-Hash: 85724031c91952a3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fridge"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.fridge"
+msgstr "Réfrigérateur"
+
+# Review: required
+# Source-Hash: e67f11024d683ea9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gas"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.gas"
+msgstr "Gaz"
+
+# Review: required
+# Source-Hash: 8ab91094cf650204
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.glass"
+msgstr "Vitrage"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.height"
+msgstr "Hauteur"
+
+# Review: required
+# Source-Hash: 6f434b84c8b59b8c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hob"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.hob"
+msgstr "Plaque"
+
+# Review: required
+# Source-Hash: d52570d41b4df776
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Increase {label}"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.increase"
+msgstr "Augmenter {label}"
+
+# Review: required
+# Source-Hash: d298f259163e868e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Induction"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.induction"
+msgstr "Induction"
+
+# Review: required
+# Source-Hash: 54800340a0eeab23
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Layout"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.layout"
+msgstr "Disposition"
+
+# Review: required
+# Source-Hash: f365c6b6dd9ebab9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.left"
+msgstr "Gauche"
+
+# Review: required
+# Source-Hash: 12ade82be3830a0b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Micro"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.micro"
+msgstr "Micro-ondes"
+
+# Review: required
+# Source-Hash: a06a50e63f0c240e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move down"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.moveDown"
+msgstr "Descendre"
+
+# Review: required
+# Source-Hash: d49ea60a2312df2f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move up"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.moveUp"
+msgstr "Monter"
+
+# Review: required
+# Source-Hash: 596023c8b9a8f2e4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Oven"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.oven"
+msgstr "Four"
+
+# Review: required
+# Source-Hash: 83b20797fb0a01a0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pullout"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.pullout"
+msgstr "Coulissant"
+
+# Review: required
+# Source-Hash: 43c251f465b647ce
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rack"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.rack"
+msgstr "Rangement"
+
+# Review: required
+# Source-Hash: 3c2b3026d37cbcc2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove compartment"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.removeCompartment"
+msgstr "Supprimer le compartiment"
+
+# Review: required
+# Source-Hash: b34d5ee0f218221d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.right"
+msgstr "Droite"
+
+# Review: required
+# Source-Hash: d7145f84f8e0e3fe
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shelf"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.shelf"
+msgstr "Étagère"
+
+# Review: required
+# Source-Hash: 5fbb88f1f079b6db
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shelves"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.shelves"
+msgstr "Étagères"
+
+# Review: required
+# Source-Hash: 47173085127029f0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shelves inside"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.shelvesInside"
+msgstr "Étagères intérieures"
+
+# Review: required
+# Source-Hash: 62ab2eb3c775da95
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.single"
+msgstr "Simple"
+
+# Review: required
+# Source-Hash: 522a7535fc93fb4f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sink"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.sink"
+msgstr "Évier"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.style"
+msgstr "Style"
+
+# Review: required
+# Source-Hash: 78a454b7ac7a3cd9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Surface"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.surface"
+msgstr "Surface"
+
+# Review: required
+# Source-Hash: 27644f0497fd9849
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.top"
+msgstr "Haut"
+
+# Review: required
+# Source-Hash: eaadfd2d19b27d87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Freezer"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.topFreezer"
+msgstr "Congélateur en haut"
+
+# Review: required
+# Source-Hash: 04f3a3462ef5d247
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top grate"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.topGrate"
+msgstr "Grille supérieure"
+
+# Review: required
+# Source-Hash: 4a616e1d2ca55bd5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tray"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.tray"
+msgstr "Plateau"
+
+# Review: required
+# Source-Hash: c44f7ab8bbd24858
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Type"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.type"
+msgstr "Type"
+
+# Review: required
+# Source-Hash: 6c4de540d19316ab
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Washer"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.washer"
+msgstr "Lave-vaisselle"
+
+# Review: required
+# Source-Hash: 5211a0caf3518125
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wire"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.wire"
+msgstr "Fil"
+
 # Source-Hash: 693a0d8896f5cc43
 # Review: required
 # AI-Provider: cursor-agent
@@ -16143,6 +16583,396 @@ msgstr "Bâtiment"
 msgid "node.cabinet.description"
 msgstr "Meuble bas paramétrique configurable."
 
+# Review: required
+# Source-Hash: b0568ea943addd5b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom freezer"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.bottomFreezer"
+msgstr "Congélateur en bas"
+
+# Review: required
+# Source-Hash: da78819903ae0863
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cooktop type"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.cooktopType"
+msgstr "Type de plaque"
+
+# Review: required
+# Source-Hash: c608188f58ed1cfc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door direction"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.doorDirection"
+msgstr "Sens d'ouverture"
+
+# Review: required
+# Source-Hash: 3cd71355956a1821
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.double"
+msgstr "Double"
+
+# Review: required
+# Source-Hash: f7fb8f6393cc4cfc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fridge type"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.fridgeType"
+msgstr "Type de réfrigérateur"
+
+# Review: required
+# Source-Hash: e67f11024d683ea9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gas"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.gas"
+msgstr "Gaz"
+
+# Review: required
+# Source-Hash: 8ab91094cf650204
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.glass"
+msgstr "Vitrage"
+
+# Review: required
+# Source-Hash: d298f259163e868e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Induction"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.induction"
+msgstr "Induction"
+
+# Review: required
+# Source-Hash: 76df477d42cec629
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Item options"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.itemOptions"
+msgstr "Options de l'élément"
+
+# Review: required
+# Source-Hash: bca1b184af1c0c4b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left hinge"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.leftHinge"
+msgstr "Charnière à gauche"
+
+# Review: required
+# Source-Hash: e32da7429c85f1a5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right hinge"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.rightHinge"
+msgstr "Charnière à droite"
+
+# Review: required
+# Source-Hash: 62ab2eb3c775da95
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.single"
+msgstr "Simple"
+
+# Review: required
+# Source-Hash: 4bc3042055df1e85
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sink layout"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.sinkLayout"
+msgstr "Configuration de l'évier"
+
+# Review: required
+# Source-Hash: 29cffe75281dbea6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top freezer"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.topFreezer"
+msgstr "Congélateur en haut"
+
+# Review: required
+# Source-Hash: 09c2cb2ea7b1be3c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose {label}"
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenCollection.chooseLabel"
+msgstr "Choisir {label}"
+
+# Review: required
+# Source-Hash: 1dd2cac6488ddc30
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No kitchen items match. Try “fridge”, “sink”, or “cabinet”."
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenCollection.noKitchenItemsMatchTryFridge"
+msgstr "Aucun élément de cuisine ne correspond. Essayez « réfrigérateur », « évier » ou « meuble »."
+
+# Review: required
+# Source-Hash: 6752675ca6280ddd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Search fridge, sink, cabinets…"
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenCollection.searchFridgeSinkCabinets"
+msgstr "Rechercher réfrigérateur, évier, meubles…"
+
+# Review: required
+# Source-Hash: fe3c6d57a07c323d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Search kitchen items"
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenCollection.searchKitchenItems"
+msgstr "Rechercher des éléments de cuisine"
+
+# Review: required
+# Source-Hash: d44a46146db2e44c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Appliances & fixtures"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.kitchenGroup.appliances"
+msgstr "Électroménager et équipements"
+
+# Review: required
+# Source-Hash: d4d3ad7c099b6513
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinets"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.kitchenGroup.cabinets"
+msgstr "Meubles"
+
+# Review: required
+# Source-Hash: 465db52f98c2d94f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add beside"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.addBeside"
+msgstr "Ajouter à côté"
+
+# Review: required
+# Source-Hash: 9733e2ad85deb6d5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add beside selected item"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.addBesideSelectedItem"
+msgstr "Ajouter à côté de l'élément sélectionné"
+
+# Review: required
+# Source-Hash: 4b2f676fb4c9ec63
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add {label}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.addLabel"
+msgstr "Ajouter {label}"
+
+# Review: required
+# Source-Hash: 5122b8e9b4ec6a00
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "An upper cabinet attached to this item will be removed to make room."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.anUpperCabinetAttachedToThis"
+msgstr "Un meuble haut fixé à cet élément sera supprimé pour faire de la place."
+
+# Review: required
+# Source-Hash: 5737c4567e0f6863
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinet"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.cabinet"
+msgstr "Meuble"
+
+# Review: required
+# Source-Hash: c0774c185060fc13
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cancel"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.cancel"
+msgstr "Annuler"
+
+# Review: required
+# Source-Hash: f42912b116015f58
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "This {width} item cannot fit within the current run and its wall or corner limits. Move an end cabinet or free space, then try again."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.cannotFit"
+msgstr "Cet élément de {width} ne tient pas dans le linéaire actuel et ses limites de mur ou d'angle. Déplacez un meuble d'extrémité ou libérez de l'espace, puis réessayez."
+
+# Review: required
+# Source-Hash: b7eeb26a356d03c3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{side, select, left {Inserts on the left of the selected item.} other {Inserts on the right of the selected item.}}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.insertsBeside"
+msgstr "{side, select, left {Insère à gauche de l'élément sélectionné.} other {Insère à droite de l'élément sélectionné.}}"
+
+# Review: required
+# Source-Hash: 5b6990b17111fd6b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Kitchen run preview, highlighted item is the proposed change"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.kitchenRunPreviewHighlightedItemIs"
+msgstr "Aperçu du linéaire de cuisine ; l’élément en surbrillance est la modification proposée"
+
+# Review: required
+# Source-Hash: cb59562ba7eb1d25
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left side"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.leftSide"
+msgstr "Côté gauche"
+
+# Review: required
+# Source-Hash: 766354d53f17d78c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{name}: moves {distance}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.moved"
+msgstr "{name} : se déplace de {distance}"
+
+# Review: required
+# Source-Hash: df1083d9ffc2c59d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{name}: {width}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.previewItem"
+msgstr "{name} : {width}"
+
+# Review: required
+# Source-Hash: ada7fbece9ca9e3c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replace selected item"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.replaceSelectedItem"
+msgstr "Remplacer l'élément sélectionné"
+
+# Review: required
+# Source-Hash: ab8b52d2704537d2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replaces only the selected item."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.replacesOnlyTheSelectedItem"
+msgstr "Remplace uniquement l'élément sélectionné."
+
+# Review: required
+# Source-Hash: 03cb6dea6e4a4c5e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replace with…"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.replaceWith"
+msgstr "Remplacer par…"
+
+# Review: required
+# Source-Hash: 948fe657641f298c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replace with {label}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.replaceWithLabel"
+msgstr "Remplacer par {label}"
+
+# Review: required
+# Source-Hash: 154f9fa86b7670ba
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{name}: {before} → {after}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.resized"
+msgstr "{name} : {before} → {after}"
+
+# Review: required
+# Source-Hash: 4ecc493400fb6aa2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right side"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.rightSide"
+msgstr "Côté droit"
+
+# Review: required
+# Source-Hash: f2c30e7e21cf27e6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unable to update this kitchen."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.unableToUpdateThisKitchen"
+msgstr "Impossible de mettre à jour cette cuisine."
+
 # Source-Hash: 2e6d8cda361c648d
 # Review: required
 # AI-Provider: cursor-agent
@@ -16152,6 +16982,1586 @@ msgstr "Meuble bas paramétrique configurable."
 #, fuzzy
 msgid "node.cabinet.label"
 msgstr "Meuble modulaire"
+
+# Review: required
+# Source-Hash: 740e0a4e4afa78ea
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finished height extends {overflow} mm above the ceiling."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.aboveCeiling"
+msgstr "La hauteur finie dépasse le plafond de {overflow} mm."
+
+# Review: required
+# Source-Hash: e3b4d2ed4f6f5efb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add chimney"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.addChimney"
+msgstr "Ajouter une hotte"
+
+# Review: required
+# Source-Hash: 90bdc92c0a91d060
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add compartment"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.addCompartment"
+msgstr "Ajouter un compartiment"
+
+# Review: required
+# Source-Hash: ece05d9b6f4b616d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add wall cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.addWallCabinet"
+msgstr "Ajouter un meuble haut"
+
+# Review: required
+# Source-Hash: f571cb2d06ae01ae
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Advanced"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.advanced"
+msgstr "Avancé"
+
+# Review: required
+# Source-Hash: 7f4dcb90defe1ac2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Appliance"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.appliance"
+msgstr "Électroménager"
+
+# Review: required
+# Source-Hash: bd5e3f533412ff6a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Appliance front"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.applianceFront"
+msgstr "Façade d'appareil"
+
+# Review: required
+# Source-Hash: 05b65242d8c48791
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Auto"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.auto"
+msgstr "Auto"
+
+# Review: required
+# Source-Hash: 9cf3754f15467c50
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.bar"
+msgstr "Barre"
+
+# Review: required
+# Source-Hash: 133893b177bd05d6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base Cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.baseCabinet"
+msgstr "Meuble bas"
+
+# Review: required
+# Source-Hash: d63f16df2c754126
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinet construction, compartments, and opening preview."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.cabinetConstructionCompartmentsAndOpeningPreview"
+msgstr "Construction du meuble, compartiments et aperçu d'ouverture."
+
+# Review: required
+# Source-Hash: d62dc35dac835228
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinet panel"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.cabinetPanel"
+msgstr "Panneau du meuble"
+
+# Review: required
+# Source-Hash: 81caf4809d58b5f5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinet Type"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.cabinetType"
+msgstr "Type de meuble"
+
+# Review: required
+# Source-Hash: 5211341ed18f33f6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.center"
+msgstr "Centre"
+
+# Review: required
+# Source-Hash: d7cf5045c01b2eb9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.close"
+msgstr "Fermer"
+
+# Review: required
+# Source-Hash: cf29134333e47184
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.closeCabinet"
+msgstr "Fermer le meuble"
+
+# Review: required
+# Source-Hash: b1ab1ba948bb77b0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Common wall-cabinet heights. Use the slider below for a custom height."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.commonWallCabinetHeightsUseThe"
+msgstr "Hauteurs courantes de meubles hauts. Utilisez le curseur ci-dessous pour une hauteur personnalisée."
+
+# Review: required
+# Source-Hash: fe9e63d5c5087386
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Compartments"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.compartments"
+msgstr "Compartiments"
+
+# Review: required
+# Source-Hash: 7984b1c42abd9c02
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cutout"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.cutout"
+msgstr "Découpe"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.depth"
+msgstr "Profondeur"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.dimensions"
+msgstr "Dimensions"
+
+# Review: required
+# Source-Hash: 82c9ea6f403fc934
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit kitchen run"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.editKitchenRun"
+msgstr "Modifier le linéaire de cuisine"
+
+# Review: required
+# Source-Hash: 7e9bbeb035fc73e2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fill to ceiling"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.fillToCeiling"
+msgstr "Jusqu'au plafond"
+
+# Review: required
+# Source-Hash: b3907da0ad234f10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finish"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.finish"
+msgstr "Terminer"
+
+# Review: required
+# Source-Hash: c1796152935221ef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Front construction"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.frontConstruction"
+msgstr "Construction de la façade"
+
+# Review: required
+# Source-Hash: 58884f99d64e6d00
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handles"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.handles"
+msgstr "Poignées"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.height"
+msgstr "Hauteur"
+
+# Review: required
+# Source-Hash: d73589d7c04b1121
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height preset"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.heightPreset"
+msgstr "Hauteur prédéfinie"
+
+# Review: required
+# Source-Hash: 590bfdd02dcdb857
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hole"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.hole"
+msgstr "Trou"
+
+# Review: required
+# Source-Hash: 3db1dea825785a30
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inset"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.inset"
+msgstr "Encastré"
+
+# Review: required
+# Source-Hash: 1176d2568d093bf1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Kitchen"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.kitchen"
+msgstr "Cuisine"
+
+# Review: required
+# Source-Hash: a74f10dadc92c8bb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Kitchen run"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.kitchenRun"
+msgstr "Linéaire de cuisine"
+
+# Review: required
+# Source-Hash: 103e15b39c909210
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Knob"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.knob"
+msgstr "Bouton"
+
+# Review: required
+# Source-Hash: 81d365ccef73068c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mounting"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.mounting"
+msgstr "Montage"
+
+# Review: required
+# Source-Hash: f2953d2931e36d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.none"
+msgstr "Aucun"
+
+# Review: required
+# Source-Hash: 3e52f04f92e08070
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.open"
+msgstr "Ouvrir"
+
+# Review: required
+# Source-Hash: b8ecc16c07d66f42
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open Animation"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.openAnimation"
+msgstr "Animation d'ouverture"
+
+# Review: required
+# Source-Hash: 2d4adbbd70c3ae6a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.openCabinet"
+msgstr "Ouvrir le meuble"
+
+# Review: required
+# Source-Hash: 9c215dc512e57fa4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Overlay"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.overlay"
+msgstr "Recouvrement"
+
+# Review: required
+# Source-Hash: a35b7357943a5cae
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panel-ready"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.panelReady"
+msgstr "Prêt à habiller"
+
+# Review: required
+# Source-Hash: 3d0d4eee59177824
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Planning checks"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.planningChecks"
+msgstr "Vérifications de conception"
+
+# Review: required
+# Source-Hash: c7b10382e01914ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Play"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.play"
+msgstr "Lancer"
+
+# Review: required
+# Source-Hash: c530f8af9dfd846f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Play animation"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.playAnimation"
+msgstr "Lancer l'animation"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.position"
+msgstr "Position"
+
+# Review: required
+# Source-Hash: efca749fc4463623
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Raised Arch"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.raisedArch"
+msgstr "Arche en relief"
+
+# Review: required
+# Source-Hash: a8639a97ab07cd59
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove wall cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.removeWallCabinet"
+msgstr "Supprimer le meuble haut"
+
+# Review: required
+# Source-Hash: 03cb6dea6e4a4c5e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replace with…"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.replaceWith"
+msgstr "Remplacer par…"
+
+# Review: required
+# Source-Hash: 5d6956c21fde6418
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reveal gap"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.revealGap"
+msgstr "Jeu entre façades"
+
+# Review: required
+# Source-Hash: 5b68e435b7210876
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaker"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.shaker"
+msgstr "Shaker"
+
+# Review: required
+# Source-Hash: c378ed346bf83375
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shared countertop, plinth, and finishes"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.sharedCountertopPlinthAndFinishes"
+msgstr "Plan de travail, socle et finitions communs"
+
+# Review: required
+# Source-Hash: 8775bc8dc9593964
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slab"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.slab"
+msgstr "Dalle"
+
+# Review: required
+# Source-Hash: 8606fe2c60764a95
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid matching front between the cabinet and wall. Countertop and toe-kick continue across this filler."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.solidMatchingFrontBetweenTheCabinet"
+msgstr "Façade pleine assortie entre le meuble et le mur. Le plan de travail et la plinthe continuent sur cette fileuse."
+
+# Review: required
+# Source-Hash: 5a4d5353cc496a63
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standard width"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.standardWidth"
+msgstr "Largeur standard"
+
+# Review: required
+# Source-Hash: 4a784e3e95a08715
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stop"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.stop"
+msgstr "Arrêter"
+
+# Review: required
+# Source-Hash: 72c9fcd7a0eb5380
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stop animation"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.stopAnimation"
+msgstr "Arrêter l'animation"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.style"
+msgstr "Style"
+
+# Review: required
+# Source-Hash: bfd618690e0c2f24
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tall Cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.tallCabinet"
+msgstr "Colonne"
+
+# Review: required
+# Source-Hash: 27644f0497fd9849
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.top"
+msgstr "Haut"
+
+# Review: required
+# Source-Hash: d09654ebd12a538a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.topCabinet"
+msgstr "Meuble haut"
+
+# Review: required
+# Source-Hash: bc19e7805b3e3703
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top / Ceiling"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.topCeiling"
+msgstr "Haut / Plafond"
+
+# Review: required
+# Source-Hash: 29ea8a68eed99925
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top depth"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.topDepth"
+msgstr "Profondeur du haut"
+
+# Review: required
+# Source-Hash: 2d40f591e7dcbf5a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top height"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.topHeight"
+msgstr "Hauteur du haut"
+
+# Review: required
+# Source-Hash: 3b878d6015c03945
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Trim / Soffit"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.trimSoffit"
+msgstr "Bandeau / Soffite"
+
+# Review: required
+# Source-Hash: a6e5be20001e8d26
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Uses the cabinet front style, reveal, handle, and front material settings below."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.usesTheCabinetFrontStyleReveal"
+msgstr "Utilise le style de façade, le jeu, la poignée et le matériau de façade définis ci-dessous."
+
+# Review: required
+# Source-Hash: cd55643590c64a42
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall filler"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.wallFiller"
+msgstr "Fileuse murale"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.width"
+msgstr "Largeur"
+
+# Review: required
+# Source-Hash: 4ef03cfd6782316b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base cabinet"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.baseCabinet"
+msgstr "Meuble bas"
+
+# Review: required
+# Source-Hash: d353fff221a78228
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dishwasher"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.dishwasher"
+msgstr "Lave-vaisselle"
+
+# Review: required
+# Source-Hash: ecb596567b8b7179
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drawer cabinet"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.drawerCabinet"
+msgstr "Meuble à tiroirs"
+
+# Review: required
+# Source-Hash: 85724031c91952a3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fridge"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.fridge"
+msgstr "Réfrigérateur"
+
+# Review: required
+# Source-Hash: 72d587d58b645a81
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gas cooktop"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.gasCooktop"
+msgstr "Plaque gaz"
+
+# Review: required
+# Source-Hash: 6b02c36e6aac2cd6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Induction cooktop"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.inductionCooktop"
+msgstr "Plaque à induction"
+
+# Review: required
+# Source-Hash: d5fcb790aef707bf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Oven Tower"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.ovenTower"
+msgstr "Colonne four"
+
+# Review: required
+# Source-Hash: edd4d1ab7525dcaa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sink cabinet"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.sinkCabinet"
+msgstr "Meuble sous-évier"
+
+# Review: required
+# Source-Hash: 9b7427a8954f618b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tall Pantry"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.tallPantry"
+msgstr "Colonne garde-manger"
+
+# Review: required
+# Source-Hash: 3bd9629eb17cc572
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall cabinet"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.wallCabinet"
+msgstr "Meuble haut"
+
+# Review: required
+# Source-Hash: 7c40d26770eede82
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add left"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.addLeft"
+msgstr "Ajouter à gauche"
+
+# Review: required
+# Source-Hash: 25082cdf77e219c3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add right"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.addRight"
+msgstr "Ajouter à droite"
+
+# Review: required
+# Source-Hash: 4b1204c1b706f618
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Align cabinets & handles"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.alignCabinetsHandles"
+msgstr "Aligner meubles et poignées"
+
+# Review: required
+# Source-Hash: 8c73c7a9406db5ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Applies depth, carcass, plinth, and countertop thickness to this run."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.appliesDepthCarcassPlinthAndCountertop"
+msgstr "Applique à ce linéaire la profondeur, le caisson, le socle et l'épaisseur du plan de travail."
+
+# Review: required
+# Source-Hash: ef576e6c8f9ebe5f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {Create {number} module copy} other {Create {number} module copies}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayCreate"
+msgstr "{count, plural, one {Créer {number} copie de module} many {Créer {number} copies de module} other {Créer {number} copies de module}}"
+
+# Review: required
+# Source-Hash: 0eec3888096306a1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {Create {number} {name} copy} other {Create {number} {name} copies}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayCreateNamed"
+msgstr "{count, plural, one {Créer {number} copie de {name}} many {Créer {number} copies de {name}} other {Créer {number} copies de {name}}}"
+
+# Review: required
+# Source-Hash: 8cdc0b808b551d3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose a copy count from 1 to 20 and spacing from 0 to 2 m"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayInvalidOptions"
+msgstr "Choisissez un nombre de copies de 1 à 20 et un espacement de 0 à 2 m"
+
+# Review: required
+# Source-Hash: cb89fe4161e87d68
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "There is not enough room in this run for the requested array"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayNoRoom"
+msgstr "Ce linéaire n'a pas assez de place pour la série demandée"
+
+# Review: required
+# Source-Hash: 075d027345689724
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose a standard or appliance module as the source"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayNoSource"
+msgstr "Choisissez un module standard ou un appareil comme source"
+
+# Review: required
+# Source-Hash: 05b65242d8c48791
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Auto"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.auto"
+msgstr "Auto"
+
+# Review: required
+# Source-Hash: 7ceade8f25b58fe9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.back"
+msgstr "Retour"
+
+# Review: required
+# Source-Hash: b2c3a03bf67a97a7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Balances standard base cabinets while keeping appliance and corner-filler widths fixed."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.balancesStandardBaseCabinetsWhileKeeping"
+msgstr "Équilibre les meubles bas standard en gardant fixes les largeurs des appareils et des fileuses d'angle."
+
+# Review: required
+# Source-Hash: 9cf3754f15467c50
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.bar"
+msgstr "Barre"
+
+# Review: required
+# Source-Hash: ccec5da17ca39eee
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar counter"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.barCounter"
+msgstr "Comptoir de bar"
+
+# Review: required
+# Source-Hash: 97c1605fff221752
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar depth"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.barDepth"
+msgstr "Profondeur du bar"
+
+# Review: required
+# Source-Hash: 9514a6ddebdca34e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar height"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.barHeight"
+msgstr "Hauteur du bar"
+
+# Review: required
+# Source-Hash: 7af3b69b4b5aeb19
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Carcass height"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.carcassHeight"
+msgstr "Hauteur du caisson"
+
+# Review: required
+# Source-Hash: 5211341ed18f33f6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.center"
+msgstr "Centre"
+
+# Review: required
+# Source-Hash: b1ab1ba948bb77b0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Common wall-cabinet heights. Use the slider below for a custom height."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.commonWallCabinetHeightsUseThe"
+msgstr "Hauteurs courantes de meubles hauts. Utilisez le curseur ci-dessous pour une hauteur personnalisée."
+
+# Review: required
+# Source-Hash: 88ccc87b9b45a464
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Copies"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.copies"
+msgstr "Copies"
+
+# Review: required
+# Source-Hash: d215c489b8385d9f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Copies include the source cabinet structure and any attached wall cabinet. Existing modules stay fixed; the requested array must fit in the available run space."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.copiesIncludeTheSourceCabinetStructure"
+msgstr "Les copies reprennent la structure du meuble source et tout meuble haut fixé. Les modules existants restent en place ; la série demandée doit tenir dans la place disponible."
+
+# Review: required
+# Source-Hash: 221d1b64649b08f8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Corner fillers cannot be used as array sources"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.cornerFillersCannotBeUsedAs"
+msgstr "Les fileuses d'angle ne peuvent pas servir de source"
+
+# Review: required
+# Source-Hash: d8d1bc5a0f9fa0cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Countertop depth"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.countertopDepth"
+msgstr "Profondeur du plan de travail"
+
+# Review: required
+# Source-Hash: 10bba4a11996c84b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Countertop height"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.countertopHeight"
+msgstr "Hauteur du plan de travail"
+
+# Review: required
+# Source-Hash: 8abdfbc1798d9eaa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Create array"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.createArray"
+msgstr "Créer la série"
+
+# Review: required
+# Source-Hash: 7984b1c42abd9c02
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cutout"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.cutout"
+msgstr "Découpe"
+
+# Review: required
+# Source-Hash: 555240ffcca44233
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete {name}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.deleteModule"
+msgstr "Supprimer {name}"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.depth"
+msgstr "Profondeur"
+
+# Review: required
+# Source-Hash: 76cd03300faa9b2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Direction"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.direction"
+msgstr "Direction"
+
+# Review: required
+# Source-Hash: 5ca5884d3ff7edf4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate along run"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.duplicateAlongRun"
+msgstr "Dupliquer le long du linéaire"
+
+# Review: required
+# Source-Hash: a834f687290afc10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Equalize all resizeable standard base cabinets in this run"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeAll"
+msgstr "Égaliser tous les meubles bas standard redimensionnables de ce linéaire"
+
+# Review: required
+# Source-Hash: 24da8a2de2c6e345
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The resizeable cabinet widths are already equal"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeAlreadyEqual"
+msgstr "Les largeurs des meubles redimensionnables sont déjà égales"
+
+# Review: required
+# Source-Hash: c38a4faef2097b73
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "At least two standard base cabinets are required"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeNeedsTwo"
+msgstr "Il faut au moins deux meubles bas standard"
+
+# Review: required
+# Source-Hash: 61f15ae24419430c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The available run width cannot satisfy the cabinet width limits"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeNoFit"
+msgstr "La largeur disponible du linéaire ne respecte pas les limites de largeur des meubles"
+
+# Review: required
+# Source-Hash: 7617bb3b455dcdda
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Equalize widths"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeWidths"
+msgstr "Égaliser les largeurs"
+
+# Review: required
+# Source-Hash: 47ccd8c8b04475cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finish & align"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.finishAlign"
+msgstr "Finitions et alignement"
+
+# Review: required
+# Source-Hash: 855892e18c74153a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finished back"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.finishedBack"
+msgstr "Dos fini"
+
+# Review: required
+# Source-Hash: 7ab47aea30c73663
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finished exposed ends"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.finishedExposedEnds"
+msgstr "Côtés apparents finis"
+
+# Review: required
+# Source-Hash: c9356f25caf33eec
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fits 50–150 mm gaps at run ends beside perpendicular walls."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fits50150MmGapsAt"
+msgstr "Comble les écarts de 50 à 150 mm en bout de linéaire contre les murs perpendiculaires."
+
+# Review: required
+# Source-Hash: b6f541bc28e38d2f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fit wall fillers"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fitWallFillers"
+msgstr "Ajuster les fileuses murales"
+
+# Review: required
+# Source-Hash: 2af738f010ce28f0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fronts"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fronts"
+msgstr "Façades"
+
+# Review: required
+# Source-Hash: 58884f99d64e6d00
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handles"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.handles"
+msgstr "Poignées"
+
+# Review: required
+# Source-Hash: d73589d7c04b1121
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height preset"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.heightPreset"
+msgstr "Hauteur prédéfinie"
+
+# Review: required
+# Source-Hash: 590bfdd02dcdb857
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hole"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.hole"
+msgstr "Trou"
+
+# Review: required
+# Source-Hash: 3db1dea825785a30
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inset"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.inset"
+msgstr "Encastré"
+
+# Review: required
+# Source-Hash: 2997c230c529590d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Island & Bar"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.islandBar"
+msgstr "Îlot et bar"
+
+# Review: required
+# Source-Hash: a74f10dadc92c8bb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Kitchen run"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.kitchenRun"
+msgstr "Linéaire de cuisine"
+
+# Review: required
+# Source-Hash: 103e15b39c909210
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Knob"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.knob"
+msgstr "Bouton"
+
+# Review: required
+# Source-Hash: f365c6b6dd9ebab9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.left"
+msgstr "Gauche"
+
+# Review: required
+# Source-Hash: 3c88a1840043e15a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Match base heights, backs, reveals and handles. Align upper cabinets; preserve tall appliances and custom compartments."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.matchBaseHeightsBacksRevealsAnd"
+msgstr "Harmonise les hauteurs des meubles bas, les dos, les jeux et les poignées. Aligne les meubles hauts ; conserve les grands appareils et les compartiments personnalisés."
+
+# Review: required
+# Source-Hash: b112e31fe44cc94b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Metric · 600 mm"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.metricProfile"
+msgstr "Métrique · 600 mm"
+
+# Review: required
+# Source-Hash: 4739f6315c5e8680
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Module {number}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.moduleNumber"
+msgstr "Module {number}"
+
+# Review: required
+# Source-Hash: b8801184e07e4815
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Modules"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.modules"
+msgstr "Modules"
+
+# Review: required
+# Source-Hash: 81d365ccef73068c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mounting"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.mounting"
+msgstr "Montage"
+
+# Review: required
+# Source-Hash: a3914bd96488175c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No eligible module"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.noEligibleModule"
+msgstr "Aucun module admissible"
+
+# Review: required
+# Source-Hash: f2953d2931e36d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.none"
+msgstr "Aucun"
+
+# Review: required
+# Source-Hash: 9c215dc512e57fa4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Overlay"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.overlay"
+msgstr "Recouvrement"
+
+# Review: required
+# Source-Hash: 49fb05dfafd6001d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Plinth height"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.plinthHeight"
+msgstr "Hauteur du socle"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.position"
+msgstr "Position"
+
+# Review: required
+# Source-Hash: efca749fc4463623
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Raised Arch"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.raisedArch"
+msgstr "Arche en relief"
+
+# Review: required
+# Source-Hash: 5d6956c21fde6418
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reveal gap"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.revealGap"
+msgstr "Jeu entre façades"
+
+# Review: required
+# Source-Hash: b34d5ee0f218221d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.right"
+msgstr "Droite"
+
+# Review: required
+# Source-Hash: e022da49ae8b4aef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Seating overhang"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.seatingOverhang"
+msgstr "Débord pour assise"
+
+# Review: required
+# Source-Hash: 5b68e435b7210876
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaker"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.shaker"
+msgstr "Shaker"
+
+# Review: required
+# Source-Hash: cba29b18ce666b0a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shared Plinth & Countertop"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.sharedPlinthCountertop"
+msgstr "Socle et plan de travail communs"
+
+# Review: required
+# Source-Hash: f7d577c4064c16ff
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Show countertop"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.showCountertop"
+msgstr "Afficher le plan de travail"
+
+# Review: required
+# Source-Hash: 5d98e04dfd2e0a83
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Show plinth"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.showPlinth"
+msgstr "Afficher le socle"
+
+# Review: required
+# Source-Hash: 8775bc8dc9593964
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slab"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.slab"
+msgstr "Dalle"
+
+# Review: required
+# Source-Hash: 5bdc0a959203c52e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Source module"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.sourceModule"
+msgstr "Module source"
+
+# Review: required
+# Source-Hash: e4698e83d02beb6c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Spacing"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.spacing"
+msgstr "Espacement"
+
+# Review: required
+# Source-Hash: 40e3105cbe68d163
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standard dimensions"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.standardDimensions"
+msgstr "Dimensions standard"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.style"
+msgstr "Style"
+
+# Review: required
+# Source-Hash: 7fc3751e46af1cc7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} other {{type}}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.summaryCompartment"
+msgstr "{type, select, shelf {Étagère} drawer {Tiroir} door {Porte} oven {Four} microwave {Micro-ondes} dishwasher {Lave-vaisselle} sink {Évier} other {{type}}}"
+
+# Review: required
+# Source-Hash: 98582c257f149d44
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {{number} compartment} other {{number} compartments}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.summaryCompartments"
+msgstr "{count, plural, one {{number} compartiment} many {{number} compartiments} other {{number} compartiments}}"
+
+# Review: required
+# Source-Hash: 65b1cbba3b92c5b2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Empty"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.summaryEmpty"
+msgstr "Vide"
+
+# Review: required
+# Source-Hash: 5db8b868684cf9f3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tall cabinet"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.summaryTall"
+msgstr "Colonne"
+
+# Review: required
+# Source-Hash: 27644f0497fd9849
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.top"
+msgstr "Haut"
+
+# Review: required
+# Source-Hash: 88c85283afe0c0bc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unable to finish this kitchen run."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.unableToFinish"
+msgstr "Impossible de terminer ce linéaire de cuisine."
+
+# Review: required
+# Source-Hash: 8f668fb3e1a1696a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Use {name} as array source"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.useAsArraySource"
+msgstr "Utiliser {name} comme source de la série"
+
+# Review: required
+# Source-Hash: 9308a109d017dcd6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Use this module as the array source"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.useThisModuleAsTheArray"
+msgstr "Utiliser ce module comme source de la série"
+
+# Review: required
+# Source-Hash: 1ce253a4d11bfa68
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "US · 24 in"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.usProfile"
+msgstr "US · 24 po"
+
+# Review: required
+# Source-Hash: a2d852b2c5629796
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waterfall ends"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.waterfallEnds"
+msgstr "Retombées en cascade"
 
 # Source-Hash: ffc8d80e438f40b7
 # Review: required
