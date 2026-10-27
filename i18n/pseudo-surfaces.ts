@@ -318,6 +318,20 @@ export const surfaces: PseudoSurface[] = [
     data: furnishedData,
   },
   {
+    name: 'node-action-menu',
+    path: furnishedPath,
+    steps: async (page) => {
+      await openLayer(page, 'Door')
+      await page
+        .locator('[data-node-action-menu] button')
+        .last()
+        .hover()
+        .catch(() => undefined)
+      await page.waitForTimeout(600)
+    },
+    scope: '[data-node-action-menu], [role="tooltip"]',
+  },
+  {
     name: 'icon-rail',
     path: apartmentPath,
     steps: async (page) => {
