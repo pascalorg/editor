@@ -32,6 +32,7 @@ import { setGroundLevel } from './set-ground-level'
 import { getSite, placeBuilding } from './site'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperation, AgentOperations } from './types'
+import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene } from './verify-scene'
 
 export * from './achieved'
@@ -86,6 +87,7 @@ export * from './search-materials'
 export * from './site'
 export * from './stairs'
 export * from './types'
+export * from './units'
 export * from './verify-scene'
 export * from './wall-face-script'
 export * from './wall-object-observations'
@@ -129,6 +131,9 @@ const SINGLE_OPERATIONS = {
   get_site: getSite,
   place_building: placeBuilding,
   ...ROOM_OPERATIONS,
+  create_unit: createUnit,
+  set_unit_members: setUnitMembers,
+  list_units: listUnits,
 } as const
 
 // add_object is no single operation: its host compiles the module first, so it exists here only as

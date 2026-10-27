@@ -30,6 +30,7 @@ import {
   createRoofTool,
   createRoomTool,
   createStairTool,
+  createUnitTool,
   type DesignBrief,
   deleteNodeTool,
   designBriefTool,
@@ -43,6 +44,7 @@ import {
   getWallsTool,
   getZonesTool,
   listLevelsTool,
+  listUnitsTool,
   measureStairTool,
   mergeWindowsTool,
   moveRoofsToRoofLevelTool,
@@ -58,6 +60,7 @@ import {
   searchMaterialsTool,
   setCheckpointTool,
   setGroundLevelTool,
+  setUnitMembersTool,
   validateDesignTool,
   verifySceneTool,
   viewAssetsTool,
@@ -70,6 +73,7 @@ import {
   type CompiledGeometryScript,
   MaterialSchema,
   SceneMaterial,
+  UnitNode,
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch } from '../bridge/scene-bridge'
@@ -522,6 +526,55 @@ const SHARED_TOOLS: SharedTool[] = [
       outputSchema: { ...structureOutput, ...achievedOutput },
     }
   }),
+  {
+    contract: createUnitTool,
+    operation: AGENT_OPERATIONS.create_unit,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: { unitId: z.string(), ...achievedOutput, ...liveSyncOutput },
+  },
+  {
+    contract: setUnitMembersTool,
+    operation: AGENT_OPERATIONS.set_unit_members,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      unitId: z.string(),
+      memberCount: z.number(),
+      ...achievedOutput,
+      ...liveSyncOutput,
+    },
+  },
+  {
+    contract: listUnitsTool,
+    operation: AGENT_OPERATIONS.list_units,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    outputSchema: {
+      units: z.array(
+        z.object({
+          unitId: z.string(),
+          name: z.string(),
+          kind: UnitNode.shape.kind,
+          color: z.string(),
+          members: z.array(z.string()),
+          report: z.object({
+            memberCount: z.number(),
+            levelSpan: z
+              .object({ minOrdinal: z.number(), maxOrdinal: z.number(), count: z.number() })
+              .nullable(),
+            grossAreaM2: z.number(),
+            members: z.array(
+              z.object({
+                zoneId: z.string(),
+                name: z.string(),
+                levelId: z.string().nullable(),
+                levelOrdinal: z.number().nullable(),
+                areaM2: z.number(),
+              }),
+            ),
+          }),
+        }),
+      ),
+    },
+  },
   {
     contract: runBatchTool,
     operation: AGENT_OPERATIONS.run_batch,

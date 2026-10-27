@@ -33,6 +33,7 @@ import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { getSiteTool, placeBuildingTool } from './site'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
+import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
@@ -69,6 +70,7 @@ export * from './search-materials'
 export * from './site'
 export { CATALOG_SOURCE, OTHER_SOURCES, OUTSIDE_SOURCES } from './sources'
 export * from './stairs'
+export * from './units'
 export * from './verify-scene'
 export * from './view-scene'
 export * from './wall-openings'
@@ -126,6 +128,7 @@ export const AGENT_TOOL_CONTRACTS = [
   getSiteTool,
   placeBuildingTool,
   ...ROOM_TOOL_CONTRACTS,
+  ...UNIT_TOOL_CONTRACTS,
   runBatchTool,
 ] as const satisfies readonly AgentToolContract[]
 

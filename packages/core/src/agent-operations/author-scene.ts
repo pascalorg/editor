@@ -52,6 +52,7 @@ import {
   type SceneMaterialId,
   SlabNode,
   type StairNode,
+  UnitNode,
   type WallFace,
   WallNode,
   WindowNode,
@@ -193,6 +194,8 @@ export type AuthorSceneReport = {
   voids: number
   /** Pascal's own roof segments, on the building's roof level. */
   roofSegments: number
+  /** Units under the building, one per distinct name the rooms and the payload give. */
+  units: number
   lights: number
   /** Rooms whose floor finish is their module, counted by the host that compiles them after the write. */
   floorScripts: number
@@ -208,7 +211,7 @@ export type AuthorSceneReport = {
   notes: string[]
   /**
    * Payload ids, `wall/i` openings, `room/level/i`, `stair/level/i`, `void/level/i` (its floor
-   * opening) and `light/level/i` ceiling points to nodes.
+   * opening), `light/level/i` ceiling points and `unit/<name>` to nodes.
    */
   ids: Record<string, string>
 }
@@ -742,6 +745,7 @@ export function authorScene(
     for (const item of level.items ?? []) claimSourceKey(item.id)
   })
   for (const item of payload.roof?.items ?? []) claimSourceKey(item.id)
+  for (const unit of payload.units) claimSourceKey(`unit/${unit.name}`)
   const buildings = Object.values(scene).filter((n) => n.type === 'building')
   const selected =
     input.buildingId ?? (context.activeLevelId ? scene[context.activeLevelId]?.parentId : undefined)
@@ -790,6 +794,7 @@ export function authorScene(
     stairs: 0,
     voids: 0,
     roofSegments: 0,
+    units: 0,
     lights: 0,
     floorScripts: 0,
     faceScripts: 0,
@@ -1262,10 +1267,12 @@ export function authorScene(
     report.rooms++
   }
   const joined = new Map<string, AuthorSceneRoom[]>()
+  const roomIds = new Map<AuthorSceneRoom, string>()
   payload.levels.forEach((level, index) => {
     const levelNode = levelNodes[index]!
     for (const [i, room] of level.rooms.entries()) {
       const id = `room/${index}/${i}`
+      roomIds.set(room, id)
       const zone = zones.find(
         (z) => z.parentId === levelNode.id && pointInPolygon(room.seed as Vec2, z.polygon),
       )
@@ -1332,6 +1339,45 @@ export function authorScene(
     say(
       `${rooms.map((room) => `"${room.name}"`).join(', ')} are one enclosure, no wall between them: one open-plan room, "${name}"${floors.length ? `, with the floor of "${first}"` : ''}`,
     )
+  }
+
+  // ---------- units: one per distinct name, under the building, holding the rooms that name it ----------
+  const units = new Map<string, { kind: UnitNode['kind']; color?: string; zones: string[] }>()
+  for (const unit of payload.units) {
+    const color = unit.color && HEX.test(unit.color) ? unit.color : undefined
+    if (unit.color && !color)
+      defect(`unit/${unit.name}`, 'invalid_color', `"${unit.color}" is not a #rrggbb colour.`)
+    units.set(unit.name, { kind: unit.kind, color, zones: [] })
+  }
+  for (const [zoneId, rooms] of joined) {
+    const names = [...new Set(rooms.flatMap((room) => (room.unit ? [room.unit] : [])))]
+    // One enclosure is one room, so it is in one unit: seeds naming two want a wall between them.
+    if (names.length > 1) {
+      defect(
+        roomIds.get(rooms[0]!)!,
+        'unit_split_room',
+        `${rooms.map((room) => `"${room.name}"`).join(', ')} are one open-plan room but name different units (${names.join(', ')}): the room is in none. Put a wall between them, or one unit on all of them.`,
+      )
+      continue
+    }
+    if (!names[0]) continue
+    const entry = units.get(names[0]) ?? { kind: 'apartment' as const, zones: [] }
+    entry.zones.push(zoneId)
+    units.set(names[0], entry)
+  }
+  for (const [name, { kind, color, zones: members }] of units) {
+    const unit = UnitNode.parse({
+      id: mint('unit', `unit/${name}`),
+      parentId: building.id,
+      name,
+      kind,
+      ...(color ? { color } : {}),
+      members,
+    })
+    draft[unit.id] = unit
+    report.ids[`unit/${name}`] = unit.id
+    report.units++
+    if (!members.length) warn(`unit/${name}`, 'unit_no_rooms', `No room names unit "${name}".`)
   }
 
   // ---------- floors and ceilings, as the editor derives them on load ----------

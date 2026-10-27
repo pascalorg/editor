@@ -1,13 +1,21 @@
 import { area } from '../lib/polygon-boolean'
 import { roomFloorChoices } from '../lib/room-floor-choices'
-import type { AnyNode, AnyNodeId, ItemNode, LevelNode, WallNode, ZoneNode } from '../schema'
+import type {
+  AnyNode,
+  AnyNodeId,
+  ItemNode,
+  LevelNode,
+  UnitNode,
+  WallNode,
+  ZoneNode,
+} from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { getWallTop } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { resolveWallFaceChain } from '../systems/wall/wall-finish'
 import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { type LevelTargetInput, targetLevel } from './level-target'
-import { contentCounts, levelIdOf, levelRole, nodesOnLevel } from './scene-queries'
+import { contentCounts, levelIdOf, levelRole, nodesOnLevel, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
 const round2 = (value: number) => Math.round(value * 100) / 100
@@ -75,6 +83,14 @@ function zoneSize(zone: ZoneNode) {
   }
 }
 
+/** The unit a zone belongs to; none is common area. */
+const unitOf = (nodes: SceneNodes, zoneId: ZoneNode['id']) => {
+  const unit = queryNodes<UnitNode>(nodes, { type: 'unit' }).find((node) =>
+    node.members.includes(zoneId),
+  )
+  return { unitId: unit?.id ?? null, unit: unit?.name ?? null }
+}
+
 const zoneSummary = (nodes: SceneNodes, zone: ZoneNode) => ({
   id: zone.id,
   name: zone.name,
@@ -83,6 +99,7 @@ const zoneSummary = (nodes: SceneNodes, zone: ZoneNode) => ({
   holes: zone.holes ?? [],
   wallMaterial: zone.wallMaterial ?? null,
   wallOverrides: zone.wallOverrides ?? [],
+  ...unitOf(nodes, zone.id),
   ...zoneSize(zone),
   floor_choices: roomFloorChoices(nodes, zone.id),
 })

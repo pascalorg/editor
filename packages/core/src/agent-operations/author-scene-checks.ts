@@ -14,6 +14,7 @@ export type AuthorSceneCheck = {
     | 'faces'
     | 'stairs'
     | 'levels'
+    | 'rooms_in_units'
     | 'refused'
   passed: boolean
   /** What was measured, in a sentence or a few. */
@@ -36,6 +37,9 @@ const SAME_MAX = 24
 /** A slab whose top is this far under its level's floor is buried. */
 const BURIED_M = 0.2
 const FACE_CODES = new Set(['face_script_failed', 'no_face', 'face_shared'])
+/** A room in no unit that is plausibly the building's common area, by its name. */
+const COMMON_ROOM =
+  /corridor|hall|lobby|stair|entry|entrance|landing|elevator|utility|mechanical|storage|laundry|parking|garage/i
 const PIECE_CODES = new Set(['piece_failed', 'piece_unknown', 'pieces_unavailable'])
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -55,8 +59,9 @@ const moves = (o: Opening) =>
  * The checks of a conversion as written: openings a person operates move, glazing is glass, every
  * room's floor finish covers it and follows its polygon, every piece named stands, what stands
  * outside is whole and above ground, wall finishes are built, stairs arrive inside a room clear of
- * walls, every level holds rooms or walls, and nothing else was refused. `payload` is what was
- * written (items naming a piece carry it, written with its module or pending).
+ * walls, every level holds rooms or walls, where units are named every room is in one or plausibly
+ * common, and nothing else was refused. `payload` is what was written (items naming a piece carry
+ * it, written with its module or pending).
  */
 export function authorSceneChecks(args: {
   payload: AuthorScenePayload
@@ -142,6 +147,31 @@ export function authorSceneChecks(args: {
   const stairIssues = args.issues.filter((issue) => issue.type?.startsWith('stair_'))
 
   const empty = payload.levels.filter((level) => !level.walls?.length && !level.rooms.length)
+
+  // Where the design names units, a room of a level with units is in one, is common area by its
+  // name, or joined another room's enclosure (its unit is that room's); a split open-plan room is
+  // in none.
+  const unitNames = new Set([
+    ...payload.units.map((unit) => unit.name),
+    ...rooms.flatMap((room) => (room.unit ? [room.unit] : [])),
+  ])
+  const unitsNamed = unitNames.size > 0
+  const splitRooms = take(defects.filter((d) => d.code === 'unit_split_room'))
+  const unassigned = unitsNamed
+    ? payload.levels.flatMap((level, l) =>
+        level.rooms.some((room) => room.unit)
+          ? level.rooms
+              .map((room, i) => ({ ...room, id: `room/${l}/${i}` }))
+              .filter(
+                (room) =>
+                  !room.unit &&
+                  !COMMON_ROOM.test(room.name) &&
+                  !merged.some((m) => m.id === room.id) &&
+                  !roomDefects.some((d) => d.id === room.id),
+              )
+          : [],
+      )
+    : []
 
   const rest = defects.filter((d) => !counted.has(d))
   const placed = named.length - args.pending.length - pieceDefects.length
@@ -230,6 +260,21 @@ export function authorSceneChecks(args: {
       detail: empty.length
         ? `${empty.map((level) => `"${level.name}"`).join(', ')} ${empty.length === 1 ? 'holds' : 'hold'} no rooms or walls: a level is a storey. The ground, terraces, paths and foundations belong to the ground level (Pascal draws the site and the foundations); move what stands there onto it.`
         : `Every level holds rooms or walls (${plural(payload.levels.length, 'level')}).`,
+    },
+    {
+      id: 'rooms_in_units',
+      passed: unassigned.length === 0 && splitRooms.length === 0,
+      detail: !unitsNamed
+        ? 'The design names no units.'
+        : [
+            ...(unassigned.length
+              ? [
+                  `${plural(unassigned.length, 'room')} in no unit on a level with units, not common area by name: ${unassigned.map((room) => `"${room.name}"`).join(', ')}. Give each its unit, or name it as common area (corridor, lobby, stairs…).`,
+                ]
+              : []),
+            ...splitRooms.map((d) => d.message),
+          ].join(' ') ||
+          `Every room is in a unit or is common area (${plural(unitNames.size, 'unit')}).`,
     },
     {
       id: 'refused',
