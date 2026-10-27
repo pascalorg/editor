@@ -178,7 +178,7 @@
       "Reload",
       "Scene",
       "Settings",
-      "Your changes haven&apos;t been saved. Reload to pick up the latest version."
+      "Your changes haven't been saved. Reload to pick up the latest version."
     ],
     "apps/editor/components/share-panel.tsx": [
       "Anyone with the link can view this project. They cannot edit it.",
@@ -1170,7 +1170,7 @@
       "Community",
       "Library",
       "Mine",
-      "No results for &ldquo;{search}&rdquo;",
+      "No results for “{search}”",
       "Search..."
     ],
     "packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx": [
@@ -1178,7 +1178,7 @@
       "Community",
       "Library",
       "Mine",
-      "No results for &ldquo;{search}&rdquo;",
+      "No results for “{search}”",
       "Search..."
     ],
     "packages/editor/src/components/ui/sidebar/panels/settings-panel/animation-speed-setting.tsx": [
@@ -3232,9 +3232,6 @@
     ],
     "packages/ui/src/button.tsx": [
       "Hello from your {appName} app!"
-    ],
-    "packages/ui/src/card.tsx": [
-      "-&gt;"
     ],
     "packages/viewer/src/components/viewer/glb-scene.tsx": [
       "Door",
