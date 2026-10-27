@@ -13,6 +13,206 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+# Source-Hash: 8ffb1c5066e53a8d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pascal home"
+#: apps/editor/components/app-home-link.tsx
+#, fuzzy
+msgid "app.appShell.pascalHome"
+msgstr "Inicio de Pascal"
+
+# Source-Hash: 2ee62be78ba76f53
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "All projects"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.allProjects"
+msgstr "Todos los proyectos"
+
+# Source-Hash: 20226b68d5467072
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Preview"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.preview"
+msgstr "Vista previa"
+
+# Source-Hash: 9f2cbc9214c8f7b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Project name"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.projectName"
+msgstr "Nombre del proyecto"
+
+# Source-Hash: 150e143a84240eee
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rename project"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.renameProject"
+msgstr "Cambiar nombre del proyecto"
+
+# Source-Hash: 331e1584943b09b9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Share"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.share"
+msgstr "Compartir"
+
+# Source-Hash: 703e1b4b9b715d3b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Anyone with the link can view this project. They cannot edit it."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.anyoneWithTheLinkCanView"
+msgstr "Cualquier persona con el enlace puede ver este proyecto, pero no editarlo."
+
+# Source-Hash: 07e04484867c17d3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Copied"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.copied"
+msgstr "Copiado"
+
+# Source-Hash: 4f60d1e142affa9c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Copy"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.copy"
+msgstr "Copiar"
+
+# Source-Hash: 8ff50e1a9962a4db
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Could not read the sharing state."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.couldNotReadTheSharingState"
+msgstr "No se pudo leer el estado de uso compartido."
+
+# Source-Hash: 791e281338a51483
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Could not turn off the public link."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.couldNotTurnOffThePublic"
+msgstr "No se pudo desactivar el enlace público."
+
+# Source-Hash: 2c5ddecfd652ba63
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Could not turn on the public link."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.couldNotTurnOnThePublic"
+msgstr "No se pudo activar el enlace público."
+
+# Source-Hash: 15e49d4da8765318
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Embed code"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.embedCode"
+msgstr "Código de inserción"
+
+# Source-Hash: d4523c2d303f99b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Embed link"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.embedLink"
+msgstr "Enlace de inserción"
+
+# Source-Hash: 252f2cbf5e1609a5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hide controls"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.hideControls"
+msgstr "Ocultar controles"
+
+# Source-Hash: ba77c0610a63bb2b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Link"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.link"
+msgstr "Enlace"
+
+# Source-Hash: a2560430aaec31d9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Only the 3D view, no header or toolbar."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.onlyThe3dViewNoHeader"
+msgstr "Solo la vista 3D, sin encabezado ni barra de herramientas."
+
+# Source-Hash: 3e52f04f92e08070
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.open"
+msgstr "Abrir"
+
+# Source-Hash: b34faaa5378056c6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Public link"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.publicLink"
+msgstr "Enlace público"
+
+# Source-Hash: 7525e8007fcab09b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Share project"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.shareProject"
+msgstr "Compartir proyecto"
+
 # Source-Hash: 3d3f438d5a49eba7
 # Review: required
 # AI-Provider: cursor-agent
@@ -792,6 +992,236 @@ msgstr "Dibuja un muro cada vez."
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.walls.title"
 msgstr "Muros"
+
+# Source-Hash: 9fc7a39bc32f287a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Plugins"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.plugins"
+msgstr "Complementos"
+
+# Source-Hash: c54f9bac358893d8
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "2D"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.view2d"
+msgstr "2D"
+
+# Source-Hash: f78f2fa035f25f85
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "3D"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.view3d"
+msgstr "3D"
+
+# Source-Hash: 05b65242d8c48791
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Auto"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.auto"
+msgstr "Auto"
+
+# Source-Hash: 7890c110650ad1e5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Browse plugins"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.browsePlugins"
+msgstr "Explorar complementos"
+
+# Source-Hash: 3b11e7af681a9dcd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close {label}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.closeLabel"
+msgstr "Cerrar {label}"
+
+# Source-Hash: 3f00e92517e3f4a5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close split (\\)"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.closeSplit"
+msgstr "Cerrar vista dividida (\\)"
+
+# Source-Hash: 94cc8e9f1ee16edb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ground"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.ground"
+msgstr "Terreno"
+
+# Source-Hash: 0d472502a4d36e86
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{standing, select, partly {Partly below grade · ground solid} below {Below grade · ground solid} other {Ground solid}}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.groundSolid"
+msgstr "{standing, select, partly {Parcialmente bajo rasante · terreno sólido} below {Bajo rasante · terreno sólido} other {Terreno sólido}}"
+
+# Source-Hash: 1b6798c307ac1b96
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{standing, select, partly {Partly below grade · ground veiled} below {Below grade · ground veiled} other {Ground veiled}}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.groundVeiled"
+msgstr "{standing, select, partly {Parcialmente bajo rasante · terreno velado} below {Bajo rasante · terreno velado} other {Terreno velado}}"
+
+# Source-Hash: ebdc976a98e82626
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Keep the ground solid"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.keepTheGroundSolid"
+msgstr "Mantener el terreno sólido"
+
+# Source-Hash: 5f827686a006d88c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "More views"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.moreViews"
+msgstr "Más vistas"
+
+# Source-Hash: f175bbcf457ab73c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pane {pane} views"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.paneViews"
+msgstr "Vistas del panel {pane}"
+
+# Source-Hash: 33c20cc33dce9a9b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pin {label}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.pinLabel"
+msgstr "Fijar {label}"
+
+# Source-Hash: 3f7231b1eb2f93f3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pin to the view bar"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.pinToTheViewBar"
+msgstr "Fijar a la barra de vistas"
+
+# Source-Hash: ef3e765e692faf4c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.solid"
+msgstr "Sólido"
+
+# Source-Hash: 98f22f3f89f17686
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Split (\\)"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.split"
+msgstr "Vista dividida (\\)"
+
+# Source-Hash: e4cd64b1680ac0d2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Split"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.split2"
+msgstr "Dividir"
+
+# Source-Hash: 15b0adc705923a27
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Swap panes"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.swapPanes"
+msgstr "Intercambiar paneles"
+
+# Source-Hash: 9781bcdb7a8549e2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unpin from the view bar"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.unpinFromTheViewBar"
+msgstr "Quitar de la barra de vistas"
+
+# Source-Hash: f667358dec4abdea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unpin {label}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.unpinLabel"
+msgstr "Dejar de fijar {label}"
+
+# Source-Hash: e96581f0bbf9fa91
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Veil the ground over a level below grade"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.veilTheGroundOverALevel"
+msgstr "Velar el terreno sobre una planta bajo rasante"
+
+# Source-Hash: fb82f09f8ed3059e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Views"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.views"
+msgstr "Vistas"
 
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human

@@ -75,9 +75,6 @@
       "Set up · Pascal",
       "This editor is reachable but not protected yet"
     ],
-    "apps/editor/components/app-shell.tsx": [
-      "Pascal home"
-    ],
     "apps/editor/components/build-tab.tsx": [
       "Add Gate",
       "Add Open Passage",
@@ -122,14 +119,6 @@
       "Failed to create project",
       "Failed to create project ({status})",
       "New project"
-    ],
-    "apps/editor/components/editor-navbar.tsx": [
-      "All projects",
-      "All projects",
-      "Preview",
-      "Project name",
-      "Rename project",
-      "Share"
     ],
     "apps/editor/components/embed-viewer.tsx": [
       "Made with Pascal",
@@ -179,23 +168,6 @@
       "Scene",
       "Settings",
       "Your changes haven't been saved. Reload to pick up the latest version."
-    ],
-    "apps/editor/components/share-panel.tsx": [
-      "Anyone with the link can view this project. They cannot edit it.",
-      "Copied",
-      "Copy",
-      "Could not read the sharing state.",
-      "Could not turn off the public link.",
-      "Could not turn on the public link.",
-      "Embed code",
-      "Embed code",
-      "Embed link",
-      "Hide controls",
-      "Link",
-      "Only the 3D view, no header or toolbar.",
-      "Open",
-      "Public link",
-      "Share project"
     ],
     "packages/editor/src/components/editor-2d/floorplan-measurement-tool-layer.tsx": [
       "ALIGN ",
@@ -427,27 +399,6 @@
       "this project",
       "uninstalled",
       "{label} details"
-    ],
-    "packages/editor/src/components/editor/views/view-bar.tsx": [
-      "Auto",
-      "Browse plugins",
-      "Close split (\\)",
-      "Close {label}",
-      "Ground",
-      "Keep the ground solid",
-      "More views",
-      "Pane {?} views",
-      "Pin to the view bar",
-      "Pin {label}",
-      "Solid",
-      "Split",
-      "Split (\\)",
-      "Swap panes",
-      "Swap panes",
-      "Unpin from the view bar",
-      "Unpin {label}",
-      "Veil the ground over a level below grade",
-      "Views"
     ],
     "packages/editor/src/components/point-ask/bubble.tsx": [
       "Ask Pascal",

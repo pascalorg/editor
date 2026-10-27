@@ -7,6 +7,86 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
 
+#: apps/editor/components/app-home-link.tsx
+msgid "app.appShell.pascalHome"
+msgstr "Pascal home"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.allProjects"
+msgstr "All projects"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.preview"
+msgstr "Preview"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.projectName"
+msgstr "Project name"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.renameProject"
+msgstr "Rename project"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.share"
+msgstr "Share"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.anyoneWithTheLinkCanView"
+msgstr "Anyone with the link can view this project. They cannot edit it."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.copied"
+msgstr "Copied"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.copy"
+msgstr "Copy"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.couldNotReadTheSharingState"
+msgstr "Could not read the sharing state."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.couldNotTurnOffThePublic"
+msgstr "Could not turn off the public link."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.couldNotTurnOnThePublic"
+msgstr "Could not turn on the public link."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.embedCode"
+msgstr "Embed code"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.embedLink"
+msgstr "Embed link"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.hideControls"
+msgstr "Hide controls"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.link"
+msgstr "Link"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.onlyThe3dViewNoHeader"
+msgstr "Only the 3D view, no header or toolbar."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.open"
+msgstr "Open"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.publicLink"
+msgstr "Public link"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.shareProject"
+msgstr "Share project"
+
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.automaticDimensions"
 msgstr "Automatic dimensions"
@@ -342,6 +422,98 @@ msgstr "Draw one wall at a time."
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.walls.title"
 msgstr "Walls"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.plugins"
+msgstr "Plugins"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.view2d"
+msgstr "2D"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.view3d"
+msgstr "3D"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.auto"
+msgstr "Auto"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.browsePlugins"
+msgstr "Browse plugins"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.closeLabel"
+msgstr "Close {label}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.closeSplit"
+msgstr "Close split (\\)"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.ground"
+msgstr "Ground"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.groundSolid"
+msgstr "{standing, select, partly {Partly below grade · ground solid} below {Below grade · ground solid} other {Ground solid}}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.groundVeiled"
+msgstr "{standing, select, partly {Partly below grade · ground veiled} below {Below grade · ground veiled} other {Ground veiled}}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.keepTheGroundSolid"
+msgstr "Keep the ground solid"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.moreViews"
+msgstr "More views"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.paneViews"
+msgstr "Pane {pane} views"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.pinLabel"
+msgstr "Pin {label}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.pinToTheViewBar"
+msgstr "Pin to the view bar"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.solid"
+msgstr "Solid"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.split"
+msgstr "Split (\\)"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.split2"
+msgstr "Split"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.swapPanes"
+msgstr "Swap panes"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.unpinFromTheViewBar"
+msgstr "Unpin from the view bar"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.unpinLabel"
+msgstr "Unpin {label}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.veilTheGroundOverALevel"
+msgstr "Veil the ground over a level below grade"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.views"
+msgstr "Views"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitLeft"

@@ -13,6 +13,206 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+# Source-Hash: 8ffb1c5066e53a8d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pascal home"
+#: apps/editor/components/app-home-link.tsx
+#, fuzzy
+msgid "app.appShell.pascalHome"
+msgstr "Pascal 首页"
+
+# Source-Hash: 2ee62be78ba76f53
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "All projects"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.allProjects"
+msgstr "所有项目"
+
+# Source-Hash: 20226b68d5467072
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Preview"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.preview"
+msgstr "预览"
+
+# Source-Hash: 9f2cbc9214c8f7b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Project name"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.projectName"
+msgstr "项目名称"
+
+# Source-Hash: 150e143a84240eee
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rename project"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.renameProject"
+msgstr "重命名项目"
+
+# Source-Hash: 331e1584943b09b9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Share"
+#: apps/editor/components/editor-navbar.tsx
+#, fuzzy
+msgid "app.editorNavbar.share"
+msgstr "分享"
+
+# Source-Hash: 703e1b4b9b715d3b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Anyone with the link can view this project. They cannot edit it."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.anyoneWithTheLinkCanView"
+msgstr "任何拥有链接的人都可以查看此项目，但无法编辑。"
+
+# Source-Hash: 07e04484867c17d3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Copied"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.copied"
+msgstr "已复制"
+
+# Source-Hash: 4f60d1e142affa9c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Copy"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.copy"
+msgstr "复制"
+
+# Source-Hash: 8ff50e1a9962a4db
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Could not read the sharing state."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.couldNotReadTheSharingState"
+msgstr "无法读取分享状态。"
+
+# Source-Hash: 791e281338a51483
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Could not turn off the public link."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.couldNotTurnOffThePublic"
+msgstr "无法关闭公开链接。"
+
+# Source-Hash: 2c5ddecfd652ba63
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Could not turn on the public link."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.couldNotTurnOnThePublic"
+msgstr "无法开启公开链接。"
+
+# Source-Hash: 15e49d4da8765318
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Embed code"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.embedCode"
+msgstr "嵌入代码"
+
+# Source-Hash: d4523c2d303f99b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Embed link"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.embedLink"
+msgstr "嵌入链接"
+
+# Source-Hash: 252f2cbf5e1609a5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hide controls"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.hideControls"
+msgstr "隐藏控件"
+
+# Source-Hash: ba77c0610a63bb2b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Link"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.link"
+msgstr "链接"
+
+# Source-Hash: a2560430aaec31d9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Only the 3D view, no header or toolbar."
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.onlyThe3dViewNoHeader"
+msgstr "仅显示 3D 视图，不显示标题栏或工具栏。"
+
+# Source-Hash: 3e52f04f92e08070
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.open"
+msgstr "打开"
+
+# Source-Hash: b34faaa5378056c6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Public link"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.publicLink"
+msgstr "公开链接"
+
+# Source-Hash: 7525e8007fcab09b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Share project"
+#: apps/editor/components/share-panel.tsx
+#, fuzzy
+msgid "app.sharePanel.shareProject"
+msgstr "分享项目"
+
 # Source-Hash: 3d3f438d5a49eba7
 # Review: required
 # AI-Provider: cursor-agent
@@ -792,6 +992,236 @@ msgstr "逐面绘制墙体。"
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.walls.title"
 msgstr "墙体"
+
+# Source-Hash: 9fc7a39bc32f287a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Plugins"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.plugins"
+msgstr "插件"
+
+# Source-Hash: c54f9bac358893d8
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "2D"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.view2d"
+msgstr "2D"
+
+# Source-Hash: f78f2fa035f25f85
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "3D"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.view3d"
+msgstr "3D"
+
+# Source-Hash: 05b65242d8c48791
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Auto"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.auto"
+msgstr "自动"
+
+# Source-Hash: 7890c110650ad1e5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Browse plugins"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.browsePlugins"
+msgstr "浏览插件"
+
+# Source-Hash: 3b11e7af681a9dcd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close {label}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.closeLabel"
+msgstr "关闭{label}"
+
+# Source-Hash: 3f00e92517e3f4a5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close split (\\)"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.closeSplit"
+msgstr "关闭分屏 (\\)"
+
+# Source-Hash: 94cc8e9f1ee16edb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ground"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.ground"
+msgstr "地面"
+
+# Source-Hash: 0d472502a4d36e86
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{standing, select, partly {Partly below grade · ground solid} below {Below grade · ground solid} other {Ground solid}}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.groundSolid"
+msgstr "{standing, select, partly {部分位于地坪以下 · 地面实体} below {位于地坪以下 · 地面实体} other {地面实体}}"
+
+# Source-Hash: 1b6798c307ac1b96
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{standing, select, partly {Partly below grade · ground veiled} below {Below grade · ground veiled} other {Ground veiled}}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.groundVeiled"
+msgstr "{standing, select, partly {部分位于地坪以下 · 地面淡化} below {位于地坪以下 · 地面淡化} other {地面淡化}}"
+
+# Source-Hash: ebdc976a98e82626
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Keep the ground solid"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.keepTheGroundSolid"
+msgstr "保持地面为实体"
+
+# Source-Hash: 5f827686a006d88c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "More views"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.moreViews"
+msgstr "更多视图"
+
+# Source-Hash: f175bbcf457ab73c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pane {pane} views"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.paneViews"
+msgstr "窗格 {pane} 视图"
+
+# Source-Hash: 33c20cc33dce9a9b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pin {label}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.pinLabel"
+msgstr "固定{label}"
+
+# Source-Hash: 3f7231b1eb2f93f3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pin to the view bar"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.pinToTheViewBar"
+msgstr "固定到视图栏"
+
+# Source-Hash: ef3e765e692faf4c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.solid"
+msgstr "实体"
+
+# Source-Hash: 98f22f3f89f17686
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Split (\\)"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.split"
+msgstr "分屏 (\\)"
+
+# Source-Hash: e4cd64b1680ac0d2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Split"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.split2"
+msgstr "分屏"
+
+# Source-Hash: 15b0adc705923a27
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Swap panes"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.swapPanes"
+msgstr "交换窗格"
+
+# Source-Hash: 9781bcdb7a8549e2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unpin from the view bar"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.unpinFromTheViewBar"
+msgstr "从视图栏取消固定"
+
+# Source-Hash: f667358dec4abdea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unpin {label}"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.unpinLabel"
+msgstr "取消固定{label}"
+
+# Source-Hash: e96581f0bbf9fa91
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Veil the ground over a level below grade"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.veilTheGroundOverALevel"
+msgstr "在地坪以下的楼层上方淡化地面"
+
+# Source-Hash: fb82f09f8ed3059e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Views"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.views"
+msgstr "视图"
 
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human
