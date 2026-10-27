@@ -47,6 +47,7 @@ import {
   ADD_WALL_CASES,
   CREATE_STAIR_CASES,
 } from './structure-cases'
+import { UNIT_CASES } from './unit-cases'
 import { VERIFY_SCENE_CASES } from './verify-scene-cases'
 
 /**
@@ -557,6 +558,8 @@ export const GET_ZONES_CASES: AgentToolCase[] = [
             bounds: { width: 4, depth: 3 },
             wallMaterial: null,
             wallOverrides: [],
+            unitId: 'unit_flat',
+            unit: 'Flat',
           },
         ],
       },
@@ -986,4 +989,5 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...SITE_LINE_CASES,
   ...SITE_VERIFY_CASES,
   ...FINISH_CASES,
+  ...UNIT_CASES,
 ]

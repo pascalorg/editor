@@ -52,6 +52,7 @@ import {
   type SceneMaterialId,
   SlabNode,
   type StairNode,
+  UnitNode,
   type WallFace,
   WallNode,
   WindowNode,
@@ -161,8 +162,9 @@ function authoredBaseline(scene: SceneNodes, building: AnyNode) {
     return undefined
   const ids: Record<string, string> = {}
   const nodes: Record<string, AnyNode> = {}
-  for (const level of queryNodes(scene, { type: 'level', parentId: building.id })) {
-    const written = level.metadata?.authorSceneWritten as AuthorSceneWritten | undefined
+  // The building lists what it holds itself (its units); each level, what stands on it.
+  for (const holder of [building, ...queryNodes(scene, { type: 'level', parentId: building.id })]) {
+    const written = holder.metadata?.authorSceneWritten as AuthorSceneWritten | undefined
     if (!written) continue
     Object.assign(ids, written.keys)
     for (const id of written.ids) {
@@ -193,6 +195,8 @@ export type AuthorSceneReport = {
   voids: number
   /** Pascal's own roof segments, on the building's roof level. */
   roofSegments: number
+  /** Units under the building, one per distinct name the rooms and the payload give. */
+  units: number
   lights: number
   /** Rooms whose floor finish is their module, counted by the host that compiles them after the write. */
   floorScripts: number
@@ -208,7 +212,7 @@ export type AuthorSceneReport = {
   notes: string[]
   /**
    * Payload ids, `wall/i` openings, `room/level/i`, `stair/level/i`, `void/level/i` (its floor
-   * opening) and `light/level/i` ceiling points to nodes.
+   * opening), `light/level/i` ceiling points and `unit/<name>` to nodes.
    */
   ids: Record<string, string>
 }
@@ -742,6 +746,7 @@ export function authorScene(
     for (const item of level.items ?? []) claimSourceKey(item.id)
   })
   for (const item of payload.roof?.items ?? []) claimSourceKey(item.id)
+  for (const unit of payload.units) claimSourceKey(`unit/${unit.name}`)
   const buildings = Object.values(scene).filter((n) => n.type === 'building')
   const selected =
     input.buildingId ?? (context.activeLevelId ? scene[context.activeLevelId]?.parentId : undefined)
@@ -790,6 +795,7 @@ export function authorScene(
     stairs: 0,
     voids: 0,
     roofSegments: 0,
+    units: 0,
     lights: 0,
     floorScripts: 0,
     faceScripts: 0,
@@ -1262,10 +1268,12 @@ export function authorScene(
     report.rooms++
   }
   const joined = new Map<string, AuthorSceneRoom[]>()
+  const roomIds = new Map<AuthorSceneRoom, string>()
   payload.levels.forEach((level, index) => {
     const levelNode = levelNodes[index]!
     for (const [i, room] of level.rooms.entries()) {
       const id = `room/${index}/${i}`
+      roomIds.set(room, id)
       const zone = zones.find(
         (z) => z.parentId === levelNode.id && pointInPolygon(room.seed as Vec2, z.polygon),
       )
@@ -1332,6 +1340,45 @@ export function authorScene(
     say(
       `${rooms.map((room) => `"${room.name}"`).join(', ')} are one enclosure, no wall between them: one open-plan room, "${name}"${floors.length ? `, with the floor of "${first}"` : ''}`,
     )
+  }
+
+  // ---------- units: one per distinct name, under the building, holding the rooms that name it ----------
+  const units = new Map<string, { kind: UnitNode['kind']; color?: string; zones: string[] }>()
+  for (const unit of payload.units) {
+    const color = unit.color && HEX.test(unit.color) ? unit.color : undefined
+    if (unit.color && !color)
+      defect(`unit/${unit.name}`, 'invalid_color', `"${unit.color}" is not a #rrggbb colour.`)
+    units.set(unit.name, { kind: unit.kind, color, zones: [] })
+  }
+  for (const [zoneId, rooms] of joined) {
+    const names = [...new Set(rooms.flatMap((room) => (room.unit ? [room.unit] : [])))]
+    // One enclosure is one room, so it is in one unit: seeds naming two want a wall between them.
+    if (names.length > 1) {
+      defect(
+        roomIds.get(rooms[0]!)!,
+        'unit_split_room',
+        `${rooms.map((room) => `"${room.name}"`).join(', ')} are one open-plan room but name different units (${names.join(', ')}): the room is in none. Put a wall between them, or one unit on all of them.`,
+      )
+      continue
+    }
+    if (!names[0]) continue
+    const entry = units.get(names[0]) ?? { kind: 'apartment' as const, zones: [] }
+    entry.zones.push(zoneId)
+    units.set(names[0], entry)
+  }
+  for (const [name, { kind, color, zones: members }] of units) {
+    const unit = UnitNode.parse({
+      id: mint('unit', `unit/${name}`),
+      parentId: building.id,
+      name,
+      kind,
+      ...(color ? { color } : {}),
+      members,
+    })
+    draft[unit.id] = unit
+    report.ids[`unit/${name}`] = unit.id
+    report.units++
+    if (!members.length) warn(`unit/${name}`, 'unit_no_rooms', `No room names unit "${name}".`)
   }
 
   // ---------- floors and ceilings, as the editor derives them on load ----------
@@ -2261,23 +2308,26 @@ export function finalizeAuthorScene(
     )
   const changes = authoredSceneChanges(current, base, candidate.nodes)
 
-  // Each written node keeps its own baseline, and each written level the list of what it holds.
-  const levelOf = (id: string): string | undefined => {
+  // Each written node keeps its own baseline; each written level lists what stands on it and the
+  // building what it holds itself (its units), so a revision finds every node of the last one.
+  const holderOf = (id: string): string | undefined => {
     let node = candidate.nodes[id]
-    while (node && node.type !== 'level')
+    while (node && node.type !== 'level') {
+      if (node.parentId === building.id) return building.id
       node = node.parentId ? candidate.nodes[node.parentId] : undefined
+    }
     return node?.id
   }
   const keyOf = new Map(Object.entries(candidate.ids).map(([key, id]) => [id, key]))
   const writtenOn = new Map<string, AuthorSceneWritten>()
   for (const id of Object.keys(candidate.nodes)) {
-    const level = levelOf(id)
-    if (!level) continue
-    const written = writtenOn.get(level) ?? { ids: [], keys: {} }
+    const holder = holderOf(id)
+    if (!holder) continue
+    const written = writtenOn.get(holder) ?? { ids: [], keys: {} }
     written.ids.push(id)
     const key = keyOf.get(id)
     if (key) written.keys[key] = id
-    writtenOn.set(level, written)
+    writtenOn.set(holder, written)
   }
   const bookkeeping = (id: string): Record<string, unknown> => ({
     authorSceneBase: withoutBookkeeping(candidate.nodes[id]!),
@@ -2321,7 +2371,11 @@ export function finalizeAuthorScene(
     id: building.id,
     data: {
       ...updated.get(building.id)?.data,
-      metadata: { ...withoutBookkeeping(building).metadata, authorSceneState: state },
+      metadata: {
+        ...withoutBookkeeping(building).metadata,
+        authorSceneState: state,
+        ...(writtenOn.has(building.id) ? { authorSceneWritten: writtenOn.get(building.id) } : {}),
+      },
     } as Partial<AnyNode>,
   })
   return {

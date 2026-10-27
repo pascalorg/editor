@@ -20848,6 +20848,26 @@ msgstr "拱形"
 msgid "node.door.panel.archHeight"
 msgstr "拱高"
 
+# Source-Hash: 05b65242d8c48791
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Auto"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.auto"
+msgstr "自动"
+
+# Source-Hash: 8a04486ba122ea7d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Auto follows the wall"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.autoFollowsTheWall"
+msgstr "自动跟随墙体"
+
 # Source-Hash: 387773c8aa2820a4
 # Review: required
 # AI-Provider: cursor-agent
@@ -21037,6 +21057,16 @@ msgstr "折叠"
 #, fuzzy
 msgid "node.door.panel.frame"
 msgstr "框架"
+
+# Source-Hash: 0cce8ae784f78478
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Depth (auto)"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.frameDepthAuto"
+msgstr "深度（自动）"
 
 # Source-Hash: 53aa825a4737190a
 # Review: required
@@ -30227,6 +30257,26 @@ msgstr "拱形"
 msgid "node.window.panel.archHeight"
 msgstr "拱高"
 
+# Source-Hash: 05b65242d8c48791
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Auto"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.auto"
+msgstr "自动"
+
+# Source-Hash: 8a04486ba122ea7d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Auto follows the wall"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.autoFollowsTheWall"
+msgstr "自动跟随墙体"
+
 # Source-Hash: 30edd1c180aac9b4
 # Review: required
 # AI-Provider: cursor-agent
@@ -30376,6 +30426,16 @@ msgstr "翻转方向"
 #, fuzzy
 msgid "node.window.panel.frame"
 msgstr "框架"
+
+# Source-Hash: 0cce8ae784f78478
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Depth (auto)"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.frameDepthAuto"
+msgstr "深度（自动）"
 
 # Source-Hash: 092033938ca2debb
 # Review: required
