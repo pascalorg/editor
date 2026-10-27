@@ -1,10 +1,12 @@
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import type { CatalogType } from '@lingui/conf'
+import { parsePo } from 'pofile-ts'
 import linguiConfig from '../lingui.config'
 import {
   checkCatalogs,
   escapePoCommentValue,
+  extractCatalogs,
   hashSource,
   refreshTranslations,
   type SourceMessage,
@@ -67,6 +69,68 @@ test('ICU plural validation follows the target locale categories', () => {
   )
   expect(validateTranslation(english, english, 'en')).toEqual([])
 })
+
+test('rich-text validation preserves attributed and self-closing tags', () => {
+  expect(
+    validateTranslation(
+      '<a href="/docs" aria-label="Documentation">Open</a> <icon name="external" />',
+      '<a href="/docs" aria-label="Documentation">Ouvrir</a> <icon name="external" />',
+      'fr',
+    ),
+  ).toEqual([])
+  expect(validateTranslation('<a href="/docs">Open</a>', '<a>Ouvrir</a>', 'fr')).toContain(
+    'rich-text tags differ from English',
+  )
+  expect(validateTranslation('Save <icon name="disk" />', 'Enregistrer', 'fr')).toContain(
+    'rich-text tags differ from English',
+  )
+})
+
+test('source drift fails checking, then extraction updates English and flags translations', async () => {
+  const sourcePath = 'packages/editor/src/components/viewer/viewer-controls-bar.tsx'
+  const catalogPaths = [
+    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.po').scanSync(),
+    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.ts').scanSync(),
+  ]
+  const paths = [sourcePath, ...catalogPaths]
+  const before = new Map(paths.map((path) => [path, readFileSync(path, 'utf8')]))
+  const originalSource = before.get(sourcePath)
+  if (!originalSource) throw new Error(`Missing ${sourcePath}`)
+
+  try {
+    writeFileSync(
+      sourcePath,
+      originalSource.replaceAll("message: 'Top view'", "message: 'Top view X'"),
+    )
+
+    const errors = await checkCatalogs()
+    expect(errors.some((error) => error.includes('source drift "viewer.camera.topView"'))).toBe(
+      true,
+    )
+
+    extractCatalogs()
+
+    const english = parsePo(readFileSync('packages/editor/src/i18n/locales/en/messages.po', 'utf8'))
+    expect(english.items.find((item) => item.msgid === 'viewer.camera.topView')?.msgstr[0]).toBe(
+      'Top view X',
+    )
+
+    for (const locale of ['zh-CN', 'fr', 'es', 'ja']) {
+      const target = parsePo(
+        readFileSync(`packages/editor/src/i18n/locales/${locale}/messages.po`, 'utf8'),
+      )
+      const item = target.items.find((entry) => entry.msgid === 'viewer.camera.topView')
+      expect(item?.msgstr[0]).not.toBe('')
+      expect(item?.flags.fuzzy).toBe(true)
+      expect(item?.comments).toContain('Review: required')
+      expect(
+        readFileSync(`packages/editor/src/i18n/locales/${locale}/messages.ts`, 'utf8'),
+      ).not.toContain('\\"viewer.camera.topView\\"')
+    }
+  } finally {
+    for (const [path, contents] of before) writeFileSync(path, contents)
+  }
+}, 120_000)
 
 test('AI translation refreshes only missing and stale entries through a mocked provider', async () => {
   const sources: SourceMessage[] = [

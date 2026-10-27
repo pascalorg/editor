@@ -20,6 +20,16 @@ const catalogs = new Map<string, Messages>()
 const scopes = new Set<PascalI18n>()
 const warnedMissingKeys = new Set<string>()
 
+function emptyMessages(): Messages {
+  return Object.create(null) as Messages
+}
+
+function assertSafeMessageKey(key: string): void {
+  if (key.split('.').includes('__proto__')) {
+    throw new TypeError('Translation message keys cannot contain "__proto__"')
+  }
+}
+
 function canonicalLocale(value: string): string {
   const trimmed = value.trim()
   if (!trimmed) return 'en'
@@ -57,19 +67,19 @@ function isDevelopment(): boolean {
 
 function namespacedMessages(namespace: string, messages: Messages): Messages {
   const normalizedNamespace = namespace.replace(/^\.+|\.+$/g, '')
-  return Object.fromEntries(
-    Object.entries(messages).map(([key, message]) => {
-      const normalizedKey = key.replace(/^\.+/g, '')
-      return [
-        normalizedNamespace ? `${normalizedNamespace}.${normalizedKey}` : normalizedKey,
-        message,
-      ]
-    }),
-  )
+  const namespaced = emptyMessages()
+  for (const [key, message] of Object.entries(messages)) {
+    const normalizedKey = key.replace(/^\.+/g, '')
+    assertSafeMessageKey(normalizedKey)
+    const fullKey = normalizedNamespace ? `${normalizedNamespace}.${normalizedKey}` : normalizedKey
+    assertSafeMessageKey(fullKey)
+    namespaced[fullKey] = message
+  }
+  return namespaced
 }
 
 function mergedMessages(requestedLocale: string): Messages {
-  const messages: Messages = {}
+  const messages = emptyMessages()
   for (const candidate of localeFallbacks(requestedLocale).reverse()) {
     Object.assign(messages, catalogs.get(candidate))
   }
@@ -218,9 +228,11 @@ export async function registerMessages(
   messages: TranslationMessages,
 ): Promise<void> {
   const { compileMessageOrThrow } = await import('@lingui/message-utils/compileMessage')
-  const compiled = Object.fromEntries(
-    Object.entries(messages).map(([key, message]) => [key, compileMessageOrThrow(message)]),
-  )
+  const compiled = emptyMessages()
+  for (const [key, message] of Object.entries(messages)) {
+    assertSafeMessageKey(key)
+    compiled[key] = compileMessageOrThrow(message)
+  }
   registerCompiledMessages(messageLocale, namespace, compiled)
 }
 
@@ -236,7 +248,7 @@ export function registerCompiledMessages(
   messages: CompiledTranslationMessages,
 ): void {
   const normalizedLocale = canonicalLocale(messageLocale)
-  const catalog = catalogs.get(normalizedLocale) ?? {}
+  const catalog = catalogs.get(normalizedLocale) ?? emptyMessages()
   Object.assign(catalog, namespacedMessages(namespace, messages))
   catalogs.set(normalizedLocale, catalog)
   for (const scope of [...scopes]) scope.refresh()

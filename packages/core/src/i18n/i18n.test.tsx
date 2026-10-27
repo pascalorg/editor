@@ -10,6 +10,7 @@ import {
   levelDisplayNumber,
   PascalI18nProvider,
   parseLocalizedNumber,
+  registerCompiledMessages,
   registerMessages,
   SiteNode,
   setLocale,
@@ -67,6 +68,18 @@ describe('message registry', () => {
 
     expect(translate('viewer.hostGreeting', 'Hello')).toBe('Welcome')
     expect(translate('viewer.unregistered', 'In-code fallback')).toBe('In-code fallback')
+  })
+
+  test('rejects prototype-mutating catalog keys', async () => {
+    const rawMessages = Object.create(null) as Record<string, string>
+    rawMessages.__proto__ = 'polluted'
+    await expect(registerMessages('en', '', rawMessages)).rejects.toThrow('__proto__')
+
+    const compiledMessages = Object.create(null)
+    compiledMessages.__proto__ = ['polluted']
+    expect(() => registerCompiledMessages('en', '', compiledMessages)).toThrow('__proto__')
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype)
+    expect(({} as { polluted?: string }).polluted).toBeUndefined()
   })
 
   test('interpolates values and selects ICU plurals', async () => {
