@@ -59,6 +59,7 @@ const UI_PROPERTIES = new Set([
   'cancelLabel',
   'confirmLabel',
   'description',
+  'detail',
   'emptyMessage',
   'heading',
   'hint',

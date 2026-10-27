@@ -92,8 +92,20 @@ import. IDs follow the owning package and path (`app.editorNavbar.share`,
 `editor.sidebar.sitePanel.addLevel`, `node.roofSegment.inspector.pitch`). The
 codemod never rewrites module-level data, server components or complex
 template interpolations. It lists them as `MANUAL` for a person to
-restructure, usually as a translated lookup inside the component. A second run
-changes nothing. Review the diff, run `bun run i18n:extract`, and translate.
+restructure. A second run changes nothing.
+
+Module data (option arrays, label maps) cannot call a hook. Name its keys or
+variables and the codemod turns those values into lazy descriptors that Lingui
+extracts:
+
+```bash
+bun run i18n:literals -- convert --apply --keys=name,detail --vars=levelModeLabels apps/editor/components/viewer-toolbar.tsx
+# { name: 'Solid' }  →  { name: /* i18n */ { id: 'app.viewerToolbar.solid', message: 'Solid' } }
+```
+
+Type the field as `MessageDescriptor` (exported by `@pascal-app/core`) and
+render it with `i18n._(option.name)` inside the component; the type checker
+lists every consumer to update. Review the diff, run `bun run i18n:extract`, and translate.
 
 ## Pseudo-locale audit
 

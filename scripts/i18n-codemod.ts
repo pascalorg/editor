@@ -271,15 +271,81 @@ function spacing(normalized: string): { lead: string; trail: string } {
   }
 }
 
+export type DescriptorTargets = {
+  /** Object keys whose module-level string values become lazy descriptors. */
+  keys?: ReadonlySet<string>
+  /** Variables whose every string property value becomes a lazy descriptor. */
+  variables?: ReadonlySet<string>
+}
+
+function declaredIn(node: ts.Node): string | undefined {
+  for (let current = node.parent; current; current = current.parent) {
+    if (ts.isVariableDeclaration(current) && ts.isIdentifier(current.name)) return current.name.text
+  }
+  return undefined
+}
+
+/**
+ * Module data cannot call a hook, so its copy becomes `/* i18n *\/ { id, message }`,
+ * which Lingui extracts and components render with `i18n._(descriptor)`. The
+ * value's type changes to `MessageDescriptor`; the type checker then points at
+ * every consumer to update.
+ */
+function descriptorEdits(
+  source: ts.SourceFile,
+  path: string,
+  registry: IdRegistry,
+  allow: Set<string>,
+  targets: DescriptorTargets,
+  planned: Planned[],
+): Edit[] {
+  const edits: Edit[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
+      (ts.isStringLiteral(node.initializer) ||
+        ts.isNoSubstitutionTemplateLiteral(node.initializer)) &&
+      !enclosingComponent(node)
+    ) {
+      const variable = declaredIn(node)
+      const wanted =
+        targets.keys?.has(node.name.text) ||
+        (variable !== undefined && targets.variables?.has(variable))
+      const value = node.initializer.text
+      if (wanted && /\p{L}{2}/u.test(value) && !allow.has(value.trim())) {
+        const message = icuLiteral(value)
+        const id = registry.idFor(path, message)
+        planned.push({
+          path,
+          line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+          id,
+          message,
+        })
+        edits.push({
+          start: node.initializer.getStart(source),
+          end: node.initializer.end,
+          text: `/* i18n */ { id: ${quote(id)}, message: ${quote(message)} }`,
+        })
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return edits
+}
+
 export function convertSource(
   path: string,
   text: string,
   registry: IdRegistry,
   allow: Set<string>,
+  targets: DescriptorTargets = {},
 ): { output: string; planned: Planned[] } {
   const source = parseSource(path, text)
-  const edits: Edit[] = []
   const planned: Planned[] = []
+  const edits: Edit[] = descriptorEdits(source, path, registry, allow, targets, planned)
+  const described = new Set(edits.map((edit) => edit.start))
   const components = new Set<ts.FunctionLikeDeclaration>()
   const serverOnly = isServerOnly(path, source)
 
@@ -356,6 +422,7 @@ export function convertSource(
         })
       },
       literal(node) {
+        if (described.has(node.getStart(source))) return
         const message = icuLiteral(node.text)
         const component = owner(node, message)
         if (!component) return
@@ -425,6 +492,15 @@ export function convertSource(
 
 export async function convertFiles(args: string[]): Promise<void> {
   const apply = args.includes('--apply')
+  const list = (name: string) =>
+    new Set(
+      args
+        .find((arg) => arg.startsWith(`--${name}=`))
+        ?.slice(name.length + 3)
+        .split(',')
+        .filter(Boolean) ?? [],
+    )
+  const targets: DescriptorTargets = { keys: list('keys'), variables: list('vars') }
   const prefixes = args.filter((arg) => !arg.startsWith('--'))
   if (prefixes.length === 0) throw new Error('Pass the files or directories to convert')
   const allowlist = JSON.parse(readFileSync(ALLOWLIST_PATH, 'utf8')) as { texts: string[] }
@@ -437,7 +513,7 @@ export async function convertFiles(args: string[]): Promise<void> {
     if (!prefixes.some((prefix) => path === prefix || path.startsWith(prefix.replace(/\/?$/, '/'))))
       continue
     const text = readFileSync(join(ROOT, path), 'utf8')
-    const { output, planned } = convertSource(path, text, registry, allow)
+    const { output, planned } = convertSource(path, text, registry, allow, targets)
     for (const item of planned) {
       if (item.manual) manual += 1
       else converted += 1

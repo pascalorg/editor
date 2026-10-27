@@ -69,6 +69,29 @@ export const Menu = () => <ul>{ITEMS.map((item) => <li key={item.label}>{item.la
   ])
 })
 
+test('module data becomes lazy descriptors only for the requested keys or variables', () => {
+  const source = `const MODES = [{ id: 'solid', name: 'Solid', icon: 'box' }]
+const LABELS: Record<string, string> = { up: 'Full height' }
+const ROUTES = [{ name: 'home' }]
+`
+  const { output } = convertSource(
+    'apps/editor/components/viewer-toolbar.tsx',
+    source,
+    new IdRegistry(),
+    new Set(),
+    { keys: new Set(['name']), variables: new Set(['LABELS']) },
+  )
+
+  expect(output).toContain(
+    "name: /* i18n */ { id: 'app.viewerToolbar.solid', message: 'Solid' }, icon: 'box'",
+  )
+  expect(output).toContain(
+    "up: /* i18n */ { id: 'app.viewerToolbar.fullHeight', message: 'Full height' }",
+  )
+  expect(output).toContain("id: 'solid'")
+  expect(output).toContain('ROUTES = [{ name: /* i18n */')
+})
+
 test('an expression-bodied component gains a block body for the hook', () => {
   const source = `export const Empty = () => <p>No layers yet</p>\n`
   const { output } = convert('packages/editor/src/components/ui/sidebar/empty.tsx', source)

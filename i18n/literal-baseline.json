@@ -19,7 +19,7 @@
     "apps/editor/components/scene-card.tsx": 20,
     "apps/editor/components/scene-loader.tsx": 9,
     "apps/editor/components/share-panel.tsx": 15,
-    "apps/editor/components/viewer-toolbar.tsx": 43,
+    "apps/editor/components/viewer-toolbar.tsx": 53,
     "packages/editor/src/components/editor-2d/floorplan-measurement-tool-layer.tsx": 4,
     "packages/editor/src/components/editor-2d/floorplan-open-wall-ends-layer.tsx": 2,
     "packages/editor/src/components/editor-2d/renderers/floorplan-dimension-edit-overlay.tsx": 1,
