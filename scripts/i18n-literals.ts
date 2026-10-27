@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { decodeHTMLStrict } from 'entities'
 import ts from 'typescript'
 import { baseRevision, readAtRevision } from './i18n-git'
 
@@ -102,7 +103,7 @@ export type Candidate = {
   manual?: string
 }
 
-type Allowlist = {
+export type Allowlist = {
   /** Exact strings that are not translatable copy anywhere (brands, units, symbols). */
   texts: string[]
   /** Path prefixes whose literals are not product UI, each with a reason. */
@@ -128,6 +129,11 @@ export function normalizeJsxText(raw: string): string {
     if (value) parts.push(value)
   })
   return parts.join(' ')
+}
+
+/** What one JSX text node renders: React's whitespace rules, then HTML entities. */
+export function renderJsxText(raw: string): string {
+  return decodeHTMLStrict(normalizeJsxText(raw))
 }
 
 function looksTranslatable(text: string, allow: Set<string>): boolean {
@@ -191,8 +197,39 @@ export function isComponentName(name: string | undefined): boolean {
   return Boolean(name && (/^[A-Z]/.test(name) || /^use[A-Z]/.test(name)))
 }
 
-/** Outermost-first search for the component or hook that encloses `node`. */
-export function enclosingComponent(node: ts.Node): ts.FunctionLikeDeclaration | undefined {
+const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef'])
+
+/** A function passed as an argument, other than to `memo` / `forwardRef`. */
+function isCallbackArgument(node: ts.Node): boolean {
+  const call = node.parent
+  if (!(call && ts.isCallExpression(call) && call.arguments.includes(node as ts.Expression))) {
+    return false
+  }
+  const callee = call.expression
+  const name = ts.isIdentifier(callee)
+    ? callee.text
+    : ts.isPropertyAccessExpression(callee)
+      ? callee.name.text
+      : undefined
+  return !(name && COMPONENT_WRAPPERS.has(name))
+}
+
+function isAsync(node: ts.FunctionLikeDeclaration): boolean {
+  return Boolean(
+    ts.canHaveModifiers(node) &&
+      ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword),
+  )
+}
+
+/**
+ * The nearest enclosing function named like a component or hook, and why it
+ * cannot own a hook: an async function, or a named callback such as
+ * `.map(function Row() …)`, is not rendered by React as a component.
+ */
+export function componentOwner(node: ts.Node): {
+  owner?: ts.FunctionLikeDeclaration
+  problem?: string
+} {
   for (let current = node.parent; current; current = current.parent) {
     if (
       (ts.isFunctionDeclaration(current) ||
@@ -200,10 +237,19 @@ export function enclosingComponent(node: ts.Node): ts.FunctionLikeDeclaration | 
         ts.isFunctionExpression(current)) &&
       isComponentName(functionName(current))
     ) {
-      return current
+      if (isAsync(current)) return { problem: 'inside an async function: hooks cannot run there' }
+      if (isCallbackArgument(current)) {
+        return { problem: 'inside a callback function: hooks cannot run there' }
+      }
+      return { owner: current }
     }
   }
-  return undefined
+  return { problem: 'outside a component or hook' }
+}
+
+/** The nearest enclosing component or hook that can own `usePascalI18n()`. */
+export function enclosingComponent(node: ts.Node): ts.FunctionLikeDeclaration | undefined {
+  return componentOwner(node).owner
 }
 
 function stringValue(node: ts.Expression | undefined): string | undefined {
@@ -223,12 +269,17 @@ export function placeholderName(expression: ts.Expression): string | undefined {
 }
 
 export type SentenceChild =
+  /** `text` is what the node renders. */
   | { type: 'text'; node: ts.JsxText; text: string }
+  /** A string literal or `const` string rendered inline, e.g. `{' '}` or `{LABEL}`. */
+  | { type: 'static'; node: ts.JsxExpression; text: string }
   | { type: 'value'; node: ts.JsxExpression; expression: ts.Expression; name: string }
 
 /**
- * Children of an element that can become one ICU message: text plus simple
- * interpolations, no nested elements, at least one value.
+ * Children of an element that render as one sentence: text, static strings and
+ * simple interpolations, no nested elements. Static parts are folded into the
+ * rendered text, so `Share{' '}project` and `Share project` read the same and a
+ * changed constant changes the sentence.
  */
 export function sentenceChildren(element: ts.JsxElement): SentenceChild[] | undefined {
   const children = element.children.filter(
@@ -237,30 +288,44 @@ export function sentenceChildren(element: ts.JsxElement): SentenceChild[] | unde
   if (children.length < 2) return undefined
   const result: SentenceChild[] = []
   let hasText = false
-  let hasValue = false
+  let hasJoin = false
   for (const child of children) {
     if (ts.isJsxText(child)) {
-      hasText ||= /\p{L}{2}/u.test(child.text)
-      result.push({ type: 'text', node: child, text: child.text })
+      const text = renderJsxText(child.text)
+      hasText ||= /\p{L}{2}/u.test(text)
+      result.push({ type: 'text', node: child, text })
       continue
     }
     if (ts.isJsxExpression(child) && child.expression && !child.dotDotDotToken) {
-      const name = placeholderName(child.expression)
+      const expression = child.expression
+      const literal =
+        ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)
+          ? expression
+          : ts.isIdentifier(expression)
+            ? constantValue(expression)
+            : undefined
+      if (literal) {
+        hasText ||= /\p{L}{2}/u.test(literal.text)
+        hasJoin = true
+        result.push({ type: 'static', node: child, text: literal.text })
+        continue
+      }
+      const name = placeholderName(expression)
       if (!name) return undefined
-      hasValue = true
-      result.push({ type: 'value', node: child, expression: child.expression, name })
+      hasJoin = true
+      result.push({ type: 'value', node: child, expression, name })
       continue
     }
     return undefined
   }
-  return hasText && hasValue ? result : undefined
+  return hasText && hasJoin ? result : undefined
 }
 
 export function sentenceMessage(children: SentenceChild[]): string {
-  const raw = children
-    .map((child) => (child.type === 'text' ? child.text : `\u0000${child.name}\u0001`))
+  return children
+    .map((child) => (child.type === 'value' ? `{${child.name}}` : child.text))
     .join('')
-  return normalizeJsxText(raw).trim().replaceAll('\u0000', '{').replaceAll('\u0001', '}')
+    .trim()
 }
 
 function notifyCallee(node: ts.CallExpression): string | undefined {
@@ -292,6 +357,8 @@ export type Visitor = {
   template(node: ts.TemplateExpression, kind: CandidateKind): void
   /** A `const` holding copy, rendered by name in JSX or a UI prop. */
   constant(node: ts.Identifier, text: string, kind: CandidateKind): void
+  /** Copy built with `+`, e.g. `'Delete ' + name`. */
+  concatenation(node: ts.BinaryExpression, text: string, kind: CandidateKind): void
 }
 
 function bindsName(name: ts.BindingName, wanted: string): boolean {
@@ -430,6 +497,37 @@ export function visitUiLiterals(
       literalSink(expression.right, kind)
       return
     }
+    if (
+      ts.isBinaryExpression(expression) &&
+      expression.operatorToken.kind === ts.SyntaxKind.PlusToken
+    ) {
+      const parts: ts.Expression[] = []
+      const flatten = (part: ts.Expression): void => {
+        if (ts.isParenthesizedExpression(part)) flatten(part.expression)
+        else if (
+          ts.isBinaryExpression(part) &&
+          part.operatorToken.kind === ts.SyntaxKind.PlusToken
+        ) {
+          flatten(part.left)
+          flatten(part.right)
+        } else parts.push(part)
+      }
+      flatten(expression)
+      const text = parts
+        .map((part) =>
+          ts.isStringLiteral(part) || ts.isNoSubstitutionTemplateLiteral(part) ? part.text : '{?}',
+        )
+        .join('')
+      const hasCopy = parts.some(
+        (part) =>
+          (ts.isStringLiteral(part) || ts.isNoSubstitutionTemplateLiteral(part)) &&
+          /\p{L}{2}/u.test(part.text),
+      )
+      if (hasCopy && looksTranslatable(text, allow) && !isIgnored(source, expression)) {
+        visitor.concatenation(expression, text, kind)
+      }
+      return
+    }
     if (ts.isIdentifier(expression)) {
       const value = constantValue(expression)
       if (
@@ -473,7 +571,7 @@ export function visitUiLiterals(
     }
 
     if (ts.isJsxText(node) && !node.containsOnlyTriviaWhiteSpaces) {
-      const text = normalizeJsxText(node.text)
+      const text = renderJsxText(node.text)
       if (looksTranslatable(text, allow) && !isIgnored(source, node)) visitor.jsxText(node, text)
       return
     }
@@ -548,13 +646,13 @@ export function scanSource(
   const allow = new Set(allowlist.texts)
   const candidates: Candidate[] = []
   const add = (node: ts.Node, kind: CandidateKind, value: string, manual?: string) => {
-    const component = enclosingComponent(node)
+    const { owner, problem } = componentOwner(node)
     candidates.push({
       kind,
       text: value,
       line: lineOf(source, node),
-      component: component ? functionName(component) : undefined,
-      manual: manual ?? (component ? undefined : 'outside a component or hook'),
+      component: owner ? functionName(owner) : undefined,
+      manual: manual ?? problem,
     })
   }
   visitUiLiterals(
@@ -580,6 +678,8 @@ export function scanSource(
       },
       constant: (node, value, kind) =>
         add(node, kind, value, 'string constant: make it a descriptor or translate at the use'),
+      concatenation: (node, value, kind) =>
+        add(node, kind, value, 'concatenated copy: write one message with placeholders'),
     },
     allow,
   )
@@ -689,18 +789,57 @@ export function checkLiterals(
       (scan.get(path) ?? []).map((candidate) => candidate.text),
     )
     if (left.length > 0) improvable.push(`${path}: ${left.length} fewer`)
-    const added = base ? beyond(allowed, base.files[path] ?? []) : []
+  }
+  if (base) {
+    // Growth is measured across the repository, so copy that moves with a
+    // renamed, split or extracted file passes; each added text must consume an
+    // equal text removed elsewhere, duplicates counted.
+    const all = (files: Baseline['files']) => Object.values(files).flat()
+    const added = beyond(all(baseline.files), all(base.files))
     if (added.length > 0) {
+      const where = (text: string) =>
+        Object.entries(baseline.files)
+          .filter(([, texts]) => texts.includes(text))
+          .map(([path]) => path)
       errors.push(
-        `${path}: i18n/literal-baseline.json adds ${added.map((text) => JSON.stringify(text)).join(', ')} relative to the base branch; the baseline may only shrink`,
+        `i18n/literal-baseline.json adds copy the base branch's baseline does not have; the baseline may only shrink:\n${[
+          ...new Set(added),
+        ]
+          .map((text) => `    ${JSON.stringify(text)} (${where(text).join(', ')})`)
+          .join('\n')}`,
       )
     }
   }
   return { errors, improvable, total }
 }
 
+/** Exemptions are reviewed like the baseline: the allowlist may not gain entries relative to the base. */
+export function checkAllowlistGrowth(current: Allowlist, base: Allowlist | undefined): string[] {
+  if (!base) return []
+  const texts = current.texts.filter((text) => !base.texts.includes(text))
+  const paths = Object.keys(current.paths).filter((path) => !(path in base.paths))
+  return [
+    ...texts.map(
+      (text) =>
+        `i18n/literal-allowlist.json adds the text ${JSON.stringify(text)}; exempt one use with i18n-ignore: <reason> instead`,
+    ),
+    ...paths.map(
+      (path) =>
+        `i18n/literal-allowlist.json adds the path ${JSON.stringify(path)}; exempting a path needs a reviewed exception`,
+    ),
+  ]
+}
+
+function readBaseAllowlist(): Allowlist | undefined {
+  const revision = baseRevision()
+  const text = revision ? readAtRevision(revision, ALLOWLIST_PATH) : undefined
+  return text ? (JSON.parse(text) as Allowlist) : undefined
+}
+
 export function checkRepositoryLiterals() {
-  return checkLiterals(scanRepository(), readBaseline(), readBaseBaseline())
+  const result = checkLiterals(scanRepository(), readBaseline(), readBaseBaseline())
+  result.errors.push(...checkAllowlistGrowth(readAllowlist(), readBaseAllowlist()))
+  return result
 }
 
 function report(scan: Map<string, Candidate[]>): void {

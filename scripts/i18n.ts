@@ -845,6 +845,23 @@ export function reviewRegressions(
         )
       }
     }
+    // A reviewed ID that disappears while a new ID carries the same English is
+    // a rename. Identical English alone does not approve the new context, so
+    // the translation must be carried over deliberately or reviewed again.
+    const sourceIds = new Set(sources.map((source) => source.id))
+    const baseEntries = base[locale] ?? {}
+    for (const [removedId, before] of Object.entries(baseEntries)) {
+      if (sourceIds.has(removedId) || before.fuzzy || before.review !== 'human') continue
+      for (const source of sources) {
+        if (source.id in baseEntries || hashSource(source.message) !== before.sourceHash) continue
+        const after = current[locale]?.[source.id]
+        if (!after?.translation || after.fuzzy || after.review !== 'human') {
+          errors.push(
+            `${locale}: "${source.id}" replaces the reviewed "${removedId}" with the same English; carry the reviewed translation over (Review: human) or review it again`,
+          )
+        }
+      }
+    }
   }
   return errors
 }

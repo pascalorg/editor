@@ -9,6 +9,8 @@ import { type PseudoSurface, surfaces } from '../i18n/pseudo-surfaces'
  * `?lang=en-XA`, where every translated letter is accented and the text is
  * ~30 % longer and bracketed, then reports any visible text or accessible
  * name that still contains plain ASCII words: that copy bypassed the catalog.
+ * Visible controls without an accessible name are reported too, so narrow
+ * layouts that hide a button's text still name it.
  * Screenshots of each surface go to the output directory for clipping review.
  *
  *   bun run i18n:pseudo-audit -- --base http://localhost:3002 [--out dir] [surface...]
@@ -80,7 +82,33 @@ async function collect(page: Page, scope: string | undefined) {
         }
       }
     }
-    return results
+    const unnamed: string[] = []
+    for (const root of roots) {
+      for (const control of root.querySelectorAll(
+        'button, a[href], [role="button"], input, select',
+      )) {
+        if (!visible(control)) continue
+        const labelledBy = control
+          .getAttribute('aria-labelledby')
+          ?.split(/\s+/)
+          .map((id) => document.getElementById(id)?.textContent ?? '')
+          .join(' ')
+        const name = [
+          control.getAttribute('aria-label'),
+          labelledBy,
+          control.getAttribute('title'),
+          // biome-ignore lint/performance/useDomNodeTextContent: text hidden at this width must not count as a name
+          (control as HTMLElement).innerText,
+          // biome-ignore lint/performance/useDomNodeTextContent: text hidden at this width must not count as a name
+          (control as HTMLInputElement).labels?.[0]?.innerText,
+          ...[...control.querySelectorAll('img[alt]')].map((image) => image.getAttribute('alt')),
+        ]
+          .map((value) => value?.trim())
+          .find(Boolean)
+        if (!name) unnamed.push(describe(control))
+      }
+    }
+    return { results, unnamed }
   }, scope)
 }
 
@@ -95,7 +123,11 @@ export async function auditSurface(page: Page, base: string, surface: PseudoSurf
   await surface.steps?.(page)
   await page.waitForTimeout(400)
   const allowed = [...ALLOWLIST.texts, ...(surface.data ?? [])]
-  for (const entry of await collect(page, surface.scope)) {
+  const { results, unnamed } = await collect(page, surface.scope)
+  for (const where of unnamed) {
+    findings.push({ surface: surface.name, where, text: 'control has no accessible name' })
+  }
+  for (const entry of results) {
     const words = untranslatedWords(entry.text, allowed)
     if (words.length > 0)
       findings.push({ surface: surface.name, where: entry.where, text: entry.text })
