@@ -309,8 +309,12 @@ export default function RoofPanel() {
               {i18n._({
                 id: 'node.roof.panel.onStoreyWalls',
                 message:
-                  "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's # roofs move together.}}",
-                values: { storey: levelMove.storey, roofs: levelMove.roofs },
+                  "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's {roofCount} roofs move together.}}",
+                values: {
+                  storey: levelMove.storey,
+                  roofs: levelMove.roofs,
+                  roofCount: String(levelMove.roofs),
+                },
               })}
             </p>
             <button
