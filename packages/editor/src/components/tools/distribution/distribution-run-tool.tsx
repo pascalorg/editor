@@ -1,6 +1,13 @@
 'use client'
 
-import { type AnyNodeId, emitter, type GridEvent, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  type GridEvent,
+  sceneRegistry,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   clearPlacementSurface,
@@ -17,11 +24,12 @@ import {
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { type Group, Vector3 } from 'three'
+import { messageWithSlot } from '../../../i18n/message-slot'
+import { Html } from '../../editor/localized-html'
 import type { RunSurfaceBounds, RunSurfaceTarget } from './distribution-run-contract'
 import { clearDrawAlignment } from './draw-alignment'
 import type { RunBodyHit, ScenePort } from './ports'
@@ -1197,6 +1205,7 @@ export function DistributionRunCursor({
   onLengthInputChange?: (value: string) => void
   onDirectionSelect?: (direction: RunPoint) => void
 }) {
+  const i18n = usePascalI18n()
   const lengthFieldRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (start) lengthFieldRef.current?.focus()
@@ -1284,30 +1293,45 @@ export function DistributionRunCursor({
             <DimensionPill parts={parts} primary={primary} unit={unit} />
             {start ? (
               <label className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] tabular-nums text-muted-foreground shadow-sm backdrop-blur">
-                Length:{' '}
-                <input
-                  className="w-20 bg-transparent text-center text-foreground outline-none"
-                  data-run-length-input
-                  inputMode="decimal"
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === 'Backspace' ||
-                      event.key === 'Delete' ||
-                      event.key === 'ArrowLeft' ||
-                      event.key === 'ArrowRight'
-                    ) {
-                      event.stopPropagation()
-                    }
-                  }}
-                  onChange={(event) => onLengthInputChange?.(event.target.value)}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  placeholder="type a length"
-                  ref={lengthFieldRef}
-                  style={{ pointerEvents: 'auto' }}
-                  type="text"
-                  value={lengthInput ?? ''}
-                />{' '}
-                m<span className="ml-2">Tab: direction</span>
+                {messageWithSlot(
+                  i18n,
+                  /* i18n */ {
+                    id: 'editor.tools.distribution.distributionRunTool.lengthField',
+                    message: 'Length: {field} m',
+                  },
+                  'field',
+                  <input
+                    className="w-20 bg-transparent text-center text-foreground outline-none"
+                    data-run-length-input
+                    inputMode="decimal"
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === 'Backspace' ||
+                        event.key === 'Delete' ||
+                        event.key === 'ArrowLeft' ||
+                        event.key === 'ArrowRight'
+                      ) {
+                        event.stopPropagation()
+                      }
+                    }}
+                    onChange={(event) => onLengthInputChange?.(event.target.value)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    placeholder={i18n._({
+                      id: 'editor.tools.distribution.distributionRunTool.typeALength',
+                      message: 'type a length',
+                    })}
+                    ref={lengthFieldRef}
+                    style={{ pointerEvents: 'auto' }}
+                    type="text"
+                    value={lengthInput ?? ''}
+                  />,
+                )}
+                <span className="ml-2">
+                  {i18n._({
+                    id: 'editor.tools.distribution.distributionRunTool.tabDirection',
+                    message: 'Tab: direction',
+                  })}
+                </span>
               </label>
             ) : null}
             {validationMessage ? (

@@ -2,10 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
 import { floorScriptInputs } from '../lib/floor-script'
+import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { cloneNodesInto } from '../registry/subtree'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
 import { roofsOver, servesAsRoofLevel } from '../services/roof-level'
+import { assertDerivedNodeWrites, filterDerivedNodeWrites } from '../store/derived-node-guard'
 import { stairArrivalOpening } from '../systems/stair/stair-footprint'
 import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-curve'
 import {
@@ -523,6 +525,69 @@ describe('author_scene', () => {
       )
       expect(typed(kept, 'zone').floor.script.params).toEqual({ grain: 2 })
       expect(typed(kept, 'ceiling').holes).toContainEqual(cut)
+    })
+
+    test("a room moved inside another leaves the outer ceiling's re-cut hole to the reconciler", () => {
+      /** A living room whose walls enclose a closet, the closet `dx` metres east of centre. */
+      const nested = (dx: number) =>
+        authorScenePayload.parse({
+          levels: [
+            {
+              name: 'Ground floor',
+              walls: [
+                { id: 'n', start: [-4, -4], end: [4, -4], height: 2.7, thickness: 0.2 },
+                { id: 'e', start: [4, -4], end: [4, 4], height: 2.7, thickness: 0.2 },
+                { id: 's', start: [4, 4], end: [-4, 4], height: 2.7, thickness: 0.2 },
+                { id: 'w', start: [-4, 4], end: [-4, -4], height: 2.7, thickness: 0.2 },
+                { id: 'cn', start: [dx - 1, -1], end: [dx + 1, -1], height: 2.7, thickness: 0.1 },
+                { id: 'ce', start: [dx + 1, -1], end: [dx + 1, 1], height: 2.7, thickness: 0.1 },
+                { id: 'cs', start: [dx + 1, 1], end: [dx - 1, 1], height: 2.7, thickness: 0.1 },
+                { id: 'cw', start: [dx - 1, 1], end: [dx - 1, -1], height: 2.7, thickness: 0.1 },
+              ],
+              rooms: [
+                { name: 'Living', seed: [3, 3] },
+                { name: 'Closet', seed: [dx, 0] },
+              ],
+            },
+          ],
+        })
+      const outerCeiling = (scene: Record<string, AnyNode>) =>
+        Object.values(scene).find(
+          (node) => node.type === 'ceiling' && node.holes.length,
+        ) as AnyNode & Record<string, any>
+      // As a host keeps it between calls: the write, then its own structure reconciliation.
+      const written = applySceneChanges(
+        scaffold(),
+        authorScene(scaffold(), { payload: nested(0), compiled: {} }, { activeLevelId: 'level_0' })
+          .changes,
+      )
+      const scene = reconcileSceneStructure({
+        nodes: written,
+        previousNodes: written,
+        mintId: (kind) => `${kind}_rebuilt`,
+      }).nodes as Record<string, AnyNode>
+      expect(outerCeiling(scene).holeMetadata).toEqual([{ source: 'room' }])
+      const revised = authorScene(
+        scene,
+        { payload: nested(0.3), compiled: {}, replace: true },
+        { activeLevelId: 'level_0' },
+      )
+      // The design re-cut the hole; the write leaves it alone and the guard lets it through.
+      const update = revised.changes!.update!.find((u) => u.id === outerCeiling(scene).id)!
+      expect(update.data).not.toHaveProperty('holes')
+      expect(update.data).not.toHaveProperty('holeMetadata')
+      const changes = filterDerivedNodeWrites(scene, revised.changes!)
+      expect(() => assertDerivedNodeWrites(scene, changes)).not.toThrow()
+      const after = reconcileSceneStructure({
+        nodes: applySceneChanges(scene, changes),
+        previousNodes: scene,
+        mintId: (kind) => `${kind}_rebuilt`,
+      }).nodes as Record<string, AnyNode>
+      const [hole] = outerCeiling(after).holes
+      expect(outerCeiling(after).holeMetadata).toEqual([{ source: 'room' }])
+      expect(new Set(hole.map(([x]: [number, number]) => Math.round(x * 10) / 10))).toEqual(
+        new Set([-0.7, 1.3]),
+      )
     })
   })
 

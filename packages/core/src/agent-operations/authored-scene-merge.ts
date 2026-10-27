@@ -31,15 +31,17 @@ const intent = (source: Record<string, unknown>) =>
  * Between conversions Pascal rebuilds what it derives: the reconciler a derived surface's outline,
  * holes and openings, a script's compile on its new outline, the order of children. None of it is
  * a person's edit, so none of it may refuse the design's next revision; a person's cut-out in a
- * derived surface, and any script code or params they changed, still are.
+ * derived surface (`personView`), and any script code or params they changed, still are.
  */
-const reconcilerOwned = (current: AnyNode, base: AnyNode) => {
-  if (!isDerivedNode(current)) return new Set<string>()
-  const owned = new Set(reconcilerOwnedFields(current))
-  if (!equal(manualSurfaceHoles(base), manualSurfaceHoles(current)))
-    for (const field of ['holes', 'holeMetadata']) owned.delete(field)
-  return owned
-}
+const reconcilerOwned = (current: AnyNode) =>
+  new Set<string>(isDerivedNode(current) ? reconcilerOwnedFields(current) : [])
+
+/**
+ * A derived surface's holes never follow the design: the host's reconciler re-cuts the room ones
+ * from the walls the revision did change and re-applies a person's, while its guard refuses a room
+ * hole written by anyone else (the outline it strips silently).
+ */
+const SURFACE_HOLES = new Set(['holes', 'holeMetadata'])
 
 /** A value as a person edits it: every script in it without its compile. */
 const asEdited = (value: unknown): unknown => {
@@ -49,12 +51,16 @@ const asEdited = (value: unknown): unknown => {
   return Object.fromEntries(Object.entries(kept).map(([key, entry]) => [key, asEdited(entry)]))
 }
 
-/** A node as a person edits it: without what Pascal derives on it, its children in any order. */
+/**
+ * A node as a person edits it: without what Pascal derives on it, its children in any order, and
+ * on a derived surface the holes they cut themselves.
+ */
 function personView(node: AnyNode, owned: ReadonlySet<string>) {
   const view = asEdited(
     Object.fromEntries(Object.entries(node).filter(([key]) => !owned.has(key))),
   ) as Record<string, unknown>
   if (Array.isArray(view.children)) view.children = [...view.children].sort()
+  if (isDerivedNode(node)) view.manualHoles = manualSurfaceHoles(node)
   return view
 }
 
@@ -132,7 +138,7 @@ export function authoredSceneChanges(
       // A person's deletion wins over regeneration, including a same-payload replay.
       delete effective[id]
     } else if (!desired) {
-      const owned = reconcilerOwned(now, old)
+      const owned = reconcilerOwned(now)
       if (!equal(personView(now, owned), personView(old, owned)))
         refuse(
           'authored_edit_conflict',
@@ -142,7 +148,7 @@ export function authoredSceneChanges(
       remove.push(id)
       delete effective[id]
     } else {
-      const owned = reconcilerOwned(now, old)
+      const owned = reconcilerOwned(now)
       const value = Object.fromEntries(
         [...new Set([...Object.keys(old), ...Object.keys(now), ...Object.keys(desired)])].flatMap(
           (key) => {
@@ -150,7 +156,11 @@ export function authoredSceneChanges(
               (node) => (node as Record<string, unknown>)[key],
             )
             // What the reconciler owns follows the design where it changed, else stays as derived.
-            const entry = owned.has(key) ? (equal(b, n) ? c : n) : merged(b, c, n, `${id}.${key}`)
+            const entry = owned.has(key)
+              ? SURFACE_HOLES.has(key) || equal(b, n)
+                ? c
+                : n
+              : merged(b, c, n, `${id}.${key}`)
             return entry === undefined ? [] : [[key, entry]]
           },
         ),

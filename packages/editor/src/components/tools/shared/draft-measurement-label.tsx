@@ -1,6 +1,6 @@
 'use client'
 
-import { Html } from '@react-three/drei'
+import { Html } from '../../editor/localized-html'
 
 /** Lift of a draft's readout above the top of what it measures, in metres. */
 export const DRAFT_LABEL_Y_OFFSET = 0.22

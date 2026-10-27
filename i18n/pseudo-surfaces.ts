@@ -3,7 +3,12 @@ import { DormerNode, SkylightNode, SolarPanelNode } from '../packages/core/src/s
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { template as twoBedroom } from '../packages/mcp/src/templates/two-bedroom'
 import { pseudoLocalize } from '../scripts/i18n'
+import { cabinetPresetById } from '../packages/nodes/src/cabinet/presets'
 import {
+  CabinetModuleNode,
+  CabinetNode,
+  ChimneyNode,
+  ColumnNode,
   RoofNode,
   RoofSegmentNode,
   StairNode,
@@ -70,6 +75,56 @@ function furnishedScene() {
 export const furnishedPath = async (base: string) =>
   `/project/${await auditScene(base, 'furnished', furnishedScene())}`
 const furnishedData = ['Project #1', 'Living / Kitchen', 'Bedroom 1', 'Bedroom 2', 'Bath']
+
+/** The two-bedroom template with a two-module kitchen run in the living room. */
+function kitchenScene() {
+  const graph = structuredClone(twoBedroom) as unknown as {
+    nodes: Record<string, { children?: string[] }>
+  }
+  const run = CabinetNode.parse({
+    id: 'cabinet_audit',
+    parentId: 'level_0',
+    position: [1.5, 0, 1],
+    children: ['cabinet-module_audit_base', 'cabinet-module_audit_sink'],
+  })
+  const modules = (['base-door', 'sink-base'] as const).map((preset, index) =>
+    CabinetModuleNode.parse({
+      ...cabinetPresetById(preset)?.createPatch(run),
+      id: `cabinet-module_audit_${preset === 'base-door' ? 'base' : 'sink'}`,
+      parentId: run.id,
+      position: [index * 0.65, 0, 0],
+    }),
+  )
+  for (const node of [run, ...modules]) graph.nodes[node.id] = node
+  graph.nodes.level_0?.children?.push(run.id)
+  return graph as unknown as SceneGraph
+}
+
+const kitchenPath = async (base: string) =>
+  `/project/${await auditScene(base, 'kitchen', kitchenScene())}`
+// Preset module names are stored scene data, like room names.
+const kitchenData = [...furnishedData, 'Base Cabinet', 'Sink Base']
+
+/** The furnished scene plus a column, and a chimney on the roof. */
+function structuresScene() {
+  const graph = furnishedScene() as unknown as {
+    nodes: Record<string, { children?: string[] }>
+  }
+  const chimney = ChimneyNode.parse({
+    id: 'chimney_audit',
+    parentId: 'rseg_audit',
+    roofSegmentId: 'rseg_audit',
+    position: [1, 0, 1.5],
+  })
+  const column = ColumnNode.parse({ id: 'column_audit', parentId: 'level_0', position: [6, 0, 6] })
+  for (const node of [chimney, column]) graph.nodes[node.id] = node
+  graph.nodes.rseg_audit?.children?.push(chimney.id)
+  graph.nodes.level_0?.children?.push(column.id)
+  return graph as unknown as SceneGraph
+}
+
+const structuresPath = async (base: string) =>
+  `/project/${await auditScene(base, 'structures', structuresScene())}`
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -339,6 +394,48 @@ export const surfaces: PseudoSurface[] = [
     name: 'stair-segment-panel',
     path: furnishedPath,
     steps: (page) => openLayer(page, /\(1\.0[x×]3\.0/),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'cabinet-module-panel',
+    path: kitchenPath,
+    steps: (page) => openLayer(page, 'Base Cabinet'),
+    scope: '[data-editor-inspector]',
+    data: kitchenData,
+  },
+  {
+    name: 'cabinet-run-panel',
+    path: kitchenPath,
+    steps: (page) => openLayer(page, /^Modular Cabinet/),
+    scope: '[data-editor-inspector]',
+    data: kitchenData,
+  },
+  {
+    name: 'node-action-menu',
+    path: furnishedPath,
+    steps: async (page) => {
+      await openLayer(page, 'Door')
+      await page
+        .locator('[data-node-action-menu] button')
+        .last()
+        .hover()
+        .catch(() => undefined)
+      await page.waitForTimeout(600)
+    },
+    scope: '[data-node-action-menu], [role="tooltip"]',
+  },
+  {
+    name: 'column-panel',
+    path: structuresPath,
+    steps: (page) => openLayer(page, 'Column'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'chimney-panel',
+    path: structuresPath,
+    steps: (page) => openLayer(page, 'Chimney'),
     scope: '[data-editor-inspector]',
     data: furnishedData,
   },

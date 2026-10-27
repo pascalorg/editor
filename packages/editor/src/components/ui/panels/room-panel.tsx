@@ -365,8 +365,8 @@ function RoomSubline({ room }: { room: RoomSelectionRecord }) {
   const text = i18n._({
     id: 'editor.panels.roomPanel.openingCounts',
     message:
-      '{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}',
-    values: { doors, windows },
+      '{doors, plural, one {{doorCount} door} other {{doorCount} doors}} · {windows, plural, one {{windowCount} window} other {{windowCount} windows}}',
+    values: { doors, windows, doorCount: String(doors), windowCount: String(windows) },
   })
   return (
     <p className="text-muted-foreground text-xs" data-room-subline>
