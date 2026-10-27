@@ -1,6 +1,6 @@
 import type { LookupAddress } from 'node:dns'
 import { lookup as dnsLookup } from 'node:dns/promises'
-import { request as httpRequest, type IncomingMessage } from 'node:http'
+import { request as httpRequest, type IncomingMessage, STATUS_CODES } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { isIP, type LookupFunction } from 'node:net'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -395,7 +395,8 @@ export async function safeFetch(
         protocolError('fetch_failed', {
           url: loggableUrl(parsed),
           status,
-          statusText: res.statusMessage ?? '',
+          // The standard text, never the server's reason phrase, which can echo the URL.
+          statusText: STATUS_CODES[status] ?? '',
         })
       }
       const declared = Number(header(res, 'content-length') ?? Number.NaN)

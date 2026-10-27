@@ -21,9 +21,10 @@ function response(
   status: number,
   headers: Record<string, string> = {},
   body = '',
+  statusMessage = '',
 ): IncomingMessage {
   const res = Readable.from(body ? [Buffer.from(body)] : []) as unknown as IncomingMessage
-  Object.assign(res, { statusCode: status, statusMessage: '', headers })
+  Object.assign(res, { statusCode: status, statusMessage, headers })
   return res
 }
 
@@ -792,6 +793,7 @@ describe('safeFetch — error data is redacted at the source', () => {
       {
         [at('/redirect-nowhere')]: () => response(302),
         [at('/fail')]: () => response(500),
+        [at('/echo')]: () => response(403, {}, '', `Forbidden ${at('/echo')} user:hunter2@`),
         [at('/declared')]: () => response(200, { 'content-length': '100' }),
         [at('/streamed')]: () => response(200, {}, 'x'.repeat(100)),
         [at('/loop')]: () => response(302, { location: at('/loop') }),
@@ -833,6 +835,7 @@ describe('safeFetch — error data is redacted at the source', () => {
     ['dns_lookup_failed', () => safeFetch(`https://empty.example/x${Q}`, {}, net())],
     ['redirect_without_location', () => safeFetch(at('/redirect-nowhere'), {}, net())],
     ['fetch_failed', () => safeFetch(at('/fail'), {}, net())],
+    ['fetch_failed', () => safeFetch(at('/echo'), {}, net())],
     ['response_too_large', () => safeFetch(at('/declared'), { maxBytes: 10 }, net())],
     ['response_too_large', () => safeFetch(at('/streamed'), { maxBytes: 10 }, net())],
     ['too_many_redirects', () => safeFetch(at('/loop'), {}, net())],
@@ -865,6 +868,15 @@ describe('safeFetch — error data is redacted at the source', () => {
       }
     })
   }
+
+  test("a failed response reports the standard status text, not the server's reason phrase", async () => {
+    const err = await safeFetch(at('/echo'), {}, net()).catch((e) => e)
+    expect((err as ProtocolError).data).toEqual({
+      url: 'https://a.example/echo',
+      status: 403,
+      statusText: 'Forbidden',
+    })
+  })
 
   test('network failures report a code, not their message', async () => {
     const dns = await safeFetch(`https://gone.example/x${Q}`, {}, net()).catch((e) => e)
