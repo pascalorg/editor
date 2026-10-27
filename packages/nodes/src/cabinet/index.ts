@@ -6,6 +6,7 @@ export {
   KITCHEN_ITEMS,
   kitchenItemMatches,
   kitchenPresetForModule,
+  kitchenPresetForPlacedModule,
 } from './kitchen-catalog'
 export { KitchenCollection, KitchenThumbnail } from './kitchen-collection'
 export { beginKitchenPlacement } from './kitchen-placement'

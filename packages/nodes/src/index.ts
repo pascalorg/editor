@@ -167,6 +167,7 @@ export {
   KitchenCollection,
   kitchenItemMatches,
   kitchenPresetForModule,
+  kitchenPresetForPlacedModule,
   MIN_PRACTICAL_TOP_CABINET_HEIGHT,
   poseCabinetMovingParts,
   useCabinetPlacementStatus,

@@ -84,6 +84,16 @@ export function kitchenPresetForModule(
   return 'base-door'
 }
 
+/** A placed module's preset, reading its parent: an upper attached to a module is a wall cabinet. */
+export function kitchenPresetForPlacedModule(
+  nodes: Readonly<Record<string, AnyNode>>,
+  node: CabinetModuleNode,
+): CabinetPresetId {
+  const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+  if (parent?.type === 'cabinet-module') return 'wall-cabinet'
+  return kitchenPresetForModule(node, parent?.type === 'cabinet' ? parent : undefined)
+}
+
 /**
  * The kitchen's placed modules a query names; fillers are part of their run,
  * not items. `labelFor` gives the name the UI shows for a preset, when it is
@@ -96,8 +106,7 @@ export function findKitchenItems(
 ): CabinetModuleNode[] {
   return Object.values(nodes).filter((node): node is CabinetModuleNode => {
     if (node.type !== 'cabinet-module' || node.moduleKind !== 'standard') return false
-    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
-    const id = kitchenPresetForModule(node, parent?.type === 'cabinet' ? parent : undefined)
+    const id = kitchenPresetForPlacedModule(nodes, node)
     return (
       kitchenItemMatches(id, query, labelFor?.(id)) ||
       (node.name ?? '').toLowerCase().includes(query.toLowerCase())

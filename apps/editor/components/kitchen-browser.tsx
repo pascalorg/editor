@@ -1,13 +1,6 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  type CabinetNode,
-  emitter,
-  resolveLevelId,
-  usePascalI18n,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNodeId, emitter, resolveLevelId, usePascalI18n, useScene } from '@pascal-app/core'
 import { useCommandPalette, useCommandRegistry, useEditor } from '@pascal-app/editor'
 import {
   beginKitchenPlacement,
@@ -15,7 +8,7 @@ import {
   KITCHEN_ITEM_LABELS,
   KITCHEN_ITEMS,
   KitchenCollection,
-  kitchenPresetForModule,
+  kitchenPresetForPlacedModule,
 } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
@@ -113,6 +106,8 @@ export function KitchenBrowser({ query = '' }: { query?: string }) {
 
 export function KitchenCommands() {
   const i18n = usePascalI18n()
+  // The commands bake translated labels; a locale or catalog change re-registers them.
+  const catalogVersion = i18n.getVersion()
   const register = useCommandRegistry((state) => state.register)
   // Always mounted: the placed items are read only while the palette is open to list them.
   const paletteOpen = useCommandPalette((state) => state.open)
@@ -134,20 +129,15 @@ export function KitchenCommands() {
           execute: () => beginKitchenPlacement(item.id),
         })),
       ),
-    [register, i18n],
+    [register, i18n, catalogVersion],
   )
   useEffect(
     () =>
       register(
         modules.map((node) => {
-          const nodes = useScene.getState().nodes
-          const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
           const preset =
             node.type === 'cabinet-module'
-              ? kitchenPresetForModule(
-                  node,
-                  parent?.type === 'cabinet' ? (parent as CabinetNode) : undefined,
-                )
+              ? kitchenPresetForPlacedModule(useScene.getState().nodes, node)
               : 'base-door'
           const item = KITCHEN_ITEMS.find((entry) => entry.id === preset)!
           return {
@@ -166,7 +156,7 @@ export function KitchenCommands() {
           }
         }),
       ),
-    [register, modules, i18n],
+    [register, modules, i18n, catalogVersion],
   )
   return null
 }
