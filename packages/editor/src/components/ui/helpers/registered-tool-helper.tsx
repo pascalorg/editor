@@ -1,3 +1,4 @@
+import { usePascalI18n } from '@pascal-app/core'
 import type { ToolHint } from '@pascal-app/core'
 import type { ContinuationContext } from '../../../lib/continuation'
 import type { HudTitle } from '../../../lib/hud-title'
@@ -29,6 +30,7 @@ export function RegisteredToolHelper({
   title?: HudTitle | null
   notice?: string | null
 }) {
+  const i18n = usePascalI18n()
   const visible = useVisibleToolHints(hints)
   if (visible.length === 0 && !snapContext && !continuationContext && !notice) return null
   // Hints carrying a live-state `chip` render as mode chips next to the
@@ -44,7 +46,7 @@ export function RegisteredToolHelper({
         const isBypassHint = hint.key === 'Shift'
         return {
           keys: [hint.key],
-          label: shiftPressed && isBypassHint ? 'Guided constraints bypassed' : hint.label,
+          label: shiftPressed && isBypassHint ? i18n._({ id: 'editor.helpers.registeredToolHelper.guidedConstraintsBypassed', message: 'Guided constraints bypassed' }) : hint.label,
           active: shiftPressed && isBypassHint,
         }
       })}

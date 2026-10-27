@@ -1,3 +1,4 @@
+import type { MessageDescriptor } from '@pascal-app/core'
 export type ContinuationContext = 'wall' | 'fence' | 'point' | 'cabinet' | 'canopy'
 export type ContinuationMode = string
 
@@ -6,7 +7,7 @@ export const CONTINUATION_PROFILES: Record<
   {
     options: ContinuationMode[]
     default: ContinuationMode
-    labels: Record<string, string>
+    labels: Record<string, MessageDescriptor>
     icons: Record<string, string>
     /**
      * Picked once from the Build panel before drawing (`wall-draw-variant.ts`),
@@ -21,7 +22,14 @@ export const CONTINUATION_PROFILES: Record<
   wall: {
     options: ['room', 'single', 'rectangle'],
     default: 'room',
-    labels: { room: 'Polygon room', single: 'Walls', rectangle: 'Rectangle room' },
+    labels: {
+      room: /* i18n */ { id: 'editor.lib.continuation.polygonRoom', message: 'Polygon room' },
+      single: /* i18n */ { id: 'editor.lib.continuation.walls', message: 'Walls' },
+      rectangle: /* i18n */ {
+        id: 'editor.lib.continuation.rectangleRoom',
+        message: 'Rectangle room',
+      },
+    },
     icons: { room: 'lucide:pentagon', single: 'lucide:minus', rectangle: 'lucide:square' },
     chosenInPanel: true,
   },
@@ -29,10 +37,13 @@ export const CONTINUATION_PROFILES: Record<
     options: ['single', 'continuous', 'curved', 'freehand'],
     default: 'continuous',
     labels: {
-      continuous: 'Continuous',
-      single: 'Single fence',
-      curved: 'Curved fence',
-      freehand: 'Freehand fence',
+      continuous: /* i18n */ { id: 'editor.lib.continuation.continuous', message: 'Continuous' },
+      single: /* i18n */ { id: 'editor.lib.continuation.singleFence', message: 'Single fence' },
+      curved: /* i18n */ { id: 'editor.lib.continuation.curvedFence', message: 'Curved fence' },
+      freehand: /* i18n */ {
+        id: 'editor.lib.continuation.freehandFence',
+        message: 'Freehand fence',
+      },
     },
     icons: {
       continuous: 'lucide:waypoints',
@@ -44,19 +55,34 @@ export const CONTINUATION_PROFILES: Record<
   point: {
     options: ['once', 'repeat'],
     default: 'once',
-    labels: { once: 'Place once', repeat: 'Place multiple' },
+    labels: {
+      once: /* i18n */ { id: 'editor.lib.continuation.placeOnce', message: 'Place once' },
+      repeat: /* i18n */ { id: 'editor.lib.continuation.placeMultiple', message: 'Place multiple' },
+    },
     icons: { once: 'lucide:target', repeat: 'lucide:copy-plus' },
   },
   cabinet: {
     options: ['single', 'continuous'],
     default: 'single',
-    labels: { single: 'Single cabinet', continuous: 'Continuous run' },
+    labels: {
+      single: /* i18n */ { id: 'editor.lib.continuation.singleCabinet', message: 'Single cabinet' },
+      continuous: /* i18n */ {
+        id: 'editor.lib.continuation.continuousRun',
+        message: 'Continuous run',
+      },
+    },
     icons: { single: 'lucide:minus', continuous: 'lucide:waypoints' },
   },
   canopy: {
     options: ['single', 'continuous'],
     default: 'single',
-    labels: { single: 'Single canopy', continuous: 'Continuous canopy' },
+    labels: {
+      single: /* i18n */ { id: 'editor.lib.continuation.singleCanopy', message: 'Single canopy' },
+      continuous: /* i18n */ {
+        id: 'editor.lib.continuation.continuousCanopy',
+        message: 'Continuous canopy',
+      },
+    },
     icons: { single: 'lucide:minus', continuous: 'lucide:waypoints' },
   },
 }

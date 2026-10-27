@@ -1,6 +1,8 @@
 import { Icon } from '@iconify/react'
+import { usePascalI18n } from '@pascal-app/core'
 import type * as React from 'react'
 
+import { toolHintKey } from '../../../i18n/node-messages'
 import { cn } from '../../../lib/utils'
 
 const MOUSE_SHORTCUTS = {
@@ -70,20 +72,22 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
   const isCommand = COMMAND_VALUES.has(value)
   const isShift = value === 'Shift'
   const commandDisplay = IS_MAC ? '⌘' : 'Ctrl'
-  const commandLabel = IS_MAC ? 'Command' : 'Control'
+  const i18n = usePascalI18n()
+  const commandLabel = toolHintKey(IS_MAC ? 'Command' : 'Control', i18n)
+  const mouseLabel = mouseShortcut ? toolHintKey(mouseShortcut.label, i18n) : undefined
+  const shown = displayValue ?? toolHintKey(value, i18n)
 
   return (
     <kbd
       aria-label={
-        mouseShortcut?.label ??
-        (isCommand ? commandLabel : isShift ? 'Shift' : (displayValue ?? value))
+        mouseLabel ?? (isCommand ? commandLabel : isShift ? 'Shift' : shown)
       }
       className={cn(
         'inline-flex h-6 items-center rounded border border-border bg-muted px-2 font-medium font-mono text-[11px] text-muted-foreground',
         (mouseShortcut || isShift) && 'justify-center px-1.5',
         className,
       )}
-      title={mouseShortcut?.label ?? (isCommand ? commandLabel : isShift ? 'Shift' : value)}
+      title={mouseLabel ?? (isCommand ? commandLabel : isShift ? 'Shift' : shown)}
       {...props}
     >
       {mouseShortcut ? (
@@ -96,7 +100,7 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
             icon={mouseShortcut.icon}
             width={14}
           />
-          <span className="sr-only">{mouseShortcut.label}</span>
+          <span className="sr-only">{mouseLabel}</span>
         </>
       ) : isShift ? (
         // Icon rather than the ⇧ text glyph — the font renders the glyph's
@@ -117,7 +121,7 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
         // it up a touch on Mac. "Ctrl" stays at the token's normal size.
         <span className={IS_MAC ? 'text-[13px] leading-none' : undefined}>{commandDisplay}</span>
       ) : (
-        (displayValue ?? value)
+        shown
       )}
     </kbd>
   )

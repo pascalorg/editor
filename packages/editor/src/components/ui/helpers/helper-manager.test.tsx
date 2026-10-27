@@ -28,7 +28,7 @@ describe('Divide HUD', () => {
       </TooltipProvider>,
     )
     expect(html).toContain('Snapping: Grid')
-    expect(html).toContain('Grid: 0.50 m')
+    expect(html).toContain('Grid: 0.50\u00a0m')
     for (const label of ['Add point', 'More shortcuts', 'Cancel'])
       expect(html).toContain(label)
     expect(html).toContain('aria-expanded="false"')
@@ -116,6 +116,9 @@ describe('HUD header', () => {
   })
 
   test('select mode is titled Select with its V key', () => {
-    expect(SELECT_HUD_TITLE).toMatchObject({ label: 'Select', shortcut: 'V' })
+    expect(SELECT_HUD_TITLE).toMatchObject({
+      label: expect.objectContaining({ message: 'Select' }),
+      shortcut: 'V',
+    })
   })
 })
