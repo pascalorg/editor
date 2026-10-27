@@ -281,8 +281,12 @@ export function DrawnFloorRow({ zoneId }: { zoneId: string }) {
           /* i18n */ {
             id: 'editor.panels.roomConstructionRows.drawnFloor',
             message:
-              '{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with # room)} other { (shared with # rooms)}}',
-            values: { ambiguous: floor.ambiguous ? 'yes' : 'no', shared: floor.shared },
+              '{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with {sharedCount} room)} other { (shared with {sharedCount} rooms)}}',
+            values: {
+              ambiguous: floor.ambiguous ? 'yes' : 'no',
+              shared: floor.shared,
+              sharedCount: String(floor.shared),
+            },
           },
           'name',
           <span className="text-foreground">{floor.name}</span>,

@@ -601,10 +601,11 @@ export default function StairPanel() {
                 {i18n._({
                   id: 'node.stair.panel.flightMeasurements',
                   message:
-                    'Flight {number}: {count, plural, one {# riser} other {# risers}} · R {riser} · T {going} · {slope}',
+                    'Flight {number}: {count, plural, one {{riserCount} riser} other {{riserCount} risers}} · R {riser} · T {going} · {slope}',
                   values: {
                     number: index + 1,
                     count: flight.count,
+                    riserCount: String(flight.count),
                     riser:
                       flight.riserHeight === null
                         ? '—'

@@ -197,18 +197,6 @@
     "packages/editor/src/components/editor/join-walls-pill.tsx": [
       "Join walls"
     ],
-    "packages/editor/src/components/editor/node-action-menu.tsx": [
-      "Curve",
-      "Cut out",
-      "Duplicate",
-      "Edit mesh",
-      "Find in catalog",
-      "Group selection",
-      "Move",
-      "Rotate left",
-      "Rotate right",
-      "Ungroup selection"
-    ],
     "packages/editor/src/components/editor/open-wall-ends-3d-layer.tsx": [
       "Wall end not joined"
     ],
@@ -221,14 +209,6 @@
       "Live lens",
       "Pinned",
       "{?} {?} measurements"
-    ],
-    "packages/editor/src/components/editor/riser-diagram-panel.tsx": [
-      "DWV plumbing isometric",
-      "DWV riser diagram",
-      "No drain, waste, or vent pipes yet. Draw plumbing to see the riser diagram.",
-      "Riser Diagram",
-      "Vent",
-      "Waste"
     ],
     "packages/editor/src/components/editor/room-controls.tsx": [
       "Add stairs",
@@ -352,24 +332,6 @@
       "Undo",
       "Undo anyway",
       "You've changed the scene since. Undoing also removes those changes."
-    ],
-    "packages/editor/src/components/procedural-items/inspector.tsx": [
-      "Adjust design",
-      "Back",
-      "Edit parts",
-      "Invalid attachment",
-      "Invalid edit",
-      "Invalid placement",
-      "Invalid position",
-      "Invalid reset",
-      "Position",
-      "Reset this part",
-      "pos"
-    ],
-    "packages/editor/src/components/tools/distribution/distribution-run-tool.tsx": [
-      "Length:",
-      "Tab: direction",
-      "type a length"
     ],
     "packages/editor/src/components/ui/command-palette/editor-commands.tsx": [
       "Add Level",

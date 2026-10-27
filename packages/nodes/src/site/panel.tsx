@@ -417,9 +417,10 @@ export function SiteNodePanel() {
             {i18n._({
               id: 'node.site.panel.surveyedContours',
               message:
-                '{count, plural, one {# surveyed line} other {# surveyed lines}} at {interval} ft ({datum}) — {source}',
+                '{count, plural, one {{lineCount} surveyed line} other {{lineCount} surveyed lines}} at {interval} ft ({datum}) — {source}',
               values: {
                 count: node.terrainContours.lines.length,
+                lineCount: String(node.terrainContours.lines.length),
                 interval: node.terrainContours.intervalFt,
                 datum: node.terrainContours.datum,
                 source:
