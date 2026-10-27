@@ -94,6 +94,6 @@
     "directory": "packages/mcp"
   },
   "license": "MIT",
-  "homepage": "https://github.com/pascalorg/editor/tree/main/packages/mcp#readme",
+  "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "bugs": "https://github.com/pascalorg/editor/issues"
 }
