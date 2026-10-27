@@ -936,7 +936,7 @@ function ReferenceFloorControl() {
                         )}
                       />
                       <span className="min-w-0 flex-1 truncate">{levelName}</span>
-                      <span className="text-[10px] text-muted-foreground">{index + 1}{' '}{i18n._({ id: 'editor.actionMenu.viewToggles.below', message: 'below' })}</span>
+                      <span className="text-[10px] text-muted-foreground">{i18n._({ id: 'editor.actionMenu.viewToggles.levelsBelow', message: '{count} below', values: { count: index + 1 } })}</span>
                     </button>
                   )
                 })}
