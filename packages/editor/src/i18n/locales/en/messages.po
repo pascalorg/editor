@@ -1251,6 +1251,106 @@ msgstr "{count, plural, one {# run} other {# runs}}"
 msgid "editor.floatingActionMenu.system"
 msgstr "System"
 
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.addAFloorUnderTheRoof"
+msgstr "Add a floor under the roof"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.addLevelAbove"
+msgstr "Add level above"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.addLevelBelow"
+msgstr "Add level below"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.cancel"
+msgstr "Cancel"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.deleteLevel"
+msgstr "Delete level"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.deleteLevelConfirm"
+msgstr "Are you sure you want to delete {levelName}? All walls, floors, and objects on this level will be permanently removed."
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.dragToReorder"
+msgstr "Drag to reorder"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.duplicateLevel"
+msgstr "Duplicate level"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.duplicateWithOptions"
+msgstr "Duplicate with options..."
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.exitUnitFocus"
+msgstr "Exit unit focus"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.focusedUnitHasZonesHere"
+msgstr "Focused unit has zones here"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.groundFloorOverGrade"
+msgstr "The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.groundFloorUnderGrade"
+msgstr "The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.groundLineTheLevelsUnderIt"
+msgstr "Ground line: the levels under it are below grade"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.groundOffset"
+msgstr "Ground · {offset}"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.insertLevelHere"
+msgstr "Insert level here"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.levelHeight"
+msgstr "Level height"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.pasteCopiedSelection"
+msgstr "Paste copied selection"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.reorderLevelname"
+msgstr "Reorder {levelName}"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.seatTheBuildingSoThisFloor"
+msgstr "Seat the building so this floor stands at grade; the floors under it are below grade"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.setAsGroundFloor"
+msgstr "Set as ground floor"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.theGroundLevelCannotBeDeleted"
+msgstr "The ground level cannot be deleted"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.thisFloorStandsAtGrade"
+msgstr "This floor stands at grade"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+msgid "editor.floatingLevelSelector.unit"
+msgstr "Unit"
+
 #: packages/editor/src/components/ui/helpers/building-helper.tsx
 msgid "editor.helpers.buildingHelper.cancel"
 msgstr "Cancel"
@@ -1511,6 +1611,102 @@ msgstr "Rotate"
 msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "Guided constraints bypassed"
 
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.ceiling"
+msgstr "Ceiling ({area})"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+msgid "editor.layers.defaultName.collection"
+msgstr "Collection"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.flight"
+msgstr "Flight ({width}×{length}m)"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.landing"
+msgstr "Landing ({width}×{length}m)"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/registry-tree-node.tsx
+msgid "editor.layers.defaultName.node"
+msgstr "Node"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.roof"
+msgstr "Roof ({count, plural, one {# segment} other {# segments}})"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.roofSegment"
+msgstr "{roofType, select, hip {Hip} gable {Gable} shed {Shed} gambrel {Gambrel} dutch {Dutch} mansard {Mansard} flat {Flat} conical {Conical} barrel {Barrel} other {Roof}} ({width}×{depth}m)"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.room"
+msgstr "Room ({area})"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.slab"
+msgstr "Slab ({area})"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.staircase"
+msgstr "Staircase ({count, plural, one {# segment} other {# segments}})"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+msgid "editor.layers.defaultName.zone"
+msgstr "Zone ({area})"
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.cancel"
+msgstr "Cancel"
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.chooseWhatToCopyFromLevel"
+msgstr "Choose what to copy from {levelName}."
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.chooseWhatToCopyFromThisLevel"
+msgstr "Choose what to copy from this level."
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.duplicate"
+msgstr "Duplicate"
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.duplicateLevel"
+msgstr "Duplicate Level"
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.everything"
+msgstr "Everything"
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.structureFinishesAndPlacedItemsWithout"
+msgstr "Structure, finishes, and placed items, without guide references."
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.structureFurniture"
+msgstr "Structure + furniture"
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.structureMaterials"
+msgstr "Structure + materials"
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.structureMaterialsFurnitureAndReferences"
+msgstr "Structure, materials, furniture, and references."
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.structureOnly"
+msgstr "Structure only"
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.structureWithTheCurrentMaterialAnd"
+msgstr "Structure with the current material and finish assignments."
+
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+msgid "editor.levelDuplicateDialog.wallsSlabsRoofsStairsWindowsAnd"
+msgstr "Walls, slabs, roofs, stairs, windows, and doors without finishes."
+
 #: packages/editor/src/lib/contextual-help.ts
 msgid "editor.lib.contextualHelp.addOrRemoveObjectsFromThe"
 msgstr "Add or remove objects from the selection"
@@ -1730,6 +1926,358 @@ msgstr "Walls"
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.reloadEditor"
 msgstr "Reload editor"
+
+#: packages/editor/src/components/ui/sidebar/icon-rail.tsx
+msgid "editor.sidebar.iconRail.settings"
+msgstr "Settings"
+
+#: packages/editor/src/components/ui/sidebar/icon-rail.tsx
+msgid "editor.sidebar.iconRail.site"
+msgstr "Site"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+msgid "editor.sidebar.panels.itemsPanel.all"
+msgstr "All"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+msgid "editor.sidebar.panels.itemsPanel.community"
+msgstr "Community"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.all"
+msgstr "All"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.community"
+msgstr "Community"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.library"
+msgstr "Library"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.mine"
+msgstr "Mine"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.noResultsForSearch"
+msgstr "No results for “{search}”"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.search"
+msgstr "Search..."
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+msgid "editor.sidebar.panels.itemsPanel.library"
+msgstr "Library"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+msgid "editor.sidebar.panels.itemsPanel.mine"
+msgstr "Mine"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+msgid "editor.sidebar.panels.itemsPanel.noResultsForSearch"
+msgstr "No results for “{search}”"
+
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+msgid "editor.sidebar.panels.itemsPanel.search"
+msgstr "Search..."
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.addLevel"
+msgstr "Add level"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.addPoint"
+msgstr "Add point"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.area"
+msgstr "Area:"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.baseElevation"
+msgstr "Base elevation"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.building"
+msgstr "Building"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/building-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.buildingTreeNode.addNewLevel"
+msgstr "Add new level"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/building-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.buildingTreeNode.building"
+msgstr "Building"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.cameraSnapshot"
+msgstr "Camera snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.capture"
+msgstr "Capture"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.clearSelection"
+msgstr "Clear selection"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.clearSnapshot"
+msgstr "Clear snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.closeWallsAroundASpaceTo"
+msgstr "Close walls around a space to make a room."
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.collectionColour"
+msgstr "Collection colour"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.collections"
+msgstr "Collections"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.deleteCollection"
+msgstr "Delete collection"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.deleteLevel"
+msgstr "Delete level"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.drawAZone"
+msgstr "Draw a zone"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.duplicate"
+msgstr "Duplicate"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.duplicateLevel"
+msgstr "Duplicate level"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.duplicateLevelWithOptions"
+msgstr "Duplicate level with options"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.duplicateWithOptions"
+msgstr "Duplicate with options..."
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.elements"
+msgstr "Elements"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.guide"
+msgstr "Guide"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.hide"
+msgstr "Hide"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.level"
+msgstr "Level"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.newUnit"
+msgstr "New unit"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.noBuildingsYet"
+msgstr "No buildings yet"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.noElementsOnThisLevel"
+msgstr "No elements on this level"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.noLevelsYet"
+msgstr "No levels yet"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.objectsSelected"
+msgstr "{count, plural, one {# object selected} other {# objects selected}}"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.otherZones"
+msgstr "Other zones"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.perimeter"
+msgstr "Perimeter:"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.propertyLine"
+msgstr "Property Line"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.rooms"
+msgstr "Rooms"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.selectALevelToViewContent"
+msgstr "Select a level to view content"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.show"
+msgstr "Show"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.site"
+msgstr "Site"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.takeSnapshot"
+msgstr "Take snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.theGroundLevelCannotBeDeleted"
+msgstr "The ground level cannot be deleted"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.cameraSnapshot"
+msgstr "Camera snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.clearSnapshot"
+msgstr "Clear snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.hide"
+msgstr "Hide"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.show"
+msgstr "Show"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.takeSnapshot"
+msgstr "Take snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.updateSnapshot"
+msgstr "Update snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.viewSnapshot"
+msgstr "View snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.units"
+msgstr "Units"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.deleteUnit"
+msgstr "Delete unit"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.focused"
+msgstr "Focused"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.removeFromUnit"
+msgstr "Remove from unit"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.room"
+msgstr "Room"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.zone"
+msgstr "Zone"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.updateSnapshot"
+msgstr "Update snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.uploadingProgress"
+msgstr "{assetType, select, guide {Uploading guide... {progress}%} other {Uploading scan... {progress}%}}"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.uploadScanFloorplan"
+msgstr "Upload scan/floorplan"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.sidebar.panels.sitePanel.viewSnapshot"
+msgstr "View snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/zone-membership-checkbox.tsx
+msgid "editor.sidebar.panels.sitePanel.zoneMembershipCheckbox.inUnitname"
+msgstr "In {unitName}"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.actions"
+msgstr "Actions"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.addOne"
+msgstr "Add one"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.cameraSnapshot"
+msgstr "Camera snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.clearSnapshot"
+msgstr "Clear snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.deleteWithContents"
+msgstr "Delete with contents"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.noZonesOnThisLevel"
+msgstr "No zones on this level."
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.saveToCatalog"
+msgstr "Save to catalog"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.selectALevelToViewAnd"
+msgstr "Select a level to view and create zones"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.takeSnapshot"
+msgstr "Take snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.updateSnapshot"
+msgstr "Update snapshot"
+
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
+msgstr "View snapshot"
+
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+msgid "editor.sidebar.usePluginPanels.labelPluginCrashed"
+msgstr "\"{label}\" plugin crashed"
+
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+msgid "editor.sidebar.usePluginPanels.loading"
+msgstr "Loading…"
+
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+msgid "editor.sidebar.usePluginPanels.plugins"
+msgstr "Plugins"
+
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+msgid "editor.sidebar.usePluginPanels.thisPanelHitAnErrorAnd"
+msgstr "This panel hit an error and was unloaded for this session. The rest of the editor is unaffected — reload to try again."
 
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.theEditorSceneFailedToRender"

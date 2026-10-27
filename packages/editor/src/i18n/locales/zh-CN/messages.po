@@ -3063,6 +3063,256 @@ msgstr "{count, plural, other {# 段}}"
 msgid "editor.floatingActionMenu.system"
 msgstr "系统"
 
+# Source-Hash: f0e76aea883d4e48
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add a floor under the roof"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.addAFloorUnderTheRoof"
+msgstr "在屋顶下添加楼层"
+
+# Source-Hash: a982ff9b075af829
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add level above"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.addLevelAbove"
+msgstr "在上方添加楼层"
+
+# Source-Hash: 0db7d221df08fa6b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add level below"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.addLevelBelow"
+msgstr "在下方添加楼层"
+
+# Source-Hash: c0774c185060fc13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cancel"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.cancel"
+msgstr "取消"
+
+# Source-Hash: b26de372b4b0eaac
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.delete"
+msgstr "删除"
+
+# Source-Hash: 8e29375893d63408
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete level"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.deleteLevel"
+msgstr "删除楼层"
+
+# Source-Hash: c3bc69ec52022250
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Are you sure you want to delete {levelName}? All walls, floors, and objects on this level will be permanently removed."
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.deleteLevelConfirm"
+msgstr "确定要删除{levelName}吗？此楼层上的所有墙体、楼板和对象都将被永久移除。"
+
+# Source-Hash: 5b2826ddac95cd0c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drag to reorder"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.dragToReorder"
+msgstr "拖动以重新排序"
+
+# Source-Hash: 933177338f5a03ed
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate level"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.duplicateLevel"
+msgstr "复制楼层"
+
+# Source-Hash: 9614c6825a7c67bf
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate with options..."
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.duplicateWithOptions"
+msgstr "带选项复制..."
+
+# Source-Hash: 5ec91bb339806413
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Exit unit focus"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.exitUnitFocus"
+msgstr "退出单元聚焦"
+
+# Source-Hash: a88c3f8bed58b4fa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Focused unit has zones here"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.focusedUnitHasZonesHere"
+msgstr "聚焦的单元在此有区域"
+
+# Source-Hash: 655055a310fb5d13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.groundFloorOverGrade"
+msgstr "首层高出地坪 {distance}。将首层设为高出地坪 8 英寸"
+
+# Source-Hash: 77548faae4869eec
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.groundFloorUnderGrade"
+msgstr "首层低于地坪 {distance}。将首层设为高出地坪 8 英寸"
+
+# Source-Hash: e3763ae2dc62c03f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ground line: the levels under it are below grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.groundLineTheLevelsUnderIt"
+msgstr "地坪线：其下方的楼层位于地坪以下"
+
+# Source-Hash: e12035eb47cc61cc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ground · {offset}"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.groundOffset"
+msgstr "地坪 · {offset}"
+
+# Source-Hash: 5661c11383217661
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Insert level here"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.insertLevelHere"
+msgstr "在此插入楼层"
+
+# Source-Hash: 0215b36d5a08597a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Level height"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.levelHeight"
+msgstr "楼层高度"
+
+# Source-Hash: 91af436e81bb0875
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paste copied selection"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.pasteCopiedSelection"
+msgstr "粘贴复制的选择"
+
+# Source-Hash: 68bc52f53240cbec
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reorder {levelName}"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.reorderLevelname"
+msgstr "重新排序{levelName}"
+
+# Source-Hash: 625d53de72ebc2ef
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Seat the building so this floor stands at grade; the floors under it are below grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.seatTheBuildingSoThisFloor"
+msgstr "调整建筑使此层位于地坪；其下方各层位于地坪以下"
+
+# Source-Hash: 7ac9c00895c30d76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Set as ground floor"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.setAsGroundFloor"
+msgstr "设为首层"
+
+# Source-Hash: d6b381247066a7aa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The ground level cannot be deleted"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.theGroundLevelCannotBeDeleted"
+msgstr "无法删除首层楼层"
+
+# Source-Hash: b1122051dce0d7a1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "This floor stands at grade"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.thisFloorStandsAtGrade"
+msgstr "此层位于地坪"
+
+# Source-Hash: 062cc0f1afef0c52
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unit"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#, fuzzy
+msgid "editor.floatingLevelSelector.unit"
+msgstr "单元"
+
 # Source-Hash: c0774c185060fc13
 # Review: required
 # AI-Provider: cursor-agent
@@ -3713,6 +3963,246 @@ msgstr "旋转"
 msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "已绕过引导约束"
 
+# Source-Hash: dbeae4c43f49327f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ceiling ({area})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.ceiling"
+msgstr "天花板（{area}）"
+
+# Source-Hash: d29165c9d4bfc3cb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collection"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+#, fuzzy
+msgid "editor.layers.defaultName.collection"
+msgstr "集合"
+
+# Source-Hash: 8f536b859be662a0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flight ({width}×{length}m)"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.flight"
+msgstr "梯段（{width}×{length}m）"
+
+# Source-Hash: 46dcbf4548374073
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Landing ({width}×{length}m)"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.landing"
+msgstr "平台（{width}×{length}m）"
+
+# Source-Hash: 3ea44453fcd08a6e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Node"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/registry-tree-node.tsx
+#, fuzzy
+msgid "editor.layers.defaultName.node"
+msgstr "节点"
+
+# Source-Hash: 93f3a04e15b6fb49
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof ({count, plural, one {# segment} other {# segments}})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.roof"
+msgstr "屋顶（{count, plural, other {# 个分段}}）"
+
+# Source-Hash: a730fab01c172704
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{roofType, select, hip {Hip} gable {Gable} shed {Shed} gambrel {Gambrel} dutch {Dutch} mansard {Mansard} flat {Flat} conical {Conical} barrel {Barrel} other {Roof}} ({width}×{depth}m)"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.roofSegment"
+msgstr "{roofType, select, hip {四坡} gable {双坡} shed {单坡} gambrel {复折} dutch {歇山} mansard {孟莎} flat {平屋顶} conical {锥形} barrel {筒形} other {屋顶}}（{width}×{depth}m）"
+
+# Source-Hash: 54efcb0756c2f2c1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room ({area})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.room"
+msgstr "房间（{area}）"
+
+# Source-Hash: e38a4b9986a9d21a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slab ({area})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.slab"
+msgstr "楼板（{area}）"
+
+# Source-Hash: 57398365d4b9066f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Staircase ({count, plural, one {# segment} other {# segments}})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.staircase"
+msgstr "楼梯（{count, plural, other {# 个分段}}）"
+
+# Source-Hash: a17f8fc29aae896e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Zone ({area})"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
+#, fuzzy
+msgid "editor.layers.defaultName.zone"
+msgstr "区域（{area}）"
+
+# Source-Hash: c0774c185060fc13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cancel"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.cancel"
+msgstr "取消"
+
+# Source-Hash: 07c11e7e4d4681d6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose what to copy from {levelName}."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.chooseWhatToCopyFromLevel"
+msgstr "选择要从{levelName}复制的内容。"
+
+# Source-Hash: 9500d4378a319532
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose what to copy from this level."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.chooseWhatToCopyFromThisLevel"
+msgstr "选择要从此楼层复制的内容。"
+
+# Source-Hash: 34dc96fe77a31e51
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.duplicate"
+msgstr "复制"
+
+# Source-Hash: a56e3eb43e60b45c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate Level"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.duplicateLevel"
+msgstr "复制楼层"
+
+# Source-Hash: e4c6ab1ea473a082
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Everything"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.everything"
+msgstr "全部"
+
+# Source-Hash: ac3f119e560388ab
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure, finishes, and placed items, without guide references."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureFinishesAndPlacedItemsWithout"
+msgstr "结构、饰面和已放置的物品，不含参考底图。"
+
+# Source-Hash: acbdf968391d5273
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure + furniture"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureFurniture"
+msgstr "结构 + 家具"
+
+# Source-Hash: ce682864a140fe75
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure + materials"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureMaterials"
+msgstr "结构 + 材质"
+
+# Source-Hash: 5ee44d53847c5ea2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure, materials, furniture, and references."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureMaterialsFurnitureAndReferences"
+msgstr "结构、材质、家具和参考。"
+
+# Source-Hash: 95aa1b43dbdb3f02
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure only"
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureOnly"
+msgstr "仅结构"
+
+# Source-Hash: 2c53b46c9ca9fe2f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Structure with the current material and finish assignments."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.structureWithTheCurrentMaterialAnd"
+msgstr "结构及当前的材质和饰面分配。"
+
+# Source-Hash: 3350e9008eaba15d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Walls, slabs, roofs, stairs, windows, and doors without finishes."
+#: packages/editor/src/components/ui/level-duplicate-dialog.tsx
+#, fuzzy
+msgid "editor.levelDuplicateDialog.wallsSlabsRoofsStairsWindowsAnd"
+msgstr "墙体、楼板、屋顶、楼梯、窗和门，不含饰面。"
+
 # Source-Hash: 395fd0821b203517
 # Review: required
 # AI-Provider: cursor-agent
@@ -4262,6 +4752,886 @@ msgstr "墙体"
 #, fuzzy
 msgid "editor.reloadEditor"
 msgstr "重新加载编辑器"
+
+# Source-Hash: 83909f82446ee9c3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Settings"
+#: packages/editor/src/components/ui/sidebar/icon-rail.tsx
+#, fuzzy
+msgid "editor.sidebar.iconRail.settings"
+msgstr "设置"
+
+# Source-Hash: 91f90818d42a984e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Site"
+#: packages/editor/src/components/ui/sidebar/icon-rail.tsx
+#, fuzzy
+msgid "editor.sidebar.iconRail.site"
+msgstr "场地"
+
+# Source-Hash: 663175a9c461a96d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "All"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.all"
+msgstr "全部"
+
+# Source-Hash: fce9814c289e6b71
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Community"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.community"
+msgstr "社区"
+
+# Source-Hash: 663175a9c461a96d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "All"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.all"
+msgstr "全部"
+
+# Source-Hash: fce9814c289e6b71
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Community"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.community"
+msgstr "社区"
+
+# Source-Hash: 8d211c78417ed1b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Library"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.library"
+msgstr "素材库"
+
+# Source-Hash: a0b7adfdfdec7307
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mine"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.mine"
+msgstr "我的"
+
+# Source-Hash: 6024b7778b392ec3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No results for “{search}”"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.noResultsForSearch"
+msgstr "没有“{search}”的结果"
+
+# Source-Hash: 4ceb6dcb7827db7f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Search..."
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/function-tree-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.functionTreePanel.search"
+msgstr "搜索..."
+
+# Source-Hash: 8d211c78417ed1b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Library"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.library"
+msgstr "素材库"
+
+# Source-Hash: a0b7adfdfdec7307
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mine"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.mine"
+msgstr "我的"
+
+# Source-Hash: 6024b7778b392ec3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No results for “{search}”"
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.noResultsForSearch"
+msgstr "没有“{search}”的结果"
+
+# Source-Hash: 4ceb6dcb7827db7f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Search..."
+#: packages/editor/src/components/ui/sidebar/panels/items-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.itemsPanel.search"
+msgstr "搜索..."
+
+# Source-Hash: 3c67cde0578ac829
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.addLevel"
+msgstr "添加楼层"
+
+# Source-Hash: 9a56d90d461b4bca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add point"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.addPoint"
+msgstr "添加点"
+
+# Source-Hash: fedccec504a9ae33
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Area:"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.area"
+msgstr "面积："
+
+# Source-Hash: 87b6880f6de7a45a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base elevation"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.baseElevation"
+msgstr "基准标高"
+
+# Source-Hash: d42f7d29e3fc4af7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Building"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.building"
+msgstr "建筑"
+
+# Source-Hash: 7c90f458259d5cd8
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add new level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/building-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.buildingTreeNode.addNewLevel"
+msgstr "添加新楼层"
+
+# Source-Hash: d42f7d29e3fc4af7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Building"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/building-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.buildingTreeNode.building"
+msgstr "建筑"
+
+# Source-Hash: bbc65c039ae86e11
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Camera snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.cameraSnapshot"
+msgstr "相机快照"
+
+# Source-Hash: 3a0701ebcb9f26cb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Capture"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.capture"
+msgstr "采集"
+
+# Source-Hash: 71f2343818c55e0c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Clear selection"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.clearSelection"
+msgstr "清除选择"
+
+# Source-Hash: 67d29724469fa8d3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Clear snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.clearSnapshot"
+msgstr "清除快照"
+
+# Source-Hash: def517c77fda49ea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close walls around a space to make a room."
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.closeWallsAroundASpaceTo"
+msgstr "用墙体围合一个空间即可创建房间。"
+
+# Source-Hash: 2b9af8da4b34cbfa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collection colour"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.collectionColour"
+msgstr "集合颜色"
+
+# Source-Hash: 135af27a14a4cda7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collections"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.collections"
+msgstr "集合"
+
+# Source-Hash: 6f4751c26f12aef9
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete collection"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/collection-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.collectionTreeNode.deleteCollection"
+msgstr "删除集合"
+
+# Source-Hash: b26de372b4b0eaac
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.delete"
+msgstr "删除"
+
+# Source-Hash: 8e29375893d63408
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.deleteLevel"
+msgstr "删除楼层"
+
+# Source-Hash: 6552e45eecc0a227
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Draw a zone"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.drawAZone"
+msgstr "绘制区域"
+
+# Source-Hash: 34dc96fe77a31e51
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.duplicate"
+msgstr "复制"
+
+# Source-Hash: 933177338f5a03ed
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.duplicateLevel"
+msgstr "复制楼层"
+
+# Source-Hash: c038947f317cabba
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate level with options"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.duplicateLevelWithOptions"
+msgstr "带选项复制楼层"
+
+# Source-Hash: 9614c6825a7c67bf
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate with options..."
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.duplicateWithOptions"
+msgstr "带选项复制..."
+
+# Source-Hash: 7c4196b9e791c195
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Elements"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.elements"
+msgstr "元素"
+
+# Source-Hash: 1344ea2602e3aa9e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Guide"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.guide"
+msgstr "参考图"
+
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hide"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.hide"
+msgstr "隐藏"
+
+# Source-Hash: 0608743fc1736d86
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.level"
+msgstr "楼层"
+
+# Source-Hash: 13b3e6a6afe319d1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "New unit"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.newUnit"
+msgstr "新建单元"
+
+# Source-Hash: 0192748d50f0e5f7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No buildings yet"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.noBuildingsYet"
+msgstr "暂无建筑"
+
+# Source-Hash: 1be310702a12e433
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No elements on this level"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.noElementsOnThisLevel"
+msgstr "此楼层上没有元素"
+
+# Source-Hash: 0956af88ced36992
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No levels yet"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.noLevelsYet"
+msgstr "暂无楼层"
+
+# Source-Hash: 45c41bfb2ae19627
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {# object selected} other {# objects selected}}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.objectsSelected"
+msgstr "{count, plural, other {已选择 # 个对象}}"
+
+# Source-Hash: a5434e26e5cb1b26
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Other zones"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.otherZones"
+msgstr "其他区域"
+
+# Source-Hash: 2aa38d84079d4dba
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Perimeter:"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.perimeter"
+msgstr "周长："
+
+# Source-Hash: 4004b9a8e4f8c9d0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Property Line"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.propertyLine"
+msgstr "地界线"
+
+# Source-Hash: 3e7408ed44676176
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rooms"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.rooms"
+msgstr "房间"
+
+# Source-Hash: ca39c0581c7318e6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Select a level to view content"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.selectALevelToViewContent"
+msgstr "选择楼层以查看内容"
+
+# Source-Hash: 827e0c6ac9936b69
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Show"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.show"
+msgstr "显示"
+
+# Source-Hash: 91f90818d42a984e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Site"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.site"
+msgstr "场地"
+
+# Source-Hash: c40163620df24a76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Take snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.takeSnapshot"
+msgstr "拍摄快照"
+
+# Source-Hash: d6b381247066a7aa
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The ground level cannot be deleted"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.theGroundLevelCannotBeDeleted"
+msgstr "无法删除首层楼层"
+
+# Source-Hash: bbc65c039ae86e11
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Camera snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.cameraSnapshot"
+msgstr "相机快照"
+
+# Source-Hash: 67d29724469fa8d3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Clear snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.clearSnapshot"
+msgstr "清除快照"
+
+# Source-Hash: 591087ea83a48ead
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hide"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.hide"
+msgstr "隐藏"
+
+# Source-Hash: 827e0c6ac9936b69
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Show"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.show"
+msgstr "显示"
+
+# Source-Hash: c40163620df24a76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Take snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.takeSnapshot"
+msgstr "拍摄快照"
+
+# Source-Hash: faecab10b69d4863
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Update snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.updateSnapshot"
+msgstr "更新快照"
+
+# Source-Hash: 8a1fd8827a68f236
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "View snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-actions.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.treeNodeActions.viewSnapshot"
+msgstr "查看快照"
+
+# Source-Hash: b404dded35241274
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Units"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.units"
+msgstr "单位"
+
+# Source-Hash: 149fec3fd1f08042
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete unit"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.deleteUnit"
+msgstr "删除单元"
+
+# Source-Hash: 930399d3fb247a7c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Focused"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.focused"
+msgstr "已聚焦"
+
+# Source-Hash: 41ac9dd23bb558d7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove from unit"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.removeFromUnit"
+msgstr "从单元中移除"
+
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.room"
+msgstr "房间"
+
+# Source-Hash: a107b4d76d6972e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Zone"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.unitTreeNode.zone"
+msgstr "区域"
+
+# Source-Hash: faecab10b69d4863
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Update snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.updateSnapshot"
+msgstr "更新快照"
+
+# Source-Hash: 28a12e6806c091b0
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{assetType, select, guide {Uploading guide... {progress}%} other {Uploading scan... {progress}%}}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.uploadingProgress"
+msgstr "{assetType, select, guide {正在上传参考底图... {progress}%} other {正在上传扫描模型... {progress}%}}"
+
+# Source-Hash: de389a2a46d53384
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Upload scan/floorplan"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.uploadScanFloorplan"
+msgstr "上传扫描模型/平面图"
+
+# Source-Hash: 8a1fd8827a68f236
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "View snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.viewSnapshot"
+msgstr "查看快照"
+
+# Source-Hash: ba9f809cb032ee57
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "In {unitName}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/zone-membership-checkbox.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.sitePanel.zoneMembershipCheckbox.inUnitname"
+msgstr "在{unitName}中"
+
+# Source-Hash: aa6d82bdb3cc1d9a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.actions"
+msgstr "操作"
+
+# Source-Hash: fcc43f22937d1536
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add one"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.addOne"
+msgstr "添加一个"
+
+# Source-Hash: bbc65c039ae86e11
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Camera snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.cameraSnapshot"
+msgstr "相机快照"
+
+# Source-Hash: 67d29724469fa8d3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Clear snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.clearSnapshot"
+msgstr "清除快照"
+
+# Source-Hash: b26de372b4b0eaac
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.delete"
+msgstr "删除"
+
+# Source-Hash: e2411929697b7ed4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete with contents"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.deleteWithContents"
+msgstr "连同内容一起删除"
+
+# Source-Hash: 22ca3935e8754072
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No zones on this level."
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.noZonesOnThisLevel"
+msgstr "此楼层上没有区域。"
+
+# Source-Hash: 941ea30f406dcfa2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Save to catalog"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.saveToCatalog"
+msgstr "保存到目录"
+
+# Source-Hash: 98662dfb371cac13
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Select a level to view and create zones"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.selectALevelToViewAnd"
+msgstr "选择楼层以查看和创建区域"
+
+# Source-Hash: c40163620df24a76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Take snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.takeSnapshot"
+msgstr "拍摄快照"
+
+# Source-Hash: faecab10b69d4863
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Update snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.updateSnapshot"
+msgstr "更新快照"
+
+# Source-Hash: 8a1fd8827a68f236
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "View snapshot"
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
+msgstr "查看快照"
+
+# Source-Hash: 58b05af5b5724efb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "\"{label}\" plugin crashed"
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.usePluginPanels.labelPluginCrashed"
+msgstr "“{label}”插件已崩溃"
+
+# Source-Hash: 9e84d6d7b9885c4f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Loading…"
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.usePluginPanels.loading"
+msgstr "加载中…"
+
+# Source-Hash: 9fc7a39bc32f287a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Plugins"
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.usePluginPanels.plugins"
+msgstr "插件"
+
+# Source-Hash: c6312309378aaaea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "This panel hit an error and was unloaded for this session. The rest of the editor is unaffected — reload to try again."
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.usePluginPanels.thisPanelHitAnErrorAnd"
+msgstr "此面板发生错误，已在本次会话中卸载。编辑器的其余部分不受影响——重新加载即可重试。"
 
 # Source-Hash: 834de1a7027c4da1
 # Review: required
