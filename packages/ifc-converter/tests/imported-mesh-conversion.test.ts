@@ -361,6 +361,17 @@ describe('IFC geometry with an unreadable number', () => {
 
     expect(broken.report.skippedGeometry.vertices).toBe(0)
     expect(conversionReportHasIssues(broken.report)).toBe(false)
+    expect(clean.report.replaced.normals).toBe(0)
+    const kept = importedMeshes(broken.scene).reduce(
+      (sum, mesh) => sum + mesh.primitives.reduce((n, p) => n + p.positions.length / 3, 0),
+      0,
+    )
+    expect(kept).toBeGreaterThan(0)
+    expect(broken.report.replaced.normals).toBeGreaterThanOrEqual(kept)
+    // Flat faces: the area-weighted normal is the face's own, as web-ifc gave it.
+    const normalsOf = (scene: PascalSceneGraph) =>
+      importedMeshes(scene).map((mesh) => mesh.primitives.map((p) => p.normals))
+    expect(normalsOf(broken.scene)).toEqual(normalsOf(clean.scene))
     expect(triangles(broken.scene)).toEqual(triangles(clean.scene))
     for (const mesh of importedMeshes(broken.scene))
       for (const { normals } of mesh.primitives) {
@@ -370,6 +381,41 @@ describe('IFC geometry with an unreadable number', () => {
             1.001,
           )
       }
+  }, 60_000)
+
+  test('a NaN normal among faces with no area becomes the unit fallback, not zero', async () => {
+    const source = await readFile(`${fixturesDirectory}04-ifc-open-house.ifc`)
+    // Every vertex at one point (finite, so kept) and every normal NaN: no face has an area.
+    const read = WebIFC.IfcAPI.prototype.GetVertexArray
+    const spy = spyOn(WebIFC.IfcAPI.prototype, 'GetVertexArray').mockImplementation(function (
+      this: WebIFC.IfcAPI,
+      ...args: Parameters<typeof read>
+    ) {
+      const vertices = Float32Array.from(read.apply(this, args))
+      for (let v = 0; v + 5 < vertices.length; v += 6) {
+        vertices[v] = 1
+        vertices[v + 1] = 1
+        vertices[v + 2] = 1
+        vertices[v + 3] = Number.NaN
+      }
+      return vertices
+    })
+    let collapsed: Awaited<ReturnType<typeof convertIfcToPascalWithReport>>
+    try {
+      collapsed = await convertIfcToPascalWithReport(source, undefined, {
+        simplify: false,
+        wasmPath,
+      })
+    } finally {
+      spy.mockRestore()
+    }
+    const normals = importedMeshes(collapsed.scene).flatMap((mesh) =>
+      mesh.primitives.flatMap((p) => p.normals),
+    )
+    expect(normals.length).toBeGreaterThan(0)
+    for (let n = 0; n < normals.length; n += 3)
+      expect([normals[n], normals[n + 1], normals[n + 2]]).toEqual([0, 0, 1])
+    expect(collapsed.report.replaced.normals).toBeGreaterThanOrEqual(normals.length / 3)
   }, 60_000)
 
   test('a clean file reports nothing', async () => {

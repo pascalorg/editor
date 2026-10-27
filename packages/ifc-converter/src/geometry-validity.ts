@@ -21,17 +21,19 @@ export interface IfcConversionReport {
     unitFactor: boolean
     originOffset: boolean
     levelElevations: number
+    /** Vertex normals recomputed from the faces around them: shading only, nothing lost. */
+    normals: number
   }
 }
 
 export function emptyConversionReport(): IfcConversionReport {
   return {
     skippedGeometry: { transforms: 0, vertices: 0, triangles: 0, primitives: 0, elements: 0 },
-    replaced: { unitFactor: false, originOffset: false, levelElevations: 0 },
+    replaced: { unitFactor: false, originOffset: false, levelElevations: 0, normals: 0 },
   }
 }
 
-/** True when the report has anything to tell the person. */
+/** True when the report has anything to tell the person (a recomputed normal loses nothing). */
 export function conversionReportHasIssues(report: IfcConversionReport): boolean {
   const { skippedGeometry, replaced } = report
   return (
@@ -68,8 +70,9 @@ export interface MeshBuffers {
  */
 export function keepValidTriangles(
   mesh: MeshBuffers,
-  skipped: IfcConversionReport['skippedGeometry'],
+  report: IfcConversionReport,
 ): MeshBuffers | null {
+  const skipped = report.skippedGeometry
   const triangleCount = Math.floor(mesh.indices.length / 3)
   if (triangleCount === 0) return null
   const vertexCount = Math.floor(mesh.positions.length / 3)
@@ -119,7 +122,7 @@ export function keepValidTriangles(
     skipped.primitives++
     return null
   }
-  recomputeNonFiniteNormals(positions, normals, indices)
+  report.replaced.normals += recomputeNonFiniteNormals(positions, normals, indices)
   return { positions, normals, indices }
 }
 
@@ -131,33 +134,58 @@ function finiteTriple(values: number[], vertex: number): boolean {
   )
 }
 
-/** Each non-finite normal becomes the area-weighted normal of the triangles at its vertex. */
-function recomputeNonFiniteNormals(positions: number[], normals: number[], indices: number[]) {
+// A vertex whose faces have no area has no direction to take; a unit normal keeps lighting sane.
+const FALLBACK_NORMAL = [0, 0, 1] as const
+
+/**
+ * Each non-finite normal becomes the area-weighted normal of the triangles at its vertex, or the
+ * fallback when they have no area. Returns how many were recomputed. Accumulates in typed arrays:
+ * a whole mesh can need it (__bench__/normal-recompute.bench.ts).
+ */
+function recomputeNonFiniteNormals(
+  positions: number[],
+  normals: number[],
+  indices: number[],
+): number {
   const vertexCount = positions.length / 3
-  const broken: number[] = []
+  const slotOf = new Int32Array(vertexCount).fill(-1)
+  let broken = 0
   for (let vertex = 0; vertex < vertexCount; vertex++)
-    if (!finiteTriple(normals, vertex)) broken.push(vertex)
-  if (broken.length === 0) return
-  const sums = new Map(broken.map((vertex) => [vertex, [0, 0, 0]]))
+    if (!finiteTriple(normals, vertex)) slotOf[vertex] = broken++
+  if (broken === 0) return 0
+  const sums = new Float64Array(broken * 3)
   for (let t = 0; t + 2 < indices.length; t += 3) {
-    const [a, b, c] = [indices[t]!, indices[t + 1]!, indices[t + 2]!]
-    if (!(sums.has(a) || sums.has(b) || sums.has(c))) continue
+    const a = indices[t]!
+    const b = indices[t + 1]!
+    const c = indices[t + 2]!
+    if (slotOf[a]! < 0 && slotOf[b]! < 0 && slotOf[c]! < 0) continue
     const ux = positions[b * 3]! - positions[a * 3]!
     const uy = positions[b * 3 + 1]! - positions[a * 3 + 1]!
     const uz = positions[b * 3 + 2]! - positions[a * 3 + 2]!
     const vx = positions[c * 3]! - positions[a * 3]!
     const vy = positions[c * 3 + 1]! - positions[a * 3 + 1]!
     const vz = positions[c * 3 + 2]! - positions[a * 3 + 2]!
-    const face = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]
+    const fx = uy * vz - uz * vy
+    const fy = uz * vx - ux * vz
+    const fz = ux * vy - uy * vx
     for (const corner of [a, b, c]) {
-      const sum = sums.get(corner)
-      if (sum) for (let axis = 0; axis < 3; axis++) sum[axis]! += face[axis]!
+      const slot = slotOf[corner]!
+      if (slot < 0) continue
+      sums[slot * 3] += fx
+      sums[slot * 3 + 1] += fy
+      sums[slot * 3 + 2] += fz
     }
   }
-  for (const [vertex, sum] of sums) {
-    const length = Math.hypot(sum[0]!, sum[1]!, sum[2]!)
+  for (let vertex = 0; vertex < vertexCount; vertex++) {
+    const slot = slotOf[vertex]!
+    if (slot < 0) continue
+    const x = sums[slot * 3]!
+    const y = sums[slot * 3 + 1]!
+    const z = sums[slot * 3 + 2]!
+    const length = Math.hypot(x, y, z)
+    const normal = length > 0 ? [x / length, y / length, z / length] : FALLBACK_NORMAL
     for (let axis = 0; axis < 3; axis++)
-      normals[vertex * 3 + axis] =
-        length > 0 ? Math.round((sum[axis]! / length) * 1000) / 1000 || 0 : 0
+      normals[vertex * 3 + axis] = Math.round(normal[axis]! * 1000) / 1000 || 0
   }
+  return broken
 }
