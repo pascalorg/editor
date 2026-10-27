@@ -113,7 +113,12 @@ export function KitchenModuleActions({
         else if (module && insertion?.ok) {
           const id = applyCabinetModuleInsertion({ module, plan: insertion, run, sceneApi: api })
           if (!id)
-            throw new Error('The kitchen changed. Select an item again to refresh the preview.')
+            throw new Error(
+              i18n._({
+                id: 'node.cabinet.kitchenModuleActions.kitchenChanged',
+                message: 'The kitchen changed. Select an item again to refresh the preview.',
+              }),
+            )
           syncCornerRunsFromRunSources({ run: api.get<CabinetNode>(run.id) ?? run, sceneApi: api })
           bumpCabinetRunLayoutRevision(api, run)
           useViewer.getState().setSelection({ selectedIds: [id] })

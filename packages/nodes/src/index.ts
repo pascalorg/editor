@@ -162,6 +162,7 @@ export {
   cabinetModuleDefinition,
   cabinetPresetById,
   findKitchenItems,
+  KITCHEN_ITEM_LABELS,
   KITCHEN_ITEMS,
   KitchenCollection,
   kitchenItemMatches,

@@ -84,17 +84,23 @@ export function kitchenPresetForModule(
   return 'base-door'
 }
 
-/** The kitchen's placed modules a query names; fillers are part of their run, not items. */
+/**
+ * The kitchen's placed modules a query names; fillers are part of their run,
+ * not items. `labelFor` gives the name the UI shows for a preset, when it is
+ * not the English one.
+ */
 export function findKitchenItems(
   nodes: Readonly<Record<string, AnyNode>>,
   query: string,
+  labelFor?: (id: CabinetPresetId) => string,
 ): CabinetModuleNode[] {
   return Object.values(nodes).filter((node): node is CabinetModuleNode => {
     if (node.type !== 'cabinet-module' || node.moduleKind !== 'standard') return false
     const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
     const id = kitchenPresetForModule(node, parent?.type === 'cabinet' ? parent : undefined)
     return (
-      kitchenItemMatches(id, query) || (node.name ?? '').toLowerCase().includes(query.toLowerCase())
+      kitchenItemMatches(id, query, labelFor?.(id)) ||
+      (node.name ?? '').toLowerCase().includes(query.toLowerCase())
     )
   })
 }

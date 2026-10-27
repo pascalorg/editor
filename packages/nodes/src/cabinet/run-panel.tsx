@@ -171,8 +171,8 @@ function moduleSummary(module: CabinetModuleNodeType, i18n: PascalI18n) {
     return i18n._({
       id: 'node.cabinet.runPanel.summaryCompartment',
       message:
-        '{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} other {{type}}}',
-      values: { type: stack[0]!.type },
+        '{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} cooktop_gas {Gas cooktop} cooktop_induction {Induction cooktop} pull_out_pantry {Pull-out pantry} fridge_single {Fridge} fridge_double {Double fridge} fridge_top_freezer {Top-freezer fridge} fridge_bottom_freezer {Bottom-freezer fridge} hood_pyramid {Pyramid hood} hood_curved_glass {Curved glass hood} other {{raw}}}',
+      values: { type: stack[0]!.type.replaceAll('-', '_'), raw: stack[0]!.type },
     })
   return i18n._({
     id: 'node.cabinet.runPanel.summaryCompartments',
@@ -778,7 +778,13 @@ export function CabinetRunPanel({
           <p className="text-xs text-muted-foreground">
             {fillerPlan.length
               ? fillerPlan
-                  .map(({ side, width }) => `${side}: ${Math.round(width * 1000)} mm`)
+                  .map(({ side, width }) =>
+                    i18n._({
+                      id: 'node.cabinet.runPanel.fillerPlanSide',
+                      message: '{side, select, left {Left: {width} mm} other {Right: {width} mm}}',
+                      values: { side, width: String(Math.round(width * 1000)) },
+                    }),
+                  )
                   .join(' · ')
               : i18n._({
                   id: 'node.cabinet.runPanel.fits50150MmGapsAt',

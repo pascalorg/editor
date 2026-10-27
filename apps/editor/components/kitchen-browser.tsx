@@ -12,6 +12,7 @@ import { useCommandPalette, useCommandRegistry, useEditor } from '@pascal-app/ed
 import {
   beginKitchenPlacement,
   findKitchenItems,
+  KITCHEN_ITEM_LABELS,
   KITCHEN_ITEMS,
   KitchenCollection,
   kitchenPresetForModule,
@@ -45,7 +46,11 @@ export function KitchenBrowser({ query = '' }: { query?: string }) {
   const mode = useEditor((state) => state.mode)
   // Read the scene only while a query asks for placed items.
   const matches = useScene(
-    useShallow((state) => (query.trim() ? findKitchenItems(state.nodes, query) : NO_ITEMS)),
+    useShallow((state) =>
+      query.trim()
+        ? findKitchenItems(state.nodes, query, (id) => i18n._(KITCHEN_ITEM_LABELS[id]))
+        : NO_ITEMS,
+    ),
   )
   const active = KITCHEN_ITEMS.find((item) => item.id === defaults?.kitchenPreset)
   return (
@@ -122,7 +127,7 @@ export function KitchenCommands() {
           label: i18n._({
             id: 'app.kitchenBrowser.addLabel',
             message: 'Add {label}',
-            values: { label: item.label },
+            values: { label: i18n._(KITCHEN_ITEM_LABELS[item.id]) },
           }),
           group: i18n._({ id: 'app.kitchenBrowser.groupAdd', message: 'Kitchen · Add' }),
           keywords: item.keywords.split(' '),
@@ -150,7 +155,7 @@ export function KitchenCommands() {
             label: i18n._({
               id: 'app.kitchenBrowser.findName',
               message: 'Find {name}',
-              values: { name: node.name || item.label },
+              values: { name: node.name || i18n._(KITCHEN_ITEM_LABELS[item.id]) },
             }),
             group: i18n._({
               id: 'app.kitchenBrowser.groupInThisProject',
