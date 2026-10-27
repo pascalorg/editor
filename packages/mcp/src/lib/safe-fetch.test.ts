@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, jest, mock, spyOn, test } from 'bun:test'
 import type { LookupAddress } from 'node:dns'
 import { createServer, request as httpRequest, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -408,6 +408,29 @@ describe('safeFetch — SSRF protection', () => {
     } finally {
       if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
       else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
+    }
+  })
+
+  test('a DNS lookup that never answers still times out', async () => {
+    jest.useFakeTimers()
+    try {
+      const { deps, resolved, requests } = fakeNetwork({})
+      deps.resolve = (hostname) => {
+        resolved.push(hostname)
+        return new Promise(() => {})
+      }
+      const pending = safeFetch('https://hang.example/x', { timeoutMs: 5_000 }, deps).catch(
+        (e) => e,
+      )
+      await Promise.resolve()
+      expect(resolved).toEqual(['hang.example'])
+      jest.advanceTimersByTime(5_000)
+      const err = await pending
+      expect(err).toBeInstanceOf(ProtocolError)
+      expect((err as Error).message).toContain('fetch_timeout')
+      expect(requests).toHaveLength(0)
+    } finally {
+      jest.useRealTimers()
     }
   })
 

@@ -221,8 +221,26 @@ function assertAllowedUrl(url: string): URL {
 
 export type Resolver = (hostname: string) => Promise<LookupAddress[]>
 
-/** Resolves `url`'s host and returns its addresses only if every one of them is public. */
-async function resolveCheckedAddresses(url: URL, resolve: Resolver): Promise<LookupAddress[]> {
+/** Settles with `promise`, or rejects with the abort reason as soon as `signal` aborts. */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason)
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason)
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  })
+}
+
+/**
+ * Resolves `url`'s host and returns its addresses only if every one of them is
+ * public. The lookup races `signal`: `dns.lookup` cannot be cancelled, so a
+ * hung resolver must not hold the fetch past its timeout.
+ */
+async function resolveCheckedAddresses(
+  url: URL,
+  resolve: Resolver,
+  signal: AbortSignal,
+): Promise<LookupAddress[]> {
   const host = url.hostname.replace(/^\[|\]$/g, '')
   const details = { hostname: url.hostname }
   const literalFamily = isIP(host)
@@ -232,8 +250,9 @@ async function resolveCheckedAddresses(url: URL, resolve: Resolver): Promise<Loo
   } else {
     if (isLocalHostname(host)) blocked('url_host_blocked', url, details)
     try {
-      addresses = await resolve(host)
+      addresses = await untilAborted(resolve(host), signal)
     } catch (err) {
+      if (signal.aborted) throw err
       return protocolError('dns_lookup_failed', {
         url: url.toString(),
         ...details,
@@ -338,7 +357,7 @@ export async function safeFetch(
     for (let i = 0; i <= MAX_REDIRECTS; i++) {
       const parsed = assertAllowedUrl(current)
       hops.push(parsed.toString())
-      const addresses = await resolveCheckedAddresses(parsed, deps.resolve)
+      const addresses = await resolveCheckedAddresses(parsed, deps.resolve, controller.signal)
       const res = await deps.request(parsed, {
         headers: opts.accept ? { Accept: opts.accept } : {},
         lookup: pinnedLookup(addresses),
