@@ -7,6 +7,262 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
 
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.automaticDimensions"
+msgstr "Automatic dimensions"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.camera"
+msgstr "Camera"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.cleanPlanDimensionsAppearWithSelection"
+msgstr "Clean plan; dimensions appear with selection"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.collapseSidebar"
+msgstr "Collapse sidebar"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.crispOpaqueEdgeLines"
+msgstr "Crisp, opaque edge lines"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.cutaway"
+msgstr "Cutaway"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.default"
+msgstr "Default"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.display"
+msgstr "Display"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.displaySettings"
+msgstr "Display settings"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.doorWindowMarks"
+msgstr "Door/window marks"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.edges"
+msgstr "Edges"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.enterVr"
+msgstr "Enter VR"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.exitVr"
+msgstr "Exit VR"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.expandSidebar"
+msgstr "Expand sidebar"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.expert"
+msgstr "Expert"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.exploded"
+msgstr "Exploded"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.faceOfStud"
+msgstr "Face of stud"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
+msgstr "Faint outline of major creases"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.feetInches"
+msgstr "Feet & inches"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.finishedFaces"
+msgstr "Finished faces"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
+msgstr "Flat and fast — no ambient occlusion"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.floorPlanAnnotations"
+msgstr "Floor plan annotations"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.floorPlanMode"
+msgstr "Floor plan mode"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.fullAmbientOcclusion"
+msgstr "Full ambient occlusion"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.fullDocumentationAndAnnotationControls"
+msgstr "Full documentation and annotation controls"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.fullHeight"
+msgstr "Full height"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.fullWallThickness"
+msgstr "Full wall thickness"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.grid"
+msgstr "Grid"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.levelsMode"
+msgstr "Levels: {mode}"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.low"
+msgstr "Low"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.magneticSnap"
+msgstr "Magnetic snap"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.manual"
+msgstr "Manual"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.manualDimensions"
+msgstr "Manual dimensions"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.measurements"
+msgstr "Measurements"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.meters"
+msgstr "Meters"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.millimeters"
+msgstr "Millimeters"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.n3dMeasurements"
+msgstr "3D measurements"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.noEdgeLines"
+msgstr "No edge lines"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.off"
+msgstr "Off"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.on"
+msgstr "On"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.orthographic"
+msgstr "Orthographic"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.perspective"
+msgstr "Perspective"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.preview"
+msgstr "Preview"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.previewMode"
+msgstr "Preview mode"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.render"
+msgstr "Render"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.rendered"
+msgstr "Rendered"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.roomLabels"
+msgstr "Room labels"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.sceneTheme"
+msgstr "Scene theme"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.shadows"
+msgstr "Shadows"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.singleWallAxis"
+msgstr "Single wall axis"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.soft"
+msgstr "Soft"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.solid"
+msgstr "Solid"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.solo"
+msgstr "Solo"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.stack"
+msgstr "Stack"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.stairAnnotations"
+msgstr "Stair annotations"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.strong"
+msgstr "Strong"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.structuralCoreFace"
+msgstr "Structural core face"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.structuralGridsColumnCenters"
+msgstr "Structural grids & column centers"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.translucent"
+msgstr "Translucent"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.units"
+msgstr "Units"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.walkthrough"
+msgstr "Walkthrough"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.wallCenterline"
+msgstr "Wall centerline"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.wallDimensions"
+msgstr "Wall dimensions"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.wallsLabel"
+msgstr "Walls: {label}"
+
 #: packages/editor/src/i18n/level-name.ts
 msgid "core.level.basement"
 msgstr "Basement"
@@ -275,31 +531,31 @@ msgstr "Viewer layout"
 msgid "viewer.stage.split"
 msgstr "Split"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.blueprint"
 msgstr "Blueprint"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.mediterranean"
 msgstr "Mediterranean"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.night"
 msgstr "Night"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.overcast"
 msgstr "Overcast"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.paper"
 msgstr "Paper"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.studio"
 msgstr "Studio"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.sunset"
 msgstr "Sunset"
 
@@ -307,11 +563,11 @@ msgstr "Sunset"
 msgid "viewer.theme.title"
 msgstr "Scene theme"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.twilight"
 msgstr "Twilight"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.verdant"
 msgstr "Verdant"
 

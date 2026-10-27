@@ -13,6 +13,646 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+# Source-Hash: 3d3f438d5a49eba7
+# Review: required
+# English: "Automatic dimensions"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.automaticDimensions"
+msgstr "自动尺寸"
+
+# Source-Hash: 14622745dbf93f4c
+# Review: required
+# English: "Camera"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.camera"
+msgstr "相机"
+
+# Source-Hash: e6bce525c47ba3ac
+# Review: required
+# English: "Clean plan; dimensions appear with selection"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.cleanPlanDimensionsAppearWithSelection"
+msgstr "简洁平面；选中时显示尺寸"
+
+# Source-Hash: 61ce356577cfb04a
+# Review: required
+# English: "Collapse sidebar"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.collapseSidebar"
+msgstr "收起侧边栏"
+
+# Source-Hash: 2416a48df28d6205
+# Review: required
+# English: "Crisp, opaque edge lines"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.crispOpaqueEdgeLines"
+msgstr "清晰、不透明的边线"
+
+# Source-Hash: 4da8b3678ed77b45
+# Review: required
+# English: "Cutaway"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.cutaway"
+msgstr "剖切"
+
+# Source-Hash: 4ca0e0e73229540c
+# Review: required
+# English: "Default"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.default"
+msgstr "默认"
+
+# Source-Hash: a313661ef9dd0a65
+# Review: required
+# English: "Display"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.display"
+msgstr "显示"
+
+# Source-Hash: d0db46f206a88e2e
+# Review: required
+# English: "Display settings"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.displaySettings"
+msgstr "显示设置"
+
+# Source-Hash: 0286962ab8e9cfcd
+# Review: required
+# English: "Door/window marks"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.doorWindowMarks"
+msgstr "门窗标记"
+
+# Source-Hash: 027bbc8b7287c06a
+# Review: required
+# English: "Edges"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.edges"
+msgstr "边线"
+
+# Source-Hash: d86126c5d16c6238
+# Review: required
+# English: "Enter VR"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.enterVr"
+msgstr "进入 VR"
+
+# Source-Hash: eb99fb0b382e58cd
+# Review: required
+# English: "Exit VR"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.exitVr"
+msgstr "退出 VR"
+
+# Source-Hash: aeac665749d3101d
+# Review: required
+# English: "Expand sidebar"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.expandSidebar"
+msgstr "展开侧边栏"
+
+# Source-Hash: 08c178ee733ff009
+# Review: required
+# English: "Expert"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.expert"
+msgstr "专家"
+
+# Source-Hash: be12f8788f1f0a05
+# Review: required
+# English: "Exploded"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.exploded"
+msgstr "分解"
+
+# Source-Hash: c6f865a366ef5755
+# Review: required
+# English: "Face of stud"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.faceOfStud"
+msgstr "龙骨面"
+
+# Source-Hash: 0c583f1d4201293b
+# Review: required
+# English: "Faint outline of major creases"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
+msgstr "主要折边的淡轮廓"
+
+# Source-Hash: 08ecd5878b08139d
+# Review: required
+# English: "Feet & inches"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.feetInches"
+msgstr "英尺和英寸"
+
+# Source-Hash: 43b8017fa821c46c
+# Review: required
+# English: "Finished faces"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.finishedFaces"
+msgstr "完成面"
+
+# Source-Hash: 8827df1cdeb02ed9
+# Review: required
+# English: "Flat and fast — no ambient occlusion"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
+msgstr "平面且快速 — 无环境光遮蔽"
+
+# Source-Hash: 060a718cdcff61b3
+# Review: required
+# English: "Floor plan annotations"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.floorPlanAnnotations"
+msgstr "平面图标注"
+
+# Source-Hash: 483171f79dc32ae5
+# Review: required
+# English: "Floor plan mode"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.floorPlanMode"
+msgstr "平面图模式"
+
+# Source-Hash: 8bb9e54fc786ca77
+# Review: required
+# English: "Full ambient occlusion"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.fullAmbientOcclusion"
+msgstr "完整环境光遮蔽"
+
+# Source-Hash: 91fd3544d9ce16bf
+# Review: required
+# English: "Full documentation and annotation controls"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.fullDocumentationAndAnnotationControls"
+msgstr "完整的图档与标注控件"
+
+# Source-Hash: 131bac2467f4fdf6
+# Review: required
+# English: "Full height"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.fullHeight"
+msgstr "全高"
+
+# Source-Hash: c9838bc98cb35125
+# Review: required
+# English: "Full wall thickness"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.fullWallThickness"
+msgstr "墙体全厚"
+
+# Source-Hash: 7e4a0a38f694be6b
+# Review: required
+# English: "Grid"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.grid"
+msgstr "网格"
+
+# Source-Hash: 4bf4a6861d7d633e
+# Review: required
+# English: "Levels: {mode}"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.levelsMode"
+msgstr "楼层：{mode}"
+
+# Source-Hash: 803532407fb5962b
+# Review: required
+# English: "Low"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.low"
+msgstr "矮墙"
+
+# Source-Hash: 32f9a404c0bdce10
+# Review: required
+# English: "Magnetic snap"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.magneticSnap"
+msgstr "磁性吸附"
+
+# Source-Hash: 387082cd5f118bed
+# Review: required
+# English: "Manual"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.manual"
+msgstr "手动"
+
+# Source-Hash: 2fb69122dd996c0a
+# Review: required
+# English: "Manual dimensions"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.manualDimensions"
+msgstr "手动尺寸"
+
+# Source-Hash: c6aa74075f37313a
+# Review: required
+# English: "Measurements"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.measurements"
+msgstr "测量"
+
+# Source-Hash: 0a39470be3b84536
+# Review: required
+# English: "Meters"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.meters"
+msgstr "米"
+
+# Source-Hash: 83cce6c521e71d01
+# Review: required
+# English: "Millimeters"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.millimeters"
+msgstr "毫米"
+
+# Source-Hash: b784527bb90b9c5e
+# Review: required
+# English: "3D measurements"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.n3dMeasurements"
+msgstr "3D 测量"
+
+# Source-Hash: 4ff58913a4492199
+# Review: required
+# English: "No edge lines"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.noEdgeLines"
+msgstr "无边线"
+
+# Source-Hash: 50accd740fa2e736
+# Review: required
+# English: "Off"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.off"
+msgstr "关"
+
+# Source-Hash: 9cc01faad79c28da
+# Review: required
+# English: "On"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.on"
+msgstr "开"
+
+# Source-Hash: ed59dd8ce7797a66
+# Review: required
+# English: "Orthographic"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.orthographic"
+msgstr "正交"
+
+# Source-Hash: 316e25993ff72b88
+# Review: required
+# English: "Perspective"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.perspective"
+msgstr "透视"
+
+# Source-Hash: 20226b68d5467072
+# Review: required
+# English: "Preview"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.preview"
+msgstr "预览"
+
+# Source-Hash: 34c20b72a42ca618
+# Review: required
+# English: "Preview mode"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.previewMode"
+msgstr "预览模式"
+
+# Source-Hash: 5e58af99d6d4fa6a
+# Review: required
+# English: "Render"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.render"
+msgstr "渲染"
+
+# Source-Hash: f363702a10aedaeb
+# Review: required
+# English: "Rendered"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.rendered"
+msgstr "渲染"
+
+# Source-Hash: 4959d5538efc595c
+# Review: required
+# English: "Room labels"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.roomLabels"
+msgstr "房间标签"
+
+# Source-Hash: 82720864e5034398
+# Review: required
+# English: "Scene theme"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.sceneTheme"
+msgstr "场景主题"
+
+# Source-Hash: 4c6bcb30b40047fc
+# Review: required
+# English: "Shadows"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.shadows"
+msgstr "阴影"
+
+# Source-Hash: 59dc62417b44931d
+# Review: required
+# English: "Single wall axis"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.singleWallAxis"
+msgstr "单一墙体轴线"
+
+# Source-Hash: d266d83ec490df4e
+# Review: required
+# English: "Soft"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.soft"
+msgstr "柔和"
+
+# Source-Hash: ef3e765e692faf4c
+# Review: required
+# English: "Solid"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.solid"
+msgstr "实体"
+
+# Source-Hash: e9f59b513f2f45ac
+# Review: required
+# English: "Solo"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.solo"
+msgstr "单独"
+
+# Source-Hash: 481b7608ce12139b
+# Review: required
+# English: "Stack"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.stack"
+msgstr "堆叠"
+
+# Source-Hash: 61ad94ca68b0458e
+# Review: required
+# English: "Stair annotations"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.stairAnnotations"
+msgstr "楼梯标注"
+
+# Source-Hash: f82927a01d4c5e45
+# Review: required
+# English: "Strong"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.strong"
+msgstr "强烈"
+
+# Source-Hash: e1be031e67d95382
+# Review: required
+# English: "Structural core face"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.structuralCoreFace"
+msgstr "结构核心面"
+
+# Source-Hash: efc50964d7b0ec47
+# Review: required
+# English: "Structural grids & column centers"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.structuralGridsColumnCenters"
+msgstr "结构轴网与柱中心"
+
+# Source-Hash: 5ce4f6b80cd30f86
+# Review: required
+# English: "Translucent"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.translucent"
+msgstr "半透明"
+
+# Source-Hash: b404dded35241274
+# Review: required
+# English: "Units"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.units"
+msgstr "单位"
+
+# Source-Hash: faf51e28b748e0d9
+# Review: required
+# English: "Walkthrough"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.walkthrough"
+msgstr "漫游"
+
+# Source-Hash: 62281975e51da7e3
+# Review: required
+# English: "Wall centerline"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.wallCenterline"
+msgstr "墙体中心线"
+
+# Source-Hash: ff145d7003118ec6
+# Review: required
+# English: "Wall dimensions"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.wallDimensions"
+msgstr "墙体尺寸"
+
+# Source-Hash: 13969d1d6e310aa4
+# Review: required
+# English: "Walls: {label}"
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.wallsLabel"
+msgstr "墙体：{label}"
+
 # Source-Hash: 8caa959c0ae800c3
 # Review: human
 # English: "Basement"
@@ -485,49 +1125,49 @@ msgstr "分屏"
 # Source-Hash: f14b89d713d2528a
 # Review: human
 # English: "Blueprint"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.blueprint"
 msgstr "蓝图"
 
 # Source-Hash: 142bcb2841f423c5
 # Review: human
 # English: "Mediterranean"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.mediterranean"
 msgstr "地中海"
 
 # Source-Hash: b399942ec5d7e1ba
 # Review: human
 # English: "Night"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.night"
 msgstr "夜景"
 
 # Source-Hash: f512d1b947b8ae5a
 # Review: human
 # English: "Overcast"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.overcast"
 msgstr "阴天"
 
 # Source-Hash: 583542b3bc837192
 # Review: human
 # English: "Paper"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.paper"
 msgstr "纸面"
 
 # Source-Hash: 7abc2dc6e39b1747
 # Review: human
 # English: "Studio"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.studio"
 msgstr "影棚"
 
 # Source-Hash: efe94d3ec8d8c44e
 # Review: human
 # English: "Sunset"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.sunset"
 msgstr "日落"
 
@@ -541,14 +1181,14 @@ msgstr "场景主题"
 # Source-Hash: 4c10ea0aa0e2ea41
 # Review: human
 # English: "Twilight"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.twilight"
 msgstr "暮色"
 
 # Source-Hash: f9592fb0672740c0
 # Review: human
 # English: "Verdant"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.verdant"
 msgstr "绿意"
 

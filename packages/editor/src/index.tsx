@@ -394,6 +394,7 @@ export { usePlacementNotice } from './hooks/use-placement-notice'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { useSelectedRoom } from './hooks/use-selected-room'
 export { type Selection, useSelection } from './hooks/use-selection'
+export { sceneThemeName } from './i18n/scene-theme-name'
 export {
   clearPlacementSurface,
   getPlacementSurface,
