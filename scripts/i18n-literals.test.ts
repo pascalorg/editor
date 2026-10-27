@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
 import {
+  annotatedState,
   checkTranslationEntries,
   hashSource,
   type LocaleEntries,
@@ -286,4 +287,22 @@ test('a reviewed translation cannot fall back to draft while its English is unch
   expect(
     reviewRegressions([reworded], everyLocale(entry({ review: 'required', fuzzy: true })), base),
   ).toEqual([])
+})
+
+test('extraction never approves a newly filled translation by itself', () => {
+  const hash = hashSource('Advanced')
+  const pasted = { translation: 'Avancé', review: 'missing' as const, fuzzy: false }
+  expect(annotatedState(pasted, 'Avancé', hash)).toEqual({
+    sourceHash: hash,
+    review: 'required',
+    fuzzy: true,
+  })
+  expect(annotatedState({ ...pasted, review: 'human' }, 'Avancé', hash)).toEqual({
+    sourceHash: hash,
+    review: 'human',
+    fuzzy: false,
+  })
+  expect(annotatedState({ ...pasted, review: 'human', sourceHash: hash }, 'Avancé', hash)).toBe(
+    undefined,
+  )
 })
