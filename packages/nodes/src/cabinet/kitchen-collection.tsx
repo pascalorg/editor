@@ -45,7 +45,8 @@ export function KitchenCollection({
   const inputId = useId()
   const items = KITCHEN_ITEMS.filter(
     (item) =>
-      (includeWall || item.id !== 'wall-cabinet') && kitchenItemMatches(item.id, query ?? search),
+      (includeWall || item.id !== 'wall-cabinet') &&
+      kitchenItemMatches(item.id, query ?? search, i18n._(KITCHEN_ITEM_LABELS[item.id])),
   )
   return (
     <div className="space-y-3">

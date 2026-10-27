@@ -55,10 +55,11 @@ export const KITCHEN_GROUP_TITLES: Record<'Cabinets' | 'Appliances & fixtures', 
     },
   }
 
-export function kitchenItemMatches(id: CabinetPresetId, query: string): boolean {
+/** `label` is the name the picker shows, when it is not the English one. */
+export function kitchenItemMatches(id: CabinetPresetId, query: string, label = ''): boolean {
   const item = KITCHEN_ITEMS.find((entry) => entry.id === id)
   if (!item) return false
-  const text = `${item.label} ${item.keywords} kitchen cabinet`.toLowerCase()
+  const text = `${item.label} ${label} ${item.keywords} kitchen cabinet`.toLowerCase()
   return query
     .trim()
     .toLowerCase()

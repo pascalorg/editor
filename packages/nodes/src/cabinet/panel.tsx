@@ -671,7 +671,11 @@ export default function CabinetPanel() {
       onClose={close}
       title={
         node.type === 'cabinet-module'
-          ? i18n._(KITCHEN_ITEM_LABELS[kitchenPresetForModule(node, parentRun)])
+          ? i18n._(
+              KITCHEN_ITEM_LABELS[
+                isWallCabinetModule ? 'wall-cabinet' : kitchenPresetForModule(node, parentRun)
+              ],
+            )
           : node.name || i18n._({ id: 'node.cabinet.panel.kitchenRun', message: 'Kitchen run' })
       }
       width={320}
