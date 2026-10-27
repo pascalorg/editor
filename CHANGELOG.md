@@ -24,6 +24,7 @@
 
 ### Breaking
 
+- **A whitespace-only `PASCAL_ALLOWED_ASSET_ORIGINS` now admits nothing.** It used to mean unset (any `https:` asset accepted) for scene asset URLs; now, like a value whose entries are all invalid, it is an allowlist with no valid entry, so scene asset URLs on `https:` origins and `safeFetch` image fetches are all refused, with a warning. Leave the variable unset or empty for no allowlist. Both read entries through one parser that normalises each to its origin (`https://CDN.example.com:443/` matches `https://cdn.example.com`) and accepts only `http:` and `https:` entries ([#1161](https://github.com/pascalorg/editor/pull/1161))
 - **Three MCP tools retired.** `validate_scene` → `verify_scene`, `find_nodes` → `find_by_type`, `describe_node` → `get_node`. They are no longer listed; a call to one answers `tool_retired` with its `replacement` ([#1081](https://github.com/pascalorg/editor/pull/1081), [#1084](https://github.com/pascalorg/editor/pull/1084))
 - **The editor no longer forces dark chrome.** A host that wants it dark puts `dark` on an ancestor and on `<body>` (or `<html>`) for the menus that portal there; the standalone app does ([#1041](https://github.com/pascalorg/editor/pull/1041))
 - **`viewMode` / `setViewMode` are deprecated** for views (`viewLayouts`, `visibleScene`, `isViewVisible`). They still work and old preferences migrate ([#1023](https://github.com/pascalorg/editor/pull/1023))
