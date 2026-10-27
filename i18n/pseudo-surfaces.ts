@@ -1,5 +1,13 @@
 import type { Page } from 'playwright-core'
+import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
+import { template as twoBedroom } from '../packages/mcp/src/templates/two-bedroom'
 import { pseudoLocalize } from '../scripts/i18n'
+import {
+  RoofNode,
+  RoofSegmentNode,
+  StairNode,
+  StairSegmentNode,
+} from '../packages/core/src/schema'
 
 /**
  * The surface manifest for `bun run i18n:pseudo-audit`. Each migration PR adds
@@ -18,22 +26,93 @@ export type PseudoSurface = {
   data?: string[]
 }
 
-let projectId: Promise<string> | undefined
+const projects = new Map<string, Promise<string>>()
 
-/** One empty project per audit run, named like the app's own default. */
-export function auditProject(base: string): Promise<string> {
-  projectId ??= fetch(new URL('/api/scenes', base), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Project #1', graph: { nodes: {}, rootNodeIds: [] } }),
-  }).then(async (response) => {
-    if (!response.ok) throw new Error(`Could not create the audit project (${response.status})`)
-    return ((await response.json()) as { id: string }).id
-  })
-  return projectId
+/** One project per scene and audit run, named like the app's own default. */
+function auditScene(base: string, key: string, graph: SceneGraph): Promise<string> {
+  let project = projects.get(key)
+  if (!project) {
+    project = fetch(new URL('/api/scenes', base), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project #1', graph }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(`Could not create the audit project (${response.status})`)
+      return ((await response.json()) as { id: string }).id
+    })
+    projects.set(key, project)
+  }
+  return project
 }
 
+export const auditProject = (base: string) =>
+  auditScene(base, 'empty', { nodes: {}, rootNodeIds: [] } as unknown as SceneGraph)
+
 export const editorPath = async (base: string) => `/project/${await auditProject(base)}`
+
+/** The two-bedroom template with a gable roof and a straight stair, so every inspector has a row. */
+function furnishedScene() {
+  const graph = structuredClone(twoBedroom) as unknown as {
+    nodes: Record<string, { children?: string[] }>
+  }
+  const nodes = [
+    RoofSegmentNode.parse({ id: 'rseg_audit', parentId: 'roof_audit', roofType: 'gable', width: 4, depth: 6 }),
+    RoofNode.parse({ id: 'roof_audit', parentId: 'level_0', children: ['rseg_audit'] }),
+    StairSegmentNode.parse({ id: 'sseg_audit', parentId: 'stair_audit', segmentType: 'stair', width: 1, length: 3 }),
+    StairNode.parse({ id: 'stair_audit', parentId: 'level_0', children: ['sseg_audit'] }),
+  ]
+  for (const node of nodes) graph.nodes[node.id] = node
+  graph.nodes.level_0?.children?.push('roof_audit', 'stair_audit')
+  return graph as unknown as SceneGraph
+}
+
+export const furnishedPath = async (base: string) =>
+  `/project/${await auditScene(base, 'furnished', furnishedScene())}`
+const furnishedData = ['Project #1', 'Living / Kitchen', 'Bedroom 1', 'Bedroom 2', 'Bath']
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** The rail and layer names stay English until the left-panel migration lands. */
+const englishOrPseudo = (english: string) =>
+  new RegExp(`^(${escapeRegExp(english)}|${escapeRegExp(pseudo(english))})$`)
+
+/** Opens the Scene panel, expands every row and selects the first row named `english`. */
+async function openLayer(
+  page: Page,
+  english: string | RegExp,
+  options: { exact?: boolean } = {},
+) {
+  await openEditor(page)
+  // The tab state persists across audit pages: clicking the active tab would collapse the panel.
+  const sceneTab = page.getByRole('button', { name: englishOrPseudo('Scene') }).first()
+  if ((await sceneTab.getAttribute('aria-pressed')) !== 'true') await sceneTab.click()
+  await page.waitForTimeout(500)
+  // Expand every row: the tree's chevrons are the small square buttons beside each name.
+  for (let pass = 0; pass < 3; pass++) {
+    for (const toggle of await page.$$('button.z-10.h-4.w-4:has(svg.lucide-chevron-right)')) {
+      const open = await toggle.evaluate((b) => {
+        const transform = b.querySelector('div')?.style.transform ?? 'none'
+        return transform !== 'none' && !/rotate\(0/.test(transform)
+      })
+      if (!open) await toggle.click().catch(() => undefined)
+    }
+    await page.waitForTimeout(700)
+  }
+  const name =
+    typeof english !== 'string' || options.exact === false ? english : englishOrPseudo(english)
+  await page.getByText(name, { exact: true }).first().click()
+  await page.waitForTimeout(1200)
+  await expandInspector(page)
+}
+
+/** The inspector opens collapsed to its header on small viewports. */
+async function expandInspector(page: Page): Promise<void> {
+  const expand = page.getByRole('button', { name: pseudo('Expand panel'), exact: true })
+  if (await expand.count()) {
+    await expand.first().click()
+    await page.waitForTimeout(800)
+  }
+}
 
 /** Waits for the editor chrome and the 3D canvas to settle. */
 export async function openEditor(page: Page): Promise<void> {
@@ -144,5 +223,77 @@ export const surfaces: PseudoSurface[] = [
     scope: '[data-surface="build-tab"]',
     // A kind registered by the external @pascal-app/plugin-streetscape, which owns its copy.
     data: ['Road'],
+  },
+  {
+    name: 'room-panel',
+    path: furnishedPath,
+    steps: (page) => openLayer(page, 'Living / Kitchen', { exact: false }),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'floor-foundation-panel',
+    path: furnishedPath,
+    steps: async (page) => {
+      await openLayer(page, 'Living / Kitchen', { exact: false })
+      // The template's rooms have no floor yet: build one, then open what it sits on.
+      await page.locator('[data-room-construction] [role="switch"]').first().click()
+      await page.locator('[data-sits-on]').first().waitFor()
+      await page.locator('[data-sits-on]').first().click()
+      await page.waitForTimeout(1200)
+      await expandInspector(page)
+    },
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'wall-panel',
+    path: furnishedPath,
+    steps: (page) => openLayer(page, 'Wall'),
+    scope: '[data-editor-inspector]',
+    // An inspector extension registered by the external @pascal-app/plugin-landscape.
+    data: [...furnishedData, 'Retaining wall'],
+  },
+  {
+    name: 'door-panel',
+    path: furnishedPath,
+    steps: (page) => openLayer(page, 'Door'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'window-panel',
+    path: furnishedPath,
+    steps: (page) => openLayer(page, 'Window'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'roof-panel',
+    path: furnishedPath,
+    steps: (page) => openLayer(page, 'Roof (1 segment)'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'roof-segment-panel',
+    path: furnishedPath,
+    steps: (page) => openLayer(page, /\(4\.0[x×]6\.0/),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'stair-panel',
+    path: furnishedPath,
+    steps: (page) => openLayer(page, 'Staircase (1 segment)'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'stair-segment-panel',
+    path: furnishedPath,
+    steps: (page) => openLayer(page, /\(1\.0[x×]3\.0/),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
   },
 ]
