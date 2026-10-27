@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { ProtocolError } from '@modelcontextprotocol/server'
+import { __resetAllowedOriginsCacheForTests } from '@pascal-app/core/schema'
 import {
   isBlockedAddress,
   type PinnedRequestInit,
@@ -83,6 +84,7 @@ async function expectBlocked(promise: Promise<unknown>, reason = 'url_host_block
 let errorLog: ReturnType<typeof spyOn>
 beforeEach(() => {
   errorLog = spyOn(console, 'error').mockImplementation(() => {})
+  __resetAllowedOriginsCacheForTests()
 })
 afterEach(() => {
   errorLog.mockRestore()

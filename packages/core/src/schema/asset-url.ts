@@ -73,6 +73,11 @@ export function parseAllowedOrigins(raw: string): {
 
 let allowlistCache: { raw: string; origins: ReadonlySet<string> } | null = null
 
+/** Test-only: forget the cached allowlist so its warnings are logged again. */
+export function __resetAllowedOriginsCacheForTests(): void {
+  allowlistCache = null
+}
+
 /**
  * The allowlist set in `raw` (the value of {@link ALLOWED_ORIGINS_ENV}), or
  * `undefined` when it is unset or empty. Only the most recent value is cached,

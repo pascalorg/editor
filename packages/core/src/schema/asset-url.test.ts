@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { ALLOWED_ORIGINS_ENV, AssetUrl, allowedOriginsFrom, parseAllowedOrigins } from './asset-url'
+import {
+  __resetAllowedOriginsCacheForTests,
+  ALLOWED_ORIGINS_ENV,
+  AssetUrl,
+  allowedOriginsFrom,
+  parseAllowedOrigins,
+} from './asset-url'
 import { GuideNode } from './nodes/guide'
+
+beforeEach(() => __resetAllowedOriginsCacheForTests())
 
 function isValid(url: string): boolean {
   return AssetUrl.safeParse(url).success
@@ -273,6 +281,10 @@ describe('allowedOriginsFrom', () => {
         '[pascal] asset_allowlist_entry_ignored {"index":2,"reason":"scheme_not_allowed"}',
       ])
       for (const line of lines) expect(line).not.toContain('secret')
+
+      __resetAllowedOriginsCacheForTests()
+      allowedOriginsFrom(raw)
+      expect(warn).toHaveBeenCalledTimes(4)
     } finally {
       warn.mockRestore()
     }
@@ -283,7 +295,7 @@ describe('allowedOriginsFrom', () => {
     try {
       expect(allowedOriginsFrom(undefined)).toBeUndefined()
       expect(allowedOriginsFrom('')).toBeUndefined()
-      expect(allowedOriginsFrom(' \t ')?.size).toBe(0)
+      expect(allowedOriginsFrom('   ')?.size).toBe(0)
       expect(warn.mock.calls.map((args) => String(args[0]))).toEqual([
         '[pascal] asset_allowlist_has_no_valid_entries: no origin is permitted',
       ])
