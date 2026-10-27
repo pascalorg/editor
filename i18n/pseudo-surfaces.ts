@@ -1,4 +1,5 @@
 import type { Page } from 'playwright-core'
+import { pseudoLocalize } from '../scripts/i18n'
 
 /**
  * The surface manifest for `bun run i18n:pseudo-audit`. Each migration PR adds
@@ -11,7 +12,7 @@ export type PseudoSurface = {
   /** A route, or a function that prepares state and returns one. */
   path: string | ((base: string) => Promise<string>)
   steps?: (page: Page) => Promise<void>
-  /** CSS selector limiting the audit and the screenshot; defaults to the page. */
+  /** CSS selector limiting the audit; the screenshot always shows the whole viewport. */
   scope?: string
   viewport?: { width: number; height: number }
   data?: string[]
@@ -38,6 +39,15 @@ export const editorPath = async (base: string) => `/project/${await auditProject
 export async function openEditor(page: Page): Promise<void> {
   await page.locator('canvas').first().waitFor({ timeout: 120_000 })
   await page.waitForTimeout(1500)
+}
+
+/** The accessible name a control has in en-XA, for locating it by its translated label. */
+export const pseudo = (english: string) => pseudoLocalize(english)
+
+export async function openInEditor(page: Page, name: string): Promise<void> {
+  await openEditor(page)
+  await page.getByRole('button', { name: pseudo(name), exact: true }).first().click()
+  await page.waitForTimeout(500)
 }
 
 export const surfaces: PseudoSurface[] = [

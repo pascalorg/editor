@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parsePo } from 'pofile-ts'
@@ -509,9 +509,16 @@ export async function convertFiles(args: string[]): Promise<void> {
   const changed: string[] = []
   let converted = 0
   let manual = 0
-  for (const path of scannedFiles()) {
-    if (!prefixes.some((prefix) => path === prefix || path.startsWith(prefix.replace(/\/?$/, '/'))))
-      continue
+  const explicit = prefixes.filter(
+    (prefix) => /\.tsx?$/.test(prefix) && existsSync(join(ROOT, prefix)),
+  )
+  const files = new Set([
+    ...explicit,
+    ...scannedFiles().filter((path) =>
+      prefixes.some((prefix) => path === prefix || path.startsWith(prefix.replace(/\/?$/, '/'))),
+    ),
+  ])
+  for (const path of [...files].sort()) {
     const text = readFileSync(join(ROOT, path), 'utf8')
     const { output, planned } = convertSource(path, text, registry, allow, targets)
     for (const item of planned) {

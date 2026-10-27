@@ -98,9 +98,10 @@ export async function auditSurface(page: Page, base: string, surface: PseudoSurf
       findings.push({ surface: surface.name, where: entry.where, text: entry.text })
   }
   const shot = join(out, `${surface.name}.png`)
-  const region = surface.scope ? page.locator(surface.scope).first() : undefined
-  if (region && (await region.count()) > 0) await region.screenshot({ path: shot })
-  else await page.screenshot({ path: shot })
+  if (surface.scope && (await page.locator(surface.scope).count()) === 0) {
+    findings.push({ surface: surface.name, where: surface.scope, text: 'surface did not open' })
+  }
+  await page.screenshot({ path: shot })
   return { findings, shot }
 }
 

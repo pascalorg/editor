@@ -90,7 +90,7 @@ simple interpolations become one message (`Shared with {count} people`). It
 adds `const i18n = usePascalI18n()` to the owning component or hook and the
 import. IDs follow the owning package and path (`app.editorNavbar.share`,
 `editor.sidebar.sitePanel.addLevel`, `node.roofSegment.inspector.pitch`). The
-codemod never rewrites module-level data, server components or complex
+codemod does not rewrite module-level data (unless asked, below), server components or complex
 template interpolations. It lists them as `MANUAL` for a person to
 restructure. A second run changes nothing.
 
