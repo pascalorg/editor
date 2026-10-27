@@ -113,6 +113,18 @@ describe('isBlockedAddress', () => {
       'other non-global IANA special-purpose',
       ['192.88.99.1', '100:0:0:1::1', '2001:2::1', '5f00::1', '2002:c000:201::'],
     ],
+    [
+      'IETF protocol assignments 2001::/23',
+      [
+        '2001:1::',
+        '2001:1::4',
+        '2001:1::1:1',
+        '2001:4::1',
+        '2001:5::1',
+        '2001:10::1',
+        '2001:1ff::1',
+      ],
+    ],
     ['zone ids and brackets', ['fe80::1%eth0', '[::1]', '[::ffff:7f00:1]']],
     ['not an address', ['', 'example.com', '1.2.3', '::ffff:1.2.3.4.5']],
   ]
@@ -144,6 +156,16 @@ describe('isBlockedAddress', () => {
       '192.175.48.1',
       '2001:4:112::1',
       '3fff:1000::1',
+      // Globally reachable exceptions inside 2001::/23, and the first address past it.
+      '2001:1::1',
+      '2001:1::2',
+      '2001:1::3',
+      '2001:3::1',
+      '2001:20::1',
+      '2001:2f:ffff::1',
+      '2001:30::1',
+      '2001:3f::1',
+      '2001:200::1',
     ]) {
       expect([address, isBlockedAddress(address)]).toEqual([address, false])
     }

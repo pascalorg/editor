@@ -108,8 +108,16 @@ function isBlockedV6(g: number[]): boolean {
   }
   if (g0 === 0x64 && g1 === 0xff9b) return true // 64:ff9b::/96 and 64:ff9b:1::/48 NAT64
   if (g0 === 0x100 && g1 === 0 && g2 === 0 && (g3 === 0 || g3 === 1)) return true // 100::/64 discard, 100:0:0:1::/64 dummy
-  if (g0 === 0x2001 && g1 === 0) return true // 2001::/32 Teredo
-  if (g0 === 0x2001 && g1 === 2 && g2 === 0) return true // 2001:2::/48 benchmarking
+  // 2001::/23 IETF protocol assignments (incl. Teredo, benchmarking, ORCHID),
+  // except the entries IANA lists as globally reachable.
+  if (g0 === 0x2001 && g1 < 0x200) {
+    const anycast = g1 === 1 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0 && g6 === 0
+    if (anycast && g7 >= 1 && g7 <= 3) return false // 2001:1::1-3 PCP, TURN, DNS-SD SRP anycast
+    if (g1 === 3) return false // 2001:3::/32 AMT
+    if (g1 === 4 && g2 === 0x112) return false // 2001:4:112::/48 AS112-v6
+    if (g1 >= 0x20 && g1 <= 0x3f) return false // 2001:20::/28 ORCHIDv2, 2001:30::/28 drone remote ID
+    return true
+  }
   if (g0 === 0x2001 && g1 === 0xdb8) return true // 2001:db8::/32 documentation
   if (g0 === 0x2002) return isBlockedV4(embeddedV4(g1, g2)) // 2002::/16 6to4
   if (g0 === 0x3fff && (g1 & 0xf000) === 0) return true // 3fff::/20 documentation
