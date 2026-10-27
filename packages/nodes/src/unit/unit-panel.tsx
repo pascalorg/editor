@@ -6,6 +6,7 @@ import {
   buildUnitReport,
   getLevelDisplayName,
   type MessageDescriptor,
+  type PascalI18n,
   UNIT_KINDS,
   type UnitKind,
   type UnitNode,
@@ -16,6 +17,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  displayRoomName,
   formatAreaLabel,
   PanelSection,
   PanelWrapper,
@@ -158,7 +160,9 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
               key={member.zoneId}
             >
               <span className="min-w-0 flex-1 truncate text-foreground">
-                {member.name || memberFallbackName(nodes, member.zoneId)}
+                {member.name
+                  ? displayRoomName(member.name, i18n)
+                  : memberFallbackName(nodes, member.zoneId, i18n)}
               </span>
               <span className="shrink-0 truncate text-muted-foreground">
                 {member.levelId ? levelNameById.get(member.levelId) : ''}
@@ -172,7 +176,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
                     ? i18n._({
                         id: 'node.unit.panel.removeMember',
                         message: 'Remove {name} from unit',
-                        values: { name: member.name },
+                        values: { name: displayRoomName(member.name, i18n) },
                       })
                     : i18n._({ id: 'node.unit.panel.removeZone', message: 'Remove zone from unit' })
                 }
@@ -231,7 +235,9 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
 }
 
 /** An unnamed member reads as what it is: a room, or another zone. */
-function memberFallbackName(nodes: Record<string, AnyNode>, zoneId: string) {
+function memberFallbackName(nodes: Record<string, AnyNode>, zoneId: string, i18n: PascalI18n) {
   const zone = nodes[zoneId]
-  return zone?.type === 'zone' && zone.spaceRole === 'room' ? 'Room' : 'Zone'
+  return zone?.type === 'zone' && zone.spaceRole === 'room'
+    ? i18n._({ id: 'node.unit.panel.memberRoom', message: 'Room' })
+    : i18n._({ id: 'node.unit.panel.memberZone', message: 'Zone' })
 }

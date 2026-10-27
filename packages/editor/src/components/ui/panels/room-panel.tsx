@@ -74,7 +74,7 @@ export function roomKicker(
       ? i18n._({
           id: 'editor.panels.roomPanel.kickerMezzanineIn',
           message: 'Mezzanine · in {room}',
-          values: { room: hostName },
+          values: { room: displayRoomName(hostName, i18n) },
         })
       : i18n._({ id: 'editor.panels.roomPanel.mezzanine', message: 'Mezzanine' })
   }
@@ -116,7 +116,7 @@ export function RoomPanel({
     <PanelWrapper
       kicker={roomKicker(nodes, room.zoneId, i18n, locale, { mezzanine })}
       onClose={onClose}
-      title={name.trim() || (mezzanine ? i18n._({ id: 'editor.panels.roomPanel.mezzanine', message: 'Mezzanine' }) : i18n._({ id: 'editor.panels.roomPanel.room', message: 'Room' }))}
+      title={(name.trim() && displayRoomName(name, i18n)) || (mezzanine ? i18n._({ id: 'editor.panels.roomPanel.mezzanine', message: 'Mezzanine' }) : i18n._({ id: 'editor.panels.roomPanel.room', message: 'Room' }))}
       titleContent={
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <RoomColorDot zoneId={room.zoneId} />
@@ -167,7 +167,10 @@ export function OpenRoomPanel({ zoneId, onClose }: { zoneId: string; onClose: ()
     <PanelWrapper
       kicker={roomKicker(nodes, zoneId, i18n, locale, { open: true })}
       onClose={onClose}
-      title={name.trim() || i18n._({ id: 'editor.panels.roomPanel.room', message: 'Room' })}
+      title={
+        (name.trim() && displayRoomName(name, i18n)) ||
+        i18n._({ id: 'editor.panels.roomPanel.room', message: 'Room' })
+      }
       titleContent={
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <RoomColorDot zoneId={zoneId} />
@@ -715,7 +718,7 @@ function RoomName({
               ? i18n._({
                   id: 'editor.panels.roomPanel.renameNamed',
                   message: '{name} · Rename',
-                  values: { name: name.trim() },
+                  values: { name: displayRoomName(name, i18n) },
                 })
               : i18n._({ id: 'editor.panels.roomPanel.rename', message: 'Rename' })
           }

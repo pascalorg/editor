@@ -1,4 +1,5 @@
 import { type AnyNode, type MessageDescriptor, type PascalI18n, scriptImages } from '@pascal-app/core'
+import { displayRoomName } from '../../../lib/room-name-messages'
 
 export type NodeDisplay = {
   icon: string
@@ -47,7 +48,9 @@ export function getNodeDisplay(node: AnyNode | null | undefined, i18n: PascalI18
   if (node.type === 'zone' && node.spaceRole === 'room') {
     return {
       icon: '/icons/kitchen.webp',
-      label: node.name || i18n._({ id: 'editor.nodeDisplay.room', message: 'Room' }),
+      label:
+        (node.name && displayRoomName(node.name, i18n)) ||
+        i18n._({ id: 'editor.nodeDisplay.room', message: 'Room' }),
     }
   }
   return {

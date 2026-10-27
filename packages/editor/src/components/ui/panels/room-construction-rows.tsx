@@ -69,6 +69,7 @@ import { messageWithSlot } from '../../../i18n/message-slot'
 import { nodeLabel } from '../../../i18n/node-messages'
 import { RoomOpeningsField } from './room-openings-field'
 import { ShapeChoice } from './shape-choice'
+import { displayRoomName } from '../../../lib/room-name-messages'
 
 /** The buttons a row offers — derived together with its presence. */
 export function constructionActions(state: RoomConstructionState, part: RoomConstructionPart) {
@@ -537,7 +538,7 @@ function sharingRoomNames(
     node.id !== zoneId &&
     node.spaceRole === 'room' &&
     node.boundaryWallIds.some((id) => wallIds.includes(id))
-      ? [node.name?.trim() || 'the next room']
+      ? [node.name?.trim() ?? '']
       : [],
   )
 }
@@ -780,7 +781,23 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
               {i18n._({
                 id: 'editor.panels.roomConstructionRows.sharedWallsNote',
                 message: 'Turning walls off keeps the ones shared with {rooms}.',
-                values: { rooms: formatList([...new Set(shared)], locale) },
+                values: {
+                  rooms: formatList(
+                    [
+                      ...new Set(
+                        shared.map((name) =>
+                          name
+                            ? displayRoomName(name, i18n)
+                            : i18n._({
+                                id: 'editor.panels.roomConstructionRows.theNextRoom',
+                                message: 'the next room',
+                              }),
+                        ),
+                      ),
+                    ],
+                    locale,
+                  ),
+                },
               })}
             </p>
           )}

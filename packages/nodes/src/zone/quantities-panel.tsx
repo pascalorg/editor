@@ -11,6 +11,7 @@ import {
   type ZoneQuantityValue,
 } from '@pascal-app/core'
 import {
+  displayRoomName,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
@@ -254,7 +255,9 @@ export default function ZoneQuantitiesPanel() {
       >
         <div className="overflow-hidden rounded-md border border-cyan-950/20 bg-[#f8faf7] text-slate-950">
           <div className="flex items-center border-cyan-950/15 border-b px-2.5 py-2">
-            <span className="font-semibold text-[11px]">{effectiveZone.name}</span>
+            <span className="font-semibold text-[11px]">
+              {displayRoomName(effectiveZone.name ?? '', i18n)}
+            </span>
             <span className="ml-auto rounded-full border border-cyan-800/25 bg-cyan-50 px-2 py-0.5 text-cyan-900 text-[9px]">
               {report.classification === 'enclosed-room'
                 ? i18n._({ id: 'node.zone.quantitiesPanel.enclosedRoom', message: 'Enclosed room' })

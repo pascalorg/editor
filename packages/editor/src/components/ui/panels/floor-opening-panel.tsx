@@ -20,6 +20,7 @@ import { Switch } from '../primitives/switch'
 import { PanelWrapper } from './panel-wrapper'
 import { localizedLevelName } from '../../../i18n/level-name'
 import { nodeLabel } from '../../../i18n/node-messages'
+import { displayRoomName } from '../../../lib/room-name-messages'
 
 /**
  * A floor (or ceiling) opening: where it is, what it cuts, and the switch for
@@ -39,7 +40,13 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
   const onCeiling = opening.drawnOn === 'ceiling'
   const zoneId = openingRoom(nodes, opening)
   const zone = zoneId ? nodes[zoneId as AnyNodeId] : undefined
-  const roomName = zone?.type === 'zone' ? zone.name?.trim() || nodeLabel('zone', 'Zone', i18n) : null
+  const storedRoomName = zone?.type === 'zone' ? zone.name?.trim() : undefined
+  const roomName =
+    zone?.type !== 'zone'
+      ? null
+      : storedRoomName
+        ? displayRoomName(storedRoomName, i18n)
+        : i18n._({ id: 'editor.panels.floorOpeningPanel.room', message: 'Room' })
   const level = opening.parentId ? nodes[opening.parentId as AnyNodeId] : undefined
   const adjacentId = opening.parentId
     ? adjacentLevelId(nodes, opening.parentId, onCeiling ? 1 : -1)

@@ -19,6 +19,7 @@ import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { ActionButton } from '../../../controls/action-button'
 import { PanelSection } from '../../../controls/panel-section'
+import { displayRoomName } from '../../../../../lib/room-name-messages'
 
 function ZoneItem({ zone }: { zone: ZoneNode }) {
   const i18n = usePascalI18n()
@@ -69,7 +70,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
         />
       </span>
       <Hexagon className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-      <span className="flex-1 truncate">{zone.name}</span>
+      <span className="flex-1 truncate">{displayRoomName(zone.name ?? '', i18n)}</span>
       {/* Camera snapshot button */}
       <Popover onOpenChange={setCameraPopoverOpen} open={cameraPopoverOpen}>
         <PopoverTrigger asChild>

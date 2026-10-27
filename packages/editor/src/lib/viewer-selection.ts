@@ -9,9 +9,11 @@ import {
   emitter,
   getLevelDisplayName,
   type LevelNode,
+  type MessageDescriptor,
   type NodeEvent,
   resolveSelectionProxyId,
   sceneRegistry,
+  translate,
   type UnitNode,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -30,6 +32,7 @@ import {
 import { useBelowGrade } from './below-grade'
 import { nodeDisplayLabel } from './node-display-label'
 import { roomFloorElevation } from './room-handle-drag'
+import { displayRoomName } from './room-name-messages'
 import { RoomSelectionIndex, type RoomSelectionRecord, resolveRoomHit } from './room-selection'
 import type { SelectionModifierKeys } from './selection-routing'
 
@@ -455,8 +458,18 @@ export type ViewerCrumb = {
   label: string
 }
 
+/** The viewer chrome's name for a zone, in the active locale (the scene keeps its stored name). */
 export function zoneLabel(zone: ZoneNode): string {
-  return zone.name?.trim() || (zone.spaceRole === 'room' ? 'Room' : 'Zone')
+  const name = zone.name?.trim()
+  if (name) return displayRoomName(name, activeLocale)
+  return zone.spaceRole === 'room'
+    ? translate('editor.roomLabel.room', 'Room')
+    : translate('editor.roomLabel.zone', 'Zone')
+}
+
+const activeLocale = {
+  _: (descriptor: MessageDescriptor) =>
+    translate(descriptor.id, descriptor.message ?? descriptor.id),
 }
 
 /**

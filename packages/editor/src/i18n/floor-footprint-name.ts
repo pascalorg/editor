@@ -4,6 +4,7 @@ import {
   type PascalI18n,
   type SlabNode,
 } from '@pascal-app/core'
+import { displayRoomName } from '../lib/room-name-messages'
 
 /** `floorFootprintName` in the UI language; MCP and agents keep core's English. */
 export function localizedFloorFootprintName(
@@ -19,7 +20,7 @@ export function localizedFloorFootprintName(
       return i18n._({
         id: 'editor.floorFootprint.room',
         message: '{room} floor',
-        values: { room: naming.room },
+        values: { room: displayRoomName(naming.room, i18n) },
       })
     case 'shared':
       return i18n._({ id: 'editor.floorFootprint.shared', message: 'Shared floor' })
