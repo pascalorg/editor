@@ -28,9 +28,18 @@ test('metric controls write values back with the scoped decimal separator', () =
 })
 
 test('metric write-back rounds negative halves away from zero like the display', () => {
-  const rounded = roundMetricValueForDisplay(-1.25, 1)
-
-  expect(rounded).toBe(-1.3)
-  expect(formatMetricInputValue(rounded, 1, 'en')).toBe('-1.3')
+  expect(roundMetricValueForDisplay(-1.25, 1)).toBe(-1.3)
+  expect(formatMetricInputValue(-1.25, 1, 'en')).toBe('-1.3')
   expect(roundMetricValueForDisplay(1.25, 1)).toBe(1.3)
+  expect(formatMetricInputValue(1.25, 1, 'en')).toBe('1.3')
+})
+
+test('metric write-back and display agree for values immediately below a half', () => {
+  const positive = 1.2499999999999998
+  const negative = -positive
+
+  expect(roundMetricValueForDisplay(negative, 1)).toBe(-1.2)
+  expect(formatMetricInputValue(negative, 1, 'en')).toBe('-1.2')
+  expect(roundMetricValueForDisplay(positive, 1)).toBe(1.2)
+  expect(formatMetricInputValue(positive, 1, 'en')).toBe('1.2')
 })

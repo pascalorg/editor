@@ -10,7 +10,7 @@ export const GuideScaleReference = z.object({
   metersPerUnit: z.number().positive(),
   displayLength: z.number().positive().optional(),
   displayUnit: z.enum(['meters', 'centimeters', 'feet', 'inches']).optional(),
-  label: z.string().optional(),
+  label: z.string(),
 })
 
 export const GuideNode = BaseNode.extend({

@@ -40,14 +40,16 @@ export function formatMetricInputValue(
   precision: number,
   locale: string,
 ): string {
-  return formatNumber(value, { locale, min: precision, max: precision })
+  return formatNumber(roundMetricValueForDisplay(value, precision), {
+    locale,
+    min: precision,
+    max: precision,
+  })
 }
 
 export function roundMetricValueForDisplay(value: number, precision: number): number {
   const factor = 10 ** precision
-  return (
-    (Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * factor)) / factor
-  )
+  return (Math.sign(value) * Math.round(Math.abs(value) * factor)) / factor
 }
 
 export function MetricControl({
