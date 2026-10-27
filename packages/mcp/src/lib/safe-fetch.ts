@@ -9,7 +9,7 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
  * SSRF-safe fetch for user-supplied URLs (image URLs in vision tools).
  *
  * Every hop (the initial URL and each redirect target) is checked the same way:
- * - only http(s) schemes
+ * - only http(s) schemes, on ports 80/443 unless the origin is allowlisted
  * - well-known local hostnames are refused outright
  * - the host is resolved once and *every* resolved address must be public;
  *   IPv6 forms that embed an IPv4 address (mapped, compatible, 6to4) are
@@ -25,6 +25,8 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 const DEFAULT_MAX_BYTES = 20 * 1024 * 1024 // 20 MB
 const DEFAULT_TIMEOUT_MS = 10_000
 const MAX_REDIRECTS = 3
+/** `URL.port` is '' when the URL uses its scheme's default port. */
+const ALLOWED_PORTS = new Set(['', '80', '443'])
 
 function parseIPv4(addr: string): number[] | null {
   const parts = addr.split('.')
@@ -209,6 +211,10 @@ function assertAllowedUrl(url: string): URL {
     if (!origins.includes(parsed.origin)) {
       blocked('url_origin_not_allowlisted', parsed, { origin: parsed.origin })
     }
+  } else if (!ALLOWED_PORTS.has(parsed.port)) {
+    // An operator-allowlisted origin may name any port; otherwise only web ports,
+    // so a public host cannot be used to probe its other services.
+    blocked('url_port_not_allowed', parsed, { port: parsed.port })
   }
   return parsed
 }

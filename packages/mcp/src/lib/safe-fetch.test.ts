@@ -204,7 +204,7 @@ describe('safeFetch — SSRF protection', () => {
   test('rejects local-style hostnames without resolving them', async () => {
     const { deps, resolved } = fakeNetwork({})
     for (const url of [
-      'http://localhost:9999/',
+      'http://localhost/',
       'http://localhost./',
       'http://mything.local/',
       'http://server.internal/',
@@ -372,6 +372,43 @@ describe('safeFetch — SSRF protection', () => {
       return JSON.parse(line.slice(line.indexOf('{'))).url as string
     })
     expect(logged).toEqual([`http://a.example${longPath.slice(0, 128)}…`, 'data:', 'javascript:'])
+  })
+
+  test('only web ports are fetched unless the origin is allowlisted', async () => {
+    const { deps, resolved } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4], 'cdn.example': [PUBLIC_V4] },
+      {
+        'http://a.example/x': () => response(200, {}, 'http'),
+        'https://a.example/x': () => response(200, {}, 'https'),
+        'http://a.example:443/x': () => response(200, {}, 'http-on-443'),
+        'https://cdn.example:8443/x': () => response(200, {}, 'allowlisted'),
+      },
+    )
+    for (const url of [
+      'http://a.example:8080/x',
+      'https://a.example:22/x',
+      'http://a.example:6379/',
+    ]) {
+      await expectBlocked(safeFetch(url, {}, deps), 'url_port_not_allowed')
+    }
+    expect(resolved).toHaveLength(0)
+    for (const [url, body] of [
+      ['http://a.example:80/x', 'http'],
+      ['https://a.example:443/x', 'https'],
+      ['http://a.example:443/x', 'http-on-443'],
+    ]) {
+      expect((await safeFetch(url!, {}, deps)).buffer.toString()).toBe(body!)
+    }
+
+    const prev = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+    process.env.PASCAL_ALLOWED_ASSET_ORIGINS = 'https://cdn.example:8443'
+    try {
+      const result = await safeFetch('https://cdn.example:8443/x', {}, deps)
+      expect(result.buffer.toString()).toBe('allowlisted')
+    } finally {
+      if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+      else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
+    }
   })
 
   test('never reads redirect or error bodies', async () => {
