@@ -1,5 +1,6 @@
 'use client'
 
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import { SegmentedControl, SliderControl, ToggleControl } from '@pascal-app/editor'
 import { ArrowDown, ArrowUp, FlipHorizontal2, Minus, Plus, Trash } from 'lucide-react'
 import {
@@ -30,37 +31,88 @@ import {
 } from './stack'
 
 const COMPARTMENT_TYPE_OPTIONS = [
-  { value: 'shelf', label: 'Shelf' },
-  { value: 'drawer', label: 'Drawer' },
-  { value: 'door', label: 'Door' },
-  { value: 'oven', label: 'Oven' },
-  { value: 'microwave', label: 'Micro' },
-  { value: 'dishwasher', label: 'Washer' },
-  { value: 'cooktop', label: 'Hob' },
-  { value: 'sink', label: 'Sink' },
-  { value: 'pull-out-pantry', label: 'Pullout' },
+  {
+    value: 'shelf',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.shelf', message: 'Shelf' },
+  },
+  {
+    value: 'drawer',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.drawer', message: 'Drawer' },
+  },
+  { value: 'door', label: /* i18n */ { id: 'node.cabinet.compartmentCard.door', message: 'Door' } },
+  { value: 'oven', label: /* i18n */ { id: 'node.cabinet.compartmentCard.oven', message: 'Oven' } },
+  {
+    value: 'microwave',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.micro', message: 'Micro' },
+  },
+  {
+    value: 'dishwasher',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.washer', message: 'Washer' },
+  },
+  {
+    value: 'cooktop',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.hob', message: 'Hob' },
+  },
+  { value: 'sink', label: /* i18n */ { id: 'node.cabinet.compartmentCard.sink', message: 'Sink' } },
+  {
+    value: 'pull-out-pantry',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.pullout', message: 'Pullout' },
+  },
 ] as const
 
-const FRIDGE_TYPE_OPTION = { value: 'fridge', label: 'Fridge' } as const
-const HOOD_TYPE_OPTION = { value: 'hood', label: 'Chimney' } as const
+const FRIDGE_TYPE_OPTION = {
+  value: 'fridge',
+  label: /* i18n */ { id: 'node.cabinet.compartmentCard.fridge', message: 'Fridge' },
+} as const
+const HOOD_TYPE_OPTION = {
+  value: 'hood',
+  label: /* i18n */ { id: 'node.cabinet.compartmentCard.chimney', message: 'Chimney' },
+} as const
 const COMPARTMENT_TYPE_CONTROL_OPTIONS = [...COMPARTMENT_TYPE_OPTIONS, FRIDGE_TYPE_OPTION] as const
 const WALL_COMPARTMENT_TYPE_CONTROL_OPTIONS = [
-  { value: 'shelf', label: 'Shelf' },
-  { value: 'drawer', label: 'Drawer' },
-  { value: 'door', label: 'Door' },
+  {
+    value: 'shelf',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.shelf', message: 'Shelf' },
+  },
+  {
+    value: 'drawer',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.drawer', message: 'Drawer' },
+  },
+  { value: 'door', label: /* i18n */ { id: 'node.cabinet.compartmentCard.door', message: 'Door' } },
   HOOD_TYPE_OPTION,
 ] as const
 
 const FRIDGE_STYLE_OPTIONS = [
-  { value: 'fridge-single', label: 'Single' },
-  { value: 'fridge-double', label: 'Double' },
-  { value: 'fridge-top-freezer', label: 'Top Freezer' },
-  { value: 'fridge-bottom-freezer', label: 'Bottom Freezer' },
+  {
+    value: 'fridge-single',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.single', message: 'Single' },
+  },
+  {
+    value: 'fridge-double',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.double', message: 'Double' },
+  },
+  {
+    value: 'fridge-top-freezer',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.topFreezer', message: 'Top Freezer' },
+  },
+  {
+    value: 'fridge-bottom-freezer',
+    label: /* i18n */ {
+      id: 'node.cabinet.compartmentCard.bottomFreezer',
+      message: 'Bottom Freezer',
+    },
+  },
 ] as const
 
 const COOKTOP_STYLE_OPTIONS = [
-  { value: 'cooktop-gas', label: 'Gas' },
-  { value: 'cooktop-induction', label: 'Induction' },
+  {
+    value: 'cooktop-gas',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.gas', message: 'Gas' },
+  },
+  {
+    value: 'cooktop-induction',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.induction', message: 'Induction' },
+  },
 ] as const
 
 const GAS_COOKTOP_LAYOUT_OPTIONS = [
@@ -76,22 +128,46 @@ const INDUCTION_COOKTOP_LAYOUT_OPTIONS = [
 ] as const satisfies Array<{ value: CooktopLayout; label: string }>
 
 const SINK_LAYOUT_OPTIONS = [
-  { value: 'single', label: 'Single' },
-  { value: 'double', label: 'Double' },
+  {
+    value: 'single',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.single', message: 'Single' },
+  },
+  {
+    value: 'double',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.double', message: 'Double' },
+  },
   { value: 'double-offset', label: '60/40' },
-] as const satisfies Array<{ value: SinkLayout; label: string }>
+] as const satisfies Array<{ value: SinkLayout; label: MessageDescriptor | string }>
 
 const PULL_OUT_PANTRY_RACK_STYLE_OPTIONS = [
-  { value: 'wire', label: 'Wire' },
-  { value: 'tray', label: 'Tray' },
-  { value: 'glass', label: 'Glass' },
-] as const satisfies Array<{ value: (typeof PULL_OUT_PANTRY_RACK_STYLES)[number]; label: string }>
+  { value: 'wire', label: /* i18n */ { id: 'node.cabinet.compartmentCard.wire', message: 'Wire' } },
+  { value: 'tray', label: /* i18n */ { id: 'node.cabinet.compartmentCard.tray', message: 'Tray' } },
+  {
+    value: 'glass',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.glass', message: 'Glass' },
+  },
+] as const satisfies Array<{
+  value: (typeof PULL_OUT_PANTRY_RACK_STYLES)[number]
+  label: MessageDescriptor
+}>
 
 const DOOR_TYPE_OPTIONS = [
-  { value: 'single-left', label: 'Left' },
-  { value: 'single-right', label: 'Right' },
-  { value: 'double', label: 'Double' },
-  { value: 'glass', label: 'Glass' },
+  {
+    value: 'single-left',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.left', message: 'Left' },
+  },
+  {
+    value: 'single-right',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.right', message: 'Right' },
+  },
+  {
+    value: 'double',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.double', message: 'Double' },
+  },
+  {
+    value: 'glass',
+    label: /* i18n */ { id: 'node.cabinet.compartmentCard.glass', message: 'Glass' },
+  },
 ] as const
 
 const ICON_BUTTON_CLASS =
@@ -113,11 +189,17 @@ function Stepper({
   min: number
   max: number
 }) {
+  const i18n = usePascalI18n()
   return (
     <div className="flex items-center justify-between rounded-lg border border-border/30 bg-black/3 dark:bg-black/10 px-2 py-1.5">
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
       <div className="flex items-center gap-1.5">
         <button
+          aria-label={i18n._({
+            id: 'node.cabinet.compartmentCard.decrease',
+            message: 'Decrease {label}',
+            values: { label },
+          })}
           className={STEPPER_BUTTON_CLASS}
           onClick={() => onChange(Math.max(min, value - 1))}
           type="button"
@@ -128,6 +210,11 @@ function Stepper({
           {value}
         </span>
         <button
+          aria-label={i18n._({
+            id: 'node.cabinet.compartmentCard.increase',
+            message: 'Increase {label}',
+            values: { label },
+          })}
           className={STEPPER_BUTTON_CLASS}
           onClick={() => onChange(Math.min(max, value + 1))}
           type="button"
@@ -150,6 +237,7 @@ function CompartmentTypeControl({
   includeHood?: boolean
   wallCabinet?: boolean
 }) {
+  const i18n = usePascalI18n()
   const options = wallCabinet
     ? WALL_COMPARTMENT_TYPE_CONTROL_OPTIONS
     : includeHood
@@ -171,7 +259,7 @@ function CompartmentTypeControl({
             onClick={() => onChange(option.value)}
             type="button"
           >
-            {option.label}
+            {i18n._(option.label)}
           </button>
         )
       })}
@@ -208,6 +296,7 @@ export function CompartmentCard({
   allowHood?: boolean
   wallCabinet?: boolean
 }) {
+  const i18n = usePascalI18n()
   const type = compartment.type as CabinetCompartmentType
   const isFridge = isFridgeCompartmentType(type)
   const isHood = isHoodCompartmentType(type)
@@ -217,13 +306,14 @@ export function CompartmentCard({
       <div className="flex items-center justify-between pb-1.5">
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {displayIndex === 0
-            ? 'Top'
+            ? i18n._({ id: 'node.cabinet.compartmentCard.top', message: 'Top' })
             : displayIndex === total - 1
-              ? 'Bottom'
+              ? i18n._({ id: 'node.cabinet.compartmentCard.bottom', message: 'Bottom' })
               : `#${total - displayIndex}`}
         </span>
         <div className="flex items-center gap-1">
           <button
+            aria-label={i18n._({ id: 'node.cabinet.compartmentCard.moveUp', message: 'Move up' })}
             className={ICON_BUTTON_CLASS}
             disabled={index === total - 1}
             onClick={() => onMove(1)}
@@ -232,6 +322,10 @@ export function CompartmentCard({
             <ArrowUp className="h-3.5 w-3.5" />
           </button>
           <button
+            aria-label={i18n._({
+              id: 'node.cabinet.compartmentCard.moveDown',
+              message: 'Move down',
+            })}
             className={ICON_BUTTON_CLASS}
             disabled={index === 0}
             onClick={() => onMove(-1)}
@@ -241,6 +335,10 @@ export function CompartmentCard({
           </button>
           <button
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-700 dark:text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-200 disabled:opacity-30 disabled:hover:bg-red-500/8"
+            aria-label={i18n._({
+              id: 'node.cabinet.compartmentCard.removeCompartment',
+              message: 'Remove compartment',
+            })}
             disabled={total <= 1}
             onClick={onRemove}
             type="button"
@@ -252,7 +350,7 @@ export function CompartmentCard({
 
       <div className="pb-2">
         <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-          Type
+          {i18n._({ id: 'node.cabinet.compartmentCard.type', message: 'Type' })}
         </div>
         <CompartmentTypeControl
           includeHood={allowHood || isHood}
@@ -278,7 +376,7 @@ export function CompartmentCard({
       {total > 1 && !isHood && !isCooktop && type !== 'sink' && (
         <div className="pb-2">
           <SliderControl
-            label="Height"
+            label={i18n._({ id: 'node.cabinet.compartmentCard.height', message: 'Height' })}
             max={carcassHeight}
             min={0.1}
             onChange={onResizeHeight}
@@ -292,7 +390,7 @@ export function CompartmentCard({
 
       {type === 'shelf' && (
         <Stepper
-          label="Shelves"
+          label={i18n._({ id: 'node.cabinet.compartmentCard.shelves', message: 'Shelves' })}
           max={8}
           min={0}
           onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}
@@ -302,7 +400,7 @@ export function CompartmentCard({
 
       {type === 'drawer' && (
         <Stepper
-          label="Drawers"
+          label={i18n._({ id: 'node.cabinet.compartmentCard.drawers', message: 'Drawers' })}
           max={6}
           min={1}
           onChange={(value) => onReplace(patchCompartment(compartment, { drawerCount: value }))}
@@ -314,13 +412,13 @@ export function CompartmentCard({
         <div className="space-y-2">
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Style
+              {i18n._({ id: 'node.cabinet.compartmentCard.style', message: 'Style' })}
             </div>
             <SegmentedControl
               onChange={(value) => onReplace(patchCompartment(compartment, { doorType: value }))}
               options={DOOR_TYPE_OPTIONS.map((option) => ({
                 value: option.value,
-                label: option.label,
+                label: i18n._(option.label),
               }))}
               value={compartmentDoorType(compartment, width)}
             />
@@ -341,14 +439,20 @@ export function CompartmentCard({
                 )
               }
             }}
-            title="Flip the door hinge to the opposite side"
+            title={i18n._({
+              id: 'node.cabinet.compartmentCard.flipTheDoorHingeToThe',
+              message: 'Flip the door hinge to the opposite side',
+            })}
             type="button"
           >
             <FlipHorizontal2 className="h-3.5 w-3.5" />
-            Flip hinge
+            {i18n._({ id: 'node.cabinet.compartmentCard.flipHinge', message: 'Flip hinge' })}
           </button>
           <Stepper
-            label="Shelves inside"
+            label={i18n._({
+              id: 'node.cabinet.compartmentCard.shelvesInside',
+              message: 'Shelves inside',
+            })}
             max={8}
             min={0}
             onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}
@@ -360,7 +464,7 @@ export function CompartmentCard({
       {isFridge && (
         <div>
           <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Style
+            {i18n._({ id: 'node.cabinet.compartmentCard.style', message: 'Style' })}
           </div>
           <SegmentedControl
             onChange={(value) =>
@@ -373,7 +477,7 @@ export function CompartmentCard({
             }
             options={FRIDGE_STYLE_OPTIONS.map((option) => ({
               value: option.value,
-              label: option.label,
+              label: i18n._(option.label),
             }))}
             value={type}
           />
@@ -382,14 +486,14 @@ export function CompartmentCard({
 
       {isHood && (
         <div className="rounded-lg border border-border/30 bg-black/3 dark:bg-black/10 px-2 py-1.5 text-[11px] font-medium text-muted-foreground">
-          Chimney
+          {i18n._({ id: 'node.cabinet.compartmentCard.chimney', message: 'Chimney' })}
         </div>
       )}
 
       {isCooktop && (
         <div className="space-y-2">
           <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Surface
+            {i18n._({ id: 'node.cabinet.compartmentCard.surface', message: 'Surface' })}
           </div>
           <SegmentedControl
             onChange={(value) =>
@@ -408,13 +512,13 @@ export function CompartmentCard({
             }
             options={COOKTOP_STYLE_OPTIONS.map((option) => ({
               value: option.value,
-              label: option.label,
+              label: i18n._(option.label),
             }))}
             value={type}
           />
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Layout
+              {i18n._({ id: 'node.cabinet.compartmentCard.layout', message: 'Layout' })}
             </div>
             <SegmentedControl
               onChange={(value) =>
@@ -432,7 +536,7 @@ export function CompartmentCard({
           </div>
           <ToggleControl
             checked={compartmentCooktopBurnersOn(compartment)}
-            label="Burners on"
+            label={i18n._({ id: 'node.cabinet.compartmentCard.burnersOn', message: 'Burners on' })}
             onChange={(checked) => {
               const count = compartmentCooktopElementCount(
                 compartment,
@@ -452,7 +556,7 @@ export function CompartmentCard({
           {type === 'cooktop-gas' && (
             <ToggleControl
               checked={compartmentCooktopShowGrate(compartment)}
-              label="Top grate"
+              label={i18n._({ id: 'node.cabinet.compartmentCard.topGrate', message: 'Top grate' })}
               onChange={(checked) =>
                 onReplace(patchCompartment(compartment, { cooktopShowGrate: checked }))
               }
@@ -464,13 +568,13 @@ export function CompartmentCard({
       {type === 'sink' && (
         <div>
           <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Bowls
+            {i18n._({ id: 'node.cabinet.compartmentCard.bowls', message: 'Bowls' })}
           </div>
           <SegmentedControl
             onChange={(value) => onReplace(patchCompartment(compartment, { sinkLayout: value }))}
             options={SINK_LAYOUT_OPTIONS.map((option) => ({
               value: option.value,
-              label: option.label,
+              label: typeof option.label === 'string' ? option.label : i18n._(option.label),
             }))}
             value={compartmentSinkLayout(compartment)}
           />
@@ -480,7 +584,7 @@ export function CompartmentCard({
       {type === 'pull-out-pantry' && (
         <div className="space-y-2">
           <Stepper
-            label="Baskets"
+            label={i18n._({ id: 'node.cabinet.compartmentCard.baskets', message: 'Baskets' })}
             max={8}
             min={2}
             onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}
@@ -488,7 +592,7 @@ export function CompartmentCard({
           />
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Rack
+              {i18n._({ id: 'node.cabinet.compartmentCard.rack', message: 'Rack' })}
             </div>
             <SegmentedControl
               onChange={(value) =>
@@ -496,7 +600,7 @@ export function CompartmentCard({
               }
               options={PULL_OUT_PANTRY_RACK_STYLE_OPTIONS.map((option) => ({
                 value: option.value,
-                label: option.label,
+                label: i18n._(option.label),
               }))}
               value={compartmentPullOutPantryRackStyle(compartment)}
             />

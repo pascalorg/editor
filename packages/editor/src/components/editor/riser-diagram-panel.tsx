@@ -1,9 +1,18 @@
 'use client'
 
-import { type AnyNodeId, buildRiserDiagram, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  buildRiserDiagram,
+  type PascalI18n,
+  type RiserMarker,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { X } from 'lucide-react'
 import { useMemo } from 'react'
+import { inspectorOptionDescriptor } from '../../i18n/node-messages'
 import useEditor from '../../store/use-editor'
 
 // Set per theme on the panel root; the light values are darker so the 9-unit
@@ -33,6 +42,7 @@ export function RiserDiagramPanel() {
 }
 
 function RiserDiagramContent() {
+  const i18n = usePascalI18n()
   const setRiserOpen = useEditor((s) => s.setRiserOpen)
   const nodes = useScene((s) => s.nodes)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -47,15 +57,30 @@ function RiserDiagramContent() {
   const ty = diagram ? -diagram.bounds.minY * SCALE + PADDING : 0
 
   return (
-    <div className="pointer-events-auto absolute top-4 right-4 z-30 flex max-h-[80vh] w-[26rem] flex-col overflow-hidden rounded-2xl border border-border/40 bg-background/95 text-foreground shadow-lg backdrop-blur-xl [--riser-vent:#9333ea] [--riser-waste:#0369a1] dark:[--riser-vent:#a855f7] dark:[--riser-waste:#0ea5e9]">
+    <div
+      data-surface="riser-diagram"
+      className="pointer-events-auto absolute top-4 right-4 z-30 flex max-h-[80vh] w-[26rem] flex-col overflow-hidden rounded-2xl border border-border/40 bg-background/95 text-foreground shadow-lg backdrop-blur-xl [--riser-vent:#9333ea] [--riser-waste:#0369a1] dark:[--riser-vent:#a855f7] dark:[--riser-waste:#0ea5e9]"
+    >
       <div className="flex items-center justify-between border-border/40 border-b px-4 py-2.5">
         <div className="flex flex-col">
-          <span className="font-medium text-sm">Riser Diagram</span>
-          <span className="text-muted-foreground text-xs">DWV plumbing isometric</span>
+          <span className="font-medium text-sm">
+            {i18n._({ id: 'editor.riserDiagramPanel.riserDiagram', message: 'Riser Diagram' })}
+          </span>
+          <span className="text-muted-foreground text-xs">
+            {i18n._({
+              id: 'editor.riserDiagramPanel.dwvPlumbingIsometric',
+              message: 'DWV plumbing isometric',
+            })}
+          </span>
         </div>
         <button
+          aria-label={i18n._({
+            id: 'editor.riserDiagramPanel.close',
+            message: 'Close riser diagram',
+          })}
           className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-black/6 dark:hover:bg-white/10"
           onClick={() => setRiserOpen(false)}
+          title={i18n._({ id: 'editor.riserDiagramPanel.close', message: 'Close riser diagram' })}
         >
           <X className="h-4 w-4 text-muted-foreground" />
         </button>
@@ -63,11 +88,12 @@ function RiserDiagramContent() {
 
       <div className="flex items-center gap-3 border-border/40 border-b px-4 py-2 text-xs">
         <span className="flex items-center gap-1.5">
-          <span className="h-0.5 w-4" style={{ background: WASTE_COLOR }} /> Waste
+          <span className="h-0.5 w-4" style={{ background: WASTE_COLOR }} />{' '}
+          {i18n._({ id: 'editor.riserDiagramPanel.waste', message: 'Waste' })}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-0 w-4 border-t-2 border-dashed" style={{ borderColor: VENT_COLOR }} />{' '}
-          Vent
+          {i18n._({ id: 'editor.riserDiagramPanel.vent', message: 'Vent' })}
         </span>
       </div>
 
@@ -76,7 +102,10 @@ function RiserDiagramContent() {
           <svg
             height={Math.max(height, 120)}
             role="img"
-            aria-label="DWV riser diagram"
+            aria-label={i18n._({
+              id: 'editor.riserDiagramPanel.dwvRiserDiagram',
+              message: 'DWV riser diagram',
+            })}
             viewBox={`0 0 ${Math.max(width, 200)} ${Math.max(height, 120)}`}
             width="100%"
           >
@@ -127,7 +156,7 @@ function RiserDiagramContent() {
                     <circle fill={MARKER_COLOR} r={3} stroke={MARKER_COLOR} strokeWidth={1.5} />
                   )}
                   <text fill={MARKER_COLOR} fontSize={9} x={8} y={3}>
-                    {marker.label}
+                    {markerLabel(marker, nodes, i18n)}
                   </text>
                 </g>
               ))}
@@ -135,10 +164,31 @@ function RiserDiagramContent() {
           </svg>
         ) : (
           <div className="flex h-32 items-center justify-center px-6 text-center text-muted-foreground text-sm">
-            No drain, waste, or vent pipes yet. Draw plumbing to see the riser diagram.
+            {i18n._({
+              id: 'editor.riserDiagramPanel.noDrainWasteOrVentPipes',
+              message:
+                'No drain, waste, or vent pipes yet. Draw plumbing to see the riser diagram.',
+            })}
           </div>
         )}
       </div>
     </div>
   )
+}
+
+/** Core's marker labels are English ("2\" P-trap"); the panel words them in the UI language. */
+function markerLabel(marker: RiserMarker, nodes: Record<string, AnyNode>, i18n: PascalI18n) {
+  const node = nodes[marker.nodeId]
+  if (marker.kind === 'fitting' && node?.type === 'pipe-fitting')
+    return i18n._(inspectorOptionDescriptor(node.fittingType))
+  if (!(node && 'diameter' in node && typeof node.diameter === 'number')) return marker.label
+  const values = { diameter: String(node.diameter) }
+  return marker.kind === 'trap'
+    ? i18n._({ id: 'editor.riserDiagramPanel.trap', message: '{diameter}" P-trap', values })
+    : i18n._({
+        id: 'editor.riserDiagramPanel.ventTermination',
+        message: '{diameter}" VTR',
+        comment: 'Vent through roof: where a plumbing vent stack exits the roof.',
+        values,
+      })
 }

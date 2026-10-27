@@ -17,8 +17,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { ProceduralItemNode } from '@pascal-app/core/procedural-items'
+import { LocalizedHtml } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { act, create } from '@react-three/test-renderer'
 import { Children, cloneElement, isValidElement, type ReactNode, useMemo } from 'react'
 import { Group } from 'three'
@@ -148,7 +148,7 @@ afterEach(() => {
 })
 function withoutLabels(element: ReactNode): ReactNode {
   if (!isValidElement<{ children?: ReactNode }>(element)) return element
-  if (element.type === Html) return null
+  if (element.type === LocalizedHtml) return null
   return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
 }
 function RegistryMover({ node }: { node: AnyNode }) {

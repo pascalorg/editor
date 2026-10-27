@@ -3901,6 +3901,54 @@ msgstr "Rectangle room"
 msgid "editor.lib.wallDrawVariant.walls"
 msgstr "Walls"
 
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+msgid "editor.mechanismAction"
+msgstr "{action, select, close {Close} open {Open} stop {Stop} other {Play}}"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.curve"
+msgstr "Curve"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.cutOut"
+msgstr "Cut out"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.duplicate"
+msgstr "Duplicate"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.editMesh"
+msgstr "Edit mesh"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.findInCatalog"
+msgstr "Find in catalog"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.groupSelection"
+msgstr "Group selection"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.move"
+msgstr "Move"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.rotateLeft"
+msgstr "Rotate left"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.rotateRight"
+msgstr "Rotate right"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.ungroupSelection"
+msgstr "Ungroup selection"
+
 #: packages/editor/src/components/ui/panels/node-display.ts
 msgid "editor.nodeDisplay.ceiling"
 msgstr "Ceiling"
@@ -4600,7 +4648,7 @@ msgstr "Close with walls"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.drawnFloor"
-msgstr "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with # room)} other { (shared with # rooms)}}"
+msgstr "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with {sharedCount} room)} other { (shared with {sharedCount} rooms)}}"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.drawnFloorSwitchHint"
@@ -4868,7 +4916,7 @@ msgstr "Not enough headroom"
 
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 msgid "editor.panels.roomPanel.openingCounts"
-msgstr "{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}"
+msgstr "{doors, plural, one {{doorCount} door} other {{doorCount} doors}} · {windows, plural, one {{windowCount} window} other {{windowCount} windows}}"
 
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 msgid "editor.panels.roomPanel.openRoomArea"
@@ -4991,9 +5039,90 @@ msgstr "Delete region"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "Paint regions"
 
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.adjustDesign"
+msgstr "Adjust design"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.back"
+msgstr "Back"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.editParts"
+msgstr "Edit parts"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidAttachment"
+msgstr "Invalid attachment"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidEdit"
+msgstr "Invalid edit"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidPlacement"
+msgstr "Invalid placement"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidPosition"
+msgstr "Invalid position"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidReset"
+msgstr "Invalid reset"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.pos"
+msgstr "pos"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.position"
+msgstr "Position"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.resetThisPart"
+msgstr "Reset this part"
+
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.reloadEditor"
 msgstr "Reload editor"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.close"
+msgstr "Close riser diagram"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.dwvPlumbingIsometric"
+msgstr "DWV plumbing isometric"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.dwvRiserDiagram"
+msgstr "DWV riser diagram"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.noDrainWasteOrVentPipes"
+msgstr "No drain, waste, or vent pipes yet. Draw plumbing to see the riser diagram."
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.riserDiagram"
+msgstr "Riser Diagram"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.trap"
+msgstr "{diameter}\" P-trap"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.vent"
+msgstr "Vent"
+
+#. Vent through roof: where a plumbing vent stack exits the roof.
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.ventTermination"
+msgstr "{diameter}\" VTR"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.waste"
+msgstr "Waste"
 
 #: packages/editor/src/lib/room-built-on.ts
 msgid "editor.room.builtOn.above"
@@ -6365,6 +6494,18 @@ msgstr "Window style — click or press L to cycle"
 msgid "editor.toolHint.windowTypeClickOrPressO.wv4x35"
 msgstr "Window type — click or press O to cycle"
 
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+msgid "editor.tools.distribution.distributionRunTool.lengthField"
+msgstr "Length: {field} m"
+
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+msgid "editor.tools.distribution.distributionRunTool.tabDirection"
+msgstr "Tab: direction"
+
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+msgid "editor.tools.distribution.distributionRunTool.typeALength"
+msgstr "type a length"
+
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.plugins"
 msgstr "Plugins"
@@ -6485,13 +6626,985 @@ msgstr "A building container holding one or more levels."
 msgid "node.building.label"
 msgstr "Building"
 
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.baskets"
+msgstr "Baskets"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.bottom"
+msgstr "Bottom"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.bottomFreezer"
+msgstr "Bottom Freezer"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.bowls"
+msgstr "Bowls"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.burnersOn"
+msgstr "Burners on"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.chimney"
+msgstr "Chimney"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.decrease"
+msgstr "Decrease {label}"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.door"
+msgstr "Door"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.double"
+msgstr "Double"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.drawer"
+msgstr "Drawer"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.drawers"
+msgstr "Drawers"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.flipHinge"
+msgstr "Flip hinge"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.flipTheDoorHingeToThe"
+msgstr "Flip the door hinge to the opposite side"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.fridge"
+msgstr "Fridge"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.gas"
+msgstr "Gas"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.height"
+msgstr "Height"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.hob"
+msgstr "Hob"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.increase"
+msgstr "Increase {label}"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.induction"
+msgstr "Induction"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.layout"
+msgstr "Layout"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.left"
+msgstr "Left"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.micro"
+msgstr "Micro"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.moveDown"
+msgstr "Move down"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.moveUp"
+msgstr "Move up"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.oven"
+msgstr "Oven"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.pullout"
+msgstr "Pullout"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.rack"
+msgstr "Rack"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.removeCompartment"
+msgstr "Remove compartment"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.right"
+msgstr "Right"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.shelf"
+msgstr "Shelf"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.shelves"
+msgstr "Shelves"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.shelvesInside"
+msgstr "Shelves inside"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.single"
+msgstr "Single"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.sink"
+msgstr "Sink"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.style"
+msgstr "Style"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.surface"
+msgstr "Surface"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.top"
+msgstr "Top"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.topFreezer"
+msgstr "Top Freezer"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.topGrate"
+msgstr "Top grate"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.tray"
+msgstr "Tray"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.type"
+msgstr "Type"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.washer"
+msgstr "Washer"
+
+#: packages/nodes/src/cabinet/compartment-card.tsx
+msgid "node.cabinet.compartmentCard.wire"
+msgstr "Wire"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.cabinet.description"
 msgstr "A configurable parametric base cabinet."
 
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.bottomFreezer"
+msgstr "Bottom freezer"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.cooktopType"
+msgstr "Cooktop type"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.doorDirection"
+msgstr "Door direction"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.double"
+msgstr "Double"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.fridgeType"
+msgstr "Fridge type"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.gas"
+msgstr "Gas"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.induction"
+msgstr "Induction"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.itemOptions"
+msgstr "Item options"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.leftHinge"
+msgstr "Left hinge"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.rightHinge"
+msgstr "Right hinge"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.single"
+msgstr "Single"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.sinkLayout"
+msgstr "Sink layout"
+
+#: packages/nodes/src/cabinet/essential-controls.tsx
+msgid "node.cabinet.essentialControls.topFreezer"
+msgstr "Top freezer"
+
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+msgid "node.cabinet.kitchenCollection.chooseLabel"
+msgstr "Choose {label}"
+
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+msgid "node.cabinet.kitchenCollection.noKitchenItemsMatchTryFridge"
+msgstr "No kitchen items match. Try “fridge”, “sink”, or “cabinet”."
+
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+msgid "node.cabinet.kitchenCollection.searchFridgeSinkCabinets"
+msgstr "Search fridge, sink, cabinets…"
+
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+msgid "node.cabinet.kitchenCollection.searchKitchenItems"
+msgstr "Search kitchen items"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.kitchenGroup.appliances"
+msgstr "Appliances & fixtures"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.kitchenGroup.cabinets"
+msgstr "Cabinets"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.addBeside"
+msgstr "Add beside"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.addBesideSelectedItem"
+msgstr "Add beside selected item"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.addLabel"
+msgstr "Add {label}"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.anUpperCabinetAttachedToThis"
+msgstr "An upper cabinet attached to this item will be removed to make room."
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.cabinet"
+msgstr "Cabinet"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.cancel"
+msgstr "Cancel"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.cannotFit"
+msgstr "This {width} item cannot fit within the current run and its wall or corner limits. Move an end cabinet or free space, then try again."
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.insertsBeside"
+msgstr "{side, select, left {Inserts on the left of the selected item.} other {Inserts on the right of the selected item.}}"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.kitchenChanged"
+msgstr "The kitchen changed. Select an item again to refresh the preview."
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.kitchenRunPreviewHighlightedItemIs"
+msgstr "Kitchen run preview, highlighted item is the proposed change"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.leftSide"
+msgstr "Left side"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.moved"
+msgstr "{name}: moves {distance}"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.previewItem"
+msgstr "{name}: {width}"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.replaceSelectedItem"
+msgstr "Replace selected item"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.replacesOnlyTheSelectedItem"
+msgstr "Replaces only the selected item."
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.replaceWith"
+msgstr "Replace with…"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.replaceWithLabel"
+msgstr "Replace with {label}"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.resized"
+msgstr "{name}: {before} → {after}"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.rightSide"
+msgstr "Right side"
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.unableToUpdateThisKitchen"
+msgstr "Unable to update this kitchen."
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.cabinet.label"
 msgstr "Modular Cabinet"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.aboveCeiling"
+msgstr "Finished height extends {overflow} mm above the ceiling."
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.addChimney"
+msgstr "Add chimney"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.addCompartment"
+msgstr "Add compartment"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.addWallCabinet"
+msgstr "Add wall cabinet"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.advanced"
+msgstr "Advanced"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.appliance"
+msgstr "Appliance"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.applianceFront"
+msgstr "Appliance front"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.auto"
+msgstr "Auto"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.bar"
+msgstr "Bar"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.baseCabinet"
+msgstr "Base Cabinet"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.cabinetConstructionCompartmentsAndOpeningPreview"
+msgstr "Cabinet construction, compartments, and opening preview."
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.cabinetPanel"
+msgstr "Cabinet panel"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.cabinetType"
+msgstr "Cabinet Type"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.center"
+msgstr "Center"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.close"
+msgstr "Close"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.closeCabinet"
+msgstr "Close cabinet"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.commonWallCabinetHeightsUseThe"
+msgstr "Common wall-cabinet heights. Use the slider below for a custom height."
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.compartments"
+msgstr "Compartments"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.cutout"
+msgstr "Cutout"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.editKitchenRun"
+msgstr "Edit kitchen run"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.fillToCeiling"
+msgstr "Fill to ceiling"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.finish"
+msgstr "Finish"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.frontConstruction"
+msgstr "Front construction"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.handles"
+msgstr "Handles"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.heightPreset"
+msgstr "Height preset"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.hole"
+msgstr "Hole"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.inset"
+msgstr "Inset"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.kitchen"
+msgstr "Kitchen"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.kitchenRun"
+msgstr "Kitchen run"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.knob"
+msgstr "Knob"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.mounting"
+msgstr "Mounting"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.none"
+msgstr "None"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.open"
+msgstr "Open"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.openAnimation"
+msgstr "Open Animation"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.openCabinet"
+msgstr "Open cabinet"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.overlay"
+msgstr "Overlay"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.panelReady"
+msgstr "Panel-ready"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.planningChecks"
+msgstr "Planning checks"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.play"
+msgstr "Play"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.playAnimation"
+msgstr "Play animation"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.raisedArch"
+msgstr "Raised Arch"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.removeWallCabinet"
+msgstr "Remove wall cabinet"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.replaceWith"
+msgstr "Replace with…"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.revealGap"
+msgstr "Reveal gap"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.shaker"
+msgstr "Shaker"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.sharedCountertopPlinthAndFinishes"
+msgstr "Shared countertop, plinth, and finishes"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.slab"
+msgstr "Slab"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.solidMatchingFrontBetweenTheCabinet"
+msgstr "Solid matching front between the cabinet and wall. Countertop and toe-kick continue across this filler."
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.standardWidth"
+msgstr "Standard width"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.stop"
+msgstr "Stop"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.stopAnimation"
+msgstr "Stop animation"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.tallCabinet"
+msgstr "Tall Cabinet"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.top"
+msgstr "Top"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.topCabinet"
+msgstr "Top Cabinet"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.topCeiling"
+msgstr "Top / Ceiling"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.topDepth"
+msgstr "Top depth"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.topHeight"
+msgstr "Top height"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.trimSoffit"
+msgstr "Trim / Soffit"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.usesTheCabinetFrontStyleReveal"
+msgstr "Uses the cabinet front style, reveal, handle, and front material settings below."
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.wallFiller"
+msgstr "Wall filler"
+
+#: packages/nodes/src/cabinet/panel.tsx
+msgid "node.cabinet.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.baseCabinet"
+msgstr "Base cabinet"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.dishwasher"
+msgstr "Dishwasher"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.drawerCabinet"
+msgstr "Drawer cabinet"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.fridge"
+msgstr "Fridge"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.gasCooktop"
+msgstr "Gas cooktop"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.inductionCooktop"
+msgstr "Induction cooktop"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.ovenTower"
+msgstr "Oven Tower"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.sinkCabinet"
+msgstr "Sink cabinet"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.tallPantry"
+msgstr "Tall Pantry"
+
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+msgid "node.cabinet.preset.wallCabinet"
+msgstr "Wall cabinet"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.addLeft"
+msgstr "Add left"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.addRight"
+msgstr "Add right"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.alignCabinetsHandles"
+msgstr "Align cabinets & handles"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.appliesDepthCarcassPlinthAndCountertop"
+msgstr "Applies depth, carcass, plinth, and countertop thickness to this run."
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.arrayCreate"
+msgstr "{count, plural, one {Create {number} module copy} other {Create {number} module copies}}"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.arrayCreateNamed"
+msgstr "{count, plural, one {Create {number} {name} copy} other {Create {number} {name} copies}}"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.arrayInvalidOptions"
+msgstr "Choose a copy count from 1 to 20 and spacing from 0 to 2 m"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.arrayNoRoom"
+msgstr "There is not enough room in this run for the requested array"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.arrayNoSource"
+msgstr "Choose a standard or appliance module as the source"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.auto"
+msgstr "Auto"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.back"
+msgstr "Back"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.balancesStandardBaseCabinetsWhileKeeping"
+msgstr "Balances standard base cabinets while keeping appliance and corner-filler widths fixed."
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.bar"
+msgstr "Bar"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.barCounter"
+msgstr "Bar counter"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.barDepth"
+msgstr "Bar depth"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.barHeight"
+msgstr "Bar height"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.carcassHeight"
+msgstr "Carcass height"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.center"
+msgstr "Center"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.commonWallCabinetHeightsUseThe"
+msgstr "Common wall-cabinet heights. Use the slider below for a custom height."
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.copies"
+msgstr "Copies"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.copiesIncludeTheSourceCabinetStructure"
+msgstr "Copies include the source cabinet structure and any attached wall cabinet. Existing modules stay fixed; the requested array must fit in the available run space."
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.cornerFillersCannotBeUsedAs"
+msgstr "Corner fillers cannot be used as array sources"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.countertopDepth"
+msgstr "Countertop depth"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.countertopHeight"
+msgstr "Countertop height"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.createArray"
+msgstr "Create array"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.cutout"
+msgstr "Cutout"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.deleteModule"
+msgstr "Delete {name}"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.direction"
+msgstr "Direction"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.duplicateAlongRun"
+msgstr "Duplicate along run"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.equalizeAll"
+msgstr "Equalize all resizeable standard base cabinets in this run"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.equalizeAlreadyEqual"
+msgstr "The resizeable cabinet widths are already equal"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.equalizeNeedsTwo"
+msgstr "At least two standard base cabinets are required"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.equalizeNoFit"
+msgstr "The available run width cannot satisfy the cabinet width limits"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.equalizeWidths"
+msgstr "Equalize widths"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.fillerPlanSide"
+msgstr "{side, select, left {Left: {width} mm} other {Right: {width} mm}}"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.finishAlign"
+msgstr "Finish & align"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.finishedBack"
+msgstr "Finished back"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.finishedExposedEnds"
+msgstr "Finished exposed ends"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.fits50150MmGapsAt"
+msgstr "Fits 50–150 mm gaps at run ends beside perpendicular walls."
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.fitWallFillers"
+msgstr "Fit wall fillers"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.fronts"
+msgstr "Fronts"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.handles"
+msgstr "Handles"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.heightPreset"
+msgstr "Height preset"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.hole"
+msgstr "Hole"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.inset"
+msgstr "Inset"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.islandBar"
+msgstr "Island & Bar"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.kitchenRun"
+msgstr "Kitchen run"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.knob"
+msgstr "Knob"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.left"
+msgstr "Left"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.matchBaseHeightsBacksRevealsAnd"
+msgstr "Match base heights, backs, reveals and handles. Align upper cabinets; preserve tall appliances and custom compartments."
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.metricProfile"
+msgstr "Metric · 600 mm"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.moduleNumber"
+msgstr "Module {number}"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.modules"
+msgstr "Modules"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.mounting"
+msgstr "Mounting"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.noEligibleModule"
+msgstr "No eligible module"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.none"
+msgstr "None"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.overlay"
+msgstr "Overlay"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.plinthHeight"
+msgstr "Plinth height"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.position"
+msgstr "Position"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.raisedArch"
+msgstr "Raised Arch"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.revealGap"
+msgstr "Reveal gap"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.right"
+msgstr "Right"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.seatingOverhang"
+msgstr "Seating overhang"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.shaker"
+msgstr "Shaker"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.sharedPlinthCountertop"
+msgstr "Shared Plinth & Countertop"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.showCountertop"
+msgstr "Show countertop"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.showPlinth"
+msgstr "Show plinth"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.slab"
+msgstr "Slab"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.sourceModule"
+msgstr "Source module"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.spacing"
+msgstr "Spacing"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.standardDimensions"
+msgstr "Standard dimensions"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.style"
+msgstr "Style"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.summaryCompartment"
+msgstr "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} cooktop_gas {Gas cooktop} cooktop_induction {Induction cooktop} pull_out_pantry {Pull-out pantry} fridge_single {Fridge} fridge_double {Double fridge} fridge_top_freezer {Top-freezer fridge} fridge_bottom_freezer {Bottom-freezer fridge} hood_pyramid {Pyramid hood} hood_curved_glass {Curved glass hood} other {{raw}}}"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.summaryCompartments"
+msgstr "{count, plural, one {{number} compartment} other {{number} compartments}}"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.summaryEmpty"
+msgstr "Empty"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.summaryTall"
+msgstr "Tall cabinet"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.top"
+msgstr "Top"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.unableToFinish"
+msgstr "Unable to finish this kitchen run."
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.useAsArraySource"
+msgstr "Use {name} as array source"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.useThisModuleAsTheArray"
+msgstr "Use this module as the array source"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.usProfile"
+msgstr "US · 24 in"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.waterfallEnds"
+msgstr "Waterfall ends"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.cabinetModule.description"
@@ -8430,7 +9543,7 @@ msgstr "Move to the roof level"
 
 #: packages/nodes/src/roof/panel.tsx
 msgid "node.roof.panel.onStoreyWalls"
-msgstr "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's # roofs move together.}}"
+msgstr "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's {roofCount} roofs move together.}}"
 
 #: packages/nodes/src/roof/panel.tsx
 msgid "node.roof.panel.position"
@@ -8984,7 +10097,7 @@ msgstr "survey"
 
 #: packages/nodes/src/site/panel.tsx
 msgid "node.site.panel.surveyedContours"
-msgstr "{count, plural, one {# surveyed line} other {# surveyed lines}} at {interval} ft ({datum}) — {source}"
+msgstr "{count, plural, one {{lineCount} surveyed line} other {{lineCount} surveyed lines}} at {interval} ft ({datum}) — {source}"
 
 #: packages/nodes/src/site/panel.tsx
 msgid "node.site.panel.terrain"
@@ -9416,7 +10529,7 @@ msgstr "Fit uniform risers"
 
 #: packages/nodes/src/stair/panel.tsx
 msgid "node.stair.panel.flightMeasurements"
-msgstr "Flight {number}: {count, plural, one {# riser} other {# risers}} · R {riser} · T {going} · {slope}"
+msgstr "Flight {number}: {count, plural, one {{riserCount} riser} other {{riserCount} risers}} · R {riser} · T {going} · {slope}"
 
 #: packages/nodes/src/stair/panel.tsx
 msgid "node.stair.panel.floorsCeilingsAndStairsOnly"

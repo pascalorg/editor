@@ -1,8 +1,14 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { BuildPanelSection, BuildToolGrid, BuildToolTile } from '@pascal-app/editor'
 import { useId, useState } from 'react'
-import { KITCHEN_ITEMS, kitchenItemMatches } from './kitchen-catalog'
+import {
+  KITCHEN_GROUP_TITLES,
+  KITCHEN_ITEM_LABELS,
+  KITCHEN_ITEMS,
+  kitchenItemMatches,
+} from './kitchen-catalog'
 import useCabinetPlacementStatus from './placement-status'
 import type { CabinetPresetId } from './presets'
 
@@ -33,12 +39,14 @@ export function KitchenCollection({
   query?: string
   includeWall?: boolean
 }) {
+  const i18n = usePascalI18n()
   const [search, setSearch] = useState('')
   const placementTarget = useCabinetPlacementStatus((state) => state.target)
   const inputId = useId()
   const items = KITCHEN_ITEMS.filter(
     (item) =>
-      (includeWall || item.id !== 'wall-cabinet') && kitchenItemMatches(item.id, query ?? search),
+      (includeWall || item.id !== 'wall-cabinet') &&
+      kitchenItemMatches(item.id, query ?? search, i18n._(KITCHEN_ITEM_LABELS[item.id])),
   )
   return (
     <div className="space-y-3">
@@ -50,12 +58,18 @@ export function KitchenCollection({
       {query === undefined && (
         <div>
           <label htmlFor={inputId} className="sr-only">
-            Search kitchen items
+            {i18n._({
+              id: 'node.cabinet.kitchenCollection.searchKitchenItems',
+              message: 'Search kitchen items',
+            })}
           </label>
           <input
             id={inputId}
             type="search"
-            placeholder="Search fridge, sink, cabinets…"
+            placeholder={i18n._({
+              id: 'node.cabinet.kitchenCollection.searchFridgeSinkCabinets',
+              message: 'Search fridge, sink, cabinets…',
+            })}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -69,17 +83,21 @@ export function KitchenCollection({
             <BuildPanelSection
               key={group}
               id={`kitchen-${group === 'Cabinets' ? 'cabinets' : 'appliances'}`}
-              title={group}
+              title={i18n._(KITCHEN_GROUP_TITLES[group])}
             >
               <BuildToolGrid columns={3}>
                 {entries.map((item) => (
                   <BuildToolTile
                     key={item.id}
-                    aria-label={`Choose ${item.label}`}
+                    aria-label={i18n._({
+                      id: 'node.cabinet.kitchenCollection.chooseLabel',
+                      message: 'Choose {label}',
+                      values: { label: i18n._(KITCHEN_ITEM_LABELS[item.id]) },
+                    })}
                     active={activeId === item.id}
                     tone="neutral"
                     iconSrc={`/icons/kitchen/${item.id}.webp`}
-                    label={item.label}
+                    label={i18n._(KITCHEN_ITEM_LABELS[item.id])}
                     onClick={() => onSelect(item.id)}
                   />
                 ))}
@@ -90,7 +108,10 @@ export function KitchenCollection({
       })}
       {!items.length && (
         <p role="status" className="text-xs text-muted-foreground">
-          No kitchen items match. Try “fridge”, “sink”, or “cabinet”.
+          {i18n._({
+            id: 'node.cabinet.kitchenCollection.noKitchenItemsMatchTryFridge',
+            message: 'No kitchen items match. Try “fridge”, “sink”, or “cabinet”.',
+          })}
         </p>
       )}
     </div>
