@@ -254,7 +254,13 @@ function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(signal.reason)
     signal.addEventListener('abort', onAbort, { once: true })
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+    const settle =
+      <A>(done: (arg: A) => void) =>
+      (arg: A) => {
+        signal.removeEventListener('abort', onAbort)
+        done(arg)
+      }
+    promise.then(settle(resolve), settle(reject))
   })
 }
 

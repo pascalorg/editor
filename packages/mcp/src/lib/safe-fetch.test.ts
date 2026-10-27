@@ -580,6 +580,104 @@ describe('safeFetch — origin allowlist', () => {
   })
 })
 
+describe('safeFetch — ports and redirects', () => {
+  test('a redirect hop to a forbidden port is blocked before it is resolved', async () => {
+    const { deps, resolved, requests } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4], 'b.example': [PUBLIC_V4] },
+      { 'https://a.example/x': () => response(302, { location: 'https://b.example:8080/y' }) },
+    )
+    await expectBlocked(safeFetch('https://a.example/x', {}, deps), 'url_port_not_allowed')
+    expect(resolved).toEqual(['a.example'])
+    expect(requests.map((r) => r.url)).toEqual(['https://a.example/x'])
+  })
+
+  test('https on port 80 counts as a web port and keeps the explicit port', async () => {
+    const { deps, requests } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4] },
+      { 'https://a.example:80/x': () => response(200, {}, 'tls-on-80') },
+    )
+    const result = await safeFetch('https://a.example:80/x', {}, deps)
+    expect(result.buffer.toString()).toBe('tls-on-80')
+    expect(requests.map((r) => r.url)).toEqual(['https://a.example:80/x'])
+  })
+})
+
+describe('safeFetch — DNS and the timeout', () => {
+  test('a DNS answer or failure arriving after the timeout changes nothing', async () => {
+    jest.useFakeTimers()
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => unhandled.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const answers: {
+        resolve: (addresses: LookupAddress[]) => void
+        reject: (err: Error) => void
+      }[] = []
+      const { deps, requests } = fakeNetwork(
+        {},
+        { 'https://late.example/x': () => response(200, {}, 'too late') },
+      )
+      deps.resolve = () => new Promise((resolve, reject) => answers.push({ resolve, reject }))
+      const answered = safeFetch('https://late.example/x', { timeoutMs: 1_000 }, deps).catch(
+        (e) => e,
+      )
+      const failed = safeFetch('https://late.example/x', { timeoutMs: 1_000 }, deps).catch((e) => e)
+      jest.advanceTimersByTime(1_000)
+      for (const err of [await answered, await failed]) {
+        expect(err).toBeInstanceOf(ProtocolError)
+        expect((err as Error).message).toContain('fetch_timeout')
+      }
+      answers[0]!.resolve([{ address: PUBLIC_V4, family: 4 }])
+      answers[1]!.reject(new Error('ENOTFOUND late.example'))
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+      expect(requests).toHaveLength(0)
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+      jest.useRealTimers()
+    }
+  })
+
+  test('the abort listener is removed as soon as each lookup settles', async () => {
+    const added: unknown[] = []
+    const removed: unknown[] = []
+    const originalAdd = AbortSignal.prototype.addEventListener
+    const originalRemove = AbortSignal.prototype.removeEventListener
+    const add = spyOn(AbortSignal.prototype, 'addEventListener').mockImplementation(function (
+      this: AbortSignal,
+      ...args: Parameters<AbortSignal['addEventListener']>
+    ) {
+      if (args[0] === 'abort') added.push(args[1])
+      return originalAdd.apply(this, args)
+    })
+    const remove = spyOn(AbortSignal.prototype, 'removeEventListener').mockImplementation(function (
+      this: AbortSignal,
+      ...args: Parameters<AbortSignal['removeEventListener']>
+    ) {
+      if (args[0] === 'abort') removed.push(args[1])
+      return originalRemove.apply(this, args)
+    })
+    try {
+      const { deps } = fakeNetwork(
+        { 'a.example': [PUBLIC_V4], 'b.example': [PUBLIC_V6] },
+        {
+          'https://a.example/x': () => response(302, { location: 'https://b.example/y' }),
+          'https://b.example/y': () => response(200, {}, 'ok'),
+        },
+      )
+      expect((await safeFetch('https://a.example/x', {}, deps)).buffer.toString()).toBe('ok')
+      expect(added).toHaveLength(2)
+      expect(removed).toEqual(added)
+      await expectBlocked(safeFetch('https://missing.example/x', {}, deps), 'dns_lookup_failed')
+      expect(added).toHaveLength(3)
+      expect(removed).toEqual(added)
+    } finally {
+      add.mockRestore()
+      remove.mockRestore()
+    }
+  })
+})
+
 describe('pinnedLookup', () => {
   test('a real socket connects to the pinned address, not what DNS says', async () => {
     const server = createServer((req, res) => res.end(`host=${req.headers.host}`))
