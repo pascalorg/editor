@@ -18,6 +18,7 @@ import {
   emitter,
   type FenceNode,
   type FloorplanGeometry,
+  formatNumber as formatLocalizedNumber,
   type GeometryContext,
   type GuideNode,
   getRenderableSlabPolygon,
@@ -2439,8 +2440,8 @@ function formatMeasurement(
   return formatLinearMeasurement(measuredValue, unit, metricNotation)
 }
 
-function formatNumber(value: number, fractionDigits = 2) {
-  return Number.parseFloat(value.toFixed(fractionDigits)).toString()
+export function formatFloorplanNumber(value: number, locale: string, fractionDigits = 2) {
+  return formatLocalizedNumber(value, { locale, max: fractionDigits })
 }
 
 function convertReferenceLengthToMeters(value: number, unit: ReferenceScaleUnit) {
@@ -2515,8 +2516,8 @@ function getReferenceScaleUnitLabel(unit: ReferenceScaleUnit) {
   }
 }
 
-function formatReferenceScaleLabel(value: number, unit: ReferenceScaleUnit) {
-  return `${formatNumber(value)} ${getReferenceScaleUnitLabel(unit)}`
+function formatReferenceScaleLabel(value: number, unit: ReferenceScaleUnit, locale: string) {
+  return `${formatFloorplanNumber(value, locale)} ${getReferenceScaleUnitLabel(unit)}`
 }
 
 function getPolygonAreaAndCentroid(polygon: Point2D[]) {
@@ -7220,7 +7221,7 @@ export function FloorplanPanel({
           realLengthMeters,
           measuredLengthUnits: scaledMeasuredLengthUnits,
           metersPerUnit,
-          label: formatReferenceScaleLabel(displayLength, referenceScaleUnit),
+          label: formatReferenceScaleLabel(displayLength, referenceScaleUnit, locale),
         },
       } as Partial<GuideNode>,
     )
@@ -10037,10 +10038,11 @@ export function FloorplanPanel({
         // confirming without editing is a no-op instead of a surprise
         // rescale (plan units are meters; convert when defaulting to feet).
         setReferenceScaleValue(
-          formatNumber(
+          formatFloorplanNumber(
             unit === 'imperial'
               ? measuredLengthUnits / linearUnitToMeters(1, 'imperial')
               : measuredLengthUnits,
+            locale,
             2,
           ),
         )
@@ -11399,7 +11401,7 @@ export function FloorplanPanel({
 
             <div className="mt-3 rounded-lg bg-muted/45 px-3 py-2 text-muted-foreground text-xs">
               {pendingReferenceImageScaleFactor
-                ? `Image will scale ${formatNumber(pendingReferenceImageScaleFactor, 3)}x from the first point.`
+                ? `Image will scale ${formatFloorplanNumber(pendingReferenceImageScaleFactor, locale, 3)}x from the first point.`
                 : 'Enter a length greater than 0.'}
             </div>
 

@@ -6,6 +6,7 @@ import {
   closestMeasurementFeatureBinding,
   collectAlignmentAnchors,
   emitter,
+  formatNumber,
   type GeometryContext,
   type MeasurementFeatureAnchor,
   type MeasurementSnapKind,
@@ -78,6 +79,10 @@ export type ProjectedFloorplanSnap = {
 const MAX_REGISTERED_SNAP_ELEMENTS = 512
 const MAX_REGISTERED_SNAP_SEGMENTS = 4096
 const MAX_SAMPLED_PATH_SEGMENTS = 48
+
+export function formatMeasurementInputValue(value: number, locale: string): string {
+  return formatNumber(value, { locale, max: 3 })
+}
 const VERTEX_SNAP_DISTANCE_PX = 16
 const EDGE_SNAP_DISTANCE_PX = 10
 const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
@@ -642,13 +647,17 @@ function FloorplanExtrusionControl({
   const points = useMeasurementDraft((state) => state.points)
   const baseNormal = useMeasurementDraft((state) => state.baseNormal)
   const [value, setValue] = useState(() =>
-    extrusionHeight === 0 ? '' : String(metersToLinearUnit(extrusionHeight, unit)),
+    extrusionHeight === 0
+      ? ''
+      : formatMeasurementInputValue(metersToLinearUnit(extrusionHeight, unit), locale),
   )
 
   useEffect(() => {
     const height = useMeasurementDraft.getState().extrusionHeight
-    setValue(height === 0 ? '' : String(Number(metersToLinearUnit(height, unit).toFixed(3))))
-  }, [unit])
+    setValue(
+      height === 0 ? '' : formatMeasurementInputValue(metersToLinearUnit(height, unit), locale),
+    )
+  }, [locale, unit])
 
   const width = 260 * unitsPerPixel
   const height = 72 * unitsPerPixel
