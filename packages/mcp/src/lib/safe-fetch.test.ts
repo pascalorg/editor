@@ -478,6 +478,108 @@ describe('safeFetch — SSRF protection', () => {
   })
 })
 
+async function withAllowlist<T>(value: string, run: () => Promise<T>): Promise<T> {
+  const prev = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+  process.env.PASCAL_ALLOWED_ASSET_ORIGINS = value
+  try {
+    return await run()
+  } finally {
+    if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+    else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
+  }
+}
+
+describe('safeFetch — origin allowlist', () => {
+  const routes = {
+    'https://cdn.example.com/x': () => response(200, {}, 'cdn'),
+    'https://cdn.example.com:8443/x': () => response(200, {}, 'cdn-8443'),
+  }
+  const dns = {
+    'cdn.example.com': [PUBLIC_V4],
+    'cdn.example.com.evil.example': [PUBLIC_V4],
+    'evilcdn.example.com': [PUBLIC_V4],
+    'cdn.example.co': [PUBLIC_V4],
+  }
+
+  test('entries match after normalisation (default port, case, trailing slash, path)', async () => {
+    for (const entry of [
+      'https://cdn.example.com:443',
+      'HTTPS://CDN.Example.COM',
+      'https://cdn.example.com/',
+      ' https://cdn.example.com/assets/ ',
+    ]) {
+      const { deps } = fakeNetwork(dns, routes)
+      const result = await withAllowlist(entry, () =>
+        safeFetch('https://cdn.example.com/x', {}, deps),
+      )
+      expect([entry, result.buffer.toString()]).toEqual([entry, 'cdn'])
+    }
+  })
+
+  test('invalid entries are skipped with one warning each, valid ones still apply', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { deps } = fakeNetwork(dns, routes)
+      const raw = 'cdn.example.com, not a url,https://cdn.example.com,cdn.example.com:443'
+      await withAllowlist(raw, async () => {
+        expect((await safeFetch('https://cdn.example.com/x', {}, deps)).buffer.toString()).toBe(
+          'cdn',
+        )
+        await safeFetch('https://cdn.example.com/x', {}, deps)
+      })
+      const entries = warn.mock.calls.map((args) => {
+        const line = String(args[0])
+        expect(line).toStartWith('[pascal-mcp] safe_fetch_allowlist_entry_ignored ')
+        return JSON.parse(line.slice(line.indexOf('{'))).entry
+      })
+      expect(entries).toEqual(['cdn.example.com', 'not a url', 'cdn.example.com:443'])
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  test('an allowlist with no valid entry blocks everything', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { deps, resolved } = fakeNetwork(dns, routes)
+      await withAllowlist('cdn.example.com', () =>
+        expectBlocked(
+          safeFetch('https://cdn.example.com/x', {}, deps),
+          'url_origin_not_allowlisted',
+        ),
+      )
+      expect(resolved).toHaveLength(0)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  test('near-miss origins are not allowlisted', async () => {
+    const { deps, resolved } = fakeNetwork(dns, routes)
+    await withAllowlist('https://cdn.example.com', async () => {
+      for (const url of [
+        'https://cdn.example.com.evil.example/x', // suffix host
+        'https://evilcdn.example.com/x', // prefix host
+        'https://cdn.example.co/x', // truncated host
+        'https://cdn.example.com:8443/x', // different port
+        'http://cdn.example.com/x', // different scheme
+      ]) {
+        await expectBlocked(safeFetch(url, {}, deps), 'url_origin_not_allowlisted')
+      }
+    })
+    await withAllowlist('https://cdn.example.com:8443', async () => {
+      await expectBlocked(
+        safeFetch('https://cdn.example.com/x', {}, deps),
+        'url_origin_not_allowlisted',
+      )
+      expect((await safeFetch('https://cdn.example.com:8443/x', {}, deps)).buffer.toString()).toBe(
+        'cdn-8443',
+      )
+    })
+    expect(resolved).toEqual(['cdn.example.com'])
+  })
+})
+
 describe('pinnedLookup', () => {
   test('a real socket connects to the pinned address, not what DNS says', async () => {
     const server = createServer((req, res) => res.end(`host=${req.headers.host}`))
