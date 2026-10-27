@@ -85,6 +85,8 @@ jobs:
       - name: Lint & format check
         run: bun run check
 
+      # Includes the review-regression check against the PR base and the
+      # scan of the compiled packs for drafts; draft counts go to the summary.
       - name: Check localization catalogs
         run: bun run i18n:check
 

@@ -50,7 +50,7 @@ that is not flagged `fuzzy` + `Review: required`, and new hardcoded UI
 literals (see the literal guard below). It is read-only: use `i18n:extract` or
 `i18n:compile` when catalogs need to be written.
 
-Ordinary CI allows drafts; releases are gated:
+CI and releases allow drafts, never regressions:
 
 - In a pull request, drafts awaiting review pass `i18n:check` but are never
   shown: compiled packs omit them, so that locale shows the English source
@@ -61,9 +61,15 @@ Ordinary CI allows drafts; releases are gated:
   draft fails CI. CI compares with the pull request's base commit; locally
   `i18n:check` compares with the merge base of `origin/main`, or
   `I18N_BASE_REF`.
-- The release workflow runs `bun scripts/i18n.ts check --reviewed` before
-  publishing, which fails on any draft. A package release therefore needs
-  every bundled translation reviewed by a fluent person.
+- Releases ship drafts as English until they are reviewed.
+- `bun scripts/i18n.ts release-check` runs in the release workflow and, as part
+  of `i18n:check`, in CI. It compares the committed catalogs with a base
+  revision: the last `v*` release tag in a release (or `--base <rev>`), and the
+  pull request base in CI. It fails when a reviewed entry with the same English
+  became a draft, or when a compiled pack contains any draft. Both jobs write
+  the per-locale draft count to the job summary.
+- `bun scripts/i18n.ts check --reviewed` is the manual sign-off for a locale:
+  it fails on every remaining draft.
 
 ## Literal guard and migration codemod
 
