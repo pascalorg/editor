@@ -67,10 +67,16 @@ CI and releases allow drafts, never regressions:
 - Releases ship drafts as English until they are reviewed.
 - `bun scripts/i18n.ts release-check` runs in the release workflow and, as part
   of `i18n:check`, in CI. It compares the committed catalogs with a base
-  revision: the last `v*` release tag in a release (or `--base <rev>`), and the
-  pull request base in CI. It fails when a reviewed entry with the same English
-  became a draft, or when a compiled pack contains any draft. Both jobs write
-  the per-locale draft count to the job summary.
+  revision. In CI that is the pull request base. In a release it is the latest
+  `@pascal-app/editor@<version>` tag reachable from HEAD (the release workflow
+  tags every package `@pascal-app/<pkg>@<version>`, and the catalogs ship in
+  the editor package), or `--base <rev>`. When that tag predates the catalogs
+  it falls back to `origin/main` if that is another commit with catalogs, then
+  to the commit that introduced the catalogs. It never compares with a base
+  that has no catalogs: with none available it fails and asks for `--base`.
+  It fails when a reviewed entry with the same English became a draft, or when
+  a compiled pack contains any draft. Both jobs write the per-locale draft
+  count, and the base used, to the job summary.
 - `bun scripts/i18n.ts check --reviewed` is the manual sign-off for a locale:
   it fails on every remaining draft.
 

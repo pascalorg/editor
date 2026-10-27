@@ -1,7 +1,10 @@
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+/** `I18N_ROOT` points the checks at another checkout (tests use a temporary repository). */
+const ROOT = process.env.I18N_ROOT
+  ? resolve(process.env.I18N_ROOT)
+  : resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 function git(args: string[]): string | undefined {
   const result = Bun.spawnSync(['git', ...args], { cwd: ROOT, stdout: 'pipe', stderr: 'ignore' })
@@ -37,8 +40,38 @@ export function readAtRevision(revision: string, path: string): string | undefin
   return git(['show', `${revision}:${relative(ROOT, path)}`])
 }
 
-/** The newest `v*` release tag reachable from HEAD, as a commit. */
-export function lastReleaseTag(): string | undefined {
-  const tag = git(['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', 'HEAD'])?.trim()
-  return tag ? git(['rev-parse', '--verify', '--quiet', `${tag}^{commit}`])?.trim() : undefined
+/**
+ * The newest release tag of `pkg` reachable from HEAD. The release workflow
+ * tags every package `@pascal-app/<pkg>@<version>`.
+ */
+export function lastReleaseTag(pkg: string): { tag: string; revision: string } | undefined {
+  const tag = git([
+    'describe',
+    '--tags',
+    '--abbrev=0',
+    '--match',
+    `@pascal-app/${pkg}@*`,
+    'HEAD',
+  ])?.trim()
+  const revision = tag
+    ? git(['rev-parse', '--verify', '--quiet', `${tag}^{commit}`])?.trim()
+    : undefined
+  return tag && revision ? { tag, revision } : undefined
+}
+
+export function resolveRevision(ref: string): string | undefined {
+  return git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim()
+}
+
+export function headRevision(): string | undefined {
+  return resolveRevision('HEAD')
+}
+
+/** The oldest commit on HEAD's history that added `path`. */
+export function firstCommitWith(path: string): string | undefined {
+  const added = git(['log', '--diff-filter=A', '--format=%H', 'HEAD', '--', relative(ROOT, path)])
+    ?.trim()
+    .split('\n')
+    .filter(Boolean)
+  return added?.at(-1)
 }
