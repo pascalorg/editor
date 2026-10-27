@@ -17,6 +17,7 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
  * - the socket connects only to the addresses that were checked, so a DNS
  *   answer that changes between check and connect cannot reach a private host
  * - optional origin allowlist via `PASCAL_ALLOWED_ASSET_ORIGINS` (comma-separated)
+ *   - listed origins skip the port limit: an allowlisted origin may name any port
  * - max body size (default 20 MB) and request timeout (default 10 s)
  *
  * Used by photo_to_scene / analyze_floorplan_image / analyze_room_photo.
@@ -192,6 +193,36 @@ function protocolError(reason: string, details: Record<string, unknown>): never 
   throw new ProtocolError(ProtocolErrorCode.InvalidParams, reason, details)
 }
 
+let allowlistCache: { raw: string; origins: Set<string> } | null = null
+
+/**
+ * Parses the allowlist into normalised origins, so `https://CDN.example.com:443/`
+ * matches `https://cdn.example.com`. Entries that are not URLs with an origin
+ * are skipped with a warning; an allowlist with no valid entry blocks everything.
+ * Cached per raw value so each bad entry warns once, not on every fetch.
+ */
+function allowedOrigins(raw: string): Set<string> {
+  if (allowlistCache?.raw === raw) return allowlistCache.origins
+  const origins = new Set<string>()
+  for (const entry of raw.split(',')) {
+    const trimmed = entry.trim()
+    if (!trimmed) continue
+    let origin = 'null'
+    try {
+      origin = new URL(trimmed).origin
+    } catch {}
+    if (origin === 'null') {
+      console.warn(
+        `[pascal-mcp] safe_fetch_allowlist_entry_ignored ${JSON.stringify({ entry: trimmed })}`,
+      )
+    } else {
+      origins.add(origin)
+    }
+  }
+  allowlistCache = { raw, origins }
+  return origins
+}
+
 function assertAllowedUrl(url: string): URL {
   let parsed: URL
   try {
@@ -204,11 +235,7 @@ function assertAllowedUrl(url: string): URL {
   }
   const allowEnv = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
   if (allowEnv) {
-    const origins = allowEnv
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (!origins.includes(parsed.origin)) {
+    if (!allowedOrigins(allowEnv).has(parsed.origin)) {
       blocked('url_origin_not_allowlisted', parsed, { origin: parsed.origin })
     }
   } else if (!ALLOWED_PORTS.has(parsed.port)) {
@@ -227,7 +254,13 @@ function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(signal.reason)
     signal.addEventListener('abort', onAbort, { once: true })
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+    const settle =
+      <A>(done: (arg: A) => void) =>
+      (arg: A) => {
+        signal.removeEventListener('abort', onAbort)
+        done(arg)
+      }
+    promise.then(settle(resolve), settle(reject))
   })
 }
 

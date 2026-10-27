@@ -478,6 +478,206 @@ describe('safeFetch — SSRF protection', () => {
   })
 })
 
+async function withAllowlist<T>(value: string, run: () => Promise<T>): Promise<T> {
+  const prev = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+  process.env.PASCAL_ALLOWED_ASSET_ORIGINS = value
+  try {
+    return await run()
+  } finally {
+    if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+    else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
+  }
+}
+
+describe('safeFetch — origin allowlist', () => {
+  const routes = {
+    'https://cdn.example.com/x': () => response(200, {}, 'cdn'),
+    'https://cdn.example.com:8443/x': () => response(200, {}, 'cdn-8443'),
+  }
+  const dns = {
+    'cdn.example.com': [PUBLIC_V4],
+    'cdn.example.com.evil.example': [PUBLIC_V4],
+    'evilcdn.example.com': [PUBLIC_V4],
+    'cdn.example.co': [PUBLIC_V4],
+  }
+
+  test('entries match after normalisation (default port, case, trailing slash, path)', async () => {
+    for (const entry of [
+      'https://cdn.example.com:443',
+      'HTTPS://CDN.Example.COM',
+      'https://cdn.example.com/',
+      ' https://cdn.example.com/assets/ ',
+    ]) {
+      const { deps } = fakeNetwork(dns, routes)
+      const result = await withAllowlist(entry, () =>
+        safeFetch('https://cdn.example.com/x', {}, deps),
+      )
+      expect([entry, result.buffer.toString()]).toEqual([entry, 'cdn'])
+    }
+  })
+
+  test('invalid entries are skipped with one warning each, valid ones still apply', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { deps } = fakeNetwork(dns, routes)
+      const raw = 'cdn.example.com, not a url,https://cdn.example.com,cdn.example.com:443'
+      await withAllowlist(raw, async () => {
+        expect((await safeFetch('https://cdn.example.com/x', {}, deps)).buffer.toString()).toBe(
+          'cdn',
+        )
+        await safeFetch('https://cdn.example.com/x', {}, deps)
+      })
+      const entries = warn.mock.calls.map((args) => {
+        const line = String(args[0])
+        expect(line).toStartWith('[pascal-mcp] safe_fetch_allowlist_entry_ignored ')
+        return JSON.parse(line.slice(line.indexOf('{'))).entry
+      })
+      expect(entries).toEqual(['cdn.example.com', 'not a url', 'cdn.example.com:443'])
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  test('an allowlist with no valid entry blocks everything', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { deps, resolved } = fakeNetwork(dns, routes)
+      await withAllowlist('cdn.example.com', () =>
+        expectBlocked(
+          safeFetch('https://cdn.example.com/x', {}, deps),
+          'url_origin_not_allowlisted',
+        ),
+      )
+      expect(resolved).toHaveLength(0)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  test('near-miss origins are not allowlisted', async () => {
+    const { deps, resolved } = fakeNetwork(dns, routes)
+    await withAllowlist('https://cdn.example.com', async () => {
+      for (const url of [
+        'https://cdn.example.com.evil.example/x', // suffix host
+        'https://evilcdn.example.com/x', // prefix host
+        'https://cdn.example.co/x', // truncated host
+        'https://cdn.example.com:8443/x', // different port
+        'http://cdn.example.com/x', // different scheme
+      ]) {
+        await expectBlocked(safeFetch(url, {}, deps), 'url_origin_not_allowlisted')
+      }
+    })
+    await withAllowlist('https://cdn.example.com:8443', async () => {
+      await expectBlocked(
+        safeFetch('https://cdn.example.com/x', {}, deps),
+        'url_origin_not_allowlisted',
+      )
+      expect((await safeFetch('https://cdn.example.com:8443/x', {}, deps)).buffer.toString()).toBe(
+        'cdn-8443',
+      )
+    })
+    expect(resolved).toEqual(['cdn.example.com'])
+  })
+})
+
+describe('safeFetch — ports and redirects', () => {
+  test('a redirect hop to a forbidden port is blocked before it is resolved', async () => {
+    const { deps, resolved, requests } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4], 'b.example': [PUBLIC_V4] },
+      { 'https://a.example/x': () => response(302, { location: 'https://b.example:8080/y' }) },
+    )
+    await expectBlocked(safeFetch('https://a.example/x', {}, deps), 'url_port_not_allowed')
+    expect(resolved).toEqual(['a.example'])
+    expect(requests.map((r) => r.url)).toEqual(['https://a.example/x'])
+  })
+
+  test('https on port 80 counts as a web port and keeps the explicit port', async () => {
+    const { deps, requests } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4] },
+      { 'https://a.example:80/x': () => response(200, {}, 'tls-on-80') },
+    )
+    const result = await safeFetch('https://a.example:80/x', {}, deps)
+    expect(result.buffer.toString()).toBe('tls-on-80')
+    expect(requests.map((r) => r.url)).toEqual(['https://a.example:80/x'])
+  })
+})
+
+describe('safeFetch — DNS and the timeout', () => {
+  test('a DNS answer or failure arriving after the timeout changes nothing', async () => {
+    jest.useFakeTimers()
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => unhandled.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const answers: {
+        resolve: (addresses: LookupAddress[]) => void
+        reject: (err: Error) => void
+      }[] = []
+      const { deps, requests } = fakeNetwork(
+        {},
+        { 'https://late.example/x': () => response(200, {}, 'too late') },
+      )
+      deps.resolve = () => new Promise((resolve, reject) => answers.push({ resolve, reject }))
+      const answered = safeFetch('https://late.example/x', { timeoutMs: 1_000 }, deps).catch(
+        (e) => e,
+      )
+      const failed = safeFetch('https://late.example/x', { timeoutMs: 1_000 }, deps).catch((e) => e)
+      jest.advanceTimersByTime(1_000)
+      for (const err of [await answered, await failed]) {
+        expect(err).toBeInstanceOf(ProtocolError)
+        expect((err as Error).message).toContain('fetch_timeout')
+      }
+      answers[0]!.resolve([{ address: PUBLIC_V4, family: 4 }])
+      answers[1]!.reject(new Error('ENOTFOUND late.example'))
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+      expect(requests).toHaveLength(0)
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+      jest.useRealTimers()
+    }
+  })
+
+  test('the abort listener is removed as soon as each lookup settles', async () => {
+    const added: unknown[] = []
+    const removed: unknown[] = []
+    const originalAdd = AbortSignal.prototype.addEventListener
+    const originalRemove = AbortSignal.prototype.removeEventListener
+    const add = spyOn(AbortSignal.prototype, 'addEventListener').mockImplementation(function (
+      this: AbortSignal,
+      ...args: Parameters<AbortSignal['addEventListener']>
+    ) {
+      if (args[0] === 'abort') added.push(args[1])
+      return originalAdd.apply(this, args)
+    })
+    const remove = spyOn(AbortSignal.prototype, 'removeEventListener').mockImplementation(function (
+      this: AbortSignal,
+      ...args: Parameters<AbortSignal['removeEventListener']>
+    ) {
+      if (args[0] === 'abort') removed.push(args[1])
+      return originalRemove.apply(this, args)
+    })
+    try {
+      const { deps } = fakeNetwork(
+        { 'a.example': [PUBLIC_V4], 'b.example': [PUBLIC_V6] },
+        {
+          'https://a.example/x': () => response(302, { location: 'https://b.example/y' }),
+          'https://b.example/y': () => response(200, {}, 'ok'),
+        },
+      )
+      expect((await safeFetch('https://a.example/x', {}, deps)).buffer.toString()).toBe('ok')
+      expect(added).toHaveLength(2)
+      expect(removed).toEqual(added)
+      await expectBlocked(safeFetch('https://missing.example/x', {}, deps), 'dns_lookup_failed')
+      expect(added).toHaveLength(3)
+      expect(removed).toEqual(added)
+    } finally {
+      add.mockRestore()
+      remove.mockRestore()
+    }
+  })
+})
+
 describe('pinnedLookup', () => {
   test('a real socket connects to the pinned address, not what DNS says', async () => {
     const server = createServer((req, res) => res.end(`host=${req.headers.host}`))
