@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import { baseRevision, readAtRevision } from './i18n-git'
 
 /**
  * User-visible literal scanner shared by the one-time codemod (`convert`) and
@@ -108,7 +109,8 @@ type Allowlist = {
   paths: Record<string, string>
 }
 
-type Baseline = { version: 1; files: Record<string, number> }
+/** Legacy candidates per file, by text (a multiset: repeated copy appears once per use). */
+export type Baseline = { version: 2; files: Record<string, string[]> }
 
 function readAllowlist(): Allowlist {
   return JSON.parse(readFileSync(ALLOWLIST_PATH, 'utf8')) as Allowlist
@@ -132,8 +134,8 @@ function looksTranslatable(text: string, allow: Set<string>): boolean {
   const trimmed = text.trim()
   if (!/\p{L}{2}/u.test(trimmed)) return false
   if (allow.has(trimmed)) return false
-  // Identifiers, icon names, CSS classes, paths and URLs.
-  if (/^[a-z0-9]+(?:[-_:./#][a-z0-9]+)+$/i.test(trimmed) && !/\s/.test(trimmed)) return false
+  // Icon names, snake_case keys, paths and URLs. Hyphenated words ("Read-only", "zoom-in") are copy.
+  if (/^[a-z0-9-]+(?:[_:./#][a-z0-9-]+)+$/i.test(trimmed)) return false
   if (/^(?:https?:|mailto:|\/|#|\.)/.test(trimmed)) return false
   if (/^[a-z][a-zA-Z0-9]*$/.test(trimmed) && /[A-Z]/.test(trimmed)) return false
   return true
@@ -152,7 +154,7 @@ function isIgnored(source: ts.SourceFile, node: ts.Node): boolean {
     previousLineStart,
     text.indexOf('\n', start) === -1 ? text.length : text.indexOf('\n', start),
   )
-  return window.includes('i18n-ignore')
+  return /i18n-ignore:\s*\S/.test(window)
 }
 
 function isTranslationCall(node: ts.Node): boolean {
@@ -288,11 +290,55 @@ export type Visitor = {
   sentence(element: ts.JsxElement, children: SentenceChild[], text: string): void
   literal(node: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral, kind: CandidateKind): void
   template(node: ts.TemplateExpression, kind: CandidateKind): void
+  /** A `const` holding copy, rendered by name in JSX or a UI prop. */
+  constant(node: ts.Identifier, text: string, kind: CandidateKind): void
+}
+
+/** `const NAME = 'Copy'` declarations anywhere in the file, by name. */
+function stringConstants(
+  source: ts.SourceFile,
+): Map<string, ts.StringLiteral | ts.NoSubstitutionTemplateLiteral> {
+  const constants = new Map<string, ts.StringLiteral | ts.NoSubstitutionTemplateLiteral>()
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclarationList(node) && (node.flags & ts.NodeFlags.Const) !== 0) {
+      for (const declaration of node.declarations) {
+        const value = declaration.initializer
+        if (
+          ts.isIdentifier(declaration.name) &&
+          value &&
+          (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value))
+        ) {
+          constants.set(declaration.name.text, value)
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return constants
+}
+
+function isNotifyOptions(node: ts.Node): boolean {
+  const call = node.parent
+  return (
+    ts.isObjectLiteralExpression(node) &&
+    !!call &&
+    ts.isCallExpression(call) &&
+    call.arguments[1] === node &&
+    notifyCallee(call) !== undefined
+  )
 }
 
 /** Walks every user-visible literal in one file. */
-export function visitUiLiterals(source: ts.SourceFile, visitor: Visitor, allow: Set<string>): void {
-  const notifyOnly = !source.fileName.endsWith('.tsx')
+export function visitUiLiterals(
+  source: ts.SourceFile,
+  visitor: Visitor,
+  allow: Set<string>,
+  /** Plain modules are scanned for notifications only unless the codemod was pointed at them. */
+  allKinds = source.fileName.endsWith('.tsx'),
+): void {
+  const notifyOnly = !allKinds
+  const constants = stringConstants(source)
   const literalSink = (expression: ts.Expression | undefined, kind: CandidateKind): void => {
     if (!expression || (notifyOnly && kind !== 'notify')) return
     if (ts.isParenthesizedExpression(expression)) {
@@ -314,6 +360,18 @@ export function visitUiLiterals(source: ts.SourceFile, visitor: Visitor, allow: 
         literalSink(expression.left, kind)
       }
       literalSink(expression.right, kind)
+      return
+    }
+    if (ts.isIdentifier(expression)) {
+      const value = constants.get(expression.text)
+      if (
+        value &&
+        looksTranslatable(value.text, allow) &&
+        !isIgnored(source, value) &&
+        !isIgnored(source, expression)
+      ) {
+        visitor.constant(expression, value.text, kind)
+      }
       return
     }
     if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
@@ -376,7 +434,8 @@ export function visitUiLiterals(source: ts.SourceFile, visitor: Visitor, allow: 
       ts.isPropertyAssignment(node) &&
       (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
       UI_PROPERTIES.has(node.name.text) &&
-      !insideTranslationCall(node)
+      !insideTranslationCall(node) &&
+      !isNotifyOptions(node.parent)
     ) {
       literalSink(node.initializer, 'property')
     }
@@ -451,6 +510,8 @@ export function scanSource(
           names.includes(undefined) ? 'complex template interpolation' : undefined,
         )
       },
+      constant: (node, value, kind) =>
+        add(node, kind, value, 'string constant: make it a descriptor or translate at the use'),
     },
     allow,
   )
@@ -480,29 +541,56 @@ export function scanRepository(): Map<string, Candidate[]> {
   return result
 }
 
+export function parseBaseline(text: string | undefined): Baseline | undefined {
+  if (!text) return undefined
+  const parsed = JSON.parse(text) as { version?: number; files?: Record<string, unknown> }
+  return parsed.version === 2 ? (parsed as Baseline) : undefined
+}
+
 function readBaseline(): Baseline {
-  return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Baseline
+  return parseBaseline(readFileSync(BASELINE_PATH, 'utf8')) ?? { version: 2, files: {} }
+}
+
+/** The base branch's baseline, when the base has one (see `baseRevision`). */
+function readBaseBaseline(): Baseline | undefined {
+  const revision = baseRevision()
+  return revision ? parseBaseline(readAtRevision(revision, BASELINE_PATH)) : undefined
 }
 
 function writeBaseline(scan: Map<string, Candidate[]>): void {
   const files = Object.fromEntries(
     [...scan.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([path, list]) => [path, list.length]),
+      .map(([path, list]) => [path, list.map((candidate) => candidate.text).sort()]),
   )
   writeFileSync(
     BASELINE_PATH,
-    `${JSON.stringify({ version: 1, files } satisfies Baseline, null, 2)}\n`,
+    `${JSON.stringify({ version: 2, files } satisfies Baseline, null, 2)}\n`,
   )
 }
 
+/** Items of `values` left after removing one occurrence per item of `allowed`. */
+function beyond(values: readonly string[], allowed: readonly string[]): string[] {
+  const remaining = new Map<string, number>()
+  for (const value of allowed) remaining.set(value, (remaining.get(value) ?? 0) + 1)
+  return values.filter((value) => {
+    const left = remaining.get(value) ?? 0
+    if (left === 0) return true
+    remaining.set(value, left - 1)
+    return false
+  })
+}
+
 /**
- * The ratchet: a file may never gain hardcoded copy. Files absent from the
- * baseline (every new file) must have none.
+ * The ratchet: a file may only keep copy its baseline already lists, so new
+ * or swapped copy fails, and a file absent from the baseline must have none.
+ * The baseline itself may only shrink relative to the base branch; exempting
+ * copy goes through `i18n/literal-allowlist.json` or an `i18n-ignore: <reason>`.
  */
 export function checkLiterals(
   scan = scanRepository(),
   baseline = readBaseline(),
+  base?: Baseline,
 ): {
   errors: string[]
   improvable: string[]
@@ -513,21 +601,38 @@ export function checkLiterals(
   let total = 0
   for (const [path, candidates] of scan) {
     total += candidates.length
-    const allowed = baseline.files[path] ?? 0
-    if (candidates.length > allowed) {
-      const listed = candidates.map(
-        (candidate) => `    ${path}:${candidate.line} ${JSON.stringify(candidate.text)}`,
-      )
+    const unknown = new Set(
+      beyond(
+        candidates.map((candidate) => candidate.text),
+        baseline.files[path] ?? [],
+      ),
+    )
+    if (unknown.size === 0) continue
+    const listed = candidates
+      .filter((candidate) => unknown.has(candidate.text))
+      .map((candidate) => `    ${path}:${candidate.line} ${JSON.stringify(candidate.text)}`)
+    errors.push(
+      `${path}: untranslated user-visible literals not in the baseline. Wrap them with i18n._({ id, message }) or add an "i18n-ignore: <reason>" comment.\n${listed.join('\n')}`,
+    )
+  }
+  for (const [path, allowed] of Object.entries(baseline.files)) {
+    const left = beyond(
+      allowed,
+      (scan.get(path) ?? []).map((candidate) => candidate.text),
+    )
+    if (left.length > 0) improvable.push(`${path}: ${left.length} fewer`)
+    const added = base ? beyond(allowed, base.files[path] ?? []) : []
+    if (added.length > 0) {
       errors.push(
-        `${path}: ${candidates.length} untranslated user-visible literals (baseline ${allowed}). Wrap new copy with i18n._({ id, message }) or add an "i18n-ignore: <reason>" comment.\n${listed.join('\n')}`,
+        `${path}: i18n/literal-baseline.json adds ${added.map((text) => JSON.stringify(text)).join(', ')} relative to the base branch; the baseline may only shrink`,
       )
     }
   }
-  for (const [path, allowed] of Object.entries(baseline.files)) {
-    const current = scan.get(path)?.length ?? 0
-    if (current < allowed) improvable.push(`${path}: ${current} < ${allowed}`)
-  }
   return { errors, improvable, total }
+}
+
+export function checkRepositoryLiterals() {
+  return checkLiterals(scanRepository(), readBaseline(), readBaseBaseline())
 }
 
 function report(scan: Map<string, Candidate[]>): void {
@@ -547,7 +652,7 @@ function report(scan: Map<string, Candidate[]>): void {
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2)
   if (command === 'check') {
-    const { errors, improvable, total } = checkLiterals()
+    const { errors, improvable, total } = checkRepositoryLiterals()
     if (improvable.length > 0) {
       console.log(
         `[i18n literals] ${improvable.length} files are below their baseline; run bun run i18n:literals -- update to lock in the progress`,
