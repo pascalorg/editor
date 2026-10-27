@@ -9,7 +9,7 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
  * SSRF-safe fetch for user-supplied URLs (image URLs in vision tools).
  *
  * Every hop (the initial URL and each redirect target) is checked the same way:
- * - only http(s) schemes
+ * - only http(s) schemes, on ports 80/443 unless the origin is allowlisted
  * - well-known local hostnames are refused outright
  * - the host is resolved once and *every* resolved address must be public;
  *   IPv6 forms that embed an IPv4 address (mapped, compatible, 6to4) are
@@ -25,6 +25,8 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 const DEFAULT_MAX_BYTES = 20 * 1024 * 1024 // 20 MB
 const DEFAULT_TIMEOUT_MS = 10_000
 const MAX_REDIRECTS = 3
+/** `URL.port` is '' when the URL uses its scheme's default port. */
+const ALLOWED_PORTS = new Set(['', '80', '443'])
 
 function parseIPv4(addr: string): number[] | null {
   const parts = addr.split('.')
@@ -108,8 +110,16 @@ function isBlockedV6(g: number[]): boolean {
   }
   if (g0 === 0x64 && g1 === 0xff9b) return true // 64:ff9b::/96 and 64:ff9b:1::/48 NAT64
   if (g0 === 0x100 && g1 === 0 && g2 === 0 && (g3 === 0 || g3 === 1)) return true // 100::/64 discard, 100:0:0:1::/64 dummy
-  if (g0 === 0x2001 && g1 === 0) return true // 2001::/32 Teredo
-  if (g0 === 0x2001 && g1 === 2 && g2 === 0) return true // 2001:2::/48 benchmarking
+  // 2001::/23 IETF protocol assignments (incl. Teredo, benchmarking, ORCHID),
+  // except the entries IANA lists as globally reachable.
+  if (g0 === 0x2001 && g1 < 0x200) {
+    const anycast = g1 === 1 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0 && g6 === 0
+    if (anycast && g7 >= 1 && g7 <= 3) return false // 2001:1::1-3 PCP, TURN, DNS-SD SRP anycast
+    if (g1 === 3) return false // 2001:3::/32 AMT
+    if (g1 === 4 && g2 === 0x112) return false // 2001:4:112::/48 AS112-v6
+    if (g1 >= 0x20 && g1 <= 0x3f) return false // 2001:20::/28 ORCHIDv2, 2001:30::/28 drone remote ID
+    return true
+  }
   if (g0 === 0x2001 && g1 === 0xdb8) return true // 2001:db8::/32 documentation
   if (g0 === 0x2002) return isBlockedV4(embeddedV4(g1, g2)) // 2002::/16 6to4
   if (g0 === 0x3fff && (g1 & 0xf000) === 0) return true // 3fff::/20 documentation
@@ -148,9 +158,22 @@ function isLocalHostname(hostname: string): boolean {
   )
 }
 
-/** Scheme, host and path only: query strings can carry presigned tokens, userinfo carries credentials. */
+const MAX_LOGGED_PATH = 128
+
+/**
+ * Scheme, host and a truncated path only: query strings can carry presigned
+ * tokens, userinfo carries credentials. Non-http(s) URLs (`data:`,
+ * `javascript:`) carry their payload in the path, so they log scheme and host.
+ */
 export function loggableUrl(url: URL): string {
-  return `${url.protocol}//${url.host}${url.pathname}`
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return url.host ? `${url.protocol}//${url.host}` : url.protocol
+  }
+  const path =
+    url.pathname.length > MAX_LOGGED_PATH
+      ? `${url.pathname.slice(0, MAX_LOGGED_PATH)}…`
+      : url.pathname
+  return `${url.protocol}//${url.host}${path}`
 }
 
 function blocked(
@@ -188,14 +211,36 @@ function assertAllowedUrl(url: string): URL {
     if (!origins.includes(parsed.origin)) {
       blocked('url_origin_not_allowlisted', parsed, { origin: parsed.origin })
     }
+  } else if (!ALLOWED_PORTS.has(parsed.port)) {
+    // An operator-allowlisted origin may name any port; otherwise only web ports,
+    // so a public host cannot be used to probe its other services.
+    blocked('url_port_not_allowed', parsed, { port: parsed.port })
   }
   return parsed
 }
 
 export type Resolver = (hostname: string) => Promise<LookupAddress[]>
 
-/** Resolves `url`'s host and returns its addresses only if every one of them is public. */
-async function resolveCheckedAddresses(url: URL, resolve: Resolver): Promise<LookupAddress[]> {
+/** Settles with `promise`, or rejects with the abort reason as soon as `signal` aborts. */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason)
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason)
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  })
+}
+
+/**
+ * Resolves `url`'s host and returns its addresses only if every one of them is
+ * public. The lookup races `signal`: `dns.lookup` cannot be cancelled, so a
+ * hung resolver must not hold the fetch past its timeout.
+ */
+async function resolveCheckedAddresses(
+  url: URL,
+  resolve: Resolver,
+  signal: AbortSignal,
+): Promise<LookupAddress[]> {
   const host = url.hostname.replace(/^\[|\]$/g, '')
   const details = { hostname: url.hostname }
   const literalFamily = isIP(host)
@@ -205,8 +250,9 @@ async function resolveCheckedAddresses(url: URL, resolve: Resolver): Promise<Loo
   } else {
     if (isLocalHostname(host)) blocked('url_host_blocked', url, details)
     try {
-      addresses = await resolve(host)
+      addresses = await untilAborted(resolve(host), signal)
     } catch (err) {
+      if (signal.aborted) throw err
       return protocolError('dns_lookup_failed', {
         url: url.toString(),
         ...details,
@@ -311,7 +357,7 @@ export async function safeFetch(
     for (let i = 0; i <= MAX_REDIRECTS; i++) {
       const parsed = assertAllowedUrl(current)
       hops.push(parsed.toString())
-      const addresses = await resolveCheckedAddresses(parsed, deps.resolve)
+      const addresses = await resolveCheckedAddresses(parsed, deps.resolve, controller.signal)
       const res = await deps.request(parsed, {
         headers: opts.accept ? { Accept: opts.accept } : {},
         lookup: pinnedLookup(addresses),

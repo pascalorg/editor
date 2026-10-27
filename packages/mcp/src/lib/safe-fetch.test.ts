@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, jest, mock, spyOn, test } from 'bun:test'
 import type { LookupAddress } from 'node:dns'
 import { createServer, request as httpRequest, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -113,6 +113,18 @@ describe('isBlockedAddress', () => {
       'other non-global IANA special-purpose',
       ['192.88.99.1', '100:0:0:1::1', '2001:2::1', '5f00::1', '2002:c000:201::'],
     ],
+    [
+      'IETF protocol assignments 2001::/23',
+      [
+        '2001:1::',
+        '2001:1::4',
+        '2001:1::1:1',
+        '2001:4::1',
+        '2001:5::1',
+        '2001:10::1',
+        '2001:1ff::1',
+      ],
+    ],
     ['zone ids and brackets', ['fe80::1%eth0', '[::1]', '[::ffff:7f00:1]']],
     ['not an address', ['', 'example.com', '1.2.3', '::ffff:1.2.3.4.5']],
   ]
@@ -144,6 +156,16 @@ describe('isBlockedAddress', () => {
       '192.175.48.1',
       '2001:4:112::1',
       '3fff:1000::1',
+      // Globally reachable exceptions inside 2001::/23, and the first address past it.
+      '2001:1::1',
+      '2001:1::2',
+      '2001:1::3',
+      '2001:3::1',
+      '2001:20::1',
+      '2001:2f:ffff::1',
+      '2001:30::1',
+      '2001:3f::1',
+      '2001:200::1',
     ]) {
       expect([address, isBlockedAddress(address)]).toEqual([address, false])
     }
@@ -182,7 +204,7 @@ describe('safeFetch — SSRF protection', () => {
   test('rejects local-style hostnames without resolving them', async () => {
     const { deps, resolved } = fakeNetwork({})
     for (const url of [
-      'http://localhost:9999/',
+      'http://localhost/',
       'http://localhost./',
       'http://mything.local/',
       'http://server.internal/',
@@ -326,13 +348,89 @@ describe('safeFetch — SSRF protection', () => {
     const logged = lines.map((line) => JSON.parse(line.slice(line.indexOf('{'))).url)
     expect(logged).toEqual([
       'http://a.example/img.png',
-      'ftp://a.example/img.png',
+      'ftp://a.example',
       'https://a.example/img.png',
     ])
     for (const line of lines) {
       for (const secret of ['s3cr3t', 't0k3n', 'frag', 'hunter2', 'user', '?']) {
         expect(line).not.toContain(secret)
       }
+    }
+  })
+
+  test('truncates long logged paths and logs only scheme and host for other schemes', async () => {
+    const { deps } = fakeNetwork({ 'a.example': ['10.0.0.7'] })
+    const longPath = `/${'p'.repeat(500)}`
+    await expectBlocked(safeFetch(`http://a.example${longPath}`, {}, deps))
+    await expectBlocked(
+      safeFetch(`data:image/png;base64,${'A'.repeat(500)}`),
+      'url_scheme_not_allowed',
+    )
+    await expectBlocked(safeFetch('javascript:alert(document.cookie)'), 'url_scheme_not_allowed')
+    const logged = errorLog.mock.calls.map((args) => {
+      const line = String(args[0])
+      return JSON.parse(line.slice(line.indexOf('{'))).url as string
+    })
+    expect(logged).toEqual([`http://a.example${longPath.slice(0, 128)}…`, 'data:', 'javascript:'])
+  })
+
+  test('only web ports are fetched unless the origin is allowlisted', async () => {
+    const { deps, resolved } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4], 'cdn.example': [PUBLIC_V4] },
+      {
+        'http://a.example/x': () => response(200, {}, 'http'),
+        'https://a.example/x': () => response(200, {}, 'https'),
+        'http://a.example:443/x': () => response(200, {}, 'http-on-443'),
+        'https://cdn.example:8443/x': () => response(200, {}, 'allowlisted'),
+      },
+    )
+    for (const url of [
+      'http://a.example:8080/x',
+      'https://a.example:22/x',
+      'http://a.example:6379/',
+    ]) {
+      await expectBlocked(safeFetch(url, {}, deps), 'url_port_not_allowed')
+    }
+    expect(resolved).toHaveLength(0)
+    for (const [url, body] of [
+      ['http://a.example:80/x', 'http'],
+      ['https://a.example:443/x', 'https'],
+      ['http://a.example:443/x', 'http-on-443'],
+    ]) {
+      expect((await safeFetch(url!, {}, deps)).buffer.toString()).toBe(body!)
+    }
+
+    const prev = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+    process.env.PASCAL_ALLOWED_ASSET_ORIGINS = 'https://cdn.example:8443'
+    try {
+      const result = await safeFetch('https://cdn.example:8443/x', {}, deps)
+      expect(result.buffer.toString()).toBe('allowlisted')
+    } finally {
+      if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+      else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
+    }
+  })
+
+  test('a DNS lookup that never answers still times out', async () => {
+    jest.useFakeTimers()
+    try {
+      const { deps, resolved, requests } = fakeNetwork({})
+      deps.resolve = (hostname) => {
+        resolved.push(hostname)
+        return new Promise(() => {})
+      }
+      const pending = safeFetch('https://hang.example/x', { timeoutMs: 5_000 }, deps).catch(
+        (e) => e,
+      )
+      await Promise.resolve()
+      expect(resolved).toEqual(['hang.example'])
+      jest.advanceTimersByTime(5_000)
+      const err = await pending
+      expect(err).toBeInstanceOf(ProtocolError)
+      expect((err as Error).message).toContain('fetch_timeout')
+      expect(requests).toHaveLength(0)
+    } finally {
+      jest.useRealTimers()
     }
   })
 
