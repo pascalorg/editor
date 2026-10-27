@@ -19,6 +19,7 @@
   },
   "files": [
     "dist",
+    "!dist/__bench__",
     "README.md"
   ],
   "scripts": {
