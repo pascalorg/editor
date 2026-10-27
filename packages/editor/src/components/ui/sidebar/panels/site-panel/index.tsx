@@ -81,14 +81,13 @@ import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { CollectionsSection } from './collection-tree-node'
-import { InlineRenameInput } from './inline-rename-input'
+import { InlineRenameInput, RoomRenameInput } from './inline-rename-input'
 import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 import { zoneDefaultName } from './default-names'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
-import { displayRoomName } from '../../../../../lib/room-name-messages'
 
 // ============================================================================
 // PROPERTY LINE SECTION
@@ -1298,9 +1297,8 @@ const ZoneItem = memo(function ZoneItem({
         />
       </span>
       <div className="min-w-0 flex-1 pr-1">
-        <InlineRenameInput
+        <RoomRenameInput
           defaultName={defaultName}
-          displayName={zone.name ? displayRoomName(zone.name, i18n) : undefined}
           isEditing={isEditing}
           nodeId={zone.id}
           onStartEditing={() => setIsEditing(true)}
