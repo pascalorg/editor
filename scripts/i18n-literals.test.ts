@@ -212,6 +212,35 @@ export function Toolbar() {
   ).toEqual(['zoom-in', 'Read-only', 'Delete everything'])
 })
 
+test('a rendered constant resolves through scope, not just its name', () => {
+  const source = `const LABEL = 'Shown label'
+
+function Other() {
+  const LABEL = 'Never rendered'
+  return LABEL.length
+}
+
+export function Panel({ title }: { title: string }) {
+  const LABEL = title
+  return (
+    <div>
+      <span>{LABEL}</span>
+      <Inner />
+    </div>
+  )
+}
+
+function Inner() {
+  return <span>{LABEL}</span>
+}
+`
+  expect(
+    scanSource('packages/editor/src/components/panel.tsx', source, allowlist).map(
+      (found) => found.text,
+    ),
+  ).toEqual(['Shown label'])
+})
+
 test('a notification description is one candidate and one edit', () => {
   const source = `export function Save() {
   return <button onClick={() => toast.error('Failed', { description: 'Try again' })} />

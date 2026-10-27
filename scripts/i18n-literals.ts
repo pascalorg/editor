@@ -294,28 +294,97 @@ export type Visitor = {
   constant(node: ts.Identifier, text: string, kind: CandidateKind): void
 }
 
-/** `const NAME = 'Copy'` declarations anywhere in the file, by name. */
-function stringConstants(
-  source: ts.SourceFile,
-): Map<string, ts.StringLiteral | ts.NoSubstitutionTemplateLiteral> {
-  const constants = new Map<string, ts.StringLiteral | ts.NoSubstitutionTemplateLiteral>()
-  const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclarationList(node) && (node.flags & ts.NodeFlags.Const) !== 0) {
-      for (const declaration of node.declarations) {
+function bindsName(name: ts.BindingName, wanted: string): boolean {
+  if (ts.isIdentifier(name)) return name.text === wanted
+  return name.elements.some(
+    (element) => !ts.isOmittedExpression(element) && bindsName(element.name, wanted),
+  )
+}
+
+type Binding =
+  | { found: false }
+  | { found: true; value?: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral }
+
+/** The declaration of `name` directly owned by one scope node, if any. */
+function bindingIn(scope: ts.Node, name: string): Binding {
+  if (ts.isFunctionLike(scope)) {
+    if (scope.parameters.some((parameter) => bindsName(parameter.name, name)))
+      return { found: true }
+    return { found: false }
+  }
+  if (
+    (ts.isForStatement(scope) || ts.isForOfStatement(scope) || ts.isForInStatement(scope)) &&
+    scope.initializer &&
+    ts.isVariableDeclarationList(scope.initializer) &&
+    scope.initializer.declarations.some((declaration) => bindsName(declaration.name, name))
+  ) {
+    return { found: true }
+  }
+  if (
+    ts.isCatchClause(scope) &&
+    scope.variableDeclaration &&
+    bindsName(scope.variableDeclaration.name, name)
+  ) {
+    return { found: true }
+  }
+  if (
+    !(
+      ts.isSourceFile(scope) ||
+      ts.isBlock(scope) ||
+      ts.isModuleBlock(scope) ||
+      ts.isCaseClause(scope)
+    )
+  ) {
+    return { found: false }
+  }
+  for (const statement of scope.statements) {
+    if (ts.isVariableStatement(statement)) {
+      const isConst = (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
+      for (const declaration of statement.declarationList.declarations) {
+        if (!bindsName(declaration.name, name)) continue
         const value = declaration.initializer
-        if (
+        return isConst &&
           ts.isIdentifier(declaration.name) &&
           value &&
           (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value))
-        ) {
-          constants.set(declaration.name.text, value)
-        }
+          ? { found: true, value }
+          : { found: true }
       }
     }
-    ts.forEachChild(node, visit)
+    if (
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name?.text === name
+    ) {
+      return { found: true }
+    }
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause
+      const bindings = clause?.namedBindings
+      if (
+        clause?.name?.text === name ||
+        (bindings && ts.isNamespaceImport(bindings) && bindings.name.text === name) ||
+        (bindings &&
+          ts.isNamedImports(bindings) &&
+          bindings.elements.some((element) => element.name.text === name))
+      ) {
+        return { found: true }
+      }
+    }
   }
-  visit(source)
-  return constants
+  return { found: false }
+}
+
+/** The `const` string an identifier refers to, resolved through the nearest scope that declares it. */
+function constantValue(
+  identifier: ts.Identifier,
+): ts.StringLiteral | ts.NoSubstitutionTemplateLiteral | undefined {
+  for (let scope = identifier.parent; scope; scope = scope.parent) {
+    const binding = bindingIn(scope, identifier.text)
+    if (binding.found) return binding.value
+  }
+  return undefined
 }
 
 function isNotifyOptions(node: ts.Node): boolean {
@@ -338,7 +407,6 @@ export function visitUiLiterals(
   allKinds = source.fileName.endsWith('.tsx'),
 ): void {
   const notifyOnly = !allKinds
-  const constants = stringConstants(source)
   const literalSink = (expression: ts.Expression | undefined, kind: CandidateKind): void => {
     if (!expression || (notifyOnly && kind !== 'notify')) return
     if (ts.isParenthesizedExpression(expression)) {
@@ -363,7 +431,7 @@ export function visitUiLiterals(
       return
     }
     if (ts.isIdentifier(expression)) {
-      const value = constants.get(expression.text)
+      const value = constantValue(expression)
       if (
         value &&
         looksTranslatable(value.text, allow) &&
