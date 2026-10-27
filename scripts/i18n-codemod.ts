@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { parsePo } from 'pofile-ts'
 import ts from 'typescript'
 import {
+  ASCII_EDGE_WHITESPACE,
+  attributeText,
   componentOwner,
   enclosingComponent,
   parseSource,
@@ -41,11 +43,13 @@ type Planned = {
  * text: braces (with any apostrophes next to them) are quoted, and an
  * apostrophe is doubled only where ICU would read it as syntax.
  */
-export function icuLiteral(text: string): string {
+export function icuLiteral(text: string, following?: string): string {
   return text.replace(/[{}']*[{}][{}']*|'/g, (run, offset: number) => {
     if (run !== "'") return `'${run.replace(/'/g, "''")}'`
-    const next = text[offset + 1]
-    const special = text[offset - 1] === "'" || next === "'" || next === '#' || next === '|'
+    // `following` is what comes after this piece, e.g. the `{` of a placeholder.
+    const next = offset + 1 < text.length ? text[offset + 1] : following
+    const special =
+      text[offset - 1] === "'" || next === "'" || next === '#' || next === '|' || next === '{'
     return special ? "''" : "'"
   })
 }
@@ -127,8 +131,19 @@ function existingMessages(): Record<string, string> {
   return Object.fromEntries(po.items.map((item) => [item.msgid, item.msgstr[0] ?? '']))
 }
 
+/** A single-quoted JavaScript string literal for any text. */
 function quote(text: string): string {
-  return `'${text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`
+  return `'${text.replace(/[\\'\n\r\u2028\u2029]/g, (character) =>
+    character === '\\'
+      ? '\\\\'
+      : character === "'"
+        ? "\\'"
+        : character === '\n'
+          ? '\\n'
+          : character === '\r'
+            ? '\\r'
+            : `\\u${character.charCodeAt(0).toString(16)}`,
+  )}'`
 }
 
 function descriptor(id: string, message: string, values: Array<[string, string]>): string {
@@ -306,10 +321,11 @@ function isServerOnly(path: string, source: ts.SourceFile): boolean {
   return editorEntryModuleSet().has(path)
 }
 
+/** Edge ASCII spaces become `{' '}` beside the call; a no-break space stays in the message. */
 function spacing(normalized: string): { lead: string; trail: string } {
   return {
-    lead: /^\s/.test(normalized) ? "{' '}" : '',
-    trail: /\s$/.test(normalized) ? "{' '}" : '',
+    lead: /^[ \t\r\n]/.test(normalized) ? "{' '}" : '',
+    trail: /[ \t\r\n]$/.test(normalized) ? "{' '}" : '',
   }
 }
 
@@ -444,7 +460,7 @@ export function convertSource(
     source,
     {
       jsxText(node, normalized) {
-        const message = icuLiteral(normalized.trim())
+        const message = icuLiteral(normalized.replace(ASCII_EDGE_WHITESPACE, ''))
         const component = owner(node, message)
         if (!component) return
         components.add(component)
@@ -463,16 +479,35 @@ export function convertSource(
           source,
           children.flatMap((child) => (child.type === 'value' ? [child] : [])),
         )
+        // Adjacent text and static pieces render as one run, so they are
+        // encoded together (`{'{'}{'}'}` is the literal `{}`), and a run before
+        // a placeholder is encoded knowing a `{` follows.
+        const runs: Array<{ text: string } | { name: string }> = []
         let index = 0
-        const message = children
-          .map((child) => {
-            if (child.type !== 'value') return icuLiteral(child.text)
-            const name = values.placeholders[index]
+        for (const child of children) {
+          if (child.type === 'value') {
+            runs.push({ name: values.placeholders[index]! })
             index += 1
-            return `{${name}}`
-          })
+            continue
+          }
+          const previous = runs.at(-1)
+          if (previous && 'text' in previous) previous.text += child.text
+          else runs.push({ text: child.text })
+        }
+        const edges = runs.map((run, runIndex) => {
+          if (!('text' in run)) return run
+          let text = run.text
+          if (runIndex === 0) text = text.replace(/^[ \t\r\n]+/, '')
+          if (runIndex === runs.length - 1) text = text.replace(/[ \t\r\n]+$/, '')
+          return { text }
+        })
+        const message = edges
+          .map((run, runIndex) =>
+            'text' in run
+              ? icuLiteral(run.text, runIndex + 1 < edges.length ? '{' : undefined)
+              : `{${run.name}}`,
+          )
           .join('')
-          .trim()
         const normalized = children
           .map((child) => (child.type === 'value' ? 'x' : child.text))
           .join('')
@@ -490,7 +525,7 @@ export function convertSource(
       },
       literal(node) {
         if (described.has(node.getStart(source))) return
-        const message = icuLiteral(node.text)
+        const message = icuLiteral(attributeText(node))
         const component = owner(node, message)
         if (!component) return
         components.add(component)
@@ -541,10 +576,13 @@ export function convertSource(
           })),
         )
         const message = [
-          icuLiteral(node.head.text),
+          icuLiteral(node.head.text, '{'),
           ...node.templateSpans.map(
             (span, spanIndex) =>
-              `{${values.placeholders[spanIndex]}}${icuLiteral(span.literal.text)}`,
+              `{${values.placeholders[spanIndex]}}${icuLiteral(
+                span.literal.text,
+                spanIndex + 1 < node.templateSpans.length ? '{' : undefined,
+              )}`,
           ),
         ].join('')
         const component = owner(node, message)

@@ -58,9 +58,14 @@ CI and releases allow drafts, never regressions:
   prints how many entries each locale still has awaiting review.
 - A translation that is `Review: human` on the base branch must stay reviewed
   while its English is unchanged. A PR may edit it, but turning it back into a
-  draft fails CI. Renaming a reviewed ID while keeping its English fails too,
-  until the reviewed translation is carried over or reviewed again: the same
-  English in a new place is not approved automatically. CI compares with the
+  draft fails CI.
+- To rename a reviewed ID, declare it on the new descriptor:
+  `i18n._({ id: 'editor.panel.advancedSection', message: 'Advanced', comment: 'renamed-from: editor.panel.advanced' })`.
+  `bun run i18n:extract` then carries the reviewed translation over while the
+  English is unchanged, and CI fails if a declared rename arrives without it.
+  An undeclared new ID that shares English with a removed reviewed ID is only
+  reported as a possible rename (console and job summary): it may be an
+  unrelated addition, and a missed carry-over just shows English. CI compares with the
   pull request's base commit, or on a push with the commit before the push;
   locally `i18n:check` compares with the merge base of `origin/main`, or
   `I18N_BASE_REF`.
@@ -90,8 +95,9 @@ literals: JSX text, string-valued `aria-*`, `title`, `placeholder`, `alt`,
 payloads (also in `.ts` modules), including `const` strings rendered by name
 in JSX, a UI prop or inside a sentence, and copy built with `+`. Hyphenated
 words ("Read-only") count as copy; icon names, paths and snake_case keys do
-not. JSX text is recorded as it renders (whitespace rules, entities, `{' '}`
-joins), so equivalent spellings match. `i18n/literal-baseline.json` lists, per
+not. JSX text and attribute values are recorded as they render (whitespace rules,
+entities, `{' '}` joins; a no-break space is content), so equivalent spellings
+match, and the allowlist applies to the joined text. `i18n/literal-baseline.json` lists, per
 file, the legacy candidates by text. A file may only contain copy its entry
 lists, so adding or swapping a string fails, and a file missing from the
 baseline (every new file) must have none. When a PR converts copy, run

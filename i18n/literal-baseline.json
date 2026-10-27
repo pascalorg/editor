@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "files": {
     "apps/editor/app/embed/[id]/page.tsx": [
       "{name} · Pascal"
@@ -439,6 +439,9 @@
       "Undo",
       "Undo anyway",
       "You've changed the scene since. Undoing also removes those changes."
+    ],
+    "packages/editor/src/components/point-ask/point-ask-layer.tsx": [
+      "{?}{?}\n.pa-layer[data-calm] .pa-hlabel{transform:none;transition-property:opacity}\n.pa-layer[data-calm] .pa-send,.pa-layer[data-calm] .pa-dict,.pa-layer[data-calm] .pa-btn,.pa-layer[data-calm] .pa-hold{transform:none;transition-property:opacity,color,background}\n.pa-layer[data-calm] .pa-pk,.pa-layer[data-calm] .pa-edgemark{transition:none}\n"
     ],
     "packages/editor/src/components/procedural-items/inspector.tsx": [
       "Adjust design",

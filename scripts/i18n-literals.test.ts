@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
 import { parsePo, stringifyPo } from 'pofile-ts'
+import ts from 'typescript'
 import {
   annotatedState,
   checkTranslationEntries,
   hashSource,
   type LocaleEntries,
+  possibleRenames,
   pseudoLocalize,
   reviewRegressions,
   type SourceMessage,
@@ -174,6 +176,82 @@ test('ICU encoding and entity decoding render the original text', () => {
   expect((compileMessageOrThrow(message) as string[]).join('')).toBe("Use {} & it's\u00a0done…")
 })
 
+test('an allowlisted text joined with static pieces stays exempt', () => {
+  const scan = (body: string) =>
+    scanSource(
+      'packages/editor/src/components/brand.tsx',
+      `export function Brand() {\n  return <p>${body}</p>\n}\n`,
+      allowlist,
+    )
+  expect(scan("Pascal{' '}")).toEqual([])
+  expect(scan('Pascal')).toEqual([])
+})
+
+test('a parenthesized named callback is not a hook owner', () => {
+  const source = `'use client'
+export function List({ items }: { items: string[] }) {
+  return <ul>{items.map((function Row(item) { return <li key={item}>Remove item</li> }))}</ul>
+}
+`
+  const { output, planned } = convert('packages/editor/src/components/list.tsx', source)
+  expect(output).toBe(source)
+  expect(planned[0]?.manual).toContain('inside a callback function')
+})
+
+test('a constant concatenated with a value is concatenated copy', () => {
+  const source = `const LABEL = 'Save'
+export function Row({ name }: { name: string }) {
+  return <span>{LABEL + ' ' + name}</span>
+}
+`
+  const [found] = scanSource('packages/editor/src/components/row.tsx', source, allowlist)
+  expect(found?.text).toBe('Save {?}')
+  expect(found?.manual).toContain('concatenated copy')
+})
+
+const render = (message: string, values: Record<string, string> = {}) =>
+  (compileMessageOrThrow(message) as Array<string | [string]>)
+    .map((token) => (typeof token === 'string' ? token : values[token[0]]))
+    .join('')
+
+test('converted messages render exactly the original text', () => {
+  const messageOf = (body: string, attributes = '') =>
+    convert(
+      'packages/editor/src/components/t.tsx',
+      `'use client'\nexport function T({ name }: { name: string }) {\n  return <p${attributes}>${body}</p>\n}\n`,
+    ).planned.map((item) => item.message)
+  const [braces] = messageOf("Use {'{'}{'}'}")
+  expect(render(braces!)).toBe('Use {}')
+  const [spaced] = messageOf('&nbsp;Copy&nbsp;')
+  expect(render(spaced!)).toBe('\u00a0Copy\u00a0')
+  const [quoted] = messageOf("Rename '{name}'")
+  expect(render(quoted!, { name: 'Lobby' })).toBe("Rename 'Lobby'")
+  const titled = messageOf('Open', ' title="Tom &amp; Jerry"').find((message) => message !== 'Open')
+  expect(render(titled ?? '')).toBe('Tom & Jerry')
+  const template = convert(
+    'packages/editor/src/components/t.tsx',
+    `'use client'\nexport function T({ name }: { name: string }) {\n  return <p title={\`Rename '\${name}'\`} />\n}\n`,
+  ).planned[0]?.message
+  expect(render(template!, { name: 'Lobby' })).toBe("Rename 'Lobby'")
+})
+
+test('inlined constants with line breaks are emitted as valid string literals', () => {
+  const source = `'use client'
+const LABEL = 'Save\\r\\nnow'
+export function T({ name }: { name: string }) {
+  return <p>{LABEL} for {name}</p>
+}
+`
+  const { output } = convert('packages/editor/src/components/t.tsx', source)
+  const result = ts.transpileModule(output, {
+    reportDiagnostics: true,
+    compilerOptions: { jsx: ts.JsxEmit.Preserve },
+    fileName: 't.tsx',
+  })
+  expect(result.diagnostics ?? []).toEqual([])
+  expect(output).toContain("message: 'Save\\r\\nnow for {name}'")
+})
+
 test('app modules without use client are left for a person', () => {
   const source = `export function AppHeader() {
   return <a aria-label="Pascal home" href="/" />
@@ -214,7 +292,7 @@ test('the guard fails on copy the baseline does not list and reports progress', 
     ['new.tsx', [candidate('Hello')]],
   ])
   const { errors, improvable } = checkLiterals(scan, {
-    version: 2,
+    version: 3,
     files: { 'a.tsx': ['Share', 'Share', 'Copy'], 'gone.tsx': ['Old'] },
   })
 
@@ -225,7 +303,7 @@ test('the guard fails on copy the baseline does not list and reports progress', 
 
 test('swapping baselined copy for new copy fails even when the count is unchanged', () => {
   const { errors } = checkLiterals(new Map([['a.tsx', [candidate('Delete everything now')]]]), {
-    version: 2,
+    version: 3,
     files: { 'a.tsx': ['Share'] },
   })
   expect(errors[0]).toContain('"Delete everything now"')
@@ -234,8 +312,8 @@ test('swapping baselined copy for new copy fails even when the count is unchange
 test('the baseline may only shrink relative to the base branch', () => {
   const { errors } = checkLiterals(
     new Map([['a.tsx', [candidate('Share'), candidate('Copy')]]]),
-    { version: 2, files: { 'a.tsx': ['Copy', 'Share'] } },
-    { version: 2, files: { 'a.tsx': ['Share'] } },
+    { version: 3, files: { 'a.tsx': ['Copy', 'Share'] } },
+    { version: 3, files: { 'a.tsx': ['Share'] } },
   )
   expect(errors).toHaveLength(1)
   expect(errors[0]).toContain('"Copy" (a.tsx)')
@@ -247,13 +325,13 @@ test('copy that moves with a git mv, a split or an extraction does not grow the 
     ['extracted.tsx', [candidate('Delete')]],
   ])
   const baseline = {
-    version: 2 as const,
+    version: 3 as const,
     files: { 'new.tsx': ['Copy', 'Share'], 'extracted.tsx': ['Delete'] },
   }
-  const base = { version: 2 as const, files: { 'old.tsx': ['Copy', 'Delete', 'Share'] } }
+  const base = { version: 3 as const, files: { 'old.tsx': ['Copy', 'Delete', 'Share'] } }
   expect(checkLiterals(scan, baseline, base).errors).toEqual([])
 
-  const duplicated = { version: 2 as const, files: { ...baseline.files, 'copy.tsx': ['Share'] } }
+  const duplicated = { version: 3 as const, files: { ...baseline.files, 'copy.tsx': ['Share'] } }
   expect(checkLiterals(scan, duplicated, base).errors[0]).toContain('"Share" (new.tsx, copy.tsx)')
 })
 
@@ -470,22 +548,58 @@ test('a reviewed translation cannot fall back to draft while its English is unch
   ).toEqual([])
 })
 
-test('renaming a reviewed ID with the same English needs a carried-over or new review', () => {
-  const renamed = { ...advanced, id: 'editor.buildPanel.advancedTools' }
-  const base = everyLocale(entry({}))
-  const drafted: LocaleEntries = Object.fromEntries(
+test('an unrelated addition sharing English with a removed reviewed ID only warns', () => {
+  const off = { id: 'viewer.common.off', message: 'Off', context: [] }
+  const added = { id: 'viewer.audio.off', message: 'Off', context: [] }
+  const reviewed = (translation: string) => ({
+    translation,
+    sourceHash: hashSource('Off'),
+    review: 'human' as const,
+    fuzzy: false,
+  })
+  const base: LocaleEntries = Object.fromEntries(
+    ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [locale, { [off.id]: reviewed('Désactivé') }]),
+  )
+  const current: LocaleEntries = Object.fromEntries(
     ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [
       locale,
-      { [renamed.id]: entry({ review: 'required', fuzzy: true }) },
+      { [added.id]: { ...reviewed('Désactivé'), review: 'required' as const, fuzzy: true } },
     ]),
   )
-  expect(reviewRegressions([renamed], drafted, base)).toContain(
-    'fr: "editor.buildPanel.advancedTools" replaces the reviewed "editor.buildPanel.advanced" with the same English; carry the reviewed translation over (Review: human) or review it again',
+  expect(reviewRegressions([added], current, base)).toEqual([])
+  expect(possibleRenames([added], current, base)).toEqual([
+    `possible rename "viewer.common.off" → "viewer.audio.off" (same English): carry over the translation if intended with comment: 'renamed-from: <old id>' and bun run i18n:extract`,
+  ])
+})
+
+test('a declared rename must carry the reviewed translation over', () => {
+  const renamed = { ...advanced, id: 'editor.buildPanel.advancedTools' }
+  const base = everyLocale(entry({}))
+  const declared = (overrides: Partial<LocaleEntries[string][string]>): LocaleEntries =>
+    Object.fromEntries(
+      ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [
+        locale,
+        { [renamed.id]: entry({ renamedFrom: advanced.id, ...overrides }) },
+      ]),
+    )
+  expect(
+    reviewRegressions([renamed], declared({ review: 'required', fuzzy: true }), base),
+  ).toContain(
+    'fr: "editor.buildPanel.advancedTools" is declared renamed-from "editor.buildPanel.advanced", whose reviewed translation was not carried over; run bun run i18n:extract',
   )
-  const carried: LocaleEntries = Object.fromEntries(
-    ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [locale, { [renamed.id]: entry({}) }]),
+  expect(reviewRegressions([renamed], declared({}), base)).toEqual([])
+  expect(possibleRenames([renamed], declared({ review: 'required', fuzzy: true }), base)).toEqual(
+    [],
   )
-  expect(reviewRegressions([renamed], carried, base)).toEqual([])
+})
+
+test('an explicit base that cannot be resolved fails the release job', () => {
+  const result = Bun.spawnSync(
+    ['bun', 'scripts/i18n.ts', 'release-check', '--base', 'nonexistent-ref'],
+    { env: { ...process.env, GITHUB_STEP_SUMMARY: '' }, stdout: 'pipe', stderr: 'pipe' },
+  )
+  expect(result.exitCode).toBe(1)
+  expect(`${result.stdout}${result.stderr}`).toContain('--base nonexistent-ref is not a commit')
 })
 
 test('extraction never approves a newly filled translation by itself', () => {

@@ -111,7 +111,7 @@ export type Allowlist = {
 }
 
 /** Legacy candidates per file, by text (a multiset: repeated copy appears once per use). */
-export type Baseline = { version: 2; files: Record<string, string[]> }
+export type Baseline = { version: 3; files: Record<string, string[]> }
 
 function readAllowlist(): Allowlist {
   return JSON.parse(readFileSync(ALLOWLIST_PATH, 'utf8')) as Allowlist
@@ -131,9 +131,17 @@ export function normalizeJsxText(raw: string): string {
   return parts.join(' ')
 }
 
+/** Leading/trailing ASCII whitespace; a no-break space (`&nbsp;`) is content. */
+export const ASCII_EDGE_WHITESPACE = /^[ \t\r\n]+|[ \t\r\n]+$/g
+
 /** What one JSX text node renders: React's whitespace rules, then HTML entities. */
 export function renderJsxText(raw: string): string {
   return decodeHTMLStrict(normalizeJsxText(raw))
+}
+
+/** A JSX attribute's string renders with HTML entities decoded; other literals are as written. */
+export function attributeText(node: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral): string {
+  return ts.isJsxAttribute(node.parent) ? decodeHTMLStrict(node.text) : node.text
 }
 
 function looksTranslatable(text: string, allow: Set<string>): boolean {
@@ -201,8 +209,11 @@ const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef'])
 
 /** A function passed as an argument, other than to `memo` / `forwardRef`. */
 function isCallbackArgument(node: ts.Node): boolean {
-  const call = node.parent
-  if (!(call && ts.isCallExpression(call) && call.arguments.includes(node as ts.Expression))) {
+  let argument: ts.Node = node
+  while (argument.parent && ts.isParenthesizedExpression(argument.parent))
+    argument = argument.parent
+  const call = argument.parent
+  if (!(call && ts.isCallExpression(call) && call.arguments.includes(argument as ts.Expression))) {
     return false
   }
   const callee = call.expression
@@ -325,7 +336,7 @@ export function sentenceMessage(children: SentenceChild[]): string {
   return children
     .map((child) => (child.type === 'value' ? `{${child.name}}` : child.text))
     .join('')
-    .trim()
+    .replace(ASCII_EDGE_WHITESPACE, '')
 }
 
 function notifyCallee(node: ts.CallExpression): string | undefined {
@@ -513,16 +524,15 @@ export function visitUiLiterals(
         } else parts.push(part)
       }
       flatten(expression)
-      const text = parts
-        .map((part) =>
-          ts.isStringLiteral(part) || ts.isNoSubstitutionTemplateLiteral(part) ? part.text : '{?}',
-        )
-        .join('')
-      const hasCopy = parts.some(
-        (part) =>
-          (ts.isStringLiteral(part) || ts.isNoSubstitutionTemplateLiteral(part)) &&
-          /\p{L}{2}/u.test(part.text),
-      )
+      // A `const` string operand is copy like a literal one.
+      const literalOf = (part: ts.Expression) =>
+        ts.isStringLiteral(part) || ts.isNoSubstitutionTemplateLiteral(part)
+          ? part
+          : ts.isIdentifier(part)
+            ? constantValue(part)
+            : undefined
+      const text = parts.map((part) => literalOf(part)?.text ?? '{?}').join('')
+      const hasCopy = parts.some((part) => /\p{L}{2}/u.test(literalOf(part)?.text ?? ''))
       if (hasCopy && looksTranslatable(text, allow) && !isIgnored(source, expression)) {
         visitor.concatenation(expression, text, kind)
       }
@@ -564,7 +574,10 @@ export function visitUiLiterals(
       const sentence = sentenceChildren(node)
       if (sentence) {
         const text = sentenceMessage(sentence)
-        if (!isIgnored(source, sentence[0]!.node)) visitor.sentence(node, sentence, text)
+        // The whole joined text is what renders, so exemptions apply to it.
+        if (looksTranslatable(text, allow) && !isIgnored(source, sentence[0]!.node)) {
+          visitor.sentence(node, sentence, text)
+        }
         ts.forEachChild(node.openingElement, visit)
         return
       }
@@ -658,9 +671,9 @@ export function scanSource(
   visitUiLiterals(
     source,
     {
-      jsxText: (node, value) => add(node, 'jsx-text', value.trim()),
+      jsxText: (node, value) => add(node, 'jsx-text', value.replace(ASCII_EDGE_WHITESPACE, '')),
       sentence: (element, _children, value) => add(element, 'jsx-sentence', value),
-      literal: (node, kind) => add(node, kind, node.text),
+      literal: (node, kind) => add(node, kind, attributeText(node)),
       template: (node, kind) => {
         const names = node.templateSpans.map((span) => placeholderName(span.expression))
         const value = [
@@ -712,11 +725,12 @@ export function scanRepository(): Map<string, Candidate[]> {
 export function parseBaseline(text: string | undefined): Baseline | undefined {
   if (!text) return undefined
   const parsed = JSON.parse(text) as { version?: number; files?: Record<string, unknown> }
-  return parsed.version === 2 ? (parsed as Baseline) : undefined
+  // Version 3 records rendered text (entities, joins); older baselines are not comparable.
+  return parsed.version === 3 ? (parsed as Baseline) : undefined
 }
 
 function readBaseline(): Baseline {
-  return parseBaseline(readFileSync(BASELINE_PATH, 'utf8')) ?? { version: 2, files: {} }
+  return parseBaseline(readFileSync(BASELINE_PATH, 'utf8')) ?? { version: 3, files: {} }
 }
 
 /** The base branch's baseline, when the base has one (see `baseRevision`). */
@@ -733,7 +747,7 @@ function writeBaseline(scan: Map<string, Candidate[]>): void {
   )
   writeFileSync(
     BASELINE_PATH,
-    `${JSON.stringify({ version: 2, files } satisfies Baseline, null, 2)}\n`,
+    `${JSON.stringify({ version: 3, files } satisfies Baseline, null, 2)}\n`,
   )
 }
 
