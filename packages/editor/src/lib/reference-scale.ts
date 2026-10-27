@@ -2,6 +2,8 @@ import { formatNumber, type GuideScaleReference } from '@pascal-app/core'
 
 export type ReferenceScaleUnit = 'meters' | 'centimeters' | 'feet' | 'inches'
 
+const MAX_REFERENCE_SCALE_LABEL_LENGTH = 64
+
 const REFERENCE_SCALE_UNIT_LABELS: Record<ReferenceScaleUnit, string> = {
   meters: 'm',
   centimeters: 'cm',
@@ -68,7 +70,7 @@ export function formatReferenceScaleLabel(reference: GuideScaleReference, locale
 
   const label: unknown = reference.label
   if (typeof label !== 'string') return label == null ? '' : String(label)
-  if (label.length > 64) return label
+  if (label.length > MAX_REFERENCE_SCALE_LABEL_LENGTH) return label
 
   const parsed = parseLegacyScaleLabel(label)
   return parsed ? formatScaleValue(parsed.value, parsed.unit, locale) : label
