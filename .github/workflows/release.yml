@@ -450,7 +450,8 @@ jobs:
     with:
       version: ${{ needs.release.outputs.version }}
       publish: true
-    secrets: inherit
+    secrets:
+      MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
 
   # The self-host image, built from the release tag on native runners (a Next
   # build under QEMU takes most of an hour) and stitched into one multi-arch

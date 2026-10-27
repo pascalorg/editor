@@ -22,11 +22,14 @@ on:
       publish:
         required: true
         type: boolean
+    secrets:
+      MCP_REGISTRY_PRIVATE_KEY:
+        required: false
   workflow_dispatch:
     inputs:
       version:
-        description: Released @pascal-app/mcp version to check out by tag (default the dispatched ref)
-        required: false
+        description: Released @pascal-app/mcp version; checks out its release tag
+        required: true
         type: string
       publish:
         description: Publish server.json to the MCP Registry
@@ -110,35 +113,61 @@ jobs:
     if: inputs.publish
     needs: validate
     runs-on: ubuntu-latest
-    environment: npm
+    # The environment's deployment rule allows only main; it holds MCP_REGISTRY_PRIVATE_KEY.
+    environment: mcp-registry
+    concurrency:
+      group: mcp-registry-publish
+      cancel-in-progress: false
     permissions:
       contents: read
+    env:
+      NAME: app.pascal/editor
+      PACKAGE: "@pascal-app/mcp"
+      VERSIONS_URL: https://registry.modelcontextprotocol.io/v0/servers/app.pascal%2Feditor/versions
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ inputs.version && format('refs/tags/@pascal-app/mcp@{0}', inputs.version) || '' }}
+          ref: refs/tags/@pascal-app/mcp@${{ inputs.version }}
           persist-credentials: false
 
-      - name: Read manifest
+      # Later steps take the version only from this step's output.
+      - name: Validate release manifest
+        id: manifest
         env:
-          EXPECTED_VERSION: ${{ inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          NAME=$(jq --raw-output '.name' server.json)
-          VERSION=$(jq --raw-output '.version' server.json)
-          PACKAGE=$(jq --raw-output '.packages[0].identifier' server.json)
-          if [ -n "$EXPECTED_VERSION" ] && [ "$VERSION" != "$EXPECTED_VERSION" ]; then
-            echo "::error::server.json is at $VERSION, expected $EXPECTED_VERSION"
+          case "$INPUT_VERSION" in
+            *$'\r'* | *$'\n'*)
+              echo "::error::version contains a line break"
+              exit 1
+              ;;
+          esac
+          if ! [[ "$INPUT_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::version must be a stable semver release such as 1.2.3"
             exit 1
           fi
-          {
-            echo "NAME=$NAME"
-            echo "VERSION=$VERSION"
-            echo "PACKAGE=$PACKAGE"
-            echo "VERSIONS_URL=https://registry.modelcontextprotocol.io/v0/servers/$(jq --raw-output --null-input --arg n "$NAME" '$n | @uri')/versions"
-          } >> "$GITHUB_ENV"
+          jq --exit-status --arg name "$NAME" --arg package "$PACKAGE" --arg version "$INPUT_VERSION" '
+            .name == $name
+            and .version == $version
+            and (.packages | length) == 1
+            and .packages[0].identifier == $package
+            and .packages[0].version == $version
+          ' server.json >/dev/null || {
+            echo "::error::server.json must name $NAME with the single package $PACKAGE, both at $INPUT_VERSION"
+            exit 1
+          }
+          jq --exit-status --arg name "$NAME" --arg package "$PACKAGE" --arg version "$INPUT_VERSION" '
+            .name == $package and .mcpName == $name and .version == $version
+          ' packages/mcp/package.json >/dev/null || {
+            echo "::error::packages/mcp/package.json must be $PACKAGE@$INPUT_VERSION with mcpName $NAME"
+            exit 1
+          }
+          echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
 
       # A fresh publish can take a few minutes to show up in `npm view`.
       - name: Wait for npm to serve the version
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
         run: |
           for attempt in $(seq 1 30); do
             if [ "$(npm view "$PACKAGE@$VERSION" mcpName 2>/dev/null)" = "$NAME" ]; then
@@ -158,10 +187,11 @@ jobs:
           echo "${MCP_PUBLISHER_LINUX_AMD64_SHA256}  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
 
-      # The app.pascal namespace is verified through the pascal.app DNS TXT record, whose
-      # Ed25519 private key is the MCP_REGISTRY_PRIVATE_KEY secret.
+      # The app.pascal namespace is verified through CI's own pascal.app DNS TXT record,
+      # whose Ed25519 private key is the MCP_REGISTRY_PRIVATE_KEY environment secret.
       - name: Publish to the MCP Registry
         env:
+          VERSION: ${{ steps.manifest.outputs.version }}
           MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
         run: |
           if curl --silent --fail "$VERSIONS_URL" \
@@ -176,7 +206,13 @@ jobs:
           "$RUNNER_TEMP/mcp-publisher" login dns --domain pascal.app --private-key "$MCP_REGISTRY_PRIVATE_KEY"
           "$RUNNER_TEMP/mcp-publisher" publish
 
+      - name: Remove the registry token
+        if: always()
+        run: rm -f ~/.mcpregistry_registry_token
+
       - name: Registry lists the version
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
         run: |
           for attempt in $(seq 1 10); do
             if curl --silent --fail "$VERSIONS_URL" \

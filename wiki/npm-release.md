@@ -50,11 +50,35 @@ The same `release.yml` run publishes `ghcr.io/pascalorg/pascal-editor` after the
 
 [`server.json`](../server.json) publishes as `app.pascal/editor` with the `@pascal-app/mcp` npm package and the hosted remote. Its version is never edited by hand: `bun scripts/sync-agent-versions.ts` rewrites it from `packages/mcp/package.json`.
 
-A stable `release.yml` run ends with the `mcp-registry` job, which calls [`mcp-registry.yml`](../.github/workflows/mcp-registry.yml) with the released version. It checks out the `@pascal-app/mcp@<version>` tag, waits until `npm view @pascal-app/mcp@<version> mcpName` reports `app.pascal/editor` (the registry verifies npm ownership through that field), publishes, and fails unless `https://registry.modelcontextprotocol.io/v0/servers/app.pascal%2Feditor/versions` then lists the version. A version that is already listed is skipped, so reruns are safe. Betas are not published: server.json stays on the last stable version.
+A stable `release.yml` run ends with the `mcp-registry` job, which calls [`mcp-registry.yml`](../.github/workflows/mcp-registry.yml) with the released version and passes it only the `MCP_REGISTRY_PRIVATE_KEY` secret. The `publish` job checks out the `@pascal-app/mcp@<version>` tag and fails unless the version is a stable `X.Y.Z` and `server.json` and `packages/mcp/package.json` name `app.pascal/editor` and `@pascal-app/mcp` at that version. It then waits until `npm view @pascal-app/mcp@<version> mcpName` reports `app.pascal/editor` (the registry verifies npm ownership through that field), publishes, deletes the registry token, and fails unless `https://registry.modelcontextprotocol.io/v0/servers/app.pascal%2Feditor/versions` then lists the version. A version that is already listed is skipped, so reruns are safe, and publish runs never overlap. Betas are not published: server.json stays on the last stable version.
 
-The `app.pascal` namespace is verified by DNS: the `pascal.app` TXT record `v=MCPv1; k=ed25519; p=<public key>`, whose hex private key is the `MCP_REGISTRY_PRIVATE_KEY` secret (repository or `npm` environment). Without it the job fails and says so.
+### The CI signing key
 
-To recover a version the release did not list, dispatch the workflow: `gh workflow run mcp-registry.yml -f version=<version> -f publish=true`. With `check-hosted` (on by default) the `hosted-matches-manifest` job also checks that the live API catalog and `/.well-known/mcp/server-card.json` report this version; those are served by the hosted deployment, so that job only passes once it runs the same `@pascal-app/mcp`, and it does not gate the publish.
+The `app.pascal` namespace is verified by DNS: a `pascal.app` TXT record `v=MCPv1; k=ed25519; p=<public key>` whose private key signs the login. `pascal.app` already carries two such records; neither is CI's. CI uses its own keypair, generated only for CI, with its own TXT record, so it can be revoked without touching anyone else's key. When the record is added, write its `p=` value here so the record CI owns is on file (the public key only):
+
+- CI public key: _not set up yet_
+
+Setting it up is a repository admin's job, done in this order:
+
+1. Create the GitHub environment `mcp-registry`. Its deployment branch rule allows only `main`; add a required reviewer as well where possible.
+2. Generate the keypair: `openssl genpkey -algorithm Ed25519 -out ci-key.pem`. The public key for the TXT record is `openssl pkey -in ci-key.pem -pubout -outform DER | tail -c 32 | base64`, and the hex private key for the secret is `openssl pkey -in ci-key.pem -noout -text | grep -A3 "priv:" | tail -n +2 | tr -d ' :\n'`.
+3. Add the TXT record `v=MCPv1; k=ed25519; p=<public key>` to `pascal.app`, and record the public key above.
+4. Store the hex private key as the `MCP_REGISTRY_PRIVATE_KEY` secret of the `mcp-registry` environment, then delete `ci-key.pem`.
+
+`MCP_REGISTRY_PRIVATE_KEY` lives only in that environment. It is never a repository secret or a secret of any other environment. Until it exists the `publish` job fails and says so.
+
+### Rotating the CI key
+
+1. Remove CI's TXT record from `pascal.app` (the one whose `p=` value is listed above).
+2. Generate a new keypair and publish its TXT record, as in the setup steps above, and update the public key listed here.
+3. Replace `MCP_REGISTRY_PRIVATE_KEY` in the `mcp-registry` environment with the new private key.
+4. Check what the registry lists: `https://registry.modelcontextprotocol.io/v0/servers?search=app.pascal` and `https://registry.modelcontextprotocol.io/v0/servers/app.pascal%2Feditor/versions`. Every entry should match a release in this repository.
+5. Mark any entry that does not with `mcp-publisher status --status deleted app.pascal/editor <version>`, logged in with a `pascal.app` key.
+6. If the workflow itself is in doubt, revert the change or disable `mcp-registry.yml` in the Actions settings until it is sorted out.
+
+### Recovering a missed version
+
+Dispatch the workflow from `main` with the version, which is required: `gh workflow run mcp-registry.yml -f version=<version> -f publish=true`. With `check-hosted` (on by default) the `hosted-matches-manifest` job also checks that the live API catalog and `/.well-known/mcp/server-card.json` report this version; those are served by the hosted deployment, so that job only passes once it runs the same `@pascal-app/mcp`, and it does not gate the publish.
 
 By hand, from the release tag: `mcp-publisher login dns --domain pascal.app --private-key <hex key>`, then `mcp-publisher publish`.
 
