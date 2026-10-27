@@ -46,8 +46,22 @@ export function nodeDescriptionDescriptor(kind: string, english: string): Messag
   return { id: `node.${nodeKindKey(kind)}.description`, message: literal(english) }
 }
 
+/**
+ * Short FNV-1a hash of the whole message. Hint IDs end with it, so two hints
+ * whose first six words agree (a plugin's and a built-in's) never share an ID
+ * and so never share a translation.
+ */
+function messageHash(message: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < message.length; index += 1) {
+    hash ^= message.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
+}
+
 function hintMessage(message: string): MessageDescriptor {
-  return { id: `editor.toolHint.${messageSlug(message)}`, message }
+  return { id: `editor.toolHint.${messageSlug(message)}.${messageHash(message)}`, message }
 }
 
 export function toolHintDescriptor(english: string): MessageDescriptor {
@@ -102,7 +116,8 @@ export function toolHintKeyDescriptor(key: string): MessageDescriptor | undefine
   if (!/\p{L}{2}/u.test(key) || /^(?:Alt|Ctrl|Cmd|Esc|Shift)$/.test(key)) {
     return undefined
   }
-  return { id: `editor.toolHint.key.${messageSlug(key)}`, message: literal(key) }
+  const message = literal(key)
+  return { id: `editor.toolHint.key.${messageSlug(key)}.${messageHash(message)}`, message }
 }
 
 export function nodeLabel(kind: string, english: string, i18n: PascalI18n): string {

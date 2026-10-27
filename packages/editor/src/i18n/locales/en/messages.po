@@ -992,10 +992,6 @@ msgid "editor.actionMenu.structureTools.zone"
 msgstr "Zone"
 
 #: packages/editor/src/components/ui/action-menu/view-toggles.tsx
-msgid "editor.actionMenu.viewToggles.below"
-msgstr "below"
-
-#: packages/editor/src/components/ui/action-menu/view-toggles.tsx
 msgid "editor.actionMenu.viewToggles.deleteGuideImage"
 msgstr "Delete guide image"
 
@@ -1042,6 +1038,10 @@ msgstr "Hide reference floor"
 #: packages/editor/src/components/ui/action-menu/view-toggles.tsx
 msgid "editor.actionMenu.viewToggles.hideScans"
 msgstr "Hide scans"
+
+#: packages/editor/src/components/ui/action-menu/view-toggles.tsx
+msgid "editor.actionMenu.viewToggles.levelsBelow"
+msgstr "{count} below"
 
 #: packages/editor/src/components/ui/action-menu/view-toggles.tsx
 msgid "editor.actionMenu.viewToggles.noLowerFloorAvailable"
@@ -1280,6 +1280,18 @@ msgid "editor.helpers.contextualHelperPanel.dragToDrawFence"
 msgstr "Drag to draw fence"
 
 #: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+msgid "editor.helpers.contextualHelperPanel.eraseScope"
+msgstr "Erase: {scope}"
+
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+msgid "editor.helpers.contextualHelperPanel.eraseScopeClickOrPressShift"
+msgstr "Erase scope — click or press Shift to cycle"
+
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+msgid "editor.helpers.contextualHelperPanel.eraseScopeLabel"
+msgstr "Erase scope: {scope}"
+
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
 msgid "editor.helpers.contextualHelperPanel.fenceTypeClickOrPressT"
 msgstr "Fence type — click or press T to switch between straight, curved and freehand"
 
@@ -1318,6 +1330,22 @@ msgstr "Hover a surface to pick its material"
 #: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
 msgid "editor.helpers.contextualHelperPanel.moreShortcuts"
 msgstr "More shortcuts"
+
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+msgid "editor.helpers.contextualHelperPanel.paintScope"
+msgstr "Paint: {scope}"
+
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+msgid "editor.helpers.contextualHelperPanel.paintScopeClickOrPressShift"
+msgstr "Paint scope — click or press Shift to cycle"
+
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+msgid "editor.helpers.contextualHelperPanel.paintScopeLabel"
+msgstr "Paint scope: {scope}"
+
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+msgid "editor.helpers.contextualHelperPanel.pickScope"
+msgstr "Pick: {scope}"
 
 #: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
 msgid "editor.helpers.contextualHelperPanel.placeGateOnAFence"
@@ -1366,10 +1394,6 @@ msgstr "Straight fence continuation — click or press C to toggle"
 #: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
 msgid "editor.helpers.contextualHelperPanel.straightSingle"
 msgstr "Straight: Single"
-
-#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
-msgid "editor.helpers.contextualHelperPanel.verbScopeClickOrPressShift"
-msgstr "{verb} scope — click or press Shift to cycle"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.addPoint"
@@ -1736,711 +1760,711 @@ msgid "editor.theEditorSceneFailedToRender"
 msgstr "The editor scene failed to render"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.aCurtainWallTakesNoCorner"
+msgid "editor.toolHint.aCurtainWallTakesNoCorner.1qxjv5i"
 msgstr "A curtain wall takes no corner window"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.aCurvedWallTakesNoCorner"
+msgid "editor.toolHint.aCurvedWallTakesNoCorner.1vdnaw5"
 msgstr "A curved wall takes no corner window"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.addACornerClickTheFirst"
+msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "Add a corner · click the first to close"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.anotherOpeningIsInTheWay"
+msgid "editor.toolHint.anotherOpeningIsInTheWay.11l9dd0"
 msgstr "Another opening is in the way at the corner"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.autoHangers"
+msgid "editor.toolHint.autoHangers.10554ka"
 msgstr "Auto hangers"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.autoHangersClickOrPressH"
+msgid "editor.toolHint.autoHangersClickOrPressH.rwa3ka"
 msgstr "Auto hangers - click or press H to toggle"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.autoHangersOff"
+msgid "editor.toolHint.autoHangersOff.7yx01x"
 msgstr "Auto hangers: Off"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.autoHangersOn"
+msgid "editor.toolHint.autoHangersOn.10b1umh"
 msgstr "Auto hangers: On"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.bypassSnapping"
+msgid "editor.toolHint.bypassSnapping.w5lmdv"
 msgstr "Bypass snapping"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cancel"
+msgid "editor.toolHint.cancel.ew9em3"
 msgstr "Cancel"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cancelMove"
+msgid "editor.toolHint.cancelMove.lvp31c"
 msgstr "Cancel move"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cancelRunExit"
+msgid "editor.toolHint.cancelRunExit.zqjf3h"
 msgstr "Cancel run / exit"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cancelStartPoint"
+msgid "editor.toolHint.cancelStartPoint.1xbq2lh"
 msgstr "Cancel start point"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cornerWindow"
+msgid "editor.toolHint.cornerWindow.1avkzpo"
 msgstr "Corner window"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cuts"
+msgid "editor.toolHint.cuts.1y0axps"
 msgstr "Cuts"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cutsValue"
+msgid "editor.toolHint.cutsValue.ouzhvb"
 msgstr "Cuts: {value}"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cutsValueEven"
+msgid "editor.toolHint.cutsValueEven.1ngsz3"
 msgstr "Cuts: {value}, even"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cycleMonoGableButterfly"
+msgid "editor.toolHint.cycleMonoGableButterfly.1poga3m"
 msgstr "Cycle mono / gable / butterfly"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.cycleSnappingMode"
+msgid "editor.toolHint.cycleSnappingMode.1ct0gn6"
 msgstr "Cycle snapping mode"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.doorStyleClickOrPressL"
+msgid "editor.toolHint.doorStyleClickOrPressL.33pe65"
 msgstr "Door style — click or press L to cycle"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.doorTypeClickOrPressO"
+msgid "editor.toolHint.doorTypeClickOrPressO.1hhh8gt"
 msgstr "Door type — click or press O to cycle"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.dropDownspoutFromOutlet"
+msgid "editor.toolHint.dropDownspoutFromOutlet.1k4h1m4"
 msgstr "Drop downspout from outlet"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.ductDiameterDownUp"
+msgid "editor.toolHint.ductDiameterDownUp.1wdz5vq"
 msgstr "Duct diameter down / up"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.endRunCancel"
+msgid "editor.toolHint.endRunCancel.59dh2w"
 msgstr "End run / cancel"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.exit"
+msgid "editor.toolHint.exit.engmg5"
 msgstr "Exit"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.exitDrawing"
+msgid "editor.toolHint.exitDrawing.9noxyb"
 msgstr "Exit drawing"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.finishAndContinue"
+msgid "editor.toolHint.finishAndContinue.1gpfsks"
 msgstr "Finish and continue"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.finishCeiling"
+msgid "editor.toolHint.finishCeiling.1c1lfel"
 msgstr "Finish ceiling"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.finishGridAxis"
+msgid "editor.toolHint.finishGridAxis.1wvrfhr"
 msgstr "Finish grid axis"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.finishMeasurement"
+msgid "editor.toolHint.finishMeasurement.1e4gv16"
 msgstr "Finish measurement"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.finishMultiPointWitnesses"
+msgid "editor.toolHint.finishMultiPointWitnesses.8wzskz"
 msgstr "Finish multi-point witnesses"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.finishSlab"
+msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "Finish slab"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.flipSide"
+msgid "editor.toolHint.flipSide.172xku9"
 msgstr "Flip side"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.followTraceALineset"
+msgid "editor.toolHint.followTraceALineset.mgquwe"
 msgstr "Follow: trace a lineset"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.forcePlace"
+msgid "editor.toolHint.forcePlace.1hq1nr"
 msgstr "Force place"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.freePlacement"
+msgid "editor.toolHint.freePlacement.1nztdac"
 msgstr "Free placement"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.goVerticalClickToPlace"
+msgid "editor.toolHint.goVerticalClickToPlace.dg8g6m"
 msgstr "Go vertical ↕, click to place"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.highlightOutlet"
+msgid "editor.toolHint.highlightOutlet.65hoq8"
 msgstr "Highlight outlet"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.joinAsACornerWindow"
+msgid "editor.toolHint.joinAsACornerWindow.jvdp4j"
 msgstr "Join as a corner window"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.altDrag"
+msgid "editor.toolHint.key.altDrag.ai3wn9"
 msgstr "Alt + drag"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.backspace"
+msgid "editor.toolHint.key.backspace.qy6qx8"
 msgstr "Backspace"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.click"
+msgid "editor.toolHint.key.click.m8sun"
 msgstr "Click"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.clickAgain"
+msgid "editor.toolHint.key.clickAgain.190ws9j"
 msgstr "Click again"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.command"
+msgid "editor.toolHint.key.command.1j2mkia"
 msgstr "Command"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.control"
+msgid "editor.toolHint.key.control.10fbl8e"
 msgstr "Control"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.delete"
+msgid "editor.toolHint.key.delete.oay2cq"
 msgstr "Delete"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.doubleClick"
+msgid "editor.toolHint.key.doubleClick.vlma6o"
 msgstr "Double click"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.drag"
+msgid "editor.toolHint.key.drag.8pwtpf"
 msgstr "Drag"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.enter"
+msgid "editor.toolHint.key.enter.1ctpui5"
 msgstr "Enter"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.hover"
+msgid "editor.toolHint.key.hover.6xw79p"
 msgstr "Hover"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.hoverADuctEnd"
+msgid "editor.toolHint.key.hoverADuctEnd.19axr3b"
 msgstr "Hover a duct end"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.hoverAPipeEnd"
+msgid "editor.toolHint.key.hoverAPipeEnd.1jbum5f"
 msgstr "Hover a pipe end"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.hoverGutter"
+msgid "editor.toolHint.key.hoverGutter.1dwcsno"
 msgstr "Hover gutter"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.leftClick"
+msgid "editor.toolHint.key.leftClick.s4gwfc"
 msgstr "Left click"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.middleClick"
+msgid "editor.toolHint.key.middleClick.1jbaan4"
 msgstr "Middle click"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.rightClick"
+msgid "editor.toolHint.key.rightClick.1ovld0h"
 msgstr "Right click"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.rShiftR"
+msgid "editor.toolHint.key.rShiftR.13bnobh"
 msgstr "R / Shift+R"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.scroll"
+msgid "editor.toolHint.key.scroll.ai6wr0"
 msgstr "Scroll"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.scrollWheel"
+msgid "editor.toolHint.key.scrollWheel.18j0ix7"
 msgstr "Scroll wheel"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.space"
+msgid "editor.toolHint.key.space.1hrh82t"
 msgstr "Space"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.key.tab"
+msgid "editor.toolHint.key.tab.1xsal0s"
 msgstr "Tab"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.mountFloorCeilingWall"
+msgid "editor.toolHint.mountFloorCeilingWall.32dxpv"
 msgstr "Mount: floor / ceiling / wall"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.noRoomForTheMatchingWindow"
+msgid "editor.toolHint.noRoomForTheMatchingWindow.1755948"
 msgstr "No room for the matching window on the other wall"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.noWallMeetsHere"
+msgid "editor.toolHint.noWallMeetsHere.19n99yc"
 msgstr "No wall meets here"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.numberOfCutsScrollOrClick"
+msgid "editor.toolHint.numberOfCutsScrollOrClick.1kqe84b"
 msgstr "Number of cuts — scroll or click to change"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.pickWitnessPoint"
+msgid "editor.toolHint.pickWitnessPoint.k3hgh1"
 msgstr "Pick witness point"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.pipeSizeDownUp"
+msgid "editor.toolHint.pipeSizeDownUp.wp04og"
 msgstr "Pipe size down / up"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeAndContinue"
+msgid "editor.toolHint.placeAndContinue.qfwkrq"
 msgstr "Place and continue"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeBlock"
+msgid "editor.toolHint.placeBlock.1aylwrx"
 msgstr "Place block"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeBoxVentOnRoof"
+msgid "editor.toolHint.placeBoxVentOnRoof.kf88e5"
 msgstr "Place box vent on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeCabinet"
+msgid "editor.toolHint.placeCabinet.b0ouyk"
 msgstr "Place cabinet"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeCanopyOrSetTheNext"
+msgid "editor.toolHint.placeCanopyOrSetTheNext.12l7zf8"
 msgstr "Place canopy or set the next run point"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeChimneyOnRoof"
+msgid "editor.toolHint.placeChimneyOnRoof.19dbqu"
 msgstr "Place chimney on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeColumn"
+msgid "editor.toolHint.placeColumn.1w2vq86"
 msgstr "Place column"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeCupolaOnRoof"
+msgid "editor.toolHint.placeCupolaOnRoof.ofx3bn"
 msgstr "Place cupola on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeDimensionLineWhenNeeded"
+msgid "editor.toolHint.placeDimensionLineWhenNeeded.bjw2cj"
 msgstr "Place dimension line when needed"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeDoorOnWall"
+msgid "editor.toolHint.placeDoorOnWall.1jwadf"
 msgstr "Place door on wall"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeDormerOnRoof"
+msgid "editor.toolHint.placeDormerOnRoof.1w518a6"
 msgstr "Place dormer on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeElevator"
+msgid "editor.toolHint.placeElevator.1f65zva"
 msgstr "Place elevator"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeEyebrowVentOnRoof"
+msgid "editor.toolHint.placeEyebrowVentOnRoof.1h1tqxn"
 msgstr "Place eyebrow vent on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeFitting"
+msgid "editor.toolHint.placeFitting.1pmx3vn"
 msgstr "Place fitting"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeGutterOnRoofEave"
+msgid "editor.toolHint.placeGutterOnRoofEave.llwzf9"
 msgstr "Place gutter on roof eave"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeItem"
+msgid "editor.toolHint.placeItem.teynf"
 msgstr "Place item"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeItLockedTo45"
+msgid "editor.toolHint.placeItLockedTo45.16e4csk"
 msgstr "Place it (locked to 45°)"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeMeasurementPoint"
+msgid "editor.toolHint.placeMeasurementPoint.bsatli"
 msgstr "Place measurement point"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placement"
+msgid "editor.toolHint.placement.13lcvts"
 msgstr "Placement"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placementAuto"
+msgid "editor.toolHint.placementAuto.1caa52d"
 msgstr "Placement: Auto"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placementGround"
+msgid "editor.toolHint.placementGround.1ruz145"
 msgstr "Placement: Ground"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placementRoof"
+msgid "editor.toolHint.placementRoof.renkw8"
 msgstr "Placement: Roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placementSurfaceClickOrPressP"
+msgid "editor.toolHint.placementSurfaceClickOrPressP.w56h19"
 msgstr "Placement surface - click or press P to cycle"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placementType"
+msgid "editor.toolHint.placementType.1mdpl60"
 msgstr "Placement type"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placementTypeClickOrPressI"
+msgid "editor.toolHint.placementTypeClickOrPressI.10cgxh2"
 msgstr "Placement type — click or press I to toggle"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeOnAFence"
+msgid "editor.toolHint.placeOnAFence.1dptstr"
 msgstr "Place on a fence"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeRegister"
+msgid "editor.toolHint.placeRegister.1uebycd"
 msgstr "Place register"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeRidgeVentOnRoof"
+msgid "editor.toolHint.placeRidgeVentOnRoof.2tpd8r"
 msgstr "Place ridge vent on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeShelf"
+msgid "editor.toolHint.placeShelf.y4l3iw"
 msgstr "Place shelf"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeSkylightOnRoof"
+msgid "editor.toolHint.placeSkylightOnRoof.e215pe"
 msgstr "Place skylight on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeSolarPanelArrayOnRoof"
+msgid "editor.toolHint.placeSolarPanelArrayOnRoof.kk11fn"
 msgstr "Place solar panel array on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeSpawnPoint"
+msgid "editor.toolHint.placeSpawnPoint.205o25"
 msgstr "Place spawn point"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeStairs"
+msgid "editor.toolHint.placeStairs.zwxxu2"
 msgstr "Place stairs"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeTrap"
+msgid "editor.toolHint.placeTrap.1gxemn3"
 msgstr "Place trap"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeTurbineVentOnRoof"
+msgid "editor.toolHint.placeTurbineVentOnRoof.1iqeluf"
 msgstr "Place turbine vent on roof"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeUnit"
+msgid "editor.toolHint.placeUnit.8zkx4q"
 msgstr "Place unit"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeWindowOnWall"
+msgid "editor.toolHint.placeWindowOnWall.1k3qnfb"
 msgstr "Place window on wall"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeWithoutTheCornerSnap"
+msgid "editor.toolHint.placeWithoutTheCornerSnap.1nifqew"
 msgstr "Place without the corner snap"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.removeLastPoint"
+msgid "editor.toolHint.removeLastPoint.2dmdcx"
 msgstr "Remove last point"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.removeLastWitness"
+msgid "editor.toolHint.removeLastWitness.1b6vvzw"
 msgstr "Remove last witness"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.rotate"
+msgid "editor.toolHint.rotate.1thqa0a"
 msgstr "Rotate"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.rotate45"
+msgid "editor.toolHint.rotate45.9zq68u"
 msgstr "Rotate ±45°"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.rotate45FloorCeiling"
+msgid "editor.toolHint.rotate45FloorCeiling.m9t57d"
 msgstr "Rotate ±45° (floor / ceiling)"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.rotateGhost15"
+msgid "editor.toolHint.rotateGhost15.rsa52c"
 msgstr "Rotate ghost ±15°"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.rotateOrFlipTheRunSide"
+msgid "editor.toolHint.rotateOrFlipTheRunSide.t5ior7"
 msgstr "Rotate or flip the run side"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.rotateRoofDirection90"
+msgid "editor.toolHint.rotateRoofDirection90.tvbji2"
 msgstr "Rotate roof direction 90°"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.rotateSpawnPoint"
+msgid "editor.toolHint.rotateSpawnPoint.1opcuu7"
 msgstr "Rotate spawn point"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.roundRectangularOval"
+msgid "editor.toolHint.roundRectangularOval.e4nh6x"
 msgstr "Round / rectangular / oval"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.setFenceStartEnd"
+msgid "editor.toolHint.setFenceStartEnd.1phbwsq"
 msgstr "Set fence start / end"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.setOneCornerThenTheOpposite"
+msgid "editor.toolHint.setOneCornerThenTheOpposite.8tsl49"
 msgstr "Set one corner, then the opposite"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.setRoofFootprint"
+msgid "editor.toolHint.setRoofFootprint.p50n0o"
 msgstr "Set roof footprint"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.setWallStartEnd"
+msgid "editor.toolHint.setWallStartEnd.1r8ubcx"
 msgstr "Set wall start / end"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.slopeLevel"
+msgid "editor.toolHint.slopeLevel.ftqp67"
 msgstr "Slope / level"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.snapOntoTheRun"
+msgid "editor.toolHint.snapOntoTheRun.86yhmp"
 msgstr "Snap onto the run"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.splitAtTheMarks"
+msgid "editor.toolHint.splitAtTheMarks.x5tpdd"
 msgstr "Split at the marks"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.startGridAxis"
+msgid "editor.toolHint.startGridAxis.k92yza"
 msgstr "Start grid axis"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.startLineset"
+msgid "editor.toolHint.startLineset.23q8dh"
 msgstr "Start lineset"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.startLiquidLine"
+msgid "editor.toolHint.startLiquidLine.1rlxsgd"
 msgstr "Start liquid line"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.startRun"
+msgid "editor.toolHint.startRun.r6fc5u"
 msgstr "Start run"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.startSegment"
+msgid "editor.toolHint.startSegment.rolym6"
 msgstr "Start segment"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.stepBackOrCancel"
+msgid "editor.toolHint.stepBackOrCancel.zbfdkn"
 msgstr "Step back or cancel"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.style"
+msgid "editor.toolHint.style.nf3vcm"
 msgstr "Style"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleBarn"
+msgid "editor.toolHint.styleBarn.k9n1x"
 msgstr "Style: Barn"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleCasement"
+msgid "editor.toolHint.styleCasement.ziklec"
 msgstr "Style: Casement"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleCraftsman"
+msgid "editor.toolHint.styleCraftsman.52e6a9"
 msgstr "Style: Craftsman"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleDoubleHung"
+msgid "editor.toolHint.styleDoubleHung.1lg8pkg"
 msgstr "Style: Double-hung"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleFrench"
+msgid "editor.toolHint.styleFrench.1ue3j64"
 msgstr "Style: French"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleGlass"
+msgid "editor.toolHint.styleGlass.qudnb4"
 msgstr "Style: Glass"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleGrid"
+msgid "editor.toolHint.styleGrid.1vuq4po"
 msgstr "Style: Grid"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleHalfLouvered"
+msgid "editor.toolHint.styleHalfLouvered.13b1few"
 msgstr "Style: Half-louvered"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleHorizontalBands"
+msgid "editor.toolHint.styleHorizontalBands.12ethxk"
 msgstr "Style: Horizontal bands"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleModern"
+msgid "editor.toolHint.styleModern.1fh8hhn"
 msgstr "Style: Modern"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.stylePanel"
+msgid "editor.toolHint.stylePanel.922jze"
 msgstr "Style: Panel"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.stylePaneledGlass"
+msgid "editor.toolHint.stylePaneledGlass.17a17en"
 msgstr "Style: Paneled glass"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleShaker"
+msgid "editor.toolHint.styleShaker.49z17k"
 msgstr "Style: Shaker"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleSingle"
+msgid "editor.toolHint.styleSingle.6f3cm0"
 msgstr "Style: Single"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleSixPanel"
+msgid "editor.toolHint.styleSixPanel.u49laj"
 msgstr "Style: Six-panel"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleSliding"
+msgid "editor.toolHint.styleSliding.q81s0i"
 msgstr "Style: Sliding"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleTallGrid"
+msgid "editor.toolHint.styleTallGrid.1eotg3x"
 msgstr "Style: Tall grid"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleTransom"
+msgid "editor.toolHint.styleTransom.kb9bh6"
 msgstr "Style: Transom"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleTripleHung"
+msgid "editor.toolHint.styleTripleHung.pxnqi3"
 msgstr "Style: Triple-hung"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.styleWideGrid"
+msgid "editor.toolHint.styleWideGrid.12n27et"
 msgstr "Style: Wide grid"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.switchRotationAxisYXZ"
+msgid "editor.toolHint.switchRotationAxisYXZ.15lohm6"
 msgstr "Switch rotation axis (Y → X → Z)"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.theWallsMeetAtTooSharp"
+msgid "editor.toolHint.theWallsMeetAtTooSharp.kh3wi3"
 msgstr "The walls meet at too sharp or too flat an angle"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.theWindowWaitingThereIsTaller"
+msgid "editor.toolHint.theWindowWaitingThereIsTaller.1tqwez4"
 msgstr "The window waiting there is taller than this wall"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.threeOrMoreWallsMeetHere"
+msgid "editor.toolHint.threeOrMoreWallsMeetHere.rgifif"
 msgstr "Three or more walls meet here"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.traceCeilingOutline"
+msgid "editor.toolHint.traceCeilingOutline.1b639wv"
 msgstr "Trace ceiling outline"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.traceSlabOutline"
+msgid "editor.toolHint.traceSlabOutline.z0j2lc"
 msgstr "Trace slab outline"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.type"
+msgid "editor.toolHint.type.1m2zofh"
 msgstr "Type"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeAwning"
+msgid "editor.toolHint.typeAwning.1cj59al"
 msgstr "Type: Awning"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeBarn"
+msgid "editor.toolHint.typeBarn.sbnygq"
 msgstr "Type: Barn"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeBay"
+msgid "editor.toolHint.typeBay.1200hc1"
 msgstr "Type: Bay"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeBow"
+msgid "editor.toolHint.typeBow.14s2t9p"
 msgstr "Type: Bow"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeCabinet"
+msgid "editor.toolHint.typeCabinet.1r68je5"
 msgstr "Type: Cabinet"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeCasement"
+msgid "editor.toolHint.typeCasement.176uo9j"
 msgstr "Type: Casement"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeDouble"
+msgid "editor.toolHint.typeDouble.af7w4i"
 msgstr "Type: Double"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeDoubleHung"
+msgid "editor.toolHint.typeDoubleHung.t482fu"
 msgstr "Type: Double Hung"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeFixed"
+msgid "editor.toolHint.typeFixed.v1cjez"
 msgstr "Type: Fixed"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeFolding"
+msgid "editor.toolHint.typeFolding.sxxyng"
 msgstr "Type: Folding"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeFrench"
+msgid "editor.toolHint.typeFrench.1y57z1b"
 msgstr "Type: French"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeHinged"
+msgid "editor.toolHint.typeHinged.1xrcfju"
 msgstr "Type: Hinged"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeIsland"
+msgid "editor.toolHint.typeIsland.ufr3ce"
 msgstr "Type: Island"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeLouvered"
+msgid "editor.toolHint.typeLouvered.oxl1cz"
 msgstr "Type: Louvered"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typePocket"
+msgid "editor.toolHint.typePocket.hc65x9"
 msgstr "Type: Pocket"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeSingleHung"
+msgid "editor.toolHint.typeSingleHung.p53pyl"
 msgstr "Type: Single Hung"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.typeSliding"
+msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "Type: Sliding"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.verticalStackClickToPlace"
+msgid "editor.toolHint.verticalStackClickToPlace.ijcn4q"
 msgstr "Vertical stack ↕, click to place"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.wasteVent"
+msgid "editor.toolHint.wasteVent.1hvi3vj"
 msgstr "Waste / vent"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.windowStyleClickOrPressL"
+msgid "editor.toolHint.windowStyleClickOrPressL.ah7qm9"
 msgstr "Window style — click or press L to cycle"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.windowTypeClickOrPressO"
+msgid "editor.toolHint.windowTypeClickOrPressO.wv4x35"
 msgstr "Window type — click or press O to cycle"
 
 #: packages/editor/src/components/editor/views/view-bar.tsx
